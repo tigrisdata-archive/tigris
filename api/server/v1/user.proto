@@ -1,0 +1,122 @@
+// Copyright 2022 Tigris Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+import "google/api/annotations.proto";
+import "google/api/field_behavior.proto";
+option go_package = "github.com/tigrisdata/tigrisdb/api";
+
+// BUG: gnostic protoc-gen-openapi doesn't support enum generation
+// https://github.com/google/gnostic/issues/255
+// BUG: grpc-gateway doesn't support in-process streaming
+// https://github.com/fullstorydev/grpchan
+// https://github.com/grpc/grpc-go/issues/906
+enum StatusCode {
+  StatusCode_UNKNOWN = 0;
+  StatusCode_OK = 200;
+  StatusCode_BAD_REQUEST = 400;
+  StatusCode_NOT_FOUND = 404;
+  StatusCode_CONFLICT = 409;
+  StatusCode_NOT_IMPLEMENTED = 501;
+  StatusCode_INTERNAL_SERVER_ERROR = 500;
+}
+
+message TigrisDBRequest {
+  string db = 1;
+  string table = 2;
+  string key = 3;
+}
+
+message TigrisDBResponse { int32 rows_changed = 1; }
+
+message TigrisDBKey {
+  bytes primary_key = 1;
+  bytes partition_key = 2;
+}
+
+message TigrisDBDoc {
+  bytes primary_key = 1;
+  bytes partition_key = 2;
+  bytes value = 3;
+}
+
+message TigrisDBCRUDRequest {
+  string db = 1;
+  string table = 2;
+  repeated TigrisDBDoc docs = 3;
+}
+
+message emptyMessage {}
+
+// TODO: query and alter table apis
+service TigrisDB {
+  rpc Health(emptyMessage) returns (TigrisDBResponse) {
+    option (google.api.http) = {
+      get : "/v1/health"
+    };
+  }
+  rpc CreateTable(TigrisDBRequest) returns (TigrisDBResponse) {
+    option (google.api.http) = {
+      put : "/v1/table/{db}/{table}/create"
+      body : "*"
+    };
+  }
+  rpc DropTable(TigrisDBRequest) returns (TigrisDBResponse) {
+    option (google.api.http) = {
+      put : "/v1/table/{db}/{table}/drop"
+      body : "*"
+    };
+  }
+  rpc TruncateTable(TigrisDBRequest) returns (TigrisDBResponse) {
+    option (google.api.http) = {
+      put : "/v1/table/{db}/{table}/truncate"
+    };
+  }
+  rpc Insert(TigrisDBCRUDRequest) returns (TigrisDBResponse) {
+    option (google.api.http) = {
+      put : "/v1/crud/{db}/{table}/insert"
+      body : "*"
+    };
+  }
+  rpc Delete(TigrisDBCRUDRequest) returns (TigrisDBResponse) {
+    option (google.api.http) = {
+      put : "/v1/crud/{db}/{table}/delete"
+      body : "*"
+    };
+  }
+  rpc Update(TigrisDBCRUDRequest) returns (TigrisDBResponse) {
+    option (google.api.http) = {
+      patch : "/v1/crud/{db}/{table}/update"
+      body : "*"
+    };
+  }
+  rpc Upsert(TigrisDBCRUDRequest) returns (TigrisDBResponse) {
+    option (google.api.http) = {
+      patch : "/v1/crud/{db}/{table}/upsert"
+      body : "*"
+    };
+  }
+  rpc Replace(TigrisDBCRUDRequest) returns (TigrisDBResponse) {
+    option (google.api.http) = {
+      put : "/v1/crud/{db}/{table}/replace"
+      body : "*"
+    };
+  }
+  rpc Read(TigrisDBCRUDRequest) returns (stream TigrisDBDoc) {
+    option (google.api.http) = {
+      put : "/v1/crud/{db}/{table}/read"
+      body : "*"
+    };
+  }
+}

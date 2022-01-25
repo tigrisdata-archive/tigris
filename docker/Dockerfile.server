@@ -1,0 +1,10 @@
+FROM golang:1.15-alpine3.12
+EXPOSE 8082
+EXPOSE 8081
+
+RUN mkdir -p /server /etc/tigrisdata/tigrisdb
+COPY server/service /server/service
+COPY config/server.yaml /etc/tigrisdata/tigrisdb
+WORKDIR /server
+
+CMD ["/server/service"]

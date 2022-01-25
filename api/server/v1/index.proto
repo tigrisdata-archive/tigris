@@ -1,0 +1,92 @@
+// Copyright 2022 Tigris Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+import "google/api/annotations.proto";
+import "server/v1/user.proto";
+option go_package = "github.com/tigrisdata/tigrisdb/api";
+
+message MicroShardKey {
+  bytes min_key = 1;
+  bytes max_key = 2;
+  int64 timestamp = 3;
+  uint64 offset = 4;
+  uint64 length = 5;
+  string file_id = 6;
+}
+
+message ShardFile {
+  int64 timestamp = 1;
+  string file_id = 2;
+  repeated MicroShardKey shards = 3;
+}
+
+message UpdateIndexRequest {
+  string db = 1;
+  string table = 2;
+  string index = 3;
+  ShardFile old = 4;
+  repeated ShardFile new = 5;
+}
+
+message ReadIndexRequest {
+  string db = 1;
+  string table = 2;
+  string index = 3;
+  bytes min_key = 4;
+  bytes max_key = 5;
+}
+
+message PatchIndexEntry {
+  bytes primary_key = 1;
+  bytes partition_key = 2;
+  MicroShardKey value = 3;
+}
+
+message PatchPrimaryIndexRequest {
+  string db = 1;
+  string table = 2;
+  repeated PatchIndexEntry entries = 3;
+}
+
+message ReadIndexResponse {
+  int32 code = 1;
+  repeated MicroShardKey shards = 2;
+}
+
+service IndexAPI {
+  rpc UpdateIndex(UpdateIndexRequest) returns (TigrisDBResponse) {
+    option (google.api.http) = {
+      put : "/v1/index/{db}/{table}/{index}/update"
+      body : "*"
+    };
+  }
+  rpc PatchPrimaryIndex(PatchPrimaryIndexRequest) returns (TigrisDBResponse) {
+    option (google.api.http) = {
+      put : "/v1/index/{db}/{table}/primary/update"
+      body : "*"
+    };
+  }
+  rpc ReadIndex(ReadIndexRequest) returns (ReadIndexResponse) {
+    option (google.api.http) = {
+      put : "/v1/index/{db}/{table}/{index}" // min_key, max_key automatically
+                                             // mappped to query parameters
+      body : "*"
+      //NOTE: We cannot use get so as URL parameters doesn't allow binary data
+      // and our key is binary in general case
+      //get : "/v1/index/{db}/{table}/{index}" // min_key, max_key automatically
+      // mappped to query parameters
+    };
+  }
+}

@@ -1,0 +1,20 @@
+FROM golang:1.15-alpine3.12
+
+RUN apk add make curl git gcc g++
+
+ENV GOPATH=/go
+RUN mkdir -p /go/src/tigris
+
+#this is to install dependencies during docker build
+COPY ./Makefile /go/src/tigris/
+COPY ./go.mod /go/src/tigris/
+
+WORKDIR /go/src/tigris
+
+RUN make test_deps
+
+RUN GO111MODULE=on go mod download
+
+RUN rm -rf ./*
+
+CMD make local_test
