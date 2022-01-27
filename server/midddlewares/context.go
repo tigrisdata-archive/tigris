@@ -12,32 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package middlewares
 
 import (
-	"github.com/tigrisdata/tigrisdb/store/kv"
-	"github.com/tigrisdata/tigrisdb/util/log"
+	"context"
+	"fmt"
+	"net/http"
 )
 
-type apiConfig struct {
-	Host     string
-	HTTPPort int16 `mapstructure:"http_port" yaml:"http_port"`
-	GRPCPort int16 `mapstructure:"grpc_port" yaml:"grpc_port"`
-}
+type ContextSetterOptions struct{}
 
-type Config struct {
-	API      apiConfig `yaml:"api" json:"api"`
-	Log      log.LogConfig
-	DynamoDB kv.DynamodbConfig
-}
+func ContextSetter(options *ContextSetterOptions) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		fn := func(w http.ResponseWriter, r *http.Request) {
+			fmt.Println("In ContextSetter")
+			var ctx context.Context = context.WithValue(r.Context(), "", nil)
+			ctx = context.WithValue(ctx, "token", r.Header.Get("TOKEN"))
 
-var config = Config{
-	Log: log.LogConfig{
-		Level: "trace",
-	},
-	API: apiConfig{
-		Host:     "0.0.0.0",
-		HTTPPort: 8081,
-		GRPCPort: 8082,
-	},
+			r = r.WithContext(ctx)
+
+			next.ServeHTTP(w, r)
+		}
+
+		return http.HandlerFunc(fn)
+	}
 }

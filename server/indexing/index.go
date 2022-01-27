@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package indexing
 
 import (
 	"bytes"
@@ -32,13 +32,13 @@ const (
 	partitionBits = 16
 )
 
-type index struct {
+type Index struct {
 	kv kv.KV
 }
 
 // NewIndexStore initializes micro-shard indexing store
-func NewIndexStore(kv kv.KV) (*index, error) {
-	return &index{kv: kv}, nil
+func NewIndexStore(kv kv.KV) (*Index, error) {
+	return &Index{kv: kv}, nil
 }
 
 func insertShardKey(ctx context.Context, table string, batch kv.Tx, mshard *api.MicroShardKey, key []byte, ts int64, fileID string, replace bool) error {
@@ -60,7 +60,7 @@ func insertShardKey(ctx context.Context, table string, batch kv.Tx, mshard *api.
 	return err
 }
 
-func (i *index) processFileShards(ctx context.Context, table string, ts int64, fileID string, shards []*api.MicroShardKey, replace bool) error {
+func (i *Index) processFileShards(ctx context.Context, table string, ts int64, fileID string, shards []*api.MicroShardKey, replace bool) error {
 	batch := i.kv.Batch()
 	nops := 0
 
@@ -95,7 +95,7 @@ func (i *index) processFileShards(ctx context.Context, table string, ts int64, f
 	return nil
 }
 
-func (i *index) ReplaceMicroShardFile(ctx context.Context, table string, del *api.ShardFile, add []*api.ShardFile) error {
+func (i *Index) ReplaceMicroShardFile(ctx context.Context, table string, del *api.ShardFile, add []*api.ShardFile) error {
 	// Insert new shards
 	for _, f := range add {
 		if err := i.processFileShards(ctx, table, f.GetTimestamp(), f.GetFileId(), f.GetShards(), true); ulog.E(err) {
@@ -111,7 +111,7 @@ func (i *index) ReplaceMicroShardFile(ctx context.Context, table string, del *ap
 	return nil
 }
 
-func (i *index) readOne(ctx context.Context, table string, key types.Key) ([]kv.Doc, error) {
+func (i *Index) readOne(ctx context.Context, table string, key types.Key) ([]kv.Doc, error) {
 	docs, err := i.kv.Read(ctx, table, key)
 	if err != nil {
 		return nil, err
@@ -129,7 +129,7 @@ func (i *index) readOne(ctx context.Context, table string, key types.Key) ([]kv.
 	return nil, nil
 }
 
-func (i *index) readRange(ctx context.Context, table string, lk types.Key, rk types.Key) ([]kv.Doc, error) {
+func (i *Index) readRange(ctx context.Context, table string, lk types.Key, rk types.Key) ([]kv.Doc, error) {
 	log.Debug().Str("lkPartition", string(lk.Partition())).Str("rkPartition", string(rk.Partition())).Msg("readRange")
 	log.Debug().Str("lKey", string(lk.Primary())).Str("rKey", string(rk.Primary())).Msg("readRange")
 
@@ -186,7 +186,7 @@ func (i *index) readRange(ctx context.Context, table string, lk types.Key, rk ty
 // ReadIndex returns index entries corresponding to the requested key range
 // If the maxKey is not provides then it returns entries equal to the minKey.
 // It returns the range of keys where key >= minKey and key < maxKey
-func (i *index) ReadIndex(ctx context.Context, table string, minKey []byte, maxKey []byte) ([]*api.MicroShardKey, error) {
+func (i *Index) ReadIndex(ctx context.Context, table string, minKey []byte, maxKey []byte) ([]*api.MicroShardKey, error) {
 	var err error
 	var docs []kv.Doc
 	var rk types.Key
@@ -247,7 +247,7 @@ type TigrisDBObject struct {
 	TigrisDB TigrisDBMetadata `json:"_tigrisdb"`
 }
 
-func (i *index) PatchPrimaryIndex(ctx context.Context, table string, entries []*api.PatchIndexEntry) error {
+func (i *Index) PatchPrimaryIndex(ctx context.Context, table string, entries []*api.PatchIndexEntry) error {
 	for _, v := range entries {
 		m := TigrisDBObject{
 			TigrisDB: TigrisDBMetadata{
@@ -299,3 +299,5 @@ func (i *indexKey) Primary() []byte {
 func (i *indexKey) String() string {
 	return fmt.Sprintf("%s %d %d %s", i.key.String(), i.timestamp, i.offset, i.fileID)
 }
+
+

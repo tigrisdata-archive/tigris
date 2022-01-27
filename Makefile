@@ -12,7 +12,7 @@ BUILD_PARAM=-tags=release -ldflags "-extldflags '-static' -X 'main.Version=$(VER
 # generate GRPC client/server, openapi spec, http server
 ${GEN_DIR}/server/${V}/%_openapi.yaml ${GEN_DIR}/server/${V}/%.pb.go ${GEN_DIR}/server/${V}/%.pb.gw.go: api/server/${V}/%.proto
 	protoc -Iapi --openapi_out=${GEN_DIR} --grpc-gateway_out=${GEN_DIR} --go_out=${GEN_DIR} --go-grpc_out=${GEN_DIR} --go_opt=paths=source_relative --go-grpc_opt=paths=source_relative --grpc-gateway_opt paths=source_relative $<
-	sed -i 's/format: bytes/format: byte/g' ${GEN_DIR}/openapi.yaml
+	perl -i -pe's/format: bytes/format: byte/g' ${GEN_DIR}/openapi.yaml
 	mv ${GEN_DIR}/openapi.yaml ${GEN_DIR}/server/${V}/$(*F)_openapi.yaml
 
 # generate Go HTTP client from openapi spec
@@ -28,7 +28,7 @@ ${GEN_DIR}/client/${V}/%/http.go: ${GEN_DIR}/server/${V}/%_openapi.yaml
 test_client: ${GEN_DIR}/client/${V}/index/http.go ${GEN_DIR}/client/${V}/user/http.go
 
 server: server/service
-server/service: $(ESRC) ${GEN_DIR}/server/${V}/index.pb.go ${GEN_DIR}/server/${V}/index.pb.gw.go ${GEN_DIR}/server/${V}/user.pb.go ${GEN_DIR}/server/${V}/user.pb.gw.go
+server/service: $(ESRC) ${GEN_DIR}/server/${V}/index.pb.go ${GEN_DIR}/server/${V}/index.pb.gw.go ${GEN_DIR}/server/${V}/user.pb.go ${GEN_DIR}/server/${V}/user.pb.gw.go ${GEN_DIR}/server/${V}/health.pb.go ${GEN_DIR}/server/${V}/health.pb.gw.go
 	CGO_ENABLED=0 go build $(BUILD_PARAM) -o server/service ./server
 
 lint:

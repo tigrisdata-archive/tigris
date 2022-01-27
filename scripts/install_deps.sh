@@ -23,6 +23,6 @@ curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/insta
 
 #generate openapi 3.0 spec
 go get github.com/googleapis/gnostic
-go install github.com/googleapis/gnostic/apps/protoc-gen-openapi
+go mod tidy
 #generate go http client
 go get github.com/deepmap/oapi-codegen/cmd/oapi-codegen

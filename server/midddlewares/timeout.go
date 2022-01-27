@@ -12,10 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package middlewares
 
-import "testing"
+import (
+	"context"
+	"net/http"
+	"time"
+)
 
-func TestIndex(t *testing.T) {
+const (
+	DefaultTimeout = 10 * time.Second
+)
 
+func Timeout(next http.Handler) http.Handler {
+	return http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			// only set from outside if value is missing in r.Context()
+			ctx, cancel := context.WithDeadline(r.Context(), time.Now().Add(DefaultTimeout))
+			defer func() {
+				cancel()
+				if ctx.Err() == context.DeadlineExceeded {
+					w.WriteHeader(http.StatusGatewayTimeout)
+				}
+			}()
+			r = r.WithContext(ctx)
+
+			next.ServeHTTP(w, r)
+		},
+	)
 }

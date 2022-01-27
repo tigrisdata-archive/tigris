@@ -17,6 +17,8 @@ package main
 import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/pflag"
+	"github.com/tigrisdata/tigrisdb/server/config"
+	"github.com/tigrisdata/tigrisdb/server/muxer"
 	"github.com/tigrisdata/tigrisdb/store/kv"
 	"github.com/tigrisdata/tigrisdb/util"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
@@ -30,21 +32,22 @@ var BuildHash string
 
 func main() {
 	pflag.String("api.grpc_port", "", "set server grpc port")
-	//	pflag.String("api.http_port", "", "set server http port")
 
-	util.LoadConfig("server", &config)
+	util.LoadConfig("server", &config.DefaultConfig)
 
-	ulog.Configure(config.Log)
+	ulog.Configure(config.DefaultConfig.Log)
 
 	log.Info().Str("version", Version).Str("BuildHash", BuildHash).Msgf("Starting server")
 
-	kv, err := kv.NewDynamoDB(&config.DynamoDB)
+	kv, err := kv.NewDynamoDB(&config.DefaultConfig.DynamoDB)
 	if err != nil {
 		log.Fatal().Err(err).Msg("error initializing kv store")
 	}
 
-	if err := ServeAPI(config.API.Host, config.API.GRPCPort, config.API.HTTPPort, kv); err != nil {
-		log.Fatal().Err(err).Msgf("error starting grpc/http server")
+	mx := muxer.NewMuxer(&config.DefaultConfig)
+	mx.RegisterServices(kv)
+	if err := mx.Start(config.DefaultConfig.Server.Host, config.DefaultConfig.Server.HTTPPort); err != nil {
+		log.Fatal().Err(err).Msgf("error starting server")
 	}
 
 	log.Info().Msg("Shutdown")
