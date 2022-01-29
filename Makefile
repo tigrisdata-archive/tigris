@@ -11,7 +11,7 @@ BUILD_PARAM=-tags=release -ldflags "-extldflags '-static' -X 'main.Version=$(VER
 
 # generate GRPC client/server, openapi spec, http server
 ${GEN_DIR}/server/${V}/%_openapi.yaml ${GEN_DIR}/server/${V}/%.pb.go ${GEN_DIR}/server/${V}/%.pb.gw.go: api/server/${V}/%.proto
-	protoc -Iapi --openapi_out=${GEN_DIR} --grpc-gateway_out=${GEN_DIR} --go_out=${GEN_DIR} --go-grpc_out=${GEN_DIR} --go_opt=paths=source_relative --go-grpc_opt=paths=source_relative --grpc-gateway_opt paths=source_relative $<
+	protoc -Iapi --openapi_out=${GEN_DIR} --openapi_opt=naming=proto  --grpc-gateway_out=${GEN_DIR} --go_out=${GEN_DIR} --go-grpc_out=${GEN_DIR} --go_opt=paths=source_relative --go-grpc_opt=paths=source_relative --grpc-gateway_opt paths=source_relative $<
 	perl -i -pe's/format: bytes/format: byte/g' ${GEN_DIR}/openapi.yaml
 	mv ${GEN_DIR}/openapi.yaml ${GEN_DIR}/server/${V}/$(*F)_openapi.yaml
 

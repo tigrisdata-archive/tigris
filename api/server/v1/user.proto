@@ -13,8 +13,10 @@
 // limitations under the License.
 
 syntax = "proto3";
+
 import "google/api/annotations.proto";
-import "google/api/field_behavior.proto";
+import "google/protobuf/struct.proto";
+
 option go_package = "github.com/tigrisdata/tigrisdb/api";
 
 // BUG: gnostic protoc-gen-openapi doesn't support enum generation
@@ -32,91 +34,195 @@ enum StatusCode {
   StatusCode_INTERNAL_SERVER_ERROR = 500;
 }
 
-message TigrisDBRequest {
+message WriteResponseHeader {
+    int32 code = 1;
+    string msg = 2;
+}
+
+message Filter {
+  repeated Clause clause = 1;
+}
+
+message Clause {
+  google.protobuf.Struct value = 1;
+}
+
+message WriteOption {}
+message ReadOption {}
+message DocOption {}
+
+message UserDocument {
+  google.protobuf.Struct doc = 1;
+  DocOption options = 2;
+}
+
+message InsertRequest {
   string db = 1;
-  string table = 2;
-  string key = 3;
+  string collection = 2;
+  InsertRequestBody insert_body = 3;
 }
 
-message TigrisDBResponse { int32 rows_changed = 1; }
-
-message TigrisDBKey {
-  bytes primary_key = 1;
-  bytes partition_key = 2;
+message InsertRequestBody {
+  repeated UserDocument documents = 1;
+  WriteOption options = 2;
 }
 
-message TigrisDBDoc {
-  bytes primary_key = 1;
-  bytes partition_key = 2;
-  bytes value = 3;
+message InsertResponse {
+  WriteResponseHeader header = 1;
 }
 
-message TigrisDBCRUDRequest {
+message DeleteRequest {
   string db = 1;
-  string table = 2;
-  repeated TigrisDBDoc docs = 3;
+  string collection = 2;
+  DeleteRequestBody delete_body = 3;
 }
 
-message emptyMessage {}
+message DeleteRequestBody {
+  Filter filter = 1;
+  WriteOption options = 2;
+}
+
+message DeleteResponse {
+  WriteResponseHeader header = 1;
+}
+
+message ReplaceRequest {
+  string db = 1;
+  string collection = 2;
+  ReplaceRequestBody replace_body = 3;
+}
+
+message ReplaceRequestBody {
+  repeated UserDocument documents = 1;
+  WriteOption options = 2;
+}
+
+message ReplaceResponse {
+  WriteResponseHeader header = 1;
+}
+
+message UpdateRequest {
+  string db = 1;
+  string collection = 2;
+  UpdateRequestBody update_body = 3;
+ }
+
+message UpdateRequestBody {
+  google.protobuf.Struct fields = 1;
+  Filter filter = 2;
+  WriteOption options = 3;
+}
+
+message UpdateResponse {
+  WriteResponseHeader header = 1;
+}
+
+message ReadRequest {
+  string db = 1;
+  string collection = 2;
+  ReadRequestBody read_body = 3;
+}
+
+message ReadRequestBody {
+  Filter filter = 1;
+  repeated UserDocument keys = 2;
+  ReadOption options = 3;
+}
+
+message ReadResponse {
+  WriteResponseHeader header = 1;
+  UserDocument doc = 2;
+}
+
+message CreateCollectionRequest {
+  string db = 1;
+  string collection = 2;
+}
+
+message CreateCollectionResponse {
+  WriteResponseHeader header = 1;
+}
+
+message AlterCollectionRequest {
+  string db = 1;
+  string collection = 2;
+}
+
+message AlterCollectionResponse {
+  WriteResponseHeader header = 1;
+}
+
+message DropCollectionRequest {
+  string db = 1;
+  string collection = 2;
+}
+
+message DropCollectionResponse {
+  WriteResponseHeader header = 1;
+}
+message TruncateCollectionRequest {
+  string db = 1;
+  string collection = 2;
+}
+
+message TruncateCollectionResponse {
+  WriteResponseHeader header = 1;
+}
 
 // TODO: query and alter table apis
 service TigrisDB {
-  rpc Health(emptyMessage) returns (TigrisDBResponse) {
+  // Following APIs are related to DMLs supported by TigrisDB
+  rpc Insert(InsertRequest) returns (InsertResponse) {
     option (google.api.http) = {
-      get : "/v1/health"
-    };
-  }
-  rpc CreateTable(TigrisDBRequest) returns (TigrisDBResponse) {
-    option (google.api.http) = {
-      put : "/v1/table/{db}/{table}/create"
+      post : "/api/v1/databases/{db}/collections/{collection}/documents/insert"
       body : "*"
     };
   }
-  rpc DropTable(TigrisDBRequest) returns (TigrisDBResponse) {
+  rpc Replace(ReplaceRequest) returns (ReplaceResponse) {
     option (google.api.http) = {
-      put : "/v1/table/{db}/{table}/drop"
+      put : "/api/v1/databases/{db}/collections/{collection}/documents/replace"
       body : "*"
     };
   }
-  rpc TruncateTable(TigrisDBRequest) returns (TigrisDBResponse) {
+  rpc Delete(DeleteRequest) returns (DeleteResponse) {
     option (google.api.http) = {
-      put : "/v1/table/{db}/{table}/truncate"
-    };
+      delete : "/api/v1/databases/{db}/collections/{collection}/documents/delete"
+        };
   }
-  rpc Insert(TigrisDBCRUDRequest) returns (TigrisDBResponse) {
+  rpc Update(UpdateRequest) returns (UpdateResponse) {
     option (google.api.http) = {
-      put : "/v1/crud/{db}/{table}/insert"
+      put : "/api/v1/databases/{db}/collections/{collection}/documents/update"
       body : "*"
     };
   }
-  rpc Delete(TigrisDBCRUDRequest) returns (TigrisDBResponse) {
+  rpc Read(ReadRequest) returns (stream ReadResponse) {
     option (google.api.http) = {
-      put : "/v1/crud/{db}/{table}/delete"
+      post : "/api/v1/databases/{db}/collections/{collection}/documents/read"
       body : "*"
     };
   }
-  rpc Update(TigrisDBCRUDRequest) returns (TigrisDBResponse) {
+
+  // The following APIs are related to DDLs supported by TigrisDB
+  rpc CreateCollection(CreateCollectionRequest) returns (CreateCollectionResponse) {
     option (google.api.http) = {
-      patch : "/v1/crud/{db}/{table}/update"
+      post : "/api/v1/databases/{db}/collections/{collection}/create"
       body : "*"
     };
   }
-  rpc Upsert(TigrisDBCRUDRequest) returns (TigrisDBResponse) {
+  rpc AlterCollection(AlterCollectionRequest) returns (AlterCollectionResponse) {
     option (google.api.http) = {
-      patch : "/v1/crud/{db}/{table}/upsert"
+      post : "/api/v1/databases/{db}/collections/{collection}/alter"
       body : "*"
     };
   }
-  rpc Replace(TigrisDBCRUDRequest) returns (TigrisDBResponse) {
+  rpc DropCollection(DropCollectionRequest) returns (DropCollectionResponse) {
     option (google.api.http) = {
-      put : "/v1/crud/{db}/{table}/replace"
-      body : "*"
+      delete : "/api/v1/databases/{db}/collections/{collection}/drop"
     };
   }
-  rpc Read(TigrisDBCRUDRequest) returns (stream TigrisDBDoc) {
+  rpc TruncateCollection(TruncateCollectionRequest) returns (TruncateCollectionResponse) {
     option (google.api.http) = {
-      put : "/v1/crud/{db}/{table}/read"
-      body : "*"
+      delete : "/api/v1/databases/{db}/collections/{collection}/truncate"
     };
   }
 }

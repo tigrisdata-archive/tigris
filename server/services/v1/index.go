@@ -18,10 +18,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
-	"google.golang.org/grpc"
-
 	"github.com/davecgh/go-spew/spew"
+	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
@@ -29,6 +27,7 @@ import (
 	"github.com/tigrisdata/tigrisdb/server/schemas"
 	"github.com/tigrisdata/tigrisdb/store/kv"
 	"github.com/tigrisdata/tigrisdb/util"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -51,7 +50,7 @@ func (a *indexService) RegisterHTTP(router chi.Router) error {
 	if err := api.RegisterIndexAPIHandlerServer(context.TODO(), mux, a); err != nil {
 		return err
 	}
-	router.HandleFunc("/v1/index/*", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc("/api/v1/index/*", func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
 	})
 
@@ -63,24 +62,24 @@ func (a *indexService) RegisterGRPC(grpc *grpc.Server) error {
 	return nil
 }
 
-func (a *indexService) UpdateIndex(ctx context.Context, r *api.UpdateIndexRequest) (*api.TigrisDBResponse, error) {
-	log.Debug().Str("db", r.GetDb()).Str("table", r.GetTable()).Str("index", r.GetIndex()).Msg("UpdateIndex")
+func (a *indexService) UpdateIndex(ctx context.Context, r *api.UpdateIndexRequest) (*api.WriteIndexResponse, error) {
+	log.Debug().Str("db", r.GetDb()).Str("collection", r.GetCollection()).Str("index", r.GetIndex()).Msg("UpdateIndex")
 
 	spew.Dump(r)
 
-	name := schemas.GetIndexName(r.GetDb(), r.GetTable(), r.GetIndex())
+	name := schemas.GetIndexName(r.GetDb(), r.GetCollection(), r.GetIndex())
 
 	if err := a.idx.ReplaceMicroShardFile(ctx, name, r.GetOld(), r.GetNew()); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	return &api.TigrisDBResponse{}, nil
+	return &api.WriteIndexResponse{}, nil
 }
 
 func (a *indexService) ReadIndex(ctx context.Context, r *api.ReadIndexRequest) (*api.ReadIndexResponse, error) {
-	log.Debug().Str("db", r.GetDb()).Str("table", r.GetTable()).Str("index", r.GetIndex()).Str("min_key", string(r.GetMinKey())).Str("max_key", string(r.GetMinKey())).Msg("ReadIndex")
+	log.Debug().Str("db", r.GetDb()).Str("collection", r.GetCollection()).Str("index", r.GetIndex()).Str("min_key", string(r.GetMinKey())).Str("max_key", string(r.GetMinKey())).Msg("ReadIndex")
 
-	name := schemas.GetIndexName(r.GetDb(), r.GetTable(), r.GetIndex())
+	name := schemas.GetIndexName(r.GetDb(), r.GetCollection(), r.GetIndex())
 	shards, err := a.idx.ReadIndex(ctx, name, r.GetMinKey(), r.GetMaxKey())
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -88,12 +87,12 @@ func (a *indexService) ReadIndex(ctx context.Context, r *api.ReadIndexRequest) (
 	return &api.ReadIndexResponse{Shards: shards}, nil
 }
 
-func (a *indexService) PatchPrimaryIndex(ctx context.Context, r *api.PatchPrimaryIndexRequest) (*api.TigrisDBResponse, error) {
-	log.Debug().Str("db", r.GetDb()).Str("table", r.GetTable()).Msg("PatchPrimaryIndex")
+func (a *indexService) PatchPrimaryIndex(ctx context.Context, r *api.PatchPrimaryIndexRequest) (*api.WriteIndexResponse, error) {
+	log.Debug().Str("db", r.GetDb()).Str("collection", r.GetCollection()).Msg("PatchPrimaryIndex")
 
-	name := schemas.GetTableName(r.GetDb(), r.GetTable())
+	name := schemas.GetTableName(r.GetDb(), r.GetCollection())
 	if err := a.idx.PatchPrimaryIndex(ctx, name, r.Entries); err != nil {
 		return nil, err
 	}
-	return &api.TigrisDBResponse{}, nil
+	return &api.WriteIndexResponse{}, nil
 }

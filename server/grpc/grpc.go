@@ -35,7 +35,8 @@ func NewServer(cfg *config.Config) *Server {
 }
 
 func (s *Server) Start(mux cmux.CMux) error {
-	match := mux.Match(cmux.HTTP2HeaderField("content-type", "application/grpc"))
+	// MatchWithWriters is needed as it needs SETTINGS frame from the server otherwise the client will block
+	match := mux.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
 	go s.GrpcS.Serve(match)
 	return nil
 }
