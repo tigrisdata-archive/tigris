@@ -22,7 +22,6 @@ import (
 	"net/http"
 	"reflect"
 
-	"github.com/aws/aws-sdk-go/aws"
 	userHTTP "github.com/tigrisdata/tigrisdb/api/client/v1/user"
 
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
@@ -83,7 +82,7 @@ type grpcClientIface interface {
 */
 
 func newGRPCClient(_ context.Context, host string, port int16) (*grpcClient, error) {
-	conn, err := grpc.Dial(fmt.Sprintf("%s:%d", host, port), grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(fmt.Sprintf("%s:%d", host, port), grpc.WithInsecure(), grpc.FailOnNonTempDialError(true), grpc.WithBlock())
 	if err != nil {
 		log.Fatal().Err(err).Msg("grpc connect failed")
 	}
@@ -96,18 +95,17 @@ func (c *grpcClient) Close() error {
 }
 
 func (c *grpcClient) Create(ctx context.Context, db string, table string, key string) error {
-	_, err := c.CreateTable(ctx, &api.TigrisDBRequest{
-		Db:    db,
-		Table: table,
-		Key:   key,
+	_, err := c.CreateCollection(ctx, &api.CreateCollectionRequest{
+		Db:         db,
+		Collection: table,
 	})
 	return err
 }
 
 func (c *grpcClient) Drop(ctx context.Context, db string, table string) error {
-	_, err := c.DropTable(ctx, &api.TigrisDBRequest{
-		Db:    db,
-		Table: table,
+	_, err := c.DropCollection(ctx, &api.DropCollectionRequest{
+		Db:         db,
+		Collection: table,
 	})
 	return err
 }
@@ -158,10 +156,10 @@ func marshalDocsGeneric(docs []interface{}, add func(doc []byte)) error {
 	return nil
 }
 
-func marshalDocsGRPC(docs []interface{}) ([]*api.TigrisDBDoc, error) {
-	res := make([]*api.TigrisDBDoc, 0, len(docs))
+func marshalDocsGRPC(docs []interface{}) ([]*api.UserDocument, error) {
+	res := make([]*api.UserDocument, 0, len(docs))
 	err := marshalDocsGeneric(docs, func(doc []byte) {
-		res = append(res, &api.TigrisDBDoc{Value: doc})
+		res = append(res, &api.UserDocument{Doc: nil})
 	})
 	if err != nil {
 		return nil, err
@@ -175,25 +173,26 @@ func (c *grpcCRUDClient) Insert(ctx context.Context, docs ...interface{}) error 
 		return err
 	}
 
-	_, err = c.c.Insert(ctx, &api.TigrisDBCRUDRequest{
-		Db:    c.db,
-		Table: c.table,
-		Docs:  bdocs,
+	_, err = c.c.Insert(ctx, &api.InsertRequest{
+		Db:         c.db,
+		Collection: c.table,
+		InsertBody: &api.InsertRequestBody{
+			Documents: bdocs,
+		},
 	})
 
 	return err
 }
 
 func (c *grpcCRUDClient) Delete(ctx context.Context, docs ...interface{}) error {
-	bdocs, err := marshalDocsGRPC(docs)
+	_, err := marshalDocsGRPC(docs)
 	if err != nil {
 		return err
 	}
 
-	_, err = c.c.Delete(ctx, &api.TigrisDBCRUDRequest{
-		Db:    c.db,
-		Table: c.table,
-		Docs:  bdocs,
+	_, err = c.c.Delete(ctx, &api.DeleteRequest{
+		Db:         c.db,
+		Collection: c.table,
 	})
 
 	return err
@@ -205,25 +204,27 @@ func (c *grpcCRUDClient) Replace(ctx context.Context, docs ...interface{}) error
 		return err
 	}
 
-	_, err = c.c.Replace(ctx, &api.TigrisDBCRUDRequest{
-		Db:    c.db,
-		Table: c.table,
-		Docs:  bdocs,
+	_, err = c.c.Replace(ctx, &api.ReplaceRequest{
+		Db:         c.db,
+		Collection: c.table,
+		ReplaceBody: &api.ReplaceRequestBody{
+			Documents: bdocs,
+		},
 	})
 
 	return err
 }
 
 func (c *grpcCRUDClient) Update(ctx context.Context, docs ...interface{}) error {
-	bdocs, err := marshalDocsGRPC(docs)
+	_, err := marshalDocsGRPC(docs)
 	if err != nil {
 		return err
 	}
 
-	_, err = c.c.Update(ctx, &api.TigrisDBCRUDRequest{
-		Db:    c.db,
-		Table: c.table,
-		Docs:  bdocs,
+	_, err = c.c.Update(ctx, &api.UpdateRequest{
+		Db:         c.db,
+		Collection: c.table,
+		UpdateBody: &api.UpdateRequestBody{},
 	})
 
 	return err
@@ -235,22 +236,24 @@ func (c *grpcCRUDClient) Read(ctx context.Context, docs ...interface{}) error {
 		return err
 	}
 
-	resp, err := c.c.Read(ctx, &api.TigrisDBCRUDRequest{
-		Db:    c.db,
-		Table: c.table,
-		Docs:  bdocs,
+	resp, err := c.c.Read(ctx, &api.ReadRequest{
+		Db:         c.db,
+		Collection: c.table,
+		ReadBody: &api.ReadRequestBody{
+			Keys: bdocs,
+		},
 	})
 
 	i := 0
 	for {
-		d, err := resp.Recv()
+		_, err := resp.Recv()
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
 			return err
 		}
-		err = json.Unmarshal(d.Value, &docs[i])
+		err = json.Unmarshal(nil, &docs[i])
 		if err != nil {
 			return err
 		}
@@ -289,15 +292,13 @@ func HTTPError(err error, resp *http.Response) error {
 	return nil
 }
 
-func (c *httpClient) Create(ctx context.Context, db string, table string, key string) error {
-	resp, err := c.TigrisDBCreateTableWithResponse(ctx, db, table, userHTTP.TigrisDBCreateTableJSONRequestBody{
-		Key: aws.String(key),
-	})
+func (c *httpClient) Create(ctx context.Context, db string, collection string, key string) error {
+	resp, err := c.TigrisDBCreateCollectionWithResponse(ctx, db, collection, userHTTP.TigrisDBCreateCollectionJSONRequestBody{})
 	return HTTPError(err, resp.HTTPResponse)
 }
 
 func (c *httpClient) Drop(ctx context.Context, db string, table string) error {
-	resp, err := c.TigrisDBDropTableWithResponse(ctx, db, table, userHTTP.TigrisDBDropTableJSONRequestBody{})
+	resp, err := c.TigrisDBDropCollectionWithResponse(ctx, db, table)
 	return HTTPError(err, resp.HTTPResponse)
 }
 
@@ -309,10 +310,10 @@ func (c *httpClient) BeginTx() (txClient, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func marshalDocsHTTP(docs []interface{}) ([]userHTTP.TigrisDBDoc, error) {
-	res := make([]userHTTP.TigrisDBDoc, 0, len(docs))
+func marshalDocsHTTP(docs []interface{}) ([]userHTTP.UserDocument, error) {
+	res := make([]userHTTP.UserDocument, 0, len(docs))
 	err := marshalDocsGeneric(docs, func(doc []byte) {
-		res = append(res, userHTTP.TigrisDBDoc{Value: &doc})
+		res = append(res, userHTTP.UserDocument{Doc: nil})
 	})
 	if err != nil {
 		return nil, err
@@ -321,65 +322,63 @@ func marshalDocsHTTP(docs []interface{}) ([]userHTTP.TigrisDBDoc, error) {
 }
 
 func (c *httpCRUDClient) Insert(ctx context.Context, docs ...interface{}) error {
-	bdocs, err := marshalDocsHTTP(docs)
+	_, err := marshalDocsHTTP(docs)
 	if err != nil {
 		return err
 	}
 
 	resp, err := c.c.TigrisDBInsertWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBInsertJSONRequestBody{
-		Docs: &bdocs,
+		InsertBody: nil,
 	})
 
 	return HTTPError(err, resp.HTTPResponse)
 }
 
 func (c *httpCRUDClient) Delete(ctx context.Context, docs ...interface{}) error {
-	bdocs, err := marshalDocsHTTP(docs)
+	_, err := marshalDocsHTTP(docs)
 	if err != nil {
 		return err
 	}
 
-	resp, err := c.c.TigrisDBDeleteWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBDeleteJSONRequestBody{
-		Docs: &bdocs,
-	})
+	resp, err := c.c.TigrisDBDeleteWithResponse(ctx, c.db, c.table, nil)
 
 	return HTTPError(err, resp.HTTPResponse)
 }
 
 func (c *httpCRUDClient) Replace(ctx context.Context, docs ...interface{}) error {
-	bdocs, err := marshalDocsHTTP(docs)
+	_, err := marshalDocsHTTP(docs)
 	if err != nil {
 		return err
 	}
 
 	resp, err := c.c.TigrisDBReplaceWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBReplaceJSONRequestBody{
-		Docs: &bdocs,
+		ReplaceBody: nil,
 	})
 
 	return HTTPError(err, resp.HTTPResponse)
 }
 
 func (c *httpCRUDClient) Update(ctx context.Context, docs ...interface{}) error {
-	bdocs, err := marshalDocsHTTP(docs)
+	_, err := marshalDocsHTTP(docs)
 	if err != nil {
 		return err
 	}
 
 	resp, err := c.c.TigrisDBUpdateWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBUpdateJSONRequestBody{
-		Docs: &bdocs,
+		UpdateBody: nil,
 	})
 
 	return HTTPError(err, resp.HTTPResponse)
 }
 
 func (c *httpCRUDClient) Read(ctx context.Context, docs ...interface{}) error {
-	bdocs, err := marshalDocsHTTP(docs)
+	_, err := marshalDocsHTTP(docs)
 	if err != nil {
 		return err
 	}
 
 	resp, err := c.c.TigrisDBReadWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBReadJSONRequestBody{
-		Docs: &bdocs,
+		ReadBody: nil,
 	})
 
 	return HTTPError(err, resp.HTTPResponse)

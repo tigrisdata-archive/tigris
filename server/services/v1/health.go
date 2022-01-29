@@ -19,11 +19,14 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"google.golang.org/grpc"
-
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/util"
+	"google.golang.org/grpc"
+)
+
+const (
+	healthPath = "/health"
 )
 
 type healthService struct {
@@ -45,7 +48,7 @@ func (h *healthService) RegisterHTTP(router chi.Router) error {
 	if err := api.RegisterHealthAPIHandlerServer(context.TODO(), mux, h); err != nil {
 		return err
 	}
-	router.HandleFunc("/v1/health", func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc(apiPathPrefix+healthPath, func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
 	})
 	return nil

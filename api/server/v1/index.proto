@@ -14,7 +14,6 @@
 
 syntax = "proto3";
 import "google/api/annotations.proto";
-import "server/v1/user.proto";
 option go_package = "github.com/tigrisdata/tigrisdb/api";
 
 message MicroShardKey {
@@ -34,7 +33,7 @@ message ShardFile {
 
 message UpdateIndexRequest {
   string db = 1;
-  string table = 2;
+  string collection = 2;
   string index = 3;
   ShardFile old = 4;
   repeated ShardFile new = 5;
@@ -42,7 +41,7 @@ message UpdateIndexRequest {
 
 message ReadIndexRequest {
   string db = 1;
-  string table = 2;
+  string collection = 2;
   string index = 3;
   bytes min_key = 4;
   bytes max_key = 5;
@@ -56,7 +55,7 @@ message PatchIndexEntry {
 
 message PatchPrimaryIndexRequest {
   string db = 1;
-  string table = 2;
+  string collection = 2;
   repeated PatchIndexEntry entries = 3;
 }
 
@@ -65,23 +64,28 @@ message ReadIndexResponse {
   repeated MicroShardKey shards = 2;
 }
 
+message WriteIndexResponse {
+  int32 code = 1;
+  string msg = 2;
+}
+
 service IndexAPI {
-  rpc UpdateIndex(UpdateIndexRequest) returns (TigrisDBResponse) {
+  rpc UpdateIndex(UpdateIndexRequest) returns (WriteIndexResponse) {
     option (google.api.http) = {
-      put : "/v1/index/{db}/{table}/{index}/update"
+      put : "/api/v1/index/databases/{db}/collections/{collection}/{index}/update"
       body : "*"
     };
   }
-  rpc PatchPrimaryIndex(PatchPrimaryIndexRequest) returns (TigrisDBResponse) {
+  rpc PatchPrimaryIndex(PatchPrimaryIndexRequest) returns (WriteIndexResponse) {
     option (google.api.http) = {
-      put : "/v1/index/{db}/{table}/primary/update"
+      put : "/api/v1/index/databases/{db}/collections/{collection}/primary/update"
       body : "*"
     };
   }
   rpc ReadIndex(ReadIndexRequest) returns (ReadIndexResponse) {
     option (google.api.http) = {
-      put : "/v1/index/{db}/{table}/{index}" // min_key, max_key automatically
-                                             // mappped to query parameters
+      put : "/api/v1/index/databases/{db}/collections/{collection}/{index}" // min_key, max_key automatically
+      // mappped to query parameters
       body : "*"
       //NOTE: We cannot use get so as URL parameters doesn't allow binary data
       // and our key is binary in general case

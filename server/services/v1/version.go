@@ -12,19 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-syntax = "proto3";
-import "google/api/annotations.proto";
-option go_package = "github.com/tigrisdata/tigrisdb/api";
+package v1
 
-message HealthCheckInput {}
-message HealthCheckResponse {
-  string response = 1;
-}
+const (
+	version = "v1"
+)
 
-service HealthAPI {
-  rpc Health(HealthCheckInput) returns (HealthCheckResponse) {
-    option (google.api.http) = {
-      get : "/api/v1/health"
-    };
-  }
-}
+const (
+	apiPathPrefix = "/api/" + version
+)

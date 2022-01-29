@@ -36,32 +36,32 @@ func TestAPIGRPC(t *testing.T) {
 	//c, _ := NewGRPCClient(ctx, "localhost", 8082)
 	c, _ := newGRPCClient(ctx, "server", 8082)
 
-	_, _ = c.DropTable(ctx, &api.TigrisDBRequest{Db: "db1", Table: "t1"})
+	_, _ = c.DropCollection(ctx, &api.DropCollectionRequest{Db: "db1", Collection: "t1"})
 
-	_, err := c.CreateTable(ctx, &api.TigrisDBRequest{Db: "db1", Table: "t1"})
+	_, err := c.CreateCollection(ctx, &api.CreateCollectionRequest{Db: "db1", Collection: "t1"})
 	require.NoError(t, err)
 
-	_, err = c.Insert(ctx, &api.TigrisDBCRUDRequest{
-		Db:    "db1",
-		Table: "t1",
-		Docs: []*api.TigrisDBDoc{
-			{
-				PrimaryKey:   []byte("aaa"),
-				PartitionKey: []byte("a"),
-				Value:        []byte(`{"bbb": "ccc"}`),
+	_, err = c.Insert(ctx, &api.InsertRequest{
+		Db:         "db1",
+		Collection: "t1",
+		InsertBody: &api.InsertRequestBody{
+			Documents: []*api.UserDocument{
+				{
+					Doc: nil,
+				},
 			},
 		},
 	})
 	require.NoError(t, err)
 
-	_, err = c.Update(ctx, &api.TigrisDBCRUDRequest{Db: "db1", Table: "t1", Docs: []*api.TigrisDBDoc{{PrimaryKey: []byte("aaa"), PartitionKey: []byte("a"), Value: []byte("bbb11111")}}})
+	// {PrimaryKey: []byte("aaa"), PartitionKey: []byte("a"), Value: []byte("bbb11111")}}}
+	// {PrimaryKey: []byte("aaa"), PartitionKey: []byte("a"), Value: []byte(`{"bbb222222" : "uuuuu111"}`)}}
+	_, err = c.Update(ctx, &api.UpdateRequest{Db: "db1", Collection: "t1", UpdateBody: &api.UpdateRequestBody{}})
 	require.NoError(t, err)
-	_, err = c.Upsert(ctx, &api.TigrisDBCRUDRequest{Db: "db1", Table: "t1", Docs: []*api.TigrisDBDoc{{PrimaryKey: []byte("bbb"), PartitionKey: []byte("b"), Value: []byte("bbb11111")}}})
-	require.NoError(t, err)
-	_, err = c.Replace(ctx, &api.TigrisDBCRUDRequest{Db: "db1", Table: "t1", Docs: []*api.TigrisDBDoc{{PrimaryKey: []byte("aaa"), PartitionKey: []byte("a"), Value: []byte(`{"bbb222222" : "uuuuu111"}`)}}})
+	_, err = c.Replace(ctx, &api.ReplaceRequest{Db: "db1", Collection: "t1", ReplaceBody: &api.ReplaceRequestBody{}})
 	require.NoError(t, err)
 
-	rc, err := c.Read(ctx, &api.TigrisDBCRUDRequest{Db: "db1", Table: "t1", Docs: []*api.TigrisDBDoc{{PrimaryKey: []byte("aaa"), PartitionKey: []byte("a")}}})
+	rc, err := c.Read(ctx, &api.ReadRequest{Db: "db1", Collection: "t1", ReadBody: &api.ReadRequestBody{}})
 	require.NoError(t, err)
 
 	for {
@@ -70,13 +70,13 @@ func TestAPIGRPC(t *testing.T) {
 			break
 		}
 		require.NoError(t, err)
-		log.Debug().Str("value", string(d.Value)).Msg("Read")
+		log.Debug().Str("value", d.Doc.GetDoc().String()).Msg("Read")
 	}
 
-	_, err = c.Delete(ctx, &api.TigrisDBCRUDRequest{Db: "db1", Table: "t1", Docs: []*api.TigrisDBDoc{{PrimaryKey: []byte("aaa"), PartitionKey: []byte("a")}}})
+	_, err = c.Delete(ctx, &api.DeleteRequest{Db: "db1", Collection: "t1", DeleteBody: &api.DeleteRequestBody{}})
 	require.NoError(t, err)
 
-	_, err = c.DropTable(ctx, &api.TigrisDBRequest{Db: "db1", Table: "t1"})
+	_, err = c.DropCollection(ctx, &api.DropCollectionRequest{Db: "db1", Collection: "t1"})
 	require.NoError(t, err)
 
 	err = c.Close()
@@ -90,14 +90,14 @@ func TestAPIGRPCUpdatePrimaryIndex(t *testing.T) {
 	c, _ := newGRPCClient(ctx, "server", 8082)
 	ac, _ := NewAdminGRPCClient(ctx, "server", 8082)
 
-	_, _ = c.DropTable(ctx, &api.TigrisDBRequest{Db: "db1", Table: "t4"})
+	_, _ = c.DropCollection(ctx, &api.DropCollectionRequest{Db: "db1", Collection: "t4"})
 
-	_, err := c.CreateTable(ctx, &api.TigrisDBRequest{Db: "db1", Table: "t4"})
+	_, err := c.CreateCollection(ctx, &api.CreateCollectionRequest{Db: "db1", Collection: "t4"})
 	require.NoError(t, err)
 
 	_, err = ac.PatchPrimaryIndex(ctx, &api.PatchPrimaryIndexRequest{
-		Db:    "db1",
-		Table: "t4",
+		Db:         "db1",
+		Collection: "t4",
 		Entries: []*api.PatchIndexEntry{
 			{
 				PrimaryKey:   []byte("mmmm"),
@@ -123,7 +123,7 @@ func TestAPIGRPCUpdatePrimaryIndex(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	rc, err := c.Read(ctx, &api.TigrisDBCRUDRequest{Db: "db1", Table: "t4", Docs: []*api.TigrisDBDoc{{PrimaryKey: []byte("mmmm"), PartitionKey: []byte("mm")}}})
+	rc, err := c.Read(ctx, &api.ReadRequest{Db: "db1", Collection: "t4", ReadBody: &api.ReadRequestBody{}})
 	require.NoError(t, err)
 
 	for {
@@ -132,10 +132,10 @@ func TestAPIGRPCUpdatePrimaryIndex(t *testing.T) {
 			break
 		}
 		require.NoError(t, err)
-		log.Debug().Str("value", string(d.Value)).Msg("ReadPrimaryIndex")
+		log.Debug().Str("value", d.Doc.GetDoc().String()).Msg("ReadPrimaryIndex")
 	}
 
-	_, err = c.DropTable(ctx, &api.TigrisDBRequest{Db: "db1", Table: "t4"})
+	_, err = c.DropCollection(ctx, &api.DropCollectionRequest{Db: "db1", Collection: "t4"})
 	require.NoError(t, err)
 
 	err = c.Close()
@@ -149,15 +149,15 @@ func TestAPIGRPCUpdateIndex(t *testing.T) {
 	c, _ := newGRPCClient(ctx, "server", 8082)
 	ac, _ := NewAdminGRPCClient(ctx, "server", 8082)
 
-	_, _ = c.DropTable(ctx, &api.TigrisDBRequest{Db: "db1", Table: "t3"})
+	_, _ = c.DropCollection(ctx, &api.DropCollectionRequest{Db: "db1", Collection: "t3"})
 
-	_, err := c.CreateTable(ctx, &api.TigrisDBRequest{Db: "db1", Table: "t3"})
+	_, err := c.CreateCollection(ctx, &api.CreateCollectionRequest{Db: "db1", Collection: "t3"})
 	require.NoError(t, err)
 
 	_, err = ac.UpdateIndex(ctx, &api.UpdateIndexRequest{
-		Db:    "db1",
-		Table: "t3",
-		Index: "clustering",
+		Db:         "db1",
+		Collection: "t3",
+		Index:      "clustering",
 		New: []*api.ShardFile{
 			{
 				FileId:    "fid1",
@@ -217,11 +217,11 @@ func TestAPIGRPCUpdateIndex(t *testing.T) {
 	require.NoError(t, err)
 
 	rresp, err := ac.ReadIndex(ctx, &api.ReadIndexRequest{
-		Db:     "db1",
-		Table:  "t3",
-		Index:  "clustering",
-		MinKey: []byte("aaa"),
-		MaxKey: []byte("adx"),
+		Db:         "db1",
+		Collection: "t3",
+		Index:      "clustering",
+		MinKey:     []byte("aaa"),
+		MaxKey:     []byte("adx"),
 	})
 	require.NoError(t, err)
 
@@ -229,7 +229,7 @@ func TestAPIGRPCUpdateIndex(t *testing.T) {
 		log.Error().Str("file_id", v.FileId).Int64("ts", v.Timestamp).Str("min_key", string(v.MinKey)).Str("max_key", string(v.MaxKey)).Uint64("offset", v.Offset).Msg("micro shard key")
 	}
 
-	_, err = c.DropTable(ctx, &api.TigrisDBRequest{Db: "db1", Table: "t3"})
+	_, err = c.DropCollection(ctx, &api.DropCollectionRequest{Db: "db1", Collection: "t3"})
 	require.NoError(t, err)
 
 	err = c.Close()
@@ -247,9 +247,9 @@ func TestAPIHTTPUpdateIndex(t *testing.T) {
 	c, err := userHTTP.NewClientWithResponses("http://server:8081")
 	require.NoError(t, err)
 
-	_, _ = c.TigrisDBDropTableWithResponse(ctx, "db1", "t2", userHTTP.TigrisDBDropTableJSONRequestBody{})
+	_, _ = c.TigrisDBDropCollectionWithResponse(ctx, "db1", "t2")
 
-	cresp, err := c.TigrisDBCreateTableWithResponse(ctx, "db1", "t2", userHTTP.TigrisDBCreateTableJSONRequestBody{})
+	cresp, err := c.TigrisDBCreateCollectionWithResponse(ctx, "db1", "t2", userHTTP.TigrisDBCreateCollectionJSONRequestBody{})
 	require.NoError(t, err)
 	require.NotNil(t, cresp)
 	require.Equal(t, cresp.StatusCode(), http.StatusOK)
@@ -332,7 +332,7 @@ func TestAPIHTTPUpdateIndex(t *testing.T) {
 		log.Error().Str("file_id", aws.StringValue(v.FileId)).Int64("ts", aws.Int64Value(v.Timestamp)).Str("min_key", string(*v.MinKey)).Str("max_key", string(*v.MinKey)).Msg("micro shard key")
 	}
 
-	resp4, err := c.TigrisDBDropTableWithResponse(ctx, "db1", "t2", userHTTP.TigrisDBDropTableJSONRequestBody{})
+	resp4, err := c.TigrisDBDropCollectionWithResponse(ctx, "db1", "t2")
 	require.NoError(t, err)
 	require.NotNil(t, resp4)
 	require.Equal(t, http.StatusOK, resp4.StatusCode())
