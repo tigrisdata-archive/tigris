@@ -28,7 +28,6 @@ import (
 	"github.com/tigrisdata/tigrisdb/server/schemas"
 	"github.com/tigrisdata/tigrisdb/store/kv"
 	"github.com/tigrisdata/tigrisdb/types"
-	"github.com/tigrisdata/tigrisdb/util"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -60,7 +59,7 @@ func newUserService(kv kv.KV) *userService {
 }
 
 func (s *userService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {
-	mux := runtime.NewServeMux(runtime.WithMarshalerOption(string(JSON), &util.JSONMix{}))
+	mux := runtime.NewServeMux(runtime.WithMarshalerOption(string(JSON), &runtime.JSONBuiltin{}))
 	if err := api.RegisterTigrisDBHandlerServer(context.TODO(), mux, s); err != nil {
 		return err
 	}

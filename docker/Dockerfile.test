@@ -1,11 +1,11 @@
-FROM golang:1.15-alpine3.12
+FROM golang:1.18beta1-bullseye
 
-RUN apk add make curl git gcc g++
+RUN apt-get install make curl git gcc g++
 
 ENV GOPATH=/go
 RUN mkdir -p /go/src/tigris
 
-#this is to install dependencies during docker build
+#this is to install dependencies once, during docker build
 COPY ./Makefile /go/src/tigris/
 COPY ./go.mod /go/src/tigris/
 

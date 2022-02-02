@@ -113,7 +113,7 @@ func testTxClient(t *testing.T, c client) {
 }
 
 func TestGRPCClient(t *testing.T) {
-	c, err := newGRPCClient(context.TODO(), "server", 8082)
+	c, err := newGRPCClient(context.TODO(), getTestServerHost(), 8081)
 	require.NoError(t, err)
 	defer func() { _ = c.Close() }()
 
@@ -121,7 +121,7 @@ func TestGRPCClient(t *testing.T) {
 }
 
 func TestHTTPClient(t *testing.T) {
-	c, err := newHTTPClient(context.TODO(), "server", 8081)
+	c, err := newHTTPClient(context.TODO(), getTestServerHost(), 8081)
 	require.NoError(t, err)
 	defer func() { _ = c.Close() }()
 
@@ -129,7 +129,7 @@ func TestHTTPClient(t *testing.T) {
 }
 
 func TestTxGRPCClient(t *testing.T) {
-	c, err := newGRPCClient(context.TODO(), "server", 8082)
+	c, err := newGRPCClient(context.TODO(), getTestServerHost(), 8081)
 	require.NoError(t, err)
 	defer func() { _ = c.Close() }()
 
@@ -137,7 +137,7 @@ func TestTxGRPCClient(t *testing.T) {
 }
 
 func TestTxHTTPClient(t *testing.T) {
-	c, err := newHTTPClient(context.TODO(), "server", 8081)
+	c, err := newHTTPClient(context.TODO(), getTestServerHost(), 8081)
 	require.NoError(t, err)
 	defer func() { _ = c.Close() }()
 

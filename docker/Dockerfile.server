@@ -1,10 +1,34 @@
-FROM golang:1.15-alpine3.12
-EXPOSE 8082
+FROM golang:1.18beta1-bullseye AS build
+
+RUN apt-get update && apt-get install -y apt-transport-https
+RUN apt-get install -y wget make git gcc g++ wget 
+
+RUN wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
+RUN dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
+
+RUN mkdir /build
+
+#Download deps once, during docker build. Rebuild only on go.mod change
+COPY ./go.mod /build
+WORKDIR /build
+RUN go mod download
+
+COPY . /build
+
+RUN rm server/service
+RUN make bins
+
+FROM debian:bullseye-slim
+
 EXPOSE 8081
 
 RUN mkdir -p /server /etc/tigrisdata/tigrisdb
-COPY server/service /server/service
-COPY config/server.yaml /etc/tigrisdata/tigrisdb
+
+COPY --from=build /build/server/service /server/service
+COPY --from=build /build/config/server.yaml /etc/tigrisdata/tigrisdb
+COPY --from=build /build/config/server.test.yaml /etc/tigrisdata/tigrisdb
+COPY --from=build /usr/lib/libfdb_c.so /usr/lib/libfdb_c.so
+
 WORKDIR /server
 
 CMD ["/server/service"]

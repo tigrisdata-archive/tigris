@@ -22,7 +22,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"github.com/tigrisdata/tigrisdb/util"
 	"google.golang.org/grpc"
 )
 
@@ -45,7 +44,7 @@ func (h *healthService) Health(_ context.Context, _ *api.HealthCheckInput) (*api
 }
 
 func (h *healthService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {
-	mux := runtime.NewServeMux(runtime.WithMarshalerOption(string(JSON), &util.JSONMix{}))
+	mux := runtime.NewServeMux(runtime.WithMarshalerOption(string(JSON), &runtime.JSONBuiltin{}))
 	if err := api.RegisterHealthAPIHandlerServer(context.TODO(), mux, h); err != nil {
 		return err
 	}
