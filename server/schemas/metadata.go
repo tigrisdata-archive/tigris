@@ -48,6 +48,10 @@ func AddTable(name string, keys []string) {
 	tables[name] = Table{Name: name, Key: keys}
 }
 
+func RemoveTable(name string) {
+	delete(tables, name)
+}
+
 func GetTable(name string) *Table {
 	tbl, ok := tables[name]
 	if !ok {

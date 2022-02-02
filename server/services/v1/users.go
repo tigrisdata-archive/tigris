@@ -83,6 +83,7 @@ func (s *userService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel
 }
 
 func (s *userService) RegisterGRPC(grpc *grpc.Server, inproc *inprocgrpc.Channel) error {
+	api.RegisterTigrisDBServer(grpc, s)
 	api.RegisterTigrisDBServer(inproc, s)
 	return nil
 }
@@ -128,13 +129,11 @@ func (s *userService) DropCollection(ctx context.Context, r *api.DropCollectionR
 	if err := s.kv.DropTable(ctx, name); ulog.E(err) {
 		return nil, status.Errorf(codes.Internal, "error: %v", err)
 	}
+	schemas.RemoveTable(name)
 
-	name = schemas.GetIndexName(r.GetDb(), r.GetCollection(), schemas.ClusteringIndexName)
-	if err := s.kv.DropTable(ctx, name); ulog.E(err) {
-		return nil, status.Errorf(codes.Internal, "error: %v", err)
-	}
-
-	return &api.DropCollectionResponse{}, nil
+	return &api.DropCollectionResponse{
+		Msg: "collection dropped successfully",
+	}, nil
 }
 
 // Insert new object returns an error if object already exists
@@ -249,7 +248,6 @@ func (s *userService) Read(r *api.ReadRequest, stream api.TigrisDB_ReadServer) e
 func (s *userService) getKey(table string, v *api.UserDocument) (types.Key, error) {
 	var key types.Key
 	k := schemas.GetTableKey(table)
-	k = []string{"a"}
 	doc := v.Doc.AsMap()
 
 	var err error

@@ -29,59 +29,6 @@ import (
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 )
 
-func TestAPIGRPC(t *testing.T) {
-	ctx := context.TODO()
-
-	//c, _ := NewGRPCClient(ctx, "localhost", 8082)
-	c, _ := newGRPCClient(ctx, "server", 8082)
-
-	_, _ = c.DropCollection(ctx, &api.DropCollectionRequest{Db: "db1", Collection: "t1"})
-
-	_, err := c.CreateCollection(ctx, &api.CreateCollectionRequest{Db: "db1", Collection: "t1"})
-	require.NoError(t, err)
-
-	_, err = c.Insert(ctx, &api.InsertRequest{
-		Db:         "db1",
-		Collection: "t1",
-		InsertBody: &api.InsertRequestBody{
-			Documents: []*api.UserDocument{
-				{
-					Doc: nil,
-				},
-			},
-		},
-	})
-	require.NoError(t, err)
-
-	// {PrimaryKey: []byte("aaa"), PartitionKey: []byte("a"), Value: []byte("bbb11111")}}}
-	// {PrimaryKey: []byte("aaa"), PartitionKey: []byte("a"), Value: []byte(`{"bbb222222" : "uuuuu111"}`)}}
-	_, err = c.Update(ctx, &api.UpdateRequest{Db: "db1", Collection: "t1", UpdateBody: &api.UpdateRequestBody{}})
-	require.NoError(t, err)
-	_, err = c.Replace(ctx, &api.ReplaceRequest{Db: "db1", Collection: "t1", ReplaceBody: &api.ReplaceRequestBody{}})
-	require.NoError(t, err)
-
-	rc, err := c.Read(ctx, &api.ReadRequest{Db: "db1", Collection: "t1", ReadBody: &api.ReadRequestBody{}})
-	require.NoError(t, err)
-
-	for {
-		d, err := rc.Recv()
-		if err == io.EOF {
-			break
-		}
-		require.NoError(t, err)
-		log.Debug().Str("value", d.Doc.String()).Msg("Read")
-	}
-
-	_, err = c.Delete(ctx, &api.DeleteRequest{Db: "db1", Collection: "t1", DeleteBody: &api.DeleteRequestBody{}})
-	require.NoError(t, err)
-
-	_, err = c.DropCollection(ctx, &api.DropCollectionRequest{Db: "db1", Collection: "t1"})
-	require.NoError(t, err)
-
-	err = c.Close()
-	require.NoError(t, err)
-}
-
 func TestAPIGRPCUpdatePrimaryIndex(t *testing.T) {
 	ctx := context.TODO()
 
