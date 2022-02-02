@@ -18,8 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"time"
-
+	"github.com/apple/foundationdb/bindings/go/src/fdb/tuple"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
@@ -27,12 +26,18 @@ import (
 	dtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/aws/smithy-go/logging"
 	"github.com/rs/zerolog/log"
-	"github.com/tigrisdata/tigrisdb/types"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
+	"time"
 )
 
-// DynamodbConfig keeps DynamoDB configuration parameters
-type DynamodbConfig struct {
+var (
+	PartitionKey = "partition_key"
+	PrimaryKey   = "primary_key"
+	DataField    = "data"
+)
+
+// DynamoDBConfig keeps DynamoDB configuration parameters
+type DynamoDBConfig struct {
 	Region   string
 	Endpoint string
 
@@ -58,8 +63,13 @@ type dtx struct {
 	tx *dynamodb.TransactWriteItemsInput
 }
 
+type ddbIterator struct {
+	pos    int
+	values []KeyValue
+}
+
 // NewDynamoDB initializes instance of DynamoDB KV interface implementation
-func NewDynamoDB(cfg *DynamodbConfig) (KV, error) {
+func NewDynamoDB(cfg *DynamoDBConfig) (KV, error) {
 	d := ddb{}
 	if err := d.init(cfg); err != nil {
 		return nil, err
@@ -67,7 +77,7 @@ func NewDynamoDB(cfg *DynamodbConfig) (KV, error) {
 	return &d, nil
 }
 
-func (d *ddb) init(cfg *DynamodbConfig) error {
+func (d *ddb) init(cfg *DynamoDBConfig) error {
 	endpointResolver := aws.EndpointResolverFunc(func(service, region string) (aws.Endpoint, error) {
 		return aws.Endpoint{
 			PartitionID:   "aws",
@@ -92,15 +102,11 @@ func (d *ddb) init(cfg *DynamodbConfig) error {
 	return nil
 }
 
-func (d *ddb) readCond(ctx context.Context, table string, cond string, values map[string]dtypes.AttributeValue, limit int32) ([]Doc, error) {
+func (d *ddb) readCond(ctx context.Context, table string, cond string, values map[string]dtypes.AttributeValue) (Iterator, error) {
 	input := &dynamodb.QueryInput{
 		TableName:                 &table,
 		KeyConditionExpression:    &cond,
 		ExpressionAttributeValues: values,
-	}
-
-	if limit != 0 {
-		input.Limit = aws.Int32(limit)
 	}
 
 	resp, err := d.svc.Query(ctx, input)
@@ -111,49 +117,55 @@ func (d *ddb) readCond(ctx context.Context, table string, cond string, values ma
 		return nil, err
 	}
 
-	res := make([]Doc, 0, resp.Count)
+	res := make([]KeyValue, 0, resp.Count)
 	for _, v := range resp.Items {
-		d := Doc{}
+		d := KeyValue{}
 
 		primKey := make([]byte, 0)
-		partKey := make([]byte, 0)
 
 		// FIXME: This makes data copy
 		if err = attributevalue.Unmarshal(v[PrimaryKey], &primKey); ulog.E(err) {
-			return nil, err
-		}
-		if err = attributevalue.Unmarshal(v[PartitionKey], &partKey); ulog.E(err) {
 			return nil, err
 		}
 		if err = attributevalue.Unmarshal(v[DataField], &d.Value); ulog.E(err) {
 			return nil, err
 		}
 
-		d.Key = types.NewUserKey(primKey, partKey)
+		t, err := tuple.Unpack(primKey)
+		if ulog.E(err) {
+			return nil, err
+		}
+		d.Key = tupleToKey(&t)
 
 		res = append(res, d)
 	}
 
-	return res, err
+	return &ddbIterator{values: res}, err
 }
 
 // Read returns all the keys which has prefix equal to "key" parameter
-func (d *ddb) Read(ctx context.Context, table string, key types.Key) ([]Doc, error) {
+func (d *ddb) Read(ctx context.Context, table string, key1 Key) (Iterator, error) {
+	key := NewDDBKey(key1)
 	cond := fmt.Sprintf("%s = :partKey AND begins_with (%s, :primKey)", PartitionKey, PrimaryKey)
 	valCond := map[string]dtypes.AttributeValue{
 		":partKey": &dtypes.AttributeValueMemberB{Value: key.Partition()},
 		":primKey": &dtypes.AttributeValueMemberB{Value: key.Primary()},
 	}
-	return d.readCond(ctx, table, cond, valCond, 0)
+	return d.readCond(ctx, table, cond, valCond)
 }
 
 // ReadRange reads range of the keys, both lkey and rkey should belong to the
 // same partition.
 // One of lkey or rkey may be nil in this case the bound is begin or end of the
 // partition respectively.
-func (d *ddb) ReadRange(ctx context.Context, table string, partitionKey []byte, lkey types.Key, rkey types.Key, limit int) ([]Doc, error) {
+func (d *ddb) ReadRange(ctx context.Context, table string, lkey1 Key, rkey1 Key) (Iterator, error) {
 	var lcond, rcond string
 	values := map[string]dtypes.AttributeValue{}
+
+	lkey := NewDDBKey(lkey1)
+	rkey := NewDDBKey(rkey1)
+
+	var partitionKey []byte
 
 	if lkey != nil {
 		if partitionKey != nil && bytes.Compare(partitionKey, lkey.Partition()) != 0 {
@@ -182,25 +194,10 @@ func (d *ddb) ReadRange(ctx context.Context, table string, partitionKey []byte, 
 	cond := fmt.Sprintf("%v = :partKey", PartitionKey)
 	values[":partKey"] = &dtypes.AttributeValueMemberB{Value: partitionKey}
 
-	return d.readCond(ctx, table, cond+lcond+rcond, values, int32(limit))
+	return d.readCond(ctx, table, cond+lcond+rcond, values)
 }
 
-func (d *ddb) Replace(ctx context.Context, table string, key types.Key, data []byte) error {
-	m := appendDBKey(nil, key)
-
-	m[DataField] = &dtypes.AttributeValueMemberB{Value: data}
-
-	_, err := d.svc.PutItem(ctx, &dynamodb.PutItemInput{
-		TableName: &table,
-		Item:      m,
-	})
-
-	log.Err(err).Str("table", table).Stringer("key", key).Msg("Upsert")
-
-	return err
-}
-
-func (d *ddb) Insert(ctx context.Context, table string, key types.Key, data []byte) error {
+func (d *ddb) Insert(ctx context.Context, table string, key Key, data []byte) error {
 	m := appendDBKey(nil, key)
 
 	m[DataField] = &dtypes.AttributeValueMemberB{Value: data}
@@ -211,36 +208,51 @@ func (d *ddb) Insert(ctx context.Context, table string, key types.Key, data []by
 		ConditionExpression: aws.String("attribute_not_exists(" + PrimaryKey + ")"),
 	})
 
-	log.Err(err).Str("table", table).Stringer("key", key).Msg("Insert")
+	log.Err(err).Str("table", table).Interface("key", key).Msg("Insert")
 
 	return err
 }
 
-func (d *ddb) Update(ctx context.Context, table string, key types.Key, data []byte) error {
+func (d *ddb) Replace(ctx context.Context, table string, key Key, data []byte) error {
 	m := appendDBKey(nil, key)
 
 	m[DataField] = &dtypes.AttributeValueMemberB{Value: data}
 
 	_, err := d.svc.PutItem(ctx, &dynamodb.PutItemInput{
-		TableName:           &table,
-		Item:                m,
-		ConditionExpression: aws.String("attribute_exists(" + PrimaryKey + ")"),
+		TableName: &table,
+		Item:      m,
+		//ConditionExpression: aws.String("attribute_exists(" + PrimaryKey + ")"),
 	})
 
-	log.Err(err).Str("table", table).Stringer("key", key).Msg("Update")
+	log.Err(err).Str("table", table).Interface("key", key).Msg("Upsert")
 
 	return err
 }
 
-func (d *ddb) Delete(ctx context.Context, table string, key types.Key) error {
+func (d *ddb) Delete(ctx context.Context, table string, key Key) error {
 	_, err := d.svc.DeleteItem(ctx, &dynamodb.DeleteItemInput{
 		TableName: &table,
 		Key:       appendDBKey(nil, key),
 	})
 
-	log.Err(err).Str("table", table).Stringer("key", key).Msg("Delete")
+	log.Err(err).Str("table", table).Interface("key", key).Msg("Delete")
 
 	return err
+}
+
+func (d *ddb) DeleteRange(ctx context.Context, table string, lKey Key, rKey Key) error {
+	_, err := d.svc.DeleteItem(ctx, &dynamodb.DeleteItemInput{
+		TableName: &table,
+		Key:       appendDBKey(nil, lKey),
+	})
+
+	log.Err(err).Str("table", table).Interface("key", lKey).Msg("Delete")
+
+	return err
+}
+
+func (d *ddb) UpdateRange(ctx context.Context, table string, lKey Key, rKey Key, apply func([]byte) []byte) error {
+	return ulog.CE("not implemented")
 }
 
 func (d *ddb) CreateTable(ctx context.Context, name string) error {
@@ -293,13 +305,17 @@ func (d *ddb) DropTable(ctx context.Context, name string) error {
 	return nil
 }
 
-func (d *ddb) Batch() Tx {
+func (d *ddb) Batch() (Tx, error) {
 	b := &dbatch{d: d}
 	b.batch = &dynamodb.BatchWriteItemInput{RequestItems: make(map[string][]dtypes.WriteRequest)}
-	return b
+	return b, nil
 }
 
-func (b *dbatch) Replace(ctx context.Context, table string, key types.Key, data []byte) error {
+func (t *dbatch) Insert(ctx context.Context, table string, key Key, data []byte) error {
+	return ulog.CE("not implemented")
+}
+
+func (b *dbatch) Replace(ctx context.Context, table string, key Key, data []byte) error {
 	m := appendDBKey(nil, key)
 
 	m[DataField] = &dtypes.AttributeValueMemberB{Value: data}
@@ -308,19 +324,31 @@ func (b *dbatch) Replace(ctx context.Context, table string, key types.Key, data 
 		Item: m,
 	}})
 
-	log.Debug().Str("table", table).Stringer("key", key).Msg("Batch replace")
+	log.Debug().Str("table", table).Interface("key", key).Msg("Batch replace")
 
 	return nil
 }
 
-func (b *dbatch) Delete(ctx context.Context, table string, key types.Key) error {
+func (b *dbatch) Delete(ctx context.Context, table string, key Key) error {
 	b.batch.RequestItems[table] = append(b.batch.RequestItems[table], dtypes.WriteRequest{DeleteRequest: &dtypes.DeleteRequest{
 		Key: appendDBKey(nil, key),
 	}})
 
-	log.Debug().Str("table", table).Stringer("key", key).Msg("Batch delete")
+	log.Debug().Str("table", table).Interface("key", key).Msg("Batch delete")
 
 	return nil
+}
+
+func (t *dbatch) DeleteRange(ctx context.Context, table string, lKey Key, rKey Key) error {
+	return ulog.CE("not implemented")
+}
+
+func (t *dbatch) Read(_ context.Context, table string, key Key) (Iterator, error) {
+	return nil, ulog.CE("not implemented")
+}
+
+func (t *dbatch) ReadRange(_ context.Context, table string, lKey Key, rKey Key) (Iterator, error) {
+	return nil, ulog.CE("not implemented")
 }
 
 func (b *dbatch) Commit(ctx context.Context) error {
@@ -343,12 +371,20 @@ func (b *dbatch) Rollback(_ context.Context) error {
 	return nil
 }
 
-func (d *ddb) Tx() Tx {
+func (b *dbatch) UpdateRange(_ context.Context, table string, lKey Key, rKey Key, apply func([]byte) []byte) error {
+	return ulog.CE("not implemented")
+}
+
+func (d *ddb) Tx() (Tx, error) {
 	t := &dtx{d: d}
-	return t
+	return t, nil
 }
 
-func (t *dtx) Replace(ctx context.Context, table string, key types.Key, data []byte) error {
+func (t *dtx) Insert(ctx context.Context, table string, key Key, data []byte) error {
+	return ulog.CE("not implemented")
+}
+
+func (t *dtx) Replace(ctx context.Context, table string, key Key, data []byte) error {
 	m := appendDBKey(nil, key)
 
 	m[DataField] = &dtypes.AttributeValueMemberB{Value: data}
@@ -357,36 +393,35 @@ func (t *dtx) Replace(ctx context.Context, table string, key types.Key, data []b
 		Put: &dtypes.Put{TableName: &table, Item: m},
 	})
 
-	log.Debug().Str("table", table).Stringer("key", key).Msg("Tx Upsert")
+	log.Debug().Str("table", table).Interface("key", key).Msg("Tx Upsert")
 
 	return nil
 }
 
-/*
-func (t *dtx) Update(ctx context.Context, table string, key types.Key, data []byte) error {
-	m := appendDBKey(nil, key)
-
-	m[DataField] = &dtypes.AttributeValueMemberB{Value: data}
-	//	attributevalue.MarshalMap()
-
-	t.tx.TransactItems = append(t.tx.TransactItems, dtypes.TransactWriteItem{
-		Put: &dtypes.Put{TableName: &table, Item: m},
-	})
-
-	log.Debug().Str("table", table).Stringer("key", key).Msg("Tx Upsert")
-
-	return nil
-}
-*/
-
-func (t *dtx) Delete(ctx context.Context, table string, key types.Key) error {
+func (t *dtx) Delete(ctx context.Context, table string, key Key) error {
 	t.tx.TransactItems = append(t.tx.TransactItems, dtypes.TransactWriteItem{
 		Delete: &dtypes.Delete{TableName: &table, Key: appendDBKey(nil, key)},
 	})
 
-	log.Debug().Str("table", table).Stringer("key", key).Msg("Tx Delete")
+	log.Debug().Str("table", table).Interface("key", key).Msg("Tx Delete")
 
 	return nil
+}
+
+func (t *dtx) DeleteRange(ctx context.Context, table string, lKey Key, rKey Key) error {
+	return ulog.CE("not implemented")
+}
+
+func (t *dtx) Read(_ context.Context, table string, key Key) (Iterator, error) {
+	return nil, ulog.CE("not implemented")
+}
+
+func (t *dtx) ReadRange(_ context.Context, table string, lKey Key, rKey Key) (Iterator, error) {
+	return nil, ulog.CE("not implemented")
+}
+
+func (t *dtx) UpdateRange(_ context.Context, table string, lKey Key, rKey Key, apply func([]byte) []byte) error {
+	return ulog.CE("not implemented")
 }
 
 func (t *dtx) Commit(ctx context.Context) error {
@@ -409,13 +444,28 @@ func (t *dtx) Rollback(_ context.Context) error {
 	return nil
 }
 
-func appendDBKey(m map[string]dtypes.AttributeValue, k types.Key) map[string]dtypes.AttributeValue {
+func (i *ddbIterator) More() bool {
+	return i.pos < len(i.values)
+}
+
+func (i *ddbIterator) Next() (*KeyValue, error) {
+	if i.pos >= len(i.values) {
+		return nil, ulog.CE("finished")
+	}
+	r := &i.values[i.pos]
+	i.pos++
+	return r, nil
+}
+
+func appendDBKey(m map[string]dtypes.AttributeValue, k Key) map[string]dtypes.AttributeValue {
 	if m == nil {
 		m = make(map[string]dtypes.AttributeValue)
 	}
 
-	m[PartitionKey] = &dtypes.AttributeValueMemberB{Value: k.Partition()}
-	m[PrimaryKey] = &dtypes.AttributeValueMemberB{Value: k.Primary()}
+	if len(k) > 0 {
+		m[PartitionKey] = &dtypes.AttributeValueMemberB{Value: tuple.Tuple{k[0]}.Pack()}
+		m[PrimaryKey] = &dtypes.AttributeValueMemberB{Value: getFDBKey("", k)}
+	}
 
 	return m
 }
@@ -428,4 +478,27 @@ func (a *awslog) Logf(c logging.Classification, format string, v ...interface{})
 		log.Warn().Msgf(format, v...)
 	}
 	log.Debug().CallerSkipFrame(3).Msgf(format, v...)
+}
+
+type ddbKey struct {
+	key       []byte
+	partition []byte
+}
+
+func NewDDBKey(k Key) *ddbKey {
+	key := getFDBKey("", k)
+	partKey := tuple.Tuple{k[0]}.Pack()
+	return &ddbKey{key: key, partition: partKey}
+}
+
+func (s *ddbKey) Partition() []byte {
+	return s.partition
+}
+
+func (s *ddbKey) Primary() []byte {
+	return []byte(s.key)
+}
+
+func (s *ddbKey) String() string {
+	return fmt.Sprintf("%v %v", s.partition, s.key)
 }

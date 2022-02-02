@@ -23,7 +23,6 @@ import (
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/store/kv"
-	"github.com/tigrisdata/tigrisdb/types"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 )
 
@@ -61,7 +60,7 @@ func insertShardKey(ctx context.Context, table string, batch kv.Tx, mshard *api.
 }
 
 func (i *Index) processFileShards(ctx context.Context, table string, ts int64, fileID string, shards []*api.MicroShardKey, replace bool) error {
-	batch := i.kv.Batch()
+	batch, _ := i.kv.Batch()
 	nops := 0
 
 	for _, v := range shards {
@@ -82,7 +81,7 @@ func (i *Index) processFileShards(ctx context.Context, table string, ts int64, f
 			if err := batch.Commit(ctx); err != nil {
 				return err
 			}
-			batch = i.kv.Batch()
+			batch, _ = i.kv.Batch()
 		}
 	}
 
@@ -111,76 +110,84 @@ func (i *Index) ReplaceMicroShardFile(ctx context.Context, table string, del *ap
 	return nil
 }
 
-func (i *Index) readOne(ctx context.Context, table string, key types.Key) ([]kv.Doc, error) {
+func (i *Index) readOne(ctx context.Context, table string, key kv.Key) (kv.Iterator, error) {
 	docs, err := i.kv.Read(ctx, table, key)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(docs) != 0 {
+	if docs.More() {
 		return docs, nil
 	}
 
-	docs, err = i.kv.ReadRange(ctx, table, key.Partition(), key, nil, 1)
+	docs, err = i.kv.ReadRange(ctx, table, key, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return nil, nil
+	return docs, nil
 }
 
-func (i *Index) readRange(ctx context.Context, table string, lk types.Key, rk types.Key) ([]kv.Doc, error) {
-	log.Debug().Str("lkPartition", string(lk.Partition())).Str("rkPartition", string(rk.Partition())).Msg("readRange")
-	log.Debug().Str("lKey", string(lk.Primary())).Str("rKey", string(rk.Primary())).Msg("readRange")
+func (i *Index) readRange(ctx context.Context, table string, lk kv.Key, rk kv.Key) (kv.Iterator, error) {
+	/*
+		log.Debug().Str("lkPartition", string(lk.Partition())).Str("rkPartition", string(rk.Partition())).Msg("readRange")
+		log.Debug().Str("lKey", string(lk.Primary())).Str("rKey", string(rk.Primary())).Msg("readRange")
 
-	// both bound belong to the same partition
-	if bytes.Compare(lk.Partition(), rk.Partition()) == 0 {
+		// both bound belong to the same partition
+		if bytes.Compare(lk.Partition(), rk.Partition()) == 0 {
+			docs, err := i.kv.ReadRange(ctx, table, lk, rk)
+			if err != nil {
+				return nil, err
+			}
+
+			if docs.More() {
+				return docs, nil
+			}
+
+			docs, err = i.kv.ReadRange(ctx, table, lk, nil) // limit 1
+			if err != nil {
+				return nil, err
+			}
+
+			return docs, nil
+		}
+
 		docs, err := i.kv.ReadRange(ctx, table, lk.Partition(), lk, rk, 0)
 		if err != nil {
 			return nil, err
 		}
 
-		if len(docs) != 0 {
-			return docs, nil
-		}
+			FIXME: Implement partition iteration inside DynamoDB KV
+			//read first partial partition
+			docs, err := i.kv.ReadRange(ctx, table, lk.Partition(), lk, nil, 0)
+			if err != nil {
+				return nil, err
+			}
 
-		docs, err = i.kv.ReadRange(ctx, table, lk.Partition(), lk, nil, 1)
-		if err != nil {
-			return nil, err
-		}
+			//read all the partitions in between
+			it, err := types.NewPrefixPartitionKeyIterator(lk.Partition(), partitionBits)
+			if err != nil {
+				return nil, err
+			}
 
-		return docs, nil
-	}
+			for p := it.Next(); bytes.Compare(p, rk.Partition()) != 0; p = it.Next() {
+				pdocs, err := i.kv.ReadRange(ctx, table, p, nil, nil, 0)
+				if err != nil {
+					return nil, err
+				}
+				docs = append(docs, pdocs...)
+			}
 
-	//read first partial partition
-	docs, err := i.kv.ReadRange(ctx, table, lk.Partition(), lk, nil, 0)
-	if err != nil {
-		return nil, err
-	}
+			//read last partial partition
+			rdocs, err := i.kv.ReadRange(ctx, table, rk.Partition(), nil, rk, 0)
+			if err != nil {
+				return nil, err
+			}
 
-	//read all the partitions in between
-	it, err := types.NewPrefixPartitionKeyIterator(lk.Partition(), partitionBits)
-	if err != nil {
-		return nil, err
-	}
+			docs = append(docs, rdocs...)
+	*/
 
-	for p := it.Next(); bytes.Compare(p, rk.Partition()) != 0; p = it.Next() {
-		pdocs, err := i.kv.ReadRange(ctx, table, p, nil, nil, 0)
-		if err != nil {
-			return nil, err
-		}
-		docs = append(docs, pdocs...)
-	}
-
-	//read last partial partition
-	rdocs, err := i.kv.ReadRange(ctx, table, rk.Partition(), nil, rk, 0)
-	if err != nil {
-		return nil, err
-	}
-
-	docs = append(docs, rdocs...)
-
-	return docs, nil
+	return nil, nil
 }
 
 // ReadIndex returns index entries corresponding to the requested key range
@@ -188,8 +195,8 @@ func (i *Index) readRange(ctx context.Context, table string, lk types.Key, rk ty
 // It returns the range of keys where key >= minKey and key < maxKey
 func (i *Index) ReadIndex(ctx context.Context, table string, minKey []byte, maxKey []byte) ([]*api.MicroShardKey, error) {
 	var err error
-	var docs []kv.Doc
-	var rk types.Key
+	var docs kv.Iterator
+	var rk kv.Key
 
 	if minKey == nil {
 		err = fmt.Errorf("lower bound of the range should be provided")
@@ -197,12 +204,14 @@ func (i *Index) ReadIndex(ctx context.Context, table string, minKey []byte, maxK
 		return nil, err
 	}
 
-	lk := types.NewBinaryKey(minKey, partitionBits)
+	//lk := types.NewBinaryKey(minKey, partitionBits)
+	lk := kv.BuildKey(minKey)
 
 	if maxKey == nil {
 		docs, err = i.readOne(ctx, table, lk)
 	} else {
-		rk = types.NewBinaryKey(maxKey, partitionBits)
+		//rk = types.NewBinaryKey(maxKey, partitionBits)
+		rk = kv.BuildKey(maxKey)
 		docs, err = i.readRange(ctx, table, lk, rk)
 	}
 
@@ -210,9 +219,13 @@ func (i *Index) ReadIndex(ctx context.Context, table string, minKey []byte, maxK
 		return nil, err
 	}
 
-	res := make([]*api.MicroShardKey, 0, len(docs))
+	res := make([]*api.MicroShardKey, 0)
 	var prev *api.MicroShardKey
-	for _, v := range docs {
+	for docs.More() {
+		v, err := docs.Next()
+		if err != nil {
+			return nil, err
+		}
 		var m api.MicroShardKey
 		if err := json.Unmarshal(v.Value, &m); ulog.E(err) {
 			return nil, err
@@ -225,9 +238,11 @@ func (i *Index) ReadIndex(ctx context.Context, table string, minKey []byte, maxK
 			prev.Timestamp == m.Timestamp {
 			continue
 		}
+		/* FIXME: Make this work with iterators
 		if len(docs) == 1 && (maxKey == nil || bytes.Compare(lk.Partition(), rk.Partition()) == 0) && m.GetMinKey() != nil {
 			continue // do not include single out of range shard
 		}
+		*/
 		prev = &m
 		res = append(res, &m)
 	}
@@ -260,7 +275,7 @@ func (i *Index) PatchPrimaryIndex(ctx context.Context, table string, entries []*
 		if ulog.E(err) {
 			return err
 		}
-		if err := i.kv.Replace(ctx, table, types.NewUserKey(v.GetPrimaryKey(), v.GetPartitionKey()), data); err != nil {
+		if err := i.kv.Replace(ctx, table, kv.BuildKey(v.GetPrimaryKey()), data); err != nil {
 			return err
 		}
 	}
@@ -268,17 +283,18 @@ func (i *Index) PatchPrimaryIndex(ctx context.Context, table string, entries []*
 }
 
 type indexKey struct {
-	key       types.Key
+	key       kv.Key
 	timestamp int64
 	fileID    string
 	offset    uint64
 	encoded   []byte
 }
 
-func NewIndexKey(key []byte, ts int64, fileID string, offset uint64) types.Key {
-	return &indexKey{key: types.NewBinaryKey(key, partitionBits), timestamp: ts, fileID: fileID, offset: offset, encoded: EncodeIndexKey(key, ts, fileID, offset)}
+func NewIndexKey(key []byte, ts int64, fileID string, offset uint64) kv.Key {
+	return kv.BuildKey(key, ts, fileID, offset)
 }
 
+/*
 func EncodeIndexKey(key []byte, ts int64, fileID string, offset uint64) []byte {
 	enc := make([]byte, 0, len(key)+2+8+8+len(fileID))
 	enc = types.EncodeBinaryKey(key, enc)
@@ -288,16 +304,15 @@ func EncodeIndexKey(key []byte, ts int64, fileID string, offset uint64) []byte {
 	return enc
 }
 
-func (i *indexKey) Partition() []byte {
+func (i *IndexKey) Partition() []byte {
 	return i.key.Partition()
 }
 
-func (i *indexKey) Primary() []byte {
+func (i *IndexKey) Primary() []byte {
 	return i.encoded
 }
 
-func (i *indexKey) String() string {
+func (i *IndexKey) String() string {
 	return fmt.Sprintf("%s %d %d %s", i.key.String(), i.timestamp, i.offset, i.fileID)
 }
-
-
+*/

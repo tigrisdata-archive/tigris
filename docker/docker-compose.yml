@@ -23,15 +23,15 @@ services:
 
   tigris_fdb:
     container_name: tigris_fdb
-    image: foundationdb/foundationdb
+    image: foundationdb/foundationdb:6.3.23
     ports:
-      - "8003:8000"
+      - "4500:4500"
 
-  tigris_s3:
-    container_name: tigris_s3
-    image: scality/s3server
-    ports:
-      - "8004:8000"
+        #  tigris_s3:
+        #    container_name: tigris_s3
+        #    image: scality/s3server
+        #    ports:
+        #      - "8004:8000"
 
   tigris_server:
     container_name: tigris_server
@@ -52,7 +52,6 @@ services:
     depends_on:
       - tigris_ddb
       - tigris_fdb
-      - tigris_s3
 
   all_test:
     image: tigris_test

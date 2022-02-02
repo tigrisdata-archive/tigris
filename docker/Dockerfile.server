@@ -21,11 +21,14 @@ FROM debian:bullseye-slim
 
 EXPOSE 8081
 
-RUN mkdir -p /server /etc/tigrisdata/tigrisdb
+RUN mkdir -p /server /etc/tigrisdata/tigrisdb /etc/foundationdb/
 
 COPY --from=build /build/server/service /server/service
+
 COPY --from=build /build/config/server.yaml /etc/tigrisdata/tigrisdb
 COPY --from=build /build/config/server.test.yaml /etc/tigrisdata/tigrisdb
+COPY --from=build /build/config/fdb.cluster /etc/foundationdb
+
 COPY --from=build /usr/lib/libfdb_c.so /usr/lib/libfdb_c.so
 
 WORKDIR /server

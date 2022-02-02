@@ -76,7 +76,7 @@ func LoadConfig(name string, config interface{}) {
 	// this is needed to automatically bind environment variables to config struct
 	b, err := yaml.Marshal(config)
 	log.Err(err).Msg("marshal config")
-	log.Debug().Msg(string(b))
+	log.Debug().RawJSON("config", b).Msg("default")
 	br := bytes.NewBuffer(b)
 	err = viper.MergeConfig(br)
 	log.Err(err).Msg("merge config")
@@ -103,7 +103,7 @@ func LoadConfig(name string, config interface{}) {
 		log.Fatal().Err(err).Msg("error unmarshalling config")
 	}
 
-	spew.Dump(config)
+	log.Debug().Interface("config", &config).Msg("final")
 	spew.Dump(viper.AllKeys())
 
 	viper.OnConfigChange(func(e fsnotify.Event) {
