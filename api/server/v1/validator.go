@@ -28,12 +28,7 @@ func (x *InsertRequest) Validate() error {
 		return err
 	}
 
-	if x.InsertBody == nil {
-		return status.Errorf(codes.InvalidArgument, "insert request body is missing")
-	}
-
-	docs := x.GetInsertBody().GetDocuments()
-	if len(docs) == 0 {
+	if len(x.Documents) == 0 {
 		return status.Errorf(codes.InvalidArgument, "empty documents received")
 	}
 	return nil
@@ -44,12 +39,7 @@ func (x *ReplaceRequest) Validate() error {
 		return err
 	}
 
-	if x.ReplaceBody == nil {
-		return status.Errorf(codes.InvalidArgument, "replace request body is missing")
-	}
-
-	docs := x.GetReplaceBody().GetDocuments()
-	if len(docs) == 0 {
+	if len(x.Documents) == 0 {
 		return status.Errorf(codes.InvalidArgument, "empty documents received")
 	}
 	return nil
@@ -60,11 +50,7 @@ func (x *UpdateRequest) Validate() error {
 		return err
 	}
 
-	if x.UpdateBody == nil {
-		return status.Errorf(codes.InvalidArgument, "update request body is missing")
-	}
-
-	if x.UpdateBody.Filter == nil {
+	if x.Filter == nil {
 		return status.Errorf(codes.InvalidArgument, "filter is a required field")
 	}
 	return nil
@@ -75,11 +61,7 @@ func (x *DeleteRequest) Validate() error {
 		return err
 	}
 
-	if x.DeleteBody == nil {
-		return status.Errorf(codes.InvalidArgument, "delete request body is missing")
-	}
-
-	if x.DeleteBody.Filter == nil {
+	if x.Filter == nil {
 		return status.Errorf(codes.InvalidArgument, "filter is a required field")
 	}
 	return nil
@@ -90,13 +72,6 @@ func (x *ReadRequest) Validate() error {
 		return err
 	}
 
-	if x.ReadBody == nil {
-		return status.Errorf(codes.InvalidArgument, "read request body is missing")
-	}
-
-	if x.ReadBody.Filter == nil {
-		return status.Errorf(codes.InvalidArgument, "filter is a required field")
-	}
 	return nil
 }
 
@@ -105,11 +80,7 @@ func (x *CreateCollectionRequest) Validate() error {
 		return err
 	}
 
-	if x.CreateBody == nil {
-		return status.Errorf(codes.InvalidArgument, "create request body is missing")
-	}
-
-	if x.CreateBody.Schema == nil {
+	if x.Schema == nil {
 		return status.Errorf(codes.InvalidArgument, "schema is a required during collection creation")
 	}
 

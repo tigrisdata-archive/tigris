@@ -59,12 +59,8 @@ message UserDocument {
 message InsertRequest {
   string db = 1;
   string collection = 2;
-  InsertRequestBody insert_body = 3;
-}
-
-message InsertRequestBody {
-  repeated UserDocument documents = 1;
-  WriteOption options = 2;
+  repeated UserDocument documents = 3;
+  WriteOption options = 4;
 }
 
 message InsertResponse {
@@ -74,12 +70,8 @@ message InsertResponse {
 message DeleteRequest {
   string db = 1;
   string collection = 2;
-  DeleteRequestBody delete_body = 3;
-}
-
-message DeleteRequestBody {
-  Filter filter = 1;
-  WriteOption options = 2;
+  Filter filter = 3;
+  WriteOption options = 4;
 }
 
 message DeleteResponse {
@@ -89,12 +81,8 @@ message DeleteResponse {
 message ReplaceRequest {
   string db = 1;
   string collection = 2;
-  ReplaceRequestBody replace_body = 3;
-}
-
-message ReplaceRequestBody {
-  repeated UserDocument documents = 1;
-  WriteOption options = 2;
+  repeated UserDocument documents = 3;
+  WriteOption options = 4;
 }
 
 message ReplaceResponse {
@@ -104,13 +92,9 @@ message ReplaceResponse {
 message UpdateRequest {
   string db = 1;
   string collection = 2;
-  UpdateRequestBody update_body = 3;
- }
-
-message UpdateRequestBody {
-  google.protobuf.Struct fields = 1;
-  Filter filter = 2;
-  WriteOption options = 3;
+  google.protobuf.Struct fields = 3;
+  Filter filter = 4;
+  WriteOption options = 5;
 }
 
 message UpdateResponse {
@@ -120,13 +104,9 @@ message UpdateResponse {
 message ReadRequest {
   string db = 1;
   string collection = 2;
-  ReadRequestBody read_body = 3;
-}
-
-message ReadRequestBody {
-  Filter filter = 1;
-  repeated UserDocument keys = 2;
-  ReadOption options = 3;
+  Filter filter = 3;
+  repeated UserDocument keys = 4;
+  ReadOption options = 5;
 }
 
 message ReadResponse {
@@ -136,11 +116,7 @@ message ReadResponse {
 message CreateCollectionRequest {
   string db = 1;
   string collection = 2;
-  CreateCollectionRequestBody create_body = 3;
-}
-
-message CreateCollectionRequestBody {
-  google.protobuf.Struct schema = 1;
+  google.protobuf.Struct schema = 3;
 }
 
 message CreateCollectionResponse {
@@ -150,11 +126,7 @@ message CreateCollectionResponse {
 message AlterCollectionRequest {
   string db = 1;
   string collection = 2;
-  AlterCollectionRequestBody alter_body = 3;
-}
-
-message AlterCollectionRequestBody {
-  google.protobuf.Struct schema = 1;
+  google.protobuf.Struct schema = 3;
 }
 
 message AlterCollectionResponse {

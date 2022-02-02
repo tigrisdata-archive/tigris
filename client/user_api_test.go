@@ -35,12 +35,14 @@ func TestAPIGRPC(t *testing.T) {
 
 	values, err := structpb.NewValue([]interface{}{"pkey_int"})
 	require.NoError(t, err)
-	_, err = c.CreateCollection(ctx, &api.CreateCollectionRequest{Db: "db1", Collection: "t1", CreateBody: &api.CreateCollectionRequestBody{
+	_, err = c.CreateCollection(ctx, &api.CreateCollectionRequest{
+		Db:         "db1",
+		Collection: "t1",
 		Schema: &structpb.Struct{
 			Fields: map[string]*structpb.Value{
 				"primary_key": values,
 			},
-		}},
+		},
 	})
 	require.NoError(t, err)
 
@@ -58,13 +60,13 @@ func TestAPIGRPC(t *testing.T) {
 	_, err = c.Insert(ctx, &api.InsertRequest{
 		Db:         "db1",
 		Collection: "t1",
-		InsertBody: &api.InsertRequestBody{
-			Documents: inputDocuments,
-		},
+		Documents:  inputDocuments,
 	})
 	require.NoError(t, err)
 
-	rc, err := c.Read(ctx, &api.ReadRequest{Db: "db1", Collection: "t1", ReadBody: &api.ReadRequestBody{
+	rc, err := c.Read(ctx, &api.ReadRequest{
+		Db:         "db1",
+		Collection: "t1",
 		Keys: []*api.UserDocument{
 			{
 				Doc: &structpb.Struct{
@@ -73,8 +75,7 @@ func TestAPIGRPC(t *testing.T) {
 					},
 				},
 			},
-		},
-	}})
+		}})
 	require.NoError(t, err)
 
 	totalReceivedDocuments := 0

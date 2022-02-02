@@ -176,9 +176,7 @@ func (c *grpcCRUDClient) Insert(ctx context.Context, docs ...interface{}) error 
 	_, err = c.c.Insert(ctx, &api.InsertRequest{
 		Db:         c.db,
 		Collection: c.table,
-		InsertBody: &api.InsertRequestBody{
-			Documents: bdocs,
-		},
+		Documents:  bdocs,
 	})
 
 	return err
@@ -207,9 +205,7 @@ func (c *grpcCRUDClient) Replace(ctx context.Context, docs ...interface{}) error
 	_, err = c.c.Replace(ctx, &api.ReplaceRequest{
 		Db:         c.db,
 		Collection: c.table,
-		ReplaceBody: &api.ReplaceRequestBody{
-			Documents: bdocs,
-		},
+		Documents:  bdocs,
 	})
 
 	return err
@@ -224,7 +220,6 @@ func (c *grpcCRUDClient) Update(ctx context.Context, docs ...interface{}) error 
 	_, err = c.c.Update(ctx, &api.UpdateRequest{
 		Db:         c.db,
 		Collection: c.table,
-		UpdateBody: &api.UpdateRequestBody{},
 	})
 
 	return err
@@ -239,9 +234,7 @@ func (c *grpcCRUDClient) Read(ctx context.Context, docs ...interface{}) error {
 	resp, err := c.c.Read(ctx, &api.ReadRequest{
 		Db:         c.db,
 		Collection: c.table,
-		ReadBody: &api.ReadRequestBody{
-			Keys: bdocs,
-		},
+		Keys:       bdocs,
 	})
 
 	i := 0
@@ -327,9 +320,7 @@ func (c *httpCRUDClient) Insert(ctx context.Context, docs ...interface{}) error 
 		return err
 	}
 
-	resp, err := c.c.TigrisDBInsertWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBInsertJSONRequestBody{
-		InsertBody: nil,
-	})
+	resp, err := c.c.TigrisDBInsertWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBInsertJSONRequestBody{})
 
 	return HTTPError(err, resp.HTTPResponse)
 }
@@ -351,9 +342,7 @@ func (c *httpCRUDClient) Replace(ctx context.Context, docs ...interface{}) error
 		return err
 	}
 
-	resp, err := c.c.TigrisDBReplaceWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBReplaceJSONRequestBody{
-		ReplaceBody: nil,
-	})
+	resp, err := c.c.TigrisDBReplaceWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBReplaceJSONRequestBody{})
 
 	return HTTPError(err, resp.HTTPResponse)
 }
@@ -364,9 +353,7 @@ func (c *httpCRUDClient) Update(ctx context.Context, docs ...interface{}) error 
 		return err
 	}
 
-	resp, err := c.c.TigrisDBUpdateWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBUpdateJSONRequestBody{
-		UpdateBody: nil,
-	})
+	resp, err := c.c.TigrisDBUpdateWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBUpdateJSONRequestBody{})
 
 	return HTTPError(err, resp.HTTPResponse)
 }
@@ -377,9 +364,7 @@ func (c *httpCRUDClient) Read(ctx context.Context, docs ...interface{}) error {
 		return err
 	}
 
-	resp, err := c.c.TigrisDBReadWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBReadJSONRequestBody{
-		ReadBody: nil,
-	})
+	resp, err := c.c.TigrisDBReadWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBReadJSONRequestBody{})
 
 	return HTTPError(err, resp.HTTPResponse)
 }
