@@ -98,7 +98,7 @@ func (s *userService) CreateCollection(ctx context.Context, r *api.CreateCollect
 		return nil, status.Errorf(codes.AlreadyExists, "collection already exists")
 	}
 
-	keys, err := schemas.ExtractKeysFromSchema(r.CreateBody.Schema.Fields)
+	keys, err := schemas.ExtractKeysFromSchema(r.Schema.Fields)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid schema")
 	}
@@ -137,7 +137,7 @@ func (s *userService) Insert(ctx context.Context, r *api.InsertRequest) (*api.In
 	}
 
 	table := schemas.GetTableName(r.GetDb(), r.GetCollection())
-	if err := s.processBatch(ctx, table, r.GetInsertBody().GetDocuments(), func(b kv.Tx, key types.Key, value []byte) error {
+	if err := s.processBatch(ctx, table, r.GetDocuments(), func(b kv.Tx, key types.Key, value []byte) error {
 		return s.kv.Insert(ctx, table, key, value)
 	}); err != nil {
 		return nil, status.Errorf(codes.Internal, "error: %v", err)
@@ -169,7 +169,7 @@ func (s *userService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.
 	}
 
 	table := schemas.GetTableName(r.GetDb(), r.GetCollection())
-	if err := s.processBatch(ctx, table, r.GetReplaceBody().GetDocuments(), func(b kv.Tx, key types.Key, value []byte) error {
+	if err := s.processBatch(ctx, table, r.GetDocuments(), func(b kv.Tx, key types.Key, value []byte) error {
 		return b.Replace(ctx, table, key, value)
 	}); err != nil {
 		return nil, status.Errorf(codes.Internal, "error: %v", err)
@@ -201,7 +201,7 @@ func (s *userService) Read(r *api.ReadRequest, stream api.TigrisDB_ReadServer) e
 	}
 
 	name := schemas.GetTableName(r.GetDb(), r.GetCollection())
-	for _, v := range r.GetReadBody().GetKeys() {
+	for _, v := range r.GetKeys() {
 		key, err := s.getKey(name, v)
 		if err != nil {
 			return err

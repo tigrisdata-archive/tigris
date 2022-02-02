@@ -69,7 +69,7 @@ func TestAPIGRPCUpdatePrimaryIndex(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	rc, err := c.Read(ctx, &api.ReadRequest{Db: "db1", Collection: "t4", ReadBody: &api.ReadRequestBody{}})
+	rc, err := c.Read(ctx, &api.ReadRequest{Db: "db1", Collection: "t4"})
 	require.NoError(t, err)
 
 	for {
