@@ -15,6 +15,10 @@
 package grpc
 
 import (
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
+	grpc_ctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
+	grpc_opentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	"github.com/soheilhy/cmux"
 	"github.com/tigrisdata/tigrisdb/server/config"
 	"github.com/tigrisdata/tigrisdb/server/types"
@@ -26,12 +30,10 @@ type Server struct {
 }
 
 func NewServer(cfg *config.Config) *Server {
-	var opts []grpc.ServerOption
-	s := grpc.NewServer(opts...)
+	s := &Server{}
+	s.SetupMiddlewares()
 
-	return &Server{
-		GrpcS: s,
-	}
+	return s
 }
 
 func (s *Server) Start(mux cmux.CMux) error {
@@ -41,7 +43,15 @@ func (s *Server) Start(mux cmux.CMux) error {
 	return nil
 }
 
-func (s *Server) SetupMiddlewares() {}
+func (s *Server) SetupMiddlewares() {
+	s.GrpcS = grpc.NewServer(grpc.UnaryInterceptor(
+		grpc_middleware.ChainUnaryServer(
+			grpc_ctxtags.UnaryServerInterceptor(),
+			grpc_opentracing.UnaryServerInterceptor(),
+			grpc_recovery.UnaryServerInterceptor(),
+		),
+	))
+}
 
 func (s *Server) GetType() string {
 	return types.GRPCServer

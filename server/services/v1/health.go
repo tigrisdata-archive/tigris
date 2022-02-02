@@ -18,6 +18,7 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
@@ -43,7 +44,7 @@ func (h *healthService) Health(_ context.Context, _ *api.HealthCheckInput) (*api
 	}, nil
 }
 
-func (h *healthService) RegisterHTTP(router chi.Router) error {
+func (h *healthService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {
 	mux := runtime.NewServeMux(runtime.WithMarshalerOption(string(JSON), &util.JSONMix{}))
 	if err := api.RegisterHealthAPIHandlerServer(context.TODO(), mux, h); err != nil {
 		return err
@@ -54,7 +55,7 @@ func (h *healthService) RegisterHTTP(router chi.Router) error {
 	return nil
 }
 
-func (h *healthService) RegisterGRPC(grpc *grpc.Server) error {
+func (h *healthService) RegisterGRPC(grpc *grpc.Server, inproc *inprocgrpc.Channel) error {
 	api.RegisterHealthAPIServer(grpc, h)
 	return nil
 }

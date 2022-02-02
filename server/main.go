@@ -46,7 +46,7 @@ func main() {
 
 	mx := muxer.NewMuxer(&config.DefaultConfig)
 	mx.RegisterServices(kv)
-	if err := mx.Start(config.DefaultConfig.Server.Host, config.DefaultConfig.Server.HTTPPort); err != nil {
+	if err := mx.Start(config.DefaultConfig.Server.Host, config.DefaultConfig.Server.Port); err != nil {
 		log.Fatal().Err(err).Msgf("error starting server")
 	}
 

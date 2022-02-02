@@ -22,7 +22,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/soheilhy/cmux"
 	"github.com/tigrisdata/tigrisdb/server/config"
-	middlewares "github.com/tigrisdata/tigrisdb/server/midddlewares"
+	tmiddlewares "github.com/tigrisdata/tigrisdb/server/midddlewares/http"
 	"github.com/tigrisdata/tigrisdb/server/types"
 )
 
@@ -39,12 +39,16 @@ type Server struct {
 
 func NewServer(cfg *config.Config) *Server {
 	r := chi.NewRouter()
-	return &Server{
+	s := &Server{
 		Router: r,
 		httpS: &http.Server{
 			Handler: r,
 		},
 	}
+
+	s.SetupMiddlewares()
+	return s
+
 }
 
 func (s *Server) Start(mux cmux.CMux) error {
@@ -56,9 +60,9 @@ func (s *Server) Start(mux cmux.CMux) error {
 func (s *Server) SetupMiddlewares() {
 	s.Router.Use(middleware.Logger)
 	s.Router.Use(middleware.ThrottleBacklog(AllowedConnections, BacklogConnectionsLimit, BacklogWindow))
-	s.Router.Use(middlewares.ContextSetter(nil))
-	s.Router.Use(middlewares.Timeout)
-	s.Router.Use(middlewares.RuntimeLabels)
+	s.Router.Use(tmiddlewares.ContextSetter(nil))
+	s.Router.Use(tmiddlewares.Timeout)
+	s.Router.Use(tmiddlewares.RuntimeLabels)
 	s.Router.Use(middleware.Recoverer)
 }
 
