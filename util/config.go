@@ -17,6 +17,7 @@ package util
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -36,8 +37,37 @@ var configPath = []string{
 }
 
 var envPrefix = "tigrisdb_server"
+var envEnv = "tigrisdb_environment"
+var environment string
+
+const (
+	EnvTest        = "test"
+	EnvDevelopment = "development"
+	EnvProduction  = "production"
+)
+
+func GetEnvironment() string {
+	return environment
+}
+
+func LoadEnvironment() {
+	env := os.Getenv(envEnv)
+	if env == "" {
+		env = os.Getenv(strings.ToUpper(envEnv))
+	}
+
+	//log.Debug().Str("environment", env).Msg("LoadConfig")
+
+	environment = env
+}
 
 func LoadConfig(name string, config interface{}) {
+	LoadEnvironment()
+
+	if GetEnvironment() != "" {
+		name += "." + GetEnvironment()
+	}
+
 	viper.SetConfigName(name)
 	viper.SetConfigType("yaml")
 

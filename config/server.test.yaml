@@ -25,7 +25,7 @@ s3:
 
 dynamodb:
   region: "us-east-1"
-  endpoint: "http://localhost:8002"
+  endpoint: "http://tigris_ddb:8000"
   access_key_id: "accessKey1"
   secret_access_key: "verySecretKey1"
   timeout: 10s

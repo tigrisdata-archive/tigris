@@ -32,9 +32,8 @@ import (
 func TestAPIGRPCUpdatePrimaryIndex(t *testing.T) {
 	ctx := context.TODO()
 
-	//c, _ := NewGRPCClient(ctx, "localhost", 8082)
-	c, _ := newGRPCClient(ctx, "server", 8082)
-	ac, _ := NewAdminGRPCClient(ctx, "server", 8082)
+	c, _ := newGRPCClient(ctx, getTestServerHost(), 8081)
+	ac, _ := NewAdminGRPCClient(ctx, getTestServerHost(), 8081)
 
 	_, _ = c.DropCollection(ctx, &api.DropCollectionRequest{Db: "db1", Collection: "t4"})
 
@@ -92,8 +91,8 @@ func TestAPIGRPCUpdateIndex(t *testing.T) {
 	ctx := context.TODO()
 
 	//c, _ := NewGRPCClient(ctx, "localhost", 8082)
-	c, _ := newGRPCClient(ctx, "server", 8082)
-	ac, _ := NewAdminGRPCClient(ctx, "server", 8082)
+	c, _ := newGRPCClient(ctx, getTestServerHost(), 8081)
+	ac, _ := NewAdminGRPCClient(ctx, getTestServerHost(), 8081)
 
 	_, _ = c.DropCollection(ctx, &api.DropCollectionRequest{Db: "db1", Collection: "t3"})
 
@@ -190,7 +189,7 @@ func byteSlice(ins string) *[]byte {
 func TestAPIHTTPUpdateIndex(t *testing.T) {
 	ctx := context.TODO()
 
-	c, err := userHTTP.NewClientWithResponses("http://server:8081")
+	c, err := userHTTP.NewClientWithResponses("http://" + getTestServerHost() + ":8081")
 	require.NoError(t, err)
 
 	_, _ = c.TigrisDBDropCollectionWithResponse(ctx, "db1", "t2")
@@ -200,7 +199,7 @@ func TestAPIHTTPUpdateIndex(t *testing.T) {
 	require.NotNil(t, cresp)
 	require.Equal(t, cresp.StatusCode(), http.StatusOK)
 
-	ac, err := indexHTTP.NewClientWithResponses("http://server:8081")
+	ac, err := indexHTTP.NewClientWithResponses("http://" + getTestServerHost() + ":8081")
 	require.NoError(t, err)
 
 	resp2, err := ac.IndexAPIUpdateIndexWithResponse(ctx, "db1", "t2", "clustering", indexHTTP.IndexAPIUpdateIndexJSONRequestBody{

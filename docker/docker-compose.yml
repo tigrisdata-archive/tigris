@@ -15,48 +15,49 @@
 version: '3.3'
 
 services:
-  ddb:
+  tigris_ddb:
     container_name: tigris_ddb
     image: amazon/dynamodb-local
     ports:
-      - 8002:8000
+      - "8002:8000"
 
-  fdb:
+  tigris_fdb:
     container_name: tigris_fdb
     image: foundationdb/foundationdb
     ports:
-      - 8003:8000
+      - "8003:8000"
 
-  s3:
+  tigris_s3:
     container_name: tigris_s3
     image: scality/s3server
     ports:
-      - 8004:8000
+      - "8004:8000"
 
-  server:
+  tigris_server:
     container_name: tigris_server
     image: tigris_server
     environment:
-      #- TIGRISDB_SERVER_API_HTTP_PORT=7777
+      #- TIGRISDB_SERVER_API_PORT=7777
+      - TIGRISDB_ENVIRONMENT=test
       - AWS_ACCESS_KEY_ID=accessKey1
       - AWS_SECRET_ACCESS_KEY=verySecretKey1
-          #- AWS_SESSION_TOKEN=session1
-      #      - GRPC_GO_LOG_VERBOSITY_LEVEL=99
+      #- AWS_SESSION_TOKEN=session1
+      #- GRPC_GO_LOG_VERBOSITY_LEVEL=99
       #- GRPC_GO_LOG_SEVERITY_LEVEL=info
     build:
       context: ..
       dockerfile: docker/Dockerfile.server
     ports:
-      - 8082:8082 #GRPC
-      - 8081:8081 #HTTP
+      - "8081:8081"
     depends_on:
-      - ddb
-      - fdb
-      - s3
+      - tigris_ddb
+      - tigris_fdb
+      - tigris_s3
 
   all_test:
     image: tigris_test
     environment:
+      - TIGRISDB_ENVIRONMENT=test
       - DB_PASSWORD=tigris_user_passwd_test
       - DB_HOST=tigris_db_test
         #      - GRPC_GO_LOG_VERBOSITY_LEVEL=99
@@ -71,6 +72,4 @@ services:
         source: ../
         target: /go/src/tigris
     depends_on:
-      - s3
-      - ddb
-      - server
+      - tigris_server
