@@ -20,9 +20,8 @@ import (
 )
 
 type ServerConfig struct {
-	Host     string
-	HTTPPort int16 `mapstructure:"http_port" yaml:"http_port"`
-	GRPCPort int16 `mapstructure:"grpc_port" yaml:"grpc_port"`
+	Host string
+	Port int16
 }
 
 type Config struct {
@@ -36,8 +35,7 @@ var DefaultConfig = Config{
 		Level: "trace",
 	},
 	Server: ServerConfig{
-		Host:     "0.0.0.0",
-		HTTPPort: 8081,
-		GRPCPort: 8082,
+		Host: "0.0.0.0",
+		Port: 8081,
 	},
 }

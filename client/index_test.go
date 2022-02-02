@@ -24,7 +24,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
-
 	indexHTTP "github.com/tigrisdata/tigrisdb/api/client/v1/index"
 	userHTTP "github.com/tigrisdata/tigrisdb/api/client/v1/user"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
@@ -70,7 +69,7 @@ func TestAPIGRPC(t *testing.T) {
 			break
 		}
 		require.NoError(t, err)
-		log.Debug().Str("value", d.Doc.GetDoc().String()).Msg("Read")
+		log.Debug().Str("value", d.Doc.String()).Msg("Read")
 	}
 
 	_, err = c.Delete(ctx, &api.DeleteRequest{Db: "db1", Collection: "t1", DeleteBody: &api.DeleteRequestBody{}})
@@ -132,7 +131,7 @@ func TestAPIGRPCUpdatePrimaryIndex(t *testing.T) {
 			break
 		}
 		require.NoError(t, err)
-		log.Debug().Str("value", d.Doc.GetDoc().String()).Msg("ReadPrimaryIndex")
+		log.Debug().Str("value", d.Doc.String()).Msg("ReadPrimaryIndex")
 	}
 
 	_, err = c.DropCollection(ctx, &api.DropCollectionRequest{Db: "db1", Collection: "t4"})

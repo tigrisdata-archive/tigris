@@ -12,28 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package middlewares
+package http
 
 import (
 	"context"
-	"fmt"
 	"net/http"
+	"runtime/pprof"
 )
 
-type ContextSetterOptions struct{}
-
-func ContextSetter(options *ContextSetterOptions) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		fn := func(w http.ResponseWriter, r *http.Request) {
-			fmt.Println("In ContextSetter")
-			var ctx context.Context = context.WithValue(r.Context(), "", nil)
-			ctx = context.WithValue(ctx, "token", r.Header.Get("TOKEN"))
-
-			r = r.WithContext(ctx)
-
-			next.ServeHTTP(w, r)
-		}
-
-		return http.HandlerFunc(fn)
-	}
+func RuntimeLabels(next http.Handler) http.Handler {
+	return http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			pprof.Do(r.Context(), pprof.Labels("http-path", r.URL.Path, "worker", "http"), func(ctx context.Context) {
+				next.ServeHTTP(w, r)
+			})
+		},
+	)
 }

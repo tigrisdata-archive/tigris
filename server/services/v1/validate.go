@@ -14,11 +14,18 @@
 
 package v1
 
-import "fmt"
+import (
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+)
+
+type ReqValidator interface {
+	Validate() error
+}
 
 func isValidCollection(name string) error {
 	if len(name) == 0 {
-		return fmt.Errorf("invalid collection name")
+		return status.Errorf(codes.InvalidArgument, "invalid collection name %s", name)
 	}
 
 	return nil
@@ -26,7 +33,7 @@ func isValidCollection(name string) error {
 
 func isValidDatabase(name string) error {
 	if len(name) == 0 {
-		return fmt.Errorf("invalid database name")
+		return status.Errorf(codes.InvalidArgument, "invalid database name %s", name)
 	}
 
 	return nil

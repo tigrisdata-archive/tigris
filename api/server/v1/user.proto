@@ -68,7 +68,7 @@ message InsertRequestBody {
 }
 
 message InsertResponse {
-  WriteResponseHeader header = 1;
+  WriteResponseHeader response = 1;
 }
 
 message DeleteRequest {
@@ -83,7 +83,7 @@ message DeleteRequestBody {
 }
 
 message DeleteResponse {
-  WriteResponseHeader header = 1;
+  WriteResponseHeader response = 1;
 }
 
 message ReplaceRequest {
@@ -98,7 +98,7 @@ message ReplaceRequestBody {
 }
 
 message ReplaceResponse {
-  WriteResponseHeader header = 1;
+  WriteResponseHeader response = 1;
 }
 
 message UpdateRequest {
@@ -114,7 +114,7 @@ message UpdateRequestBody {
 }
 
 message UpdateResponse {
-  WriteResponseHeader header = 1;
+  WriteResponseHeader response = 1;
 }
 
 message ReadRequest {
@@ -130,26 +130,35 @@ message ReadRequestBody {
 }
 
 message ReadResponse {
-  WriteResponseHeader header = 1;
-  UserDocument doc = 2;
+  google.protobuf.Struct doc = 1;
 }
 
 message CreateCollectionRequest {
   string db = 1;
   string collection = 2;
+  CreateCollectionRequestBody create_body = 3;
+}
+
+message CreateCollectionRequestBody {
+  google.protobuf.Struct schema = 1;
 }
 
 message CreateCollectionResponse {
-  WriteResponseHeader header = 1;
+  string msg = 1;
 }
 
 message AlterCollectionRequest {
   string db = 1;
   string collection = 2;
+  AlterCollectionRequestBody alter_body = 3;
+}
+
+message AlterCollectionRequestBody {
+  google.protobuf.Struct schema = 1;
 }
 
 message AlterCollectionResponse {
-  WriteResponseHeader header = 1;
+  string msg = 1;
 }
 
 message DropCollectionRequest {
@@ -158,7 +167,7 @@ message DropCollectionRequest {
 }
 
 message DropCollectionResponse {
-  WriteResponseHeader header = 1;
+  string msg = 1;
 }
 message TruncateCollectionRequest {
   string db = 1;
@@ -166,10 +175,9 @@ message TruncateCollectionRequest {
 }
 
 message TruncateCollectionResponse {
-  WriteResponseHeader header = 1;
+  string msg = 1;
 }
 
-// TODO: query and alter table apis
 service TigrisDB {
   // Following APIs are related to DMLs supported by TigrisDB
   rpc Insert(InsertRequest) returns (InsertResponse) {

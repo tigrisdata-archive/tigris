@@ -16,12 +16,17 @@ package schemas
 
 import (
 	"fmt"
-	"strings"
+
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 const (
 	IndexNamespace      = "tigrisdb"
 	ClusteringIndexName = "clustering"
+)
+
+const (
+	PrimaryKeySchemaName = "primary_key"
 )
 
 type Table struct {
@@ -39,10 +44,17 @@ func GetIndexName(db string, table string, index string) string {
 	return fmt.Sprintf(IndexNamespace+".%s.%s.index.%s", db, table, index)
 }
 
-func AddTable(name string, key string) {
-	keys := strings.Split(key, ",")
-
+func AddTable(name string, keys []string) {
 	tables[name] = Table{Name: name, Key: keys}
+}
+
+func GetTable(name string) *Table {
+	tbl, ok := tables[name]
+	if !ok {
+		return nil
+	}
+
+	return &tbl
 }
 
 func GetTableKey(name string) []string {
@@ -50,4 +62,17 @@ func GetTableKey(name string) []string {
 		return nil
 	}
 	return tables[name].Key
+}
+
+func ExtractKeysFromSchema(userSchema map[string]*structpb.Value) ([]string, error) {
+	var keys []string
+	v := userSchema[PrimaryKeySchemaName]
+	if list := v.GetListValue(); list != nil {
+		for _, l := range list.GetValues() {
+			keys = append(keys, l.GetStringValue())
+		}
+		return keys, nil
+	} else {
+		return nil, fmt.Errorf("not compatible keys")
+	}
 }

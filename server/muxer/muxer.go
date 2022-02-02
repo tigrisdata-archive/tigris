@@ -18,14 +18,14 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/tigrisdata/tigrisdb/server/types"
-
+	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
 	"github.com/tigrisdata/tigrisdb/server/config"
 	tgrpc "github.com/tigrisdata/tigrisdb/server/grpc"
 	tHTTP "github.com/tigrisdata/tigrisdb/server/http"
 	v1 "github.com/tigrisdata/tigrisdb/server/services/v1"
+	"github.com/tigrisdata/tigrisdb/server/types"
 	"github.com/tigrisdata/tigrisdb/store/kv"
 )
 
@@ -47,25 +47,20 @@ func NewMuxer(cfg *config.Config) *Muxer {
 		servers: s,
 	}
 
-	m.setupMiddlewares()
-
 	return m
-}
-
-func (m *Muxer) setupMiddlewares() {
-	for _, s := range m.servers {
-		s.SetupMiddlewares()
-	}
 }
 
 func (m *Muxer) RegisterServices(kv kv.KV) {
 	services := v1.GetRegisteredServices(kv)
 	for _, r := range services {
+		// create an inproc channel that is passed to all the servers
+		var inproc = new(inprocgrpc.Channel)
+
 		for _, s := range m.servers {
 			if s.GetType() == types.GRPCServer {
-				r.RegisterGRPC(s.(*tgrpc.Server).GrpcS)
+				r.RegisterGRPC(s.(*tgrpc.Server).GrpcS, inproc)
 			} else if s.GetType() == types.HTTPServer {
-				r.RegisterHTTP(s.(*tHTTP.Server).Router)
+				r.RegisterHTTP(s.(*tHTTP.Server).Router, inproc)
 			}
 		}
 	}

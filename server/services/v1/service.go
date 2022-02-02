@@ -15,6 +15,7 @@
 package v1
 
 import (
+	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
 	"github.com/tigrisdata/tigrisdb/store/kv"
 	"google.golang.org/grpc"
@@ -27,8 +28,8 @@ const (
 )
 
 type Service interface {
-	RegisterHTTP(router chi.Router) error
-	RegisterGRPC(grpc *grpc.Server) error
+	RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error
+	RegisterGRPC(grpc *grpc.Server, inproc *inprocgrpc.Channel) error
 }
 
 func GetRegisteredServices(kv kv.KV) []Service {

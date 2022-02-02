@@ -19,6 +19,7 @@ import (
 	"net/http"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog/log"
@@ -45,7 +46,7 @@ func newIndexService(kv kv.KV) *indexService {
 	}
 }
 
-func (a *indexService) RegisterHTTP(router chi.Router) error {
+func (a *indexService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {
 	mux := runtime.NewServeMux(runtime.WithMarshalerOption("application/json", &util.JSONMix{}))
 	if err := api.RegisterIndexAPIHandlerServer(context.TODO(), mux, a); err != nil {
 		return err
@@ -57,7 +58,7 @@ func (a *indexService) RegisterHTTP(router chi.Router) error {
 	return nil
 }
 
-func (a *indexService) RegisterGRPC(grpc *grpc.Server) error {
+func (a *indexService) RegisterGRPC(grpc *grpc.Server, inproc *inprocgrpc.Channel) error {
 	api.RegisterIndexAPIServer(grpc, a)
 	return nil
 }
