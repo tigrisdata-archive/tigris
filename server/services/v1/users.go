@@ -89,7 +89,7 @@ func (s *userService) RegisterGRPC(grpc *grpc.Server, inproc *inprocgrpc.Channel
 }
 
 func (s *userService) CreateCollection(ctx context.Context, r *api.CreateCollectionRequest) (*api.CreateCollectionResponse, error) {
-	if err := isValidCollectionAndDatabase(r.GetCollection(), r.GetDb()); err != nil {
+	if err := r.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -97,15 +97,8 @@ func (s *userService) CreateCollection(ctx context.Context, r *api.CreateCollect
 	if tbl := schemas.GetTable(name); tbl != nil {
 		return nil, status.Errorf(codes.AlreadyExists, "collection already exists")
 	}
-	if r.CreateBody == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "collection request body is missing")
-	}
-	sch := r.GetCreateBody().GetSchema()
-	if sch == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "schema is a required during collection creation")
-	}
 
-	keys, err := schemas.ExtractKeysFromSchema(sch.Fields)
+	keys, err := schemas.ExtractKeysFromSchema(r.CreateBody.Schema.Fields)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid schema")
 	}
@@ -121,7 +114,7 @@ func (s *userService) CreateCollection(ctx context.Context, r *api.CreateCollect
 }
 
 func (s *userService) DropCollection(ctx context.Context, r *api.DropCollectionRequest) (*api.DropCollectionResponse, error) {
-	if err := isValidCollectionAndDatabase(r.GetCollection(), r.GetDb()); err != nil {
+	if err := r.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -139,20 +132,12 @@ func (s *userService) DropCollection(ctx context.Context, r *api.DropCollectionR
 // Insert new object returns an error if object already exists
 // Operations done individually not in actual batch
 func (s *userService) Insert(ctx context.Context, r *api.InsertRequest) (*api.InsertResponse, error) {
-	if err := isValidCollectionAndDatabase(r.GetCollection(), r.GetDb()); err != nil {
+	if err := r.Validate(); err != nil {
 		return nil, err
 	}
 
-	if r.InsertBody == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "insert request body is missing")
-	}
-	docs := r.GetInsertBody().GetDocuments()
-	if len(docs) == 0 {
-		return nil, status.Errorf(codes.InvalidArgument, "empty documents received")
-	}
-
 	table := schemas.GetTableName(r.GetDb(), r.GetCollection())
-	if err := s.processBatch(ctx, table, docs, func(b kv.Tx, key types.Key, value []byte) error {
+	if err := s.processBatch(ctx, table, r.GetInsertBody().GetDocuments(), func(b kv.Tx, key types.Key, value []byte) error {
 		return s.kv.Insert(ctx, table, key, value)
 	}); err != nil {
 		return nil, status.Errorf(codes.Internal, "error: %v", err)
@@ -164,7 +149,7 @@ func (s *userService) Insert(ctx context.Context, r *api.InsertRequest) (*api.In
 // Update performs full body replace of existing object
 // Operations done individually not in actual batch
 func (s *userService) Update(ctx context.Context, r *api.UpdateRequest) (*api.UpdateResponse, error) {
-	if err := isValidCollectionAndDatabase(r.GetCollection(), r.GetDb()); err != nil {
+	if err := r.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -179,7 +164,7 @@ func (s *userService) Update(ctx context.Context, r *api.UpdateRequest) (*api.Up
 }
 
 func (s *userService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.ReplaceResponse, error) {
-	if err := isValidCollectionAndDatabase(r.GetCollection(), r.GetDb()); err != nil {
+	if err := r.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -196,7 +181,7 @@ func (s *userService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.
 }
 
 func (s *userService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.DeleteResponse, error) {
-	if err := isValidCollectionAndDatabase(r.GetCollection(), r.GetDb()); err != nil {
+	if err := r.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -211,11 +196,8 @@ func (s *userService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.De
 }
 
 func (s *userService) Read(r *api.ReadRequest, stream api.TigrisDB_ReadServer) error {
-	if err := isValidCollectionAndDatabase(r.GetCollection(), r.GetDb()); err != nil {
+	if err := r.Validate(); err != nil {
 		return err
-	}
-	if r.ReadBody == nil {
-		return status.Errorf(codes.InvalidArgument, "read request body is missing")
 	}
 
 	name := schemas.GetTableName(r.GetDb(), r.GetCollection())
