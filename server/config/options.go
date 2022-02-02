@@ -27,7 +27,8 @@ type ServerConfig struct {
 type Config struct {
 	Server   ServerConfig `yaml:"server" json:"server"`
 	Log      log.LogConfig
-	DynamoDB kv.DynamodbConfig
+	DynamoDB kv.DynamoDBConfig
+	FoundationDB kv.FoundationDBConfig
 }
 
 var DefaultConfig = Config{

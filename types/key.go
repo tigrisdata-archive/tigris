@@ -189,28 +189,6 @@ func (s *stringKey) String() string {
 	return fmt.Sprintf("%v %s", s.partition, s.key)
 }
 
-type userKey struct {
-	key       []byte
-	partition []byte
-}
-
-// NewUserKey creates binary key with user provided partition key
-func NewUserKey(k []byte, partition []byte) Key {
-	return &userKey{key: k, partition: partition}
-}
-
-func (s *userKey) Partition() []byte {
-	return s.partition
-}
-
-func (s *userKey) Primary() []byte {
-	return []byte(s.key)
-}
-
-func (s *userKey) String() string {
-	return fmt.Sprintf("%v %v", s.partition, s.key)
-}
-
 type partitionKeyIterator interface {
 	Next() []byte
 }

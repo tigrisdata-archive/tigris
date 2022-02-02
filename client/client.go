@@ -22,17 +22,15 @@ import (
 	"net/http"
 	"reflect"
 
-	userHTTP "github.com/tigrisdata/tigrisdb/api/client/v1/user"
-
-	ulog "github.com/tigrisdata/tigrisdb/util/log"
-
 	"github.com/rs/zerolog/log"
+	userHTTP "github.com/tigrisdata/tigrisdb/api/client/v1/user"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"google.golang.org/grpc"
 )
 
 type crudClient interface {
-	Insert(ctx context.Context, docs ...interface{}) error // return rows affected and per doc error?
+	Insert(ctx context.Context, docs ...interface{}) error
 	Update(ctx context.Context, docs ...interface{}) error
 	Delete(ctx context.Context, docs ...interface{}) error
 	Replace(ctx context.Context, docs ...interface{}) error
@@ -257,11 +255,11 @@ func (c *grpcCRUDClient) Read(ctx context.Context, docs ...interface{}) error {
 }
 
 type httpClient struct {
-	userHTTP.ClientWithResponsesInterface
+	*userHTTP.ClientWithResponses
 }
 
 type httpCRUDClient struct {
-	c     userHTTP.ClientWithResponsesInterface
+	c     *userHTTP.ClientWithResponses
 	db    string
 	table string
 }
@@ -275,28 +273,33 @@ func (c *httpClient) Close() error {
 	return nil
 }
 
-func HTTPError(err error, resp *http.Response) error {
+type httpStatus interface {
+	StatusCode() int
+	Status() string
+}
+
+func HTTPError(err error, resp httpStatus) error {
 	if err != nil {
 		return err
 	}
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf(resp.Status)
+	if resp.StatusCode() != http.StatusOK && resp.StatusCode() != http.StatusCreated {
+		return fmt.Errorf(resp.Status())
 	}
 	return nil
 }
 
 func (c *httpClient) Create(ctx context.Context, db string, collection string, key string) error {
 	resp, err := c.TigrisDBCreateCollectionWithResponse(ctx, db, collection, userHTTP.TigrisDBCreateCollectionJSONRequestBody{})
-	return HTTPError(err, resp.HTTPResponse)
+	return HTTPError(err, resp)
 }
 
 func (c *httpClient) Drop(ctx context.Context, db string, table string) error {
 	resp, err := c.TigrisDBDropCollectionWithResponse(ctx, db, table)
-	return HTTPError(err, resp.HTTPResponse)
+	return HTTPError(err, resp)
 }
 
 func (c *httpClient) Use(db string, table string) crudClient {
-	return &httpCRUDClient{c: c.ClientWithResponsesInterface, db: db, table: table}
+	return &httpCRUDClient{c: c.ClientWithResponses, db: db, table: table}
 }
 
 func (c *httpClient) BeginTx() (txClient, error) {
@@ -322,7 +325,7 @@ func (c *httpCRUDClient) Insert(ctx context.Context, docs ...interface{}) error 
 
 	resp, err := c.c.TigrisDBInsertWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBInsertJSONRequestBody{})
 
-	return HTTPError(err, resp.HTTPResponse)
+	return HTTPError(err, resp)
 }
 
 func (c *httpCRUDClient) Delete(ctx context.Context, docs ...interface{}) error {
@@ -333,7 +336,7 @@ func (c *httpCRUDClient) Delete(ctx context.Context, docs ...interface{}) error 
 
 	resp, err := c.c.TigrisDBDeleteWithResponse(ctx, c.db, c.table, nil)
 
-	return HTTPError(err, resp.HTTPResponse)
+	return HTTPError(err, resp)
 }
 
 func (c *httpCRUDClient) Replace(ctx context.Context, docs ...interface{}) error {
@@ -344,7 +347,7 @@ func (c *httpCRUDClient) Replace(ctx context.Context, docs ...interface{}) error
 
 	resp, err := c.c.TigrisDBReplaceWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBReplaceJSONRequestBody{})
 
-	return HTTPError(err, resp.HTTPResponse)
+	return HTTPError(err, resp)
 }
 
 func (c *httpCRUDClient) Update(ctx context.Context, docs ...interface{}) error {
@@ -355,7 +358,11 @@ func (c *httpCRUDClient) Update(ctx context.Context, docs ...interface{}) error 
 
 	resp, err := c.c.TigrisDBUpdateWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBUpdateJSONRequestBody{})
 
-	return HTTPError(err, resp.HTTPResponse)
+	return HTTPError(err, resp)
+}
+
+type ReadStruct struct {
+	Result *api.ReadResponse
 }
 
 func (c *httpCRUDClient) Read(ctx context.Context, docs ...interface{}) error {
@@ -364,9 +371,38 @@ func (c *httpCRUDClient) Read(ctx context.Context, docs ...interface{}) error {
 		return err
 	}
 
-	resp, err := c.c.TigrisDBReadWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBReadJSONRequestBody{})
+	resp, err := c.c.TigrisDBRead(ctx, c.db, c.table, userHTTP.TigrisDBReadJSONRequestBody{})
 
-	return HTTPError(err, resp.HTTPResponse)
+	if ulog.E(err) {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf(resp.Status)
+	}
+
+	i := 0
+	dec := json.NewDecoder(resp.Body)
+
+	for dec.More() {
+		td := ReadStruct{}
+		if err := dec.Decode(&td); ulog.E(err) {
+			return err
+		}
+
+		//FIXME: Can we unmarshall structpb directly to user struct?
+		b, err := json.Marshal(td.Result.Doc)
+		if ulog.E(err) {
+			return err
+		}
+		err = json.Unmarshal(b, &docs[i])
+		if ulog.E(err) {
+			return err
+		}
+		i++
+	}
+
+	return nil
 }
 
 type grpcAdminClient struct {

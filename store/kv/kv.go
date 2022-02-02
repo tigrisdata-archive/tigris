@@ -16,41 +16,51 @@ package kv
 
 import (
 	"context"
-
-	"github.com/tigrisdata/tigrisdb/types"
+	"unsafe"
 )
 
-var (
-	PartitionKey = "partition_key"
-	PrimaryKey   = "primary_key"
-	DataField    = "data"
-)
-
-type Doc struct {
-	Key   types.Key
+type KeyValue struct {
+	Key   Key
 	Value []byte
 }
 
 type crud interface {
-	Insert(ctx context.Context, table string, key types.Key, data []byte) error
-	Update(ctx context.Context, table string, key types.Key, data []byte) error // full body replace of existing document
-	Replace(ctx context.Context, table string, key types.Key, data []byte) error
-	Delete(ctx context.Context, table string, key types.Key) error
-	Read(ctx context.Context, table string, key types.Key) ([]Doc, error)
-	ReadRange(ctx context.Context, table string, partitionKey []byte, lkey types.Key, rkey types.Key, limit int) ([]Doc, error)
+	Insert(ctx context.Context, table string, key Key, data []byte) error
+	Replace(ctx context.Context, table string, key Key, data []byte) error
+	Delete(ctx context.Context, table string, key Key) error
+	DeleteRange(ctx context.Context, table string, lKey Key, rKey Key) error
+	Read(ctx context.Context, table string, key Key) (Iterator, error)
+	ReadRange(ctx context.Context, table string, lkey Key, rkey Key) (Iterator, error)
+	UpdateRange(ctx context.Context, table string, lKey Key, rKey Key, apply func([]byte) []byte) error
 }
 
 type Tx interface {
-	Replace(ctx context.Context, table string, key types.Key, data []byte) error
-	Delete(ctx context.Context, table string, key types.Key) error
+	crud
 	Commit(context.Context) error
 	Rollback(context.Context) error
 }
 
 type KV interface {
 	crud
-	Tx() Tx
-	Batch() Tx
+	Tx() (Tx, error)
+	Batch() (Tx, error)
 	CreateTable(ctx context.Context, name string) error
 	DropTable(ctx context.Context, name string) error
+}
+
+type Iterator interface {
+	More() bool
+	Next() (*KeyValue, error)
+}
+
+type KeyPart interface{}
+type Key []KeyPart
+
+func BuildKey(parts ...interface{}) Key {
+	ptr := unsafe.Pointer(&parts)
+	return *(*Key)(ptr)
+}
+
+func (k *Key) AddPart(part interface{}) {
+	*k = append(*k, KeyPart(part))
 }

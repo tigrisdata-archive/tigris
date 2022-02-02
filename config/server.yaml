@@ -29,3 +29,6 @@ dynamodb:
   access_key_id: "accessKey1"
   secret_access_key: "verySecretKey1"
   timeout: 10s
+
+foundationdb:
+  cluster_file: "config/fdb.cluster"

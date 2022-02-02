@@ -175,7 +175,7 @@ func TestAPIGRPCUpdateIndex(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, v := range rresp.Shards {
-		log.Error().Str("file_id", v.FileId).Int64("ts", v.Timestamp).Str("min_key", string(v.MinKey)).Str("max_key", string(v.MaxKey)).Uint64("offset", v.Offset).Msg("micro shard key")
+		log.Debug().Str("file_id", v.FileId).Int64("ts", v.Timestamp).Str("min_key", string(v.MinKey)).Str("max_key", string(v.MaxKey)).Uint64("offset", v.Offset).Msg("micro shard key")
 	}
 
 	_, err = c.DropCollection(ctx, &api.DropCollectionRequest{Db: "db1", Collection: "t3"})
@@ -282,7 +282,7 @@ func TestAPIHTTPUpdateIndex(t *testing.T) {
 	require.NotNil(t, resp3.JSON200)
 
 	for _, v := range *resp3.JSON200.Shards {
-		log.Error().Str("file_id", aws.StringValue(v.FileId)).Int64("ts", aws.Int64Value(v.Timestamp)).Str("min_key", string(*v.MinKey)).Str("max_key", string(*v.MinKey)).Msg("micro shard key")
+		log.Debug().Str("file_id", aws.StringValue(v.FileId)).Int64("ts", aws.Int64Value(v.Timestamp)).Str("min_key", string(*v.MinKey)).Str("max_key", string(*v.MinKey)).Msg("micro shard key")
 	}
 
 	resp4, err := c.TigrisDBDropCollectionWithResponse(ctx, "db1", "t2")

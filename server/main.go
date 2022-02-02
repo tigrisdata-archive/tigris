@@ -39,6 +39,7 @@ func main() {
 	log.Info().Str("version", Version).Str("BuildHash", BuildHash).Msgf("Starting server")
 
 	kv, err := kv.NewDynamoDB(&config.DefaultConfig.DynamoDB)
+	//kv, err := kv.NewFoundationDB(&config.DefaultConfig.FoundationDB)
 	if err != nil {
 		log.Fatal().Err(err).Msg("error initializing kv store")
 	}

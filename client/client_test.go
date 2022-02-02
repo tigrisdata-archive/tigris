@@ -147,6 +147,5 @@ func TestTxHTTPClient(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = c.Close() }()
 
-	testClient(t, c)
 	testTxClient(t, c)
 }

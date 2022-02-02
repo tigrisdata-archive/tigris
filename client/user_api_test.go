@@ -99,7 +99,7 @@ func TestAPIGRPC(t *testing.T) {
 		require.EqualValues(t, inputDocuments[0].Doc.AsMap(), d.Doc.AsMap())
 		totalReceivedDocuments++
 	}
-	require.Equal(t, totalReceivedDocuments, len(inputDocuments))
+	require.Equal(t, len(inputDocuments), totalReceivedDocuments)
 
 	_, err = c.DropCollection(ctx, &api.DropCollectionRequest{Db: "db1", Collection: "t1"})
 	require.NoError(t, err)

@@ -3,6 +3,7 @@ module github.com/tigrisdata/tigrisdb
 go 1.17
 
 require (
+	github.com/apple/foundationdb/bindings/go v0.0.0-20211207225159-47b9a81d1c10
 	github.com/aws/aws-sdk-go v1.42.23
 	github.com/aws/aws-sdk-go-v2 v1.13.0
 	github.com/aws/aws-sdk-go-v2/config v1.10.2
@@ -12,15 +13,19 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deepmap/oapi-codegen v1.9.1
 	github.com/fsnotify/fsnotify v1.5.1
+	github.com/fullstorydev/grpchan v1.1.0
 	github.com/getkin/kin-openapi v0.87.0
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/golang/protobuf v1.5.2
+	github.com/google/uuid v1.3.0
+	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.7.3
 	github.com/rs/zerolog v1.26.0
 	github.com/soheilhy/cmux v0.1.5
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.9.0
 	github.com/stretchr/testify v1.7.0
+	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
 	google.golang.org/genproto v0.0.0-20220118154757-00ab72f36ad5
 	google.golang.org/grpc v1.43.0
 	google.golang.org/protobuf v1.27.1
@@ -39,16 +44,10 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.5.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.6.1 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.10.1 // indirect
-	github.com/fullstorydev/grpchan v1.1.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/swag v0.19.5 // indirect
-	github.com/golang/glog v1.0.0 // indirect
-	github.com/google/uuid v1.3.0 // indirect
-	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
-	github.com/jhump/gopoet v0.1.0 // indirect
-	github.com/jhump/goprotoc v0.4.0 // indirect
 	github.com/jhump/protoreflect v1.5.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/magiconair/properties v1.8.5 // indirect
@@ -67,5 +66,4 @@ require (
 	golang.org/x/text v0.3.7 // indirect
 	gopkg.in/ini.v1 v1.64.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
-	sigs.k8s.io/yaml v1.3.0 // indirect
 )

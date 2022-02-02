@@ -28,7 +28,6 @@ import (
 	"github.com/tigrisdata/tigrisdb/schema"
 	"github.com/tigrisdata/tigrisdb/server/transaction"
 	"github.com/tigrisdata/tigrisdb/store/kv"
-	"github.com/tigrisdata/tigrisdb/types"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -132,7 +131,7 @@ func (s *userService) DropCollection(ctx context.Context, r *api.DropCollectionR
 	}, nil
 }
 
-func (s *userService) BeginTransaction(ctx context.Context, r *api.BeginTransactionRequest) (*api.BeginTransactionResponse, error) {
+func (s *userService) BeginTransaction(_ context.Context, _ *api.BeginTransactionRequest) (*api.BeginTransactionResponse, error) {
 	tx, err := s.tx.StartTxn()
 	if err != nil {
 		return nil, err
@@ -143,7 +142,7 @@ func (s *userService) BeginTransaction(ctx context.Context, r *api.BeginTransact
 	}, nil
 }
 
-func (s *userService) CommitTransaction(ctx context.Context, r *api.CommitTransactionRequest) (*api.CommitTransactionResponse, error) {
+func (s *userService) CommitTransaction(_ context.Context, r *api.CommitTransactionRequest) (*api.CommitTransactionResponse, error) {
 	if err := s.tx.EndTxn(r.Tx.Id, true); err != nil {
 		return nil, err
 	}
@@ -151,7 +150,7 @@ func (s *userService) CommitTransaction(ctx context.Context, r *api.CommitTransa
 	return &api.CommitTransactionResponse{}, nil
 }
 
-func (s *userService) RollbackTransaction(ctx context.Context, r *api.RollbackTransactionRequest) (*api.RollbackTransactionResponse, error) {
+func (s *userService) RollbackTransaction(_ context.Context, r *api.RollbackTransactionRequest) (*api.RollbackTransactionResponse, error) {
 	if err := s.tx.EndTxn(r.Tx.Id, false); err != nil {
 		return nil, err
 	}
@@ -170,7 +169,7 @@ func (s *userService) Insert(ctx context.Context, r *api.InsertRequest) (*api.In
 	if collection == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "collection doesn't exists")
 	}
-	if err := s.processBatch(ctx, collection, r.GetDocuments(), func(b kv.Tx, key types.Key, value []byte) error {
+	if err := s.processBatch(ctx, collection, r.GetDocuments(), func(b kv.Tx, key kv.Key, value []byte) error {
 		return s.kv.Insert(ctx, collection.StorageName(), key, value)
 	}); err != nil {
 		return nil, status.Errorf(codes.Internal, "error: %v", err)
@@ -190,8 +189,11 @@ func (s *userService) Update(ctx context.Context, r *api.UpdateRequest) (*api.Up
 	if collection == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "collection doesn't exists")
 	}
-	if err := s.processBatch(ctx, collection, nil, func(b kv.Tx, key types.Key, value []byte) error {
-		return s.kv.Update(ctx, collection.StorageName(), key, value)
+	if err := s.processBatch(ctx, collection, nil, func(b kv.Tx, key kv.Key, value []byte) error {
+		return s.kv.UpdateRange(ctx, collection.StorageName(), key, key, func(in []byte) []byte {
+			// FIXME: Merge in + value
+			return value
+		})
 	}); err != nil {
 		return nil, status.Errorf(codes.Internal, "error: %v", err)
 	}
@@ -208,7 +210,7 @@ func (s *userService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.
 	if collection == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "collection doesn't exists")
 	}
-	if err := s.processBatch(ctx, collection, r.GetDocuments(), func(b kv.Tx, key types.Key, value []byte) error {
+	if err := s.processBatch(ctx, collection, r.GetDocuments(), func(b kv.Tx, key kv.Key, value []byte) error {
 		return b.Replace(ctx, collection.StorageName(), key, value)
 	}); err != nil {
 		return nil, status.Errorf(codes.Internal, "error: %v", err)
@@ -228,7 +230,7 @@ func (s *userService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.De
 	if collection == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "collection doesn't exists")
 	}
-	if err := s.processBatch(ctx, collection, nil, func(b kv.Tx, key types.Key, value []byte) error {
+	if err := s.processBatch(ctx, collection, nil, func(b kv.Tx, key kv.Key, value []byte) error {
 		return b.Delete(ctx, collection.StorageName(), key)
 	}); err != nil {
 		return nil, status.Errorf(codes.Internal, "error: %v", err)
@@ -253,11 +255,15 @@ func (s *userService) Read(r *api.ReadRequest, stream api.TigrisDB_ReadServer) e
 			return err
 		}
 
-		docs, err := s.kv.Read(context.TODO(), collection.StorageName(), key)
+		it, err := s.kv.Read(context.TODO(), collection.StorageName(), key)
 		if err != nil {
 			return err
 		}
-		for _, d := range docs {
+		for it.More() {
+			d, err := it.Next()
+			if err != nil {
+				return err
+			}
 			s := &structpb.Struct{}
 			err = protojson.Unmarshal(d.Value, s)
 			if err != nil {
@@ -273,8 +279,8 @@ func (s *userService) Read(r *api.ReadRequest, stream api.TigrisDB_ReadServer) e
 	return nil
 }
 
-func (s *userService) getKey(collection schema.Collection, v *api.UserDocument) (types.Key, error) {
-	var key types.Key
+func (s *userService) getKey(collection schema.Collection, v *api.UserDocument) (kv.Key, error) {
+	var key kv.Key
 	pkey := collection.PrimaryKeys()
 	doc := v.Doc.AsMap()
 
@@ -287,11 +293,15 @@ func (s *userService) getKey(collection schema.Collection, v *api.UserDocument) 
 		return nil, err
 	}
 	spew.Dump(doc)
+	spew.Dump(key)
 	return key, nil
 }
 
-func (s *userService) processBatch(ctx context.Context, collection schema.Collection, docs []*api.UserDocument, fn func(b kv.Tx, key types.Key, value []byte) error) error {
-	b := s.kv.Batch()
+func (s *userService) processBatch(ctx context.Context, collection schema.Collection, docs []*api.UserDocument, fn func(b kv.Tx, key kv.Key, value []byte) error) error {
+	b, err := s.kv.Batch()
+	if err != nil {
+		return err
+	}
 
 	for _, v := range docs {
 		key, err := s.getKey(collection, v)
@@ -319,34 +329,18 @@ func (s *userService) processBatch(ctx context.Context, collection schema.Collec
 	return nil
 }
 
-func buildKey(fields map[string]interface{}, key []string) (types.Key, error) {
-	b := make([]byte, 0)
-	var p []byte
-	for i, v := range key {
+func buildKey(fields map[string]interface{}, key []string) (kv.Key, error) {
+	nKey := kv.Key{}
+	for _, v := range key {
 		k, ok := fields[v]
 		if !ok {
 			return nil, ulog.CE("missing primary key column(s) %s", v)
 		}
 
-		switch t := k.(type) {
-		case int:
-			b = types.EncodeIntKey(uint64(t), b)
-		case uint64:
-			b = types.EncodeIntKey(t, b)
-		case float64:
-			b = types.EncodeIntKey(uint64(t), b)
-		case []byte:
-			b = types.EncodeBinaryKey(t, b)
-		case string:
-			b = types.EncodeBinaryKey([]byte(t), b)
-		}
-		if i == 0 {
-			p = make([]byte, len(b))
-			copy(p, b)
-		}
+		nKey.AddPart(k)
 	}
-	if len(b) == 0 {
+	if len(nKey) == 0 {
 		return nil, ulog.CE("missing primary key column(s)")
 	}
-	return types.NewUserKey(b, p), nil
+	return nKey, nil
 }
