@@ -56,8 +56,6 @@ func LoadEnvironment() {
 		env = os.Getenv(strings.ToUpper(envEnv))
 	}
 
-	//log.Debug().Str("environment", env).Msg("LoadConfig")
-
 	environment = env
 }
 
