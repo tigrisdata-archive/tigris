@@ -26,6 +26,7 @@ import (
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/server/schemas"
+	"github.com/tigrisdata/tigrisdb/server/transaction"
 	"github.com/tigrisdata/tigrisdb/store/kv"
 	"github.com/tigrisdata/tigrisdb/types"
 	"github.com/tigrisdata/tigrisdb/util"
@@ -51,11 +52,13 @@ type userService struct {
 	api.UnimplementedTigrisDBServer
 
 	kv kv.KV
+	tx *transaction.Manager
 }
 
 func newUserService(kv kv.KV) *userService {
 	return &userService{
 		kv: kv,
+		tx: transaction.NewTransactionMgr(),
 	}
 }
 
@@ -127,6 +130,33 @@ func (s *userService) DropCollection(ctx context.Context, r *api.DropCollectionR
 	return &api.DropCollectionResponse{
 		Msg: "collection dropped successfully",
 	}, nil
+}
+
+func (s *userService) BeginTransaction(ctx context.Context, r *api.BeginTransactionRequest) (*api.BeginTransactionResponse, error) {
+	tx, err := s.tx.StartTxn()
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.BeginTransactionResponse{
+		Tx: tx,
+	}, nil
+}
+
+func (s *userService) CommitTransaction(ctx context.Context, r *api.CommitTransactionRequest) (*api.CommitTransactionResponse, error) {
+	if err := s.tx.EndTxn(r.Tx.Id, true); err != nil {
+		return nil, err
+	}
+
+	return &api.CommitTransactionResponse{}, nil
+}
+
+func (s *userService) RollbackTransaction(ctx context.Context, r *api.RollbackTransactionRequest) (*api.RollbackTransactionResponse, error) {
+	if err := s.tx.EndTxn(r.Tx.Id, false); err != nil {
+		return nil, err
+	}
+
+	return &api.RollbackTransactionResponse{}, nil
 }
 
 // Insert new object returns an error if object already exists
