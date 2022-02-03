@@ -20,7 +20,6 @@ import (
 	"github.com/tigrisdata/tigrisdb/server/config"
 	"github.com/tigrisdata/tigrisdb/server/muxer"
 	"github.com/tigrisdata/tigrisdb/store/kv"
-	"github.com/tigrisdata/tigrisdb/util"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 )
 
@@ -33,7 +32,7 @@ var BuildHash string
 func main() {
 	pflag.String("api.grpc_port", "", "set server grpc port")
 
-	util.LoadConfig("server", &config.DefaultConfig)
+	config.LoadConfig("server", &config.DefaultConfig)
 
 	ulog.Configure(config.DefaultConfig.Log)
 
