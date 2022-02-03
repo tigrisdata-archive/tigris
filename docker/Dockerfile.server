@@ -1,21 +1,20 @@
 FROM golang:1.18beta1-bullseye AS build
 
 RUN apt-get update && apt-get install -y apt-transport-https
-RUN apt-get install -y wget make git gcc g++ wget 
-
-RUN wget https://github.com/apple/foundationdb/releases/download/6.3.23/foundationdb-clients_6.3.23-1_amd64.deb
-RUN dpkg -i foundationdb-clients_6.3.23-1_amd64.deb
+RUN apt-get install -y protobuf-compiler
 
 RUN mkdir /build
 
 #Download deps once, during docker build. Rebuild only on go.mod change
-COPY ./go.mod /build
+COPY scripts/install_build_deps.sh /build
+RUN sh /build/install_build_deps.sh
+COPY go.mod /build
 WORKDIR /build
 RUN go mod download
 
 COPY . /build
 
-RUN rm server/service
+RUN rm -f server/service
 RUN make bins
 
 FROM debian:bullseye-slim

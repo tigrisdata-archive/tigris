@@ -31,6 +31,7 @@ import (
 )
 
 func TestAPIGRPCUpdatePrimaryIndex(t *testing.T) {
+	t.Skip("not implemented")
 	ctx := context.TODO()
 
 	h, p := getTestServerHostPort()
@@ -90,6 +91,7 @@ func TestAPIGRPCUpdatePrimaryIndex(t *testing.T) {
 }
 
 func TestAPIGRPCUpdateIndex(t *testing.T) {
+	t.Skip("not implemented")
 	ctx := context.TODO()
 
 	h, p := getTestServerHostPort()
@@ -189,6 +191,7 @@ func byteSlice(ins string) *[]byte {
 }
 
 func TestAPIHTTPUpdateIndex(t *testing.T) {
+	t.Skip("not implemented")
 	ctx := context.TODO()
 
 	h, p := getTestServerHostPort()

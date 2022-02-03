@@ -13,16 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
-#nice REST cli
-#python3 -m pip install httpie
+set -e
 
 #test deps
-go get github.com/golang/mock/mockgen@v1.6.0
-curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v1.43.0
-
-#generate openapi 3.0 spec
-go get github.com/googleapis/gnostic
-go mod tidy
-#generate go http client
-go get github.com/deepmap/oapi-codegen/cmd/oapi-codegen
+go install github.com/golang/mock/mockgen@v1.6.0
+curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v1.44.0

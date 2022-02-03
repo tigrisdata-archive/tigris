@@ -1,17 +1,18 @@
 FROM golang:1.18beta1-bullseye
 
-RUN apt-get install make curl git gcc g++
+RUN apt-get update -y
+RUN apt-get install -y shellcheck protobuf-compiler
 
-ENV GOPATH=/go
 RUN mkdir -p /go/src/tigris
 
 #this is to install dependencies once, during docker build
-COPY ./Makefile /go/src/tigris/
-COPY ./go.mod /go/src/tigris/
+COPY scripts/install_build_deps.sh /go/src/tigris
+COPY scripts/install_test_deps.sh /go/src/tigris
+RUN sh /go/src/tigris/install_build_deps.sh
+RUN sh /go/src/tigris/install_test_deps.sh
+COPY go.mod /go/src/tigris/
 
 WORKDIR /go/src/tigris
-
-RUN make test_deps
 
 RUN GO111MODULE=on go mod download
 

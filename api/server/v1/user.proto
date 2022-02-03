@@ -14,7 +14,6 @@
 
 syntax = "proto3";
 
-import "server/v1/txn.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/struct.proto";
 
@@ -22,9 +21,6 @@ option go_package = "github.com/tigrisdata/tigrisdb/api";
 
 // BUG: gnostic protoc-gen-openapi doesn't support enum generation
 // https://github.com/google/gnostic/issues/255
-// BUG: grpc-gateway doesn't support in-process streaming
-// https://github.com/fullstorydev/grpchan
-// https://github.com/grpc/grpc-go/issues/906
 enum StatusCode {
   StatusCode_UNKNOWN = 0;
   StatusCode_OK = 200;
@@ -55,6 +51,11 @@ message DocOption {}
 message UserDocument {
   google.protobuf.Struct doc = 1;
   DocOption options = 2;
+}
+
+message Transaction {
+  string id = 1;
+  string origin = 2;
 }
 
 message BeginTransactionRequest {
