@@ -28,7 +28,7 @@ ${GEN_DIR}/client/${V}/%/http.go: ${GEN_DIR}/server/${V}/%_openapi.yaml
 test_client: ${GEN_DIR}/client/${V}/index/http.go ${GEN_DIR}/client/${V}/user/http.go
 
 server: server/service
-server/service: $(ESRC) ${GEN_DIR}/server/${V}/index.pb.go ${GEN_DIR}/server/${V}/index.pb.gw.go ${GEN_DIR}/server/${V}/user.pb.go ${GEN_DIR}/server/${V}/user.pb.gw.go ${GEN_DIR}/server/${V}/health.pb.go ${GEN_DIR}/server/${V}/health.pb.gw.go
+server/service: $(ESRC) ${GEN_DIR}/server/${V}/index.pb.go ${GEN_DIR}/server/${V}/index.pb.gw.go ${GEN_DIR}/server/${V}/user.pb.go ${GEN_DIR}/server/${V}/user.pb.gw.go ${GEN_DIR}/server/${V}/health.pb.go ${GEN_DIR}/server/${V}/health.pb.gw.go ${GEN_DIR}/server/${V}/txn.pb.go ${GEN_DIR}/server/${V}/txn.pb.gw.go
 	CGO_ENABLED=0 go build $(BUILD_PARAM) -o server/service ./server
 
 lint:

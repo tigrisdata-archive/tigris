@@ -14,6 +14,7 @@
 
 syntax = "proto3";
 
+import "server/v1/txn.proto";
 import "google/api/annotations.proto";
 import "google/protobuf/struct.proto";
 
@@ -55,6 +56,25 @@ message UserDocument {
   google.protobuf.Struct doc = 1;
   DocOption options = 2;
 }
+
+message BeginTransactionRequest {
+  string db = 1;
+}
+message BeginTransactionResponse {
+  Transaction tx = 1;
+}
+
+message CommitTransactionRequest {
+  string db = 1;
+  Transaction tx = 2;
+}
+message CommitTransactionResponse {}
+
+message RollbackTransactionRequest {
+  string db = 1;
+  Transaction tx = 2;
+}
+message RollbackTransactionResponse {}
 
 message InsertRequest {
   string db = 1;
@@ -151,6 +171,26 @@ message TruncateCollectionResponse {
 }
 
 service TigrisDB {
+  // Transactional APIs
+  rpc BeginTransaction(BeginTransactionRequest) returns (BeginTransactionResponse) {
+    option (google.api.http) = {
+      post : "/api/v1/databases/{db}/transactions/begin"
+      body : "*"
+    };
+  }
+  rpc CommitTransaction(CommitTransactionRequest) returns (CommitTransactionResponse) {
+    option (google.api.http) = {
+      post : "/api/v1/databases/{db}/transactions/commit"
+      body : "*"
+    };
+  }
+  rpc RollbackTransaction(RollbackTransactionRequest) returns (RollbackTransactionResponse) {
+    option (google.api.http) = {
+      post : "/api/v1/databases/{db}/transactions/rollback"
+      body : "*"
+    };
+  }
+
   // Following APIs are related to DMLs supported by TigrisDB
   rpc Insert(InsertRequest) returns (InsertResponse) {
     option (google.api.http) = {
