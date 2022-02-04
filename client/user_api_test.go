@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"github.com/tigrisdata/tigrisdb/server/config"
 	"io"
 	"testing"
 
@@ -25,10 +26,19 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
+func getTestServerHostPort() (string, int16) {
+	config.LoadEnvironment() // Move this to test.Main
+
+	if config.GetEnvironment() == config.EnvTest {
+		return "tigris_server", 8081
+	}
+	return "localhost", 8081
+}
+
 func TestAPIGRPC(t *testing.T) {
 	ctx := context.TODO()
-
-	c, err := newGRPCClient(ctx, "localhost", 8081)
+	h, p := getTestServerHostPort()
+	c, err := newGRPCClient(ctx, h, p)
 	require.NoError(t, err)
 
 	_, _ = c.DropCollection(ctx, &api.DropCollectionRequest{Db: "db1", Collection: "t1"})

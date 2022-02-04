@@ -15,27 +15,101 @@
 package config
 
 import (
-	"github.com/tigrisdata/tigrisdb/store/kv"
-	"github.com/tigrisdata/tigrisdb/util/log"
+	"bytes"
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/spf13/pflag"
+
+	"github.com/davecgh/go-spew/spew"
+	"github.com/fsnotify/fsnotify"
+	"github.com/rs/zerolog/log"
+	"github.com/spf13/viper"
+	"gopkg.in/yaml.v2"
 )
 
-type ServerConfig struct {
-	Host string
-	Port int16
+var configPath = []string{
+	"/etc/tigrisdata/tigrisdb/",
+	"$HOME/.tigrisdata/tigrisdb/",
+	"./config/",
+	"./",
 }
 
-type Config struct {
-	Server   ServerConfig `yaml:"server" json:"server"`
-	Log      log.LogConfig
-	DynamoDB kv.DynamodbConfig
+var envPrefix = "tigrisdb_server"
+var envEnv = "tigrisdb_environment"
+var environment string
+
+const (
+	EnvTest        = "test"
+	EnvDevelopment = "development"
+	EnvProduction  = "production"
+)
+
+func GetEnvironment() string {
+	return environment
 }
 
-var DefaultConfig = Config{
-	Log: log.LogConfig{
-		Level: "trace",
-	},
-	Server: ServerConfig{
-		Host: "0.0.0.0",
-		Port: 8081,
-	},
+func LoadEnvironment() {
+	env := os.Getenv(envEnv)
+	if env == "" {
+		env = os.Getenv(strings.ToUpper(envEnv))
+	}
+
+	environment = env
+}
+
+func LoadConfig(name string, config interface{}) {
+	LoadEnvironment()
+
+	if GetEnvironment() != "" {
+		name += "." + GetEnvironment()
+	}
+
+	viper.SetConfigName(name)
+	viper.SetConfigType("yaml")
+
+	for _, v := range configPath {
+		viper.AddConfigPath(v)
+	}
+
+	// this is needed to automatically bind environment variables to config struct
+	b, err := yaml.Marshal(config)
+	log.Err(err).Msg("marshal config")
+	log.Debug().Msg(string(b))
+	br := bytes.NewBuffer(b)
+	err = viper.MergeConfig(br)
+	log.Err(err).Msg("merge config")
+
+	spew.Dump(viper.AllKeys())
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	viper.SetEnvPrefix(envPrefix)
+	viper.AutomaticEnv()
+
+	pflag.Parse()
+	err = viper.BindPFlags(pflag.CommandLine)
+	log.Err(err).Msg("bind flags")
+
+	err = viper.ReadInConfig()
+	if err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			log.Warn().Err(err).Msgf("config file not found")
+		} else {
+			log.Fatal().Err(err).Msgf("error reading config")
+		}
+	}
+
+	if err := viper.Unmarshal(&config); err != nil {
+		log.Fatal().Err(err).Msg("error unmarshalling config")
+	}
+
+	spew.Dump(config)
+	spew.Dump(viper.AllKeys())
+
+	viper.OnConfigChange(func(e fsnotify.Event) {
+		fmt.Println("Config file changed:", e.Name)
+		//TODO: handle config change
+	})
+
+	viper.WatchConfig()
 }

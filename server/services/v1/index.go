@@ -27,7 +27,6 @@ import (
 	"github.com/tigrisdata/tigrisdb/server/indexing"
 	"github.com/tigrisdata/tigrisdb/server/schemas"
 	"github.com/tigrisdata/tigrisdb/store/kv"
-	"github.com/tigrisdata/tigrisdb/util"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -47,7 +46,7 @@ func newIndexService(kv kv.KV) *indexService {
 }
 
 func (a *indexService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {
-	mux := runtime.NewServeMux(runtime.WithMarshalerOption("application/json", &util.JSONMix{}))
+	mux := runtime.NewServeMux(runtime.WithMarshalerOption(string(JSON), &runtime.JSONBuiltin{}))
 	if err := api.RegisterIndexAPIHandlerServer(context.TODO(), mux, a); err != nil {
 		return err
 	}

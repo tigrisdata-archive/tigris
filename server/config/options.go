@@ -12,11 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-syntax = "proto3";
+package config
 
-option go_package = "github.com/tigrisdata/tigrisdb/api";
+import (
+	"github.com/tigrisdata/tigrisdb/store/kv"
+	"github.com/tigrisdata/tigrisdb/util/log"
+)
 
-message Transaction {
-  string id = 1;
-  string origin = 2;
+type ServerConfig struct {
+	Host string
+	Port int16
+}
+
+type Config struct {
+	Server   ServerConfig `yaml:"server" json:"server"`
+	Log      log.LogConfig
+	DynamoDB kv.DynamodbConfig
+}
+
+var DefaultConfig = Config{
+	Log: log.LogConfig{
+		Level: "trace",
+	},
+	Server: ServerConfig{
+		Host: "0.0.0.0",
+		Port: 8081,
+	},
 }

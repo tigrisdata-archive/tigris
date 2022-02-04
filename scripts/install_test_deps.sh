@@ -1,3 +1,4 @@
+#!/bin/bash
 # Copyright 2022 Tigris Data, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,20 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-api:
-  port: 8081
+set -e
 
-s3:
-  region: "us-east-1"
-  endpoint: "http://tigris_s3:8000"
-  access_key_id: 'accessKey1'
-  secret_access_key: 'verySecretKey1'
-  bucket: "testbucket"
-  base_dir: "/tmp/test"
-
-dynamodb:
-  region: "us-east-1"
-  endpoint: "http://localhost:8002"
-  access_key_id: "accessKey1"
-  secret_access_key: "verySecretKey1"
-  timeout: 10s
+#test deps
+go install github.com/golang/mock/mockgen@v1.6.0
+curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v1.44.0
