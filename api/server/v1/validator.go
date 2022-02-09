@@ -23,6 +23,30 @@ type Validator interface {
 	Validate() error
 }
 
+func (x *BeginTransactionRequest) Validate() error {
+	if err := isValidDatabase(x.Db); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (x *CommitTransactionRequest) Validate() error {
+	if err := isValidDatabase(x.Db); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (x *RollbackTransactionRequest) Validate() error {
+	if err := isValidDatabase(x.Db); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (x *InsertRequest) Validate() error {
 	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
 		return err
@@ -84,12 +108,24 @@ func (x *CreateCollectionRequest) Validate() error {
 		return status.Errorf(codes.InvalidArgument, "schema is a required during collection creation")
 	}
 
+	if !IsTxSupported(x) {
+		if transaction := GetTransaction(x); transaction != nil {
+			return status.Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
+		}
+	}
+
 	return nil
 }
 
 func (x *DropCollectionRequest) Validate() error {
 	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
 		return err
+	}
+
+	if !IsTxSupported(x) {
+		if transaction := GetTransaction(x); transaction != nil {
+			return status.Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
+		}
 	}
 
 	return nil
@@ -100,12 +136,24 @@ func (x *AlterCollectionRequest) Validate() error {
 		return err
 	}
 
+	if !IsTxSupported(x) {
+		if transaction := GetTransaction(x); transaction != nil {
+			return status.Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
+		}
+	}
+
 	return nil
 }
 
 func (x *TruncateCollectionRequest) Validate() error {
 	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
 		return err
+	}
+
+	if !IsTxSupported(x) {
+		if transaction := GetTransaction(x); transaction != nil {
+			return status.Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
+		}
 	}
 
 	return nil

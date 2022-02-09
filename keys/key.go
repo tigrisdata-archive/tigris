@@ -12,4 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package api
+package keys
+
+// Key is an interface that provides encoded key used for storing Key, Value in FDB.
+type Key interface {
+	Prefix() string
+	PrimaryKeys() []interface{}
+}
+
+type prefixEncodedKey struct {
+	prefix      string
+	primaryKeys []interface{}
+}
+
+// NewKey returns the Key
+func NewKey(prefix string, primaryKeys []interface{}) Key {
+	return &prefixEncodedKey{
+		prefix:      prefix,
+		primaryKeys: primaryKeys,
+	}
+}
+
+func (p *prefixEncodedKey) Prefix() string {
+	return p.prefix
+}
+
+func (p *prefixEncodedKey) PrimaryKeys() []interface{} {
+	return p.primaryKeys
+}

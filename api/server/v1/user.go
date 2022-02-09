@@ -18,11 +18,78 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+type RequestType string
+
+const (
+	Insert              RequestType = "Insert"
+	Replace             RequestType = "Replace"
+	Update              RequestType = "Update"
+	Delete              RequestType = "Delete"
+	Read                RequestType = "Read"
+	BeginTransaction    RequestType = "BeginTransaction"
+	CommitTransaction   RequestType = "CommitTransaction"
+	RollbackTransaction RequestType = "RollbackTransaction"
+	CreateCollection    RequestType = "CreateCollection"
+	DropCollection      RequestType = "DropCollection"
+	AlterCollection     RequestType = "AlterCollection"
+	TruncateCollection  RequestType = "TruncateCollection"
+)
+
 type Request interface {
 	proto.Message
 	Validator
+
+	Type() RequestType
 }
 
 type Response interface {
 	proto.Message
+}
+
+func (x *BeginTransactionRequest) Type() RequestType {
+	return BeginTransaction
+}
+
+func (x *CommitTransactionRequest) Type() RequestType {
+	return CommitTransaction
+}
+
+func (x *RollbackTransactionRequest) Type() RequestType {
+	return RollbackTransaction
+}
+
+func (x *InsertRequest) Type() RequestType {
+	return Insert
+}
+
+func (x *ReplaceRequest) Type() RequestType {
+	return Replace
+}
+
+func (x *UpdateRequest) Type() RequestType {
+	return Update
+}
+
+func (x *DeleteRequest) Type() RequestType {
+	return Delete
+}
+
+func (x *ReadRequest) Type() RequestType {
+	return Read
+}
+
+func (x *CreateCollectionRequest) Type() RequestType {
+	return CreateCollection
+}
+
+func (x *DropCollectionRequest) Type() RequestType {
+	return DropCollection
+}
+
+func (x *AlterCollectionRequest) Type() RequestType {
+	return AlterCollection
+}
+
+func (x *TruncateCollectionRequest) Type() RequestType {
+	return TruncateCollection
 }

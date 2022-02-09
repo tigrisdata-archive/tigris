@@ -18,13 +18,11 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
-	structpb "github.com/golang/protobuf/ptypes/struct"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	"github.com/tigrisdata/tigrisdb/encoding"
 	"github.com/tigrisdata/tigrisdb/schema"
 	"github.com/tigrisdata/tigrisdb/server/transaction"
 	"github.com/tigrisdata/tigrisdb/store/kv"
@@ -32,7 +30,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 const (
@@ -49,17 +46,25 @@ const (
 type userService struct {
 	api.UnimplementedTigrisDBServer
 
-	kv          kv.KV
-	tx          *transaction.Manager
-	schemaCache *schema.Cache
+	kv                    kv.KV
+	txMgr                 *transaction.Manager
+	encoder               encoding.Encoder
+	schemaCache           *schema.Cache
+	queryLifecycleFactory *QueryLifecycleFactory
+	queryRunnerFactory    *QueryRunnerFactory
 }
 
 func newUserService(kv kv.KV) *userService {
-	return &userService{
+	u := &userService{
 		kv:          kv,
-		tx:          transaction.NewTransactionMgr(),
+		txMgr:       transaction.NewManager(kv),
 		schemaCache: schema.NewCache(),
+		encoder:     &encoding.PrefixEncoder{},
 	}
+
+	u.queryLifecycleFactory = NewQueryLifecycleFactory()
+	u.queryRunnerFactory = NewQueryRunnerFactory(u.txMgr, u.encoder)
+	return u
 }
 
 func (s *userService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {
@@ -96,7 +101,7 @@ func (s *userService) CreateCollection(ctx context.Context, r *api.CreateCollect
 		return nil, err
 	}
 
-	if tbl := s.schemaCache.Get(r.GetDb(), r.GetCollection()); tbl != nil {
+	if c := s.schemaCache.Get(r.Db, r.Collection); c != nil {
 		return nil, status.Errorf(codes.AlreadyExists, "collection already exists")
 	}
 
@@ -104,7 +109,7 @@ func (s *userService) CreateCollection(ctx context.Context, r *api.CreateCollect
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid schema")
 	}
-	collection := schema.NewCollection(r.GetDb(), r.GetCollection(), keys)
+	collection := schema.NewCollection(r.Db, r.Collection, keys)
 
 	if err := s.kv.CreateTable(ctx, collection.StorageName()); ulog.E(err) {
 		return nil, status.Errorf(codes.Internal, "error: %v", err)
@@ -124,6 +129,7 @@ func (s *userService) DropCollection(ctx context.Context, r *api.DropCollectionR
 	if err := s.kv.DropTable(ctx, schema.StorageName(r.GetDb(), r.GetCollection())); ulog.E(err) {
 		return nil, status.Errorf(codes.Internal, "error: %v", err)
 	}
+
 	s.schemaCache.Remove(r.GetDb(), r.GetCollection())
 
 	return &api.DropCollectionResponse{
@@ -131,27 +137,38 @@ func (s *userService) DropCollection(ctx context.Context, r *api.DropCollectionR
 	}, nil
 }
 
-func (s *userService) BeginTransaction(_ context.Context, _ *api.BeginTransactionRequest) (*api.BeginTransactionResponse, error) {
-	tx, err := s.tx.StartTxn()
+func (s *userService) BeginTransaction(ctx context.Context, r *api.BeginTransactionRequest) (*api.BeginTransactionResponse, error) {
+	_, txCtx, err := s.txMgr.StartTx(ctx, true)
 	if err != nil {
 		return nil, err
 	}
 
 	return &api.BeginTransactionResponse{
-		Tx: tx,
+		TxCtx: txCtx,
 	}, nil
 }
 
-func (s *userService) CommitTransaction(_ context.Context, r *api.CommitTransactionRequest) (*api.CommitTransactionResponse, error) {
-	if err := s.tx.EndTxn(r.Tx.Id, true); err != nil {
+func (s *userService) CommitTransaction(ctx context.Context, r *api.CommitTransactionRequest) (*api.CommitTransactionResponse, error) {
+	tx, err := s.txMgr.GetTx(r.TxCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = tx.Commit(ctx); err != nil {
 		return nil, err
 	}
 
 	return &api.CommitTransactionResponse{}, nil
 }
 
-func (s *userService) RollbackTransaction(_ context.Context, r *api.RollbackTransactionRequest) (*api.RollbackTransactionResponse, error) {
-	if err := s.tx.EndTxn(r.Tx.Id, false); err != nil {
+func (s *userService) RollbackTransaction(ctx context.Context, r *api.RollbackTransactionRequest) (*api.RollbackTransactionResponse, error) {
+	tx, err := s.txMgr.GetTx(r.TxCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = tx.Rollback(ctx); err != nil {
+		// ToDo: Do we need to return here in this case? Or silently return success?
 		return nil, err
 	}
 
@@ -169,10 +186,15 @@ func (s *userService) Insert(ctx context.Context, r *api.InsertRequest) (*api.In
 	if collection == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "collection doesn't exists")
 	}
-	if err := s.processBatch(ctx, collection, r.GetDocuments(), func(b kv.Tx, key kv.Key, value []byte) error {
-		return s.kv.Insert(ctx, collection.StorageName(), key, value)
-	}); err != nil {
-		return nil, status.Errorf(codes.Internal, "error: %v", err)
+
+	_, err := s.Run(ctx, &Request{
+		Request:     r,
+		documents:   r.Documents,
+		collection:  collection,
+		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return &api.InsertResponse{}, nil
@@ -189,15 +211,15 @@ func (s *userService) Update(ctx context.Context, r *api.UpdateRequest) (*api.Up
 	if collection == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "collection doesn't exists")
 	}
-	if err := s.processBatch(ctx, collection, nil, func(b kv.Tx, key kv.Key, value []byte) error {
-		return s.kv.UpdateRange(ctx, collection.StorageName(), key, key, func(in []byte) []byte {
-			// FIXME: Merge in + value
-			return value
-		})
-	}); err != nil {
-		return nil, status.Errorf(codes.Internal, "error: %v", err)
-	}
 
+	_, err := s.Run(ctx, &Request{
+		Request:     r,
+		collection:  collection,
+		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
+	})
+	if err != nil {
+		return nil, err
+	}
 	return &api.UpdateResponse{}, nil
 }
 
@@ -210,13 +232,16 @@ func (s *userService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.
 	if collection == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "collection doesn't exists")
 	}
-	if err := s.processBatch(ctx, collection, r.GetDocuments(), func(b kv.Tx, key kv.Key, value []byte) error {
-		return b.Replace(ctx, collection.StorageName(), key, value)
-	}); err != nil {
-		return nil, status.Errorf(codes.Internal, "error: %v", err)
-	}
 
-	log.Debug().Str("db", r.GetDb()).Str("table", r.GetCollection()).Msgf("Replace after")
+	_, err := s.Run(ctx, &Request{
+		Request:     r,
+		documents:   r.Documents,
+		collection:  collection,
+		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
+	})
+	if err != nil {
+		return nil, err
+	}
 
 	return &api.ReplaceResponse{}, nil
 }
@@ -230,10 +255,14 @@ func (s *userService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.De
 	if collection == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "collection doesn't exists")
 	}
-	if err := s.processBatch(ctx, collection, nil, func(b kv.Tx, key kv.Key, value []byte) error {
-		return b.Delete(ctx, collection.StorageName(), key)
-	}); err != nil {
-		return nil, status.Errorf(codes.Internal, "error: %v", err)
+
+	_, err := s.Run(ctx, &Request{
+		Request:     r,
+		collection:  collection,
+		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return &api.DeleteResponse{}, nil
@@ -249,98 +278,20 @@ func (s *userService) Read(r *api.ReadRequest, stream api.TigrisDB_ReadServer) e
 		return status.Errorf(codes.InvalidArgument, "collection doesn't exists")
 	}
 
-	for _, v := range r.GetKeys() {
-		key, err := s.getKey(collection, v)
-		if err != nil {
-			return err
-		}
-
-		it, err := s.kv.Read(context.TODO(), collection.StorageName(), key)
-		if err != nil {
-			return err
-		}
-		for it.More() {
-			d, err := it.Next()
-			if err != nil {
-				return err
-			}
-			s := &structpb.Struct{}
-			err = protojson.Unmarshal(d.Value, s)
-			if err != nil {
-				return err
-			}
-			if err := stream.Send(&api.ReadResponse{
-				Doc: s,
-			}); ulog.E(err) {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (s *userService) getKey(collection schema.Collection, v *api.UserDocument) (kv.Key, error) {
-	var key kv.Key
-	pkey := collection.PrimaryKeys()
-	doc := v.Doc.AsMap()
-
-	var k []string
-	for _, p := range pkey {
-		k = append(k, p.FieldName)
-	}
-	var err error
-	if key, err = buildKey(doc, k); err != nil {
-		return nil, err
-	}
-	spew.Dump(doc)
-	spew.Dump(key)
-	return key, nil
-}
-
-func (s *userService) processBatch(ctx context.Context, collection schema.Collection, docs []*api.UserDocument, fn func(b kv.Tx, key kv.Key, value []byte) error) error {
-	b, err := s.kv.Batch()
+	_, err := s.Run(stream.Context(), &Request{
+		Request:     r,
+		keys:        r.Keys,
+		collection:  collection,
+		queryRunner: s.queryRunnerFactory.GetStreamingQueryRunner(stream),
+	})
 	if err != nil {
 		return err
 	}
 
-	for _, v := range docs {
-		key, err := s.getKey(collection, v)
-		if err != nil {
-			log.Debug().Err(err).Msg("get key error")
-			return err
-		}
-
-		marshalled, err := v.GetDoc().MarshalJSON()
-		if err != nil {
-			log.Debug().Err(err).Msg("marshaling fail for the document")
-			return err
-		}
-		if err := fn(b, key, marshalled); ulog.E(err) {
-			log.Debug().Err(err).Msg("fn error")
-			return err
-		}
-	}
-
-	if err := b.Commit(ctx); err != nil {
-		log.Debug().Err(err).Msg("commit error")
-		return err
-	}
-
 	return nil
 }
 
-func buildKey(fields map[string]interface{}, key []string) (kv.Key, error) {
-	nKey := kv.Key{}
-	for _, v := range key {
-		k, ok := fields[v]
-		if !ok {
-			return nil, ulog.CE("missing primary key column(s) %s", v)
-		}
-
-		nKey.AddPart(k)
-	}
-	if len(nKey) == 0 {
-		return nil, ulog.CE("missing primary key column(s)")
-	}
-	return nKey, nil
+func (s *userService) Run(ctx context.Context, req *Request) (*Response, error) {
+	queryLifecycle := s.queryLifecycleFactory.Get()
+	return queryLifecycle.run(ctx, req)
 }
