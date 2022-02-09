@@ -15,7 +15,6 @@
 package config
 
 import (
-	"github.com/tigrisdata/tigrisdb/store/kv"
 	"github.com/tigrisdata/tigrisdb/util/log"
 )
 
@@ -25,10 +24,9 @@ type ServerConfig struct {
 }
 
 type Config struct {
-	Server   ServerConfig `yaml:"server" json:"server"`
-	Log      log.LogConfig
-	DynamoDB kv.DynamoDBConfig
-	FoundationDB kv.FoundationDBConfig
+	Server       ServerConfig `yaml:"server" json:"server"`
+	Log          log.LogConfig
+	FoundationDB FoundationDBConfig
 }
 
 var DefaultConfig = Config{
@@ -39,4 +37,9 @@ var DefaultConfig = Config{
 		Host: "0.0.0.0",
 		Port: 8081,
 	},
+}
+
+// FoundationDBConfig keeps FoundationDB configuration parameters
+type FoundationDBConfig struct {
+	ClusterFile string `mapstructure:"cluster_file" json:"cluster_file" yaml:"cluster_file"`
 }

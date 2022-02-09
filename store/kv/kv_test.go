@@ -4,42 +4,30 @@ import (
 	"context"
 	"fmt"
 	"github.com/stretchr/testify/require"
+	"github.com/tigrisdata/tigrisdb/server/config"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
-	"net"
 	"os"
 	"os/exec"
 	"testing"
 )
 
-func getTestFDBConfig(t *testing.T) *FoundationDBConfig {
-	// FIXME: Avoid cyclic dependencies and load environment
-	//	config.LoadEnvironment()
+func getTestFDBConfig(t *testing.T) *config.FoundationDBConfig {
+	config.LoadEnvironment()
 
 	var fn string
-	//	if config.GetEnvironment() == config.EnvTest {
-	ip, err := net.LookupHost("tigris_fdb")
-	require.NoError(t, err)
-	require.Greater(t, len(ip), 0)
-	fn = "/tmp/fdb.test.cluster"
-	err = os.WriteFile(fn, []byte(fmt.Sprintf("docker:docker@%s:4500", ip[0])), 0644)
-	require.NoError(t, err)
-	/*
-		} else {
-			fn = "/tmp/fdb.development.cluster"
-			err := os.WriteFile(fn, []byte(fmt.Sprintf("docker:docker@127.0.0.1:4500")), 0644)
-			require.NoError(t, err)
-		}
-	*/
+	if config.GetEnvironment() != config.EnvTest {
+		fn = "../../config/fdb.cluster"
+	}
 
 	cmd := exec.Command("fdbcli", "-C", fn, "--exec", "configure new single memory")
-	_, err = cmd.Output()
+	_, err := cmd.Output()
 	if err != nil {
 		cmd := exec.Command("fdbcli", "-C", fn, "--exec", "configure single memory")
 		_, err = cmd.Output()
 	}
 	require.NoError(t, err)
 
-	return &FoundationDBConfig{ClusterFile: fn}
+	return &config.FoundationDBConfig{ClusterFile: fn}
 }
 
 func readAll(t *testing.T, it Iterator) []KeyValue {

@@ -30,7 +30,7 @@ var Version string
 var BuildHash string
 
 func main() {
-	pflag.String("api.grpc_port", "", "set server grpc port")
+	pflag.String("api.port", "", "set port server listens on")
 
 	config.LoadConfig("server", &config.DefaultConfig)
 
@@ -38,8 +38,7 @@ func main() {
 
 	log.Info().Str("version", Version).Str("BuildHash", BuildHash).Msgf("Starting server")
 
-	kv, err := kv.NewDynamoDB(&config.DefaultConfig.DynamoDB)
-	//kv, err := kv.NewFoundationDB(&config.DefaultConfig.FoundationDB)
+	kv, err := kv.NewFoundationDB(&config.DefaultConfig.FoundationDB)
 	if err != nil {
 		log.Fatal().Err(err).Msg("error initializing kv store")
 	}

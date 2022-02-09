@@ -15,20 +15,5 @@
 api:
   port: 8081
 
-s3:
-  region: "us-east-1"
-  endpoint: "http://tigris_s3:8000"
-  access_key_id: 'accessKey1'
-  secret_access_key: 'verySecretKey1'
-  bucket: "testbucket"
-  base_dir: "/tmp/test"
-
-dynamodb:
-  region: "us-east-1"
-  endpoint: "http://localhost:8002"
-  access_key_id: "accessKey1"
-  secret_access_key: "verySecretKey1"
-  timeout: 10s
-
 foundationdb:
   cluster_file: "config/fdb.cluster"
