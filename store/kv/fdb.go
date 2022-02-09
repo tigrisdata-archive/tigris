@@ -283,6 +283,7 @@ func (t *ftx) Insert(_ context.Context, table string, key Key, data []byte) erro
 	if vv != nil {
 		return os.ErrExist
 	}
+
 	t.tx.Set(k, data)
 
 	log.Err(err).Str("table", table).Interface("key", key).Msg("Insert")
