@@ -15,23 +15,15 @@
 version: '3.3'
 
 services:
-  tigris_ddb:
-    container_name: tigris_ddb
-    image: amazon/dynamodb-local
-    ports:
-      - "8002:8000"
-
   tigris_fdb:
     container_name: tigris_fdb
     image: foundationdb/foundationdb:6.3.23
+    volumes:
+      - type: volume
+        source: fdbdata
+        target: /var/fdb/
     ports:
       - "4500:4500"
-
-        #  tigris_s3:
-        #    container_name: tigris_s3
-        #    image: scality/s3server
-        #    ports:
-        #      - "8004:8000"
 
   tigris_server:
     container_name: tigris_server
@@ -47,10 +39,13 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.server
+    volumes:
+      - type: volume
+        source: fdbdata
+        target: /etc/foundationdb/
     ports:
       - "8081:8081"
     depends_on:
-      - tigris_ddb
       - tigris_fdb
 
   all_test:
@@ -70,5 +65,11 @@ services:
       - type: bind
         source: ../
         target: /go/src/tigris
+      - type: volume
+        source: fdbdata
+        target: /etc/foundationdb/
     depends_on:
       - tigris_server
+
+volumes:
+  fdbdata:

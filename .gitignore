@@ -1,0 +1,4 @@
+*.pb.go
+*.pb.gw.go
+*_openapi.yaml
+api/client/*

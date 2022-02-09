@@ -16,6 +16,7 @@ package kv
 
 import (
 	"context"
+	"github.com/tigrisdata/tigrisdb/server/config"
 	"golang.org/x/xerrors"
 	"os"
 	"unsafe"
@@ -31,12 +32,7 @@ const (
 	maxTxSizeBytes = 10000000
 )
 
-// FoundationDBConfig keeps FoundationDB configuration parameters
-type FoundationDBConfig struct {
-	ClusterFile string `mapstructure:"cluster_file" json:"cluster_file" yaml:"cluster_file"`
-}
-
-// fdbkv is an implementation of kv on top of DynamoDB
+// fdbkv is an implementation of kv on top of FoundationDB
 type fdbkv struct {
 	db fdb.Database
 }
@@ -64,7 +60,7 @@ type fdbIteratorTxCloser struct {
 }
 
 // NewFoundationDB initializes instance of FoundationDB KV interface implementation
-func NewFoundationDB(cfg *FoundationDBConfig) (KV, error) {
+func NewFoundationDB(cfg *config.FoundationDBConfig) (KV, error) {
 	d := fdbkv{}
 	if err := d.init(cfg); err != nil {
 		return nil, err
@@ -72,7 +68,7 @@ func NewFoundationDB(cfg *FoundationDBConfig) (KV, error) {
 	return &d, nil
 }
 
-func (d *fdbkv) init(cfg *FoundationDBConfig) (err error) {
+func (d *fdbkv) init(cfg *config.FoundationDBConfig) (err error) {
 	log.Err(err).Int("api_version", 630).Str("cluster_file", cfg.ClusterFile).Msg("initializing foundation db")
 	fdb.MustAPIVersion(630)
 	d.db, err = fdb.OpenDatabase(cfg.ClusterFile)

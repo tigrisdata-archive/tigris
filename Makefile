@@ -33,9 +33,9 @@ ${API_DIR}/client/${V}/%/http.go: ${GEN_DIR}/%_openapi.yaml
 #    -o /local/${GEN_DIR}/out
 #
 
-gen_proto: ${GEN_DIR}/index.pb.go ${GEN_DIR}/index.pb.gw.go ${GEN_DIR}/user.pb.go ${GEN_DIR}/user.pb.gw.go ${GEN_DIR}/health.pb.go ${GEN_DIR}/health.pb.gw.go
+gen_proto: ${GEN_DIR}/user.pb.go ${GEN_DIR}/user.pb.gw.go ${GEN_DIR}/health.pb.go ${GEN_DIR}/health.pb.gw.go
 
-test_client: ${API_DIR}/client/${V}/index/http.go ${API_DIR}/client/${V}/user/http.go
+test_client: ${API_DIR}/client/${V}/user/http.go
 
 server: server/service
 server/service: $(ESRC) gen_proto
@@ -45,7 +45,7 @@ lint:
 	shellcheck scripts/*
 	# golangci-lint run #FIXME: doesn't work with go1.18beta1
 
-docker_test: 
+docker_test:
 	docker-compose -f docker/docker-compose.yml up --build --abort-on-container-exit --exit-code-from all_test all_test
 
 test: docker_test

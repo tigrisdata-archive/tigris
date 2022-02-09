@@ -404,26 +404,3 @@ func (c *httpCRUDClient) Read(ctx context.Context, docs ...interface{}) error {
 
 	return nil
 }
-
-type grpcAdminClient struct {
-	api.IndexAPIClient
-	conn *grpc.ClientConn
-}
-
-type grpcAdminClientIface interface {
-	api.IndexAPIClient
-	Close() error
-}
-
-func NewAdminGRPCClient(_ context.Context, host string, port int16) (grpcAdminClientIface, error) {
-	conn, err := grpc.Dial(fmt.Sprintf("%s:%d", host, port), grpc.WithInsecure(), grpc.WithBlock())
-	if err != nil {
-		log.Fatal().Err(err).Msg("grpc connect failed")
-	}
-
-	return &grpcAdminClient{IndexAPIClient: api.NewIndexAPIClient(conn), conn: conn}, nil
-}
-
-func (c *grpcAdminClient) Close() error {
-	return c.conn.Close()
-}
