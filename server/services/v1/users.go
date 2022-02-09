@@ -25,7 +25,7 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"github.com/tigrisdata/tigrisdb/server/schemas"
+	"github.com/tigrisdata/tigrisdb/schema"
 	"github.com/tigrisdata/tigrisdb/server/transaction"
 	"github.com/tigrisdata/tigrisdb/store/kv"
 	"github.com/tigrisdata/tigrisdb/types"
@@ -50,14 +50,16 @@ const (
 type userService struct {
 	api.UnimplementedTigrisDBServer
 
-	kv kv.KV
-	tx *transaction.Manager
+	kv          kv.KV
+	tx          *transaction.Manager
+	schemaCache *schema.Cache
 }
 
 func newUserService(kv kv.KV) *userService {
 	return &userService{
-		kv: kv,
-		tx: transaction.NewTransactionMgr(),
+		kv:          kv,
+		tx:          transaction.NewTransactionMgr(),
+		schemaCache: schema.NewCache(),
 	}
 }
 
@@ -95,20 +97,20 @@ func (s *userService) CreateCollection(ctx context.Context, r *api.CreateCollect
 		return nil, err
 	}
 
-	name := schemas.GetTableName(r.GetDb(), r.GetCollection())
-	if tbl := schemas.GetTable(name); tbl != nil {
+	if tbl := s.schemaCache.Get(r.GetDb(), r.GetCollection()); tbl != nil {
 		return nil, status.Errorf(codes.AlreadyExists, "collection already exists")
 	}
 
-	keys, err := schemas.ExtractKeysFromSchema(r.Schema.Fields)
+	keys, err := schema.ExtractKeysFromSchema(r.Schema.Fields)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid schema")
 	}
+	collection := schema.NewCollection(r.GetDb(), r.GetCollection(), keys)
 
-	if err := s.kv.CreateTable(ctx, name); ulog.E(err) {
+	if err := s.kv.CreateTable(ctx, collection.StorageName()); ulog.E(err) {
 		return nil, status.Errorf(codes.Internal, "error: %v", err)
 	}
-	schemas.AddTable(name, keys)
+	s.schemaCache.Put(collection)
 
 	return &api.CreateCollectionResponse{
 		Msg: "collection created successfully",
@@ -120,11 +122,10 @@ func (s *userService) DropCollection(ctx context.Context, r *api.DropCollectionR
 		return nil, err
 	}
 
-	name := schemas.GetTableName(r.GetDb(), r.GetCollection())
-	if err := s.kv.DropTable(ctx, name); ulog.E(err) {
+	if err := s.kv.DropTable(ctx, schema.StorageName(r.GetDb(), r.GetCollection())); ulog.E(err) {
 		return nil, status.Errorf(codes.Internal, "error: %v", err)
 	}
-	schemas.RemoveTable(name)
+	s.schemaCache.Remove(r.GetDb(), r.GetCollection())
 
 	return &api.DropCollectionResponse{
 		Msg: "collection dropped successfully",
@@ -165,9 +166,12 @@ func (s *userService) Insert(ctx context.Context, r *api.InsertRequest) (*api.In
 		return nil, err
 	}
 
-	table := schemas.GetTableName(r.GetDb(), r.GetCollection())
-	if err := s.processBatch(ctx, table, r.GetDocuments(), func(b kv.Tx, key types.Key, value []byte) error {
-		return s.kv.Insert(ctx, table, key, value)
+	collection := s.schemaCache.Get(r.GetDb(), r.GetCollection())
+	if collection == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "collection doesn't exists")
+	}
+	if err := s.processBatch(ctx, collection, r.GetDocuments(), func(b kv.Tx, key types.Key, value []byte) error {
+		return s.kv.Insert(ctx, collection.StorageName(), key, value)
 	}); err != nil {
 		return nil, status.Errorf(codes.Internal, "error: %v", err)
 	}
@@ -182,9 +186,12 @@ func (s *userService) Update(ctx context.Context, r *api.UpdateRequest) (*api.Up
 		return nil, err
 	}
 
-	table := schemas.GetTableName(r.GetDb(), r.GetCollection())
-	if err := s.processBatch(ctx, table, nil, func(b kv.Tx, key types.Key, value []byte) error {
-		return s.kv.Update(ctx, table, key, value)
+	collection := s.schemaCache.Get(r.GetDb(), r.GetCollection())
+	if collection == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "collection doesn't exists")
+	}
+	if err := s.processBatch(ctx, collection, nil, func(b kv.Tx, key types.Key, value []byte) error {
+		return s.kv.Update(ctx, collection.StorageName(), key, value)
 	}); err != nil {
 		return nil, status.Errorf(codes.Internal, "error: %v", err)
 	}
@@ -197,9 +204,12 @@ func (s *userService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.
 		return nil, err
 	}
 
-	table := schemas.GetTableName(r.GetDb(), r.GetCollection())
-	if err := s.processBatch(ctx, table, r.GetDocuments(), func(b kv.Tx, key types.Key, value []byte) error {
-		return b.Replace(ctx, table, key, value)
+	collection := s.schemaCache.Get(r.GetDb(), r.GetCollection())
+	if collection == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "collection doesn't exists")
+	}
+	if err := s.processBatch(ctx, collection, r.GetDocuments(), func(b kv.Tx, key types.Key, value []byte) error {
+		return b.Replace(ctx, collection.StorageName(), key, value)
 	}); err != nil {
 		return nil, status.Errorf(codes.Internal, "error: %v", err)
 	}
@@ -214,9 +224,12 @@ func (s *userService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.De
 		return nil, err
 	}
 
-	table := schemas.GetTableName(r.GetDb(), r.GetCollection())
-	if err := s.processBatch(ctx, table, nil, func(b kv.Tx, key types.Key, value []byte) error {
-		return b.Delete(ctx, table, key)
+	collection := s.schemaCache.Get(r.GetDb(), r.GetCollection())
+	if collection == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "collection doesn't exists")
+	}
+	if err := s.processBatch(ctx, collection, nil, func(b kv.Tx, key types.Key, value []byte) error {
+		return b.Delete(ctx, collection.StorageName(), key)
 	}); err != nil {
 		return nil, status.Errorf(codes.Internal, "error: %v", err)
 	}
@@ -229,14 +242,18 @@ func (s *userService) Read(r *api.ReadRequest, stream api.TigrisDB_ReadServer) e
 		return err
 	}
 
-	name := schemas.GetTableName(r.GetDb(), r.GetCollection())
+	collection := s.schemaCache.Get(r.GetDb(), r.GetCollection())
+	if collection == nil {
+		return status.Errorf(codes.InvalidArgument, "collection doesn't exists")
+	}
+
 	for _, v := range r.GetKeys() {
-		key, err := s.getKey(name, v)
+		key, err := s.getKey(collection, v)
 		if err != nil {
 			return err
 		}
 
-		docs, err := s.kv.Read(context.TODO(), name, key)
+		docs, err := s.kv.Read(context.TODO(), collection.StorageName(), key)
 		if err != nil {
 			return err
 		}
@@ -256,11 +273,15 @@ func (s *userService) Read(r *api.ReadRequest, stream api.TigrisDB_ReadServer) e
 	return nil
 }
 
-func (s *userService) getKey(table string, v *api.UserDocument) (types.Key, error) {
+func (s *userService) getKey(collection schema.Collection, v *api.UserDocument) (types.Key, error) {
 	var key types.Key
-	k := schemas.GetTableKey(table)
+	pkey := collection.PrimaryKeys()
 	doc := v.Doc.AsMap()
 
+	var k []string
+	for _, p := range pkey {
+		k = append(k, p.FieldName)
+	}
 	var err error
 	if key, err = buildKey(doc, k); err != nil {
 		return nil, err
@@ -269,11 +290,11 @@ func (s *userService) getKey(table string, v *api.UserDocument) (types.Key, erro
 	return key, nil
 }
 
-func (s *userService) processBatch(ctx context.Context, table string, docs []*api.UserDocument, fn func(b kv.Tx, key types.Key, value []byte) error) error {
+func (s *userService) processBatch(ctx context.Context, collection schema.Collection, docs []*api.UserDocument, fn func(b kv.Tx, key types.Key, value []byte) error) error {
 	b := s.kv.Batch()
 
 	for _, v := range docs {
-		key, err := s.getKey(table, v)
+		key, err := s.getKey(collection, v)
 		if err != nil {
 			log.Debug().Err(err).Msg("get key error")
 			return err
