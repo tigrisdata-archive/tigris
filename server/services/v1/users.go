@@ -170,7 +170,7 @@ func (s *userService) Insert(ctx context.Context, r *api.InsertRequest) (*api.In
 		return nil, status.Errorf(codes.InvalidArgument, "collection doesn't exists")
 	}
 	if err := s.processBatch(ctx, collection, r.GetDocuments(), func(b kv.Tx, key kv.Key, value []byte) error {
-		return s.kv.Insert(ctx, collection.StorageName(), key, value)
+		return s.kv.Insert(ctx, collection.StorageName(), key, value, true)
 	}); err != nil {
 		return nil, status.Errorf(codes.Internal, "error: %v", err)
 	}
@@ -211,7 +211,7 @@ func (s *userService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.
 		return nil, status.Errorf(codes.InvalidArgument, "collection doesn't exists")
 	}
 	if err := s.processBatch(ctx, collection, r.GetDocuments(), func(b kv.Tx, key kv.Key, value []byte) error {
-		return b.Replace(ctx, collection.StorageName(), key, value)
+		return b.Insert(ctx, collection.StorageName(), key, value, false)
 	}); err != nil {
 		return nil, status.Errorf(codes.Internal, "error: %v", err)
 	}

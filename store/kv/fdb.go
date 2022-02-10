@@ -101,16 +101,9 @@ func (d *fdbkv) ReadRange(ctx context.Context, table string, lKey Key, rKey Key)
 	return &fdbIteratorTxCloser{it, tx}, nil
 }
 
-func (d *fdbkv) Insert(ctx context.Context, table string, key Key, data []byte) error {
+func (d *fdbkv) Insert(ctx context.Context, table string, key Key, data []byte, mustNotExist bool) error {
 	_, err := d.db.Transact(func(tr fdb.Transaction) (interface{}, error) {
-		return nil, (&ftx{d, &tr}).Insert(ctx, table, key, data)
-	})
-	return err
-}
-
-func (d *fdbkv) Replace(ctx context.Context, table string, key Key, data []byte) error {
-	_, err := d.db.Transact(func(tr fdb.Transaction) (interface{}, error) {
-		return nil, (&ftx{d, &tr}).Replace(ctx, table, key, data)
+		return nil, (&ftx{d, &tr}).Insert(ctx, table, key, data, mustNotExist)
 	})
 	return err
 }
@@ -190,18 +183,11 @@ func (b *fbatch) flushBatch(ctx context.Context, _ Key, _ Key, data []byte) erro
 	return nil
 }
 
-func (b *fbatch) Insert(ctx context.Context, table string, key Key, data []byte) error {
+func (b *fbatch) Insert(ctx context.Context, table string, key Key, data []byte, mustNotExist bool) error {
 	if err := b.flushBatch(ctx, key, nil, data); err != nil {
 		return err
 	}
-	return b.tx.Insert(ctx, table, key, data)
-}
-
-func (b *fbatch) Replace(ctx context.Context, table string, key Key, data []byte) error {
-	if err := b.flushBatch(ctx, key, nil, data); err != nil {
-		return err
-	}
-	return b.tx.Replace(ctx, table, key, data)
+	return b.tx.Insert(ctx, table, key, data, mustNotExist)
 }
 
 func (b *fbatch) Delete(ctx context.Context, table string, key Key) error {
@@ -256,31 +242,24 @@ func (d *fdbkv) Tx() (Tx, error) {
 	return &ftx{d: d, tx: &tx}, nil
 }
 
-func (t *ftx) Insert(_ context.Context, table string, key Key, data []byte) error {
+func (t *ftx) Insert(_ context.Context, table string, key Key, data []byte, mustNotExist bool) error {
 	k := getFDBKey(table, key)
 
-	// Read the value and if exists reject the write
-	v := t.tx.Get(k)
-	vv, err := v.Get()
-	if err != nil {
-		return err
+	if mustNotExist {
+		// Read the value and if exists reject the write
+		v := t.tx.Get(k)
+		vv, err := v.Get()
+		if ulog.E(err) {
+			return err
+		}
+		if vv != nil {
+			return os.ErrExist
+		}
 	}
-	if vv != nil {
-		return os.ErrExist
-	}
-	t.tx.Set(k, data)
-
-	log.Err(err).Str("table", table).Interface("key", key).Msg("Insert")
-
-	return err
-}
-
-func (t *ftx) Replace(_ context.Context, table string, key Key, data []byte) error {
-	k := getFDBKey(table, key)
 
 	t.tx.Set(k, data)
 
-	log.Debug().Str("table", table).Interface("key", key).Msg("tx Replace")
+	log.Info().Str("table", table).Interface("key", key).Msg("Insert")
 
 	return nil
 }

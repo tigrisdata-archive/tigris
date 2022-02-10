@@ -58,9 +58,9 @@ func testKVBasic(t *testing.T, kv KV) {
 
 	// insert records with two prefixes p1 and p2
 	for i := 0; i < nRecs; i++ {
-		err = kv.Insert(ctx, "t1", BuildKey("p1", i+1), []byte(fmt.Sprintf("value%d", i+1)))
+		err = kv.Insert(ctx, "t1", BuildKey("p1", i+1), []byte(fmt.Sprintf("value%d", i+1)), true)
 		require.NoError(t, err)
-		err = kv.Insert(ctx, "t1", BuildKey("p2", i+1), []byte(fmt.Sprintf("value%d", i+1)))
+		err = kv.Insert(ctx, "t1", BuildKey("p2", i+1), []byte(fmt.Sprintf("value%d", i+1)), true)
 		require.NoError(t, err)
 	}
 
@@ -72,7 +72,7 @@ func testKVBasic(t *testing.T, kv KV) {
 	require.Equal(t, []KeyValue{{Key: BuildKey("p1", int64(2)), Value: []byte("value2")}}, v)
 
 	// replace individual record
-	err = kv.Replace(ctx, "t1", BuildKey("p1", 2), []byte("value2+2"))
+	err = kv.Insert(ctx, "t1", BuildKey("p1", 2), []byte("value2+2"), false)
 
 	it, err = kv.Read(ctx, "t1", BuildKey("p1", 2))
 	require.NoError(t, err)
@@ -183,11 +183,11 @@ func testKVInsert(t *testing.T, kv KV) {
 
 		t.Run(v.name, func(t *testing.T) {
 			for _, i := range v.insert {
-				err := kv.Insert(context.TODO(), "t1", i.Key, i.Value)
+				err := kv.Insert(context.TODO(), "t1", i.Key, i.Value, true)
 				require.NoError(t, err)
 			}
 			for _, i := range v.test {
-				err := kv.Insert(context.TODO(), "t1", i.Key, i.Value)
+				err := kv.Insert(context.TODO(), "t1", i.Key, i.Value, true)
 				if v.err != nil {
 					require.EqualError(t, err, v.err.Error())
 				} else {

@@ -25,8 +25,7 @@ type KeyValue struct {
 }
 
 type crud interface {
-	Insert(ctx context.Context, table string, key Key, data []byte) error
-	Replace(ctx context.Context, table string, key Key, data []byte) error
+	Insert(ctx context.Context, table string, key Key, data []byte, mustNotExist bool) error
 	Delete(ctx context.Context, table string, key Key) error
 	DeleteRange(ctx context.Context, table string, lKey Key, rKey Key) error
 	Read(ctx context.Context, table string, key Key) (Iterator, error)
