@@ -1,0 +1,29 @@
+name: golangci-lint
+on:
+  push:
+    tags:
+      - v*
+    branches:
+      - main
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  golangci:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+        with:
+          go-version: '1.17.6'
+      - name: Install dependencies
+        run: /bin/bash scripts/install_build_deps.sh
+      - name: Generated code
+        run: make gen_proto test_client
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v2
+        with:
+          version: v1.44
+          skip-pkg-cache: true
+          skip-build-cache: true
