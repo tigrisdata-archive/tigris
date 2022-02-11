@@ -13,8 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -e
+set -ex
+
+export GO111MODULE=on
 
 #test deps
 go install github.com/golang/mock/mockgen@v1.6.0
 curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v1.44.0
+sudo apt-get install -y shellcheck
