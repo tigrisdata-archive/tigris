@@ -16,16 +16,17 @@ package kv
 
 import (
 	"context"
-	"github.com/tigrisdata/tigrisdb/server/config"
-	"golang.org/x/xerrors"
 	"os"
+	"time"
 	"unsafe"
 
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	"github.com/apple/foundationdb/bindings/go/src/fdb/subspace"
 	"github.com/apple/foundationdb/bindings/go/src/fdb/tuple"
 	"github.com/rs/zerolog/log"
+	"github.com/tigrisdata/tigrisdb/server/config"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
+	"golang.org/x/xerrors"
 )
 
 const (
@@ -78,7 +79,7 @@ func (d *fdbkv) init(cfg *config.FoundationDBConfig) (err error) {
 
 // Read returns all the keys which has prefix equal to "key" parameter
 func (d *fdbkv) Read(ctx context.Context, table string, key Key) (Iterator, error) {
-	tx, err := d.Tx()
+	tx, err := d.Tx(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +91,7 @@ func (d *fdbkv) Read(ctx context.Context, table string, key Key) (Iterator, erro
 }
 
 func (d *fdbkv) ReadRange(ctx context.Context, table string, lKey Key, rKey Key) (Iterator, error) {
-	tx, err := d.Tx()
+	tx, err := d.Tx(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -101,36 +102,45 @@ func (d *fdbkv) ReadRange(ctx context.Context, table string, lKey Key, rKey Key)
 	return &fdbIteratorTxCloser{it, tx}, nil
 }
 
+func (d *fdbkv) txWithTimeout(ctx context.Context, fn func(fdb.Transaction) (interface{}, error)) (interface{}, error) {
+	return d.db.Transact(func(tr fdb.Transaction) (interface{}, error) {
+		if err := setTxTimeout(&tr, getCtxTimeout(ctx)); err != nil {
+			return nil, err
+		}
+		return fn(tr)
+	})
+}
+
 func (d *fdbkv) Insert(ctx context.Context, table string, key Key, data []byte) error {
-	_, err := d.db.Transact(func(tr fdb.Transaction) (interface{}, error) {
+	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
 		return nil, (&ftx{d, &tr}).Insert(ctx, table, key, data)
 	})
 	return err
 }
 
 func (d *fdbkv) Replace(ctx context.Context, table string, key Key, data []byte) error {
-	_, err := d.db.Transact(func(tr fdb.Transaction) (interface{}, error) {
+	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
 		return nil, (&ftx{d, &tr}).Replace(ctx, table, key, data)
 	})
 	return err
 }
 
 func (d *fdbkv) Delete(ctx context.Context, table string, key Key) error {
-	_, err := d.db.Transact(func(tr fdb.Transaction) (interface{}, error) {
+	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
 		return nil, (&ftx{d, &tr}).Delete(ctx, table, key)
 	})
 	return err
 }
 
 func (d *fdbkv) DeleteRange(ctx context.Context, table string, lKey Key, rKey Key) error {
-	_, err := d.db.Transact(func(tr fdb.Transaction) (interface{}, error) {
+	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
 		return nil, (&ftx{d, &tr}).DeleteRange(ctx, table, lKey, rKey)
 	})
 	return err
 }
 
 func (d *fdbkv) UpdateRange(ctx context.Context, table string, lKey Key, rKey Key, apply func([]byte) []byte) error {
-	_, err := d.db.Transact(func(tr fdb.Transaction) (interface{}, error) {
+	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
 		return nil, (&ftx{d, &tr}).UpdateRange(ctx, table, lKey, rKey, apply)
 	})
 	return err
@@ -141,10 +151,10 @@ func (d *fdbkv) CreateTable(_ context.Context, name string) error {
 	return nil
 }
 
-func (d *fdbkv) DropTable(_ context.Context, name string) error {
+func (d *fdbkv) DropTable(ctx context.Context, name string) error {
 	s := subspace.FromBytes([]byte(name))
 
-	_, err := d.db.Transact(func(tr fdb.Transaction) (interface{}, error) {
+	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
 		tr.ClearRange(s)
 		return nil, nil
 	})
@@ -247,11 +257,16 @@ func (b *fbatch) Rollback(ctx context.Context) error {
 	return b.tx.Rollback(ctx)
 }
 
-func (d *fdbkv) Tx() (Tx, error) {
+func (d *fdbkv) Tx(ctx context.Context) (Tx, error) {
 	tx, err := d.db.CreateTransaction()
 	if ulog.E(err) {
 		return nil, err
 	}
+
+	if err := setTxTimeout(&tx, getCtxTimeout(ctx)); err != nil {
+		return nil, err
+	}
+
 	log.Debug().Msg("create transaction")
 	return &ftx{d: d, tx: &tx}, nil
 }
@@ -368,8 +383,8 @@ func (t *ftx) Commit(_ context.Context) error {
 			err = t.tx.OnError(ep).Get()
 		}
 
-		if err == nil {
-			break
+		if err != nil {
+			return err
 		}
 	}
 
@@ -427,4 +442,25 @@ func getFDBKey(table string, key Key) fdb.Key {
 	k := s.Pack(*(*tuple.Tuple)(p))
 	log.Debug().Str("key", k.String()).Msg("getFDBKey")
 	return k
+}
+
+// getCtxTimeout returns timeout in ms if it's set in the context
+// returns 0 if timeout is not set
+// returns negative number if timeout has expired
+func getCtxTimeout(ctx context.Context) int64 {
+	tm, ok := ctx.Deadline()
+	if !ok {
+		return 0
+	}
+	return tm.Sub(time.Now()).Milliseconds()
+}
+
+// setTxTimeout sets transaction timeout
+// Zero input sets unlimited timeout timeout
+func setTxTimeout(tx *fdb.Transaction, ms int64) error {
+	if ms < 0 {
+		return context.DeadlineExceeded
+	}
+
+	return tx.Options().SetTimeout(ms)
 }

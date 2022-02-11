@@ -42,7 +42,7 @@ type Tx interface {
 
 type KV interface {
 	crud
-	Tx() (Tx, error)
+	Tx(ctx context.Context) (Tx, error)
 	Batch() (Tx, error)
 	CreateTable(ctx context.Context, name string) error
 	DropTable(ctx context.Context, name string) error
