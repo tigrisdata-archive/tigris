@@ -37,11 +37,7 @@ message WriteResponseHeader {
 }
 
 message Filter {
-  repeated Clause clause = 1;
-}
-
-message Clause {
-  google.protobuf.Struct value = 1;
+  repeated google.protobuf.Struct value = 1;
 }
 
 message WriteOption {
@@ -101,7 +97,7 @@ message InsertResponse {
 message DeleteRequest {
   string db = 1;
   string collection = 2;
-  Filter filter = 3;
+  repeated Filter filter = 3;
   WriteOption options = 4;
 }
 
@@ -124,7 +120,7 @@ message UpdateRequest {
   string db = 1;
   string collection = 2;
   google.protobuf.Struct fields = 3;
-  Filter filter = 4;
+  repeated Filter filter = 4;
   WriteOption options = 5;
 }
 
@@ -135,7 +131,7 @@ message UpdateResponse {
 message ReadRequest {
   string db = 1;
   string collection = 2;
-  Filter filter = 3;
+  repeated google.protobuf.Struct filter = 3;
   repeated Document keys = 4;
   ReadOption options = 5;
 }
