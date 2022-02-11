@@ -16,7 +16,6 @@ package config
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"strings"
 
@@ -107,7 +106,7 @@ func LoadConfig(name string, config interface{}) {
 	spew.Dump(viper.AllKeys())
 
 	viper.OnConfigChange(func(e fsnotify.Event) {
-		fmt.Println("Config file changed:", e.Name)
+		log.Debug().Str("notify", e.Name).Msg("Config file changed")
 		//TODO: handle config change
 	})
 

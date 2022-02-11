@@ -12,36 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package api
+package set
 
-func IsTxSupported(req Request) bool {
-	switch req.Type() {
-	case Insert, Replace, Update, Delete, Read:
-		return true
-	}
-
-	return false
+type HashSet struct {
+	stringMap map[string]struct{}
 }
 
-func GetTransaction(req Request) *TransactionCtx {
-	switch r := req.(type) {
-	case *InsertRequest:
-		if r.GetOptions() == nil {
-			return nil
-		}
-		return r.GetOptions().TxCtx
-	default:
-		return nil
+func New(s ...string) HashSet {
+	set := HashSet{
+		stringMap: make(map[string]struct{}, len(s)*2),
+	}
+	for _, ss := range s {
+		set.Insert(ss)
+	}
+	return set
+}
+
+func (set *HashSet) Insert(s ...string) {
+	for _, ss := range s {
+		set.stringMap[ss] = struct{}{}
 	}
 }
 
-func GetFilter(req Request) []*Filter {
-	switch r := req.(type) {
-	case *UpdateRequest:
-		return r.Filter
-	case *DeleteRequest:
-		return r.Filter
-	default:
-		return nil
+func (set *HashSet) ToList() []string {
+	list := make([]string, 0, len(set.stringMap))
+	for k := range set.stringMap {
+		list = append(list, k)
 	}
+	return list
 }
