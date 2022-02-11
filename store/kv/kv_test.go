@@ -3,12 +3,15 @@ package kv
 import (
 	"context"
 	"fmt"
-	"github.com/stretchr/testify/require"
-	"github.com/tigrisdata/tigrisdb/server/config"
-	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"os"
 	"os/exec"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/tigrisdata/tigrisdb/server/config"
+	ulog "github.com/tigrisdata/tigrisdb/util/log"
 )
 
 func getTestFDBConfig(t *testing.T) *config.FoundationDBConfig {
@@ -206,17 +209,60 @@ func testKVInsert(t *testing.T, kv KV) {
 		})
 	}
 
+	t.Run("test_kv_timeout", func(t *testing.T) {
+		testKVTimeout(t, kv)
+	})
+
 	err := kv.DropTable(ctx, "t1")
 	require.NoError(t, err)
+}
+
+func testKVTimeout(t *testing.T, kv KV) {
+	ctx, cancel1 := context.WithTimeout(context.Background(), 3*time.Millisecond)
+	defer cancel1()
+
+	tx, err := kv.Tx(ctx)
+	require.NoError(t, err)
+	time.Sleep(5 * time.Millisecond)
+	err = tx.Commit(context.Background())
+	assert.Error(t, err)
+
+	tx, err = kv.Tx(context.Background())
+	require.NoError(t, err)
+	time.Sleep(5 * time.Millisecond)
+	err = tx.Commit(context.Background())
+	assert.NoError(t, err)
+
+	ctx, cancel2 := context.WithDeadline(context.Background(), time.Now().Add(-3*time.Millisecond))
+	defer cancel2()
+	tx, err = kv.Tx(ctx)
+	assert.Equal(t, context.DeadlineExceeded, err)
 }
 
 func TestKVFDB(t *testing.T) {
 	kv, err := NewFoundationDB(getTestFDBConfig(t))
 	require.NoError(t, err)
+
 	t.Run("TestKVFDBBasic", func(t *testing.T) {
 		testKVBasic(t, kv)
 	})
 	t.Run("TestKVFDBInsert", func(t *testing.T) {
 		testKVInsert(t, kv)
 	})
+}
+
+func TestGetCtxTimeout(t *testing.T) {
+	//FIXME: time.Now dependent, may be flaky on slow machine
+	// positive timeout set in the context
+	ctx, cancel1 := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel1()
+	assert.Greater(t, getCtxTimeout(ctx), int64(0))
+
+	// not timeout set in the context
+	assert.Equal(t, int64(0), getCtxTimeout(context.Background()))
+
+	// expired context timeout
+	ctx, cancel2 := context.WithDeadline(context.Background(), time.Now().Add(-10*time.Millisecond))
+	defer cancel2()
+	assert.Less(t, getCtxTimeout(ctx), int64(0))
 }
