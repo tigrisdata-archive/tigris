@@ -16,6 +16,7 @@ package v1
 
 import (
 	"context"
+
 	structpb "github.com/golang/protobuf/ptypes/struct"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/encoding"
@@ -129,14 +130,16 @@ type StreamingQueryRunner struct {
 
 // Run is responsible for running/executing the query
 func (q *StreamingQueryRunner) Run(ctx context.Context, req *Request) (*Response, error) {
-	tx, err := q.txMgr.GetInherited(api.GetTransaction(req))
+	_, err := q.txMgr.GetInherited(api.GetTransaction(req))
 	if err != nil {
 		return nil, err
 	}
 
-	if tx != nil {
-		// ToDo we need to read in the transaction context
-	}
+	/*
+		if tx != nil {
+			// ToDo we need to read in the transaction context
+		}
+	*/
 
 	for _, v := range req.keys {
 		key, err := q.encoder.BuildKey(v.Doc.AsMap(), req.collection)

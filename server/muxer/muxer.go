@@ -58,9 +58,9 @@ func (m *Muxer) RegisterServices(kv kv.KV) {
 
 		for _, s := range m.servers {
 			if s.GetType() == types.GRPCServer {
-				r.RegisterGRPC(s.(*tgrpc.Server).GrpcS, inproc)
+				_ = r.RegisterGRPC(s.(*tgrpc.Server).GrpcS, inproc)
 			} else if s.GetType() == types.HTTPServer {
-				r.RegisterHTTP(s.(*tHTTP.Server).Router, inproc)
+				_ = r.RegisterHTTP(s.(*tHTTP.Server).Router, inproc)
 			}
 		}
 	}
@@ -76,7 +76,7 @@ func (m *Muxer) Start(host string, port int16) error {
 
 	cm := cmux.New(l)
 	for _, s := range m.servers {
-		s.Start(cm)
+		_ = s.Start(cm)
 	}
 
 	return cm.Serve()

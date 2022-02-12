@@ -182,14 +182,14 @@ func (tx *TxExplicit) Rollback(ctx context.Context) error {
 type TxInherited struct {
 	*baseTx
 
-	session *session
+	//session *session
 }
 
 // NewTxInherited create TxInherited object
 func NewTxInherited(session *session) *TxInherited {
 	return &TxInherited{
 		baseTx: &baseTx{
-			session: session,
+			//session: session,
 		},
 	}
 }

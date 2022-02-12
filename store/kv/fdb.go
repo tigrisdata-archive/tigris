@@ -453,7 +453,7 @@ func getCtxTimeout(ctx context.Context) int64 {
 	if !ok {
 		return 0
 	}
-	return tm.Sub(time.Now()).Milliseconds()
+	return time.Until(tm).Milliseconds()
 }
 
 // setTxTimeout sets transaction timeout

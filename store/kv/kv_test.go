@@ -76,6 +76,7 @@ func testKVBasic(t *testing.T, kv KV) {
 
 	// replace individual record
 	err = kv.Replace(ctx, "t1", BuildKey("p1", 2), []byte("value2+2"))
+	require.NoError(t, err)
 
 	it, err = kv.Read(ctx, "t1", BuildKey("p1", 2))
 	require.NoError(t, err)
@@ -145,18 +146,20 @@ func testKVBasic(t *testing.T, kv KV) {
 	require.NoError(t, err)
 }
 
+/*
 type keyRange struct {
 	left  Key
 	right Key
 }
+*/
 
 type kvTestCase struct {
-	name     string
-	insert   []KeyValue
-	test     []KeyValue
-	keyRange keyRange
-	result   []KeyValue
-	err      error
+	name   string
+	insert []KeyValue
+	test   []KeyValue
+	//	keyRange keyRange
+	result []KeyValue
+	err    error
 }
 
 func testKVInsert(t *testing.T, kv KV) {
@@ -235,7 +238,7 @@ func testKVTimeout(t *testing.T, kv KV) {
 
 	ctx, cancel2 := context.WithDeadline(context.Background(), time.Now().Add(-3*time.Millisecond))
 	defer cancel2()
-	tx, err = kv.Tx(ctx)
+	_, err = kv.Tx(ctx)
 	assert.Equal(t, context.DeadlineExceeded, err)
 }
 

@@ -21,11 +21,18 @@ import (
 
 type ContextSetterOptions struct{}
 
+type key string
+
+const (
+	empty key = ""
+	token key = "token"
+)
+
 func ContextSetter(options *ContextSetterOptions) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		fn := func(w http.ResponseWriter, r *http.Request) {
-			var ctx context.Context = context.WithValue(r.Context(), "", nil)
-			ctx = context.WithValue(ctx, "token", r.Header.Get("TOKEN"))
+			var ctx context.Context = context.WithValue(r.Context(), empty, nil)
+			ctx = context.WithValue(ctx, token, r.Header.Get("TOKEN"))
 
 			r = r.WithContext(ctx)
 

@@ -18,6 +18,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/soheilhy/cmux"
@@ -53,7 +55,10 @@ func NewServer(cfg *config.Config) *Server {
 
 func (s *Server) Start(mux cmux.CMux) error {
 	match := mux.Match(cmux.HTTP1Fast())
-	go s.httpS.Serve(match)
+	go func() {
+		err := s.httpS.Serve(match)
+		log.Fatal().Err(err).Msg("start http server")
+	}()
 	return nil
 }
 

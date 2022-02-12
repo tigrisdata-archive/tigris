@@ -27,6 +27,7 @@ import (
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type crudClient interface {
@@ -56,10 +57,12 @@ type client interface {
 	//txClient
 }
 
+/*
 func NewClient(ctx context.Context, host string, port int16) (client, error) {
 	return newGRPCClient(ctx, host, port)
 	//return newHTTPClient(ctx, host, port)
 }
+*/
 
 type grpcClient struct {
 	api.TigrisDBClient
@@ -80,7 +83,7 @@ type grpcClientIface interface {
 */
 
 func newGRPCClient(_ context.Context, host string, port int16) (*grpcClient, error) {
-	conn, err := grpc.Dial(fmt.Sprintf("%s:%d", host, port), grpc.WithInsecure(), grpc.FailOnNonTempDialError(true), grpc.WithBlock())
+	conn, err := grpc.Dial(fmt.Sprintf("%s:%d", host, port), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.FailOnNonTempDialError(true), grpc.WithBlock())
 	if err != nil {
 		log.Fatal().Err(err).Msg("grpc connect failed")
 	}
@@ -234,6 +237,9 @@ func (c *grpcCRUDClient) Read(ctx context.Context, docs ...interface{}) error {
 		Collection: c.table,
 		Keys:       bdocs,
 	})
+	if err != nil {
+		return err
+	}
 
 	i := 0
 	for {

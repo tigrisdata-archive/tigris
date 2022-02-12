@@ -41,16 +41,16 @@ server: server/service
 server/service: $(ESRC) gen_proto
 	go build $(BUILD_PARAM) -o server/service ./server
 
-lint:
+lint: gen_proto test_client
 	shellcheck scripts/*
-	# golangci-lint run #FIXME: doesn't work with go1.18beta1
+	golangci-lint run #FIXME: doesn't work with go1.18beta1
 
 docker_test:
 	COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker-compose -f docker/docker-compose.yml up --build --abort-on-container-exit --exit-code-from all_test all_test
 
 test: docker_test
 
-local_test: lint gen_proto test_client
+local_test: gen_proto test_client lint
 	go test $(TEST_PARAM) ./...
 
 run: $(BINS)
