@@ -2,3 +2,6 @@
 *.pb.gw.go
 *_openapi.yaml
 api/client/*
+
+.idea
+server/service
