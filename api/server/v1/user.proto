@@ -208,7 +208,8 @@ service TigrisDB {
   rpc Delete(DeleteRequest) returns (DeleteResponse) {
     option (google.api.http) = {
       delete : "/api/v1/databases/{db}/collections/{collection}/documents/delete"
-        };
+      body : "*"
+    };
   }
   rpc Update(UpdateRequest) returns (UpdateResponse) {
     option (google.api.http) = {
