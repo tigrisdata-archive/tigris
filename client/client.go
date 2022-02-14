@@ -334,7 +334,7 @@ func (c *httpCRUDClient) Delete(ctx context.Context, docs ...interface{}) error 
 		return err
 	}
 
-	resp, err := c.c.TigrisDBDeleteWithResponse(ctx, c.db, c.table, nil)
+	resp, err := c.c.TigrisDBDeleteWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBDeleteJSONRequestBody{})
 
 	return HTTPError(err, resp)
 }

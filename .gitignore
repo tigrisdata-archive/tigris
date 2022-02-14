@@ -4,3 +4,4 @@
 api/client/*
 
 .idea
+server/service
