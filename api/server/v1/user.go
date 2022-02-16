@@ -33,6 +33,8 @@ const (
 	DropCollection      RequestType = "DropCollection"
 	AlterCollection     RequestType = "AlterCollection"
 	TruncateCollection  RequestType = "TruncateCollection"
+	ListCollections     RequestType = "ListCollections"
+	ListDatabases       RequestType = "ListDatabases"
 )
 
 type Request interface {
@@ -92,4 +94,12 @@ func (x *AlterCollectionRequest) Type() RequestType {
 
 func (x *TruncateCollectionRequest) Type() RequestType {
 	return TruncateCollection
+}
+
+func (x *ListCollectionsRequest) Type() RequestType {
+	return ListCollections
+}
+
+func (x *ListDatabasesRequest) Type() RequestType {
+	return ListDatabases
 }

@@ -26,7 +26,7 @@ go install github.com/google/gnostic/cmd/protoc-gen-openapi@v0.6.6
 go install github.com/deepmap/oapi-codegen/cmd/oapi-codegen@v1.9.1
 
 FDB_VERSION=6.3.23
-if [ "$OSTYPE" = "darwin" ]; then
+if [[ "$OSTYPE" == "darwin"* ]]; then
 	FDB_SHA512=d7b89e82dae332af09637543371c58bcaaab2c818a3ea49f56e22587d1a6adfc255e154e6c4feca90f407e37d63d8a3cd2e7cfa0b996c2865c9d74fd5dc1b0ba
 	wget https://github.com/apple/foundationdb/releases/download/$FDB_VERSION/FoundationDB-$FDB_VERSION.pkg
 	echo "$FDB_SHA512 FoundationDB-$FDB_VERSION.pkg" | sha512sum -c

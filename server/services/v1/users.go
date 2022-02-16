@@ -291,6 +291,14 @@ func (s *userService) Read(r *api.ReadRequest, stream api.TigrisDB_ReadServer) e
 	return nil
 }
 
+func (s *userService) ListDatabases(ctx context.Context, r *api.ListDatabasesRequest) (*api.ListDatabasesResponse, error) {
+	return &api.ListDatabasesResponse{}, nil
+}
+
+func (s *userService) ListCollections(ctx context.Context, r *api.ListCollectionsRequest) (*api.ListCollectionsResponse, error) {
+	return &api.ListCollectionsResponse{}, nil
+}
+
 func (s *userService) Run(ctx context.Context, req *Request) (*Response, error) {
 	queryLifecycle := s.queryLifecycleFactory.Get()
 	return queryLifecycle.run(ctx, req)
