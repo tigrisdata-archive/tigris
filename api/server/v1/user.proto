@@ -32,8 +32,8 @@ enum StatusCode {
 }
 
 message WriteResponseHeader {
-    int32 code = 1;
-    string msg = 2;
+  int32 code = 1;
+  string msg = 2;
 }
 
 message Filter {
@@ -172,6 +172,21 @@ message TruncateCollectionResponse {
   string msg = 1;
 }
 
+message ListDatabasesRequest {
+}
+
+message ListDatabasesResponse {
+  repeated string dbs = 1;
+}
+
+message ListCollectionsRequest {
+  string db = 1;
+}
+
+message ListCollectionsResponse {
+  repeated string collections = 1;
+}
+
 service TigrisDB {
   // Transactional APIs
   rpc BeginTransaction(BeginTransactionRequest) returns (BeginTransactionResponse) {
@@ -246,6 +261,18 @@ service TigrisDB {
   rpc TruncateCollection(TruncateCollectionRequest) returns (TruncateCollectionResponse) {
     option (google.api.http) = {
       delete : "/api/v1/databases/{db}/collections/{collection}/truncate"
+    };
+  }
+  rpc ListDatabases(ListDatabasesRequest) returns (ListDatabasesResponse) {
+    option (google.api.http) = {
+      post : "/api/v1/databases"
+      body : "*"
+    };
+  }
+  rpc ListCollections(ListCollectionsRequest) returns (ListCollectionsResponse) {
+    option (google.api.http) = {
+      post : "/api/v1/databases/{db}/collections"
+      body : "*"
     };
   }
 }
