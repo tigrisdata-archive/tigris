@@ -44,11 +44,17 @@ message Clause {
   google.protobuf.Struct value = 1;
 }
 
-message WriteOption {}
-message ReadOption {}
+message WriteOption {
+  TransactionCtx tx_ctx = 1;
+}
+
+message ReadOption {
+  TransactionCtx tx_ctx = 1;
+}
+
 message DocOption {}
 
-message UserDocument {
+message Document {
   google.protobuf.Struct doc = 1;
   DocOption options = 2;
 }
@@ -80,9 +86,8 @@ message RollbackTransactionResponse {}
 message InsertRequest {
   string db = 1;
   string collection = 2;
-  repeated UserDocument documents = 3;
+  repeated Document documents = 3;
   WriteOption options = 4;
-  TransactionCtx tx_ctx = 5;
 }
 
 message InsertResponse {
@@ -103,7 +108,7 @@ message DeleteResponse {
 message ReplaceRequest {
   string db = 1;
   string collection = 2;
-  repeated UserDocument documents = 3;
+  repeated Document documents = 3;
   WriteOption options = 4;
 }
 
@@ -127,7 +132,7 @@ message ReadRequest {
   string db = 1;
   string collection = 2;
   Filter filter = 3;
-  repeated UserDocument keys = 4;
+  repeated Document keys = 4;
   ReadOption options = 5;
 }
 

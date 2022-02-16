@@ -95,7 +95,7 @@ func (c *grpcClient) Close() error {
 	return c.conn.Close()
 }
 
-func (c *grpcClient) Create(ctx context.Context, db string, table string, key string) error {
+func (c *grpcClient) Create(ctx context.Context, db string, table string, _ string) error {
 	_, err := c.CreateCollection(ctx, &api.CreateCollectionRequest{
 		Db:         db,
 		Collection: table,
@@ -157,10 +157,10 @@ func marshalDocsGeneric(docs []interface{}, add func(doc []byte)) error {
 	return nil
 }
 
-func marshalDocsGRPC(docs []interface{}) ([]*api.UserDocument, error) {
-	res := make([]*api.UserDocument, 0, len(docs))
+func marshalDocsGRPC(docs []interface{}) ([]*api.Document, error) {
+	res := make([]*api.Document, 0, len(docs))
 	err := marshalDocsGeneric(docs, func(doc []byte) {
-		res = append(res, &api.UserDocument{Doc: nil})
+		res = append(res, &api.Document{Doc: nil})
 	})
 	if err != nil {
 		return nil, err
@@ -294,7 +294,7 @@ func HTTPError(err error, resp httpStatus) error {
 	return nil
 }
 
-func (c *httpClient) Create(ctx context.Context, db string, collection string, key string) error {
+func (c *httpClient) Create(ctx context.Context, db string, collection string, _ string) error {
 	resp, err := c.TigrisDBCreateCollectionWithResponse(ctx, db, collection, userHTTP.TigrisDBCreateCollectionJSONRequestBody{})
 	return HTTPError(err, resp)
 }
@@ -312,10 +312,10 @@ func (c *httpClient) BeginTx() (txClient, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func marshalDocsHTTP(docs []interface{}) ([]userHTTP.UserDocument, error) {
-	res := make([]userHTTP.UserDocument, 0, len(docs))
+func marshalDocsHTTP(docs []interface{}) ([]userHTTP.Document, error) {
+	res := make([]userHTTP.Document, 0, len(docs))
 	err := marshalDocsGeneric(docs, func(doc []byte) {
-		res = append(res, userHTTP.UserDocument{Doc: nil})
+		res = append(res, userHTTP.Document{Doc: nil})
 	})
 	if err != nil {
 		return nil, err

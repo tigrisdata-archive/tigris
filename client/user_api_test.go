@@ -16,13 +16,13 @@ package main
 
 import (
 	"context"
-	"github.com/tigrisdata/tigrisdb/server/config"
 	"io"
 	"testing"
 
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	"github.com/tigrisdata/tigrisdb/server/config"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -56,7 +56,7 @@ func TestAPIGRPC(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	inputDocuments := []*api.UserDocument{
+	inputDocuments := []*api.Document{
 		{
 			Doc: &structpb.Struct{
 				Fields: map[string]*structpb.Value{
@@ -77,7 +77,7 @@ func TestAPIGRPC(t *testing.T) {
 	rc, err := c.Read(ctx, &api.ReadRequest{
 		Db:         "db1",
 		Collection: "t1",
-		Keys: []*api.UserDocument{
+		Keys: []*api.Document{
 			{
 				Doc: &structpb.Struct{
 					Fields: map[string]*structpb.Value{
