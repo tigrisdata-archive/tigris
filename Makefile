@@ -16,7 +16,7 @@ ${GEN_DIR}/%_openapi.yaml ${GEN_DIR}/%.pb.go ${GEN_DIR}/%.pb.gw.go: ${GEN_DIR}/%
 	protoc -Iapi --openapi_out=${API_DIR} --openapi_opt=naming=proto \
 		--go_out=${API_DIR} --go_opt=paths=source_relative \
 		--go-grpc_out=${API_DIR} --go-grpc_opt=paths=source_relative \
-		--grpc-gateway_out=allow_delete_body=true:${API_DIR} --grpc-gateway_opt=paths=source_relative \
+		--grpc-gateway_out=${API_DIR} --grpc-gateway_opt=paths=source_relative,allow_delete_body=true \
 		$<
 	sed -e 's/format: bytes/format: byte/g' ${API_DIR}/openapi.yaml >${GEN_DIR}/$(*F)_openapi.yaml
 	rm ${API_DIR}/openapi.yaml 
@@ -27,21 +27,16 @@ ${API_DIR}/client/${V}/%/http.go: ${GEN_DIR}/%_openapi.yaml
 	oapi-codegen -package api -generate "client, types, spec" \
 		-o ${API_DIR}/client/${V}/$(*F)/http.go \
 		${GEN_DIR}/$(*F)_openapi.yaml
-# generate client for other languagaes
-#	docker run --rm -v "${PWD}:/local" openapitools/openapi-generator-cli generate \
-#    -i /local/${GEN_DIR}/$(*F)_openapi.yaml -g go \
-#    -o /local/${GEN_DIR}/out
-#
 
-gen_proto: ${GEN_DIR}/user.pb.go ${GEN_DIR}/user.pb.gw.go ${GEN_DIR}/health.pb.go ${GEN_DIR}/health.pb.gw.go
+generate: ${GEN_DIR}/user.pb.go ${GEN_DIR}/user.pb.gw.go ${GEN_DIR}/health.pb.go ${GEN_DIR}/health.pb.gw.go
 
 test_client: ${API_DIR}/client/${V}/user/http.go
 
 server: server/service
-server/service: $(ESRC) gen_proto
+server/service: $(ESRC) generate
 	go build $(BUILD_PARAM) -o server/service ./server
 
-lint: gen_proto test_client
+lint: generate test_client
 	shellcheck scripts/*
 	golangci-lint run #FIXME: doesn't work with go1.18beta1
 
@@ -50,7 +45,7 @@ docker_test:
 
 test: docker_test
 
-local_test: gen_proto test_client lint
+local_test: generate test_client lint
 	go test $(TEST_PARAM) ./...
 
 run: $(BINS)

@@ -43,7 +43,7 @@ func (h *healthService) Health(_ context.Context, _ *api.HealthCheckInput) (*api
 	}, nil
 }
 
-func (h *healthService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {
+func (h *healthService) RegisterHTTP(router chi.Router, _ *inprocgrpc.Channel) error {
 	mux := runtime.NewServeMux(runtime.WithMarshalerOption(string(JSON), &runtime.JSONBuiltin{}))
 	if err := api.RegisterHealthAPIHandlerServer(context.TODO(), mux, h); err != nil {
 		return err
@@ -54,7 +54,7 @@ func (h *healthService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Chann
 	return nil
 }
 
-func (h *healthService) RegisterGRPC(grpc *grpc.Server, inproc *inprocgrpc.Channel) error {
+func (h *healthService) RegisterGRPC(grpc *grpc.Server) error {
 	api.RegisterHealthAPIServer(grpc, h)
 	return nil
 }

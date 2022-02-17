@@ -29,7 +29,7 @@ const (
 
 type Service interface {
 	RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error
-	RegisterGRPC(grpc *grpc.Server, inproc *inprocgrpc.Channel) error
+	RegisterGRPC(grpc *grpc.Server) error
 }
 
 func GetRegisteredServices(kv kv.KV) []Service {

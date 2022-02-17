@@ -12,32 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package http
+package middleware
 
 import (
 	"context"
-	"net/http"
-	"time"
+	"runtime/pprof"
+
+	"google.golang.org/grpc"
 )
 
-const (
-	DefaultTimeout = 10 * time.Second
-)
-
-func Timeout(next http.Handler) http.Handler {
-	return http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
-			// only set from outside if value is missing in r.Context()
-			ctx, cancel := context.WithDeadline(r.Context(), time.Now().Add(DefaultTimeout))
-			defer func() {
-				cancel()
-				if ctx.Err() == context.DeadlineExceeded {
-					w.WriteHeader(http.StatusGatewayTimeout)
-				}
-			}()
-			r = r.WithContext(ctx)
-
-			next.ServeHTTP(w, r)
-		},
-	)
+func PprofUnaryServerInterceptor() grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		defer pprof.SetGoroutineLabels(ctx)
+		ctx = pprof.WithLabels(ctx, pprof.Labels("full-method", info.FullMethod, "worker", "grpc"))
+		pprof.SetGoroutineLabels(ctx)
+		return handler(ctx, req)
+	}
 }

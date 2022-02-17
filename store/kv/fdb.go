@@ -430,9 +430,14 @@ func (i *fdbIterator) Next() (*KeyValue, error) {
 }
 
 func (i *fdbIteratorTxCloser) More() bool {
+	if i.tx == nil {
+		return false
+	}
 	if !i.Iterator.More() {
 		err := i.tx.Rollback(context.Background())
 		ulog.E(err)
+		i.tx = nil
+		return false
 	}
 	return i.Iterator.More()
 }

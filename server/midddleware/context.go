@@ -12,33 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package http
+package middleware
 
 import (
 	"context"
-	"net/http"
-)
+	"time"
 
-type ContextSetterOptions struct{}
+	"google.golang.org/grpc"
+)
 
 type key string
 
 const (
-	empty key = ""
 	token key = "token"
 )
 
-func ContextSetter(options *ContextSetterOptions) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		fn := func(w http.ResponseWriter, r *http.Request) {
-			var ctx context.Context = context.WithValue(r.Context(), empty, nil)
-			ctx = context.WithValue(ctx, token, r.Header.Get("TOKEN"))
-
-			r = r.WithContext(ctx)
-
-			next.ServeHTTP(w, r)
-		}
-
-		return http.HandlerFunc(fn)
+func TxCtxUnaryServerInterceptor(timeout time.Duration) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (iface interface{}, err error) {
+		ctx = context.WithValue(ctx, token, getHeader(ctx, string(token)))
+		return handler(ctx, req)
 	}
 }

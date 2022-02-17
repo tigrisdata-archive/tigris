@@ -15,24 +15,23 @@
 package grpc
 
 import (
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
-	grpc_ctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
-	grpc_opentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
 	"github.com/tigrisdata/tigrisdb/server/config"
+	middleware "github.com/tigrisdata/tigrisdb/server/midddleware"
 	"github.com/tigrisdata/tigrisdb/server/types"
 	"google.golang.org/grpc"
 )
 
 type Server struct {
-	GrpcS *grpc.Server
+	*grpc.Server
 }
 
 func NewServer(cfg *config.Config) *Server {
 	s := &Server{}
-	s.SetupMiddlewares()
+
+	unary, stream := middleware.Get()
+	s.Server = grpc.NewServer(grpc.StreamInterceptor(stream), grpc.UnaryInterceptor(unary))
 
 	return s
 }
@@ -41,20 +40,10 @@ func (s *Server) Start(mux cmux.CMux) error {
 	// MatchWithWriters is needed as it needs SETTINGS frame from the server otherwise the client will block
 	match := mux.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
 	go func() {
-		err := s.GrpcS.Serve(match)
+		err := s.Serve(match)
 		log.Fatal().Err(err).Msg("start http server")
 	}()
 	return nil
-}
-
-func (s *Server) SetupMiddlewares() {
-	s.GrpcS = grpc.NewServer(grpc.UnaryInterceptor(
-		grpc_middleware.ChainUnaryServer(
-			grpc_ctxtags.UnaryServerInterceptor(),
-			grpc_opentracing.UnaryServerInterceptor(),
-			grpc_recovery.UnaryServerInterceptor(),
-		),
-	))
 }
 
 func (s *Server) GetType() string {

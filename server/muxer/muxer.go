@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
 	"github.com/tigrisdata/tigrisdb/server/config"
@@ -31,7 +30,6 @@ import (
 
 type Server interface {
 	Start(mux cmux.CMux) error
-	SetupMiddlewares()
 	GetType() string
 }
 
@@ -53,14 +51,11 @@ func NewMuxer(cfg *config.Config) *Muxer {
 func (m *Muxer) RegisterServices(kv kv.KV) {
 	services := v1.GetRegisteredServices(kv)
 	for _, r := range services {
-		// create an inproc channel that is passed to all the servers
-		var inproc = new(inprocgrpc.Channel)
-
 		for _, s := range m.servers {
 			if s.GetType() == types.GRPCServer {
-				_ = r.RegisterGRPC(s.(*tgrpc.Server).GrpcS, inproc)
+				_ = r.RegisterGRPC(s.(*tgrpc.Server).Server)
 			} else if s.GetType() == types.HTTPServer {
-				_ = r.RegisterHTTP(s.(*tHTTP.Server).Router, inproc)
+				_ = r.RegisterHTTP(s.(*tHTTP.Server).Router, s.(*tHTTP.Server).Inproc)
 			}
 		}
 	}

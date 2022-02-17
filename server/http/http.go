@@ -16,41 +16,39 @@ package http
 
 import (
 	"net/http"
-	"time"
 
-	"github.com/rs/zerolog/log"
+	middleware "github.com/tigrisdata/tigrisdb/server/midddleware"
 
+	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
 	"github.com/tigrisdata/tigrisdb/server/config"
-	tmiddlewares "github.com/tigrisdata/tigrisdb/server/midddlewares/http"
 	"github.com/tigrisdata/tigrisdb/server/types"
-)
-
-const (
-	AllowedConnections      int           = 256
-	BacklogConnectionsLimit int           = 256
-	BacklogWindow           time.Duration = 1 * time.Second
 )
 
 type Server struct {
 	Router chi.Router
 	httpS  *http.Server
+	Inproc *inprocgrpc.Channel
 }
 
 func NewServer(cfg *config.Config) *Server {
 	r := chi.NewRouter()
 	s := &Server{
+		Inproc: &inprocgrpc.Channel{},
 		Router: r,
 		httpS: &http.Server{
 			Handler: r,
 		},
 	}
 
-	s.SetupMiddlewares()
-	return s
+	unary, stream := middleware.Get()
 
+	s.Inproc.WithServerStreamInterceptor(stream)
+	s.Inproc.WithServerUnaryInterceptor(unary)
+
+	return s
 }
 
 func (s *Server) Start(mux cmux.CMux) error {
@@ -60,15 +58,6 @@ func (s *Server) Start(mux cmux.CMux) error {
 		log.Fatal().Err(err).Msg("start http server")
 	}()
 	return nil
-}
-
-func (s *Server) SetupMiddlewares() {
-	s.Router.Use(middleware.Logger)
-	s.Router.Use(middleware.ThrottleBacklog(AllowedConnections, BacklogConnectionsLimit, BacklogWindow))
-	s.Router.Use(tmiddlewares.ContextSetter(nil))
-	s.Router.Use(tmiddlewares.Timeout)
-	s.Router.Use(tmiddlewares.RuntimeLabels)
-	s.Router.Use(middleware.Recoverer)
 }
 
 func (s *Server) GetType() string {

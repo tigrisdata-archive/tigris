@@ -12,20 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package http
+package middleware
 
 import (
 	"context"
-	"net/http"
-	"runtime/pprof"
+	"time"
 )
 
-func RuntimeLabels(next http.Handler) http.Handler {
-	return http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
-			pprof.Do(r.Context(), pprof.Labels("http-path", r.URL.Path, "worker", "http"), func(ctx context.Context) {
-				next.ServeHTTP(w, r)
-			})
-		},
-	)
+const (
+	AllowedConnections      int           = 256
+	BacklogConnectionsLimit int           = 256
+	BacklogWindow           time.Duration = 1 * time.Second
+)
+
+type RateLimiter struct {
+}
+
+func (r *RateLimiter) Limit(_ context.Context) error {
+	return nil
 }

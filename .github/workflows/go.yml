@@ -41,4 +41,4 @@ jobs:
           docker image prune -f
 
       - name: Run tests
-        run: docker-compose -f docker/docker-compose.yml up --abort-on-container-exit --exit-code-from tigris_test tigris_test
+        run: docker-compose -f docker/docker-compose.yml up --abort-on-container-exit --exit-code-from tigris_test tigris_test || ( docker-compose -f docker/docker-compose.yml logs && false )
