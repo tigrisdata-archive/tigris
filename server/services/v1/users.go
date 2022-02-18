@@ -33,10 +33,10 @@ import (
 )
 
 const (
-	databasePath        = "/databases/{db}"
+	databasePath        = "/databases"
 	databasePathPattern = databasePath + "/*"
 
-	collectionPath        = databasePath + "/collections/{collection}"
+	collectionPath        = databasePath + "/collections"
 	collectionPathPattern = collectionPath + "/*"
 
 	documentPath        = collectionPath + "/documents"

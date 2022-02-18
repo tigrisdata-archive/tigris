@@ -270,13 +270,13 @@ service TigrisDB {
   }
   rpc ListDatabases(ListDatabasesRequest) returns (ListDatabasesResponse) {
     option (google.api.http) = {
-      post : "/api/v1/databases"
+      post : "/api/v1/databases/list"
       body : "*"
     };
   }
   rpc ListCollections(ListCollectionsRequest) returns (ListCollectionsResponse) {
     option (google.api.http) = {
-      post : "/api/v1/databases/{db}/collections"
+      post : "/api/v1/databases/{db}/collections/list"
       body : "*"
     };
   }
