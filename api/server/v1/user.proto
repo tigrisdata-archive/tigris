@@ -52,6 +52,10 @@ message ReadOption {
   TransactionCtx tx_ctx = 1;
 }
 
+message CreateDatabaseOption {}
+
+message DropDatabaseOption {}
+
 message DocOption {}
 
 message Document {
@@ -140,6 +144,24 @@ message ReadResponse {
   google.protobuf.Struct doc = 1;
 }
 
+message CreateDatabaseRequest {
+  string db = 1;
+  CreateDatabaseOption options = 2;
+}
+
+message CreateDatabaseResponse {
+  string msg = 1;
+}
+
+message DropDatabaseRequest {
+  string db = 1;
+  DropDatabaseOption options = 2;
+}
+
+message DropDatabaseResponse {
+  string msg = 1;
+}
+
 message CreateCollectionRequest {
   string db = 1;
   string collection = 2;
@@ -168,6 +190,7 @@ message DropCollectionRequest {
 message DropCollectionResponse {
   string msg = 1;
 }
+
 message TruncateCollectionRequest {
   string db = 1;
   string collection = 2;
@@ -277,6 +300,20 @@ service TigrisDB {
   rpc ListCollections(ListCollectionsRequest) returns (ListCollectionsResponse) {
     option (google.api.http) = {
       post : "/api/v1/databases/{db}/collections/list"
+      body : "*"
+    };
+  }
+
+  rpc CreateDatabase(CreateDatabaseRequest) returns (CreateDatabaseResponse) {
+    option (google.api.http) = {
+      post : "/api/v1/databases/{db}/create"
+      body : "*"
+    };
+  }
+
+  rpc DropDatabase(DropDatabaseRequest) returns (DropDatabaseResponse) {
+    option (google.api.http) = {
+      delete : "/api/v1/databases/{db}/drop"
       body : "*"
     };
   }

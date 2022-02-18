@@ -299,6 +299,18 @@ func (s *userService) ListCollections(ctx context.Context, r *api.ListCollection
 	return &api.ListCollectionsResponse{}, nil
 }
 
+func (s *userService) CreateDatabase(ctx context.Context, r *api.CreateDatabaseRequest) (*api.CreateDatabaseResponse, error) {
+	return &api.CreateDatabaseResponse{
+		Msg: "database created successfully",
+	}, nil
+}
+
+func (s *userService) DropDatabase(ctx context.Context, r *api.DropDatabaseRequest) (*api.DropDatabaseResponse, error) {
+	return &api.DropDatabaseResponse{
+		Msg: "database dropped successfully",
+	}, nil
+}
+
 func (s *userService) Run(ctx context.Context, req *Request) (*Response, error) {
 	queryLifecycle := s.queryLifecycleFactory.Get()
 	return queryLifecycle.run(ctx, req)
