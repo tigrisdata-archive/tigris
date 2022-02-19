@@ -46,7 +46,7 @@ lint: gen_proto test_client
 	golangci-lint run #FIXME: doesn't work with go1.18beta1
 
 docker_test:
-	COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker-compose -f docker/docker-compose.yml up --build --abort-on-container-exit --exit-code-from all_test all_test
+	COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker-compose -f docker/docker-compose.yml up --build --abort-on-container-exit --exit-code-from tigris_test tigris_test
 
 test: docker_test
 

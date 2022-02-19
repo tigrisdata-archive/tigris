@@ -6,10 +6,39 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
+      - name: Check out code
+        uses: actions/checkout@v1
 
-    - name: Check out code
-      uses: actions/checkout@v1
+      - name: Get changed files using defaults
+        id: changed-files
+        uses: tj-actions/changed-files@v16
 
-    - name: Run tests
-      run: make test
+      # Pulling existing images to skip caching them
+      - name: Pull docker images
+        run: docker-compose -f docker/docker-compose.yml pull
 
+      - name: Pull build docker images
+        if: |
+          contains(steps.changed-files.outputs.modified_files, 'Dockerfile') ||
+          contains(steps.changed-files.outputs.modified_files, 'Makefile') ||
+          contains(steps.changed-files.outputs.modified_files, 'go.mod')
+        run: |
+          docker pull debian:bullseye-slim
+          docker pull golang:1.17.6-bullseye
+          docker pull golang:1.18beta2-bullseye
+
+      - name: Docker cache
+        uses: satackey/action-docker-layer-caching@v0.0.11
+        continue-on-error: true
+
+      - name: Build docker images
+        if: |
+          contains(steps.changed-files.outputs.modified_files, 'Dockerfile') ||
+          contains(steps.changed-files.outputs.modified_files, 'Makefile') ||
+          contains(steps.changed-files.outputs.modified_files, 'go.mod')
+        run: |
+          COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker-compose -f docker/docker-compose.yml build
+          docker image prune -f
+
+      - name: Run tests
+        run: docker-compose -f docker/docker-compose.yml up --abort-on-container-exit --exit-code-from tigris_test tigris_test

@@ -48,7 +48,7 @@ services:
     depends_on:
       - tigris_fdb
 
-  all_test:
+  tigris_test:
     image: tigris_test
     environment:
       - TIGRISDB_ENVIRONMENT=test
