@@ -31,7 +31,8 @@ func Get() (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor) {
 	stream := middleware.ChainStreamServer(
 		grpc_ratelimit.StreamServerInterceptor(&RateLimiter{}),
 		grpc_auth.StreamServerInterceptor(AuthFunc),
-		grpc_logging.StreamServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger)),
+		grpc_logging.StreamServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger), []grpc_logging.Option{}...),
+		// grpc_logging.PayloadStreamServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger), alwaysLoggingDeciderServer, time.RFC3339), // To log payload
 		grpc_validator.StreamServerInterceptor(false),
 		grpc_opentracing.StreamServerInterceptor(),
 		grpc_recovery.StreamServerInterceptor(),
@@ -42,6 +43,7 @@ func Get() (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor) {
 		grpc_ratelimit.UnaryServerInterceptor(&RateLimiter{}),
 		grpc_auth.UnaryServerInterceptor(AuthFunc),
 		grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger)),
+		// grpc_logging.PayloadUnaryServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger), alwaysLoggingDeciderServer, time.RFC3339), //To log payload
 		grpc_validator.UnaryServerInterceptor(false),
 		TimeoutUnaryServerInterceptor(DefaultTimeout),
 		grpc_opentracing.UnaryServerInterceptor(),

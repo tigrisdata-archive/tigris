@@ -25,7 +25,9 @@ type FieldType int
 const (
 	UnknownType FieldType = iota + 1
 	NullType
+	BoolType
 	IntType
+	DoubleType
 	BytesType
 	StringType
 	UUIDType
@@ -33,7 +35,9 @@ const (
 
 const (
 	nullDef   = "null"
+	boolDef   = "bool"
 	intDef    = "int"
+	doubleDef = "double"
 	bytesDef  = "bytes"
 	stringDef = "string"
 	uuidDef   = "uuid"
@@ -44,8 +48,12 @@ func ToFieldType(t string) FieldType {
 	switch t {
 	case nullDef:
 		return NullType
+	case boolDef:
+		return BoolType
 	case intDef:
 		return IntType
+	case doubleDef:
+		return DoubleType
 	case bytesDef:
 		return BytesType
 	case stringDef:
@@ -63,6 +71,8 @@ func ToStringType(t FieldType) string {
 		return nullDef
 	case IntType:
 		return intDef
+	case DoubleType:
+		return doubleDef
 	case BytesType:
 		return bytesDef
 	case StringType:
@@ -74,21 +84,14 @@ func ToStringType(t FieldType) string {
 	}
 }
 
-type Field interface {
-	Name() string
-	Type() FieldType
-	TypeName() string
-	IsPrimaryKey() bool
-}
-
-type FieldImpl struct {
+type Field struct {
 	FieldName       string
 	DataType        FieldType
 	PrimaryKeyField *bool
 }
 
-func NewField(name string, ty string, isPrimaryKey bool) *FieldImpl {
-	f := FieldImpl{
+func NewField(name string, ty string, isPrimaryKey bool) *Field {
+	f := Field{
 		FieldName: name,
 		DataType:  ToFieldType(ty),
 	}
@@ -99,15 +102,15 @@ func NewField(name string, ty string, isPrimaryKey bool) *FieldImpl {
 	return &f
 }
 
-func (f *FieldImpl) Name() string {
+func (f *Field) Name() string {
 	return f.FieldName
 }
 
-func (f *FieldImpl) Type() FieldType {
+func (f *Field) Type() FieldType {
 	return f.DataType
 }
 
-func (f *FieldImpl) IsPrimaryKey() bool {
+func (f *Field) IsPrimaryKey() bool {
 	if f.PrimaryKeyField == nil {
 		return false
 	}

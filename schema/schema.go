@@ -16,11 +16,46 @@ package schema
 
 import (
 	"fmt"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-func ExtractKeysFromSchema(userSchema map[string]*structpb.Value) ([]*FieldImpl, error) {
-	var keys []*FieldImpl
+func CreateCollectionFromSchema(database string, collection string, userSchema map[string]*structpb.Value) (Collection, error) {
+	var fields []*Field
+	var nameToFieldMapping = make(map[string]*Field)
+	for key, value := range userSchema {
+		if key == PrimaryKeySchemaName {
+			continue
+		}
+
+		f := NewField(key, value.GetStringValue(), false)
+		fields = append(fields, f)
+		nameToFieldMapping[f.FieldName] = f
+	}
+
+	var primaryKeyFields []*Field
+	v := userSchema[PrimaryKeySchemaName]
+	if list := v.GetListValue(); list != nil {
+		for _, l := range list.GetValues() {
+			f, ok := nameToFieldMapping[l.GetStringValue()]
+			if !ok {
+				return nil, status.Errorf(codes.InvalidArgument, "missing primary key '%s' field in schema", l.GetStringValue())
+			}
+
+			ptrTrue := true
+			f.PrimaryKeyField = &ptrTrue
+
+			primaryKeyFields = append(primaryKeyFields, f)
+		}
+	}
+
+	return NewCollection(database, collection, fields, primaryKeyFields), nil
+}
+
+func ExtractKeysFromSchema(userSchema map[string]*structpb.Value) ([]*Field, error) {
+	var keys []*Field
 	v := userSchema[PrimaryKeySchemaName]
 	if list := v.GetListValue(); list != nil {
 		for _, l := range list.GetValues() {

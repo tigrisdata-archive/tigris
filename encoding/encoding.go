@@ -18,23 +18,29 @@ import (
 	"github.com/tigrisdata/tigrisdb/keys"
 	"github.com/tigrisdata/tigrisdb/schema"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
+	"github.com/tigrisdata/tigrisdb/value"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type Encoder interface {
-	BuildKey(doc map[string]interface{}, collection schema.Collection) (keys.Key, error)
+	BuildKey(doc map[string]*structpb.Value, collection schema.Collection) (keys.Key, error)
 }
 
 type PrefixEncoder struct{}
 
-func (e *PrefixEncoder) encodeKey(doc map[string]interface{}, prefix string, primaryKeys []*schema.FieldImpl) (keys.Key, error) {
+func (e *PrefixEncoder) encodeKey(doc map[string]*structpb.Value, prefix string, userDefinedKeys []*schema.Field) (keys.Key, error) {
 	var primaryKeyParts []interface{}
-	for _, v := range primaryKeys {
+	for _, v := range userDefinedKeys {
 		k, ok := doc[v.Name()]
 		if !ok {
 			return nil, ulog.CE("missing primary key column(s) %v", v)
 		}
 
-		primaryKeyParts = append(primaryKeyParts, k)
+		val, err := value.NewValueUsingSchema(v, k)
+		if err != nil {
+			return nil, err
+		}
+		primaryKeyParts = append(primaryKeyParts, val.AsInterface())
 	}
 	if len(primaryKeyParts) == 0 {
 		return nil, ulog.CE("missing primary key column(s)")
@@ -42,7 +48,7 @@ func (e *PrefixEncoder) encodeKey(doc map[string]interface{}, prefix string, pri
 	return keys.NewKey(prefix, primaryKeyParts...), nil
 }
 
-func (e *PrefixEncoder) BuildKey(doc map[string]interface{}, collection schema.Collection) (keys.Key, error) {
+func (e *PrefixEncoder) BuildKey(doc map[string]*structpb.Value, collection schema.Collection) (keys.Key, error) {
 	key, err := e.encodeKey(doc, collection.StorageName(), collection.PrimaryKeys())
 	if err != nil {
 		return nil, err

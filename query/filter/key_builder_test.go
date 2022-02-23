@@ -1,3 +1,17 @@
+// Copyright 2022 Tigris Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package filter
 
 import (
@@ -6,6 +20,7 @@ import (
 	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/keys"
+	"github.com/tigrisdata/tigrisdb/schema"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -24,61 +39,61 @@ func testFilters(t testing.TB, input []byte) []Filter {
 
 func TestKeyBuilder(t *testing.T) {
 	cases := []struct {
-		userKeys  []string
+		userKeys  []*schema.Field
 		userInput []byte
 		expError  error
 		expKeys   []keys.Key
 	}{
 		{
 			// fewer fields in user input
-			[]string{"a", "c", "b"},
+			[]*schema.Field{{FieldName: "a", DataType: schema.IntType}, {FieldName: "c", DataType: schema.IntType}, {FieldName: "b", DataType: schema.IntType}},
 			[]byte(`{"filter": [{"a": 10}, {"c": 10}]}`),
 			status.Errorf(codes.InvalidArgument, "filters doesn't contains primary key fields"),
 			nil,
 		},
 		{
 			// some fields are not with eq
-			[]string{"a", "c", "b"},
+			[]*schema.Field{{FieldName: "a", DataType: schema.IntType}, {FieldName: "c", DataType: schema.IntType}, {FieldName: "b", DataType: schema.IntType}},
 			[]byte(`{"filter": [{"a": 10}, {"b": {"$eq": 10}}, {"c": {"$gt": 15}}]}`),
 			status.Errorf(codes.InvalidArgument, "filters only supporting $eq comparison, found '$gt'"),
 			nil,
 		},
 		{
 			// some fields are repeated
-			[]string{"a", "b"},
+			[]*schema.Field{{FieldName: "a", DataType: schema.IntType}, {FieldName: "b", DataType: schema.IntType}},
 			[]byte(`{"filter": [{"a": 10}, {"b": {"$eq": 10}}, {"b": 15}]}`),
 			status.Errorf(codes.InvalidArgument, "reusing same fields for conditions on equality"),
 			nil,
 		},
 		{
 			// single user defined key
-			[]string{"a"},
+			[]*schema.Field{{FieldName: "a", DataType: schema.IntType}},
 			[]byte(`{"filter": [{"b": 10}, {"a": {"$eq": 1}}]}`),
 			nil,
 			[]keys.Key{keys.NewKey("", int64(1))},
 		},
 		{
 			// composite user defined key
-			[]string{"a", "b", "c"},
+			[]*schema.Field{{FieldName: "a", DataType: schema.BoolType}, {FieldName: "b", DataType: schema.IntType}, {FieldName: "c", DataType: schema.StringType}},
 			[]byte(`{"filter": [{"b": 10}, {"a": {"$eq": true}}, {"c": "foo"}]}`),
 			nil,
 			[]keys.Key{keys.NewKey("", true, int64(10), "foo")},
 		},
 		{
 			// single with AND/OR filter
-			[]string{"a"},
+			[]*schema.Field{{FieldName: "a", DataType: schema.IntType}},
 			[]byte(`{"filter": [{"$or": [{"a": 1}, {"$and": [{"a":2}, {"f1": 3}]}]}, {"$and": [{"a": 4}, {"$or": [{"a":5}, {"f2": 6}]}, {"$or": [{"a":5}, {"a": 6}]}]}]}`),
 			nil,
 			[]keys.Key{keys.NewKey("", int64(1)), keys.NewKey("", int64(4)), keys.NewKey("", int64(2)), keys.NewKey("", int64(5)), keys.NewKey("", int64(5)), keys.NewKey("", int64(6))},
 		},
 		{
 			// composite with AND filter
-			[]string{"a", "b"},
+			[]*schema.Field{{FieldName: "a", DataType: schema.IntType}, {FieldName: "b", DataType: schema.StringType}},
 			[]byte(`{"filter":[{"$and":[{"a":1},{"b":"aaa"},{"$and":[{"a":2},{"c":5},{"b":"bbb"}]}]},{"$and":[{"a":4},{"c":10},{"b":"ccc"}]}]}`),
 			nil,
 			[]keys.Key{keys.NewKey("", int64(1), "aaa"), keys.NewKey("", int64(4), "ccc"), keys.NewKey("", int64(2), "bbb")},
 		}, {
-			[]string{"a"},
+			[]*schema.Field{{FieldName: "a", DataType: schema.IntType}},
 			[]byte(`{"filter":[{"b":10},{"a":1},{"c":"ccc"},{"$or":[{"f1":10},{"a":2}]}]}`),
 			nil,
 			[]keys.Key{keys.NewKey("", int64(1)), keys.NewKey("", int64(2))},
@@ -97,7 +112,7 @@ func BenchmarkStrictEqKeyComposer_Compose(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		kb := NewKeyBuilder(NewStrictEqKeyComposer(""))
 		filters := testFilters(b, []byte(`{"filter": [{"b": 10}, {"a": {"$eq": 10}}, {"c": "foo"}]}`))
-		_, err := kb.Build(filters, []string{"a", "b", "c"})
+		_, err := kb.Build(filters, []*schema.Field{{FieldName: "a", DataType: schema.IntType}, {FieldName: "b", DataType: schema.IntType}, {FieldName: "c", DataType: schema.IntType}})
 		require.NoError(b, err)
 	}
 	b.ReportAllocs()

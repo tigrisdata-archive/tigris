@@ -16,9 +16,10 @@ package filter
 
 import (
 	"fmt"
-	ulog "github.com/tigrisdata/tigrisdb/util/log"
 
 	"github.com/tigrisdata/tigrisdb/query/expression"
+	ulog "github.com/tigrisdata/tigrisdb/util/log"
+	"github.com/tigrisdata/tigrisdb/value"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -122,10 +123,10 @@ func convertExprListToFilters(expr []expression.Expr) ([]Filter, error) {
 
 // ParseSelector is a short-circuit for Selector i.e. when we know the filter passed is not logical then we directly
 // call this because if it is not logical then it is simply a Selector filter.
-func ParseSelector(key string, value *structpb.Value) (Filter, error) {
-	switch ty := value.Kind.(type) {
+func ParseSelector(key string, userValue *structpb.Value) (Filter, error) {
+	switch ty := userValue.Kind.(type) {
 	case *structpb.Value_NumberValue, *structpb.Value_StringValue, *structpb.Value_BoolValue:
-		val := NewValue(value)
+		val := value.NewValue(userValue)
 		if val == nil {
 			return nil, fmt.Errorf("not able to create internal value %T", ty)
 		}

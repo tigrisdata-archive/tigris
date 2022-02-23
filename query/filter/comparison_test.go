@@ -15,63 +15,22 @@
 package filter
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-func TestValue(t *testing.T) {
-	t.Run("int", func(t *testing.T) {
-		i := IntValue(5)
-		r, err := i.CompareTo(NewValue(structpb.NewNumberValue(5)))
-		require.NoError(t, err)
-		require.Equal(t, 0, r)
+func TestNewMatcher(t *testing.T) {
+	matcher, err := NewMatcher(EQ, structpb.NewNumberValue(1))
+	require.NoError(t, err)
 
-		r, err = i.CompareTo(NewValue(structpb.NewNumberValue(7)))
-		require.NoError(t, err)
-		require.Equal(t, -1, r)
+	_, ok := matcher.(*EqualityMatcher)
+	require.True(t, ok)
 
-		r, err = i.CompareTo(NewValue(structpb.NewNumberValue(0)))
-		require.NoError(t, err)
-		require.Equal(t, 1, r)
-
-		r, err = i.CompareTo(NewValue(structpb.NewStringValue("5")))
-		require.Equal(t, fmt.Errorf("wrong type compared "), err)
-		require.Equal(t, -2, r)
-	})
-	t.Run("string", func(t *testing.T) {
-		i := StringValue("abc")
-		r, err := i.CompareTo(NewValue(structpb.NewStringValue("abc")))
-		require.NoError(t, err)
-		require.Equal(t, 0, r)
-
-		r, err = i.CompareTo(NewValue(structpb.NewStringValue("ac")))
-		require.NoError(t, err)
-		require.Equal(t, -1, r)
-
-		r, err = i.CompareTo(NewValue(structpb.NewStringValue("abb")))
-		require.NoError(t, err)
-		require.Equal(t, 1, r)
-
-		r, err = i.CompareTo(NewValue(structpb.NewNumberValue(5)))
-		require.Equal(t, fmt.Errorf("wrong type compared "), err)
-		require.Equal(t, -2, r)
-	})
-	t.Run("bool", func(t *testing.T) {
-		i := BoolValue(false)
-		r, err := i.CompareTo(NewValue(structpb.NewBoolValue(false)))
-		require.NoError(t, err)
-		require.Equal(t, 0, r)
-
-		r, err = i.CompareTo(NewValue(structpb.NewBoolValue(true)))
-		require.NoError(t, err)
-		require.Equal(t, -1, r)
-
-		i = BoolValue(true)
-		r, err = i.CompareTo(NewValue(structpb.NewBoolValue(false)))
-		require.NoError(t, err)
-		require.Equal(t, 1, r)
-	})
+	matcher, err = NewMatcher("foo", structpb.NewNumberValue(1))
+	require.Equal(t, status.Errorf(codes.InvalidArgument, "unsupported operand 'foo'"), err)
+	require.Nil(t, matcher)
 }

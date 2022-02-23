@@ -24,6 +24,15 @@ import (
 )
 
 func TestFilterUsingJSON(t *testing.T) {
+	t.Run("basic_filter1", func(t *testing.T) {
+		var r = &api.ReadRequest{}
+		js := []byte(`{"filter": [{"a": 1}]}`)
+		require.NoError(t, protojson.Unmarshal(js, r))
+
+		filters, err := Build(r.Filter)
+		require.NoError(t, err)
+		require.Len(t, filters, 1)
+	})
 	t.Run("basic_filter", func(t *testing.T) {
 		var r = &api.ReadRequest{}
 		js := []byte(`{"filter": [{"f1": 10}, {"f2": 10}]}`)

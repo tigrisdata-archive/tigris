@@ -1,7 +1,22 @@
+// Copyright 2022 Tigris Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package filter
 
 import (
 	"github.com/tigrisdata/tigrisdb/keys"
+	"github.com/tigrisdata/tigrisdb/schema"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -23,7 +38,7 @@ func NewKeyBuilder(composer KeyComposer) *KeyBuilder {
 // and passed by the caller in this method. The build is doing a level by level traversal to build the internal Keys.
 // On each level multiple keys can be formed because the user can specify ranges. The builder is not deciding the logic
 // of key generation, the builder is simply traversing on the filters and calling compose where the logic resides.
-func (k *KeyBuilder) Build(filters []Filter, userDefinedKeys []string) ([]keys.Key, error) {
+func (k *KeyBuilder) Build(filters []Filter, userDefinedKeys []*schema.Field) ([]keys.Key, error) {
 	var queue []Filter
 	var singleLevel []*Selector
 	var allKeys []keys.Key
@@ -69,7 +84,7 @@ func (k *KeyBuilder) Build(filters []Filter, userDefinedKeys []string) ([]keys.K
 
 // KeyComposer needs to be implemented to have a custom Compose method with different constraints.
 type KeyComposer interface {
-	Compose(level []*Selector, userDefinedKeys []string, parent LogicalOP) ([]keys.Key, error)
+	Compose(level []*Selector, userDefinedKeys []*schema.Field, parent LogicalOP) ([]keys.Key, error)
 }
 
 // StrictEqKeyComposer is to generate internal keys only if the condition is equality on the fields that are part of
@@ -88,12 +103,12 @@ func NewStrictEqKeyComposer(prefix string) *StrictEqKeyComposer {
 }
 
 // Compose is implementing the logic of composing keys
-func (s *StrictEqKeyComposer) Compose(selectors []*Selector, userDefinedKeys []string, parent LogicalOP) ([]keys.Key, error) {
+func (s *StrictEqKeyComposer) Compose(selectors []*Selector, userDefinedKeys []*schema.Field, parent LogicalOP) ([]keys.Key, error) {
 	var compositeKeys = make([][]*Selector, 1) // allocate just for the first keyParts
 	for _, k := range userDefinedKeys {
 		var repeatedFields []*Selector
 		for _, sel := range selectors {
-			if k == sel.Field {
+			if k.FieldName == sel.Field {
 				repeatedFields = append(repeatedFields, sel)
 			}
 			if sel.Matcher.Type() != EQ {
@@ -128,7 +143,7 @@ func (s *StrictEqKeyComposer) Compose(selectors []*Selector, userDefinedKeys []s
 		case AndOP:
 			var primaryKeyParts []interface{}
 			for _, s := range k {
-				primaryKeyParts = append(primaryKeyParts, s.Matcher.GetValue().Get())
+				primaryKeyParts = append(primaryKeyParts, s.Matcher.GetValue().AsInterface())
 			}
 
 			allKeys = append(allKeys, keys.NewKey(s.Prefix, primaryKeyParts...))
@@ -139,7 +154,7 @@ func (s *StrictEqKeyComposer) Compose(selectors []*Selector, userDefinedKeys []s
 					return nil, status.Errorf(codes.InvalidArgument, "OR is not supported with composite primary keys")
 				}
 
-				allKeys = append(allKeys, keys.NewKey(s.Prefix, sel.Matcher.GetValue().Get()))
+				allKeys = append(allKeys, keys.NewKey(s.Prefix, sel.Matcher.GetValue().AsInterface()))
 			}
 		}
 	}
