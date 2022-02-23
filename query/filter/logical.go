@@ -33,6 +33,7 @@ const (
 //    {"$or": [{"f1":1}, {"f2": 3}]}
 type LogicalFilter interface {
 	GetFilters() []Filter
+	Type() LogicalOP
 }
 
 // AndFilter performs a logical AND operation on an array of two or more expressions. The and filter looks like this,
@@ -61,6 +62,11 @@ func (a *AndFilter) validate() error {
 
 	return nil
 }
+
+func (a *AndFilter) Type() LogicalOP {
+	return AndOP
+}
+
 
 // Matches returns true if the input doc matches this filter.
 func (a *AndFilter) Matches(doc *structpb.Struct) bool {
@@ -112,6 +118,10 @@ func (o *OrFilter) validate() error {
 	}
 
 	return nil
+}
+
+func (o *OrFilter) Type() LogicalOP {
+	return OrOP
 }
 
 // Matches returns true if the input doc matches this filter.
