@@ -26,7 +26,7 @@ type prefixEncodedKey struct {
 }
 
 // NewKey returns the Key
-func NewKey(prefix string, primaryKeys []interface{}) Key {
+func NewKey(prefix string, primaryKeys ...interface{}) Key {
 	return &prefixEncodedKey{
 		prefix:      prefix,
 		primaryKeys: primaryKeys,

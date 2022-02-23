@@ -69,6 +69,7 @@ func ParseFilter(value *structpb.Struct) (expression.Expr, error) {
 	var err error
 	var expr []expression.Expr
 	for key, value := range value.GetFields() {
+		// Range is only used to extract objects from this struct, there will only be a single object in one value
 		switch key {
 		case string(AndOP):
 			if expr, err = expression.ParseList(value.GetListValue(), ParseFilter); err != nil {

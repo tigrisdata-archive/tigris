@@ -39,7 +39,7 @@ func (e *PrefixEncoder) encodeKey(doc map[string]interface{}, prefix string, pri
 	if len(primaryKeyParts) == 0 {
 		return nil, ulog.CE("missing primary key column(s)")
 	}
-	return keys.NewKey(prefix, primaryKeyParts), nil
+	return keys.NewKey(prefix, primaryKeyParts...), nil
 }
 
 func (e *PrefixEncoder) BuildKey(doc map[string]interface{}, collection schema.Collection) (keys.Key, error) {

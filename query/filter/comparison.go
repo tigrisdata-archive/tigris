@@ -36,6 +36,9 @@ type Comparable interface {
 // Value is our value object that implements comparable so that two values can be compared.
 type Value interface {
 	Comparable
+
+	// Get to return the value
+	Get() interface{}
 }
 
 // NewValue returns Value object if it is able to create otherwise nil at this point the caller ensures that
@@ -77,6 +80,10 @@ func (i *IntValue) CompareTo(v Value) (int, error) {
 	}
 }
 
+func (i *IntValue) Get() interface{} {
+	return int64(*i)
+}
+
 func (i *IntValue) String() string {
 	if i == nil {
 		return ""
@@ -104,6 +111,10 @@ func (s *StringValue) CompareTo(v Value) (int, error) {
 	} else {
 		return 1, nil
 	}
+}
+
+func (s *StringValue) Get() interface{} {
+	return string(*s)
 }
 
 func (s *StringValue) String() string {
@@ -135,6 +146,10 @@ func (b *BoolValue) CompareTo(v Value) (int, error) {
 	return 0, nil
 }
 
+func (b *BoolValue) Get() interface{} {
+	return bool(*b)
+}
+
 func (b *BoolValue) String() string {
 	if b == nil {
 		return ""
@@ -150,6 +165,9 @@ type ValueMatcher interface {
 
 	// Type return the type of the value matcher, syntactic sugar for logging, etc
 	Type() string
+
+	// GetValue returns the value on which the Matcher is operating
+	GetValue() Value
 }
 
 // NewMatcher returns ValueMatcher that is derived from the key
@@ -182,6 +200,10 @@ func NewEqualityMatcher(v Value) *EqualityMatcher {
 	}
 }
 
+func (e *EqualityMatcher) GetValue() Value {
+	return e.Value
+}
+
 func (e *EqualityMatcher) Matches(input Value) bool {
 	res, _ := e.Value.CompareTo(input)
 	return res == 0
@@ -205,6 +227,11 @@ func NewGreaterThanMatcher(v Value) *GreaterThanMatcher {
 		Value: v,
 	}
 }
+
+func (g *GreaterThanMatcher) GetValue() Value {
+	return g.Value
+}
+
 
 func (g *GreaterThanMatcher) Matches(input Value) bool {
 	res, _ := g.Value.CompareTo(input)
