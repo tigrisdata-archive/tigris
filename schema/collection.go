@@ -28,21 +28,24 @@ type Collection interface {
 	Name() string
 	Type() string
 	Database() string
-	PrimaryKeys() []*FieldImpl
+	GetFields() []*Field
+	PrimaryKeys() []*Field
 	StorageName() string // ToDo: this is a placeholder, will be replaced by encoding package
 }
 
 type SimpleCollection struct {
 	CollectionName string
 	DatabaseName   string
-	Keys           []*FieldImpl
+	Keys           []*Field
+	Fields         []*Field
 }
 
-func NewCollection(database string, collection string, keys []*FieldImpl) Collection {
+func NewCollection(database string, collection string, fields []*Field, keys []*Field) Collection {
 	return &SimpleCollection{
 		DatabaseName:   database,
 		CollectionName: collection,
 		Keys:           keys,
+		Fields:         fields,
 	}
 }
 
@@ -58,7 +61,11 @@ func (s *SimpleCollection) Database() string {
 	return s.DatabaseName
 }
 
-func (s *SimpleCollection) PrimaryKeys() []*FieldImpl {
+func (s *SimpleCollection) GetFields() []*Field {
+	return s.Fields
+}
+
+func (s *SimpleCollection) PrimaryKeys() []*Field {
 	return s.Keys
 }
 

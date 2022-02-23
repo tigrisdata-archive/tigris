@@ -20,6 +20,7 @@ import (
 	structpb "github.com/golang/protobuf/ptypes/struct"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/encoding"
+	"github.com/tigrisdata/tigrisdb/query/filter"
 	"github.com/tigrisdata/tigrisdb/server/transaction"
 	"github.com/tigrisdata/tigrisdb/store/kv"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
@@ -31,7 +32,7 @@ type QueryRunner interface {
 	Run(ctx context.Context, req *Request) (*Response, error)
 }
 
-// QueryRunnerFactory is reponsible for creating query runners for different queries
+// QueryRunnerFactory is responsible for creating query runners for different queries
 type QueryRunnerFactory struct {
 	txMgr   *transaction.Manager
 	encoder encoding.Encoder
@@ -89,7 +90,7 @@ func (q *TxQueryRunner) Run(ctx context.Context, req *Request) (*Response, error
 	}()
 
 	for _, d := range req.documents {
-		key, err := q.encoder.BuildKey(d.Doc.AsMap(), req.collection)
+		key, err := q.encoder.BuildKey(d.Doc.GetFields(), req.collection)
 		if err != nil {
 			return nil, err
 		}
@@ -135,18 +136,17 @@ func (q *StreamingQueryRunner) Run(ctx context.Context, req *Request) (*Response
 		return nil, err
 	}
 
-	/*
-		if tx != nil {
-			// ToDo we need to read in the transaction context
-		}
-	*/
+	filters, err := filter.Build(api.GetFilter(req.Request))
+	if err != nil {
+		return nil, err
+	}
 
-	for _, v := range req.keys {
-		key, err := q.encoder.BuildKey(v.Doc.AsMap(), req.collection)
-		if err != nil {
-			return nil, err
-		}
-
+	kb := filter.NewKeyBuilder(filter.NewStrictEqKeyComposer(req.collection.StorageName()))
+	iKeys, err := kb.Build(filters, req.collection.PrimaryKeys())
+	if err != nil {
+		return nil, err
+	}
+	for _, key := range iKeys {
 		it, err := q.txMgr.GetKV().Read(ctx, req.collection.StorageName(), kv.BuildKey(key.PrimaryKeys()...))
 		if err != nil {
 			return nil, err

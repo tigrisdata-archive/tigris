@@ -12,38 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package api
+package keys
 
 import (
-	"google.golang.org/protobuf/types/known/structpb"
+	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
-func IsTxSupported(req Request) bool {
-	switch RequestType(req) {
-	case Insert, Replace, Update, Delete, Read:
-		return true
-	}
+func TestKey(t *testing.T) {
+	k := NewKey("", int64(10))
+	require.Empty(t, k.Prefix())
+	require.Equal(t, []interface{}{int64(10)}, k.PrimaryKeys())
 
-	return false
-}
-
-func GetTransaction(req Request) *TransactionCtx {
-	switch r := req.(type) {
-	case *InsertRequest:
-		if r.GetOptions() == nil {
-			return nil
-		}
-		return r.GetOptions().GetTxCtx()
-	default:
-		return nil
-	}
-}
-
-func GetFilter(req Request) []*structpb.Struct {
-	switch r := req.(type) {
-	case *ReadRequest:
-		return r.GetFilter()
-	default:
-		return nil
-	}
+	k = NewKey("foo", []interface{}{int64(5)}...)
+	require.Equal(t, []interface{}{int64(5)}, k.PrimaryKeys())
+	require.Equal(t, "foo", k.Prefix())
 }

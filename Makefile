@@ -53,6 +53,7 @@ run: $(BINS)
 
 bins: $(BINS)
 
+
 clean:
 	docker-compose -f docker/docker-compose.yml down -v --remove-orphans
 	rm -f server/service api/server/${V}/*.pb.go \

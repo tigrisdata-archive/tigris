@@ -55,6 +55,7 @@ func TestAPIGRPC(t *testing.T) {
 		Collection: "t1",
 		Schema: &structpb.Struct{
 			Fields: map[string]*structpb.Value{
+				"pkey_int": structpb.NewStringValue("int"),
 				"primary_key": values,
 			},
 		},
@@ -82,12 +83,10 @@ func TestAPIGRPC(t *testing.T) {
 	rc, err := c.Read(ctx, &api.ReadRequest{
 		Db:         "db1",
 		Collection: "t1",
-		Keys: []*api.Document{
+		Filter: []*structpb.Struct{
 			{
-				Doc: &structpb.Struct{
-					Fields: map[string]*structpb.Value{
-						"pkey_int": structpb.NewNumberValue(1),
-					},
+				Fields: map[string]*structpb.Value{
+					"pkey_int": structpb.NewNumberValue(1),
 				},
 			},
 		}})
@@ -130,6 +129,7 @@ func TestAPIHTTP(t *testing.T) {
 	require.NoError(t, err)
 	_, err = c.TigrisDBCreateCollectionWithResponse(ctx, "db1", "t1", userHTTP.TigrisDBCreateCollectionJSONRequestBody{
 		Schema: &map[string]interface{}{
+			"pkey_int": "int",
 			"primary_key": values,
 		},
 	})
@@ -150,11 +150,9 @@ func TestAPIHTTP(t *testing.T) {
 	require.NoError(t, err)
 
 	resp, err := c.TigrisDBRead(ctx, "db1", "t1", userHTTP.TigrisDBReadJSONRequestBody{
-		Keys: &[]userHTTP.Document{
+		Filter: &[]map[string]interface{}{
 			{
-				Doc: &map[string]interface{}{
-					"pkey_int": 1,
-				},
+				"pkey_int": 1,
 			},
 		}})
 	require.NoError(t, err)

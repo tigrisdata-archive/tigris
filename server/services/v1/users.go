@@ -99,11 +99,10 @@ func (s *userService) CreateCollection(ctx context.Context, r *api.CreateCollect
 		return nil, status.Errorf(codes.AlreadyExists, "collection already exists")
 	}
 
-	keys, err := schema.ExtractKeysFromSchema(r.Schema.Fields)
+	collection, err := schema.CreateCollectionFromSchema(r.Db, r.Collection, r.Schema.Fields)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid schema")
 	}
-	collection := schema.NewCollection(r.Db, r.Collection, keys)
 
 	if err := s.kv.CreateTable(ctx, collection.StorageName()); ulog.E(err) {
 		return nil, status.Errorf(codes.Internal, "error: %v", err)
