@@ -16,100 +16,35 @@ package api
 
 import (
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-type RequestType string
-
 const (
-	Insert              RequestType = "Insert"
-	Replace             RequestType = "Replace"
-	Update              RequestType = "Update"
-	Delete              RequestType = "Delete"
-	Read                RequestType = "Read"
-	BeginTransaction    RequestType = "BeginTransaction"
-	CommitTransaction   RequestType = "CommitTransaction"
-	RollbackTransaction RequestType = "RollbackTransaction"
-	CreateCollection    RequestType = "CreateCollection"
-	DropCollection      RequestType = "DropCollection"
-	AlterCollection     RequestType = "AlterCollection"
-	TruncateCollection  RequestType = "TruncateCollection"
-	ListCollections     RequestType = "ListCollections"
-	ListDatabases       RequestType = "ListDatabases"
-	CreateDatabase      RequestType = "CreateDatabase"
-	DropDatabase        RequestType = "DropDatabase"
+	Insert              protoreflect.FullName = "InsertRequest"
+	Replace             protoreflect.FullName = "ReplaceRequest"
+	Update              protoreflect.FullName = "UpdateRequest"
+	Delete              protoreflect.FullName = "DeleteRequest"
+	Read                protoreflect.FullName = "ReadRequest"
+	BeginTransaction    protoreflect.FullName = "BeginTransactionRequest"
+	CommitTransaction   protoreflect.FullName = "CommitTransactionRequest"
+	RollbackTransaction protoreflect.FullName = "RollbackTransactionRequest"
+	CreateCollection    protoreflect.FullName = "CreateCollectionRequest"
+	DropCollection      protoreflect.FullName = "DropCollectionRequest"
+	AlterCollection     protoreflect.FullName = "AlterCollectionRequest"
+	TruncateCollection  protoreflect.FullName = "TruncateCollectionRequest"
+	ListCollections     protoreflect.FullName = "ListCollectionsRequest"
+	ListDatabases       protoreflect.FullName = "ListDatabasesRequest"
+	CreateDatabase      protoreflect.FullName = "CreateDatabaseRequest"
+	DropDatabase        protoreflect.FullName = "DropDatabaseRequest"
 )
 
 type Request interface {
 	proto.Message
 	Validator
-
-	Type() RequestType
 }
 
 type Response interface {
 	proto.Message
 }
 
-func (x *BeginTransactionRequest) Type() RequestType {
-	return BeginTransaction
-}
-
-func (x *CommitTransactionRequest) Type() RequestType {
-	return CommitTransaction
-}
-
-func (x *RollbackTransactionRequest) Type() RequestType {
-	return RollbackTransaction
-}
-
-func (x *InsertRequest) Type() RequestType {
-	return Insert
-}
-
-func (x *ReplaceRequest) Type() RequestType {
-	return Replace
-}
-
-func (x *UpdateRequest) Type() RequestType {
-	return Update
-}
-
-func (x *DeleteRequest) Type() RequestType {
-	return Delete
-}
-
-func (x *ReadRequest) Type() RequestType {
-	return Read
-}
-
-func (x *CreateCollectionRequest) Type() RequestType {
-	return CreateCollection
-}
-
-func (x *DropCollectionRequest) Type() RequestType {
-	return DropCollection
-}
-
-func (x *AlterCollectionRequest) Type() RequestType {
-	return AlterCollection
-}
-
-func (x *TruncateCollectionRequest) Type() RequestType {
-	return TruncateCollection
-}
-
-func (x *ListCollectionsRequest) Type() RequestType {
-	return ListCollections
-}
-
-func (x *ListDatabasesRequest) Type() RequestType {
-	return ListDatabases
-}
-
-func (x *CreateDatabaseRequest) Type() RequestType {
-	return CreateDatabase
-}
-
-func (x *DropDatabaseRequest) Type() RequestType {
-	return DropDatabase
-}
+var RequestType = proto.MessageName

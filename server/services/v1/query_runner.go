@@ -99,7 +99,7 @@ func (q *TxQueryRunner) Run(ctx context.Context, req *Request) (*Response, error
 			return nil, err
 		}
 
-		switch req.Type() {
+		switch api.RequestType(req) {
 		case api.Insert:
 			txErr = tx.Insert(ctx, key, value)
 		case api.Replace:

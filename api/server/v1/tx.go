@@ -15,7 +15,7 @@
 package api
 
 func IsTxSupported(req Request) bool {
-	switch req.Type() {
+	switch RequestType(req) {
 	case Insert, Replace, Update, Delete, Read:
 		return true
 	}
@@ -29,7 +29,7 @@ func GetTransaction(req Request) *TransactionCtx {
 		if r.GetOptions() == nil {
 			return nil
 		}
-		return r.GetOptions().TxCtx
+		return r.GetOptions().GetTxCtx()
 	default:
 		return nil
 	}
