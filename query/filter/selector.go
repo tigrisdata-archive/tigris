@@ -17,7 +17,7 @@ package filter
 import (
 	"fmt"
 
-	"google.golang.org/protobuf/types/known/structpb"
+	structpb "github.com/gogo/protobuf/types"
 )
 
 // Selector is a condition defined inside a filter. It has a field which corresponding the field on which condition

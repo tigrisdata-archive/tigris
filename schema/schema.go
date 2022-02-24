@@ -16,10 +16,11 @@ package schema
 
 import (
 	"fmt"
-	"google.golang.org/protobuf/types/known/structpb"
+
+	"github.com/gogo/protobuf/types"
 )
 
-func ExtractKeysFromSchema(userSchema map[string]*structpb.Value) ([]*FieldImpl, error) {
+func ExtractKeysFromSchema(userSchema map[string]*types.Value) ([]*FieldImpl, error) {
 	var keys []*FieldImpl
 	v := userSchema[PrimaryKeySchemaName]
 	if list := v.GetListValue(); list != nil {

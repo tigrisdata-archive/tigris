@@ -14,7 +14,11 @@
 
 syntax = "proto3";
 import "google/api/annotations.proto";
+import "gogoproto/gogo.proto";
+
 option go_package = "github.com/tigrisdata/tigrisdb/api";
+
+option (gogoproto.goproto_registration) = true;
 
 message HealthCheckInput {}
 message HealthCheckResponse {

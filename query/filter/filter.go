@@ -16,12 +16,15 @@ package filter
 
 import (
 	"fmt"
+
+	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 
+	structpb "github.com/gogo/protobuf/types"
 	"github.com/tigrisdata/tigrisdb/query/expression"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // A Filter represents a query filter that can have any multiple conditions, logical filtering, nested conditions, etc
@@ -42,7 +45,7 @@ type Filter interface {
 	Matches(doc *structpb.Struct) bool
 }
 
-func Build(reqFilter []*structpb.Struct) ([]Filter, error) {
+func Build(reqFilter []api.Filter) ([]Filter, error) {
 	if len(reqFilter) == 0 {
 		return nil, nil
 	}
@@ -65,48 +68,51 @@ func Build(reqFilter []*structpb.Struct) ([]Filter, error) {
 	return filters, nil
 }
 
-func ParseFilter(value *structpb.Struct) (expression.Expr, error) {
-	var err error
-	var expr []expression.Expr
-	for key, value := range value.GetFields() {
-		// Range is only used to extract objects from this struct, there will only be a single object in one value
-		switch key {
-		case string(AndOP):
-			if expr, err = expression.ParseList(value.GetListValue(), ParseFilter); err != nil {
-				return nil, err
-			}
-			filters, err := convertExprListToFilters(expr)
-			if err != nil {
-				return nil, err
-			}
+func ParseFilter(value api.Filter) (expression.Expr, error) {
+	/*
+		var err error
+		var expr []expression.Expr
+		for key, value := range value.GetFields() {
+			// Range is only used to extract objects from this struct, there will only be a single object in one value
+			switch key {
+			case string(AndOP):
+				if expr, err = expression.ParseList(value.GetListValue(), ParseFilter); err != nil {
+					return nil, err
+				}
+				filters, err := convertExprListToFilters(expr)
+				if err != nil {
+					return nil, err
+				}
 
-			a, err := NewAndFilter(filters)
-			if err != nil {
-				return nil, err
-			}
-			return a, nil
-		case string(OrOP):
-			if expr, err = expression.ParseList(value.GetListValue(), ParseFilter); err != nil {
-				return nil, err
-			}
-			filters, err := convertExprListToFilters(expr)
-			if err != nil {
-				return nil, err
-			}
+				a, err := NewAndFilter(filters)
+				if err != nil {
+					return nil, err
+				}
+				return a, nil
+			case string(OrOP):
+				if expr, err = expression.ParseList(value.GetListValue(), ParseFilter); err != nil {
+					return nil, err
+				}
+				filters, err := convertExprListToFilters(expr)
+				if err != nil {
+					return nil, err
+				}
 
-			o, err := NewOrFilter(filters)
-			if err != nil {
-				return nil, err
+				o, err := NewOrFilter(filters)
+				if err != nil {
+					return nil, err
+				}
+				return o, nil
+			default:
+				return ParseSelector(key, value)
 			}
-			return o, nil
-		default:
-			return ParseSelector(key, value)
 		}
-	}
+	*/
 
 	return nil, ulog.CE("not able to decode to filter")
 }
 
+/*
 func convertExprListToFilters(expr []expression.Expr) ([]Filter, error) {
 	var filters []Filter
 	for _, e := range expr {
@@ -119,6 +125,7 @@ func convertExprListToFilters(expr []expression.Expr) ([]Filter, error) {
 
 	return filters, nil
 }
+*/
 
 // ParseSelector is a short-circuit for Selector i.e. when we know the filter passed is not logical then we directly
 // call this because if it is not logical then it is simply a Selector filter.

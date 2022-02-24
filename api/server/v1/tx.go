@@ -35,7 +35,7 @@ func GetTransaction(req Request) *TransactionCtx {
 	}
 }
 
-func GetFilter(req Request) []*Filter {
+func GetFilter(req Request) []Filter {
 	switch r := req.(type) {
 	case *UpdateRequest:
 		return r.Filter

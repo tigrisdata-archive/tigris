@@ -70,11 +70,11 @@ func newUserService(kv kv.KV) *userService {
 func (s *userService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {
 	mux := runtime.NewServeMux(runtime.WithMarshalerOption(string(JSON), &runtime.JSONBuiltin{}))
 
-	if err := api.RegisterTigrisDBHandlerClient(context.TODO(), mux, api.NewTigrisDBClient(inproc)); err != nil {
+	if err := api.RegisterTigrisDBHandlerClient(context.TODO(), mux, api.NewTigrisDBClientFixed(inproc)); err != nil {
 		return err
 	}
 
-	api.RegisterTigrisDBServer(inproc, s)
+	api.RegisterTigrisDBServerFixed(inproc, s)
 
 	router.HandleFunc(apiPathPrefix+databasePathPattern, func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
@@ -99,7 +99,8 @@ func (s *userService) CreateCollection(ctx context.Context, r *api.CreateCollect
 		return nil, status.Errorf(codes.AlreadyExists, "collection already exists")
 	}
 
-	keys, err := schema.ExtractKeysFromSchema(r.Schema.Fields)
+	//	keys, err := schema.ExtractKeysFromSchema(r.Schema.Fields)
+	keys, err := schema.ExtractKeysFromSchema(nil)
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid schema")
 	}

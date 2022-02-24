@@ -15,27 +15,26 @@
 package api
 
 import (
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
+	"github.com/gogo/protobuf/proto"
 )
 
 const (
-	Insert              protoreflect.FullName = "InsertRequest"
-	Replace             protoreflect.FullName = "ReplaceRequest"
-	Update              protoreflect.FullName = "UpdateRequest"
-	Delete              protoreflect.FullName = "DeleteRequest"
-	Read                protoreflect.FullName = "ReadRequest"
-	BeginTransaction    protoreflect.FullName = "BeginTransactionRequest"
-	CommitTransaction   protoreflect.FullName = "CommitTransactionRequest"
-	RollbackTransaction protoreflect.FullName = "RollbackTransactionRequest"
-	CreateCollection    protoreflect.FullName = "CreateCollectionRequest"
-	DropCollection      protoreflect.FullName = "DropCollectionRequest"
-	AlterCollection     protoreflect.FullName = "AlterCollectionRequest"
-	TruncateCollection  protoreflect.FullName = "TruncateCollectionRequest"
-	ListCollections     protoreflect.FullName = "ListCollectionsRequest"
-	ListDatabases       protoreflect.FullName = "ListDatabasesRequest"
-	CreateDatabase      protoreflect.FullName = "CreateDatabaseRequest"
-	DropDatabase        protoreflect.FullName = "DropDatabaseRequest"
+	Insert              string = "InsertRequest"
+	Replace             string = "ReplaceRequest"
+	Update              string = "UpdateRequest"
+	Delete              string = "DeleteRequest"
+	Read                string = "ReadRequest"
+	BeginTransaction    string = "BeginTransactionRequest"
+	CommitTransaction   string = "CommitTransactionRequest"
+	RollbackTransaction string = "RollbackTransactionRequest"
+	CreateCollection    string = "CreateCollectionRequest"
+	DropCollection      string = "DropCollectionRequest"
+	AlterCollection     string = "AlterCollectionRequest"
+	TruncateCollection  string = "TruncateCollectionRequest"
+	ListCollections     string = "ListCollectionsRequest"
+	ListDatabases       string = "ListDatabasesRequest"
+	CreateDatabase      string = "CreateDatabaseRequest"
+	DropDatabase        string = "DropDatabaseRequest"
 )
 
 type Request interface {

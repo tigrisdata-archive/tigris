@@ -15,7 +15,7 @@
 package expression
 
 import (
-	"google.golang.org/protobuf/types/known/structpb"
+	structpb "github.com/gogo/protobuf/types"
 )
 
 // Expr can be any operator, filter, field literal, etc. It is useful for parsing complex grammar, it can be nested.

@@ -17,7 +17,7 @@ package filter
 import (
 	"fmt"
 
-	"google.golang.org/protobuf/types/known/structpb"
+	structpb "github.com/gogo/protobuf/types"
 )
 
 const (
@@ -42,7 +42,7 @@ type Value interface {
 }
 
 // NewValue returns Value object if it is able to create otherwise nil at this point the caller ensures that
-// structpb.Value can be used to create internal value.
+// json.Value can be used to create internal value.
 func NewValue(input *structpb.Value) Value {
 	switch ty := input.Kind.(type) {
 	case *structpb.Value_NumberValue:

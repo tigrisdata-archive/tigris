@@ -1,6 +1,7 @@
 package filter
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -8,12 +9,11 @@ import (
 	"github.com/tigrisdata/tigrisdb/keys"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func testFilters(t testing.TB, input []byte) []Filter {
 	var r = &api.ReadRequest{}
-	require.NoError(t, protojson.Unmarshal(input, r))
+	require.NoError(t, json.Unmarshal(input, r))
 
 	filters, err := Build(r.Filter)
 	require.NoError(t, err)

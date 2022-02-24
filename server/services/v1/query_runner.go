@@ -16,14 +16,13 @@ package v1
 
 import (
 	"context"
+	"encoding/json"
 
-	structpb "github.com/golang/protobuf/ptypes/struct"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/encoding"
 	"github.com/tigrisdata/tigrisdb/server/transaction"
 	"github.com/tigrisdata/tigrisdb/store/kv"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
-	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // QueryRunner is responsible for executing the current query and return the response
@@ -89,7 +88,8 @@ func (q *TxQueryRunner) Run(ctx context.Context, req *Request) (*Response, error
 	}()
 
 	for _, d := range req.documents {
-		key, err := q.encoder.BuildKey(d.Doc.AsMap(), req.collection)
+		//key, err := q.encoder.BuildKey(d.Doc.AsMap(), req.collection)
+		key, err := q.encoder.BuildKey(nil, req.collection)
 		if err != nil {
 			return nil, err
 		}
@@ -142,7 +142,12 @@ func (q *StreamingQueryRunner) Run(ctx context.Context, req *Request) (*Response
 	*/
 
 	for _, v := range req.keys {
-		key, err := q.encoder.BuildKey(v.Doc.AsMap(), req.collection)
+		m := make(map[string]interface{})
+		err := json.Unmarshal([]byte(v.Doc), &m)
+		if err != nil {
+			return nil, err
+		}
+		key, err := q.encoder.BuildKey(m, req.collection)
 		if err != nil {
 			return nil, err
 		}
@@ -158,13 +163,8 @@ func (q *StreamingQueryRunner) Run(ctx context.Context, req *Request) (*Response
 				return nil, err
 			}
 
-			s := &structpb.Struct{}
-			err = protojson.Unmarshal(v.Value, s)
-			if err != nil {
-				return nil, err
-			}
 			if err := q.streaming.Send(&api.ReadResponse{
-				Doc: s,
+				Doc: v.Value,
 			}); ulog.E(err) {
 				return nil, err
 			}

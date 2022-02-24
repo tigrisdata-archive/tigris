@@ -18,6 +18,7 @@ set -ex
 export GO111MODULE=on
 
 go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.27.1
+go install github.com/gogo/protobuf/protoc-gen-gogo@latest
 go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0
 go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2.7.3
 #generate openapi 3.0 spec

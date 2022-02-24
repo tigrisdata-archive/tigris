@@ -17,7 +17,7 @@ package filter
 import (
 	"fmt"
 
-	"google.golang.org/protobuf/types/known/structpb"
+	structpb "github.com/gogo/protobuf/types"
 )
 
 type LogicalOP string

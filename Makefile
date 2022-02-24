@@ -13,13 +13,15 @@ TEST_PARAM=-cover -race -tags=test $(shell printenv TEST_PARAM)
 
 # generate GRPC client/server, openapi spec, http server
 ${GEN_DIR}/%_openapi.yaml ${GEN_DIR}/%.pb.go ${GEN_DIR}/%.pb.gw.go: ${GEN_DIR}/%.proto
-	protoc -Iapi --openapi_out=${API_DIR} --openapi_opt=naming=proto \
-		--go_out=${API_DIR} --go_opt=paths=source_relative \
-		--go-grpc_out=${API_DIR} --go-grpc_opt=paths=source_relative \
-		--grpc-gateway_out=${API_DIR} --grpc-gateway_opt=paths=source_relative,allow_delete_body=true \
+	protoc -Iapi --proto_path=$(shell go list -m -f '{{.Dir}}' github.com/gogo/protobuf) --openapi_out=${API_DIR} --openapi_opt=naming=proto \
+		--gogo_out=plugins=grpc,Mgoogle/protobuf/struct.proto=github.com/gogo/protobuf/types,paths=source_relative:${API_DIR} \
+        --grpc-gateway_out=paths=source_relative,allow_delete_body=true,allow_patch_feature=false:${API_DIR} \
 		$<
+	sed -i -e "s/runtime.ForwardResponseMessage/ForwardResponseMessage/g" ${GEN_DIR}/$(*F).pb.gw.go
+	sed -i -e "s/runtime.ForwardResponseStream/ForwardResponseStream/g" ${GEN_DIR}/$(*F).pb.gw.go
+	sed -i -e "s+google.golang.org/protobuf/proto+github.com/gogo/protobuf/proto+g" ${GEN_DIR}/$(*F).pb.gw.go
 	sed -e 's/format: bytes/format: byte/g' ${API_DIR}/openapi.yaml >${GEN_DIR}/$(*F)_openapi.yaml
-	rm ${API_DIR}/openapi.yaml 
+	rm ${API_DIR}/openapi.yaml
 
 # generate Go HTTP client from openapi spec
 ${API_DIR}/client/${V}/%/http.go: ${GEN_DIR}/%_openapi.yaml
