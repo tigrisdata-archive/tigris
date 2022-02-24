@@ -1,15 +1,14 @@
-name: Go
+name: go-test
 on: [push]
 jobs:
-
   build:
-    name: Test
+    name: test
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
         uses: actions/checkout@v1
 
-      - name: Get changed files using defaults
+      - name: Get changed files
         id: changed-files
         uses: tj-actions/changed-files@v16
 
@@ -41,4 +40,4 @@ jobs:
           docker image prune -f
 
       - name: Run tests
-        run: docker-compose -f docker/docker-compose.yml up --abort-on-container-exit --exit-code-from tigris_test tigris_test || ( docker-compose -f docker/docker-compose.yml logs && false )
+        run: docker-compose -f docker/docker-compose.yml up --no-build --abort-on-container-exit --exit-code-from tigris_test tigris_test || ( docker-compose -f docker/docker-compose.yml logs && false )
