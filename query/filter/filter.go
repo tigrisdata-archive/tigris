@@ -15,6 +15,7 @@
 package filter
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/tigrisdata/tigrisdb/query/expression"
@@ -43,15 +44,25 @@ type Filter interface {
 	Matches(doc *structpb.Struct) bool
 }
 
-func Build(reqFilter []*structpb.Struct) ([]Filter, error) {
+func Build(reqFilter []byte) ([]Filter, error) {
 	if len(reqFilter) == 0 {
 		return nil, nil
 	}
 
+	var decodeFilter = &structpb.Value{}
+	if err := json.Unmarshal(reqFilter, decodeFilter); ulog.E(err) {
+		return nil, err
+	}
+
+	structObj := decodeFilter.GetStructValue()
+	if structObj == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "only object is allowed to be passed as filter '%s'", string(reqFilter))
+	}
+
 	var filters []Filter
-	for _, reqF := range reqFilter {
-		e, err := ParseFilter(reqF)
-		if err != nil {
+	for key, reqF := range structObj.GetFields() {
+		e, err := ParseFilter(key, reqF)
+		if ulog.E(err) {
 			return nil, err
 		}
 
@@ -66,46 +77,42 @@ func Build(reqFilter []*structpb.Struct) ([]Filter, error) {
 	return filters, nil
 }
 
-func ParseFilter(value *structpb.Struct) (expression.Expr, error) {
+func ParseFilter(name string, value *structpb.Value) (expression.Expr, error) {
 	var err error
 	var expr []expression.Expr
-	for key, value := range value.GetFields() {
-		// Range is only used to extract objects from this struct, there will only be a single object in one value
-		switch key {
-		case string(AndOP):
-			if expr, err = expression.ParseList(value.GetListValue(), ParseFilter); err != nil {
-				return nil, err
-			}
-			filters, err := convertExprListToFilters(expr)
-			if err != nil {
-				return nil, err
-			}
 
-			a, err := NewAndFilter(filters)
-			if err != nil {
-				return nil, err
-			}
-			return a, nil
-		case string(OrOP):
-			if expr, err = expression.ParseList(value.GetListValue(), ParseFilter); err != nil {
-				return nil, err
-			}
-			filters, err := convertExprListToFilters(expr)
-			if err != nil {
-				return nil, err
-			}
-
-			o, err := NewOrFilter(filters)
-			if err != nil {
-				return nil, err
-			}
-			return o, nil
-		default:
-			return ParseSelector(key, value)
+	switch name {
+	case string(AndOP):
+		if expr, err = expression.ParseList(value.GetListValue(), ParseFilter); err != nil {
+			return nil, err
 		}
-	}
+		filters, err := convertExprListToFilters(expr)
+		if err != nil {
+			return nil, err
+		}
 
-	return nil, ulog.CE("not able to decode to filter")
+		a, err := NewAndFilter(filters)
+		if err != nil {
+			return nil, err
+		}
+		return a, nil
+	case string(OrOP):
+		if expr, err = expression.ParseList(value.GetListValue(), ParseFilter); err != nil {
+			return nil, err
+		}
+		filters, err := convertExprListToFilters(expr)
+		if err != nil {
+			return nil, err
+		}
+
+		o, err := NewOrFilter(filters)
+		if err != nil {
+			return nil, err
+		}
+		return o, nil
+	default:
+		return ParseSelector(name, value)
+	}
 }
 
 func convertExprListToFilters(expr []expression.Expr) ([]Filter, error) {

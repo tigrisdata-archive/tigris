@@ -36,10 +36,6 @@ message WriteResponseHeader {
   string msg = 2;
 }
 
-message Filter {
-  repeated google.protobuf.Struct value = 1;
-}
-
 message WriteOption {
   TransactionCtx tx_ctx = 1;
 }
@@ -55,7 +51,7 @@ message DropDatabaseOption {}
 message DocOption {}
 
 message Document {
-  google.protobuf.Struct doc = 1;
+  bytes doc = 1;
   DocOption options = 2;
 }
 
@@ -97,7 +93,7 @@ message InsertResponse {
 message DeleteRequest {
   string db = 1;
   string collection = 2;
-  repeated Filter filter = 3;
+  bytes filter = 3;
   WriteOption options = 4;
 }
 
@@ -119,8 +115,8 @@ message ReplaceResponse {
 message UpdateRequest {
   string db = 1;
   string collection = 2;
-  google.protobuf.Struct fields = 3;
-  repeated Filter filter = 4;
+  bytes fields = 3;
+  bytes filter = 4;
   WriteOption options = 5;
 }
 
@@ -137,7 +133,7 @@ message ReadRequest {
 }
 
 message ReadResponse {
-  google.protobuf.Struct doc = 1;
+  bytes doc = 1;
 }
 
 message CreateDatabaseRequest {

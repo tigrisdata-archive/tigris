@@ -16,15 +16,15 @@ package v1
 
 import (
 	"context"
+	"encoding/json"
 
-	structpb "github.com/golang/protobuf/ptypes/struct"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/encoding"
 	"github.com/tigrisdata/tigrisdb/query/filter"
 	"github.com/tigrisdata/tigrisdb/server/transaction"
 	"github.com/tigrisdata/tigrisdb/store/kv"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
-	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // QueryRunner is responsible for executing the current query and return the response
@@ -90,23 +90,24 @@ func (q *TxQueryRunner) Run(ctx context.Context, req *Request) (*Response, error
 	}()
 
 	for _, d := range req.documents {
-		key, err := q.encoder.BuildKey(d.Doc.GetFields(), req.collection)
-		if err != nil {
+		// ToDo: need to implement our own decoding to only extract custom keys
+		var s = &structpb.Struct{}
+		if err := json.Unmarshal(d.Doc, s); err != nil {
 			return nil, err
 		}
 
-		value, err := d.Doc.MarshalJSON()
+		key, err := q.encoder.BuildKey(s.GetFields(), req.collection)
 		if err != nil {
 			return nil, err
 		}
 
 		switch api.RequestType(req) {
 		case api.Insert:
-			txErr = tx.Insert(ctx, key, value)
+			txErr = tx.Insert(ctx, key, d.Doc)
 		case api.Replace:
-			txErr = tx.Replace(ctx, key, value)
+			txErr = tx.Replace(ctx, key, d.Doc)
 		case api.Update:
-			txErr = tx.Update(ctx, key, value)
+			txErr = tx.Update(ctx, key, d.Doc)
 		case api.Delete:
 			txErr = tx.Delete(ctx, key)
 		}
@@ -158,13 +159,8 @@ func (q *StreamingQueryRunner) Run(ctx context.Context, req *Request) (*Response
 				return nil, err
 			}
 
-			s := &structpb.Struct{}
-			err = protojson.Unmarshal(v.Value, s)
-			if err != nil {
-				return nil, err
-			}
 			if err := q.streaming.Send(&api.ReadResponse{
-				Doc: s,
+				Doc: v.Value,
 			}); ulog.E(err) {
 				return nil, err
 			}

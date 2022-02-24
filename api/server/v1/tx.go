@@ -14,10 +14,6 @@
 
 package api
 
-import (
-	"google.golang.org/protobuf/types/known/structpb"
-)
-
 func IsTxSupported(req Request) bool {
 	switch RequestType(req) {
 	case Insert, Replace, Update, Delete, Read:
@@ -39,9 +35,13 @@ func GetTransaction(req Request) *TransactionCtx {
 	}
 }
 
-func GetFilter(req Request) []*structpb.Struct {
+func GetFilter(req Request) []byte {
 	switch r := req.(type) {
 	case *ReadRequest:
+		return r.GetFilter()
+	case *UpdateRequest:
+		return r.GetFilter()
+	case *DeleteRequest:
 		return r.GetFilter()
 	default:
 		return nil
