@@ -55,7 +55,7 @@ func TestAPIGRPC(t *testing.T) {
 		Collection: "t1",
 		Schema: &structpb.Struct{
 			Fields: map[string]*structpb.Value{
-				"pkey_int": structpb.NewStringValue("int"),
+				"pkey_int":    structpb.NewStringValue("int"),
 				"primary_key": values,
 			},
 		},
@@ -64,13 +64,7 @@ func TestAPIGRPC(t *testing.T) {
 
 	inputDocuments := []*api.Document{
 		{
-			Doc: &structpb.Struct{
-				Fields: map[string]*structpb.Value{
-					"pkey_int":  structpb.NewNumberValue(1),
-					"int_value": structpb.NewNumberValue(2),
-					"str_value": structpb.NewStringValue("foo"),
-				},
-			},
+			Doc: []byte(`{"pkey_int": 1, "int_value": 2, "str_value": "foo"}`),
 		},
 	}
 	_, err = c.Insert(ctx, &api.InsertRequest{
@@ -83,13 +77,8 @@ func TestAPIGRPC(t *testing.T) {
 	rc, err := c.Read(ctx, &api.ReadRequest{
 		Db:         "db1",
 		Collection: "t1",
-		Filter: []*structpb.Struct{
-			{
-				Fields: map[string]*structpb.Value{
-					"pkey_int": structpb.NewNumberValue(1),
-				},
-			},
-		}})
+		Filter:     []byte(`{"pkey_int": 1}`),
+	})
 	require.NoError(t, err)
 
 	totalReceivedDocuments := 0
@@ -99,8 +88,8 @@ func TestAPIGRPC(t *testing.T) {
 			break
 		}
 		require.NoError(t, err)
-		log.Debug().Str("value", d.Doc.String()).Msg("Read")
-		require.EqualValues(t, inputDocuments[0].Doc.AsMap(), d.Doc.AsMap())
+		log.Debug().Str("value", string(d.Doc)).Msg("Read")
+		require.EqualValues(t, inputDocuments[0].Doc, d.Doc)
 		totalReceivedDocuments++
 	}
 	require.Equal(t, len(inputDocuments), totalReceivedDocuments)
@@ -129,7 +118,7 @@ func TestAPIHTTP(t *testing.T) {
 	require.NoError(t, err)
 	_, err = c.TigrisDBCreateCollectionWithResponse(ctx, "db1", "t1", userHTTP.TigrisDBCreateCollectionJSONRequestBody{
 		Schema: &map[string]interface{}{
-			"pkey_int": "int",
+			"pkey_int":    "int",
 			"primary_key": values,
 		},
 	})
@@ -150,18 +139,15 @@ func TestAPIHTTP(t *testing.T) {
 	require.NoError(t, err)
 
 	resp, err := c.TigrisDBRead(ctx, "db1", "t1", userHTTP.TigrisDBReadJSONRequestBody{
-		Filter: &[]map[string]interface{}{
-			{
-				"pkey_int": 1,
-			},
-		}})
+		Filter: &map[string]interface{}{
+			"pkey_int": 1,
+		},
+	})
 	require.NoError(t, err)
-
 	require.False(t, resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated)
 
 	i := 0
 	dec := json.NewDecoder(resp.Body)
-
 	for dec.More() {
 		td := readResponse{}
 		err := dec.Decode(&td)

@@ -15,6 +15,7 @@
 package expression
 
 import (
+	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -22,7 +23,7 @@ import (
 type Expr interface{}
 
 // ParseList is used to parse any expression that is list.
-func ParseList(list *structpb.ListValue, cb func(value *structpb.Struct) (Expr, error)) ([]Expr, error) {
+func ParseList(list *structpb.ListValue, cb func(name string, value *structpb.Value) (Expr, error)) ([]Expr, error) {
 	var items []Expr
 	for _, value := range list.Values {
 		item, err := ParseExpr(value, cb)
@@ -37,7 +38,7 @@ func ParseList(list *structpb.ListValue, cb func(value *structpb.Struct) (Expr, 
 }
 
 // ParseExpr is used to parse any expression. It expects a callback that is used to parse structs/maps.
-func ParseExpr(value *structpb.Value, cb func(value *structpb.Struct) (Expr, error)) (Expr, error) {
+func ParseExpr(value *structpb.Value, cb func(name string, value *structpb.Value) (Expr, error)) (Expr, error) {
 	if listValue := value.GetListValue(); listValue != nil {
 		items, err := ParseList(listValue, cb)
 		if err != nil {
@@ -47,5 +48,26 @@ func ParseExpr(value *structpb.Value, cb func(value *structpb.Struct) (Expr, err
 		return &items, nil
 	}
 
-	return cb(value.GetStructValue())
+	structObj := value.GetStructValue()
+	if structObj == nil || len(structObj.GetFields()) == 0 {
+		return nil, ulog.CE("expression parsing is only supported for objects")
+	}
+
+	if len(structObj.GetFields()) > 1 {
+		var items []Expr
+		for key, value := range structObj.GetFields() {
+			exp, err := cb(key, value)
+			if ulog.E(err) {
+				return nil, err
+			}
+			items = append(items, exp)
+		}
+		return items, nil
+	} else {
+		for key, value := range structObj.GetFields() {
+			return cb(key, value)
+		}
+	}
+
+	return nil, ulog.CE("expression parsing is only supported for objects")
 }

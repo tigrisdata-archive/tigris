@@ -18,38 +18,21 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func TestFilterUsingJSON(t *testing.T) {
-	t.Run("basic_filter1", func(t *testing.T) {
-		var r = &api.ReadRequest{}
-		js := []byte(`{"filter": [{"a": 1}]}`)
-		require.NoError(t, protojson.Unmarshal(js, r))
-
-		filters, err := Build(r.Filter)
-		require.NoError(t, err)
-		require.Len(t, filters, 1)
-	})
 	t.Run("basic_filter", func(t *testing.T) {
-		var r = &api.ReadRequest{}
-		js := []byte(`{"filter": [{"f1": 10}, {"f2": 10}]}`)
-		require.NoError(t, protojson.Unmarshal(js, r))
-
-		filters, err := Build(r.Filter)
+		js := []byte(`{"f1": 10, "f2": 10}`)
+		filters, err := Build(js)
 		require.NoError(t, err)
 		require.Len(t, filters, 2)
-		require.Equal(t, "f1", filters[0].(*Selector).Field)
-		require.Equal(t, "f2", filters[1].(*Selector).Field)
+		for _, f := range filters {
+			require.True(t, f.(*Selector).Field == "f1" || f.(*Selector).Field == "f2")
+		}
 	})
 	t.Run("filter_or_nested_and", func(t *testing.T) {
-		var r = &api.ReadRequest{}
-		js := []byte(`{"filter": [{"$or": [{"f1": 20}, {"$and": [{"f2":5}, {"f3": 6}]}]}]}`)
-		require.NoError(t, protojson.Unmarshal(js, r))
-
-		filters, err := Build(r.Filter)
+		js := []byte(`{"$or": [{"f1": 20}, {"$and": [{"f2":5}, {"f3": 6}]}]}`)
+		filters, err := Build(js)
 		require.NoError(t, err)
 		require.Len(t, filters, 1)
 		require.Len(t, filters[0].(*OrFilter).filter, 2)
@@ -59,11 +42,8 @@ func TestFilterUsingJSON(t *testing.T) {
 		require.Equal(t, "f3", filters[0].(*OrFilter).filter[1].(*AndFilter).filter[1].(*Selector).Field)
 	})
 	t.Run("filter_and_or_nested", func(t *testing.T) {
-		var r = &api.ReadRequest{}
-		js := []byte(`{"filter": [{"$and": [{"a": 20}, {"$or": [{"b":5}, {"c": 6}]}, {"$and": [{"e":5}, {"f": 6}]}]}]}`)
-		require.NoError(t, protojson.Unmarshal(js, r))
-
-		filters, err := Build(r.Filter)
+		js := []byte(`{"$and": [{"a": 20}, {"$or": [{"b":5}, {"c": 6}]}, {"$and": [{"e":5}, {"f": 6}]}]}`)
+		filters, err := Build(js)
 		require.NoError(t, err)
 		require.Len(t, filters, 1)
 		require.Len(t, filters[0].(*AndFilter).filter, 3)
@@ -74,55 +54,34 @@ func TestFilterUsingJSON(t *testing.T) {
 		require.Equal(t, "e", filters[0].(*AndFilter).filter[2].(*AndFilter).filter[0].(*Selector).Field)
 	})
 	t.Run("filter_mix", func(t *testing.T) {
-		var r = &api.ReadRequest{}
-		js := []byte(`{"filter": [{"f1": 10}, {"f2": 10}, {"$or": [{"f3": 20}, {"$and": [{"f4":5}, {"f5": 6}]}]}, {"$and": [{"a": 20}, {"$or": [{"b":5}, {"c": 6}]}, {"$and": [{"e":5}, {"f": 6}]}]}]}`)
-		require.NoError(t, protojson.Unmarshal(js, r))
-
-		filters, err := Build(r.Filter)
+		js := []byte(`{"f1": 10, "f2": 10, "$or": [{"f3": 20}, {"$and": [{"f4":5}, {"f5": 6}]}], "$and": [{"a": 20}, {"$or": [{"b":5}, {"c": 6}]}, {"$and": [{"e":5}, {"f": 6}]}]}`)
+		filters, err := Build(js)
 		require.NoError(t, err)
 		require.Len(t, filters, 4)
-		require.Equal(t, "f1", filters[0].(*Selector).Field)
-		require.Equal(t, "f2", filters[1].(*Selector).Field)
-		require.Len(t, filters[2].(*OrFilter).filter, 2)
-		require.Len(t, filters[3].(*AndFilter).filter, 3)
+
+		countSelectors, countAnd, countOr := 0, 0, 0
+		for _, f := range filters {
+			if _, ok := f.(*Selector); ok {
+				countSelectors++
+				require.True(t, f.(*Selector).Field == "f1" || f.(*Selector).Field == "f2")
+			}
+			if _, ok := f.(*OrFilter); ok {
+				require.Len(t, f.(*OrFilter).filter, 2)
+				countOr++
+			}
+			if _, ok := f.(*AndFilter); ok {
+				require.Len(t, f.(*AndFilter).filter, 3)
+				countAnd++
+			}
+		}
+		require.Equal(t, 2, countSelectors)
+		require.Equal(t, 1, countOr)
+		require.Equal(t, 1, countAnd)
 	})
 }
 
-func TestFilterProto(t *testing.T) {
-	var orClause []interface{}
-	orClause = append(orClause, map[string]interface{}{
-		"f3": 30,
-	})
-	orClause = append(orClause, map[string]interface{}{
-		"f4": 40,
-	})
-	l, err := structpb.NewList(orClause)
-	require.NoError(t, err)
-
-	gtStruct, err := structpb.NewStruct(map[string]interface{}{
-		"$gt": 20,
-	})
-	require.NoError(t, err)
-
-	var f = []*structpb.Struct{
-		{
-			Fields: map[string]*structpb.Value{
-				"f1": structpb.NewNumberValue(10),
-			},
-		},
-		{
-			Fields: map[string]*structpb.Value{
-				"f2": structpb.NewStructValue(gtStruct),
-			},
-		},
-		{
-			Fields: map[string]*structpb.Value{
-				"$or": structpb.NewListValue(l),
-			},
-		},
-	}
-
-	filters, err := Build(f)
-	require.NoError(t, err)
-	require.Len(t, filters, 3)
+func TestFilterDuplicateKey(t *testing.T) {
+	filters, err := Build([]byte(`{"a": 10, "b": {"$eq": 10}, "b": 15}`))
+	require.Nil(t, filters)
+	require.Contains(t, err.Error(), "duplicate map key")
 }
