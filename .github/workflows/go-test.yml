@@ -16,27 +16,35 @@ jobs:
       - name: Pull docker images
         run: docker-compose -f docker/docker-compose.yml pull
 
-      - name: Pull build docker images
-        if: |
-          contains(steps.changed-files.outputs.modified_files, 'Dockerfile') ||
+      - name: Docker cache
+        uses: satackey/action-docker-layer-caching@v0.0.11
+        continue-on-error: true
+
+      - name: Check need rebuild Docker images
+        run: |
+          if ${{ contains(steps.changed-files.outputs.modified_files, 'Dockerfile') ||
           contains(steps.changed-files.outputs.modified_files, 'Makefile') ||
-          contains(steps.changed-files.outputs.modified_files, 'go.mod')
+          contains(steps.changed-files.outputs.modified_files, 'go.mod') }}; then
+            echo "need_rebuild=true" >> $GITHUB_ENV
+            echo "Rebuild due to docker build file changed"
+          fi
+          if ! docker image inspect tigris_server >/dev/null 2>&1 || ! docker image inspect tigris_test >/dev/null 2>&1; then
+            echo "need_rebuild=true" >> $GITHUB_ENV
+            echo "Rebuild due to missing images"
+          fi
+
+      - name: Pull build docker images
+        if: env.need_rebuild
         run: |
           docker pull debian:bullseye-slim
           docker pull golang:1.17.6-bullseye
           docker pull golang:1.18beta2-bullseye
 
-      - name: Docker cache
-        uses: satackey/action-docker-layer-caching@v0.0.11
-        continue-on-error: true
-
       - name: Build docker images
-        if: |
-          contains(steps.changed-files.outputs.modified_files, 'Dockerfile') ||
-          contains(steps.changed-files.outputs.modified_files, 'Makefile') ||
-          contains(steps.changed-files.outputs.modified_files, 'go.mod')
+        if: env.need_rebuild
         run: |
           COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker-compose -f docker/docker-compose.yml build
+          docker image rm debian:bullseye-slim golang:1.17.6-bullseye golang:1.18beta2-bullseye
           docker image prune -f
 
       - name: Run tests
