@@ -21,15 +21,6 @@ option go_package = "github.com/tigrisdata/tigrisdb/api";
 
 // BUG: gnostic protoc-gen-openapi doesn't support enum generation
 // https://github.com/google/gnostic/issues/255
-enum StatusCode {
-  StatusCode_UNKNOWN = 0;
-  StatusCode_OK = 200;
-  StatusCode_BAD_REQUEST = 400;
-  StatusCode_NOT_FOUND = 404;
-  StatusCode_CONFLICT = 409;
-  StatusCode_NOT_IMPLEMENTED = 501;
-  StatusCode_INTERNAL_SERVER_ERROR = 500;
-}
 
 message WriteOption {
   TransactionCtx tx_ctx = 1;
@@ -39,11 +30,9 @@ message ReadOption {
   TransactionCtx tx_ctx = 1;
 }
 
-message CreateDatabaseOption {}
-
-message DropDatabaseOption {}
-
-message DocOption {}
+message DatabaseOption {}
+message CollectionOption {}
+message TransactionOption {}
 
 message TransactionCtx {
   string id = 1;
@@ -52,6 +41,7 @@ message TransactionCtx {
 
 message BeginTransactionRequest {
   string db = 1;
+  TransactionOption options = 2;
 }
 message BeginTransactionResponse {
   TransactionCtx tx_ctx = 1;
@@ -121,7 +111,7 @@ message ReadResponse {
 
 message CreateDatabaseRequest {
   string db = 1;
-  CreateDatabaseOption options = 2;
+  DatabaseOption options = 2;
 }
 
 message CreateDatabaseResponse {
@@ -130,7 +120,7 @@ message CreateDatabaseResponse {
 
 message DropDatabaseRequest {
   string db = 1;
-  DropDatabaseOption options = 2;
+  DatabaseOption options = 2;
 }
 
 message DropDatabaseResponse {
@@ -141,6 +131,7 @@ message CreateCollectionRequest {
   string db = 1;
   string collection = 2;
   google.protobuf.Struct schema = 3;
+  CollectionOption options = 4;
 }
 
 message CreateCollectionResponse {
@@ -151,6 +142,7 @@ message AlterCollectionRequest {
   string db = 1;
   string collection = 2;
   google.protobuf.Struct schema = 3;
+  CollectionOption options = 4;
 }
 
 message AlterCollectionResponse {
@@ -160,6 +152,7 @@ message AlterCollectionResponse {
 message DropCollectionRequest {
   string db = 1;
   string collection = 2;
+  CollectionOption options = 3;
 }
 
 message DropCollectionResponse {
@@ -268,14 +261,12 @@ service TigrisDB {
   }
   rpc ListDatabases(ListDatabasesRequest) returns (ListDatabasesResponse) {
     option (google.api.http) = {
-      post : "/api/v1/databases/list"
-      body : "*"
+      get : "/api/v1/databases/list"
     };
   }
   rpc ListCollections(ListCollectionsRequest) returns (ListCollectionsResponse) {
     option (google.api.http) = {
-      post : "/api/v1/databases/{db}/collections/list"
-      body : "*"
+      get : "/api/v1/databases/{db}/collections/list"
     };
   }
 
