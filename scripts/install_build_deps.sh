@@ -39,3 +39,5 @@ else
 	sudo apt-get install -y protobuf-compiler
 fi
 
+# This is used to fix OpenAPI spec in scripts/fix_openapi.sh
+go install github.com/mikefarah/yq/v4@latest

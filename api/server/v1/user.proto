@@ -131,7 +131,7 @@ message UpdateResponse {
 message ReadRequest {
   string db = 1;
   string collection = 2;
-  repeated google.protobuf.Struct filter = 3;
+  bytes filter = 3;
   repeated Document keys = 4;
   ReadOption options = 5;
 }

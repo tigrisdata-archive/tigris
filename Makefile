@@ -18,7 +18,7 @@ ${GEN_DIR}/%_openapi.yaml ${GEN_DIR}/%.pb.go ${GEN_DIR}/%.pb.gw.go: ${GEN_DIR}/%
 		--go-grpc_out=${API_DIR} --go-grpc_opt=paths=source_relative \
 		--grpc-gateway_out=${API_DIR} --grpc-gateway_opt=paths=source_relative,allow_delete_body=true \
 		$<
-	sed -e 's/format: bytes/format: byte/g' ${API_DIR}/openapi.yaml >${GEN_DIR}/$(*F)_openapi.yaml
+	sh scripts/fix_openapi.sh ${API_DIR}/openapi.yaml ${GEN_DIR}/$(*F)_openapi.yaml
 	rm ${API_DIR}/openapi.yaml 
 
 # generate Go HTTP client from openapi spec
