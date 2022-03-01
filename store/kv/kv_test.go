@@ -17,8 +17,8 @@ import (
 func getTestFDBConfig(t *testing.T) *config.FoundationDBConfig {
 	config.LoadEnvironment()
 
-	var fn string
-	if config.GetEnvironment() != config.EnvTest {
+	fn, exists := os.LookupEnv("TIGRISDB_SERVER_FOUNDATIONDB_CLUSTER_FILE")
+	if !exists {
 		fn = "../../config/fdb.cluster"
 	}
 

@@ -35,7 +35,10 @@ var configPath = []string{
 	"./",
 }
 
+// envPrefix is used by viper to detect environment variables that should be used.
+// viper will automatically uppercase this and append _ to it
 var envPrefix = "tigrisdb_server"
+
 var envEnv = "tigrisdb_environment"
 var environment string
 
@@ -72,16 +75,22 @@ func LoadConfig(name string, config interface{}) {
 		viper.AddConfigPath(v)
 	}
 
-	// this is needed to automatically bind environment variables to config struct
+	// This is needed to automatically bind environment variables to config struct
 	b, err := yaml.Marshal(config)
 	log.Err(err).Msg("marshal config")
-	log.Debug().RawJSON("config", b).Msg("default")
+	log.Debug().RawJSON("config", b).Msg("default config")
 	br := bytes.NewBuffer(b)
 	err = viper.MergeConfig(br)
 	log.Err(err).Msg("merge config")
 
 	spew.Dump(viper.AllKeys())
+
+	// This is needed to replace periods with underscores when mapping environment variables to multi-level
+	// config keys. For example, this will allow foundationdb.cluster_file to be mapped to FOUNDATIONDB_CLUSTER_FILE
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
+	// The environment variables have a higher priority as compared to config values defined in the config file.
+	// This allows us to override the config values using environment variables.
 	viper.SetEnvPrefix(envPrefix)
 	viper.AutomaticEnv()
 
