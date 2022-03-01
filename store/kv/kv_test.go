@@ -49,7 +49,8 @@ func readAll(t *testing.T, it Iterator) []KeyValue {
 func testKVBasic(t *testing.T, kv KV) {
 	ulog.Configure(ulog.LogConfig{Level: "trace"})
 
-	ctx := context.TODO()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	nRecs := 5
 
@@ -163,7 +164,8 @@ type kvTestCase struct {
 }
 
 func testKVInsert(t *testing.T, kv KV) {
-	ctx := context.TODO()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	cases := []kvTestCase{
 		{
