@@ -20,14 +20,39 @@ sidebar_label: "Developing on TigrisDB"
   ~ limitations under the License.
   -->
 
-The first step is to start the server after making the changes locally. This can be done by running
+# Development
+
+## Prerequisite
+
+### Mac OSX
+It is recommended to have a package manager such as `brew` installed
+
+## Building and Testing with Docker Containers
+
+The first step is to run `make run` which would bring dependencies and server up in the docker
+containers with all your changes.
+
+**Note** Running the server locally or in editor will cause connectivity issues with FDB. For now, use make run to start the tigris server in a container.
+
+The above command will inject your changes into the tigris server container.
+
+## Building and Testing on Apple M1
+
+Due to various issues with Docker on Apple M1, it is recommended to install FoundationDB on the host and the run
+the server on the host directly as well.
+
+To run the server on the host, required dependencies need to be installed by running:
+
 ```shell
-make run
+sh scripts/install_build_deps.sh
+sh scripts/install_test_deps.sh
 ```
 
-**Note** Running the server locally or in editor will cause connectivity issues with FDB. For now, use make run to start the tigris server in a container. 
+Once the dependencies are installed, you can start up the server on the host as follows:
 
-The above command will inject your changes into the tigris server container. 
+```shell
+make osx_run
+```
 
 ## Defining the schema
 

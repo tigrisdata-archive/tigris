@@ -29,16 +29,17 @@ services:
     container_name: tigris_server
     image: tigris_server
     environment:
+      - TIGRISDB_SERVER_FOUNDATIONDB_CLUSTER_FILE=/etc/foundationdb/fdb.cluster
       #- TIGRISDB_SERVER_API_PORT=7777
-      - TIGRISDB_ENVIRONMENT=test
+      #- TIGRISDB_ENVIRONMENT=test
       - AWS_ACCESS_KEY_ID=accessKey1
       - AWS_SECRET_ACCESS_KEY=verySecretKey1
       #- AWS_SESSION_TOKEN=session1
       #- GRPC_GO_LOG_VERBOSITY_LEVEL=99
       #- GRPC_GO_LOG_SEVERITY_LEVEL=info
     build:
-      context: ..
-      dockerfile: docker/Dockerfile.server
+      context: ../../
+      dockerfile: docker/Dockerfile
     volumes:
       - type: volume
         source: fdbdata
@@ -51,7 +52,8 @@ services:
   tigris_test:
     image: tigris_test
     environment:
-      - TIGRISDB_ENVIRONMENT=test
+      - TIGRISDB_SERVER_FOUNDATIONDB_CLUSTER_FILE=/etc/foundationdb/fdb.cluster
+      #- TIGRISDB_ENVIRONMENT=test
       - DB_PASSWORD=tigris_user_passwd_test
       - DB_HOST=tigris_db_test
         #      - GRPC_GO_LOG_VERBOSITY_LEVEL=99
@@ -59,11 +61,11 @@ services:
       - TEST_PARAM
     container_name: tigris_test
     build:
-      context: ..
-      dockerfile: docker/Dockerfile.test
+      context: ../../
+      dockerfile: test/docker/Dockerfile
     volumes:
       - type: bind
-        source: ../
+        source: ../../
         target: /go/src/tigris
       - type: volume
         source: fdbdata

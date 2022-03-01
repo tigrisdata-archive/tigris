@@ -14,7 +14,7 @@ jobs:
 
       # Pulling existing images to skip caching them
       - name: Pull docker images
-        run: docker-compose -f docker/docker-compose.yml pull
+        run: docker-compose -f test/docker/docker-compose.yml pull
 
       - name: Docker cache
         uses: satackey/action-docker-layer-caching@v0.0.11
@@ -44,9 +44,9 @@ jobs:
       - name: Build docker images
         if: env.need_rebuild
         run: |
-          COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker-compose -f docker/docker-compose.yml build
+          make docker_compose_build
           docker image rm debian:bullseye-slim golang:1.17.6-bullseye golang:1.18beta2-bullseye
           docker image prune -f
 
       - name: Run tests
-        run: docker-compose -f docker/docker-compose.yml up --no-build --abort-on-container-exit --exit-code-from tigris_test tigris_test || ( docker-compose -f docker/docker-compose.yml logs && false )
+        run: make docker_test_no_build || ( docker-compose -f test/docker/docker-compose.yml logs && false )

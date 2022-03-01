@@ -17,7 +17,13 @@ set -ex
 
 export GO111MODULE=on
 
-#test deps
 go install github.com/golang/mock/mockgen@v1.6.0
 curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v1.44.0
-sudo apt-get install -y shellcheck
+
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  if command -v brew > /dev/null 2>&1; then
+    brew install shellcheck
+  fi
+else
+  sudo apt-get install -y shellcheck
+fi
