@@ -18,16 +18,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"reflect"
-
 	"github.com/rs/zerolog/log"
 	userHTTP "github.com/tigrisdata/tigrisdb/api/client/v1/user"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"io"
+	"net/http"
 )
 
 type crudClient interface {
@@ -119,52 +117,17 @@ func (c *grpcClient) BeginTx() (txClient, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func marshalDocsGeneric(docs []interface{}, add func(doc []byte)) error {
-	for _, v := range docs {
-		switch reflect.TypeOf(v).Kind() {
-		case reflect.Slice, reflect.Array:
-			s := reflect.ValueOf(v)
-			if s.Len() == 0 {
-				continue
-			}
-			if s.Index(0).Kind() == reflect.Uint8 {
-				add(s.Bytes())
-				continue
-			}
-			for i := 0; i < s.Len(); i++ {
-				switch s.Index(i).Kind() {
-				case reflect.Map, reflect.Struct, reflect.Interface, reflect.Ptr:
-				default:
-					return fmt.Errorf("unsupported type %v", reflect.TypeOf(v).Kind())
-				}
-				data, err := json.Marshal(s.Index(i).Interface())
-				if ulog.E(err) {
-					return err
-				}
-				add(data)
-			}
-			continue
-		case reflect.Map, reflect.Struct, reflect.Interface, reflect.Ptr:
-		default:
-			return fmt.Errorf("unsupported type %v", reflect.TypeOf(v).Kind())
+func marshalDocsGRPC(docs []interface{}) ([][]byte, error) {
+	res := make([][]byte, 0, len(docs))
+	for i, d := range docs {
+		b, err := json.Marshal(d)
+		if err != nil {
+			return nil, err
 		}
-		data, err := json.Marshal(v)
-		if ulog.E(err) {
-			return err
-		}
-		add(data)
-	}
-	return nil
-}
 
-func marshalDocsGRPC(docs []interface{}) ([]*api.Document, error) {
-	res := make([]*api.Document, 0, len(docs))
-	err := marshalDocsGeneric(docs, func(doc []byte) {
-		res = append(res, &api.Document{Doc: nil})
-	})
-	if err != nil {
-		return nil, err
+		res[i] = b
 	}
+
 	return res, nil
 }
 
@@ -227,15 +190,9 @@ func (c *grpcCRUDClient) Update(ctx context.Context, docs ...interface{}) error 
 }
 
 func (c *grpcCRUDClient) Read(ctx context.Context, docs ...interface{}) error {
-	bdocs, err := marshalDocsGRPC(docs)
-	if err != nil {
-		return err
-	}
-
 	resp, err := c.c.Read(ctx, &api.ReadRequest{
 		Db:         c.db,
 		Collection: c.table,
-		Keys:       bdocs,
 	})
 	if err != nil {
 		return err
@@ -312,14 +269,17 @@ func (c *httpClient) BeginTx() (txClient, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func marshalDocsHTTP(docs []interface{}) ([]userHTTP.Document, error) {
-	res := make([]userHTTP.Document, 0, len(docs))
-	err := marshalDocsGeneric(docs, func(doc []byte) {
-		res = append(res, userHTTP.Document{Doc: nil})
-	})
-	if err != nil {
-		return nil, err
+func marshalDocsHTTP(docs []interface{}) ([][]byte, error) {
+	res := make([][]byte, 0, len(docs))
+	for i, d := range docs {
+		b, err := json.Marshal(d)
+		if err != nil {
+			return nil, err
+		}
+
+		res[i] = b
 	}
+
 	return res, nil
 }
 

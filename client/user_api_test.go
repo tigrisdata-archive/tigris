@@ -62,11 +62,8 @@ func TestAPIGRPC(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	inputDocuments := []*api.Document{
-		{
-			Doc: []byte(`{"pkey_int": 1, "int_value": 2, "str_value": "foo"}`),
-		},
-	}
+	inputDoc := []byte(`{"pkey_int": 1, "int_value": 2, "str_value": "foo"}`)
+	var inputDocuments = [][]byte{inputDoc}
 	_, err = c.Insert(ctx, &api.InsertRequest{
 		Db:         "db1",
 		Collection: "t1",
@@ -89,7 +86,7 @@ func TestAPIGRPC(t *testing.T) {
 		}
 		require.NoError(t, err)
 		log.Debug().Str("value", string(d.Doc)).Msg("Read")
-		require.EqualValues(t, inputDocuments[0].Doc, d.Doc)
+		require.EqualValues(t, inputDocuments[0], d.Doc)
 		totalReceivedDocuments++
 	}
 	require.Equal(t, len(inputDocuments), totalReceivedDocuments)
@@ -124,13 +121,11 @@ func TestAPIHTTP(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	inputDocuments := []userHTTP.Document{
+	inputDocuments := []map[string]interface{}{
 		{
-			Doc: &map[string]interface{}{
-				"pkey_int":  1,
-				"int_value": 2,
-				"str_value": "foo",
-			},
+			"pkey_int":  1,
+			"int_value": 2,
+			"str_value": "foo",
 		},
 	}
 	_, err = c.TigrisDBInsertWithResponse(ctx, "db1", "t1", userHTTP.TigrisDBInsertJSONRequestBody{
@@ -155,7 +150,7 @@ func TestAPIHTTP(t *testing.T) {
 		log.Debug().Interface("value", td.Result).Msg("Read response")
 		res, err := json.Marshal(td.Result.Doc)
 		require.NoError(t, err)
-		exp, err := json.Marshal(inputDocuments[i].Doc)
+		exp, err := json.Marshal(inputDocuments[i])
 		require.NoError(t, err)
 		require.JSONEq(t, string(exp), string(res))
 		i++

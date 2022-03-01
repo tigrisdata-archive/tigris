@@ -92,7 +92,7 @@ func (q *TxQueryRunner) Run(ctx context.Context, req *Request) (*Response, error
 	for _, d := range req.documents {
 		// ToDo: need to implement our own decoding to only extract custom keys
 		var s = &structpb.Struct{}
-		if err := json.Unmarshal(d.Doc, s); err != nil {
+		if err := json.Unmarshal(d, s); err != nil {
 			return nil, err
 		}
 
@@ -103,11 +103,11 @@ func (q *TxQueryRunner) Run(ctx context.Context, req *Request) (*Response, error
 
 		switch api.RequestType(req) {
 		case api.Insert:
-			txErr = tx.Insert(ctx, key, d.Doc)
+			txErr = tx.Insert(ctx, key, d)
 		case api.Replace:
-			txErr = tx.Replace(ctx, key, d.Doc)
+			txErr = tx.Replace(ctx, key, d)
 		case api.Update:
-			txErr = tx.Update(ctx, key, d.Doc)
+			txErr = tx.Update(ctx, key, d)
 		case api.Delete:
 			txErr = tx.Delete(ctx, key)
 		}

@@ -14,6 +14,11 @@ yq_fix_object() {
 	yq_cmd ".components.schemas.$1.properties.$2.type=\"object\""
 }
 
+yq_fix_object_array() {
+	yq_cmd "del(.components.schemas.$1.properties.$2.items.format)"
+	yq_cmd ".components.schemas.$1.properties.$2.items.type=\"object\""
+}
+
 # Fix the types of filter and document fields to be object on HTTP wire.
 # The original format in proto file is "bytes", which allows to skip
 # unmarshalling in GRPC, we also implement custom unmashalling for HTTP
@@ -21,7 +26,10 @@ for i in DeleteRequest UpdateRequest ReadRequest; do
 	yq_fix_object $i filter
 done
 
-yq_fix_object Document doc
+for i in InsertRequest ReplaceRequest; do
+	yq_fix_object_array $i documents
+done
+
 yq_fix_object ReadResponse doc
 
 # According to the OpenAPI spec format should be "byte",

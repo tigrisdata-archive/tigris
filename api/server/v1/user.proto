@@ -31,11 +31,6 @@ enum StatusCode {
   StatusCode_INTERNAL_SERVER_ERROR = 500;
 }
 
-message WriteResponseHeader {
-  int32 code = 1;
-  string msg = 2;
-}
-
 message WriteOption {
   TransactionCtx tx_ctx = 1;
 }
@@ -49,11 +44,6 @@ message CreateDatabaseOption {}
 message DropDatabaseOption {}
 
 message DocOption {}
-
-message Document {
-  bytes doc = 1;
-  DocOption options = 2;
-}
 
 message TransactionCtx {
   string id = 1;
@@ -82,13 +72,11 @@ message RollbackTransactionResponse {}
 message InsertRequest {
   string db = 1;
   string collection = 2;
-  repeated Document documents = 3;
+  repeated bytes documents = 3;
   WriteOption options = 4;
 }
 
-message InsertResponse {
-  WriteResponseHeader response = 1;
-}
+message InsertResponse {}
 
 message DeleteRequest {
   string db = 1;
@@ -97,20 +85,16 @@ message DeleteRequest {
   WriteOption options = 4;
 }
 
-message DeleteResponse {
-  WriteResponseHeader response = 1;
-}
+message DeleteResponse {}
 
 message ReplaceRequest {
   string db = 1;
   string collection = 2;
-  repeated Document documents = 3;
+  repeated bytes documents = 3;
   WriteOption options = 4;
 }
 
-message ReplaceResponse {
-  WriteResponseHeader response = 1;
-}
+message ReplaceResponse {}
 
 message UpdateRequest {
   string db = 1;
@@ -121,14 +105,13 @@ message UpdateRequest {
 }
 
 message UpdateResponse {
-  WriteResponseHeader response = 1;
+  int32 rc = 1;
 }
 
 message ReadRequest {
   string db = 1;
   string collection = 2;
   bytes filter = 3;
-  repeated Document keys = 4;
   ReadOption options = 5;
 }
 

@@ -126,7 +126,7 @@ func (s *userService) DropCollection(ctx context.Context, r *api.DropCollectionR
 	}, nil
 }
 
-func (s *userService) BeginTransaction(ctx context.Context, r *api.BeginTransactionRequest) (*api.BeginTransactionResponse, error) {
+func (s *userService) BeginTransaction(ctx context.Context, _ *api.BeginTransactionRequest) (*api.BeginTransactionResponse, error) {
 	_, txCtx, err := s.txMgr.StartTx(ctx, true)
 	if err != nil {
 		return nil, err
@@ -174,7 +174,7 @@ func (s *userService) Insert(ctx context.Context, r *api.InsertRequest) (*api.In
 
 	_, err := s.Run(ctx, &Request{
 		Request:     r,
-		documents:   r.Documents,
+		documents:   r.GetDocuments(),
 		collection:  collection,
 		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
 	})
@@ -201,6 +201,7 @@ func (s *userService) Update(ctx context.Context, r *api.UpdateRequest) (*api.Up
 	if err != nil {
 		return nil, err
 	}
+
 	return &api.UpdateResponse{}, nil
 }
 
@@ -212,7 +213,7 @@ func (s *userService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.
 
 	_, err := s.Run(ctx, &Request{
 		Request:     r,
-		documents:   r.Documents,
+		documents:   r.GetDocuments(),
 		collection:  collection,
 		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
 	})
@@ -249,7 +250,6 @@ func (s *userService) Read(r *api.ReadRequest, stream api.TigrisDB_ReadServer) e
 
 	_, err := s.Run(stream.Context(), &Request{
 		Request:     r,
-		keys:        r.Keys,
 		collection:  collection,
 		queryRunner: s.queryRunnerFactory.GetStreamingQueryRunner(stream),
 	})
@@ -260,21 +260,21 @@ func (s *userService) Read(r *api.ReadRequest, stream api.TigrisDB_ReadServer) e
 	return nil
 }
 
-func (s *userService) ListDatabases(ctx context.Context, r *api.ListDatabasesRequest) (*api.ListDatabasesResponse, error) {
+func (s *userService) ListDatabases(_ context.Context, _ *api.ListDatabasesRequest) (*api.ListDatabasesResponse, error) {
 	return &api.ListDatabasesResponse{}, nil
 }
 
-func (s *userService) ListCollections(ctx context.Context, r *api.ListCollectionsRequest) (*api.ListCollectionsResponse, error) {
+func (s *userService) ListCollections(_ context.Context, _ *api.ListCollectionsRequest) (*api.ListCollectionsResponse, error) {
 	return &api.ListCollectionsResponse{}, nil
 }
 
-func (s *userService) CreateDatabase(ctx context.Context, r *api.CreateDatabaseRequest) (*api.CreateDatabaseResponse, error) {
+func (s *userService) CreateDatabase(_ context.Context, _ *api.CreateDatabaseRequest) (*api.CreateDatabaseResponse, error) {
 	return &api.CreateDatabaseResponse{
 		Msg: "database created successfully",
 	}, nil
 }
 
-func (s *userService) DropDatabase(ctx context.Context, r *api.DropDatabaseRequest) (*api.DropDatabaseResponse, error) {
+func (s *userService) DropDatabase(_ context.Context, _ *api.DropDatabaseRequest) (*api.DropDatabaseResponse, error) {
 	return &api.DropDatabaseResponse{
 		Msg: "database dropped successfully",
 	}, nil

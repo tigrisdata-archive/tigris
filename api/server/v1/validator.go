@@ -52,7 +52,7 @@ func (x *InsertRequest) Validate() error {
 		return err
 	}
 
-	if len(x.Documents) == 0 {
+	if len(x.GetDocuments()) == 0 {
 		return status.Errorf(codes.InvalidArgument, "empty documents received")
 	}
 	return nil
@@ -63,7 +63,7 @@ func (x *ReplaceRequest) Validate() error {
 		return err
 	}
 
-	if len(x.Documents) == 0 {
+	if len(x.GetDocuments()) == 0 {
 		return status.Errorf(codes.InvalidArgument, "empty documents received")
 	}
 	return nil

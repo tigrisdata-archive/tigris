@@ -32,6 +32,7 @@ jobs:
             echo "need_rebuild=true" >> $GITHUB_ENV
             echo "Rebuild due to missing images"
           fi
+          echo "need_rebuild=true" >> $GITHUB_ENV
 
       - name: Pull build docker images
         if: env.need_rebuild
