@@ -15,6 +15,7 @@
 package filter
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -99,7 +100,17 @@ func TestKeyBuilder(t *testing.T) {
 		filters := testFilters(t, c.userInput)
 		buildKeys, err := b.Build(filters, c.userKeys)
 		require.Equal(t, c.expError, err)
-		require.Equal(t, c.expKeys, buildKeys)
+		require.Equal(t, len(c.expKeys), len(buildKeys))
+		for _, k := range c.expKeys {
+			found := false
+			for _, build := range buildKeys {
+				if reflect.DeepEqual(k, build) {
+					found = true
+					break
+				}
+			}
+			require.True(t, found)
+		}
 	}
 }
 
