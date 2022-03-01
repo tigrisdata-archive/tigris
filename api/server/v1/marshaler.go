@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -37,10 +38,6 @@ func (x *ReadRequest) UnmarshalJSON(data []byte) error {
 		case "filter":
 			// not decoding it here and let it decode during filter parsing
 			x.Filter = value
-		case "keys":
-			if err := jsoniter.Unmarshal(value, &x.Keys); err != nil {
-				return err
-			}
 		case "options":
 			if err := jsoniter.Unmarshal(value, &x.Options); err != nil {
 				return err
@@ -51,8 +48,9 @@ func (x *ReadRequest) UnmarshalJSON(data []byte) error {
 }
 
 // UnmarshalJSON on InsertRequest avoids unmarshalling user document. We only need to extract primary/index keys from
-// the document and want to store the document as-is in the database. This way there is no exta cost of serialization/deserialization
-// and also less error prone because we are not touching the user document.
+// the document and want to store the document as-is in the database. This way there is no extra cost of serialization/deserialization
+// and also less error-prone because we are not touching the user document. The req handler needs to extract out
+// the relevant keys from the user docs and should pass it as-is to the underlying engine.
 func (x *InsertRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
 	if err := jsoniter.Unmarshal(data, &mp); err != nil {
@@ -69,31 +67,15 @@ func (x *InsertRequest) UnmarshalJSON(data []byte) error {
 				return err
 			}
 		case "documents":
-			if err := jsoniter.Unmarshal(value, &x.Documents); err != nil {
+			var docs []json.RawMessage
+			if err := jsoniter.Unmarshal(value, &docs); err != nil {
 				return err
 			}
-		case "options":
-			if err := jsoniter.Unmarshal(value, &x.Options); err != nil {
-				return err
+
+			x.Documents = make([][]byte, len(docs))
+			for i := 0; i < len(docs); i++ {
+				x.Documents[i] = docs[i]
 			}
-		}
-	}
-	return nil
-}
-
-// UnmarshalJSON is a custom unmarshaler implemented for the Document struct. The req handler needs to extract out
-// the relevant keys from this document and should pass it as-is to the underlying engine.
-func (x *Document) UnmarshalJSON(data []byte) error {
-	var mp map[string]jsoniter.RawMessage
-	if err := jsoniter.Unmarshal(data, &mp); err != nil {
-		return err
-	}
-
-	for key, value := range mp {
-		switch key {
-		case "doc":
-			// no need to decode
-			x.Doc = value
 		case "options":
 			if err := jsoniter.Unmarshal(value, &x.Options); err != nil {
 				return err

@@ -29,8 +29,7 @@ type Request struct {
 	api.Request
 
 	collection  schema.Collection
-	documents   []*api.Document
-	keys        []*api.Document
+	documents   [][]byte
 	queryRunner QueryRunner
 }
 
