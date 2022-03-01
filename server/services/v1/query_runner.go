@@ -17,7 +17,6 @@ package v1
 import (
 	"context"
 	"encoding/json"
-
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/encoding"
 	"github.com/tigrisdata/tigrisdb/query/filter"

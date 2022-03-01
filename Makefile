@@ -17,7 +17,7 @@ OSX_CLUSTER_FILE="/usr/local/etc/foundationdb/fdb.cluster"
 all: server
 
 BUILD_PARAM=-tags=release -ldflags "-X 'main.Version=$(VERSION)' -X 'main.BuildHash=$(GIT_HASH)'" $(shell printenv BUILD_PARAM)
-TEST_PARAM=-cover -race -tags=test $(shell printenv TEST_PARAM)
+TEST_PARAM=-cover -race -tags=test,integration $(shell printenv TEST_PARAM)
 
 # Generate GRPC client/server, openapi spec, http server
 ${GEN_DIR}/%_openapi.yaml ${GEN_DIR}/%.pb.go ${GEN_DIR}/%.pb.gw.go: ${GEN_DIR}/%.proto
@@ -57,7 +57,7 @@ docker_test:
 docker_test_no_build:
 	$(DOCKER_COMPOSE) up --no-build --abort-on-container-exit --exit-code-from tigris_test tigris_test
 
-test: docker_test
+test: clean docker_test
 
 # Use this target to run the test from inside docker container
 local_test: generate test_client

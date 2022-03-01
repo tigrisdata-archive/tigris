@@ -16,6 +16,9 @@ package schema
 
 import (
 	"sync"
+
+	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	"google.golang.org/grpc/codes"
 )
 
 type Cache struct {
@@ -72,13 +75,17 @@ func (c *Cache) Remove(databaseName, collectionName string) {
 	c.schemas[databaseName].remove(collectionName)
 }
 
-func (c *Cache) Get(databaseName, collectionName string) Collection {
+func (c *Cache) Get(databaseName, collectionName string) (Collection, error) {
 	c.RLock()
 	defer c.RUnlock()
 
 	if db := c.schemas[databaseName]; db == nil {
-		return nil
+		return nil, api.Errorf(codes.InvalidArgument, "database doesn't exists '%s'", databaseName)
 	}
 
-	return c.schemas[databaseName].get(collectionName)
+	coll := c.schemas[databaseName].get(collectionName)
+	if coll == nil {
+		return nil, api.Errorf(codes.InvalidArgument, "collection doesn't exists '%s'", collectionName)
+	}
+	return coll, nil
 }

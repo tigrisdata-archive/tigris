@@ -102,7 +102,7 @@ func (s *userService) CreateCollection(ctx context.Context, r *api.CreateCollect
 		return nil, err
 	}
 
-	if c := s.schemaCache.Get(r.Db, r.Collection); c != nil {
+	if c, _ := s.schemaCache.Get(r.Db, r.Collection); c != nil {
 		return nil, api.Errorf(codes.AlreadyExists, "collection already exists")
 	}
 
@@ -199,12 +199,12 @@ func (s *userService) Insert(ctx context.Context, r *api.InsertRequest) (*api.In
 		return nil, err
 	}
 
-	collection := s.schemaCache.Get(r.GetDb(), r.GetCollection())
-	if collection == nil {
-		return nil, api.Errorf(codes.InvalidArgument, "collection doesn't exists")
+	collection, err := s.schemaCache.Get(r.GetDb(), r.GetCollection())
+	if err != nil {
+		return nil, err
 	}
 
-	_, err := s.Run(ctx, &Request{
+	_, err = s.Run(ctx, &Request{
 		Request:     r,
 		documents:   r.GetDocuments(),
 		collection:  collection,
@@ -224,12 +224,12 @@ func (s *userService) Update(ctx context.Context, r *api.UpdateRequest) (*api.Up
 		return nil, err
 	}
 
-	collection := s.schemaCache.Get(r.GetDb(), r.GetCollection())
-	if collection == nil {
-		return nil, api.Errorf(codes.InvalidArgument, "collection doesn't exists")
+	collection, err := s.schemaCache.Get(r.GetDb(), r.GetCollection())
+	if err != nil {
+		return nil, err
 	}
 
-	_, err := s.Run(ctx, &Request{
+	_, err = s.Run(ctx, &Request{
 		Request:     r,
 		collection:  collection,
 		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
@@ -246,12 +246,12 @@ func (s *userService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.
 		return nil, err
 	}
 
-	collection := s.schemaCache.Get(r.GetDb(), r.GetCollection())
-	if collection == nil {
-		return nil, api.Errorf(codes.InvalidArgument, "collection doesn't exists")
+	collection, err := s.schemaCache.Get(r.GetDb(), r.GetCollection())
+	if err != nil {
+		return nil, err
 	}
 
-	_, err := s.Run(ctx, &Request{
+	_, err = s.Run(ctx, &Request{
 		Request:     r,
 		documents:   r.GetDocuments(),
 		collection:  collection,
@@ -269,12 +269,12 @@ func (s *userService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.De
 		return nil, err
 	}
 
-	collection := s.schemaCache.Get(r.GetDb(), r.GetCollection())
-	if collection == nil {
-		return nil, api.Errorf(codes.InvalidArgument, "collection doesn't exists")
+	collection, err := s.schemaCache.Get(r.GetDb(), r.GetCollection())
+	if err != nil {
+		return nil, err
 	}
 
-	_, err := s.Run(ctx, &Request{
+	_, err = s.Run(ctx, &Request{
 		Request:     r,
 		collection:  collection,
 		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
@@ -291,12 +291,12 @@ func (s *userService) Read(r *api.ReadRequest, stream api.TigrisDB_ReadServer) e
 		return err
 	}
 
-	collection := s.schemaCache.Get(r.GetDb(), r.GetCollection())
-	if collection == nil {
-		return api.Errorf(codes.InvalidArgument, "collection doesn't exists")
+	collection, err := s.schemaCache.Get(r.GetDb(), r.GetCollection())
+	if err != nil {
+		return err
 	}
 
-	_, err := s.Run(stream.Context(), &Request{
+	_, err = s.Run(stream.Context(), &Request{
 		Request:     r,
 		collection:  collection,
 		queryRunner: s.queryRunnerFactory.GetStreamingQueryRunner(stream),
