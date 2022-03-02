@@ -17,9 +17,13 @@ import (
 func getTestFDBConfig(t *testing.T) *config.FoundationDBConfig {
 	config.LoadEnvironment()
 
+	// Environment can be set on OS X
 	fn, exists := os.LookupEnv("TIGRISDB_SERVER_FOUNDATIONDB_CLUSTER_FILE")
-	if !exists {
-		fn = "../../config/fdb.cluster"
+
+	// Use default location when run test in the docker
+	// where cluster file is shared between containers
+	if !exists && config.GetEnvironment() != config.EnvTest {
+		fn = "../../test/config/fdb.cluster"
 	}
 
 	cmd := exec.Command("fdbcli", "-C", fn, "--exec", "configure new single memory")

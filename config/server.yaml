@@ -16,4 +16,4 @@ api:
   port: 8081
 
 foundationdb:
-  cluster_file: "config/fdb.cluster"
+  cluster_file: "/etc/foundationdb/fdb.cluster"
