@@ -27,6 +27,10 @@ func (x *ReadRequest) UnmarshalJSON(data []byte) error {
 	}
 	for key, value := range mp {
 		switch key {
+		case "project":
+			if err := jsoniter.Unmarshal(value, &x.Project); err != nil {
+				return err
+			}
 		case "db":
 			if err := jsoniter.Unmarshal(value, &x.Db); err != nil {
 				return err
@@ -58,6 +62,10 @@ func (x *InsertRequest) UnmarshalJSON(data []byte) error {
 	}
 	for key, value := range mp {
 		switch key {
+		case "project":
+			if err := jsoniter.Unmarshal(value, &x.Project); err != nil {
+				return err
+			}
 		case "db":
 			if err := jsoniter.Unmarshal(value, &x.Db); err != nil {
 				return err

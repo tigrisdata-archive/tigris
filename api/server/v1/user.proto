@@ -40,58 +40,65 @@ message TransactionCtx {
 }
 
 message BeginTransactionRequest {
-  string db = 1;
-  TransactionOption options = 2;
+  string project = 1;
+  string db = 2;
+  TransactionOption options = 3;
 }
 message BeginTransactionResponse {
   TransactionCtx tx_ctx = 1;
 }
 
 message CommitTransactionRequest {
-  string db = 1;
-  TransactionCtx tx_ctx = 2;
+  string project = 1;
+  string db = 2;
+  TransactionCtx tx_ctx = 3;
 }
 message CommitTransactionResponse {}
 
 message RollbackTransactionRequest {
-  string db = 1;
-  TransactionCtx tx_ctx = 2;
+  string project = 1;
+  string db = 2;
+  TransactionCtx tx_ctx = 3;
 }
 message RollbackTransactionResponse {}
 
 message InsertRequest {
-  string db = 1;
-  string collection = 2;
-  repeated bytes documents = 3;
-  WriteOption options = 4;
+  string project = 1;
+  string db = 2;
+  string collection = 3;
+  repeated bytes documents = 4;
+  WriteOption options = 5;
 }
 
 message InsertResponse {}
 
 message DeleteRequest {
-  string db = 1;
-  string collection = 2;
-  bytes filter = 3;
-  WriteOption options = 4;
+  string project = 1;
+  string db = 2;
+  string collection = 3;
+  bytes filter = 4;
+  WriteOption options = 5;
 }
 
 message DeleteResponse {}
 
 message ReplaceRequest {
-  string db = 1;
-  string collection = 2;
-  repeated bytes documents = 3;
-  WriteOption options = 4;
+  string project = 1;
+  string db = 2;
+  string collection = 3;
+  repeated bytes documents = 4;
+  WriteOption options = 5;
 }
 
 message ReplaceResponse {}
 
 message UpdateRequest {
-  string db = 1;
-  string collection = 2;
-  bytes fields = 3;
-  bytes filter = 4;
-  WriteOption options = 5;
+  string project = 1;
+  string db = 2;
+  string collection = 3;
+  bytes fields = 4;
+  bytes filter = 5;
+  WriteOption options = 6;
 }
 
 message UpdateResponse {
@@ -99,9 +106,10 @@ message UpdateResponse {
 }
 
 message ReadRequest {
-  string db = 1;
-  string collection = 2;
-  bytes filter = 3;
+  string project = 1;
+  string db = 2;
+  string collection = 3;
+  bytes filter = 4;
   ReadOption options = 5;
 }
 
@@ -110,8 +118,9 @@ message ReadResponse {
 }
 
 message CreateDatabaseRequest {
-  string db = 1;
-  DatabaseOption options = 2;
+  string project = 1;
+  string db = 2;
+  DatabaseOption options = 3;
 }
 
 message CreateDatabaseResponse {
@@ -119,8 +128,9 @@ message CreateDatabaseResponse {
 }
 
 message DropDatabaseRequest {
-  string db = 1;
-  DatabaseOption options = 2;
+  string project = 1;
+  string db = 2;
+  DatabaseOption options = 3;
 }
 
 message DropDatabaseResponse {
@@ -128,10 +138,11 @@ message DropDatabaseResponse {
 }
 
 message CreateCollectionRequest {
-  string db = 1;
-  string collection = 2;
-  google.protobuf.Struct schema = 3;
-  CollectionOption options = 4;
+  string project = 1;
+  string db = 2;
+  string collection = 3;
+  google.protobuf.Struct schema = 4;
+  CollectionOption options = 5;
 }
 
 message CreateCollectionResponse {
@@ -139,10 +150,11 @@ message CreateCollectionResponse {
 }
 
 message AlterCollectionRequest {
-  string db = 1;
-  string collection = 2;
-  google.protobuf.Struct schema = 3;
-  CollectionOption options = 4;
+  string project = 1;
+  string db = 2;
+  string collection = 3;
+  google.protobuf.Struct schema = 4;
+  CollectionOption options = 5;
 }
 
 message AlterCollectionResponse {
@@ -150,9 +162,10 @@ message AlterCollectionResponse {
 }
 
 message DropCollectionRequest {
-  string db = 1;
-  string collection = 2;
-  CollectionOption options = 3;
+  string project = 1;
+  string db = 2;
+  string collection = 3;
+  CollectionOption options = 4;
 }
 
 message DropCollectionResponse {
@@ -160,8 +173,9 @@ message DropCollectionResponse {
 }
 
 message TruncateCollectionRequest {
-  string db = 1;
-  string collection = 2;
+  string project = 1;
+  string db = 2;
+  string collection = 3;
 }
 
 message TruncateCollectionResponse {
@@ -169,6 +183,7 @@ message TruncateCollectionResponse {
 }
 
 message ListDatabasesRequest {
+  string project = 1;
 }
 
 message ListDatabasesResponse {
@@ -176,30 +191,59 @@ message ListDatabasesResponse {
 }
 
 message ListCollectionsRequest {
-  string db = 1;
+  string project = 1;
+  string db = 2;
 }
 
 message ListCollectionsResponse {
   repeated string collections = 1;
 }
 
+message CreateProjectRequest {
+  string project = 1;
+  ProjectOption options = 2;
+}
+
+message CreateProjectResponse {
+  string msg = 1;
+}
+
+message DeleteProjectRequest {
+  string project = 1;
+  ProjectOption options = 2;
+}
+
+message DeleteProjectResponse {
+  string msg = 1;
+}
+
+message ListProjectsRequest {
+}
+
+message ListProjectsResponse {
+  repeated string projects = 1;
+}
+
+message ProjectOption {
+}
+
 service TigrisDB {
   // Transactional APIs
   rpc BeginTransaction(BeginTransactionRequest) returns (BeginTransactionResponse) {
     option (google.api.http) = {
-      post : "/api/v1/databases/{db}/transactions/begin"
+      post : "/api/v1/projects/{project}/databases/{db}/transactions/begin"
       body : "*"
     };
   }
   rpc CommitTransaction(CommitTransactionRequest) returns (CommitTransactionResponse) {
     option (google.api.http) = {
-      post : "/api/v1/databases/{db}/transactions/commit"
+      post : "/api/v1/projects/{project}/databases/{db}/transactions/commit"
       body : "*"
     };
   }
   rpc RollbackTransaction(RollbackTransactionRequest) returns (RollbackTransactionResponse) {
     option (google.api.http) = {
-      post : "/api/v1/databases/{db}/transactions/rollback"
+      post : "/api/v1/projects/{project}/databases/{db}/transactions/rollback"
       body : "*"
     };
   }
@@ -207,31 +251,31 @@ service TigrisDB {
   // Following APIs are related to DMLs supported by TigrisDB
   rpc Insert(InsertRequest) returns (InsertResponse) {
     option (google.api.http) = {
-      post : "/api/v1/databases/{db}/collections/{collection}/documents/insert"
+      post : "/api/v1/projects/{project}/databases/{db}/collections/{collection}/documents/insert"
       body : "*"
     };
   }
   rpc Replace(ReplaceRequest) returns (ReplaceResponse) {
     option (google.api.http) = {
-      put : "/api/v1/databases/{db}/collections/{collection}/documents/replace"
+      put : "/api/v1/projects/{project}/databases/{db}/collections/{collection}/documents/replace"
       body : "*"
     };
   }
   rpc Delete(DeleteRequest) returns (DeleteResponse) {
     option (google.api.http) = {
-      delete : "/api/v1/databases/{db}/collections/{collection}/documents/delete"
+      delete : "/api/v1/projects/{project}/databases/{db}/collections/{collection}/documents/delete"
       body : "*"
     };
   }
   rpc Update(UpdateRequest) returns (UpdateResponse) {
     option (google.api.http) = {
-      put : "/api/v1/databases/{db}/collections/{collection}/documents/update"
+      put : "/api/v1/projects/{project}/databases/{db}/collections/{collection}/documents/update"
       body : "*"
     };
   }
   rpc Read(ReadRequest) returns (stream ReadResponse) {
     option (google.api.http) = {
-      post : "/api/v1/databases/{db}/collections/{collection}/documents/read"
+      post : "/api/v1/projects/{project}/databases/{db}/collections/{collection}/documents/read"
       body : "*"
     };
   }
@@ -239,48 +283,68 @@ service TigrisDB {
   // The following APIs are related to DDLs supported by TigrisDB
   rpc CreateCollection(CreateCollectionRequest) returns (CreateCollectionResponse) {
     option (google.api.http) = {
-      post : "/api/v1/databases/{db}/collections/{collection}/create"
+      post : "/api/v1/projects/{project}/databases/{db}/collections/{collection}/create"
       body : "*"
     };
   }
   rpc AlterCollection(AlterCollectionRequest) returns (AlterCollectionResponse) {
     option (google.api.http) = {
-      post : "/api/v1/databases/{db}/collections/{collection}/alter"
+      post : "/api/v1/projects/{project}/databases/{db}/collections/{collection}/alter"
       body : "*"
     };
   }
   rpc DropCollection(DropCollectionRequest) returns (DropCollectionResponse) {
     option (google.api.http) = {
-      delete : "/api/v1/databases/{db}/collections/{collection}/drop"
+      delete : "/api/v1/projects/{project}/databases/{db}/collections/{collection}/drop"
     };
   }
   rpc TruncateCollection(TruncateCollectionRequest) returns (TruncateCollectionResponse) {
     option (google.api.http) = {
-      delete : "/api/v1/databases/{db}/collections/{collection}/truncate"
+      delete : "/api/v1/projects/{project}/databases/{db}/collections/{collection}/truncate"
     };
   }
   rpc ListDatabases(ListDatabasesRequest) returns (ListDatabasesResponse) {
     option (google.api.http) = {
-      get : "/api/v1/databases/list"
+      get : "/api/v1/projects/{project}/databases/list"
     };
   }
   rpc ListCollections(ListCollectionsRequest) returns (ListCollectionsResponse) {
     option (google.api.http) = {
-      get : "/api/v1/databases/{db}/collections/list"
+      get : "/api/v1/projects/{project}/databases/{db}/collections/list"
     };
   }
 
   rpc CreateDatabase(CreateDatabaseRequest) returns (CreateDatabaseResponse) {
     option (google.api.http) = {
-      post : "/api/v1/databases/{db}/create"
+      post : "/api/v1/projects/{project}/databases/{db}/create"
       body : "*"
     };
   }
 
   rpc DropDatabase(DropDatabaseRequest) returns (DropDatabaseResponse) {
     option (google.api.http) = {
-      delete : "/api/v1/databases/{db}/drop"
+      delete : "/api/v1/projects/{project}/databases/{db}/drop"
       body : "*"
+    };
+  }
+
+  rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse) {
+    option (google.api.http) = {
+      post : "/api/v1/projects/{project}/create"
+      body : "*"
+    };
+  }
+
+  rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse) {
+    option (google.api.http) = {
+      delete : "/api/v1/projects/{project}/delete"
+      body : "*"
+    };
+  }
+
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse) {
+    option (google.api.http) = {
+      get : "/api/v1/projects/list"
     };
   }
 }

@@ -33,7 +33,10 @@ import (
 )
 
 const (
-	databasePath        = "/databases"
+	projectsPath       = "/projects"
+	projectPathPattern = projectsPath + "/*"
+
+	databasePath        = projectsPath + "/databases"
 	databasePathPattern = databasePath + "/*"
 
 	collectionPath        = databasePath + "/collections"
@@ -76,6 +79,9 @@ func (s *userService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel
 
 	api.RegisterTigrisDBServer(inproc, s)
 
+	router.HandleFunc(apiPathPrefix+projectPathPattern, func(w http.ResponseWriter, r *http.Request) {
+		mux.ServeHTTP(w, r)
+	})
 	router.HandleFunc(apiPathPrefix+databasePathPattern, func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
 	})
@@ -278,6 +284,22 @@ func (s *userService) DropDatabase(_ context.Context, _ *api.DropDatabaseRequest
 	return &api.DropDatabaseResponse{
 		Msg: "database dropped successfully",
 	}, nil
+}
+
+func (s *userService) CreateProject(_ context.Context, _ *api.CreateProjectRequest) (*api.CreateProjectResponse, error) {
+	return &api.CreateProjectResponse{
+		Msg: "Project created successfully",
+	}, nil
+}
+
+func (s *userService) DeleteProject(_ context.Context, _ *api.DeleteProjectRequest) (*api.DeleteProjectResponse, error) {
+	return &api.DeleteProjectResponse{
+		Msg: "Project deleted successfully",
+	}, nil
+}
+
+func (s *userService) ListProjects(_ context.Context, _ *api.ListProjectsRequest) (*api.ListProjectsResponse, error) {
+	return &api.ListProjectsResponse{}, nil
 }
 
 func (s *userService) Run(ctx context.Context, req *Request) (*Response, error) {

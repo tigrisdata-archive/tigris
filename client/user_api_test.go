@@ -51,6 +51,7 @@ func TestAPIGRPC(t *testing.T) {
 	values, err := structpb.NewValue([]interface{}{"pkey_int"})
 	require.NoError(t, err)
 	_, err = c.CreateCollection(ctx, &api.CreateCollectionRequest{
+		Project:    "project1",
 		Db:         "db1",
 		Collection: "t1",
 		Schema: &structpb.Struct{
@@ -65,6 +66,7 @@ func TestAPIGRPC(t *testing.T) {
 	inputDoc := []byte(`{"pkey_int": 1, "int_value": 2, "str_value": "foo"}`)
 	var inputDocuments = [][]byte{inputDoc}
 	_, err = c.Insert(ctx, &api.InsertRequest{
+		Project:    "project1",
 		Db:         "db1",
 		Collection: "t1",
 		Documents:  inputDocuments,
@@ -72,6 +74,7 @@ func TestAPIGRPC(t *testing.T) {
 	require.NoError(t, err)
 
 	rc, err := c.Read(ctx, &api.ReadRequest{
+		Project:    "project1",
 		Db:         "db1",
 		Collection: "t1",
 		Filter:     []byte(`{"pkey_int": 1}`),
@@ -109,11 +112,11 @@ func TestAPIHTTP(t *testing.T) {
 	c, err := newHTTPClient(ctx, h, p)
 	require.NoError(t, err)
 
-	_, _ = c.TigrisDBDropCollectionWithResponse(ctx, "db1", "t1")
+	_, _ = c.TigrisDBDropCollectionWithResponse(ctx, "project1", "db1", "t1")
 
 	values, err := structpb.NewValue([]interface{}{"pkey_int"})
 	require.NoError(t, err)
-	_, err = c.TigrisDBCreateCollectionWithResponse(ctx, "db1", "t1", userHTTP.TigrisDBCreateCollectionJSONRequestBody{
+	_, err = c.TigrisDBCreateCollectionWithResponse(ctx, "project1", "db1", "t1", userHTTP.TigrisDBCreateCollectionJSONRequestBody{
 		Schema: &map[string]interface{}{
 			"pkey_int":    "int",
 			"primary_key": values,
@@ -128,12 +131,12 @@ func TestAPIHTTP(t *testing.T) {
 			"str_value": "foo",
 		},
 	}
-	_, err = c.TigrisDBInsertWithResponse(ctx, "db1", "t1", userHTTP.TigrisDBInsertJSONRequestBody{
+	_, err = c.TigrisDBInsertWithResponse(ctx, "project1", "db1", "t1", userHTTP.TigrisDBInsertJSONRequestBody{
 		Documents: &inputDocuments,
 	})
 	require.NoError(t, err)
 
-	resp, err := c.TigrisDBRead(ctx, "db1", "t1", userHTTP.TigrisDBReadJSONRequestBody{
+	resp, err := c.TigrisDBRead(ctx, "project1", "db1", "t1", userHTTP.TigrisDBReadJSONRequestBody{
 		Filter: &map[string]interface{}{
 			"pkey_int": 1,
 		},
@@ -158,7 +161,7 @@ func TestAPIHTTP(t *testing.T) {
 
 	require.Equal(t, len(inputDocuments), i)
 
-	_, err = c.TigrisDBDropCollectionWithResponse(ctx, "db1", "t1")
+	_, err = c.TigrisDBDropCollectionWithResponse(ctx, "project1", "db1", "t1")
 	require.NoError(t, err)
 
 	err = c.Close()

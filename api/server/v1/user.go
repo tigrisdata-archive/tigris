@@ -36,6 +36,9 @@ const (
 	ListDatabases       protoreflect.FullName = "ListDatabasesRequest"
 	CreateDatabase      protoreflect.FullName = "CreateDatabaseRequest"
 	DropDatabase        protoreflect.FullName = "DropDatabaseRequest"
+	CreateProject       protoreflect.FullName = "CreateProjectRequest"
+	ListProjects        protoreflect.FullName = "ListProjectsRequest"
+	DeleteProject       protoreflect.FullName = "DeleteProjectRequest"
 )
 
 type Request interface {

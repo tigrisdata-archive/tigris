@@ -34,12 +34,12 @@ func testClient(t *testing.T, c client) {
 
 	ctx := context.TODO()
 
-	_ = c.Drop(ctx, "db1", "t1")
+	_ = c.Drop(ctx, "project1", "db1", "t1")
 
-	err := c.Create(ctx, "db1", "t1", "K1,K2")
+	err := c.Create(ctx, "project1", "db1", "t1", "K1,K2")
 	require.NoError(t, err)
 
-	t1 := c.Use("db1", "t1")
+	t1 := c.Use("project1", "db1", "t1")
 
 	doc1 := Doc{K1: "vK1", K2: 1, D1: "vD1"}
 
@@ -78,7 +78,7 @@ func testClient(t *testing.T, c client) {
 	err = t1.Delete(ctx, []Doc{doc1, doc2, doc3})
 	require.NoError(t, err)
 
-	err = c.Drop(ctx, "db1", "t1")
+	err = c.Drop(ctx, "project1", "db1", "t1")
 	require.NoError(t, err)
 }
 
@@ -87,14 +87,14 @@ func testTxClient(t *testing.T, c client) {
 
 	ctx := context.TODO()
 
-	err := c.Create(ctx, "db1", "t2", "K1,K2")
+	err := c.Create(ctx, "project1", "db1", "t2", "K1,K2")
 	require.NoError(t, err)
 
 	tx, err := c.BeginTx()
 	require.NoError(t, err)
 	defer func() { _ = tx.Rollback() }()
 
-	t2 := tx.Use("db1", "t2")
+	t2 := tx.Use("project1", "db1", "t2")
 
 	doc1 := Doc{K1: "vK1", K2: 1, D1: "vD1"}
 
@@ -110,7 +110,7 @@ func testTxClient(t *testing.T, c client) {
 	err = tx.Commit()
 	require.NoError(t, err)
 
-	err = c.Drop(ctx, "db1", "t2")
+	err = c.Drop(ctx, "project1", "db1", "t2")
 	require.NoError(t, err)
 }
 

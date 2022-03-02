@@ -37,14 +37,14 @@ type crudClient interface {
 }
 
 type tableClient interface {
-	Create(ctx context.Context, db string, table string, key string) error
-	Drop(ctx context.Context, db string, table string) error
-	Use(db string, table string) crudClient
+	Create(ctx context.Context, project string, db string, table string, key string) error
+	Drop(ctx context.Context, project string, db string, table string) error
+	Use(projcet string, db string, table string) crudClient
 	BeginTx() (txClient, error)
 }
 
 type txClient interface {
-	Use(db string, table string) crudClient
+	Use(project string, db string, table string) crudClient
 	Commit() error
 	Rollback() error
 }
@@ -68,9 +68,10 @@ type grpcClient struct {
 }
 
 type grpcCRUDClient struct {
-	c     api.TigrisDBClient
-	db    string
-	table string
+	c       api.TigrisDBClient
+	project string
+	db      string
+	table   string
 }
 
 /*
@@ -93,24 +94,26 @@ func (c *grpcClient) Close() error {
 	return c.conn.Close()
 }
 
-func (c *grpcClient) Create(ctx context.Context, db string, table string, _ string) error {
+func (c *grpcClient) Create(ctx context.Context, project string, db string, table string, _ string) error {
 	_, err := c.CreateCollection(ctx, &api.CreateCollectionRequest{
+		Project:    project,
 		Db:         db,
 		Collection: table,
 	})
 	return err
 }
 
-func (c *grpcClient) Drop(ctx context.Context, db string, table string) error {
+func (c *grpcClient) Drop(ctx context.Context, project string, db string, table string) error {
 	_, err := c.DropCollection(ctx, &api.DropCollectionRequest{
+		Project:    project,
 		Db:         db,
 		Collection: table,
 	})
 	return err
 }
 
-func (c *grpcClient) Use(db string, table string) crudClient {
-	return &grpcCRUDClient{c: c.TigrisDBClient, db: db, table: table}
+func (c *grpcClient) Use(project string, db string, table string) crudClient {
+	return &grpcCRUDClient{c: c.TigrisDBClient, project: project, db: db, table: table}
 }
 
 func (c *grpcClient) BeginTx() (txClient, error) {
@@ -138,6 +141,7 @@ func (c *grpcCRUDClient) Insert(ctx context.Context, docs ...interface{}) error 
 	}
 
 	_, err = c.c.Insert(ctx, &api.InsertRequest{
+		Project:    c.project,
 		Db:         c.db,
 		Collection: c.table,
 		Documents:  bdocs,
@@ -153,6 +157,7 @@ func (c *grpcCRUDClient) Delete(ctx context.Context, docs ...interface{}) error 
 	}
 
 	_, err = c.c.Delete(ctx, &api.DeleteRequest{
+		Project:    c.project,
 		Db:         c.db,
 		Collection: c.table,
 	})
@@ -167,6 +172,7 @@ func (c *grpcCRUDClient) Replace(ctx context.Context, docs ...interface{}) error
 	}
 
 	_, err = c.c.Replace(ctx, &api.ReplaceRequest{
+		Project:    c.project,
 		Db:         c.db,
 		Collection: c.table,
 		Documents:  bdocs,
@@ -182,6 +188,7 @@ func (c *grpcCRUDClient) Update(ctx context.Context, docs ...interface{}) error 
 	}
 
 	_, err = c.c.Update(ctx, &api.UpdateRequest{
+		Project:    c.project,
 		Db:         c.db,
 		Collection: c.table,
 	})
@@ -191,6 +198,7 @@ func (c *grpcCRUDClient) Update(ctx context.Context, docs ...interface{}) error 
 
 func (c *grpcCRUDClient) Read(ctx context.Context, docs ...interface{}) error {
 	resp, err := c.c.Read(ctx, &api.ReadRequest{
+		Project:    c.project,
 		Db:         c.db,
 		Collection: c.table,
 	})
@@ -222,9 +230,10 @@ type httpClient struct {
 }
 
 type httpCRUDClient struct {
-	c     *userHTTP.ClientWithResponses
-	db    string
-	table string
+	c       *userHTTP.ClientWithResponses
+	project string
+	db      string
+	table   string
 }
 
 func newHTTPClient(_ context.Context, host string, port int16) (*httpClient, error) {
@@ -251,18 +260,18 @@ func HTTPError(err error, resp httpStatus) error {
 	return nil
 }
 
-func (c *httpClient) Create(ctx context.Context, db string, collection string, _ string) error {
-	resp, err := c.TigrisDBCreateCollectionWithResponse(ctx, db, collection, userHTTP.TigrisDBCreateCollectionJSONRequestBody{})
+func (c *httpClient) Create(ctx context.Context, project string, db string, collection string, _ string) error {
+	resp, err := c.TigrisDBCreateCollectionWithResponse(ctx, project, db, collection, userHTTP.TigrisDBCreateCollectionJSONRequestBody{})
 	return HTTPError(err, resp)
 }
 
-func (c *httpClient) Drop(ctx context.Context, db string, table string) error {
-	resp, err := c.TigrisDBDropCollectionWithResponse(ctx, db, table)
+func (c *httpClient) Drop(ctx context.Context, project string, db string, table string) error {
+	resp, err := c.TigrisDBDropCollectionWithResponse(ctx, project, db, table)
 	return HTTPError(err, resp)
 }
 
-func (c *httpClient) Use(db string, table string) crudClient {
-	return &httpCRUDClient{c: c.ClientWithResponses, db: db, table: table}
+func (c *httpClient) Use(project string, db string, table string) crudClient {
+	return &httpCRUDClient{c: c.ClientWithResponses, project: project, db: db, table: table}
 }
 
 func (c *httpClient) BeginTx() (txClient, error) {
@@ -289,7 +298,7 @@ func (c *httpCRUDClient) Insert(ctx context.Context, docs ...interface{}) error 
 		return err
 	}
 
-	resp, err := c.c.TigrisDBInsertWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBInsertJSONRequestBody{})
+	resp, err := c.c.TigrisDBInsertWithResponse(ctx, c.project, c.db, c.table, userHTTP.TigrisDBInsertJSONRequestBody{})
 
 	return HTTPError(err, resp)
 }
@@ -300,7 +309,7 @@ func (c *httpCRUDClient) Delete(ctx context.Context, docs ...interface{}) error 
 		return err
 	}
 
-	resp, err := c.c.TigrisDBDeleteWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBDeleteJSONRequestBody{})
+	resp, err := c.c.TigrisDBDeleteWithResponse(ctx, c.project, c.db, c.table, userHTTP.TigrisDBDeleteJSONRequestBody{})
 
 	return HTTPError(err, resp)
 }
@@ -311,7 +320,7 @@ func (c *httpCRUDClient) Replace(ctx context.Context, docs ...interface{}) error
 		return err
 	}
 
-	resp, err := c.c.TigrisDBReplaceWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBReplaceJSONRequestBody{})
+	resp, err := c.c.TigrisDBReplaceWithResponse(ctx, c.project, c.db, c.table, userHTTP.TigrisDBReplaceJSONRequestBody{})
 
 	return HTTPError(err, resp)
 }
@@ -322,7 +331,7 @@ func (c *httpCRUDClient) Update(ctx context.Context, docs ...interface{}) error 
 		return err
 	}
 
-	resp, err := c.c.TigrisDBUpdateWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBUpdateJSONRequestBody{})
+	resp, err := c.c.TigrisDBUpdateWithResponse(ctx, c.project, c.db, c.table, userHTTP.TigrisDBUpdateJSONRequestBody{})
 
 	return HTTPError(err, resp)
 }
@@ -337,7 +346,7 @@ func (c *httpCRUDClient) Read(ctx context.Context, docs ...interface{}) error {
 		return err
 	}
 
-	resp, err := c.c.TigrisDBRead(ctx, c.db, c.table, userHTTP.TigrisDBReadJSONRequestBody{})
+	resp, err := c.c.TigrisDBRead(ctx, c.project, c.db, c.table, userHTTP.TigrisDBReadJSONRequestBody{})
 
 	if ulog.E(err) {
 		return err
