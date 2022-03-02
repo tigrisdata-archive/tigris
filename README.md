@@ -4,10 +4,31 @@
 
 # Configuration
 
-## Connecting to FoundationDB
-The FoundationDB cluster file can be specified in the configuration file `server.yaml`.
-It can also be passed through the environment variable `TIGRISDB_SERVER_FOUNDATIONDB_CLUSTER_FILE`. The environment
-variable has higher precedence and will override the cluster file configuration define in `server.yaml`.
+The configuration is specified either through the configuration file
+`server.yaml` or through environment variables.
+
+Example configuration is shown below:
+
+```yaml
+api:
+  port: 8081
+
+foundationdb:
+  cluster_file: "/etc/foundationdb/fdb.cluster"
+```
+
+When the configuration options are specified through environment 
+variables they have a higher precedence. The environment variables
+have the following structure:
+
+- The variables are in uppercase
+- They are prefixed by `TIGRISDB_SERVER_`
+- Multi-level variables are specified by replacing `.` with `_`
+
+Examples:
+
+- To specify the FoundationDB cluster file set the variable `TIGRISDB_SERVER_FOUNDATIONDB_CLUSTER_FILE`
+- To specify the API listen port set the variable `TIGRISDB_SERVER_API_PORT`
 
 # Development
 
@@ -34,7 +55,8 @@ sh scripts/install_build_deps.sh
 sh scripts/install_test_deps.sh
 ```
 
-On OSX you can run `make osx_test` to test against FDB running on the host.
+Running `make osx_run` on OSX would bring the server up on the host. You can 
+then run `make osx_test` to test against FDB running on the host.
 
 # License
 This software is licensed under the [Apache 2.0](LICENSE).

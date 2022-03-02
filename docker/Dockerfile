@@ -1,7 +1,6 @@
 FROM golang:1.18beta2-bullseye AS build
 
-RUN apt-get update && apt-get install -y apt-transport-https
-RUN apt-get install -y sudo
+RUN apt-get update && apt-get install -y --no-install-recommends apt-transport-https sudo
 
 RUN mkdir /build
 
@@ -14,12 +13,15 @@ RUN go mod download
 
 COPY . /build
 
-RUN rm -f server/service
-RUN make bins
+RUN rm -f server/service && make bins
 
 FROM debian:bullseye-slim
 
-EXPOSE 8081
+# Remove apt configuration
+RUN rm -rf /etc/apt/*
+
+# Setup an unprivileged user
+RUN groupadd -r tigris && useradd -r -s /bin/false -g tigris tigris
 
 RUN mkdir -p /server /etc/tigrisdata/tigrisdb /etc/foundationdb/
 
@@ -27,6 +29,13 @@ COPY --from=build /build/server/service /server/service
 COPY --from=build /build/config/server.yaml /etc/tigrisdata/tigrisdb
 COPY --from=build /usr/lib/libfdb_c.so /usr/lib/libfdb_c.so
 
+RUN chown -R tigris:tigris /server /etc/tigrisdata/tigrisdb
+
+EXPOSE 8081
+
 WORKDIR /server
+
+# Set the default effective user to an unprivileged user
+USER tigris
 
 CMD ["/server/service"]
