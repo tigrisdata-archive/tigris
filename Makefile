@@ -69,7 +69,7 @@ run: generate
 bins: $(BINS)
 
 clean:
-	docker-compose -f test/docker/docker-compose.yml down -v --remove-orphans
+	$(DOCKER_COMPOSE) down -v --remove-orphans
 	rm -f server/service api/server/${V}/*.pb.go \
 		api/server/${V}/*.pb.gw.go \
 		api/server/${V}/*_openapi.yaml \
