@@ -16,6 +16,8 @@ package v1
 
 import (
 	"context"
+	"encoding/json"
+	"google.golang.org/protobuf/types/known/structpb"
 	"net/http"
 
 	"github.com/fullstorydev/grpchan/inprocgrpc"
@@ -104,7 +106,12 @@ func (s *userService) CreateCollection(ctx context.Context, r *api.CreateCollect
 		return nil, api.Errorf(codes.AlreadyExists, "collection already exists")
 	}
 
-	collection, err := schema.CreateCollectionFromSchema(r.Db, r.Collection, r.Schema.Fields)
+	var schemaObj = &structpb.Struct{}
+	if err := json.Unmarshal(r.Schema, schemaObj); err != nil {
+		return nil, err
+	}
+
+	collection, err := schema.CreateCollectionFromSchema(r.Db, r.Collection, schemaObj.Fields)
 	if err != nil {
 		return nil, api.Errorf(codes.InvalidArgument, "invalid schema")
 	}

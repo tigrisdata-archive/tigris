@@ -40,6 +40,8 @@ done
 
 yq_fix_object UpdateRequest fields
 yq_fix_object ReadResponse doc
+yq_fix_object CreateCollectionRequest schema
+yq_fix_object AlterCollectionRequest schema
 
 fix_bytes
 
