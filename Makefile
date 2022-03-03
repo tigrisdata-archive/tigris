@@ -69,7 +69,7 @@ run: generate
 bins: $(BINS)
 
 clean:
-	$(DOCKER_COMPOSE) down -v --remove-orphans
+	$(DOCKER_COMPOSE) down -v --remove-orphans --volumes
 	rm -f server/service api/server/${V}/*.pb.go \
 		api/server/${V}/*.pb.gw.go \
 		api/server/${V}/*_openapi.yaml \

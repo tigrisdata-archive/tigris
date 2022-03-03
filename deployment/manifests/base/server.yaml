@@ -1,0 +1,8 @@
+server:
+  port: 8080
+
+log:
+  level: info
+
+foundationdb:
+  cluster_file: "/mnt/fdb-config-volume/cluster-file"

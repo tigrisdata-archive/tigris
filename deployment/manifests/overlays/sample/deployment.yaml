@@ -1,0 +1,14 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tigrisdb-server
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tigrisdb-server
+  template:
+    spec:
+      volumes:
+        - name: fdb-cluster-config-volume
+          configMap:
+            name: dev-fdb-cluster-config

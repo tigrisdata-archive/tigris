@@ -28,7 +28,7 @@ have the following structure:
 Examples:
 
 - To specify the FoundationDB cluster file set the variable `TIGRISDB_SERVER_FOUNDATIONDB_CLUSTER_FILE`
-- To specify the API listen port set the variable `TIGRISDB_SERVER_API_PORT`
+- To specify the API listen port set the variable `TIGRISDB_SERVER_SERVER_PORT`
 
 # Development
 
