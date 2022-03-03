@@ -71,7 +71,7 @@ type TxQueryRunner struct {
 
 // Run is responsible for running/executing the query
 func (q *TxQueryRunner) Run(ctx context.Context, req *Request) (*Response, error) {
-	tx, err := q.txMgr.GetInheritedOrStartTx(ctx, api.GetTransaction(req), false)
+	tx, err := q.txMgr.GetInheritedOrStartTx(ctx, api.GetTransaction(req.Request), false)
 	if err != nil {
 		return nil, err
 	}
@@ -89,38 +89,74 @@ func (q *TxQueryRunner) Run(ctx context.Context, req *Request) (*Response, error
 		}
 	}()
 
-	for _, d := range req.documents {
-		// ToDo: need to implement our own decoding to only extract custom keys
-		var s = &structpb.Struct{}
-		if err := json.Unmarshal(d, s); err != nil {
-			return nil, err
-		}
-
-		key, err := q.encoder.BuildKey(s.GetFields(), req.collection)
-		if err != nil {
-			return nil, err
-		}
-
-		switch api.RequestType(req) {
-		case api.Insert:
-			txErr = tx.Insert(ctx, key, d)
-		case api.Replace:
-			txErr = tx.Replace(ctx, key, d)
-		case api.Update:
-			txErr = tx.Update(ctx, key, d)
-		case api.Delete:
-			txErr = tx.Delete(ctx, key)
-		}
-
-		if txErr != nil {
-			return nil, err
-		}
+	if reqFilter := api.GetFilter(req); reqFilter != nil {
+		txErr = q.iterateFilter(ctx, req, tx, reqFilter)
+	} else {
+		txErr = q.iterateDocument(ctx, req, tx)
 	}
+
 	if txErr != nil {
 		return nil, txErr
 	}
 
 	return &Response{}, err
+}
+
+func (q *TxQueryRunner) iterateFilter(ctx context.Context, req *Request, tx transaction.Tx, reqFilter []byte) error {
+	filters, err := filter.Build(reqFilter)
+	if err != nil {
+		return err
+	}
+
+	kb := filter.NewKeyBuilder(filter.NewStrictEqKeyComposer(req.collection.StorageName()))
+	iKeys, err := kb.Build(filters, req.collection.PrimaryKeys())
+	if err != nil {
+		return err
+	}
+
+	for _, key := range iKeys {
+		switch api.RequestType(req) {
+		case api.Update:
+			err = tx.Update(ctx, key, req.Request.(*api.UpdateRequest).Fields)
+		case api.Delete:
+			err = tx.Delete(ctx, key)
+		}
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return err
+}
+
+func (q *TxQueryRunner) iterateDocument(ctx context.Context, req *Request, tx transaction.Tx) error {
+	var err error
+	for _, d := range req.documents {
+		// ToDo: need to implement our own decoding to only extract custom keys
+		var s = &structpb.Struct{}
+		if err = json.Unmarshal(d, s); err != nil {
+			return err
+		}
+
+		key, err := q.encoder.BuildKey(s.GetFields(), req.collection)
+		if err != nil {
+			return err
+		}
+
+		switch api.RequestType(req) {
+		case api.Insert:
+			err = tx.Insert(ctx, key, d)
+		case api.Replace:
+			err = tx.Replace(ctx, key, d)
+		}
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return err
 }
 
 // StreamingQueryRunner is a runner used for Queries that are reads and needs to return result in streaming fashion
