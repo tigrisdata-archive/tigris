@@ -99,3 +99,57 @@ func (x *InsertRequest) UnmarshalJSON(data []byte) error {
 	}
 	return nil
 }
+
+// UnmarshalJSON on CreateCollectionRequest avoids unmarshalling schema. The req handler deserializes the schema.
+func (x *CreateCollectionRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+	for key, value := range mp {
+		switch key {
+		case "db":
+			if err := jsoniter.Unmarshal(value, &x.Db); err != nil {
+				return err
+			}
+		case "collection":
+			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
+				return err
+			}
+		case "schema":
+			x.Schema = value
+		case "options":
+			if err := jsoniter.Unmarshal(value, &x.Options); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// UnmarshalJSON on AlterCollectionRequest avoids unmarshalling schema. The req handler deserializes the schema.
+func (x *AlterCollectionRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+	for key, value := range mp {
+		switch key {
+		case "db":
+			if err := jsoniter.Unmarshal(value, &x.Db); err != nil {
+				return err
+			}
+		case "collection":
+			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
+				return err
+			}
+		case "schema":
+			x.Schema = value
+		case "options":
+			if err := jsoniter.Unmarshal(value, &x.Options); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}

@@ -135,7 +135,7 @@ message DropDatabaseResponse {
 message CreateCollectionRequest {
   string db = 1;
   string collection = 2;
-  google.protobuf.Struct schema = 3;
+  bytes schema = 3;
   CollectionOption options = 4;
 }
 
@@ -146,7 +146,7 @@ message CreateCollectionResponse {
 message AlterCollectionRequest {
   string db = 1;
   string collection = 2;
-  google.protobuf.Struct schema = 3;
+  bytes schema = 3;
   CollectionOption options = 4;
 }
 

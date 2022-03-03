@@ -48,17 +48,11 @@ func TestAPIGRPC(t *testing.T) {
 
 	_, _ = c.DropCollection(ctx, &api.DropCollectionRequest{Db: "db1", Collection: "t1"})
 
-	values, err := structpb.NewValue([]interface{}{"pkey_int"})
 	require.NoError(t, err)
 	_, err = c.CreateCollection(ctx, &api.CreateCollectionRequest{
 		Db:         "db1",
 		Collection: "t1",
-		Schema: &structpb.Struct{
-			Fields: map[string]*structpb.Value{
-				"pkey_int":    structpb.NewStringValue("int"),
-				"primary_key": values,
-			},
-		},
+		Schema:     []byte(`{"pkey_int": "int","primary_key": ["pkey_int"]}`),
 	})
 	require.NoError(t, err)
 
