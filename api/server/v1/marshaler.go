@@ -1,9 +1,24 @@
 package api
 
 import (
-	"encoding/json"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	jsoniter "github.com/json-iterator/go"
+	spb "google.golang.org/genproto/googleapis/rpc/status"
 )
+
+// CustomMarshaler is a marshaler to customize the response. Currently it is only used to marshal custom error message
+// otherwise it just use the inbuilt mux marshaller.
+type CustomMarshaler struct {
+	*runtime.JSONBuiltin
+}
+
+func (c *CustomMarshaler) Marshal(v interface{}) ([]byte, error) {
+	switch ty := v.(type) {
+	case *spb.Status:
+		return MarshalStatus(ty)
+	}
+	return c.JSONBuiltin.Marshal(v)
+}
 
 // MarshalJSON on read response avoid any encoding/decoding on x.Doc. With this approach we are not doing any extra
 // marshaling/unmarshalling in returning the data from the database. The document returned from the database is stored
@@ -67,7 +82,7 @@ func (x *InsertRequest) UnmarshalJSON(data []byte) error {
 				return err
 			}
 		case "documents":
-			var docs []json.RawMessage
+			var docs []jsoniter.RawMessage
 			if err := jsoniter.Unmarshal(value, &docs); err != nil {
 				return err
 			}

@@ -22,29 +22,34 @@ import (
 	grpc_logging "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	grpc_ratelimit "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/ratelimit"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
-	grpc_validator "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/validator"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 )
 
 func Get() (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor) {
+	// adding all the middlewares for the server stream
+	//
+	// Note: we don't add validate here and rather call it in server code because the validator interceptor returns gRPC
+	// error which is not convertible to the internal rest error code.
 	stream := middleware.ChainStreamServer(
 		grpc_ratelimit.StreamServerInterceptor(&RateLimiter{}),
 		grpc_auth.StreamServerInterceptor(AuthFunc),
 		grpc_logging.StreamServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger), []grpc_logging.Option{}...),
 		// grpc_logging.PayloadStreamServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger), alwaysLoggingDeciderServer, time.RFC3339), // To log payload
-		grpc_validator.StreamServerInterceptor(false),
 		grpc_opentracing.StreamServerInterceptor(),
 		grpc_recovery.StreamServerInterceptor(),
 	)
 
+	// adding all the middlewares for the unary stream
+	//
+	// Note: we don't add validate here and rather call it in server code because the validator interceptor returns gRPC
+	// error which is not convertible to the internal rest error code.
 	unary := middleware.ChainUnaryServer(
 		PprofUnaryServerInterceptor(),
 		grpc_ratelimit.UnaryServerInterceptor(&RateLimiter{}),
 		grpc_auth.UnaryServerInterceptor(AuthFunc),
 		grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger)),
 		// grpc_logging.PayloadUnaryServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger), alwaysLoggingDeciderServer, time.RFC3339), //To log payload
-		grpc_validator.UnaryServerInterceptor(false),
 		TimeoutUnaryServerInterceptor(DefaultTimeout),
 		grpc_opentracing.UnaryServerInterceptor(),
 		grpc_recovery.UnaryServerInterceptor(),

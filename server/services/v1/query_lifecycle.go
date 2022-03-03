@@ -17,8 +17,9 @@ package v1
 import (
 	"context"
 
+	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // QueryLifecycleFactory is responsible for returning queryLifecycle objects
@@ -43,10 +44,10 @@ func newQueryLifecycle() *queryLifecycle {
 
 func (q *queryLifecycle) run(ctx context.Context, req *Request) (*Response, error) {
 	if req == nil {
-		return nil, status.Errorf(codes.Internal, "empty request")
+		return nil, api.Errorf(codes.Internal, "empty request")
 	}
 	if req.queryRunner == nil {
-		return nil, status.Errorf(codes.Internal, "query runner is missing")
+		return nil, api.Errorf(codes.Internal, "query runner is missing")
 	}
 
 	return req.queryRunner.Run(ctx, req)

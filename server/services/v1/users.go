@@ -29,7 +29,6 @@ import (
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -68,7 +67,9 @@ func newUserService(kv kv.KV) *userService {
 }
 
 func (s *userService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {
-	mux := runtime.NewServeMux(runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.JSONBuiltin{}))
+	mux := runtime.NewServeMux(runtime.WithMarshalerOption(runtime.MIMEWildcard, &api.CustomMarshaler{
+		JSONBuiltin: &runtime.JSONBuiltin{},
+	}))
 
 	if err := api.RegisterTigrisDBHandlerClient(context.TODO(), mux, api.NewTigrisDBClient(inproc)); err != nil {
 		return err
@@ -95,17 +96,21 @@ func (s *userService) RegisterGRPC(grpc *grpc.Server) error {
 }
 
 func (s *userService) CreateCollection(ctx context.Context, r *api.CreateCollectionRequest) (*api.CreateCollectionResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
 	if c := s.schemaCache.Get(r.Db, r.Collection); c != nil {
-		return nil, status.Errorf(codes.AlreadyExists, "collection already exists")
+		return nil, api.Errorf(codes.AlreadyExists, "collection already exists")
 	}
 
 	collection, err := schema.CreateCollectionFromSchema(r.Db, r.Collection, r.Schema.Fields)
 	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid schema")
+		return nil, api.Errorf(codes.InvalidArgument, "invalid schema")
 	}
 
 	if err := s.kv.CreateTable(ctx, collection.StorageName()); ulog.E(err) {
-		return nil, status.Errorf(codes.Internal, "error: %v", err)
+		return nil, api.Errorf(codes.Internal, "error: %v", err)
 	}
 	s.schemaCache.Put(collection)
 
@@ -115,8 +120,12 @@ func (s *userService) CreateCollection(ctx context.Context, r *api.CreateCollect
 }
 
 func (s *userService) DropCollection(ctx context.Context, r *api.DropCollectionRequest) (*api.DropCollectionResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
 	if err := s.kv.DropTable(ctx, schema.StorageName(r.GetDb(), r.GetCollection())); ulog.E(err) {
-		return nil, status.Errorf(codes.Internal, "error: %v", err)
+		return nil, api.Errorf(codes.Internal, "error: %v", err)
 	}
 
 	s.schemaCache.Remove(r.GetDb(), r.GetCollection())
@@ -126,7 +135,11 @@ func (s *userService) DropCollection(ctx context.Context, r *api.DropCollectionR
 	}, nil
 }
 
-func (s *userService) BeginTransaction(ctx context.Context, _ *api.BeginTransactionRequest) (*api.BeginTransactionResponse, error) {
+func (s *userService) BeginTransaction(ctx context.Context, r *api.BeginTransactionRequest) (*api.BeginTransactionResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
 	_, txCtx, err := s.txMgr.StartTx(ctx, true)
 	if err != nil {
 		return nil, err
@@ -138,6 +151,10 @@ func (s *userService) BeginTransaction(ctx context.Context, _ *api.BeginTransact
 }
 
 func (s *userService) CommitTransaction(ctx context.Context, r *api.CommitTransactionRequest) (*api.CommitTransactionResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
 	tx, err := s.txMgr.GetTx(r.TxCtx)
 	if err != nil {
 		return nil, err
@@ -151,6 +168,10 @@ func (s *userService) CommitTransaction(ctx context.Context, r *api.CommitTransa
 }
 
 func (s *userService) RollbackTransaction(ctx context.Context, r *api.RollbackTransactionRequest) (*api.RollbackTransactionResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
 	tx, err := s.txMgr.GetTx(r.TxCtx)
 	if err != nil {
 		return nil, err
@@ -167,9 +188,13 @@ func (s *userService) RollbackTransaction(ctx context.Context, r *api.RollbackTr
 // Insert new object returns an error if object already exists
 // Operations done individually not in actual batch
 func (s *userService) Insert(ctx context.Context, r *api.InsertRequest) (*api.InsertResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
 	collection := s.schemaCache.Get(r.GetDb(), r.GetCollection())
 	if collection == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "collection doesn't exists")
+		return nil, api.Errorf(codes.InvalidArgument, "collection doesn't exists")
 	}
 
 	_, err := s.Run(ctx, &Request{
@@ -188,9 +213,13 @@ func (s *userService) Insert(ctx context.Context, r *api.InsertRequest) (*api.In
 // Update performs full body replace of existing object
 // Operations done individually not in actual batch
 func (s *userService) Update(ctx context.Context, r *api.UpdateRequest) (*api.UpdateResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
 	collection := s.schemaCache.Get(r.GetDb(), r.GetCollection())
 	if collection == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "collection doesn't exists")
+		return nil, api.Errorf(codes.InvalidArgument, "collection doesn't exists")
 	}
 
 	_, err := s.Run(ctx, &Request{
@@ -206,9 +235,13 @@ func (s *userService) Update(ctx context.Context, r *api.UpdateRequest) (*api.Up
 }
 
 func (s *userService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.ReplaceResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
 	collection := s.schemaCache.Get(r.GetDb(), r.GetCollection())
 	if collection == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "collection doesn't exists")
+		return nil, api.Errorf(codes.InvalidArgument, "collection doesn't exists")
 	}
 
 	_, err := s.Run(ctx, &Request{
@@ -225,9 +258,13 @@ func (s *userService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.
 }
 
 func (s *userService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.DeleteResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
 	collection := s.schemaCache.Get(r.GetDb(), r.GetCollection())
 	if collection == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "collection doesn't exists")
+		return nil, api.Errorf(codes.InvalidArgument, "collection doesn't exists")
 	}
 
 	_, err := s.Run(ctx, &Request{
@@ -243,9 +280,13 @@ func (s *userService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.De
 }
 
 func (s *userService) Read(r *api.ReadRequest, stream api.TigrisDB_ReadServer) error {
+	if err := r.Validate(); err != nil {
+		return err
+	}
+
 	collection := s.schemaCache.Get(r.GetDb(), r.GetCollection())
 	if collection == nil {
-		return status.Errorf(codes.InvalidArgument, "collection doesn't exists")
+		return api.Errorf(codes.InvalidArgument, "collection doesn't exists")
 	}
 
 	_, err := s.Run(stream.Context(), &Request{
