@@ -22,6 +22,11 @@ option go_package = "github.com/tigrisdata/tigrisdb/api";
 // BUG: gnostic protoc-gen-openapi doesn't support enum generation
 // https://github.com/google/gnostic/issues/255
 
+message ErrorDetails {
+  uint32 code = 1;
+  string msg = 2;
+}
+
 message WriteOption {
   TransactionCtx tx_ctx = 1;
 }

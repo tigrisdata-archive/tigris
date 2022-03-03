@@ -40,6 +40,7 @@ const (
 
 type Request interface {
 	proto.Message
+
 	Validator
 }
 

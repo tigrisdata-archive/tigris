@@ -16,7 +16,6 @@ package api
 
 import (
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type Validator interface {
@@ -53,7 +52,7 @@ func (x *InsertRequest) Validate() error {
 	}
 
 	if len(x.GetDocuments()) == 0 {
-		return status.Errorf(codes.InvalidArgument, "empty documents received")
+		return Errorf(codes.InvalidArgument, "empty documents received")
 	}
 	return nil
 }
@@ -64,7 +63,7 @@ func (x *ReplaceRequest) Validate() error {
 	}
 
 	if len(x.GetDocuments()) == 0 {
-		return status.Errorf(codes.InvalidArgument, "empty documents received")
+		return Errorf(codes.InvalidArgument, "empty documents received")
 	}
 	return nil
 }
@@ -75,7 +74,7 @@ func (x *UpdateRequest) Validate() error {
 	}
 
 	if x.Filter == nil {
-		return status.Errorf(codes.InvalidArgument, "filter is a required field")
+		return Errorf(codes.InvalidArgument, "filter is a required field")
 	}
 	return nil
 }
@@ -86,7 +85,7 @@ func (x *DeleteRequest) Validate() error {
 	}
 
 	if x.Filter == nil {
-		return status.Errorf(codes.InvalidArgument, "filter is a required field")
+		return Errorf(codes.InvalidArgument, "filter is a required field")
 	}
 	return nil
 }
@@ -105,12 +104,12 @@ func (x *CreateCollectionRequest) Validate() error {
 	}
 
 	if x.Schema == nil {
-		return status.Errorf(codes.InvalidArgument, "schema is a required during collection creation")
+		return Errorf(codes.InvalidArgument, "schema is a required during collection creation")
 	}
 
 	if !IsTxSupported(x) {
 		if transaction := GetTransaction(x); transaction != nil {
-			return status.Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
+			return Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
 		}
 	}
 
@@ -124,7 +123,7 @@ func (x *DropCollectionRequest) Validate() error {
 
 	if !IsTxSupported(x) {
 		if transaction := GetTransaction(x); transaction != nil {
-			return status.Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
+			return Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
 		}
 	}
 
@@ -138,7 +137,7 @@ func (x *AlterCollectionRequest) Validate() error {
 
 	if !IsTxSupported(x) {
 		if transaction := GetTransaction(x); transaction != nil {
-			return status.Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
+			return Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
 		}
 	}
 
@@ -152,7 +151,7 @@ func (x *TruncateCollectionRequest) Validate() error {
 
 	if !IsTxSupported(x) {
 		if transaction := GetTransaction(x); transaction != nil {
-			return status.Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
+			return Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
 		}
 	}
 
@@ -161,7 +160,7 @@ func (x *TruncateCollectionRequest) Validate() error {
 
 func isValidCollection(name string) error {
 	if len(name) == 0 {
-		return status.Errorf(codes.InvalidArgument, "invalid collection name %s", name)
+		return Error(codes.InvalidArgument, "invalid collection name")
 	}
 
 	return nil
@@ -169,7 +168,7 @@ func isValidCollection(name string) error {
 
 func isValidDatabase(name string) error {
 	if len(name) == 0 {
-		return status.Errorf(codes.InvalidArgument, "invalid database name %s", name)
+		return Error(codes.InvalidArgument, "invalid database name")
 	}
 
 	return nil
