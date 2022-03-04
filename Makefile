@@ -63,7 +63,7 @@ test: clean docker_test
 local_test: generate test_client
 	go test $(TEST_PARAM) ./...
 
-run: generate
+run: clean generate
 	$(DOCKER_COMPOSE) up --build tigris_server
 
 bins: $(BINS)

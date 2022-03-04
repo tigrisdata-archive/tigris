@@ -17,12 +17,14 @@ package v1
 import (
 	"context"
 	"encoding/json"
+
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/encoding"
 	"github.com/tigrisdata/tigrisdb/query/filter"
 	"github.com/tigrisdata/tigrisdb/server/transaction"
 	"github.com/tigrisdata/tigrisdb/store/kv"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -146,6 +148,10 @@ func (q *TxQueryRunner) iterateDocument(ctx context.Context, req *Request, tx tr
 		switch api.RequestType(req) {
 		case api.Insert:
 			err = tx.Insert(ctx, key, d)
+			if err != nil && err.Error() == "file already exists" {
+				// FDB returning it as string, probably we need to move this check in KV
+				return api.Errorf(codes.AlreadyExists, "row already exists")
+			}
 		case api.Replace:
 			err = tx.Replace(ctx, key, d)
 		}
