@@ -12,8 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-api:
+server:
   port: 8081
+
+log:
+  level: trace
 
 foundationdb:
   cluster_file: "/etc/foundationdb/fdb.cluster"
