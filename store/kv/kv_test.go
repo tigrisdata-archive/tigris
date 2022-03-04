@@ -232,7 +232,7 @@ func testKVTimeout(t *testing.T, kv KV) {
 
 	tx, err := kv.Tx(ctx)
 	require.NoError(t, err)
-	time.Sleep(5 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 	err = tx.Commit(context.Background())
 	assert.Error(t, err)
 

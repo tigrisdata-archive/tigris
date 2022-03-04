@@ -72,7 +72,7 @@ type TxQueryRunner struct {
 
 // Run is responsible for running/executing the query
 func (q *TxQueryRunner) Run(ctx context.Context, req *Request) (*Response, error) {
-	tx, err := q.txMgr.GetInheritedOrStartTx(ctx, api.GetTransaction(req.Request), false)
+	tx, err := q.txMgr.GetInheritedOrStartTx(ctx, api.GetTransaction(req.apiRequest), false)
 	if err != nil {
 		return nil, err
 	}
@@ -90,13 +90,13 @@ func (q *TxQueryRunner) Run(ctx context.Context, req *Request) (*Response, error
 		}
 	}()
 
-	if reqFilter := api.GetFilter(req); reqFilter != nil {
+	if reqFilter := api.GetFilter(req.apiRequest); reqFilter != nil {
 		txErr = q.iterateFilter(ctx, req, tx, reqFilter)
 	} else {
 		txErr = q.iterateDocument(ctx, req, tx)
 	}
 
-	if txErr != nil {
+	if ulog.E(txErr) {
 		return nil, txErr
 	}
 
@@ -116,9 +116,9 @@ func (q *TxQueryRunner) iterateFilter(ctx context.Context, req *Request, tx tran
 	}
 
 	for _, key := range iKeys {
-		switch api.RequestType(req) {
+		switch api.RequestType(req.apiRequest) {
 		case api.Update:
-			err = tx.Update(ctx, key, req.Request.(*api.UpdateRequest).Fields)
+			err = tx.Update(ctx, key, req.apiRequest.(*api.UpdateRequest).Fields)
 		case api.Delete:
 			err = tx.Delete(ctx, key)
 		}
@@ -145,7 +145,7 @@ func (q *TxQueryRunner) iterateDocument(ctx context.Context, req *Request, tx tr
 			return err
 		}
 
-		switch api.RequestType(req) {
+		switch api.RequestType(req.apiRequest) {
 		case api.Insert:
 			err = tx.Insert(ctx, key, d)
 			if err != nil && err.Error() == "file already exists" {
@@ -173,12 +173,12 @@ type StreamingQueryRunner struct {
 
 // Run is responsible for running/executing the query
 func (q *StreamingQueryRunner) Run(ctx context.Context, req *Request) (*Response, error) {
-	_, err := q.txMgr.GetInherited(api.GetTransaction(req))
+	_, err := q.txMgr.GetInherited(api.GetTransaction(req.apiRequest))
 	if err != nil {
 		return nil, err
 	}
 
-	filters, err := filter.Build(api.GetFilter(req.Request))
+	filters, err := filter.Build(api.GetFilter(req.apiRequest))
 	if err != nil {
 		return nil, err
 	}

@@ -26,8 +26,7 @@ type Streaming interface {
 
 // Request is a wrapper on api.Request.
 type Request struct {
-	api.Request
-
+	apiRequest  api.Request
 	collection  schema.Collection
 	documents   [][]byte
 	queryRunner QueryRunner

@@ -136,7 +136,7 @@ func (s *session) update(ctx context.Context, key keys.Key, value []byte) error 
 		return nil
 	}
 
-	return s.kTx.UpdateRange(ctx, key.Prefix(), kv.BuildKey(key.PrimaryKeys()...), kv.BuildKey(key.PrimaryKeys()), nil)
+	return s.kTx.UpdateRange(ctx, key.Prefix(), kv.BuildKey(key.PrimaryKeys()...), kv.BuildKey(key.PrimaryKeys()...), nil)
 }
 
 func (s *session) delete(ctx context.Context, key keys.Key) error {

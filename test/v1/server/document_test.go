@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"testing"
 
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -115,7 +116,7 @@ func (s *DocumentSuite) TestInsert_BadRequest() {
 func (s *DocumentSuite) TestInsert_AlreadyExists() {
 	inputDocument := []interface{}{
 		map[string]interface{}{
-			"pkey_int":     2,
+			"pkey_int":     1,
 			"int_value":    10,
 			"string_value": "simple_insert",
 			"bool_value":   true,
@@ -169,7 +170,7 @@ func (s *DocumentSuite) TestInsert_SingleRow() {
 		Object().
 		Empty()
 
-	readResp := s.readByFilter(map[string]interface{}{
+	readResp := readByFilter(s.T(), s.database, s.collection, map[string]interface{}{
 		"pkey_int": 10,
 	})
 
@@ -213,7 +214,7 @@ func (s *DocumentSuite) TestInsert_MultipleRows() {
 		Object().
 		Empty()
 
-	readResp := s.readByFilter(map[string]interface{}{
+	readResp := readByFilter(s.T(), s.database, s.collection, map[string]interface{}{
 		"$or": []interface{}{
 			map[string]interface{}{
 				"pkey_int": 20,
@@ -236,9 +237,302 @@ func (s *DocumentSuite) TestInsert_MultipleRows() {
 	}
 }
 
-func (s *DocumentSuite) readByFilter(filter map[string]interface{}) []map[string]json.RawMessage {
-	e := httpexpect.New(s.T(), config.GetBaseURL())
-	str := e.POST(getDocumentURL(s.database, s.collection, "read")).
+func (s *DocumentSuite) TestUpdate_BadRequest() {
+	cases := []struct {
+		database   string
+		collection string
+		fields     map[string]interface{}
+		filter     map[string]interface{}
+		expMessage string
+	}{
+		{
+			"random_database1",
+			s.collection,
+			map[string]interface{}{
+				"$set": map[string]interface{}{
+					"string_value": "simple_update",
+				},
+			},
+			map[string]interface{}{
+				"pkey_int": 1,
+			},
+			"database doesn't exists 'random_database1'",
+		}, {
+			s.database,
+			"random_collection",
+			map[string]interface{}{
+				"$set": map[string]interface{}{
+					"string_value": "simple_update",
+				},
+			},
+			map[string]interface{}{
+				"pkey_int": 1,
+			},
+			"collection doesn't exists 'random_collection'",
+		}, {
+			"",
+			s.collection,
+			map[string]interface{}{
+				"$set": map[string]interface{}{
+					"string_value": "simple_update",
+				},
+			},
+			map[string]interface{}{
+				"pkey_int": 1,
+			},
+			"invalid database name",
+		}, {
+			s.database,
+			"",
+			map[string]interface{}{
+				"$set": map[string]interface{}{
+					"string_value": "simple_update",
+				},
+			},
+			map[string]interface{}{
+				"pkey_int": 1,
+			},
+			"invalid collection name",
+		}, {
+			s.database,
+			s.collection,
+			nil,
+			map[string]interface{}{
+				"pkey_int": 1,
+			},
+			"empty fields received",
+		}, {
+			s.database,
+			s.collection,
+			map[string]interface{}{
+				"$set": map[string]interface{}{
+					"string_value": "simple_update",
+				},
+			},
+			nil,
+			"filter is a required field",
+		},
+	}
+	for _, c := range cases {
+		e := httpexpect.New(s.T(), config.GetBaseURL())
+		e.PUT(getDocumentURL(c.database, c.collection, "update")).
+			WithJSON(map[string]interface{}{
+				"fields": c.fields,
+				"filter": c.filter,
+			}).
+			Expect().
+			Status(http.StatusBadRequest).
+			JSON().
+			Object().
+			ValueEqual("message", c.expMessage)
+	}
+}
+
+func (s *DocumentSuite) TestDelete_BadRequest() {
+	cases := []struct {
+		databaseName   string
+		collectionName string
+		filter         map[string]interface{}
+		expMessage     string
+	}{
+		{
+			"random_database1",
+			s.collection,
+			map[string]interface{}{
+				"pkey_int": 1,
+			},
+			"database doesn't exists 'random_database1'",
+		}, {
+			s.database,
+			"random_collection",
+			map[string]interface{}{
+				"pkey_int": 1,
+			},
+			"collection doesn't exists 'random_collection'",
+		}, {
+			"",
+			s.collection,
+			map[string]interface{}{
+				"pkey_int": 1,
+			},
+			"invalid database name",
+		}, {
+			s.database,
+			"",
+			map[string]interface{}{
+				"pkey_int": 1,
+			},
+			"invalid collection name",
+		}, {
+			s.database,
+			s.collection,
+			nil,
+			"filter is a required field",
+		},
+	}
+	for _, c := range cases {
+		e := httpexpect.New(s.T(), config.GetBaseURL())
+		e.DELETE(getDocumentURL(c.databaseName, c.collectionName, "delete")).
+			WithJSON(map[string]interface{}{
+				"filter": c.filter,
+			}).
+			Expect().
+			Status(http.StatusBadRequest).
+			JSON().
+			Object().
+			ValueEqual("message", c.expMessage)
+	}
+}
+
+func (s *DocumentSuite) TestDelete_SingleRow() {
+	inputDocument := []interface{}{
+		map[string]interface{}{
+			"pkey_int":  40,
+			"int_value": 10,
+		},
+	}
+
+	insertDocuments(s.T(), s.database, s.collection, inputDocument, false).
+		Status(http.StatusOK)
+
+	readAndValidate(s.T(),
+		s.database,
+		s.collection,
+		map[string]interface{}{
+			"pkey_int": 40,
+		},
+		inputDocument)
+
+	deleteByFilter(s.T(), s.database, s.collection, map[string]interface{}{
+		"filter": map[string]interface{}{
+			"pkey_int": 40,
+		},
+	}).Status(http.StatusOK).
+		JSON().
+		Object().
+		Empty()
+
+	readAndValidate(s.T(),
+		s.database,
+		s.collection,
+		map[string]interface{}{
+			"pkey_int": 40,
+		},
+		nil)
+}
+
+func (s *DocumentSuite) TestDelete_MultipleRows() {
+	inputDocument := []interface{}{
+		map[string]interface{}{
+			"pkey_int":     50,
+			"string_value": "simple_insert50",
+		},
+		map[string]interface{}{
+			"pkey_int":     60,
+			"string_value": "simple_insert60",
+		},
+		map[string]interface{}{
+			"pkey_int":     70,
+			"string_value": "simple_insert70",
+		},
+	}
+
+	// should always succeed with mustNotExists as false
+	insertDocuments(s.T(), s.database, s.collection, inputDocument, false).
+		Status(http.StatusOK)
+
+	readFilter := map[string]interface{}{
+		"$or": []interface{}{
+			map[string]interface{}{
+				"pkey_int": 50,
+			},
+			map[string]interface{}{
+				"pkey_int": 60,
+			},
+			map[string]interface{}{
+				"pkey_int": 70,
+			},
+		},
+	}
+	readAndValidate(s.T(),
+		s.database,
+		s.collection,
+		readFilter,
+		inputDocument)
+
+	// first try deleting a no-op operation i.e. random filter value
+	deleteByFilter(s.T(), s.database, s.collection, map[string]interface{}{
+		"filter": map[string]interface{}{
+			"pkey_int": 10000,
+		},
+	}).Status(http.StatusOK).
+		JSON().
+		Object().
+		Empty()
+
+	// read all documents back
+	readAndValidate(s.T(),
+		s.database,
+		s.collection,
+		readFilter,
+		inputDocument)
+
+	// DELETE keys 50 and 70
+	deleteByFilter(s.T(), s.database, s.collection, map[string]interface{}{
+		"filter": map[string]interface{}{
+			"$or": []interface{}{
+				map[string]interface{}{
+					"pkey_int": 50,
+				},
+				map[string]interface{}{
+					"pkey_int": 70,
+				},
+			},
+		},
+	}).Status(http.StatusOK).
+		JSON().
+		Object().
+		Empty()
+
+	readAndValidate(s.T(),
+		s.database,
+		s.collection,
+		readFilter,
+		[]interface{}{
+			map[string]interface{}{
+				"pkey_int":     60,
+				"string_value": "simple_insert60",
+			},
+		},
+	)
+}
+
+func insertDocuments(t *testing.T, db string, collection string, documents []interface{}, mustNotExists bool) *httpexpect.Response {
+	e := httpexpect.New(t, config.GetBaseURL())
+
+	if mustNotExists {
+		return e.POST(getDocumentURL(db, collection, "insert")).
+			WithJSON(map[string]interface{}{
+				"documents": documents,
+			}).Expect()
+	} else {
+		return e.PUT(getDocumentURL(db, collection, "replace")).
+			WithJSON(map[string]interface{}{
+				"documents": documents,
+			}).Expect()
+	}
+}
+
+func deleteByFilter(t *testing.T, db string, collection string, filter map[string]interface{}) *httpexpect.Response {
+	e := httpexpect.New(t, config.GetBaseURL())
+	return e.DELETE(getDocumentURL(db, collection, "delete")).
+		WithJSON(filter).
+		Expect()
+}
+
+func readByFilter(t *testing.T, db string, collection string, filter map[string]interface{}) []map[string]json.RawMessage {
+	e := httpexpect.New(t, config.GetBaseURL())
+	str := e.POST(getDocumentURL(db, collection, "read")).
 		WithJSON(map[string]interface{}{
 			"filter": filter,
 		}).
@@ -251,10 +545,24 @@ func (s *DocumentSuite) readByFilter(filter map[string]interface{}) []map[string
 	dec := json.NewDecoder(bytes.NewReader([]byte(str)))
 	for dec.More() {
 		var mp map[string]json.RawMessage
-		require.NoError(s.T(), dec.Decode(&mp))
+		require.NoError(t, dec.Decode(&mp))
 		resp = append(resp, mp)
 	}
 
-	s.T().Logf("read response %s", str)
+	t.Logf("read response %s", str)
 	return resp
+}
+
+func readAndValidate(t *testing.T, db string, collection string, filter map[string]interface{}, inputDocument []interface{}) {
+	readResp := readByFilter(t, db, collection, filter)
+	require.Equal(t, len(inputDocument), len(readResp))
+	for i := 0; i < len(inputDocument); i++ {
+		var doc map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(readResp[i]["result"], &doc))
+
+		var actualDoc = []byte(doc["doc"])
+		expDoc, err := json.Marshal(inputDocument[i])
+		require.NoError(t, err)
+		require.Equal(t, expDoc, actualDoc, "exp '%s' actual '%s'", string(expDoc), string(actualDoc))
+	}
 }

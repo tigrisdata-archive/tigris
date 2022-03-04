@@ -73,7 +73,11 @@ func (x *UpdateRequest) Validate() error {
 		return err
 	}
 
-	if x.Filter == nil {
+	if len(x.GetFields()) == 0 {
+		return Errorf(codes.InvalidArgument, "empty fields received")
+	}
+
+	if len(x.GetFilter()) == 0 {
 		return Errorf(codes.InvalidArgument, "filter is a required field")
 	}
 	return nil
@@ -84,7 +88,7 @@ func (x *DeleteRequest) Validate() error {
 		return err
 	}
 
-	if x.Filter == nil {
+	if len(x.GetFilter()) == 0 {
 		return Errorf(codes.InvalidArgument, "filter is a required field")
 	}
 	return nil

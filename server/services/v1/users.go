@@ -17,7 +17,6 @@ package v1
 import (
 	"context"
 	"encoding/json"
-	"google.golang.org/protobuf/types/known/structpb"
 	"net/http"
 
 	"github.com/fullstorydev/grpchan/inprocgrpc"
@@ -31,6 +30,7 @@ import (
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 const (
@@ -205,7 +205,7 @@ func (s *userService) Insert(ctx context.Context, r *api.InsertRequest) (*api.In
 	}
 
 	_, err = s.Run(ctx, &Request{
-		Request:     r,
+		apiRequest:  r,
 		documents:   r.GetDocuments(),
 		collection:  collection,
 		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
@@ -230,7 +230,7 @@ func (s *userService) Update(ctx context.Context, r *api.UpdateRequest) (*api.Up
 	}
 
 	_, err = s.Run(ctx, &Request{
-		Request:     r,
+		apiRequest:  r,
 		collection:  collection,
 		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
 	})
@@ -252,7 +252,7 @@ func (s *userService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.
 	}
 
 	_, err = s.Run(ctx, &Request{
-		Request:     r,
+		apiRequest:  r,
 		documents:   r.GetDocuments(),
 		collection:  collection,
 		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
@@ -275,7 +275,7 @@ func (s *userService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.De
 	}
 
 	_, err = s.Run(ctx, &Request{
-		Request:     r,
+		apiRequest:  r,
 		collection:  collection,
 		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
 	})
@@ -297,7 +297,7 @@ func (s *userService) Read(r *api.ReadRequest, stream api.TigrisDB_ReadServer) e
 	}
 
 	_, err = s.Run(stream.Context(), &Request{
-		Request:     r,
+		apiRequest:  r,
 		collection:  collection,
 		queryRunner: s.queryRunnerFactory.GetStreamingQueryRunner(stream),
 	})

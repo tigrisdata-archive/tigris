@@ -100,6 +100,105 @@ func (x *InsertRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// UnmarshalJSON on ReplaceRequest avoids unmarshalling user document. We only need to extract primary/index keys from
+// the document and want to store the document as-is in the database. This way there is no extra cost of serialization/deserialization
+// and also less error-prone because we are not touching the user document. The req handler needs to extract out
+// the relevant keys from the user docs and should pass it as-is to the underlying engine.
+func (x *ReplaceRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+	for key, value := range mp {
+		switch key {
+		case "db":
+			if err := jsoniter.Unmarshal(value, &x.Db); err != nil {
+				return err
+			}
+		case "collection":
+			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
+				return err
+			}
+		case "documents":
+			var docs []jsoniter.RawMessage
+			if err := jsoniter.Unmarshal(value, &docs); err != nil {
+				return err
+			}
+
+			x.Documents = make([][]byte, len(docs))
+			for i := 0; i < len(docs); i++ {
+				x.Documents[i] = docs[i]
+			}
+		case "options":
+			if err := jsoniter.Unmarshal(value, &x.Options); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// UnmarshalJSON on UpdateRequest avoids unmarshalling filter and instead this way we can write a custom struct to do
+// the unmarshalling and will be avoiding any extra allocation/copying.
+func (x *UpdateRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+	for key, value := range mp {
+		switch key {
+		case "db":
+			if err := jsoniter.Unmarshal(value, &x.Db); err != nil {
+				return err
+			}
+		case "collection":
+			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
+				return err
+			}
+		case "fields":
+			// not decoding it here and let it decode during Fields parsing
+			x.Fields = value
+		case "filter":
+			// not decoding it here and let it decode during filter parsing
+			x.Filter = value
+		case "options":
+			if err := jsoniter.Unmarshal(value, &x.Options); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// UnmarshalJSON on DeleteRequest avoids unmarshalling filter and instead this way we can write a custom struct to do
+// the unmarshalling and will be avoiding any extra allocation/copying.
+func (x *DeleteRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+	for key, value := range mp {
+		switch key {
+		case "db":
+			if err := jsoniter.Unmarshal(value, &x.Db); err != nil {
+				return err
+			}
+		case "collection":
+			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
+				return err
+			}
+		case "filter":
+			// not decoding it here and let it decode during filter parsing
+			x.Filter = value
+		case "options":
+			if err := jsoniter.Unmarshal(value, &x.Options); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // UnmarshalJSON on CreateCollectionRequest avoids unmarshalling schema. The req handler deserializes the schema.
 func (x *CreateCollectionRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
