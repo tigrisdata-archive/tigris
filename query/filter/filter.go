@@ -15,8 +15,8 @@
 package filter
 
 import (
-	"encoding/json"
 	"fmt"
+	jsoniter "github.com/json-iterator/go"
 
 	"github.com/tigrisdata/tigrisdb/query/expression"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
@@ -50,7 +50,7 @@ func Build(reqFilter []byte) ([]Filter, error) {
 	}
 
 	var decodeFilter = &structpb.Value{}
-	if err := json.Unmarshal(reqFilter, decodeFilter); ulog.E(err) {
+	if err := jsoniter.Unmarshal(reqFilter, decodeFilter); ulog.E(err) {
 		return nil, err
 	}
 

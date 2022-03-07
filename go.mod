@@ -4,6 +4,7 @@ go 1.17
 
 require (
 	github.com/apple/foundationdb/bindings/go v0.0.0-20211207225159-47b9a81d1c10
+	github.com/buger/jsonparser v1.1.1
 	github.com/davecgh/go-spew v1.1.1
 	github.com/deepmap/oapi-codegen v1.9.1
 	github.com/fsnotify/fsnotify v1.5.1

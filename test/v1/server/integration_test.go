@@ -38,6 +38,8 @@ func SetupSuites() []suite.TestingSuite {
 	return suites
 }
 
+// TestServer will run all the test present in the suites.
+// To run an individual tests use go test -tags=integration -run TestServer/TestUpdate_SingleRow ./test/v1/server/...
 func TestServer(t *testing.T) {
 	suites := SetupSuites()
 	for _, s := range suites {
