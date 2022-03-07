@@ -21,6 +21,7 @@ import (
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/encoding"
 	"github.com/tigrisdata/tigrisdb/query/filter"
+	"github.com/tigrisdata/tigrisdb/query/update"
 	"github.com/tigrisdata/tigrisdb/server/transaction"
 	"github.com/tigrisdata/tigrisdb/store/kv"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
@@ -115,16 +116,27 @@ func (q *TxQueryRunner) iterateFilter(ctx context.Context, req *Request, tx tran
 		return err
 	}
 
-	for _, key := range iKeys {
-		switch api.RequestType(req.apiRequest) {
-		case api.Update:
-			err = tx.Update(ctx, key, req.apiRequest.(*api.UpdateRequest).Fields)
-		case api.Delete:
-			err = tx.Delete(ctx, key)
-		}
-
+	switch api.RequestType(req.apiRequest) {
+	case api.Update:
+		var factory *update.FieldOperatorFactory
+		factory, err = update.BuildFieldOperators(req.apiRequest.(*api.UpdateRequest).Fields)
 		if err != nil {
 			return err
+		}
+
+		for _, key := range iKeys {
+			// decode the fields now
+			err = tx.Update(ctx, key, func(existingDoc []byte) ([]byte, error) {
+				merged, er := factory.MergeAndGet(existingDoc)
+				if er != nil {
+					return nil, er
+				}
+				return merged, nil
+			})
+		}
+	case api.Delete:
+		for _, key := range iKeys {
+			err = tx.Delete(ctx, key)
 		}
 	}
 

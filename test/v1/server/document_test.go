@@ -328,6 +328,217 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 	}
 }
 
+func (s *DocumentSuite) TestUpdate_SingleRow() {
+	inputDocument := []interface{}{
+		map[string]interface{}{
+			"pkey_int":     100,
+			"int_value":    100,
+			"string_value": "simple_insert1_update",
+			"bool_value":   true,
+			"double_value": 100.00001,
+			"bytes_value":  []byte(`"simple_insert1_update"`),
+		},
+	}
+
+	insertDocuments(s.T(), s.database, s.collection, inputDocument, false).
+		Status(http.StatusOK)
+
+	readAndValidate(s.T(),
+		s.database,
+		s.collection,
+		map[string]interface{}{
+			"pkey_int": 100,
+		},
+		inputDocument)
+
+	updateByFilter(s.T(),
+		s.database,
+		s.collection,
+		map[string]interface{}{
+			"filter": map[string]interface{}{
+				"pkey_int": 100,
+			},
+		},
+		map[string]interface{}{
+			"fields": map[string]interface{}{
+				"$set": map[string]interface{}{
+					"int_value":    200,
+					"string_value": "simple_insert1_update_modified",
+					"bool_value":   false,
+					"double_value": 200.00001,
+					"bytes_value":  []byte(`"simple_insert1_update_modified"`),
+				},
+			},
+		}).Status(http.StatusOK).
+		JSON().
+		Object().
+		Empty()
+
+	readAndValidate(s.T(),
+		s.database,
+		s.collection,
+		map[string]interface{}{
+			"pkey_int": 100,
+		},
+		[]interface{}{
+			map[string]interface{}{
+				"pkey_int":     100,
+				"int_value":    200,
+				"string_value": "simple_insert1_update_modified",
+				"bool_value":   false,
+				"double_value": 200.00001,
+				"bytes_value":  []byte(`"simple_insert1_update_modified"`),
+			},
+		})
+}
+
+func (s *DocumentSuite) TestUpdate_MultipleRows() {
+	inputDocument := []interface{}{
+		map[string]interface{}{
+			"pkey_int":     110,
+			"int_value":    1000,
+			"string_value": "simple_insert110",
+			"bool_value":   true,
+			"double_value": 1000.000001,
+			"bytes_value":  []byte(`"simple_insert110"`),
+		},
+		map[string]interface{}{
+			"pkey_int":     120,
+			"int_value":    2000,
+			"string_value": "simple_insert120",
+			"bool_value":   false,
+			"double_value": 2000.22221,
+			"bytes_value":  []byte(`"simple_insert120"`),
+		},
+		map[string]interface{}{
+			"pkey_int":     130,
+			"int_value":    3000,
+			"string_value": "simple_insert130",
+			"bool_value":   true,
+			"double_value": 3000.999999,
+			"bytes_value":  []byte(`"simple_insert130"`),
+		},
+	}
+
+	// should always succeed with mustNotExists as false
+	insertDocuments(s.T(), s.database, s.collection, inputDocument, false).
+		Status(http.StatusOK)
+
+	readFilter := map[string]interface{}{
+		"$or": []interface{}{
+			map[string]interface{}{
+				"pkey_int": 110,
+			},
+			map[string]interface{}{
+				"pkey_int": 120,
+			},
+			map[string]interface{}{
+				"pkey_int": 130,
+			},
+		},
+	}
+	readAndValidate(s.T(),
+		s.database,
+		s.collection,
+		readFilter,
+		inputDocument)
+
+	// first try updating a no-op operation i.e. random filter value
+	updateByFilter(s.T(),
+		s.database,
+		s.collection,
+		map[string]interface{}{
+			"filter": map[string]interface{}{
+				"pkey_int": 10000,
+			},
+		},
+		map[string]interface{}{
+			"fields": map[string]interface{}{
+				"$set": map[string]interface{}{
+					"int_value": 0,
+				},
+			},
+		}).Status(http.StatusOK).
+		JSON().
+		Object().
+		Empty()
+
+	// read all documents back
+	readAndValidate(s.T(),
+		s.database,
+		s.collection,
+		readFilter,
+		inputDocument)
+
+	// Update keys 120 and 130
+	updateByFilter(s.T(),
+		s.database,
+		s.collection,
+		map[string]interface{}{
+			"filter": map[string]interface{}{
+				"$or": []interface{}{
+					map[string]interface{}{
+						"pkey_int": 120,
+					},
+					map[string]interface{}{
+						"pkey_int": 130,
+					},
+				},
+			},
+		},
+		map[string]interface{}{
+			"fields": map[string]interface{}{
+				"$set": map[string]interface{}{
+					"int_value":    12345,
+					"string_value": "modified_120_130",
+					"added_value_double": 1234.999999,
+					"added_string_value": "new_key_added",
+					"bytes_value":  []byte(`"modified_120_130"`),
+				},
+			},
+		}).Status(http.StatusOK).
+		JSON().
+		Object().
+		Empty()
+
+	outDocument := []interface{}{
+		// this didn't change as-is
+		map[string]interface{}{
+			"pkey_int":     110,
+			"int_value":    1000,
+			"string_value": "simple_insert110",
+			"bool_value":   true,
+			"double_value": 1000.000001,
+			"bytes_value":  []byte(`"simple_insert110"`),
+		},
+		map[string]interface{}{
+			"pkey_int":     120,
+			"int_value":    12345,
+			"string_value": "modified_120_130",
+			"bool_value":   false,
+			"double_value": 2000.22221,
+			"bytes_value":  []byte(`"modified_120_130"`),
+			"added_value_double": 1234.999999,
+			"added_string_value": "new_key_added",
+		},
+		map[string]interface{}{
+			"pkey_int":     130,
+			"int_value":    12345,
+			"string_value": "modified_120_130",
+			"bool_value":   true,
+			"double_value": 3000.999999,
+			"bytes_value":  []byte(`"modified_120_130"`),
+			"added_value_double": 1234.999999,
+			"added_string_value": "new_key_added",
+		},
+	}
+	readAndValidate(s.T(),
+		s.database,
+		s.collection,
+		readFilter,
+		outDocument)
+}
+
 func (s *DocumentSuite) TestDelete_BadRequest() {
 	cases := []struct {
 		databaseName   string
@@ -523,6 +734,20 @@ func insertDocuments(t *testing.T, db string, collection string, documents []int
 	}
 }
 
+func updateByFilter(t *testing.T, db string, collection string, filter map[string]interface{}, fields map[string]interface{}) *httpexpect.Response {
+	var payload = make(map[string]interface{})
+	for key, value := range filter {
+		payload[key] = value
+	}
+	for key, value := range fields {
+		payload[key] = value
+	}
+	e := httpexpect.New(t, config.GetBaseURL())
+	return e.PUT(getDocumentURL(db, collection, "update")).
+		WithJSON(payload).
+		Expect()
+}
+
 func deleteByFilter(t *testing.T, db string, collection string, filter map[string]interface{}) *httpexpect.Response {
 	e := httpexpect.New(t, config.GetBaseURL())
 	return e.DELETE(getDocumentURL(db, collection, "delete")).
@@ -563,6 +788,6 @@ func readAndValidate(t *testing.T, db string, collection string, filter map[stri
 		var actualDoc = []byte(doc["doc"])
 		expDoc, err := json.Marshal(inputDocument[i])
 		require.NoError(t, err)
-		require.Equal(t, expDoc, actualDoc, "exp '%s' actual '%s'", string(expDoc), string(actualDoc))
+		require.JSONEqf(t, string(expDoc), string(actualDoc), "exp '%s' actual '%s'", string(expDoc), string(actualDoc))
 	}
 }

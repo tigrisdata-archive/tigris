@@ -40,7 +40,7 @@ var (
 type Tx interface {
 	Insert(ctx context.Context, key keys.Key, value []byte) error
 	Replace(ctx context.Context, key keys.Key, value []byte) error
-	Update(ctx context.Context, key keys.Key, value []byte) error
+	Update(ctx context.Context, key keys.Key, apply func([]byte) ([]byte, error)) error
 	Delete(ctx context.Context, key keys.Key) error
 	Commit(ctx context.Context) error
 	Rollback(ctx context.Context) error
@@ -189,7 +189,7 @@ type TxInherited struct {
 func NewTxInherited(session *session) *TxInherited {
 	return &TxInherited{
 		baseTx: &baseTx{
-			//session: session,
+			session: session,
 		},
 	}
 }
@@ -216,8 +216,8 @@ func (b *baseTx) Replace(ctx context.Context, key keys.Key, value []byte) error 
 	return b.session.replace(ctx, key, value)
 }
 
-func (b *baseTx) Update(ctx context.Context, key keys.Key, value []byte) error {
-	return b.session.update(ctx, key, value)
+func (b *baseTx) Update(ctx context.Context, key keys.Key, apply func([]byte) ([]byte, error)) error {
+	return b.session.update(ctx, key, apply)
 }
 
 func (b *baseTx) Delete(ctx context.Context, key keys.Key) error {

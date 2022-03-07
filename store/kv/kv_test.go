@@ -101,11 +101,11 @@ func testKVBasic(t *testing.T, kv KV) {
 
 	// update range
 	i := 3
-	err = kv.UpdateRange(ctx, "t1", BuildKey("p1", 3), BuildKey("p1", 6), func(orig []byte) []byte {
+	err = kv.UpdateRange(ctx, "t1", BuildKey("p1", 3), BuildKey("p1", 6), func(orig []byte) ([]byte, error) {
 		require.Equal(t, fmt.Sprintf("value%d", i), string(orig))
 		res := []byte(fmt.Sprintf("value%d+%d", i, i))
 		i++
-		return res
+		return res, nil
 	})
 	require.NoError(t, err)
 

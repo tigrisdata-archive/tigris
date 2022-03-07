@@ -139,7 +139,14 @@ func (d *fdbkv) DeleteRange(ctx context.Context, table string, lKey Key, rKey Ke
 	return err
 }
 
-func (d *fdbkv) UpdateRange(ctx context.Context, table string, lKey Key, rKey Key, apply func([]byte) []byte) error {
+func (d *fdbkv) Update(ctx context.Context, table string, key Key, apply func([]byte) ([]byte, error)) error {
+	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
+		return nil, (&ftx{d, &tr}).Update(ctx, table, key, apply)
+	})
+	return err
+}
+
+func (d *fdbkv) UpdateRange(ctx context.Context, table string, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) error {
 	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
 		return nil, (&ftx{d, &tr}).UpdateRange(ctx, table, lKey, rKey, apply)
 	})
@@ -228,7 +235,14 @@ func (b *fbatch) DeleteRange(ctx context.Context, table string, lKey Key, rKey K
 	return b.tx.DeleteRange(ctx, table, lKey, rKey)
 }
 
-func (b *fbatch) UpdateRange(ctx context.Context, table string, lKey Key, rKey Key, apply func([]byte) []byte) error {
+func (b *fbatch) Update(ctx context.Context, table string, key Key, apply func([]byte) ([]byte, error)) error {
+	if err := b.flushBatch(ctx, key, nil, nil); err != nil {
+		return err
+	}
+	return b.tx.Update(ctx, table, key, apply)
+}
+
+func (b *fbatch) UpdateRange(ctx context.Context, table string, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) error {
 	if err := b.flushBatch(ctx, lKey, rKey, nil); err != nil {
 		return err
 	}
@@ -325,7 +339,34 @@ func (t *ftx) DeleteRange(_ context.Context, table string, lKey Key, rKey Key) e
 	return nil
 }
 
-func (t *ftx) UpdateRange(_ context.Context, table string, lKey Key, rKey Key, apply func([]byte) []byte) error {
+func (t *ftx) Update(_ context.Context, table string, key Key, apply func([]byte) ([]byte, error)) error {
+	k, err := fdb.PrefixRange(getFDBKey(table, key))
+	if ulog.E(err) {
+		return err
+	}
+
+	r := t.tx.GetRange(k, fdb.RangeOptions{})
+	it := r.Iterator()
+
+	for it.Advance() {
+		kv, err := it.Get()
+		if ulog.E(err) {
+			return err
+		}
+		v, err := apply(kv.Value)
+		if ulog.E(err) {
+			return err
+		}
+
+		t.tx.Set(kv.Key, v)
+	}
+
+	log.Debug().Str("table", table).Interface("Key", key).Msg("tx update")
+
+	return nil
+}
+
+func (t *ftx) UpdateRange(_ context.Context, table string, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) error {
 	lk := getFDBKey(table, lKey)
 	rk := getFDBKey(table, rKey)
 
@@ -338,7 +379,11 @@ func (t *ftx) UpdateRange(_ context.Context, table string, lKey Key, rKey Key, a
 		if ulog.E(err) {
 			return err
 		}
-		v := apply(kv.Value)
+		v, err := apply(kv.Value)
+		if ulog.E(err) {
+			return err
+		}
+
 		t.tx.Set(kv.Key, v)
 	}
 
