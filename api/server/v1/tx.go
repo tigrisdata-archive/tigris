@@ -26,10 +26,10 @@ func IsTxSupported(req Request) bool {
 func GetTransaction(req Request) *TransactionCtx {
 	switch r := req.(type) {
 	case *InsertRequest:
-		if r.GetOptions() == nil {
+		if r.GetOptions() == nil || r.GetOptions().GetWriteOptions() == nil {
 			return nil
 		}
-		return r.GetOptions().GetTxCtx()
+		return r.GetOptions().GetWriteOptions().GetTxCtx()
 	default:
 		return nil
 	}
