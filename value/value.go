@@ -17,6 +17,9 @@ package value
 import (
 	"encoding/base64"
 	"fmt"
+	"strconv"
+
+	"github.com/buger/jsonparser"
 
 	"github.com/tigrisdata/tigrisdb/schema"
 	"google.golang.org/grpc/codes"
@@ -38,6 +41,31 @@ type Value interface {
 
 	// AsInterface to return the value as interface
 	AsInterface() interface{}
+}
+
+func NewValueFromByte(value []byte, dataType jsonparser.ValueType) (Value, error) {
+	switch dataType {
+	case jsonparser.Boolean:
+		b, err := strconv.ParseBool(string(value))
+		if err != nil {
+			return nil, err
+		}
+		return NewBoolValue(b), nil
+	case jsonparser.Number:
+		val, err := strconv.ParseFloat(string(value), 64)
+		if err != nil {
+			return nil, err
+		}
+
+		if isIntegral(val) {
+			return NewIntValue(int64(val)), nil
+		}
+		return NewDoubleValue(val), nil
+	case jsonparser.String:
+		return NewStringValue(string(value)), nil
+	}
+
+	return nil, status.Errorf(codes.InvalidArgument, "unsupported value type")
 }
 
 // NewValue returns Value object if it is able to create otherwise nil at this point the caller ensures that

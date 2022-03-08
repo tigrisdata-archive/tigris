@@ -15,59 +15,69 @@
 package expression
 
 import (
-	ulog "github.com/tigrisdata/tigrisdb/util/log"
-	"google.golang.org/protobuf/types/known/structpb"
+	"fmt"
+	"github.com/tigrisdata/tigrisdb/value"
+
+	jsoniter "github.com/json-iterator/go"
+	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	"google.golang.org/grpc/codes"
 )
 
 // Expr can be any operator, filter, field literal, etc. It is useful for parsing complex grammar, it can be nested.
 type Expr interface{}
 
-// ParseList is used to parse any expression that is list.
-func ParseList(list *structpb.ListValue, cb func(name string, value *structpb.Value) (Expr, error)) ([]Expr, error) {
-	var items []Expr
-	for _, value := range list.Values {
-		item, err := ParseExpr(value, cb)
-		if err != nil {
-			return nil, err
-		}
-
-		items = append(items, item)
+func Unmarshal(input jsoniter.RawMessage, objCb func(jsoniter.RawMessage) (Expr, error)) (Expr, error) {
+	iter := jsoniter.ParseBytes(jsoniter.ConfigCompatibleWithStandardLibrary, input)
+	next := iter.WhatIsNext()
+	if next == jsoniter.InvalidValue {
+		return nil, fmt.Errorf("invalid JSON '%s'", string(input))
 	}
 
-	return items, nil
+	switch next {
+	case jsoniter.StringValue:
+		return value.NewStringValue(iter.ReadString()), nil
+	case jsoniter.NumberValue:
+		number := iter.ReadNumber()
+		if i, err := number.Int64(); err == nil {
+			return value.NewIntValue(i), nil
+		}
+		if i, err := number.Float64(); err == nil {
+			return value.NewDoubleValue(i), nil
+		}
+		return nil, fmt.Errorf("not able to decode number")
+	case jsoniter.BoolValue:
+		return value.NewBoolValue(iter.ReadBool()), nil
+	case jsoniter.ArrayValue:
+		return UnmarshalArray(input, objCb)
+	case jsoniter.ObjectValue:
+		return objCb(input)
+	case jsoniter.NilValue:
+		return nil, api.Errorf(codes.InvalidArgument, "null is not a valid expression")
+	}
+
+	return nil, api.Errorf(codes.InvalidArgument, "not a valid expression")
 }
 
-// ParseExpr is used to parse any expression. It expects a callback that is used to parse structs/maps.
-func ParseExpr(value *structpb.Value, cb func(name string, value *structpb.Value) (Expr, error)) (Expr, error) {
-	if listValue := value.GetListValue(); listValue != nil {
-		items, err := ParseList(listValue, cb)
+func UnmarshalArray(input jsoniter.RawMessage, objCb func(jsoniter.RawMessage) (Expr, error)) ([]Expr, error) {
+	var array []jsoniter.RawMessage
+
+	var err error
+	var expr []Expr
+	err = jsoniter.Unmarshal(input, &array)
+
+	for _, a := range array {
+		var e Expr
+		e, err = Unmarshal(a, objCb)
 		if err != nil {
 			return nil, err
 		}
 
-		return &items, nil
-	}
-
-	structObj := value.GetStructValue()
-	if structObj == nil || len(structObj.GetFields()) == 0 {
-		return nil, ulog.CE("expression parsing is only supported for objects")
-	}
-
-	if len(structObj.GetFields()) > 1 {
-		var items []Expr
-		for key, value := range structObj.GetFields() {
-			exp, err := cb(key, value)
-			if ulog.E(err) {
-				return nil, err
-			}
-			items = append(items, exp)
+		if e == nil {
+			return nil, api.Errorf(codes.InvalidArgument, "empty object detected")
 		}
-		return items, nil
-	} else {
-		for key, value := range structObj.GetFields() {
-			return cb(key, value)
-		}
+
+		expr = append(expr, e)
 	}
 
-	return nil, ulog.CE("expression parsing is only supported for objects")
+	return expr, err
 }

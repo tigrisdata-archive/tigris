@@ -20,8 +20,6 @@ import (
 	"github.com/tigrisdata/tigrisdb/value"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 const (
@@ -42,9 +40,7 @@ type ValueMatcher interface {
 }
 
 // NewMatcher returns ValueMatcher that is derived from the key
-func NewMatcher(key string, userValue *structpb.Value) (ValueMatcher, error) {
-	v := value.NewValue(userValue)
-
+func NewMatcher(key string, v value.Value) (ValueMatcher, error) {
 	switch key {
 	case EQ:
 		return &EqualityMatcher{
