@@ -12,26 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package filter
+package expression
 
 import (
-	"testing"
-
-	"github.com/tigrisdata/tigrisdb/value"
-
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"github.com/tigrisdata/tigrisdb/value"
+	"testing"
 )
 
-func TestNewMatcher(t *testing.T) {
-	matcher, err := NewMatcher(EQ, value.NewIntValue(1))
+func TestExpression(t *testing.T) {
+	expr, err := Unmarshal([]byte(`["$foo", "bar", 1, 1.01, false]`), nil)
 	require.NoError(t, err)
-
-	_, ok := matcher.(*EqualityMatcher)
+	listExpr, ok := expr.([]Expr)
 	require.True(t, ok)
-
-	matcher, err = NewMatcher("foo", value.NewIntValue(1))
-	require.Equal(t, status.Errorf(codes.InvalidArgument, "unsupported operand 'foo'"), err)
-	require.Nil(t, matcher)
+	require.Equal(t, 5, len(listExpr))
+	require.Equal(t, "$foo", string(*listExpr[0].(value.Value).(*value.StringValue)))
+	require.Equal(t, "bar", string(*listExpr[1].(value.Value).(*value.StringValue)))
+	require.Equal(t, int64(1), int64(*listExpr[2].(value.Value).(*value.IntValue)))
+	require.Equal(t, float64(1.01), float64(*listExpr[3].(value.Value).(*value.DoubleValue)))
+	require.Equal(t, false, bool(*listExpr[4].(value.Value).(*value.BoolValue)))
 }

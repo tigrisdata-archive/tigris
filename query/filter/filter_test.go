@@ -83,5 +83,5 @@ func TestFilterUsingJSON(t *testing.T) {
 func TestFilterDuplicateKey(t *testing.T) {
 	filters, err := Build([]byte(`{"a": 10, "b": {"$eq": 10}, "b": 15}`))
 	require.Nil(t, filters)
-	require.Contains(t, err.Error(), "duplicate map key")
+	require.Contains(t, err.Error(), "duplicate filter 'b'")
 }

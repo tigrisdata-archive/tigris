@@ -21,6 +21,8 @@ import (
 	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	"github.com/tigrisdata/tigrisdb/query/aggregation"
+	"github.com/tigrisdata/tigrisdb/query/expression"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"github.com/valyala/bytebufferpool"
 	"google.golang.org/grpc/codes"
@@ -67,6 +69,13 @@ func BuildFields(reqFields jsoniter.RawMessage) (*FieldFactory, error) {
 				Name: string(key),
 				Incl: include == 1,
 			})
+		case jsonparser.Object:
+			var expr expression.Expr
+			expr, err = aggregation.Unmarshal(value)
+			if err != nil {
+				return err
+			}
+			factory.addField(NewExprField(string(key), expr))
 		default:
 			return api.Errorf(codes.InvalidArgument, "only boolean/integer is supported as value")
 		}
@@ -93,6 +102,7 @@ func (factory *FieldFactory) addField(f Field) {
 
 	factory.Include[f.Alias()] = f
 }
+
 func (factory *FieldFactory) Apply(document []byte) ([]byte, error) {
 	if len(factory.Include) == 0 && len(factory.Exclude) == 0 {
 		// need to return everything
@@ -254,6 +264,34 @@ func (s *SimpleField) Apply(data map[string]*JSONObject) ([]byte, error) {
 		return js.GetValue(), nil
 	}
 
+	return nil, nil
+}
+
+type ExprField struct {
+	FieldAlias string
+	Expr       expression.Expr
+}
+
+func NewExprField(alias string, expr expression.Expr) *ExprField {
+	return &ExprField{
+		FieldAlias: alias,
+		Expr:       expr,
+	}
+}
+
+func (e *ExprField) Include() bool {
+	return true
+}
+
+func (e *ExprField) GetJSONAlias() []byte {
+	return []byte(fmt.Sprintf(`"%s"`, e.FieldAlias))
+}
+
+func (e *ExprField) Alias() string {
+	return e.FieldAlias
+}
+
+func (e *ExprField) Apply(data map[string]*JSONObject) ([]byte, error) {
 	return nil, nil
 }
 

@@ -15,9 +15,9 @@
 package filter
 
 import (
-	"fmt"
+	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
-
+	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/query/expression"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"github.com/tigrisdata/tigrisdb/value"
@@ -49,70 +49,87 @@ func Build(reqFilter []byte) ([]Filter, error) {
 		return nil, nil
 	}
 
-	var decodeFilter = &structpb.Value{}
-	if err := jsoniter.Unmarshal(reqFilter, decodeFilter); ulog.E(err) {
-		return nil, err
-	}
-
-	structObj := decodeFilter.GetStructValue()
-	if structObj == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "only object is allowed to be passed as filter '%s'", string(reqFilter))
-	}
-
+	var seen = make(map[string]struct{})
 	var filters []Filter
-	for key, reqF := range structObj.GetFields() {
-		e, err := ParseFilter(key, reqF)
-		if ulog.E(err) {
-			return nil, err
+	var err error
+	err = jsonparser.ObjectEach(reqFilter, func(k []byte, v []byte, dataType jsonparser.ValueType, offset int) error {
+		if err != nil {
+			return err
 		}
 
-		f, ok := e.(Filter)
-		if !ok {
-			return nil, ulog.CE("not able to decode to filter %v", f)
+		var filter Filter
+		switch string(k) {
+		case string(AndOP):
+			filter, err = UnmarshalAnd(v)
+		case string(OrOP):
+			filter, err = UnmarshalOr(v)
+		default:
+			filter, err = ParseSelector(k, v, dataType)
 		}
+		if err != nil {
+			return err
+		}
+		if _, ok := seen[string(k)]; ok {
+			return api.Errorf(codes.InvalidArgument, "duplicate filter '%s'", string(k))
+		}
+		seen[string(k)] = struct{}{}
+		filters = append(filters, filter)
 
-		filters = append(filters, f)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return filters, nil
 }
 
-func ParseFilter(name string, value *structpb.Value) (expression.Expr, error) {
+func UnmarshalFilter(input jsoniter.RawMessage) (expression.Expr, error) {
 	var err error
-	var expr []expression.Expr
-
-	switch name {
-	case string(AndOP):
-		if expr, err = expression.ParseList(value.GetListValue(), ParseFilter); err != nil {
-			return nil, err
-		}
-		filters, err := convertExprListToFilters(expr)
+	var filter Filter
+	err = jsonparser.ObjectEach(input, func(k []byte, v []byte, dataType jsonparser.ValueType, offset int) error {
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		a, err := NewAndFilter(filters)
-		if err != nil {
-			return nil, err
+		switch string(k) {
+		case string(AndOP):
+			filter, err = UnmarshalAnd(v)
+		case string(OrOP):
+			filter, err = UnmarshalOr(v)
+		default:
+			filter, err = ParseSelector(k, v, dataType)
 		}
-		return a, nil
-	case string(OrOP):
-		if expr, err = expression.ParseList(value.GetListValue(), ParseFilter); err != nil {
-			return nil, err
-		}
-		filters, err := convertExprListToFilters(expr)
-		if err != nil {
-			return nil, err
-		}
+		return nil
+	})
 
-		o, err := NewOrFilter(filters)
-		if err != nil {
-			return nil, err
-		}
-		return o, nil
-	default:
-		return ParseSelector(name, value)
+	return filter, err
+}
+
+func UnmarshalAnd(input jsoniter.RawMessage) (Filter, error) {
+	expr, err := expression.UnmarshalArray(input, UnmarshalFilter)
+	if err != nil {
+		return nil, err
 	}
+	andFilters, err := convertExprListToFilters(expr)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewAndFilter(andFilters)
+}
+
+func UnmarshalOr(input jsoniter.RawMessage) (Filter, error) {
+	expr, err := expression.UnmarshalArray(input, UnmarshalFilter)
+	if err != nil {
+		return nil, err
+	}
+	orFilters, err := convertExprListToFilters(expr)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewOrFilter(orFilters)
 }
 
 func convertExprListToFilters(expr []expression.Expr) ([]Filter, error) {
@@ -130,52 +147,57 @@ func convertExprListToFilters(expr []expression.Expr) ([]Filter, error) {
 
 // ParseSelector is a short-circuit for Selector i.e. when we know the filter passed is not logical then we directly
 // call this because if it is not logical then it is simply a Selector filter.
-func ParseSelector(key string, userValue *structpb.Value) (Filter, error) {
-	switch ty := userValue.Kind.(type) {
-	case *structpb.Value_NumberValue, *structpb.Value_StringValue, *structpb.Value_BoolValue:
-		val := value.NewValue(userValue)
-		if val == nil {
-			return nil, fmt.Errorf("not able to create internal value %T", ty)
-		}
-
-		// just add equality by default if not specified by the user something like {"a": 10}
-		return NewSelector(key, NewEqualityMatcher(val)), nil
-	case *structpb.Value_StructValue:
-		c, err := buildComparisonOperator(ty)
+func ParseSelector(k []byte, v []byte, dataType jsonparser.ValueType) (Filter, error) {
+	switch dataType {
+	case jsonparser.Boolean, jsonparser.Number, jsonparser.String:
+		val, err := value.NewValueFromByte(v, dataType)
 		if err != nil {
 			return nil, err
 		}
-		return NewSelector(key, c), nil
+
+		return NewSelector(string(k), NewEqualityMatcher(val)), nil
+	case jsonparser.Object:
+		valueMatcher, err := buildComparisonOperator(v)
+		if err != nil {
+			return nil, err
+		}
+
+		return NewSelector(string(k), valueMatcher), nil
+	default:
+		return nil, api.Errorf(codes.InvalidArgument, "unable to parse the comparison operator")
 	}
-	return nil, nil
 }
 
-func buildComparisonOperator(value *structpb.Value_StructValue) (ValueMatcher, error) {
-	if value == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "empty object")
-	}
-	if len(value.StructValue.GetFields()) == 0 {
+func buildComparisonOperator(input jsoniter.RawMessage) (ValueMatcher, error) {
+	if len(input) == 0 {
 		return nil, status.Errorf(codes.InvalidArgument, "empty object")
 	}
 
-	for k, v := range value.StructValue.GetFields() {
-		switch k {
+	var valueMatcher ValueMatcher
+	var err error
+	err = jsonparser.ObjectEach(input, func(key []byte, v []byte, dataType jsonparser.ValueType, offset int) error {
+		if err != nil {
+			return err
+		}
+
+		switch string(key) {
 		case EQ, GT:
-			switch v.Kind.(type) {
-			case *structpb.Value_NumberValue, *structpb.Value_StringValue, *structpb.Value_BoolValue, *structpb.Value_NullValue:
-				// if value is simple
-				return NewMatcher(k, v)
-			case *structpb.Value_StructValue:
-				// ToDo: support for nested expression object to extract the value
-				return nil, status.Errorf(codes.InvalidArgument, "expression is not supported inside comparison operator %v", v)
-			case *structpb.Value_ListValue:
-				// ToDo: similar as above support for nested expression object to extract the value
-				return nil, status.Errorf(codes.InvalidArgument, "list is not supported inside comparison operator %v", v)
+			switch dataType {
+			case jsonparser.Boolean, jsonparser.Number, jsonparser.String, jsonparser.Null:
+				var val value.Value
+				val, err = value.NewValueFromByte(v, dataType)
+				if err != nil {
+					return err
+				}
+
+				valueMatcher, err = NewMatcher(string(key), val)
+				return err
 			}
 		default:
-			return nil, status.Errorf(codes.InvalidArgument, "expression is not supported inside comparison operator %s", k)
+			return status.Errorf(codes.InvalidArgument, "expression is not supported inside comparison operator %s", string(key))
 		}
-	}
+		return nil
+	})
 
-	return nil, status.Errorf(codes.InvalidArgument, "only object allowed inside filters is and/or or comparison operator")
+	return valueMatcher, err
 }
