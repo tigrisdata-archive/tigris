@@ -172,7 +172,7 @@ func (s *DocumentSuite) TestInsert_SingleRow() {
 
 	readResp := readByFilter(s.T(), s.database, s.collection, map[string]interface{}{
 		"pkey_int": 10,
-	})
+	}, nil)
 
 	var doc map[string]json.RawMessage
 	require.NoError(s.T(), json.Unmarshal(readResp[0]["result"], &doc))
@@ -223,7 +223,7 @@ func (s *DocumentSuite) TestInsert_MultipleRows() {
 				"pkey_int": 30,
 			},
 		},
-	})
+	}, nil)
 
 	require.Equal(s.T(), 2, len(readResp))
 	for i := 0; i < len(inputDocument); i++ {
@@ -349,6 +349,7 @@ func (s *DocumentSuite) TestUpdate_SingleRow() {
 		map[string]interface{}{
 			"pkey_int": 100,
 		},
+		nil,
 		inputDocument)
 
 	updateByFilter(s.T(),
@@ -380,6 +381,7 @@ func (s *DocumentSuite) TestUpdate_SingleRow() {
 		map[string]interface{}{
 			"pkey_int": 100,
 		},
+		nil,
 		[]interface{}{
 			map[string]interface{}{
 				"pkey_int":     100,
@@ -441,6 +443,7 @@ func (s *DocumentSuite) TestUpdate_MultipleRows() {
 		s.database,
 		s.collection,
 		readFilter,
+		nil,
 		inputDocument)
 
 	// first try updating a no-op operation i.e. random filter value
@@ -468,6 +471,7 @@ func (s *DocumentSuite) TestUpdate_MultipleRows() {
 		s.database,
 		s.collection,
 		readFilter,
+		nil,
 		inputDocument)
 
 	// Update keys 120 and 130
@@ -489,11 +493,11 @@ func (s *DocumentSuite) TestUpdate_MultipleRows() {
 		map[string]interface{}{
 			"fields": map[string]interface{}{
 				"$set": map[string]interface{}{
-					"int_value":    12345,
-					"string_value": "modified_120_130",
+					"int_value":          12345,
+					"string_value":       "modified_120_130",
 					"added_value_double": 1234.999999,
 					"added_string_value": "new_key_added",
-					"bytes_value":  []byte(`"modified_120_130"`),
+					"bytes_value":        []byte(`"modified_120_130"`),
 				},
 			},
 		}).Status(http.StatusOK).
@@ -512,22 +516,22 @@ func (s *DocumentSuite) TestUpdate_MultipleRows() {
 			"bytes_value":  []byte(`"simple_insert110"`),
 		},
 		map[string]interface{}{
-			"pkey_int":     120,
-			"int_value":    12345,
-			"string_value": "modified_120_130",
-			"bool_value":   false,
-			"double_value": 2000.22221,
-			"bytes_value":  []byte(`"modified_120_130"`),
+			"pkey_int":           120,
+			"int_value":          12345,
+			"string_value":       "modified_120_130",
+			"bool_value":         false,
+			"double_value":       2000.22221,
+			"bytes_value":        []byte(`"modified_120_130"`),
 			"added_value_double": 1234.999999,
 			"added_string_value": "new_key_added",
 		},
 		map[string]interface{}{
-			"pkey_int":     130,
-			"int_value":    12345,
-			"string_value": "modified_120_130",
-			"bool_value":   true,
-			"double_value": 3000.999999,
-			"bytes_value":  []byte(`"modified_120_130"`),
+			"pkey_int":           130,
+			"int_value":          12345,
+			"string_value":       "modified_120_130",
+			"bool_value":         true,
+			"double_value":       3000.999999,
+			"bytes_value":        []byte(`"modified_120_130"`),
 			"added_value_double": 1234.999999,
 			"added_string_value": "new_key_added",
 		},
@@ -536,6 +540,7 @@ func (s *DocumentSuite) TestUpdate_MultipleRows() {
 		s.database,
 		s.collection,
 		readFilter,
+		nil,
 		outDocument)
 }
 
@@ -612,6 +617,7 @@ func (s *DocumentSuite) TestDelete_SingleRow() {
 		map[string]interface{}{
 			"pkey_int": 40,
 		},
+		nil,
 		inputDocument)
 
 	deleteByFilter(s.T(), s.database, s.collection, map[string]interface{}{
@@ -629,6 +635,7 @@ func (s *DocumentSuite) TestDelete_SingleRow() {
 		map[string]interface{}{
 			"pkey_int": 40,
 		},
+		nil,
 		nil)
 }
 
@@ -669,6 +676,7 @@ func (s *DocumentSuite) TestDelete_MultipleRows() {
 		s.database,
 		s.collection,
 		readFilter,
+		nil,
 		inputDocument)
 
 	// first try deleting a no-op operation i.e. random filter value
@@ -686,6 +694,7 @@ func (s *DocumentSuite) TestDelete_MultipleRows() {
 		s.database,
 		s.collection,
 		readFilter,
+		nil,
 		inputDocument)
 
 	// DELETE keys 50 and 70
@@ -709,6 +718,7 @@ func (s *DocumentSuite) TestDelete_MultipleRows() {
 		s.database,
 		s.collection,
 		readFilter,
+		nil,
 		[]interface{}{
 			map[string]interface{}{
 				"pkey_int":     60,
@@ -716,6 +726,123 @@ func (s *DocumentSuite) TestDelete_MultipleRows() {
 			},
 		},
 	)
+}
+
+func (s *DocumentSuite) TestRead_MultipleRows() {
+	inputDocument := []interface{}{
+		map[string]interface{}{
+			"pkey_int":     210,
+			"int_value":    1000,
+			"string_value": "simple_insert110",
+			"bool_value":   true,
+			"double_value": 1000.000001,
+			"bytes_value":  []byte(`"simple_insert110"`),
+		},
+		map[string]interface{}{
+			"pkey_int":     220,
+			"int_value":    2000,
+			"string_value": "simple_insert120",
+			"bool_value":   false,
+			"double_value": 2000.22221,
+			"bytes_value":  []byte(`"simple_insert120"`),
+		},
+		map[string]interface{}{
+			"pkey_int":     230,
+			"string_value": "simple_insert130",
+			"bytes_value":  []byte(`"simple_insert130"`),
+		},
+	}
+
+	// should always succeed with mustNotExists as false
+	insertDocuments(s.T(), s.database, s.collection, inputDocument, false).
+		Status(http.StatusOK)
+
+	readFilter := map[string]interface{}{
+		"$or": []interface{}{
+			map[string]interface{}{
+				"pkey_int": 210,
+			},
+			map[string]interface{}{
+				"pkey_int": 220,
+			},
+			map[string]interface{}{
+				"pkey_int": 230,
+			},
+		},
+	}
+
+	cases := []struct {
+		fields       map[string]interface{}
+		expDocuments []interface{}
+	}{
+		{
+			map[string]interface{}{
+				"int_value":    1,
+				"string_value": 1,
+				"bytes_value":  1,
+			},
+			[]interface{}{
+				map[string]interface{}{
+					"int_value":    1000,
+					"string_value": "simple_insert110",
+					"bytes_value":  []byte(`"simple_insert110"`),
+				},
+				map[string]interface{}{
+					"int_value":    2000,
+					"string_value": "simple_insert120",
+					"bytes_value":  []byte(`"simple_insert120"`),
+				},
+				map[string]interface{}{
+					"string_value": "simple_insert130",
+					"bytes_value":  []byte(`"simple_insert130"`),
+				},
+			},
+		}, {
+			// bool is not present in the third document
+			map[string]interface{}{
+				"string_value": 1,
+				"bool_value":   1,
+			},
+			[]interface{}{
+				map[string]interface{}{
+					"string_value": "simple_insert110",
+					"bool_value":   true,
+				},
+				map[string]interface{}{
+					"string_value": "simple_insert120",
+					"bool_value":   false,
+				},
+				map[string]interface{}{
+					"string_value": "simple_insert130",
+				},
+			},
+		}, {
+			// both are not present in the third document
+			map[string]interface{}{
+				"double_value": 1,
+				"bool_value":   1,
+			},
+			[]interface{}{
+				map[string]interface{}{
+					"double_value": 1000.000001,
+					"bool_value":   true,
+				},
+				map[string]interface{}{
+					"double_value": 2000.22221,
+					"bool_value":   false,
+				},
+				map[string]interface{}{},
+			},
+		},
+	}
+	for _, c := range cases {
+		readAndValidate(s.T(),
+			s.database,
+			s.collection,
+			readFilter,
+			c.fields,
+			c.expDocuments)
+	}
 }
 
 func insertDocuments(t *testing.T, db string, collection string, documents []interface{}, mustNotExists bool) *httpexpect.Response {
@@ -755,12 +882,14 @@ func deleteByFilter(t *testing.T, db string, collection string, filter map[strin
 		Expect()
 }
 
-func readByFilter(t *testing.T, db string, collection string, filter map[string]interface{}) []map[string]json.RawMessage {
+func readByFilter(t *testing.T, db string, collection string, filter map[string]interface{}, fields map[string]interface{}) []map[string]json.RawMessage {
+	var payload = make(map[string]interface{})
+	payload["fields"] = fields
+	payload["filter"] = filter
+
 	e := httpexpect.New(t, config.GetBaseURL())
 	str := e.POST(getDocumentURL(db, collection, "read")).
-		WithJSON(map[string]interface{}{
-			"filter": filter,
-		}).
+		WithJSON(payload).
 		Expect().
 		Status(http.StatusOK).
 		Body().
@@ -778,8 +907,8 @@ func readByFilter(t *testing.T, db string, collection string, filter map[string]
 	return resp
 }
 
-func readAndValidate(t *testing.T, db string, collection string, filter map[string]interface{}, inputDocument []interface{}) {
-	readResp := readByFilter(t, db, collection, filter)
+func readAndValidate(t *testing.T, db string, collection string, filter map[string]interface{}, fields map[string]interface{}, inputDocument []interface{}) {
+	readResp := readByFilter(t, db, collection, filter, fields)
 	require.Equal(t, len(inputDocument), len(readResp))
 	for i := 0; i < len(inputDocument); i++ {
 		var doc map[string]json.RawMessage

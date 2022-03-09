@@ -17,6 +17,7 @@ package v1
 import (
 	"context"
 	"encoding/json"
+	"github.com/tigrisdata/tigrisdb/query/read"
 
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/encoding"
@@ -200,6 +201,12 @@ func (q *StreamingQueryRunner) Run(ctx context.Context, req *Request) (*Response
 	if err != nil {
 		return nil, err
 	}
+
+	fieldFactory, err := read.BuildFields(req.apiRequest.(*api.ReadRequest).Fields)
+	if ulog.E(err) {
+		return nil, err
+	}
+
 	for _, key := range iKeys {
 		it, err := q.txMgr.GetKV().Read(ctx, req.collection.StorageName(), kv.BuildKey(key.PrimaryKeys()...))
 		if err != nil {
@@ -212,8 +219,13 @@ func (q *StreamingQueryRunner) Run(ctx context.Context, req *Request) (*Response
 				return nil, err
 			}
 
+			newValue, err := fieldFactory.Apply(v.Value)
+			if err != nil {
+				return nil, err
+			}
+
 			if err := q.streaming.Send(&api.ReadResponse{
-				Doc: v.Value,
+				Doc: newValue,
 			}); ulog.E(err) {
 				return nil, err
 			}
