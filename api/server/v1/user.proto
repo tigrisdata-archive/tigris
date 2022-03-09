@@ -123,6 +123,7 @@ message ReadRequest {
   string db = 1;
   string collection = 2;
   bytes filter = 3;
+  bytes fields = 4;
   ReadRequestOptions options = 5;
 }
 
