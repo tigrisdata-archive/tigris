@@ -207,6 +207,7 @@ func (q *StreamingQueryRunner) Run(ctx context.Context, req *Request) (*Response
 		return nil, err
 	}
 
+	var totalResults int64 = 0
 	for _, key := range iKeys {
 		it, err := q.txMgr.GetKV().Read(ctx, req.collection.StorageName(), kv.BuildKey(key.PrimaryKeys()...))
 		if err != nil {
@@ -214,6 +215,10 @@ func (q *StreamingQueryRunner) Run(ctx context.Context, req *Request) (*Response
 		}
 
 		for it.More() {
+			if req.apiRequest.(*api.ReadRequest).GetOptions().GetLimit() > 0 && req.apiRequest.(*api.ReadRequest).GetOptions().GetLimit() <= totalResults {
+				return &Response{}, nil
+			}
+
 			v, err := it.Next()
 			if err != nil {
 				return nil, err
@@ -226,9 +231,12 @@ func (q *StreamingQueryRunner) Run(ctx context.Context, req *Request) (*Response
 
 			if err := q.streaming.Send(&api.ReadResponse{
 				Doc: newValue,
+				Key: v.FDBKey,
 			}); ulog.E(err) {
 				return nil, err
 			}
+
+			totalResults++
 		}
 	}
 
