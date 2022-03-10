@@ -20,8 +20,9 @@ import (
 )
 
 type KeyValue struct {
-	Key   Key
-	Value []byte
+	Key    Key
+	FDBKey []byte
+	Value  []byte
 }
 
 type crud interface {

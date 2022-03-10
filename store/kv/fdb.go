@@ -471,7 +471,7 @@ func (i *fdbIterator) Next() (*KeyValue, error) {
 	if ulog.E(err) {
 		return nil, err
 	}
-	return &KeyValue{Key: tupleToKey(&t), Value: kv.Value}, nil
+	return &KeyValue{Key: tupleToKey(&t), FDBKey: kv.Key, Value: kv.Value}, nil
 }
 
 func (i *fdbIteratorTxCloser) More() bool {

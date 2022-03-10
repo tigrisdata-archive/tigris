@@ -77,7 +77,8 @@ func testKVBasic(t *testing.T, kv KV) {
 	require.NoError(t, err)
 
 	v := readAll(t, it)
-	require.Equal(t, []KeyValue{{Key: BuildKey("p1", int64(2)), Value: []byte("value2")}}, v)
+	fmt.Println(string(v[0].FDBKey))
+	require.Equal(t, []KeyValue{{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(2))), Value: []byte("value2")}}, v)
 
 	// replace individual record
 	err = kv.Replace(ctx, "t1", BuildKey("p1", 2), []byte("value2+2"))
@@ -87,7 +88,7 @@ func testKVBasic(t *testing.T, kv KV) {
 	require.NoError(t, err)
 
 	v = readAll(t, it)
-	require.Equal(t, []KeyValue{{Key: BuildKey("p1", int64(2)), Value: []byte("value2+2")}}, v)
+	require.Equal(t, []KeyValue{{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(2))), Value: []byte("value2+2")}}, v)
 
 	// read range
 	it, err = kv.ReadRange(ctx, "t1", BuildKey("p1", 2), BuildKey("p1", 4))
@@ -95,8 +96,8 @@ func testKVBasic(t *testing.T, kv KV) {
 
 	v = readAll(t, it)
 	require.Equal(t, []KeyValue{
-		{Key: BuildKey("p1", int64(2)), Value: []byte("value2+2")},
-		{Key: BuildKey("p1", int64(3)), Value: []byte("value3")},
+		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(2))), Value: []byte("value2+2")},
+		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(3))), Value: []byte("value3")},
 	}, v)
 
 	// update range
@@ -114,9 +115,9 @@ func testKVBasic(t *testing.T, kv KV) {
 
 	v = readAll(t, it)
 	require.Equal(t, []KeyValue{
-		{Key: BuildKey("p1", int64(3)), Value: []byte("value3+3")},
-		{Key: BuildKey("p1", int64(4)), Value: []byte("value4+4")},
-		{Key: BuildKey("p1", int64(5)), Value: []byte("value5+5")},
+		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(3))), Value: []byte("value3+3")},
+		{Key: BuildKey("p1", int64(4)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(4))), Value: []byte("value4+4")},
+		{Key: BuildKey("p1", int64(5)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(5))), Value: []byte("value5+5")},
 	}, v)
 
 	// prefix read
@@ -125,11 +126,11 @@ func testKVBasic(t *testing.T, kv KV) {
 
 	v = readAll(t, it)
 	require.Equal(t, []KeyValue{
-		{Key: BuildKey("p1", int64(1)), Value: []byte("value1")},
-		{Key: BuildKey("p1", int64(2)), Value: []byte("value2+2")},
-		{Key: BuildKey("p1", int64(3)), Value: []byte("value3+3")},
-		{Key: BuildKey("p1", int64(4)), Value: []byte("value4+4")},
-		{Key: BuildKey("p1", int64(5)), Value: []byte("value5+5")},
+		{Key: BuildKey("p1", int64(1)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(1))), Value: []byte("value1")},
+		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(2))), Value: []byte("value2+2")},
+		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(3))), Value: []byte("value3+3")},
+		{Key: BuildKey("p1", int64(4)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(4))), Value: []byte("value4+4")},
+		{Key: BuildKey("p1", int64(5)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(5))), Value: []byte("value5+5")},
 	}, v)
 
 	// delete and delete range
@@ -144,7 +145,7 @@ func testKVBasic(t *testing.T, kv KV) {
 
 	v = readAll(t, it)
 	require.Equal(t, []KeyValue{
-		{Key: BuildKey("p1", int64(2)), Value: []byte("value2+2")},
+		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(2))), Value: []byte("value2+2")},
 	}, v)
 
 	err = kv.DropTable(ctx, "t1")
@@ -174,14 +175,14 @@ func testKVInsert(t *testing.T, kv KV) {
 	cases := []kvTestCase{
 		{
 			name:   "simple",
-			test:   []KeyValue{{BuildKey("p1"), []byte("value1")}},
-			result: []KeyValue{{BuildKey("p1"), []byte("value1")}},
+			test:   []KeyValue{{BuildKey("p1"), nil, []byte("value1")}},
+			result: []KeyValue{{BuildKey("p1"), getFDBKey("t1", BuildKey("p1")), []byte("value1")}},
 		},
 		{
 			name:   "conflict",
-			insert: []KeyValue{{BuildKey("p1"), []byte("value1")}},
-			test:   []KeyValue{{BuildKey("p1"), []byte("value2")}},
-			result: []KeyValue{{BuildKey("p1"), []byte("value1")}},
+			insert: []KeyValue{{BuildKey("p1"), nil, []byte("value1")}},
+			test:   []KeyValue{{BuildKey("p1"), nil, []byte("value2")}},
+			result: []KeyValue{{BuildKey("p1"), getFDBKey("t1", BuildKey("p1")), []byte("value1")}},
 			err:    os.ErrExist,
 		},
 	}

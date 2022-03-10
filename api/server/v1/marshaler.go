@@ -15,9 +15,14 @@
 package api
 
 import (
+	"fmt"
+
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	jsoniter "github.com/json-iterator/go"
+	ulog "github.com/tigrisdata/tigrisdb/util/log"
+	"github.com/valyala/bytebufferpool"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/grpc/codes"
 )
 
 // CustomMarshaler is a marshaler to customize the response. Currently it is only used to marshal custom error message
@@ -41,10 +46,39 @@ func (c *CustomMarshaler) Marshal(v interface{}) ([]byte, error) {
 // Note: This also means any changes in ReadResponse proto needs to make sure that we add that here and similarly
 // the openAPI specs needs to be specify Doc as object instead of bytes.
 func (x *ReadResponse) MarshalJSON() ([]byte, error) {
-	b := []byte(`{"doc":`)
-	b = append(b, x.Doc...)
-	b = append(b, []byte(`}`)...)
-	return b, nil
+	var err error
+	bb := bytebufferpool.Get()
+	_, err = bb.Write([]byte(`{"doc":`))
+	if ulog.E(err) {
+		return nil, Errorf(codes.Internal, err.Error())
+	}
+
+	_, err = bb.Write(x.Doc)
+	if ulog.E(err) {
+		return nil, Errorf(codes.Internal, err.Error())
+	}
+
+	key, err := jsoniter.Marshal(x.Key)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = bb.Write([]byte(`,"key":`))
+	if ulog.E(err) {
+		return nil, Errorf(codes.Internal, err.Error())
+	}
+	_, err = bb.Write(key)
+	if ulog.E(err) {
+		return nil, Errorf(codes.Internal, err.Error())
+	}
+
+	_, err = bb.WriteString("}")
+	if ulog.E(err) {
+		return nil, Errorf(codes.Internal, err.Error())
+	}
+
+	fmt.Println("resp ", string(bb.Bytes()))
+	return bb.Bytes(), nil
 }
 
 // UnmarshalJSON on ReadRequest avoids unmarshalling filter and instead this way we can write a custom struct to do
