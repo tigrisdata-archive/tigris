@@ -18,6 +18,7 @@ import "google/api/annotations.proto";
 import "google/protobuf/struct.proto";
 
 option go_package = "github.com/tigrisdata/tigrisdb/api";
+option java_package = "com.tigrisdata.db.api.v1.grpc";
 
 // BUG: gnostic protoc-gen-openapi doesn't support enum generation
 // https://github.com/google/gnostic/issues/255

@@ -15,6 +15,7 @@
 syntax = "proto3";
 import "google/api/annotations.proto";
 option go_package = "github.com/tigrisdata/tigrisdb/api";
+option java_package = "com.tigrisdata.db.api.v1.grpc";
 
 message HealthCheckInput {}
 message HealthCheckResponse {
