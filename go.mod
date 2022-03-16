@@ -1,6 +1,6 @@
 module github.com/tigrisdata/tigrisdb
 
-go 1.17
+go 1.18
 
 require (
 	github.com/apple/foundationdb/bindings/go v0.0.0-20211207225159-47b9a81d1c10

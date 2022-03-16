@@ -1,4 +1,4 @@
-FROM golang:1.17.6-bullseye
+FROM golang:1.18-bullseye
 
 RUN apt-get update && apt-get install -y apt-transport-https
 RUN apt-get install -y sudo

@@ -139,6 +139,9 @@ func (s *DocumentSuite) TestInsert_AlreadyExists() {
 	e.POST(getDocumentURL(s.database, s.collection, "insert")).
 		WithJSON(map[string]interface{}{
 			"documents": inputDocument,
+			"options": map[string]interface{}{
+				"must_not_exist": true,
+			},
 		}).
 		Expect().
 		Status(http.StatusConflict).
@@ -845,20 +848,16 @@ func (s *DocumentSuite) TestRead_MultipleRows() {
 	}
 }
 
-func insertDocuments(t *testing.T, db string, collection string, documents []interface{}, mustNotExists bool) *httpexpect.Response {
+func insertDocuments(t *testing.T, db string, collection string, documents []interface{}, mustNotExist bool) *httpexpect.Response {
 	e := httpexpect.New(t, config.GetBaseURL())
 
-	if mustNotExists {
-		return e.POST(getDocumentURL(db, collection, "insert")).
-			WithJSON(map[string]interface{}{
-				"documents": documents,
-			}).Expect()
-	} else {
-		return e.PUT(getDocumentURL(db, collection, "replace")).
-			WithJSON(map[string]interface{}{
-				"documents": documents,
-			}).Expect()
-	}
+	return e.POST(getDocumentURL(db, collection, "insert")).
+		WithJSON(map[string]interface{}{
+			"documents": documents,
+			"options": map[string]interface{}{
+				"must_not_exist": mustNotExist,
+			},
+		}).Expect()
 }
 
 func updateByFilter(t *testing.T, db string, collection string, filter map[string]interface{}, fields map[string]interface{}) *httpexpect.Response {

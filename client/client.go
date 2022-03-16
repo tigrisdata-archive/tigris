@@ -18,21 +18,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+
 	"github.com/rs/zerolog/log"
 	userHTTP "github.com/tigrisdata/tigrisdb/api/client/v1/user"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"io"
-	"net/http"
 )
 
 type crudClient interface {
 	Insert(ctx context.Context, docs ...interface{}) error
 	Update(ctx context.Context, docs ...interface{}) error
 	Delete(ctx context.Context, docs ...interface{}) error
-	Replace(ctx context.Context, docs ...interface{}) error
 	Read(ctx context.Context, docs ...interface{}) error
 }
 
@@ -155,21 +155,6 @@ func (c *grpcCRUDClient) Delete(ctx context.Context, docs ...interface{}) error 
 	_, err = c.c.Delete(ctx, &api.DeleteRequest{
 		Db:         c.db,
 		Collection: c.table,
-	})
-
-	return err
-}
-
-func (c *grpcCRUDClient) Replace(ctx context.Context, docs ...interface{}) error {
-	bdocs, err := marshalDocsGRPC(docs)
-	if err != nil {
-		return err
-	}
-
-	_, err = c.c.Replace(ctx, &api.ReplaceRequest{
-		Db:         c.db,
-		Collection: c.table,
-		Documents:  bdocs,
 	})
 
 	return err
@@ -301,17 +286,6 @@ func (c *httpCRUDClient) Delete(ctx context.Context, docs ...interface{}) error 
 	}
 
 	resp, err := c.c.TigrisDBDeleteWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBDeleteJSONRequestBody{})
-
-	return HTTPError(err, resp)
-}
-
-func (c *httpCRUDClient) Replace(ctx context.Context, docs ...interface{}) error {
-	_, err := marshalDocsHTTP(docs)
-	if err != nil {
-		return err
-	}
-
-	resp, err := c.c.TigrisDBReplaceWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBReplaceJSONRequestBody{})
 
 	return HTTPError(err, resp)
 }

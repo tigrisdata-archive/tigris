@@ -217,8 +217,6 @@ func (s *userService) Insert(ctx context.Context, r *api.InsertRequest) (*api.In
 	return &api.InsertResponse{}, nil
 }
 
-// Update performs full body replace of existing object
-// Operations done individually not in actual batch
 func (s *userService) Update(ctx context.Context, r *api.UpdateRequest) (*api.UpdateResponse, error) {
 	if err := r.Validate(); err != nil {
 		return nil, err
@@ -239,29 +237,6 @@ func (s *userService) Update(ctx context.Context, r *api.UpdateRequest) (*api.Up
 	}
 
 	return &api.UpdateResponse{}, nil
-}
-
-func (s *userService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.ReplaceResponse, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-
-	collection, err := s.schemaCache.Get(r.GetDb(), r.GetCollection())
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = s.Run(ctx, &Request{
-		apiRequest:  r,
-		documents:   r.GetDocuments(),
-		collection:  collection,
-		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &api.ReplaceResponse{}, nil
 }
 
 func (s *userService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.DeleteResponse, error) {

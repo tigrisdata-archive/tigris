@@ -45,8 +45,9 @@ server/service: $(GO_SRC) generate
 	GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) go build $(BUILD_PARAM) -o server/service ./server
 
 lint: generate test_client
+	yq --exit-status 'tag == "!!map" or tag== "!!seq"' .github/workflows/*.yml config/*.yaml
 	shellcheck scripts/*
-	golangci-lint run #FIXME: doesn't work with go1.18beta1
+	golangci-lint run
 
 docker_compose_build:
 	$(DOCKER_COMPOSE) build

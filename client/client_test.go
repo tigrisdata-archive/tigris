@@ -49,18 +49,18 @@ func testClient(t *testing.T, c client) {
 	doc2, doc3 := Doc{K1: "vK1", K2: 2, D1: "vD2"}, Doc{K1: "vK2", K2: 1, D1: "vD3"}
 
 	// multiple docs
-	err = t1.Replace(ctx, doc1, doc2, doc3)
+	err = t1.Insert(ctx, doc1, doc2, doc3)
 	require.NoError(t, err)
 
 	// array of docs
-	err = t1.Replace(ctx, []Doc{doc1, doc2, doc3})
+	err = t1.Insert(ctx, []Doc{doc1, doc2, doc3})
 	require.NoError(t, err)
 
 	b, err := json.Marshal(doc1)
 	require.NoError(t, err)
 
 	// pre-marshaled data
-	err = t1.Replace(ctx, b)
+	err = t1.Insert(ctx, b)
 	require.NoError(t, err)
 
 	// only key-part of docs may be filled for read and delete
@@ -104,7 +104,7 @@ func testTxClient(t *testing.T, c client) {
 	doc2, doc3 := Doc{K1: "vK1", K2: 2, D1: "vD2"}, Doc{K1: "vK2", K2: 1, D1: "vD3"}
 
 	// multiple docs
-	err = t2.Replace(ctx, doc1, doc2, doc3)
+	err = t2.Insert(ctx, doc1, doc2, doc3)
 	require.NoError(t, err)
 
 	err = tx.Commit()

@@ -15,7 +15,6 @@
 syntax = "proto3";
 
 import "google/api/annotations.proto";
-import "google/protobuf/struct.proto";
 
 option go_package = "github.com/tigrisdata/tigrisdb/api";
 option java_package = "com.tigrisdata.db.api.v1.grpc";
@@ -70,6 +69,7 @@ message RollbackTransactionResponse {}
 
 message InsertRequestOptions {
   WriteOptions write_options = 1;
+  bool must_not_exist = 2;
 }
 
 message InsertRequest {
@@ -93,19 +93,6 @@ message DeleteRequest {
 }
 
 message DeleteResponse {}
-
-message ReplaceRequestOptions {
-  WriteOptions write_options = 1;
-}
-
-message ReplaceRequest {
-  string db = 1;
-  string collection = 2;
-  repeated bytes documents = 3;
-  ReplaceRequestOptions options = 4;
-}
-
-message ReplaceResponse {}
 
 message UpdateRequestOptions {
   WriteOptions write_options = 1;
@@ -235,12 +222,6 @@ service TigrisDB {
   rpc Insert(InsertRequest) returns (InsertResponse) {
     option (google.api.http) = {
       post : "/api/v1/databases/{db}/collections/{collection}/documents/insert"
-      body : "*"
-    };
-  }
-  rpc Replace(ReplaceRequest) returns (ReplaceResponse) {
-    option (google.api.http) = {
-      put : "/api/v1/databases/{db}/collections/{collection}/documents/replace"
       body : "*"
     };
   }

@@ -57,17 +57,6 @@ func (x *InsertRequest) Validate() error {
 	return nil
 }
 
-func (x *ReplaceRequest) Validate() error {
-	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
-		return err
-	}
-
-	if len(x.GetDocuments()) == 0 {
-		return Errorf(codes.InvalidArgument, "empty documents received")
-	}
-	return nil
-}
-
 func (x *UpdateRequest) Validate() error {
 	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
 		return err
