@@ -1,8 +1,12 @@
 name: go-test
-on: [push]
+on:
+  push:
+  workflow_call:
+    secrets:
+      API_DEPLOY_KEY:
+        required: true
 jobs:
-  build:
-    name: test
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
