@@ -43,7 +43,7 @@ func NewServer(cfg *config.Config) *Server {
 		},
 	}
 
-	unary, stream := middleware.Get()
+	unary, stream := middleware.Get(cfg)
 
 	s.Inproc.WithServerStreamInterceptor(stream)
 	s.Inproc.WithServerUnaryInterceptor(unary)

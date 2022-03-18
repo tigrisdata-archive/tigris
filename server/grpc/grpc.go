@@ -30,7 +30,7 @@ type Server struct {
 func NewServer(cfg *config.Config) *Server {
 	s := &Server{}
 
-	unary, stream := middleware.Get()
+	unary, stream := middleware.Get(cfg)
 	s.Server = grpc.NewServer(grpc.StreamInterceptor(stream), grpc.UnaryInterceptor(unary))
 
 	return s

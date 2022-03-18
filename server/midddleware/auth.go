@@ -16,12 +16,17 @@ package middleware
 
 import (
 	"context"
+	"net/url"
 	"strings"
+	"time"
 
+	"github.com/auth0/go-jwt-middleware/v2/jwks"
+	"github.com/auth0/go-jwt-middleware/v2/validator"
 	"github.com/grpc-ecosystem/go-grpc-middleware/util/metautils"
 	"github.com/rs/zerolog/log"
+	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	"github.com/tigrisdata/tigrisdb/server/config"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 var (
@@ -40,20 +45,56 @@ func getHeader(ctx context.Context, header string) string {
 func AuthFromMD(ctx context.Context, expectedScheme string) (string, error) {
 	val := getHeader(ctx, headerAuthorize)
 	if val == "" {
-		return "", status.Errorf(codes.Unauthenticated, "Request unauthenticated with "+expectedScheme)
+		return "", api.Error(codes.Unauthenticated, "request unauthenticated with "+expectedScheme)
 	}
 	splits := strings.SplitN(val, " ", 2)
 	if len(splits) < 2 {
-		return "", status.Errorf(codes.Unauthenticated, "Bad authorization string")
+		return "", api.Error(codes.Unauthenticated, "bad authorization string")
 	}
 	if !strings.EqualFold(splits[0], expectedScheme) {
-		return "", status.Errorf(codes.Unauthenticated, "Request unauthenticated with "+expectedScheme)
+		return "", api.Error(codes.Unauthenticated, "request unauthenticated with bearer")
 	}
 	return splits[1], nil
 }
 
-func AuthFunc(ctx context.Context) (context.Context, error) {
-	_, err := AuthFromMD(ctx, "bearer")
-	log.Debug().Str("error", err.Error()).Msg("auth interceptor")
-	return context.WithValue(ctx, key("role"), "admin"), nil
+func GetJWTValidator(config *config.Config) *validator.Validator {
+	issuerURL, _ := url.Parse(config.Auth.IssuerURL)
+	provider := jwks.NewCachingProvider(issuerURL, config.Auth.JWKSCacheTimeout)
+
+	jwtValidator, err := validator.New(
+		provider.KeyFunc,
+		validator.RS256,
+		issuerURL.String(),
+		[]string{config.Auth.Audience},
+		validator.WithAllowedClockSkew(time.Minute),
+	)
+
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to configure JWTValidator")
+	}
+	return jwtValidator
+}
+
+func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config *config.Config) (ctxResult context.Context, err error) {
+	defer func() {
+		if err != nil {
+			log.Warn().Bool("log_only?", config.Auth.LogOnly).Str("error", err.Error()).Err(err).Msg("could not validate token")
+			if config.Auth.LogOnly {
+				err = nil
+			}
+		}
+	}()
+
+	token, err := AuthFromMD(ctx, "bearer")
+	if err != nil {
+		return ctx, err
+	}
+
+	validToken, err := jwtValidator.ValidateToken(ctx, token)
+	if err != nil {
+		return ctx, api.Error(codes.Unauthenticated, err.Error())
+	}
+
+	log.Debug().Msg("Valid token received")
+	return context.WithValue(ctx, key("token"), validToken), nil
 }
