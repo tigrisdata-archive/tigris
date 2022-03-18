@@ -15,6 +15,8 @@
 package middleware
 
 import (
+	"context"
+
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_zerolog "github.com/grpc-ecosystem/go-grpc-middleware/providers/zerolog/v2"
 	grpc_opentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
@@ -23,17 +25,24 @@ import (
 	grpc_ratelimit "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/ratelimit"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"github.com/rs/zerolog/log"
+	"github.com/tigrisdata/tigrisdb/server/config"
 	"google.golang.org/grpc"
 )
 
-func Get() (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor) {
+func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor) {
+	jwtValidator := GetJWTValidator(config)
+	// inline closure to access the state of jwtValidator
+	authFunction := func(ctx context.Context) (context.Context, error) {
+		return AuthFunction(ctx, jwtValidator, config)
+	}
+
 	// adding all the middlewares for the server stream
 	//
 	// Note: we don't add validate here and rather call it in server code because the validator interceptor returns gRPC
 	// error which is not convertible to the internal rest error code.
 	stream := middleware.ChainStreamServer(
 		grpc_ratelimit.StreamServerInterceptor(&RateLimiter{}),
-		grpc_auth.StreamServerInterceptor(AuthFunc),
+		grpc_auth.StreamServerInterceptor(authFunction),
 		grpc_logging.StreamServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger), []grpc_logging.Option{}...),
 		// grpc_logging.PayloadStreamServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger), alwaysLoggingDeciderServer, time.RFC3339), // To log payload
 		grpc_opentracing.StreamServerInterceptor(),
@@ -47,7 +56,7 @@ func Get() (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor) {
 	unary := middleware.ChainUnaryServer(
 		PprofUnaryServerInterceptor(),
 		grpc_ratelimit.UnaryServerInterceptor(&RateLimiter{}),
-		grpc_auth.UnaryServerInterceptor(AuthFunc),
+		grpc_auth.UnaryServerInterceptor(authFunction),
 		grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger)),
 		// grpc_logging.PayloadUnaryServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger), alwaysLoggingDeciderServer, time.RFC3339), //To log payload
 		TimeoutUnaryServerInterceptor(DefaultTimeout),

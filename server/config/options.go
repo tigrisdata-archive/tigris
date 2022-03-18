@@ -15,6 +15,8 @@
 package config
 
 import (
+	"time"
+
 	"github.com/tigrisdata/tigrisdb/util/log"
 )
 
@@ -26,7 +28,15 @@ type ServerConfig struct {
 type Config struct {
 	Server       ServerConfig `yaml:"server" json:"server"`
 	Log          log.LogConfig
+	Auth         AuthConfig `yaml:"auth" json:"auth"`
 	FoundationDB FoundationDBConfig
+}
+
+type AuthConfig struct {
+	IssuerURL        string
+	Audience         string
+	JWKSCacheTimeout time.Duration
+	LogOnly          bool
 }
 
 var DefaultConfig = Config{
@@ -36,6 +46,12 @@ var DefaultConfig = Config{
 	Server: ServerConfig{
 		Host: "0.0.0.0",
 		Port: 8081,
+	},
+	Auth: AuthConfig{
+		IssuerURL:        "https://tigrisdata-dev.us.auth0.com/",
+		Audience:         "https://tigris-db-api",
+		JWKSCacheTimeout: 5 * time.Minute,
+		LogOnly:          true,
 	},
 }
 
