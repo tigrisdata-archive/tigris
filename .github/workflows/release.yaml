@@ -11,11 +11,13 @@ jobs:
     uses: ./.github/workflows/go-test.yaml
     secrets:
       API_DEPLOY_KEY: ${{ secrets.API_DEPLOY_KEY }}
+      CLIENT_DEPLOY_KEY: ${{ secrets.CLIENT_DEPLOY_KEY }}
 
   lint:
     uses: ./.github/workflows/go-lint.yaml
     secrets:
       API_DEPLOY_KEY: ${{ secrets.API_DEPLOY_KEY }}
+      CLIENT_DEPLOY_KEY: ${{ secrets.CLIENT_DEPLOY_KEY }}
 
   release:
     runs-on: ubuntu-latest

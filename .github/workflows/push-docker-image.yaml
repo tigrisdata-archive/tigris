@@ -24,6 +24,13 @@ jobs:
       packages: write
 
     steps:
+      - name: Setup SSH deploy keys
+        uses: webfactory/ssh-agent@v0.5.4
+        with:
+          ssh-private-key: |
+            ${{ secrets.CLIENT_DEPLOY_KEY }}
+            ${{ secrets.API_DEPLOY_KEY }}
+
       - name: Checkout repository
         uses: actions/checkout@v2
 
@@ -52,6 +59,10 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+
+      # Pull private repos while SSH agent is available
+      - name: Pull submodules
+        run: git submodule update --init --recursive
 
       - name: Build and push
         uses: docker/build-push-action@v2

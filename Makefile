@@ -5,6 +5,7 @@ GO_SRC=$(shell find . -name "*.go" -not -name "*_test.go")
 API_DIR=api
 V=v1
 GEN_DIR=${API_DIR}/server/${V}
+PROTO_DIR=${API_DIR}/proto/server/${V}
 
 # Needed to be able to build amd64 binaries on MacOS M1
 DOCKER_PLATFORM="linux/amd64"
@@ -19,22 +20,25 @@ all: server
 BUILD_PARAM=-tags=release -ldflags "-X 'main.Version=$(VERSION)' -X 'main.BuildHash=$(GIT_HASH)'" $(shell printenv BUILD_PARAM)
 TEST_PARAM=-cover -race -tags=test,integration $(shell printenv TEST_PARAM)
 
+${PROTO_DIR}/%.proto:
+	git submodule update --init --recursive
+
 # Generate GRPC client/server, openapi spec, http server
-${GEN_DIR}/%_openapi.yaml ${GEN_DIR}/%.pb.go ${GEN_DIR}/%.pb.gw.go: ${GEN_DIR}/%.proto
-	protoc -Iapi --openapi_out=${API_DIR} --openapi_opt=naming=proto \
+${PROTO_DIR}/%_openapi.yaml ${GEN_DIR}/%.pb.go ${GEN_DIR}/%.pb.gw.go: ${PROTO_DIR}/%.proto
+	protoc -Iapi/proto --openapi_out=${API_DIR} --openapi_opt=naming=proto \
 		--go_out=${API_DIR} --go_opt=paths=source_relative \
 		--go-grpc_out=${API_DIR} --go-grpc_opt=paths=source_relative \
 		--grpc-gateway_out=${API_DIR} --grpc-gateway_opt=paths=source_relative,allow_delete_body=true \
 		$<
-	/bin/bash scripts/fix_openapi.sh ${API_DIR}/openapi.yaml ${GEN_DIR}/$(*F)_openapi.yaml
+	/bin/bash scripts/fix_openapi.sh ${API_DIR}/openapi.yaml ${PROTO_DIR}/$(*F)_openapi.yaml
 	rm ${API_DIR}/openapi.yaml 
 
 # Generate Go HTTP client from openapi spec
-${API_DIR}/client/${V}/%/http.go: ${GEN_DIR}/%_openapi.yaml
+${API_DIR}/client/${V}/%/http.go: ${PROTO_DIR}/%_openapi.yaml
 	mkdir -p ${API_DIR}/client/${V}/$(*F)
 	oapi-codegen -package api -generate "client, types, spec" \
 		-o ${API_DIR}/client/${V}/$(*F)/http.go \
-		${GEN_DIR}/$(*F)_openapi.yaml
+		${PROTO_DIR}/$(*F)_openapi.yaml
 
 generate: ${GEN_DIR}/api.pb.go ${GEN_DIR}/api.pb.gw.go ${GEN_DIR}/health.pb.go ${GEN_DIR}/health.pb.gw.go
 
@@ -52,7 +56,9 @@ lint: generate test_client
 docker_compose_build:
 	$(DOCKER_COMPOSE) build
 
-docker_test:
+# dependency on generate needed to create generated file outside of docker with
+# current user owner instead of root
+docker_test: generate
 	$(DOCKER_COMPOSE) up --build --abort-on-container-exit --exit-code-from tigris_test tigris_test
 
 docker_test_no_build:
@@ -82,3 +88,7 @@ osx_test: generate test_client
 
 osx_run: generate server
 	TIGRISDB_SERVER_FOUNDATIONDB_CLUSTER_FILE=$(OSX_CLUSTER_FILE) ./server/service
+
+upgrade_api:
+	git submodule update --remote --recursive --rebase
+

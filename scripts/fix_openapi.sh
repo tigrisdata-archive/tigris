@@ -34,10 +34,7 @@ for i in DeleteRequest UpdateRequest ReadRequest; do
 	yq_fix_object $i filter
 done
 
-for i in InsertRequest ReplaceRequest; do
-	yq_fix_object $i documents.items
-done
-
+yq_fix_object InsertRequest documents.items
 yq_fix_object UpdateRequest fields
 yq_fix_object ReadResponse doc
 yq_fix_object CreateCollectionRequest schema
