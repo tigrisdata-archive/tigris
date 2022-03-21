@@ -8,6 +8,8 @@ RUN mkdir /build
 COPY scripts/install_build_deps.sh /build
 RUN sh /build/install_build_deps.sh
 COPY go.mod /build
+#Avoid access to private repos by removing test deps
+RUN sed -i '/tigrisdb-client-go/d' /build/go.mod
 WORKDIR /build
 RUN go mod download
 
