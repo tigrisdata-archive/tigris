@@ -1,5 +1,5 @@
 BINS=server
-VERSION=$(shell git describe --tags)
+VERSION=$(shell git describe --tags --always)
 GIT_HASH=$(shell [ ! -d .git ] || git rev-parse --short HEAD)
 GO_SRC=$(shell find . -name "*.go" -not -name "*_test.go")
 API_DIR=api
@@ -36,9 +36,9 @@ ${API_DIR}/client/${V}/%/http.go: ${GEN_DIR}/%_openapi.yaml
 		-o ${API_DIR}/client/${V}/$(*F)/http.go \
 		${GEN_DIR}/$(*F)_openapi.yaml
 
-generate: ${GEN_DIR}/user.pb.go ${GEN_DIR}/user.pb.gw.go ${GEN_DIR}/health.pb.go ${GEN_DIR}/health.pb.gw.go
+generate: ${GEN_DIR}/api.pb.go ${GEN_DIR}/api.pb.gw.go ${GEN_DIR}/health.pb.go ${GEN_DIR}/health.pb.gw.go
 
-test_client: ${API_DIR}/client/${V}/user/http.go
+test_client: ${API_DIR}/client/${V}/api/http.go
 
 server: server/service
 server/service: $(GO_SRC) generate

@@ -13,7 +13,7 @@ fix_bytes() {
 	sed -e 's/format: bytes/format: byte/g' "$IN_FILE" >"$OUT_FILE"
 }
 
-if [[ "$OUT_FILE" != *"user_openapi"* ]]; then
+if [[ "$OUT_FILE" != *"api_openapi"* ]]; then
 	fix_bytes
 	exit 0
 fi
