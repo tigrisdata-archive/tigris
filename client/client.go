@@ -22,7 +22,7 @@ import (
 	"net/http"
 
 	"github.com/rs/zerolog/log"
-	userHTTP "github.com/tigrisdata/tigrisdb/api/client/v1/user"
+	apiHTTP "github.com/tigrisdata/tigrisdb/api/client/v1/api"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"google.golang.org/grpc"
@@ -203,17 +203,17 @@ func (c *grpcCRUDClient) Read(ctx context.Context, docs ...interface{}) error {
 }
 
 type httpClient struct {
-	*userHTTP.ClientWithResponses
+	*apiHTTP.ClientWithResponses
 }
 
 type httpCRUDClient struct {
-	c     *userHTTP.ClientWithResponses
+	c     *apiHTTP.ClientWithResponses
 	db    string
 	table string
 }
 
 func newHTTPClient(_ context.Context, host string, port int16) (*httpClient, error) {
-	c, err := userHTTP.NewClientWithResponses(fmt.Sprintf("http://%s:%d", host, port))
+	c, err := apiHTTP.NewClientWithResponses(fmt.Sprintf("http://%s:%d", host, port))
 	return &httpClient{c}, err
 }
 
@@ -237,7 +237,7 @@ func HTTPError(err error, resp httpStatus) error {
 }
 
 func (c *httpClient) Create(ctx context.Context, db string, collection string, _ string) error {
-	resp, err := c.TigrisDBCreateCollectionWithResponse(ctx, db, collection, userHTTP.TigrisDBCreateCollectionJSONRequestBody{})
+	resp, err := c.TigrisDBCreateCollectionWithResponse(ctx, db, collection, apiHTTP.TigrisDBCreateCollectionJSONRequestBody{})
 	return HTTPError(err, resp)
 }
 
@@ -274,7 +274,7 @@ func (c *httpCRUDClient) Insert(ctx context.Context, docs ...interface{}) error 
 		return err
 	}
 
-	resp, err := c.c.TigrisDBInsertWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBInsertJSONRequestBody{})
+	resp, err := c.c.TigrisDBInsertWithResponse(ctx, c.db, c.table, apiHTTP.TigrisDBInsertJSONRequestBody{})
 
 	return HTTPError(err, resp)
 }
@@ -285,7 +285,7 @@ func (c *httpCRUDClient) Delete(ctx context.Context, docs ...interface{}) error 
 		return err
 	}
 
-	resp, err := c.c.TigrisDBDeleteWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBDeleteJSONRequestBody{})
+	resp, err := c.c.TigrisDBDeleteWithResponse(ctx, c.db, c.table, apiHTTP.TigrisDBDeleteJSONRequestBody{})
 
 	return HTTPError(err, resp)
 }
@@ -296,7 +296,7 @@ func (c *httpCRUDClient) Update(ctx context.Context, docs ...interface{}) error 
 		return err
 	}
 
-	resp, err := c.c.TigrisDBUpdateWithResponse(ctx, c.db, c.table, userHTTP.TigrisDBUpdateJSONRequestBody{})
+	resp, err := c.c.TigrisDBUpdateWithResponse(ctx, c.db, c.table, apiHTTP.TigrisDBUpdateJSONRequestBody{})
 
 	return HTTPError(err, resp)
 }
@@ -311,7 +311,7 @@ func (c *httpCRUDClient) Read(ctx context.Context, docs ...interface{}) error {
 		return err
 	}
 
-	resp, err := c.c.TigrisDBRead(ctx, c.db, c.table, userHTTP.TigrisDBReadJSONRequestBody{})
+	resp, err := c.c.TigrisDBRead(ctx, c.db, c.table, apiHTTP.TigrisDBReadJSONRequestBody{})
 
 	if ulog.E(err) {
 		return err

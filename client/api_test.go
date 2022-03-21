@@ -24,7 +24,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
-	userHTTP "github.com/tigrisdata/tigrisdb/api/client/v1/user"
+	apiHTTP "github.com/tigrisdata/tigrisdb/api/client/v1/api"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/server/config"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -93,7 +93,7 @@ func TestAPIGRPC(t *testing.T) {
 }
 
 type readResponse struct {
-	Result *userHTTP.ReadResponse
+	Result *apiHTTP.ReadResponse
 }
 
 func TestAPIHTTP(t *testing.T) {
@@ -107,7 +107,7 @@ func TestAPIHTTP(t *testing.T) {
 
 	values, err := structpb.NewValue([]interface{}{"pkey_int"})
 	require.NoError(t, err)
-	_, err = c.TigrisDBCreateCollectionWithResponse(ctx, "db1", "t1", userHTTP.TigrisDBCreateCollectionJSONRequestBody{
+	_, err = c.TigrisDBCreateCollectionWithResponse(ctx, "db1", "t1", apiHTTP.TigrisDBCreateCollectionJSONRequestBody{
 		Schema: &map[string]interface{}{
 			"pkey_int":    "int",
 			"primary_key": values,
@@ -122,12 +122,12 @@ func TestAPIHTTP(t *testing.T) {
 			"str_value": "foo",
 		},
 	}
-	_, err = c.TigrisDBInsertWithResponse(ctx, "db1", "t1", userHTTP.TigrisDBInsertJSONRequestBody{
+	_, err = c.TigrisDBInsertWithResponse(ctx, "db1", "t1", apiHTTP.TigrisDBInsertJSONRequestBody{
 		Documents: &inputDocuments,
 	})
 	require.NoError(t, err)
 
-	resp, err := c.TigrisDBRead(ctx, "db1", "t1", userHTTP.TigrisDBReadJSONRequestBody{
+	resp, err := c.TigrisDBRead(ctx, "db1", "t1", apiHTTP.TigrisDBReadJSONRequestBody{
 		Filter: &map[string]interface{}{
 			"pkey_int": 1,
 		},

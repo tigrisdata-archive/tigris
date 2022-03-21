@@ -44,7 +44,7 @@ const (
 	documentPathPattern = documentPath + "/*"
 )
 
-type userService struct {
+type apiService struct {
 	api.UnimplementedTigrisDBServer
 
 	kv                    kv.KV
@@ -55,8 +55,8 @@ type userService struct {
 	queryRunnerFactory    *QueryRunnerFactory
 }
 
-func newUserService(kv kv.KV) *userService {
-	u := &userService{
+func newApiService(kv kv.KV) *apiService {
+	u := &apiService{
 		kv:          kv,
 		txMgr:       transaction.NewManager(kv),
 		schemaCache: schema.NewCache(),
@@ -68,7 +68,7 @@ func newUserService(kv kv.KV) *userService {
 	return u
 }
 
-func (s *userService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {
+func (s *apiService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {
 	mux := runtime.NewServeMux(runtime.WithMarshalerOption(runtime.MIMEWildcard, &api.CustomMarshaler{
 		JSONBuiltin: &runtime.JSONBuiltin{},
 	}))
@@ -92,12 +92,153 @@ func (s *userService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel
 	return nil
 }
 
-func (s *userService) RegisterGRPC(grpc *grpc.Server) error {
+func (s *apiService) RegisterGRPC(grpc *grpc.Server) error {
 	api.RegisterTigrisDBServer(grpc, s)
 	return nil
 }
 
-func (s *userService) CreateCollection(ctx context.Context, r *api.CreateCollectionRequest) (*api.CreateCollectionResponse, error) {
+func (s *apiService) BeginTransaction(ctx context.Context, r *api.BeginTransactionRequest) (*api.BeginTransactionResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
+	_, txCtx, err := s.txMgr.StartTx(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.BeginTransactionResponse{
+		TxCtx: txCtx,
+	}, nil
+}
+
+func (s *apiService) CommitTransaction(ctx context.Context, r *api.CommitTransactionRequest) (*api.CommitTransactionResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
+	tx, err := s.txMgr.GetTx(r.TxCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return &api.CommitTransactionResponse{}, nil
+}
+
+func (s *apiService) RollbackTransaction(ctx context.Context, r *api.RollbackTransactionRequest) (*api.RollbackTransactionResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
+	tx, err := s.txMgr.GetTx(r.TxCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = tx.Rollback(ctx); err != nil {
+		// ToDo: Do we need to return here in this case? Or silently return success?
+		return nil, err
+	}
+
+	return &api.RollbackTransactionResponse{}, nil
+}
+
+// Insert new object returns an error if object already exists
+// Operations done individually not in actual batch
+func (s *apiService) Insert(ctx context.Context, r *api.InsertRequest) (*api.InsertResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
+	collection, err := s.schemaCache.Get(r.GetDb(), r.GetCollection())
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = s.Run(ctx, &Request{
+		apiRequest:  r,
+		documents:   r.GetDocuments(),
+		collection:  collection,
+		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.InsertResponse{}, nil
+}
+
+func (s *apiService) Update(ctx context.Context, r *api.UpdateRequest) (*api.UpdateResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
+	collection, err := s.schemaCache.Get(r.GetDb(), r.GetCollection())
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = s.Run(ctx, &Request{
+		apiRequest:  r,
+		collection:  collection,
+		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.UpdateResponse{}, nil
+}
+
+func (s *apiService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.DeleteResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
+	collection, err := s.schemaCache.Get(r.GetDb(), r.GetCollection())
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = s.Run(ctx, &Request{
+		apiRequest:  r,
+		collection:  collection,
+		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.DeleteResponse{}, nil
+}
+
+func (s *apiService) Read(r *api.ReadRequest, stream api.TigrisDB_ReadServer) error {
+	if err := r.Validate(); err != nil {
+		return err
+	}
+
+	collection, err := s.schemaCache.Get(r.GetDb(), r.GetCollection())
+	if err != nil {
+		return err
+	}
+
+	_, err = s.Run(stream.Context(), &Request{
+		apiRequest:  r,
+		collection:  collection,
+		queryRunner: s.queryRunnerFactory.GetStreamingQueryRunner(stream),
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *apiService) CreateCollection(ctx context.Context, r *api.CreateCollectionRequest) (*api.CreateCollectionResponse, error) {
 	if err := r.Validate(); err != nil {
 		return nil, err
 	}
@@ -126,7 +267,7 @@ func (s *userService) CreateCollection(ctx context.Context, r *api.CreateCollect
 	}, nil
 }
 
-func (s *userService) DropCollection(ctx context.Context, r *api.DropCollectionRequest) (*api.DropCollectionResponse, error) {
+func (s *apiService) DropCollection(ctx context.Context, r *api.DropCollectionRequest) (*api.DropCollectionResponse, error) {
 	if err := r.Validate(); err != nil {
 		return nil, err
 	}
@@ -142,168 +283,27 @@ func (s *userService) DropCollection(ctx context.Context, r *api.DropCollectionR
 	}, nil
 }
 
-func (s *userService) BeginTransaction(ctx context.Context, r *api.BeginTransactionRequest) (*api.BeginTransactionResponse, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-
-	_, txCtx, err := s.txMgr.StartTx(ctx, true)
-	if err != nil {
-		return nil, err
-	}
-
-	return &api.BeginTransactionResponse{
-		TxCtx: txCtx,
-	}, nil
-}
-
-func (s *userService) CommitTransaction(ctx context.Context, r *api.CommitTransactionRequest) (*api.CommitTransactionResponse, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-
-	tx, err := s.txMgr.GetTx(r.TxCtx)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = tx.Commit(ctx); err != nil {
-		return nil, err
-	}
-
-	return &api.CommitTransactionResponse{}, nil
-}
-
-func (s *userService) RollbackTransaction(ctx context.Context, r *api.RollbackTransactionRequest) (*api.RollbackTransactionResponse, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-
-	tx, err := s.txMgr.GetTx(r.TxCtx)
-	if err != nil {
-		return nil, err
-	}
-
-	if err = tx.Rollback(ctx); err != nil {
-		// ToDo: Do we need to return here in this case? Or silently return success?
-		return nil, err
-	}
-
-	return &api.RollbackTransactionResponse{}, nil
-}
-
-// Insert new object returns an error if object already exists
-// Operations done individually not in actual batch
-func (s *userService) Insert(ctx context.Context, r *api.InsertRequest) (*api.InsertResponse, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-
-	collection, err := s.schemaCache.Get(r.GetDb(), r.GetCollection())
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = s.Run(ctx, &Request{
-		apiRequest:  r,
-		documents:   r.GetDocuments(),
-		collection:  collection,
-		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &api.InsertResponse{}, nil
-}
-
-func (s *userService) Update(ctx context.Context, r *api.UpdateRequest) (*api.UpdateResponse, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-
-	collection, err := s.schemaCache.Get(r.GetDb(), r.GetCollection())
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = s.Run(ctx, &Request{
-		apiRequest:  r,
-		collection:  collection,
-		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &api.UpdateResponse{}, nil
-}
-
-func (s *userService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.DeleteResponse, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-
-	collection, err := s.schemaCache.Get(r.GetDb(), r.GetCollection())
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = s.Run(ctx, &Request{
-		apiRequest:  r,
-		collection:  collection,
-		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &api.DeleteResponse{}, nil
-}
-
-func (s *userService) Read(r *api.ReadRequest, stream api.TigrisDB_ReadServer) error {
-	if err := r.Validate(); err != nil {
-		return err
-	}
-
-	collection, err := s.schemaCache.Get(r.GetDb(), r.GetCollection())
-	if err != nil {
-		return err
-	}
-
-	_, err = s.Run(stream.Context(), &Request{
-		apiRequest:  r,
-		collection:  collection,
-		queryRunner: s.queryRunnerFactory.GetStreamingQueryRunner(stream),
-	})
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *userService) ListDatabases(_ context.Context, _ *api.ListDatabasesRequest) (*api.ListDatabasesResponse, error) {
+func (s *apiService) ListDatabases(_ context.Context, _ *api.ListDatabasesRequest) (*api.ListDatabasesResponse, error) {
 	return &api.ListDatabasesResponse{}, nil
 }
 
-func (s *userService) ListCollections(_ context.Context, _ *api.ListCollectionsRequest) (*api.ListCollectionsResponse, error) {
+func (s *apiService) ListCollections(_ context.Context, _ *api.ListCollectionsRequest) (*api.ListCollectionsResponse, error) {
 	return &api.ListCollectionsResponse{}, nil
 }
 
-func (s *userService) CreateDatabase(_ context.Context, _ *api.CreateDatabaseRequest) (*api.CreateDatabaseResponse, error) {
+func (s *apiService) CreateDatabase(_ context.Context, _ *api.CreateDatabaseRequest) (*api.CreateDatabaseResponse, error) {
 	return &api.CreateDatabaseResponse{
 		Msg: "database created successfully",
 	}, nil
 }
 
-func (s *userService) DropDatabase(_ context.Context, _ *api.DropDatabaseRequest) (*api.DropDatabaseResponse, error) {
+func (s *apiService) DropDatabase(_ context.Context, _ *api.DropDatabaseRequest) (*api.DropDatabaseResponse, error) {
 	return &api.DropDatabaseResponse{
 		Msg: "database dropped successfully",
 	}, nil
 }
 
-func (s *userService) Run(ctx context.Context, req *Request) (*Response, error) {
+func (s *apiService) Run(ctx context.Context, req *Request) (*Response, error) {
 	queryLifecycle := s.queryLifecycleFactory.Get()
 	return queryLifecycle.run(ctx, req)
 }

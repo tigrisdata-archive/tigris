@@ -35,7 +35,7 @@ type Service interface {
 func GetRegisteredServices(kv kv.KV) []Service {
 	var v1Services []Service
 
-	v1Services = append(v1Services, newUserService(kv))
+	v1Services = append(v1Services, newApiService(kv))
 	v1Services = append(v1Services, newHealthService())
 	return v1Services
 }
