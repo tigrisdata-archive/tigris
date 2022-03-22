@@ -28,6 +28,7 @@ RUN mkdir -p /server /etc/tigrisdata/tigrisdb /etc/foundationdb/
 COPY --from=build /build/server/service /server/service
 COPY --from=build /build/config/server.yaml /etc/tigrisdata/tigrisdb
 COPY --from=build /usr/lib/libfdb_c.so /usr/lib/libfdb_c.so
+COPY --from=build /usr/bin/fdbcli /usr/bin/fdbcli
 
 RUN chown -R tigris:tigris /server /etc/tigrisdata/tigrisdb
 
