@@ -18,12 +18,12 @@ package server
 
 import (
 	"fmt"
-	"github.com/tigrisdata/tigrisdb/test/config"
-	"gopkg.in/gavv/httpexpect.v1"
 	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+	"github.com/tigrisdata/tigrisdb/test/config"
+	"gopkg.in/gavv/httpexpect.v1"
 )
 
 type DatabaseSuite struct {
