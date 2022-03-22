@@ -42,6 +42,7 @@ type Tx interface {
 	Replace(ctx context.Context, key keys.Key, value []byte) error
 	Update(ctx context.Context, key keys.Key, apply func([]byte) ([]byte, error)) error
 	Delete(ctx context.Context, key keys.Key) error
+	Read(ctx context.Context, key keys.Key) (kv.Iterator, error)
 	Commit(ctx context.Context) error
 	Rollback(ctx context.Context) error
 }
@@ -80,6 +81,12 @@ func (m *Manager) StartTx(ctx context.Context, enableTracking bool) (Tx, *api.Tr
 	}
 
 	return NewTxExplicit(session, m.tracker, enableTracking), session.GetTxCtx(), nil
+}
+
+// StartTxWithoutTracking always starts a new session and disables the tracking
+func (m *Manager) StartTxWithoutTracking(ctx context.Context) (Tx, error) {
+	tx, _, err := m.StartTx(ctx, false)
+	return tx, err
 }
 
 // GetTx will return an explicit transaction that is getting tracked. It is called mainly when the caller wants to
@@ -222,4 +229,8 @@ func (b *baseTx) Update(ctx context.Context, key keys.Key, apply func([]byte) ([
 
 func (b *baseTx) Delete(ctx context.Context, key keys.Key) error {
 	return b.session.delete(ctx, key)
+}
+
+func (b *baseTx) Read(ctx context.Context, key keys.Key) (kv.Iterator, error) {
+	return b.session.read(ctx, key)
 }

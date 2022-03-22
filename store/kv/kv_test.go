@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -13,29 +12,6 @@ import (
 	"github.com/tigrisdata/tigrisdb/server/config"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 )
-
-func getTestFDBConfig(t *testing.T) *config.FoundationDBConfig {
-	config.LoadEnvironment()
-
-	// Environment can be set on OS X
-	fn, exists := os.LookupEnv("TIGRISDB_SERVER_FOUNDATIONDB_CLUSTER_FILE")
-
-	// Use default location when run test in the docker
-	// where cluster file is shared between containers
-	if !exists && config.GetEnvironment() != config.EnvTest {
-		fn = "../../test/config/fdb.cluster"
-	}
-
-	cmd := exec.Command("fdbcli", "-C", fn, "--exec", "configure new single memory")
-	_, err := cmd.Output()
-	if err != nil {
-		cmd := exec.Command("fdbcli", "-C", fn, "--exec", "configure single memory")
-		_, err = cmd.Output()
-	}
-	require.NoError(t, err)
-
-	return &config.FoundationDBConfig{ClusterFile: fn}
-}
 
 func readAll(t *testing.T, it Iterator) []KeyValue {
 	res := make([]KeyValue, 0)
@@ -250,7 +226,10 @@ func testKVTimeout(t *testing.T, kv KV) {
 }
 
 func TestKVFDB(t *testing.T) {
-	kv, err := NewFoundationDB(getTestFDBConfig(t))
+	cfg, err := config.GetTestFDBConfig()
+	require.NoError(t, err)
+
+	kv, err := NewFoundationDB(cfg)
 	require.NoError(t, err)
 
 	t.Run("TestKVFDBBasic", func(t *testing.T) {
