@@ -34,6 +34,35 @@ var (
 	grpcGatewayPrefix = "grpc-gateway-"
 )
 
+type Organization struct {
+	Code string `json:"code"`
+}
+
+type User struct {
+	Email string `json:"email"`
+}
+
+type CustomClaim struct {
+	Roles []string     `json:"https://tigris-db-api/r"`
+	Org   Organization `json:"https://tigris-db-api/o"`
+	User  User         `json:"https://tigris-db-api/u"`
+}
+
+func (c CustomClaim) Validate(ctx context.Context) error {
+	// org code claim verification
+	orgName, err := getOrganizationName(ctx)
+	if err != nil {
+		return err
+	}
+	if len(c.Org.Code) == 0 {
+		return api.Error(codes.PermissionDenied, "empty organization code in token")
+	}
+	if orgName != c.Org.Code {
+		return api.Error(codes.PermissionDenied, "your token is not valid for this URL")
+	}
+	return nil
+}
+
 func getHeader(ctx context.Context, header string) string {
 	if val := metautils.ExtractIncoming(ctx).Get(header); val != "" {
 		return val
@@ -67,6 +96,11 @@ func GetJWTValidator(config *config.Config) *validator.Validator {
 		issuerURL.String(),
 		[]string{config.Auth.Audience},
 		validator.WithAllowedClockSkew(time.Minute),
+		validator.WithCustomClaims(
+			func() validator.CustomClaims {
+				return &CustomClaim{}
+			},
+		),
 	)
 
 	if err != nil {
@@ -97,4 +131,25 @@ func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config
 
 	log.Debug().Msg("Valid token received")
 	return context.WithValue(ctx, key("token"), validToken), nil
+}
+
+func getOrganizationName(ctx context.Context) (string, error) {
+	host := getHeader(ctx, ":authority")
+	if host == "" {
+		host = getHeader(ctx, "host")
+	}
+	// <project>-<org-name>.<env>.tigrisdata.cloud
+	parts := strings.Split(host, ".")
+	if len(parts) < 3 {
+		return "", api.Error(codes.FailedPrecondition, "hostname is not as per expected scheme")
+	}
+	subParts := strings.Split(parts[0], "-")
+	if len(subParts) > 2 {
+		return "", api.Error(codes.FailedPrecondition, "hostname is not as per expected scheme")
+	}
+	organizationName := subParts[0]
+	if len(subParts) > 1 {
+		organizationName = subParts[1]
+	}
+	return organizationName, nil
 }
