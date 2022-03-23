@@ -376,6 +376,8 @@ github.com/subosito/gotenv v1.2.0 h1:Slr1R9HxAlEKefgq5jn9U+DnETlIUa6HfgEzj0g5d7s
 github.com/subosito/gotenv v1.2.0/go.mod h1:N0PQaV/YGNqwC0u51sEeR/aUtSLEXKX9iv69rRypqCw=
 github.com/tigrisdata/tigrisdb-client-go v0.0.0-20220323055009-6ab83fc6b3b2 h1:yfEahJ0R7rGazMKNirhKaQjT1+CRSsI5JrwYnr7yzrg=
 github.com/tigrisdata/tigrisdb-client-go v0.0.0-20220323055009-6ab83fc6b3b2/go.mod h1:lP4RhNml4kRHULYY+nb+nmvGz0THlwUx9w5BI7Qus7I=
+github.com/tigrisdata/tigrisdb-client-go v0.0.0-20220323193655-8e98830528bd h1:gKA+8WvqnicM2c7ZrAtmd5BAeaLlvOZ2BZuhxwM3uS8=
+github.com/tigrisdata/tigrisdb-client-go v0.0.0-20220323193655-8e98830528bd/go.mod h1:lP4RhNml4kRHULYY+nb+nmvGz0THlwUx9w5BI7Qus7I=
 github.com/ugorji/go v1.1.7/go.mod h1:kZn38zHttfInRq0xu/PH0az30d+z6vm202qpg1oXVMw=
 github.com/ugorji/go v1.2.6/go.mod h1:anCg0y61KIhDlPZmnH+so+RQbysYVyDko0IMgJv0Nn0=
 github.com/ugorji/go/codec v1.1.7/go.mod h1:Ax+UKWsSmolVDwsd+7N3ZtXu+yMGCf907BLYF3GoBXY=

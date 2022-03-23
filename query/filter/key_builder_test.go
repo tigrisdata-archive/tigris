@@ -93,6 +93,12 @@ func TestKeyBuilder(t *testing.T) {
 			[]byte(`{"b":10,"a":1,"c":"ccc","$or":[{"f1":10},{"a":2}]}`),
 			nil,
 			[]keys.Key{keys.NewKey("", int64(1)), keys.NewKey("", int64(2))},
+		}, {
+			// composite with OR parent filter
+			[]*schema.Field{{FieldName: "K1", DataType: schema.StringType}, {FieldName: "K2", DataType: schema.IntType}},
+			[]byte(`{"$or":[{"$and":[{"K1":"bar"},{"K2":3}]},{"$and":[{"K1":"foo"},{"K2":2}]}]}`),
+			nil,
+			[]keys.Key{keys.NewKey("", "bar", int64(3)), keys.NewKey("", "foo", int64(2))},
 		},
 	}
 	for _, c := range cases {
