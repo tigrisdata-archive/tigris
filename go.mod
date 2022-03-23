@@ -7,10 +7,8 @@ require (
 	github.com/auth0/go-jwt-middleware/v2 v2.0.0
 	github.com/buger/jsonparser v1.1.1
 	github.com/davecgh/go-spew v1.1.1
-	github.com/deepmap/oapi-codegen v1.9.1
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/fullstorydev/grpchan v1.1.1
-	github.com/getkin/kin-openapi v0.90.0
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/golang/protobuf v1.5.2
 	github.com/google/uuid v1.3.0
@@ -38,8 +36,10 @@ require (
 	cloud.google.com/go v0.99.0 // indirect
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/andybalholm/brotli v1.0.4 // indirect
+	github.com/deepmap/oapi-codegen v1.9.1 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424 // indirect
+	github.com/getkin/kin-openapi v0.90.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/swag v0.21.1 // indirect

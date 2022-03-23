@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-func TestNoToken(t *testing.T) {
+func TestAuth(t *testing.T) {
 	enforcedAuthConfig := config.Config{
 		Server: config.ServerConfig{},
 		Log: log.LogConfig{
@@ -60,4 +60,25 @@ func TestNoToken(t *testing.T) {
 		require.NotNil(t, err)
 		require.Contains(t, err.Error(), "could not parse the token: illegal base64 data")
 	})
+
+	t.Run("test valid extraction of organization name - 1", func(t *testing.T) {
+		incomingCtx := metadata.NewIncomingContext(context.TODO(), metadata.Pairs("host", "project1-tigrisdata.dev.tigrisdata.cloud"))
+		organizationName, err := getOrganizationName(incomingCtx)
+		require.Nil(t, err)
+		require.Equal(t, "tigrisdata", organizationName)
+	})
+
+	t.Run("test invalid extraction of organization name - 1", func(t *testing.T) {
+		incomingCtx := metadata.NewIncomingContext(context.TODO(), metadata.Pairs("host", "project1tigrisdata.dev.tigrisdata.cloud"))
+		organizationName, err := getOrganizationName(incomingCtx)
+		require.Nil(t, err)
+		require.Equal(t, organizationName, "project1tigrisdata")
+	})
+
+	t.Run("test invalid extraction of organization name - 2", func(t *testing.T) {
+		incomingCtx := metadata.NewIncomingContext(context.TODO(), metadata.Pairs("host", "project1-tigris-data.dev.tigrisdata.cloud"))
+		_, err := getOrganizationName(incomingCtx)
+		require.Equal(t, err, api.Error(codes.FailedPrecondition, "hostname is not as per expected scheme"))
+	})
+
 }
