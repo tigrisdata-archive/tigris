@@ -23,8 +23,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	api "github.com/tigrisdata/tigrisdb-client-go/api/server/v1"
 	"github.com/tigrisdata/tigrisdb-client-go/driver"
 	"github.com/tigrisdata/tigrisdb/server/config"
+	"google.golang.org/grpc/codes"
 )
 
 func getTestServerHostPort() (string, int16) {
@@ -39,12 +41,13 @@ func getTestServerHostPort() (string, int16) {
 func testRead(t *testing.T, c driver.Driver, filter driver.Filter, expected []driver.Document) {
 	ctx := context.Background()
 
-	it, err := c.Read(ctx, "db1", "c1", filter)
+	it, err := c.Read(ctx, "db1", "c1", filter, &driver.ReadOptions{})
 	require.NoError(t, err)
 
 	var doc driver.Document
 	var i int
 	for it.Next(&doc) {
+		require.Less(t, i, len(expected[i]))
 		assert.JSONEq(t, string(expected[i]), string(doc))
 		i++
 	}
@@ -53,109 +56,108 @@ func testRead(t *testing.T, c driver.Driver, filter driver.Filter, expected []dr
 }
 
 func testClient(t *testing.T, c driver.Driver) {
-	t.Skip("not implemented")
-
 	ctx := context.TODO()
 
-	_ = c.DropCollection(ctx, "db1", "c1")
+	_ = c.DropCollection(ctx, "db1", "c1", &driver.CollectionOptions{})
 
-	schema := `{ "schema": {
+	schema := `{
 		"K1": "string",
 		"K2": "int",
 		"D1": "string",
 		"primary_key":  [ "K1", "K2" ]
 	}`
 
-	err := c.CreateCollection(ctx, "db1", "c1", driver.Schema(schema))
+	err := c.CreateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
 	require.NoError(t, err)
 
-	doc1 := driver.Document(`{"K1"": "vK1", "K2"": 1, "D1"": "vD1"}`)
+	err = c.CreateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
+	require.Error(t, api.Errorf(codes.AlreadyExists, "collection already exists"), err)
 
-	_, err = c.Insert(ctx, "db1", "c1", []driver.Document{doc1})
+	doc1 := driver.Document(`{"K1": "vK1", "K2": 1, "D1": "vD1"}`)
+
+	_, err = c.Insert(ctx, "db1", "c1", []driver.Document{doc1}, &driver.InsertOptions{})
 	require.NoError(t, err)
 
-	doc2, doc3 := driver.Document(`{"K1"": "vK1", "K2"": 2, "D1"": "vD2"}`), driver.Document(`{"K1"": "vK1", "K2"": 3, "D1"": "vD3"}`)
+	_, err = c.Insert(ctx, "db1", "c1", []driver.Document{doc1}, &driver.InsertOptions{MustNotExist: true})
+	require.Error(t, api.Errorf(codes.AlreadyExists, "row already exists"), err)
+
+	doc2, doc3 := driver.Document(`{"K1": "vK1", "K2": 2, "D1": "vD2"}`), driver.Document(`{"K1": "vK1", "K2": 3, "D1": "vD3"}`)
 
 	// multiple docs
-	_, err = c.Insert(ctx, "db1", "c1", []driver.Document{doc1, doc2, doc3})
+	_, err = c.Insert(ctx, "db1", "c1", []driver.Document{doc1, doc2, doc3}, &driver.InsertOptions{})
 	require.NoError(t, err)
 
-	// array of docs
-	_, err = c.Insert(ctx, "db1", "c1", []driver.Document{doc1, doc2, doc3})
+	fl := driver.Filter(`{ "$or" : [ {"$and" : [ {"K1" : "vK1"}, {"K2" : 1} ]}, {"$and" : [ {"K1" : "vk1"}, {"K2" : 3} ]} ]}`)
+	testRead(t, c, fl, []driver.Document{doc1, doc3})
+
+	_, err = c.Delete(ctx, "db1", "c1", fl, &driver.DeleteOptions{})
 	require.NoError(t, err)
 
-	testRead(t, c, driver.Filter(`{ "$or" : [ {"K1" : "vK1", "K2" : 1}, {"K1" : "vk1", "K2" : 3}]}`),
-		[]driver.Document{doc1, doc3})
+	testRead(t, c, nil, []driver.Document{doc2})
 
-	_, err = c.Delete(ctx, "db1", "c1", driver.Filter(`{ "$or" : [ {"K1" : "vK1", "K2" : 1}, {"K1" : "vk1", "K2" : 3}]}`))
+	err = c.DropCollection(ctx, "db1", "c1", &driver.CollectionOptions{})
 	require.NoError(t, err)
 
-	testRead(t, c, driver.Filter(`{}`), []driver.Document{doc2})
-
-	err = c.DropCollection(ctx, "db1", "c1")
+	err = c.DropCollection(ctx, "db1", "c1", &driver.CollectionOptions{})
 	require.NoError(t, err)
 }
 
 func testTxClient(t *testing.T, c driver.Driver) {
-	t.Skip("not implemented")
-
 	ctx := context.TODO()
 
-	_ = c.DropCollection(ctx, "db1", "c1")
+	_ = c.DropCollection(ctx, "db1", "c1", &driver.CollectionOptions{})
 
-	schema := `{ "schema": {
+	schema := `{
 		"K1": "string",
 		"K2": "int",
 		"D1": "string",
-		"primary_key":  [ "K1", "K2" ]
+		"primary_key":  [ "K2" ]
 	}`
 
-	err := c.CreateCollection(ctx, "db1", "c1", driver.Schema(schema))
+	err := c.CreateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
 	require.NoError(t, err)
 
-	tx, err := c.BeginTx(ctx, "db1")
+	tx, err := c.BeginTx(ctx, "db1", &driver.TxOptions{})
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	doc1 := driver.Document(`{"K1"": "vK1", "K2"": 1, "D1"": "vD1"}`)
+	doc1 := driver.Document(`{"K1": "vK1", "K2": 1, "D1": "vD1"}`)
 
-	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1})
+	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1}, &driver.InsertOptions{})
 	require.NoError(t, err)
 
-	doc2, doc3 := driver.Document(`{"K1"": "vK1", "K2"": 2, "D1"": "vD2"}`), driver.Document(`{"K1"": "vK1", "K2"": 3, "D1"": "vD3"}`)
+	doc2, doc3 := driver.Document(`{"K1": "vK1", "K2": 2, "D1": "vD2"}`), driver.Document(`{"K1": "vK1", "K2": 3, "D1": "vD3"}`)
 
 	// multiple docs
-	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1, doc2, doc3})
+	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1, doc2, doc3}, &driver.InsertOptions{})
 	require.NoError(t, err)
 
 	// array of docs
-	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1, doc2, doc3})
+	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1, doc2, doc3}, &driver.InsertOptions{})
 	require.NoError(t, err)
 
 	err = tx.Commit(ctx)
 	require.NoError(t, err)
 
-	testRead(t, c, driver.Filter(`{ "$or" : [ {"K1" : "vK1", "K2" : 1}, {"K1" : "vk1", "K2" : 3}]}`),
-		[]driver.Document{doc1, doc3})
+	fl := driver.Filter(`{ "$or" : [ {"$and" : [ {"K1" : "vK1"}, {"K2" : 1} ]}, {"$and" : [ {"K1" : "vk1"}, {"K2" : 3} ]} ]}`)
+	testRead(t, c, fl, []driver.Document{doc1, doc3})
 
-	_, err = c.Delete(ctx, "db1", "c1", driver.Filter(`{ "$or" : [ {"K1" : "vK1", "K2" : 1}, {"K1" : "vk1", "K2" : 3}]}`))
+	_, err = c.Delete(ctx, "db1", "c1", fl, &driver.DeleteOptions{})
 	require.NoError(t, err)
 
-	testRead(t, c, driver.Filter(`{}`), []driver.Document{doc2})
+	testRead(t, c, nil, []driver.Document{doc2})
 
-	_, err = c.Delete(ctx, "db1", "c1", driver.Filter(`{"K1" : "vK1", "K2" : 2}`))
+	_, err = c.Delete(ctx, "db1", "c1", driver.Filter(`{"K1" : "vK1", "K2" : 2}`), &driver.DeleteOptions{})
 	require.NoError(t, err)
 
-	testRead(t, c, driver.Filter(`{}`), nil)
+	testRead(t, c, nil, nil)
 
-	tx, err = c.BeginTx(ctx, "db1")
+	tx, err = c.BeginTx(ctx, "db1", &driver.TxOptions{})
 
-	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1})
+	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1}, &driver.InsertOptions{})
 	require.NoError(t, err)
 
-	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1, doc2, doc3})
-	require.NoError(t, err)
-
-	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1, doc2, doc3})
+	//multiple documents
+	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1, doc2, doc3}, &driver.InsertOptions{})
 	require.NoError(t, err)
 
 	err = tx.Rollback(ctx)
@@ -163,7 +165,7 @@ func testTxClient(t *testing.T, c driver.Driver) {
 
 	testRead(t, c, driver.Filter(`{}`), nil)
 
-	err = c.DropCollection(ctx, "db1", "c1")
+	err = c.DropCollection(ctx, "db1", "c1", &driver.CollectionOptions{})
 	require.NoError(t, err)
 }
 
@@ -180,7 +182,7 @@ func TestGRPCClient(t *testing.T) {
 func TestHTTPClient(t *testing.T) {
 	h, p := getTestServerHostPort()
 	driver.DefaultProtocol = driver.HTTP
-	c, err := driver.NewDriver(context.Background(), fmt.Sprintf("%s:%d", h, p), nil)
+	c, err := driver.NewDriver(context.Background(), fmt.Sprintf("http://%s:%d", h, p), nil)
 	require.NoError(t, err)
 	defer func() { _ = c.Close() }()
 
@@ -200,7 +202,7 @@ func TestTxGRPCClient(t *testing.T) {
 func TestTxHTTPClient(t *testing.T) {
 	h, p := getTestServerHostPort()
 	driver.DefaultProtocol = driver.HTTP
-	c, err := driver.NewDriver(context.Background(), fmt.Sprintf("%s:%d", h, p), nil)
+	c, err := driver.NewDriver(context.Background(), fmt.Sprintf("http://%s:%d", h, p), nil)
 	require.NoError(t, err)
 	defer func() { _ = c.Close() }()
 

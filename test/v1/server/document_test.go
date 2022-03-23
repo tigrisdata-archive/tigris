@@ -902,7 +902,6 @@ func readByFilter(t *testing.T, db string, collection string, filter map[string]
 		resp = append(resp, mp)
 	}
 
-	t.Logf("read response %s", str)
 	return resp
 }
 

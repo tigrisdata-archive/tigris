@@ -123,7 +123,7 @@ func LoadConfig(name string, config interface{}) {
 	viper.WatchConfig()
 }
 
-func GetTestFDBConfig() (*FoundationDBConfig, error) {
+func GetTestFDBConfig(path string) (*FoundationDBConfig, error) {
 	LoadEnvironment()
 
 	// Environment can be set on OS X
@@ -132,7 +132,7 @@ func GetTestFDBConfig() (*FoundationDBConfig, error) {
 	// Use default location when run test in the docker
 	// where cluster file is shared between containers
 	if !exists && GetEnvironment() != EnvTest {
-		fn = "../../test/config/fdb.cluster"
+		fn = path + "/test/config/fdb.cluster"
 	}
 
 	cmd := exec.Command("fdbcli", "-C", fn, "--exec", "configure new single memory")

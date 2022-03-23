@@ -226,7 +226,7 @@ func testKVTimeout(t *testing.T, kv KV) {
 }
 
 func TestKVFDB(t *testing.T) {
-	cfg, err := config.GetTestFDBConfig()
+	cfg, err := config.GetTestFDBConfig("../..")
 	require.NoError(t, err)
 
 	kv, err := NewFoundationDB(cfg)
