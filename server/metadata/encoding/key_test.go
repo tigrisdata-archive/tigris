@@ -16,9 +16,11 @@ package encoding
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"google.golang.org/grpc/codes"
-	"testing"
 
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigrisdb/server/config"
@@ -27,16 +29,21 @@ import (
 )
 
 func TestKeyEncoding(t *testing.T) {
-	fdbCfg, err := config.GetTestFDBConfig()
+	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
 	kv, err := kv.NewFoundationDB(fdbCfg)
 	require.NoError(t, err)
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_ = kv.DropTable(ctx, encodingSubspaceKey)
+	_ = kv.DropTable(ctx, reservedSubspaceKey)
+
 	tm := transaction.NewManager(kv)
 	k := NewKeyEncoder()
 
-	ctx := context.TODO()
 	tx, err := tm.StartTxWithoutTracking(ctx)
 	require.NoError(t, err)
 	require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", 1234))
@@ -81,16 +88,21 @@ func TestKeyEncoding(t *testing.T) {
 }
 
 func TestKeyEncoding_Error(t *testing.T) {
-	fdbCfg, err := config.GetTestFDBConfig()
+	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
 	kv, err := kv.NewFoundationDB(fdbCfg)
 	require.NoError(t, err)
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_ = kv.DropTable(ctx, encodingSubspaceKey)
+	_ = kv.DropTable(ctx, reservedSubspaceKey)
+
 	tm := transaction.NewManager(kv)
 	k := NewKeyEncoder()
 
-	ctx := context.TODO()
 	tx, err := tm.StartTxWithoutTracking(ctx)
 	require.NoError(t, err)
 	dbId, err := k.EncodeDatabaseName(ctx, tx, "db-1", 0)
@@ -108,16 +120,21 @@ func TestKeyEncoding_Error(t *testing.T) {
 }
 
 func TestReservedNamespace(t *testing.T) {
-	fdbCfg, err := config.GetTestFDBConfig()
+	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
 	kv, err := kv.NewFoundationDB(fdbCfg)
 	require.NoError(t, err)
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_ = kv.DropTable(ctx, encodingSubspaceKey)
+	_ = kv.DropTable(ctx, reservedSubspaceKey)
+
 	tm := transaction.NewManager(kv)
 	r := newReservedSubspace()
 
-	ctx := context.TODO()
 	tx, err := tm.StartTxWithoutTracking(ctx)
 	require.NoError(t, err)
 	require.NoError(t, r.reserveNamespace(ctx, tx, "p1-o1", 123))
