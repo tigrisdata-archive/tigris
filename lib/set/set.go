@@ -34,6 +34,12 @@ func (set *HashSet) Insert(s ...string) {
 	}
 }
 
+func (set *HashSet) Contains(s string) bool {
+	if _, ok := set.stringMap[s]; ok {
+		return true
+	}
+	return false
+}
 func (set *HashSet) ToList() []string {
 	list := make([]string, 0, len(set.stringMap))
 	for k := range set.stringMap {
