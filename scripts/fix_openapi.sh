@@ -22,9 +22,18 @@ yq_cmd() {
 	yq -I 4 -i "$1" "$IN_FILE"
 }
 
+# Change type of documents, filters, fields, schema to be JSON object
+# instead of bytes.
+# It's defined as bytes in proto to implement custom unmarshalling.
 yq_fix_object() {
 	yq_cmd "del(.components.schemas.$1.properties.$2.format)"
 	yq_cmd ".components.schemas.$1.properties.$2.type=\"object\""
+}
+
+# Delete db and collection fields from request body
+yq_del_db_coll() {
+	yq_cmd "del(.components.schemas.$1.properties.db)"
+	yq_cmd "del(.components.schemas.$1.properties.collection)"
 }
 
 # Fix the types of filter and document fields to be object on HTTP wire.
@@ -39,6 +48,15 @@ yq_fix_object UpdateRequest fields
 yq_fix_object ReadResponse doc
 yq_fix_object CreateCollectionRequest schema
 yq_fix_object AlterCollectionRequest schema
+
+for i in InsertRequest UpdateRequest DeleteRequest ReadRequest \
+	CreateCollectionRequest DropCollectionRequest AlterCollectionRequest \
+	CreateDatabaseRequest DropDatabaseRequest \
+	ListDatabasesRequest ListCollectionsRequest \
+	BeginTransactionRequest CommitTransactionRequest RollbackTransactionRequest; do
+
+	yq_del_db_coll $i
+done
 
 fix_bytes
 

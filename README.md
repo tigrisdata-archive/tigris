@@ -58,7 +58,7 @@ sh scripts/install_test_deps.sh
 Running `make osx_run` on OSX would bring the server up on the host. You can 
 then run `make osx_test` to test against FDB running on the host.
 
-# Local Deployment for application development
+# Application Development
 
 Start local TigrisDB server listening on `http://localhost:8081` by running:
 ```sh
@@ -76,6 +76,8 @@ export TIGRISDB_URL=http://localhost:8081
 ./tigrisdb-cli list databases
 ```
 More eleborate example of CLI usage [here](https://github.com/tigrisdata/tigrisdb-cli/)
+
+Golang client example [here](https://github.com/tigrisdata/tigrisdb-client-go/)
 
 # License
 This software is licensed under the [Apache 2.0](LICENSE).
