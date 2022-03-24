@@ -84,22 +84,31 @@ func ToStringType(t FieldType) string {
 	}
 }
 
+type FieldBuilder struct {
+	Description string `json:"description,omitempty"`
+	FieldName   string
+	Type        string `json:"type,omitempty"`
+	MaxLength   *int32 `json:"max_length,omitempty"`
+	Primary     *bool
+	Unique      *bool `json:"unique,omitempty"`
+}
+
+func (f *FieldBuilder) Build() *Field {
+	var field = &Field{}
+	field.FieldName = f.FieldName
+	field.MaxLength = f.MaxLength
+	field.UniqueKeyField = f.Unique
+	field.DataType = ToFieldType(f.Type)
+	field.PrimaryKeyField = f.Primary
+	return field
+}
+
 type Field struct {
 	FieldName       string
 	DataType        FieldType
+	MaxLength       *int32
+	UniqueKeyField  *bool
 	PrimaryKeyField *bool
-}
-
-func NewField(name string, ty string, isPrimaryKey bool) *Field {
-	f := Field{
-		FieldName: name,
-		DataType:  ToFieldType(ty),
-	}
-	if isPrimaryKey {
-		f.PrimaryKeyField = &isPrimaryKey
-	}
-
-	return &f
 }
 
 func (f *Field) Name() string {

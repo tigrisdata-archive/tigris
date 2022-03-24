@@ -26,15 +26,75 @@ import (
 	"gopkg.in/gavv/httpexpect.v1"
 )
 
+/**
+{
+	"title": "test schema1",
+	"description": "this schema is for integration tests",
+	"properties": {
+		"pkey_int": {
+			"description": "primary key field",
+			"type": "int"
+		},
+		"int_value": {
+			"description": "simple int field",
+			"type": "int"
+		},
+		"string_value": {
+			"description": "simple string field",
+			"type": "string",
+			"max_length": 128,
+		},
+		"bool_value": {
+			"description": "simple bool field",
+			"type": "bool"
+		},
+		"double_value": {
+			"description": "simple double field",
+			"type": "double"
+		},
+		"bytes_value": {
+			"description": "simple bytes field",
+			"type": "bytes"
+		}
+	},
+	"primary_key": [
+		"cust_id",
+		"order_id"
+	]
+}
+*/
 var testCreateSchema = map[string]interface{}{
 	"schema": map[string]interface{}{
-		"pkey_int":     "int",
-		"int_value":    "int",
-		"string_value": "string",
-		"bool_value":   "bool",
-		"double_value": "double",
-		"bytes_value":  "bytes",
-		"primary_key":  []interface{}{"pkey_int"},
+		"title":       "test schema1",
+		"description": "this schema is for integration tests",
+		"properties": map[string]interface{}{
+			"pkey_int": map[string]interface{}{
+				"description": "primary key field",
+				"type":        "int",
+			},
+			"int_value": map[string]interface{}{
+				"description": "simple int field",
+				"type":        "int",
+			},
+			"string_value": map[string]interface{}{
+				"description": "simple string field",
+				"type":        "string",
+				"max_length":  128,
+			},
+			"bool_value": map[string]interface{}{
+				"description": "simple bool field",
+				"type":        "bool",
+			},
+			"double_value": map[string]interface{}{
+				"description": "simple double field",
+				"type":        "double",
+			},
+			"bytes_value": map[string]interface{}{
+				"description": "simple bytes field",
+				"type":        "bytes",
+			},
+		},
+		"primary_key": []interface{}{"pkey_int"},
 	},
 }
 

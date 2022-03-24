@@ -62,10 +62,21 @@ func testClient(t *testing.T, c driver.Driver) {
 	_ = c.DropCollection(ctx, "db1", "c1", &driver.CollectionOptions{})
 
 	schema := `{
-		"K1": "string",
-		"K2": "int",
-		"D1": "string",
-		"primary_key":  [ "K1", "K2" ]
+		"title": "test schema1",
+		"description": "this schema is for client integration tests",
+		"properties": {
+			"K1": {
+				"type": "string"
+			},
+			"K2": {
+				"type": "int"
+			},
+			"D1": {
+				"type": "string",
+				"max_length": 128
+			}
+		},
+		"primary_key": ["K1", "K2"]
 	}`
 
 	err := c.CreateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
@@ -112,10 +123,21 @@ func testTxClient(t *testing.T, c driver.Driver) {
 	_ = c.DropCollection(ctx, "db1", "c1", &driver.CollectionOptions{})
 
 	schema := `{
-		"K1": "string",
-		"K2": "int",
-		"D1": "string",
-		"primary_key":  [ "K1", "K2" ]
+		"title": "test schema1",
+		"description": "this schema is for client integration tests",
+		"properties": {
+			"K1": {
+				"type": "string"
+			},
+			"K2": {
+				"type": "int"
+			},
+			"D1": {
+				"type": "string",
+				"max_length": 128
+			}
+		},
+		"primary_key": ["K1", "K2"]
 	}`
 
 	err := c.CreateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})

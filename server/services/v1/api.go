@@ -16,7 +16,6 @@ package v1
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 
 	"github.com/fullstorydev/grpchan/inprocgrpc"
@@ -30,7 +29,6 @@ import (
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 const (
@@ -247,14 +245,9 @@ func (s *apiService) CreateCollection(ctx context.Context, r *api.CreateCollecti
 		return nil, api.Errorf(codes.AlreadyExists, "collection already exists")
 	}
 
-	var schemaObj = &structpb.Struct{}
-	if err := json.Unmarshal(r.Schema, schemaObj); err != nil {
-		return nil, err
-	}
-
-	collection, err := schema.CreateCollectionFromSchema(r.Db, r.Collection, schemaObj.Fields)
+	collection, err := schema.CreateCollection(r.Db, r.Collection, r.Schema)
 	if err != nil {
-		return nil, api.Errorf(codes.InvalidArgument, "invalid schema")
+		return nil, err
 	}
 
 	if err := s.kv.CreateTable(ctx, collection.StorageName()); ulog.E(err) {
