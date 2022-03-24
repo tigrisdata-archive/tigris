@@ -30,7 +30,7 @@ Examples:
 - To specify the FoundationDB cluster file set the variable `TIGRISDB_SERVER_FOUNDATIONDB_CLUSTER_FILE`
 - To specify the API listen port set the variable `TIGRISDB_SERVER_SERVER_PORT`
 
-# Development
+# Server Development
 
 ## Prerequisite
 
@@ -57,6 +57,25 @@ sh scripts/install_test_deps.sh
 
 Running `make osx_run` on OSX would bring the server up on the host. You can 
 then run `make osx_test` to test against FDB running on the host.
+
+# Local Deployment for application development
+
+Start local TigrisDB server listening on `http://localhost:8081` by running:
+```sh
+make run
+```
+
+Install CLI:
+```shell
+go install github.com/tigrisdata/tigrisdb-cli@latest
+```
+
+Test that server is up and running:
+```sh
+export TIGRISDB_URL=http://localhost:8081
+./tigrisdb-cli list databases
+```
+More eleborate example of CLI usage [here](https://github.com/tigrisdata/tigrisdb-cli/)
 
 # License
 This software is licensed under the [Apache 2.0](LICENSE).
