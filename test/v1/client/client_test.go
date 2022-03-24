@@ -97,9 +97,7 @@ func testClient(t *testing.T, c driver.Driver) {
 	_, err = c.Delete(ctx, "db1", "c1", fl, &driver.DeleteOptions{})
 	require.NoError(t, err)
 
-	//FIXME: use full table scan when it's available
-	fl3 := driver.Filter(`{ "$or" : [ {"$and" : [ {"K1" : "vK1"}, {"K2" : 1} ]}, {"$and" : [ {"K1" : "vK1"}, {"K2" : 3} ]}, {"$and" : [ {"K1" : "vK1"}, {"K2" : 2} ]} ]}`)
-	testRead(t, c, fl3, []driver.Document{doc2})
+	testRead(t, c, driver.Filter("{}"), []driver.Document{doc2})
 
 	err = c.DropCollection(ctx, "db1", "c1", &driver.CollectionOptions{})
 	require.NoError(t, err)
@@ -150,14 +148,12 @@ func testTxClient(t *testing.T, c driver.Driver) {
 	_, err = c.Delete(ctx, "db1", "c1", fl, &driver.DeleteOptions{})
 	require.NoError(t, err)
 
-	//FIXME: use full table scan when it's available
-	fl3 := driver.Filter(`{ "$or" : [ {"$and" : [ {"K1" : "vK1"}, {"K2" : 1} ]}, {"$and" : [ {"K1" : "vK1"}, {"K2" : 3} ]}, {"$and" : [ {"K1" : "vK1"}, {"K2" : 2} ]} ]}`)
-	testRead(t, c, fl3, []driver.Document{doc2})
+	testRead(t, c, driver.Filter("{}"), []driver.Document{doc2})
 
 	_, err = c.Delete(ctx, "db1", "c1", driver.Filter(`{"K1" : "vK1", "K2" : 2}`), &driver.DeleteOptions{})
 	require.NoError(t, err)
 
-	testRead(t, c, fl3, nil)
+	testRead(t, c, driver.Filter("{}"), nil)
 
 	tx, err = c.BeginTx(ctx, "db1", &driver.TxOptions{})
 
@@ -171,7 +167,7 @@ func testTxClient(t *testing.T, c driver.Driver) {
 	err = tx.Rollback(ctx)
 	require.NoError(t, err)
 
-	testRead(t, c, fl3, nil)
+	testRead(t, c, driver.Filter("{}"), nil)
 
 	err = c.DropCollection(ctx, "db1", "c1", &driver.CollectionOptions{})
 	require.NoError(t, err)

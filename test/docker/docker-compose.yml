@@ -51,6 +51,8 @@ services:
   tigris_test:
     image: tigris_test
     environment:
+      # Instruct test to use default location in the docker
+      # instead of test/config/fdb.cluster file when running on the host
       - TIGRISDB_ENVIRONMENT=test
       - TEST_PARAM
     container_name: tigris_test
