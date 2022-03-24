@@ -15,6 +15,7 @@
 package filter
 
 import (
+	"bytes"
 	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
@@ -24,6 +25,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
+)
+
+var (
+	fullScanFilter = []byte(`{}`)
 )
 
 // A Filter represents a query filter that can have any multiple conditions, logical filtering, nested conditions, etc
@@ -42,6 +47,10 @@ import (
 type Filter interface {
 	// Matches returns true if the input doc passes the filter, otherwise false
 	Matches(doc *structpb.Struct) bool
+}
+
+func IsFullCollectionScan(reqFilter []byte) bool {
+	return bytes.Equal(reqFilter, fullScanFilter)
 }
 
 func Build(reqFilter []byte) ([]Filter, error) {

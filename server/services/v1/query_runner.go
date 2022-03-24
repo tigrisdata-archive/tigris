@@ -17,7 +17,6 @@ package v1
 import (
 	"context"
 	"encoding/json"
-
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/encoding"
 	"github.com/tigrisdata/tigrisdb/query/filter"
@@ -189,6 +188,31 @@ type StreamingQueryRunner struct {
 
 // Run is responsible for running/executing the query
 func (q *StreamingQueryRunner) Run(ctx context.Context, req *Request) (*Response, error) {
+	if filter.IsFullCollectionScan(api.GetFilter(req.apiRequest)) {
+		return q.iterateCollection(ctx, req)
+	} else {
+		return q.iterateKeys(ctx, req)
+	}
+}
+
+// iterateCollection is used to scan the entire collection.
+func (q *StreamingQueryRunner) iterateCollection(ctx context.Context, req *Request) (*Response, error) {
+	fieldFactory, err := read.BuildFields(req.apiRequest.(*api.ReadRequest).Fields)
+	if ulog.E(err) {
+		return nil, err
+	}
+
+	var totalResults int64 = 0
+	if err := q.iterate(ctx, req.collection.StorageName(), nil, fieldFactory, &totalResults, req.apiRequest.(*api.ReadRequest).GetOptions().GetLimit()); err != nil {
+		return nil, err
+	}
+
+	return &Response{}, nil
+}
+
+// iterateKeys is responsible for building keys from the filter and then executing the query. A key could be a primary
+// key or an index key.
+func (q *StreamingQueryRunner) iterateKeys(ctx context.Context, req *Request) (*Response, error) {
 	_, err := q.txMgr.GetInherited(api.GetTransaction(req.apiRequest))
 	if err != nil {
 		return nil, err
@@ -212,36 +236,45 @@ func (q *StreamingQueryRunner) Run(ctx context.Context, req *Request) (*Response
 
 	var totalResults int64 = 0
 	for _, key := range iKeys {
-		it, err := q.txMgr.GetKV().Read(ctx, req.collection.StorageName(), kv.BuildKey(key.PrimaryKeys()...))
-		if err != nil {
+		fdbKey := kv.BuildKey(key.PrimaryKeys()...)
+		if err := q.iterate(ctx, req.collection.StorageName(), fdbKey, fieldFactory, &totalResults, req.apiRequest.(*api.ReadRequest).GetOptions().GetLimit()); err != nil {
 			return nil, err
-		}
-
-		for it.More() {
-			if req.apiRequest.(*api.ReadRequest).GetOptions().GetLimit() > 0 && req.apiRequest.(*api.ReadRequest).GetOptions().GetLimit() <= totalResults {
-				return &Response{}, nil
-			}
-
-			v, err := it.Next()
-			if err != nil {
-				return nil, err
-			}
-
-			newValue, err := fieldFactory.Apply(v.Value)
-			if err != nil {
-				return nil, err
-			}
-
-			if err := q.streaming.Send(&api.ReadResponse{
-				Doc: newValue,
-				Key: v.FDBKey,
-			}); ulog.E(err) {
-				return nil, err
-			}
-
-			totalResults++
 		}
 	}
 
 	return &Response{}, nil
+}
+
+func (q *StreamingQueryRunner) iterate(ctx context.Context, collectionName string, key kv.Key, fieldFactory *read.FieldFactory, totalResults *int64, limit int64) error {
+	it, err := q.txMgr.GetKV().Read(ctx, collectionName, key)
+	if err != nil {
+		return err
+	}
+
+	for it.More() {
+		if limit > 0 && limit <= *totalResults {
+			return nil
+		}
+
+		v, err := it.Next()
+		if err != nil {
+			return err
+		}
+
+		newValue, err := fieldFactory.Apply(v.Value)
+		if err != nil {
+			return err
+		}
+
+		if err := q.streaming.Send(&api.ReadResponse{
+			Doc: newValue,
+			Key: v.FDBKey,
+		}); ulog.E(err) {
+			return err
+		}
+
+		*totalResults++
+	}
+
+	return nil
 }

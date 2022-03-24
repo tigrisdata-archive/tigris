@@ -128,6 +128,50 @@ func testKVBasic(t *testing.T, kv KV) {
 	require.NoError(t, err)
 }
 
+func testFullScan(t *testing.T, kv KV) {
+	ulog.Configure(ulog.LogConfig{Level: "trace"})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	nRecs := 5
+
+	err := kv.DropTable(ctx, "t1")
+	require.NoError(t, err)
+
+	err = kv.CreateTable(ctx, "t1")
+	require.NoError(t, err)
+
+	// insert records with two prefixes p1 and p2
+	for i := 0; i < nRecs; i++ {
+		err = kv.Insert(ctx, "t1", BuildKey("p1", i+1), []byte(fmt.Sprintf("value%d", i+1)))
+		require.NoError(t, err)
+		err = kv.Insert(ctx, "t1", BuildKey("p2", i+1), []byte(fmt.Sprintf("value%d", i+1)))
+		require.NoError(t, err)
+	}
+
+	// prefix read
+	it, err := kv.Read(ctx, "t1", nil)
+	require.NoError(t, err)
+
+	v := readAll(t, it)
+	require.Equal(t, []KeyValue{
+		{Key: BuildKey("p1", int64(1)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(1))), Value: []byte("value1")},
+		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(2))), Value: []byte("value2")},
+		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(3))), Value: []byte("value3")},
+		{Key: BuildKey("p1", int64(4)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(4))), Value: []byte("value4")},
+		{Key: BuildKey("p1", int64(5)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(5))), Value: []byte("value5")},
+		{Key: BuildKey("p2", int64(1)), FDBKey: getFDBKey("t1", BuildKey("p2", int64(1))), Value: []byte("value1")},
+		{Key: BuildKey("p2", int64(2)), FDBKey: getFDBKey("t1", BuildKey("p2", int64(2))), Value: []byte("value2")},
+		{Key: BuildKey("p2", int64(3)), FDBKey: getFDBKey("t1", BuildKey("p2", int64(3))), Value: []byte("value3")},
+		{Key: BuildKey("p2", int64(4)), FDBKey: getFDBKey("t1", BuildKey("p2", int64(4))), Value: []byte("value4")},
+		{Key: BuildKey("p2", int64(5)), FDBKey: getFDBKey("t1", BuildKey("p2", int64(5))), Value: []byte("value5")},
+	}, v)
+
+	err = kv.DropTable(ctx, "t1")
+	require.NoError(t, err)
+}
+
 /*
 type keyRange struct {
 	left  Key
@@ -237,6 +281,9 @@ func TestKVFDB(t *testing.T) {
 	})
 	t.Run("TestKVFDBInsert", func(t *testing.T) {
 		testKVInsert(t, kv)
+	})
+	t.Run("TestKVFDBFullScan", func(t *testing.T) {
+		testFullScan(t, kv)
 	})
 }
 
