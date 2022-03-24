@@ -848,6 +848,46 @@ func (s *DocumentSuite) TestRead_MultipleRows() {
 	}
 }
 
+func (s *DocumentSuite) TestRead_EntireCollection() {
+	dropCollection(s.T(), s.database, s.collection)
+	createCollection(s.T(), s.database, s.collection, testCreateSchema)
+
+	inputDocument := []interface{}{
+		map[string]interface{}{
+			"pkey_int":     1000,
+			"int_value":    1000,
+			"string_value": "simple_insert1000",
+			"bool_value":   true,
+			"double_value": 1000.000001,
+			"bytes_value":  []byte(`"simple_insert1000"`),
+		},
+		map[string]interface{}{
+			"pkey_int":     1010,
+			"int_value":    2000,
+			"string_value": "simple_insert1010",
+			"bool_value":   false,
+			"double_value": 2000.22221,
+			"bytes_value":  []byte(`"simple_insert1010"`),
+		},
+		map[string]interface{}{
+			"pkey_int":     1020,
+			"string_value": "simple_insert1020",
+			"bytes_value":  []byte(`"simple_insert1020"`),
+		},
+	}
+
+	// should always succeed with mustNotExists as false
+	insertDocuments(s.T(), s.database, s.collection, inputDocument, false).
+		Status(http.StatusOK)
+
+	readAndValidate(s.T(),
+		s.database,
+		s.collection,
+		nil,
+		nil,
+		inputDocument)
+}
+
 func insertDocuments(t *testing.T, db string, collection string, documents []interface{}, mustNotExist bool) *httpexpect.Response {
 	e := httpexpect.New(t, config.GetBaseURL())
 
@@ -884,7 +924,11 @@ func deleteByFilter(t *testing.T, db string, collection string, filter map[strin
 func readByFilter(t *testing.T, db string, collection string, filter map[string]interface{}, fields map[string]interface{}) []map[string]json.RawMessage {
 	var payload = make(map[string]interface{})
 	payload["fields"] = fields
-	payload["filter"] = filter
+	if filter == nil {
+		payload["filter"] = json.RawMessage(`{}`)
+	} else {
+		payload["filter"] = filter
+	}
 
 	e := httpexpect.New(t, config.GetBaseURL())
 	str := e.POST(getDocumentURL(db, collection, "read")).
