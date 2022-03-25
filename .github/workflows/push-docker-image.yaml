@@ -11,6 +11,10 @@ on:
         required: true
       GH_ECR_AWS_SECRET_ACCESS_KEY:
         required: true
+      API_DEPLOY_KEY:
+        required: true
+      CLIENT_DEPLOY_KEY:
+        required: true
 
 env:
   AWS_REGION: "us-west-2"
