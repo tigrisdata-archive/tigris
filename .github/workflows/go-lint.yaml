@@ -5,6 +5,8 @@ on:
     secrets:
       API_DEPLOY_KEY:
         required: true
+      CLIENT_DEPLOY_KEY:
+        required: true
 permissions:
   contents: read
 jobs:
