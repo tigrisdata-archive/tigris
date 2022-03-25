@@ -38,3 +38,5 @@ jobs:
     secrets:
       GH_ECR_AWS_ACCESS_KEY_ID: ${{ secrets.GH_ECR_AWS_ACCESS_KEY_ID }}
       GH_ECR_AWS_SECRET_ACCESS_KEY: ${{ secrets.GH_ECR_AWS_SECRET_ACCESS_KEY }}
+      API_DEPLOY_KEY: ${{ secrets.API_DEPLOY_KEY }}
+      CLIENT_DEPLOY_KEY: ${{ secrets.CLIENT_DEPLOY_KEY }}
