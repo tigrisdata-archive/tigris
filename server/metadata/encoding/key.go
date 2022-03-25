@@ -124,12 +124,8 @@ func (r *reservedSubspace) reload(ctx context.Context, tx transaction.Tx) error 
 		return err
 	}
 
-	for it.More() {
-		row, err := it.Next()
-		if err != nil {
-			return err
-		}
-
+	var row kv.KeyValue
+	for it.Next(&row) {
 		if len(row.Key) < 3 {
 			return api.Errorf(codes.Internal, "not a valid key %v", row.Key)
 		}
@@ -144,7 +140,7 @@ func (r *reservedSubspace) reload(ctx context.Context, tx transaction.Tx) error 
 		r.Unlock()
 	}
 
-	return nil
+	return it.Err()
 }
 
 func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.Tx, namespace string, id uint32) error {
@@ -185,13 +181,13 @@ func (r *reservedSubspace) allocateToken(ctx context.Context, tx transaction.Tx,
 	}
 
 	newReservedValue := reservedBaseValue
-	if it.More() {
-		row, err := it.Next()
-		if err != nil {
-			return 0, err
-		}
-
+	var row kv.KeyValue
+	if it.Next(&row) {
 		newReservedValue = ByteToUInt32(row.Value) + 1
+	}
+
+	if err := it.Err(); err != nil {
+		return 0, err
 	}
 
 	if err := tx.Replace(ctx, key, UInt32ToByte(newReservedValue)); err != nil {
@@ -322,13 +318,13 @@ func (k *KeyEncoder) getId(ctx context.Context, tx transaction.Tx, key keys.Key)
 		return invalidId, err
 	}
 
-	if it.More() {
-		row, err := it.Next()
-		if err != nil {
-			return 0, err
-		}
-
+	var row kv.KeyValue
+	if it.Next(&row) {
 		return ByteToUInt32(row.Value), nil
+	}
+
+	if err := it.Err(); err != nil {
+		return 0, err
 	}
 
 	return invalidId, api.Errorf(codes.NotFound, "not found %v", key)
