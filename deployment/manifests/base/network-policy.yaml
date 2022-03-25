@@ -8,5 +8,8 @@ spec:
       app.kubernetes.io/name: tigrisdb-server
   ingress:
     - {}
+  egress:
+    - {}
   policyTypes:
     - Ingress
+    - Egress

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -13,29 +12,6 @@ import (
 	"github.com/tigrisdata/tigrisdb/server/config"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 )
-
-func getTestFDBConfig(t *testing.T) *config.FoundationDBConfig {
-	config.LoadEnvironment()
-
-	// Environment can be set on OS X
-	fn, exists := os.LookupEnv("TIGRISDB_SERVER_FOUNDATIONDB_CLUSTER_FILE")
-
-	// Use default location when run test in the docker
-	// where cluster file is shared between containers
-	if !exists && config.GetEnvironment() != config.EnvTest {
-		fn = "../../test/config/fdb.cluster"
-	}
-
-	cmd := exec.Command("fdbcli", "-C", fn, "--exec", "configure new single memory")
-	_, err := cmd.Output()
-	if err != nil {
-		cmd := exec.Command("fdbcli", "-C", fn, "--exec", "configure single memory")
-		_, err = cmd.Output()
-	}
-	require.NoError(t, err)
-
-	return &config.FoundationDBConfig{ClusterFile: fn}
-}
 
 func readAll(t *testing.T, it Iterator) []KeyValue {
 	res := make([]KeyValue, 0)
@@ -152,6 +128,50 @@ func testKVBasic(t *testing.T, kv KV) {
 	require.NoError(t, err)
 }
 
+func testFullScan(t *testing.T, kv KV) {
+	ulog.Configure(ulog.LogConfig{Level: "trace"})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	nRecs := 5
+
+	err := kv.DropTable(ctx, "t1")
+	require.NoError(t, err)
+
+	err = kv.CreateTable(ctx, "t1")
+	require.NoError(t, err)
+
+	// insert records with two prefixes p1 and p2
+	for i := 0; i < nRecs; i++ {
+		err = kv.Insert(ctx, "t1", BuildKey("p1", i+1), []byte(fmt.Sprintf("value%d", i+1)))
+		require.NoError(t, err)
+		err = kv.Insert(ctx, "t1", BuildKey("p2", i+1), []byte(fmt.Sprintf("value%d", i+1)))
+		require.NoError(t, err)
+	}
+
+	// prefix read
+	it, err := kv.Read(ctx, "t1", nil)
+	require.NoError(t, err)
+
+	v := readAll(t, it)
+	require.Equal(t, []KeyValue{
+		{Key: BuildKey("p1", int64(1)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(1))), Value: []byte("value1")},
+		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(2))), Value: []byte("value2")},
+		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(3))), Value: []byte("value3")},
+		{Key: BuildKey("p1", int64(4)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(4))), Value: []byte("value4")},
+		{Key: BuildKey("p1", int64(5)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(5))), Value: []byte("value5")},
+		{Key: BuildKey("p2", int64(1)), FDBKey: getFDBKey("t1", BuildKey("p2", int64(1))), Value: []byte("value1")},
+		{Key: BuildKey("p2", int64(2)), FDBKey: getFDBKey("t1", BuildKey("p2", int64(2))), Value: []byte("value2")},
+		{Key: BuildKey("p2", int64(3)), FDBKey: getFDBKey("t1", BuildKey("p2", int64(3))), Value: []byte("value3")},
+		{Key: BuildKey("p2", int64(4)), FDBKey: getFDBKey("t1", BuildKey("p2", int64(4))), Value: []byte("value4")},
+		{Key: BuildKey("p2", int64(5)), FDBKey: getFDBKey("t1", BuildKey("p2", int64(5))), Value: []byte("value5")},
+	}, v)
+
+	err = kv.DropTable(ctx, "t1")
+	require.NoError(t, err)
+}
+
 /*
 type keyRange struct {
 	left  Key
@@ -250,7 +270,10 @@ func testKVTimeout(t *testing.T, kv KV) {
 }
 
 func TestKVFDB(t *testing.T) {
-	kv, err := NewFoundationDB(getTestFDBConfig(t))
+	cfg, err := config.GetTestFDBConfig("../..")
+	require.NoError(t, err)
+
+	kv, err := NewFoundationDB(cfg)
 	require.NoError(t, err)
 
 	t.Run("TestKVFDBBasic", func(t *testing.T) {
@@ -258,6 +281,9 @@ func TestKVFDB(t *testing.T) {
 	})
 	t.Run("TestKVFDBInsert", func(t *testing.T) {
 		testKVInsert(t, kv)
+	})
+	t.Run("TestKVFDBFullScan", func(t *testing.T) {
+		testFullScan(t, kv)
 	})
 }
 

@@ -489,8 +489,13 @@ func (i *fdbIteratorTxCloser) More() bool {
 
 func getFDBKey(table string, key Key) fdb.Key {
 	s := subspace.FromBytes([]byte(table))
-	p := unsafe.Pointer(&key)
-	k := s.Pack(*(*tuple.Tuple)(p))
+	var k fdb.Key
+	if len(key) == 0 {
+		k = s.FDBKey()
+	} else {
+		p := unsafe.Pointer(&key)
+		k = s.Pack(*(*tuple.Tuple)(p))
+	}
 	log.Debug().Str("key", k.String()).Msg("getFDBKey")
 	return k
 }

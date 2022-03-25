@@ -26,14 +26,14 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-// RestError is our Tigris HTTP counterpart of grpc status. All the APIs should use this Error to return as a user facing
-// error. RestError will return grpcStatus to the muxer so that grpc client can see grpcStatus as the final output. For
+// TigrisDBError is our Tigris HTTP counterpart of grpc status. All the APIs should use this Error to return as a user facing
+// error. TigrisDBError will return grpcStatus to the muxer so that grpc client can see grpcStatus as the final output. For
 // HTTP clients see the **MarshalStatus** method where we are returning the response by not the grpc code as that is not
 // needed for HTTP clients.
-type RestError struct {
+type TigrisDBError struct {
 	// The status code, which should be an enum value of [google.rpc.Code][google.rpc.Code]. We don't need to marshal
 	// this code for HTTP clients.
-	Code codes.Code `json:"-,omitempty"`
+	Code codes.Code `json:"code,omitempty"`
 	// A developer-facing error message.
 	Message string `json:"message,omitempty"`
 	// A list of messages that carry the error details. This is mainly to send our internal codes and messages.
@@ -41,12 +41,12 @@ type RestError struct {
 }
 
 // Error to return the underlying error message
-func (e *RestError) Error() string {
+func (e *TigrisDBError) Error() string {
 	return e.Message
 }
 
-// GRPCStatus converts the RestError and return status.Status. This is used to return grpc status to the grpc clients
-func (e *RestError) GRPCStatus() *status.Status {
+// GRPCStatus converts the TigrisDBError and return status.Status. This is used to return grpc status to the grpc clients
+func (e *TigrisDBError) GRPCStatus() *status.Status {
 	s := &spb.Status{
 		Code:    int32(e.Code),
 		Message: e.Message,
@@ -69,15 +69,15 @@ func (e *RestError) GRPCStatus() *status.Status {
 	return status.FromProto(s)
 }
 
-// WithDetails a helper method for adding details to the RestError
-func (e *RestError) WithDetails(details ...*ErrorDetails) *RestError {
+// WithDetails a helper method for adding details to the TigrisDBError
+func (e *TigrisDBError) WithDetails(details ...*ErrorDetails) *TigrisDBError {
 	e.Details = details
 	return e
 }
 
 // MarshalStatus marshal status object
 func MarshalStatus(status *spb.Status) ([]byte, error) {
-	var resp = &RestError{}
+	var resp = &TigrisDBError{}
 	resp.Message = status.Message
 	if len(status.Details) > 0 {
 		var internalDetails []*ErrorDetails
@@ -96,17 +96,17 @@ func MarshalStatus(status *spb.Status) ([]byte, error) {
 }
 
 // Errorf returns Error(c, fmt.Sprintf(format, a...)).
-func Errorf(c codes.Code, format string, a ...interface{}) *RestError {
+func Errorf(c codes.Code, format string, a ...interface{}) *TigrisDBError {
 	return Error(c, fmt.Sprintf(format, a...))
 }
 
 // Error returns an error representing c and msg.  If c is OK, returns nil.
-func Error(c codes.Code, msg string) *RestError {
+func Error(c codes.Code, msg string) *TigrisDBError {
 	if c == codes.OK {
 		return nil
 	}
 
-	return &RestError{
+	return &TigrisDBError{
 		Code:    c,
 		Message: msg,
 	}

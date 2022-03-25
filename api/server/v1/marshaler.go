@@ -15,8 +15,6 @@
 package api
 
 import (
-	"fmt"
-
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	jsoniter "github.com/json-iterator/go"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
@@ -77,7 +75,6 @@ func (x *ReadResponse) MarshalJSON() ([]byte, error) {
 		return nil, Errorf(codes.Internal, err.Error())
 	}
 
-	fmt.Println("resp ", string(bb.Bytes()))
 	return bb.Bytes(), nil
 }
 

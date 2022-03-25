@@ -28,14 +28,6 @@ services:
   tigris_server:
     container_name: tigris_server
     image: tigris_server
-    environment:
-      #- TIGRISDB_SERVER_API_PORT=7777
-      #- TIGRISDB_ENVIRONMENT=test
-      - AWS_ACCESS_KEY_ID=accessKey1
-      - AWS_SECRET_ACCESS_KEY=verySecretKey1
-      #- AWS_SESSION_TOKEN=session1
-      #- GRPC_GO_LOG_VERBOSITY_LEVEL=99
-      #- GRPC_GO_LOG_SEVERITY_LEVEL=info
     build:
       context: ../../
       dockerfile: docker/Dockerfile
@@ -45,12 +37,16 @@ services:
         target: /etc/foundationdb/
     ports:
       - "8081:8081"
+    command: >
+      bash -c 'fdbcli --exec "configure new single memory" && /server/service'
     depends_on:
       - tigris_fdb
 
   tigris_test:
     image: tigris_test
     environment:
+      # Instruct test to use default location in the docker
+      # instead of test/config/fdb.cluster file when running on the host
       - TIGRISDB_ENVIRONMENT=test
       - TEST_PARAM
     container_name: tigris_test

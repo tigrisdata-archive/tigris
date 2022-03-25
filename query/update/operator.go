@@ -5,14 +5,16 @@ import (
 
 	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
+	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/util/log"
+	"google.golang.org/grpc/codes"
 )
 
 // FieldOPType is the field operator passed in the Update API
 type FieldOPType string
 
 const (
-	set    FieldOPType = "$set"
+	set FieldOPType = "$set"
 )
 
 // BuildFieldOperators un-marshals request "fields" present in the Update API and returns a FieldOperatorFactory
@@ -46,6 +48,9 @@ type FieldOperatorFactory struct {
 // MergeAndGet method to converts the input to the output after applying all the operators.
 func (factory *FieldOperatorFactory) MergeAndGet(existingDoc jsoniter.RawMessage) (jsoniter.RawMessage, error) {
 	setFieldOp := factory.FieldOperators[string(set)]
+	if setFieldOp == nil {
+		return nil, api.Error(codes.InvalidArgument, "set operator not present in the fields parameter")
+	}
 	out, err := factory.apply(existingDoc, setFieldOp.Document)
 	if err != nil {
 		return nil, err

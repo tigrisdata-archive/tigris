@@ -111,7 +111,7 @@ func (s *session) insert(ctx context.Context, key keys.Key, value []byte) error 
 	defer s.Unlock()
 
 	if err := s.validateSession(); err != nil {
-		return nil
+		return err
 	}
 
 	return s.kTx.Insert(ctx, key.Prefix(), kv.BuildKey(key.PrimaryKeys()...), value)
@@ -122,7 +122,7 @@ func (s *session) replace(ctx context.Context, key keys.Key, value []byte) error
 	defer s.Unlock()
 
 	if err := s.validateSession(); err != nil {
-		return nil
+		return err
 	}
 
 	return s.kTx.Replace(ctx, key.Prefix(), kv.BuildKey(key.PrimaryKeys()...), value)
@@ -133,7 +133,7 @@ func (s *session) update(ctx context.Context, key keys.Key, apply func([]byte) (
 	defer s.Unlock()
 
 	if err := s.validateSession(); err != nil {
-		return nil
+		return err
 	}
 
 	return s.kTx.Update(ctx, key.Prefix(), kv.BuildKey(key.PrimaryKeys()...), apply)
@@ -144,10 +144,21 @@ func (s *session) delete(ctx context.Context, key keys.Key) error {
 	defer s.Unlock()
 
 	if err := s.validateSession(); err != nil {
-		return nil
+		return err
 	}
 
 	return s.kTx.Delete(ctx, key.Prefix(), kv.BuildKey(key.PrimaryKeys()...))
+}
+
+func (s *session) read(ctx context.Context, key keys.Key) (kv.Iterator, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	if err := s.validateSession(); err != nil {
+		return nil, err
+	}
+
+	return s.kTx.Read(ctx, key.Prefix(), kv.BuildKey(key.PrimaryKeys()...))
 }
 
 func (s *session) commit(ctx context.Context) error {

@@ -70,11 +70,14 @@ func (k *KeyBuilder) Build(filters []Filter, userDefinedKeys []*schema.Field) ([
 				}
 			}
 
-			iKeys, err := k.composer.Compose(singleLevel, userDefinedKeys, e.Type())
-			if err != nil {
-				return nil, err
+			if len(singleLevel) > 0 {
+				// try building keys with there is selector available
+				iKeys, err := k.composer.Compose(singleLevel, userDefinedKeys, e.Type())
+				if err != nil {
+					return nil, err
+				}
+				allKeys = append(allKeys, iKeys...)
 			}
-			allKeys = append(allKeys, iKeys...)
 		}
 		queue = queue[1:]
 	}

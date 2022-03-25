@@ -8,6 +8,8 @@ RUN mkdir /build
 COPY scripts/install_build_deps.sh /build
 RUN sh /build/install_build_deps.sh
 COPY go.mod /build
+#Avoid access to private repos by removing test deps
+RUN sed -i '/tigrisdb-client-go/d' /build/go.mod
 WORKDIR /build
 RUN go mod download
 
@@ -28,6 +30,7 @@ RUN mkdir -p /server /etc/tigrisdata/tigrisdb /etc/foundationdb/
 COPY --from=build /build/server/service /server/service
 COPY --from=build /build/config/server.yaml /etc/tigrisdata/tigrisdb
 COPY --from=build /usr/lib/libfdb_c.so /usr/lib/libfdb_c.so
+COPY --from=build /usr/bin/fdbcli /usr/bin/fdbcli
 
 RUN chown -R tigris:tigris /server /etc/tigrisdata/tigrisdb
 
