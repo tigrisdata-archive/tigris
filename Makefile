@@ -75,7 +75,7 @@ local_test: generate test_client
 	go test $(TEST_PARAM) ./...
 
 run: clean generate
-	$(DOCKER_COMPOSE) up --build tigris_server
+	$(DOCKER_COMPOSE) up --build --detach tigris_server
 
 bins: $(BINS)
 

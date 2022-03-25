@@ -22,11 +22,6 @@ sidebar_label: "Developing on TigrisDB"
 
 # Development
 
-## Prerequisite
-
-### Mac OSX
-It is recommended to have a package manager such as `brew` installed
-
 ## Building and Testing with Docker Containers
 
 The first step is to run `make run` which would bring dependencies and server up in the docker
@@ -36,7 +31,10 @@ containers with all your changes.
 
 The above command will inject your changes into the tigris server container.
 
-## Building and Testing on Apple M1
+## OSX
+It is recommended to have a package manager such as `brew` installed
+
+### Building and Testing on Apple M1
 
 Due to various issues with Docker on Apple M1, it is recommended to install FoundationDB on the host and the run
 the server on the host directly as well.
@@ -62,12 +60,21 @@ Below is an example curl request with the JSON schema payload. The schema has tw
 ```json
 {
   "schema": {
-    "pkey_int": "int",
-    "str_value": "string",
-    "int_value": "int",
+    "title": "Some record",
+    "description": "This document stores a record",
+    "properties": {
+      "pkey_int": {
+        "type": "int"
+      },
+      "str_value": {
+        "type": "string"
+      },
+      "int_value": {
+        "type": "int"
+      }
+    },
     "primary_key": ["pkey_int"]
-  },
-  "options": {}
+  } 
 }
 ```
 
