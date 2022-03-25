@@ -13,10 +13,6 @@ on:
         required: true
       GH_ECR_AWS_SECRET_ACCESS_KEY:
         required: true
-      API_DEPLOY_KEY:
-        required: true
-      CLIENT_DEPLOY_KEY:
-        required: true
       GH_DOCKER_ACCESS_USER:
         required: true
       GH_DOCKER_ACCESS_TOKEN:
@@ -35,13 +31,6 @@ jobs:
       packages: write
 
     steps:
-      - name: Setup SSH deploy keys
-        uses: webfactory/ssh-agent@v0.5.4
-        with:
-          ssh-private-key: |
-            ${{ secrets.CLIENT_DEPLOY_KEY }}
-            ${{ secrets.API_DEPLOY_KEY }}
-
       - name: Checkout repository
         uses: actions/checkout@v2
 
@@ -80,7 +69,6 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
-      # Pull private repos while SSH agent is available
       - name: Pull submodules
         run: git submodule update --init --recursive
 

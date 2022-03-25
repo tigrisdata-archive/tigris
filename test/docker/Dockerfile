@@ -28,10 +28,7 @@ COPY go.mod /go/src/tigris/
 
 WORKDIR /go/src/tigris
 
-#Set SSH access to private repos
-RUN mkdir -p /root/.ssh && ssh-keyscan -t rsa github.com >> /root/.ssh/known_hosts
-RUN git config --global url."ssh://git@github.com/".insteadOf "https://github.com/"
-RUN --mount=type=ssh GO111MODULE=on GOPRIVATE=github.com/tigrisdata/ go mod download
+RUN GO111MODULE=on go mod download
 
 RUN rm -rf ./*
 

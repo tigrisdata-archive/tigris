@@ -2,22 +2,10 @@ name: go-test
 on:
   push:
   workflow_call:
-    secrets:
-      API_DEPLOY_KEY:
-        required: true
-      CLIENT_DEPLOY_KEY:
-        required: true
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: Setup SSH deploy keys
-        uses: webfactory/ssh-agent@v0.5.4
-        with:
-          ssh-private-key: |
-            ${{ secrets.CLIENT_DEPLOY_KEY }}
-            ${{ secrets.API_DEPLOY_KEY }}
-
       - name: Check out code
         uses: actions/checkout@v1
 
@@ -39,7 +27,6 @@ jobs:
           docker pull debian:bullseye-slim
           docker pull golang:1.18-bullseye
 
-      # Pull private repos while SSH agent is available
       - name: Pull submodules
         run: git submodule update --init --recursive
 

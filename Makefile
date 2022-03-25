@@ -54,15 +54,11 @@ lint: generate test_client
 	golangci-lint run
 
 docker_compose_build:
-	#FIXME: remove once ssh-agent forwaring support added to docker-compose
-	DOCKER_BUILDKIT=1 docker build --ssh default -f test/docker/Dockerfile .
 	$(DOCKER_COMPOSE) build
 
 # dependency on generate needed to create generated file outside of docker with
 # current user owner instead of root
 docker_test: generate test_client
-	#FIXME: remove once ssh-agent forwaring support added to docker-compose
-	DOCKER_BUILDKIT=1 docker build --ssh default -f test/docker/Dockerfile .
 	$(DOCKER_COMPOSE) up --build --abort-on-container-exit --exit-code-from tigris_test tigris_test
 
 docker_test_no_build:

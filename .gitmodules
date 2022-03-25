@@ -1,4 +1,4 @@
 [submodule "api/proto"]
 	path = api/proto
-	url = ssh://git@github.com/tigrisdata/tigrisdb-api.git
+	url = https://github.com/tigrisdata/tigrisdb-api.git
 	branch = main
