@@ -5,6 +5,8 @@ on:
     secrets:
       API_DEPLOY_KEY:
         required: true
+      CLIENT_DEPLOY_KEY:
+        required: true
 jobs:
   test:
     runs-on: ubuntu-latest
