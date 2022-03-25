@@ -26,7 +26,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
-	"gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v2"
 )
 
 var configPath = []string{
