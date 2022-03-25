@@ -73,7 +73,7 @@ go install github.com/tigrisdata/tigrisdb-cli@latest
 Test that server is up and running:
 ```sh
 export TIGRISDB_URL=http://localhost:8081
-./tigrisdb-cli list databases
+tigrisdb-cli list databases
 ```
 More eleborate example of CLI usage [here](https://github.com/tigrisdata/tigrisdb-cli/)
 

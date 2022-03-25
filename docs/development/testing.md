@@ -1,60 +1,47 @@
 # Testing
 
-For different test use cases FDB is configured as follows:
+## Running tests in docker containers
 
-### Docker tests / GitHub action tests
+Tests are executed using `make test`. This runs both unit and integration 
+tests. The FoundationDB container auto-generates the cluster file which is
+shared between containers using a docker volume.
 
-Can be run using `make test`, this runs both unit and integration tests
-In this case auto-generated cluster file is shared between containers
-using Docker volume.
-
-Mounted at:
+The docker volume `fdbdata` is mounted at:
 
 * /var/fdb/fdb.cluster in tigris_fdb container
-* /etc/foundationdb/fdb.cluster in tigris_test and tigris_server 
-containers, which is default location, so no need to pass cluster file to 
-the init function
+* /etc/foundationdb/fdb.cluster in tigris_test and tigris_server containers,
+  which is the default location where the client will search for the cluster 
+  file
 
-Docker compose file sets "test" config environment variables so 
-`getTestFDBConfig` passes empty cluster file.
+## Running tests on your local machine
 
-### Running unit and integration tests on the host (server in the docker)
+Once FoundationDB and tigris server have been started up using `make run`, 
+the tests can be run using `make local_test`.
 
-FDB and server should be started using `make run`. The tests then can be 
-run using `make local_test`.
+The config file is shared between FoundationDB and tigris server the same way 
+as described in the section above.
 
-Between FDB and server, config file is shared the same way as in fully 
-docker tests, described above.
+Go tests use `config/fdb.cluster` file for connection, which is configured
+by the `getTestFDBConfig` function.
 
-Go tests use `config/fdb.cluster` file for connection, which is 
-configured by `getTestFDBConfig` function.
+The tests can also be executed from within the IDE.
 
-### Running unit and integration tests in IDE (server in the docker)
+## OSX
 
-Same as hosts tests containers should be started using `make run`
+Due to various issues with Docker on Apple M1, it is recommended to install
+FoundationDB on the host and run the server on the host directly as well.
 
-After that individual tests can be run in the IDE.
-
-Unittests are using `config/fdb.cluster` for connecting to FDB and 
-configured by `getTestFDBConfig`
-
-### Integration tests with server running on the host
-
-In this case FDB can be started as follows: 
+To run the server on the host, required dependencies need to be installed by
+running:
 
 ```shell
-docker-compose -f docker/docker-compose.yml up tigris_fdb
+sh scripts/install_build_deps.sh
+sh scripts/install_test_deps.sh
 ```
 
-Server can be compiled by `make bins`, the server then can be started 
-manually on the host by running `server/service` in the root of the repository
+Once the dependencies are installed, you can run the test on your local 
+machine as follows:
 
-The server uses `config/config.yaml` in this case which is configured to use 
-`config/fdb.cluster` file
-
-# Known issues
-
-  * There is a network issue when server is run on the Mac OS X host. The server 
-cannot connect to the FDB container, which exposes port 4500 on the localhost.
-
-    So it should be started using `make run`
+```shell
+make osx_test
+```
