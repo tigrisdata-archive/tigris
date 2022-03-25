@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/apple/foundationdb/bindings/go/src/fdb/subspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigrisdb/server/config"
@@ -30,12 +31,12 @@ import (
 func readAll(t *testing.T, it Iterator) []KeyValue {
 	res := make([]KeyValue, 0)
 
-	for it.More() {
-		v, err := it.Next()
-		require.NoError(t, err)
-
-		res = append(res, *v)
+	var kv KeyValue
+	for it.Next(&kv) {
+		res = append(res, kv)
 	}
+
+	require.NoError(t, it.Err())
 
 	return res
 }
@@ -244,11 +245,12 @@ func testKVInsert(t *testing.T, kv KV) {
 			for _, i := range v.result {
 				it, err := kv.Read(context.Background(), "t1", i.Key)
 				require.NoError(t, err)
-				require.True(t, it.More())
-				res, err := it.Next()
-				require.NoError(t, err)
-				require.Equal(t, i, *res)
-				require.True(t, !it.More())
+				var res KeyValue
+				require.True(t, it.Next(&res))
+				require.NoError(t, it.Err())
+				require.Equal(t, i, res)
+				require.True(t, !it.Next(&res))
+				require.NoError(t, it.Err())
 			}
 		})
 	}
@@ -283,6 +285,47 @@ func testKVTimeout(t *testing.T, kv KV) {
 	assert.Equal(t, context.DeadlineExceeded, err)
 }
 
+func testFDBKVIterator(t *testing.T, kv KV) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	err := kv.DropTable(ctx, "t1")
+	require.NoError(t, err)
+
+	err = kv.CreateTable(ctx, "t1")
+	require.NoError(t, err)
+
+	nRecs := 5
+
+	for i := 0; i < nRecs; i++ {
+		err = kv.Insert(ctx, "t1", BuildKey("p1", i+1), []byte(fmt.Sprintf("value%d", i+1)))
+		require.NoError(t, err)
+	}
+
+	it, err := kv.Read(ctx, "t1", nil)
+	require.NoError(t, err)
+
+	ic, ok := it.(*fdbIteratorTxCloser)
+	require.True(t, ok)
+	fi, ok := ic.Iterator.(*fdbIterator)
+	require.True(t, ok)
+
+	var v KeyValue
+	assert.True(t, it.Next(nil))
+	assert.True(t, it.Next(&v))
+	assert.NotNil(t, ic.tx)
+
+	fi.subspace = subspace.FromBytes([]byte("invalid"))
+
+	assert.False(t, it.Next(&v))
+	assert.Nil(t, ic.tx)
+	// Next should not fail after error
+	assert.False(t, it.Next(&v))
+	assert.Error(t, it.Err())
+
+	err = kv.DropTable(ctx, "t1")
+	require.NoError(t, err)
+}
+
 func TestKVFDB(t *testing.T) {
 	cfg, err := config.GetTestFDBConfig("../..")
 	require.NoError(t, err)
@@ -298,6 +341,9 @@ func TestKVFDB(t *testing.T) {
 	})
 	t.Run("TestKVFDBFullScan", func(t *testing.T) {
 		testFullScan(t, kv)
+	})
+	t.Run("TestKVFDBIterator", func(t *testing.T) {
+		testFDBKVIterator(t, kv)
 	})
 }
 

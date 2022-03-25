@@ -52,7 +52,7 @@ type ftx struct {
 type fdbIterator struct {
 	it       *fdb.RangeIterator
 	subspace subspace.Subspace
-	loaded   bool
+	err      error
 }
 
 type fdbIteratorTxCloser struct {
@@ -447,44 +447,60 @@ func (t *ftx) Rollback(_ context.Context) error {
 	return nil
 }
 
-func (i *fdbIterator) More() bool {
-	// makes calls to More idempotent
-	if !i.loaded && i.it.Advance() {
-		i.loaded = true
-	}
-	return i.loaded
-}
-
 func tupleToKey(t *tuple.Tuple) Key {
 	p := unsafe.Pointer(t)
 	return *(*Key)(p)
 }
 
-func (i *fdbIterator) Next() (*KeyValue, error) {
-	i.loaded = false
-	kv, err := i.it.Get()
-	if ulog.E(err) {
-		return nil, err
+func (i *fdbIterator) Next(kv *KeyValue) bool {
+	if i.err != nil {
+		return false
 	}
-	log.Debug().Str("key", kv.Key.String()).Msg("fdbIterator.Next")
-	t, err := i.subspace.Unpack(kv.Key)
-	if ulog.E(err) {
-		return nil, err
+
+	if !i.it.Advance() {
+		return false
 	}
-	return &KeyValue{Key: tupleToKey(&t), FDBKey: kv.Key, Value: kv.Value}, nil
+
+	tkv, err := i.it.Get()
+	if ulog.E(err) {
+		i.err = err
+		return false
+	}
+
+	log.Debug().Str("key", tkv.Key.String()).Msg("fdbIterator.Next")
+
+	t, err := i.subspace.Unpack(tkv.Key)
+	if ulog.E(err) {
+		i.err = err
+		return false
+	}
+
+	if kv != nil {
+		kv.Key = tupleToKey(&t)
+		kv.FDBKey = tkv.Key
+		kv.Value = tkv.Value
+	}
+
+	return true
 }
 
-func (i *fdbIteratorTxCloser) More() bool {
+func (i *fdbIterator) Err() error {
+	return i.err
+}
+
+func (i *fdbIteratorTxCloser) Next(kv *KeyValue) bool {
 	if i.tx == nil {
 		return false
 	}
-	if !i.Iterator.More() {
-		err := i.tx.Rollback(context.Background())
+	if !i.Iterator.Next(kv) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		err := i.tx.Rollback(ctx)
 		ulog.E(err)
 		i.tx = nil
 		return false
 	}
-	return i.Iterator.More()
+	return true
 }
 
 func getFDBKey(table string, key Key) fdb.Key {

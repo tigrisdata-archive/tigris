@@ -51,8 +51,8 @@ type KV interface {
 }
 
 type Iterator interface {
-	More() bool
-	Next() (*KeyValue, error)
+	Next(*KeyValue) bool
+	Err() error
 }
 
 type KeyPart interface{}

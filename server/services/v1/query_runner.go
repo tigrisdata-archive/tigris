@@ -17,6 +17,7 @@ package v1
 import (
 	"context"
 	"encoding/json"
+
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/encoding"
 	"github.com/tigrisdata/tigrisdb/query/filter"
@@ -251,14 +252,10 @@ func (q *StreamingQueryRunner) iterate(ctx context.Context, collectionName strin
 		return err
 	}
 
-	for it.More() {
+	var v kv.KeyValue
+	for it.Next(&v) {
 		if limit > 0 && limit <= *totalResults {
 			return nil
-		}
-
-		v, err := it.Next()
-		if err != nil {
-			return err
 		}
 
 		newValue, err := fieldFactory.Apply(v.Value)
@@ -276,5 +273,5 @@ func (q *StreamingQueryRunner) iterate(ctx context.Context, collectionName strin
 		*totalResults++
 	}
 
-	return nil
+	return it.Err()
 }
