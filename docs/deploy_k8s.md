@@ -1,4 +1,4 @@
-# Deployment
+# Deployment to Kubernetes
 
 The `deployment` directory contains manifests that can be used to deploy to
 Kubernetes. The directory layout follows the Kustomize best practices and uses
