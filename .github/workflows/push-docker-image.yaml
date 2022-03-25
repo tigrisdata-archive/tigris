@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - main
+  release:
+    types: [published]
   workflow_call:
     secrets:
       GH_ECR_AWS_ACCESS_KEY_ID:
