@@ -7,8 +7,10 @@ require (
 	github.com/auth0/go-jwt-middleware/v2 v2.0.0
 	github.com/buger/jsonparser v1.1.1
 	github.com/davecgh/go-spew v1.1.1
+	github.com/deepmap/oapi-codegen v1.9.1
 	github.com/fsnotify/fsnotify v1.5.1
 	github.com/fullstorydev/grpchan v1.1.1
+	github.com/getkin/kin-openapi v0.90.0
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/golang/protobuf v1.5.2
 	github.com/google/uuid v1.3.0
@@ -17,12 +19,13 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.0.0-rc.2.0.20211207221722-a5b9e0b0458c
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.8.0
 	github.com/json-iterator/go v1.1.12
+	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.26.1
 	github.com/soheilhy/cmux v0.1.5
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.10.1
 	github.com/stretchr/testify v1.7.0
-	github.com/tigrisdata/tigrisdb-client-go v0.0.0-20220324225753-76fef4280270
+	github.com/tigrisdata/tigrisdb-client-go v1.0.0-alpha.1
 	github.com/valyala/bytebufferpool v1.0.0
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1
 	google.golang.org/genproto v0.0.0-20220303160752-862486edd9cc
@@ -36,10 +39,8 @@ require (
 	cloud.google.com/go v0.99.0 // indirect
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/andybalholm/brotli v1.0.4 // indirect
-	github.com/deepmap/oapi-codegen v1.9.1 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424 // indirect
-	github.com/getkin/kin-openapi v0.90.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/swag v0.21.1 // indirect
@@ -58,7 +59,6 @@ require (
 	github.com/onsi/gomega v1.18.1 // indirect
 	github.com/opentracing/opentracing-go v1.1.0 // indirect
 	github.com/pelletier/go-toml v1.9.4 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/sergi/go-diff v1.0.0 // indirect
 	github.com/smartystreets/goconvey v1.7.2 // indirect
