@@ -17,6 +17,7 @@ package config
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -25,6 +26,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
+	yaml "gopkg.in/yaml.v2"
 )
 
 var configPath = []string{
@@ -131,6 +133,16 @@ func GetTestFDBConfig(path string) (*FoundationDBConfig, error) {
 	// where cluster file is shared between containers
 	if !exists && GetEnvironment() != EnvTest {
 		fn = path + "/test/config/fdb.cluster"
+	}
+
+	cmd := exec.Command("fdbcli", "-C", fn, "--exec", "configure new single memory")
+	_, err := cmd.Output()
+	if err != nil {
+		cmd := exec.Command("fdbcli", "-C", fn, "--exec", "configure single memory")
+		_, err = cmd.Output()
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	return &FoundationDBConfig{ClusterFile: fn}, nil
