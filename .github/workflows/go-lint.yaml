@@ -2,23 +2,12 @@ name: go-lint
 on:
   push:
   workflow_call:
-    secrets:
-      API_DEPLOY_KEY:
-        required: true
-      CLIENT_DEPLOY_KEY:
-        required: true
 permissions:
   contents: read
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - name: Setup SSH deploy keys
-        uses: webfactory/ssh-agent@v0.5.4
-        with:
-          ssh-private-key: |
-            ${{ secrets.CLIENT_DEPLOY_KEY }}
-            ${{ secrets.API_DEPLOY_KEY }}
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Setup Go
