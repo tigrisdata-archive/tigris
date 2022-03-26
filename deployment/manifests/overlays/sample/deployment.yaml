@@ -25,4 +25,4 @@ spec:
       volumes:
         - name: fdb-cluster-config-volume
           configMap:
-            name: dev-fdb-cluster-config
+            name: sample-fdb-cluster-config
