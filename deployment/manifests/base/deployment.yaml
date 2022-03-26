@@ -31,7 +31,7 @@ spec:
     spec:
       containers:
         - name: tigrisdb-server
-          image: tigrisdb:latest # To be replaced with the image URI during kustomization phase
+          image: tigrisdata/tigrisdb:alpha # Replace this with the version you want to run through kustomization
           imagePullPolicy: Always
           command: ["/server/service"]
           volumeMounts:
