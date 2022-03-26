@@ -19,16 +19,15 @@ import (
 	"testing"
 	"time"
 
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"google.golang.org/grpc/codes"
-
 	"github.com/stretchr/testify/require"
+	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/server/config"
 	"github.com/tigrisdata/tigrisdb/server/transaction"
 	"github.com/tigrisdata/tigrisdb/store/kv"
+	"google.golang.org/grpc/codes"
 )
 
-func TestKeyEncoding(t *testing.T) {
+func TestDictionaryEncoding(t *testing.T) {
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
@@ -42,7 +41,7 @@ func TestKeyEncoding(t *testing.T) {
 	_ = kv.DropTable(ctx, reservedSubspaceKey)
 
 	tm := transaction.NewManager(kv)
-	k := NewKeyEncoder()
+	k := NewDictionaryEncoder()
 
 	tx, err := tm.StartTxWithoutTracking(ctx)
 	require.NoError(t, err)
@@ -87,7 +86,7 @@ func TestKeyEncoding(t *testing.T) {
 	require.Error(t, k.ReserveNamespace(context.TODO(), tx, "proj2-org-1", 1234))
 }
 
-func TestKeyEncoding_Error(t *testing.T) {
+func TestDictionaryEncoding_Error(t *testing.T) {
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
@@ -101,7 +100,7 @@ func TestKeyEncoding_Error(t *testing.T) {
 	_ = kv.DropTable(ctx, reservedSubspaceKey)
 
 	tm := transaction.NewManager(kv)
-	k := NewKeyEncoder()
+	k := NewDictionaryEncoder()
 
 	tx, err := tm.StartTxWithoutTracking(ctx)
 	require.NoError(t, err)
@@ -155,7 +154,7 @@ func TestReservedNamespace(t *testing.T) {
 
 func TestDecode(t *testing.T) {
 	k := kv.BuildKey(encVersion, UInt32ToByte(1234), dbKey, "db-1", keyEnd)
-	mp, err := NewKeyEncoder().decode(context.TODO(), k)
+	mp, err := NewDictionaryEncoder().decode(context.TODO(), k)
 	require.NoError(t, err)
 	require.Equal(t, mp[dbKey], "db-1")
 }

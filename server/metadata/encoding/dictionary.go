@@ -68,19 +68,6 @@ import (
 //
 // Request: To drop an Index
 //   ["encoding", 0x01, x, 0x01, 0x03, "index", "pkey", "dropped"] = 0x04
-//
-// The schemas' subspace will be storing the actual schema of the user for a collection. The schema subspace will
-// look like below
-//    ["schemas", 0x01, x, 0x01, 0x03, "created", 0x01] => {
-//      properties: {"a": int},
-//      primary_key: ["a"],
-//      indexes: [
-//        {name: “primary”, code: 2, columns: [“id”]},
-//        {name: “email_index”, code: 3, columns: [“email”], unique:true},
-//        {name: “created_at_index”, code: 4, columns: [“created_at”]},
-//      ]
-//    }
-//
 const (
 	namespaceKey  = "namespace"
 	dbKey         = "db"
@@ -163,7 +150,7 @@ func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.
 	}
 
 	key := keys.NewKey(reservedSubspaceKey, namespaceKey, namespace, keyEnd)
-	// now do insert because we need strict insert functionality here
+	// now do an insert to fail if namespace already exists.
 	if err := tx.Insert(ctx, key, UInt32ToByte(id)); err != nil {
 		log.Debug().Interface("key", key).Uint32("value", id).Err(err).Msg("reserving namespace failed")
 		return err
@@ -199,23 +186,25 @@ func (r *reservedSubspace) allocateToken(ctx context.Context, tx transaction.Tx,
 	return newReservedValue, nil
 }
 
-type KeyEncoder struct {
+// DictionaryEncoder is used to replace variable length strings to their corresponding codes to encode it. Compression
+// is achieved by replacing long strings with a simple 4byte representation.
+type DictionaryEncoder struct {
 	reservedSb *reservedSubspace
 }
 
-func NewKeyEncoder() *KeyEncoder {
-	return &KeyEncoder{
+func NewDictionaryEncoder() *DictionaryEncoder {
+	return &DictionaryEncoder{
 		reservedSb: newReservedSubspace(),
 	}
 }
 
 // ReserveNamespace is the first step in the encoding and the mapping is passed the caller. As this is the first encoded
 // integer the caller needs to make sure a unique value is assigned to this namespace.
-func (k *KeyEncoder) ReserveNamespace(ctx context.Context, tx transaction.Tx, namespace string, id uint32) error {
+func (k *DictionaryEncoder) ReserveNamespace(ctx context.Context, tx transaction.Tx, namespace string, id uint32) error {
 	return k.reservedSb.reserveNamespace(ctx, tx, namespace, id)
 }
 
-func (k *KeyEncoder) EncodeDatabaseName(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32) (uint32, error) {
+func (k *DictionaryEncoder) EncodeDatabaseName(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32) (uint32, error) {
 	if err := k.validNamespaceId(namespaceId); err != nil {
 		return invalidId, err
 	}
@@ -227,7 +216,7 @@ func (k *KeyEncoder) EncodeDatabaseName(ctx context.Context, tx transaction.Tx, 
 	return k.encode(ctx, tx, key, dbKey)
 }
 
-func (k *KeyEncoder) EncodeCollectionName(ctx context.Context, tx transaction.Tx, collection string, namespaceId uint32, dbId uint32) (uint32, error) {
+func (k *DictionaryEncoder) EncodeCollectionName(ctx context.Context, tx transaction.Tx, collection string, namespaceId uint32, dbId uint32) (uint32, error) {
 	if err := k.validNamespaceId(namespaceId); err != nil {
 		return invalidId, err
 	}
@@ -242,7 +231,7 @@ func (k *KeyEncoder) EncodeCollectionName(ctx context.Context, tx transaction.Tx
 	return k.encode(ctx, tx, key, collectionKey)
 }
 
-func (k *KeyEncoder) EncodeIndexName(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32, dbId uint32, collId uint32) (uint32, error) {
+func (k *DictionaryEncoder) EncodeIndexName(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32, dbId uint32, collId uint32) (uint32, error) {
 	if err := k.validNamespaceId(namespaceId); err != nil {
 		return invalidId, err
 	}
@@ -260,7 +249,7 @@ func (k *KeyEncoder) EncodeIndexName(ctx context.Context, tx transaction.Tx, ind
 	return k.encode(ctx, tx, key, indexKey)
 }
 
-func (k *KeyEncoder) encode(ctx context.Context, tx transaction.Tx, key keys.Key, encName string) (uint32, error) {
+func (k *DictionaryEncoder) encode(ctx context.Context, tx transaction.Tx, key keys.Key, encName string) (uint32, error) {
 	reserveToken, err := k.reservedSb.allocateToken(ctx, tx, encodingSubspaceKey)
 	if err != nil {
 		return invalidId, err
@@ -276,43 +265,43 @@ func (k *KeyEncoder) encode(ctx context.Context, tx transaction.Tx, key keys.Key
 	return reserveToken, nil
 }
 
-func (k *KeyEncoder) validNamespaceId(id uint32) error {
+func (k *DictionaryEncoder) validNamespaceId(id uint32) error {
 	if id == invalidId {
 		return api.Errorf(codes.InvalidArgument, "invalid namespace id")
 	}
 	return nil
 }
 
-func (k *KeyEncoder) validDatabaseId(id uint32) error {
+func (k *DictionaryEncoder) validDatabaseId(id uint32) error {
 	if id == invalidId {
 		return api.Errorf(codes.InvalidArgument, "invalid database id")
 	}
 	return nil
 }
 
-func (k *KeyEncoder) validCollectionId(id uint32) error {
+func (k *DictionaryEncoder) validCollectionId(id uint32) error {
 	if id == invalidId {
 		return api.Errorf(codes.InvalidArgument, "invalid collection id")
 	}
 	return nil
 }
 
-func (k *KeyEncoder) getDatabaseId(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32) (uint32, error) {
+func (k *DictionaryEncoder) getDatabaseId(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32) (uint32, error) {
 	key := keys.NewKey(encodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyEnd)
 	return k.getId(ctx, tx, key)
 }
 
-func (k *KeyEncoder) getCollectionId(ctx context.Context, tx transaction.Tx, collName string, namespaceId uint32, dbId uint32) (uint32, error) {
+func (k *DictionaryEncoder) getCollectionId(ctx context.Context, tx transaction.Tx, collName string, namespaceId uint32, dbId uint32) (uint32, error) {
 	key := keys.NewKey(encodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collName, keyEnd)
 	return k.getId(ctx, tx, key)
 }
 
-func (k *KeyEncoder) getIndexId(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32, dbId uint32, collId uint32) (uint32, error) {
+func (k *DictionaryEncoder) getIndexId(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32, dbId uint32, collId uint32) (uint32, error) {
 	key := keys.NewKey(encodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyEnd)
 	return k.getId(ctx, tx, key)
 }
 
-func (k *KeyEncoder) getId(ctx context.Context, tx transaction.Tx, key keys.Key) (uint32, error) {
+func (k *DictionaryEncoder) getId(ctx context.Context, tx transaction.Tx, key keys.Key) (uint32, error) {
 	it, err := tx.Read(ctx, key)
 	if err != nil {
 		return invalidId, err
@@ -332,7 +321,7 @@ func (k *KeyEncoder) getId(ctx context.Context, tx transaction.Tx, key keys.Key)
 
 // decode is currently only use for debugging purpose, once we have a layer on top of this encoding then we leverage this
 // method
-func (k *KeyEncoder) decode(_ context.Context, fdbKey kv.Key) (map[string]interface{}, error) {
+func (k *DictionaryEncoder) decode(_ context.Context, fdbKey kv.Key) (map[string]interface{}, error) {
 	var decoded = make(map[string]interface{})
 	if len(fdbKey) > 0 {
 		decoded["version"] = fdbKey[0]
