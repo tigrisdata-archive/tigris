@@ -124,7 +124,7 @@ func NewValueUsingSchema(field *schema.Field, input *structpb.Value) (Value, err
 		return nil, status.Errorf(codes.InvalidArgument, "permissible type for '%s' is string only", field.FieldName)
 	}
 
-	return nil, status.Errorf(codes.InvalidArgument, "unsupported type '%T'", input.Kind)
+	return nil, status.Errorf(codes.InvalidArgument, "unsupported type for field name '%s'", field.Name())
 }
 
 // NewValueFromStruct returns Value object based on the schema using input Struct
