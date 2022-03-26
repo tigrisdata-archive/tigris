@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - alpha
   release:
     types: [published]
   workflow_call:
