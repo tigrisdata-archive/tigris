@@ -63,11 +63,13 @@ jobs:
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
             ${{ env.DOCKER_REPOSITORY }}
           # generate Docker tags based on the following events/attributes
+          # we generate the latest tag off the alpha branch
           tags: |
             type=ref,event=branch
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/alpha' }}
 
       - name: Pull submodules
         run: git submodule update --init --recursive

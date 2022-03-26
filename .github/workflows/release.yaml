@@ -25,12 +25,3 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_BOT_ACCESS_TOKEN }}
         run: npx semantic-release --debug
-
-  publish:
-    needs: release
-    uses: ./.github/workflows/push-docker-image.yaml
-    secrets:
-      GH_ECR_AWS_ACCESS_KEY_ID: ${{ secrets.GH_ECR_AWS_ACCESS_KEY_ID }}
-      GH_ECR_AWS_SECRET_ACCESS_KEY: ${{ secrets.GH_ECR_AWS_SECRET_ACCESS_KEY }}
-      GH_DOCKER_ACCESS_USER: ${{ secrets.GH_DOCKER_ACCESS_USER }}
-      GH_DOCKER_ACCESS_TOKEN: ${{ secrets.GH_DOCKER_ACCESS_TOKEN }}
