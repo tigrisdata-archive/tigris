@@ -9,15 +9,9 @@ on:
 jobs:
   test:
     uses: ./.github/workflows/go-test.yaml
-    secrets:
-      API_DEPLOY_KEY: ${{ secrets.API_DEPLOY_KEY }}
-      CLIENT_DEPLOY_KEY: ${{ secrets.CLIENT_DEPLOY_KEY }}
 
   lint:
     uses: ./.github/workflows/go-lint.yaml
-    secrets:
-      API_DEPLOY_KEY: ${{ secrets.API_DEPLOY_KEY }}
-      CLIENT_DEPLOY_KEY: ${{ secrets.CLIENT_DEPLOY_KEY }}
 
   release:
     runs-on: ubuntu-latest
@@ -29,7 +23,7 @@ jobs:
           node-version: 16
       - name: release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_BOT_ACCESS_TOKEN }}
         run: npx semantic-release --debug
 
   publish:
@@ -38,7 +32,5 @@ jobs:
     secrets:
       GH_ECR_AWS_ACCESS_KEY_ID: ${{ secrets.GH_ECR_AWS_ACCESS_KEY_ID }}
       GH_ECR_AWS_SECRET_ACCESS_KEY: ${{ secrets.GH_ECR_AWS_SECRET_ACCESS_KEY }}
-      API_DEPLOY_KEY: ${{ secrets.API_DEPLOY_KEY }}
-      CLIENT_DEPLOY_KEY: ${{ secrets.CLIENT_DEPLOY_KEY }}
       GH_DOCKER_ACCESS_USER: ${{ secrets.GH_DOCKER_ACCESS_USER }}
       GH_DOCKER_ACCESS_TOKEN: ${{ secrets.GH_DOCKER_ACCESS_TOKEN }}

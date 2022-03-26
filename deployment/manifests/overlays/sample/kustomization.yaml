@@ -18,7 +18,3 @@ resources:
   - ../../base
 patchesStrategicMerge:
   - deployment.yaml
-images:
-  - name: tigrisdb
-    newName: prod/tigrisdb
-    newTag: v1
