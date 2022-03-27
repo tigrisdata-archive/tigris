@@ -1,5 +1,6 @@
 # TigrisDB
 
+[![Go Report](https://goreportcard.com/badge/github.com/tigrisdata/tigrisdb)](https://goreportcard.com/report/github.com/tigrisdata/tigrisdb)
 [![Build Status](https://github.com/tigrisdata/tigrisdb/workflows/Go/badge.svg)]()
 
 # Development
