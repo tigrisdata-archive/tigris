@@ -67,7 +67,6 @@ func (a *AndFilter) Type() LogicalOP {
 	return AndOP
 }
 
-
 // Matches returns true if the input doc matches this filter.
 func (a *AndFilter) Matches(doc *structpb.Struct) bool {
 	for _, f := range a.filter {
