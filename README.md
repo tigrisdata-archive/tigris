@@ -36,6 +36,12 @@ Golang client example [here](https://github.com/tigrisdata/tigrisdb-client-go/)
 * [Configuration](docs/configuration.md)
 * [Deployment to Kubernetes](docs/deploy_k8s.md)
 
+# Community & Support
+
+* [Slack Community](https://join.slack.com/t/tigrisdatacommunity/shared_invite/zt-16fn5ogio-OjxJlgttJIV0ZDywcBItJQ)
+* [GitHub Issues](https://github.com/tigrisdata/tigrisdb/issues)
+* [GitHub Discussions](https://github.com/tigrisdata/tigrisdb/discussions)
+
 # License
 
 This software is licensed under the [Apache 2.0](LICENSE).
