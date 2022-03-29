@@ -161,6 +161,28 @@ func (s *session) read(ctx context.Context, key keys.Key) (kv.Iterator, error) {
 	return s.kTx.Read(ctx, key.Prefix(), kv.BuildKey(key.PrimaryKeys()...))
 }
 
+func (s *session) setVersionstampedValue(ctx context.Context, key []byte, value []byte) error {
+	s.Lock()
+	defer s.Unlock()
+
+	if err := s.validateSession(); err != nil {
+		return nil
+	}
+
+	return s.kTx.SetVersionstampedValue(ctx, key, value)
+}
+
+func (s *session) get(ctx context.Context, key []byte) ([]byte, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	if err := s.validateSession(); err != nil {
+		return nil, err
+	}
+
+	return s.kTx.Get(ctx, key)
+}
+
 func (s *session) commit(ctx context.Context) error {
 	s.Lock()
 	defer s.Unlock()

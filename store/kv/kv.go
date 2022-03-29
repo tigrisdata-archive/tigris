@@ -34,6 +34,8 @@ type crud interface {
 	ReadRange(ctx context.Context, table string, lkey Key, rkey Key) (Iterator, error)
 	Update(ctx context.Context, table string, key Key, apply func([]byte) ([]byte, error)) error
 	UpdateRange(ctx context.Context, table string, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) error
+	SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error
+	Get(ctx context.Context, key []byte) ([]byte, error)
 }
 
 type Tx interface {
