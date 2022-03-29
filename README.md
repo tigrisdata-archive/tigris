@@ -2,6 +2,7 @@
 
 [![Go Report](https://goreportcard.com/badge/github.com/tigrisdata/tigrisdb)](https://goreportcard.com/report/github.com/tigrisdata/tigrisdb)
 [![Build Status](https://github.com/tigrisdata/tigrisdb/workflows/Go/badge.svg)]()
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
 
 # Getting started
 
