@@ -2,8 +2,14 @@
 
 ## Building and Testing with Docker Containers
 
-The first step is to run `make run` which would bring dependencies and server up
-in the docker containers with all your changes.
+Start local TigrisDB server listening on `http://localhost:8081` by running:
+
+```sh
+make run
+```
+
+This would bring dependencies and server up in the docker containers with all
+your changes.
 
 ## OSX
 
@@ -58,7 +64,7 @@ primary key fields.
 }
 ```
 
-Below is an example curl request with the JSON schema. The collection "t1" will 
+Below is an example curl request with the JSON schema. The collection "t1" will
 get created in the database "db1".
 
 ```shell
