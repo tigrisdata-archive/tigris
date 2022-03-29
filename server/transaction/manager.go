@@ -45,6 +45,8 @@ type Tx interface {
 	Read(ctx context.Context, key keys.Key) (kv.Iterator, error)
 	Commit(ctx context.Context) error
 	Rollback(ctx context.Context) error
+	SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error
+	Get(ctx context.Context, key []byte) ([]byte, error)
 }
 
 // Manager is used to track all the sessions and provide all the functionality related to transactions. Once created
@@ -233,4 +235,12 @@ func (b *baseTx) Delete(ctx context.Context, key keys.Key) error {
 
 func (b *baseTx) Read(ctx context.Context, key keys.Key) (kv.Iterator, error) {
 	return b.session.read(ctx, key)
+}
+
+func (b *baseTx) SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error {
+	return b.session.setVersionstampedValue(ctx, key, value)
+}
+
+func (b *baseTx) Get(ctx context.Context, key []byte) ([]byte, error) {
+	return b.session.get(ctx, key)
 }

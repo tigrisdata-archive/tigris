@@ -16,6 +16,7 @@ package kv
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"time"
 	"unsafe"
@@ -153,6 +154,20 @@ func (d *fdbkv) UpdateRange(ctx context.Context, table string, lKey Key, rKey Ke
 	return err
 }
 
+func (d *fdbkv) SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error {
+	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
+		return nil, (&ftx{d, &tr}).SetVersionstampedValue(ctx, key, value)
+	})
+	return err
+}
+
+func (d *fdbkv) Get(ctx context.Context, key []byte) ([]byte, error) {
+	val, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
+		return (&ftx{d, &tr}).Get(ctx, key)
+	})
+	return val.([]byte), err
+}
+
 func (d *fdbkv) CreateTable(_ context.Context, name string) error {
 	log.Debug().Str("name", name).Msg("table created")
 	return nil
@@ -261,6 +276,14 @@ func (b *fbatch) ReadRange(ctx context.Context, table string, lKey Key, rKey Key
 		return nil, err
 	}
 	return b.tx.ReadRange(ctx, table, lKey, rKey)
+}
+
+func (b *fbatch) SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error {
+	return fmt.Errorf("batch doesn't support setting versionstamped value")
+}
+
+func (b *fbatch) Get(ctx context.Context, key []byte) ([]byte, error) {
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (b *fbatch) Commit(ctx context.Context) error {
@@ -412,6 +435,17 @@ func (t *ftx) ReadRange(_ context.Context, table string, lKey Key, rKey Key) (It
 	log.Debug().Str("table", table).Interface("lKey", lKey).Interface("rKey", rKey).Msg("tx read range")
 
 	return &fdbIterator{it: r.Iterator(), subspace: subspace.FromBytes([]byte(table))}, nil
+}
+
+func (t *ftx) SetVersionstampedValue(_ context.Context, key []byte, value []byte) error {
+	t.tx.SetVersionstampedValue(fdb.Key(key), value)
+
+	log.Debug().Str("key", string(key)).Msg("setting metadata version key")
+	return nil
+}
+
+func (t *ftx) Get(_ context.Context, key []byte) ([]byte, error) {
+	return t.tx.Get(fdb.Key(key)).Get()
 }
 
 func (t *ftx) Commit(_ context.Context) error {

@@ -17,6 +17,7 @@ package kv
 import (
 	"context"
 	"fmt"
+	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	"os"
 	"testing"
 	"time"
@@ -326,6 +327,23 @@ func testFDBKVIterator(t *testing.T, kv KV) {
 	require.NoError(t, err)
 }
 
+func testSetVersionstampedValue(t *testing.T, kv KV) {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	tx, err := kv.Tx(ctx)
+	require.NoError(t, err)
+
+	require.NoError(t, tx.SetVersionstampedValue(ctx, []byte("foo"), []byte("bar")))
+	err = tx.Commit(ctx)
+	require.Equal(t, 2000, err.(fdb.Error).Code)
+
+	tx, err = kv.Tx(ctx)
+	require.NoError(t, err)
+	require.NoError(t, tx.SetVersionstampedValue(ctx, []byte{0xff, '/', 'm', 'e', 't', 'a', 'd', 'a', 't', 'a', 'V', 'e', 'r', 's', 'i', 'o', 'n'}, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}))
+	require.NoError(t, tx.Commit(ctx))
+}
+
 func TestKVFDB(t *testing.T) {
 	cfg, err := config.GetTestFDBConfig("../..")
 	require.NoError(t, err)
@@ -344,6 +362,9 @@ func TestKVFDB(t *testing.T) {
 	})
 	t.Run("TestKVFDBIterator", func(t *testing.T) {
 		testFDBKVIterator(t, kv)
+	})
+	t.Run("TestSetVersionstampedValue", func(t *testing.T) {
+		testSetVersionstampedValue(t, kv)
 	})
 }
 
