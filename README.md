@@ -3,13 +3,31 @@
 [![Go Report](https://goreportcard.com/badge/github.com/tigrisdata/tigrisdb)](https://goreportcard.com/report/github.com/tigrisdata/tigrisdb)
 [![Build Status](https://github.com/tigrisdata/tigrisdb/workflows/Go/badge.svg)]()
 
-# Development
+# Getting started
 
-Start local TigrisDB server listening on `http://localhost:8081` by running:
+These instructions will get you through setting up TigrisDB locally as Docker
+containers.
 
-```sh
-make run
+## Prerequisites
+
+* Make sure that you have Docker and Docker Compose installed
+    * Windows or
+      MacOS: [Install Docker Desktop](https://www.docker.com/get-started)
+    * Linux: [Install Docker](https://www.docker.com/get-started) and then
+      [Docker Compose](https://github.com/docker/compose)
+
+## Running locally
+
+The [docker/local](docker/local) directory contains the docker-compose.yaml
+which describes the configuration of TigrisDB components. You can run TigrisDB
+in a local environment by executing:
+
+```shell
+cd docker/local
+docker-compose up -d
 ```
+
+## Connecting using CLI
 
 Install the CLI:
 
@@ -17,17 +35,18 @@ Install the CLI:
 go install github.com/tigrisdata/tigrisdb-cli@latest
 ```
 
-Test that server is up and running:
+Test that TigrisDB is up and running locally:
 
-```sh
+```shell
 export TIGRISDB_URL=http://localhost:8081
 tigrisdb-cli list databases
 ```
 
-More elaborate example of CLI
-usage [here](https://github.com/tigrisdata/tigrisdb-cli/)
+More elaborate example of CLI usage can be
+found [here](https://github.com/tigrisdata/tigrisdb-cli/).
 
-Golang client example [here](https://github.com/tigrisdata/tigrisdb-client-go/)
+Golang client example can be
+found [here](https://github.com/tigrisdata/tigrisdb-client-go/).
 
 # Documentation
 
