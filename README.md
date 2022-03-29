@@ -56,6 +56,9 @@ found [here](https://github.com/tigrisdata/tigrisdb-client-go/).
 * [Configuration](docs/configuration.md)
 * [Deployment to Kubernetes](docs/deploy_k8s.md)
 
+# Roadmap
+* [Alpha Release](https://github.com/orgs/tigrisdata/projects/1/views/1)
+
 # Community & Support
 
 * [Slack Community](https://join.slack.com/t/tigrisdatacommunity/shared_invite/zt-16fn5ogio-OjxJlgttJIV0ZDywcBItJQ)
