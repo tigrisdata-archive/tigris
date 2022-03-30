@@ -176,8 +176,6 @@ func (s *CollectionSuite) TestDropCollection() {
 		ValueEqual("msg", "collection dropped successfully")
 }
 
-func (s *CollectionSuite) TestTruncateCollection() {}
-
 func createCollection(t *testing.T, database string, collection string, schema map[string]interface{}) *httpexpect.Response {
 	e := httpexpect.New(t, config.GetBaseURL())
 	return e.POST(getCollectionURL(database, collection, "create")).
