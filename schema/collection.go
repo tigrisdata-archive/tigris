@@ -20,9 +20,62 @@ const (
 	UserDefinedSchema = "user_defined_schema"
 )
 
-const (
-	PrimaryKeySchemaName = "primary_key"
-)
+// Indexes is to wrap different index that a collection can have.
+type Indexes struct {
+	PrimaryKey *Index
+}
+
+func (i *Indexes) GetIndexes() []*Index {
+	var indexes []*Index
+	indexes = append(indexes, i.PrimaryKey)
+	return indexes
+}
+
+// Index can be composite so it has a list of fields, each index has name and encoded id. The encoded is used for key
+// building.
+type Index struct {
+	Fields []*Field
+	Name   string
+	Id     uint32
+}
+
+// DefaultCollection is used to represent a collection. The tenant in the metadata package is responsible for creating
+// the collection.
+type DefaultCollection struct {
+	// Id is the dictionary encoded value for this collection.
+	Id uint32
+	// Name is the name of the collection.
+	Name string
+	// Fields are derived from the user schema.
+	Fields []*Field
+	// Indexes is a wrapper on the indexes part of this collection.
+	Indexes *Indexes
+}
+
+func NewDefaultCollection(cname string, id uint32, fields []*Field, indexes *Indexes) *DefaultCollection {
+	return &DefaultCollection{
+		Id:      id,
+		Name:    cname,
+		Fields:  fields,
+		Indexes: indexes,
+	}
+}
+
+func (d *DefaultCollection) GetName() string {
+	return d.Name
+}
+
+func (d *DefaultCollection) Type() string {
+	return UserDefinedSchema
+}
+
+func (d *DefaultCollection) GetFields() []*Field {
+	return d.Fields
+}
+
+func (d *DefaultCollection) GetIndexes() *Indexes {
+	return d.Indexes
+}
 
 type Collection interface {
 	Name() string

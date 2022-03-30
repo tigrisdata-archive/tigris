@@ -79,8 +79,8 @@ const (
 
 // subspaces
 const (
-	reservedSubspaceKey = "reserved"
-	encodingSubspaceKey = "encoding"
+	ReservedSubspaceKey = "reserved"
+	EncodingSubspaceKey = "encoding"
 )
 
 var (
@@ -95,17 +95,23 @@ var (
 type reservedSubspace struct {
 	sync.RWMutex
 
-	allocated map[uint32]string
+	allocated     map[uint32]string
+	namespaceToId map[string]uint32
 }
 
 func newReservedSubspace() *reservedSubspace {
 	return &reservedSubspace{
-		allocated: make(map[uint32]string),
+		allocated:     make(map[uint32]string),
+		namespaceToId: make(map[string]uint32),
 	}
 }
 
+func (r *reservedSubspace) getNamespaces() map[string]uint32 {
+	return r.namespaceToId
+}
+
 func (r *reservedSubspace) reload(ctx context.Context, tx transaction.Tx) error {
-	key := keys.NewKey(reservedSubspaceKey)
+	key := keys.NewKey(ReservedSubspaceKey)
 	it, err := tx.Read(ctx, key)
 	if err != nil {
 		return err
@@ -124,6 +130,7 @@ func (r *reservedSubspace) reload(ctx context.Context, tx transaction.Tx) error 
 
 		r.Lock()
 		r.allocated[ByteToUInt32(row.Value)] = allocatedTo.(string)
+		r.namespaceToId[allocatedTo.(string)] = ByteToUInt32(row.Value)
 		r.Unlock()
 	}
 
@@ -149,7 +156,7 @@ func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.
 		}
 	}
 
-	key := keys.NewKey(reservedSubspaceKey, namespaceKey, namespace, keyEnd)
+	key := keys.NewKey(ReservedSubspaceKey, namespaceKey, namespace, keyEnd)
 	// now do an insert to fail if namespace already exists.
 	if err := tx.Insert(ctx, key, UInt32ToByte(id)); err != nil {
 		log.Debug().Interface("key", key).Uint32("value", id).Err(err).Msg("reserving namespace failed")
@@ -161,7 +168,7 @@ func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.
 }
 
 func (r *reservedSubspace) allocateToken(ctx context.Context, tx transaction.Tx, keyName string) (uint32, error) {
-	key := keys.NewKey(reservedSubspaceKey, keyName, counterKey, keyEnd)
+	key := keys.NewKey(ReservedSubspaceKey, keyName, counterKey, keyEnd)
 	it, err := tx.Read(ctx, key)
 	if err != nil {
 		return 0, err
@@ -204,6 +211,14 @@ func (k *DictionaryEncoder) ReserveNamespace(ctx context.Context, tx transaction
 	return k.reservedSb.reserveNamespace(ctx, tx, namespace, id)
 }
 
+func (k *DictionaryEncoder) GetNamespaces(ctx context.Context, tx transaction.Tx) (map[string]uint32, error) {
+	if err := k.reservedSb.reload(ctx, tx); err != nil {
+		return nil, err
+	}
+
+	return k.reservedSb.getNamespaces(), nil
+}
+
 func (k *DictionaryEncoder) EncodeDatabaseName(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32) (uint32, error) {
 	if err := k.validNamespaceId(namespaceId); err != nil {
 		return invalidId, err
@@ -212,7 +227,7 @@ func (k *DictionaryEncoder) EncodeDatabaseName(ctx context.Context, tx transacti
 		return invalidId, api.Errorf(codes.InvalidArgument, "database name is empty")
 	}
 
-	key := keys.NewKey(encodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyEnd)
+	key := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyEnd)
 	return k.encode(ctx, tx, key, dbKey)
 }
 
@@ -227,7 +242,7 @@ func (k *DictionaryEncoder) EncodeCollectionName(ctx context.Context, tx transac
 		return invalidId, api.Errorf(codes.InvalidArgument, "collection name is empty")
 	}
 
-	key := keys.NewKey(encodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collection, keyEnd)
+	key := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collection, keyEnd)
 	return k.encode(ctx, tx, key, collectionKey)
 }
 
@@ -245,12 +260,12 @@ func (k *DictionaryEncoder) EncodeIndexName(ctx context.Context, tx transaction.
 		return invalidId, api.Errorf(codes.InvalidArgument, "index name is empty")
 	}
 
-	key := keys.NewKey(encodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyEnd)
+	key := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyEnd)
 	return k.encode(ctx, tx, key, indexKey)
 }
 
 func (k *DictionaryEncoder) encode(ctx context.Context, tx transaction.Tx, key keys.Key, encName string) (uint32, error) {
-	reserveToken, err := k.reservedSb.allocateToken(ctx, tx, encodingSubspaceKey)
+	reserveToken, err := k.reservedSb.allocateToken(ctx, tx, EncodingSubspaceKey)
 	if err != nil {
 		return invalidId, err
 	}
@@ -286,18 +301,112 @@ func (k *DictionaryEncoder) validCollectionId(id uint32) error {
 	return nil
 }
 
-func (k *DictionaryEncoder) getDatabaseId(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32) (uint32, error) {
-	key := keys.NewKey(encodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyEnd)
+func (k *DictionaryEncoder) GetDatabases(ctx context.Context, tx transaction.Tx, namespaceId uint32) (map[string]uint32, error) {
+	databases := make(map[string]uint32)
+	it, err := tx.Read(ctx, keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), dbKey))
+	if err != nil {
+		return nil, err
+	}
+
+	var v kv.KeyValue
+	for it.Next(&v) {
+		if len(v.Key) < 5 {
+			return nil, api.Errorf(codes.Internal, "not a valid key %v", v.Key)
+		}
+		if len(v.Key) == 5 {
+			// format <version,namespace-id,db,dbName,keyEnd>
+			end, ok := v.Key[4].(string)
+			if !ok || end != keyEnd {
+				return nil, api.Errorf(codes.Internal, "database encoding is missing %v", v.Key)
+			}
+			name, ok := v.Key[3].(string)
+			if !ok {
+				return nil, api.Errorf(codes.Internal, "database name not found %T %v", v.Key[3], v.Key[3])
+			}
+
+			databases[name] = ByteToUInt32(v.Value)
+		}
+	}
+
+	return databases, it.Err()
+}
+
+func (k *DictionaryEncoder) GetCollections(ctx context.Context, tx transaction.Tx, namespaceId uint32, databaseId uint32) (map[string]uint32, error) {
+	var collections = make(map[string]uint32)
+	it, err := tx.Read(ctx, keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(databaseId)))
+	if err != nil {
+		return nil, err
+	}
+
+	var v kv.KeyValue
+	for it.Next(&v) {
+		if len(v.Key) < 6 {
+			return nil, api.Errorf(codes.Internal, "not a valid key %v", v.Key)
+		}
+
+		if len(v.Key) == 6 {
+			// format <version,namespace-id,db-id,coll,coll-name,keyEnd>
+			end, ok := v.Key[5].(string)
+			if !ok || end != keyEnd {
+				return nil, api.Errorf(codes.Internal, "collection encoding is missing %v", v.Key)
+			}
+
+			name, ok := v.Key[4].(string)
+			if !ok {
+				return nil, api.Errorf(codes.Internal, "collection name not found %T %v", v.Key[4], v.Key[4])
+			}
+
+			collections[name] = ByteToUInt32(v.Value)
+		}
+	}
+
+	return collections, it.Err()
+}
+
+func (k *DictionaryEncoder) GetIndexes(ctx context.Context, tx transaction.Tx, namespaceId uint32, databaseId uint32, collId uint32) (map[string]uint32, error) {
+	var indexes = make(map[string]uint32)
+	it, err := tx.Read(ctx, keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(databaseId), UInt32ToByte(collId)))
+	if err != nil {
+		return nil, err
+	}
+
+	var v kv.KeyValue
+	for it.Next(&v) {
+		if len(v.Key) < 6 {
+			return nil, api.Errorf(codes.Internal, "not a valid key %v", v.Key)
+		}
+		if len(v.Key) == 7 {
+			// if it is the format <version,namespace-id,db-id,coll-id,indexName,index-name,keyEnd>
+			end, ok := v.Key[6].(string)
+			if !ok || end != keyEnd {
+				// if it is not index skip it
+				continue
+			}
+
+			name, ok := v.Key[5].(string)
+			if !ok {
+				return nil, api.Errorf(codes.Internal, "index name not found %T %v", v.Key[5], v.Key[5])
+			}
+
+			indexes[name] = ByteToUInt32(v.Value)
+		}
+	}
+
+	return indexes, it.Err()
+}
+
+func (k *DictionaryEncoder) GetDatabaseId(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32) (uint32, error) {
+	key := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyEnd)
 	return k.getId(ctx, tx, key)
 }
 
-func (k *DictionaryEncoder) getCollectionId(ctx context.Context, tx transaction.Tx, collName string, namespaceId uint32, dbId uint32) (uint32, error) {
-	key := keys.NewKey(encodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collName, keyEnd)
+func (k *DictionaryEncoder) GetCollectionId(ctx context.Context, tx transaction.Tx, collName string, namespaceId uint32, dbId uint32) (uint32, error) {
+	key := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collName, keyEnd)
 	return k.getId(ctx, tx, key)
 }
 
-func (k *DictionaryEncoder) getIndexId(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32, dbId uint32, collId uint32) (uint32, error) {
-	key := keys.NewKey(encodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyEnd)
+func (k *DictionaryEncoder) GetIndexId(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32, dbId uint32, collId uint32) (uint32, error) {
+	key := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyEnd)
 	return k.getId(ctx, tx, key)
 }
 
