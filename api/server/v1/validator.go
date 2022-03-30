@@ -137,20 +137,6 @@ func (x *AlterCollectionRequest) Validate() error {
 	return nil
 }
 
-func (x *TruncateCollectionRequest) Validate() error {
-	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
-		return err
-	}
-
-	if !IsTxSupported(x) {
-		if transaction := GetTransaction(x); transaction != nil {
-			return Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
-		}
-	}
-
-	return nil
-}
-
 func isValidCollection(name string) error {
 	if len(name) == 0 {
 		return Error(codes.InvalidArgument, "invalid collection name")
