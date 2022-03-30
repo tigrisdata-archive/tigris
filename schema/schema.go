@@ -140,6 +140,92 @@ func CreateCollection(database string, collection string, reqSchema jsoniter.Raw
 	return NewCollection(database, collection, fields, primaryKeyFields), nil
 }
 
+// Factory is used as an intermediate step so that collection can be initialized with properly encoded values.
+type Factory struct {
+	// Fields are derived from the user schema.
+	Fields []*Field
+	// Indexes is a wrapper on the indexes part of this collection. At this point the dictionary encoded value is not
+	// set for these indexes which is set as part of collection creation.
+	Indexes *Indexes
+	// Schema is the raw JSON schema received as part of CreateOrUpdateCollection request. This is stored as-is in the
+	// schema subspace.
+	Schema jsoniter.RawMessage
+	// CollectionName is the collection name of this schema.
+	CollectionName string
+}
+
+// Build is used to deserialize the user json schema into a schema factory.
+// ToDo: after integrating with API, simplify the CreateCollection method
+func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
+	var schema = &JSONSchema{}
+	if err := jsoniter.Unmarshal(reqSchema, schema); err != nil {
+		return nil, api.Errorf(codes.Internal, errors.Wrap(err, "unmarshalling failed").Error())
+	}
+	if len(schema.Properties) == 0 {
+		return nil, api.Errorf(codes.InvalidArgument, "missing properties field in schema")
+	}
+	if len(schema.PrimaryKeys) == 0 {
+		return nil, api.Errorf(codes.InvalidArgument, "missing primary key field in schema")
+	}
+	var primaryKeysSet = set.New(schema.PrimaryKeys...)
+	var fields []*Field
+	var err error
+	err = jsonparser.ObjectEach(schema.Properties, func(key []byte, v []byte, dataType jsonparser.ValueType, offset int) error {
+		if err != nil {
+			return api.Errorf(codes.Internal, errors.Wrap(err, "failed to iterate on user schema").Error())
+		}
+
+		var builder FieldBuilder
+		builder.FieldName = string(key)
+		if err = jsoniter.Unmarshal(v, &builder); err != nil {
+			return api.Errorf(codes.Internal, err.Error())
+		}
+		if primaryKeysSet.Contains(builder.FieldName) {
+			boolTrue := true
+			builder.Primary = &boolTrue
+		}
+
+		var f *Field
+		f, err = builder.Build()
+		if err != nil {
+			return err
+		}
+		fields = append(fields, f)
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// ordering needs to same as in schema
+	var primaryKeyFields []*Field
+	for _, pkeyField := range schema.PrimaryKeys {
+		found := false
+		for _, f := range fields {
+			if f.FieldName == pkeyField {
+				primaryKeyFields = append(primaryKeyFields, f)
+				found = true
+			}
+		}
+		if !found {
+			return nil, status.Errorf(codes.InvalidArgument, "missing primary key '%s' field in schema", pkeyField)
+		}
+	}
+
+	return &Factory{
+		Fields: fields,
+		Indexes: &Indexes{
+			PrimaryKey: &Index{
+				Name:   "pkey",
+				Fields: primaryKeyFields,
+			},
+		},
+		CollectionName: collection,
+		Schema:         reqSchema,
+	}, nil
+}
+
 func StorageName(databaseName, collectionName string) string {
 	return fmt.Sprintf("%s.%s", databaseName, collectionName)
 }

@@ -37,8 +37,8 @@ func TestDictionaryEncoding(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_ = kv.DropTable(ctx, encodingSubspaceKey)
-	_ = kv.DropTable(ctx, reservedSubspaceKey)
+	_ = kv.DropTable(ctx, EncodingSubspaceKey)
+	_ = kv.DropTable(ctx, ReservedSubspaceKey)
 
 	tm := transaction.NewManager(kv)
 	k := NewDictionaryEncoder()
@@ -68,15 +68,15 @@ func TestDictionaryEncoding(t *testing.T) {
 
 	tx, err = tm.StartTxWithoutTracking(ctx)
 	require.NoError(t, err)
-	v, err := k.getDatabaseId(ctx, tx, "db-1", 1234)
+	v, err := k.GetDatabaseId(ctx, tx, "db-1", 1234)
 	require.NoError(t, err)
 	require.Equal(t, v, dbId)
 
-	v, err = k.getCollectionId(ctx, tx, "coll-1", 1234, dbId)
+	v, err = k.GetCollectionId(ctx, tx, "coll-1", 1234, dbId)
 	require.NoError(t, err)
 	require.Equal(t, v, collId)
 
-	v, err = k.getIndexId(ctx, tx, "pkey", 1234, dbId, collId)
+	v, err = k.GetIndexId(ctx, tx, "pkey", 1234, dbId, collId)
 	require.NoError(t, err)
 	require.Equal(t, v, indexId)
 
@@ -96,8 +96,8 @@ func TestDictionaryEncoding_Error(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_ = kv.DropTable(ctx, encodingSubspaceKey)
-	_ = kv.DropTable(ctx, reservedSubspaceKey)
+	_ = kv.DropTable(ctx, EncodingSubspaceKey)
+	_ = kv.DropTable(ctx, ReservedSubspaceKey)
 
 	tm := transaction.NewManager(kv)
 	k := NewDictionaryEncoder()
@@ -118,6 +118,79 @@ func TestDictionaryEncoding_Error(t *testing.T) {
 	require.NoError(t, tx.Rollback(context.TODO()))
 }
 
+func TestDictionaryEncoding_GetMethods(t *testing.T) {
+	fdbCfg, err := config.GetTestFDBConfig("../../..")
+	require.NoError(t, err)
+
+	kv, err := kv.NewFoundationDB(fdbCfg)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	tm := transaction.NewManager(kv)
+	k := NewDictionaryEncoder()
+
+	t.Run("get_databases", func(t *testing.T) {
+		_ = kv.DropTable(ctx, EncodingSubspaceKey)
+		_ = kv.DropTable(ctx, ReservedSubspaceKey)
+
+		tx, err := tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		dbId1, err := k.EncodeDatabaseName(ctx, tx, "db-1", 1)
+		require.NoError(t, err)
+		dbId2, err := k.EncodeDatabaseName(ctx, tx, "db-2", 1)
+		require.NoError(t, err)
+
+		dbToId, err := k.GetDatabases(ctx, tx, 1)
+		require.NoError(t, err)
+		require.Len(t, dbToId, 2)
+		require.Equal(t, dbToId["db-1"], dbId1)
+		require.Equal(t, dbToId["db-2"], dbId2)
+		require.NoError(t, tx.Commit(ctx))
+	})
+	t.Run("get_collections", func(t *testing.T) {
+		_ = kv.DropTable(ctx, EncodingSubspaceKey)
+		_ = kv.DropTable(ctx, ReservedSubspaceKey)
+
+		tx, err := tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		dbId, err := k.EncodeDatabaseName(ctx, tx, "db-1", 1)
+		require.NoError(t, err)
+
+		cid1, err := k.EncodeCollectionName(ctx, tx, "coll-1", 1, dbId)
+		require.NoError(t, err)
+		cid2, err := k.EncodeCollectionName(ctx, tx, "coll-2", 1, dbId)
+		require.NoError(t, err)
+
+		collToId, err := k.GetCollections(ctx, tx, 1, dbId)
+		require.NoError(t, err)
+		require.Len(t, collToId, 2)
+		require.Equal(t, collToId["coll-1"], cid1)
+		require.Equal(t, collToId["coll-2"], cid2)
+		require.NoError(t, tx.Commit(ctx))
+	})
+	t.Run("get_indexes", func(t *testing.T) {
+		_ = kv.DropTable(ctx, EncodingSubspaceKey)
+		_ = kv.DropTable(ctx, ReservedSubspaceKey)
+
+		tx, err := tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		dbId, err := k.EncodeDatabaseName(ctx, tx, "db-1", 1)
+		require.NoError(t, err)
+
+		cid1, err := k.EncodeCollectionName(ctx, tx, "coll-1", 1, dbId)
+		require.NoError(t, err)
+
+		pkid, err := k.EncodeIndexName(ctx, tx, "pkey", 1, dbId, cid1)
+		require.NoError(t, err)
+		idxToId, err := k.GetIndexes(ctx, tx, 1, dbId, cid1)
+		require.NoError(t, err)
+		require.Len(t, idxToId, 1)
+		require.Equal(t, idxToId["pkey"], pkid)
+	})
+}
+
 func TestReservedNamespace(t *testing.T) {
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
@@ -128,8 +201,8 @@ func TestReservedNamespace(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_ = kv.DropTable(ctx, encodingSubspaceKey)
-	_ = kv.DropTable(ctx, reservedSubspaceKey)
+	_ = kv.DropTable(ctx, EncodingSubspaceKey)
+	_ = kv.DropTable(ctx, ReservedSubspaceKey)
 
 	tm := transaction.NewManager(kv)
 	r := newReservedSubspace()

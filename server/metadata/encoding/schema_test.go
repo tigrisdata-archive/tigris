@@ -39,7 +39,7 @@ func TestSchemaSubspace(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		_ = kv.DropTable(ctx, schemaSubspaceKey)
+		_ = kv.DropTable(ctx, SchemaSubspaceKey)
 		tm := transaction.NewManager(kv)
 		tx, err := tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
@@ -54,7 +54,7 @@ func TestSchemaSubspace(t *testing.T) {
 
 		schema := []byte(`{"title": "test schema1"}`)
 
-		_ = kv.DropTable(ctx, schemaSubspaceKey)
+		_ = kv.DropTable(ctx, SchemaSubspaceKey)
 		tm := transaction.NewManager(kv)
 		tx, err := tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
@@ -67,7 +67,7 @@ func TestSchemaSubspace(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		_ = kv.DropTable(ctx, schemaSubspaceKey)
+		_ = kv.DropTable(ctx, SchemaSubspaceKey)
 
 		schema := []byte(`{
 		"name": "collection1",
@@ -103,13 +103,13 @@ func TestSchemaSubspace(t *testing.T) {
 		require.Equal(t, 1, revisions[0])
 		require.NoError(t, tx.Commit(ctx))
 
-		_ = kv.DropTable(ctx, schemaSubspaceKey)
+		_ = kv.DropTable(ctx, SchemaSubspaceKey)
 	})
 	t.Run("put_get_multiple", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		_ = kv.DropTable(ctx, schemaSubspaceKey)
+		_ = kv.DropTable(ctx, SchemaSubspaceKey)
 
 		schema1 := []byte(`{
 		"name": "collection1",
@@ -160,6 +160,6 @@ func TestSchemaSubspace(t *testing.T) {
 		require.Equal(t, 1, revisions[0])
 		require.Equal(t, 2, revisions[1])
 		require.NoError(t, tx.Commit(ctx))
-		_ = kv.DropTable(ctx, schemaSubspaceKey)
+		_ = kv.DropTable(ctx, SchemaSubspaceKey)
 	})
 }

@@ -16,17 +16,17 @@ package encoding
 
 import (
 	"context"
-	"github.com/tigrisdata/tigrisdb/store/kv"
 	"sort"
 
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/keys"
 	"github.com/tigrisdata/tigrisdb/server/transaction"
+	"github.com/tigrisdata/tigrisdb/store/kv"
 	"google.golang.org/grpc/codes"
 )
 
-// The schema subspace will be storing the actual schema of the user for a collection. The schema subspace will
+// SchemaSubspaceKey (the schema subspace) will be storing the actual schema of the user for a collection. The schema subspace will
 // look like below
 //    ["schema", 0x01, x, 0x01, 0x03, "created", 0x01] => {
 //      properties: {"a": int},
@@ -47,7 +47,7 @@ import (
 //    - "created" is keyword.
 //    - 0x01 is the revision of the schema.
 const (
-	schemaSubspaceKey = "schema"
+	SchemaSubspaceKey = "schema"
 )
 
 var (
@@ -66,7 +66,7 @@ func (s *SchemaSubspace) Put(ctx context.Context, tx transaction.Tx, namespaceId
 		return api.Errorf(codes.InvalidArgument, "empty schema")
 	}
 
-	key := keys.NewKey(schemaSubspaceKey, schVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), keyEnd, UInt32ToByte(uint32(revision)))
+	key := keys.NewKey(SchemaSubspaceKey, schVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), keyEnd, UInt32ToByte(uint32(revision)))
 	if err := tx.Insert(ctx, key, schema); err != nil {
 		log.Debug().Interface("key", key).Str("value", string(schema)).Err(err).Msg("storing schema failed")
 		return err
@@ -91,7 +91,7 @@ func (s *SchemaSubspace) GetLatest(ctx context.Context, tx transaction.Tx, names
 
 // Get returns all the version stored for a collection inside a given namespace and database.
 func (s *SchemaSubspace) Get(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbId uint32, collId uint32) ([][]byte, []int, error) {
-	key := keys.NewKey(schemaSubspaceKey, schVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), keyEnd)
+	key := keys.NewKey(SchemaSubspaceKey, schVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), keyEnd)
 	it, err := tx.Read(ctx, key)
 	if err != nil {
 		return nil, nil, err
