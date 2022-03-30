@@ -17,6 +17,7 @@ kind: Kustomization
 resources:
   - deployment.yaml
   - service.yaml
+  - service_grpc.yaml
   - network-policy.yaml
 configMapGenerator:
   - name: tigrisdb-server-config
