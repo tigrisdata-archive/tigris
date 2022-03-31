@@ -160,16 +160,13 @@ func (q *TxQueryRunner) iterateDocument(ctx context.Context, req *Request, tx tr
 
 		switch api.RequestType(req.apiRequest) {
 		case api.Insert:
-			opts := req.apiRequest.(*api.InsertRequest).GetOptions()
-			if opts != nil && opts.MustNotExist {
-				err = tx.Insert(ctx, key, d)
-			} else {
-				err = tx.Replace(ctx, key, d)
-			}
+			err = tx.Insert(ctx, key, d)
 			if err != nil && err.Error() == "file already exists" {
 				// FDB returning it as string, probably we need to move this check in KV
 				return api.Errorf(codes.AlreadyExists, "row already exists")
 			}
+		case api.Replace:
+			err = tx.Replace(ctx, key, d)
 		}
 
 		if err != nil {

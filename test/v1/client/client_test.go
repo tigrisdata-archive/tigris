@@ -90,13 +90,13 @@ func testClient(t *testing.T, c driver.Driver) {
 	_, err = c.Insert(ctx, "db1", "c1", []driver.Document{doc1}, &driver.InsertOptions{})
 	require.NoError(t, err)
 
-	_, err = c.Insert(ctx, "db1", "c1", []driver.Document{doc1}, &driver.InsertOptions{MustNotExist: true})
+	_, err = c.Insert(ctx, "db1", "c1", []driver.Document{doc1}, &driver.InsertOptions{})
 	require.Error(t, api.Errorf(codes.AlreadyExists, "row already exists"), err)
 
 	doc2, doc3 := driver.Document(`{"K1": "vK1", "K2": 2, "D1": "vD2"}`), driver.Document(`{"K1": "vK1", "K2": 3, "D1": "vD3"}`)
 
 	// multiple docs
-	_, err = c.Insert(ctx, "db1", "c1", []driver.Document{doc1, doc2, doc3}, &driver.InsertOptions{})
+	_, err = c.Insert(ctx, "db1", "c1", []driver.Document{doc2, doc3}, &driver.InsertOptions{})
 	require.NoError(t, err)
 
 	fl := driver.Filter(`{ "$or" : [ {"$and" : [ {"K1" : "vK1"}, {"K2" : 1} ]}, {"$and" : [ {"K1" : "vK1"}, {"K2" : 3} ]} ]}`)
@@ -154,11 +154,7 @@ func testTxClient(t *testing.T, c driver.Driver) {
 	doc2, doc3 := driver.Document(`{"K1": "vK1", "K2": 2, "D1": "vD2"}`), driver.Document(`{"K1": "vK1", "K2": 3, "D1": "vD3"}`)
 
 	// multiple docs
-	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1, doc2, doc3}, &driver.InsertOptions{})
-	require.NoError(t, err)
-
-	// array of docs
-	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1, doc2, doc3}, &driver.InsertOptions{})
+	_, err = tx.Insert(ctx, "c1", []driver.Document{doc2, doc3}, &driver.InsertOptions{})
 	require.NoError(t, err)
 
 	err = tx.Commit(ctx)
@@ -183,7 +179,7 @@ func testTxClient(t *testing.T, c driver.Driver) {
 	require.NoError(t, err)
 
 	//multiple documents
-	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1, doc2, doc3}, &driver.InsertOptions{})
+	_, err = tx.Insert(ctx, "c1", []driver.Document{doc2, doc3}, &driver.InsertOptions{})
 	require.NoError(t, err)
 
 	err = tx.Rollback(ctx)
