@@ -170,6 +170,29 @@ func (s *apiService) Insert(ctx context.Context, r *api.InsertRequest) (*api.Ins
 	return &api.InsertResponse{}, nil
 }
 
+func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.ReplaceResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
+	collection, err := s.schemaCache.Get(r.GetDb(), r.GetCollection())
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = s.Run(ctx, &Request{
+		apiRequest:  r,
+		documents:   r.GetDocuments(),
+		collection:  collection,
+		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.ReplaceResponse{}, nil
+}
+
 func (s *apiService) Update(ctx context.Context, r *api.UpdateRequest) (*api.UpdateResponse, error) {
 	if err := r.Validate(); err != nil {
 		return nil, err
