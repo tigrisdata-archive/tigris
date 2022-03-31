@@ -1,0 +1,22 @@
+{
+  "title": "User",
+  "description": "Collection of documents with details of users",
+  "properties": {
+    "id": {
+      "description": "A unique identifier for the user",
+      "type": "int"
+    },
+    "name": {
+      "description": "Name of the user",
+      "type": "string",
+      "max_length": 100
+    },
+    "balance": {
+      "description": "User account balance",
+      "type": "double"
+    }
+  },
+  "primary_key": [
+    "id"
+  ]
+}
