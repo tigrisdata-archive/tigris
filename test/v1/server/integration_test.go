@@ -33,7 +33,7 @@ func SetupSuites() []suite.TestingSuite {
 
 	suites = append(suites, &DocumentSuite{
 		database:   "db2",
-		collection: "c1",
+		collection: "test_collection",
 	})
 	return suites
 }

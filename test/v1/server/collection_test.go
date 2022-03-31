@@ -28,7 +28,7 @@ import (
 
 /**
 {
-	"title": "test schema1",
+	"name": "test_collection",
 	"description": "this schema is for integration tests",
 	"properties": {
 		"pkey_int": {
@@ -65,7 +65,7 @@ import (
 */
 var testCreateSchema = map[string]interface{}{
 	"schema": map[string]interface{}{
-		"title":       "test schema1",
+		"name":        "test_collection",
 		"description": "this schema is for integration tests",
 		"properties": map[string]interface{}{
 			"pkey_int": map[string]interface{}{

@@ -71,6 +71,8 @@ var (
 )
 
 type JSONSchema struct {
+	Name        string              `json:"name,omitempty"`
+	Description string              `json:"description,omitempty"`
 	Properties  jsoniter.RawMessage `json:"properties,omitempty"`
 	PrimaryKeys []string            `json:"primary_key,omitempty"`
 }
@@ -79,6 +81,9 @@ func CreateCollection(database string, collection string, reqSchema jsoniter.Raw
 	var schema = &JSONSchema{}
 	if err := jsoniter.Unmarshal(reqSchema, schema); err != nil {
 		return nil, api.Errorf(codes.Internal, errors.Wrap(err, "unmarshalling failed").Error())
+	}
+	if collection != schema.Name {
+		return nil, api.Errorf(codes.InvalidArgument, "collection name is not same as schema name '%s' '%s'", collection, schema.Name)
 	}
 	if len(schema.Properties) == 0 {
 		return nil, api.Errorf(codes.InvalidArgument, "missing properties field in schema")

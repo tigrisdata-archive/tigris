@@ -70,7 +70,7 @@ func TestSchemaSubspace(t *testing.T) {
 		_ = kv.DropTable(ctx, schemaSubspaceKey)
 
 		schema := []byte(`{
-		"title": "test schema1",
+		"name": "collection1",
 		"description": "this schema is for client integration tests",
 		"properties": {
 			"K1": {
@@ -112,7 +112,7 @@ func TestSchemaSubspace(t *testing.T) {
 		_ = kv.DropTable(ctx, schemaSubspaceKey)
 
 		schema1 := []byte(`{
-		"title": "test schema1",
+		"name": "collection1",
 		"description": "this schema is for client integration tests",
 		"properties": {
 			"K1": {
@@ -129,7 +129,7 @@ func TestSchemaSubspace(t *testing.T) {
 		"primary_key": ["K1", "K2"]
 	}`)
 		schema2 := []byte(`{
-		"title": "test schema2",
+		"name": "collection1",
 		"description": "this schema is for client integration tests",
 		"properties": {
 			"K1": {
