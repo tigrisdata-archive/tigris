@@ -62,7 +62,7 @@ func testClient(t *testing.T, c driver.Driver) {
 	_ = c.DropCollection(ctx, "db1", "c1", &driver.CollectionOptions{})
 
 	schema := `{
-		"title": "test schema1",
+		"name": "c1",
 		"description": "this schema is for client integration tests",
 		"properties": {
 			"K1": {
@@ -123,7 +123,7 @@ func testTxClient(t *testing.T, c driver.Driver) {
 	_ = c.DropCollection(ctx, "db1", "c1", &driver.CollectionOptions{})
 
 	schema := `{
-		"title": "test schema1",
+		"name": "c1",
 		"description": "this schema is for client integration tests",
 		"properties": {
 			"K1": {
