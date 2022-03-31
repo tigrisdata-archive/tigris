@@ -96,7 +96,7 @@ func NewValueUsingSchema(field *schema.Field, input *structpb.Value) (Value, err
 			return &i, nil
 		}
 		return nil, status.Errorf(codes.InvalidArgument, "permissible type for '%s' is bool only", field.FieldName)
-	case schema.IntType:
+	case schema.IntType, schema.BigIntType:
 		if inpVal, ok := input.Kind.(*structpb.Value_NumberValue); ok {
 			if isIntegral(inpVal.NumberValue) {
 				return NewIntValue(int64(inpVal.NumberValue)), nil

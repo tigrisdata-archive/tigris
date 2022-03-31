@@ -66,6 +66,10 @@ A sample user JSON schema looks like below,
 }
 */
 
+var (
+	boolTrue = true
+)
+
 type JSONSchema struct {
 	Properties  jsoniter.RawMessage `json:"properties,omitempty"`
 	PrimaryKeys []string            `json:"primary_key,omitempty"`
@@ -97,11 +101,15 @@ func CreateCollection(database string, collection string, reqSchema jsoniter.Raw
 			return api.Errorf(codes.Internal, err.Error())
 		}
 		if primaryKeysSet.Contains(builder.FieldName) {
-			boolTrue := true
 			builder.Primary = &boolTrue
 		}
 
-		fields = append(fields, builder.Build())
+		var f *Field
+		f, err = builder.Build()
+		if err != nil {
+			return err
+		}
+		fields = append(fields, f)
 
 		return nil
 	})

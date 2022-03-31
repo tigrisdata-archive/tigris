@@ -69,7 +69,6 @@ func testKVBasic(t *testing.T, kv KV) {
 	require.NoError(t, err)
 
 	v := readAll(t, it)
-	fmt.Println(string(v[0].FDBKey))
 	require.Equal(t, []KeyValue{{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(2))), Value: []byte("value2")}}, v)
 
 	// replace individual record
