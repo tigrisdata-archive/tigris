@@ -77,8 +77,8 @@ const (
 	keyEnd        = "created"
 )
 
-// subspaces
-const (
+// subspaces - only reason of not declaring these as consts because tests in different packages can overwrite this.
+var (
 	ReservedSubspaceKey = "reserved"
 	EncodingSubspaceKey = "encoding"
 )
@@ -111,6 +111,9 @@ func (r *reservedSubspace) getNamespaces() map[string]uint32 {
 }
 
 func (r *reservedSubspace) reload(ctx context.Context, tx transaction.Tx) error {
+	r.Lock()
+	defer r.Unlock()
+
 	key := keys.NewKey(ReservedSubspaceKey)
 	it, err := tx.Read(ctx, key)
 	if err != nil {
@@ -128,10 +131,8 @@ func (r *reservedSubspace) reload(ctx context.Context, tx transaction.Tx) error 
 			return api.Errorf(codes.Internal, "unable to deduce the encoded key from fdb key %T", allocatedTo)
 		}
 
-		r.Lock()
 		r.allocated[ByteToUInt32(row.Value)] = allocatedTo.(string)
 		r.namespaceToId[allocatedTo.(string)] = ByteToUInt32(row.Value)
-		r.Unlock()
 	}
 
 	return it.Err()
@@ -148,6 +149,7 @@ func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.
 
 	r.RLock()
 	defer r.RUnlock()
+	log.Debug().Uint32("namespace-id", id).Str("namespace", r.allocated[id]).Msg("reserved for namespace")
 	if allocatedTo, ok := r.allocated[id]; ok {
 		if allocatedTo == namespace {
 			return nil

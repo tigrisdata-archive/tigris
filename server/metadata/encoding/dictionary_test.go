@@ -28,6 +28,9 @@ import (
 )
 
 func TestDictionaryEncoding(t *testing.T) {
+	ReservedSubspaceKey = "test_reserved"
+	EncodingSubspaceKey = "test_encoding"
+
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
@@ -79,14 +82,19 @@ func TestDictionaryEncoding(t *testing.T) {
 	v, err = k.GetIndexId(ctx, tx, "pkey", 1234, dbId, collId)
 	require.NoError(t, err)
 	require.Equal(t, v, indexId)
+	require.NoError(t, tx.Commit(ctx))
 
 	// try assigning the same namespace id to some other namespace
-	tx, err = tm.StartTxWithoutTracking(context.TODO())
+	tx, err = tm.StartTxWithoutTracking(ctx)
 	require.NoError(t, err)
-	require.Error(t, k.ReserveNamespace(context.TODO(), tx, "proj2-org-1", 1234))
+	require.Error(t, k.ReserveNamespace(ctx, tx, "proj2-org-1", 1234))
+	require.NoError(t, tx.Rollback(ctx))
 }
 
 func TestDictionaryEncoding_Error(t *testing.T) {
+	ReservedSubspaceKey = "test_reserved"
+	EncodingSubspaceKey = "test_encoding"
+
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
@@ -119,6 +127,9 @@ func TestDictionaryEncoding_Error(t *testing.T) {
 }
 
 func TestDictionaryEncoding_GetMethods(t *testing.T) {
+	ReservedSubspaceKey = "test_reserved"
+	EncodingSubspaceKey = "test_encoding"
+
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
@@ -144,10 +155,10 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 
 		dbToId, err := k.GetDatabases(ctx, tx, 1)
 		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
 		require.Len(t, dbToId, 2)
 		require.Equal(t, dbToId["db-1"], dbId1)
 		require.Equal(t, dbToId["db-2"], dbId2)
-		require.NoError(t, tx.Commit(ctx))
 	})
 	t.Run("get_collections", func(t *testing.T) {
 		_ = kv.DropTable(ctx, EncodingSubspaceKey)
@@ -165,10 +176,10 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 
 		collToId, err := k.GetCollections(ctx, tx, 1, dbId)
 		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
 		require.Len(t, collToId, 2)
 		require.Equal(t, collToId["coll-1"], cid1)
 		require.Equal(t, collToId["coll-2"], cid2)
-		require.NoError(t, tx.Commit(ctx))
 	})
 	t.Run("get_indexes", func(t *testing.T) {
 		_ = kv.DropTable(ctx, EncodingSubspaceKey)
@@ -188,10 +199,14 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, idxToId, 1)
 		require.Equal(t, idxToId["pkey"], pkid)
+		require.NoError(t, tx.Commit(ctx))
 	})
 }
 
 func TestReservedNamespace(t *testing.T) {
+	ReservedSubspaceKey = "test_reserved"
+	EncodingSubspaceKey = "test_encoding"
+
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
