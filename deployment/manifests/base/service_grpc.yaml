@@ -24,6 +24,7 @@ metadata:
   name: tigrisdb-server-grpc
 spec:
   type: NodePort
+  clusterIP: None # bypass kube-proxy as the default k8s load balancing does not work well with grpc
   ports:
     - port: 80
       name: http
