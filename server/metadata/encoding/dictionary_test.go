@@ -91,6 +91,210 @@ func TestDictionaryEncoding(t *testing.T) {
 	require.NoError(t, tx.Rollback(ctx))
 }
 
+func TestDictionaryEncodingDropped(t *testing.T) {
+	ReservedSubspaceKey = "test_reserved"
+	EncodingSubspaceKey = "test_encoding"
+
+	fdbCfg, err := config.GetTestFDBConfig("../../..")
+	require.NoError(t, err)
+
+	kv, err := kv.NewFoundationDB(fdbCfg)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	t.Run("drop_database", func(t *testing.T) {
+		_ = kv.DropTable(ctx, EncodingSubspaceKey)
+		_ = kv.DropTable(ctx, ReservedSubspaceKey)
+
+		tm := transaction.NewManager(kv)
+		k := NewDictionaryEncoder()
+
+		tx, err := tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", 1234))
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		dbId, err := k.EncodeDatabaseName(ctx, tx, "db-1", 1234)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		v, err := k.GetDatabaseId(ctx, tx, "db-1", 1234)
+		require.NoError(t, err)
+		require.Equal(t, v, dbId)
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		err = k.EncodeDatabaseAsDropped(ctx, tx, "db-1", 1234, dbId)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		v, err = k.GetDatabaseId(ctx, tx, "db-1", 1234)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+		require.Equal(t, v, invalidId)
+	})
+	t.Run("drop_collection", func(t *testing.T) {
+		_ = kv.DropTable(ctx, EncodingSubspaceKey)
+		_ = kv.DropTable(ctx, ReservedSubspaceKey)
+
+		tm := transaction.NewManager(kv)
+		k := NewDictionaryEncoder()
+
+		tx, err := tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", 1234))
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		dbId, err := k.EncodeDatabaseName(ctx, tx, "db-1", 1234)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		collId, err := k.EncodeCollectionName(ctx, tx, "coll-1", 1234, dbId)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		v, err := k.GetCollectionId(ctx, tx, "coll-1", 1234, dbId)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+		require.Equal(t, v, collId)
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		err = k.EncodeCollectionAsDropped(ctx, tx, "coll-1", 1234, dbId, collId)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		v, err = k.GetCollectionId(ctx, tx, "coll-1", 1234, dbId)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+		require.Equal(t, v, invalidId)
+	})
+	t.Run("drop_index", func(t *testing.T) {
+		_ = kv.DropTable(ctx, EncodingSubspaceKey)
+		_ = kv.DropTable(ctx, ReservedSubspaceKey)
+
+		tm := transaction.NewManager(kv)
+		k := NewDictionaryEncoder()
+
+		tx, err := tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", 1234))
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		dbId, err := k.EncodeDatabaseName(ctx, tx, "db-1", 1234)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		collId, err := k.EncodeCollectionName(ctx, tx, "coll-1", 1234, dbId)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		idxId, err := k.EncodeIndexName(ctx, tx, "idx-1", 1234, dbId, collId)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		v, err := k.GetIndexId(ctx, tx, "idx-1", 1234, dbId, collId)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+		require.Equal(t, v, idxId)
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		err = k.EncodeIndexAsDropped(ctx, tx, "idx-1", 1234, dbId, collId, idxId)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		v, err = k.GetIndexId(ctx, tx, "idx-1", 1234, dbId, collId)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+		require.Equal(t, v, invalidId)
+	})
+	t.Run("drop_collection_multiple", func(t *testing.T) {
+		_ = kv.DropTable(ctx, EncodingSubspaceKey)
+		_ = kv.DropTable(ctx, ReservedSubspaceKey)
+
+		tm := transaction.NewManager(kv)
+		k := NewDictionaryEncoder()
+
+		tx, err := tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", 1234))
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		dbId, err := k.EncodeDatabaseName(ctx, tx, "db-1", 1234)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		collId, err := k.EncodeCollectionName(ctx, tx, "coll-1", 1234, dbId)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		v, err := k.GetCollectionId(ctx, tx, "coll-1", 1234, dbId)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+		require.Equal(t, v, collId)
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		err = k.EncodeCollectionAsDropped(ctx, tx, "coll-1", 1234, dbId, collId)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		v, err = k.GetCollectionId(ctx, tx, "coll-1", 1234, dbId)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+		require.Equal(t, v, invalidId)
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		newCollId, err := k.EncodeCollectionName(ctx, tx, "coll-1", 1234, dbId)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		v, err = k.GetCollectionId(ctx, tx, "coll-1", 1234, dbId)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+		require.Equal(t, v, newCollId)
+	})
+}
+
 func TestDictionaryEncoding_Error(t *testing.T) {
 	ReservedSubspaceKey = "test_reserved"
 	EncodingSubspaceKey = "test_encoding"

@@ -214,3 +214,76 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 		_ = kv.DropTable(ctx, encoding.SchemaSubspaceKey)
 	})
 }
+
+func TestTenantManager_DropCollection(t *testing.T) {
+	fdbCfg, err := config.GetTestFDBConfig("../../..")
+	require.NoError(t, err)
+
+	kv, err := kv.NewFoundationDB(fdbCfg)
+	require.NoError(t, err)
+
+	tm := transaction.NewManager(kv)
+	t.Run("drop_collection", func(t *testing.T) {
+		ctx := context.TODO()
+		_ = kv.DropTable(ctx, encoding.ReservedSubspaceKey)
+		_ = kv.DropTable(ctx, encoding.EncodingSubspaceKey)
+		_ = kv.DropTable(ctx, encoding.SchemaSubspaceKey)
+
+		m := NewTenantManager()
+		tx, err := tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+
+		require.NoError(t, m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 2}))
+		tenant := m.GetTenant("ns-test1")
+		require.NoError(t, tenant.CreateDatabase(ctx, tx, "db1"))
+		require.NoError(t, tenant.CreateDatabase(ctx, tx, "db2"))
+
+		db1, err := tenant.GetDatabase(ctx, tx, "db1")
+		require.NoError(t, err)
+		require.Equal(t, "db1", db1.name)
+
+		db2, err := tenant.GetDatabase(ctx, tx, "db2")
+		require.NoError(t, err)
+		require.Equal(t, "db2", db2.name)
+
+		jsSchema := []byte(`{
+		"properties": {
+			"K1": {
+				"type": "string"
+			},
+			"K2": {
+				"type": "int"
+			}
+		},
+		"primary_key": ["K1"]
+	}`)
+
+		factory, err := schema.Build("test_collection", jsoniter.RawMessage(jsSchema))
+		require.NoError(t, err)
+		require.NoError(t, tenant.CreateCollection(ctx, tx, db2, factory))
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		coll, err := db2.GetCollection("test_collection")
+		require.NoError(t, err)
+		require.Equal(t, "test_collection", coll.Name)
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		require.NoError(t, tenant.DropCollection(ctx, tx, db2, "test_collection"))
+		require.Equal(t, "test_collection", coll.Name)
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		coll, err = db2.GetCollection("test_collection")
+		require.Equal(t, "collection doesn't exists 'test_collection'", err.Error())
+		require.Nil(t, coll)
+
+		_ = kv.DropTable(ctx, encoding.ReservedSubspaceKey)
+		_ = kv.DropTable(ctx, encoding.EncodingSubspaceKey)
+		_ = kv.DropTable(ctx, encoding.SchemaSubspaceKey)
+	})
+}

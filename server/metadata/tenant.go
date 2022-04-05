@@ -240,6 +240,40 @@ func (tenant *Tenant) CreateDatabase(ctx context.Context, tx transaction.Tx, dbN
 	return nil
 }
 
+// DropDatabase is responsible for first dropping a dictionary encoding of the database and then adding a corresponding
+// dropped encoding in the table.
+func (tenant *Tenant) DropDatabase(ctx context.Context, tx transaction.Tx, dbName string) error {
+	// reloading
+	_, err := tenant.GetDatabase(ctx, tx, dbName)
+	if err != nil {
+		return err
+	}
+
+	tenant.Lock()
+	defer tenant.Unlock()
+
+	db, ok := tenant.databases[dbName]
+	if !ok {
+		return nil
+	}
+
+	// if there are concurrent requests on different workers then one of them will fail with duplicate entry and only
+	// one will succeed.
+	if err = tenant.encoder.EncodeDatabaseAsDropped(ctx, tx, dbName, tenant.namespace.Id(), db.id); err != nil {
+		return err
+	}
+
+	for _, c := range db.collections {
+		if err := tenant.dropCollection(ctx, tx, db, c.collection.Name); err != nil {
+			return err
+		}
+	}
+
+	delete(tenant.databases, db.name)
+
+	return nil
+}
+
 // GetDatabase returns the database object, or null if there is no database exist with the name passed in the param.
 // This API is also responsible for reloading the tenant knowledge of the databases to ensure caller sees a consistent
 // view of all the schemas. This is achieved by first checking the meta version and if it is changed then call reload.
@@ -341,6 +375,43 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 		name:        schFactory.CollectionName,
 		collection:  schema.NewDefaultCollection(schFactory.CollectionName, collectionId, schFactory.Fields, schFactory.Indexes),
 	}
+
+	return nil
+}
+
+// DropCollection is to drop a collection and its associated indexes. It removes the "created" entry from the encoding
+// subspace and adds a "dropped" entry for the same collection key.
+func (tenant *Tenant) DropCollection(ctx context.Context, tx transaction.Tx, db *Database, collectionName string) error {
+	tenant.Lock()
+	defer tenant.Unlock()
+
+	return tenant.dropCollection(ctx, tx, db, collectionName)
+}
+
+func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db *Database, collectionName string) error {
+	if db == nil {
+		return api.Errorf(codes.NotFound, "database missing")
+	}
+
+	cHolder, ok := db.collections[collectionName]
+	if !ok {
+		return nil
+	}
+
+	if err := tenant.encoder.EncodeCollectionAsDropped(ctx, tx, cHolder.collection.Name, tenant.namespace.Id(), db.id, cHolder.collection.Id); err != nil {
+		return err
+	}
+
+	for _, idx := range cHolder.collection.Indexes.GetIndexes() {
+		if err := tenant.encoder.EncodeIndexAsDropped(ctx, tx, idx.Name, tenant.namespace.Id(), db.id, cHolder.collection.Id, idx.Id); err != nil {
+			return err
+		}
+	}
+	if err := tenant.schemaStore.Delete(ctx, tx, tenant.namespace.Id(), db.id, cHolder.collection.Id); err != nil {
+		return err
+	}
+
+	delete(db.collections, cHolder.name)
 
 	return nil
 }
