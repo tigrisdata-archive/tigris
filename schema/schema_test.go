@@ -23,7 +23,7 @@ import (
 
 func TestCreateCollectionFromSchema(t *testing.T) {
 	t.Run("test_create_success", func(t *testing.T) {
-		reqSchema := []byte(`{"name":"t1", "description":"This document records the details of an order","properties":{"order_id":{"description":"A unique identifier for an order","type":"bigint"},"cust_id":{"description":"A unique identifier for a customer","type":"bigint"},"product":{"description":"name of the product","type":"string","max_length":100,"unique":true},"quantity":{"description":"number of products ordered","type":"int"},"price":{"description":"price of the product","type":"double"}},"primary_key":["cust_id","order_id"]}`)
+		reqSchema := []byte(`{"name":"t1", "description":"This document records the details of an order","properties":{"order_id":{"description":"A unique identifier for an order","type":"bigint"},"cust_id":{"description":"A unique identifier for a customer","type":"bigint"},"product":{"description":"name of the product","type":"string","maxLength":100},"quantity":{"description":"number of products ordered","type":"int"},"price":{"description":"price of the product","type":"double"}},"primary_key":["cust_id","order_id"]}`)
 		c, err := CreateCollection("d1", "t1", reqSchema)
 		require.NoError(t, err)
 		require.Equal(t, c.Name(), "t1")
@@ -31,7 +31,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		require.Equal(t, c.PrimaryKeys()[1].FieldName, "order_id")
 	})
 	t.Run("test_create_failure", func(t *testing.T) {
-		reqSchema := []byte(`{"name":"Record of an order","properties":{"order_id":{"description":"A unique identifier for an order","type":"bigint"},"cust_id":{"description":"A unique identifier for a customer","type":"bigint"},"product":{"description":"name of the product","type":"string","max_length":100,"unique":true},"quantity":{"description":"number of products ordered","type":"int"},"price":{"description":"price of the product","type":"double"}},"primary_key":["cust_id","order_id"]}`)
+		reqSchema := []byte(`{"name":"Record of an order","properties":{"order_id":{"description":"A unique identifier for an order","type":"bigint"},"cust_id":{"description":"A unique identifier for a customer","type":"bigint"},"product":{"description":"name of the product","type":"string","maxLength":100,"unique":true},"quantity":{"description":"number of products ordered","type":"int"},"price":{"description":"price of the product","type":"double"}},"primary_key":["cust_id","order_id"]}`)
 		_, err := CreateCollection("d1", "t1", reqSchema)
 		require.Equal(t, "collection name is not same as schema name 't1' 'Record of an order'", err.(*api.TigrisDBError).Error())
 	})
@@ -49,7 +49,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 				"type": "bigint"
 			},
 			"K4": {
-				"type": "bool"
+				"type": "boolean"
 			},
 			"K5": {
 				"type": "bytes"

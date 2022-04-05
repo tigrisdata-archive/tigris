@@ -42,11 +42,11 @@ import (
 		"string_value": {
 			"description": "simple string field",
 			"type": "string",
-			"max_length": 128,
+			"maxLength": 128,
 		},
 		"bool_value": {
-			"description": "simple bool field",
-			"type": "bool"
+			"description": "simple boolean field",
+			"type": "boolean"
 		},
 		"double_value": {
 			"description": "simple double field",
@@ -79,11 +79,11 @@ var testCreateSchema = map[string]interface{}{
 			"string_value": map[string]interface{}{
 				"description": "simple string field",
 				"type":        "string",
-				"max_length":  128,
+				"maxLength":   128,
 			},
 			"bool_value": map[string]interface{}{
-				"description": "simple bool field",
-				"type":        "bool",
+				"description": "simple boolean field",
+				"type":        "boolean",
 			},
 			"double_value": map[string]interface{}{
 				"description": "simple double field",

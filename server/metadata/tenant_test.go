@@ -195,7 +195,7 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 			},
 			"D1": {
 				"type": "string",
-				"max_length": 128
+				"maxLength": 128
 			}
 		},
 		"primary_key": ["K1", "K2"]

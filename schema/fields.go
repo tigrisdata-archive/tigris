@@ -17,7 +17,9 @@ package schema
 import (
 	"strings"
 
+	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	"github.com/tigrisdata/tigrisdb/lib/set"
 	"google.golang.org/grpc/codes"
 )
 
@@ -38,7 +40,7 @@ const (
 
 const (
 	nullDef   = "null"
-	boolDef   = "bool"
+	boolDef   = "boolean"
 	intDef    = "int"
 	bigIntDef = "bigint"
 	doubleDef = "double"
@@ -94,20 +96,35 @@ func IsValidIndexType(t FieldType) bool {
 	}
 }
 
+var SupportedFieldProperties = set.New("description", "type", "maxLength")
+
 type FieldBuilder struct {
 	Description string `json:"description,omitempty"`
 	FieldName   string
 	Type        string `json:"type,omitempty"`
-	MaxLength   *int32 `json:"max_length,omitempty"`
+	MaxLength   *int32 `json:"maxLength,omitempty"`
 	Primary     *bool
-	Unique      *bool `json:"unique,omitempty"`
+}
+
+func (f *FieldBuilder) Validate(v []byte) error {
+	var fieldProperties map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(v, &fieldProperties); err != nil {
+		return err
+	}
+
+	for key := range fieldProperties {
+		if !SupportedFieldProperties.Contains(key) {
+			return api.Errorf(codes.InvalidArgument, "unsupported property found '%s'", key)
+		}
+	}
+
+	return nil
 }
 
 func (f *FieldBuilder) Build() (*Field, error) {
 	var field = &Field{}
 	field.FieldName = f.FieldName
 	field.MaxLength = f.MaxLength
-	field.UniqueKeyField = f.Unique
 	fieldType := ToFieldType(f.Type)
 	if fieldType == UnknownType {
 		return nil, api.Errorf(codes.InvalidArgument, "unsupported type detected '%s'", f.Type)
