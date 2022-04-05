@@ -26,9 +26,7 @@ import (
 	"github.com/tigrisdata/tigrisdb/schema"
 	"github.com/tigrisdata/tigrisdb/server/transaction"
 	"github.com/tigrisdata/tigrisdb/store/kv"
-	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 )
 
 const (
@@ -61,8 +59,8 @@ func newApiService(kv kv.KV) *apiService {
 		encoder:     &encoding.PrefixEncoder{},
 	}
 
-	u.queryLifecycleFactory = NewQueryLifecycleFactory()
-	u.queryRunnerFactory = NewQueryRunnerFactory(u.txMgr, u.encoder)
+	u.queryLifecycleFactory = NewQueryLifecycleFactory(u.txMgr)
+	u.queryRunnerFactory = NewQueryRunnerFactory(u.kv, u.txMgr, u.encoder, u.schemaCache)
 	return u
 }
 
@@ -152,16 +150,9 @@ func (s *apiService) Insert(ctx context.Context, r *api.InsertRequest) (*api.Ins
 		return nil, err
 	}
 
-	collection, err := s.schemaCache.Get(r.GetDb(), r.GetCollection())
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = s.Run(ctx, &Request{
-		apiRequest:  r,
-		documents:   r.GetDocuments(),
-		collection:  collection,
-		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
+	_, err := s.Run(ctx, &ReqOptions{
+		txCtx:       api.GetTransaction(r),
+		queryRunner: s.queryRunnerFactory.GetInsertQueryRunner(r),
 	})
 	if err != nil {
 		return nil, err
@@ -175,16 +166,9 @@ func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.R
 		return nil, err
 	}
 
-	collection, err := s.schemaCache.Get(r.GetDb(), r.GetCollection())
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = s.Run(ctx, &Request{
-		apiRequest:  r,
-		documents:   r.GetDocuments(),
-		collection:  collection,
-		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
+	_, err := s.Run(ctx, &ReqOptions{
+		txCtx:       api.GetTransaction(r),
+		queryRunner: s.queryRunnerFactory.GetReplaceQueryRunner(r),
 	})
 	if err != nil {
 		return nil, err
@@ -198,15 +182,9 @@ func (s *apiService) Update(ctx context.Context, r *api.UpdateRequest) (*api.Upd
 		return nil, err
 	}
 
-	collection, err := s.schemaCache.Get(r.GetDb(), r.GetCollection())
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = s.Run(ctx, &Request{
-		apiRequest:  r,
-		collection:  collection,
-		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
+	_, err := s.Run(ctx, &ReqOptions{
+		txCtx:       api.GetTransaction(r),
+		queryRunner: s.queryRunnerFactory.GetUpdateQueryRunner(r),
 	})
 	if err != nil {
 		return nil, err
@@ -220,15 +198,9 @@ func (s *apiService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.Del
 		return nil, err
 	}
 
-	collection, err := s.schemaCache.Get(r.GetDb(), r.GetCollection())
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = s.Run(ctx, &Request{
-		apiRequest:  r,
-		collection:  collection,
-		queryRunner: s.queryRunnerFactory.GetTxQueryRunner(),
+	_, err := s.Run(ctx, &ReqOptions{
+		txCtx:       api.GetTransaction(r),
+		queryRunner: s.queryRunnerFactory.GetDeleteQueryRunner(r),
 	})
 	if err != nil {
 		return nil, err
@@ -242,15 +214,9 @@ func (s *apiService) Read(r *api.ReadRequest, stream api.TigrisDB_ReadServer) er
 		return err
 	}
 
-	collection, err := s.schemaCache.Get(r.GetDb(), r.GetCollection())
-	if err != nil {
-		return err
-	}
-
-	_, err = s.Run(stream.Context(), &Request{
-		apiRequest:  r,
-		collection:  collection,
-		queryRunner: s.queryRunnerFactory.GetStreamingQueryRunner(stream),
+	_, err := s.Run(stream.Context(), &ReqOptions{
+		txCtx:       api.GetTransaction(r),
+		queryRunner: s.queryRunnerFactory.GetStreamingQueryRunner(r, stream),
 	})
 	if err != nil {
 		return err
@@ -264,19 +230,12 @@ func (s *apiService) CreateCollection(ctx context.Context, r *api.CreateCollecti
 		return nil, err
 	}
 
-	if c, _ := s.schemaCache.Get(r.Db, r.Collection); c != nil {
-		return nil, api.Errorf(codes.AlreadyExists, "collection already exists")
-	}
-
-	collection, err := schema.CreateCollection(r.Db, r.Collection, r.Schema)
+	_, err := s.Run(ctx, &ReqOptions{
+		queryRunner: s.queryRunnerFactory.GetCollectionQueryRunner(r, nil),
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	if err := s.kv.CreateTable(ctx, collection.StorageName()); ulog.E(err) {
-		return nil, api.Errorf(codes.Internal, "error: %v", err)
-	}
-	s.schemaCache.Put(collection)
 
 	return &api.CreateCollectionResponse{
 		Msg: "collection created successfully",
@@ -288,11 +247,12 @@ func (s *apiService) DropCollection(ctx context.Context, r *api.DropCollectionRe
 		return nil, err
 	}
 
-	if err := s.kv.DropTable(ctx, schema.StorageName(r.GetDb(), r.GetCollection())); ulog.E(err) {
-		return nil, api.Errorf(codes.Internal, "error: %v", err)
+	_, err := s.Run(ctx, &ReqOptions{
+		queryRunner: s.queryRunnerFactory.GetCollectionQueryRunner(nil, r),
+	})
+	if err != nil {
+		return nil, err
 	}
-
-	s.schemaCache.Remove(r.GetDb(), r.GetCollection())
 
 	return &api.DropCollectionResponse{
 		Msg: "collection dropped successfully",
@@ -319,7 +279,7 @@ func (s *apiService) DropDatabase(_ context.Context, _ *api.DropDatabaseRequest)
 	}, nil
 }
 
-func (s *apiService) Run(ctx context.Context, req *Request) (*Response, error) {
+func (s *apiService) Run(ctx context.Context, req *ReqOptions) (*Response, error) {
 	queryLifecycle := s.queryLifecycleFactory.Get()
 	return queryLifecycle.run(ctx, req)
 }

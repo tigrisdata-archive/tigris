@@ -17,7 +17,6 @@ package kv
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 	"unsafe"
 
@@ -25,9 +24,11 @@ import (
 	"github.com/apple/foundationdb/bindings/go/src/fdb/subspace"
 	"github.com/apple/foundationdb/bindings/go/src/fdb/tuple"
 	"github.com/rs/zerolog/log"
+	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/server/config"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"golang.org/x/xerrors"
+	"google.golang.org/grpc/codes"
 )
 
 const (
@@ -318,7 +319,7 @@ func (t *ftx) Insert(_ context.Context, table string, key Key, data []byte) erro
 		return err
 	}
 	if vv != nil {
-		return os.ErrExist
+		return api.Errorf(codes.AlreadyExists, "duplicate key value, violates unique primary key constraint")
 	}
 
 	t.tx.Set(k, data)

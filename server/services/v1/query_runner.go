@@ -20,9 +20,11 @@ import (
 
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/encoding"
+	"github.com/tigrisdata/tigrisdb/keys"
 	"github.com/tigrisdata/tigrisdb/query/filter"
 	"github.com/tigrisdata/tigrisdb/query/read"
 	"github.com/tigrisdata/tigrisdb/query/update"
+	"github.com/tigrisdata/tigrisdb/schema"
 	"github.com/tigrisdata/tigrisdb/server/transaction"
 	"github.com/tigrisdata/tigrisdb/store/kv"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
@@ -32,176 +34,265 @@ import (
 
 // QueryRunner is responsible for executing the current query and return the response
 type QueryRunner interface {
-	Run(ctx context.Context, req *Request) (*Response, error)
+	Run(ctx context.Context, tx transaction.Tx) (*Response, error)
 }
 
 // QueryRunnerFactory is responsible for creating query runners for different queries
 type QueryRunnerFactory struct {
-	txMgr   *transaction.Manager
-	encoder encoding.Encoder
+	kv          kv.KV
+	txMgr       *transaction.Manager
+	encoder     encoding.Encoder
+	schemaCache *schema.Cache
 }
 
 // NewQueryRunnerFactory returns QueryRunnerFactory object
-func NewQueryRunnerFactory(txMgr *transaction.Manager, encoder encoding.Encoder) *QueryRunnerFactory {
+func NewQueryRunnerFactory(kv kv.KV, txMgr *transaction.Manager, encoder encoding.Encoder, cache *schema.Cache) *QueryRunnerFactory {
 	return &QueryRunnerFactory{
-		txMgr:   txMgr,
-		encoder: encoder,
+		kv:          kv,
+		txMgr:       txMgr,
+		encoder:     encoder,
+		schemaCache: cache,
 	}
 }
 
-// GetTxQueryRunner returns TxQueryRunner
-func (f *QueryRunnerFactory) GetTxQueryRunner() *TxQueryRunner {
-	return &TxQueryRunner{
-		txMgr:   f.txMgr,
-		encoder: f.encoder,
+func (f *QueryRunnerFactory) GetInsertQueryRunner(r *api.InsertRequest) *InsertQueryRunner {
+	return &InsertQueryRunner{
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.schemaCache),
+		req:             r,
+	}
+}
+
+func (f *QueryRunnerFactory) GetReplaceQueryRunner(r *api.ReplaceRequest) *ReplaceQueryRunner {
+	return &ReplaceQueryRunner{
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.schemaCache),
+		req:             r,
+	}
+}
+
+func (f *QueryRunnerFactory) GetUpdateQueryRunner(r *api.UpdateRequest) *UpdateQueryRunner {
+	return &UpdateQueryRunner{
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.schemaCache),
+		req:             r,
+	}
+}
+
+func (f *QueryRunnerFactory) GetDeleteQueryRunner(r *api.DeleteRequest) *DeleteQueryRunner {
+	return &DeleteQueryRunner{
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.schemaCache),
+		req:             r,
 	}
 }
 
 // GetStreamingQueryRunner returns StreamingQueryRunner
-func (f *QueryRunnerFactory) GetStreamingQueryRunner(streaming Streaming) *StreamingQueryRunner {
+func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streaming Streaming) *StreamingQueryRunner {
 	return &StreamingQueryRunner{
-		txMgr:     f.txMgr,
-		encoder:   f.encoder,
-		streaming: streaming,
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.schemaCache),
+		req:             r,
+		streaming:       streaming,
 	}
 }
 
-// TxQueryRunner is a runner used for Queries mainly writes that needs to be executed in the context of the transaction
-type TxQueryRunner struct {
-	txMgr   *transaction.Manager
-	encoder encoding.Encoder
+func (f *QueryRunnerFactory) GetCollectionQueryRunner(create *api.CreateCollectionRequest, drop *api.DropCollectionRequest) *CollectionQueryRunner {
+	return &CollectionQueryRunner{
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.schemaCache),
+		kv:              f.kv,
+		create:          create,
+		drop:            drop,
+	}
 }
 
-// Run is responsible for running/executing the query
-func (q *TxQueryRunner) Run(ctx context.Context, req *Request) (*Response, error) {
-	tx, err := q.txMgr.GetInheritedOrStartTx(ctx, api.GetTransaction(req.apiRequest), false)
+type BaseQueryRunner struct {
+	encoder     encoding.Encoder
+	schemaCache *schema.Cache
+}
+
+func NewBaseQueryRunner(encoder encoding.Encoder, cache *schema.Cache) *BaseQueryRunner {
+	return &BaseQueryRunner{
+		encoder:     encoder,
+		schemaCache: cache,
+	}
+}
+
+func (runner *BaseQueryRunner) GetCollections(dbName string, collectionName string) (schema.Collection, error) {
+	collection, err := runner.schemaCache.Get(dbName, collectionName)
 	if err != nil {
 		return nil, err
 	}
-
-	var txErr error
-	defer func() {
-		var err error
-		if txErr == nil {
-			err = tx.Commit(ctx)
-		} else {
-			err = tx.Rollback(ctx)
-		}
-		if txErr == nil {
-			txErr = err
-		}
-	}()
-
-	if reqFilter := api.GetFilter(req.apiRequest); reqFilter != nil {
-		txErr = q.iterateFilter(ctx, req, tx, reqFilter)
-	} else {
-		txErr = q.iterateDocument(ctx, req, tx)
-	}
-
-	if ulog.E(txErr) {
-		return nil, txErr
-	}
-
-	return &Response{}, err
+	return collection, nil
 }
 
-func (q *TxQueryRunner) iterateFilter(ctx context.Context, req *Request, tx transaction.Tx, reqFilter []byte) error {
-	filters, err := filter.Build(reqFilter)
-	if err != nil {
-		return err
-	}
-
-	kb := filter.NewKeyBuilder(filter.NewStrictEqKeyComposer(req.collection.StorageName()))
-	iKeys, err := kb.Build(filters, req.collection.PrimaryKeys())
-	if err != nil {
-		return err
-	}
-
-	switch api.RequestType(req.apiRequest) {
-	case api.Update:
-		var factory *update.FieldOperatorFactory
-		factory, err = update.BuildFieldOperators(req.apiRequest.(*api.UpdateRequest).Fields)
-		if err != nil {
-			return err
-		}
-
-		for _, key := range iKeys {
-			// decode the fields now
-			err = tx.Update(ctx, key, func(existingDoc []byte) ([]byte, error) {
-				merged, er := factory.MergeAndGet(existingDoc)
-				if er != nil {
-					return nil, er
-				}
-				return merged, nil
-			})
-		}
-	case api.Delete:
-		for _, key := range iKeys {
-			err = tx.Delete(ctx, key)
-		}
-	}
-
-	return err
-}
-
-func (q *TxQueryRunner) iterateDocument(ctx context.Context, req *Request, tx transaction.Tx) error {
+func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transaction.Tx, collection schema.Collection, documents [][]byte, insert bool) error {
 	var err error
-	for _, d := range req.documents {
+	for _, d := range documents {
 		// ToDo: need to implement our own decoding to only extract custom keys
 		var s = &structpb.Struct{}
 		if err = json.Unmarshal(d, s); err != nil {
 			return err
 		}
 
-		key, err := q.encoder.BuildKey(s.GetFields(), req.collection)
-		if err != nil {
+		var key keys.Key
+		if key, err = runner.encoder.BuildKey(s.GetFields(), collection); err != nil {
 			return err
 		}
 
-		switch api.RequestType(req.apiRequest) {
-		case api.Insert:
+		if insert {
 			err = tx.Insert(ctx, key, d)
-			if err != nil && err.Error() == "file already exists" {
-				// FDB returning it as string, probably we need to move this check in KV
-				return api.Errorf(codes.AlreadyExists, "row already exists")
-			}
-		case api.Replace:
+		} else {
 			err = tx.Replace(ctx, key, d)
 		}
-
 		if err != nil {
 			return err
 		}
 	}
-
 	return err
+}
+
+func (runner *BaseQueryRunner) buildKeysUsingFilter(collection schema.Collection, reqFilter []byte) ([]keys.Key, error) {
+	filters, err := filter.Build(reqFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	kb := filter.NewKeyBuilder(filter.NewStrictEqKeyComposer(collection.StorageName()))
+	iKeys, err := kb.Build(filters, collection.PrimaryKeys())
+	if err != nil {
+		return nil, err
+	}
+
+	return iKeys, nil
+}
+
+type InsertQueryRunner struct {
+	*BaseQueryRunner
+
+	req *api.InsertRequest
+}
+
+func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx) (*Response, error) {
+	collection, err := runner.GetCollections(runner.req.GetDb(), runner.req.GetCollection())
+	if err != nil {
+		return nil, err
+	}
+
+	if err := runner.insertOrReplace(ctx, tx, collection, runner.req.GetDocuments(), true); err != nil {
+		return nil, err
+	}
+	return &Response{}, nil
+}
+
+type ReplaceQueryRunner struct {
+	*BaseQueryRunner
+
+	req *api.ReplaceRequest
+}
+
+func (runner *ReplaceQueryRunner) Run(ctx context.Context, tx transaction.Tx) (*Response, error) {
+	collection, err := runner.GetCollections(runner.req.GetDb(), runner.req.GetCollection())
+	if err != nil {
+		return nil, err
+	}
+
+	if err := runner.insertOrReplace(ctx, tx, collection, runner.req.GetDocuments(), false); err != nil {
+		return nil, err
+	}
+	return &Response{}, nil
+}
+
+type UpdateQueryRunner struct {
+	*BaseQueryRunner
+
+	req *api.UpdateRequest
+}
+
+func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx) (*Response, error) {
+	collection, err := runner.GetCollections(runner.req.GetDb(), runner.req.GetCollection())
+	if err != nil {
+		return nil, err
+	}
+
+	iKeys, err := runner.buildKeysUsingFilter(collection, runner.req.Filter)
+	if err != nil {
+		return nil, err
+	}
+
+	var factory *update.FieldOperatorFactory
+	factory, err = update.BuildFieldOperators(runner.req.Fields)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, key := range iKeys {
+		// decode the fields now
+		if err = tx.Update(ctx, key, func(existingDoc []byte) ([]byte, error) {
+			merged, er := factory.MergeAndGet(existingDoc)
+			if er != nil {
+				return nil, er
+			}
+			return merged, nil
+		}); ulog.E(err) {
+			return nil, err
+		}
+	}
+
+	return &Response{}, err
+}
+
+type DeleteQueryRunner struct {
+	*BaseQueryRunner
+
+	req *api.DeleteRequest
+}
+
+func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx) (*Response, error) {
+	collection, err := runner.GetCollections(runner.req.GetDb(), runner.req.GetCollection())
+	if err != nil {
+		return nil, err
+	}
+
+	iKeys, err := runner.buildKeysUsingFilter(collection, runner.req.Filter)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, key := range iKeys {
+		if err = tx.Delete(ctx, key); ulog.E(err) {
+			return nil, err
+		}
+	}
+
+	return &Response{}, nil
 }
 
 // StreamingQueryRunner is a runner used for Queries that are reads and needs to return result in streaming fashion
 type StreamingQueryRunner struct {
-	txMgr     *transaction.Manager
-	encoder   encoding.Encoder
+	*BaseQueryRunner
+
+	req       *api.ReadRequest
 	streaming Streaming
 }
 
 // Run is responsible for running/executing the query
-func (q *StreamingQueryRunner) Run(ctx context.Context, req *Request) (*Response, error) {
-	if filter.IsFullCollectionScan(api.GetFilter(req.apiRequest)) {
-		return q.iterateCollection(ctx, req)
-	} else {
-		return q.iterateKeys(ctx, req)
+func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx) (*Response, error) {
+	collection, err := runner.GetCollections(runner.req.GetDb(), runner.req.GetCollection())
+	if err != nil {
+		return nil, err
 	}
-}
 
-// iterateCollection is used to scan the entire collection.
-func (q *StreamingQueryRunner) iterateCollection(ctx context.Context, req *Request) (*Response, error) {
-	fieldFactory, err := read.BuildFields(req.apiRequest.(*api.ReadRequest).Fields)
+	fieldFactory, err := read.BuildFields(runner.req.GetFields())
 	if ulog.E(err) {
 		return nil, err
 	}
 
+	if filter.IsFullCollectionScan(runner.req.GetFilter()) {
+		return runner.iterateCollection(ctx, tx, collection, fieldFactory)
+	}
+	return runner.iterateKeys(ctx, tx, collection, fieldFactory)
+}
+
+// iterateCollection is used to scan the entire collection.
+func (runner *StreamingQueryRunner) iterateCollection(ctx context.Context, tx transaction.Tx, collection schema.Collection, fieldFactory *read.FieldFactory) (*Response, error) {
 	var totalResults int64 = 0
-	if err := q.iterate(ctx, req.collection.StorageName(), nil, fieldFactory, &totalResults, req.apiRequest.(*api.ReadRequest).GetOptions().GetLimit()); err != nil {
+	if err := runner.iterate(ctx, tx, keys.NewKey(collection.StorageName()), fieldFactory, &totalResults); err != nil {
 		return nil, err
 	}
 
@@ -210,32 +301,15 @@ func (q *StreamingQueryRunner) iterateCollection(ctx context.Context, req *Reque
 
 // iterateKeys is responsible for building keys from the filter and then executing the query. A key could be a primary
 // key or an index key.
-func (q *StreamingQueryRunner) iterateKeys(ctx context.Context, req *Request) (*Response, error) {
-	_, err := q.txMgr.GetInherited(api.GetTransaction(req.apiRequest))
+func (runner *StreamingQueryRunner) iterateKeys(ctx context.Context, tx transaction.Tx, collection schema.Collection, fieldFactory *read.FieldFactory) (*Response, error) {
+	iKeys, err := runner.buildKeysUsingFilter(collection, runner.req.Filter)
 	if err != nil {
-		return nil, err
-	}
-
-	filters, err := filter.Build(api.GetFilter(req.apiRequest))
-	if err != nil {
-		return nil, err
-	}
-
-	kb := filter.NewKeyBuilder(filter.NewStrictEqKeyComposer(req.collection.StorageName()))
-	iKeys, err := kb.Build(filters, req.collection.PrimaryKeys())
-	if err != nil {
-		return nil, err
-	}
-
-	fieldFactory, err := read.BuildFields(req.apiRequest.(*api.ReadRequest).Fields)
-	if ulog.E(err) {
 		return nil, err
 	}
 
 	var totalResults int64 = 0
 	for _, key := range iKeys {
-		fdbKey := kv.BuildKey(key.PrimaryKeys()...)
-		if err := q.iterate(ctx, req.collection.StorageName(), fdbKey, fieldFactory, &totalResults, req.apiRequest.(*api.ReadRequest).GetOptions().GetLimit()); err != nil {
+		if err := runner.iterate(ctx, tx, key, fieldFactory, &totalResults); err != nil {
 			return nil, err
 		}
 	}
@@ -243,10 +317,15 @@ func (q *StreamingQueryRunner) iterateKeys(ctx context.Context, req *Request) (*
 	return &Response{}, nil
 }
 
-func (q *StreamingQueryRunner) iterate(ctx context.Context, collectionName string, key kv.Key, fieldFactory *read.FieldFactory, totalResults *int64, limit int64) error {
-	it, err := q.txMgr.GetKV().Read(ctx, collectionName, key)
+func (runner *StreamingQueryRunner) iterate(ctx context.Context, tx transaction.Tx, key keys.Key, fieldFactory *read.FieldFactory, totalResults *int64) error {
+	it, err := tx.Read(ctx, key)
 	if err != nil {
 		return err
+	}
+
+	var limit int64 = 0
+	if runner.req.GetOptions() != nil {
+		limit = runner.req.GetOptions().Limit
 	}
 
 	var v kv.KeyValue
@@ -260,7 +339,7 @@ func (q *StreamingQueryRunner) iterate(ctx context.Context, collectionName strin
 			return err
 		}
 
-		if err := q.streaming.Send(&api.ReadResponse{
+		if err := runner.streaming.Send(&api.ReadResponse{
 			Doc: newValue,
 			Key: v.FDBKey,
 		}); ulog.E(err) {
@@ -271,4 +350,37 @@ func (q *StreamingQueryRunner) iterate(ctx context.Context, collectionName strin
 	}
 
 	return it.Err()
+}
+
+type CollectionQueryRunner struct {
+	*BaseQueryRunner
+
+	kv     kv.KV
+	drop   *api.DropCollectionRequest
+	create *api.CreateCollectionRequest
+}
+
+func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx) (*Response, error) {
+	if runner.drop != nil {
+		if err := runner.kv.DropTable(ctx, schema.StorageName(runner.drop.GetDb(), runner.drop.GetCollection())); ulog.E(err) {
+			return nil, api.Errorf(codes.Internal, "error: %v", err)
+		}
+
+		runner.schemaCache.Remove(runner.drop.GetDb(), runner.drop.GetCollection())
+		return &Response{}, nil
+	} else if runner.create != nil {
+		if c, _ := runner.schemaCache.Get(runner.create.GetDb(), runner.create.GetCollection()); c != nil {
+			return nil, api.Errorf(codes.AlreadyExists, "collection already exists")
+		}
+
+		collection, err := schema.CreateCollection(runner.create.GetDb(), runner.create.GetCollection(), runner.create.GetSchema())
+		if err != nil {
+			return nil, err
+		}
+
+		runner.schemaCache.Put(collection)
+		return &Response{}, nil
+	}
+
+	return &Response{}, api.Errorf(codes.Unknown, "unknown path")
 }
