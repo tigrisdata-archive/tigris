@@ -101,6 +101,10 @@ func CreateCollection(database string, collection string, reqSchema jsoniter.Raw
 		}
 
 		var builder FieldBuilder
+		if err = builder.Validate(v); err != nil {
+			return err
+		}
+
 		builder.FieldName = string(key)
 		if err = jsoniter.Unmarshal(v, &builder); err != nil {
 			return api.Errorf(codes.Internal, err.Error())
@@ -176,6 +180,9 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 		}
 
 		var builder FieldBuilder
+		if err = builder.Validate(v); err != nil {
+			return err
+		}
 		builder.FieldName = string(key)
 		if err = jsoniter.Unmarshal(v, &builder); err != nil {
 			return api.Errorf(codes.Internal, err.Error())

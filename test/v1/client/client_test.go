@@ -73,7 +73,7 @@ func testClient(t *testing.T, c driver.Driver) {
 			},
 			"D1": {
 				"type": "string",
-				"max_length": 128
+				"maxLength": 128
 			}
 		},
 		"primary_key": ["K1", "K2"]
@@ -134,7 +134,7 @@ func testTxClient(t *testing.T, c driver.Driver) {
 			},
 			"D1": {
 				"type": "string",
-				"max_length": 128
+				"maxLength": 128
 			}
 		},
 		"primary_key": ["K1", "K2"]
