@@ -162,4 +162,71 @@ func TestSchemaSubspace(t *testing.T) {
 		require.NoError(t, tx.Commit(ctx))
 		_ = kv.DropTable(ctx, SchemaSubspaceKey)
 	})
+	t.Run("put_delete_get", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		_ = kv.DropTable(ctx, SchemaSubspaceKey)
+
+		schema1 := []byte(`{
+		"name": "collection1",
+		"description": "this schema is for client integration tests",
+		"properties": {
+			"K1": {
+				"type": "string"
+			},
+			"K2": {
+				"type": "int"
+			},
+			"D1": {
+				"type": "string",
+				"max_length": 128
+			}
+		},
+		"primary_key": ["K1", "K2"]
+	}`)
+		schema2 := []byte(`{
+		"name": "collection1",
+		"description": "this schema is for client integration tests",
+		"properties": {
+			"K1": {
+				"type": "string"
+			},
+			"K2": {
+				"type": "int"
+			}
+		},
+		"primary_key": ["K1"]
+	}`)
+
+		tm := transaction.NewManager(kv)
+		tx, err := tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		s := SchemaSubspace{}
+		require.NoError(t, s.Put(ctx, tx, 1, 2, 3, schema1, 1))
+		require.NoError(t, s.Put(ctx, tx, 1, 2, 3, schema2, 2))
+
+		schemas, revisions, err := s.Get(ctx, tx, 1, 2, 3)
+		require.NoError(t, err)
+		require.Equal(t, schema1, schemas[0])
+		require.Equal(t, schema2, schemas[1])
+		require.Len(t, schemas, 2)
+		require.Len(t, revisions, 2)
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		require.NoError(t, s.Delete(ctx, tx, 1, 2, 3))
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTxWithoutTracking(ctx)
+		require.NoError(t, err)
+		schemas, revisions, err = s.Get(ctx, tx, 1, 2, 3)
+		require.NoError(t, err)
+		require.Len(t, schemas, 0)
+		require.Len(t, revisions, 0)
+		require.NoError(t, tx.Commit(ctx))
+
+		_ = kv.DropTable(ctx, SchemaSubspaceKey)
+	})
 }

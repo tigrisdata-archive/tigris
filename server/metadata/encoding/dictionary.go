@@ -75,6 +75,7 @@ const (
 	counterKey    = "counter"
 	indexKey      = "index"
 	keyEnd        = "created"
+	keyDroppedEnd = "dropped"
 )
 
 // subspaces - only reason of not declaring these as consts because tests in different packages can overwrite this.
@@ -233,6 +234,22 @@ func (k *DictionaryEncoder) EncodeDatabaseName(ctx context.Context, tx transacti
 	return k.encode(ctx, tx, key, dbKey)
 }
 
+// EncodeDatabaseAsDropped will remove the "created" entry from the encoding subspace and will add a "dropped" entry with the same
+// value.
+func (k *DictionaryEncoder) EncodeDatabaseAsDropped(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32, existingId uint32) error {
+	if err := k.validNamespaceId(namespaceId); err != nil {
+		return err
+	}
+	if len(dbName) == 0 {
+		return api.Errorf(codes.InvalidArgument, "database name is empty")
+	}
+
+	// remove existing entry
+	toDeleteKey := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyEnd)
+	newKey := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyDroppedEnd)
+	return k.encodeAsDropped(ctx, tx, toDeleteKey, newKey, existingId, dbKey)
+}
+
 func (k *DictionaryEncoder) EncodeCollectionName(ctx context.Context, tx transaction.Tx, collection string, namespaceId uint32, dbId uint32) (uint32, error) {
 	if err := k.validNamespaceId(namespaceId); err != nil {
 		return invalidId, err
@@ -246,6 +263,23 @@ func (k *DictionaryEncoder) EncodeCollectionName(ctx context.Context, tx transac
 
 	key := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collection, keyEnd)
 	return k.encode(ctx, tx, key, collectionKey)
+}
+
+func (k *DictionaryEncoder) EncodeCollectionAsDropped(ctx context.Context, tx transaction.Tx, collection string, namespaceId uint32, dbId uint32, existingId uint32) error {
+	if err := k.validNamespaceId(namespaceId); err != nil {
+		return err
+	}
+	if err := k.validDatabaseId(dbId); err != nil {
+		return err
+	}
+	if len(collection) == 0 {
+		return api.Errorf(codes.InvalidArgument, "collection name is empty")
+	}
+
+	// remove existing entry
+	toDeleteKey := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collection, keyEnd)
+	newKey := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collection, keyDroppedEnd)
+	return k.encodeAsDropped(ctx, tx, toDeleteKey, newKey, existingId, collectionKey)
 }
 
 func (k *DictionaryEncoder) EncodeIndexName(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32, dbId uint32, collId uint32) (uint32, error) {
@@ -264,6 +298,42 @@ func (k *DictionaryEncoder) EncodeIndexName(ctx context.Context, tx transaction.
 
 	key := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyEnd)
 	return k.encode(ctx, tx, key, indexKey)
+}
+
+func (k *DictionaryEncoder) EncodeIndexAsDropped(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32, dbId uint32, collId uint32, existingId uint32) error {
+	if err := k.validNamespaceId(namespaceId); err != nil {
+		return err
+	}
+	if err := k.validDatabaseId(dbId); err != nil {
+		return err
+	}
+	if err := k.validCollectionId(collId); err != nil {
+		return err
+	}
+	if len(indexName) == 0 {
+		return api.Errorf(codes.InvalidArgument, "index name is empty")
+	}
+
+	toDeleteKey := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyEnd)
+	newKey := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyDroppedEnd)
+	return k.encodeAsDropped(ctx, tx, toDeleteKey, newKey, existingId, indexKey)
+}
+
+func (k *DictionaryEncoder) encodeAsDropped(ctx context.Context, tx transaction.Tx, toDeleteKey keys.Key, newKey keys.Key, newValue uint32, encName string) error {
+	if err := tx.Delete(ctx, toDeleteKey); err != nil {
+		log.Debug().Interface("key", toDeleteKey).Err(err).Str("type", encName).Msg("existing entry deletion failed")
+		return err
+	}
+	log.Debug().Interface("key", toDeleteKey).Str("type", encName).Msg("existing entry deletion succeed")
+
+	// now do insert because we need to fail if token is already assigned
+	if err := tx.Replace(ctx, newKey, UInt32ToByte(newValue)); err != nil {
+		log.Debug().Interface("key", newKey).Uint32("value", newValue).Err(err).Str("type", encName).Msg("encoding failed")
+		return err
+	}
+	log.Debug().Interface("key", newKey).Uint32("value", newValue).Str("type", encName).Msg("encoding succeed")
+
+	return nil
 }
 
 func (k *DictionaryEncoder) encode(ctx context.Context, tx transaction.Tx, key keys.Key, encName string) (uint32, error) {
@@ -427,7 +497,8 @@ func (k *DictionaryEncoder) getId(ctx context.Context, tx transaction.Tx, key ke
 		return 0, err
 	}
 
-	return invalidId, api.Errorf(codes.NotFound, "not found %v", key)
+	// no need to return an error if not found, upper layer will convert this as an error.
+	return invalidId, nil
 }
 
 // decode is currently only use for debugging purpose, once we have a layer on top of this encoding then we leverage this

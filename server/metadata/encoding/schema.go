@@ -123,3 +123,15 @@ func (s *SchemaSubspace) Get(ctx context.Context, tx transaction.Tx, namespaceId
 
 	return schemas, revisions, nil
 }
+
+// Delete is to remove schema for a given namespace, database and collection.
+func (s *SchemaSubspace) Delete(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbId uint32, collId uint32) error {
+	key := keys.NewKey(SchemaSubspaceKey, schVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), keyEnd)
+	if err := tx.Delete(ctx, key); err != nil {
+		log.Debug().Interface("key", key).Err(err).Msg("deleting schema failed")
+		return err
+	}
+
+	log.Debug().Interface("key", key).Msg("deleting schema succeed")
+	return nil
+}
