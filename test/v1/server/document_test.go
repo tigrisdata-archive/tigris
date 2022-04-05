@@ -144,7 +144,7 @@ func (s *DocumentSuite) TestInsert_AlreadyExists() {
 		Status(http.StatusConflict).
 		JSON().
 		Object().
-		ValueEqual("message", "row already exists")
+		ValueEqual("message", "duplicate key value, violates unique primary key constraint")
 }
 
 func (s *DocumentSuite) TestInsert_SingleRow() {

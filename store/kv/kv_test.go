@@ -17,16 +17,17 @@ package kv
 import (
 	"context"
 	"fmt"
-	"github.com/apple/foundationdb/bindings/go/src/fdb"
-	"os"
 	"testing"
 	"time"
 
+	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	"github.com/apple/foundationdb/bindings/go/src/fdb/subspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/server/config"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
+	"google.golang.org/grpc/codes"
 )
 
 func readAll(t *testing.T, it Iterator) []KeyValue {
@@ -218,7 +219,7 @@ func testKVInsert(t *testing.T, kv KV) {
 			insert: []KeyValue{{BuildKey("p1"), nil, []byte("value1")}},
 			test:   []KeyValue{{BuildKey("p1"), nil, []byte("value2")}},
 			result: []KeyValue{{BuildKey("p1"), getFDBKey("t1", BuildKey("p1")), []byte("value1")}},
-			err:    os.ErrExist,
+			err:    api.Errorf(codes.AlreadyExists, "duplicate key value, violates unique primary key constraint"),
 		},
 	}
 
