@@ -45,7 +45,7 @@ func (e *PrefixEncoder) encodeKey(doc map[string]*structpb.Value, prefix string,
 	if len(primaryKeyParts) == 0 {
 		return nil, ulog.CE("missing primary key column(s)")
 	}
-	return keys.NewKey(prefix, primaryKeyParts...), nil
+	return keys.NewKey([]byte(prefix), primaryKeyParts...), nil
 }
 
 func (e *PrefixEncoder) BuildKey(doc map[string]*structpb.Value, collection schema.Collection) (keys.Key, error) {

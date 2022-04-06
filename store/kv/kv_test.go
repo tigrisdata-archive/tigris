@@ -51,50 +51,51 @@ func testKVBasic(t *testing.T, kv KV) {
 
 	nRecs := 5
 
-	err := kv.DropTable(ctx, "t1")
+	table := []byte("t1")
+	err := kv.DropTable(ctx, table)
 	require.NoError(t, err)
 
-	err = kv.CreateTable(ctx, "t1")
+	err = kv.CreateTable(ctx, table)
 	require.NoError(t, err)
 
 	// insert records with two prefixes p1 and p2
 	for i := 0; i < nRecs; i++ {
-		err = kv.Insert(ctx, "t1", BuildKey("p1", i+1), []byte(fmt.Sprintf("value%d", i+1)))
+		err = kv.Insert(ctx, table, BuildKey("p1", i+1), []byte(fmt.Sprintf("value%d", i+1)))
 		require.NoError(t, err)
-		err = kv.Insert(ctx, "t1", BuildKey("p2", i+1), []byte(fmt.Sprintf("value%d", i+1)))
+		err = kv.Insert(ctx, table, BuildKey("p2", i+1), []byte(fmt.Sprintf("value%d", i+1)))
 		require.NoError(t, err)
 	}
 
 	// read individual record
-	it, err := kv.Read(ctx, "t1", BuildKey("p1", 2))
+	it, err := kv.Read(ctx, table, BuildKey("p1", 2))
 	require.NoError(t, err)
 
 	v := readAll(t, it)
-	require.Equal(t, []KeyValue{{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(2))), Value: []byte("value2")}}, v)
+	require.Equal(t, []KeyValue{{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2))), Value: []byte("value2")}}, v)
 
 	// replace individual record
-	err = kv.Replace(ctx, "t1", BuildKey("p1", 2), []byte("value2+2"))
+	err = kv.Replace(ctx, table, BuildKey("p1", 2), []byte("value2+2"))
 	require.NoError(t, err)
 
-	it, err = kv.Read(ctx, "t1", BuildKey("p1", 2))
+	it, err = kv.Read(ctx, table, BuildKey("p1", 2))
 	require.NoError(t, err)
 
 	v = readAll(t, it)
-	require.Equal(t, []KeyValue{{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(2))), Value: []byte("value2+2")}}, v)
+	require.Equal(t, []KeyValue{{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2))), Value: []byte("value2+2")}}, v)
 
 	// read range
-	it, err = kv.ReadRange(ctx, "t1", BuildKey("p1", 2), BuildKey("p1", 4))
+	it, err = kv.ReadRange(ctx, table, BuildKey("p1", 2), BuildKey("p1", 4))
 	require.NoError(t, err)
 
 	v = readAll(t, it)
 	require.Equal(t, []KeyValue{
-		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(2))), Value: []byte("value2+2")},
-		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(3))), Value: []byte("value3")},
+		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2))), Value: []byte("value2+2")},
+		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey(table, BuildKey("p1", int64(3))), Value: []byte("value3")},
 	}, v)
 
 	// update range
 	i := 3
-	err = kv.UpdateRange(ctx, "t1", BuildKey("p1", 3), BuildKey("p1", 6), func(orig []byte) ([]byte, error) {
+	err = kv.UpdateRange(ctx, table, BuildKey("p1", 3), BuildKey("p1", 6), func(orig []byte) ([]byte, error) {
 		require.Equal(t, fmt.Sprintf("value%d", i), string(orig))
 		res := []byte(fmt.Sprintf("value%d+%d", i, i))
 		i++
@@ -102,45 +103,45 @@ func testKVBasic(t *testing.T, kv KV) {
 	})
 	require.NoError(t, err)
 
-	it, err = kv.ReadRange(ctx, "t1", BuildKey("p1", 3), BuildKey("p1", 6))
+	it, err = kv.ReadRange(ctx, table, BuildKey("p1", 3), BuildKey("p1", 6))
 	require.NoError(t, err)
 
 	v = readAll(t, it)
 	require.Equal(t, []KeyValue{
-		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(3))), Value: []byte("value3+3")},
-		{Key: BuildKey("p1", int64(4)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(4))), Value: []byte("value4+4")},
-		{Key: BuildKey("p1", int64(5)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(5))), Value: []byte("value5+5")},
+		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey(table, BuildKey("p1", int64(3))), Value: []byte("value3+3")},
+		{Key: BuildKey("p1", int64(4)), FDBKey: getFDBKey(table, BuildKey("p1", int64(4))), Value: []byte("value4+4")},
+		{Key: BuildKey("p1", int64(5)), FDBKey: getFDBKey(table, BuildKey("p1", int64(5))), Value: []byte("value5+5")},
 	}, v)
 
 	// prefix read
-	it, err = kv.Read(ctx, "t1", BuildKey("p1"))
+	it, err = kv.Read(ctx, table, BuildKey("p1"))
 	require.NoError(t, err)
 
 	v = readAll(t, it)
 	require.Equal(t, []KeyValue{
-		{Key: BuildKey("p1", int64(1)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(1))), Value: []byte("value1")},
-		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(2))), Value: []byte("value2+2")},
-		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(3))), Value: []byte("value3+3")},
-		{Key: BuildKey("p1", int64(4)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(4))), Value: []byte("value4+4")},
-		{Key: BuildKey("p1", int64(5)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(5))), Value: []byte("value5+5")},
+		{Key: BuildKey("p1", int64(1)), FDBKey: getFDBKey(table, BuildKey("p1", int64(1))), Value: []byte("value1")},
+		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2))), Value: []byte("value2+2")},
+		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey(table, BuildKey("p1", int64(3))), Value: []byte("value3+3")},
+		{Key: BuildKey("p1", int64(4)), FDBKey: getFDBKey(table, BuildKey("p1", int64(4))), Value: []byte("value4+4")},
+		{Key: BuildKey("p1", int64(5)), FDBKey: getFDBKey(table, BuildKey("p1", int64(5))), Value: []byte("value5+5")},
 	}, v)
 
 	// delete and delete range
-	err = kv.Delete(ctx, "t1", BuildKey("p1", 1))
+	err = kv.Delete(ctx, table, BuildKey("p1", 1))
 	require.NoError(t, err)
 
-	err = kv.DeleteRange(ctx, "t1", BuildKey("p1", 3), BuildKey("p2", 6))
+	err = kv.DeleteRange(ctx, table, BuildKey("p1", 3), BuildKey("p2", 6))
 	require.NoError(t, err)
 
-	it, err = kv.ReadRange(ctx, "t1", BuildKey("p1", 1), BuildKey("p1", 6))
+	it, err = kv.ReadRange(ctx, table, BuildKey("p1", 1), BuildKey("p1", 6))
 	require.NoError(t, err)
 
 	v = readAll(t, it)
 	require.Equal(t, []KeyValue{
-		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(2))), Value: []byte("value2+2")},
+		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2))), Value: []byte("value2+2")},
 	}, v)
 
-	err = kv.DropTable(ctx, "t1")
+	err = kv.DropTable(ctx, table)
 	require.NoError(t, err)
 }
 
@@ -152,39 +153,40 @@ func testFullScan(t *testing.T, kv KV) {
 
 	nRecs := 5
 
-	err := kv.DropTable(ctx, "t1")
+	table := []byte("t1")
+	err := kv.DropTable(ctx, table)
 	require.NoError(t, err)
 
-	err = kv.CreateTable(ctx, "t1")
+	err = kv.CreateTable(ctx, table)
 	require.NoError(t, err)
 
 	// insert records with two prefixes p1 and p2
 	for i := 0; i < nRecs; i++ {
-		err = kv.Insert(ctx, "t1", BuildKey("p1", i+1), []byte(fmt.Sprintf("value%d", i+1)))
+		err = kv.Insert(ctx, table, BuildKey("p1", i+1), []byte(fmt.Sprintf("value%d", i+1)))
 		require.NoError(t, err)
-		err = kv.Insert(ctx, "t1", BuildKey("p2", i+1), []byte(fmt.Sprintf("value%d", i+1)))
+		err = kv.Insert(ctx, table, BuildKey("p2", i+1), []byte(fmt.Sprintf("value%d", i+1)))
 		require.NoError(t, err)
 	}
 
 	// prefix read
-	it, err := kv.Read(ctx, "t1", nil)
+	it, err := kv.Read(ctx, table, nil)
 	require.NoError(t, err)
 
 	v := readAll(t, it)
 	require.Equal(t, []KeyValue{
-		{Key: BuildKey("p1", int64(1)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(1))), Value: []byte("value1")},
-		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(2))), Value: []byte("value2")},
-		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(3))), Value: []byte("value3")},
-		{Key: BuildKey("p1", int64(4)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(4))), Value: []byte("value4")},
-		{Key: BuildKey("p1", int64(5)), FDBKey: getFDBKey("t1", BuildKey("p1", int64(5))), Value: []byte("value5")},
-		{Key: BuildKey("p2", int64(1)), FDBKey: getFDBKey("t1", BuildKey("p2", int64(1))), Value: []byte("value1")},
-		{Key: BuildKey("p2", int64(2)), FDBKey: getFDBKey("t1", BuildKey("p2", int64(2))), Value: []byte("value2")},
-		{Key: BuildKey("p2", int64(3)), FDBKey: getFDBKey("t1", BuildKey("p2", int64(3))), Value: []byte("value3")},
-		{Key: BuildKey("p2", int64(4)), FDBKey: getFDBKey("t1", BuildKey("p2", int64(4))), Value: []byte("value4")},
-		{Key: BuildKey("p2", int64(5)), FDBKey: getFDBKey("t1", BuildKey("p2", int64(5))), Value: []byte("value5")},
+		{Key: BuildKey("p1", int64(1)), FDBKey: getFDBKey(table, BuildKey("p1", int64(1))), Value: []byte("value1")},
+		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2))), Value: []byte("value2")},
+		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey(table, BuildKey("p1", int64(3))), Value: []byte("value3")},
+		{Key: BuildKey("p1", int64(4)), FDBKey: getFDBKey(table, BuildKey("p1", int64(4))), Value: []byte("value4")},
+		{Key: BuildKey("p1", int64(5)), FDBKey: getFDBKey(table, BuildKey("p1", int64(5))), Value: []byte("value5")},
+		{Key: BuildKey("p2", int64(1)), FDBKey: getFDBKey(table, BuildKey("p2", int64(1))), Value: []byte("value1")},
+		{Key: BuildKey("p2", int64(2)), FDBKey: getFDBKey(table, BuildKey("p2", int64(2))), Value: []byte("value2")},
+		{Key: BuildKey("p2", int64(3)), FDBKey: getFDBKey(table, BuildKey("p2", int64(3))), Value: []byte("value3")},
+		{Key: BuildKey("p2", int64(4)), FDBKey: getFDBKey(table, BuildKey("p2", int64(4))), Value: []byte("value4")},
+		{Key: BuildKey("p2", int64(5)), FDBKey: getFDBKey(table, BuildKey("p2", int64(5))), Value: []byte("value5")},
 	}, v)
 
-	err = kv.DropTable(ctx, "t1")
+	err = kv.DropTable(ctx, table)
 	require.NoError(t, err)
 }
 
@@ -208,35 +210,36 @@ func testKVInsert(t *testing.T, kv KV) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	table := []byte("t1")
 	cases := []kvTestCase{
 		{
 			name:   "simple",
 			test:   []KeyValue{{BuildKey("p1"), nil, []byte("value1")}},
-			result: []KeyValue{{BuildKey("p1"), getFDBKey("t1", BuildKey("p1")), []byte("value1")}},
+			result: []KeyValue{{BuildKey("p1"), getFDBKey(table, BuildKey("p1")), []byte("value1")}},
 		},
 		{
 			name:   "conflict",
 			insert: []KeyValue{{BuildKey("p1"), nil, []byte("value1")}},
 			test:   []KeyValue{{BuildKey("p1"), nil, []byte("value2")}},
-			result: []KeyValue{{BuildKey("p1"), getFDBKey("t1", BuildKey("p1")), []byte("value1")}},
+			result: []KeyValue{{BuildKey("p1"), getFDBKey(table, BuildKey("p1")), []byte("value1")}},
 			err:    api.Errorf(codes.AlreadyExists, "duplicate key value, violates unique primary key constraint"),
 		},
 	}
 
 	for _, v := range cases {
-		err := kv.DropTable(ctx, "t1")
+		err := kv.DropTable(ctx, table)
 		require.NoError(t, err)
 
-		err = kv.CreateTable(ctx, "t1")
+		err = kv.CreateTable(ctx, table)
 		require.NoError(t, err)
 
 		t.Run(v.name, func(t *testing.T) {
 			for _, i := range v.insert {
-				err := kv.Insert(context.TODO(), "t1", i.Key, i.Value)
+				err := kv.Insert(context.TODO(), table, i.Key, i.Value)
 				require.NoError(t, err)
 			}
 			for _, i := range v.test {
-				err := kv.Insert(context.TODO(), "t1", i.Key, i.Value)
+				err := kv.Insert(context.TODO(), table, i.Key, i.Value)
 				if v.err != nil {
 					require.EqualError(t, err, v.err.Error())
 				} else {
@@ -244,7 +247,7 @@ func testKVInsert(t *testing.T, kv KV) {
 				}
 			}
 			for _, i := range v.result {
-				it, err := kv.Read(context.Background(), "t1", i.Key)
+				it, err := kv.Read(context.Background(), table, i.Key)
 				require.NoError(t, err)
 				var res KeyValue
 				require.True(t, it.Next(&res))
@@ -260,7 +263,7 @@ func testKVInsert(t *testing.T, kv KV) {
 		testKVTimeout(t, kv)
 	})
 
-	err := kv.DropTable(ctx, "t1")
+	err := kv.DropTable(ctx, table)
 	require.NoError(t, err)
 }
 
@@ -289,20 +292,21 @@ func testKVTimeout(t *testing.T, kv KV) {
 func testFDBKVIterator(t *testing.T, kv KV) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	err := kv.DropTable(ctx, "t1")
+	table := []byte("t1")
+	err := kv.DropTable(ctx, table)
 	require.NoError(t, err)
 
-	err = kv.CreateTable(ctx, "t1")
+	err = kv.CreateTable(ctx, table)
 	require.NoError(t, err)
 
 	nRecs := 5
 
 	for i := 0; i < nRecs; i++ {
-		err = kv.Insert(ctx, "t1", BuildKey("p1", i+1), []byte(fmt.Sprintf("value%d", i+1)))
+		err = kv.Insert(ctx, table, BuildKey("p1", i+1), []byte(fmt.Sprintf("value%d", i+1)))
 		require.NoError(t, err)
 	}
 
-	it, err := kv.Read(ctx, "t1", nil)
+	it, err := kv.Read(ctx, table, nil)
 	require.NoError(t, err)
 
 	ic, ok := it.(*fdbIteratorTxCloser)
@@ -323,7 +327,7 @@ func testFDBKVIterator(t *testing.T, kv KV) {
 	assert.False(t, it.Next(&v))
 	assert.Error(t, it.Err())
 
-	err = kv.DropTable(ctx, "t1")
+	err = kv.DropTable(ctx, table)
 	require.NoError(t, err)
 }
 

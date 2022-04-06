@@ -80,8 +80,8 @@ const (
 
 // subspaces - only reason of not declaring these as consts because tests in different packages can overwrite this.
 var (
-	ReservedSubspaceKey = "reserved"
-	EncodingSubspaceKey = "encoding"
+	ReservedSubspaceKey = []byte("reserved")
+	EncodingSubspaceKey = []byte("encoding")
 )
 
 var (
@@ -115,7 +115,7 @@ func (r *reservedSubspace) reload(ctx context.Context, tx transaction.Tx) error 
 	r.Lock()
 	defer r.Unlock()
 
-	key := keys.NewKey(ReservedSubspaceKey)
+	key := keys.NewKey([]byte(ReservedSubspaceKey))
 	it, err := tx.Read(ctx, key)
 	if err != nil {
 		return err
@@ -337,7 +337,7 @@ func (k *DictionaryEncoder) encodeAsDropped(ctx context.Context, tx transaction.
 }
 
 func (k *DictionaryEncoder) encode(ctx context.Context, tx transaction.Tx, key keys.Key, encName string) (uint32, error) {
-	reserveToken, err := k.reservedSb.allocateToken(ctx, tx, EncodingSubspaceKey)
+	reserveToken, err := k.reservedSb.allocateToken(ctx, tx, string(EncodingSubspaceKey))
 	if err != nil {
 		return invalidId, err
 	}

@@ -96,12 +96,12 @@ type KeyComposer interface {
 //  - For AND filters it is possible to build internal keys for composite indexes, for OR it is not possible.
 // So for OR filter an error is returned if it is used for indexes that are composite.
 type StrictEqKeyComposer struct {
-	Prefix string
+	Table []byte
 }
 
-func NewStrictEqKeyComposer(prefix string) *StrictEqKeyComposer {
+func NewStrictEqKeyComposer(table []byte) *StrictEqKeyComposer {
 	return &StrictEqKeyComposer{
-		Prefix: prefix,
+		Table: table,
 	}
 }
 
@@ -149,7 +149,7 @@ func (s *StrictEqKeyComposer) Compose(selectors []*Selector, userDefinedKeys []*
 				primaryKeyParts = append(primaryKeyParts, s.Matcher.GetValue().AsInterface())
 			}
 
-			allKeys = append(allKeys, keys.NewKey(s.Prefix, primaryKeyParts...))
+			allKeys = append(allKeys, keys.NewKey(s.Table, primaryKeyParts...))
 		case OrOP:
 			for _, sel := range k {
 				if len(userDefinedKeys) > 1 {
@@ -157,7 +157,7 @@ func (s *StrictEqKeyComposer) Compose(selectors []*Selector, userDefinedKeys []*
 					return nil, status.Errorf(codes.InvalidArgument, "OR is not supported with composite primary keys")
 				}
 
-				allKeys = append(allKeys, keys.NewKey(s.Prefix, sel.Matcher.GetValue().AsInterface()))
+				allKeys = append(allKeys, keys.NewKey(s.Table, sel.Matcher.GetValue().AsInterface()))
 			}
 		}
 	}
