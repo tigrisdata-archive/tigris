@@ -25,6 +25,7 @@ import (
 	"github.com/tigrisdata/tigrisdb/keys"
 	"github.com/tigrisdata/tigrisdb/server/transaction"
 	"github.com/tigrisdata/tigrisdb/store/kv"
+	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"google.golang.org/grpc/codes"
 )
 
@@ -88,7 +89,7 @@ var (
 	// versions
 	encVersion = []byte{0x01}
 
-	invalidId         = uint32(0)
+	InvalidId         = uint32(0)
 	reservedBaseValue = uint32(1)
 )
 
@@ -115,7 +116,7 @@ func (r *reservedSubspace) reload(ctx context.Context, tx transaction.Tx) error 
 	r.Lock()
 	defer r.Unlock()
 
-	key := keys.NewKey([]byte(ReservedSubspaceKey))
+	key := keys.NewKey(ReservedSubspaceKey, namespaceKey)
 	it, err := tx.Read(ctx, key)
 	if err != nil {
 		return err
@@ -144,14 +145,14 @@ func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.
 		return api.Errorf(codes.InvalidArgument, "namespace is empty")
 	}
 
-	if err := r.reload(ctx, tx); err != nil {
+	if err := r.reload(ctx, tx); ulog.E(err) {
 		return err
 	}
 
 	r.RLock()
 	defer r.RUnlock()
-	log.Debug().Uint32("namespace-id", id).Str("namespace", r.allocated[id]).Msg("reserved for namespace")
 	if allocatedTo, ok := r.allocated[id]; ok {
+		log.Debug().Uint32("namespace_id", id).Str("namespace_name", r.allocated[id]).Msg("namespace reserved for")
 		if allocatedTo == namespace {
 			return nil
 		} else {
@@ -188,10 +189,11 @@ func (r *reservedSubspace) allocateToken(ctx context.Context, tx transaction.Tx,
 	}
 
 	if err := tx.Replace(ctx, key, UInt32ToByte(newReservedValue)); err != nil {
+		log.Debug().Str("key", key.String()).Uint32("value", newReservedValue).Msg("allocating token failed")
 		return 0, err
 	}
 
-	log.Debug().Interface("key", key).Uint32("value", newReservedValue).Msg("reserved new value")
+	log.Debug().Str("key", key.String()).Uint32("value", newReservedValue).Msg("allocating token succeed")
 
 	return newReservedValue, nil
 }
@@ -224,10 +226,10 @@ func (k *DictionaryEncoder) GetNamespaces(ctx context.Context, tx transaction.Tx
 
 func (k *DictionaryEncoder) EncodeDatabaseName(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32) (uint32, error) {
 	if err := k.validNamespaceId(namespaceId); err != nil {
-		return invalidId, err
+		return InvalidId, err
 	}
 	if len(dbName) == 0 {
-		return invalidId, api.Errorf(codes.InvalidArgument, "database name is empty")
+		return InvalidId, api.Errorf(codes.InvalidArgument, "database name is empty")
 	}
 
 	key := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyEnd)
@@ -252,13 +254,13 @@ func (k *DictionaryEncoder) EncodeDatabaseAsDropped(ctx context.Context, tx tran
 
 func (k *DictionaryEncoder) EncodeCollectionName(ctx context.Context, tx transaction.Tx, collection string, namespaceId uint32, dbId uint32) (uint32, error) {
 	if err := k.validNamespaceId(namespaceId); err != nil {
-		return invalidId, err
+		return InvalidId, err
 	}
 	if err := k.validDatabaseId(dbId); err != nil {
-		return invalidId, err
+		return InvalidId, err
 	}
 	if len(collection) == 0 {
-		return invalidId, api.Errorf(codes.InvalidArgument, "collection name is empty")
+		return InvalidId, api.Errorf(codes.InvalidArgument, "collection name is empty")
 	}
 
 	key := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collection, keyEnd)
@@ -284,16 +286,16 @@ func (k *DictionaryEncoder) EncodeCollectionAsDropped(ctx context.Context, tx tr
 
 func (k *DictionaryEncoder) EncodeIndexName(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32, dbId uint32, collId uint32) (uint32, error) {
 	if err := k.validNamespaceId(namespaceId); err != nil {
-		return invalidId, err
+		return InvalidId, err
 	}
 	if err := k.validDatabaseId(dbId); err != nil {
-		return invalidId, err
+		return InvalidId, err
 	}
 	if err := k.validCollectionId(collId); err != nil {
-		return invalidId, err
+		return InvalidId, err
 	}
 	if len(indexName) == 0 {
-		return invalidId, api.Errorf(codes.InvalidArgument, "index name is empty")
+		return InvalidId, api.Errorf(codes.InvalidArgument, "index name is empty")
 	}
 
 	key := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyEnd)
@@ -321,17 +323,17 @@ func (k *DictionaryEncoder) EncodeIndexAsDropped(ctx context.Context, tx transac
 
 func (k *DictionaryEncoder) encodeAsDropped(ctx context.Context, tx transaction.Tx, toDeleteKey keys.Key, newKey keys.Key, newValue uint32, encName string) error {
 	if err := tx.Delete(ctx, toDeleteKey); err != nil {
-		log.Debug().Interface("key", toDeleteKey).Err(err).Str("type", encName).Msg("existing entry deletion failed")
+		log.Debug().Str("key", toDeleteKey.String()).Err(err).Str("type", encName).Msg("existing entry deletion failed")
 		return err
 	}
-	log.Debug().Interface("key", toDeleteKey).Str("type", encName).Msg("existing entry deletion succeed")
+	log.Debug().Str("key", toDeleteKey.String()).Str("type", encName).Msg("existing entry deletion succeed")
 
 	// now do insert because we need to fail if token is already assigned
 	if err := tx.Replace(ctx, newKey, UInt32ToByte(newValue)); err != nil {
-		log.Debug().Interface("key", newKey).Uint32("value", newValue).Err(err).Str("type", encName).Msg("encoding failed")
+		log.Debug().Str("key", newKey.String()).Uint32("value", newValue).Err(err).Str("type", encName).Msg("encoding failed")
 		return err
 	}
-	log.Debug().Interface("key", newKey).Uint32("value", newValue).Str("type", encName).Msg("encoding succeed")
+	log.Debug().Str("key", newKey.String()).Uint32("value", newValue).Str("type", encName).Msg("encoding succeed")
 
 	return nil
 }
@@ -339,35 +341,35 @@ func (k *DictionaryEncoder) encodeAsDropped(ctx context.Context, tx transaction.
 func (k *DictionaryEncoder) encode(ctx context.Context, tx transaction.Tx, key keys.Key, encName string) (uint32, error) {
 	reserveToken, err := k.reservedSb.allocateToken(ctx, tx, string(EncodingSubspaceKey))
 	if err != nil {
-		return invalidId, err
+		return InvalidId, err
 	}
 
 	// now do insert because we need to fail if token is already assigned
 	if err := tx.Insert(ctx, key, UInt32ToByte(reserveToken)); err != nil {
-		log.Debug().Interface("key", key).Uint32("value", reserveToken).Err(err).Str("type", encName).Msg("encoding failed")
-		return invalidId, err
+		log.Debug().Str("type", encName).Str("key", key.String()).Uint32("value", reserveToken).Err(err).Msg("encoding failed for")
+		return InvalidId, err
 	}
-	log.Debug().Interface("key", key).Uint32("value", reserveToken).Str("type", encName).Msg("encoding succeed")
+	log.Debug().Str("type", encName).Str("key", key.String()).Uint32("value", reserveToken).Msg("encoding succeed for")
 
 	return reserveToken, nil
 }
 
 func (k *DictionaryEncoder) validNamespaceId(id uint32) error {
-	if id == invalidId {
+	if id == InvalidId {
 		return api.Errorf(codes.InvalidArgument, "invalid namespace id")
 	}
 	return nil
 }
 
 func (k *DictionaryEncoder) validDatabaseId(id uint32) error {
-	if id == invalidId {
+	if id == InvalidId {
 		return api.Errorf(codes.InvalidArgument, "invalid database id")
 	}
 	return nil
 }
 
 func (k *DictionaryEncoder) validCollectionId(id uint32) error {
-	if id == invalidId {
+	if id == InvalidId {
 		return api.Errorf(codes.InvalidArgument, "invalid collection id")
 	}
 	return nil
@@ -380,6 +382,7 @@ func (k *DictionaryEncoder) GetDatabases(ctx context.Context, tx transaction.Tx,
 		return nil, err
 	}
 
+	droppedDatabase := make(map[string]uint32)
 	var v kv.KeyValue
 	for it.Next(&v) {
 		if len(v.Key) < 5 {
@@ -388,15 +391,31 @@ func (k *DictionaryEncoder) GetDatabases(ctx context.Context, tx transaction.Tx,
 		if len(v.Key) == 5 {
 			// format <version,namespace-id,db,dbName,keyEnd>
 			end, ok := v.Key[4].(string)
-			if !ok || end != keyEnd {
+			if !ok || (end != keyEnd && end != keyDroppedEnd) {
 				return nil, api.Errorf(codes.Internal, "database encoding is missing %v", v.Key)
 			}
+
 			name, ok := v.Key[3].(string)
 			if !ok {
 				return nil, api.Errorf(codes.Internal, "database name not found %T %v", v.Key[3], v.Key[3])
 			}
 
+			if end == keyDroppedEnd {
+				log.Debug().Str("database", name).Msg("dropped database found, ignoring")
+				droppedDatabase[name] = ByteToUInt32(v.Value)
+				continue
+			}
+
 			databases[name] = ByteToUInt32(v.Value)
+		}
+	}
+
+	// retrogression check; if created and dropped both exists then the created id should be greater than dropped id
+	log.Debug().Interface("key_dropped", droppedDatabase).Msg("dropped databases")
+	log.Debug().Interface("key_created", databases).Msg("created databases")
+	for droppedDB, droppedValue := range droppedDatabase {
+		if createdValue, ok := databases[droppedDB]; ok && droppedValue >= createdValue {
+			return nil, api.Errorf(codes.Internal, "retrogression found in database assigned value database [%s] droppedValue [%d] createdValue [%d]", droppedDB, droppedValue, createdValue)
 		}
 	}
 
@@ -410,6 +429,7 @@ func (k *DictionaryEncoder) GetCollections(ctx context.Context, tx transaction.T
 		return nil, err
 	}
 
+	droppedCollection := make(map[string]uint32)
 	var v kv.KeyValue
 	for it.Next(&v) {
 		if len(v.Key) < 6 {
@@ -419,7 +439,7 @@ func (k *DictionaryEncoder) GetCollections(ctx context.Context, tx transaction.T
 		if len(v.Key) == 6 {
 			// format <version,namespace-id,db-id,coll,coll-name,keyEnd>
 			end, ok := v.Key[5].(string)
-			if !ok || end != keyEnd {
+			if !ok || (end != keyEnd && end != keyDroppedEnd) {
 				return nil, api.Errorf(codes.Internal, "collection encoding is missing %v", v.Key)
 			}
 
@@ -428,7 +448,22 @@ func (k *DictionaryEncoder) GetCollections(ctx context.Context, tx transaction.T
 				return nil, api.Errorf(codes.Internal, "collection name not found %T %v", v.Key[4], v.Key[4])
 			}
 
+			if end == keyDroppedEnd {
+				log.Debug().Str("collection", name).Msg("dropped collection found, ignoring")
+				droppedCollection[name] = ByteToUInt32(v.Value)
+				continue
+			}
+
 			collections[name] = ByteToUInt32(v.Value)
+		}
+	}
+
+	// retrogression check; if created and dropped both exists then the created id should be greater than dropped id
+	log.Debug().Interface("key_dropped", droppedCollection).Msg("dropped collections")
+	log.Debug().Interface("key_created", collections).Msg("created collections")
+	for droppedC, droppedValue := range droppedCollection {
+		if createdValue, ok := collections[droppedC]; ok && droppedValue >= createdValue {
+			return nil, api.Errorf(codes.Internal, "retrogression found in collection assigned value collection [%s] droppedValue [%d] createdValue [%d]", droppedC, droppedValue, createdValue)
 		}
 	}
 
@@ -442,6 +477,7 @@ func (k *DictionaryEncoder) GetIndexes(ctx context.Context, tx transaction.Tx, n
 		return nil, err
 	}
 
+	droppedIndexes := make(map[string]uint32)
 	var v kv.KeyValue
 	for it.Next(&v) {
 		if len(v.Key) < 6 {
@@ -450,7 +486,7 @@ func (k *DictionaryEncoder) GetIndexes(ctx context.Context, tx transaction.Tx, n
 		if len(v.Key) == 7 {
 			// if it is the format <version,namespace-id,db-id,coll-id,indexName,index-name,keyEnd>
 			end, ok := v.Key[6].(string)
-			if !ok || end != keyEnd {
+			if !ok || (end != keyEnd && end != keyDroppedEnd) {
 				// if it is not index skip it
 				continue
 			}
@@ -460,7 +496,20 @@ func (k *DictionaryEncoder) GetIndexes(ctx context.Context, tx transaction.Tx, n
 				return nil, api.Errorf(codes.Internal, "index name not found %T %v", v.Key[5], v.Key[5])
 			}
 
+			if end == keyDroppedEnd {
+				log.Debug().Str("index", name).Msg("dropped index found, ignoring")
+				droppedIndexes[name] = ByteToUInt32(v.Value)
+				continue
+			}
+
 			indexes[name] = ByteToUInt32(v.Value)
+		}
+	}
+
+	// retrogression check
+	for droppedC, droppedValue := range droppedIndexes {
+		if createdValue, ok := indexes[droppedC]; ok && droppedValue >= createdValue {
+			return nil, api.Errorf(codes.Internal, "retrogression found in indexes assigned value index [%s] droppedValue [%d] createdValue [%d]", droppedC, droppedValue, createdValue)
 		}
 	}
 
@@ -485,7 +534,7 @@ func (k *DictionaryEncoder) GetIndexId(ctx context.Context, tx transaction.Tx, i
 func (k *DictionaryEncoder) getId(ctx context.Context, tx transaction.Tx, key keys.Key) (uint32, error) {
 	it, err := tx.Read(ctx, key)
 	if err != nil {
-		return invalidId, err
+		return InvalidId, err
 	}
 
 	var row kv.KeyValue
@@ -498,7 +547,7 @@ func (k *DictionaryEncoder) getId(ctx context.Context, tx transaction.Tx, key ke
 	}
 
 	// no need to return an error if not found, upper layer will convert this as an error.
-	return invalidId, nil
+	return InvalidId, nil
 }
 
 // decode is currently only use for debugging purpose, once we have a layer on top of this encoding then we leverage this

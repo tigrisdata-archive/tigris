@@ -21,11 +21,12 @@ import (
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"github.com/tigrisdata/tigrisdb/encoding"
-	"github.com/tigrisdata/tigrisdb/schema"
+	"github.com/tigrisdata/tigrisdb/server/metadata"
 	"github.com/tigrisdata/tigrisdb/server/transaction"
 	"github.com/tigrisdata/tigrisdb/store/kv"
+	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"google.golang.org/grpc"
 )
 
@@ -45,22 +46,34 @@ type apiService struct {
 
 	kv                    kv.KV
 	txMgr                 *transaction.Manager
-	encoder               encoding.Encoder
-	schemaCache           *schema.Cache
+	encoder               metadata.Encoder
+	tenantMgr             *metadata.TenantManager
 	queryLifecycleFactory *QueryLifecycleFactory
 	queryRunnerFactory    *QueryRunnerFactory
 }
 
 func newApiService(kv kv.KV) *apiService {
 	u := &apiService{
-		kv:          kv,
-		txMgr:       transaction.NewManager(kv),
-		schemaCache: schema.NewCache(),
-		encoder:     &encoding.PrefixEncoder{},
+		kv:      kv,
+		txMgr:   transaction.NewManager(kv),
+		encoder: metadata.NewEncoder(),
 	}
 
-	u.queryLifecycleFactory = NewQueryLifecycleFactory(u.txMgr)
-	u.queryRunnerFactory = NewQueryRunnerFactory(u.kv, u.txMgr, u.encoder, u.schemaCache)
+	ctx := context.TODO()
+	tx, err := u.txMgr.StartTxWithoutTracking(ctx)
+	if ulog.E(err) {
+		log.Fatal().Err(err).Msgf("error starting server: starting transaction failed")
+	}
+
+	tenantMgr := metadata.NewTenantManager()
+	if err := tenantMgr.Reload(ctx, tx); ulog.E(err) {
+		log.Fatal().Err(err).Msgf("error starting server: reloading tenants failed")
+	}
+	_ = tx.Commit(ctx)
+
+	u.tenantMgr = tenantMgr
+	u.queryLifecycleFactory = NewQueryLifecycleFactory(u.txMgr, u.tenantMgr)
+	u.queryRunnerFactory = NewQueryRunnerFactory(u.txMgr, u.encoder)
 	return u
 }
 
@@ -259,21 +272,59 @@ func (s *apiService) DropCollection(ctx context.Context, r *api.DropCollectionRe
 	}, nil
 }
 
-func (s *apiService) ListDatabases(_ context.Context, _ *api.ListDatabasesRequest) (*api.ListDatabasesResponse, error) {
-	return &api.ListDatabasesResponse{}, nil
+func (s *apiService) ListDatabases(ctx context.Context, r *api.ListDatabasesRequest) (*api.ListDatabasesResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
+	queryRunner := s.queryRunnerFactory.GetDatabaseQueryRunner()
+	queryRunner.SetListDatabaseReq(r)
+
+	resp, err := s.Run(ctx, &ReqOptions{
+		queryRunner: queryRunner,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.ListDatabasesResponse), nil
 }
 
 func (s *apiService) ListCollections(_ context.Context, _ *api.ListCollectionsRequest) (*api.ListCollectionsResponse, error) {
 	return &api.ListCollectionsResponse{}, nil
 }
 
-func (s *apiService) CreateDatabase(_ context.Context, _ *api.CreateDatabaseRequest) (*api.CreateDatabaseResponse, error) {
+func (s *apiService) CreateDatabase(ctx context.Context, r *api.CreateDatabaseRequest) (*api.CreateDatabaseResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
+	queryRunner := s.queryRunnerFactory.GetDatabaseQueryRunner()
+	queryRunner.SetCreateDatabaseReq(r)
+	if _, err := s.Run(ctx, &ReqOptions{
+		queryRunner: queryRunner,
+	}); err != nil {
+		return nil, err
+	}
+
 	return &api.CreateDatabaseResponse{
 		Msg: "database created successfully",
 	}, nil
 }
 
-func (s *apiService) DropDatabase(_ context.Context, _ *api.DropDatabaseRequest) (*api.DropDatabaseResponse, error) {
+func (s *apiService) DropDatabase(ctx context.Context, r *api.DropDatabaseRequest) (*api.DropDatabaseResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
+	queryRunner := s.queryRunnerFactory.GetDatabaseQueryRunner()
+	queryRunner.SetDropDatabaseReq(r)
+	if _, err := s.Run(ctx, &ReqOptions{
+		queryRunner: queryRunner,
+	}); err != nil {
+		return nil, err
+	}
+
 	return &api.DropDatabaseResponse{
 		Msg: "database dropped successfully",
 	}, nil

@@ -59,6 +59,7 @@ func testRead(t *testing.T, c driver.Driver, filter driver.Filter, expected []dr
 func testClient(t *testing.T, c driver.Driver) {
 	ctx := context.TODO()
 
+	_ = c.DropDatabase(ctx, "db1", &driver.DatabaseOptions{})
 	_ = c.DropCollection(ctx, "db1", "c1", &driver.CollectionOptions{})
 
 	schema := `{
@@ -79,7 +80,10 @@ func testClient(t *testing.T, c driver.Driver) {
 		"primary_key": ["K1", "K2"]
 	}`
 
-	err := c.CreateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
+	err := c.CreateDatabase(ctx, "db1", &driver.DatabaseOptions{})
+	require.NoError(t, err)
+
+	err = c.CreateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
 	require.NoError(t, err)
 
 	err = c.CreateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
@@ -120,6 +124,7 @@ func testClient(t *testing.T, c driver.Driver) {
 func testTxClient(t *testing.T, c driver.Driver) {
 	ctx := context.TODO()
 
+	_ = c.DropDatabase(ctx, "db1", &driver.DatabaseOptions{})
 	_ = c.DropCollection(ctx, "db1", "c1", &driver.CollectionOptions{})
 
 	schema := `{
@@ -140,7 +145,10 @@ func testTxClient(t *testing.T, c driver.Driver) {
 		"primary_key": ["K1", "K2"]
 	}`
 
-	err := c.CreateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
+	err := c.CreateDatabase(ctx, "db1", &driver.DatabaseOptions{})
+	require.NoError(t, err)
+
+	err = c.CreateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
 	require.NoError(t, err)
 
 	tx, err := c.BeginTx(ctx, "db1", &driver.TxOptions{})

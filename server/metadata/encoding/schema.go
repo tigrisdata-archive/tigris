@@ -68,11 +68,11 @@ func (s *SchemaSubspace) Put(ctx context.Context, tx transaction.Tx, namespaceId
 
 	key := keys.NewKey(SchemaSubspaceKey, schVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), keyEnd, UInt32ToByte(uint32(revision)))
 	if err := tx.Insert(ctx, key, schema); err != nil {
-		log.Debug().Interface("key", key).Str("value", string(schema)).Err(err).Msg("storing schema failed")
+		log.Debug().Str("key", key.String()).Str("value", string(schema)).Err(err).Msg("storing schema failed")
 		return err
 	}
 
-	log.Debug().Interface("key", key).Str("value", string(schema)).Msg("storing schema succeed")
+	log.Debug().Str("key", key.String()).Str("value", string(schema)).Msg("storing schema succeed")
 	return nil
 }
 
@@ -128,10 +128,10 @@ func (s *SchemaSubspace) Get(ctx context.Context, tx transaction.Tx, namespaceId
 func (s *SchemaSubspace) Delete(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbId uint32, collId uint32) error {
 	key := keys.NewKey(SchemaSubspaceKey, schVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), keyEnd)
 	if err := tx.Delete(ctx, key); err != nil {
-		log.Debug().Interface("key", key).Err(err).Msg("deleting schema failed")
+		log.Debug().Str("key", key.String()).Err(err).Msg("deleting schema failed")
 		return err
 	}
 
-	log.Debug().Interface("key", key).Msg("deleting schema succeed")
+	log.Debug().Str("key", key.String()).Msg("deleting schema succeed")
 	return nil
 }

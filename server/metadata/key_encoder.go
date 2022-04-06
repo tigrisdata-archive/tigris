@@ -19,19 +19,22 @@ import (
 	"github.com/tigrisdata/tigrisdb/keys"
 	"github.com/tigrisdata/tigrisdb/schema"
 	"github.com/tigrisdata/tigrisdb/server/metadata/encoding"
-	ulog "github.com/tigrisdata/tigrisdb/util/log"
-	"github.com/tigrisdata/tigrisdb/value"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // Encoder is used to encode/decode values of the Key.
 type Encoder interface {
-	// EncodeTableName returns encoded bytes which are formed by combining namespace, database, collection and index ids.
-	EncodeTableName(ns Namespace, db *Database, coll *schema.DefaultCollection, idx *schema.Index) []byte
+	// EncodeTableName returns encoded bytes which are formed by combining namespace, database, and collection.
+	EncodeTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) []byte
+	// EncodeIndexName returns encoded bytes for the index name
+	EncodeIndexName(idx *schema.Index) []byte
 	// EncodeKey returns encoded bytes of the key which will be used to store the values in fdb. The Key return by this
-	// method is set with encoded table name and index values.
-	EncodeKey(ns Namespace, db *Database, coll *schema.DefaultCollection, idx *schema.Index, doc map[string]*structpb.Value) (keys.Key, error)
+	// method has two parts,
+	//   - tableName: This is set with an encoding of namespace, database and collection id.
+	//   - IndexParts: This has the index identifier and value(s) associated with a single or composite index. This is appended
+	//	   to the table name to form the Key. The first element of this list is the dictionary encoding of index type key
+	//	   information i.e. whether the index is pkey, etc. The remaining elements are values for this index.
+	EncodeKey(ns Namespace, db *Database, coll *schema.DefaultCollection, idx *schema.Index, idxParts []interface{}) (keys.Key, error)
 }
 
 // NewEncoder creates Dictionary encoder to encode keys.
@@ -41,11 +44,15 @@ func NewEncoder() Encoder {
 
 type DictKeyEncoder struct{}
 
-func (d *DictKeyEncoder) EncodeTableName(ns Namespace, db *Database, coll *schema.DefaultCollection, idx *schema.Index) []byte {
-	return d.buildTableParts(ns, db, coll, idx)
+func (d *DictKeyEncoder) EncodeTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) []byte {
+	return d.encodedTableName(ns, db, coll)
 }
 
-func (d *DictKeyEncoder) EncodeKey(ns Namespace, db *Database, coll *schema.DefaultCollection, idx *schema.Index, doc map[string]*structpb.Value) (keys.Key, error) {
+func (d *DictKeyEncoder) EncodeIndexName(idx *schema.Index) []byte {
+	return d.encodedIdxName(idx)
+}
+
+func (d *DictKeyEncoder) EncodeKey(ns Namespace, db *Database, coll *schema.DefaultCollection, idx *schema.Index, idxParts []interface{}) (keys.Key, error) {
 	if db == nil {
 		return nil, api.Errorf(codes.InvalidArgument, "database is missing")
 	}
@@ -56,41 +63,24 @@ func (d *DictKeyEncoder) EncodeKey(ns Namespace, db *Database, coll *schema.Defa
 		return nil, api.Errorf(codes.InvalidArgument, "index is missing")
 	}
 
-	indexKeyParts, err := d.buildIndexKeyParts(idx.Fields, doc)
-	if err != nil {
-		return nil, err
-	}
+	encodedTable := d.encodedTableName(ns, db, coll)
+	encodedIdxName := d.encodedIdxName(idx)
 
-	table := d.buildTableParts(ns, db, coll, idx)
-	return keys.NewKey(table, indexKeyParts...), nil
+	var remainingKeyParts []interface{}
+	remainingKeyParts = append(remainingKeyParts, encodedIdxName)
+	remainingKeyParts = append(remainingKeyParts, idxParts...)
+
+	return keys.NewKey(encodedTable, remainingKeyParts...), nil
 }
 
-func (d *DictKeyEncoder) buildTableParts(ns Namespace, db *Database, coll *schema.DefaultCollection, idx *schema.Index) []byte {
-	var tableKey []byte
-	tableKey = append(tableKey, encoding.UInt32ToByte(ns.Id())...)
-	tableKey = append(tableKey, encoding.UInt32ToByte(db.id)...)
-	tableKey = append(tableKey, encoding.UInt32ToByte(coll.Id)...)
-	tableKey = append(tableKey, encoding.UInt32ToByte(idx.Id)...)
-
-	return tableKey
+func (d *DictKeyEncoder) encodedTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) []byte {
+	var appendTo []byte
+	appendTo = append(appendTo, encoding.UInt32ToByte(ns.Id())...)
+	appendTo = append(appendTo, encoding.UInt32ToByte(db.id)...)
+	appendTo = append(appendTo, encoding.UInt32ToByte(coll.Id)...)
+	return appendTo
 }
 
-func (d *DictKeyEncoder) buildIndexKeyParts(userDefinedKeys []*schema.Field, doc map[string]*structpb.Value) ([]interface{}, error) {
-	var indexKeyParts []interface{}
-	for _, v := range userDefinedKeys {
-		k, ok := doc[v.Name()]
-		if !ok {
-			return nil, ulog.CE("missing index key column(s) %v", v)
-		}
-
-		val, err := value.NewValueUsingSchema(v, k)
-		if err != nil {
-			return nil, err
-		}
-		indexKeyParts = append(indexKeyParts, val.AsInterface())
-	}
-	if len(indexKeyParts) == 0 {
-		return nil, ulog.CE("missing index key column(s)")
-	}
-	return indexKeyParts, nil
+func (d *DictKeyEncoder) encodedIdxName(idx *schema.Index) []byte {
+	return encoding.UInt32ToByte(idx.Id)
 }

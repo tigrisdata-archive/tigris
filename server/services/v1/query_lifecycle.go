@@ -17,36 +17,43 @@ package v1
 import (
 	"context"
 
+	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	"github.com/tigrisdata/tigrisdb/server/metadata"
 	"github.com/tigrisdata/tigrisdb/server/transaction"
+	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"google.golang.org/grpc/codes"
 )
 
 // QueryLifecycleFactory is responsible for returning queryLifecycle objects
 type QueryLifecycleFactory struct {
-	txMgr *transaction.Manager
+	txMgr     *transaction.Manager
+	tenantMgr *metadata.TenantManager
 }
 
-func NewQueryLifecycleFactory(txMgr *transaction.Manager) *QueryLifecycleFactory {
+func NewQueryLifecycleFactory(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager) *QueryLifecycleFactory {
 	return &QueryLifecycleFactory{
-		txMgr: txMgr,
+		txMgr:     txMgr,
+		tenantMgr: tenantMgr,
 	}
 }
 
 // Get will create and return a queryLifecycle object
 func (f *QueryLifecycleFactory) Get() *queryLifecycle {
-	return newQueryLifecycle(f.txMgr)
+	return newQueryLifecycle(f.txMgr, f.tenantMgr)
 }
 
 // queryLifecycle manages the lifecycle of a query that it is handling. Single place that can be used to validate
 // the query, authorize the query, or to log or emit metrics related to this query.
 type queryLifecycle struct {
-	txMgr *transaction.Manager
+	txMgr     *transaction.Manager
+	tenantMgr *metadata.TenantManager
 }
 
-func newQueryLifecycle(txMgr *transaction.Manager) *queryLifecycle {
+func newQueryLifecycle(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager) *queryLifecycle {
 	return &queryLifecycle{
-		txMgr: txMgr,
+		txMgr:     txMgr,
+		tenantMgr: tenantMgr,
 	}
 }
 
@@ -58,9 +65,22 @@ func (q *queryLifecycle) run(ctx context.Context, options *ReqOptions) (*Respons
 		return nil, api.Errorf(codes.Internal, "query runner is missing")
 	}
 
+	// ToDo: extract the namespace from the token. For now, just use the default tenant
+	tenant := q.tenantMgr.GetTenant(metadata.DefaultNamespaceName)
+	if tenant != nil {
+		log.Debug().Str("ns", tenant.String()).Msg("tenant found")
+	}
+
 	tx, err := q.txMgr.GetInheritedOrStartTx(ctx, options.txCtx, false)
-	if err != nil {
+	if ulog.E(err) {
 		return nil, err
+	}
+
+	if tenant == nil {
+		log.Debug().Str("tenant", metadata.DefaultNamespaceName).Msg("tenant not found, creating")
+		if tenant, err = q.tenantMgr.CreateOrGetTenant(ctx, tx, metadata.NewDefaultNamespace()); ulog.E(err) {
+			return nil, err
+		}
 	}
 
 	var resp *Response
@@ -77,6 +97,6 @@ func (q *queryLifecycle) run(ctx context.Context, options *ReqOptions) (*Respons
 		}
 	}()
 
-	resp, txErr = options.queryRunner.Run(ctx, tx)
+	resp, txErr = options.queryRunner.Run(ctx, tx, tenant)
 	return resp, txErr
 }

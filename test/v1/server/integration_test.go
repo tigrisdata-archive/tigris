@@ -28,12 +28,12 @@ func SetupSuites() []suite.TestingSuite {
 	suites = append(suites, &DatabaseSuite{})
 
 	suites = append(suites, &CollectionSuite{
-		database: "db1",
+		database: "integration_db1",
 	})
 
 	suites = append(suites, &DocumentSuite{
-		database:   "db2",
-		collection: "test_collection",
+		database:   "integration_db2",
+		collection: "integration_test_collection",
 	})
 	return suites
 }

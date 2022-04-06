@@ -44,7 +44,8 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		tx, err := tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
 
-		require.NoError(t, m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 2}))
+		_, err = m.CreateOrGetTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
+		require.NoError(t, err)
 
 		tenant := m.GetTenant("ns-test1")
 		require.Equal(t, "ns-test1", tenant.namespace.Name())
@@ -61,8 +62,11 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		tx, err := tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
 
-		require.NoError(t, m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 2}))
-		require.NoError(t, m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test2", 3}))
+		_, err = m.CreateOrGetTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
+		require.NoError(t, err)
+
+		_, err = m.CreateOrGetTenant(ctx, tx, &TenantNamespace{"ns-test2", 3})
+		require.NoError(t, err)
 
 		tenant := m.GetTenant("ns-test1")
 		require.Equal(t, "ns-test1", tenant.namespace.Name())
@@ -85,13 +89,14 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		m := NewTenantManager()
 		tx, err := tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
-		require.NoError(t, m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 2}))
+		_, err = m.CreateOrGetTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
+		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
 		// should fail now
 		tx, err = tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
-		err = m.CreateTenant(context.TODO(), tx, &TenantNamespace{"ns-test1", 3})
+		_, err = m.CreateOrGetTenant(context.TODO(), tx, &TenantNamespace{"ns-test1", 3})
 		require.Equal(t, "id is already assigned to 'ns-test1'", err.(*api.TigrisDBError).Error())
 		require.NoError(t, tx.Commit(context.TODO()))
 
@@ -104,13 +109,14 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		m := NewTenantManager()
 		tx, err := tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
-		require.NoError(t, m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 2}))
+		_, err = m.CreateOrGetTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
+		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
 		// should fail now
 		tx, err = tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
-		err = m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test2", 2})
+		_, err = m.CreateOrGetTenant(ctx, tx, &TenantNamespace{"ns-test2", 2})
 		require.Equal(t, "id is already assigned to the namespace 'ns-test1'", err.(*api.TigrisDBError).Error())
 		require.NoError(t, tx.Rollback(ctx))
 
@@ -135,7 +141,8 @@ func TestTenantManager_CreateDatabases(t *testing.T) {
 		tx, err := tm.StartTxWithoutTracking(context.TODO())
 		require.NoError(t, err)
 
-		require.NoError(t, m.CreateTenant(context.TODO(), tx, &TenantNamespace{"ns-test1", 2}))
+		_, err = m.CreateOrGetTenant(context.TODO(), tx, &TenantNamespace{"ns-test1", 2})
+		require.NoError(t, err)
 		tenant := m.GetTenant("ns-test1")
 		require.NoError(t, tenant.CreateDatabase(ctx, tx, "db1"))
 		require.NoError(t, tenant.CreateDatabase(ctx, tx, "db2"))
@@ -172,7 +179,8 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 		tx, err := tm.StartTxWithoutTracking(context.TODO())
 		require.NoError(t, err)
 
-		require.NoError(t, m.CreateTenant(context.TODO(), tx, &TenantNamespace{"ns-test1", 2}))
+		_, err = m.CreateOrGetTenant(context.TODO(), tx, &TenantNamespace{"ns-test1", 2})
+		require.NoError(t, err)
 		tenant := m.GetTenant("ns-test1")
 		require.NoError(t, tenant.CreateDatabase(ctx, tx, "db1"))
 		require.NoError(t, tenant.CreateDatabase(ctx, tx, "db2"))
@@ -233,7 +241,8 @@ func TestTenantManager_DropCollection(t *testing.T) {
 		tx, err := tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
 
-		require.NoError(t, m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 2}))
+		_, err = m.CreateOrGetTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
+		require.NoError(t, err)
 		tenant := m.GetTenant("ns-test1")
 		require.NoError(t, tenant.CreateDatabase(ctx, tx, "db1"))
 		require.NoError(t, tenant.CreateDatabase(ctx, tx, "db2"))

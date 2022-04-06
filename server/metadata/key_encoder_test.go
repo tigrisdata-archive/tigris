@@ -15,7 +15,6 @@
 package metadata
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -30,10 +29,11 @@ func TestEncodeKey(t *testing.T) {
 	idx := &schema.Index{Id: 10}
 
 	k := NewEncoder()
-	tbl := k.EncodeTableName(ns, db, coll, idx)
-	fmt.Println(tbl)
-	require.Equal(t, uint32(1), encoding.ByteToUInt32(tbl[0:4]))
-	require.Equal(t, uint32(3), encoding.ByteToUInt32(tbl[4:8]))
-	require.Equal(t, uint32(5), encoding.ByteToUInt32(tbl[8:12]))
-	require.Equal(t, uint32(10), encoding.ByteToUInt32(tbl[12:16]))
+	encodedTable := k.EncodeTableName(ns, db, coll)
+	require.Equal(t, uint32(1), encoding.ByteToUInt32(encodedTable[0:4]))
+	require.Equal(t, uint32(3), encoding.ByteToUInt32(encodedTable[4:8]))
+	require.Equal(t, uint32(5), encoding.ByteToUInt32(encodedTable[8:12]))
+
+	encodedIdx := k.EncodeIndexName(idx)
+	require.Equal(t, uint32(10), encoding.ByteToUInt32(encodedIdx))
 }
