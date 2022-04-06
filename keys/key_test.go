@@ -23,9 +23,9 @@ import (
 func TestKey(t *testing.T) {
 	k := NewKey(nil, int64(10))
 	require.Nil(t, k.Table())
-	require.Equal(t, []interface{}{int64(10)}, k.IndexKeys())
+	require.Equal(t, []interface{}{int64(10)}, k.IndexParts())
 
 	k = NewKey([]byte("foo"), []interface{}{int64(5)}...)
-	require.Equal(t, []interface{}{int64(5)}, k.IndexKeys())
+	require.Equal(t, []interface{}{int64(5)}, k.IndexParts())
 	require.Equal(t, []byte("foo"), k.Table())
 }

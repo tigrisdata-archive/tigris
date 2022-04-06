@@ -424,7 +424,7 @@ func (t *ftx) Read(_ context.Context, table []byte, key Key) (Iterator, error) {
 
 	r := t.tx.GetRange(k, fdb.RangeOptions{})
 
-	return &fdbIterator{it: r.Iterator(), subspace: subspace.FromBytes([]byte(table))}, nil
+	return &fdbIterator{it: r.Iterator(), subspace: subspace.FromBytes(table)}, nil
 }
 
 func (t *ftx) ReadRange(_ context.Context, table []byte, lKey Key, rKey Key) (Iterator, error) {
@@ -435,7 +435,7 @@ func (t *ftx) ReadRange(_ context.Context, table []byte, lKey Key, rKey Key) (It
 
 	log.Debug().Str("table", string(table)).Interface("lKey", lKey).Interface("rKey", rKey).Msg("tx read range")
 
-	return &fdbIterator{it: r.Iterator(), subspace: subspace.FromBytes([]byte(table))}, nil
+	return &fdbIterator{it: r.Iterator(), subspace: subspace.FromBytes(table)}, nil
 }
 
 func (t *ftx) SetVersionstampedValue(_ context.Context, key []byte, value []byte) error {

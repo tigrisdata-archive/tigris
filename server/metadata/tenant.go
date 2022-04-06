@@ -16,8 +16,10 @@ package metadata
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
+	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/schema"
 	"github.com/tigrisdata/tigrisdb/server/metadata/encoding"
@@ -29,13 +31,11 @@ import (
 type NamespaceType string
 
 const (
-	// DefaultType is for "default" namespace in the cluster which means all the databases created are under a single
+	// DefaultNamespaceName is for "default" namespace in the cluster which means all the databases created are under a single
 	// namespace.
 	// It is totally fine for a deployment to choose this and just have one namespace. The default assigned value for
 	// this namespace is 1.
-	DefaultType NamespaceType = "default_namespace"
-	// TenantType is for tenant namespace i.e. when there is a need of a higher layer of logical grouping of databases.
-	TenantType NamespaceType = "tenant_namespace"
+	DefaultNamespaceName string = "default_namespace"
 
 	DefaultNamespaceId = uint32(1)
 )
@@ -58,12 +58,16 @@ type Namespace interface {
 type DefaultNamespace struct{}
 
 func (n *DefaultNamespace) Name() string {
-	return string(DefaultType)
+	return DefaultNamespaceName
 }
 
 // Id returns id assigned to the namespace
 func (n *DefaultNamespace) Id() uint32 {
 	return DefaultNamespaceId
+}
+
+func NewDefaultNamespace() *DefaultNamespace {
+	return &DefaultNamespace{}
 }
 
 // TenantNamespace is used when there is a finer isolation of databases is needed. The caller provides a unique
@@ -105,8 +109,10 @@ func NewTenantManager() *TenantManager {
 	}
 }
 
-// CreateTenant is a thread safe implementation of creating a new tenant. It returns nil if tenant already exists.
-func (m *TenantManager) CreateTenant(ctx context.Context, tx transaction.Tx, namespace Namespace) error {
+// CreateOrGetTenant is a thread safe implementation of creating a new tenant. It returns the tenant if it already exists.
+// This is mainly returning the tenant to avoid calling "Get" again after creating the tenant. This method is expensive
+// as it reloads the existing tenants from the disk if it sees the tenant is not present in the cache.
+func (m *TenantManager) CreateOrGetTenant(ctx context.Context, tx transaction.Tx, namespace Namespace) (*Tenant, error) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -114,18 +120,28 @@ func (m *TenantManager) CreateTenant(ctx context.Context, tx transaction.Tx, nam
 	if ok {
 		if tenant.namespace.Id() == namespace.Id() {
 			// tenant was present
-			return nil
+			return tenant, nil
 		} else {
-			return api.Errorf(codes.InvalidArgument, "id is already assigned to '%s'", tenant.namespace.Name())
+			return nil, api.Errorf(codes.InvalidArgument, "id is already assigned to '%s'", tenant.namespace.Name())
 		}
 	}
 
-	if err := m.encoder.ReserveNamespace(ctx, tx, namespace.Name(), namespace.Id()); err != nil {
-		return err
+	if err := m.reload(ctx, tx); ulog.E(err) {
+		// first reload
+		return nil, err
+	}
+	if tenant, ok := m.tenants[namespace.Name()]; ok {
+		// if it is created by some other thread in parallel then we should see it now.
+		return tenant, nil
 	}
 
-	m.tenants[namespace.Name()] = NewTenant(namespace, m.encoder)
-	return nil
+	if err := m.encoder.ReserveNamespace(ctx, tx, namespace.Name(), namespace.Id()); ulog.E(err) {
+		return nil, err
+	}
+
+	tenant = NewTenant(namespace, m.encoder)
+	m.tenants[namespace.Name()] = tenant
+	return tenant, nil
 }
 
 // GetTenant returns tenants if exists in the tenant map or nil.
@@ -141,6 +157,7 @@ func (m *TenantManager) GetTenant(namespace string) *Tenant {
 // As this is an expensive call, the reloading happens during start time or in background. It is possible that reloading
 // fails during start time then we rely on background thread to reload all the mapping.
 func (m *TenantManager) Reload(ctx context.Context, tx transaction.Tx) error {
+	log.Debug().Msg("reloading tenants")
 	m.Lock()
 	defer m.Unlock()
 
@@ -152,6 +169,7 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx) error {
 	if err != nil {
 		return err
 	}
+	log.Debug().Interface("ns", namespaces).Msg("existing namespaces")
 
 	for namespace, id := range namespaces {
 		if _, ok := m.tenants[namespace]; !ok {
@@ -160,6 +178,7 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx) error {
 	}
 
 	for _, tenant := range m.tenants {
+		log.Debug().Interface("tenant", tenant.String()).Msg("reloading tenant")
 		if err := tenant.reload(ctx, tx); err != nil {
 			return err
 		}
@@ -214,6 +233,13 @@ func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx) error {
 	return nil
 }
 
+func (tenant *Tenant) GetNamespace() Namespace {
+	tenant.RLock()
+	defer tenant.RUnlock()
+
+	return tenant.namespace
+}
+
 // CreateDatabase is responsible for first creating a dictionary encoding of the database and then adding an entry for
 // this database in the tenant object.
 func (tenant *Tenant) CreateDatabase(ctx context.Context, tx transaction.Tx, dbName string) error {
@@ -221,6 +247,7 @@ func (tenant *Tenant) CreateDatabase(ctx context.Context, tx transaction.Tx, dbN
 	defer tenant.Unlock()
 
 	if _, ok := tenant.databases[dbName]; ok {
+		log.Debug().Str("db", dbName).Msg("already exist, ignoring create request")
 		return nil
 	}
 
@@ -284,8 +311,12 @@ func (tenant *Tenant) GetDatabase(ctx context.Context, tx transaction.Tx, dbName
 	// ToDo: if version has changed then reload
 	if _, ok := tenant.databases[dbName]; !ok {
 		id, err := tenant.encoder.GetDatabaseId(ctx, tx, dbName, tenant.namespace.Id())
-		if err != nil {
+		if ulog.E(err) {
 			return nil, err
+		}
+		if id == encoding.InvalidId {
+			// nothing found
+			return nil, nil
 		}
 
 		if err := tenant.reloadDatabase(ctx, tx, dbName, id); ulog.E(err) {
@@ -295,6 +326,18 @@ func (tenant *Tenant) GetDatabase(ctx context.Context, tx transaction.Tx, dbName
 	}
 
 	return tenant.databases[dbName], nil
+}
+
+func (tenant *Tenant) ListDatabases(ctx context.Context, tx transaction.Tx) []string {
+	tenant.RLock()
+	defer tenant.RUnlock()
+
+	var databases []string
+	for dbName := range tenant.databases {
+		databases = append(databases, dbName)
+	}
+
+	return databases
 }
 
 func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbName string, dbId uint32) error {
@@ -414,6 +457,10 @@ func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db 
 	delete(db.collections, cHolder.name)
 
 	return nil
+}
+
+func (tenant *Tenant) String() string {
+	return fmt.Sprintf("id: %d, name: %s", tenant.namespace.Id(), tenant.namespace.Name())
 }
 
 // Database is to manage the collections for this database.

@@ -102,7 +102,7 @@ func TestKeyBuilder(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		b := NewKeyBuilder(NewStrictEqKeyComposer(nil))
+		b := NewKeyBuilder(NewStrictEqKeyComposer(dummyEncodeFunc))
 		filters := testFilters(t, c.userInput)
 		buildKeys, err := b.Build(filters, c.userKeys)
 		require.Equal(t, c.expError, err)
@@ -122,10 +122,14 @@ func TestKeyBuilder(t *testing.T) {
 
 func BenchmarkStrictEqKeyComposer_Compose(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		kb := NewKeyBuilder(NewStrictEqKeyComposer(nil))
+		kb := NewKeyBuilder(NewStrictEqKeyComposer(dummyEncodeFunc))
 		filters := testFilters(b, []byte(`{"b": 10, "a": {"$eq": 10}, "c": "foo"}}`))
 		_, err := kb.Build(filters, []*schema.Field{{FieldName: "a", DataType: schema.IntType}, {FieldName: "b", DataType: schema.IntType}, {FieldName: "c", DataType: schema.IntType}})
 		require.NoError(b, err)
 	}
 	b.ReportAllocs()
+}
+
+func dummyEncodeFunc(indexParts ...interface{}) (keys.Key, error) {
+	return keys.NewKey(nil, indexParts...), nil
 }

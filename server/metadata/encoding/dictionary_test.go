@@ -140,7 +140,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 		v, err = k.GetDatabaseId(ctx, tx, "db-1", 1234)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
-		require.Equal(t, v, invalidId)
+		require.Equal(t, v, InvalidId)
 	})
 	t.Run("drop_collection", func(t *testing.T) {
 		_ = kv.DropTable(ctx, EncodingSubspaceKey)
@@ -184,7 +184,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 		v, err = k.GetCollectionId(ctx, tx, "coll-1", 1234, dbId)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
-		require.Equal(t, v, invalidId)
+		require.Equal(t, v, InvalidId)
 	})
 	t.Run("drop_index", func(t *testing.T) {
 		_ = kv.DropTable(ctx, EncodingSubspaceKey)
@@ -234,7 +234,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 		v, err = k.GetIndexId(ctx, tx, "idx-1", 1234, dbId, collId)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
-		require.Equal(t, v, invalidId)
+		require.Equal(t, v, InvalidId)
 	})
 	t.Run("drop_collection_multiple", func(t *testing.T) {
 		_ = kv.DropTable(ctx, EncodingSubspaceKey)
@@ -278,7 +278,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 		v, err = k.GetCollectionId(ctx, tx, "coll-1", 1234, dbId)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
-		require.Equal(t, v, invalidId)
+		require.Equal(t, v, InvalidId)
 
 		tx, err = tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
@@ -318,15 +318,15 @@ func TestDictionaryEncoding_Error(t *testing.T) {
 	require.NoError(t, err)
 	dbId, err := k.EncodeDatabaseName(ctx, tx, "db-1", 0)
 	require.Error(t, api.Errorf(codes.InvalidArgument, "invalid namespace id"), err)
-	require.Equal(t, invalidId, dbId)
+	require.Equal(t, InvalidId, dbId)
 
 	collId, err := k.EncodeCollectionName(ctx, tx, "coll-1", 1234, 0)
 	require.Error(t, api.Errorf(codes.InvalidArgument, "invalid database id"), err)
-	require.Equal(t, invalidId, collId)
+	require.Equal(t, InvalidId, collId)
 
 	indexId, err := k.EncodeIndexName(ctx, tx, "pkey", 1234, 1, 0)
 	require.Error(t, api.Errorf(codes.InvalidArgument, "invalid collection id"), err)
-	require.Equal(t, invalidId, indexId)
+	require.Equal(t, InvalidId, indexId)
 	require.NoError(t, tx.Rollback(context.TODO()))
 }
 
