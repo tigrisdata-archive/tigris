@@ -12,20 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package keys
+package metadata
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/tigrisdata/tigrisdb/schema"
+	"github.com/tigrisdata/tigrisdb/server/metadata/encoding"
 )
 
-func TestKey(t *testing.T) {
-	k := NewKey(nil, int64(10))
-	require.Nil(t, k.Table())
-	require.Equal(t, []interface{}{int64(10)}, k.IndexKeys())
+func TestEncodeKey(t *testing.T) {
+	ns := NewTenantNamespace("hello", 1)
+	db := &Database{id: 3}
+	coll := &schema.DefaultCollection{Id: 5}
+	idx := &schema.Index{Id: 10}
 
-	k = NewKey([]byte("foo"), []interface{}{int64(5)}...)
-	require.Equal(t, []interface{}{int64(5)}, k.IndexKeys())
-	require.Equal(t, []byte("foo"), k.Table())
+	k := NewEncoder()
+	tbl := k.EncodeTableName(ns, db, coll, idx)
+	fmt.Println(tbl)
+	require.Equal(t, uint32(1), encoding.ByteToUInt32(tbl[0:4]))
+	require.Equal(t, uint32(3), encoding.ByteToUInt32(tbl[4:8]))
+	require.Equal(t, uint32(5), encoding.ByteToUInt32(tbl[8:12]))
+	require.Equal(t, uint32(10), encoding.ByteToUInt32(tbl[12:16]))
 }

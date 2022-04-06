@@ -66,43 +66,43 @@ func TestKeyBuilder(t *testing.T) {
 			[]*schema.Field{{FieldName: "a", DataType: schema.IntType}},
 			[]byte(`{"b": 10, "a": {"$eq": 1}}`),
 			nil,
-			[]keys.Key{keys.NewKey("", int64(1))},
+			[]keys.Key{keys.NewKey(nil, int64(1))},
 		},
 		{
 			// composite user defined key
 			[]*schema.Field{{FieldName: "a", DataType: schema.BoolType}, {FieldName: "b", DataType: schema.IntType}, {FieldName: "c", DataType: schema.StringType}},
 			[]byte(`{"b": 10, "a": {"$eq": true}, "c": "foo"}`),
 			nil,
-			[]keys.Key{keys.NewKey("", true, int64(10), "foo")},
+			[]keys.Key{keys.NewKey(nil, true, int64(10), "foo")},
 		},
 		{
 			// single with AND/OR filter
 			[]*schema.Field{{FieldName: "a", DataType: schema.IntType}},
 			[]byte(`{"$or": [{"a": 1}, {"$and": [{"a":2}, {"f1": 3}]}], "$and": [{"a": 4}, {"$or": [{"a":5}, {"f2": 6}]}, {"$or": [{"a":5}, {"a": 6}]}]}`),
 			nil,
-			[]keys.Key{keys.NewKey("", int64(1)), keys.NewKey("", int64(4)), keys.NewKey("", int64(2)), keys.NewKey("", int64(5)), keys.NewKey("", int64(5)), keys.NewKey("", int64(6))},
+			[]keys.Key{keys.NewKey(nil, int64(1)), keys.NewKey(nil, int64(4)), keys.NewKey(nil, int64(2)), keys.NewKey(nil, int64(5)), keys.NewKey(nil, int64(5)), keys.NewKey(nil, int64(6))},
 		},
 		{
 			// composite with AND filter
 			[]*schema.Field{{FieldName: "a", DataType: schema.IntType}, {FieldName: "b", DataType: schema.StringType}},
 			[]byte(`{"$and":[{"a":1},{"b":"aaa"},{"$and":[{"a":2},{"c":5},{"b":"bbb"}]}]}`),
 			nil,
-			[]keys.Key{keys.NewKey("", int64(1), "aaa"), keys.NewKey("", int64(2), "bbb")},
+			[]keys.Key{keys.NewKey(nil, int64(1), "aaa"), keys.NewKey(nil, int64(2), "bbb")},
 		}, {
 			[]*schema.Field{{FieldName: "a", DataType: schema.IntType}},
 			[]byte(`{"b":10,"a":1,"c":"ccc","$or":[{"f1":10},{"a":2}]}`),
 			nil,
-			[]keys.Key{keys.NewKey("", int64(1)), keys.NewKey("", int64(2))},
+			[]keys.Key{keys.NewKey(nil, int64(1)), keys.NewKey(nil, int64(2))},
 		}, {
 			// composite with OR parent filter
 			[]*schema.Field{{FieldName: "K1", DataType: schema.StringType}, {FieldName: "K2", DataType: schema.IntType}},
 			[]byte(`{"$or":[{"$and":[{"K1":"bar"},{"K2":3}]},{"$and":[{"K1":"foo"},{"K2":2}]}]}`),
 			nil,
-			[]keys.Key{keys.NewKey("", "bar", int64(3)), keys.NewKey("", "foo", int64(2))},
+			[]keys.Key{keys.NewKey(nil, "bar", int64(3)), keys.NewKey(nil, "foo", int64(2))},
 		},
 	}
 	for _, c := range cases {
-		b := NewKeyBuilder(NewStrictEqKeyComposer(""))
+		b := NewKeyBuilder(NewStrictEqKeyComposer(nil))
 		filters := testFilters(t, c.userInput)
 		buildKeys, err := b.Build(filters, c.userKeys)
 		require.Equal(t, c.expError, err)
@@ -122,7 +122,7 @@ func TestKeyBuilder(t *testing.T) {
 
 func BenchmarkStrictEqKeyComposer_Compose(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		kb := NewKeyBuilder(NewStrictEqKeyComposer(""))
+		kb := NewKeyBuilder(NewStrictEqKeyComposer(nil))
 		filters := testFilters(b, []byte(`{"b": 10, "a": {"$eq": 10}, "c": "foo"}}`))
 		_, err := kb.Build(filters, []*schema.Field{{FieldName: "a", DataType: schema.IntType}, {FieldName: "b", DataType: schema.IntType}, {FieldName: "c", DataType: schema.IntType}})
 		require.NoError(b, err)

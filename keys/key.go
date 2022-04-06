@@ -14,29 +14,33 @@
 
 package keys
 
-// Key is an interface that provides encoded key used for storing Key, Value in FDB.
+// Key is an interface that provides an encoded key which will be used for storing Key, Value in FDB. The Key has two
+// elements, the first set of bytes is the encoded table name and the remaining is the actual index values.
 type Key interface {
-	Prefix() string
-	PrimaryKeys() []interface{}
+	// Table is logical representation of namespace, database, collection and type of index.
+	Table() []byte
+	// IndexKeys has the value(s) of a single or composite index. The index keys are appended
+	// to the table name to form the Key.
+	IndexKeys() []interface{}
 }
 
-type prefixEncodedKey struct {
-	prefix      string
-	primaryKeys []interface{}
+type tableEncodedKey struct {
+	table     []byte
+	indexKeys []interface{}
 }
 
-// NewKey returns the Key
-func NewKey(prefix string, primaryKeys ...interface{}) Key {
-	return &prefixEncodedKey{
-		prefix:      prefix,
-		primaryKeys: primaryKeys,
+// NewKey returns the Key.
+func NewKey(table []byte, indexKeys ...interface{}) Key {
+	return &tableEncodedKey{
+		table:     table,
+		indexKeys: indexKeys,
 	}
 }
 
-func (p *prefixEncodedKey) Prefix() string {
-	return p.prefix
+func (p *tableEncodedKey) Table() []byte {
+	return p.table
 }
 
-func (p *prefixEncodedKey) PrimaryKeys() []interface{} {
-	return p.primaryKeys
+func (p *tableEncodedKey) IndexKeys() []interface{} {
+	return p.indexKeys
 }

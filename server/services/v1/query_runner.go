@@ -153,7 +153,7 @@ func (runner *BaseQueryRunner) buildKeysUsingFilter(collection schema.Collection
 		return nil, err
 	}
 
-	kb := filter.NewKeyBuilder(filter.NewStrictEqKeyComposer(collection.StorageName()))
+	kb := filter.NewKeyBuilder(filter.NewStrictEqKeyComposer([]byte(collection.StorageName())))
 	iKeys, err := kb.Build(filters, collection.PrimaryKeys())
 	if err != nil {
 		return nil, err
@@ -292,7 +292,7 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx) 
 // iterateCollection is used to scan the entire collection.
 func (runner *StreamingQueryRunner) iterateCollection(ctx context.Context, tx transaction.Tx, collection schema.Collection, fieldFactory *read.FieldFactory) (*Response, error) {
 	var totalResults int64 = 0
-	if err := runner.iterate(ctx, tx, keys.NewKey(collection.StorageName()), fieldFactory, &totalResults); err != nil {
+	if err := runner.iterate(ctx, tx, keys.NewKey([]byte(collection.StorageName())), fieldFactory, &totalResults); err != nil {
 		return nil, err
 	}
 
@@ -362,7 +362,7 @@ type CollectionQueryRunner struct {
 
 func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx) (*Response, error) {
 	if runner.drop != nil {
-		if err := runner.kv.DropTable(ctx, schema.StorageName(runner.drop.GetDb(), runner.drop.GetCollection())); ulog.E(err) {
+		if err := runner.kv.DropTable(ctx, []byte(schema.StorageName(runner.drop.GetDb(), runner.drop.GetCollection()))); ulog.E(err) {
 			return nil, api.Errorf(codes.Internal, "error: %v", err)
 		}
 

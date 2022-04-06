@@ -46,8 +46,8 @@ import (
 //    - 0x03 is the value for the collection.
 //    - "created" is keyword.
 //    - 0x01 is the revision of the schema.
-const (
-	SchemaSubspaceKey = "schema"
+var (
+	SchemaSubspaceKey = []byte("schema")
 )
 
 var (

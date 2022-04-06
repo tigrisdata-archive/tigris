@@ -28,8 +28,8 @@ import (
 )
 
 func TestDictionaryEncoding(t *testing.T) {
-	ReservedSubspaceKey = "test_reserved"
-	EncodingSubspaceKey = "test_encoding"
+	ReservedSubspaceKey = []byte("test_reserved")
+	EncodingSubspaceKey = []byte("test_encoding")
 
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
@@ -92,8 +92,8 @@ func TestDictionaryEncoding(t *testing.T) {
 }
 
 func TestDictionaryEncodingDropped(t *testing.T) {
-	ReservedSubspaceKey = "test_reserved"
-	EncodingSubspaceKey = "test_encoding"
+	ReservedSubspaceKey = []byte("test_reserved")
+	EncodingSubspaceKey = []byte("test_encoding")
 
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
@@ -296,8 +296,8 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 }
 
 func TestDictionaryEncoding_Error(t *testing.T) {
-	ReservedSubspaceKey = "test_reserved"
-	EncodingSubspaceKey = "test_encoding"
+	ReservedSubspaceKey = []byte("test_reserved")
+	EncodingSubspaceKey = []byte("test_encoding")
 
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
@@ -331,8 +331,8 @@ func TestDictionaryEncoding_Error(t *testing.T) {
 }
 
 func TestDictionaryEncoding_GetMethods(t *testing.T) {
-	ReservedSubspaceKey = "test_reserved"
-	EncodingSubspaceKey = "test_encoding"
+	ReservedSubspaceKey = []byte("test_reserved")
+	EncodingSubspaceKey = []byte("test_encoding")
 
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
@@ -408,8 +408,8 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 }
 
 func TestReservedNamespace(t *testing.T) {
-	ReservedSubspaceKey = "test_reserved"
-	EncodingSubspaceKey = "test_encoding"
+	ReservedSubspaceKey = []byte("test_reserved")
+	EncodingSubspaceKey = []byte("test_encoding")
 
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
