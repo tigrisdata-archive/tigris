@@ -17,7 +17,6 @@ package v1
 import (
 	"context"
 	"encoding/json"
-
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/keys"
@@ -90,11 +89,9 @@ func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streami
 	}
 }
 
-func (f *QueryRunnerFactory) GetCollectionQueryRunner(create *api.CreateCollectionRequest, drop *api.DropCollectionRequest) *CollectionQueryRunner {
+func (f *QueryRunnerFactory) GetCollectionQueryRunner() *CollectionQueryRunner {
 	return &CollectionQueryRunner{
 		BaseQueryRunner: NewBaseQueryRunner(f.encoder),
-		create:          create,
-		drop:            drop,
 	}
 }
 
@@ -127,11 +124,8 @@ func (runner *BaseQueryRunner) GetDatabase(ctx context.Context, tx transaction.T
 	return db, nil
 }
 
-func (runner *BaseQueryRunner) GetCollections(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, db *metadata.Database, collName string) (*schema.DefaultCollection, error) {
-	collection, err := db.GetCollection(collName)
-	if err != nil {
-		return nil, err
-	}
+func (runner *BaseQueryRunner) GetCollections(db *metadata.Database, collName string) (*schema.DefaultCollection, error) {
+	collection := db.GetCollection(collName)
 	if collection == nil {
 		return nil, api.Errorf(codes.InvalidArgument, "collection doesn't exists '%s'", collName)
 	}
@@ -220,7 +214,7 @@ func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, err
 	}
 
-	coll, err := runner.GetCollections(ctx, tx, tenant, db, runner.req.GetCollection())
+	coll, err := runner.GetCollections(db, runner.req.GetCollection())
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +237,7 @@ func (runner *ReplaceQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 		return nil, err
 	}
 
-	coll, err := runner.GetCollections(ctx, tx, tenant, db, runner.req.GetCollection())
+	coll, err := runner.GetCollections(db, runner.req.GetCollection())
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +260,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, err
 	}
 
-	collection, err := runner.GetCollections(ctx, tx, tenant, db, runner.req.GetCollection())
+	collection, err := runner.GetCollections(db, runner.req.GetCollection())
 	if err != nil {
 		return nil, err
 	}
@@ -310,7 +304,7 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, err
 	}
 
-	collection, err := runner.GetCollections(ctx, tx, tenant, db, runner.req.GetCollection())
+	collection, err := runner.GetCollections(db, runner.req.GetCollection())
 	if err != nil {
 		return nil, err
 	}
@@ -344,7 +338,7 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 		return nil, err
 	}
 
-	collection, err := runner.GetCollections(ctx, tx, tenant, db, runner.req.GetCollection())
+	collection, err := runner.GetCollections(db, runner.req.GetCollection())
 	if err != nil {
 		return nil, err
 	}
@@ -438,8 +432,21 @@ func (runner *StreamingQueryRunner) iterate(ctx context.Context, tx transaction.
 type CollectionQueryRunner struct {
 	*BaseQueryRunner
 
-	drop   *api.DropCollectionRequest
-	create *api.CreateCollectionRequest
+	drop           *api.DropCollectionRequest
+	list           *api.ListCollectionsRequest
+	createOrUpdate *api.CreateOrUpdateCollectionRequest
+}
+
+func (runner *CollectionQueryRunner) SetCreateOrUpdateCollectionReq(create *api.CreateOrUpdateCollectionRequest) {
+	runner.createOrUpdate = create
+}
+
+func (runner *CollectionQueryRunner) SetDropCollectionReq(drop *api.DropCollectionRequest) {
+	runner.drop = drop
+}
+
+func (runner *CollectionQueryRunner) SetListCollectionReq(list *api.ListCollectionsRequest) {
+	runner.list = list
 }
 
 func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, error) {
@@ -453,17 +460,18 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			return nil, err
 		}
 		return &Response{}, nil
-	} else if runner.create != nil {
-		db, err := runner.GetDatabase(ctx, tx, tenant, runner.create.GetDb())
+	} else if runner.createOrUpdate != nil {
+		db, err := runner.GetDatabase(ctx, tx, tenant, runner.createOrUpdate.GetDb())
 		if err != nil {
 			return nil, err
 		}
 
-		if coll, _ := db.GetCollection(runner.create.GetCollection()); coll != nil {
+		if db.GetCollection(runner.createOrUpdate.GetCollection()) != nil && runner.createOrUpdate.OnlyCreate {
+			// check if onlyCreate is set and if yes then return an error if collection already exist
 			return nil, api.Errorf(codes.AlreadyExists, "collection already exists")
 		}
 
-		schFactory, err := schema.Build(runner.create.GetCollection(), runner.create.GetSchema())
+		schFactory, err := schema.Build(runner.createOrUpdate.GetCollection(), runner.createOrUpdate.GetSchema())
 		if err != nil {
 			return nil, err
 		}
@@ -473,6 +481,24 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		}
 
 		return &Response{}, nil
+	} else if runner.list != nil {
+		db, err := runner.GetDatabase(ctx, tx, tenant, runner.list.GetDb())
+		if err != nil {
+			return nil, err
+		}
+
+		collectionList := db.ListCollection()
+		var collections = make([]*api.CollectionInfo, len(collectionList))
+		for i, c := range collectionList {
+			collections[i] = &api.CollectionInfo{
+				Name: c.GetName(),
+			}
+		}
+		return &Response{
+			Response: &api.ListCollectionsResponse{
+				Collections: collections,
+			},
+		}, nil
 	}
 
 	return &Response{}, api.Errorf(codes.Unknown, "unknown request path")
@@ -500,22 +526,43 @@ func (runner *DatabaseQueryRunner) SetListDatabaseReq(list *api.ListDatabasesReq
 
 func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, error) {
 	if runner.drop != nil {
+		db, err := tenant.GetDatabase(ctx, tx, runner.drop.GetDb())
+		if err != nil {
+			return nil, err
+		}
+		if db == nil {
+			return nil, api.Errorf(codes.InvalidArgument, "database doesn't exists '%s'", runner.drop.GetDb())
+		}
 		if err := tenant.DropDatabase(ctx, tx, runner.drop.GetDb()); err != nil {
 			return nil, err
 		}
 
 		return &Response{}, nil
 	} else if runner.create != nil {
+		db, err := tenant.GetDatabase(ctx, tx, runner.create.GetDb())
+		if err != nil {
+			return nil, err
+		}
+		if db != nil {
+			return nil, api.Errorf(codes.AlreadyExists, "database already exists")
+		}
+
 		if err := tenant.CreateDatabase(ctx, tx, runner.create.GetDb()); err != nil {
 			return nil, err
 		}
-
 		return &Response{}, nil
 	} else if runner.list != nil {
-		list := tenant.ListDatabases(ctx, tx)
+		databaseList := tenant.ListDatabases(ctx, tx)
+
+		var databases = make([]*api.DatabaseInfo, len(databaseList))
+		for i, l := range databaseList {
+			databases[i] = &api.DatabaseInfo{
+				Name: l,
+			}
+		}
 		return &Response{
 			Response: &api.ListDatabasesResponse{
-				Dbs: list,
+				Databases: databases,
 			},
 		}, nil
 	}

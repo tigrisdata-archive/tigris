@@ -102,7 +102,7 @@ func (x *ReadRequest) Validate() error {
 	return nil
 }
 
-func (x *CreateCollectionRequest) Validate() error {
+func (x *CreateOrUpdateCollectionRequest) Validate() error {
 	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
 		return err
 	}
@@ -134,11 +134,7 @@ func (x *DropCollectionRequest) Validate() error {
 	return nil
 }
 
-func (x *AlterCollectionRequest) Validate() error {
-	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
-		return err
-	}
-
+func (x *ListCollectionsRequest) Validate() error {
 	if !IsTxSupported(x) {
 		if transaction := GetTransaction(x); transaction != nil {
 			return Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")

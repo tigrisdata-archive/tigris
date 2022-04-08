@@ -238,19 +238,22 @@ func (s *apiService) Read(r *api.ReadRequest, stream api.TigrisDB_ReadServer) er
 	return nil
 }
 
-func (s *apiService) CreateCollection(ctx context.Context, r *api.CreateCollectionRequest) (*api.CreateCollectionResponse, error) {
+func (s *apiService) CreateOrUpdateCollection(ctx context.Context, r *api.CreateOrUpdateCollectionRequest) (*api.CreateOrUpdateCollectionResponse, error) {
 	if err := r.Validate(); err != nil {
 		return nil, err
 	}
 
+	runner := s.queryRunnerFactory.GetCollectionQueryRunner()
+	runner.SetCreateOrUpdateCollectionReq(r)
+
 	_, err := s.Run(ctx, &ReqOptions{
-		queryRunner: s.queryRunnerFactory.GetCollectionQueryRunner(r, nil),
+		queryRunner: runner,
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return &api.CreateCollectionResponse{
+	return &api.CreateOrUpdateCollectionResponse{
 		Msg: "collection created successfully",
 	}, nil
 }
@@ -260,8 +263,11 @@ func (s *apiService) DropCollection(ctx context.Context, r *api.DropCollectionRe
 		return nil, err
 	}
 
+	runner := s.queryRunnerFactory.GetCollectionQueryRunner()
+	runner.SetDropCollectionReq(r)
+
 	_, err := s.Run(ctx, &ReqOptions{
-		queryRunner: s.queryRunnerFactory.GetCollectionQueryRunner(nil, r),
+		queryRunner: runner,
 	})
 	if err != nil {
 		return nil, err
@@ -270,6 +276,24 @@ func (s *apiService) DropCollection(ctx context.Context, r *api.DropCollectionRe
 	return &api.DropCollectionResponse{
 		Msg: "collection dropped successfully",
 	}, nil
+}
+
+func (s *apiService) ListCollections(ctx context.Context, r *api.ListCollectionsRequest) (*api.ListCollectionsResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
+	runner := s.queryRunnerFactory.GetCollectionQueryRunner()
+	runner.SetListCollectionReq(r)
+
+	resp, err := s.Run(ctx, &ReqOptions{
+		queryRunner: runner,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.ListCollectionsResponse), nil
 }
 
 func (s *apiService) ListDatabases(ctx context.Context, r *api.ListDatabasesRequest) (*api.ListDatabasesResponse, error) {
@@ -288,10 +312,6 @@ func (s *apiService) ListDatabases(ctx context.Context, r *api.ListDatabasesRequ
 	}
 
 	return resp.Response.(*api.ListDatabasesResponse), nil
-}
-
-func (s *apiService) ListCollections(_ context.Context, _ *api.ListCollectionsRequest) (*api.ListCollectionsResponse, error) {
-	return &api.ListCollectionsResponse{}, nil
 }
 
 func (s *apiService) CreateDatabase(ctx context.Context, r *api.CreateDatabaseRequest) (*api.CreateDatabaseResponse, error) {

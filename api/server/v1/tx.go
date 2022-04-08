@@ -50,6 +50,11 @@ func GetTransaction(req Request) *TransactionCtx {
 		if r.GetOptions() == nil {
 			return r.GetOptions().GetTxCtx()
 		}
+	case *CreateOrUpdateCollectionRequest:
+		if r.GetOptions() == nil || r.GetOptions().GetTxCtx() == nil {
+			return nil
+		}
+		return r.GetOptions().GetTxCtx()
 	}
 	return nil
 }

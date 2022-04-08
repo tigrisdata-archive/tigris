@@ -17,8 +17,10 @@ package metadata
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sync"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/schema"
@@ -385,7 +387,17 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 		return api.Errorf(codes.NotFound, "database missing")
 	}
 
-	if _, ok := dbObj.collections[schFactory.CollectionName]; ok {
+	if c, ok := dbObj.collections[schFactory.CollectionName]; ok {
+		// if collection already exists, check if it is same or different schema
+		equal, err := JSONSchemaEqual(c.schema, schFactory.Schema)
+		if err != nil {
+			fmt.Println("JSON schema equal error ", err)
+			fmt.Println(c.schema, schFactory.Schema)
+			return err
+		}
+		if !equal {
+			return api.Errorf(codes.InvalidArgument, "schema changes are not supported")
+		}
 		return nil
 	}
 
@@ -416,10 +428,22 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 		id:          collectionId,
 		idxNameToId: idxNameToId,
 		name:        schFactory.CollectionName,
+		schema:      schFactory.Schema,
 		collection:  schema.NewDefaultCollection(schFactory.CollectionName, collectionId, schFactory.Fields, schFactory.Indexes),
 	}
 
 	return nil
+}
+
+func JSONSchemaEqual(s1, s2 []byte) (bool, error) {
+	var j, j2 interface{}
+	if err := jsoniter.Unmarshal(s1, &j); err != nil {
+		return false, err
+	}
+	if err := jsoniter.Unmarshal(s2, &j2); err != nil {
+		return false, err
+	}
+	return reflect.DeepEqual(j2, j), nil
 }
 
 // DropCollection is to drop a collection and its associated indexes. It removes the "created" entry from the encoding
@@ -482,15 +506,29 @@ func (d *Database) Id() uint32 {
 	return d.id
 }
 
+// ListCollection returns the collection object of all the collections in this database.
+func (d *Database) ListCollection() []*schema.DefaultCollection {
+	d.RLock()
+	defer d.RUnlock()
+
+	var collections []*schema.DefaultCollection
+	for _, c := range d.collections {
+		collections = append(collections, c.collection)
+	}
+	return collections
+}
+
 // GetCollection returns the collection object, or null if the collection map contains no mapping for the database. At
 // this point collection is fully formed and safe to use.
-func (d *Database) GetCollection(cname string) (*schema.DefaultCollection, error) {
-	holder := d.collections[cname]
-	if holder != nil {
-		return holder.get(), nil
+func (d *Database) GetCollection(cname string) *schema.DefaultCollection {
+	d.RLock()
+	defer d.RUnlock()
+
+	if holder := d.collections[cname]; holder != nil {
+		return holder.get()
 	}
 
-	return nil, api.Errorf(codes.InvalidArgument, "collection doesn't exists '%s'", cname)
+	return nil
 }
 
 type collectionHolder struct {
@@ -504,6 +542,8 @@ type collectionHolder struct {
 	collection *schema.DefaultCollection
 	// idxNameToId is a map storing dictionary encoding values of all the indexes that are part of this collection.
 	idxNameToId map[string]uint32
+	// latest schema
+	schema jsoniter.RawMessage
 }
 
 // get returns the collection managed by this holder. At this point, a Collection object is safely constructed
@@ -539,5 +579,6 @@ func (c *collectionHolder) set(revision []byte) error {
 	}
 
 	c.collection = schema.NewDefaultCollection(c.name, c.id, schFactory.Fields, schFactory.Indexes)
+	c.schema = revision
 	return nil
 }
