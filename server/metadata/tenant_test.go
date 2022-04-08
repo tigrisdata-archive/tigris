@@ -212,9 +212,7 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 		factory, err := schema.Build("test_collection", jsoniter.RawMessage(jsSchema))
 		require.NoError(t, err)
 		require.NoError(t, tenant.CreateCollection(context.TODO(), tx, db2, factory))
-		coll, err := db2.GetCollection("test_collection")
-		require.NoError(t, err)
-		require.Equal(t, "test_collection", coll.Name)
+		require.Equal(t, "test_collection", db2.GetCollection("test_collection").Name)
 		require.NoError(t, tx.Commit(context.TODO()))
 
 		_ = kv.DropTable(ctx, encoding.ReservedSubspaceKey)
@@ -274,21 +272,17 @@ func TestTenantManager_DropCollection(t *testing.T) {
 
 		tx, err = tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
-		coll, err := db2.GetCollection("test_collection")
-		require.NoError(t, err)
-		require.Equal(t, "test_collection", coll.Name)
+		require.Equal(t, "test_collection", db2.GetCollection("test_collection").Name)
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
 		require.NoError(t, tenant.DropCollection(ctx, tx, db2, "test_collection"))
-		require.Equal(t, "test_collection", coll.Name)
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
-		coll, err = db2.GetCollection("test_collection")
-		require.Equal(t, "collection doesn't exists 'test_collection'", err.Error())
+		coll := db2.GetCollection("test_collection")
 		require.Nil(t, coll)
 
 		_ = kv.DropTable(ctx, encoding.ReservedSubspaceKey)

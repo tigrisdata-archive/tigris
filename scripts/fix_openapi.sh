@@ -61,11 +61,10 @@ yq_fix_object InsertRequest documents.items
 yq_fix_object ReplaceRequest documents.items
 yq_fix_object UpdateRequest fields
 yq_fix_object ReadResponse doc
-yq_fix_object CreateCollectionRequest schema
-yq_fix_object AlterCollectionRequest schema
+yq_fix_object CreateOrUpdateCollectionRequest schema
 
 for i in InsertRequest ReplaceRequest UpdateRequest DeleteRequest ReadRequest \
-	CreateCollectionRequest DropCollectionRequest AlterCollectionRequest \
+	CreateOrUpdateCollectionRequest DropCollectionRequest \
 	CreateDatabaseRequest DropDatabaseRequest \
 	ListDatabasesRequest ListCollectionsRequest \
 	BeginTransactionRequest CommitTransactionRequest RollbackTransactionRequest; do

@@ -41,7 +41,7 @@ func getTestServerHostPort() (string, int16) {
 func testRead(t *testing.T, c driver.Driver, filter driver.Filter, expected []driver.Document) {
 	ctx := context.Background()
 
-	it, err := c.Read(ctx, "db1", "c1", filter, &driver.ReadOptions{})
+	it, err := c.Read(ctx, "db1", "c1", filter, nil, &driver.ReadOptions{})
 	require.NoError(t, err)
 
 	var doc driver.Document
@@ -83,10 +83,10 @@ func testClient(t *testing.T, c driver.Driver) {
 	err := c.CreateDatabase(ctx, "db1", &driver.DatabaseOptions{})
 	require.NoError(t, err)
 
-	err = c.CreateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
+	err = c.CreateOrUpdateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
 	require.NoError(t, err)
 
-	err = c.CreateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
+	err = c.CreateOrUpdateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
 	require.Error(t, api.Errorf(codes.AlreadyExists, "collection already exists"), err)
 
 	doc1 := driver.Document(`{"K1": "vK1", "K2": 1, "D1": "vD1"}`)
@@ -148,7 +148,7 @@ func testTxClient(t *testing.T, c driver.Driver) {
 	err := c.CreateDatabase(ctx, "db1", &driver.DatabaseOptions{})
 	require.NoError(t, err)
 
-	err = c.CreateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
+	err = c.CreateOrUpdateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
 	require.NoError(t, err)
 
 	tx, err := c.BeginTx(ctx, "db1", &driver.TxOptions{})

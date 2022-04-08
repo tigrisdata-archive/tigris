@@ -33,6 +33,16 @@ func (c *CustomMarshaler) Marshal(v interface{}) ([]byte, error) {
 	switch ty := v.(type) {
 	case *spb.Status:
 		return MarshalStatus(ty)
+	case *ListCollectionsResponse:
+		if len(ty.Collections) == 0 {
+			return []byte(`{"collections":[]}`), nil
+		}
+		return c.JSONBuiltin.Marshal(v)
+	case *ListDatabasesResponse:
+		if len(ty.Databases) == 0 {
+			return []byte(`{"databases":[]}`), nil
+		}
+		return c.JSONBuiltin.Marshal(v)
 	}
 	return c.JSONBuiltin.Marshal(v)
 }
@@ -42,7 +52,7 @@ func (c *CustomMarshaler) Marshal(v interface{}) ([]byte, error) {
 // in x.Doc and will return as-is.
 //
 // Note: This also means any changes in ReadResponse proto needs to make sure that we add that here and similarly
-// the openAPI specs needs to be specify Doc as object instead of bytes.
+// the openAPI specs needs to be specified Doc as object instead of bytes.
 func (x *ReadResponse) MarshalJSON() ([]byte, error) {
 	var err error
 	bb := bytebufferpool.Get()
@@ -248,7 +258,7 @@ func (x *DeleteRequest) UnmarshalJSON(data []byte) error {
 }
 
 // UnmarshalJSON on CreateCollectionRequest avoids unmarshalling schema. The req handler deserializes the schema.
-func (x *CreateCollectionRequest) UnmarshalJSON(data []byte) error {
+func (x *CreateOrUpdateCollectionRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
 	if err := jsoniter.Unmarshal(data, &mp); err != nil {
 		return err
@@ -263,31 +273,8 @@ func (x *CreateCollectionRequest) UnmarshalJSON(data []byte) error {
 			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
 				return err
 			}
-		case "schema":
-			x.Schema = value
-		case "options":
-			if err := jsoniter.Unmarshal(value, &x.Options); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-// UnmarshalJSON on AlterCollectionRequest avoids unmarshalling schema. The req handler deserializes the schema.
-func (x *AlterCollectionRequest) UnmarshalJSON(data []byte) error {
-	var mp map[string]jsoniter.RawMessage
-	if err := jsoniter.Unmarshal(data, &mp); err != nil {
-		return err
-	}
-	for key, value := range mp {
-		switch key {
-		case "db":
-			if err := jsoniter.Unmarshal(value, &x.Db); err != nil {
-				return err
-			}
-		case "collection":
-			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
+		case "only_create":
+			if err := jsoniter.Unmarshal(value, &x.OnlyCreate); err != nil {
 				return err
 			}
 		case "schema":
