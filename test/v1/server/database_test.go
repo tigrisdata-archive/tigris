@@ -42,6 +42,14 @@ func (s *DatabaseSuite) TestCreateDatabase() {
 		ValueEqual("msg", "database created successfully")
 }
 
+func (s *DatabaseSuite) TestDropDatabase_NotFound() {
+	resp := dropDatabase(s.T(), "test_drop_db_not_found")
+	resp.Status(http.StatusNotFound).
+		JSON().
+		Object().
+		ValueEqual("message", "database doesn't exists 'test_drop_db_not_found'")
+}
+
 func (s *DatabaseSuite) TestDropDatabase() {
 	resp := dropDatabase(s.T(), "test_db")
 	resp.Status(http.StatusOK).
