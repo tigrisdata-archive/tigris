@@ -456,6 +456,10 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			return nil, err
 		}
 
+		if db.GetCollection(runner.drop.GetCollection()) == nil {
+			return nil, api.Errorf(codes.NotFound, "collection doesn't exists '%s'", runner.drop.GetCollection())
+		}
+
 		if err = tenant.DropCollection(ctx, tx, db, runner.drop.GetCollection()); err != nil {
 			return nil, err
 		}
@@ -531,7 +535,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			return nil, err
 		}
 		if db == nil {
-			return nil, api.Errorf(codes.InvalidArgument, "database doesn't exists '%s'", runner.drop.GetDb())
+			return nil, api.Errorf(codes.NotFound, "database doesn't exists '%s'", runner.drop.GetDb())
 		}
 		if err := tenant.DropDatabase(ctx, tx, runner.drop.GetDb()); err != nil {
 			return nil, err

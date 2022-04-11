@@ -184,6 +184,13 @@ func (s *CollectionSuite) TestDropCollection() {
 		JSON().
 		Object().
 		ValueEqual("msg", "collection dropped successfully")
+
+	// dropping again should return in a NOT FOUND error
+	resp = dropCollection(s.T(), s.database, "test_collection")
+	resp.Status(http.StatusNotFound).
+		JSON().
+		Object().
+		ValueEqual("message", "collection doesn't exists 'test_collection'")
 }
 
 func createCollection(t *testing.T, database string, collection string, schema map[string]interface{}) *httpexpect.Response {

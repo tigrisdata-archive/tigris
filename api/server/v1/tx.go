@@ -16,7 +16,7 @@ package api
 
 func IsTxSupported(req Request) bool {
 	switch RequestType(req) {
-	case Insert, Replace, Update, Delete, Read:
+	case Insert, Replace, Update, Delete, Read, CreateOrUpdateCollection, DropCollection, ListCollections:
 		return true
 	}
 
@@ -51,6 +51,16 @@ func GetTransaction(req Request) *TransactionCtx {
 			return r.GetOptions().GetTxCtx()
 		}
 	case *CreateOrUpdateCollectionRequest:
+		if r.GetOptions() == nil || r.GetOptions().GetTxCtx() == nil {
+			return nil
+		}
+		return r.GetOptions().GetTxCtx()
+	case *DropCollectionRequest:
+		if r.GetOptions() == nil || r.GetOptions().GetTxCtx() == nil {
+			return nil
+		}
+		return r.GetOptions().GetTxCtx()
+	case *ListCollectionsRequest:
 		if r.GetOptions() == nil || r.GetOptions().GetTxCtx() == nil {
 			return nil
 		}

@@ -20,22 +20,20 @@ import (
 )
 
 const (
-	Insert              protoreflect.FullName = "InsertRequest"
-	Replace             protoreflect.FullName = "ReplaceRequest"
-	Update              protoreflect.FullName = "UpdateRequest"
-	Delete              protoreflect.FullName = "DeleteRequest"
-	Read                protoreflect.FullName = "ReadRequest"
-	BeginTransaction    protoreflect.FullName = "BeginTransactionRequest"
-	CommitTransaction   protoreflect.FullName = "CommitTransactionRequest"
-	RollbackTransaction protoreflect.FullName = "RollbackTransactionRequest"
-	CreateCollection    protoreflect.FullName = "CreateCollectionRequest"
-	DropCollection      protoreflect.FullName = "DropCollectionRequest"
-	AlterCollection     protoreflect.FullName = "AlterCollectionRequest"
-	TruncateCollection  protoreflect.FullName = "TruncateCollectionRequest"
-	ListCollections     protoreflect.FullName = "ListCollectionsRequest"
-	ListDatabases       protoreflect.FullName = "ListDatabasesRequest"
-	CreateDatabase      protoreflect.FullName = "CreateDatabaseRequest"
-	DropDatabase        protoreflect.FullName = "DropDatabaseRequest"
+	Insert                   protoreflect.FullName = "InsertRequest"
+	Replace                  protoreflect.FullName = "ReplaceRequest"
+	Update                   protoreflect.FullName = "UpdateRequest"
+	Delete                   protoreflect.FullName = "DeleteRequest"
+	Read                     protoreflect.FullName = "ReadRequest"
+	BeginTransaction         protoreflect.FullName = "BeginTransactionRequest"
+	CommitTransaction        protoreflect.FullName = "CommitTransactionRequest"
+	RollbackTransaction      protoreflect.FullName = "RollbackTransactionRequest"
+	CreateOrUpdateCollection protoreflect.FullName = "CreateOrUpdateCollectionRequest"
+	DropCollection           protoreflect.FullName = "DropCollectionRequest"
+	ListCollections          protoreflect.FullName = "ListCollectionsRequest"
+	ListDatabases            protoreflect.FullName = "ListDatabasesRequest"
+	CreateDatabase           protoreflect.FullName = "CreateDatabaseRequest"
+	DropDatabase             protoreflect.FullName = "DropDatabaseRequest"
 )
 
 type Request interface {
