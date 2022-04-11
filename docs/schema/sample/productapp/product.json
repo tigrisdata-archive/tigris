@@ -1,0 +1,26 @@
+{
+  "title": "Product",
+  "description": "Collection of documents with details of products available",
+  "properties": {
+    "id": {
+      "description": "A unique identifier for the product",
+      "type": "int"
+    },
+    "name": {
+      "description": "Name of the product",
+      "type": "string",
+      "max_length": 100
+    },
+    "quantity": {
+      "description": "Number of products available in the store",
+      "type": "int"
+    },
+    "price": {
+      "description": "Price of the product",
+      "type": "double"
+    }
+  },
+  "primary_key": [
+    "id"
+  ]
+}

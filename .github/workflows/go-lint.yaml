@@ -13,7 +13,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v2
         with:
-          go-version: '1.17.6'
+          go-version: '1.18'
       - name: Install dependencies
         run: /bin/bash scripts/install_build_deps.sh
       - name: Generated code
@@ -21,6 +21,6 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v2
         with:
-          version: v1.44.2
+          version: v1.45.2
           skip-pkg-cache: true
           skip-build-cache: true

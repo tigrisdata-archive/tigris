@@ -57,6 +57,17 @@ func (x *InsertRequest) Validate() error {
 	return nil
 }
 
+func (x *ReplaceRequest) Validate() error {
+	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
+		return err
+	}
+
+	if len(x.GetDocuments()) == 0 {
+		return Errorf(codes.InvalidArgument, "empty documents received")
+	}
+	return nil
+}
+
 func (x *UpdateRequest) Validate() error {
 	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
 		return err
@@ -91,7 +102,7 @@ func (x *ReadRequest) Validate() error {
 	return nil
 }
 
-func (x *CreateCollectionRequest) Validate() error {
+func (x *CreateOrUpdateCollectionRequest) Validate() error {
 	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
 		return err
 	}
@@ -123,8 +134,18 @@ func (x *DropCollectionRequest) Validate() error {
 	return nil
 }
 
-func (x *AlterCollectionRequest) Validate() error {
-	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
+func (x *ListCollectionsRequest) Validate() error {
+	if !IsTxSupported(x) {
+		if transaction := GetTransaction(x); transaction != nil {
+			return Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
+		}
+	}
+
+	return nil
+}
+
+func (x *CreateDatabaseRequest) Validate() error {
+	if err := isValidDatabase(x.Db); err != nil {
 		return err
 	}
 
@@ -137,11 +158,21 @@ func (x *AlterCollectionRequest) Validate() error {
 	return nil
 }
 
-func (x *TruncateCollectionRequest) Validate() error {
-	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
+func (x *DropDatabaseRequest) Validate() error {
+	if err := isValidDatabase(x.Db); err != nil {
 		return err
 	}
 
+	if !IsTxSupported(x) {
+		if transaction := GetTransaction(x); transaction != nil {
+			return Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
+		}
+	}
+
+	return nil
+}
+
+func (x *ListDatabasesRequest) Validate() error {
 	if !IsTxSupported(x) {
 		if transaction := GetTransaction(x); transaction != nil {
 			return Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")

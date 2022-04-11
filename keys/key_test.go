@@ -21,11 +21,11 @@ import (
 )
 
 func TestKey(t *testing.T) {
-	k := NewKey("", int64(10))
-	require.Empty(t, k.Prefix())
-	require.Equal(t, []interface{}{int64(10)}, k.PrimaryKeys())
+	k := NewKey(nil, int64(10))
+	require.Nil(t, k.Table())
+	require.Equal(t, []interface{}{int64(10)}, k.IndexParts())
 
-	k = NewKey("foo", []interface{}{int64(5)}...)
-	require.Equal(t, []interface{}{int64(5)}, k.PrimaryKeys())
-	require.Equal(t, "foo", k.Prefix())
+	k = NewKey([]byte("foo"), []interface{}{int64(5)}...)
+	require.Equal(t, []interface{}{int64(5)}, k.IndexParts())
+	require.Equal(t, []byte("foo"), k.Table())
 }

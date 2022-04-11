@@ -41,7 +41,7 @@ func getTestServerHostPort() (string, int16) {
 func testRead(t *testing.T, c driver.Driver, filter driver.Filter, expected []driver.Document) {
 	ctx := context.Background()
 
-	it, err := c.Read(ctx, "db1", "c1", filter, &driver.ReadOptions{})
+	it, err := c.Read(ctx, "db1", "c1", filter, nil, &driver.ReadOptions{})
 	require.NoError(t, err)
 
 	var doc driver.Document
@@ -59,10 +59,11 @@ func testRead(t *testing.T, c driver.Driver, filter driver.Filter, expected []dr
 func testClient(t *testing.T, c driver.Driver) {
 	ctx := context.TODO()
 
+	_ = c.DropDatabase(ctx, "db1", &driver.DatabaseOptions{})
 	_ = c.DropCollection(ctx, "db1", "c1", &driver.CollectionOptions{})
 
 	schema := `{
-		"title": "test schema1",
+		"name": "c1",
 		"description": "this schema is for client integration tests",
 		"properties": {
 			"K1": {
@@ -73,16 +74,19 @@ func testClient(t *testing.T, c driver.Driver) {
 			},
 			"D1": {
 				"type": "string",
-				"max_length": 128
+				"maxLength": 128
 			}
 		},
 		"primary_key": ["K1", "K2"]
 	}`
 
-	err := c.CreateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
+	err := c.CreateDatabase(ctx, "db1", &driver.DatabaseOptions{})
 	require.NoError(t, err)
 
-	err = c.CreateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
+	err = c.CreateOrUpdateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
+	require.NoError(t, err)
+
+	err = c.CreateOrUpdateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
 	require.Error(t, api.Errorf(codes.AlreadyExists, "collection already exists"), err)
 
 	doc1 := driver.Document(`{"K1": "vK1", "K2": 1, "D1": "vD1"}`)
@@ -90,13 +94,13 @@ func testClient(t *testing.T, c driver.Driver) {
 	_, err = c.Insert(ctx, "db1", "c1", []driver.Document{doc1}, &driver.InsertOptions{})
 	require.NoError(t, err)
 
-	_, err = c.Insert(ctx, "db1", "c1", []driver.Document{doc1}, &driver.InsertOptions{MustNotExist: true})
+	_, err = c.Insert(ctx, "db1", "c1", []driver.Document{doc1}, &driver.InsertOptions{})
 	require.Error(t, api.Errorf(codes.AlreadyExists, "row already exists"), err)
 
 	doc2, doc3 := driver.Document(`{"K1": "vK1", "K2": 2, "D1": "vD2"}`), driver.Document(`{"K1": "vK1", "K2": 3, "D1": "vD3"}`)
 
 	// multiple docs
-	_, err = c.Insert(ctx, "db1", "c1", []driver.Document{doc1, doc2, doc3}, &driver.InsertOptions{})
+	_, err = c.Insert(ctx, "db1", "c1", []driver.Document{doc2, doc3}, &driver.InsertOptions{})
 	require.NoError(t, err)
 
 	fl := driver.Filter(`{ "$or" : [ {"$and" : [ {"K1" : "vK1"}, {"K2" : 1} ]}, {"$and" : [ {"K1" : "vK1"}, {"K2" : 3} ]} ]}`)
@@ -120,10 +124,11 @@ func testClient(t *testing.T, c driver.Driver) {
 func testTxClient(t *testing.T, c driver.Driver) {
 	ctx := context.TODO()
 
+	_ = c.DropDatabase(ctx, "db1", &driver.DatabaseOptions{})
 	_ = c.DropCollection(ctx, "db1", "c1", &driver.CollectionOptions{})
 
 	schema := `{
-		"title": "test schema1",
+		"name": "c1",
 		"description": "this schema is for client integration tests",
 		"properties": {
 			"K1": {
@@ -134,13 +139,16 @@ func testTxClient(t *testing.T, c driver.Driver) {
 			},
 			"D1": {
 				"type": "string",
-				"max_length": 128
+				"maxLength": 128
 			}
 		},
 		"primary_key": ["K1", "K2"]
 	}`
 
-	err := c.CreateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
+	err := c.CreateDatabase(ctx, "db1", &driver.DatabaseOptions{})
+	require.NoError(t, err)
+
+	err = c.CreateOrUpdateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
 	require.NoError(t, err)
 
 	tx, err := c.BeginTx(ctx, "db1", &driver.TxOptions{})
@@ -154,11 +162,7 @@ func testTxClient(t *testing.T, c driver.Driver) {
 	doc2, doc3 := driver.Document(`{"K1": "vK1", "K2": 2, "D1": "vD2"}`), driver.Document(`{"K1": "vK1", "K2": 3, "D1": "vD3"}`)
 
 	// multiple docs
-	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1, doc2, doc3}, &driver.InsertOptions{})
-	require.NoError(t, err)
-
-	// array of docs
-	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1, doc2, doc3}, &driver.InsertOptions{})
+	_, err = tx.Insert(ctx, "c1", []driver.Document{doc2, doc3}, &driver.InsertOptions{})
 	require.NoError(t, err)
 
 	err = tx.Commit(ctx)
@@ -183,7 +187,7 @@ func testTxClient(t *testing.T, c driver.Driver) {
 	require.NoError(t, err)
 
 	//multiple documents
-	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1, doc2, doc3}, &driver.InsertOptions{})
+	_, err = tx.Insert(ctx, "c1", []driver.Document{doc2, doc3}, &driver.InsertOptions{})
 	require.NoError(t, err)
 
 	err = tx.Rollback(ctx)

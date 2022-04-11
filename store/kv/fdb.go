@@ -16,7 +16,7 @@ package kv
 
 import (
 	"context"
-	"os"
+	"fmt"
 	"time"
 	"unsafe"
 
@@ -24,9 +24,11 @@ import (
 	"github.com/apple/foundationdb/bindings/go/src/fdb/subspace"
 	"github.com/apple/foundationdb/bindings/go/src/fdb/tuple"
 	"github.com/rs/zerolog/log"
+	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/server/config"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"golang.org/x/xerrors"
+	"google.golang.org/grpc/codes"
 )
 
 const (
@@ -52,7 +54,7 @@ type ftx struct {
 type fdbIterator struct {
 	it       *fdb.RangeIterator
 	subspace subspace.Subspace
-	loaded   bool
+	err      error
 }
 
 type fdbIteratorTxCloser struct {
@@ -78,7 +80,7 @@ func (d *fdbkv) init(cfg *config.FoundationDBConfig) (err error) {
 }
 
 // Read returns all the keys which has prefix equal to "key" parameter
-func (d *fdbkv) Read(ctx context.Context, table string, key Key) (Iterator, error) {
+func (d *fdbkv) Read(ctx context.Context, table []byte, key Key) (Iterator, error) {
 	tx, err := d.Tx(ctx)
 	if err != nil {
 		return nil, err
@@ -90,7 +92,7 @@ func (d *fdbkv) Read(ctx context.Context, table string, key Key) (Iterator, erro
 	return &fdbIteratorTxCloser{it, tx}, nil
 }
 
-func (d *fdbkv) ReadRange(ctx context.Context, table string, lKey Key, rKey Key) (Iterator, error) {
+func (d *fdbkv) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key) (Iterator, error) {
 	tx, err := d.Tx(ctx)
 	if err != nil {
 		return nil, err
@@ -111,62 +113,76 @@ func (d *fdbkv) txWithTimeout(ctx context.Context, fn func(fdb.Transaction) (int
 	})
 }
 
-func (d *fdbkv) Insert(ctx context.Context, table string, key Key, data []byte) error {
+func (d *fdbkv) Insert(ctx context.Context, table []byte, key Key, data []byte) error {
 	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
 		return nil, (&ftx{d, &tr}).Insert(ctx, table, key, data)
 	})
 	return err
 }
 
-func (d *fdbkv) Replace(ctx context.Context, table string, key Key, data []byte) error {
+func (d *fdbkv) Replace(ctx context.Context, table []byte, key Key, data []byte) error {
 	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
 		return nil, (&ftx{d, &tr}).Replace(ctx, table, key, data)
 	})
 	return err
 }
 
-func (d *fdbkv) Delete(ctx context.Context, table string, key Key) error {
+func (d *fdbkv) Delete(ctx context.Context, table []byte, key Key) error {
 	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
 		return nil, (&ftx{d, &tr}).Delete(ctx, table, key)
 	})
 	return err
 }
 
-func (d *fdbkv) DeleteRange(ctx context.Context, table string, lKey Key, rKey Key) error {
+func (d *fdbkv) DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key) error {
 	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
 		return nil, (&ftx{d, &tr}).DeleteRange(ctx, table, lKey, rKey)
 	})
 	return err
 }
 
-func (d *fdbkv) Update(ctx context.Context, table string, key Key, apply func([]byte) ([]byte, error)) error {
+func (d *fdbkv) Update(ctx context.Context, table []byte, key Key, apply func([]byte) ([]byte, error)) error {
 	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
 		return nil, (&ftx{d, &tr}).Update(ctx, table, key, apply)
 	})
 	return err
 }
 
-func (d *fdbkv) UpdateRange(ctx context.Context, table string, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) error {
+func (d *fdbkv) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) error {
 	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
 		return nil, (&ftx{d, &tr}).UpdateRange(ctx, table, lKey, rKey, apply)
 	})
 	return err
 }
 
-func (d *fdbkv) CreateTable(_ context.Context, name string) error {
-	log.Debug().Str("name", name).Msg("table created")
+func (d *fdbkv) SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error {
+	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
+		return nil, (&ftx{d, &tr}).SetVersionstampedValue(ctx, key, value)
+	})
+	return err
+}
+
+func (d *fdbkv) Get(ctx context.Context, key []byte) ([]byte, error) {
+	val, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
+		return (&ftx{d, &tr}).Get(ctx, key)
+	})
+	return val.([]byte), err
+}
+
+func (d *fdbkv) CreateTable(_ context.Context, name []byte) error {
+	log.Debug().Str("name", string(name)).Msg("table created")
 	return nil
 }
 
-func (d *fdbkv) DropTable(ctx context.Context, name string) error {
-	s := subspace.FromBytes([]byte(name))
+func (d *fdbkv) DropTable(ctx context.Context, name []byte) error {
+	s := subspace.FromBytes(name)
 
 	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
 		tr.ClearRange(s)
 		return nil, nil
 	})
 
-	log.Err(err).Str("name", name).Msg("table dropped")
+	log.Err(err).Str("name", string(name)).Msg("table dropped")
 
 	return nil
 }
@@ -207,60 +223,68 @@ func (b *fbatch) flushBatch(ctx context.Context, _ Key, _ Key, data []byte) erro
 	return nil
 }
 
-func (b *fbatch) Insert(ctx context.Context, table string, key Key, data []byte) error {
+func (b *fbatch) Insert(ctx context.Context, table []byte, key Key, data []byte) error {
 	if err := b.flushBatch(ctx, key, nil, data); err != nil {
 		return err
 	}
 	return b.tx.Insert(ctx, table, key, data)
 }
 
-func (b *fbatch) Replace(ctx context.Context, table string, key Key, data []byte) error {
+func (b *fbatch) Replace(ctx context.Context, table []byte, key Key, data []byte) error {
 	if err := b.flushBatch(ctx, key, nil, data); err != nil {
 		return err
 	}
 	return b.tx.Replace(ctx, table, key, data)
 }
 
-func (b *fbatch) Delete(ctx context.Context, table string, key Key) error {
+func (b *fbatch) Delete(ctx context.Context, table []byte, key Key) error {
 	if err := b.flushBatch(ctx, key, nil, nil); err != nil {
 		return err
 	}
 	return b.tx.Delete(ctx, table, key)
 }
 
-func (b *fbatch) DeleteRange(ctx context.Context, table string, lKey Key, rKey Key) error {
+func (b *fbatch) DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key) error {
 	if err := b.flushBatch(ctx, lKey, rKey, nil); err != nil {
 		return err
 	}
 	return b.tx.DeleteRange(ctx, table, lKey, rKey)
 }
 
-func (b *fbatch) Update(ctx context.Context, table string, key Key, apply func([]byte) ([]byte, error)) error {
+func (b *fbatch) Update(ctx context.Context, table []byte, key Key, apply func([]byte) ([]byte, error)) error {
 	if err := b.flushBatch(ctx, key, nil, nil); err != nil {
 		return err
 	}
 	return b.tx.Update(ctx, table, key, apply)
 }
 
-func (b *fbatch) UpdateRange(ctx context.Context, table string, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) error {
+func (b *fbatch) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) error {
 	if err := b.flushBatch(ctx, lKey, rKey, nil); err != nil {
 		return err
 	}
 	return b.tx.UpdateRange(ctx, table, lKey, rKey, apply)
 }
 
-func (b *fbatch) Read(ctx context.Context, table string, key Key) (Iterator, error) {
+func (b *fbatch) Read(ctx context.Context, table []byte, key Key) (Iterator, error) {
 	if err := b.flushBatch(ctx, key, nil, nil); err != nil {
 		return nil, err
 	}
 	return b.tx.Read(ctx, table, key)
 }
 
-func (b *fbatch) ReadRange(ctx context.Context, table string, lKey Key, rKey Key) (Iterator, error) {
+func (b *fbatch) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key) (Iterator, error) {
 	if err := b.flushBatch(ctx, lKey, rKey, nil); err != nil {
 		return nil, err
 	}
 	return b.tx.ReadRange(ctx, table, lKey, rKey)
+}
+
+func (b *fbatch) SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error {
+	return fmt.Errorf("batch doesn't support setting versionstamped value")
+}
+
+func (b *fbatch) Get(ctx context.Context, key []byte) ([]byte, error) {
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (b *fbatch) Commit(ctx context.Context) error {
@@ -285,7 +309,7 @@ func (d *fdbkv) Tx(ctx context.Context) (Tx, error) {
 	return &ftx{d: d, tx: &tx}, nil
 }
 
-func (t *ftx) Insert(_ context.Context, table string, key Key, data []byte) error {
+func (t *ftx) Insert(_ context.Context, table []byte, key Key, data []byte) error {
 	k := getFDBKey(table, key)
 
 	// Read the value and if exists reject the write
@@ -295,27 +319,27 @@ func (t *ftx) Insert(_ context.Context, table string, key Key, data []byte) erro
 		return err
 	}
 	if vv != nil {
-		return os.ErrExist
+		return api.Errorf(codes.AlreadyExists, "duplicate key value, violates unique primary key constraint")
 	}
 
 	t.tx.Set(k, data)
 
-	log.Err(err).Str("table", table).Interface("key", key).Msg("Insert")
+	log.Err(err).Str("table", string(table)).Interface("key", key).Msg("Insert")
 
 	return err
 }
 
-func (t *ftx) Replace(_ context.Context, table string, key Key, data []byte) error {
+func (t *ftx) Replace(_ context.Context, table []byte, key Key, data []byte) error {
 	k := getFDBKey(table, key)
 
 	t.tx.Set(k, data)
 
-	log.Debug().Str("table", table).Interface("key", key).Msg("tx Replace")
+	log.Debug().Str("table", string(table)).Interface("key", key).Msg("tx Replace")
 
 	return nil
 }
 
-func (t *ftx) Delete(_ context.Context, table string, key Key) error {
+func (t *ftx) Delete(_ context.Context, table []byte, key Key) error {
 	kr, err := fdb.PrefixRange(getFDBKey(table, key))
 	if ulog.E(err) {
 		return err
@@ -323,23 +347,23 @@ func (t *ftx) Delete(_ context.Context, table string, key Key) error {
 
 	t.tx.ClearRange(kr)
 
-	log.Debug().Str("table", table).Interface("key", key).Msg("tx delete")
+	log.Debug().Str("table", string(table)).Interface("key", key).Msg("tx delete")
 
 	return nil
 }
 
-func (t *ftx) DeleteRange(_ context.Context, table string, lKey Key, rKey Key) error {
+func (t *ftx) DeleteRange(_ context.Context, table []byte, lKey Key, rKey Key) error {
 	lk := getFDBKey(table, lKey)
 	rk := getFDBKey(table, rKey)
 
 	t.tx.ClearRange(fdb.KeyRange{Begin: lk, End: rk})
 
-	log.Debug().Str("table", table).Interface("lKey", lKey).Interface("rKey", rKey).Msg("tx delete range")
+	log.Debug().Str("table", string(table)).Interface("lKey", lKey).Interface("rKey", rKey).Msg("tx delete range")
 
 	return nil
 }
 
-func (t *ftx) Update(_ context.Context, table string, key Key, apply func([]byte) ([]byte, error)) error {
+func (t *ftx) Update(_ context.Context, table []byte, key Key, apply func([]byte) ([]byte, error)) error {
 	k, err := fdb.PrefixRange(getFDBKey(table, key))
 	if ulog.E(err) {
 		return err
@@ -361,12 +385,12 @@ func (t *ftx) Update(_ context.Context, table string, key Key, apply func([]byte
 		t.tx.Set(kv.Key, v)
 	}
 
-	log.Debug().Str("table", table).Interface("Key", key).Msg("tx update")
+	log.Debug().Str("table", string(table)).Interface("Key", key).Msg("tx update")
 
 	return nil
 }
 
-func (t *ftx) UpdateRange(_ context.Context, table string, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) error {
+func (t *ftx) UpdateRange(_ context.Context, table []byte, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) error {
 	lk := getFDBKey(table, lKey)
 	rk := getFDBKey(table, rKey)
 
@@ -387,12 +411,12 @@ func (t *ftx) UpdateRange(_ context.Context, table string, lKey Key, rKey Key, a
 		t.tx.Set(kv.Key, v)
 	}
 
-	log.Debug().Str("table", table).Interface("lKey", lKey).Interface("rKey", rKey).Msg("tx update range")
+	log.Debug().Str("table", string(table)).Interface("lKey", lKey).Interface("rKey", rKey).Msg("tx update range")
 
 	return nil
 }
 
-func (t *ftx) Read(_ context.Context, table string, key Key) (Iterator, error) {
+func (t *ftx) Read(_ context.Context, table []byte, key Key) (Iterator, error) {
 	k, err := fdb.PrefixRange(getFDBKey(table, key))
 	if ulog.E(err) {
 		return nil, err
@@ -400,18 +424,29 @@ func (t *ftx) Read(_ context.Context, table string, key Key) (Iterator, error) {
 
 	r := t.tx.GetRange(k, fdb.RangeOptions{})
 
-	return &fdbIterator{it: r.Iterator(), subspace: subspace.FromBytes([]byte(table))}, nil
+	return &fdbIterator{it: r.Iterator(), subspace: subspace.FromBytes(table)}, nil
 }
 
-func (t *ftx) ReadRange(_ context.Context, table string, lKey Key, rKey Key) (Iterator, error) {
+func (t *ftx) ReadRange(_ context.Context, table []byte, lKey Key, rKey Key) (Iterator, error) {
 	lk := getFDBKey(table, lKey)
 	rk := getFDBKey(table, rKey)
 
 	r := t.tx.GetRange(fdb.KeyRange{Begin: lk, End: rk}, fdb.RangeOptions{})
 
-	log.Debug().Str("table", table).Interface("lKey", lKey).Interface("rKey", rKey).Msg("tx read range")
+	log.Debug().Str("table", string(table)).Interface("lKey", lKey).Interface("rKey", rKey).Msg("tx read range")
 
-	return &fdbIterator{it: r.Iterator(), subspace: subspace.FromBytes([]byte(table))}, nil
+	return &fdbIterator{it: r.Iterator(), subspace: subspace.FromBytes(table)}, nil
+}
+
+func (t *ftx) SetVersionstampedValue(_ context.Context, key []byte, value []byte) error {
+	t.tx.SetVersionstampedValue(fdb.Key(key), value)
+
+	log.Debug().Str("key", string(key)).Msg("setting metadata version key")
+	return nil
+}
+
+func (t *ftx) Get(_ context.Context, key []byte) ([]byte, error) {
+	return t.tx.Get(fdb.Key(key)).Get()
 }
 
 func (t *ftx) Commit(_ context.Context) error {
@@ -447,48 +482,64 @@ func (t *ftx) Rollback(_ context.Context) error {
 	return nil
 }
 
-func (i *fdbIterator) More() bool {
-	// makes calls to More idempotent
-	if !i.loaded && i.it.Advance() {
-		i.loaded = true
-	}
-	return i.loaded
-}
-
 func tupleToKey(t *tuple.Tuple) Key {
 	p := unsafe.Pointer(t)
 	return *(*Key)(p)
 }
 
-func (i *fdbIterator) Next() (*KeyValue, error) {
-	i.loaded = false
-	kv, err := i.it.Get()
-	if ulog.E(err) {
-		return nil, err
+func (i *fdbIterator) Next(kv *KeyValue) bool {
+	if i.err != nil {
+		return false
 	}
-	log.Debug().Str("key", kv.Key.String()).Msg("fdbIterator.Next")
-	t, err := i.subspace.Unpack(kv.Key)
-	if ulog.E(err) {
-		return nil, err
+
+	if !i.it.Advance() {
+		return false
 	}
-	return &KeyValue{Key: tupleToKey(&t), FDBKey: kv.Key, Value: kv.Value}, nil
+
+	tkv, err := i.it.Get()
+	if ulog.E(err) {
+		i.err = err
+		return false
+	}
+
+	log.Debug().Str("key", tkv.Key.String()).Msg("fdbIterator.Next")
+
+	t, err := i.subspace.Unpack(tkv.Key)
+	if ulog.E(err) {
+		i.err = err
+		return false
+	}
+
+	if kv != nil {
+		kv.Key = tupleToKey(&t)
+		kv.FDBKey = tkv.Key
+		kv.Value = tkv.Value
+	}
+
+	return true
 }
 
-func (i *fdbIteratorTxCloser) More() bool {
+func (i *fdbIterator) Err() error {
+	return i.err
+}
+
+func (i *fdbIteratorTxCloser) Next(kv *KeyValue) bool {
 	if i.tx == nil {
 		return false
 	}
-	if !i.Iterator.More() {
-		err := i.tx.Rollback(context.Background())
+	if !i.Iterator.Next(kv) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		err := i.tx.Rollback(ctx)
 		ulog.E(err)
 		i.tx = nil
 		return false
 	}
-	return i.Iterator.More()
+	return true
 }
 
-func getFDBKey(table string, key Key) fdb.Key {
-	s := subspace.FromBytes([]byte(table))
+func getFDBKey(table []byte, key Key) fdb.Key {
+	s := subspace.FromBytes(table)
 	var k fdb.Key
 	if len(key) == 0 {
 		k = s.FDBKey()

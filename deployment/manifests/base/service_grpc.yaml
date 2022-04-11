@@ -12,14 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - deployment.yaml
-  - service.yaml
-  - service_grpc.yaml
-  - network-policy.yaml
-configMapGenerator:
-  - name: tigrisdb-server-config
-    files:
-      - server.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: tigrisdb-server
+    app.kubernetes.io/part-of: tigrisdb
+    app.kubernetes.io/component: server-grpc
+  annotations:
+    alb.ingress.kubernetes.io/backend-protocol-version: GRPC
+  name: tigrisdb-server-grpc
+spec:
+  type: NodePort
+  ports:
+    - port: 80
+      name: http
+      protocol: TCP
+      targetPort: 8080
+  selector:
+    app.kubernetes.io/name: tigrisdb-server

@@ -28,7 +28,7 @@ import (
 
 /**
 {
-	"title": "test schema1",
+	"name": "test_collection",
 	"description": "this schema is for integration tests",
 	"properties": {
 		"pkey_int": {
@@ -42,11 +42,11 @@ import (
 		"string_value": {
 			"description": "simple string field",
 			"type": "string",
-			"max_length": 128,
+			"maxLength": 128,
 		},
 		"bool_value": {
-			"description": "simple bool field",
-			"type": "bool"
+			"description": "simple boolean field",
+			"type": "boolean"
 		},
 		"double_value": {
 			"description": "simple double field",
@@ -65,7 +65,7 @@ import (
 */
 var testCreateSchema = map[string]interface{}{
 	"schema": map[string]interface{}{
-		"title":       "test schema1",
+		"name":        "test_collection",
 		"description": "this schema is for integration tests",
 		"properties": map[string]interface{}{
 			"pkey_int": map[string]interface{}{
@@ -79,11 +79,11 @@ var testCreateSchema = map[string]interface{}{
 			"string_value": map[string]interface{}{
 				"description": "simple string field",
 				"type":        "string",
-				"max_length":  128,
+				"maxLength":   128,
 			},
 			"bool_value": map[string]interface{}{
-				"description": "simple bool field",
-				"type":        "bool",
+				"description": "simple boolean field",
+				"type":        "boolean",
 			},
 			"double_value": map[string]interface{}{
 				"description": "simple double field",
@@ -150,21 +150,31 @@ func (s *CollectionSuite) TestCreateCollection() {
 	s.Run("status_conflict", func() {
 		dropCollection(s.T(), s.database, "test_collection")
 
-		resp := createCollection(s.T(), s.database, "test_collection", testCreateSchema)
-		resp.Status(http.StatusOK).
+		var createOrUpdateOptions = map[string]interface{}{
+			"only_create": true,
+		}
+		for key, value := range testCreateSchema {
+			createOrUpdateOptions[key] = value
+		}
+
+		e := httpexpect.New(s.T(), config.GetBaseURL())
+		e.POST(getCollectionURL(s.database, "test_collection", "createOrUpdate")).
+			WithJSON(createOrUpdateOptions).
+			Expect().
+			Status(http.StatusOK).
 			JSON().
 			Object().
 			ValueEqual("msg", "collection created successfully")
 
-		resp = createCollection(s.T(), s.database, "test_collection", testCreateSchema)
-		resp.Status(http.StatusConflict).
+		e.POST(getCollectionURL(s.database, "test_collection", "createOrUpdate")).
+			WithJSON(createOrUpdateOptions).
+			Expect().
+			Status(http.StatusConflict).
 			JSON().
 			Object().
 			ValueEqual("message", "collection already exists")
 	})
 }
-
-func (s *CollectionSuite) TestAlterCollection() {}
 
 func (s *CollectionSuite) TestDropCollection() {
 	createCollection(s.T(), s.database, "test_collection", testCreateSchema)
@@ -176,11 +186,9 @@ func (s *CollectionSuite) TestDropCollection() {
 		ValueEqual("msg", "collection dropped successfully")
 }
 
-func (s *CollectionSuite) TestTruncateCollection() {}
-
 func createCollection(t *testing.T, database string, collection string, schema map[string]interface{}) *httpexpect.Response {
 	e := httpexpect.New(t, config.GetBaseURL())
-	return e.POST(getCollectionURL(database, collection, "create")).
+	return e.POST(getCollectionURL(database, collection, "createOrUpdate")).
 		WithJSON(schema).
 		Expect()
 }

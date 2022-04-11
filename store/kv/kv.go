@@ -26,14 +26,16 @@ type KeyValue struct {
 }
 
 type crud interface {
-	Insert(ctx context.Context, table string, key Key, data []byte) error
-	Replace(ctx context.Context, table string, key Key, data []byte) error
-	Delete(ctx context.Context, table string, key Key) error
-	DeleteRange(ctx context.Context, table string, lKey Key, rKey Key) error
-	Read(ctx context.Context, table string, key Key) (Iterator, error)
-	ReadRange(ctx context.Context, table string, lkey Key, rkey Key) (Iterator, error)
-	Update(ctx context.Context, table string, key Key, apply func([]byte) ([]byte, error)) error
-	UpdateRange(ctx context.Context, table string, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) error
+	Insert(ctx context.Context, table []byte, key Key, data []byte) error
+	Replace(ctx context.Context, table []byte, key Key, data []byte) error
+	Delete(ctx context.Context, table []byte, key Key) error
+	DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key) error
+	Read(ctx context.Context, table []byte, key Key) (Iterator, error)
+	ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key) (Iterator, error)
+	Update(ctx context.Context, table []byte, key Key, apply func([]byte) ([]byte, error)) error
+	UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) error
+	SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error
+	Get(ctx context.Context, key []byte) ([]byte, error)
 }
 
 type Tx interface {
@@ -46,13 +48,13 @@ type KV interface {
 	crud
 	Tx(ctx context.Context) (Tx, error)
 	Batch() (Tx, error)
-	CreateTable(ctx context.Context, name string) error
-	DropTable(ctx context.Context, name string) error
+	CreateTable(ctx context.Context, name []byte) error
+	DropTable(ctx context.Context, name []byte) error
 }
 
 type Iterator interface {
-	More() bool
-	Next() (*KeyValue, error)
+	Next(*KeyValue) bool
+	Err() error
 }
 
 type KeyPart interface{}

@@ -16,19 +16,18 @@ package v1
 
 import (
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"github.com/tigrisdata/tigrisdb/schema"
 )
+
+const ()
 
 // Streaming is a wrapper interface for passing around for streaming reads
 type Streaming interface {
 	api.TigrisDB_ReadServer
 }
 
-// Request is a wrapper on api.Request.
-type Request struct {
-	apiRequest  api.Request
-	collection  schema.Collection
-	documents   [][]byte
+// ReqOptions are options used by queryLifecycle to execute a query
+type ReqOptions struct {
+	txCtx       *api.TransactionCtx
 	queryRunner QueryRunner
 }
 

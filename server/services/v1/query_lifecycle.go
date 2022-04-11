@@ -17,38 +17,86 @@ package v1
 import (
 	"context"
 
+	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-
+	"github.com/tigrisdata/tigrisdb/server/metadata"
+	"github.com/tigrisdata/tigrisdb/server/transaction"
+	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"google.golang.org/grpc/codes"
 )
 
 // QueryLifecycleFactory is responsible for returning queryLifecycle objects
-type QueryLifecycleFactory struct{}
+type QueryLifecycleFactory struct {
+	txMgr     *transaction.Manager
+	tenantMgr *metadata.TenantManager
+}
 
-func NewQueryLifecycleFactory() *QueryLifecycleFactory {
-	return &QueryLifecycleFactory{}
+func NewQueryLifecycleFactory(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager) *QueryLifecycleFactory {
+	return &QueryLifecycleFactory{
+		txMgr:     txMgr,
+		tenantMgr: tenantMgr,
+	}
 }
 
 // Get will create and return a queryLifecycle object
 func (f *QueryLifecycleFactory) Get() *queryLifecycle {
-	return newQueryLifecycle()
+	return newQueryLifecycle(f.txMgr, f.tenantMgr)
 }
 
 // queryLifecycle manages the lifecycle of a query that it is handling. Single place that can be used to validate
 // the query, authorize the query, or to log or emit metrics related to this query.
-type queryLifecycle struct{}
-
-func newQueryLifecycle() *queryLifecycle {
-	return &queryLifecycle{}
+type queryLifecycle struct {
+	txMgr     *transaction.Manager
+	tenantMgr *metadata.TenantManager
 }
 
-func (q *queryLifecycle) run(ctx context.Context, req *Request) (*Response, error) {
-	if req == nil {
-		return nil, api.Errorf(codes.Internal, "empty request")
+func newQueryLifecycle(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager) *queryLifecycle {
+	return &queryLifecycle{
+		txMgr:     txMgr,
+		tenantMgr: tenantMgr,
 	}
-	if req.queryRunner == nil {
+}
+
+func (q *queryLifecycle) run(ctx context.Context, options *ReqOptions) (*Response, error) {
+	if options == nil {
+		return nil, api.Errorf(codes.Internal, "empty options")
+	}
+	if options.queryRunner == nil {
 		return nil, api.Errorf(codes.Internal, "query runner is missing")
 	}
 
-	return req.queryRunner.Run(ctx, req)
+	// ToDo: extract the namespace from the token. For now, just use the default tenant
+	tenant := q.tenantMgr.GetTenant(metadata.DefaultNamespaceName)
+	if tenant != nil {
+		log.Debug().Str("ns", tenant.String()).Msg("tenant found")
+	}
+
+	tx, err := q.txMgr.GetInheritedOrStartTx(ctx, options.txCtx, false)
+	if ulog.E(err) {
+		return nil, err
+	}
+
+	if tenant == nil {
+		log.Debug().Str("tenant", metadata.DefaultNamespaceName).Msg("tenant not found, creating")
+		if tenant, err = q.tenantMgr.CreateOrGetTenant(ctx, tx, metadata.NewDefaultNamespace()); ulog.E(err) {
+			return nil, err
+		}
+	}
+
+	var resp *Response
+	var txErr error
+	defer func() {
+		var err error
+		if txErr == nil {
+			err = tx.Commit(ctx)
+		} else {
+			err = tx.Rollback(ctx)
+		}
+		if txErr == nil {
+			txErr = err
+		}
+	}()
+
+	resp, txErr = options.queryRunner.Run(ctx, tx, tenant)
+	return resp, txErr
 }

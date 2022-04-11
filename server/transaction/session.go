@@ -114,7 +114,7 @@ func (s *session) insert(ctx context.Context, key keys.Key, value []byte) error 
 		return err
 	}
 
-	return s.kTx.Insert(ctx, key.Prefix(), kv.BuildKey(key.PrimaryKeys()...), value)
+	return s.kTx.Insert(ctx, key.Table(), kv.BuildKey(key.IndexParts()...), value)
 }
 
 func (s *session) replace(ctx context.Context, key keys.Key, value []byte) error {
@@ -125,7 +125,7 @@ func (s *session) replace(ctx context.Context, key keys.Key, value []byte) error
 		return err
 	}
 
-	return s.kTx.Replace(ctx, key.Prefix(), kv.BuildKey(key.PrimaryKeys()...), value)
+	return s.kTx.Replace(ctx, key.Table(), kv.BuildKey(key.IndexParts()...), value)
 }
 
 func (s *session) update(ctx context.Context, key keys.Key, apply func([]byte) ([]byte, error)) error {
@@ -136,7 +136,7 @@ func (s *session) update(ctx context.Context, key keys.Key, apply func([]byte) (
 		return err
 	}
 
-	return s.kTx.Update(ctx, key.Prefix(), kv.BuildKey(key.PrimaryKeys()...), apply)
+	return s.kTx.Update(ctx, key.Table(), kv.BuildKey(key.IndexParts()...), apply)
 }
 
 func (s *session) delete(ctx context.Context, key keys.Key) error {
@@ -147,7 +147,7 @@ func (s *session) delete(ctx context.Context, key keys.Key) error {
 		return err
 	}
 
-	return s.kTx.Delete(ctx, key.Prefix(), kv.BuildKey(key.PrimaryKeys()...))
+	return s.kTx.Delete(ctx, key.Table(), kv.BuildKey(key.IndexParts()...))
 }
 
 func (s *session) read(ctx context.Context, key keys.Key) (kv.Iterator, error) {
@@ -158,7 +158,29 @@ func (s *session) read(ctx context.Context, key keys.Key) (kv.Iterator, error) {
 		return nil, err
 	}
 
-	return s.kTx.Read(ctx, key.Prefix(), kv.BuildKey(key.PrimaryKeys()...))
+	return s.kTx.Read(ctx, key.Table(), kv.BuildKey(key.IndexParts()...))
+}
+
+func (s *session) setVersionstampedValue(ctx context.Context, key []byte, value []byte) error {
+	s.Lock()
+	defer s.Unlock()
+
+	if err := s.validateSession(); err != nil {
+		return nil
+	}
+
+	return s.kTx.SetVersionstampedValue(ctx, key, value)
+}
+
+func (s *session) get(ctx context.Context, key []byte) ([]byte, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	if err := s.validateSession(); err != nil {
+		return nil, err
+	}
+
+	return s.kTx.Get(ctx, key)
 }
 
 func (s *session) commit(ctx context.Context) error {

@@ -26,24 +26,35 @@ func IsTxSupported(req Request) bool {
 func GetTransaction(req Request) *TransactionCtx {
 	switch r := req.(type) {
 	case *InsertRequest:
+		r.GetOptions().ProtoReflect()
 		if r.GetOptions() == nil || r.GetOptions().GetWriteOptions() == nil {
 			return nil
 		}
 		return r.GetOptions().GetWriteOptions().GetTxCtx()
-	default:
-		return nil
-	}
-}
-
-func GetFilter(req Request) []byte {
-	switch r := req.(type) {
-	case *ReadRequest:
-		return r.GetFilter()
+	case *ReplaceRequest:
+		if r.GetOptions() == nil || r.GetOptions().GetWriteOptions() == nil {
+			return nil
+		}
+		return r.GetOptions().GetWriteOptions().GetTxCtx()
 	case *UpdateRequest:
-		return r.GetFilter()
+		if r.GetOptions() == nil || r.GetOptions().GetWriteOptions() == nil {
+			return nil
+		}
+		return r.GetOptions().GetWriteOptions().GetTxCtx()
 	case *DeleteRequest:
-		return r.GetFilter()
-	default:
-		return nil
+		if r.GetOptions() == nil || r.GetOptions().GetWriteOptions() == nil {
+			return nil
+		}
+		return r.GetOptions().GetWriteOptions().GetTxCtx()
+	case *ReadRequest:
+		if r.GetOptions() == nil {
+			return r.GetOptions().GetTxCtx()
+		}
+	case *CreateOrUpdateCollectionRequest:
+		if r.GetOptions() == nil || r.GetOptions().GetTxCtx() == nil {
+			return nil
+		}
+		return r.GetOptions().GetTxCtx()
 	}
+	return nil
 }

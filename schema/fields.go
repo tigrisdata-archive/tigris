@@ -16,6 +16,11 @@ package schema
 
 import (
 	"strings"
+
+	jsoniter "github.com/json-iterator/go"
+	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	"github.com/tigrisdata/tigrisdb/lib/set"
+	"google.golang.org/grpc/codes"
 )
 
 type Fields interface{}
@@ -27,20 +32,20 @@ const (
 	NullType
 	BoolType
 	IntType
+	BigIntType
 	DoubleType
 	BytesType
 	StringType
-	UUIDType
 )
 
 const (
 	nullDef   = "null"
-	boolDef   = "bool"
+	boolDef   = "boolean"
 	intDef    = "int"
+	bigIntDef = "bigint"
 	doubleDef = "double"
 	bytesDef  = "bytes"
 	stringDef = "string"
-	uuidDef   = "uuid"
 )
 
 func ToFieldType(t string) FieldType {
@@ -52,14 +57,14 @@ func ToFieldType(t string) FieldType {
 		return BoolType
 	case intDef:
 		return IntType
+	case bigIntDef:
+		return BigIntType
 	case doubleDef:
 		return DoubleType
 	case bytesDef:
 		return BytesType
 	case stringDef:
 		return StringType
-	case uuidDef:
-		return UUIDType
 	default:
 		return UnknownType
 	}
@@ -77,30 +82,62 @@ func ToStringType(t FieldType) string {
 		return bytesDef
 	case StringType:
 		return stringDef
-	case UUIDType:
-		return uuidDef
 	default:
 		return "unknown"
 	}
 }
 
+func IsValidIndexType(t FieldType) bool {
+	switch t {
+	case IntType, BigIntType, StringType, BytesType:
+		return true
+	default:
+		return false
+	}
+}
+
+var SupportedFieldProperties = set.New("description", "type", "maxLength")
+
 type FieldBuilder struct {
 	Description string `json:"description,omitempty"`
 	FieldName   string
 	Type        string `json:"type,omitempty"`
-	MaxLength   *int32 `json:"max_length,omitempty"`
+	MaxLength   *int32 `json:"maxLength,omitempty"`
 	Primary     *bool
-	Unique      *bool `json:"unique,omitempty"`
 }
 
-func (f *FieldBuilder) Build() *Field {
+func (f *FieldBuilder) Validate(v []byte) error {
+	var fieldProperties map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(v, &fieldProperties); err != nil {
+		return err
+	}
+
+	for key := range fieldProperties {
+		if !SupportedFieldProperties.Contains(key) {
+			return api.Errorf(codes.InvalidArgument, "unsupported property found '%s'", key)
+		}
+	}
+
+	return nil
+}
+
+func (f *FieldBuilder) Build() (*Field, error) {
 	var field = &Field{}
 	field.FieldName = f.FieldName
 	field.MaxLength = f.MaxLength
-	field.UniqueKeyField = f.Unique
-	field.DataType = ToFieldType(f.Type)
+	fieldType := ToFieldType(f.Type)
+	if fieldType == UnknownType {
+		return nil, api.Errorf(codes.InvalidArgument, "unsupported type detected '%s'", f.Type)
+	}
+	field.DataType = fieldType
+	if f.Primary != nil && *f.Primary {
+		// validate the primary key types
+		if !IsValidIndexType(field.DataType) {
+			return nil, api.Errorf(codes.InvalidArgument, "unsupported primary key type detected '%s'", f.Type)
+		}
+	}
 	field.PrimaryKeyField = f.Primary
-	return field
+	return field, nil
 }
 
 type Field struct {
