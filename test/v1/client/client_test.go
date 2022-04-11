@@ -116,9 +116,6 @@ func testClient(t *testing.T, c driver.Driver) {
 
 	err = c.DropCollection(ctx, "db1", "c1", &driver.CollectionOptions{})
 	require.NoError(t, err)
-
-	err = c.DropCollection(ctx, "db1", "c1", &driver.CollectionOptions{})
-	require.NoError(t, err)
 }
 
 func testTxClient(t *testing.T, c driver.Driver) {
