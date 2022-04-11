@@ -113,3 +113,9 @@ func NewFieldOperator(op FieldOPType, val jsoniter.RawMessage) *FieldOperator {
 		Document: val,
 	}
 }
+
+func (f *FieldOperator) DeserializeDoc() (interface{}, error) {
+	var v interface{}
+	err := jsoniter.Unmarshal(f.Document, &v)
+	return v, err
+}

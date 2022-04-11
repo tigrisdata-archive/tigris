@@ -14,7 +14,15 @@
 
 package schema
 
-import "fmt"
+import (
+	"bytes"
+	"fmt"
+
+	jsoniter "github.com/json-iterator/go"
+	"github.com/santhosh-tekuri/jsonschema/v5"
+	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	"google.golang.org/grpc/codes"
+)
 
 const (
 	UserDefinedSchema = "user_defined_schema"
@@ -50,14 +58,29 @@ type DefaultCollection struct {
 	Fields []*Field
 	// Indexes is a wrapper on the indexes part of this collection.
 	Indexes *Indexes
+	// Validator is used to validate the JSON document. As it is expensive to create this, it is only created once
+	// during constructor of the collection.
+	Validator *jsonschema.Schema
 }
 
-func NewDefaultCollection(cname string, id uint32, fields []*Field, indexes *Indexes) *DefaultCollection {
+func NewDefaultCollection(cname string, id uint32, fields []*Field, indexes *Indexes, schema jsoniter.RawMessage) *DefaultCollection {
+	url := cname + ".json"
+	compiler := jsonschema.NewCompiler()
+	if err := compiler.AddResource(url, bytes.NewReader(schema)); err != nil {
+		panic(err)
+	}
+
+	validator, err := compiler.Compile(url)
+	if err != nil {
+		panic(err)
+	}
+
 	return &DefaultCollection{
-		Id:      id,
-		Name:    cname,
-		Fields:  fields,
-		Indexes: indexes,
+		Id:        id,
+		Name:      cname,
+		Fields:    fields,
+		Indexes:   indexes,
+		Validator: validator,
 	}
 }
 
@@ -75,6 +98,26 @@ func (d *DefaultCollection) GetFields() []*Field {
 
 func (d *DefaultCollection) GetIndexes() *Indexes {
 	return d.Indexes
+}
+
+// Validate expects an unmarshalled document which it will validate again the schema of this collection.
+func (d *DefaultCollection) Validate(document interface{}) error {
+	err := d.Validator.Validate(document)
+	if err == nil {
+		return nil
+	}
+
+	if v, ok := err.(*jsonschema.ValidationError); ok {
+		if len(v.Causes) == 1 {
+			field := v.Causes[0].InstanceLocation
+			if len(field) > 0 && field[0] == '/' {
+				field = field[1:]
+			}
+			return api.Errorf(codes.InvalidArgument, "json schema validation failed for field '%s' reason '%s'", field, v.Causes[0].Message)
+		}
+	}
+
+	return api.Errorf(codes.InvalidArgument, err.Error())
 }
 
 type Collection interface {

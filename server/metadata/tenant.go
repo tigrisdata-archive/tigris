@@ -429,7 +429,7 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 		idxNameToId: idxNameToId,
 		name:        schFactory.CollectionName,
 		schema:      schFactory.Schema,
-		collection:  schema.NewDefaultCollection(schFactory.CollectionName, collectionId, schFactory.Fields, schFactory.Indexes),
+		collection:  schema.NewDefaultCollection(schFactory.CollectionName, collectionId, schFactory.Fields, schFactory.Indexes, schFactory.Schema),
 	}
 
 	return nil
@@ -578,7 +578,7 @@ func (c *collectionHolder) set(revision []byte) error {
 		index.Id = id
 	}
 
-	c.collection = schema.NewDefaultCollection(c.name, c.id, schFactory.Fields, schFactory.Indexes)
+	c.collection = schema.NewDefaultCollection(c.name, c.id, schFactory.Fields, schFactory.Indexes, revision)
 	c.schema = revision
 	return nil
 }

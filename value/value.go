@@ -95,19 +95,19 @@ func NewValueUsingSchema(field *schema.Field, input *structpb.Value) (Value, err
 			i := BoolValue(inpVal.BoolValue)
 			return &i, nil
 		}
-		return nil, status.Errorf(codes.InvalidArgument, "permissible type for '%s' is bool only", field.FieldName)
+		return nil, status.Errorf(codes.InvalidArgument, "permissible type for '%s' is boolean only", field.FieldName)
 	case schema.IntType:
 		if inpVal, ok := input.Kind.(*structpb.Value_NumberValue); ok {
 			if isIntegral(inpVal.NumberValue) {
 				return NewIntValue(int64(inpVal.NumberValue)), nil
 			}
 		}
-		return nil, status.Errorf(codes.InvalidArgument, "permissible type for '%s' is int only", field.FieldName)
+		return nil, status.Errorf(codes.InvalidArgument, "permissible type for '%s' is integer only", field.FieldName)
 	case schema.DoubleType:
 		if inpVal, ok := input.Kind.(*structpb.Value_NumberValue); ok {
 			return NewDoubleValue(inpVal.NumberValue), nil
 		}
-		return nil, status.Errorf(codes.InvalidArgument, "permissible type for '%s' is double only", field.FieldName)
+		return nil, status.Errorf(codes.InvalidArgument, "permissible type for '%s' is number only", field.FieldName)
 	case schema.BytesType:
 		if inpVal, ok := input.Kind.(*structpb.Value_StringValue); ok {
 			if decoded, err := base64.StdEncoding.DecodeString(inpVal.StringValue); err == nil {
