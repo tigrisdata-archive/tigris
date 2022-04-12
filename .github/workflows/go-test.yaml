@@ -38,4 +38,7 @@ jobs:
           docker image prune -f
 
       - name: Run tests
-        run: make docker_test_no_build || ( docker-compose -f test/docker/docker-compose.yml logs && false )
+        run: TEST_PARAM="-coverprofile=coverage.out -covermode=atomic" make docker_test_no_build || ( docker-compose -f test/docker/docker-compose.yml logs && false )
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v2
