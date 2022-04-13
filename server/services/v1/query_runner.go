@@ -162,6 +162,11 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 			return err
 		}
 
+		if err = coll.Validate(s.AsMap()); err != nil {
+			// schema validation failed
+			return err
+		}
+
 		indexParts, err := runner.extractIndexParts(coll.Indexes.PrimaryKey.Fields, s.GetFields())
 		if ulog.E(err) {
 			return err
@@ -274,6 +279,18 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	factory, err = update.BuildFieldOperators(runner.req.Fields)
 	if err != nil {
 		return nil, err
+	}
+
+	for _, fieldOperators := range factory.FieldOperators {
+		v, err := fieldOperators.DeserializeDoc()
+		if err != nil {
+			return nil, err
+		}
+
+		if err = collection.Validate(v); err != nil {
+			// schema validation failed
+			return nil, err
+		}
 	}
 
 	for _, key := range iKeys {

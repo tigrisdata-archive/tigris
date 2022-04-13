@@ -94,7 +94,7 @@ func TestNewValueFromSchema(t *testing.T) {
 				DataType:  schema.IntType,
 			},
 			nil,
-			status.Errorf(codes.InvalidArgument, "permissible type for '%s' is int only", "B"),
+			status.Errorf(codes.InvalidArgument, "permissible type for '%s' is integer only", "B"),
 		}, {
 			&schema.Field{
 				FieldName: "B",

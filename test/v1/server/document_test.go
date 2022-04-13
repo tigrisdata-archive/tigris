@@ -147,6 +147,50 @@ func (s *DocumentSuite) TestInsert_AlreadyExists() {
 		ValueEqual("message", "duplicate key value, violates unique primary key constraint")
 }
 
+func (s *DocumentSuite) TestInsert_SchemaValidationError() {
+	cases := []struct {
+		documents  []interface{}
+		expMessage string
+	}{
+		{
+			[]interface{}{
+				map[string]interface{}{
+					"pkey_int":  1,
+					"int_value": 10.20,
+				},
+			},
+			"json schema validation failed for field 'int_value' reason 'expected integer, but got number'",
+		}, {
+			[]interface{}{
+				map[string]interface{}{
+					"pkey_int":     1,
+					"string_value": 12,
+				},
+			},
+			"json schema validation failed for field 'string_value' reason 'expected string, but got number'",
+		}, {
+			[]interface{}{
+				map[string]interface{}{
+					"bytes_value": 12.30,
+				},
+			},
+			"json schema validation failed for field 'bytes_value' reason 'expected string, but got number'",
+		},
+	}
+	for _, c := range cases {
+		e := httpexpect.New(s.T(), config.GetBaseURL())
+		e.POST(getDocumentURL(s.database, s.collection, "insert")).
+			WithJSON(map[string]interface{}{
+				"documents": c.documents,
+			}).
+			Expect().
+			Status(http.StatusBadRequest).
+			JSON().
+			Object().
+			ValueEqual("message", c.expMessage)
+	}
+}
+
 func (s *DocumentSuite) TestInsert_SingleRow() {
 	inputDocument := []interface{}{
 		map[string]interface{}{
@@ -392,6 +436,67 @@ func (s *DocumentSuite) TestUpdate_SingleRow() {
 				"bytes_value":  []byte(`"simple_insert1_update_modified"`),
 			},
 		})
+}
+
+func (s *DocumentSuite) TestUpdate_SchemaValidationError() {
+	inputDocument := []interface{}{
+		map[string]interface{}{
+			"pkey_int":     100,
+			"int_value":    100,
+			"string_value": "simple_insert1_update",
+			"bool_value":   true,
+			"double_value": 100.00001,
+			"bytes_value":  []byte(`"simple_insert1_update"`),
+		},
+	}
+
+	insertDocuments(s.T(), s.database, s.collection, inputDocument, false).
+		Status(http.StatusOK)
+
+	readAndValidate(s.T(),
+		s.database,
+		s.collection,
+		map[string]interface{}{
+			"pkey_int": 100,
+		},
+		nil,
+		inputDocument)
+
+	cases := []struct {
+		documents  map[string]interface{}
+		expMessage string
+	}{
+		{
+			map[string]interface{}{
+				"$set": map[string]interface{}{
+					"string_value": 1,
+				},
+			},
+			"json schema validation failed for field 'string_value' reason 'expected string, but got number'",
+		}, {
+			map[string]interface{}{
+				"$set": map[string]interface{}{
+					"int_value": "1",
+				},
+			},
+			"json schema validation failed for field 'int_value' reason 'expected integer, but got string'",
+		},
+	}
+	for _, c := range cases {
+		e := httpexpect.New(s.T(), config.GetBaseURL())
+		e.PUT(getDocumentURL(s.database, s.collection, "update")).
+			WithJSON(map[string]interface{}{
+				"fields": c.documents,
+				"filter": map[string]interface{}{
+					"pkey_int": 1,
+				},
+			}).
+			Expect().
+			Status(http.StatusBadRequest).
+			JSON().
+			Object().
+			ValueEqual("message", c.expMessage)
+	}
 }
 
 func (s *DocumentSuite) TestUpdate_MultipleRows() {
