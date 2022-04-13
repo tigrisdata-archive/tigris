@@ -15,8 +15,6 @@
 package schema
 
 import (
-	"fmt"
-
 	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
@@ -77,73 +75,6 @@ type JSONSchema struct {
 	PrimaryKeys []string            `json:"primary_key,omitempty"`
 }
 
-func CreateCollection(database string, collection string, reqSchema jsoniter.RawMessage) (Collection, error) {
-	var schema = &JSONSchema{}
-	if err := jsoniter.Unmarshal(reqSchema, schema); err != nil {
-		return nil, api.Errorf(codes.Internal, errors.Wrap(err, "unmarshalling failed").Error())
-	}
-	if collection != schema.Name {
-		return nil, api.Errorf(codes.InvalidArgument, "collection name is not same as schema name '%s' '%s'", collection, schema.Name)
-	}
-	if len(schema.Properties) == 0 {
-		return nil, api.Errorf(codes.InvalidArgument, "missing properties field in schema")
-	}
-	if len(schema.PrimaryKeys) == 0 {
-		return nil, api.Errorf(codes.InvalidArgument, "missing primary key field in schema")
-	}
-
-	var primaryKeysSet = set.New(schema.PrimaryKeys...)
-	var fields []*Field
-	var err error
-	err = jsonparser.ObjectEach(schema.Properties, func(key []byte, v []byte, dataType jsonparser.ValueType, offset int) error {
-		if err != nil {
-			return api.Errorf(codes.Internal, errors.Wrap(err, "failed to iterate on user schema").Error())
-		}
-
-		var builder FieldBuilder
-		if err = builder.Validate(v); err != nil {
-			return err
-		}
-
-		builder.FieldName = string(key)
-		if err = jsoniter.Unmarshal(v, &builder); err != nil {
-			return api.Errorf(codes.Internal, err.Error())
-		}
-		if primaryKeysSet.Contains(builder.FieldName) {
-			builder.Primary = &boolTrue
-		}
-
-		var f *Field
-		f, err = builder.Build()
-		if err != nil {
-			return err
-		}
-		fields = append(fields, f)
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// ordering needs to same as in schema
-	var primaryKeyFields []*Field
-	for _, pkeyField := range schema.PrimaryKeys {
-		found := false
-		for _, f := range fields {
-			if f.FieldName == pkeyField {
-				primaryKeyFields = append(primaryKeyFields, f)
-				found = true
-			}
-		}
-		if !found {
-			return nil, status.Errorf(codes.InvalidArgument, "missing primary key '%s' field in schema", pkeyField)
-		}
-	}
-
-	return NewCollection(database, collection, fields, primaryKeyFields), nil
-}
-
 // Factory is used as an intermediate step so that collection can be initialized with properly encoded values.
 type Factory struct {
 	// Fields are derived from the user schema.
@@ -159,11 +90,13 @@ type Factory struct {
 }
 
 // Build is used to deserialize the user json schema into a schema factory.
-// ToDo: after integrating with API, simplify the CreateCollection method
 func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 	var schema = &JSONSchema{}
 	if err := jsoniter.Unmarshal(reqSchema, schema); err != nil {
 		return nil, api.Errorf(codes.Internal, errors.Wrap(err, "unmarshalling failed").Error())
+	}
+	if collection != schema.Name {
+		return nil, api.Errorf(codes.InvalidArgument, "collection name is not same as schema name '%s' '%s'", collection, schema.Name)
 	}
 	if len(schema.Properties) == 0 {
 		return nil, api.Errorf(codes.InvalidArgument, "missing properties field in schema")
@@ -172,35 +105,7 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 		return nil, api.Errorf(codes.InvalidArgument, "missing primary key field in schema")
 	}
 	var primaryKeysSet = set.New(schema.PrimaryKeys...)
-	var fields []*Field
-	var err error
-	err = jsonparser.ObjectEach(schema.Properties, func(key []byte, v []byte, dataType jsonparser.ValueType, offset int) error {
-		if err != nil {
-			return api.Errorf(codes.Internal, errors.Wrap(err, "failed to iterate on user schema").Error())
-		}
-
-		var builder FieldBuilder
-		if err = builder.Validate(v); err != nil {
-			return err
-		}
-		builder.FieldName = string(key)
-		if err = jsoniter.Unmarshal(v, &builder); err != nil {
-			return api.Errorf(codes.Internal, err.Error())
-		}
-		if primaryKeysSet.Contains(builder.FieldName) {
-			boolTrue := true
-			builder.Primary = &boolTrue
-		}
-
-		var f *Field
-		f, err = builder.Build()
-		if err != nil {
-			return err
-		}
-		fields = append(fields, f)
-
-		return nil
-	})
+	fields, err := deserializeProperties(schema.Properties, primaryKeysSet)
 	if err != nil {
 		return nil, err
 	}
@@ -233,6 +138,77 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 	}, nil
 }
 
-func StorageName(databaseName, collectionName string) string {
-	return fmt.Sprintf("%s.%s", databaseName, collectionName)
+func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet set.HashSet) ([]*Field, error) {
+	var fields []*Field
+	var err error
+	err = jsonparser.ObjectEach(properties, func(key []byte, v []byte, dataType jsonparser.ValueType, offset int) error {
+		if err != nil {
+			return api.Errorf(codes.Internal, errors.Wrap(err, "failed to iterate on user schema").Error())
+		}
+
+		var builder FieldBuilder
+		if err = builder.Validate(v); err != nil {
+			// builder validates against the supported schema attributes on properties
+			return err
+		}
+
+		// set field name and try to unmarshal the value into field builder
+		builder.FieldName = string(key)
+		if err = jsoniter.Unmarshal(v, &builder); err != nil {
+			return api.Errorf(codes.Internal, err.Error())
+		}
+		if builder.Type == jsonSpecArray && builder.Items == nil {
+			return api.Errorf(codes.InvalidArgument, "missing items for array field")
+		}
+		if builder.Type == jsonSpecObject && len(builder.Properties) == 0 {
+			return api.Errorf(codes.InvalidArgument, "missing properties for object field")
+		}
+
+		if builder.Items != nil {
+			// for arrays, items must be set, and it is possible that item type is object in that case deserialize those
+			// fields
+			var nestedFields []*Field
+			if len(builder.Items.Properties) > 0 {
+				if nestedFields, err = deserializeProperties(builder.Items.Properties, primaryKeysSet); err != nil {
+					return err
+				}
+				builder.Fields = nestedFields
+			} else {
+				// if it is simple item type
+				var f *Field
+				if f, err = builder.Items.Build(); err != nil {
+					return err
+				}
+				builder.Fields = append(nestedFields, f)
+			}
+		}
+
+		// for objects, properties are part of the field definitions in that case deserialize those
+		// nested fields
+		if len(builder.Properties) > 0 {
+			var nestedFields []*Field
+			if nestedFields, err = deserializeProperties(builder.Properties, primaryKeysSet); err != nil {
+				return err
+			}
+			builder.Fields = nestedFields
+		}
+		if primaryKeysSet.Contains(builder.FieldName) {
+			boolTrue := true
+			builder.Primary = &boolTrue
+		}
+
+		var f *Field
+		f, err = builder.Build()
+		if err != nil {
+			return err
+		}
+		fields = append(fields, f)
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return fields, nil
 }

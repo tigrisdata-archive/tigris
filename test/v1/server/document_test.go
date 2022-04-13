@@ -200,6 +200,15 @@ func (s *DocumentSuite) TestInsert_SingleRow() {
 			"bool_value":   true,
 			"double_value": 10.01,
 			"bytes_value":  []byte(`"simple_insert"`),
+			"array_value": []interface{}{
+				map[string]interface{}{
+					"id":      1,
+					"product": "foo",
+				},
+			},
+			"object_value": map[string]interface{}{
+				"name": "hi",
+			},
 		},
 	}
 
