@@ -4,7 +4,7 @@
   "properties": {
     "id": {
       "description": "A unique identifier for the product",
-      "type": "int"
+      "type": "integer"
     },
     "name": {
       "description": "Name of the product",
@@ -13,11 +13,11 @@
     },
     "quantity": {
       "description": "Number of products available in the store",
-      "type": "int"
+      "type": "integer"
     },
     "price": {
       "description": "Price of the product",
-      "type": "double"
+      "type": "number"
     }
   },
   "primary_key": [

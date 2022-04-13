@@ -70,7 +70,7 @@ func testClient(t *testing.T, c driver.Driver) {
 				"type": "string"
 			},
 			"K2": {
-				"type": "int"
+				"type": "integer"
 			},
 			"D1": {
 				"type": "string",
@@ -132,7 +132,7 @@ func testTxClient(t *testing.T, c driver.Driver) {
 				"type": "string"
 			},
 			"K2": {
-				"type": "int"
+				"type": "integer"
 			},
 			"D1": {
 				"type": "string",

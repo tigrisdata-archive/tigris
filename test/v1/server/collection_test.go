@@ -33,11 +33,11 @@ import (
 	"properties": {
 		"pkey_int": {
 			"description": "primary key field",
-			"type": "int"
+			"type": "integer"
 		},
 		"int_value": {
-			"description": "simple int field",
-			"type": "int"
+			"description": "simple integer field",
+			"type": "integer"
 		},
 		"string_value": {
 			"description": "simple string field",
@@ -50,11 +50,12 @@ import (
 		},
 		"double_value": {
 			"description": "simple double field",
-			"type": "double"
+			"type": "number"
 		},
 		"bytes_value": {
 			"description": "simple bytes field",
-			"type": "bytes"
+			"type": "string",
+			"contentEncoding": "base64"
 		}
 	},
 	"primary_key": [
@@ -70,11 +71,11 @@ var testCreateSchema = map[string]interface{}{
 		"properties": map[string]interface{}{
 			"pkey_int": map[string]interface{}{
 				"description": "primary key field",
-				"type":        "int",
+				"type":        "integer",
 			},
 			"int_value": map[string]interface{}{
 				"description": "simple int field",
-				"type":        "int",
+				"type":        "integer",
 			},
 			"string_value": map[string]interface{}{
 				"description": "simple string field",
@@ -87,11 +88,12 @@ var testCreateSchema = map[string]interface{}{
 			},
 			"double_value": map[string]interface{}{
 				"description": "simple double field",
-				"type":        "double",
+				"type":        "number",
 			},
 			"bytes_value": map[string]interface{}{
-				"description": "simple bytes field",
-				"type":        "bytes",
+				"description":     "simple bytes field",
+				"type":            "string",
+				"contentEncoding": "base64",
 			},
 		},
 		"primary_key": []interface{}{"pkey_int"},
