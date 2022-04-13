@@ -76,7 +76,7 @@ func TestSchemaSubspace(t *testing.T) {
 				"type": "string"
 			},
 			"K2": {
-				"type": "int"
+				"type": "integer"
 			},
 			"D1": {
 				"type": "string",
@@ -118,7 +118,7 @@ func TestSchemaSubspace(t *testing.T) {
 				"type": "string"
 			},
 			"K2": {
-				"type": "int"
+				"type": "integer"
 			},
 			"D1": {
 				"type": "string",
@@ -135,7 +135,7 @@ func TestSchemaSubspace(t *testing.T) {
 				"type": "string"
 			},
 			"K2": {
-				"type": "int"
+				"type": "integer"
 			}
 		},
 		"primary_key": ["K1"]
@@ -175,7 +175,7 @@ func TestSchemaSubspace(t *testing.T) {
 				"type": "string"
 			},
 			"K2": {
-				"type": "int"
+				"type": "integer"
 			},
 			"D1": {
 				"type": "string",
@@ -192,7 +192,7 @@ func TestSchemaSubspace(t *testing.T) {
 				"type": "string"
 			},
 			"K2": {
-				"type": "int"
+				"type": "integer"
 			}
 		},
 		"primary_key": ["K1"]

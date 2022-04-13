@@ -23,6 +23,12 @@ import (
 )
 
 func TestFieldBuilder_Build(t *testing.T) {
+	t.Run("test convert json to internal types", func(t *testing.T) {
+		require.Equal(t, IntType, ToFieldType("integer", ""))
+		require.Equal(t, StringType, ToFieldType("string", ""))
+		require.Equal(t, BytesType, ToFieldType("string", jsonSpecEncodingB64))
+		require.Equal(t, UnknownType, ToFieldType("string", "random"))
+	})
 	t.Run("test supported types", func(t *testing.T) {
 		cases := []struct {
 			builder  *FieldBuilder
@@ -41,15 +47,15 @@ func TestFieldBuilder_Build(t *testing.T) {
 				expError: api.Errorf(codes.InvalidArgument, "unsupported type detected 'uuid'"),
 			},
 			{
-				builder:  &FieldBuilder{FieldName: "test", Type: "double"},
+				builder:  &FieldBuilder{FieldName: "test", Type: "number"},
 				expError: nil,
 			},
 			{
-				builder:  &FieldBuilder{FieldName: "test", Type: "double", Primary: &boolTrue},
-				expError: api.Errorf(codes.InvalidArgument, "unsupported primary key type detected 'double'"),
+				builder:  &FieldBuilder{FieldName: "test", Type: "number", Primary: &boolTrue},
+				expError: api.Errorf(codes.InvalidArgument, "unsupported primary key type detected 'number'"),
 			},
 			{
-				builder:  &FieldBuilder{FieldName: "test", Type: "int", Primary: &boolTrue},
+				builder:  &FieldBuilder{FieldName: "test", Type: "integer", Primary: &boolTrue},
 				expError: nil,
 			},
 		}

@@ -23,7 +23,7 @@ import (
 
 func TestCreateCollectionFromSchema(t *testing.T) {
 	t.Run("test_create_success", func(t *testing.T) {
-		reqSchema := []byte(`{"name":"t1", "description":"This document records the details of an order","properties":{"order_id":{"description":"A unique identifier for an order","type":"bigint"},"cust_id":{"description":"A unique identifier for a customer","type":"bigint"},"product":{"description":"name of the product","type":"string","maxLength":100},"quantity":{"description":"number of products ordered","type":"int"},"price":{"description":"price of the product","type":"double"}},"primary_key":["cust_id","order_id"]}`)
+		reqSchema := []byte(`{"name":"t1", "description":"This document records the details of an order","properties":{"order_id":{"description":"A unique identifier for an order","type":"integer"},"cust_id":{"description":"A unique identifier for a customer","type":"integer"},"product":{"description":"name of the product","type":"string","maxLength":100},"quantity":{"description":"number of products ordered","type":"integer"},"price":{"description":"price of the product","type":"number"}},"primary_key":["cust_id","order_id"]}`)
 		c, err := CreateCollection("d1", "t1", reqSchema)
 		require.NoError(t, err)
 		require.Equal(t, c.Name(), "t1")
@@ -31,7 +31,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		require.Equal(t, c.PrimaryKeys()[1].FieldName, "order_id")
 	})
 	t.Run("test_create_failure", func(t *testing.T) {
-		reqSchema := []byte(`{"name":"Record of an order","properties":{"order_id":{"description":"A unique identifier for an order","type":"bigint"},"cust_id":{"description":"A unique identifier for a customer","type":"bigint"},"product":{"description":"name of the product","type":"string","maxLength":100,"unique":true},"quantity":{"description":"number of products ordered","type":"int"},"price":{"description":"price of the product","type":"double"}},"primary_key":["cust_id","order_id"]}`)
+		reqSchema := []byte(`{"name":"Record of an order","properties":{"order_id":{"description":"A unique identifier for an order","type":"integer"},"cust_id":{"description":"A unique identifier for a customer","type":"integer"},"product":{"description":"name of the product","type":"string","maxLength":100,"unique":true},"quantity":{"description":"number of products ordered","type":"int"},"price":{"description":"price of the product","type":"double"}},"primary_key":["cust_id","order_id"]}`)
 		_, err := CreateCollection("d1", "t1", reqSchema)
 		require.Equal(t, "collection name is not same as schema name 't1' 'Record of an order'", err.(*api.TigrisDBError).Error())
 	})
@@ -43,19 +43,17 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 				"type": "string"
 			},
 			"K2": {
-				"type": "int"
+				"type": "integer"
 			},
 			"K3": {
-				"type": "bigint"
+				"type": "number"
 			},
 			"K4": {
 				"type": "boolean"
 			},
 			"K5": {
-				"type": "bytes"
-			},
-			"K6": {
-				"type": "double"
+				"type": "string",
+				"contentEncoding": "base64"
 			}
 		},
 		"primary_key": ["K1", "K2"]
@@ -65,10 +63,9 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		fields := c.GetFields()
 		require.Equal(t, StringType, fields[0].DataType)
 		require.Equal(t, IntType, fields[1].DataType)
-		require.Equal(t, BigIntType, fields[2].DataType)
+		require.Equal(t, DoubleType, fields[2].DataType)
 		require.Equal(t, BoolType, fields[3].DataType)
 		require.Equal(t, BytesType, fields[4].DataType)
-		require.Equal(t, DoubleType, fields[5].DataType)
 	})
 	t.Run("test_supported_primary_keys", func(t *testing.T) {
 		schema := []byte(`{
@@ -78,7 +75,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 				"type": "string"
 			},
 			"K2": {
-				"type": "int"
+				"type": "integer"
 			}
 		},
 		"primary_key": ["K1"]
@@ -93,7 +90,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		"name": "t1",
 		"properties": {
 			"K1": {
-				"type": "double"
+				"type": "number"
 			},
 			"K2": {
 				"type": "int"
@@ -102,6 +99,6 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		"primary_key": ["K1"]
 	}`)
 		_, err := CreateCollection("d1", "t1", schema)
-		require.Equal(t, "unsupported primary key type detected 'double'", err.(*api.TigrisDBError).Error())
+		require.Equal(t, "unsupported primary key type detected 'number'", err.(*api.TigrisDBError).Error())
 	})
 }
