@@ -32,56 +32,56 @@ const (
 	NullType
 	BoolType
 	IntType
-	BigIntType
 	DoubleType
 	BytesType
 	StringType
 )
 
 const (
-	nullDef   = "null"
-	boolDef   = "boolean"
-	intDef    = "int"
-	bigIntDef = "bigint"
-	doubleDef = "double"
-	bytesDef  = "bytes"
-	stringDef = "string"
+	jsonSpecNull   = "null"
+	jsonSpecBool   = "boolean"
+	jsonSpecInt    = "integer"
+	jsonSpecDouble = "number"
+	jsonSpecString = "string"
+
+	jsonSpecEncodingB64 = "base64"
 )
 
-func ToFieldType(t string) FieldType {
-	t = strings.ToLower(t)
-	switch t {
-	case nullDef:
+func ToFieldType(jsonType string, encoding string) FieldType {
+	jsonType = strings.ToLower(jsonType)
+	switch jsonType {
+	case jsonSpecNull:
 		return NullType
-	case boolDef:
+	case jsonSpecBool:
 		return BoolType
-	case intDef:
+	case jsonSpecInt:
 		return IntType
-	case bigIntDef:
-		return BigIntType
-	case doubleDef:
+	case jsonSpecDouble:
 		return DoubleType
-	case bytesDef:
-		return BytesType
-	case stringDef:
+	case jsonSpecString:
+		if encoding == jsonSpecEncodingB64 {
+			return BytesType
+		}
+		if len(encoding) > 0 {
+			return UnknownType
+		}
+
 		return StringType
 	default:
 		return UnknownType
 	}
 }
 
-func ToStringType(t FieldType) string {
+func ToJSONSpecString(t FieldType) string {
 	switch t {
 	case NullType:
-		return nullDef
+		return jsonSpecNull
 	case IntType:
-		return intDef
+		return jsonSpecInt
 	case DoubleType:
-		return doubleDef
-	case BytesType:
-		return bytesDef
+		return jsonSpecDouble
 	case StringType:
-		return stringDef
+		return jsonSpecString
 	default:
 		return "unknown"
 	}
@@ -89,19 +89,27 @@ func ToStringType(t FieldType) string {
 
 func IsValidIndexType(t FieldType) bool {
 	switch t {
-	case IntType, BigIntType, StringType, BytesType:
+	case IntType, StringType, BytesType:
 		return true
 	default:
 		return false
 	}
 }
 
-var SupportedFieldProperties = set.New("description", "type", "maxLength")
+var SupportedFieldProperties = set.New(
+	"type",
+	"format",
+	"maxLength",
+	"description",
+	"contentEncoding",
+)
 
 type FieldBuilder struct {
-	Description string `json:"description,omitempty"`
 	FieldName   string
+	Description string `json:"description,omitempty"`
 	Type        string `json:"type,omitempty"`
+	Format      string `json:"format,omitempty"`
+	Encoding    string `json:"contentEncoding,omitempty"`
 	MaxLength   *int32 `json:"maxLength,omitempty"`
 	Primary     *bool
 }
@@ -125,8 +133,11 @@ func (f *FieldBuilder) Build() (*Field, error) {
 	var field = &Field{}
 	field.FieldName = f.FieldName
 	field.MaxLength = f.MaxLength
-	fieldType := ToFieldType(f.Type)
+	fieldType := ToFieldType(f.Type, f.Encoding)
 	if fieldType == UnknownType {
+		if len(f.Encoding) > 0 {
+			return nil, api.Errorf(codes.InvalidArgument, "unsupported encoding '%s'", f.Encoding)
+		}
 		return nil, api.Errorf(codes.InvalidArgument, "unsupported type detected '%s'", f.Type)
 	}
 	field.DataType = fieldType

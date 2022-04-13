@@ -48,13 +48,13 @@ primary key fields.
     "description": "This document stores a record",
     "properties": {
       "pkey_int": {
-        "type": "int"
+        "type": "integer"
       },
       "str_value": {
         "type": "string"
       },
       "int_value": {
-        "type": "int"
+        "type": "integer"
       }
     },
     "primary_key": [
@@ -75,13 +75,13 @@ curl -X POST 'localhost:8081/api/v1/databases/db1/collections/t1/create' -d '
     "description": "This document stores a record",
     "properties": {
       "pkey_int": {
-        "type": "int"
+        "type": "integer"
       },
       "str_value": {
         "type": "string"
       },
       "int_value": {
-        "type": "int"
+        "type": "integer"
       }
     },
     "primary_key": ["pkey_int"]
