@@ -194,6 +194,7 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 		require.Equal(t, "db2", db2.name)
 
 		jsSchema := []byte(`{
+        "name": "test_collection",
 		"properties": {
 			"K1": {
 				"type": "string"
@@ -254,6 +255,7 @@ func TestTenantManager_DropCollection(t *testing.T) {
 		require.Equal(t, "db2", db2.name)
 
 		jsSchema := []byte(`{
+		"name": "test_collection",
 		"properties": {
 			"K1": {
 				"type": "string"

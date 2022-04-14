@@ -23,8 +23,6 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-type Fields interface{}
-
 type FieldType int
 
 const (
@@ -35,6 +33,8 @@ const (
 	DoubleType
 	BytesType
 	StringType
+	ArrayType
+	ObjectType
 )
 
 const (
@@ -43,6 +43,8 @@ const (
 	jsonSpecInt    = "integer"
 	jsonSpecDouble = "number"
 	jsonSpecString = "string"
+	jsonSpecArray  = "array"
+	jsonSpecObject = "object"
 
 	jsonSpecEncodingB64 = "base64"
 )
@@ -67,6 +69,10 @@ func ToFieldType(jsonType string, encoding string) FieldType {
 		}
 
 		return StringType
+	case jsonSpecArray:
+		return ArrayType
+	case jsonSpecObject:
+		return ObjectType
 	default:
 		return UnknownType
 	}
@@ -82,6 +88,10 @@ func ToJSONSpecString(t FieldType) string {
 		return jsonSpecDouble
 	case StringType:
 		return jsonSpecString
+	case ArrayType:
+		return jsonSpecArray
+	case ObjectType:
+		return jsonSpecObject
 	default:
 		return "unknown"
 	}
@@ -99,19 +109,24 @@ func IsValidIndexType(t FieldType) bool {
 var SupportedFieldProperties = set.New(
 	"type",
 	"format",
+	"items",
 	"maxLength",
 	"description",
 	"contentEncoding",
+	"properties",
 )
 
 type FieldBuilder struct {
 	FieldName   string
-	Description string `json:"description,omitempty"`
-	Type        string `json:"type,omitempty"`
-	Format      string `json:"format,omitempty"`
-	Encoding    string `json:"contentEncoding,omitempty"`
-	MaxLength   *int32 `json:"maxLength,omitempty"`
+	Description string              `json:"description,omitempty"`
+	Type        string              `json:"type,omitempty"`
+	Format      string              `json:"format,omitempty"`
+	Encoding    string              `json:"contentEncoding,omitempty"`
+	MaxLength   *int32              `json:"maxLength,omitempty"`
+	Items       *FieldBuilder       `json:"items,omitempty"`
+	Properties  jsoniter.RawMessage `json:"properties,omitempty"`
 	Primary     *bool
+	Fields      []*Field
 }
 
 func (f *FieldBuilder) Validate(v []byte) error {
@@ -130,9 +145,6 @@ func (f *FieldBuilder) Validate(v []byte) error {
 }
 
 func (f *FieldBuilder) Build() (*Field, error) {
-	var field = &Field{}
-	field.FieldName = f.FieldName
-	field.MaxLength = f.MaxLength
 	fieldType := ToFieldType(f.Type, f.Encoding)
 	if fieldType == UnknownType {
 		if len(f.Encoding) > 0 {
@@ -140,14 +152,19 @@ func (f *FieldBuilder) Build() (*Field, error) {
 		}
 		return nil, api.Errorf(codes.InvalidArgument, "unsupported type detected '%s'", f.Type)
 	}
-	field.DataType = fieldType
 	if f.Primary != nil && *f.Primary {
 		// validate the primary key types
-		if !IsValidIndexType(field.DataType) {
+		if !IsValidIndexType(fieldType) {
 			return nil, api.Errorf(codes.InvalidArgument, "unsupported primary key type detected '%s'", f.Type)
 		}
 	}
+
+	var field = &Field{}
+	field.FieldName = f.FieldName
+	field.MaxLength = f.MaxLength
+	field.DataType = fieldType
 	field.PrimaryKeyField = f.Primary
+	field.Fields = f.Fields
 	return field, nil
 }
 
@@ -157,6 +174,7 @@ type Field struct {
 	MaxLength       *int32
 	UniqueKeyField  *bool
 	PrimaryKeyField *bool
+	Fields          []*Field
 }
 
 func (f *Field) Name() string {

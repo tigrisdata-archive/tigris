@@ -95,6 +95,30 @@ var testCreateSchema = map[string]interface{}{
 				"type":            "string",
 				"contentEncoding": "base64",
 			},
+			"array_value": map[string]interface{}{
+				"description": "array field",
+				"type":        "array",
+				"items": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"id": map[string]interface{}{
+							"type": "integer",
+						},
+						"product": map[string]interface{}{
+							"type": "string",
+						},
+					},
+				},
+			},
+			"object_value": map[string]interface{}{
+				"description": "object field",
+				"type":        "object",
+				"properties": map[string]interface{}{
+					"name": map[string]interface{}{
+						"type": "string",
+					},
+				},
+			},
 		},
 		"primary_key": []interface{}{"pkey_int"},
 	},
