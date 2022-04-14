@@ -22,6 +22,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	"github.com/tigrisdata/tigrisdb/internal"
 	"github.com/tigrisdata/tigrisdb/keys"
 	"github.com/tigrisdata/tigrisdb/query/filter"
 	"github.com/tigrisdata/tigrisdb/query/read"
@@ -178,9 +179,9 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 		}
 
 		if insert {
-			err = tx.Insert(ctx, key, doc)
+			err = tx.Insert(ctx, key, internal.NewTableData(doc))
 		} else {
-			err = tx.Replace(ctx, key, doc)
+			err = tx.Replace(ctx, key, internal.NewTableData(doc))
 		}
 		if err != nil {
 			return err
@@ -296,12 +297,14 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	for _, key := range iKeys {
 		// decode the fields now
-		if err = tx.Update(ctx, key, func(existingDoc []byte) ([]byte, error) {
-			merged, er := factory.MergeAndGet(existingDoc)
+		if err = tx.Update(ctx, key, func(existing *internal.TableData) (*internal.TableData, error) {
+			merged, er := factory.MergeAndGet(existing.RawData)
 			if er != nil {
 				return nil, er
 			}
-			return merged, nil
+
+			// ToDo: may need to change the schema version
+			return internal.NewTableData(merged), nil
 		}); ulog.E(err) {
 			return nil, err
 		}
@@ -423,20 +426,20 @@ func (runner *StreamingQueryRunner) iterate(ctx context.Context, tx transaction.
 		limit = runner.req.GetOptions().Limit
 	}
 
-	var v kv.KeyValue
-	for it.Next(&v) {
+	var row kv.KeyValue
+	for it.Next(&row) {
 		if limit > 0 && limit <= *totalResults {
 			return nil
 		}
 
-		newValue, err := fieldFactory.Apply(v.Value)
+		newValue, err := fieldFactory.Apply(row.Data.RawData)
 		if ulog.E(err) {
 			return err
 		}
 
 		if err := runner.streaming.Send(&api.ReadResponse{
 			Doc: newValue,
-			Key: v.FDBKey,
+			Key: row.FDBKey,
 		}); ulog.E(err) {
 			return err
 		}

@@ -31,7 +31,7 @@ func TestSchemaSubspace(t *testing.T) {
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
-	kv, err := kv.NewFoundationDB(fdbCfg)
+	kv, err := kv.NewKeyValueStore(fdbCfg)
 	require.NoError(t, err)
 
 	t.Run("put_error", func(t *testing.T) {

@@ -20,6 +20,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	"github.com/tigrisdata/tigrisdb/internal"
 	"github.com/tigrisdata/tigrisdb/keys"
 	"github.com/tigrisdata/tigrisdb/server/transaction"
 	"github.com/tigrisdata/tigrisdb/store/kv"
@@ -67,7 +68,7 @@ func (s *SchemaSubspace) Put(ctx context.Context, tx transaction.Tx, namespaceId
 	}
 
 	key := keys.NewKey(SchemaSubspaceKey, schVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), keyEnd, UInt32ToByte(uint32(revision)))
-	if err := tx.Insert(ctx, key, schema); err != nil {
+	if err := tx.Insert(ctx, key, internal.NewTableData(schema)); err != nil {
 		log.Debug().Str("key", key.String()).Str("value", string(schema)).Err(err).Msg("storing schema failed")
 		return err
 	}
@@ -109,7 +110,7 @@ func (s *SchemaSubspace) Get(ctx context.Context, tx transaction.Tx, namespaceId
 		if !ok {
 			return nil, nil, api.Errorf(codes.Internal, "not able to extract revision from schema %v", row.Key)
 		}
-		revisionToSchemaMapping[ByteToUInt32(revision)] = row.Value
+		revisionToSchemaMapping[ByteToUInt32(revision)] = row.Data.RawData
 		revisions = append(revisions, int(ByteToUInt32(revision)))
 	}
 

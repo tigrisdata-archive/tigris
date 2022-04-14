@@ -6,6 +6,7 @@ API_DIR=api
 V=v1
 GEN_DIR=${API_DIR}/server/${V}
 PROTO_DIR=${API_DIR}/proto/server/${V}
+DATA_PROTO_DIR=internal
 
 # Needed to be able to build amd64 binaries on MacOS M1
 DOCKER_PLATFORM="linux/amd64"
@@ -40,7 +41,13 @@ ${API_DIR}/client/${V}/%/http.go: ${PROTO_DIR}/%_openapi.yaml
 		-o ${API_DIR}/client/${V}/$(*F)/http.go \
 		${PROTO_DIR}/$(*F)_openapi.yaml
 
-generate: ${GEN_DIR}/api.pb.go ${GEN_DIR}/api.pb.gw.go ${GEN_DIR}/health.pb.go ${GEN_DIR}/health.pb.gw.go
+${DATA_PROTO_DIR}/%.pb.go ${DATA_PROTO_DIR}/%.pb.gw.go: ${DATA_PROTO_DIR}/%.proto
+	protoc -Iinternal \
+		--go_out=${DATA_PROTO_DIR} --go_opt=paths=source_relative \
+		--go-grpc_out=${DATA_PROTO_DIR} --go-grpc_opt=paths=source_relative \
+		$<
+
+generate: ${GEN_DIR}/api.pb.go ${GEN_DIR}/api.pb.gw.go ${GEN_DIR}/health.pb.go ${GEN_DIR}/health.pb.gw.go ${DATA_PROTO_DIR}/data.pb.gw.go
 
 test_client: ${API_DIR}/client/${V}/api/http.go
 

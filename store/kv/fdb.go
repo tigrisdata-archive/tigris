@@ -42,7 +42,7 @@ type fdbkv struct {
 
 type fbatch struct {
 	db  *fdbkv
-	tx  Tx
+	tx  baseTx
 	rtx fdb.Transaction
 }
 
@@ -58,17 +58,17 @@ type fdbIterator struct {
 }
 
 type fdbIteratorTxCloser struct {
-	Iterator
-	tx Tx
+	baseIterator
+	tx baseTx
 }
 
-// NewFoundationDB initializes instance of FoundationDB KV interface implementation
-func NewFoundationDB(cfg *config.FoundationDBConfig) (KV, error) {
-	d := fdbkv{}
+// newFoundationDB initializes instance of FoundationDB KV interface implementation
+func newFoundationDB(cfg *config.FoundationDBConfig) (*fdbkv, error) {
+	d := &fdbkv{}
 	if err := d.init(cfg); err != nil {
 		return nil, err
 	}
-	return &d, nil
+	return d, nil
 }
 
 func (d *fdbkv) init(cfg *config.FoundationDBConfig) (err error) {
@@ -80,7 +80,7 @@ func (d *fdbkv) init(cfg *config.FoundationDBConfig) (err error) {
 }
 
 // Read returns all the keys which has prefix equal to "key" parameter
-func (d *fdbkv) Read(ctx context.Context, table []byte, key Key) (Iterator, error) {
+func (d *fdbkv) Read(ctx context.Context, table []byte, key Key) (baseIterator, error) {
 	tx, err := d.Tx(ctx)
 	if err != nil {
 		return nil, err
@@ -92,7 +92,7 @@ func (d *fdbkv) Read(ctx context.Context, table []byte, key Key) (Iterator, erro
 	return &fdbIteratorTxCloser{it, tx}, nil
 }
 
-func (d *fdbkv) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key) (Iterator, error) {
+func (d *fdbkv) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key) (baseIterator, error) {
 	tx, err := d.Tx(ctx)
 	if err != nil {
 		return nil, err
@@ -187,7 +187,7 @@ func (d *fdbkv) DropTable(ctx context.Context, name []byte) error {
 	return nil
 }
 
-func (d *fdbkv) Batch() (Tx, error) {
+func (d *fdbkv) Batch() (baseTx, error) {
 	tx, err := d.db.CreateTransaction()
 	if ulog.E(err) {
 		return nil, err
@@ -265,25 +265,25 @@ func (b *fbatch) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey K
 	return b.tx.UpdateRange(ctx, table, lKey, rKey, apply)
 }
 
-func (b *fbatch) Read(ctx context.Context, table []byte, key Key) (Iterator, error) {
+func (b *fbatch) Read(ctx context.Context, table []byte, key Key) (baseIterator, error) {
 	if err := b.flushBatch(ctx, key, nil, nil); err != nil {
 		return nil, err
 	}
 	return b.tx.Read(ctx, table, key)
 }
 
-func (b *fbatch) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key) (Iterator, error) {
+func (b *fbatch) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key) (baseIterator, error) {
 	if err := b.flushBatch(ctx, lKey, rKey, nil); err != nil {
 		return nil, err
 	}
 	return b.tx.ReadRange(ctx, table, lKey, rKey)
 }
 
-func (b *fbatch) SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error {
+func (b *fbatch) SetVersionstampedValue(_ context.Context, _ []byte, _ []byte) error {
 	return fmt.Errorf("batch doesn't support setting versionstamped value")
 }
 
-func (b *fbatch) Get(ctx context.Context, key []byte) ([]byte, error) {
+func (b *fbatch) Get(_ context.Context, _ []byte) ([]byte, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
@@ -295,7 +295,7 @@ func (b *fbatch) Rollback(ctx context.Context) error {
 	return b.tx.Rollback(ctx)
 }
 
-func (d *fdbkv) Tx(ctx context.Context) (Tx, error) {
+func (d *fdbkv) Tx(ctx context.Context) (baseTx, error) {
 	tx, err := d.db.CreateTransaction()
 	if ulog.E(err) {
 		return nil, err
@@ -416,7 +416,7 @@ func (t *ftx) UpdateRange(_ context.Context, table []byte, lKey Key, rKey Key, a
 	return nil
 }
 
-func (t *ftx) Read(_ context.Context, table []byte, key Key) (Iterator, error) {
+func (t *ftx) Read(_ context.Context, table []byte, key Key) (baseIterator, error) {
 	k, err := fdb.PrefixRange(getFDBKey(table, key))
 	if ulog.E(err) {
 		return nil, err
@@ -427,7 +427,7 @@ func (t *ftx) Read(_ context.Context, table []byte, key Key) (Iterator, error) {
 	return &fdbIterator{it: r.Iterator(), subspace: subspace.FromBytes(table)}, nil
 }
 
-func (t *ftx) ReadRange(_ context.Context, table []byte, lKey Key, rKey Key) (Iterator, error) {
+func (t *ftx) ReadRange(_ context.Context, table []byte, lKey Key, rKey Key) (baseIterator, error) {
 	lk := getFDBKey(table, lKey)
 	rk := getFDBKey(table, rKey)
 
@@ -487,7 +487,7 @@ func tupleToKey(t *tuple.Tuple) Key {
 	return *(*Key)(p)
 }
 
-func (i *fdbIterator) Next(kv *KeyValue) bool {
+func (i *fdbIterator) Next(kv *baseKeyValue) bool {
 	if i.err != nil {
 		return false
 	}
@@ -523,11 +523,11 @@ func (i *fdbIterator) Err() error {
 	return i.err
 }
 
-func (i *fdbIteratorTxCloser) Next(kv *KeyValue) bool {
+func (i *fdbIteratorTxCloser) Next(kv *baseKeyValue) bool {
 	if i.tx == nil {
 		return false
 	}
-	if !i.Iterator.Next(kv) {
+	if !i.baseIterator.Next(kv) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		err := i.tx.Rollback(ctx)

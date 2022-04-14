@@ -44,7 +44,7 @@ const (
 type apiService struct {
 	api.UnimplementedTigrisDBServer
 
-	kv                    kv.KV
+	kvStore               kv.KeyValueStore
 	txMgr                 *transaction.Manager
 	encoder               metadata.Encoder
 	tenantMgr             *metadata.TenantManager
@@ -52,9 +52,9 @@ type apiService struct {
 	queryRunnerFactory    *QueryRunnerFactory
 }
 
-func newApiService(kv kv.KV) *apiService {
+func newApiService(kv kv.KeyValueStore) *apiService {
 	u := &apiService{
-		kv:      kv,
+		kvStore: kv,
 		txMgr:   transaction.NewManager(kv),
 		encoder: metadata.NewEncoder(),
 	}

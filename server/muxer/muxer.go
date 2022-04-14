@@ -48,8 +48,8 @@ func NewMuxer(cfg *config.Config) *Muxer {
 	return m
 }
 
-func (m *Muxer) RegisterServices(kv kv.KV) {
-	services := v1.GetRegisteredServices(kv)
+func (m *Muxer) RegisterServices(kvStore kv.KeyValueStore) {
+	services := v1.GetRegisteredServices(kvStore)
 	for _, r := range services {
 		for _, s := range m.servers {
 			if s.GetType() == types.GRPCServer {
