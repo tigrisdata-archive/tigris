@@ -411,8 +411,8 @@ func (k *DictionaryEncoder) GetDatabases(ctx context.Context, tx transaction.Tx,
 	}
 
 	// retrogression check; if created and dropped both exists then the created id should be greater than dropped id
-	log.Debug().Interface("key_dropped", droppedDatabase).Msg("dropped databases")
-	log.Debug().Interface("key_created", databases).Msg("created databases")
+	log.Debug().Interface("existing_dropped", droppedDatabase).Msg("dropped databases")
+	log.Debug().Interface("existing_created", databases).Msg("created databases")
 	for droppedDB, droppedValue := range droppedDatabase {
 		if createdValue, ok := databases[droppedDB]; ok && droppedValue >= createdValue {
 			return nil, api.Errorf(codes.Internal, "retrogression found in database assigned value database [%s] droppedValue [%d] createdValue [%d]", droppedDB, droppedValue, createdValue)
@@ -459,8 +459,8 @@ func (k *DictionaryEncoder) GetCollections(ctx context.Context, tx transaction.T
 	}
 
 	// retrogression check; if created and dropped both exists then the created id should be greater than dropped id
-	log.Debug().Interface("key_dropped", droppedCollection).Msg("dropped collections")
-	log.Debug().Interface("key_created", collections).Msg("created collections")
+	log.Debug().Uint32("db", databaseId).Interface("existing_dropped", droppedCollection).Msg("dropped collections")
+	log.Debug().Uint32("db", databaseId).Interface("existing_created", collections).Msg("created collections")
 	for droppedC, droppedValue := range droppedCollection {
 		if createdValue, ok := collections[droppedC]; ok && droppedValue >= createdValue {
 			return nil, api.Errorf(codes.Internal, "retrogression found in collection assigned value collection [%s] droppedValue [%d] createdValue [%d]", droppedC, droppedValue, createdValue)
@@ -506,6 +506,8 @@ func (k *DictionaryEncoder) GetIndexes(ctx context.Context, tx transaction.Tx, n
 		}
 	}
 
+	log.Debug().Uint32("db", databaseId).Uint32("coll", collId).Interface("existing_dropped", droppedIndexes).Msg("dropped indexes")
+	log.Debug().Uint32("db", databaseId).Uint32("coll", collId).Interface("existing_created", indexes).Msg("created indexes")
 	// retrogression check
 	for droppedC, droppedValue := range droppedIndexes {
 		if createdValue, ok := indexes[droppedC]; ok && droppedValue >= createdValue {

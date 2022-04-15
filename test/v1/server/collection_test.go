@@ -95,6 +95,16 @@ var testCreateSchema = map[string]interface{}{
 				"type":            "string",
 				"contentEncoding": "base64",
 			},
+			"uuid_value": map[string]interface{}{
+				"description": "uuid field",
+				"type":        "string",
+				"format":      "uuid",
+			},
+			"date_time_value": map[string]interface{}{
+				"description": "date time field",
+				"type":        "string",
+				"format":      "date-time",
+			},
 			"array_value": map[string]interface{}{
 				"description": "array field",
 				"type":        "array",

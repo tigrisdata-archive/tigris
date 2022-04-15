@@ -1,62 +1,74 @@
 package schema
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 
+	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
 )
 
 func TestCollection_SchemaValidate(t *testing.T) {
 	reqSchema := []byte(`{
-	"name": "t1",
-	"properties": {
-		"id": {
-			"type": "integer"
-		},
-		"random": {
-			"type": "string",
-			"contentEncoding": "base64",
-			"maxLength": 1024
-		},
-		"product": {
-			"type": "string",
-			"maxLength": 100
-		},
-		"price": {
-			"type": "number"
-		},
-		"simple_items": {
-			"type": "array",
-			"items": {
+		"name": "t1",
+		"properties": {
+			"id": {
 				"type": "integer"
-			}
-		},
-		"simple_object": {
-			"type": "object",
-			"properties": {
-				"name": { "type": "string" }
-			}
-		},
-		"product_items": {
-			"type": "array",
-			"items": {
+			},
+			"random": {
+				"type": "string",
+				"contentEncoding": "base64",
+				"maxLength": 1024
+			},
+			"product": {
+				"type": "string",
+				"maxLength": 100
+			},
+			"id_uuid": {
+				"type": "string",
+				"format": "uuid"
+			},
+			"ts": {
+				"type": "string",
+				"format": "date-time"
+			},
+			"price": {
+				"type": "number"
+			},
+			"simple_items": {
+				"type": "array",
+				"items": {
+					"type": "integer"
+				}
+			},
+			"simple_object": {
 				"type": "object",
 				"properties": {
-					"id": {
-						"type": "integer"
-					},
-					"item_name": {
-						"type": "string"
+					"name": { "type": "string" }
+				}
+			},
+			"product_items": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"properties": {
+						"id": {
+							"type": "integer"
+						},
+						"item_name": {
+							"type": "string"
+						}
 					}
 				}
 			}
-		}
-	},
-	"primary_key": ["id"]
-}`)
+		},
+		"primary_key": ["id"]
+	}`)
 
+	base64Encoded, err := json.Marshal([]byte(`"base64 string"`))
+	require.NoError(t, err)
 	cases := []struct {
 		document []byte
 		expError string
@@ -65,7 +77,7 @@ func TestCollection_SchemaValidate(t *testing.T) {
 			document: []byte(`{"id": 1, "product": "hello", "price": 1.01}`),
 			expError: "",
 		}, {
-			document: []byte(fmt.Sprintf(`{"id": 1, "product": "hello", "price": 1.01, "random": "%v"}`, []byte(`hello`))),
+			document: []byte(fmt.Sprintf(`{"id": 1, "product": "hello", "price": 1.01, "random": %s}`, string(base64Encoded))),
 			expError: "",
 		}, {
 			document: []byte(`{"id": 1, "price": 1}`),
@@ -97,6 +109,24 @@ func TestCollection_SchemaValidate(t *testing.T) {
 		}, {
 			document: []byte(`{"id": 1, "product_items": [{"id": 1, "item_name": "foo"}]}`),
 			expError: "",
+		}, {
+			document: []byte(fmt.Sprintf(`{"id": 1, "id_uuid": "%s"}`, uuid.New().String())),
+			expError: "",
+		}, {
+			document: []byte(`{"id": 1, "id_uuid": "hello"}`),
+			expError: "field 'id_uuid' reason ''hello' is not valid 'uuid'",
+		},
+		{
+			document: []byte(`{"id": 1, "ts": "2015-12-21T17:42:34Z"}`),
+			expError: "",
+		},
+		{
+			document: []byte(`{"id": 1, "ts": "2021-09-29T16:04:33.01234567Z"}`),
+			expError: "",
+		},
+		{
+			document: []byte(`{"id": 1, "ts": "2016-02-15"}`),
+			expError: "field 'ts' reason ''2016-02-15' is not valid 'date-time'",
 		},
 	}
 	for _, c := range cases {
@@ -105,8 +135,7 @@ func TestCollection_SchemaValidate(t *testing.T) {
 
 		coll := NewDefaultCollection("t1", 1, schFactory.Fields, schFactory.Indexes, schFactory.Schema)
 		var v interface{}
-		err = jsoniter.Unmarshal(c.document, &v)
-		require.NoError(t, err)
+		require.NoError(t, jsoniter.Unmarshal(c.document, &v))
 		if len(c.expError) > 0 {
 			require.Contains(t, coll.Validate(v).Error(), c.expError)
 		} else {

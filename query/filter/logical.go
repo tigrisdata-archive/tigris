@@ -16,8 +16,6 @@ package filter
 
 import (
 	"fmt"
-
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type LogicalOP string
@@ -68,7 +66,7 @@ func (a *AndFilter) Type() LogicalOP {
 }
 
 // Matches returns true if the input doc matches this filter.
-func (a *AndFilter) Matches(doc *structpb.Struct) bool {
+func (a *AndFilter) Matches(doc []byte) bool {
 	for _, f := range a.filter {
 		if !f.Matches(doc) {
 			return false
@@ -124,7 +122,7 @@ func (o *OrFilter) Type() LogicalOP {
 }
 
 // Matches returns true if the input doc matches this filter.
-func (o *OrFilter) Matches(doc *structpb.Struct) bool {
+func (o *OrFilter) Matches(doc []byte) bool {
 	for _, f := range o.filter {
 		if f.Matches(doc) {
 			return true

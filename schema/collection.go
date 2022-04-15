@@ -42,9 +42,12 @@ func (i *Indexes) GetIndexes() []*Index {
 // Index can be composite so it has a list of fields, each index has name and encoded id. The encoded is used for key
 // building.
 type Index struct {
+	// Fields that are part of this index. An index can have a single or composite fields.
 	Fields []*Field
-	Name   string
-	Id     uint32
+	// Name is used by dictionary encoder for this index.
+	Name string
+	// Id is assigned to this index by the dictionary encoder.
+	Id uint32
 }
 
 // DefaultCollection is used to represent a collection. The tenant in the metadata package is responsible for creating
@@ -66,6 +69,7 @@ type DefaultCollection struct {
 func NewDefaultCollection(cname string, id uint32, fields []*Field, indexes *Indexes, schema jsoniter.RawMessage) *DefaultCollection {
 	url := cname + ".json"
 	compiler := jsonschema.NewCompiler()
+	compiler.Draft = jsonschema.Draft7 // Format is only working for draft7
 	if err := compiler.AddResource(url, bytes.NewReader(schema)); err != nil {
 		panic(err)
 	}

@@ -49,9 +49,17 @@ func TestNewValue(t *testing.T) {
 	s := &structpb.Struct{}
 	require.NoError(t, protojson.Unmarshal(b, s))
 
-	require.Equal(t, int64(1), NewValue(s.Fields["A"]).AsInterface())
-	require.Equal(t, float64(1.01), NewValue(s.Fields["B"]).AsInterface())
-	require.Equal(t, "foo", NewValue(s.Fields["C"]).AsInterface())
+	v, err := NewValueUsingSchema(&schema.Field{FieldName: "A", DataType: schema.IntType}, s.Fields["A"])
+	require.NoError(t, err)
+	require.Equal(t, int64(1), v.AsInterface())
+
+	v, err = NewValueUsingSchema(&schema.Field{FieldName: "B", DataType: schema.DoubleType}, s.Fields["B"])
+	require.NoError(t, err)
+	require.Equal(t, float64(1.01), v.AsInterface())
+
+	v, err = NewValueUsingSchema(&schema.Field{FieldName: "C", DataType: schema.StringType}, s.Fields["C"])
+	require.NoError(t, err)
+	require.Equal(t, "foo", v.AsInterface())
 }
 
 func TestNewValueFromSchema(t *testing.T) {
@@ -110,11 +118,12 @@ func TestNewValueFromSchema(t *testing.T) {
 			NewStringValue("foo"),
 			nil,
 		}, {
+			// we don't decode byte type
 			&schema.Field{
 				FieldName: "D",
-				DataType:  schema.BytesType,
+				DataType:  schema.ByteType,
 			},
-			NewBytesValue([]byte(`"foo"`)),
+			NewBytesValue([]byte(`ImZvbyI=`)),
 			nil,
 		}, {
 			&schema.Field{
@@ -141,52 +150,77 @@ func TestIsIntegral(t *testing.T) {
 func TestValue(t *testing.T) {
 	t.Run("int", func(t *testing.T) {
 		i := IntValue(5)
-		r, err := i.CompareTo(NewValue(structpb.NewNumberValue(5)))
+
+		v, err := NewValueUsingSchema(&schema.Field{DataType: schema.IntType}, structpb.NewNumberValue(5))
+		require.NoError(t, err)
+		r, err := i.CompareTo(v)
 		require.NoError(t, err)
 		require.Equal(t, 0, r)
 
-		r, err = i.CompareTo(NewValue(structpb.NewNumberValue(7)))
+		v, err = NewValueUsingSchema(&schema.Field{DataType: schema.IntType}, structpb.NewNumberValue(7))
+		require.NoError(t, err)
+		r, err = i.CompareTo(v)
 		require.NoError(t, err)
 		require.Equal(t, -1, r)
 
-		r, err = i.CompareTo(NewValue(structpb.NewNumberValue(0)))
+		v, err = NewValueUsingSchema(&schema.Field{DataType: schema.IntType}, structpb.NewNumberValue(0))
+		require.NoError(t, err)
+		r, err = i.CompareTo(v)
 		require.NoError(t, err)
 		require.Equal(t, 1, r)
 
-		r, err = i.CompareTo(NewValue(structpb.NewStringValue("5")))
+		v, err = NewValueUsingSchema(&schema.Field{DataType: schema.StringType}, structpb.NewStringValue("5"))
+		require.NoError(t, err)
+		r, err = i.CompareTo(v)
 		require.Equal(t, fmt.Errorf("wrong type compared "), err)
 		require.Equal(t, -2, r)
 	})
 	t.Run("string", func(t *testing.T) {
 		i := StringValue("abc")
-		r, err := i.CompareTo(NewValue(structpb.NewStringValue("abc")))
+
+		v, err := NewValueUsingSchema(&schema.Field{DataType: schema.StringType}, structpb.NewStringValue("abc"))
+		require.NoError(t, err)
+		r, err := i.CompareTo(v)
 		require.NoError(t, err)
 		require.Equal(t, 0, r)
 
-		r, err = i.CompareTo(NewValue(structpb.NewStringValue("ac")))
+		v, err = NewValueUsingSchema(&schema.Field{DataType: schema.StringType}, structpb.NewStringValue("acc"))
+		require.NoError(t, err)
+		r, err = i.CompareTo(v)
 		require.NoError(t, err)
 		require.Equal(t, -1, r)
 
-		r, err = i.CompareTo(NewValue(structpb.NewStringValue("abb")))
+		v, err = NewValueUsingSchema(&schema.Field{DataType: schema.StringType}, structpb.NewStringValue("abb"))
+		require.NoError(t, err)
+		r, err = i.CompareTo(v)
 		require.NoError(t, err)
 		require.Equal(t, 1, r)
 
-		r, err = i.CompareTo(NewValue(structpb.NewNumberValue(5)))
+		v, err = NewValueUsingSchema(&schema.Field{DataType: schema.IntType}, structpb.NewNumberValue(5))
+		require.NoError(t, err)
+		r, err = i.CompareTo(v)
 		require.Equal(t, fmt.Errorf("wrong type compared "), err)
 		require.Equal(t, -2, r)
 	})
 	t.Run("bool", func(t *testing.T) {
 		i := BoolValue(false)
-		r, err := i.CompareTo(NewValue(structpb.NewBoolValue(false)))
+
+		v, err := NewValueUsingSchema(&schema.Field{DataType: schema.BoolType}, structpb.NewBoolValue(false))
+		require.NoError(t, err)
+		r, err := i.CompareTo(v)
 		require.NoError(t, err)
 		require.Equal(t, 0, r)
 
-		r, err = i.CompareTo(NewValue(structpb.NewBoolValue(true)))
+		v, err = NewValueUsingSchema(&schema.Field{DataType: schema.BoolType}, structpb.NewBoolValue(true))
+		require.NoError(t, err)
+		r, err = i.CompareTo(v)
 		require.NoError(t, err)
 		require.Equal(t, -1, r)
 
 		i = BoolValue(true)
-		r, err = i.CompareTo(NewValue(structpb.NewBoolValue(false)))
+		v, err = NewValueUsingSchema(&schema.Field{DataType: schema.BoolType}, structpb.NewBoolValue(false))
+		require.NoError(t, err)
+		r, err = i.CompareTo(v)
 		require.NoError(t, err)
 		require.Equal(t, 1, r)
 	})

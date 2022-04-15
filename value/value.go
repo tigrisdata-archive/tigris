@@ -15,11 +15,8 @@
 package value
 
 import (
-	"encoding/base64"
 	"fmt"
 	"strconv"
-
-	"github.com/buger/jsonparser"
 
 	"github.com/tigrisdata/tigrisdb/schema"
 	"google.golang.org/grpc/codes"
@@ -43,48 +40,34 @@ type Value interface {
 	AsInterface() interface{}
 }
 
-func NewValueFromByte(value []byte, dataType jsonparser.ValueType) (Value, error) {
-	switch dataType {
-	case jsonparser.Boolean:
+func NewValueFromByte(field *schema.Field, value []byte) (Value, error) {
+	switch field.Type() {
+	case schema.BoolType:
 		b, err := strconv.ParseBool(string(value))
 		if err != nil {
 			return nil, err
 		}
 		return NewBoolValue(b), nil
-	case jsonparser.Number:
+	case schema.DoubleType:
+		val, err := strconv.ParseFloat(string(value), 64)
+		if err != nil {
+			return nil, err
+		}
+		return NewDoubleValue(val), nil
+	case schema.IntType:
 		val, err := strconv.ParseFloat(string(value), 64)
 		if err != nil {
 			return nil, err
 		}
 
-		if isIntegral(val) {
-			return NewIntValue(int64(val)), nil
-		}
-		return NewDoubleValue(val), nil
-	case jsonparser.String:
+		return NewIntValue(int64(val)), nil
+	case schema.StringType, schema.UUIDType, schema.DateTimeType:
 		return NewStringValue(string(value)), nil
+	case schema.ByteType:
+		return NewBytesValue(value), nil
 	}
 
 	return nil, status.Errorf(codes.InvalidArgument, "unsupported value type")
-}
-
-// NewValue returns Value object if it is able to create otherwise nil at this point the caller ensures that
-// structpb.Value can be used to create internal value.
-func NewValue(input *structpb.Value) Value {
-	switch ty := input.Kind.(type) {
-	case *structpb.Value_NumberValue:
-		if isIntegral(ty.NumberValue) {
-			return NewIntValue(int64(ty.NumberValue))
-		} else {
-			return NewDoubleValue(ty.NumberValue)
-		}
-	case *structpb.Value_StringValue:
-		return NewStringValue(ty.StringValue)
-	case *structpb.Value_BoolValue:
-		return NewBoolValue(ty.BoolValue)
-	}
-
-	return nil
 }
 
 // NewValueUsingSchema returns Value object using Schema from the input struct Value
@@ -108,16 +91,13 @@ func NewValueUsingSchema(field *schema.Field, input *structpb.Value) (Value, err
 			return NewDoubleValue(inpVal.NumberValue), nil
 		}
 		return nil, status.Errorf(codes.InvalidArgument, "permissible type for '%s' is number only", field.FieldName)
-	case schema.BytesType:
+	case schema.ByteType:
+		// it is base64 as defined by the user, so we need to use it in the value as-is
 		if inpVal, ok := input.Kind.(*structpb.Value_StringValue); ok {
-			if decoded, err := base64.StdEncoding.DecodeString(inpVal.StringValue); err == nil {
-				return NewBytesValue(decoded), nil
-			} else {
-				return NewBytesValue([]byte(inpVal.StringValue)), nil
-			}
+			return NewBytesValue([]byte(inpVal.StringValue)), nil
 		}
 		return nil, status.Errorf(codes.InvalidArgument, "permissible type for '%s' is bytes only", field.FieldName)
-	case schema.StringType:
+	case schema.StringType, schema.UUIDType, schema.DateTimeType:
 		if inpVal, ok := input.Kind.(*structpb.Value_StringValue); ok {
 			return NewStringValue(inpVal.StringValue), nil
 		}

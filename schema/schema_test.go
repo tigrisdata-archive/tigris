@@ -40,27 +40,35 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 	})
 	t.Run("test_supported_types", func(t *testing.T) {
 		schema := []byte(`{
-		"name": "t1",
-		"properties": {
-			"K1": {
-				"type": "string"
-			},
-			"K2": {
-				"type": "integer"
-			},
-			"K3": {
-				"type": "number"
-			},
-			"K4": {
-				"type": "boolean"
-			},
-			"K5": {
-				"type": "string",
-				"contentEncoding": "base64"
-			}
+	"name": "t1",
+	"properties": {
+		"K1": {
+			"type": "string"
 		},
-		"primary_key": ["K1", "K2"]
-	}`)
+		"K2": {
+			"type": "integer"
+		},
+		"K3": {
+			"type": "number"
+		},
+		"K4": {
+			"type": "boolean"
+		},
+		"K5": {
+			"type": "string",
+			"contentEncoding": "base64"
+		},
+		"K6": {
+			"type": "string",
+			"format": "uuid"
+		},
+		"K7": {
+			"type": "string",
+			"format": "date-time"
+		}
+	},
+	"primary_key": ["K1", "K2"]
+}`)
 		sch, err := Build("t1", schema)
 		require.NoError(t, err)
 		c := NewDefaultCollection("t1", 1, sch.Fields, sch.Indexes, sch.Schema)
@@ -69,26 +77,44 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		require.Equal(t, IntType, fields[1].DataType)
 		require.Equal(t, DoubleType, fields[2].DataType)
 		require.Equal(t, BoolType, fields[3].DataType)
-		require.Equal(t, BytesType, fields[4].DataType)
+		require.Equal(t, ByteType, fields[4].DataType)
+		require.Equal(t, UUIDType, fields[5].DataType)
+		require.Equal(t, DateTimeType, fields[6].DataType)
 	})
 	t.Run("test_supported_primary_keys", func(t *testing.T) {
 		schema := []byte(`{
-		"name": "t1",
-		"properties": {
-			"K1": {
-				"type": "string"
-			},
-			"K2": {
-				"type": "integer"
-			}
+	"name": "t1",
+	"properties": {
+		"K1": {
+			"type": "string"
 		},
-		"primary_key": ["K1"]
-	}`)
+		"K2": {
+			"type": "integer"
+		},
+		"K3": {
+			"type": "string",
+			"contentEncoding": "base64"
+		},
+		"K4": {
+			"type": "string",
+			"format": "uuid"
+		},
+		"K5": {
+			"type": "string",
+			"format": "date-time"
+		}
+	},
+	"primary_key": ["K1", "K2", "K3", "K4", "K5"]
+}`)
 		sch, err := Build("t1", schema)
 		require.NoError(t, err)
 		c := NewDefaultCollection("t1", 1, sch.Fields, sch.Indexes, sch.Schema)
 		require.NoError(t, err)
 		require.Equal(t, StringType, c.Indexes.PrimaryKey.Fields[0].DataType)
+		require.Equal(t, IntType, c.Indexes.PrimaryKey.Fields[1].DataType)
+		require.Equal(t, ByteType, c.Indexes.PrimaryKey.Fields[2].DataType)
+		require.Equal(t, UUIDType, c.Indexes.PrimaryKey.Fields[3].DataType)
+		require.Equal(t, DateTimeType, c.Indexes.PrimaryKey.Fields[4].DataType)
 	})
 	t.Run("test_unsupported_primary_key", func(t *testing.T) {
 		schema := []byte(`{

@@ -67,7 +67,8 @@ func newApiService(kv kv.KV) *apiService {
 
 	tenantMgr := metadata.NewTenantManager()
 	if err := tenantMgr.Reload(ctx, tx); ulog.E(err) {
-		log.Fatal().Err(err).Msgf("error starting server: reloading tenants failed")
+		// ToDo: no need to panic, probably handle through async thread.
+		log.Err(err).Msgf("error starting server: reloading tenants failed")
 	}
 	_ = tx.Commit(ctx)
 

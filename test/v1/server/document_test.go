@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"github.com/tigrisdata/tigrisdb/test/config"
@@ -175,6 +176,34 @@ func (s *DocumentSuite) TestInsert_SchemaValidationError() {
 				},
 			},
 			"json schema validation failed for field 'bytes_value' reason 'expected string, but got number'",
+		}, {
+			[]interface{}{
+				map[string]interface{}{
+					"bytes_value": "not enough",
+				},
+			},
+			"json schema validation failed for field 'bytes_value' reason ''not enough' is not base64 encoded'",
+		}, {
+			[]interface{}{
+				map[string]interface{}{
+					"bytes_value": "not enough",
+				},
+			},
+			"json schema validation failed for field 'bytes_value' reason ''not enough' is not base64 encoded'",
+		}, {
+			[]interface{}{
+				map[string]interface{}{
+					"date_time_value": "Mon, 02 Jan 2006",
+				},
+			},
+			"json schema validation failed for field 'date_time_value' reason ''Mon, 02 Jan 2006' is not valid 'date-time''",
+		}, {
+			[]interface{}{
+				map[string]interface{}{
+					"uuid_value": "abc-bcd",
+				},
+			},
+			"json schema validation failed for field 'uuid_value' reason ''abc-bcd' is not valid 'uuid''",
 		},
 	}
 	for _, c := range cases {
@@ -191,15 +220,161 @@ func (s *DocumentSuite) TestInsert_SchemaValidationError() {
 	}
 }
 
+func (s *DocumentSuite) TestInsert_SupportedPrimaryKeys() {
+	base64 := []byte(`"base64 string"`)
+	base64Encoded, err := json.Marshal(base64)
+	require.NoError(s.T(), err)
+
+	uuidValue := uuid.New().String()
+	collectionName := "test_supported_primary_keys"
+	cases := []struct {
+		schema           map[string]interface{}
+		inputDoc         []interface{}
+		primaryKeyLookup map[string]interface{}
+	}{
+		{
+			schema: map[string]interface{}{
+				"schema": map[string]interface{}{
+					"name": collectionName,
+					"properties": map[string]interface{}{
+						"int_value": map[string]interface{}{
+							"type": "integer",
+						},
+						"bytes_value": map[string]interface{}{
+							"type":            "string",
+							"contentEncoding": "base64",
+						},
+					},
+					"primary_key": []interface{}{"bytes_value"},
+				},
+			},
+			inputDoc: []interface{}{
+				map[string]interface{}{
+					"int_value":   10,
+					"bytes_value": base64Encoded,
+				},
+			},
+			primaryKeyLookup: map[string]interface{}{
+				"bytes_value": base64Encoded,
+			},
+		}, {
+			schema: map[string]interface{}{
+				"schema": map[string]interface{}{
+					"name": collectionName,
+					"properties": map[string]interface{}{
+						"int_value": map[string]interface{}{
+							"type": "integer",
+						},
+						"uuid_value": map[string]interface{}{
+							"type":   "string",
+							"format": "uuid",
+						},
+					},
+					"primary_key": []interface{}{"uuid_value"},
+				},
+			},
+			inputDoc: []interface{}{
+				map[string]interface{}{
+					"int_value":  10,
+					"uuid_value": uuidValue,
+				},
+			},
+			primaryKeyLookup: map[string]interface{}{
+				"uuid_value": uuidValue,
+			},
+		}, {
+			schema: map[string]interface{}{
+				"schema": map[string]interface{}{
+					"name": collectionName,
+					"properties": map[string]interface{}{
+						"int_value": map[string]interface{}{
+							"type": "integer",
+						},
+						"date_time_value": map[string]interface{}{
+							"type":   "string",
+							"format": "date-time",
+						},
+					},
+					"primary_key": []interface{}{"date_time_value"},
+				},
+			},
+			inputDoc: []interface{}{
+				map[string]interface{}{
+					"int_value":       10,
+					"date_time_value": "2015-12-21T17:42:34Z",
+				},
+			},
+			primaryKeyLookup: map[string]interface{}{
+				"date_time_value": "2015-12-21T17:42:34Z",
+			},
+		}, {
+			schema: map[string]interface{}{
+				"schema": map[string]interface{}{
+					"name": collectionName,
+					"properties": map[string]interface{}{
+						"int_value": map[string]interface{}{
+							"type": "integer",
+						},
+						"string_value": map[string]interface{}{
+							"type": "string",
+						},
+					},
+					"primary_key": []interface{}{"string_value"},
+				},
+			},
+			inputDoc: []interface{}{
+				map[string]interface{}{
+					"int_value":    10,
+					"string_value": "hello",
+				},
+			},
+			primaryKeyLookup: map[string]interface{}{
+				"string_value": "hello",
+			},
+		},
+	}
+	for _, c := range cases {
+		dropCollection(s.T(), s.database, collectionName)
+		createCollection(s.T(), s.database, collectionName, c.schema)
+
+		e := httpexpect.New(s.T(), config.GetBaseURL())
+		e.POST(getDocumentURL(s.database, collectionName, "insert")).
+			WithJSON(map[string]interface{}{
+				"documents": c.inputDoc,
+			}).
+			Expect().
+			Status(http.StatusOK).
+			JSON().
+			Object().
+			Empty()
+
+		readResp := readByFilter(s.T(), s.database, collectionName, c.primaryKeyLookup, nil)
+
+		var doc map[string]json.RawMessage
+		require.NoError(s.T(), json.Unmarshal(readResp[0]["result"], &doc))
+
+		var actualDoc = []byte(doc["doc"])
+		expDoc, err := json.Marshal(c.inputDoc[0])
+		require.NoError(s.T(), err)
+		require.Equal(s.T(), expDoc, actualDoc)
+	}
+}
+
 func (s *DocumentSuite) TestInsert_SingleRow() {
+	base64 := []byte(`"base64 string"`)
+	v, err := json.Marshal(base64)
+	require.NoError(s.T(), err)
+
 	inputDocument := []interface{}{
 		map[string]interface{}{
-			"pkey_int":     10,
-			"int_value":    10,
-			"string_value": "simple_insert",
-			"bool_value":   true,
-			"double_value": 10.01,
-			"bytes_value":  []byte(`"simple_insert"`),
+			"pkey_int":        10,
+			"int_value":       10,
+			"string_value":    "simple_insert",
+			"bool_value":      true,
+			"double_value":    10.01,
+			"bytes_value":     v,
+			"date_time_value": "2015-12-21T17:42:34Z",
+			"uuid_value":      uuid.New().String(),
 			"array_value": []interface{}{
 				map[string]interface{}{
 					"id":      1,
