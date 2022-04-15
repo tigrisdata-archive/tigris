@@ -64,6 +64,10 @@ A sample user JSON schema looks like below,
 }
 */
 
+const (
+	PrimaryKeyIndexName = "pkey"
+)
+
 var (
 	boolTrue = true
 )
@@ -129,7 +133,7 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 		Fields: fields,
 		Indexes: &Indexes{
 			PrimaryKey: &Index{
-				Name:   "pkey",
+				Name:   PrimaryKeyIndexName,
 				Fields: primaryKeyFields,
 			},
 		},

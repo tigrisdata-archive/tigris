@@ -24,10 +24,12 @@ import (
 
 func TestFieldBuilder_Build(t *testing.T) {
 	t.Run("test convert json to internal types", func(t *testing.T) {
-		require.Equal(t, IntType, ToFieldType("integer", ""))
-		require.Equal(t, StringType, ToFieldType("string", ""))
-		require.Equal(t, BytesType, ToFieldType("string", jsonSpecEncodingB64))
-		require.Equal(t, UnknownType, ToFieldType("string", "random"))
+		require.Equal(t, IntType, ToFieldType("integer", "", ""))
+		require.Equal(t, StringType, ToFieldType("string", "", ""))
+		require.Equal(t, ByteType, ToFieldType("string", jsonSpecEncodingB64, ""))
+		require.Equal(t, UUIDType, ToFieldType("string", "", jsonSpecFormatUUID))
+		require.Equal(t, DateTimeType, ToFieldType("string", "", jsonSpecFormatDateTime))
+		require.Equal(t, UnknownType, ToFieldType("string", "random", ""))
 	})
 	t.Run("test supported types", func(t *testing.T) {
 		cases := []struct {
@@ -43,8 +45,8 @@ func TestFieldBuilder_Build(t *testing.T) {
 				expError: api.Errorf(codes.InvalidArgument, "unsupported type detected 'bool'"),
 			},
 			{
-				builder:  &FieldBuilder{FieldName: "test", Type: "uuid"},
-				expError: api.Errorf(codes.InvalidArgument, "unsupported type detected 'uuid'"),
+				builder:  &FieldBuilder{FieldName: "test", Type: "string", Format: "uuid"},
+				expError: nil,
 			},
 			{
 				builder:  &FieldBuilder{FieldName: "test", Type: "number"},

@@ -16,9 +16,6 @@ package filter
 
 import (
 	"fmt"
-
-	"github.com/tigrisdata/tigrisdb/value"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // Selector is a condition defined inside a filter. It has a field which corresponding the field on which condition
@@ -44,16 +41,8 @@ func NewSelector(field string, matcher ValueMatcher) *Selector {
 }
 
 // Matches returns true if the input doc matches this filter.
-func (s *Selector) Matches(doc *structpb.Struct) bool {
-	if v, ok := doc.Fields[s.Field]; ok {
-		val := value.NewValue(v)
-		if val == nil {
-			return false
-		}
-
-		return s.Matcher.Matches(val)
-	}
-
+func (s *Selector) Matches(doc []byte) bool {
+	//ToDo: not implemented
 	return false
 }
 

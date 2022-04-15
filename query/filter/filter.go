@@ -16,15 +16,16 @@ package filter
 
 import (
 	"bytes"
+
 	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/query/expression"
+	"github.com/tigrisdata/tigrisdb/schema"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"github.com/tigrisdata/tigrisdb/value"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 var (
@@ -46,14 +47,24 @@ var (
 // The default rule applied between filters are "$and and the default selector is "$eq".
 type Filter interface {
 	// Matches returns true if the input doc passes the filter, otherwise false
-	Matches(doc *structpb.Struct) bool
+	Matches(doc []byte) bool
 }
 
 func IsFullCollectionScan(reqFilter []byte) bool {
 	return bytes.Equal(reqFilter, fullScanFilter)
 }
 
-func Build(reqFilter []byte) ([]Filter, error) {
+type Factory struct {
+	fields []*schema.Field
+}
+
+func NewFactory(fields []*schema.Field) *Factory {
+	return &Factory{
+		fields: fields,
+	}
+}
+
+func (factory *Factory) Build(reqFilter []byte) ([]Filter, error) {
 	if len(reqFilter) == 0 {
 		return nil, nil
 	}
@@ -61,7 +72,7 @@ func Build(reqFilter []byte) ([]Filter, error) {
 	var seen = make(map[string]struct{})
 	var filters []Filter
 	var err error
-	err = jsonparser.ObjectEach(reqFilter, func(k []byte, v []byte, dataType jsonparser.ValueType, offset int) error {
+	err = jsonparser.ObjectEach(reqFilter, func(k []byte, v []byte, jsonDataType jsonparser.ValueType, offset int) error {
 		if err != nil {
 			return err
 		}
@@ -69,11 +80,11 @@ func Build(reqFilter []byte) ([]Filter, error) {
 		var filter Filter
 		switch string(k) {
 		case string(AndOP):
-			filter, err = UnmarshalAnd(v)
+			filter, err = factory.UnmarshalAnd(v)
 		case string(OrOP):
-			filter, err = UnmarshalOr(v)
+			filter, err = factory.UnmarshalOr(v)
 		default:
-			filter, err = ParseSelector(k, v, dataType)
+			filter, err = factory.ParseSelector(k, v, jsonDataType)
 		}
 		if err != nil {
 			return err
@@ -93,21 +104,21 @@ func Build(reqFilter []byte) ([]Filter, error) {
 	return filters, nil
 }
 
-func UnmarshalFilter(input jsoniter.RawMessage) (expression.Expr, error) {
+func (factory *Factory) UnmarshalFilter(input jsoniter.RawMessage) (expression.Expr, error) {
 	var err error
 	var filter Filter
-	err = jsonparser.ObjectEach(input, func(k []byte, v []byte, dataType jsonparser.ValueType, offset int) error {
+	err = jsonparser.ObjectEach(input, func(k []byte, v []byte, jsonDataType jsonparser.ValueType, offset int) error {
 		if err != nil {
 			return err
 		}
 
 		switch string(k) {
 		case string(AndOP):
-			filter, err = UnmarshalAnd(v)
+			filter, err = factory.UnmarshalAnd(v)
 		case string(OrOP):
-			filter, err = UnmarshalOr(v)
+			filter, err = factory.UnmarshalOr(v)
 		default:
-			filter, err = ParseSelector(k, v, dataType)
+			filter, err = factory.ParseSelector(k, v, jsonDataType)
 		}
 		return nil
 	})
@@ -115,8 +126,8 @@ func UnmarshalFilter(input jsoniter.RawMessage) (expression.Expr, error) {
 	return filter, err
 }
 
-func UnmarshalAnd(input jsoniter.RawMessage) (Filter, error) {
-	expr, err := expression.UnmarshalArray(input, UnmarshalFilter)
+func (factory *Factory) UnmarshalAnd(input jsoniter.RawMessage) (Filter, error) {
+	expr, err := expression.UnmarshalArray(input, factory.UnmarshalFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -128,8 +139,8 @@ func UnmarshalAnd(input jsoniter.RawMessage) (Filter, error) {
 	return NewAndFilter(andFilters)
 }
 
-func UnmarshalOr(input jsoniter.RawMessage) (Filter, error) {
-	expr, err := expression.UnmarshalArray(input, UnmarshalFilter)
+func (factory *Factory) UnmarshalOr(input jsoniter.RawMessage) (Filter, error) {
+	expr, err := expression.UnmarshalArray(input, factory.UnmarshalFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -156,17 +167,27 @@ func convertExprListToFilters(expr []expression.Expr) ([]Filter, error) {
 
 // ParseSelector is a short-circuit for Selector i.e. when we know the filter passed is not logical then we directly
 // call this because if it is not logical then it is simply a Selector filter.
-func ParseSelector(k []byte, v []byte, dataType jsonparser.ValueType) (Filter, error) {
+func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.ValueType) (Filter, error) {
+	var field *schema.Field
+	for _, f := range factory.fields {
+		if f.FieldName == string(k) {
+			field = f
+		}
+	}
+	if field == nil {
+		return nil, api.Errorf(codes.InvalidArgument, "querying on non schema field '%s'", string(k))
+	}
+
 	switch dataType {
 	case jsonparser.Boolean, jsonparser.Number, jsonparser.String:
-		val, err := value.NewValueFromByte(v, dataType)
+		val, err := value.NewValueFromByte(field, v)
 		if err != nil {
 			return nil, err
 		}
 
 		return NewSelector(string(k), NewEqualityMatcher(val)), nil
 	case jsonparser.Object:
-		valueMatcher, err := buildComparisonOperator(v)
+		valueMatcher, err := buildComparisonOperator(v, field)
 		if err != nil {
 			return nil, err
 		}
@@ -177,7 +198,7 @@ func ParseSelector(k []byte, v []byte, dataType jsonparser.ValueType) (Filter, e
 	}
 }
 
-func buildComparisonOperator(input jsoniter.RawMessage) (ValueMatcher, error) {
+func buildComparisonOperator(input jsoniter.RawMessage, field *schema.Field) (ValueMatcher, error) {
 	if len(input) == 0 {
 		return nil, status.Errorf(codes.InvalidArgument, "empty object")
 	}
@@ -194,7 +215,7 @@ func buildComparisonOperator(input jsoniter.RawMessage) (ValueMatcher, error) {
 			switch dataType {
 			case jsonparser.Boolean, jsonparser.Number, jsonparser.String, jsonparser.Null:
 				var val value.Value
-				val, err = value.NewValueFromByte(v, dataType)
+				val, err = value.NewValueFromByte(field, v)
 				if err != nil {
 					return err
 				}

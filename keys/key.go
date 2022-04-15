@@ -54,5 +54,5 @@ func (p *tableKey) IndexParts() []interface{} {
 }
 
 func (p *tableKey) String() string {
-	return fmt.Sprintf("table:%v, indexKeyAndValues:%v", p.table, p.table)
+	return fmt.Sprintf("table:%v, indexKeyAndValues:%v", p.table, p.indexParts)
 }

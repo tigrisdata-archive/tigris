@@ -20,6 +20,9 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/hashicorp/go-multierror"
+	"github.com/pkg/errors"
+
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
@@ -212,6 +215,9 @@ func NewTenant(namespace Namespace, encoder *encoding.DictionaryEncoder) *Tenant
 // Loading all corresponding collections in this call is unnecessary and will be expensive. Rather that can happen
 // during reloadDatabase API call.
 func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx) error {
+	tenant.Lock()
+	defer tenant.Unlock()
+
 	dbNameToId, err := tenant.encoder.GetDatabases(ctx, tx, tenant.namespace.Id())
 	if err != nil {
 		return err
@@ -227,12 +233,13 @@ func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx) error {
 		}
 	}
 	for _, db := range tenant.databases {
-		if err := tenant.reloadDatabase(ctx, tx, db.name, db.id); err != nil {
-			return err
+		if e := tenant.reloadDatabase(ctx, tx, db.name, db.id); e != nil {
+			err = multierror.Append(err, e)
+			continue
 		}
 	}
 
-	return nil
+	return err
 }
 
 func (tenant *Tenant) GetNamespace() Namespace {
@@ -356,26 +363,30 @@ func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbN
 	}
 
 	for coll, id := range collNameToId {
-		idxNameToId, err := tenant.encoder.GetIndexes(ctx, tx, tenant.namespace.Id(), dbObj.id, id)
-		if err != nil {
-			return err
+		idxNameToId, e := tenant.encoder.GetIndexes(ctx, tx, tenant.namespace.Id(), dbObj.id, id)
+		if e != nil {
+			err = multierror.Append(err, e)
+			continue
 		}
 
-		userSch, _, err := tenant.schemaStore.GetLatest(ctx, tx, tenant.namespace.Id(), dbObj.id, id)
-		if err != nil {
-			return err
+		userSch, _, e := tenant.schemaStore.GetLatest(ctx, tx, tenant.namespace.Id(), dbObj.id, id)
+		if e != nil {
+			err = multierror.Append(err, e)
+			continue
 		}
 		dbObj.collections[coll] = &collectionHolder{
 			name:        coll,
 			id:          id,
 			idxNameToId: idxNameToId,
 		}
-		if err = dbObj.collections[coll].set(userSch); err != nil {
-			return nil
+
+		if e = dbObj.collections[coll].set(userSch); e != nil {
+			err = multierror.Append(err, e)
+			continue
 		}
 	}
 
-	return nil
+	return err
 }
 
 // CreateCollection is to create a collection inside tenant namespace.
@@ -386,13 +397,22 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 	if dbObj == nil {
 		return api.Errorf(codes.NotFound, "database missing")
 	}
-
 	if c, ok := dbObj.collections[schFactory.CollectionName]; ok {
+		if !c.isFullyFormed() {
+			// if it is not formed fully first time then reload schema and try building collection again
+			userSch, _, err := tenant.schemaStore.GetLatest(ctx, tx, tenant.namespace.Id(), dbObj.id, c.id)
+			if err != nil {
+				return err
+			}
+
+			if err := c.set(userSch); err != nil {
+				return errors.Wrap(err, "previous incompatible version detected, drop collection first")
+			}
+		}
+
 		// if collection already exists, check if it is same or different schema
 		equal, err := JSONSchemaEqual(c.schema, schFactory.Schema)
 		if err != nil {
-			fmt.Println("JSON schema equal error ", err)
-			fmt.Println(c.schema, schFactory.Schema)
 			return err
 		}
 		if !equal {
@@ -462,19 +482,19 @@ func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db 
 
 	cHolder, ok := db.collections[collectionName]
 	if !ok {
-		return nil
+		return api.Errorf(codes.NotFound, "collection doesn't exists '%s'", collectionName)
 	}
 
-	if err := tenant.encoder.EncodeCollectionAsDropped(ctx, tx, cHolder.collection.Name, tenant.namespace.Id(), db.id, cHolder.collection.Id); err != nil {
+	if err := tenant.encoder.EncodeCollectionAsDropped(ctx, tx, cHolder.name, tenant.namespace.Id(), db.id, cHolder.id); err != nil {
 		return err
 	}
 
-	for _, idx := range cHolder.collection.Indexes.GetIndexes() {
-		if err := tenant.encoder.EncodeIndexAsDropped(ctx, tx, idx.Name, tenant.namespace.Id(), db.id, cHolder.collection.Id, idx.Id); err != nil {
+	for idxName, idxId := range cHolder.idxNameToId {
+		if err := tenant.encoder.EncodeIndexAsDropped(ctx, tx, idxName, tenant.namespace.Id(), db.id, cHolder.id, idxId); err != nil {
 			return err
 		}
 	}
-	if err := tenant.schemaStore.Delete(ctx, tx, tenant.namespace.Id(), db.id, cHolder.collection.Id); err != nil {
+	if err := tenant.schemaStore.Delete(ctx, tx, tenant.namespace.Id(), db.id, cHolder.id); err != nil {
 		return err
 	}
 
@@ -544,6 +564,8 @@ type collectionHolder struct {
 	idxNameToId map[string]uint32
 	// latest schema
 	schema jsoniter.RawMessage
+	// if collection is not properly formed during restart then this is false and we need to reload it during request
+	fullFormed bool
 }
 
 // get returns the collection managed by this holder. At this point, a Collection object is safely constructed
@@ -580,5 +602,13 @@ func (c *collectionHolder) set(revision []byte) error {
 
 	c.collection = schema.NewDefaultCollection(c.name, c.id, schFactory.Fields, schFactory.Indexes, revision)
 	c.schema = revision
+	c.fullFormed = true
 	return nil
+}
+
+func (c *collectionHolder) isFullyFormed() bool {
+	c.RLock()
+	defer c.RUnlock()
+
+	return c.fullFormed
 }

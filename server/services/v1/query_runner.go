@@ -17,6 +17,7 @@ package v1
 import (
 	"context"
 	"encoding/json"
+
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/keys"
@@ -190,7 +191,8 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 }
 
 func (runner *BaseQueryRunner) buildKeysUsingFilter(tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection, reqFilter []byte) ([]keys.Key, error) {
-	filters, err := filter.Build(reqFilter)
+	filterFactory := filter.NewFactory(coll.Fields)
+	filters, err := filterFactory.Build(reqFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -471,10 +473,6 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		db, err := runner.GetDatabase(ctx, tx, tenant, runner.drop.GetDb())
 		if err != nil {
 			return nil, err
-		}
-
-		if db.GetCollection(runner.drop.GetCollection()) == nil {
-			return nil, api.Errorf(codes.NotFound, "collection doesn't exists '%s'", runner.drop.GetCollection())
 		}
 
 		if err = tenant.DropCollection(ctx, tx, db, runner.drop.GetCollection()); err != nil {

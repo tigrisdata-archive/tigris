@@ -31,8 +31,12 @@ const (
 	BoolType
 	IntType
 	DoubleType
-	BytesType
 	StringType
+	// ByteType is a base64 encoded characters, base64 encoding is done by the user.
+	ByteType
+	UUIDType
+	// DateTimeType is a valid date representation as defined by RFC 3339, see https://datatracker.ietf.org/doc/html/rfc3339#section-5.6
+	DateTimeType
 	ArrayType
 	ObjectType
 )
@@ -46,10 +50,12 @@ const (
 	jsonSpecArray  = "array"
 	jsonSpecObject = "object"
 
-	jsonSpecEncodingB64 = "base64"
+	jsonSpecEncodingB64    = "base64"
+	jsonSpecFormatUUID     = "uuid"
+	jsonSpecFormatDateTime = "date-time"
 )
 
-func ToFieldType(jsonType string, encoding string) FieldType {
+func ToFieldType(jsonType string, encoding string, format string) FieldType {
 	jsonType = strings.ToLower(jsonType)
 	switch jsonType {
 	case jsonSpecNull:
@@ -61,11 +67,27 @@ func ToFieldType(jsonType string, encoding string) FieldType {
 	case jsonSpecDouble:
 		return DoubleType
 	case jsonSpecString:
-		if encoding == jsonSpecEncodingB64 {
-			return BytesType
+		// if encoding is set
+		switch encoding {
+		case jsonSpecEncodingB64:
+			// base64 encoded characters
+			return ByteType
+		default:
+			if len(encoding) > 0 {
+				return UnknownType
+			}
 		}
-		if len(encoding) > 0 {
-			return UnknownType
+
+		// if format is specified
+		switch format {
+		case jsonSpecFormatUUID:
+			return UUIDType
+		case jsonSpecFormatDateTime:
+			return DateTimeType
+		default:
+			if len(format) > 0 {
+				return UnknownType
+			}
 		}
 
 		return StringType
@@ -78,7 +100,7 @@ func ToFieldType(jsonType string, encoding string) FieldType {
 	}
 }
 
-func ToJSONSpecString(t FieldType) string {
+func ToFieldTypeString(t FieldType) string {
 	switch t {
 	case NullType:
 		return jsonSpecNull
@@ -92,6 +114,12 @@ func ToJSONSpecString(t FieldType) string {
 		return jsonSpecArray
 	case ObjectType:
 		return jsonSpecObject
+	case ByteType:
+		return "byte"
+	case UUIDType:
+		return jsonSpecFormatUUID
+	case DateTimeType:
+		return jsonSpecFormatDateTime
 	default:
 		return "unknown"
 	}
@@ -99,7 +127,7 @@ func ToJSONSpecString(t FieldType) string {
 
 func IsValidIndexType(t FieldType) bool {
 	switch t {
-	case IntType, StringType, BytesType:
+	case IntType, StringType, ByteType, DateTimeType, UUIDType:
 		return true
 	default:
 		return false
@@ -145,11 +173,15 @@ func (f *FieldBuilder) Validate(v []byte) error {
 }
 
 func (f *FieldBuilder) Build() (*Field, error) {
-	fieldType := ToFieldType(f.Type, f.Encoding)
+	fieldType := ToFieldType(f.Type, f.Encoding, f.Format)
 	if fieldType == UnknownType {
 		if len(f.Encoding) > 0 {
 			return nil, api.Errorf(codes.InvalidArgument, "unsupported encoding '%s'", f.Encoding)
 		}
+		if len(f.Format) > 0 {
+			return nil, api.Errorf(codes.InvalidArgument, "unsupported format '%s'", f.Format)
+		}
+
 		return nil, api.Errorf(codes.InvalidArgument, "unsupported type detected '%s'", f.Type)
 	}
 	if f.Primary != nil && *f.Primary {
