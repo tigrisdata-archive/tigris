@@ -36,11 +36,13 @@ Install the CLI:
 go install github.com/tigrisdata/tigrisdb-cli@latest
 ```
 
+Make sure to include the installed binary in your PATH.
+
 Test that TigrisDB is up and running locally:
 
 ```shell
 export TIGRISDB_URL=http://localhost:8081
-tigrisdb-cli list databases
+tigrisdb-cli db list databases
 ```
 
 More elaborate example of CLI usage can be
