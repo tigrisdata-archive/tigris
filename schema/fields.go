@@ -34,6 +34,8 @@ const (
 	StringType
 	// ByteType is a base64 encoded characters, base64 encoding is done by the user.
 	ByteType
+	// BinaryType is a any sequence of octets send by the user.
+	BinaryType
 	UUIDType
 	// DateTimeType is a valid date representation as defined by RFC 3339, see https://datatracker.ietf.org/doc/html/rfc3339#section-5.6
 	DateTimeType
@@ -51,6 +53,7 @@ const (
 	jsonSpecObject = "object"
 
 	jsonSpecEncodingB64    = "base64"
+	jsonSpecEncodingBinary = "binary"
 	jsonSpecFormatUUID     = "uuid"
 	jsonSpecFormatDateTime = "date-time"
 )
@@ -72,6 +75,8 @@ func ToFieldType(jsonType string, encoding string, format string) FieldType {
 		case jsonSpecEncodingB64:
 			// base64 encoded characters
 			return ByteType
+		case jsonSpecEncodingBinary:
+			return BinaryType
 		default:
 			if len(encoding) > 0 {
 				return UnknownType
@@ -116,6 +121,8 @@ func ToFieldTypeString(t FieldType) string {
 		return jsonSpecObject
 	case ByteType:
 		return "byte"
+	case BinaryType:
+		return "binary"
 	case UUIDType:
 		return jsonSpecFormatUUID
 	case DateTimeType:
@@ -127,7 +134,7 @@ func ToFieldTypeString(t FieldType) string {
 
 func IsValidIndexType(t FieldType) bool {
 	switch t {
-	case IntType, StringType, ByteType, DateTimeType, UUIDType:
+	case IntType, StringType, ByteType, DateTimeType, UUIDType, BinaryType:
 		return true
 	default:
 		return false

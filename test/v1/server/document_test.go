@@ -331,6 +331,31 @@ func (s *DocumentSuite) TestInsert_SupportedPrimaryKeys() {
 			primaryKeyLookup: map[string]interface{}{
 				"string_value": "hello",
 			},
+		}, {
+			schema: map[string]interface{}{
+				"schema": map[string]interface{}{
+					"name": collectionName,
+					"properties": map[string]interface{}{
+						"int_value": map[string]interface{}{
+							"type": "integer",
+						},
+						"binary_value": map[string]interface{}{
+							"type":            "string",
+							"contentEncoding": "binary",
+						},
+					},
+					"primary_key": []interface{}{"binary_value"},
+				},
+			},
+			inputDoc: []interface{}{
+				map[string]interface{}{
+					"int_value":    10,
+					"binary_value": []byte("hello"),
+				},
+			},
+			primaryKeyLookup: map[string]interface{}{
+				"binary_value": []byte("hello"),
+			},
 		},
 	}
 	for _, c := range cases {

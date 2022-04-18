@@ -95,6 +95,11 @@ var testCreateSchema = map[string]interface{}{
 				"type":            "string",
 				"contentEncoding": "base64",
 			},
+			"binary_value": map[string]interface{}{
+				"description":     "simple binary field",
+				"type":            "string",
+				"contentEncoding": "binary",
+			},
 			"uuid_value": map[string]interface{}{
 				"description": "uuid field",
 				"type":        "string",
