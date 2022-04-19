@@ -16,8 +16,10 @@ package v1
 
 import (
 	"context"
-	"encoding/json"
 
+	"github.com/buger/jsonparser"
+	jsoniter "github.com/json-iterator/go"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/keys"
@@ -31,7 +33,6 @@ import (
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"github.com/tigrisdata/tigrisdb/value"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // QueryRunner is responsible for executing the current query and return the response
@@ -134,15 +135,15 @@ func (runner *BaseQueryRunner) GetCollections(db *metadata.Database, collName st
 	return collection, nil
 }
 
-func (runner *BaseQueryRunner) extractIndexParts(userDefinedKeys []*schema.Field, doc map[string]*structpb.Value) ([]interface{}, error) {
+func (runner *BaseQueryRunner) extractIndexParts(userDefinedKeys []*schema.Field, doc []byte) ([]interface{}, error) {
 	var appendTo []interface{}
 	for _, v := range userDefinedKeys {
-		k, ok := doc[v.Name()]
-		if !ok {
-			return nil, ulog.CE("missing index key column(s) %v", v)
+		jsonVal, _, _, err := jsonparser.Get(doc, v.FieldName)
+		if err != nil {
+			return nil, api.Errorf(codes.InvalidArgument, errors.Wrapf(err, "missing index key column(s) '%s'", v.FieldName).Error())
 		}
 
-		val, err := value.NewValueUsingSchema(v, k)
+		val, err := value.NewValue(v.DataType, jsonVal)
 		if err != nil {
 			return nil, err
 		}
@@ -156,19 +157,17 @@ func (runner *BaseQueryRunner) extractIndexParts(userDefinedKeys []*schema.Field
 
 func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection, documents [][]byte, insert bool) error {
 	var err error
-	for _, d := range documents {
-		// ToDo: need to implement our own decoding to only extract custom keys
-		var s = &structpb.Struct{}
-		if err = json.Unmarshal(d, s); ulog.E(err) {
+	for _, doc := range documents {
+		var deserializedDoc map[string]interface{}
+		if err = jsoniter.Unmarshal(doc, &deserializedDoc); ulog.E(err) {
 			return err
 		}
-
-		if err = coll.Validate(s.AsMap()); err != nil {
+		if err = coll.Validate(deserializedDoc); err != nil {
 			// schema validation failed
 			return err
 		}
 
-		indexParts, err := runner.extractIndexParts(coll.Indexes.PrimaryKey.Fields, s.GetFields())
+		indexParts, err := runner.extractIndexParts(coll.Indexes.PrimaryKey.Fields, doc)
 		if ulog.E(err) {
 			return err
 		}
@@ -179,9 +178,9 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 		}
 
 		if insert {
-			err = tx.Insert(ctx, key, d)
+			err = tx.Insert(ctx, key, doc)
 		} else {
-			err = tx.Replace(ctx, key, d)
+			err = tx.Replace(ctx, key, doc)
 		}
 		if err != nil {
 			return err

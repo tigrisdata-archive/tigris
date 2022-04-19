@@ -16,7 +16,6 @@ package filter
 
 import (
 	"bytes"
-
 	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
@@ -180,7 +179,7 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 
 	switch dataType {
 	case jsonparser.Boolean, jsonparser.Number, jsonparser.String:
-		val, err := value.NewValueFromByte(field, v)
+		val, err := value.NewValue(field.DataType, v)
 		if err != nil {
 			return nil, err
 		}
@@ -215,7 +214,7 @@ func buildComparisonOperator(input jsoniter.RawMessage, field *schema.Field) (Va
 			switch dataType {
 			case jsonparser.Boolean, jsonparser.Number, jsonparser.String, jsonparser.Null:
 				var val value.Value
-				val, err = value.NewValueFromByte(field, v)
+				val, err = value.NewValue(field.DataType, v)
 				if err != nil {
 					return err
 				}

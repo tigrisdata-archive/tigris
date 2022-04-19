@@ -15,13 +15,14 @@
 package value
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strconv"
 
+	"github.com/pkg/errors"
+	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/schema"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type Comparable interface {
@@ -32,7 +33,11 @@ type Comparable interface {
 	CompareTo(v Value) (int, error)
 }
 
-// Value is our value object that implements comparable so that two values can be compared.
+// Value is our value object that implements comparable so that two values can be compared. This is used to build the
+// keys(primary key or any other index key), or to build the selector filter.
+// Note: if the field data type is byte/binary then the value object returned is base64 decoded. The reason is that
+// JSON has encoded the byte array to base64 so to make sure we are using the user provided value in building the key
+// and the filter we must first decode this field. This allows us later to perform prefix scans.
 type Value interface {
 	Comparable
 
@@ -40,81 +45,40 @@ type Value interface {
 	AsInterface() interface{}
 }
 
-func NewValueFromByte(field *schema.Field, value []byte) (Value, error) {
-	switch field.Type() {
+// NewValue returns the value of the field from the raw json value. It uses schema to get the type of the field.
+func NewValue(fieldType schema.FieldType, value []byte) (Value, error) {
+	switch fieldType {
 	case schema.BoolType:
 		b, err := strconv.ParseBool(string(value))
 		if err != nil {
-			return nil, err
+			return nil, api.Error(codes.InvalidArgument, errors.Wrap(err, "unsupported value type ").Error())
 		}
 		return NewBoolValue(b), nil
 	case schema.DoubleType:
 		val, err := strconv.ParseFloat(string(value), 64)
 		if err != nil {
-			return nil, err
+			return nil, api.Error(codes.InvalidArgument, errors.Wrap(err, "unsupported value type ").Error())
 		}
 		return NewDoubleValue(val), nil
 	case schema.IntType:
-		val, err := strconv.ParseFloat(string(value), 64)
+		val, err := strconv.ParseInt(string(value), 10, 64)
 		if err != nil {
-			return nil, err
+			return nil, api.Error(codes.InvalidArgument, errors.Wrap(err, "unsupported value type ").Error())
 		}
 
 		return NewIntValue(int64(val)), nil
 	case schema.StringType, schema.UUIDType, schema.DateTimeType:
 		return NewStringValue(string(value)), nil
-	case schema.ByteType:
-		return NewBytesValue(value), nil
+	case schema.ByteType, schema.BinaryType:
+		if decoded, err := base64.StdEncoding.DecodeString(string(value)); err == nil {
+			// when we match the value or build the key we first decode the base64 data
+			return NewBytesValue(decoded), nil
+		} else {
+			return NewBytesValue(value), nil
+		}
 	}
 
-	return nil, status.Errorf(codes.InvalidArgument, "unsupported value type")
-}
-
-// NewValueUsingSchema returns Value object using Schema from the input struct Value
-func NewValueUsingSchema(field *schema.Field, input *structpb.Value) (Value, error) {
-	switch field.Type() {
-	case schema.BoolType:
-		if inpVal, ok := input.Kind.(*structpb.Value_BoolValue); ok {
-			i := BoolValue(inpVal.BoolValue)
-			return &i, nil
-		}
-		return nil, status.Errorf(codes.InvalidArgument, "permissible type for '%s' is boolean only", field.FieldName)
-	case schema.IntType:
-		if inpVal, ok := input.Kind.(*structpb.Value_NumberValue); ok {
-			if isIntegral(inpVal.NumberValue) {
-				return NewIntValue(int64(inpVal.NumberValue)), nil
-			}
-		}
-		return nil, status.Errorf(codes.InvalidArgument, "permissible type for '%s' is integer only", field.FieldName)
-	case schema.DoubleType:
-		if inpVal, ok := input.Kind.(*structpb.Value_NumberValue); ok {
-			return NewDoubleValue(inpVal.NumberValue), nil
-		}
-		return nil, status.Errorf(codes.InvalidArgument, "permissible type for '%s' is number only", field.FieldName)
-	case schema.ByteType:
-		// it is base64 as defined by the user, so we need to use it in the value as-is
-		if inpVal, ok := input.Kind.(*structpb.Value_StringValue); ok {
-			return NewBytesValue([]byte(inpVal.StringValue)), nil
-		}
-		return nil, status.Errorf(codes.InvalidArgument, "permissible type for '%s' is bytes only", field.FieldName)
-	case schema.StringType, schema.UUIDType, schema.DateTimeType:
-		if inpVal, ok := input.Kind.(*structpb.Value_StringValue); ok {
-			return NewStringValue(inpVal.StringValue), nil
-		}
-		return nil, status.Errorf(codes.InvalidArgument, "permissible type for '%s' is string only", field.FieldName)
-	}
-
-	return nil, status.Errorf(codes.InvalidArgument, "unsupported type for field name '%s'", field.Name())
-}
-
-// NewValueFromStruct returns Value object based on the schema using input Struct
-func NewValueFromStruct(field *schema.Field, inputS *structpb.Struct) (Value, error) {
-	input, ok := inputS.GetFields()[field.FieldName]
-	if !ok {
-		return nil, status.Errorf(codes.InvalidArgument, "field is missing in the input")
-	}
-
-	return NewValueUsingSchema(field, input)
+	return nil, api.Errorf(codes.InvalidArgument, "unsupported value type")
 }
 
 func isIntegral(val float64) bool {

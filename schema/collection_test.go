@@ -22,6 +22,10 @@ func TestCollection_SchemaValidate(t *testing.T) {
 				"contentEncoding": "base64",
 				"maxLength": 1024
 			},
+			"random_binary": {
+				"type": "string",
+				"contentEncoding": "binary"
+			},
 			"product": {
 				"type": "string",
 				"maxLength": 100
@@ -127,6 +131,12 @@ func TestCollection_SchemaValidate(t *testing.T) {
 		{
 			document: []byte(`{"id": 1, "ts": "2016-02-15"}`),
 			expError: "field 'ts' reason ''2016-02-15' is not valid 'date-time'",
+		}, {
+			document: []byte(`{"id": 1, "random_binary": 1}`),
+			expError: "expected string, but got number",
+		}, {
+			document: []byte(fmt.Sprintf(`{"id": 1, "random_binary": "%s"}`, []byte(`1`))),
+			expError: "",
 		},
 	}
 	for _, c := range cases {

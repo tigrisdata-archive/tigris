@@ -18,6 +18,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -38,6 +39,20 @@ func getTestServerHostPort() (string, int16) {
 	return "localhost", 8081
 }
 
+func getDocuments(t *testing.T, c driver.Driver, filter driver.Filter) []driver.Document {
+	ctx := context.Background()
+
+	it, err := c.Read(ctx, "db1", "c1", filter, nil, &driver.ReadOptions{})
+	require.NoError(t, err)
+
+	var documents []driver.Document
+	var doc driver.Document
+	for it.Next(&doc) {
+		documents = append(documents, doc)
+	}
+	return documents
+}
+
 func testRead(t *testing.T, c driver.Driver, filter driver.Filter, expected []driver.Document) {
 	ctx := context.Background()
 
@@ -54,6 +69,82 @@ func testRead(t *testing.T, c driver.Driver, filter driver.Filter, expected []dr
 
 	require.Equal(t, len(expected), i)
 	assert.NoError(t, it.Err())
+}
+
+func testClientBinary(t *testing.T, c driver.Driver) {
+	ctx := context.TODO()
+
+	_ = c.DropDatabase(ctx, "db1", &driver.DatabaseOptions{})
+	_ = c.DropCollection(ctx, "db1", "c1", &driver.CollectionOptions{})
+
+	schema := `{
+		"name": "c1",
+		"properties": {
+			"K1": {
+				"type": "string",
+				"contentEncoding": "binary"
+			},
+			"D1": {
+				"type": "string",
+				"maxLength": 128
+			}
+		},
+		"primary_key": ["K1"]
+	}`
+
+	err := c.CreateDatabase(ctx, "db1", &driver.DatabaseOptions{})
+	require.NoError(t, err)
+
+	err = c.CreateOrUpdateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
+	require.NoError(t, err)
+
+	err = c.CreateOrUpdateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
+	require.Error(t, api.Errorf(codes.AlreadyExists, "collection already exists"), err)
+
+	type doc struct {
+		K1 []byte
+		D1 string
+	}
+
+	doc1 := doc{
+		K1: []byte("vK1"),
+		D1: "vD1",
+	}
+	docEnc, err := json.Marshal(doc1)
+	require.NoError(t, err)
+
+	_, err = c.Insert(ctx, "db1", "c1", []driver.Document{docEnc}, &driver.InsertOptions{})
+	require.NoError(t, err)
+
+	doc2 := doc{
+		K1: []byte(`1234`),
+		D1: "vD2",
+	}
+	docEnc, err = json.Marshal(doc2)
+	require.NoError(t, err)
+
+	_, err = c.Insert(ctx, "db1", "c1", []driver.Document{docEnc}, &driver.InsertOptions{})
+	require.NoError(t, err)
+
+	filterEnc, err := json.Marshal(map[string]interface{}{
+		"K1": []byte("vK1"),
+	})
+	require.NoError(t, err)
+
+	var actualDoc doc
+	require.NoError(t, json.Unmarshal(getDocuments(t, c, driver.Filter(filterEnc))[0], &actualDoc))
+	require.Equal(t, doc1, actualDoc)
+
+	filterEnc, err = json.Marshal(map[string]interface{}{
+		"K1": []byte(`1234`),
+	})
+	require.NoError(t, err)
+
+	require.NoError(t, json.Unmarshal(getDocuments(t, c, driver.Filter(filterEnc))[0], &actualDoc))
+	require.Equal(t, doc2, actualDoc)
+
+	err = c.DropCollection(ctx, "db1", "c1", &driver.CollectionOptions{})
+	require.NoError(t, err)
 }
 
 func testClient(t *testing.T, c driver.Driver) {
@@ -204,6 +295,7 @@ func TestGRPCClient(t *testing.T) {
 	defer func() { _ = c.Close() }()
 
 	testClient(t, c)
+	testClientBinary(t, c)
 }
 
 func TestHTTPClient(t *testing.T) {
@@ -214,6 +306,7 @@ func TestHTTPClient(t *testing.T) {
 	defer func() { _ = c.Close() }()
 
 	testClient(t, c)
+	testClientBinary(t, c)
 }
 
 func TestTxGRPCClient(t *testing.T) {
