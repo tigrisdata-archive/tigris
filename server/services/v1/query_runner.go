@@ -120,7 +120,7 @@ func (runner *BaseQueryRunner) GetDatabase(ctx context.Context, tx transaction.T
 	}
 	if db == nil {
 		// database not found
-		return nil, api.Errorf(codes.InvalidArgument, "database doesn't exists '%s'", dbName)
+		return nil, api.Errorf(codes.NotFound, "database doesn't exist '%s'", dbName)
 	}
 
 	return db, nil
@@ -129,7 +129,7 @@ func (runner *BaseQueryRunner) GetDatabase(ctx context.Context, tx transaction.T
 func (runner *BaseQueryRunner) GetCollections(db *metadata.Database, collName string) (*schema.DefaultCollection, error) {
 	collection := db.GetCollection(collName)
 	if collection == nil {
-		return nil, api.Errorf(codes.InvalidArgument, "collection doesn't exists '%s'", collName)
+		return nil, api.Errorf(codes.NotFound, "collection doesn't exist '%s'", collName)
 	}
 
 	return collection, nil

@@ -50,12 +50,13 @@ func (s *DocumentSuite) TearDownSuite() {
 	dropDatabase(s.T(), s.database)
 }
 
-func (s *DocumentSuite) TestInsert_BadRequest() {
+func (s *DocumentSuite) TestInsert_Bad_NotFoundRequest() {
 	cases := []struct {
 		databaseName   string
 		collectionName string
 		documents      []interface{}
 		expMessage     string
+		status         int
 	}{
 		{
 			"random_database1",
@@ -65,7 +66,8 @@ func (s *DocumentSuite) TestInsert_BadRequest() {
 					"pkey_int": 1,
 				},
 			},
-			"database doesn't exists 'random_database1'",
+			"database doesn't exist 'random_database1'",
+			http.StatusNotFound,
 		}, {
 			s.database,
 			"random_collection",
@@ -74,7 +76,8 @@ func (s *DocumentSuite) TestInsert_BadRequest() {
 					"pkey_int": 1,
 				},
 			},
-			"collection doesn't exists 'random_collection'",
+			"collection doesn't exist 'random_collection'",
+			http.StatusNotFound,
 		}, {
 			"",
 			s.collection,
@@ -84,6 +87,7 @@ func (s *DocumentSuite) TestInsert_BadRequest() {
 				},
 			},
 			"invalid database name",
+			http.StatusBadRequest,
 		}, {
 			s.database,
 			"",
@@ -93,11 +97,13 @@ func (s *DocumentSuite) TestInsert_BadRequest() {
 				},
 			},
 			"invalid collection name",
+			http.StatusBadRequest,
 		}, {
 			s.database,
 			s.collection,
 			[]interface{}{},
 			"empty documents received",
+			http.StatusBadRequest,
 		},
 	}
 	for _, c := range cases {
@@ -107,7 +113,7 @@ func (s *DocumentSuite) TestInsert_BadRequest() {
 				"documents": c.documents,
 			}).
 			Expect().
-			Status(http.StatusBadRequest).
+			Status(c.status).
 			JSON().
 			Object().
 			ValueEqual("message", c.expMessage)
@@ -497,6 +503,7 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 		fields     map[string]interface{}
 		filter     map[string]interface{}
 		expMessage string
+		status     int
 	}{
 		{
 			"random_database1",
@@ -509,7 +516,8 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 			map[string]interface{}{
 				"pkey_int": 1,
 			},
-			"database doesn't exists 'random_database1'",
+			"database doesn't exist 'random_database1'",
+			http.StatusNotFound,
 		}, {
 			s.database,
 			"random_collection",
@@ -521,7 +529,8 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 			map[string]interface{}{
 				"pkey_int": 1,
 			},
-			"collection doesn't exists 'random_collection'",
+			"collection doesn't exist 'random_collection'",
+			http.StatusNotFound,
 		}, {
 			"",
 			s.collection,
@@ -534,6 +543,7 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 				"pkey_int": 1,
 			},
 			"invalid database name",
+			http.StatusBadRequest,
 		}, {
 			s.database,
 			"",
@@ -546,6 +556,7 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 				"pkey_int": 1,
 			},
 			"invalid collection name",
+			http.StatusBadRequest,
 		}, {
 			s.database,
 			s.collection,
@@ -554,6 +565,7 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 				"pkey_int": 1,
 			},
 			"empty fields received",
+			http.StatusBadRequest,
 		}, {
 			s.database,
 			s.collection,
@@ -564,6 +576,7 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 			},
 			nil,
 			"filter is a required field",
+			http.StatusBadRequest,
 		},
 	}
 	for _, c := range cases {
@@ -574,7 +587,7 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 				"filter": c.filter,
 			}).
 			Expect().
-			Status(http.StatusBadRequest).
+			Status(c.status).
 			JSON().
 			Object().
 			ValueEqual("message", c.expMessage)
@@ -864,6 +877,7 @@ func (s *DocumentSuite) TestDelete_BadRequest() {
 		collectionName string
 		filter         map[string]interface{}
 		expMessage     string
+		status         int
 	}{
 		{
 			"random_database1",
@@ -871,14 +885,16 @@ func (s *DocumentSuite) TestDelete_BadRequest() {
 			map[string]interface{}{
 				"pkey_int": 1,
 			},
-			"database doesn't exists 'random_database1'",
+			"database doesn't exist 'random_database1'",
+			http.StatusNotFound,
 		}, {
 			s.database,
 			"random_collection",
 			map[string]interface{}{
 				"pkey_int": 1,
 			},
-			"collection doesn't exists 'random_collection'",
+			"collection doesn't exist 'random_collection'",
+			http.StatusNotFound,
 		}, {
 			"",
 			s.collection,
@@ -886,6 +902,7 @@ func (s *DocumentSuite) TestDelete_BadRequest() {
 				"pkey_int": 1,
 			},
 			"invalid database name",
+			http.StatusBadRequest,
 		}, {
 			s.database,
 			"",
@@ -893,11 +910,13 @@ func (s *DocumentSuite) TestDelete_BadRequest() {
 				"pkey_int": 1,
 			},
 			"invalid collection name",
+			http.StatusBadRequest,
 		}, {
 			s.database,
 			s.collection,
 			nil,
 			"filter is a required field",
+			http.StatusBadRequest,
 		},
 	}
 	for _, c := range cases {
@@ -907,7 +926,7 @@ func (s *DocumentSuite) TestDelete_BadRequest() {
 				"filter": c.filter,
 			}).
 			Expect().
-			Status(http.StatusBadRequest).
+			Status(c.status).
 			JSON().
 			Object().
 			ValueEqual("message", c.expMessage)
