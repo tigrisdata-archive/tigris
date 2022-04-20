@@ -12,7 +12,7 @@ import (
 
 func TestCollection_SchemaValidate(t *testing.T) {
 	reqSchema := []byte(`{
-		"name": "t1",
+		"title": "t1",
 		"properties": {
 			"id": {
 				"type": "integer"
