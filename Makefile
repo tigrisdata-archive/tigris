@@ -44,7 +44,6 @@ ${API_DIR}/client/${V}/%/http.go: ${PROTO_DIR}/%_openapi.yaml
 ${DATA_PROTO_DIR}/%.pb.go ${DATA_PROTO_DIR}/%.pb.gw.go: ${DATA_PROTO_DIR}/%.proto
 	protoc -Iinternal \
 		--go_out=${DATA_PROTO_DIR} --go_opt=paths=source_relative \
-		--go-grpc_out=${DATA_PROTO_DIR} --go-grpc_opt=paths=source_relative \
 		$<
 
 generate: ${GEN_DIR}/api.pb.go ${GEN_DIR}/api.pb.gw.go ${GEN_DIR}/health.pb.go ${GEN_DIR}/health.pb.gw.go ${DATA_PROTO_DIR}/data.pb.gw.go
