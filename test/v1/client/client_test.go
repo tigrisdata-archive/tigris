@@ -78,7 +78,7 @@ func testClientBinary(t *testing.T, c driver.Driver) {
 	_ = c.DropCollection(ctx, "db1", "c1", &driver.CollectionOptions{})
 
 	schema := `{
-		"name": "c1",
+		"title": "c1",
 		"properties": {
 			"K1": {
 				"type": "string",
@@ -154,7 +154,7 @@ func testClient(t *testing.T, c driver.Driver) {
 	_ = c.DropCollection(ctx, "db1", "c1", &driver.CollectionOptions{})
 
 	schema := `{
-		"name": "c1",
+		"title": "c1",
 		"description": "this schema is for client integration tests",
 		"properties": {
 			"K1": {
@@ -216,7 +216,7 @@ func testTxClient(t *testing.T, c driver.Driver) {
 	_ = c.DropCollection(ctx, "db1", "c1", &driver.CollectionOptions{})
 
 	schema := `{
-		"name": "c1",
+		"title": "c1",
 		"description": "this schema is for client integration tests",
 		"properties": {
 			"K1": {

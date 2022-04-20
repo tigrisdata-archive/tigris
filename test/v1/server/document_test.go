@@ -241,7 +241,7 @@ func (s *DocumentSuite) TestInsert_SupportedPrimaryKeys() {
 		{
 			schema: map[string]interface{}{
 				"schema": map[string]interface{}{
-					"name": collectionName,
+					"title": collectionName,
 					"properties": map[string]interface{}{
 						"int_value": map[string]interface{}{
 							"type": "integer",
@@ -266,7 +266,7 @@ func (s *DocumentSuite) TestInsert_SupportedPrimaryKeys() {
 		}, {
 			schema: map[string]interface{}{
 				"schema": map[string]interface{}{
-					"name": collectionName,
+					"title": collectionName,
 					"properties": map[string]interface{}{
 						"int_value": map[string]interface{}{
 							"type": "integer",
@@ -291,7 +291,7 @@ func (s *DocumentSuite) TestInsert_SupportedPrimaryKeys() {
 		}, {
 			schema: map[string]interface{}{
 				"schema": map[string]interface{}{
-					"name": collectionName,
+					"title": collectionName,
 					"properties": map[string]interface{}{
 						"int_value": map[string]interface{}{
 							"type": "integer",
@@ -316,7 +316,7 @@ func (s *DocumentSuite) TestInsert_SupportedPrimaryKeys() {
 		}, {
 			schema: map[string]interface{}{
 				"schema": map[string]interface{}{
-					"name": collectionName,
+					"title": collectionName,
 					"properties": map[string]interface{}{
 						"int_value": map[string]interface{}{
 							"type": "integer",
@@ -340,7 +340,7 @@ func (s *DocumentSuite) TestInsert_SupportedPrimaryKeys() {
 		}, {
 			schema: map[string]interface{}{
 				"schema": map[string]interface{}{
-					"name": collectionName,
+					"title": collectionName,
 					"properties": map[string]interface{}{
 						"int_value": map[string]interface{}{
 							"type": "integer",

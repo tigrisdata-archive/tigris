@@ -73,7 +73,7 @@ var (
 )
 
 type JSONSchema struct {
-	Name        string              `json:"name,omitempty"`
+	Name        string              `json:"title,omitempty"`
 	Description string              `json:"description,omitempty"`
 	Properties  jsoniter.RawMessage `json:"properties,omitempty"`
 	PrimaryKeys []string            `json:"primary_key,omitempty"`
