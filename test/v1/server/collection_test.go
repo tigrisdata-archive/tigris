@@ -82,11 +82,19 @@ var testCreateSchema = map[string]interface{}{
 				"type":        "string",
 				"maxLength":   128,
 			},
+			"added_string_value": map[string]interface{}{
+				"description": "simple string field",
+				"type":        "string",
+			},
 			"bool_value": map[string]interface{}{
 				"description": "simple boolean field",
 				"type":        "boolean",
 			},
 			"double_value": map[string]interface{}{
+				"description": "simple double field",
+				"type":        "number",
+			},
+			"added_value_double": map[string]interface{}{
 				"description": "simple double field",
 				"type":        "number",
 			},

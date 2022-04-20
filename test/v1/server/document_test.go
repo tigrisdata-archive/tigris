@@ -210,6 +210,14 @@ func (s *DocumentSuite) TestInsert_SchemaValidationError() {
 				},
 			},
 			"json schema validation failed for field 'uuid_value' reason ''abc-bcd' is not valid 'uuid''",
+		}, {
+			[]interface{}{
+				map[string]interface{}{
+					"pkey_int":  10,
+					"extra_key": "abc-bcd",
+				},
+			},
+			"json schema validation failed for field '' reason 'additionalProperties 'extra_key' not allowed'",
 		},
 	}
 	for _, c := range cases {
