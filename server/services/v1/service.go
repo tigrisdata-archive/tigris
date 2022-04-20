@@ -32,10 +32,10 @@ type Service interface {
 	RegisterGRPC(grpc *grpc.Server) error
 }
 
-func GetRegisteredServices(kv kv.KV) []Service {
+func GetRegisteredServices(kvStore kv.KeyValueStore) []Service {
 	var v1Services []Service
 
-	v1Services = append(v1Services, newApiService(kv))
+	v1Services = append(v1Services, newApiService(kvStore))
 	v1Services = append(v1Services, newHealthService())
 	return v1Services
 }

@@ -38,13 +38,13 @@ func main() {
 
 	log.Info().Str("version", Version).Str("BuildHash", BuildHash).Msgf("Starting server")
 
-	kv, err := kv.NewFoundationDB(&config.DefaultConfig.FoundationDB)
+	kvStore, err := kv.NewKeyValueStore(&config.DefaultConfig.FoundationDB)
 	if err != nil {
 		log.Fatal().Err(err).Msg("error initializing kv store")
 	}
 
 	mx := muxer.NewMuxer(&config.DefaultConfig)
-	mx.RegisterServices(kv)
+	mx.RegisterServices(kvStore)
 	if err := mx.Start(config.DefaultConfig.Server.Host, config.DefaultConfig.Server.Port); err != nil {
 		log.Fatal().Err(err).Msgf("error starting server")
 	}
