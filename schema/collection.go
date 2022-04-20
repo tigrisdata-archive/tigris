@@ -78,6 +78,9 @@ func NewDefaultCollection(cname string, id uint32, fields []*Field, indexes *Ind
 	if err != nil {
 		panic(err)
 	}
+	// this is to not support additional properties, this is intentional to avoid caller not passing additional properties
+	// flag. Later probably we can relax it. Starting with strict validation is better than not validating extra keys.
+	validator.AdditionalProperties = false
 
 	return &DefaultCollection{
 		Id:        id,

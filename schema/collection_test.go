@@ -137,6 +137,10 @@ func TestCollection_SchemaValidate(t *testing.T) {
 		}, {
 			document: []byte(fmt.Sprintf(`{"id": 1, "random_binary": "%s"}`, []byte(`1`))),
 			expError: "",
+		}, {
+			// if additional properties are set then reject the request
+			document: []byte(fmt.Sprintf(`{"id": 1, "random_binary": "%s", "extra_key": "hello"}`, []byte(`1`))),
+			expError: "reason 'additionalProperties 'extra_key' not allowed",
 		},
 	}
 	for _, c := range cases {
