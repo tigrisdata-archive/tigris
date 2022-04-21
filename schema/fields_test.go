@@ -24,7 +24,7 @@ import (
 
 func TestFieldBuilder_Build(t *testing.T) {
 	t.Run("test convert json to internal types", func(t *testing.T) {
-		require.Equal(t, IntType, ToFieldType("integer", "", ""))
+		require.Equal(t, Int64Type, ToFieldType("integer", "", ""))
 		require.Equal(t, StringType, ToFieldType("string", "", ""))
 		require.Equal(t, ByteType, ToFieldType("string", jsonSpecEncodingB64, ""))
 		require.Equal(t, UUIDType, ToFieldType("string", "", jsonSpecFormatUUID))

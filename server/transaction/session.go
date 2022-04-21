@@ -129,12 +129,12 @@ func (s *session) replace(ctx context.Context, key keys.Key, data *internal.Tabl
 	return s.kTx.Replace(ctx, key.Table(), kv.BuildKey(key.IndexParts()...), data)
 }
 
-func (s *session) update(ctx context.Context, key keys.Key, apply func(*internal.TableData) (*internal.TableData, error)) error {
+func (s *session) update(ctx context.Context, key keys.Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error) {
 	s.Lock()
 	defer s.Unlock()
 
 	if err := s.validateSession(); err != nil {
-		return err
+		return -1, err
 	}
 
 	return s.kTx.Update(ctx, key.Table(), kv.BuildKey(key.IndexParts()...), apply)

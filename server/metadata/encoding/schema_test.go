@@ -59,7 +59,7 @@ func TestSchemaSubspace(t *testing.T) {
 		require.NoError(t, err)
 		s := SchemaSubspace{}
 		require.NoError(t, s.Put(ctx, tx, 1, 2, 3, schema, 1))
-		require.Equal(t, api.Errorf(codes.AlreadyExists, "duplicate key value, violates unique primary key constraint"), s.Put(ctx, tx, 1, 2, 3, schema, 1))
+		require.Equal(t, api.Errorf(codes.AlreadyExists, "duplicate key value, violates key constraint"), s.Put(ctx, tx, 1, 2, 3, schema, 1))
 		require.NoError(t, tx.Rollback(ctx))
 	})
 	t.Run("put_get", func(t *testing.T) {

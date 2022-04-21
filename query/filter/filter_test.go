@@ -26,8 +26,8 @@ func TestFilterUsingJSON(t *testing.T) {
 		js := []byte(`{"f1": 10, "f2": 10}`)
 		var factory = Factory{
 			fields: []*schema.Field{
-				{FieldName: "f1", DataType: schema.IntType},
-				{FieldName: "f2", DataType: schema.IntType},
+				{FieldName: "f1", DataType: schema.Int64Type},
+				{FieldName: "f2", DataType: schema.Int64Type},
 			},
 		}
 		filters, err := factory.Build(js)
@@ -41,9 +41,9 @@ func TestFilterUsingJSON(t *testing.T) {
 		js := []byte(`{"$or": [{"f1": 20}, {"$and": [{"f2":5}, {"f3": 6}]}]}`)
 		var factory = Factory{
 			fields: []*schema.Field{
-				{FieldName: "f1", DataType: schema.IntType},
-				{FieldName: "f2", DataType: schema.IntType},
-				{FieldName: "f3", DataType: schema.IntType},
+				{FieldName: "f1", DataType: schema.Int64Type},
+				{FieldName: "f2", DataType: schema.Int64Type},
+				{FieldName: "f3", DataType: schema.Int64Type},
 			},
 		}
 		filters, err := factory.Build(js)
@@ -59,11 +59,11 @@ func TestFilterUsingJSON(t *testing.T) {
 		js := []byte(`{"$and": [{"a": 20}, {"$or": [{"b":5}, {"c": 6}]}, {"$and": [{"e":5}, {"f": 6}]}]}`)
 		var factory = Factory{
 			fields: []*schema.Field{
-				{FieldName: "a", DataType: schema.IntType},
-				{FieldName: "b", DataType: schema.IntType},
-				{FieldName: "c", DataType: schema.IntType},
-				{FieldName: "e", DataType: schema.IntType},
-				{FieldName: "f", DataType: schema.IntType},
+				{FieldName: "a", DataType: schema.Int64Type},
+				{FieldName: "b", DataType: schema.Int64Type},
+				{FieldName: "c", DataType: schema.Int64Type},
+				{FieldName: "e", DataType: schema.Int64Type},
+				{FieldName: "f", DataType: schema.Int64Type},
 			},
 		}
 		filters, err := factory.Build(js)
@@ -80,16 +80,16 @@ func TestFilterUsingJSON(t *testing.T) {
 		js := []byte(`{"f1": 10, "f2": 10, "$or": [{"f3": 20}, {"$and": [{"f4":5}, {"f5": 6}]}], "$and": [{"a": 20}, {"$or": [{"b":5}, {"c": 6}]}, {"$and": [{"e":5}, {"f": 6}]}]}`)
 		var factory = Factory{
 			fields: []*schema.Field{
-				{FieldName: "f1", DataType: schema.IntType},
-				{FieldName: "f2", DataType: schema.IntType},
-				{FieldName: "f3", DataType: schema.IntType},
-				{FieldName: "f4", DataType: schema.IntType},
-				{FieldName: "f5", DataType: schema.IntType},
-				{FieldName: "a", DataType: schema.IntType},
-				{FieldName: "b", DataType: schema.IntType},
-				{FieldName: "c", DataType: schema.IntType},
-				{FieldName: "e", DataType: schema.IntType},
-				{FieldName: "f", DataType: schema.IntType},
+				{FieldName: "f1", DataType: schema.Int64Type},
+				{FieldName: "f2", DataType: schema.Int64Type},
+				{FieldName: "f3", DataType: schema.Int64Type},
+				{FieldName: "f4", DataType: schema.Int64Type},
+				{FieldName: "f5", DataType: schema.Int64Type},
+				{FieldName: "a", DataType: schema.Int64Type},
+				{FieldName: "b", DataType: schema.Int64Type},
+				{FieldName: "c", DataType: schema.Int64Type},
+				{FieldName: "e", DataType: schema.Int64Type},
+				{FieldName: "f", DataType: schema.Int64Type},
 			},
 		}
 		filters, err := factory.Build(js)
@@ -120,8 +120,8 @@ func TestFilterUsingJSON(t *testing.T) {
 func TestFilterDuplicateKey(t *testing.T) {
 	var factory = Factory{
 		fields: []*schema.Field{
-			{FieldName: "a", DataType: schema.IntType},
-			{FieldName: "b", DataType: schema.IntType},
+			{FieldName: "a", DataType: schema.Int64Type},
+			{FieldName: "b", DataType: schema.Int64Type},
 		},
 	}
 	filters, err := factory.Build([]byte(`{"a": 10, "b": {"$eq": 10}, "b": 15}`))

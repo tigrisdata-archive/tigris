@@ -60,7 +60,7 @@ func NewValue(fieldType schema.FieldType, value []byte) (Value, error) {
 			return nil, api.Error(codes.InvalidArgument, errors.Wrap(err, "unsupported value type ").Error())
 		}
 		return NewDoubleValue(val), nil
-	case schema.IntType:
+	case schema.Int32Type, schema.Int64Type:
 		val, err := strconv.ParseInt(string(value), 10, 64)
 		if err != nil {
 			return nil, api.Error(codes.InvalidArgument, errors.Wrap(err, "unsupported value type ").Error())
@@ -69,7 +69,7 @@ func NewValue(fieldType schema.FieldType, value []byte) (Value, error) {
 		return NewIntValue(int64(val)), nil
 	case schema.StringType, schema.UUIDType, schema.DateTimeType:
 		return NewStringValue(string(value)), nil
-	case schema.ByteType, schema.BinaryType:
+	case schema.ByteType:
 		if decoded, err := base64.StdEncoding.DecodeString(string(value)); err == nil {
 			// when we match the value or build the key we first decode the base64 data
 			return NewBytesValue(decoded), nil

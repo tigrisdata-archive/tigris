@@ -55,7 +55,7 @@ import (
 		"bytes_value": {
 			"description": "simple bytes field",
 			"type": "string",
-			"contentEncoding": "base64"
+			"format": "byte"
 		}
 	},
 	"primary_key": [
@@ -99,14 +99,9 @@ var testCreateSchema = map[string]interface{}{
 				"type":        "number",
 			},
 			"bytes_value": map[string]interface{}{
-				"description":     "simple bytes field",
-				"type":            "string",
-				"contentEncoding": "base64",
-			},
-			"binary_value": map[string]interface{}{
-				"description":     "simple binary field",
-				"type":            "string",
-				"contentEncoding": "binary",
+				"description": "simple bytes field",
+				"type":        "string",
+				"format":      "byte",
 			},
 			"uuid_value": map[string]interface{}{
 				"description": "uuid field",

@@ -27,7 +27,8 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.10.1
 	github.com/stretchr/testify v1.7.1
-	github.com/tigrisdata/tigrisdb-client-go v1.0.0-alpha.4
+	github.com/tigrisdata/tigrisdb-client-go v1.0.0-alpha.6
+	github.com/ugorji/go/codec v1.2.7
 	github.com/valyala/bytebufferpool v1.0.0
 	golang.org/x/xerrors v0.0.0-20220411194840-2f41105eb62f
 	google.golang.org/genproto v0.0.0-20220303160752-862486edd9cc
@@ -69,7 +70,6 @@ require (
 	github.com/spf13/cast v1.4.1 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/subosito/gotenv v1.2.0 // indirect
-	github.com/ugorji/go/codec v1.2.7 // indirect
 	github.com/valyala/fasthttp v1.34.0 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect

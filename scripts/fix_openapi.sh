@@ -60,7 +60,7 @@ done
 yq_fix_object InsertRequest documents.items
 yq_fix_object ReplaceRequest documents.items
 yq_fix_object UpdateRequest fields
-yq_fix_object ReadResponse doc
+yq_fix_object ReadResponse data
 yq_fix_object CreateOrUpdateCollectionRequest schema
 
 for i in InsertRequest ReplaceRequest UpdateRequest DeleteRequest ReadRequest \

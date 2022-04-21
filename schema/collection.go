@@ -16,7 +16,11 @@ package schema
 
 import (
 	"bytes"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"math"
+	"strconv"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/santhosh-tekuri/jsonschema/v5"
@@ -67,6 +71,8 @@ type DefaultCollection struct {
 }
 
 func NewDefaultCollection(cname string, id uint32, fields []*Field, indexes *Indexes, schema jsoniter.RawMessage) *DefaultCollection {
+	RegisterTigrisFormats()
+
 	url := cname + ".json"
 	compiler := jsonschema.NewCompiler()
 	compiler.Draft = jsonschema.Draft7 // Format is only working for draft7
@@ -127,59 +133,47 @@ func (d *DefaultCollection) Validate(document interface{}) error {
 	return api.Errorf(codes.InvalidArgument, err.Error())
 }
 
-type Collection interface {
-	Name() string
-	Type() string
-	Database() string
-	GetFields() []*Field
-	PrimaryKeys() []*Field
-	StorageName() string // ToDo: this is a placeholder, will be replaced by encoding package
-}
+func RegisterTigrisFormats() {
+	jsonschema.Formats[FieldNames[ByteType]] = func(i interface{}) bool {
+		switch i.(type) {
+		case string:
+			_, err := base64.StdEncoding.DecodeString(i.(string))
+			return err == nil
+		}
+		return false
+	}
+	jsonschema.Formats[FieldNames[Int32Type]] = func(i interface{}) bool {
+		val, err := parseInt(i)
+		if err != nil {
+			return false
+		}
 
-type SimpleCollection struct {
-	CollectionName string
-	DatabaseName   string
-	Keys           []*Field
-	Fields         []*Field
-}
+		if val < math.MinInt32 || val > math.MaxInt32 {
+			return false
+		}
+		return true
+	}
+	jsonschema.Formats[FieldNames[Int64Type]] = func(i interface{}) bool {
+		val, err := parseInt(i)
+		if err != nil {
+			return false
+		}
 
-func NewCollection(database string, collection string, fields []*Field, keys []*Field) Collection {
-	return &SimpleCollection{
-		DatabaseName:   database,
-		CollectionName: collection,
-		Keys:           keys,
-		Fields:         fields,
+		if val < math.MinInt64 || val > math.MaxInt64 {
+			return false
+		}
+		return true
 	}
 }
 
-func (s *SimpleCollection) Name() string {
-	return s.CollectionName
-}
-
-func (s *SimpleCollection) Type() string {
-	return UserDefinedSchema
-}
-
-func (s *SimpleCollection) Database() string {
-	return s.DatabaseName
-}
-
-func (s *SimpleCollection) GetFields() []*Field {
-	return s.Fields
-}
-
-func (s *SimpleCollection) PrimaryKeys() []*Field {
-	return s.Keys
-}
-
-func (s *SimpleCollection) StorageName() string {
-	return fmt.Sprintf("%s.%s", s.DatabaseName, s.CollectionName)
-}
-
-func GetIndexName(database, collection, index string) string {
-	return fmt.Sprintf("%s.%s.%s", database, collection, index)
-}
-
-func GetCollectionName(database, collection string) string {
-	return fmt.Sprintf("%s.%s", database, collection)
+func parseInt(i interface{}) (int64, error) {
+	switch i.(type) {
+	case json.Number, float64, int, int32, int64:
+		n, err := strconv.ParseInt(fmt.Sprint(i), 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		return n, nil
+	}
+	return 0, api.Errorf(codes.InvalidArgument, "expected integer but found %T", i)
 }

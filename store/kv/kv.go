@@ -35,8 +35,8 @@ type KV interface {
 	DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key) error
 	Read(ctx context.Context, table []byte, key Key) (Iterator, error)
 	ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key) (Iterator, error)
-	Update(ctx context.Context, table []byte, key Key, apply func(*internal.TableData) (*internal.TableData, error)) error
-	UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func(*internal.TableData) (*internal.TableData, error)) error
+	Update(ctx context.Context, table []byte, key Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error)
+	UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error)
 	SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error
 	Get(ctx context.Context, key []byte) ([]byte, error)
 }
@@ -111,7 +111,7 @@ func (k *KeyValueStoreImpl) ReadRange(ctx context.Context, table []byte, lkey Ke
 	}, nil
 }
 
-func (k *KeyValueStoreImpl) Update(ctx context.Context, table []byte, key Key, apply func(*internal.TableData) (*internal.TableData, error)) error {
+func (k *KeyValueStoreImpl) Update(ctx context.Context, table []byte, key Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error) {
 	return k.fdbkv.Update(ctx, table, key, func(existing []byte) ([]byte, error) {
 		decoded, err := internal.Decode(existing)
 		if err != nil {
@@ -132,7 +132,7 @@ func (k *KeyValueStoreImpl) Update(ctx context.Context, table []byte, key Key, a
 	})
 }
 
-func (k *KeyValueStoreImpl) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func(*internal.TableData) (*internal.TableData, error)) error {
+func (k *KeyValueStoreImpl) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error) {
 	return k.fdbkv.UpdateRange(ctx, table, lKey, rKey, func(existing []byte) ([]byte, error) {
 		decoded, err := internal.Decode(existing)
 		if err != nil {
@@ -206,7 +206,7 @@ func (tx *TxImpl) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Ke
 	}, nil
 }
 
-func (tx *TxImpl) Update(ctx context.Context, table []byte, key Key, apply func(*internal.TableData) (*internal.TableData, error)) error {
+func (tx *TxImpl) Update(ctx context.Context, table []byte, key Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error) {
 	return tx.ftx.Update(ctx, table, key, func(existing []byte) ([]byte, error) {
 		decoded, err := internal.Decode(existing)
 		if err != nil {
@@ -227,7 +227,7 @@ func (tx *TxImpl) Update(ctx context.Context, table []byte, key Key, apply func(
 	})
 }
 
-func (tx *TxImpl) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func(*internal.TableData) (*internal.TableData, error)) error {
+func (tx *TxImpl) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error) {
 	return tx.ftx.UpdateRange(ctx, table, lKey, rKey, func(existing []byte) ([]byte, error) {
 		decoded, err := internal.Decode(existing)
 		if err != nil {

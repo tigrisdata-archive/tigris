@@ -82,7 +82,7 @@ func testClientBinary(t *testing.T, c driver.Driver) {
 		"properties": {
 			"K1": {
 				"type": "string",
-				"contentEncoding": "binary"
+				"format": "byte"
 			},
 			"D1": {
 				"type": "string",
@@ -198,7 +198,7 @@ func testClient(t *testing.T, c driver.Driver) {
 	testRead(t, c, fl, []driver.Document{doc1, doc3})
 
 	flupd := driver.Filter(`{"$and" : [ {"K1" : "vK1"}, {"K2" : 2} ]}`)
-	_, err = c.Update(ctx, "db1", "c1", flupd, driver.Fields(`{"D1": "1000"}`), &driver.UpdateOptions{})
+	_, err = c.Update(ctx, "db1", "c1", flupd, driver.Update(`{"D1": "1000"}`), &driver.UpdateOptions{})
 
 	_, err = c.Delete(ctx, "db1", "c1", fl, &driver.DeleteOptions{})
 	require.NoError(t, err)

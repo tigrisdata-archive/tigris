@@ -15,8 +15,8 @@ type baseKV interface {
 	DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key) error
 	Read(ctx context.Context, table []byte, key Key) (baseIterator, error)
 	ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key) (baseIterator, error)
-	Update(ctx context.Context, table []byte, key Key, apply func([]byte) ([]byte, error)) error
-	UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) error
+	Update(ctx context.Context, table []byte, key Key, apply func([]byte) ([]byte, error)) (int32, error)
+	UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) (int32, error)
 	SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error
 	Get(ctx context.Context, key []byte) ([]byte, error)
 }

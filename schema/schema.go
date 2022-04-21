@@ -32,29 +32,29 @@ A sample user JSON schema looks like below,
 	"properties": {
 		"order_id": {
 			"description": "A unique identifier for an order",
-			"type": "bigint"
+			"type": "integer"
 		},
 		"cust_id": {
 			"description": "A unique identifier for a customer",
-			"type": "bigint"
+			"type": "integer"
 		},
 		"product": {
 			"description": "name of the product",
 			"type": "string",
 			"max_length": 100,
-			"unique": true
 		},
 		"quantity": {
 			"description": "number of products ordered",
-			"type": "int"
+			"type": "integer"
 		},
 		"price": {
 			"description": "price of the product",
-			"type": "double"
+			"type": "number"
 		},
 		"date_ordered": {
 			"description": "The date order was made",
-			"type": "datetime"
+			"type": "string",
+			"format": "date-time"
 		}
 	},
 	"primary_key": [
