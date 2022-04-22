@@ -194,7 +194,7 @@ func (s *CollectionSuite) TestCreateCollection() {
 		resp.Status(http.StatusOK).
 			JSON().
 			Object().
-			ValueEqual("msg", "collection created successfully")
+			ValueEqual("message", "collection created successfully")
 	})
 	s.Run("status_conflict", func() {
 		dropCollection(s.T(), s.database, "test_collection")
@@ -213,7 +213,7 @@ func (s *CollectionSuite) TestCreateCollection() {
 			Status(http.StatusOK).
 			JSON().
 			Object().
-			ValueEqual("msg", "collection created successfully")
+			ValueEqual("message", "collection created successfully")
 
 		e.POST(getCollectionURL(s.database, "test_collection", "createOrUpdate")).
 			WithJSON(createOrUpdateOptions).
@@ -232,7 +232,7 @@ func (s *CollectionSuite) TestDropCollection() {
 	resp.Status(http.StatusOK).
 		JSON().
 		Object().
-		ValueEqual("msg", "collection dropped successfully")
+		ValueEqual("message", "collection dropped successfully")
 
 	// dropping again should return in a NOT FOUND error
 	resp = dropCollection(s.T(), s.database, "test_collection")

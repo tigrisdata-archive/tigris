@@ -39,7 +39,7 @@ func (s *DatabaseSuite) TestCreateDatabase() {
 	resp.Status(http.StatusOK).
 		JSON().
 		Object().
-		ValueEqual("msg", "database created successfully")
+		ValueEqual("message", "database created successfully")
 }
 
 func (s *DatabaseSuite) TestDropDatabase_NotFound() {
@@ -55,7 +55,7 @@ func (s *DatabaseSuite) TestDropDatabase() {
 	resp.Status(http.StatusOK).
 		JSON().
 		Object().
-		ValueEqual("msg", "database dropped successfully")
+		ValueEqual("message", "database dropped successfully")
 }
 
 func createDatabase(t *testing.T, databaseName string) *httpexpect.Response {

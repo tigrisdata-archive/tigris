@@ -255,7 +255,7 @@ func (s *apiService) CreateOrUpdateCollection(ctx context.Context, r *api.Create
 	}
 
 	return &api.CreateOrUpdateCollectionResponse{
-		Msg: "collection created successfully",
+		Message: "collection created successfully",
 	}, nil
 }
 
@@ -275,7 +275,7 @@ func (s *apiService) DropCollection(ctx context.Context, r *api.DropCollectionRe
 	}
 
 	return &api.DropCollectionResponse{
-		Msg: "collection dropped successfully",
+		Message: "collection dropped successfully",
 	}, nil
 }
 
@@ -329,7 +329,7 @@ func (s *apiService) CreateDatabase(ctx context.Context, r *api.CreateDatabaseRe
 	}
 
 	return &api.CreateDatabaseResponse{
-		Msg: "database created successfully",
+		Message: "database created successfully",
 	}, nil
 }
 
@@ -347,7 +347,7 @@ func (s *apiService) DropDatabase(ctx context.Context, r *api.DropDatabaseReques
 	}
 
 	return &api.DropDatabaseResponse{
-		Msg: "database dropped successfully",
+		Message: "database dropped successfully",
 	}, nil
 }
 
