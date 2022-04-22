@@ -438,8 +438,8 @@ func (runner *StreamingQueryRunner) iterate(ctx context.Context, tx transaction.
 		}
 
 		if err := runner.streaming.Send(&api.ReadResponse{
-			Doc: newValue,
-			Key: row.FDBKey,
+			Data:        newValue,
+			ResumeToken: row.FDBKey,
 		}); ulog.E(err) {
 			return err
 		}
@@ -512,7 +512,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		var collections = make([]*api.CollectionInfo, len(collectionList))
 		for i, c := range collectionList {
 			collections[i] = &api.CollectionInfo{
-				Name: c.GetName(),
+				Collection: c.GetName(),
 			}
 		}
 		return &Response{
@@ -578,7 +578,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		var databases = make([]*api.DatabaseInfo, len(databaseList))
 		for i, l := range databaseList {
 			databases[i] = &api.DatabaseInfo{
-				Name: l,
+				Db: l,
 			}
 		}
 		return &Response{
