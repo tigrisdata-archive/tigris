@@ -29,15 +29,7 @@ import (
 
 // SchemaSubspaceKey (the schema subspace) will be storing the actual schema of the user for a collection. The schema subspace will
 // look like below
-//    ["schema", 0x01, x, 0x01, 0x03, "created", 0x01] => {
-//      properties: {"a": int},
-//      primary_key: ["a"],
-//      indexes: [
-//        {name: “primary”, code: 2, columns: [“id”]},
-//        {name: “email_index”, code: 3, columns: [“email”], unique:true},
-//        {name: “created_at_index”, code: 4, columns: [“created_at”]},
-//      ]
-//    }
+//    ["schema", 0x01, x, 0x01, 0x03, "created", 0x01] => {"title": "t1", properties: {"a": int}, primary_key: ["a"]}
 //
 //  where,
 //    - schema is the keyword for this table.

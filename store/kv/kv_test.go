@@ -118,7 +118,8 @@ func testKeyValueStoreBasic(t *testing.T, kv KeyValueStore) {
 	// update range
 	i := 3
 	var updatedData []*internal.TableData
-	err = kv.UpdateRange(ctx, table, BuildKey("p1", 3), BuildKey("p1", 6), func(orig *internal.TableData) (*internal.TableData, error) {
+	modifiedCount := int32(0)
+	modifiedCount, err = kv.UpdateRange(ctx, table, BuildKey("p1", 3), BuildKey("p1", 6), func(orig *internal.TableData) (*internal.TableData, error) {
 		require.Equal(t, fmt.Sprintf("value%d", i), string(orig.RawData))
 		res := internal.NewTableData([]byte(fmt.Sprintf("value%d+%d", i, i)))
 		i++
@@ -126,6 +127,7 @@ func testKeyValueStoreBasic(t *testing.T, kv KeyValueStore) {
 		return res, nil
 	})
 	require.NoError(t, err)
+	require.Equal(t, int32(3), modifiedCount)
 
 	it, err = kv.ReadRange(ctx, table, BuildKey("p1", 3), BuildKey("p1", 6))
 	require.NoError(t, err)
@@ -273,13 +275,15 @@ func testKVBasic(t *testing.T, kv baseKVStore) {
 
 	// update range
 	i := 3
-	err = kv.UpdateRange(ctx, table, BuildKey("p1", 3), BuildKey("p1", 6), func(orig []byte) ([]byte, error) {
+	modifiedCount := int32(0)
+	modifiedCount, err = kv.UpdateRange(ctx, table, BuildKey("p1", 3), BuildKey("p1", 6), func(orig []byte) ([]byte, error) {
 		require.Equal(t, fmt.Sprintf("value%d", i), string(orig))
 		res := []byte(fmt.Sprintf("value%d+%d", i, i))
 		i++
 		return res, nil
 	})
 	require.NoError(t, err)
+	require.Equal(t, int32(3), modifiedCount)
 
 	it, err = kv.ReadRange(ctx, table, BuildKey("p1", 3), BuildKey("p1", 6))
 	require.NoError(t, err)
@@ -400,7 +404,7 @@ func testKVInsert(t *testing.T, kv baseKVStore) {
 			insert: []baseKeyValue{{BuildKey("p1"), nil, []byte("value1")}},
 			test:   []baseKeyValue{{BuildKey("p1"), nil, []byte("value2")}},
 			result: []baseKeyValue{{BuildKey("p1"), getFDBKey(table, BuildKey("p1")), []byte("value1")}},
-			err:    api.Errorf(codes.AlreadyExists, "duplicate key value, violates unique primary key constraint"),
+			err:    api.Errorf(codes.AlreadyExists, "duplicate key value, violates key constraint"),
 		},
 	}
 

@@ -26,22 +26,37 @@ import (
 type FieldType int
 
 const (
-	UnknownType FieldType = iota + 1
+	UnknownType FieldType = iota
 	NullType
 	BoolType
-	IntType
+	Int32Type
+	Int64Type
 	DoubleType
 	StringType
-	// ByteType is a base64 encoded characters, base64 encoding is done by the user.
+	// ByteType is a base64 encoded characters, this means if this type is used as key then we need to decode it
+	// and then use it as key.
 	ByteType
-	// BinaryType is a any sequence of octets send by the user.
-	BinaryType
 	UUIDType
 	// DateTimeType is a valid date representation as defined by RFC 3339, see https://datatracker.ietf.org/doc/html/rfc3339#section-5.6
 	DateTimeType
 	ArrayType
 	ObjectType
 )
+
+var FieldNames = [...]string{
+	UnknownType:  "unknown",
+	NullType:     "null",
+	BoolType:     "bool",
+	Int32Type:    "int32",
+	Int64Type:    "int64",
+	DoubleType:   "double",
+	StringType:   "string",
+	ByteType:     "byte",
+	UUIDType:     "uuid",
+	DateTimeType: "datetime",
+	ArrayType:    "array",
+	ObjectType:   "object",
+}
 
 const (
 	jsonSpecNull   = "null"
@@ -53,9 +68,11 @@ const (
 	jsonSpecObject = "object"
 
 	jsonSpecEncodingB64    = "base64"
-	jsonSpecEncodingBinary = "binary"
 	jsonSpecFormatUUID     = "uuid"
 	jsonSpecFormatDateTime = "date-time"
+	jsonSpecFormatByte     = "byte"
+	jsonSpecFormatInt32    = "int32"
+	jsonSpecFormatInt64    = "int64"
 )
 
 func ToFieldType(jsonType string, encoding string, format string) FieldType {
@@ -66,7 +83,17 @@ func ToFieldType(jsonType string, encoding string, format string) FieldType {
 	case jsonSpecBool:
 		return BoolType
 	case jsonSpecInt:
-		return IntType
+		if len(format) == 0 {
+			return Int64Type
+		}
+
+		switch format {
+		case jsonSpecFormatInt32:
+			return Int32Type
+		case jsonSpecFormatInt64:
+			return Int64Type
+		}
+		return UnknownType
 	case jsonSpecDouble:
 		return DoubleType
 	case jsonSpecString:
@@ -75,8 +102,6 @@ func ToFieldType(jsonType string, encoding string, format string) FieldType {
 		case jsonSpecEncodingB64:
 			// base64 encoded characters
 			return ByteType
-		case jsonSpecEncodingBinary:
-			return BinaryType
 		default:
 			if len(encoding) > 0 {
 				return UnknownType
@@ -89,6 +114,8 @@ func ToFieldType(jsonType string, encoding string, format string) FieldType {
 			return UUIDType
 		case jsonSpecFormatDateTime:
 			return DateTimeType
+		case jsonSpecFormatByte:
+			return ByteType
 		default:
 			if len(format) > 0 {
 				return UnknownType
@@ -105,36 +132,9 @@ func ToFieldType(jsonType string, encoding string, format string) FieldType {
 	}
 }
 
-func ToFieldTypeString(t FieldType) string {
-	switch t {
-	case NullType:
-		return jsonSpecNull
-	case IntType:
-		return jsonSpecInt
-	case DoubleType:
-		return jsonSpecDouble
-	case StringType:
-		return jsonSpecString
-	case ArrayType:
-		return jsonSpecArray
-	case ObjectType:
-		return jsonSpecObject
-	case ByteType:
-		return "byte"
-	case BinaryType:
-		return "binary"
-	case UUIDType:
-		return jsonSpecFormatUUID
-	case DateTimeType:
-		return jsonSpecFormatDateTime
-	default:
-		return "unknown"
-	}
-}
-
 func IsValidIndexType(t FieldType) bool {
 	switch t {
-	case IntType, StringType, ByteType, DateTimeType, UUIDType, BinaryType:
+	case Int32Type, Int64Type, StringType, ByteType, DateTimeType, UUIDType:
 		return true
 	default:
 		return false

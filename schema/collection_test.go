@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -17,14 +18,22 @@ func TestCollection_SchemaValidate(t *testing.T) {
 			"id": {
 				"type": "integer"
 			},
+			"id_32": {
+				"type": "integer",
+				"format": "int32"
+			},
+			"id_64": {
+				"type": "integer",
+				"format": "int64"
+			},
 			"random": {
 				"type": "string",
-				"contentEncoding": "base64",
+				"format": "byte",
 				"maxLength": 1024
 			},
 			"random_binary": {
 				"type": "string",
-				"contentEncoding": "binary"
+				"format": ""
 			},
 			"product": {
 				"type": "string",
@@ -141,6 +150,18 @@ func TestCollection_SchemaValidate(t *testing.T) {
 			// if additional properties are set then reject the request
 			document: []byte(fmt.Sprintf(`{"id": 1, "random_binary": "%s", "extra_key": "hello"}`, []byte(`1`))),
 			expError: "reason 'additionalProperties 'extra_key' not allowed",
+		}, {
+			document: []byte(`{"id": 123456789, "id_32": 2147483647}`),
+			expError: "",
+		}, {
+			document: []byte(`{"id": 123456789, "id_32": 2147483648}`),
+			expError: "reason '2147483648 is not valid 'int32'",
+		}, {
+			document: []byte(`{"id": 123456789, "id_32": 2147483647, "id_64": 2147483648}`),
+			expError: "",
+		}, {
+			document: []byte(`{"id": 123456789, "id_32": 2147483647, "id_64": 9223372036854775808}`),
+			expError: "reason '9223372036854775808 is not valid 'int64'",
 		},
 	}
 	for _, c := range cases {
@@ -148,8 +169,11 @@ func TestCollection_SchemaValidate(t *testing.T) {
 		require.NoError(t, err)
 
 		coll := NewDefaultCollection("t1", 1, schFactory.Fields, schFactory.Indexes, schFactory.Schema)
+
+		dec := jsoniter.NewDecoder(bytes.NewReader(c.document))
+		dec.UseNumber()
 		var v interface{}
-		require.NoError(t, jsoniter.Unmarshal(c.document, &v))
+		require.NoError(t, dec.Decode(&v))
 		if len(c.expError) > 0 {
 			require.Contains(t, coll.Validate(v).Error(), c.expError)
 		} else {

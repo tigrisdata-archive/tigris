@@ -141,7 +141,7 @@ func (s *DocumentSuite) TestInsert_AlreadyExists() {
 		Status(http.StatusOK).
 		JSON().
 		Object().
-		Empty()
+		ValueEqual("status", "inserted")
 
 	e.POST(getDocumentURL(s.database, s.collection, "insert")).
 		WithJSON(map[string]interface{}{
@@ -151,7 +151,7 @@ func (s *DocumentSuite) TestInsert_AlreadyExists() {
 		Status(http.StatusConflict).
 		JSON().
 		Object().
-		ValueEqual("message", "duplicate key value, violates unique primary key constraint")
+		ValueEqual("message", "duplicate key value, violates key constraint")
 }
 
 func (s *DocumentSuite) TestInsert_SchemaValidationError() {
@@ -188,14 +188,7 @@ func (s *DocumentSuite) TestInsert_SchemaValidationError() {
 					"bytes_value": "not enough",
 				},
 			},
-			"json schema validation failed for field 'bytes_value' reason ''not enough' is not base64 encoded'",
-		}, {
-			[]interface{}{
-				map[string]interface{}{
-					"bytes_value": "not enough",
-				},
-			},
-			"json schema validation failed for field 'bytes_value' reason ''not enough' is not base64 encoded'",
+			"json schema validation failed for field 'bytes_value' reason ''not enough' is not valid 'byte''",
 		}, {
 			[]interface{}{
 				map[string]interface{}{
@@ -255,8 +248,8 @@ func (s *DocumentSuite) TestInsert_SupportedPrimaryKeys() {
 							"type": "integer",
 						},
 						"bytes_value": map[string]interface{}{
-							"type":            "string",
-							"contentEncoding": "base64",
+							"type":   "string",
+							"format": "byte",
 						},
 					},
 					"primary_key": []interface{}{"bytes_value"},
@@ -345,31 +338,6 @@ func (s *DocumentSuite) TestInsert_SupportedPrimaryKeys() {
 			primaryKeyLookup: map[string]interface{}{
 				"string_value": "hello",
 			},
-		}, {
-			schema: map[string]interface{}{
-				"schema": map[string]interface{}{
-					"title": collectionName,
-					"properties": map[string]interface{}{
-						"int_value": map[string]interface{}{
-							"type": "integer",
-						},
-						"binary_value": map[string]interface{}{
-							"type":            "string",
-							"contentEncoding": "binary",
-						},
-					},
-					"primary_key": []interface{}{"binary_value"},
-				},
-			},
-			inputDoc: []interface{}{
-				map[string]interface{}{
-					"int_value":    10,
-					"binary_value": []byte("hello"),
-				},
-			},
-			primaryKeyLookup: map[string]interface{}{
-				"binary_value": []byte("hello"),
-			},
 		},
 	}
 	for _, c := range cases {
@@ -385,14 +353,14 @@ func (s *DocumentSuite) TestInsert_SupportedPrimaryKeys() {
 			Status(http.StatusOK).
 			JSON().
 			Object().
-			Empty()
+			ValueEqual("status", "inserted")
 
 		readResp := readByFilter(s.T(), s.database, collectionName, c.primaryKeyLookup, nil)
 
 		var doc map[string]json.RawMessage
 		require.NoError(s.T(), json.Unmarshal(readResp[0]["result"], &doc))
 
-		var actualDoc = []byte(doc["doc"])
+		var actualDoc = []byte(doc["data"])
 		expDoc, err := json.Marshal(c.inputDoc[0])
 		require.NoError(s.T(), err)
 		require.Equal(s.T(), expDoc, actualDoc)
@@ -435,7 +403,7 @@ func (s *DocumentSuite) TestInsert_SingleRow() {
 		Status(http.StatusOK).
 		JSON().
 		Object().
-		Empty()
+		ValueEqual("status", "inserted")
 
 	readResp := readByFilter(s.T(), s.database, s.collection, map[string]interface{}{
 		"pkey_int": 10,
@@ -444,7 +412,7 @@ func (s *DocumentSuite) TestInsert_SingleRow() {
 	var doc map[string]json.RawMessage
 	require.NoError(s.T(), json.Unmarshal(readResp[0]["result"], &doc))
 
-	var actualDoc = []byte(doc["doc"])
+	var actualDoc = []byte(doc["data"])
 	expDoc, err := json.Marshal(inputDocument[0])
 	require.NoError(s.T(), err)
 	require.Equal(s.T(), expDoc, actualDoc)
@@ -479,7 +447,7 @@ func (s *DocumentSuite) TestInsert_MultipleRows() {
 		Status(http.StatusOK).
 		JSON().
 		Object().
-		Empty()
+		ValueEqual("status", "inserted")
 
 	readResp := readByFilter(s.T(), s.database, s.collection, map[string]interface{}{
 		"$or": []interface{}{
@@ -497,7 +465,7 @@ func (s *DocumentSuite) TestInsert_MultipleRows() {
 		var doc map[string]json.RawMessage
 		require.NoError(s.T(), json.Unmarshal(readResp[i]["result"], &doc))
 
-		var actualDoc = []byte(doc["doc"])
+		var actualDoc = []byte(doc["data"])
 		expDoc, err := json.Marshal(inputDocument[i])
 		require.NoError(s.T(), err)
 		require.Equal(s.T(), expDoc, actualDoc)
@@ -647,7 +615,7 @@ func (s *DocumentSuite) TestUpdate_SingleRow() {
 		}).Status(http.StatusOK).
 		JSON().
 		Object().
-		Empty()
+		ValueEqual("modified_count", 1)
 
 	readAndValidate(s.T(),
 		s.database,
@@ -799,7 +767,7 @@ func (s *DocumentSuite) TestUpdate_MultipleRows() {
 		}).Status(http.StatusOK).
 		JSON().
 		Object().
-		Empty()
+		ValueEqual("status", "updated")
 
 	// read all documents back
 	readAndValidate(s.T(),
@@ -838,7 +806,7 @@ func (s *DocumentSuite) TestUpdate_MultipleRows() {
 		}).Status(http.StatusOK).
 		JSON().
 		Object().
-		Empty()
+		ValueEqual("modified_count", 2)
 
 	outDocument := []interface{}{
 		// this didn't change as-is
@@ -968,7 +936,7 @@ func (s *DocumentSuite) TestDelete_SingleRow() {
 	}).Status(http.StatusOK).
 		JSON().
 		Object().
-		Empty()
+		ValueEqual("status", "deleted")
 
 	readAndValidate(s.T(),
 		s.database,
@@ -1028,7 +996,7 @@ func (s *DocumentSuite) TestDelete_MultipleRows() {
 	}).Status(http.StatusOK).
 		JSON().
 		Object().
-		Empty()
+		ValueEqual("status", "deleted")
 
 	// read all documents back
 	readAndValidate(s.T(),
@@ -1053,7 +1021,7 @@ func (s *DocumentSuite) TestDelete_MultipleRows() {
 	}).Status(http.StatusOK).
 		JSON().
 		Object().
-		Empty()
+		ValueEqual("status", "deleted")
 
 	readAndValidate(s.T(),
 		s.database,
@@ -1298,7 +1266,7 @@ func readAndValidate(t *testing.T, db string, collection string, filter map[stri
 		var doc map[string]json.RawMessage
 		require.NoError(t, json.Unmarshal(readResp[i]["result"], &doc))
 
-		var actualDoc = []byte(doc["doc"])
+		var actualDoc = []byte(doc["data"])
 		expDoc, err := json.Marshal(inputDocument[i])
 		require.NoError(t, err)
 		require.JSONEqf(t, string(expDoc), string(actualDoc), "exp '%s' actual '%s'", string(expDoc), string(actualDoc))

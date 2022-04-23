@@ -56,7 +56,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		},
 		"K5": {
 			"type": "string",
-			"contentEncoding": "base64"
+			"format": "byte"
 		},
 		"K6": {
 			"type": "string",
@@ -74,7 +74,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		c := NewDefaultCollection("t1", 1, sch.Fields, sch.Indexes, sch.Schema)
 		fields := c.GetFields()
 		require.Equal(t, StringType, fields[0].DataType)
-		require.Equal(t, IntType, fields[1].DataType)
+		require.Equal(t, Int64Type, fields[1].DataType)
 		require.Equal(t, DoubleType, fields[2].DataType)
 		require.Equal(t, BoolType, fields[3].DataType)
 		require.Equal(t, ByteType, fields[4].DataType)
@@ -93,7 +93,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		},
 		"K3": {
 			"type": "string",
-			"contentEncoding": "base64"
+			"format": "byte"
 		},
 		"K4": {
 			"type": "string",
@@ -111,7 +111,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		c := NewDefaultCollection("t1", 1, sch.Fields, sch.Indexes, sch.Schema)
 		require.NoError(t, err)
 		require.Equal(t, StringType, c.Indexes.PrimaryKey.Fields[0].DataType)
-		require.Equal(t, IntType, c.Indexes.PrimaryKey.Fields[1].DataType)
+		require.Equal(t, Int64Type, c.Indexes.PrimaryKey.Fields[1].DataType)
 		require.Equal(t, ByteType, c.Indexes.PrimaryKey.Fields[2].DataType)
 		require.Equal(t, UUIDType, c.Indexes.PrimaryKey.Fields[3].DataType)
 		require.Equal(t, DateTimeType, c.Indexes.PrimaryKey.Fields[4].DataType)
@@ -141,7 +141,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		},
 		"random": {
 			"type": "string",
-			"contentEncoding": "base64",
+			"format": "byte",
 			"maxLength": 1024
 		},
 		"product": {
@@ -190,7 +190,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		require.NoError(t, err)
 		coll := NewDefaultCollection("t1", 1, sch.Fields, sch.Indexes, sch.Schema)
 		require.Equal(t, "simple_items", coll.Fields[4].FieldName)
-		require.Equal(t, IntType, coll.Fields[4].Fields[0].DataType)
+		require.Equal(t, Int64Type, coll.Fields[4].Fields[0].DataType)
 		require.Equal(t, 1, len(coll.Fields[4].Fields))
 
 		require.Equal(t, "simple_object", coll.Fields[5].FieldName)
@@ -200,7 +200,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 
 		require.Equal(t, "product_items", coll.Fields[6].FieldName)
 		require.Equal(t, 3, len(coll.Fields[6].Fields))
-		require.Equal(t, IntType, coll.Fields[6].Fields[0].DataType)
+		require.Equal(t, Int64Type, coll.Fields[6].Fields[0].DataType)
 		require.Equal(t, "id", coll.Fields[6].Fields[0].FieldName)
 		require.Equal(t, StringType, coll.Fields[6].Fields[1].DataType)
 		require.Equal(t, "item_name", coll.Fields[6].Fields[1].FieldName)

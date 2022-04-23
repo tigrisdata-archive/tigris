@@ -17,7 +17,10 @@ syntax = "proto3";
 option go_package = "github.com/tigrisdata/tigrisdb/internal";
 
 message Timestamp {
-  int64 nano=1;
+  // Represents seconds of UTC time since Unix epoch
+  int64 seconds = 2;
+  // Non-negative fractions of a second at nanosecond resolution.
+  int64 nanoseconds = 3;
 }
 
 // TableData is a wrapper around underlying storage raw bytes. This is used to store user collection data, internal

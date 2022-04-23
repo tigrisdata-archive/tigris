@@ -164,7 +164,7 @@ func (s *apiService) Insert(ctx context.Context, r *api.InsertRequest) (*api.Ins
 		return nil, err
 	}
 
-	_, err := s.Run(ctx, &ReqOptions{
+	resp, err := s.Run(ctx, &ReqOptions{
 		txCtx:       api.GetTransaction(r),
 		queryRunner: s.queryRunnerFactory.GetInsertQueryRunner(r),
 	})
@@ -172,7 +172,10 @@ func (s *apiService) Insert(ctx context.Context, r *api.InsertRequest) (*api.Ins
 		return nil, err
 	}
 
-	return &api.InsertResponse{}, nil
+	return &api.InsertResponse{
+		Status:    resp.status,
+		Timestamp: resp.timestamp.GetProtoTS(),
+	}, nil
 }
 
 func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.ReplaceResponse, error) {
@@ -180,7 +183,7 @@ func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.R
 		return nil, err
 	}
 
-	_, err := s.Run(ctx, &ReqOptions{
+	resp, err := s.Run(ctx, &ReqOptions{
 		txCtx:       api.GetTransaction(r),
 		queryRunner: s.queryRunnerFactory.GetReplaceQueryRunner(r),
 	})
@@ -188,7 +191,10 @@ func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.R
 		return nil, err
 	}
 
-	return &api.ReplaceResponse{}, nil
+	return &api.ReplaceResponse{
+		Status:    resp.status,
+		Timestamp: resp.timestamp.GetProtoTS(),
+	}, nil
 }
 
 func (s *apiService) Update(ctx context.Context, r *api.UpdateRequest) (*api.UpdateResponse, error) {
@@ -196,7 +202,7 @@ func (s *apiService) Update(ctx context.Context, r *api.UpdateRequest) (*api.Upd
 		return nil, err
 	}
 
-	_, err := s.Run(ctx, &ReqOptions{
+	resp, err := s.Run(ctx, &ReqOptions{
 		txCtx:       api.GetTransaction(r),
 		queryRunner: s.queryRunnerFactory.GetUpdateQueryRunner(r),
 	})
@@ -204,7 +210,11 @@ func (s *apiService) Update(ctx context.Context, r *api.UpdateRequest) (*api.Upd
 		return nil, err
 	}
 
-	return &api.UpdateResponse{}, nil
+	return &api.UpdateResponse{
+		Status:        resp.status,
+		Timestamp:     resp.timestamp.GetProtoTS(),
+		ModifiedCount: resp.modifiedCount,
+	}, nil
 }
 
 func (s *apiService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.DeleteResponse, error) {
@@ -212,7 +222,7 @@ func (s *apiService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.Del
 		return nil, err
 	}
 
-	_, err := s.Run(ctx, &ReqOptions{
+	resp, err := s.Run(ctx, &ReqOptions{
 		txCtx:       api.GetTransaction(r),
 		queryRunner: s.queryRunnerFactory.GetDeleteQueryRunner(r),
 	})
@@ -220,7 +230,10 @@ func (s *apiService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.Del
 		return nil, err
 	}
 
-	return &api.DeleteResponse{}, nil
+	return &api.DeleteResponse{
+		Status:    resp.status,
+		Timestamp: resp.timestamp.GetProtoTS(),
+	}, nil
 }
 
 func (s *apiService) Read(r *api.ReadRequest, stream api.TigrisDB_ReadServer) error {
@@ -247,7 +260,7 @@ func (s *apiService) CreateOrUpdateCollection(ctx context.Context, r *api.Create
 	runner := s.queryRunnerFactory.GetCollectionQueryRunner()
 	runner.SetCreateOrUpdateCollectionReq(r)
 
-	_, err := s.Run(ctx, &ReqOptions{
+	resp, err := s.Run(ctx, &ReqOptions{
 		queryRunner: runner,
 	})
 	if err != nil {
@@ -255,6 +268,7 @@ func (s *apiService) CreateOrUpdateCollection(ctx context.Context, r *api.Create
 	}
 
 	return &api.CreateOrUpdateCollectionResponse{
+		Status:  resp.status,
 		Message: "collection created successfully",
 	}, nil
 }
@@ -267,7 +281,7 @@ func (s *apiService) DropCollection(ctx context.Context, r *api.DropCollectionRe
 	runner := s.queryRunnerFactory.GetCollectionQueryRunner()
 	runner.SetDropCollectionReq(r)
 
-	_, err := s.Run(ctx, &ReqOptions{
+	resp, err := s.Run(ctx, &ReqOptions{
 		queryRunner: runner,
 	})
 	if err != nil {
@@ -275,6 +289,7 @@ func (s *apiService) DropCollection(ctx context.Context, r *api.DropCollectionRe
 	}
 
 	return &api.DropCollectionResponse{
+		Status:  resp.status,
 		Message: "collection dropped successfully",
 	}, nil
 }
@@ -322,13 +337,15 @@ func (s *apiService) CreateDatabase(ctx context.Context, r *api.CreateDatabaseRe
 
 	queryRunner := s.queryRunnerFactory.GetDatabaseQueryRunner()
 	queryRunner.SetCreateDatabaseReq(r)
-	if _, err := s.Run(ctx, &ReqOptions{
+	resp, err := s.Run(ctx, &ReqOptions{
 		queryRunner: queryRunner,
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, err
 	}
 
 	return &api.CreateDatabaseResponse{
+		Status:  resp.status,
 		Message: "database created successfully",
 	}, nil
 }
@@ -340,13 +357,15 @@ func (s *apiService) DropDatabase(ctx context.Context, r *api.DropDatabaseReques
 
 	queryRunner := s.queryRunnerFactory.GetDatabaseQueryRunner()
 	queryRunner.SetDropDatabaseReq(r)
-	if _, err := s.Run(ctx, &ReqOptions{
+	resp, err := s.Run(ctx, &ReqOptions{
 		queryRunner: queryRunner,
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, err
 	}
 
 	return &api.DropDatabaseResponse{
+		Status:  resp.status,
 		Message: "database dropped successfully",
 	}, nil
 }

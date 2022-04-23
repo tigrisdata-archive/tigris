@@ -15,6 +15,7 @@
 package v1
 
 import (
+	"bytes"
 	"context"
 
 	"github.com/buger/jsonparser"
@@ -156,38 +157,42 @@ func (runner *BaseQueryRunner) extractIndexParts(userDefinedKeys []*schema.Field
 	return appendTo, nil
 }
 
-func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection, documents [][]byte, insert bool) error {
+func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection, documents [][]byte, insert bool) (*internal.Timestamp, error) {
 	var err error
+	var ts = internal.NewTimestamp()
 	for _, doc := range documents {
 		var deserializedDoc map[string]interface{}
-		if err = jsoniter.Unmarshal(doc, &deserializedDoc); ulog.E(err) {
-			return err
+		dec := jsoniter.NewDecoder(bytes.NewReader(doc))
+		dec.UseNumber()
+		if err = dec.Decode(&deserializedDoc); ulog.E(err) {
+			return nil, err
 		}
 		if err = coll.Validate(deserializedDoc); err != nil {
 			// schema validation failed
-			return err
+			return nil, err
 		}
 
 		indexParts, err := runner.extractIndexParts(coll.Indexes.PrimaryKey.Fields, doc)
 		if ulog.E(err) {
-			return err
+			return nil, err
 		}
 
 		var key keys.Key
 		if key, err = runner.encoder.EncodeKey(tenant.GetNamespace(), db, coll, coll.Indexes.PrimaryKey, indexParts); ulog.E(err) {
-			return err
+			return nil, err
 		}
 
+		tableData := internal.NewTableDataWithTS(ts, doc)
 		if insert {
-			err = tx.Insert(ctx, key, internal.NewTableData(doc))
+			err = tx.Insert(ctx, key, tableData)
 		} else {
-			err = tx.Replace(ctx, key, internal.NewTableData(doc))
+			err = tx.Replace(ctx, key, tableData)
 		}
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return err
+	return ts, err
 }
 
 func (runner *BaseQueryRunner) buildKeysUsingFilter(tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection, reqFilter []byte) ([]keys.Key, error) {
@@ -226,10 +231,14 @@ func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, err
 	}
 
-	if err := runner.insertOrReplace(ctx, tx, tenant, db, coll, runner.req.GetDocuments(), true); err != nil {
+	ts, err := runner.insertOrReplace(ctx, tx, tenant, db, coll, runner.req.GetDocuments(), true)
+	if err != nil {
 		return nil, err
 	}
-	return &Response{}, nil
+	return &Response{
+		status:    InsertedStatus,
+		timestamp: ts,
+	}, nil
 }
 
 type ReplaceQueryRunner struct {
@@ -249,10 +258,14 @@ func (runner *ReplaceQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 		return nil, err
 	}
 
-	if err := runner.insertOrReplace(ctx, tx, tenant, db, coll, runner.req.GetDocuments(), false); err != nil {
+	ts, err := runner.insertOrReplace(ctx, tx, tenant, db, coll, runner.req.GetDocuments(), false)
+	if err != nil {
 		return nil, err
 	}
-	return &Response{}, nil
+	return &Response{
+		status:    ReplacedStatus,
+		timestamp: ts,
+	}, nil
 }
 
 type UpdateQueryRunner struct {
@@ -262,6 +275,7 @@ type UpdateQueryRunner struct {
 }
 
 func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, error) {
+	var ts = internal.NewTimestamp()
 	db, err := runner.GetDatabase(ctx, tx, tenant, runner.req.GetDb())
 	if err != nil {
 		return nil, err
@@ -295,22 +309,29 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		}
 	}
 
+	modifiedCount := int32(0)
 	for _, key := range iKeys {
 		// decode the fields now
-		if err = tx.Update(ctx, key, func(existing *internal.TableData) (*internal.TableData, error) {
+		modified := int32(0)
+		if modified, err = tx.Update(ctx, key, func(existing *internal.TableData) (*internal.TableData, error) {
 			merged, er := factory.MergeAndGet(existing.RawData)
 			if er != nil {
 				return nil, er
 			}
 
 			// ToDo: may need to change the schema version
-			return internal.NewTableData(merged), nil
+			return internal.NewTableDataWithTS(ts, merged), nil
 		}); ulog.E(err) {
 			return nil, err
 		}
+		modifiedCount += modified
 	}
 
-	return &Response{}, err
+	return &Response{
+		status:        UpdatedStatus,
+		timestamp:     ts,
+		modifiedCount: modifiedCount,
+	}, err
 }
 
 type DeleteQueryRunner struct {
@@ -320,6 +341,7 @@ type DeleteQueryRunner struct {
 }
 
 func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, error) {
+	var ts = internal.NewTimestamp()
 	db, err := runner.GetDatabase(ctx, tx, tenant, runner.req.GetDb())
 	if err != nil {
 		return nil, err
@@ -341,7 +363,10 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		}
 	}
 
-	return &Response{}, nil
+	return &Response{
+		status:    DeletedStatus,
+		timestamp: ts,
+	}, nil
 }
 
 // StreamingQueryRunner is a runner used for Queries that are reads and needs to return result in streaming fashion
@@ -480,7 +505,9 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		if err = tenant.DropCollection(ctx, tx, db, runner.drop.GetCollection()); err != nil {
 			return nil, err
 		}
-		return &Response{}, nil
+		return &Response{
+			status: DroppedStatus,
+		}, nil
 	} else if runner.createOrUpdate != nil {
 		db, err := runner.GetDatabase(ctx, tx, tenant, runner.createOrUpdate.GetDb())
 		if err != nil {
@@ -501,7 +528,9 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			return nil, err
 		}
 
-		return &Response{}, nil
+		return &Response{
+			status: CreatedStatus,
+		}, nil
 	} else if runner.list != nil {
 		db, err := runner.GetDatabase(ctx, tx, tenant, runner.list.GetDb())
 		if err != nil {
@@ -558,7 +587,9 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			return nil, err
 		}
 
-		return &Response{}, nil
+		return &Response{
+			status: DroppedStatus,
+		}, nil
 	} else if runner.create != nil {
 		db, err := tenant.GetDatabase(ctx, tx, runner.create.GetDb())
 		if err != nil {
@@ -571,7 +602,9 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		if err := tenant.CreateDatabase(ctx, tx, runner.create.GetDb()); err != nil {
 			return nil, err
 		}
-		return &Response{}, nil
+		return &Response{
+			status: CreatedStatus,
+		}, nil
 	} else if runner.list != nil {
 		databaseList := tenant.ListDatabases(ctx, tx)
 

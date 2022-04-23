@@ -33,12 +33,12 @@ func TestNewValue(t *testing.T) {
 		expError  error
 	}{
 		{
-			schema.IntType,
-			[]byte(`1`),
-			NewIntValue(1),
+			schema.Int64Type,
+			[]byte(`12345678`),
+			NewIntValue(12345678),
 			nil,
 		}, {
-			schema.IntType,
+			schema.Int32Type,
 			[]byte(`"1"`),
 			nil,
 			api.Errorf(codes.InvalidArgument, "unsupported value type : strconv.ParseInt: parsing \"\\\"1\\\"\": invalid syntax"),
@@ -82,19 +82,19 @@ func TestValue(t *testing.T) {
 	t.Run("int", func(t *testing.T) {
 		i := IntValue(5)
 
-		v, err := NewValue(schema.IntType, []byte(`5`))
+		v, err := NewValue(schema.Int64Type, []byte(`5`))
 		require.NoError(t, err)
 		r, err := i.CompareTo(v)
 		require.NoError(t, err)
 		require.Equal(t, 0, r)
 
-		v, err = NewValue(schema.IntType, []byte(`7`))
+		v, err = NewValue(schema.Int64Type, []byte(`7`))
 		require.NoError(t, err)
 		r, err = i.CompareTo(v)
 		require.NoError(t, err)
 		require.Equal(t, -1, r)
 
-		v, err = NewValue(schema.IntType, []byte(`0`))
+		v, err = NewValue(schema.Int64Type, []byte(`0`))
 		require.NoError(t, err)
 		r, err = i.CompareTo(v)
 		require.NoError(t, err)
@@ -127,7 +127,7 @@ func TestValue(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 1, r)
 
-		v, err = NewValue(schema.IntType, []byte(`5`))
+		v, err = NewValue(schema.Int64Type, []byte(`5`))
 		require.NoError(t, err)
 		r, err = i.CompareTo(v)
 		require.Equal(t, fmt.Errorf("wrong type compared "), err)

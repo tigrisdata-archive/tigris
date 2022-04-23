@@ -22,6 +22,7 @@ import (
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"github.com/ugorji/go/codec"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 var (
@@ -39,8 +40,22 @@ const (
 )
 
 func NewTimestamp() *Timestamp {
+	ts := time.Now().UTC()
 	return &Timestamp{
-		Nano: time.Now().UnixNano(),
+		Seconds:     ts.Unix(),
+		Nanoseconds: int64(ts.Nanosecond()),
+	}
+}
+
+func (ts *Timestamp) ToRFC3339() string {
+	gotime := time.Unix(ts.Seconds, ts.Nanoseconds).UTC()
+	return gotime.Format(time.RFC3339)
+}
+
+func (ts *Timestamp) GetProtoTS() *timestamppb.Timestamp {
+	return &timestamppb.Timestamp{
+		Seconds: ts.Seconds,
+		Nanos:   int32(ts.Nanoseconds),
 	}
 }
 
@@ -48,6 +63,13 @@ func NewTimestamp() *Timestamp {
 func NewTableData(data []byte) *TableData {
 	return &TableData{
 		Ts:      NewTimestamp(),
+		RawData: data,
+	}
+}
+
+func NewTableDataWithTS(ts *Timestamp, data []byte) *TableData {
+	return &TableData{
+		Ts:      ts,
 		RawData: data,
 	}
 }

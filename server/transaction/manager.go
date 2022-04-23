@@ -41,7 +41,7 @@ var (
 type Tx interface {
 	Insert(ctx context.Context, key keys.Key, data *internal.TableData) error
 	Replace(ctx context.Context, key keys.Key, data *internal.TableData) error
-	Update(ctx context.Context, key keys.Key, apply func(*internal.TableData) (*internal.TableData, error)) error
+	Update(ctx context.Context, key keys.Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error)
 	Delete(ctx context.Context, key keys.Key) error
 	Read(ctx context.Context, key keys.Key) (kv.Iterator, error)
 	Commit(ctx context.Context) error
@@ -226,7 +226,7 @@ func (b *baseTx) Replace(ctx context.Context, key keys.Key, data *internal.Table
 	return b.session.replace(ctx, key, data)
 }
 
-func (b *baseTx) Update(ctx context.Context, key keys.Key, apply func(*internal.TableData) (*internal.TableData, error)) error {
+func (b *baseTx) Update(ctx context.Context, key keys.Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error) {
 	return b.session.update(ctx, key, apply)
 }
 
