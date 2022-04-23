@@ -43,6 +43,7 @@ type ReqOptions struct {
 type Response struct {
 	api.Response
 	status        string
-	timestamp     *internal.Timestamp
+	createdAt     *internal.Timestamp
+	updatedAt     *internal.Timestamp
 	modifiedCount int32
 }

@@ -173,8 +173,10 @@ func (s *apiService) Insert(ctx context.Context, r *api.InsertRequest) (*api.Ins
 	}
 
 	return &api.InsertResponse{
-		Status:    resp.status,
-		Timestamp: resp.timestamp.GetProtoTS(),
+		Status: resp.status,
+		Metadata: &api.ResponseMetadata{
+			CreatedAt: resp.createdAt.GetProtoTS(),
+		},
 	}, nil
 }
 
@@ -192,8 +194,10 @@ func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.R
 	}
 
 	return &api.ReplaceResponse{
-		Status:    resp.status,
-		Timestamp: resp.timestamp.GetProtoTS(),
+		Status: resp.status,
+		Metadata: &api.ResponseMetadata{
+			CreatedAt: resp.createdAt.GetProtoTS(),
+		},
 	}, nil
 }
 
@@ -212,8 +216,10 @@ func (s *apiService) Update(ctx context.Context, r *api.UpdateRequest) (*api.Upd
 
 	return &api.UpdateResponse{
 		Status:        resp.status,
-		Timestamp:     resp.timestamp.GetProtoTS(),
 		ModifiedCount: resp.modifiedCount,
+		Metadata: &api.ResponseMetadata{
+			UpdatedAt: resp.updatedAt.GetProtoTS(),
+		},
 	}, nil
 }
 
@@ -231,8 +237,10 @@ func (s *apiService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.Del
 	}
 
 	return &api.DeleteResponse{
-		Status:    resp.status,
-		Timestamp: resp.timestamp.GetProtoTS(),
+		Status: resp.status,
+		Metadata: &api.ResponseMetadata{
+			UpdatedAt: resp.updatedAt.GetProtoTS(),
+		},
 	}, nil
 }
 
@@ -368,6 +376,42 @@ func (s *apiService) DropDatabase(ctx context.Context, r *api.DropDatabaseReques
 		Status:  resp.status,
 		Message: "database dropped successfully",
 	}, nil
+}
+
+func (s *apiService) DescribeCollection(ctx context.Context, r *api.DescribeCollectionRequest) (*api.DescribeCollectionResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
+	runner := s.queryRunnerFactory.GetCollectionQueryRunner()
+	runner.SetDescribeCollectionReq(r)
+
+	resp, err := s.Run(ctx, &ReqOptions{
+		queryRunner: runner,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.DescribeCollectionResponse), nil
+}
+
+func (s *apiService) DescribeDatabase(ctx context.Context, r *api.DescribeDatabaseRequest) (*api.DescribeDatabaseResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
+	runner := s.queryRunnerFactory.GetDatabaseQueryRunner()
+	runner.SetDescribeDatabaseReq(r)
+
+	resp, err := s.Run(ctx, &ReqOptions{
+		queryRunner: runner,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.DescribeDatabaseResponse), nil
 }
 
 func (s *apiService) Run(ctx context.Context, req *ReqOptions) (*Response, error) {

@@ -62,15 +62,16 @@ func (ts *Timestamp) GetProtoTS() *timestamppb.Timestamp {
 // NewTableData returns a table data type by setting the ts to the current value.
 func NewTableData(data []byte) *TableData {
 	return &TableData{
-		Ts:      NewTimestamp(),
-		RawData: data,
+		CreatedAt: NewTimestamp(),
+		RawData:   data,
 	}
 }
 
-func NewTableDataWithTS(ts *Timestamp, data []byte) *TableData {
+func NewTableDataWithTS(createdAt *Timestamp, updatedAt *Timestamp, data []byte) *TableData {
 	return &TableData{
-		Ts:      ts,
-		RawData: data,
+		CreatedAt: createdAt,
+		UpdatedAt: updatedAt,
+		RawData:   data,
 	}
 }
 

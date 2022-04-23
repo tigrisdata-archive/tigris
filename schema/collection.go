@@ -68,6 +68,8 @@ type DefaultCollection struct {
 	// Validator is used to validate the JSON document. As it is expensive to create this, it is only created once
 	// during constructor of the collection.
 	Validator *jsonschema.Schema
+	// JSON schema
+	Schema jsoniter.RawMessage
 }
 
 func NewDefaultCollection(cname string, id uint32, fields []*Field, indexes *Indexes, schema jsoniter.RawMessage) *DefaultCollection {
@@ -94,6 +96,7 @@ func NewDefaultCollection(cname string, id uint32, fields []*Field, indexes *Ind
 		Fields:    fields,
 		Indexes:   indexes,
 		Validator: validator,
+		Schema:    schema,
 	}
 }
 
