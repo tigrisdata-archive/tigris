@@ -66,6 +66,16 @@ func (x *ReadResponse) MarshalJSON() ([]byte, error) {
 		return nil, Errorf(codes.Internal, err.Error())
 	}
 
+	_, err = bb.Write([]byte(`,"metadata":`))
+	metadataKey, err := jsoniter.Marshal(x.Metadata)
+	if err != nil {
+		return nil, err
+	}
+	_, err = bb.Write(metadataKey)
+	if err != nil {
+		return nil, err
+	}
+
 	key, err := jsoniter.Marshal(x.ResumeToken)
 	if err != nil {
 		return nil, err

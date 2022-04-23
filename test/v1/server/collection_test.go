@@ -237,9 +237,31 @@ func (s *CollectionSuite) TestDropCollection() {
 		ValueEqual("message", "collection doesn't exists 'test_collection'")
 }
 
+func (s *CollectionSuite) TestDescribeCollection() {
+	createCollection(s.T(), s.database, "test_collection", testCreateSchema)
+	resp := describeCollection(s.T(), s.database, "test_collection", testCreateSchema)
+
+	resp.Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("description").
+		Object().
+		ValueEqual("collection", "test_collection")
+
+	// cleanup
+	dropCollection(s.T(), s.database, "test_collection")
+}
+
 func createCollection(t *testing.T, database string, collection string, schema map[string]interface{}) *httpexpect.Response {
 	e := httpexpect.New(t, config.GetBaseURL())
 	return e.POST(getCollectionURL(database, collection, "createOrUpdate")).
+		WithJSON(schema).
+		Expect()
+}
+
+func describeCollection(t *testing.T, database string, collection string, schema map[string]interface{}) *httpexpect.Response {
+	e := httpexpect.New(t, config.GetBaseURL())
+	return e.POST(getCollectionURL(database, collection, "describe")).
 		WithJSON(schema).
 		Expect()
 }

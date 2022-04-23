@@ -35,6 +35,7 @@ import (
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"github.com/tigrisdata/tigrisdb/value"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // QueryRunner is responsible for executing the current query and return the response
@@ -182,7 +183,7 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 			return nil, err
 		}
 
-		tableData := internal.NewTableDataWithTS(ts, doc)
+		tableData := internal.NewTableDataWithTS(ts, nil, doc)
 		if insert {
 			err = tx.Insert(ctx, key, tableData)
 		} else {
@@ -237,7 +238,7 @@ func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}
 	return &Response{
 		status:    InsertedStatus,
-		timestamp: ts,
+		createdAt: ts,
 	}, nil
 }
 
@@ -264,7 +265,7 @@ func (runner *ReplaceQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 	}
 	return &Response{
 		status:    ReplacedStatus,
-		timestamp: ts,
+		createdAt: ts,
 	}, nil
 }
 
@@ -320,7 +321,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			}
 
 			// ToDo: may need to change the schema version
-			return internal.NewTableDataWithTS(ts, merged), nil
+			return internal.NewTableDataWithTS(existing.CreatedAt, ts, merged), nil
 		}); ulog.E(err) {
 			return nil, err
 		}
@@ -329,7 +330,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	return &Response{
 		status:        UpdatedStatus,
-		timestamp:     ts,
+		updatedAt:     ts,
 		modifiedCount: modifiedCount,
 	}, err
 }
@@ -365,7 +366,7 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	return &Response{
 		status:    DeletedStatus,
-		timestamp: ts,
+		updatedAt: ts,
 	}, nil
 }
 
@@ -461,9 +462,20 @@ func (runner *StreamingQueryRunner) iterate(ctx context.Context, tx transaction.
 		if ulog.E(err) {
 			return err
 		}
+		var createdAt, updatedAt *timestamppb.Timestamp
+		if row.Data.CreatedAt != nil {
+			createdAt = row.Data.CreatedAt.GetProtoTS()
+		}
+		if row.Data.UpdatedAt != nil {
+			updatedAt = row.Data.UpdatedAt.GetProtoTS()
+		}
 
 		if err := runner.streaming.Send(&api.ReadResponse{
-			Data:        newValue,
+			Data: newValue,
+			Metadata: &api.ResponseMetadata{
+				CreatedAt: createdAt,
+				UpdatedAt: updatedAt,
+			},
 			ResumeToken: row.FDBKey,
 		}); ulog.E(err) {
 			return err
@@ -481,6 +493,7 @@ type CollectionQueryRunner struct {
 	drop           *api.DropCollectionRequest
 	list           *api.ListCollectionsRequest
 	createOrUpdate *api.CreateOrUpdateCollectionRequest
+	describe       *api.DescribeCollectionRequest
 }
 
 func (runner *CollectionQueryRunner) SetCreateOrUpdateCollectionReq(create *api.CreateOrUpdateCollectionRequest) {
@@ -493,6 +506,10 @@ func (runner *CollectionQueryRunner) SetDropCollectionReq(drop *api.DropCollecti
 
 func (runner *CollectionQueryRunner) SetListCollectionReq(list *api.ListCollectionsRequest) {
 	runner.list = list
+}
+
+func (runner *CollectionQueryRunner) SetDescribeCollectionReq(describe *api.DescribeCollectionRequest) {
+	runner.describe = describe
 }
 
 func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, error) {
@@ -549,6 +566,27 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 				Collections: collections,
 			},
 		}, nil
+	} else if runner.describe != nil {
+		db, err := runner.GetDatabase(ctx, tx, tenant, runner.describe.GetDb())
+		if err != nil {
+			return nil, err
+		}
+
+		coll, err := runner.GetCollections(db, runner.describe.GetCollection())
+		if err != nil {
+			return nil, err
+		}
+		return &Response{
+			Response: &api.DescribeCollectionResponse{
+				Description: &api.CollectionDescription{
+					Collection: coll.Name,
+					Metadata:   &api.CollectionMetadata{},
+					SchemaInfo: &api.SchemaInfo{
+						Schema: coll.Schema,
+					},
+				},
+			},
+		}, nil
 	}
 
 	return &Response{}, api.Errorf(codes.Unknown, "unknown request path")
@@ -557,9 +595,10 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 type DatabaseQueryRunner struct {
 	*BaseQueryRunner
 
-	drop   *api.DropDatabaseRequest
-	create *api.CreateDatabaseRequest
-	list   *api.ListDatabasesRequest
+	drop     *api.DropDatabaseRequest
+	create   *api.CreateDatabaseRequest
+	list     *api.ListDatabasesRequest
+	describe *api.DescribeDatabaseRequest
 }
 
 func (runner *DatabaseQueryRunner) SetCreateDatabaseReq(create *api.CreateDatabaseRequest) {
@@ -572,6 +611,10 @@ func (runner *DatabaseQueryRunner) SetDropDatabaseReq(drop *api.DropDatabaseRequ
 
 func (runner *DatabaseQueryRunner) SetListDatabaseReq(list *api.ListDatabasesRequest) {
 	runner.list = list
+}
+
+func (runner *DatabaseQueryRunner) SetDescribeDatabaseReq(describe *api.DescribeDatabaseRequest) {
+	runner.describe = describe
 }
 
 func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, error) {
@@ -617,6 +660,34 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		return &Response{
 			Response: &api.ListDatabasesResponse{
 				Databases: databases,
+			},
+		}, nil
+	} else if runner.describe != nil {
+		db, err := runner.GetDatabase(ctx, tx, tenant, runner.describe.GetDb())
+		if err != nil {
+			return nil, err
+		}
+
+		collectionList := db.ListCollection()
+
+		var collectionsDescription = make([]*api.CollectionDescription, len(collectionList))
+		for i, c := range collectionList {
+			collectionsDescription[i] = &api.CollectionDescription{
+				Collection: c.GetName(),
+				Metadata:   &api.CollectionMetadata{},
+				SchemaInfo: &api.SchemaInfo{
+					Schema: c.Schema,
+				},
+			}
+		}
+
+		return &Response{
+			Response: &api.DescribeDatabaseResponse{
+				Description: &api.DatabaseDescription{
+					Db:                     db.Name(),
+					Metadata:               &api.DatabaseMetadata{},
+					CollectionsDescription: collectionsDescription,
+				},
 			},
 		}, nil
 	}
