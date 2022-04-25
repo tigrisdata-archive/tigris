@@ -63,9 +63,7 @@ func newApiService(kv kv.KeyValueStore) *apiService {
 		encoder: metadata.NewEncoder(),
 	}
 
-	u.cdcMgr = cdc.NewManager()
-
-	ctx := u.cdcMgr.WrapContext(context.TODO())
+	ctx := context.TODO()
 	tx, err := u.txMgr.StartTxWithoutTracking(ctx)
 	if ulog.E(err) {
 		log.Fatal().Err(err).Msgf("error starting server: starting transaction failed")
@@ -79,6 +77,7 @@ func newApiService(kv kv.KeyValueStore) *apiService {
 	_ = tx.Commit(ctx)
 
 	u.tenantMgr = tenantMgr
+	u.cdcMgr = cdc.NewManager()
 	u.queryLifecycleFactory = NewQueryLifecycleFactory(u.txMgr, u.tenantMgr, u.cdcMgr)
 	u.queryRunnerFactory = NewQueryRunnerFactory(u.txMgr, u.encoder, u.cdcMgr)
 	return u

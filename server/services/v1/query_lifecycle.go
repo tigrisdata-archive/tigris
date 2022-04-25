@@ -76,8 +76,6 @@ func (q *queryLifecycle) run(ctx context.Context, options *ReqOptions) (*Respons
 		log.Debug().Str("ns", tenant.String()).Msg("tenant found")
 	}
 
-	ctx = q.cdcMgr.WrapContext(ctx)
-
 	tx, err := q.txMgr.GetInheritedOrStartTx(ctx, options.txCtx, false)
 	if ulog.E(err) {
 		return nil, err
@@ -104,6 +102,6 @@ func (q *queryLifecycle) run(ctx context.Context, options *ReqOptions) (*Respons
 		}
 	}()
 
-	resp, txErr = options.queryRunner.Run(ctx, tx, tenant)
+	resp, ctx, txErr = options.queryRunner.Run(ctx, tx, tenant)
 	return resp, txErr
 }
