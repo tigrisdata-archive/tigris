@@ -61,6 +61,7 @@ func (s *Streamer) start() error {
 		for range s.ticker.C {
 			if err := s.read(); err != nil {
 				log.Err(err).Msg("read failed")
+				return
 			}
 		}
 	}()
