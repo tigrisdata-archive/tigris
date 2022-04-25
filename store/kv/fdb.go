@@ -309,7 +309,8 @@ func (d *fdbkv) Tx(ctx context.Context) (baseTx, error) {
 	return &ftx{d: d, tx: &tx}, nil
 }
 
-func (t *ftx) Insert(_ context.Context, table []byte, key Key, data []byte) error {
+func (t *ftx) Insert(ctx context.Context, table []byte, key Key, data []byte) error {
+	l := GetListener(ctx)
 	k := getFDBKey(table, key)
 
 	// Read the value and if exists reject the request.
@@ -323,47 +324,55 @@ func (t *ftx) Insert(_ context.Context, table []byte, key Key, data []byte) erro
 	}
 
 	t.tx.Set(k, data)
+	l.OnSet(InsertType, table, k, data)
 
 	log.Err(err).Str("table", string(table)).Interface("key", key).Msg("Insert")
 
 	return err
 }
 
-func (t *ftx) Replace(_ context.Context, table []byte, key Key, data []byte) error {
+func (t *ftx) Replace(ctx context.Context, table []byte, key Key, data []byte) error {
+	l := GetListener(ctx)
 	k := getFDBKey(table, key)
 
 	t.tx.Set(k, data)
+	l.OnSet(ReplaceType, table, k, data)
 
 	log.Debug().Str("table", string(table)).Interface("key", key).Msg("tx Replace")
 
 	return nil
 }
 
-func (t *ftx) Delete(_ context.Context, table []byte, key Key) error {
+func (t *ftx) Delete(ctx context.Context, table []byte, key Key) error {
+	l := GetListener(ctx)
 	kr, err := fdb.PrefixRange(getFDBKey(table, key))
 	if ulog.E(err) {
 		return err
 	}
 
 	t.tx.ClearRange(kr)
+	l.OnClearRange(DeleteType, table, kr.Begin.FDBKey(), kr.End.FDBKey())
 
 	log.Debug().Str("table", string(table)).Interface("key", key).Msg("tx delete")
 
 	return nil
 }
 
-func (t *ftx) DeleteRange(_ context.Context, table []byte, lKey Key, rKey Key) error {
+func (t *ftx) DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key) error {
+	l := GetListener(ctx)
 	lk := getFDBKey(table, lKey)
 	rk := getFDBKey(table, rKey)
 
 	t.tx.ClearRange(fdb.KeyRange{Begin: lk, End: rk})
+	l.OnClearRange(DeleteRangeType, table, lk, rk)
 
 	log.Debug().Str("table", string(table)).Interface("lKey", lKey).Interface("rKey", rKey).Msg("tx delete range")
 
 	return nil
 }
 
-func (t *ftx) Update(_ context.Context, table []byte, key Key, apply func([]byte) ([]byte, error)) (int32, error) {
+func (t *ftx) Update(ctx context.Context, table []byte, key Key, apply func([]byte) ([]byte, error)) (int32, error) {
+	l := GetListener(ctx)
 	k, err := fdb.PrefixRange(getFDBKey(table, key))
 	if ulog.E(err) {
 		return -1, err
@@ -384,6 +393,8 @@ func (t *ftx) Update(_ context.Context, table []byte, key Key, apply func([]byte
 		}
 
 		t.tx.Set(kv.Key, v)
+		l.OnSet(UpdateType, table, kv.Key, v)
+
 		modifiedCount++
 	}
 
@@ -392,7 +403,8 @@ func (t *ftx) Update(_ context.Context, table []byte, key Key, apply func([]byte
 	return modifiedCount, nil
 }
 
-func (t *ftx) UpdateRange(_ context.Context, table []byte, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) (int32, error) {
+func (t *ftx) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) (int32, error) {
+	l := GetListener(ctx)
 	lk := getFDBKey(table, lKey)
 	rk := getFDBKey(table, rKey)
 
@@ -411,6 +423,8 @@ func (t *ftx) UpdateRange(_ context.Context, table []byte, lKey Key, rKey Key, a
 		}
 
 		t.tx.Set(kv.Key, v)
+		l.OnSet(UpdateRangeType, table, kv.Key, v)
+
 		modifiedCount++
 	}
 
@@ -452,9 +466,16 @@ func (t *ftx) Get(_ context.Context, key []byte) ([]byte, error) {
 	return t.tx.Get(fdb.Key(key)).Get()
 }
 
-func (t *ftx) Commit(_ context.Context) error {
+func (t *ftx) Commit(ctx context.Context) error {
+	l := GetListener(ctx)
+
 	for {
-		err := t.tx.Commit().Get()
+		err := l.OnCommit(t.tx)
+		if err != nil {
+			return err
+		}
+
+		err = t.tx.Commit().Get()
 
 		if err == nil {
 			break
@@ -477,8 +498,11 @@ func (t *ftx) Commit(_ context.Context) error {
 	return nil
 }
 
-func (t *ftx) Rollback(_ context.Context) error {
+func (t *ftx) Rollback(ctx context.Context) error {
+	l := GetListener(ctx)
+
 	t.tx.Cancel()
+	l.OnCancel()
 
 	log.Debug().Msg("tx Rollback")
 

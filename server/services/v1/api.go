@@ -21,13 +21,16 @@ import (
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	"github.com/tigrisdata/tigrisdb/cdc"
 	"github.com/tigrisdata/tigrisdb/server/metadata"
 	"github.com/tigrisdata/tigrisdb/server/transaction"
 	"github.com/tigrisdata/tigrisdb/store/kv"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 )
 
 const (
@@ -48,6 +51,7 @@ type apiService struct {
 	txMgr                 *transaction.Manager
 	encoder               metadata.Encoder
 	tenantMgr             *metadata.TenantManager
+	cdcMgr                *cdc.Manager
 	queryLifecycleFactory *QueryLifecycleFactory
 	queryRunnerFactory    *QueryRunnerFactory
 }
@@ -59,7 +63,9 @@ func newApiService(kv kv.KeyValueStore) *apiService {
 		encoder: metadata.NewEncoder(),
 	}
 
-	ctx := context.TODO()
+	u.cdcMgr = cdc.NewManager()
+
+	ctx := u.cdcMgr.WrapContext(context.TODO())
 	tx, err := u.txMgr.StartTxWithoutTracking(ctx)
 	if ulog.E(err) {
 		log.Fatal().Err(err).Msgf("error starting server: starting transaction failed")
@@ -73,8 +79,8 @@ func newApiService(kv kv.KeyValueStore) *apiService {
 	_ = tx.Commit(ctx)
 
 	u.tenantMgr = tenantMgr
-	u.queryLifecycleFactory = NewQueryLifecycleFactory(u.txMgr, u.tenantMgr)
-	u.queryRunnerFactory = NewQueryRunnerFactory(u.txMgr, u.encoder)
+	u.queryLifecycleFactory = NewQueryLifecycleFactory(u.txMgr, u.tenantMgr, u.cdcMgr)
+	u.queryRunnerFactory = NewQueryRunnerFactory(u.txMgr, u.encoder, u.cdcMgr)
 	return u
 }
 
@@ -417,4 +423,46 @@ func (s *apiService) DescribeDatabase(ctx context.Context, r *api.DescribeDataba
 func (s *apiService) Run(ctx context.Context, req *ReqOptions) (*Response, error) {
 	queryLifecycle := s.queryLifecycleFactory.Get()
 	return queryLifecycle.run(ctx, req)
+}
+
+func (s *apiService) Stream(r *api.StreamRequest, stream api.TigrisDB_StreamServer) error {
+	if err := r.Validate(); err != nil {
+		return err
+	}
+
+	publisher := s.cdcMgr.GetPublisher(r.GetDb())
+	streamer, err := publisher.NewStreamer(s.kvStore)
+	if err != nil {
+		return err
+	}
+	defer streamer.Close()
+
+	for {
+		select {
+		case tx, ok := <-streamer.Txs:
+			if !ok {
+				return api.Error(codes.Canceled, "buffer overflow")
+			}
+
+			changes := make([]*api.StreamChange, 0)
+
+			for _, op := range tx.Ops {
+				data, err := jsoniter.Marshal(op)
+				if err != nil {
+					return err
+				}
+
+				changes = append(changes, &api.StreamChange{
+					CollectionName: "todo", // TODO: CDC extract name from op
+					Data:           data,
+				})
+			}
+
+			if err := stream.Send(&api.StreamResponse{
+				Changes: changes,
+			}); ulog.E(err) {
+				return err
+			}
+		}
+	}
 }
