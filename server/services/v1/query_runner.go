@@ -23,6 +23,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	"github.com/tigrisdata/tigrisdb/cdc"
 	"github.com/tigrisdata/tigrisdb/internal"
 	"github.com/tigrisdata/tigrisdb/keys"
 	"github.com/tigrisdata/tigrisdb/query/filter"
@@ -47,40 +48,42 @@ type QueryRunner interface {
 type QueryRunnerFactory struct {
 	txMgr   *transaction.Manager
 	encoder metadata.Encoder
+	cdcMgr  *cdc.Manager
 }
 
 // NewQueryRunnerFactory returns QueryRunnerFactory object
-func NewQueryRunnerFactory(txMgr *transaction.Manager, encoder metadata.Encoder) *QueryRunnerFactory {
+func NewQueryRunnerFactory(txMgr *transaction.Manager, encoder metadata.Encoder, cdcMgr *cdc.Manager) *QueryRunnerFactory {
 	return &QueryRunnerFactory{
 		txMgr:   txMgr,
 		encoder: encoder,
+		cdcMgr:  cdcMgr,
 	}
 }
 
 func (f *QueryRunnerFactory) GetInsertQueryRunner(r *api.InsertRequest) *InsertQueryRunner {
 	return &InsertQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr),
 		req:             r,
 	}
 }
 
 func (f *QueryRunnerFactory) GetReplaceQueryRunner(r *api.ReplaceRequest) *ReplaceQueryRunner {
 	return &ReplaceQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr),
 		req:             r,
 	}
 }
 
 func (f *QueryRunnerFactory) GetUpdateQueryRunner(r *api.UpdateRequest) *UpdateQueryRunner {
 	return &UpdateQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr),
 		req:             r,
 	}
 }
 
 func (f *QueryRunnerFactory) GetDeleteQueryRunner(r *api.DeleteRequest) *DeleteQueryRunner {
 	return &DeleteQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr),
 		req:             r,
 	}
 }
@@ -88,7 +91,7 @@ func (f *QueryRunnerFactory) GetDeleteQueryRunner(r *api.DeleteRequest) *DeleteQ
 // GetStreamingQueryRunner returns StreamingQueryRunner
 func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streaming Streaming) *StreamingQueryRunner {
 	return &StreamingQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr),
 		req:             r,
 		streaming:       streaming,
 	}
@@ -96,23 +99,25 @@ func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streami
 
 func (f *QueryRunnerFactory) GetCollectionQueryRunner() *CollectionQueryRunner {
 	return &CollectionQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr),
 	}
 }
 
 func (f *QueryRunnerFactory) GetDatabaseQueryRunner() *DatabaseQueryRunner {
 	return &DatabaseQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr),
 	}
 }
 
 type BaseQueryRunner struct {
 	encoder metadata.Encoder
+	cdcMgr  *cdc.Manager
 }
 
-func NewBaseQueryRunner(encoder metadata.Encoder) *BaseQueryRunner {
+func NewBaseQueryRunner(encoder metadata.Encoder, cdcMgr *cdc.Manager) *BaseQueryRunner {
 	return &BaseQueryRunner{
 		encoder: encoder,
+		cdcMgr:  cdcMgr,
 	}
 }
 
@@ -227,6 +232,8 @@ func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, err
 	}
 
+	runner.cdcMgr.SetDatabaseName(ctx, db.Name())
+
 	coll, err := runner.GetCollections(db, runner.req.GetCollection())
 	if err != nil {
 		return nil, err
@@ -253,6 +260,8 @@ func (runner *ReplaceQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 	if err != nil {
 		return nil, err
 	}
+
+	runner.cdcMgr.SetDatabaseName(ctx, db.Name())
 
 	coll, err := runner.GetCollections(db, runner.req.GetCollection())
 	if err != nil {
@@ -281,6 +290,8 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	if err != nil {
 		return nil, err
 	}
+
+	runner.cdcMgr.SetDatabaseName(ctx, db.Name())
 
 	collection, err := runner.GetCollections(db, runner.req.GetCollection())
 	if err != nil {
@@ -348,6 +359,8 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, err
 	}
 
+	runner.cdcMgr.SetDatabaseName(ctx, db.Name())
+
 	collection, err := runner.GetCollections(db, runner.req.GetCollection())
 	if err != nil {
 		return nil, err
@@ -384,6 +397,8 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 	if err != nil {
 		return nil, err
 	}
+
+	runner.cdcMgr.SetDatabaseName(ctx, db.Name())
 
 	collection, err := runner.GetCollections(db, runner.req.GetCollection())
 	if err != nil {

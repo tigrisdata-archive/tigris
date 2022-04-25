@@ -30,6 +30,7 @@ type Config struct {
 	Log          log.LogConfig
 	Auth         AuthConfig `yaml:"auth" json:"auth"`
 	FoundationDB FoundationDBConfig
+	Cdc          CdcConfig
 }
 
 type AuthConfig struct {
@@ -37,6 +38,13 @@ type AuthConfig struct {
 	Audience         string
 	JWKSCacheTimeout time.Duration
 	LogOnly          bool
+}
+
+type CdcConfig struct {
+	Enabled        bool
+	StreamInterval time.Duration
+	StreamBatch    int
+	StreamBuffer   int
 }
 
 var DefaultConfig = Config{
@@ -52,6 +60,12 @@ var DefaultConfig = Config{
 		Audience:         "https://tigris-db-api",
 		JWKSCacheTimeout: 5 * time.Minute,
 		LogOnly:          true,
+	},
+	Cdc: CdcConfig{
+		Enabled:        false, // TODO: CDC change to true after fixing tests
+		StreamInterval: 500 * time.Millisecond,
+		StreamBatch:    100,
+		StreamBuffer:   200,
 	},
 }
 

@@ -201,6 +201,14 @@ func (x *ListDatabasesRequest) Validate() error {
 	return nil
 }
 
+func (x *StreamRequest) Validate() error {
+	if err := isValidDatabase(x.Db); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func isValidCollection(name string) error {
 	if len(name) == 0 {
 		return Error(codes.InvalidArgument, "invalid collection name")

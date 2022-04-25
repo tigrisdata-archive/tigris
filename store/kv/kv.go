@@ -52,6 +52,7 @@ type KeyValueStore interface {
 	Tx(ctx context.Context) (Tx, error)
 	CreateTable(ctx context.Context, name []byte) error
 	DropTable(ctx context.Context, name []byte) error
+	GetInternalDatabase() interface{} // TODO: CDC remove workaround
 }
 
 type Iterator interface {
@@ -162,6 +163,10 @@ func (k *KeyValueStoreImpl) Tx(ctx context.Context) (Tx, error) {
 	return &TxImpl{
 		ftx: btx.(*ftx),
 	}, nil
+}
+
+func (k *KeyValueStoreImpl) GetInternalDatabase() interface{} {
+	return k.db
 }
 
 type TxImpl struct {
