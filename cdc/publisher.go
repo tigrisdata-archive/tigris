@@ -24,7 +24,6 @@ import (
 
 type Publisher struct {
 	keySpace *PublisherKeySpace
-	listener *kv.Listener
 }
 
 type PublisherKeySpace struct {
