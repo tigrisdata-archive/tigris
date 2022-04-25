@@ -91,6 +91,9 @@ func (l *TxListener) OnCommit(fdbTx *fdb.Transaction) error {
 
 	data := internal.NewTableDataWithEncoding(json, internal.JsonEncoding)
 	bytes, err := internal.Encode(data)
+	if err != nil {
+		return err
+	}
 
 	fdbTx.SetVersionstampedKey(key, bytes)
 
