@@ -62,7 +62,7 @@ var DefaultConfig = Config{
 		LogOnly:          true,
 	},
 	Cdc: CdcConfig{
-		Enabled:        false, // TODO: CDC change to true after fixing tests
+		Enabled:        true,
 		StreamInterval: 500 * time.Millisecond,
 		StreamBatch:    100,
 		StreamBuffer:   200,

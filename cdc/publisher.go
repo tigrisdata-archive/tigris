@@ -23,14 +23,19 @@ import (
 )
 
 type Publisher struct {
+	keySpace *PublisherKeySpace
+	listener *kv.Listener
+}
+
+type PublisherKeySpace struct {
 	cdcBytes []byte
 	beginKey fdb.Key
 	endKey   fdb.Key
 }
 
-func NewPublisher(dbName string) *Publisher {
+func NewPublisherKeySpace(dbName string) *PublisherKeySpace {
 	cdcBytes := []byte("cdc_" + dbName)
-	return &Publisher{
+	return &PublisherKeySpace{
 		cdcBytes: cdcBytes,
 		beginKey: getKey(cdcBytes, [10]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}),
 		endKey:   getKey(cdcBytes, [10]byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE}),
@@ -45,18 +50,24 @@ func getKey(cdcBytes []byte, tv [10]byte) fdb.Key {
 	return k
 }
 
-func (p *Publisher) getNextKey() (fdb.Key, error) {
+func (p *PublisherKeySpace) getNextKey() (fdb.Key, error) {
 	s := subspace.FromBytes(p.cdcBytes)
 	v := tuple.IncompleteVersionstamp(0)
 	t := []tuple.TupleElement{v}
 	return s.PackWithVersionstamp(t)
 }
 
+func NewPublisher(dbName string) *Publisher {
+	return &Publisher{
+		keySpace: NewPublisherKeySpace(dbName),
+	}
+}
+
 func (p *Publisher) NewStreamer(kvStore kv.KeyValueStore) (*Streamer, error) {
 	s := Streamer{
-		pub: p,
-		db:  kvStore.GetInternalDatabase().(fdb.Database),
-		cfg: config.DefaultConfig.Cdc,
+		keySpace: p.keySpace,
+		db:       kvStore.GetInternalDatabase().(fdb.Database),
+		cfg:      config.DefaultConfig.Cdc,
 	}
 
 	err := s.start()
@@ -65,4 +76,15 @@ func (p *Publisher) NewStreamer(kvStore kv.KeyValueStore) (*Streamer, error) {
 	}
 
 	return &s, nil
+}
+
+func (p *Publisher) NewListener() kv.Listener {
+	if config.DefaultConfig.Cdc.Enabled {
+		return &TxListener{
+			tx:       &Tx{},
+			keySpace: p.keySpace,
+		}
+	} else {
+		return &kv.NoListener{}
+	}
 }

@@ -25,18 +25,18 @@ import (
 )
 
 type Streamer struct {
-	db      fdb.Database
-	lastKey fdb.Key
-	cfg     config.CdcConfig
-	pub     *Publisher
-	ticker  *time.Ticker
-	Txs     chan Tx
+	db       fdb.Database
+	lastKey  fdb.Key
+	cfg      config.CdcConfig
+	keySpace *PublisherKeySpace
+	ticker   *time.Ticker
+	Txs      chan Tx
 }
 
 func (s *Streamer) start() error {
 	key, err := s.db.ReadTransact(func(rtx fdb.ReadTransaction) (interface{}, error) {
-		begin := fdb.FirstGreaterThan(s.pub.beginKey)
-		end := fdb.LastLessThan(s.pub.endKey)
+		begin := fdb.FirstGreaterThan(s.keySpace.beginKey)
+		end := fdb.LastLessThan(s.keySpace.endKey)
 		r := rtx.GetRange(fdb.SelectorRange{Begin: begin, End: end}, fdb.RangeOptions{Limit: 1, Reverse: true})
 
 		i := r.Iterator()
@@ -47,7 +47,7 @@ func (s *Streamer) start() error {
 			}
 			return kv.Key, nil
 		} else {
-			return s.pub.beginKey, nil
+			return s.keySpace.beginKey, nil
 		}
 	})
 	if err != nil {
@@ -59,8 +59,7 @@ func (s *Streamer) start() error {
 	s.ticker = time.NewTicker(s.cfg.StreamInterval)
 	go func() {
 		for range s.ticker.C {
-			err := s.read()
-			if err != nil {
+			if err := s.read(); err != nil {
 				log.Err(err).Msg("read failed")
 			}
 		}
@@ -72,7 +71,7 @@ func (s *Streamer) start() error {
 func (s *Streamer) read() error {
 	_, err := s.db.ReadTransact(func(rtx fdb.ReadTransaction) (interface{}, error) {
 		begin := fdb.FirstGreaterThan(s.lastKey)
-		end := fdb.LastLessThan(s.pub.endKey)
+		end := fdb.LastLessThan(s.keySpace.endKey)
 		r := rtx.GetRange(fdb.SelectorRange{Begin: begin, End: end}, fdb.RangeOptions{Limit: s.cfg.StreamBatch})
 
 		i := r.Iterator()
@@ -98,7 +97,6 @@ func (s *Streamer) read() error {
 				s.Txs <- tx
 			} else {
 				// buffer overflow
-				s.ticker.Stop()
 				close(s.Txs)
 				break
 			}

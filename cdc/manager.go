@@ -18,7 +18,6 @@ import (
 	"context"
 	"sync"
 
-	"github.com/tigrisdata/tigrisdb/server/config"
 	"github.com/tigrisdata/tigrisdb/store/kv"
 )
 
@@ -44,21 +43,12 @@ func (m *Manager) GetPublisher(dbName string) *Publisher {
 	return m.pubs[dbName]
 }
 
-func (m *Manager) WrapContext(ctx context.Context) context.Context {
-	l := kv.Listener(nil)
-
-	if config.DefaultConfig.Cdc.Enabled {
-		l = &TxListener{tx: &Tx{}}
-	} else {
-		l = &kv.NoListener{}
+func (m *Manager) WrapContext(ctx context.Context, dbName string) context.Context {
+	if len(dbName) == 0 {
+		return context.WithValue(ctx, kv.ListenerCtxKey{}, kv.NoListener{})
 	}
 
+	p := m.GetPublisher(dbName)
+	l := p.NewListener()
 	return context.WithValue(ctx, kv.ListenerCtxKey{}, l)
-}
-
-func (m *Manager) SetDatabaseName(ctx context.Context, dbName string) {
-	l, ok := kv.GetListener(ctx).(*TxListener)
-	if ok {
-		l.SetPublisher(m.GetPublisher(dbName))
-	}
 }

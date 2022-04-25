@@ -15,8 +15,6 @@
 package cdc
 
 import (
-	"errors"
-
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tigrisdata/tigrisdb/internal"
@@ -40,12 +38,8 @@ func (tx *Tx) addOp(entry Op) {
 }
 
 type TxListener struct {
-	pub *Publisher
-	tx  *Tx
-}
-
-func (l *TxListener) SetPublisher(pub *Publisher) {
-	l.pub = pub
+	keySpace *PublisherKeySpace
+	tx       *Tx
 }
 
 func (l *TxListener) OnSet(opType string, table []byte, key []byte, data []byte) {
@@ -80,11 +74,7 @@ func (l *TxListener) OnCommit(fdbTx *fdb.Transaction) error {
 		return err
 	}
 
-	if l.pub == nil {
-		return errors.New("no publisher set")
-	}
-
-	key, err := l.pub.getNextKey()
+	key, err := l.keySpace.getNextKey()
 	if err != nil {
 		return err
 	}
