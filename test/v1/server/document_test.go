@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"github.com/tigrisdata/tigrisdb/test/config"
@@ -49,12 +50,13 @@ func (s *DocumentSuite) TearDownSuite() {
 	dropDatabase(s.T(), s.database)
 }
 
-func (s *DocumentSuite) TestInsert_BadRequest() {
+func (s *DocumentSuite) TestInsert_Bad_NotFoundRequest() {
 	cases := []struct {
 		databaseName   string
 		collectionName string
 		documents      []interface{}
 		expMessage     string
+		status         int
 	}{
 		{
 			"random_database1",
@@ -64,7 +66,8 @@ func (s *DocumentSuite) TestInsert_BadRequest() {
 					"pkey_int": 1,
 				},
 			},
-			"database doesn't exists 'random_database1'",
+			"database doesn't exist 'random_database1'",
+			http.StatusNotFound,
 		}, {
 			s.database,
 			"random_collection",
@@ -73,7 +76,8 @@ func (s *DocumentSuite) TestInsert_BadRequest() {
 					"pkey_int": 1,
 				},
 			},
-			"collection doesn't exists 'random_collection'",
+			"collection doesn't exist 'random_collection'",
+			http.StatusNotFound,
 		}, {
 			"",
 			s.collection,
@@ -83,6 +87,7 @@ func (s *DocumentSuite) TestInsert_BadRequest() {
 				},
 			},
 			"invalid database name",
+			http.StatusBadRequest,
 		}, {
 			s.database,
 			"",
@@ -92,11 +97,13 @@ func (s *DocumentSuite) TestInsert_BadRequest() {
 				},
 			},
 			"invalid collection name",
+			http.StatusBadRequest,
 		}, {
 			s.database,
 			s.collection,
 			[]interface{}{},
 			"empty documents received",
+			http.StatusBadRequest,
 		},
 	}
 	for _, c := range cases {
@@ -106,7 +113,7 @@ func (s *DocumentSuite) TestInsert_BadRequest() {
 				"documents": c.documents,
 			}).
 			Expect().
-			Status(http.StatusBadRequest).
+			Status(c.status).
 			JSON().
 			Object().
 			ValueEqual("message", c.expMessage)
@@ -134,7 +141,7 @@ func (s *DocumentSuite) TestInsert_AlreadyExists() {
 		Status(http.StatusOK).
 		JSON().
 		Object().
-		Empty()
+		ValueEqual("status", "inserted")
 
 	e.POST(getDocumentURL(s.database, s.collection, "insert")).
 		WithJSON(map[string]interface{}{
@@ -144,18 +151,246 @@ func (s *DocumentSuite) TestInsert_AlreadyExists() {
 		Status(http.StatusConflict).
 		JSON().
 		Object().
-		ValueEqual("message", "duplicate key value, violates unique primary key constraint")
+		ValueEqual("message", "duplicate key value, violates key constraint")
+}
+
+func (s *DocumentSuite) TestInsert_SchemaValidationError() {
+	cases := []struct {
+		documents  []interface{}
+		expMessage string
+	}{
+		{
+			[]interface{}{
+				map[string]interface{}{
+					"pkey_int":  1,
+					"int_value": 10.20,
+				},
+			},
+			"json schema validation failed for field 'int_value' reason 'expected integer, but got number'",
+		}, {
+			[]interface{}{
+				map[string]interface{}{
+					"pkey_int":     1,
+					"string_value": 12,
+				},
+			},
+			"json schema validation failed for field 'string_value' reason 'expected string, but got number'",
+		}, {
+			[]interface{}{
+				map[string]interface{}{
+					"bytes_value": 12.30,
+				},
+			},
+			"json schema validation failed for field 'bytes_value' reason 'expected string, but got number'",
+		}, {
+			[]interface{}{
+				map[string]interface{}{
+					"bytes_value": "not enough",
+				},
+			},
+			"json schema validation failed for field 'bytes_value' reason ''not enough' is not valid 'byte''",
+		}, {
+			[]interface{}{
+				map[string]interface{}{
+					"date_time_value": "Mon, 02 Jan 2006",
+				},
+			},
+			"json schema validation failed for field 'date_time_value' reason ''Mon, 02 Jan 2006' is not valid 'date-time''",
+		}, {
+			[]interface{}{
+				map[string]interface{}{
+					"uuid_value": "abc-bcd",
+				},
+			},
+			"json schema validation failed for field 'uuid_value' reason ''abc-bcd' is not valid 'uuid''",
+		}, {
+			[]interface{}{
+				map[string]interface{}{
+					"pkey_int":  10,
+					"extra_key": "abc-bcd",
+				},
+			},
+			"json schema validation failed for field '' reason 'additionalProperties 'extra_key' not allowed'",
+		},
+	}
+	for _, c := range cases {
+		e := httpexpect.New(s.T(), config.GetBaseURL())
+		e.POST(getDocumentURL(s.database, s.collection, "insert")).
+			WithJSON(map[string]interface{}{
+				"documents": c.documents,
+			}).
+			Expect().
+			Status(http.StatusBadRequest).
+			JSON().
+			Object().
+			ValueEqual("message", c.expMessage)
+	}
+}
+
+func (s *DocumentSuite) TestInsert_SupportedPrimaryKeys() {
+	base64 := []byte(`"base64 string"`)
+	base64Encoded, err := json.Marshal(base64)
+	require.NoError(s.T(), err)
+
+	uuidValue := uuid.New().String()
+	collectionName := "test_supported_primary_keys"
+	cases := []struct {
+		schema           map[string]interface{}
+		inputDoc         []interface{}
+		primaryKeyLookup map[string]interface{}
+	}{
+		{
+			schema: map[string]interface{}{
+				"schema": map[string]interface{}{
+					"title": collectionName,
+					"properties": map[string]interface{}{
+						"int_value": map[string]interface{}{
+							"type": "integer",
+						},
+						"bytes_value": map[string]interface{}{
+							"type":   "string",
+							"format": "byte",
+						},
+					},
+					"primary_key": []interface{}{"bytes_value"},
+				},
+			},
+			inputDoc: []interface{}{
+				map[string]interface{}{
+					"int_value":   10,
+					"bytes_value": base64Encoded,
+				},
+			},
+			primaryKeyLookup: map[string]interface{}{
+				"bytes_value": base64Encoded,
+			},
+		}, {
+			schema: map[string]interface{}{
+				"schema": map[string]interface{}{
+					"title": collectionName,
+					"properties": map[string]interface{}{
+						"int_value": map[string]interface{}{
+							"type": "integer",
+						},
+						"uuid_value": map[string]interface{}{
+							"type":   "string",
+							"format": "uuid",
+						},
+					},
+					"primary_key": []interface{}{"uuid_value"},
+				},
+			},
+			inputDoc: []interface{}{
+				map[string]interface{}{
+					"int_value":  10,
+					"uuid_value": uuidValue,
+				},
+			},
+			primaryKeyLookup: map[string]interface{}{
+				"uuid_value": uuidValue,
+			},
+		}, {
+			schema: map[string]interface{}{
+				"schema": map[string]interface{}{
+					"title": collectionName,
+					"properties": map[string]interface{}{
+						"int_value": map[string]interface{}{
+							"type": "integer",
+						},
+						"date_time_value": map[string]interface{}{
+							"type":   "string",
+							"format": "date-time",
+						},
+					},
+					"primary_key": []interface{}{"date_time_value"},
+				},
+			},
+			inputDoc: []interface{}{
+				map[string]interface{}{
+					"int_value":       10,
+					"date_time_value": "2015-12-21T17:42:34Z",
+				},
+			},
+			primaryKeyLookup: map[string]interface{}{
+				"date_time_value": "2015-12-21T17:42:34Z",
+			},
+		}, {
+			schema: map[string]interface{}{
+				"schema": map[string]interface{}{
+					"title": collectionName,
+					"properties": map[string]interface{}{
+						"int_value": map[string]interface{}{
+							"type": "integer",
+						},
+						"string_value": map[string]interface{}{
+							"type": "string",
+						},
+					},
+					"primary_key": []interface{}{"string_value"},
+				},
+			},
+			inputDoc: []interface{}{
+				map[string]interface{}{
+					"int_value":    10,
+					"string_value": "hello",
+				},
+			},
+			primaryKeyLookup: map[string]interface{}{
+				"string_value": "hello",
+			},
+		},
+	}
+	for _, c := range cases {
+		dropCollection(s.T(), s.database, collectionName)
+		createCollection(s.T(), s.database, collectionName, c.schema)
+
+		e := httpexpect.New(s.T(), config.GetBaseURL())
+		e.POST(getDocumentURL(s.database, collectionName, "insert")).
+			WithJSON(map[string]interface{}{
+				"documents": c.inputDoc,
+			}).
+			Expect().
+			Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status", "inserted")
+
+		readResp := readByFilter(s.T(), s.database, collectionName, c.primaryKeyLookup, nil)
+
+		var doc map[string]json.RawMessage
+		require.NoError(s.T(), json.Unmarshal(readResp[0]["result"], &doc))
+
+		var actualDoc = []byte(doc["data"])
+		expDoc, err := json.Marshal(c.inputDoc[0])
+		require.NoError(s.T(), err)
+		require.Equal(s.T(), expDoc, actualDoc)
+	}
 }
 
 func (s *DocumentSuite) TestInsert_SingleRow() {
+	base64 := []byte(`"base64 string"`)
+	v, err := json.Marshal(base64)
+	require.NoError(s.T(), err)
+
 	inputDocument := []interface{}{
 		map[string]interface{}{
-			"pkey_int":     10,
-			"int_value":    10,
-			"string_value": "simple_insert",
-			"bool_value":   true,
-			"double_value": 10.01,
-			"bytes_value":  []byte(`"simple_insert"`),
+			"pkey_int":        10,
+			"int_value":       10,
+			"string_value":    "simple_insert",
+			"bool_value":      true,
+			"double_value":    10.01,
+			"bytes_value":     v,
+			"date_time_value": "2015-12-21T17:42:34Z",
+			"uuid_value":      uuid.New().String(),
+			"array_value": []interface{}{
+				map[string]interface{}{
+					"id":      1,
+					"product": "foo",
+				},
+			},
+			"object_value": map[string]interface{}{
+				"name": "hi",
+			},
 		},
 	}
 
@@ -168,7 +403,7 @@ func (s *DocumentSuite) TestInsert_SingleRow() {
 		Status(http.StatusOK).
 		JSON().
 		Object().
-		Empty()
+		ValueEqual("status", "inserted")
 
 	readResp := readByFilter(s.T(), s.database, s.collection, map[string]interface{}{
 		"pkey_int": 10,
@@ -177,7 +412,7 @@ func (s *DocumentSuite) TestInsert_SingleRow() {
 	var doc map[string]json.RawMessage
 	require.NoError(s.T(), json.Unmarshal(readResp[0]["result"], &doc))
 
-	var actualDoc = []byte(doc["doc"])
+	var actualDoc = []byte(doc["data"])
 	expDoc, err := json.Marshal(inputDocument[0])
 	require.NoError(s.T(), err)
 	require.Equal(s.T(), expDoc, actualDoc)
@@ -212,7 +447,7 @@ func (s *DocumentSuite) TestInsert_MultipleRows() {
 		Status(http.StatusOK).
 		JSON().
 		Object().
-		Empty()
+		ValueEqual("status", "inserted")
 
 	readResp := readByFilter(s.T(), s.database, s.collection, map[string]interface{}{
 		"$or": []interface{}{
@@ -230,7 +465,7 @@ func (s *DocumentSuite) TestInsert_MultipleRows() {
 		var doc map[string]json.RawMessage
 		require.NoError(s.T(), json.Unmarshal(readResp[i]["result"], &doc))
 
-		var actualDoc = []byte(doc["doc"])
+		var actualDoc = []byte(doc["data"])
 		expDoc, err := json.Marshal(inputDocument[i])
 		require.NoError(s.T(), err)
 		require.Equal(s.T(), expDoc, actualDoc)
@@ -244,6 +479,7 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 		fields     map[string]interface{}
 		filter     map[string]interface{}
 		expMessage string
+		status     int
 	}{
 		{
 			"random_database1",
@@ -256,7 +492,8 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 			map[string]interface{}{
 				"pkey_int": 1,
 			},
-			"database doesn't exists 'random_database1'",
+			"database doesn't exist 'random_database1'",
+			http.StatusNotFound,
 		}, {
 			s.database,
 			"random_collection",
@@ -268,7 +505,8 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 			map[string]interface{}{
 				"pkey_int": 1,
 			},
-			"collection doesn't exists 'random_collection'",
+			"collection doesn't exist 'random_collection'",
+			http.StatusNotFound,
 		}, {
 			"",
 			s.collection,
@@ -281,6 +519,7 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 				"pkey_int": 1,
 			},
 			"invalid database name",
+			http.StatusBadRequest,
 		}, {
 			s.database,
 			"",
@@ -293,6 +532,7 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 				"pkey_int": 1,
 			},
 			"invalid collection name",
+			http.StatusBadRequest,
 		}, {
 			s.database,
 			s.collection,
@@ -301,6 +541,7 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 				"pkey_int": 1,
 			},
 			"empty fields received",
+			http.StatusBadRequest,
 		}, {
 			s.database,
 			s.collection,
@@ -311,6 +552,7 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 			},
 			nil,
 			"filter is a required field",
+			http.StatusBadRequest,
 		},
 	}
 	for _, c := range cases {
@@ -321,7 +563,7 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 				"filter": c.filter,
 			}).
 			Expect().
-			Status(http.StatusBadRequest).
+			Status(c.status).
 			JSON().
 			Object().
 			ValueEqual("message", c.expMessage)
@@ -373,7 +615,7 @@ func (s *DocumentSuite) TestUpdate_SingleRow() {
 		}).Status(http.StatusOK).
 		JSON().
 		Object().
-		Empty()
+		ValueEqual("modified_count", 1)
 
 	readAndValidate(s.T(),
 		s.database,
@@ -392,6 +634,67 @@ func (s *DocumentSuite) TestUpdate_SingleRow() {
 				"bytes_value":  []byte(`"simple_insert1_update_modified"`),
 			},
 		})
+}
+
+func (s *DocumentSuite) TestUpdate_SchemaValidationError() {
+	inputDocument := []interface{}{
+		map[string]interface{}{
+			"pkey_int":     100,
+			"int_value":    100,
+			"string_value": "simple_insert1_update",
+			"bool_value":   true,
+			"double_value": 100.00001,
+			"bytes_value":  []byte(`"simple_insert1_update"`),
+		},
+	}
+
+	insertDocuments(s.T(), s.database, s.collection, inputDocument, false).
+		Status(http.StatusOK)
+
+	readAndValidate(s.T(),
+		s.database,
+		s.collection,
+		map[string]interface{}{
+			"pkey_int": 100,
+		},
+		nil,
+		inputDocument)
+
+	cases := []struct {
+		documents  map[string]interface{}
+		expMessage string
+	}{
+		{
+			map[string]interface{}{
+				"$set": map[string]interface{}{
+					"string_value": 1,
+				},
+			},
+			"json schema validation failed for field 'string_value' reason 'expected string, but got number'",
+		}, {
+			map[string]interface{}{
+				"$set": map[string]interface{}{
+					"int_value": "1",
+				},
+			},
+			"json schema validation failed for field 'int_value' reason 'expected integer, but got string'",
+		},
+	}
+	for _, c := range cases {
+		e := httpexpect.New(s.T(), config.GetBaseURL())
+		e.PUT(getDocumentURL(s.database, s.collection, "update")).
+			WithJSON(map[string]interface{}{
+				"fields": c.documents,
+				"filter": map[string]interface{}{
+					"pkey_int": 1,
+				},
+			}).
+			Expect().
+			Status(http.StatusBadRequest).
+			JSON().
+			Object().
+			ValueEqual("message", c.expMessage)
+	}
 }
 
 func (s *DocumentSuite) TestUpdate_MultipleRows() {
@@ -464,7 +767,7 @@ func (s *DocumentSuite) TestUpdate_MultipleRows() {
 		}).Status(http.StatusOK).
 		JSON().
 		Object().
-		Empty()
+		ValueEqual("status", "updated")
 
 	// read all documents back
 	readAndValidate(s.T(),
@@ -503,7 +806,7 @@ func (s *DocumentSuite) TestUpdate_MultipleRows() {
 		}).Status(http.StatusOK).
 		JSON().
 		Object().
-		Empty()
+		ValueEqual("modified_count", 2)
 
 	outDocument := []interface{}{
 		// this didn't change as-is
@@ -550,6 +853,7 @@ func (s *DocumentSuite) TestDelete_BadRequest() {
 		collectionName string
 		filter         map[string]interface{}
 		expMessage     string
+		status         int
 	}{
 		{
 			"random_database1",
@@ -557,14 +861,16 @@ func (s *DocumentSuite) TestDelete_BadRequest() {
 			map[string]interface{}{
 				"pkey_int": 1,
 			},
-			"database doesn't exists 'random_database1'",
+			"database doesn't exist 'random_database1'",
+			http.StatusNotFound,
 		}, {
 			s.database,
 			"random_collection",
 			map[string]interface{}{
 				"pkey_int": 1,
 			},
-			"collection doesn't exists 'random_collection'",
+			"collection doesn't exist 'random_collection'",
+			http.StatusNotFound,
 		}, {
 			"",
 			s.collection,
@@ -572,6 +878,7 @@ func (s *DocumentSuite) TestDelete_BadRequest() {
 				"pkey_int": 1,
 			},
 			"invalid database name",
+			http.StatusBadRequest,
 		}, {
 			s.database,
 			"",
@@ -579,11 +886,13 @@ func (s *DocumentSuite) TestDelete_BadRequest() {
 				"pkey_int": 1,
 			},
 			"invalid collection name",
+			http.StatusBadRequest,
 		}, {
 			s.database,
 			s.collection,
 			nil,
 			"filter is a required field",
+			http.StatusBadRequest,
 		},
 	}
 	for _, c := range cases {
@@ -593,7 +902,7 @@ func (s *DocumentSuite) TestDelete_BadRequest() {
 				"filter": c.filter,
 			}).
 			Expect().
-			Status(http.StatusBadRequest).
+			Status(c.status).
 			JSON().
 			Object().
 			ValueEqual("message", c.expMessage)
@@ -627,7 +936,7 @@ func (s *DocumentSuite) TestDelete_SingleRow() {
 	}).Status(http.StatusOK).
 		JSON().
 		Object().
-		Empty()
+		ValueEqual("status", "deleted")
 
 	readAndValidate(s.T(),
 		s.database,
@@ -687,7 +996,7 @@ func (s *DocumentSuite) TestDelete_MultipleRows() {
 	}).Status(http.StatusOK).
 		JSON().
 		Object().
-		Empty()
+		ValueEqual("status", "deleted")
 
 	// read all documents back
 	readAndValidate(s.T(),
@@ -712,7 +1021,7 @@ func (s *DocumentSuite) TestDelete_MultipleRows() {
 	}).Status(http.StatusOK).
 		JSON().
 		Object().
-		Empty()
+		ValueEqual("status", "deleted")
 
 	readAndValidate(s.T(),
 		s.database,
@@ -957,7 +1266,7 @@ func readAndValidate(t *testing.T, db string, collection string, filter map[stri
 		var doc map[string]json.RawMessage
 		require.NoError(t, json.Unmarshal(readResp[i]["result"], &doc))
 
-		var actualDoc = []byte(doc["doc"])
+		var actualDoc = []byte(doc["data"])
 		expDoc, err := json.Marshal(inputDocument[i])
 		require.NoError(t, err)
 		require.JSONEqf(t, string(expDoc), string(actualDoc), "exp '%s' actual '%s'", string(expDoc), string(actualDoc))

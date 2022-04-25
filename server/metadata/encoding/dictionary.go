@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/tigrisdata/tigrisdb/internal"
+
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
 	"github.com/tigrisdata/tigrisdb/keys"
@@ -133,8 +135,9 @@ func (r *reservedSubspace) reload(ctx context.Context, tx transaction.Tx) error 
 			return api.Errorf(codes.Internal, "unable to deduce the encoded key from fdb key %T", allocatedTo)
 		}
 
-		r.allocated[ByteToUInt32(row.Value)] = allocatedTo.(string)
-		r.namespaceToId[allocatedTo.(string)] = ByteToUInt32(row.Value)
+		allocatedValue := ByteToUInt32(row.Data.RawData)
+		r.allocated[allocatedValue] = allocatedTo.(string)
+		r.namespaceToId[allocatedTo.(string)] = allocatedValue
 	}
 
 	return it.Err()
@@ -162,7 +165,7 @@ func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.
 
 	key := keys.NewKey(ReservedSubspaceKey, namespaceKey, namespace, keyEnd)
 	// now do an insert to fail if namespace already exists.
-	if err := tx.Insert(ctx, key, UInt32ToByte(id)); err != nil {
+	if err := tx.Insert(ctx, key, internal.NewTableData(UInt32ToByte(id))); err != nil {
 		log.Debug().Interface("key", key).Uint32("value", id).Err(err).Msg("reserving namespace failed")
 		return err
 	}
@@ -181,14 +184,14 @@ func (r *reservedSubspace) allocateToken(ctx context.Context, tx transaction.Tx,
 	newReservedValue := reservedBaseValue
 	var row kv.KeyValue
 	if it.Next(&row) {
-		newReservedValue = ByteToUInt32(row.Value) + 1
+		newReservedValue = ByteToUInt32(row.Data.RawData) + 1
 	}
 
 	if err := it.Err(); err != nil {
 		return 0, err
 	}
 
-	if err := tx.Replace(ctx, key, UInt32ToByte(newReservedValue)); err != nil {
+	if err := tx.Replace(ctx, key, internal.NewTableData(UInt32ToByte(newReservedValue))); err != nil {
 		log.Debug().Str("key", key.String()).Uint32("value", newReservedValue).Msg("allocating token failed")
 		return 0, err
 	}
@@ -329,7 +332,7 @@ func (k *DictionaryEncoder) encodeAsDropped(ctx context.Context, tx transaction.
 	log.Debug().Str("key", toDeleteKey.String()).Str("type", encName).Msg("existing entry deletion succeed")
 
 	// now do insert because we need to fail if token is already assigned
-	if err := tx.Replace(ctx, newKey, UInt32ToByte(newValue)); err != nil {
+	if err := tx.Replace(ctx, newKey, internal.NewTableData(UInt32ToByte(newValue))); err != nil {
 		log.Debug().Str("key", newKey.String()).Uint32("value", newValue).Err(err).Str("type", encName).Msg("encoding failed")
 		return err
 	}
@@ -345,7 +348,7 @@ func (k *DictionaryEncoder) encode(ctx context.Context, tx transaction.Tx, key k
 	}
 
 	// now do insert because we need to fail if token is already assigned
-	if err := tx.Insert(ctx, key, UInt32ToByte(reserveToken)); err != nil {
+	if err := tx.Insert(ctx, key, internal.NewTableData(UInt32ToByte(reserveToken))); err != nil {
 		log.Debug().Str("type", encName).Str("key", key.String()).Uint32("value", reserveToken).Err(err).Msg("encoding failed for")
 		return InvalidId, err
 	}
@@ -402,17 +405,17 @@ func (k *DictionaryEncoder) GetDatabases(ctx context.Context, tx transaction.Tx,
 
 			if end == keyDroppedEnd {
 				log.Debug().Str("database", name).Msg("dropped database found, ignoring")
-				droppedDatabase[name] = ByteToUInt32(v.Value)
+				droppedDatabase[name] = ByteToUInt32(v.Data.RawData)
 				continue
 			}
 
-			databases[name] = ByteToUInt32(v.Value)
+			databases[name] = ByteToUInt32(v.Data.RawData)
 		}
 	}
 
 	// retrogression check; if created and dropped both exists then the created id should be greater than dropped id
-	log.Debug().Interface("key_dropped", droppedDatabase).Msg("dropped databases")
-	log.Debug().Interface("key_created", databases).Msg("created databases")
+	log.Debug().Interface("existing_dropped", droppedDatabase).Msg("dropped databases")
+	log.Debug().Interface("existing_created", databases).Msg("created databases")
 	for droppedDB, droppedValue := range droppedDatabase {
 		if createdValue, ok := databases[droppedDB]; ok && droppedValue >= createdValue {
 			return nil, api.Errorf(codes.Internal, "retrogression found in database assigned value database [%s] droppedValue [%d] createdValue [%d]", droppedDB, droppedValue, createdValue)
@@ -450,17 +453,17 @@ func (k *DictionaryEncoder) GetCollections(ctx context.Context, tx transaction.T
 
 			if end == keyDroppedEnd {
 				log.Debug().Str("collection", name).Msg("dropped collection found, ignoring")
-				droppedCollection[name] = ByteToUInt32(v.Value)
+				droppedCollection[name] = ByteToUInt32(v.Data.RawData)
 				continue
 			}
 
-			collections[name] = ByteToUInt32(v.Value)
+			collections[name] = ByteToUInt32(v.Data.RawData)
 		}
 	}
 
 	// retrogression check; if created and dropped both exists then the created id should be greater than dropped id
-	log.Debug().Interface("key_dropped", droppedCollection).Msg("dropped collections")
-	log.Debug().Interface("key_created", collections).Msg("created collections")
+	log.Debug().Uint32("db", databaseId).Interface("existing_dropped", droppedCollection).Msg("dropped collections")
+	log.Debug().Uint32("db", databaseId).Interface("existing_created", collections).Msg("created collections")
 	for droppedC, droppedValue := range droppedCollection {
 		if createdValue, ok := collections[droppedC]; ok && droppedValue >= createdValue {
 			return nil, api.Errorf(codes.Internal, "retrogression found in collection assigned value collection [%s] droppedValue [%d] createdValue [%d]", droppedC, droppedValue, createdValue)
@@ -498,14 +501,16 @@ func (k *DictionaryEncoder) GetIndexes(ctx context.Context, tx transaction.Tx, n
 
 			if end == keyDroppedEnd {
 				log.Debug().Str("index", name).Msg("dropped index found, ignoring")
-				droppedIndexes[name] = ByteToUInt32(v.Value)
+				droppedIndexes[name] = ByteToUInt32(v.Data.RawData)
 				continue
 			}
 
-			indexes[name] = ByteToUInt32(v.Value)
+			indexes[name] = ByteToUInt32(v.Data.RawData)
 		}
 	}
 
+	log.Debug().Uint32("db", databaseId).Uint32("coll", collId).Interface("existing_dropped", droppedIndexes).Msg("dropped indexes")
+	log.Debug().Uint32("db", databaseId).Uint32("coll", collId).Interface("existing_created", indexes).Msg("created indexes")
 	// retrogression check
 	for droppedC, droppedValue := range droppedIndexes {
 		if createdValue, ok := indexes[droppedC]; ok && droppedValue >= createdValue {
@@ -539,7 +544,7 @@ func (k *DictionaryEncoder) getId(ctx context.Context, tx transaction.Tx, key ke
 
 	var row kv.KeyValue
 	if it.Next(&row) {
-		return ByteToUInt32(row.Value), nil
+		return ByteToUInt32(row.Data.RawData), nil
 	}
 
 	if err := it.Err(); err != nil {

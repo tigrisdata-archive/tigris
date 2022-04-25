@@ -20,6 +20,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	"github.com/tigrisdata/tigrisdb/internal"
 	"github.com/tigrisdata/tigrisdb/keys"
 	"github.com/tigrisdata/tigrisdb/server/transaction"
 	"github.com/tigrisdata/tigrisdb/store/kv"
@@ -28,15 +29,7 @@ import (
 
 // SchemaSubspaceKey (the schema subspace) will be storing the actual schema of the user for a collection. The schema subspace will
 // look like below
-//    ["schema", 0x01, x, 0x01, 0x03, "created", 0x01] => {
-//      properties: {"a": int},
-//      primary_key: ["a"],
-//      indexes: [
-//        {name: “primary”, code: 2, columns: [“id”]},
-//        {name: “email_index”, code: 3, columns: [“email”], unique:true},
-//        {name: “created_at_index”, code: 4, columns: [“created_at”]},
-//      ]
-//    }
+//    ["schema", 0x01, x, 0x01, 0x03, "created", 0x01] => {"title": "t1", properties: {"a": int}, primary_key: ["a"]}
 //
 //  where,
 //    - schema is the keyword for this table.
@@ -67,7 +60,7 @@ func (s *SchemaSubspace) Put(ctx context.Context, tx transaction.Tx, namespaceId
 	}
 
 	key := keys.NewKey(SchemaSubspaceKey, schVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), keyEnd, UInt32ToByte(uint32(revision)))
-	if err := tx.Insert(ctx, key, schema); err != nil {
+	if err := tx.Insert(ctx, key, internal.NewTableData(schema)); err != nil {
 		log.Debug().Str("key", key.String()).Str("value", string(schema)).Err(err).Msg("storing schema failed")
 		return err
 	}
@@ -109,7 +102,7 @@ func (s *SchemaSubspace) Get(ctx context.Context, tx transaction.Tx, namespaceId
 		if !ok {
 			return nil, nil, api.Errorf(codes.Internal, "not able to extract revision from schema %v", row.Key)
 		}
-		revisionToSchemaMapping[ByteToUInt32(revision)] = row.Value
+		revisionToSchemaMapping[ByteToUInt32(revision)] = row.Data.RawData
 		revisions = append(revisions, int(ByteToUInt32(revision)))
 	}
 

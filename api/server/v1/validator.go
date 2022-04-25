@@ -144,6 +144,26 @@ func (x *ListCollectionsRequest) Validate() error {
 	return nil
 }
 
+func (x *DescribeCollectionRequest) Validate() error {
+	if !IsTxSupported(x) {
+		if transaction := GetTransaction(x); transaction != nil {
+			return Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
+		}
+	}
+
+	return nil
+}
+
+func (x *DescribeDatabaseRequest) Validate() error {
+	if !IsTxSupported(x) {
+		if transaction := GetTransaction(x); transaction != nil {
+			return Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
+		}
+	}
+
+	return nil
+}
+
 func (x *CreateDatabaseRequest) Validate() error {
 	if err := isValidDatabase(x.Db); err != nil {
 		return err
@@ -178,7 +198,6 @@ func (x *ListDatabasesRequest) Validate() error {
 			return Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
 		}
 	}
-
 	return nil
 }
 

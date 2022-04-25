@@ -15,10 +15,15 @@
 package v1
 
 import (
+	"bytes"
 	"context"
-	"encoding/json"
+
+	"github.com/buger/jsonparser"
+	jsoniter "github.com/json-iterator/go"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	"github.com/tigrisdata/tigrisdb/internal"
 	"github.com/tigrisdata/tigrisdb/keys"
 	"github.com/tigrisdata/tigrisdb/query/filter"
 	"github.com/tigrisdata/tigrisdb/query/read"
@@ -30,7 +35,7 @@ import (
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
 	"github.com/tigrisdata/tigrisdb/value"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // QueryRunner is responsible for executing the current query and return the response
@@ -118,7 +123,7 @@ func (runner *BaseQueryRunner) GetDatabase(ctx context.Context, tx transaction.T
 	}
 	if db == nil {
 		// database not found
-		return nil, api.Errorf(codes.InvalidArgument, "database doesn't exists '%s'", dbName)
+		return nil, api.Errorf(codes.NotFound, "database doesn't exist '%s'", dbName)
 	}
 
 	return db, nil
@@ -127,21 +132,21 @@ func (runner *BaseQueryRunner) GetDatabase(ctx context.Context, tx transaction.T
 func (runner *BaseQueryRunner) GetCollections(db *metadata.Database, collName string) (*schema.DefaultCollection, error) {
 	collection := db.GetCollection(collName)
 	if collection == nil {
-		return nil, api.Errorf(codes.InvalidArgument, "collection doesn't exists '%s'", collName)
+		return nil, api.Errorf(codes.NotFound, "collection doesn't exist '%s'", collName)
 	}
 
 	return collection, nil
 }
 
-func (runner *BaseQueryRunner) extractIndexParts(userDefinedKeys []*schema.Field, doc map[string]*structpb.Value) ([]interface{}, error) {
+func (runner *BaseQueryRunner) extractIndexParts(userDefinedKeys []*schema.Field, doc []byte) ([]interface{}, error) {
 	var appendTo []interface{}
 	for _, v := range userDefinedKeys {
-		k, ok := doc[v.Name()]
-		if !ok {
-			return nil, ulog.CE("missing index key column(s) %v", v)
+		jsonVal, _, _, err := jsonparser.Get(doc, v.FieldName)
+		if err != nil {
+			return nil, api.Errorf(codes.InvalidArgument, errors.Wrapf(err, "missing index key column(s) '%s'", v.FieldName).Error())
 		}
 
-		val, err := value.NewValueUsingSchema(v, k)
+		val, err := value.NewValue(v.DataType, jsonVal)
 		if err != nil {
 			return nil, err
 		}
@@ -153,39 +158,47 @@ func (runner *BaseQueryRunner) extractIndexParts(userDefinedKeys []*schema.Field
 	return appendTo, nil
 }
 
-func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection, documents [][]byte, insert bool) error {
+func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection, documents [][]byte, insert bool) (*internal.Timestamp, error) {
 	var err error
-	for _, d := range documents {
-		// ToDo: need to implement our own decoding to only extract custom keys
-		var s = &structpb.Struct{}
-		if err = json.Unmarshal(d, s); ulog.E(err) {
-			return err
+	var ts = internal.NewTimestamp()
+	for _, doc := range documents {
+		var deserializedDoc map[string]interface{}
+		dec := jsoniter.NewDecoder(bytes.NewReader(doc))
+		dec.UseNumber()
+		if err = dec.Decode(&deserializedDoc); ulog.E(err) {
+			return nil, err
+		}
+		if err = coll.Validate(deserializedDoc); err != nil {
+			// schema validation failed
+			return nil, err
 		}
 
-		indexParts, err := runner.extractIndexParts(coll.Indexes.PrimaryKey.Fields, s.GetFields())
+		indexParts, err := runner.extractIndexParts(coll.Indexes.PrimaryKey.Fields, doc)
 		if ulog.E(err) {
-			return err
+			return nil, err
 		}
 
 		var key keys.Key
 		if key, err = runner.encoder.EncodeKey(tenant.GetNamespace(), db, coll, coll.Indexes.PrimaryKey, indexParts); ulog.E(err) {
-			return err
+			return nil, err
 		}
 
+		tableData := internal.NewTableDataWithTS(ts, nil, doc)
 		if insert {
-			err = tx.Insert(ctx, key, d)
+			err = tx.Insert(ctx, key, tableData)
 		} else {
-			err = tx.Replace(ctx, key, d)
+			err = tx.Replace(ctx, key, tableData)
 		}
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return err
+	return ts, err
 }
 
 func (runner *BaseQueryRunner) buildKeysUsingFilter(tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection, reqFilter []byte) ([]keys.Key, error) {
-	filters, err := filter.Build(reqFilter)
+	filterFactory := filter.NewFactory(coll.Fields)
+	filters, err := filterFactory.Build(reqFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -219,10 +232,14 @@ func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, err
 	}
 
-	if err := runner.insertOrReplace(ctx, tx, tenant, db, coll, runner.req.GetDocuments(), true); err != nil {
+	ts, err := runner.insertOrReplace(ctx, tx, tenant, db, coll, runner.req.GetDocuments(), true)
+	if err != nil {
 		return nil, err
 	}
-	return &Response{}, nil
+	return &Response{
+		status:    InsertedStatus,
+		createdAt: ts,
+	}, nil
 }
 
 type ReplaceQueryRunner struct {
@@ -242,10 +259,14 @@ func (runner *ReplaceQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 		return nil, err
 	}
 
-	if err := runner.insertOrReplace(ctx, tx, tenant, db, coll, runner.req.GetDocuments(), false); err != nil {
+	ts, err := runner.insertOrReplace(ctx, tx, tenant, db, coll, runner.req.GetDocuments(), false)
+	if err != nil {
 		return nil, err
 	}
-	return &Response{}, nil
+	return &Response{
+		status:    ReplacedStatus,
+		createdAt: ts,
+	}, nil
 }
 
 type UpdateQueryRunner struct {
@@ -255,6 +276,7 @@ type UpdateQueryRunner struct {
 }
 
 func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, error) {
+	var ts = internal.NewTimestamp()
 	db, err := runner.GetDatabase(ctx, tx, tenant, runner.req.GetDb())
 	if err != nil {
 		return nil, err
@@ -276,20 +298,41 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, err
 	}
 
-	for _, key := range iKeys {
-		// decode the fields now
-		if err = tx.Update(ctx, key, func(existingDoc []byte) ([]byte, error) {
-			merged, er := factory.MergeAndGet(existingDoc)
-			if er != nil {
-				return nil, er
-			}
-			return merged, nil
-		}); ulog.E(err) {
+	for _, fieldOperators := range factory.FieldOperators {
+		v, err := fieldOperators.DeserializeDoc()
+		if err != nil {
+			return nil, err
+		}
+
+		if err = collection.Validate(v); err != nil {
+			// schema validation failed
 			return nil, err
 		}
 	}
 
-	return &Response{}, err
+	modifiedCount := int32(0)
+	for _, key := range iKeys {
+		// decode the fields now
+		modified := int32(0)
+		if modified, err = tx.Update(ctx, key, func(existing *internal.TableData) (*internal.TableData, error) {
+			merged, er := factory.MergeAndGet(existing.RawData)
+			if er != nil {
+				return nil, er
+			}
+
+			// ToDo: may need to change the schema version
+			return internal.NewTableDataWithTS(existing.CreatedAt, ts, merged), nil
+		}); ulog.E(err) {
+			return nil, err
+		}
+		modifiedCount += modified
+	}
+
+	return &Response{
+		status:        UpdatedStatus,
+		updatedAt:     ts,
+		modifiedCount: modifiedCount,
+	}, err
 }
 
 type DeleteQueryRunner struct {
@@ -299,6 +342,7 @@ type DeleteQueryRunner struct {
 }
 
 func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, error) {
+	var ts = internal.NewTimestamp()
 	db, err := runner.GetDatabase(ctx, tx, tenant, runner.req.GetDb())
 	if err != nil {
 		return nil, err
@@ -320,7 +364,10 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		}
 	}
 
-	return &Response{}, nil
+	return &Response{
+		status:    DeletedStatus,
+		updatedAt: ts,
+	}, nil
 }
 
 // StreamingQueryRunner is a runner used for Queries that are reads and needs to return result in streaming fashion
@@ -405,20 +452,31 @@ func (runner *StreamingQueryRunner) iterate(ctx context.Context, tx transaction.
 		limit = runner.req.GetOptions().Limit
 	}
 
-	var v kv.KeyValue
-	for it.Next(&v) {
+	var row kv.KeyValue
+	for it.Next(&row) {
 		if limit > 0 && limit <= *totalResults {
 			return nil
 		}
 
-		newValue, err := fieldFactory.Apply(v.Value)
+		newValue, err := fieldFactory.Apply(row.Data.RawData)
 		if ulog.E(err) {
 			return err
 		}
+		var createdAt, updatedAt *timestamppb.Timestamp
+		if row.Data.CreatedAt != nil {
+			createdAt = row.Data.CreatedAt.GetProtoTS()
+		}
+		if row.Data.UpdatedAt != nil {
+			updatedAt = row.Data.UpdatedAt.GetProtoTS()
+		}
 
 		if err := runner.streaming.Send(&api.ReadResponse{
-			Doc: newValue,
-			Key: v.FDBKey,
+			Data: newValue,
+			Metadata: &api.ResponseMetadata{
+				CreatedAt: createdAt,
+				UpdatedAt: updatedAt,
+			},
+			ResumeToken: row.FDBKey,
 		}); ulog.E(err) {
 			return err
 		}
@@ -435,6 +493,7 @@ type CollectionQueryRunner struct {
 	drop           *api.DropCollectionRequest
 	list           *api.ListCollectionsRequest
 	createOrUpdate *api.CreateOrUpdateCollectionRequest
+	describe       *api.DescribeCollectionRequest
 }
 
 func (runner *CollectionQueryRunner) SetCreateOrUpdateCollectionReq(create *api.CreateOrUpdateCollectionRequest) {
@@ -449,6 +508,10 @@ func (runner *CollectionQueryRunner) SetListCollectionReq(list *api.ListCollecti
 	runner.list = list
 }
 
+func (runner *CollectionQueryRunner) SetDescribeCollectionReq(describe *api.DescribeCollectionRequest) {
+	runner.describe = describe
+}
+
 func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, error) {
 	if runner.drop != nil {
 		db, err := runner.GetDatabase(ctx, tx, tenant, runner.drop.GetDb())
@@ -456,14 +519,12 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			return nil, err
 		}
 
-		if db.GetCollection(runner.drop.GetCollection()) == nil {
-			return nil, api.Errorf(codes.NotFound, "collection doesn't exists '%s'", runner.drop.GetCollection())
-		}
-
 		if err = tenant.DropCollection(ctx, tx, db, runner.drop.GetCollection()); err != nil {
 			return nil, err
 		}
-		return &Response{}, nil
+		return &Response{
+			status: DroppedStatus,
+		}, nil
 	} else if runner.createOrUpdate != nil {
 		db, err := runner.GetDatabase(ctx, tx, tenant, runner.createOrUpdate.GetDb())
 		if err != nil {
@@ -484,7 +545,9 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			return nil, err
 		}
 
-		return &Response{}, nil
+		return &Response{
+			status: CreatedStatus,
+		}, nil
 	} else if runner.list != nil {
 		db, err := runner.GetDatabase(ctx, tx, tenant, runner.list.GetDb())
 		if err != nil {
@@ -495,12 +558,33 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		var collections = make([]*api.CollectionInfo, len(collectionList))
 		for i, c := range collectionList {
 			collections[i] = &api.CollectionInfo{
-				Name: c.GetName(),
+				Collection: c.GetName(),
 			}
 		}
 		return &Response{
 			Response: &api.ListCollectionsResponse{
 				Collections: collections,
+			},
+		}, nil
+	} else if runner.describe != nil {
+		db, err := runner.GetDatabase(ctx, tx, tenant, runner.describe.GetDb())
+		if err != nil {
+			return nil, err
+		}
+
+		coll, err := runner.GetCollections(db, runner.describe.GetCollection())
+		if err != nil {
+			return nil, err
+		}
+		return &Response{
+			Response: &api.DescribeCollectionResponse{
+				Description: &api.CollectionDescription{
+					Collection: coll.Name,
+					Metadata:   &api.CollectionMetadata{},
+					SchemaInfo: &api.SchemaInfo{
+						Schema: coll.Schema,
+					},
+				},
 			},
 		}, nil
 	}
@@ -511,9 +595,10 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 type DatabaseQueryRunner struct {
 	*BaseQueryRunner
 
-	drop   *api.DropDatabaseRequest
-	create *api.CreateDatabaseRequest
-	list   *api.ListDatabasesRequest
+	drop     *api.DropDatabaseRequest
+	create   *api.CreateDatabaseRequest
+	list     *api.ListDatabasesRequest
+	describe *api.DescribeDatabaseRequest
 }
 
 func (runner *DatabaseQueryRunner) SetCreateDatabaseReq(create *api.CreateDatabaseRequest) {
@@ -526,6 +611,10 @@ func (runner *DatabaseQueryRunner) SetDropDatabaseReq(drop *api.DropDatabaseRequ
 
 func (runner *DatabaseQueryRunner) SetListDatabaseReq(list *api.ListDatabasesRequest) {
 	runner.list = list
+}
+
+func (runner *DatabaseQueryRunner) SetDescribeDatabaseReq(describe *api.DescribeDatabaseRequest) {
+	runner.describe = describe
 }
 
 func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, error) {
@@ -541,7 +630,9 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			return nil, err
 		}
 
-		return &Response{}, nil
+		return &Response{
+			status: DroppedStatus,
+		}, nil
 	} else if runner.create != nil {
 		db, err := tenant.GetDatabase(ctx, tx, runner.create.GetDb())
 		if err != nil {
@@ -554,19 +645,49 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		if err := tenant.CreateDatabase(ctx, tx, runner.create.GetDb()); err != nil {
 			return nil, err
 		}
-		return &Response{}, nil
+		return &Response{
+			status: CreatedStatus,
+		}, nil
 	} else if runner.list != nil {
 		databaseList := tenant.ListDatabases(ctx, tx)
 
 		var databases = make([]*api.DatabaseInfo, len(databaseList))
 		for i, l := range databaseList {
 			databases[i] = &api.DatabaseInfo{
-				Name: l,
+				Db: l,
 			}
 		}
 		return &Response{
 			Response: &api.ListDatabasesResponse{
 				Databases: databases,
+			},
+		}, nil
+	} else if runner.describe != nil {
+		db, err := runner.GetDatabase(ctx, tx, tenant, runner.describe.GetDb())
+		if err != nil {
+			return nil, err
+		}
+
+		collectionList := db.ListCollection()
+
+		var collectionsDescription = make([]*api.CollectionDescription, len(collectionList))
+		for i, c := range collectionList {
+			collectionsDescription[i] = &api.CollectionDescription{
+				Collection: c.GetName(),
+				Metadata:   &api.CollectionMetadata{},
+				SchemaInfo: &api.SchemaInfo{
+					Schema: c.Schema,
+				},
+			}
+		}
+
+		return &Response{
+			Response: &api.DescribeDatabaseResponse{
+				Description: &api.DatabaseDescription{
+					Db:                     db.Name(),
+					Metadata:               &api.DatabaseMetadata{},
+					CollectionsDescription: collectionsDescription,
+				},
 			},
 		}, nil
 	}

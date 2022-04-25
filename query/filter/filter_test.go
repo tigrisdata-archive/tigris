@@ -18,12 +18,19 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/tigrisdata/tigrisdb/schema"
 )
 
 func TestFilterUsingJSON(t *testing.T) {
 	t.Run("basic_filter", func(t *testing.T) {
 		js := []byte(`{"f1": 10, "f2": 10}`)
-		filters, err := Build(js)
+		var factory = Factory{
+			fields: []*schema.Field{
+				{FieldName: "f1", DataType: schema.Int64Type},
+				{FieldName: "f2", DataType: schema.Int64Type},
+			},
+		}
+		filters, err := factory.Build(js)
 		require.NoError(t, err)
 		require.Len(t, filters, 2)
 		for _, f := range filters {
@@ -32,7 +39,14 @@ func TestFilterUsingJSON(t *testing.T) {
 	})
 	t.Run("filter_or_nested_and", func(t *testing.T) {
 		js := []byte(`{"$or": [{"f1": 20}, {"$and": [{"f2":5}, {"f3": 6}]}]}`)
-		filters, err := Build(js)
+		var factory = Factory{
+			fields: []*schema.Field{
+				{FieldName: "f1", DataType: schema.Int64Type},
+				{FieldName: "f2", DataType: schema.Int64Type},
+				{FieldName: "f3", DataType: schema.Int64Type},
+			},
+		}
+		filters, err := factory.Build(js)
 		require.NoError(t, err)
 		require.Len(t, filters, 1)
 		require.Len(t, filters[0].(*OrFilter).filter, 2)
@@ -43,7 +57,16 @@ func TestFilterUsingJSON(t *testing.T) {
 	})
 	t.Run("filter_and_or_nested", func(t *testing.T) {
 		js := []byte(`{"$and": [{"a": 20}, {"$or": [{"b":5}, {"c": 6}]}, {"$and": [{"e":5}, {"f": 6}]}]}`)
-		filters, err := Build(js)
+		var factory = Factory{
+			fields: []*schema.Field{
+				{FieldName: "a", DataType: schema.Int64Type},
+				{FieldName: "b", DataType: schema.Int64Type},
+				{FieldName: "c", DataType: schema.Int64Type},
+				{FieldName: "e", DataType: schema.Int64Type},
+				{FieldName: "f", DataType: schema.Int64Type},
+			},
+		}
+		filters, err := factory.Build(js)
 		require.NoError(t, err)
 		require.Len(t, filters, 1)
 		require.Len(t, filters[0].(*AndFilter).filter, 3)
@@ -55,7 +78,21 @@ func TestFilterUsingJSON(t *testing.T) {
 	})
 	t.Run("filter_mix", func(t *testing.T) {
 		js := []byte(`{"f1": 10, "f2": 10, "$or": [{"f3": 20}, {"$and": [{"f4":5}, {"f5": 6}]}], "$and": [{"a": 20}, {"$or": [{"b":5}, {"c": 6}]}, {"$and": [{"e":5}, {"f": 6}]}]}`)
-		filters, err := Build(js)
+		var factory = Factory{
+			fields: []*schema.Field{
+				{FieldName: "f1", DataType: schema.Int64Type},
+				{FieldName: "f2", DataType: schema.Int64Type},
+				{FieldName: "f3", DataType: schema.Int64Type},
+				{FieldName: "f4", DataType: schema.Int64Type},
+				{FieldName: "f5", DataType: schema.Int64Type},
+				{FieldName: "a", DataType: schema.Int64Type},
+				{FieldName: "b", DataType: schema.Int64Type},
+				{FieldName: "c", DataType: schema.Int64Type},
+				{FieldName: "e", DataType: schema.Int64Type},
+				{FieldName: "f", DataType: schema.Int64Type},
+			},
+		}
+		filters, err := factory.Build(js)
 		require.NoError(t, err)
 		require.Len(t, filters, 4)
 
@@ -81,7 +118,13 @@ func TestFilterUsingJSON(t *testing.T) {
 }
 
 func TestFilterDuplicateKey(t *testing.T) {
-	filters, err := Build([]byte(`{"a": 10, "b": {"$eq": 10}, "b": 15}`))
+	var factory = Factory{
+		fields: []*schema.Field{
+			{FieldName: "a", DataType: schema.Int64Type},
+			{FieldName: "b", DataType: schema.Int64Type},
+		},
+	}
+	filters, err := factory.Build([]byte(`{"a": 10, "b": {"$eq": 10}, "b": 15}`))
 	require.Nil(t, filters)
 	require.Contains(t, err.Error(), "duplicate filter 'b'")
 }

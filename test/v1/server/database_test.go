@@ -39,7 +39,17 @@ func (s *DatabaseSuite) TestCreateDatabase() {
 	resp.Status(http.StatusOK).
 		JSON().
 		Object().
-		ValueEqual("msg", "database created successfully")
+		ValueEqual("message", "database created successfully")
+}
+
+func (s *DatabaseSuite) TestDescribeDatabase() {
+	resp := describeDatabase(s.T(), "test_db")
+	resp.Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("description").
+		Object().
+		ValueEqual("db", "test_db")
 }
 
 func (s *DatabaseSuite) TestDropDatabase_NotFound() {
@@ -55,7 +65,7 @@ func (s *DatabaseSuite) TestDropDatabase() {
 	resp.Status(http.StatusOK).
 		JSON().
 		Object().
-		ValueEqual("msg", "database dropped successfully")
+		ValueEqual("message", "database dropped successfully")
 }
 
 func createDatabase(t *testing.T, databaseName string) *httpexpect.Response {
@@ -68,4 +78,9 @@ func dropDatabase(t *testing.T, databaseName string) *httpexpect.Response {
 	e := httpexpect.New(t, config.GetBaseURL())
 	return e.DELETE(getDatabaseURL(databaseName, "drop")).
 		Expect()
+}
+
+func describeDatabase(t *testing.T, databaseName string) *httpexpect.Response {
+	e := httpexpect.New(t, config.GetBaseURL())
+	return e.POST(getDatabaseURL(databaseName, "describe")).Expect()
 }

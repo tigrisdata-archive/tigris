@@ -21,6 +21,7 @@ import (
 
 	"github.com/google/uuid"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	"github.com/tigrisdata/tigrisdb/internal"
 	"github.com/tigrisdata/tigrisdb/keys"
 	"github.com/tigrisdata/tigrisdb/store/kv"
 	"google.golang.org/grpc/codes"
@@ -39,20 +40,20 @@ const (
 type session struct {
 	sync.RWMutex
 
-	kv    kv.KV
-	kTx   kv.Tx
-	state sessionState
-	txCtx *api.TransactionCtx
+	kvStore kv.KeyValueStore
+	kTx     kv.Tx
+	state   sessionState
+	txCtx   *api.TransactionCtx
 }
 
-func newSession(kv kv.KV) (*session, error) {
+func newSession(kv kv.KeyValueStore) (*session, error) {
 	if kv == nil {
 		return nil, status.Errorf(codes.Internal, "session needs non-nil kv object")
 	}
 	return &session{
-		kv:    kv,
-		state: sessionCreated,
-		txCtx: generateTransactionCtx(),
+		kvStore: kv,
+		state:   sessionCreated,
+		txCtx:   generateTransactionCtx(),
 	}, nil
 }
 
@@ -88,7 +89,7 @@ func (s *session) start(ctx context.Context) error {
 
 	s.state = sessionActive
 	var err error
-	if s.kTx, err = s.kv.Tx(ctx); err != nil {
+	if s.kTx, err = s.kvStore.Tx(ctx); err != nil {
 		return err
 	}
 
@@ -106,7 +107,7 @@ func (s *session) validateSession() error {
 	return nil
 }
 
-func (s *session) insert(ctx context.Context, key keys.Key, value []byte) error {
+func (s *session) insert(ctx context.Context, key keys.Key, data *internal.TableData) error {
 	s.Lock()
 	defer s.Unlock()
 
@@ -114,10 +115,10 @@ func (s *session) insert(ctx context.Context, key keys.Key, value []byte) error 
 		return err
 	}
 
-	return s.kTx.Insert(ctx, key.Table(), kv.BuildKey(key.IndexParts()...), value)
+	return s.kTx.Insert(ctx, key.Table(), kv.BuildKey(key.IndexParts()...), data)
 }
 
-func (s *session) replace(ctx context.Context, key keys.Key, value []byte) error {
+func (s *session) replace(ctx context.Context, key keys.Key, data *internal.TableData) error {
 	s.Lock()
 	defer s.Unlock()
 
@@ -125,15 +126,15 @@ func (s *session) replace(ctx context.Context, key keys.Key, value []byte) error
 		return err
 	}
 
-	return s.kTx.Replace(ctx, key.Table(), kv.BuildKey(key.IndexParts()...), value)
+	return s.kTx.Replace(ctx, key.Table(), kv.BuildKey(key.IndexParts()...), data)
 }
 
-func (s *session) update(ctx context.Context, key keys.Key, apply func([]byte) ([]byte, error)) error {
+func (s *session) update(ctx context.Context, key keys.Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error) {
 	s.Lock()
 	defer s.Unlock()
 
 	if err := s.validateSession(); err != nil {
-		return err
+		return -1, err
 	}
 
 	return s.kTx.Update(ctx, key.Table(), kv.BuildKey(key.IndexParts()...), apply)

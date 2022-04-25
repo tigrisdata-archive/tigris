@@ -15,6 +15,7 @@
 package update
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/buger/jsonparser"
@@ -112,4 +113,12 @@ func NewFieldOperator(op FieldOPType, val jsoniter.RawMessage) *FieldOperator {
 		Op:       op,
 		Document: val,
 	}
+}
+
+func (f *FieldOperator) DeserializeDoc() (interface{}, error) {
+	var v interface{}
+	dec := jsoniter.NewDecoder(bytes.NewReader(f.Document))
+	dec.UseNumber()
+	err := dec.Decode(&v)
+	return v, err
 }

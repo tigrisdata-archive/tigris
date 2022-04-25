@@ -28,7 +28,7 @@ import (
 
 /**
 {
-	"name": "test_collection",
+	"title": "test_collection",
 	"description": "this schema is for integration tests",
 	"properties": {
 		"pkey_int": {
@@ -55,7 +55,7 @@ import (
 		"bytes_value": {
 			"description": "simple bytes field",
 			"type": "string",
-			"contentEncoding": "base64"
+			"format": "byte"
 		}
 	},
 	"primary_key": [
@@ -66,7 +66,7 @@ import (
 */
 var testCreateSchema = map[string]interface{}{
 	"schema": map[string]interface{}{
-		"name":        "test_collection",
+		"title":       "test_collection",
 		"description": "this schema is for integration tests",
 		"properties": map[string]interface{}{
 			"pkey_int": map[string]interface{}{
@@ -82,6 +82,10 @@ var testCreateSchema = map[string]interface{}{
 				"type":        "string",
 				"maxLength":   128,
 			},
+			"added_string_value": map[string]interface{}{
+				"description": "simple string field",
+				"type":        "string",
+			},
 			"bool_value": map[string]interface{}{
 				"description": "simple boolean field",
 				"type":        "boolean",
@@ -90,10 +94,48 @@ var testCreateSchema = map[string]interface{}{
 				"description": "simple double field",
 				"type":        "number",
 			},
+			"added_value_double": map[string]interface{}{
+				"description": "simple double field",
+				"type":        "number",
+			},
 			"bytes_value": map[string]interface{}{
-				"description":     "simple bytes field",
-				"type":            "string",
-				"contentEncoding": "base64",
+				"description": "simple bytes field",
+				"type":        "string",
+				"format":      "byte",
+			},
+			"uuid_value": map[string]interface{}{
+				"description": "uuid field",
+				"type":        "string",
+				"format":      "uuid",
+			},
+			"date_time_value": map[string]interface{}{
+				"description": "date time field",
+				"type":        "string",
+				"format":      "date-time",
+			},
+			"array_value": map[string]interface{}{
+				"description": "array field",
+				"type":        "array",
+				"items": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"id": map[string]interface{}{
+							"type": "integer",
+						},
+						"product": map[string]interface{}{
+							"type": "string",
+						},
+					},
+				},
+			},
+			"object_value": map[string]interface{}{
+				"description": "object field",
+				"type":        "object",
+				"properties": map[string]interface{}{
+					"name": map[string]interface{}{
+						"type": "string",
+					},
+				},
 			},
 		},
 		"primary_key": []interface{}{"pkey_int"},
@@ -147,7 +189,7 @@ func (s *CollectionSuite) TestCreateCollection() {
 		resp.Status(http.StatusOK).
 			JSON().
 			Object().
-			ValueEqual("msg", "collection created successfully")
+			ValueEqual("message", "collection created successfully")
 	})
 	s.Run("status_conflict", func() {
 		dropCollection(s.T(), s.database, "test_collection")
@@ -166,7 +208,7 @@ func (s *CollectionSuite) TestCreateCollection() {
 			Status(http.StatusOK).
 			JSON().
 			Object().
-			ValueEqual("msg", "collection created successfully")
+			ValueEqual("message", "collection created successfully")
 
 		e.POST(getCollectionURL(s.database, "test_collection", "createOrUpdate")).
 			WithJSON(createOrUpdateOptions).
@@ -185,7 +227,7 @@ func (s *CollectionSuite) TestDropCollection() {
 	resp.Status(http.StatusOK).
 		JSON().
 		Object().
-		ValueEqual("msg", "collection dropped successfully")
+		ValueEqual("message", "collection dropped successfully")
 
 	// dropping again should return in a NOT FOUND error
 	resp = dropCollection(s.T(), s.database, "test_collection")
@@ -195,9 +237,31 @@ func (s *CollectionSuite) TestDropCollection() {
 		ValueEqual("message", "collection doesn't exists 'test_collection'")
 }
 
+func (s *CollectionSuite) TestDescribeCollection() {
+	createCollection(s.T(), s.database, "test_collection", testCreateSchema)
+	resp := describeCollection(s.T(), s.database, "test_collection", testCreateSchema)
+
+	resp.Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("description").
+		Object().
+		ValueEqual("collection", "test_collection")
+
+	// cleanup
+	dropCollection(s.T(), s.database, "test_collection")
+}
+
 func createCollection(t *testing.T, database string, collection string, schema map[string]interface{}) *httpexpect.Response {
 	e := httpexpect.New(t, config.GetBaseURL())
 	return e.POST(getCollectionURL(database, collection, "createOrUpdate")).
+		WithJSON(schema).
+		Expect()
+}
+
+func describeCollection(t *testing.T, database string, collection string, schema map[string]interface{}) *httpexpect.Response {
+	e := httpexpect.New(t, config.GetBaseURL())
+	return e.POST(getCollectionURL(database, collection, "describe")).
 		WithJSON(schema).
 		Expect()
 }

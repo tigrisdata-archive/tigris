@@ -32,7 +32,7 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
-	kv, err := kv.NewFoundationDB(fdbCfg)
+	kv, err := kv.NewKeyValueStore(fdbCfg)
 	require.NoError(t, err)
 
 	tm := transaction.NewManager(kv)
@@ -128,7 +128,7 @@ func TestTenantManager_CreateDatabases(t *testing.T) {
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
-	kv, err := kv.NewFoundationDB(fdbCfg)
+	kv, err := kv.NewKeyValueStore(fdbCfg)
 	require.NoError(t, err)
 
 	tm := transaction.NewManager(kv)
@@ -165,7 +165,7 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
-	kv, err := kv.NewFoundationDB(fdbCfg)
+	kv, err := kv.NewKeyValueStore(fdbCfg)
 	require.NoError(t, err)
 
 	tm := transaction.NewManager(kv)
@@ -194,6 +194,7 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 		require.Equal(t, "db2", db2.name)
 
 		jsSchema := []byte(`{
+        "title": "test_collection",
 		"properties": {
 			"K1": {
 				"type": "string"
@@ -225,7 +226,7 @@ func TestTenantManager_DropCollection(t *testing.T) {
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
-	kv, err := kv.NewFoundationDB(fdbCfg)
+	kv, err := kv.NewKeyValueStore(fdbCfg)
 	require.NoError(t, err)
 
 	tm := transaction.NewManager(kv)
@@ -254,6 +255,7 @@ func TestTenantManager_DropCollection(t *testing.T) {
 		require.Equal(t, "db2", db2.name)
 
 		jsSchema := []byte(`{
+		"title": "test_collection",
 		"properties": {
 			"K1": {
 				"type": "string"

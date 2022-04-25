@@ -18,6 +18,7 @@ import (
 	"context"
 
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	"github.com/tigrisdata/tigrisdb/internal"
 	"github.com/tigrisdata/tigrisdb/keys"
 	"github.com/tigrisdata/tigrisdb/store/kv"
 	"google.golang.org/grpc/codes"
@@ -38,9 +39,9 @@ var (
 // Tx interface exposes a method to execute and then other method to end the transaction. When Tx is returned at that
 // point transaction is already started so no need for explicit start.
 type Tx interface {
-	Insert(ctx context.Context, key keys.Key, value []byte) error
-	Replace(ctx context.Context, key keys.Key, value []byte) error
-	Update(ctx context.Context, key keys.Key, apply func([]byte) ([]byte, error)) error
+	Insert(ctx context.Context, key keys.Key, data *internal.TableData) error
+	Replace(ctx context.Context, key keys.Key, data *internal.TableData) error
+	Update(ctx context.Context, key keys.Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error)
 	Delete(ctx context.Context, key keys.Key) error
 	Read(ctx context.Context, key keys.Key) (kv.Iterator, error)
 	Commit(ctx context.Context) error
@@ -52,24 +53,24 @@ type Tx interface {
 // Manager is used to track all the sessions and provide all the functionality related to transactions. Once created
 // this will create a session tracker for tracking the sessions.
 type Manager struct {
-	kv      kv.KV
+	kvStore kv.KeyValueStore
 	tracker *sessionTracker
 }
 
-func NewManager(kv kv.KV) *Manager {
+func NewManager(kvStore kv.KeyValueStore) *Manager {
 	return &Manager{
-		kv:      kv,
+		kvStore: kvStore,
 		tracker: newSessionTracker(),
 	}
 }
 
 func (m *Manager) GetKV() kv.KV {
-	return m.kv
+	return m.kvStore
 }
 
 // StartTx always starts a new session and tracks the session based on the input parameter.
 func (m *Manager) StartTx(ctx context.Context, enableTracking bool) (Tx, *api.TransactionCtx, error) {
-	session, err := newSession(m.kv)
+	session, err := newSession(m.kvStore)
 	if err != nil {
 		return nil, nil, status.Errorf(codes.Internal, "issue creating a session %v", err)
 	}
@@ -217,15 +218,15 @@ type baseTx struct {
 	session *session
 }
 
-func (b *baseTx) Insert(ctx context.Context, key keys.Key, value []byte) error {
-	return b.session.insert(ctx, key, value)
+func (b *baseTx) Insert(ctx context.Context, key keys.Key, data *internal.TableData) error {
+	return b.session.insert(ctx, key, data)
 }
 
-func (b *baseTx) Replace(ctx context.Context, key keys.Key, value []byte) error {
-	return b.session.replace(ctx, key, value)
+func (b *baseTx) Replace(ctx context.Context, key keys.Key, data *internal.TableData) error {
+	return b.session.replace(ctx, key, data)
 }
 
-func (b *baseTx) Update(ctx context.Context, key keys.Key, apply func([]byte) ([]byte, error)) error {
+func (b *baseTx) Update(ctx context.Context, key keys.Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error) {
 	return b.session.update(ctx, key, apply)
 }
 

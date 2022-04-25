@@ -31,7 +31,7 @@ func TestSchemaSubspace(t *testing.T) {
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
-	kv, err := kv.NewFoundationDB(fdbCfg)
+	kv, err := kv.NewKeyValueStore(fdbCfg)
 	require.NoError(t, err)
 
 	t.Run("put_error", func(t *testing.T) {
@@ -59,7 +59,7 @@ func TestSchemaSubspace(t *testing.T) {
 		require.NoError(t, err)
 		s := SchemaSubspace{}
 		require.NoError(t, s.Put(ctx, tx, 1, 2, 3, schema, 1))
-		require.Equal(t, api.Errorf(codes.AlreadyExists, "duplicate key value, violates unique primary key constraint"), s.Put(ctx, tx, 1, 2, 3, schema, 1))
+		require.Equal(t, api.Errorf(codes.AlreadyExists, "duplicate key value, violates key constraint"), s.Put(ctx, tx, 1, 2, 3, schema, 1))
 		require.NoError(t, tx.Rollback(ctx))
 	})
 	t.Run("put_get", func(t *testing.T) {
@@ -69,7 +69,7 @@ func TestSchemaSubspace(t *testing.T) {
 		_ = kv.DropTable(ctx, SchemaSubspaceKey)
 
 		schema := []byte(`{
-		"name": "collection1",
+		"title": "collection1",
 		"description": "this schema is for client integration tests",
 		"properties": {
 			"K1": {
@@ -111,7 +111,7 @@ func TestSchemaSubspace(t *testing.T) {
 		_ = kv.DropTable(ctx, SchemaSubspaceKey)
 
 		schema1 := []byte(`{
-		"name": "collection1",
+		"title": "collection1",
 		"description": "this schema is for client integration tests",
 		"properties": {
 			"K1": {
@@ -128,7 +128,7 @@ func TestSchemaSubspace(t *testing.T) {
 		"primary_key": ["K1", "K2"]
 	}`)
 		schema2 := []byte(`{
-		"name": "collection1",
+		"title": "collection1",
 		"description": "this schema is for client integration tests",
 		"properties": {
 			"K1": {
@@ -168,7 +168,7 @@ func TestSchemaSubspace(t *testing.T) {
 		_ = kv.DropTable(ctx, SchemaSubspaceKey)
 
 		schema1 := []byte(`{
-		"name": "collection1",
+		"title": "collection1",
 		"description": "this schema is for client integration tests",
 		"properties": {
 			"K1": {
@@ -185,7 +185,7 @@ func TestSchemaSubspace(t *testing.T) {
 		"primary_key": ["K1", "K2"]
 	}`)
 		schema2 := []byte(`{
-		"name": "collection1",
+		"title": "collection1",
 		"description": "this schema is for client integration tests",
 		"properties": {
 			"K1": {

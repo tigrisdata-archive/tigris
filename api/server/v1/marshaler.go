@@ -56,22 +56,32 @@ func (c *CustomMarshaler) Marshal(v interface{}) ([]byte, error) {
 func (x *ReadResponse) MarshalJSON() ([]byte, error) {
 	var err error
 	bb := bytebufferpool.Get()
-	_, err = bb.Write([]byte(`{"doc":`))
+	_, err = bb.Write([]byte(`{"data":`))
 	if ulog.E(err) {
 		return nil, Errorf(codes.Internal, err.Error())
 	}
 
-	_, err = bb.Write(x.Doc)
+	_, err = bb.Write(x.Data)
 	if ulog.E(err) {
 		return nil, Errorf(codes.Internal, err.Error())
 	}
 
-	key, err := jsoniter.Marshal(x.Key)
+	_, err = bb.Write([]byte(`,"metadata":`))
+	metadataKey, err := jsoniter.Marshal(x.Metadata)
+	if err != nil {
+		return nil, err
+	}
+	_, err = bb.Write(metadataKey)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = bb.Write([]byte(`,"key":`))
+	key, err := jsoniter.Marshal(x.ResumeToken)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = bb.Write([]byte(`,"resume_token":`))
 	if ulog.E(err) {
 		return nil, Errorf(codes.Internal, err.Error())
 	}

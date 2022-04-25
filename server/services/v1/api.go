@@ -44,7 +44,7 @@ const (
 type apiService struct {
 	api.UnimplementedTigrisDBServer
 
-	kv                    kv.KV
+	kvStore               kv.KeyValueStore
 	txMgr                 *transaction.Manager
 	encoder               metadata.Encoder
 	tenantMgr             *metadata.TenantManager
@@ -52,9 +52,9 @@ type apiService struct {
 	queryRunnerFactory    *QueryRunnerFactory
 }
 
-func newApiService(kv kv.KV) *apiService {
+func newApiService(kv kv.KeyValueStore) *apiService {
 	u := &apiService{
-		kv:      kv,
+		kvStore: kv,
 		txMgr:   transaction.NewManager(kv),
 		encoder: metadata.NewEncoder(),
 	}
@@ -67,7 +67,8 @@ func newApiService(kv kv.KV) *apiService {
 
 	tenantMgr := metadata.NewTenantManager()
 	if err := tenantMgr.Reload(ctx, tx); ulog.E(err) {
-		log.Fatal().Err(err).Msgf("error starting server: reloading tenants failed")
+		// ToDo: no need to panic, probably handle through async thread.
+		log.Err(err).Msgf("error starting server: reloading tenants failed")
 	}
 	_ = tx.Commit(ctx)
 
@@ -163,7 +164,7 @@ func (s *apiService) Insert(ctx context.Context, r *api.InsertRequest) (*api.Ins
 		return nil, err
 	}
 
-	_, err := s.Run(ctx, &ReqOptions{
+	resp, err := s.Run(ctx, &ReqOptions{
 		txCtx:       api.GetTransaction(r),
 		queryRunner: s.queryRunnerFactory.GetInsertQueryRunner(r),
 	})
@@ -171,7 +172,12 @@ func (s *apiService) Insert(ctx context.Context, r *api.InsertRequest) (*api.Ins
 		return nil, err
 	}
 
-	return &api.InsertResponse{}, nil
+	return &api.InsertResponse{
+		Status: resp.status,
+		Metadata: &api.ResponseMetadata{
+			CreatedAt: resp.createdAt.GetProtoTS(),
+		},
+	}, nil
 }
 
 func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.ReplaceResponse, error) {
@@ -179,7 +185,7 @@ func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.R
 		return nil, err
 	}
 
-	_, err := s.Run(ctx, &ReqOptions{
+	resp, err := s.Run(ctx, &ReqOptions{
 		txCtx:       api.GetTransaction(r),
 		queryRunner: s.queryRunnerFactory.GetReplaceQueryRunner(r),
 	})
@@ -187,7 +193,12 @@ func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.R
 		return nil, err
 	}
 
-	return &api.ReplaceResponse{}, nil
+	return &api.ReplaceResponse{
+		Status: resp.status,
+		Metadata: &api.ResponseMetadata{
+			CreatedAt: resp.createdAt.GetProtoTS(),
+		},
+	}, nil
 }
 
 func (s *apiService) Update(ctx context.Context, r *api.UpdateRequest) (*api.UpdateResponse, error) {
@@ -195,7 +206,7 @@ func (s *apiService) Update(ctx context.Context, r *api.UpdateRequest) (*api.Upd
 		return nil, err
 	}
 
-	_, err := s.Run(ctx, &ReqOptions{
+	resp, err := s.Run(ctx, &ReqOptions{
 		txCtx:       api.GetTransaction(r),
 		queryRunner: s.queryRunnerFactory.GetUpdateQueryRunner(r),
 	})
@@ -203,7 +214,13 @@ func (s *apiService) Update(ctx context.Context, r *api.UpdateRequest) (*api.Upd
 		return nil, err
 	}
 
-	return &api.UpdateResponse{}, nil
+	return &api.UpdateResponse{
+		Status:        resp.status,
+		ModifiedCount: resp.modifiedCount,
+		Metadata: &api.ResponseMetadata{
+			UpdatedAt: resp.updatedAt.GetProtoTS(),
+		},
+	}, nil
 }
 
 func (s *apiService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.DeleteResponse, error) {
@@ -211,7 +228,7 @@ func (s *apiService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.Del
 		return nil, err
 	}
 
-	_, err := s.Run(ctx, &ReqOptions{
+	resp, err := s.Run(ctx, &ReqOptions{
 		txCtx:       api.GetTransaction(r),
 		queryRunner: s.queryRunnerFactory.GetDeleteQueryRunner(r),
 	})
@@ -219,7 +236,12 @@ func (s *apiService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.Del
 		return nil, err
 	}
 
-	return &api.DeleteResponse{}, nil
+	return &api.DeleteResponse{
+		Status: resp.status,
+		Metadata: &api.ResponseMetadata{
+			UpdatedAt: resp.updatedAt.GetProtoTS(),
+		},
+	}, nil
 }
 
 func (s *apiService) Read(r *api.ReadRequest, stream api.TigrisDB_ReadServer) error {
@@ -246,7 +268,7 @@ func (s *apiService) CreateOrUpdateCollection(ctx context.Context, r *api.Create
 	runner := s.queryRunnerFactory.GetCollectionQueryRunner()
 	runner.SetCreateOrUpdateCollectionReq(r)
 
-	_, err := s.Run(ctx, &ReqOptions{
+	resp, err := s.Run(ctx, &ReqOptions{
 		queryRunner: runner,
 	})
 	if err != nil {
@@ -254,7 +276,8 @@ func (s *apiService) CreateOrUpdateCollection(ctx context.Context, r *api.Create
 	}
 
 	return &api.CreateOrUpdateCollectionResponse{
-		Msg: "collection created successfully",
+		Status:  resp.status,
+		Message: "collection created successfully",
 	}, nil
 }
 
@@ -266,7 +289,7 @@ func (s *apiService) DropCollection(ctx context.Context, r *api.DropCollectionRe
 	runner := s.queryRunnerFactory.GetCollectionQueryRunner()
 	runner.SetDropCollectionReq(r)
 
-	_, err := s.Run(ctx, &ReqOptions{
+	resp, err := s.Run(ctx, &ReqOptions{
 		queryRunner: runner,
 	})
 	if err != nil {
@@ -274,7 +297,8 @@ func (s *apiService) DropCollection(ctx context.Context, r *api.DropCollectionRe
 	}
 
 	return &api.DropCollectionResponse{
-		Msg: "collection dropped successfully",
+		Status:  resp.status,
+		Message: "collection dropped successfully",
 	}, nil
 }
 
@@ -321,14 +345,16 @@ func (s *apiService) CreateDatabase(ctx context.Context, r *api.CreateDatabaseRe
 
 	queryRunner := s.queryRunnerFactory.GetDatabaseQueryRunner()
 	queryRunner.SetCreateDatabaseReq(r)
-	if _, err := s.Run(ctx, &ReqOptions{
+	resp, err := s.Run(ctx, &ReqOptions{
 		queryRunner: queryRunner,
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, err
 	}
 
 	return &api.CreateDatabaseResponse{
-		Msg: "database created successfully",
+		Status:  resp.status,
+		Message: "database created successfully",
 	}, nil
 }
 
@@ -339,15 +365,53 @@ func (s *apiService) DropDatabase(ctx context.Context, r *api.DropDatabaseReques
 
 	queryRunner := s.queryRunnerFactory.GetDatabaseQueryRunner()
 	queryRunner.SetDropDatabaseReq(r)
-	if _, err := s.Run(ctx, &ReqOptions{
+	resp, err := s.Run(ctx, &ReqOptions{
 		queryRunner: queryRunner,
-	}); err != nil {
+	})
+	if err != nil {
 		return nil, err
 	}
 
 	return &api.DropDatabaseResponse{
-		Msg: "database dropped successfully",
+		Status:  resp.status,
+		Message: "database dropped successfully",
 	}, nil
+}
+
+func (s *apiService) DescribeCollection(ctx context.Context, r *api.DescribeCollectionRequest) (*api.DescribeCollectionResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
+	runner := s.queryRunnerFactory.GetCollectionQueryRunner()
+	runner.SetDescribeCollectionReq(r)
+
+	resp, err := s.Run(ctx, &ReqOptions{
+		queryRunner: runner,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.DescribeCollectionResponse), nil
+}
+
+func (s *apiService) DescribeDatabase(ctx context.Context, r *api.DescribeDatabaseRequest) (*api.DescribeDatabaseResponse, error) {
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
+	runner := s.queryRunnerFactory.GetDatabaseQueryRunner()
+	runner.SetDescribeDatabaseReq(r)
+
+	resp, err := s.Run(ctx, &ReqOptions{
+		queryRunner: runner,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.DescribeDatabaseResponse), nil
 }
 
 func (s *apiService) Run(ctx context.Context, req *ReqOptions) (*Response, error) {

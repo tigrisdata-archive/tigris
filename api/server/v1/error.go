@@ -79,6 +79,7 @@ func (e *TigrisDBError) WithDetails(details ...*ErrorDetails) *TigrisDBError {
 func MarshalStatus(status *spb.Status) ([]byte, error) {
 	var resp = &TigrisDBError{}
 	resp.Message = status.Message
+	resp.Code = codes.Code(status.Code)
 	if len(status.Details) > 0 {
 		var internalDetails []*ErrorDetails
 		for _, d := range status.Details {

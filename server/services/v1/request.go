@@ -16,9 +16,17 @@ package v1
 
 import (
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	"github.com/tigrisdata/tigrisdb/internal"
 )
 
-const ()
+const (
+	InsertedStatus string = "inserted"
+	ReplacedStatus string = "replaced"
+	UpdatedStatus  string = "updated"
+	DeletedStatus  string = "deleted"
+	CreatedStatus  string = "created"
+	DroppedStatus  string = "dropped"
+)
 
 // Streaming is a wrapper interface for passing around for streaming reads
 type Streaming interface {
@@ -34,4 +42,8 @@ type ReqOptions struct {
 // Response is a wrapper on api.Response
 type Response struct {
 	api.Response
+	status        string
+	createdAt     *internal.Timestamp
+	updatedAt     *internal.Timestamp
+	modifiedCount int32
 }

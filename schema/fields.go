@@ -23,19 +23,40 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-type Fields interface{}
-
 type FieldType int
 
 const (
-	UnknownType FieldType = iota + 1
+	UnknownType FieldType = iota
 	NullType
 	BoolType
-	IntType
+	Int32Type
+	Int64Type
 	DoubleType
-	BytesType
 	StringType
+	// ByteType is a base64 encoded characters, this means if this type is used as key then we need to decode it
+	// and then use it as key.
+	ByteType
+	UUIDType
+	// DateTimeType is a valid date representation as defined by RFC 3339, see https://datatracker.ietf.org/doc/html/rfc3339#section-5.6
+	DateTimeType
+	ArrayType
+	ObjectType
 )
+
+var FieldNames = [...]string{
+	UnknownType:  "unknown",
+	NullType:     "null",
+	BoolType:     "bool",
+	Int32Type:    "int32",
+	Int64Type:    "int64",
+	DoubleType:   "double",
+	StringType:   "string",
+	ByteType:     "byte",
+	UUIDType:     "uuid",
+	DateTimeType: "datetime",
+	ArrayType:    "array",
+	ObjectType:   "object",
+}
 
 const (
 	jsonSpecNull   = "null"
@@ -43,11 +64,18 @@ const (
 	jsonSpecInt    = "integer"
 	jsonSpecDouble = "number"
 	jsonSpecString = "string"
+	jsonSpecArray  = "array"
+	jsonSpecObject = "object"
 
-	jsonSpecEncodingB64 = "base64"
+	jsonSpecEncodingB64    = "base64"
+	jsonSpecFormatUUID     = "uuid"
+	jsonSpecFormatDateTime = "date-time"
+	jsonSpecFormatByte     = "byte"
+	jsonSpecFormatInt32    = "int32"
+	jsonSpecFormatInt64    = "int64"
 )
 
-func ToFieldType(jsonType string, encoding string) FieldType {
+func ToFieldType(jsonType string, encoding string, format string) FieldType {
 	jsonType = strings.ToLower(jsonType)
 	switch jsonType {
 	case jsonSpecNull:
@@ -55,41 +83,58 @@ func ToFieldType(jsonType string, encoding string) FieldType {
 	case jsonSpecBool:
 		return BoolType
 	case jsonSpecInt:
-		return IntType
+		if len(format) == 0 {
+			return Int64Type
+		}
+
+		switch format {
+		case jsonSpecFormatInt32:
+			return Int32Type
+		case jsonSpecFormatInt64:
+			return Int64Type
+		}
+		return UnknownType
 	case jsonSpecDouble:
 		return DoubleType
 	case jsonSpecString:
-		if encoding == jsonSpecEncodingB64 {
-			return BytesType
+		// if encoding is set
+		switch encoding {
+		case jsonSpecEncodingB64:
+			// base64 encoded characters
+			return ByteType
+		default:
+			if len(encoding) > 0 {
+				return UnknownType
+			}
 		}
-		if len(encoding) > 0 {
-			return UnknownType
+
+		// if format is specified
+		switch format {
+		case jsonSpecFormatUUID:
+			return UUIDType
+		case jsonSpecFormatDateTime:
+			return DateTimeType
+		case jsonSpecFormatByte:
+			return ByteType
+		default:
+			if len(format) > 0 {
+				return UnknownType
+			}
 		}
 
 		return StringType
+	case jsonSpecArray:
+		return ArrayType
+	case jsonSpecObject:
+		return ObjectType
 	default:
 		return UnknownType
 	}
 }
 
-func ToJSONSpecString(t FieldType) string {
-	switch t {
-	case NullType:
-		return jsonSpecNull
-	case IntType:
-		return jsonSpecInt
-	case DoubleType:
-		return jsonSpecDouble
-	case StringType:
-		return jsonSpecString
-	default:
-		return "unknown"
-	}
-}
-
 func IsValidIndexType(t FieldType) bool {
 	switch t {
-	case IntType, StringType, BytesType:
+	case Int32Type, Int64Type, StringType, ByteType, DateTimeType, UUIDType:
 		return true
 	default:
 		return false
@@ -99,19 +144,24 @@ func IsValidIndexType(t FieldType) bool {
 var SupportedFieldProperties = set.New(
 	"type",
 	"format",
+	"items",
 	"maxLength",
 	"description",
 	"contentEncoding",
+	"properties",
 )
 
 type FieldBuilder struct {
 	FieldName   string
-	Description string `json:"description,omitempty"`
-	Type        string `json:"type,omitempty"`
-	Format      string `json:"format,omitempty"`
-	Encoding    string `json:"contentEncoding,omitempty"`
-	MaxLength   *int32 `json:"maxLength,omitempty"`
+	Description string              `json:"description,omitempty"`
+	Type        string              `json:"type,omitempty"`
+	Format      string              `json:"format,omitempty"`
+	Encoding    string              `json:"contentEncoding,omitempty"`
+	MaxLength   *int32              `json:"maxLength,omitempty"`
+	Items       *FieldBuilder       `json:"items,omitempty"`
+	Properties  jsoniter.RawMessage `json:"properties,omitempty"`
 	Primary     *bool
+	Fields      []*Field
 }
 
 func (f *FieldBuilder) Validate(v []byte) error {
@@ -130,24 +180,30 @@ func (f *FieldBuilder) Validate(v []byte) error {
 }
 
 func (f *FieldBuilder) Build() (*Field, error) {
-	var field = &Field{}
-	field.FieldName = f.FieldName
-	field.MaxLength = f.MaxLength
-	fieldType := ToFieldType(f.Type, f.Encoding)
+	fieldType := ToFieldType(f.Type, f.Encoding, f.Format)
 	if fieldType == UnknownType {
 		if len(f.Encoding) > 0 {
 			return nil, api.Errorf(codes.InvalidArgument, "unsupported encoding '%s'", f.Encoding)
 		}
+		if len(f.Format) > 0 {
+			return nil, api.Errorf(codes.InvalidArgument, "unsupported format '%s'", f.Format)
+		}
+
 		return nil, api.Errorf(codes.InvalidArgument, "unsupported type detected '%s'", f.Type)
 	}
-	field.DataType = fieldType
 	if f.Primary != nil && *f.Primary {
 		// validate the primary key types
-		if !IsValidIndexType(field.DataType) {
+		if !IsValidIndexType(fieldType) {
 			return nil, api.Errorf(codes.InvalidArgument, "unsupported primary key type detected '%s'", f.Type)
 		}
 	}
+
+	var field = &Field{}
+	field.FieldName = f.FieldName
+	field.MaxLength = f.MaxLength
+	field.DataType = fieldType
 	field.PrimaryKeyField = f.Primary
+	field.Fields = f.Fields
 	return field, nil
 }
 
@@ -157,6 +213,7 @@ type Field struct {
 	MaxLength       *int32
 	UniqueKeyField  *bool
 	PrimaryKeyField *bool
+	Fields          []*Field
 }
 
 func (f *Field) Name() string {

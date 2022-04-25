@@ -35,6 +35,9 @@ type Encoder interface {
 	//	   to the table name to form the Key. The first element of this list is the dictionary encoding of index type key
 	//	   information i.e. whether the index is pkey, etc. The remaining elements are values for this index.
 	EncodeKey(ns Namespace, db *Database, coll *schema.DefaultCollection, idx *schema.Index, idxParts []interface{}) (keys.Key, error)
+
+	DecodeTableName(tableName []byte) (uint32, uint32, uint32)
+	DecodeIndexName(indexName []byte) uint32
 }
 
 // NewEncoder creates Dictionary encoder to encode keys.
@@ -83,4 +86,16 @@ func (d *DictKeyEncoder) encodedTableName(ns Namespace, db *Database, coll *sche
 
 func (d *DictKeyEncoder) encodedIdxName(idx *schema.Index) []byte {
 	return encoding.UInt32ToByte(idx.Id)
+}
+
+func (d *DictKeyEncoder) DecodeTableName(tableName []byte) (uint32, uint32, uint32) {
+	nsId := encoding.ByteToUInt32(tableName[0:4])
+	dbId := encoding.ByteToUInt32(tableName[4:8])
+	collId := encoding.ByteToUInt32(tableName[8:12])
+
+	return nsId, dbId, collId
+}
+
+func (d *DictKeyEncoder) DecodeIndexName(indexName []byte) uint32 {
+	return encoding.ByteToUInt32(indexName)
 }
