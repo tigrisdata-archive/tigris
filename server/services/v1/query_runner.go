@@ -593,13 +593,9 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		}
 		return &Response{
 			Response: &api.DescribeCollectionResponse{
-				Description: &api.CollectionDescription{
-					Collection: coll.Name,
-					Metadata:   &api.CollectionMetadata{},
-					SchemaInfo: &api.SchemaInfo{
-						Schema: coll.Schema,
-					},
-				},
+				Collection: coll.Name,
+				Metadata:   &api.CollectionMetadata{},
+				Schema:     coll.Schema,
 			},
 		}, ctx, nil
 	}
@@ -685,24 +681,20 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 
 		collectionList := db.ListCollection()
 
-		var collectionsDescription = make([]*api.CollectionDescription, len(collectionList))
+		var collections = make([]*api.CollectionDescription, len(collectionList))
 		for i, c := range collectionList {
-			collectionsDescription[i] = &api.CollectionDescription{
+			collections[i] = &api.CollectionDescription{
 				Collection: c.GetName(),
 				Metadata:   &api.CollectionMetadata{},
-				SchemaInfo: &api.SchemaInfo{
-					Schema: c.Schema,
-				},
+				Schema:     c.Schema,
 			}
 		}
 
 		return &Response{
 			Response: &api.DescribeDatabaseResponse{
-				Description: &api.DatabaseDescription{
-					Db:                     db.Name(),
-					Metadata:               &api.DatabaseMetadata{},
-					CollectionsDescription: collectionsDescription,
-				},
+				Db:          db.Name(),
+				Metadata:    &api.DatabaseMetadata{},
+				Collections: collections,
 			},
 		}, ctx, nil
 	}

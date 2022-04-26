@@ -47,8 +47,6 @@ func (s *DatabaseSuite) TestDescribeDatabase() {
 	resp.Status(http.StatusOK).
 		JSON().
 		Object().
-		Value("description").
-		Object().
 		ValueEqual("db", "test_db")
 }
 
