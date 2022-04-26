@@ -34,6 +34,7 @@ const (
 	ListDatabases            protoreflect.FullName = "ListDatabasesRequest"
 	CreateDatabase           protoreflect.FullName = "CreateDatabaseRequest"
 	DropDatabase             protoreflect.FullName = "DropDatabaseRequest"
+	Stream                   protoreflect.FullName = "StreamRequest"
 )
 
 type Request interface {

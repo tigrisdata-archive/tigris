@@ -244,8 +244,6 @@ func (s *CollectionSuite) TestDescribeCollection() {
 	resp.Status(http.StatusOK).
 		JSON().
 		Object().
-		Value("description").
-		Object().
 		ValueEqual("collection", "test_collection")
 
 	// cleanup

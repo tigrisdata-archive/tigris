@@ -19,6 +19,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	"github.com/tigrisdata/tigrisdb/cdc"
 	"github.com/tigrisdata/tigrisdb/server/metadata"
 	"github.com/tigrisdata/tigrisdb/server/transaction"
 	ulog "github.com/tigrisdata/tigrisdb/util/log"
@@ -29,18 +30,20 @@ import (
 type QueryLifecycleFactory struct {
 	txMgr     *transaction.Manager
 	tenantMgr *metadata.TenantManager
+	cdcMgr    *cdc.Manager
 }
 
-func NewQueryLifecycleFactory(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager) *QueryLifecycleFactory {
+func NewQueryLifecycleFactory(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, cdcMgr *cdc.Manager) *QueryLifecycleFactory {
 	return &QueryLifecycleFactory{
 		txMgr:     txMgr,
 		tenantMgr: tenantMgr,
+		cdcMgr:    cdcMgr,
 	}
 }
 
 // Get will create and return a queryLifecycle object
 func (f *QueryLifecycleFactory) Get() *queryLifecycle {
-	return newQueryLifecycle(f.txMgr, f.tenantMgr)
+	return newQueryLifecycle(f.txMgr, f.tenantMgr, f.cdcMgr)
 }
 
 // queryLifecycle manages the lifecycle of a query that it is handling. Single place that can be used to validate
@@ -48,12 +51,14 @@ func (f *QueryLifecycleFactory) Get() *queryLifecycle {
 type queryLifecycle struct {
 	txMgr     *transaction.Manager
 	tenantMgr *metadata.TenantManager
+	cdcMgr    *cdc.Manager
 }
 
-func newQueryLifecycle(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager) *queryLifecycle {
+func newQueryLifecycle(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, cdcMgr *cdc.Manager) *queryLifecycle {
 	return &queryLifecycle{
 		txMgr:     txMgr,
 		tenantMgr: tenantMgr,
+		cdcMgr:    cdcMgr,
 	}
 }
 
@@ -97,6 +102,6 @@ func (q *queryLifecycle) run(ctx context.Context, options *ReqOptions) (*Respons
 		}
 	}()
 
-	resp, txErr = options.queryRunner.Run(ctx, tx, tenant)
+	resp, ctx, txErr = options.queryRunner.Run(ctx, tx, tenant)
 	return resp, txErr
 }

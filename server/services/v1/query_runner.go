@@ -23,6 +23,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	"github.com/tigrisdata/tigrisdb/cdc"
 	"github.com/tigrisdata/tigrisdb/internal"
 	"github.com/tigrisdata/tigrisdb/keys"
 	"github.com/tigrisdata/tigrisdb/query/filter"
@@ -40,47 +41,49 @@ import (
 
 // QueryRunner is responsible for executing the current query and return the response
 type QueryRunner interface {
-	Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, error)
+	Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error)
 }
 
 // QueryRunnerFactory is responsible for creating query runners for different queries
 type QueryRunnerFactory struct {
 	txMgr   *transaction.Manager
 	encoder metadata.Encoder
+	cdcMgr  *cdc.Manager
 }
 
 // NewQueryRunnerFactory returns QueryRunnerFactory object
-func NewQueryRunnerFactory(txMgr *transaction.Manager, encoder metadata.Encoder) *QueryRunnerFactory {
+func NewQueryRunnerFactory(txMgr *transaction.Manager, encoder metadata.Encoder, cdcMgr *cdc.Manager) *QueryRunnerFactory {
 	return &QueryRunnerFactory{
 		txMgr:   txMgr,
 		encoder: encoder,
+		cdcMgr:  cdcMgr,
 	}
 }
 
 func (f *QueryRunnerFactory) GetInsertQueryRunner(r *api.InsertRequest) *InsertQueryRunner {
 	return &InsertQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr),
 		req:             r,
 	}
 }
 
 func (f *QueryRunnerFactory) GetReplaceQueryRunner(r *api.ReplaceRequest) *ReplaceQueryRunner {
 	return &ReplaceQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr),
 		req:             r,
 	}
 }
 
 func (f *QueryRunnerFactory) GetUpdateQueryRunner(r *api.UpdateRequest) *UpdateQueryRunner {
 	return &UpdateQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr),
 		req:             r,
 	}
 }
 
 func (f *QueryRunnerFactory) GetDeleteQueryRunner(r *api.DeleteRequest) *DeleteQueryRunner {
 	return &DeleteQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr),
 		req:             r,
 	}
 }
@@ -88,7 +91,7 @@ func (f *QueryRunnerFactory) GetDeleteQueryRunner(r *api.DeleteRequest) *DeleteQ
 // GetStreamingQueryRunner returns StreamingQueryRunner
 func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streaming Streaming) *StreamingQueryRunner {
 	return &StreamingQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr),
 		req:             r,
 		streaming:       streaming,
 	}
@@ -96,23 +99,25 @@ func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streami
 
 func (f *QueryRunnerFactory) GetCollectionQueryRunner() *CollectionQueryRunner {
 	return &CollectionQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr),
 	}
 }
 
 func (f *QueryRunnerFactory) GetDatabaseQueryRunner() *DatabaseQueryRunner {
 	return &DatabaseQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr),
 	}
 }
 
 type BaseQueryRunner struct {
 	encoder metadata.Encoder
+	cdcMgr  *cdc.Manager
 }
 
-func NewBaseQueryRunner(encoder metadata.Encoder) *BaseQueryRunner {
+func NewBaseQueryRunner(encoder metadata.Encoder, cdcMgr *cdc.Manager) *BaseQueryRunner {
 	return &BaseQueryRunner{
 		encoder: encoder,
+		cdcMgr:  cdcMgr,
 	}
 }
 
@@ -221,25 +226,27 @@ type InsertQueryRunner struct {
 	req *api.InsertRequest
 }
 
-func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, error) {
+func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	db, err := runner.GetDatabase(ctx, tx, tenant, runner.req.GetDb())
 	if err != nil {
-		return nil, err
+		return nil, ctx, err
 	}
+
+	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
 	coll, err := runner.GetCollections(db, runner.req.GetCollection())
 	if err != nil {
-		return nil, err
+		return nil, ctx, err
 	}
 
 	ts, err := runner.insertOrReplace(ctx, tx, tenant, db, coll, runner.req.GetDocuments(), true)
 	if err != nil {
-		return nil, err
+		return nil, ctx, err
 	}
 	return &Response{
 		status:    InsertedStatus,
 		createdAt: ts,
-	}, nil
+	}, ctx, nil
 }
 
 type ReplaceQueryRunner struct {
@@ -248,25 +255,27 @@ type ReplaceQueryRunner struct {
 	req *api.ReplaceRequest
 }
 
-func (runner *ReplaceQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, error) {
+func (runner *ReplaceQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	db, err := runner.GetDatabase(ctx, tx, tenant, runner.req.GetDb())
 	if err != nil {
-		return nil, err
+		return nil, ctx, err
 	}
+
+	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
 	coll, err := runner.GetCollections(db, runner.req.GetCollection())
 	if err != nil {
-		return nil, err
+		return nil, ctx, err
 	}
 
 	ts, err := runner.insertOrReplace(ctx, tx, tenant, db, coll, runner.req.GetDocuments(), false)
 	if err != nil {
-		return nil, err
+		return nil, ctx, err
 	}
 	return &Response{
 		status:    ReplacedStatus,
 		createdAt: ts,
-	}, nil
+	}, ctx, nil
 }
 
 type UpdateQueryRunner struct {
@@ -275,38 +284,40 @@ type UpdateQueryRunner struct {
 	req *api.UpdateRequest
 }
 
-func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, error) {
+func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	var ts = internal.NewTimestamp()
 	db, err := runner.GetDatabase(ctx, tx, tenant, runner.req.GetDb())
 	if err != nil {
-		return nil, err
+		return nil, ctx, err
 	}
+
+	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
 	collection, err := runner.GetCollections(db, runner.req.GetCollection())
 	if err != nil {
-		return nil, err
+		return nil, ctx, err
 	}
 
 	iKeys, err := runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter)
 	if err != nil {
-		return nil, err
+		return nil, ctx, err
 	}
 
 	var factory *update.FieldOperatorFactory
 	factory, err = update.BuildFieldOperators(runner.req.Fields)
 	if err != nil {
-		return nil, err
+		return nil, ctx, err
 	}
 
 	for _, fieldOperators := range factory.FieldOperators {
 		v, err := fieldOperators.DeserializeDoc()
 		if err != nil {
-			return nil, err
+			return nil, ctx, err
 		}
 
 		if err = collection.Validate(v); err != nil {
 			// schema validation failed
-			return nil, err
+			return nil, ctx, err
 		}
 	}
 
@@ -323,7 +334,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			// ToDo: may need to change the schema version
 			return internal.NewTableDataWithTS(existing.CreatedAt, ts, merged), nil
 		}); ulog.E(err) {
-			return nil, err
+			return nil, ctx, err
 		}
 		modifiedCount += modified
 	}
@@ -332,7 +343,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		status:        UpdatedStatus,
 		updatedAt:     ts,
 		modifiedCount: modifiedCount,
-	}, err
+	}, ctx, err
 }
 
 type DeleteQueryRunner struct {
@@ -341,33 +352,35 @@ type DeleteQueryRunner struct {
 	req *api.DeleteRequest
 }
 
-func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, error) {
+func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	var ts = internal.NewTimestamp()
 	db, err := runner.GetDatabase(ctx, tx, tenant, runner.req.GetDb())
 	if err != nil {
-		return nil, err
+		return nil, ctx, err
 	}
+
+	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
 	collection, err := runner.GetCollections(db, runner.req.GetCollection())
 	if err != nil {
-		return nil, err
+		return nil, ctx, err
 	}
 
 	iKeys, err := runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter)
 	if err != nil {
-		return nil, err
+		return nil, ctx, err
 	}
 
 	for _, key := range iKeys {
 		if err = tx.Delete(ctx, key); ulog.E(err) {
-			return nil, err
+			return nil, ctx, err
 		}
 	}
 
 	return &Response{
 		status:    DeletedStatus,
 		updatedAt: ts,
-	}, nil
+	}, ctx, nil
 }
 
 // StreamingQueryRunner is a runner used for Queries that are reads and needs to return result in streaming fashion
@@ -379,20 +392,22 @@ type StreamingQueryRunner struct {
 }
 
 // Run is responsible for running/executing the query
-func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, error) {
+func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	db, err := runner.GetDatabase(ctx, tx, tenant, runner.req.GetDb())
 	if err != nil {
-		return nil, err
+		return nil, ctx, err
 	}
+
+	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
 	collection, err := runner.GetCollections(db, runner.req.GetCollection())
 	if err != nil {
-		return nil, err
+		return nil, ctx, err
 	}
 
 	fieldFactory, err := read.BuildFields(runner.req.GetFields())
 	if ulog.E(err) {
-		return nil, err
+		return nil, ctx, err
 	}
 
 	if filter.IsFullCollectionScan(runner.req.GetFilter()) {
@@ -402,20 +417,20 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 			log.Debug().Str("db", db.Name()).Str("coll", collection.Name).Bytes("encoding", table).Err(err).Msg("full scan")
 		}
 
-		return resp, err
+		return resp, ctx, err
 	}
 
 	// or this is a read request that needs to be streamed after filtering the keys.
 	iKeys, err := runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter)
 	if err != nil {
-		return nil, err
+		return nil, ctx, err
 	}
 
 	resp, err := runner.iterateKeys(ctx, tx, iKeys, fieldFactory)
 	if err != nil {
 		log.Debug().Str("db", db.Name()).Str("coll", collection.Name).Err(err).Msg("iterate keys")
 	}
-	return resp, err
+	return resp, ctx, err
 }
 
 // iterateCollection is used to scan the entire collection.
@@ -512,46 +527,46 @@ func (runner *CollectionQueryRunner) SetDescribeCollectionReq(describe *api.Desc
 	runner.describe = describe
 }
 
-func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, error) {
+func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	if runner.drop != nil {
 		db, err := runner.GetDatabase(ctx, tx, tenant, runner.drop.GetDb())
 		if err != nil {
-			return nil, err
+			return nil, ctx, err
 		}
 
 		if err = tenant.DropCollection(ctx, tx, db, runner.drop.GetCollection()); err != nil {
-			return nil, err
+			return nil, ctx, err
 		}
 		return &Response{
 			status: DroppedStatus,
-		}, nil
+		}, ctx, nil
 	} else if runner.createOrUpdate != nil {
 		db, err := runner.GetDatabase(ctx, tx, tenant, runner.createOrUpdate.GetDb())
 		if err != nil {
-			return nil, err
+			return nil, ctx, err
 		}
 
 		if db.GetCollection(runner.createOrUpdate.GetCollection()) != nil && runner.createOrUpdate.OnlyCreate {
 			// check if onlyCreate is set and if yes then return an error if collection already exist
-			return nil, api.Errorf(codes.AlreadyExists, "collection already exists")
+			return nil, ctx, api.Errorf(codes.AlreadyExists, "collection already exists")
 		}
 
 		schFactory, err := schema.Build(runner.createOrUpdate.GetCollection(), runner.createOrUpdate.GetSchema())
 		if err != nil {
-			return nil, err
+			return nil, ctx, err
 		}
 
 		if err = tenant.CreateCollection(ctx, tx, db, schFactory); err != nil {
-			return nil, err
+			return nil, ctx, err
 		}
 
 		return &Response{
 			status: CreatedStatus,
-		}, nil
+		}, ctx, nil
 	} else if runner.list != nil {
 		db, err := runner.GetDatabase(ctx, tx, tenant, runner.list.GetDb())
 		if err != nil {
-			return nil, err
+			return nil, ctx, err
 		}
 
 		collectionList := db.ListCollection()
@@ -565,31 +580,27 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			Response: &api.ListCollectionsResponse{
 				Collections: collections,
 			},
-		}, nil
+		}, ctx, nil
 	} else if runner.describe != nil {
 		db, err := runner.GetDatabase(ctx, tx, tenant, runner.describe.GetDb())
 		if err != nil {
-			return nil, err
+			return nil, ctx, err
 		}
 
 		coll, err := runner.GetCollections(db, runner.describe.GetCollection())
 		if err != nil {
-			return nil, err
+			return nil, ctx, err
 		}
 		return &Response{
 			Response: &api.DescribeCollectionResponse{
-				Description: &api.CollectionDescription{
-					Collection: coll.Name,
-					Metadata:   &api.CollectionMetadata{},
-					SchemaInfo: &api.SchemaInfo{
-						Schema: coll.Schema,
-					},
-				},
+				Collection: coll.Name,
+				Metadata:   &api.CollectionMetadata{},
+				Schema:     coll.Schema,
 			},
-		}, nil
+		}, ctx, nil
 	}
 
-	return &Response{}, api.Errorf(codes.Unknown, "unknown request path")
+	return &Response{}, ctx, api.Errorf(codes.Unknown, "unknown request path")
 }
 
 type DatabaseQueryRunner struct {
@@ -617,37 +628,37 @@ func (runner *DatabaseQueryRunner) SetDescribeDatabaseReq(describe *api.Describe
 	runner.describe = describe
 }
 
-func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, error) {
+func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	if runner.drop != nil {
 		db, err := tenant.GetDatabase(ctx, tx, runner.drop.GetDb())
 		if err != nil {
-			return nil, err
+			return nil, ctx, err
 		}
 		if db == nil {
-			return nil, api.Errorf(codes.NotFound, "database doesn't exists '%s'", runner.drop.GetDb())
+			return nil, ctx, api.Errorf(codes.NotFound, "database doesn't exists '%s'", runner.drop.GetDb())
 		}
 		if err := tenant.DropDatabase(ctx, tx, runner.drop.GetDb()); err != nil {
-			return nil, err
+			return nil, ctx, err
 		}
 
 		return &Response{
 			status: DroppedStatus,
-		}, nil
+		}, ctx, nil
 	} else if runner.create != nil {
 		db, err := tenant.GetDatabase(ctx, tx, runner.create.GetDb())
 		if err != nil {
-			return nil, err
+			return nil, ctx, err
 		}
 		if db != nil {
-			return nil, api.Errorf(codes.AlreadyExists, "database already exists")
+			return nil, ctx, api.Errorf(codes.AlreadyExists, "database already exists")
 		}
 
 		if err := tenant.CreateDatabase(ctx, tx, runner.create.GetDb()); err != nil {
-			return nil, err
+			return nil, ctx, err
 		}
 		return &Response{
 			status: CreatedStatus,
-		}, nil
+		}, ctx, nil
 	} else if runner.list != nil {
 		databaseList := tenant.ListDatabases(ctx, tx)
 
@@ -661,36 +672,32 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			Response: &api.ListDatabasesResponse{
 				Databases: databases,
 			},
-		}, nil
+		}, ctx, nil
 	} else if runner.describe != nil {
 		db, err := runner.GetDatabase(ctx, tx, tenant, runner.describe.GetDb())
 		if err != nil {
-			return nil, err
+			return nil, ctx, err
 		}
 
 		collectionList := db.ListCollection()
 
-		var collectionsDescription = make([]*api.CollectionDescription, len(collectionList))
+		var collections = make([]*api.CollectionDescription, len(collectionList))
 		for i, c := range collectionList {
-			collectionsDescription[i] = &api.CollectionDescription{
+			collections[i] = &api.CollectionDescription{
 				Collection: c.GetName(),
 				Metadata:   &api.CollectionMetadata{},
-				SchemaInfo: &api.SchemaInfo{
-					Schema: c.Schema,
-				},
+				Schema:     c.Schema,
 			}
 		}
 
 		return &Response{
 			Response: &api.DescribeDatabaseResponse{
-				Description: &api.DatabaseDescription{
-					Db:                     db.Name(),
-					Metadata:               &api.DatabaseMetadata{},
-					CollectionsDescription: collectionsDescription,
-				},
+				Db:          db.Name(),
+				Metadata:    &api.DatabaseMetadata{},
+				Collections: collections,
 			},
-		}, nil
+		}, ctx, nil
 	}
 
-	return &Response{}, api.Errorf(codes.Unknown, "unknown request path")
+	return &Response{}, ctx, api.Errorf(codes.Unknown, "unknown request path")
 }

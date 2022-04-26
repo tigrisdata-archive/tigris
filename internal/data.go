@@ -39,6 +39,10 @@ const (
 	TableDataType
 )
 
+const (
+	JsonEncoding = iota + 1
+)
+
 func NewTimestamp() *Timestamp {
 	ts := time.Now().UTC()
 	return &Timestamp{
@@ -72,6 +76,14 @@ func NewTableDataWithTS(createdAt *Timestamp, updatedAt *Timestamp, data []byte)
 		CreatedAt: createdAt,
 		UpdatedAt: updatedAt,
 		RawData:   data,
+	}
+}
+
+func NewTableDataWithEncoding(data []byte, encoding int32) *TableData {
+	return &TableData{
+		CreatedAt: NewTimestamp(),
+		RawData:   data,
+		Encoding:  encoding,
 	}
 }
 
