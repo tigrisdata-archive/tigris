@@ -16,6 +16,7 @@ package api
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	jsoniter "github.com/json-iterator/go"
@@ -54,15 +55,34 @@ func (c *CustomMarshaler) Marshal(v interface{}) ([]byte, error) {
 // the openAPI specs needs to be specified Data as object instead of bytes.
 func (x *ReadResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
-		Data        json.RawMessage   `json:"data"`
-		Metadata    *ResponseMetadata `json:"metadata"`
-		ResumeToken []byte            `json:"resume_token"`
+		Data        json.RawMessage `json:"data,omitempty"`
+		Metadata    Metadata        `json:"metadata,omitempty"`
+		ResumeToken []byte          `json:"resume_token,omitempty"`
 	}{
 		Data:        x.Data,
-		Metadata:    x.Metadata,
+		Metadata:    CreateMDFromResponseMD(x.Metadata),
 		ResumeToken: x.ResumeToken,
 	}
 	return json.Marshal(resp)
+}
+
+type Metadata struct {
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+}
+
+func CreateMDFromResponseMD(x *ResponseMetadata) Metadata {
+	var md Metadata
+	if x.CreatedAt != nil {
+		tm := x.CreatedAt.AsTime()
+		md.CreatedAt = &tm
+	}
+	if x.UpdatedAt != nil {
+		tm := x.UpdatedAt.AsTime()
+		md.UpdatedAt = &tm
+	}
+
+	return md
 }
 
 // UnmarshalJSON on ReadRequest avoids unmarshalling filter and instead this way we can write a custom struct to do
