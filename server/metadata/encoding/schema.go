@@ -94,16 +94,15 @@ func (s *SchemaSubspace) Get(ctx context.Context, tx transaction.Tx, namespaceId
 	var revisions []int
 	var row kv.KeyValue
 	for it.Next(&row) {
-		if it.Err() != nil {
-			return nil, nil, err
-		}
-
 		revision, ok := row.Key[len(row.Key)-1].([]byte)
 		if !ok {
 			return nil, nil, api.Errorf(codes.Internal, "not able to extract revision from schema %v", row.Key)
 		}
 		revisionToSchemaMapping[ByteToUInt32(revision)] = row.Data.RawData
 		revisions = append(revisions, int(ByteToUInt32(revision)))
+	}
+	if it.Err() != nil {
+		return nil, nil, it.Err()
 	}
 
 	// sort revisions now

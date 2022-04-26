@@ -40,6 +40,7 @@ const (
 type session struct {
 	sync.RWMutex
 
+	context *SessionCtx
 	kvStore kv.KeyValueStore
 	kTx     kv.Tx
 	state   sessionState
@@ -51,6 +52,7 @@ func newSession(kv kv.KeyValueStore) (*session, error) {
 		return nil, status.Errorf(codes.Internal, "session needs non-nil kv object")
 	}
 	return &session{
+		context: &SessionCtx{},
 		kvStore: kv,
 		state:   sessionCreated,
 		txCtx:   generateTransactionCtx(),
@@ -87,11 +89,11 @@ func (s *session) start(ctx context.Context) error {
 		return status.Errorf(codes.Internal, "session state is misused")
 	}
 
-	s.state = sessionActive
 	var err error
 	if s.kTx, err = s.kvStore.Tx(ctx); err != nil {
 		return err
 	}
+	s.state = sessionActive
 
 	return nil
 }
