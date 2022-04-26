@@ -45,7 +45,7 @@ const (
 )
 
 type apiService struct {
-	api.UnimplementedTigrisDBServer
+	api.UnimplementedTigrisServer
 
 	kvStore               kv.KeyValueStore
 	txMgr                 *transaction.Manager
@@ -88,11 +88,11 @@ func (s *apiService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel)
 		JSONBuiltin: &runtime.JSONBuiltin{},
 	}))
 
-	if err := api.RegisterTigrisDBHandlerClient(context.TODO(), mux, api.NewTigrisDBClient(inproc)); err != nil {
+	if err := api.RegisterTigrisHandlerClient(context.TODO(), mux, api.NewTigrisClient(inproc)); err != nil {
 		return err
 	}
 
-	api.RegisterTigrisDBServer(inproc, s)
+	api.RegisterTigrisServer(inproc, s)
 
 	router.HandleFunc(apiPathPrefix+databasePathPattern, func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
@@ -108,7 +108,7 @@ func (s *apiService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel)
 }
 
 func (s *apiService) RegisterGRPC(grpc *grpc.Server) error {
-	api.RegisterTigrisDBServer(grpc, s)
+	api.RegisterTigrisServer(grpc, s)
 	return nil
 }
 
@@ -249,7 +249,7 @@ func (s *apiService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.Del
 	}, nil
 }
 
-func (s *apiService) Read(r *api.ReadRequest, stream api.TigrisDB_ReadServer) error {
+func (s *apiService) Read(r *api.ReadRequest, stream api.Tigris_ReadServer) error {
 	if err := r.Validate(); err != nil {
 		return err
 	}
@@ -424,7 +424,7 @@ func (s *apiService) Run(ctx context.Context, req *ReqOptions) (*Response, error
 	return queryLifecycle.run(ctx, req)
 }
 
-func (s *apiService) Stream(r *api.StreamRequest, stream api.TigrisDB_StreamServer) error {
+func (s *apiService) Stream(r *api.StreamRequest, stream api.Tigris_StreamServer) error {
 	if err := r.Validate(); err != nil {
 		return err
 	}

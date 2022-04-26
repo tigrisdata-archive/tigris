@@ -30,7 +30,7 @@ const (
 
 // Streaming is a wrapper interface for passing around for streaming reads
 type Streaming interface {
-	api.TigrisDB_ReadServer
+	api.Tigris_ReadServer
 }
 
 // ReqOptions are options used by queryLifecycle to execute a query
