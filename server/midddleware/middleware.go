@@ -25,7 +25,7 @@ import (
 	grpc_ratelimit "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/ratelimit"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"github.com/rs/zerolog/log"
-	"github.com/tigrisdata/tigrisdb/server/config"
+	"github.com/tigrisdata/tigris/server/config"
 	"google.golang.org/grpc"
 )
 

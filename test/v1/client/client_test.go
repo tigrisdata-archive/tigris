@@ -24,9 +24,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	api "github.com/tigrisdata/tigrisdb-client-go/api/server/v1"
-	"github.com/tigrisdata/tigrisdb-client-go/driver"
-	"github.com/tigrisdata/tigrisdb/server/config"
+	api "github.com/tigrisdata/tigris-client-go/api/server/v1"
+	"github.com/tigrisdata/tigris-client-go/driver"
+	"github.com/tigrisdata/tigris/server/config"
 	"google.golang.org/grpc/codes"
 )
 

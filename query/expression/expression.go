@@ -16,10 +16,10 @@ package expression
 
 import (
 	"fmt"
-	"github.com/tigrisdata/tigrisdb/value"
+	"github.com/tigrisdata/tigris/value"
 
 	jsoniter "github.com/json-iterator/go"
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"google.golang.org/grpc/codes"
 )
 

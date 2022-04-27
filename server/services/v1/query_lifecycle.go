@@ -18,11 +18,11 @@ import (
 	"context"
 
 	"github.com/rs/zerolog/log"
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"github.com/tigrisdata/tigrisdb/cdc"
-	"github.com/tigrisdata/tigrisdb/server/metadata"
-	"github.com/tigrisdata/tigrisdb/server/transaction"
-	ulog "github.com/tigrisdata/tigrisdb/util/log"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/cdc"
+	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/transaction"
+	ulog "github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc/codes"
 )
 

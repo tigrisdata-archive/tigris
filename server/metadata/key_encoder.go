@@ -15,10 +15,10 @@
 package metadata
 
 import (
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"github.com/tigrisdata/tigrisdb/keys"
-	"github.com/tigrisdata/tigrisdb/schema"
-	"github.com/tigrisdata/tigrisdb/server/metadata/encoding"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/keys"
+	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/server/metadata/encoding"
 	"google.golang.org/grpc/codes"
 )
 

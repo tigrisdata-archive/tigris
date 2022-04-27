@@ -20,10 +20,10 @@ import (
 
 	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"github.com/tigrisdata/tigrisdb/query/aggregation"
-	"github.com/tigrisdata/tigrisdb/query/expression"
-	ulog "github.com/tigrisdata/tigrisdb/util/log"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/query/aggregation"
+	"github.com/tigrisdata/tigris/query/expression"
+	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/valyala/bytebufferpool"
 	"google.golang.org/grpc/codes"
 )

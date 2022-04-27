@@ -18,8 +18,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/tigrisdata/tigrisdb/schema"
-	"github.com/tigrisdata/tigrisdb/server/metadata/encoding"
+	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/server/metadata/encoding"
 )
 
 func TestEncodeKey(t *testing.T) {

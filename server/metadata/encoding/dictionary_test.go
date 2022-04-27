@@ -20,10 +20,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"github.com/tigrisdata/tigrisdb/server/config"
-	"github.com/tigrisdata/tigrisdb/server/transaction"
-	"github.com/tigrisdata/tigrisdb/store/kv"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/transaction"
+	"github.com/tigrisdata/tigris/store/kv"
 	"google.golang.org/grpc/codes"
 )
 

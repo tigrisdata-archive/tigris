@@ -17,7 +17,7 @@ package cdc
 import (
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/tigrisdata/tigrisdb/internal"
+	"github.com/tigrisdata/tigris/internal"
 )
 
 type Tx struct {

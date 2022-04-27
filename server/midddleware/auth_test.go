@@ -20,9 +20,9 @@ import (
 
 	"github.com/auth0/go-jwt-middleware/v2/validator"
 	"github.com/stretchr/testify/require"
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"github.com/tigrisdata/tigrisdb/server/config"
-	"github.com/tigrisdata/tigrisdb/util/log"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 )

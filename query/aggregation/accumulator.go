@@ -18,7 +18,7 @@ import (
 	"fmt"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/tigrisdata/tigrisdb/query/expression"
+	"github.com/tigrisdata/tigris/query/expression"
 )
 
 // supported accumulators

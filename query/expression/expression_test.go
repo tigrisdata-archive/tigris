@@ -16,7 +16,7 @@ package expression
 
 import (
 	"github.com/stretchr/testify/require"
-	"github.com/tigrisdata/tigrisdb/value"
+	"github.com/tigrisdata/tigris/value"
 	"testing"
 )
 

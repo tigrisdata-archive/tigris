@@ -1,4 +1,4 @@
-module github.com/tigrisdata/tigrisdb
+module github.com/tigrisdata/tigris
 
 go 1.18
 
@@ -27,7 +27,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.10.1
 	github.com/stretchr/testify v1.7.1
-	github.com/tigrisdata/tigrisdb-client-go v1.0.0-alpha.6
+	github.com/tigrisdata/tigris-client-go v1.0.0-alpha.8
 	github.com/ugorji/go/codec v1.2.7
 	github.com/valyala/bytebufferpool v1.0.0
 	golang.org/x/xerrors v0.0.0-20220411194840-2f41105eb62f

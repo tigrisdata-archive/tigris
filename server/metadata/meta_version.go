@@ -17,7 +17,7 @@ package metadata
 import (
 	"context"
 
-	"github.com/tigrisdata/tigrisdb/server/transaction"
+	"github.com/tigrisdata/tigris/server/transaction"
 )
 
 var (

@@ -19,11 +19,11 @@ import (
 	"sort"
 
 	"github.com/rs/zerolog/log"
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"github.com/tigrisdata/tigrisdb/internal"
-	"github.com/tigrisdata/tigrisdb/keys"
-	"github.com/tigrisdata/tigrisdb/server/transaction"
-	"github.com/tigrisdata/tigrisdb/store/kv"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/internal"
+	"github.com/tigrisdata/tigris/keys"
+	"github.com/tigrisdata/tigris/server/transaction"
+	"github.com/tigrisdata/tigris/store/kv"
 	"google.golang.org/grpc/codes"
 )
 

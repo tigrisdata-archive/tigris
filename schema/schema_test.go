@@ -20,7 +20,7 @@ import (
 	"google.golang.org/grpc/codes"
 
 	"github.com/stretchr/testify/require"
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 )
 
 func TestCreateCollectionFromSchema(t *testing.T) {
@@ -36,7 +36,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 	t.Run("test_create_failure", func(t *testing.T) {
 		reqSchema := []byte(`{"title":"Record of an order","properties":{"order_id":{"description":"A unique identifier for an order","type":"integer"},"cust_id":{"description":"A unique identifier for a customer","type":"integer"},"product":{"description":"name of the product","type":"string","maxLength":100},"quantity":{"description":"number of products ordered","type":"integer"},"price":{"description":"price of the product","type":"number"}},"primary_key":["cust_id","order_id"]}`)
 		_, err := Build("t1", reqSchema)
-		require.Equal(t, "collection name is not same as schema name 't1' 'Record of an order'", err.(*api.TigrisDBError).Error())
+		require.Equal(t, "collection name is not same as schema name 't1' 'Record of an order'", err.(*api.TigrisError).Error())
 	})
 	t.Run("test_supported_types", func(t *testing.T) {
 		schema := []byte(`{
@@ -130,7 +130,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		"primary_key": ["K1"]
 	}`)
 		_, err := Build("t1", schema)
-		require.Equal(t, "unsupported primary key type detected 'number'", err.(*api.TigrisDBError).Error())
+		require.Equal(t, "unsupported primary key type detected 'number'", err.(*api.TigrisError).Error())
 	})
 	t.Run("test_complex_types", func(t *testing.T) {
 		schema := []byte(`{

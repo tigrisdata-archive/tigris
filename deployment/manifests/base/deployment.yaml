@@ -16,22 +16,22 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app.kubernetes.io/name: tigrisdb-server
-    app.kubernetes.io/part-of: tigrisdb
+    app.kubernetes.io/name: tigris-server
+    app.kubernetes.io/part-of: tigris
     app.kubernetes.io/component: server
-  name: tigrisdb-server
+  name: tigris-server
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: tigrisdb-server
+      app.kubernetes.io/name: tigris-server
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: tigrisdb-server
+        app.kubernetes.io/name: tigris-server
     spec:
       containers:
-        - name: tigrisdb-server
-          image: tigrisdata/tigrisdb:latest # Replace this with the version you want to run through kustomization
+        - name: tigris-server
+          image: tigrisdata/tigris:latest # Replace this with the version you want to run through kustomization
           imagePullPolicy: Always
           command: ["/server/service"]
           volumeMounts:
@@ -39,7 +39,7 @@ spec:
               name: tmp
             - mountPath: /mnt/fdb-config-volume
               name: fdb-cluster-config-volume
-            - mountPath: /etc/tigrisdata/tigrisdb
+            - mountPath: /etc/tigrisdata/tigris
               name: server-config-volume
           ports:
             - containerPort: 8080
@@ -72,7 +72,7 @@ spec:
         # This configmap is created during the kustomization phase
         - name: server-config-volume
           configMap:
-            name: tigrisdb-server-config
+            name: tigris-server-config
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -80,11 +80,11 @@ spec:
                 topologyKey: kubernetes.io/hostname
                 labelSelector:
                   matchLabels:
-                    app.kubernetes.io/name: tigrisdb-server
+                    app.kubernetes.io/name: tigris-server
               weight: 100
             - podAffinityTerm:
                 topologyKey: kubernetes.io/hostname
                 labelSelector:
                   matchLabels:
-                    app.kubernetes.io/part-of: tigrisdb
+                    app.kubernetes.io/part-of: tigris
               weight: 5

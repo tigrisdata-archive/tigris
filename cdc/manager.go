@@ -18,7 +18,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/tigrisdata/tigrisdb/store/kv"
+	"github.com/tigrisdata/tigris/store/kv"
 )
 
 type Manager struct {

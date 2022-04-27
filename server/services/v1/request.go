@@ -15,8 +15,8 @@
 package v1
 
 import (
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"github.com/tigrisdata/tigrisdb/internal"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/internal"
 )
 
 const (
@@ -30,7 +30,7 @@ const (
 
 // Streaming is a wrapper interface for passing around for streaming reads
 type Streaming interface {
-	api.TigrisDB_ReadServer
+	api.Tigris_ReadServer
 }
 
 // ReqOptions are options used by queryLifecycle to execute a query

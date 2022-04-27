@@ -18,7 +18,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/tigrisdata/tigrisdb/query/expression"
+	"github.com/tigrisdata/tigris/query/expression"
 )
 
 func TestAggregation(t *testing.T) {

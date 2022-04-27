@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-option go_package = "github.com/tigrisdata/tigrisdb/internal";
+option go_package = "github.com/tigrisdata/tigris/internal";
 
 message Timestamp {
   // Represents seconds of UTC time since Unix epoch

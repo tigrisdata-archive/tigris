@@ -15,11 +15,11 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: tigrisdb-server
+  name: tigris-server
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: tigrisdb-server
+      app.kubernetes.io/name: tigris-server
   template:
     spec:
       volumes:

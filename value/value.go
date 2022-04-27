@@ -20,8 +20,8 @@ import (
 	"strconv"
 
 	"github.com/pkg/errors"
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"github.com/tigrisdata/tigrisdb/schema"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/schema"
 	"google.golang.org/grpc/codes"
 )
 
