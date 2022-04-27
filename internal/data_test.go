@@ -18,7 +18,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"google.golang.org/grpc/codes"
 )
 

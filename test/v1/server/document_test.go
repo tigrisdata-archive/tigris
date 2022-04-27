@@ -26,7 +26,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"github.com/tigrisdata/tigrisdb/test/config"
+	"github.com/tigrisdata/tigris/test/config"
 	"gopkg.in/gavv/httpexpect.v1"
 )
 

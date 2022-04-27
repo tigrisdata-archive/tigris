@@ -21,7 +21,7 @@ import (
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"google.golang.org/grpc"
 )
 

@@ -20,14 +20,14 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/tigrisdata/tigrisdb/internal"
+	"github.com/tigrisdata/tigris/internal"
 
 	"github.com/rs/zerolog/log"
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"github.com/tigrisdata/tigrisdb/keys"
-	"github.com/tigrisdata/tigrisdb/server/transaction"
-	"github.com/tigrisdata/tigrisdb/store/kv"
-	ulog "github.com/tigrisdata/tigrisdb/util/log"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/keys"
+	"github.com/tigrisdata/tigris/server/transaction"
+	"github.com/tigrisdata/tigris/store/kv"
+	ulog "github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc/codes"
 )
 
@@ -42,7 +42,7 @@ import (
 //
 // The second subspace is the "encoding" which is used to assign dictionary encoded values for the database, collection
 // and any index names. Values assigned are monotonically incremental counter and are local to this cluster and doesn't
-// need to be unique across the TigrisDB ecosystem.
+// need to be unique across the Tigris ecosystem.
 //
 // The structure for encoding subspace looks like below,
 //    ["encoding", 0x01, x, "db", "db-1", "created"] = 0x01

@@ -18,8 +18,8 @@ import (
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	"github.com/apple/foundationdb/bindings/go/src/fdb/subspace"
 	"github.com/apple/foundationdb/bindings/go/src/fdb/tuple"
-	"github.com/tigrisdata/tigrisdb/server/config"
-	"github.com/tigrisdata/tigrisdb/store/kv"
+	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/store/kv"
 )
 
 type Publisher struct {

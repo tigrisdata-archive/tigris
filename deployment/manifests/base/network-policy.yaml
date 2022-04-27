@@ -15,11 +15,11 @@
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: tigrisdb-server-network-policy
+  name: tigris-server-network-policy
 spec:
   podSelector:
     matchLabels:
-      app.kubernetes.io/name: tigrisdb-server
+      app.kubernetes.io/name: tigris-server
   ingress:
     - {}
   egress:

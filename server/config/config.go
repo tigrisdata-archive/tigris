@@ -30,17 +30,17 @@ import (
 )
 
 var configPath = []string{
-	"/etc/tigrisdata/tigrisdb/",
-	"$HOME/.tigrisdata/tigrisdb/",
+	"/etc/tigrisdata/tigris/",
+	"$HOME/.tigrisdata/tigris/",
 	"./config/",
 	"./",
 }
 
 // envPrefix is used by viper to detect environment variables that should be used.
 // viper will automatically uppercase this and append _ to it
-var envPrefix = "tigrisdb_server"
+var envPrefix = "tigris_server"
 
-var envEnv = "tigrisdb_environment"
+var envEnv = "tigris_environment"
 var environment string
 
 const (
@@ -127,7 +127,7 @@ func GetTestFDBConfig(path string) (*FoundationDBConfig, error) {
 	LoadEnvironment()
 
 	// Environment can be set on OS X
-	fn, exists := os.LookupEnv("TIGRISDB_SERVER_FOUNDATIONDB_CLUSTER_FILE")
+	fn, exists := os.LookupEnv("TIGRIS_SERVER_FOUNDATIONDB_CLUSTER_FILE")
 
 	// Use default location when run test in the docker
 	// where cluster file is shared between containers

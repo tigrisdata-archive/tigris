@@ -20,8 +20,8 @@ import (
 
 	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"github.com/tigrisdata/tigrisdb/util/log"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc/codes"
 )
 

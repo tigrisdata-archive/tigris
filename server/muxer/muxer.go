@@ -20,12 +20,12 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
-	"github.com/tigrisdata/tigrisdb/server/config"
-	tgrpc "github.com/tigrisdata/tigrisdb/server/grpc"
-	tHTTP "github.com/tigrisdata/tigrisdb/server/http"
-	v1 "github.com/tigrisdata/tigrisdb/server/services/v1"
-	"github.com/tigrisdata/tigrisdb/server/types"
-	"github.com/tigrisdata/tigrisdb/store/kv"
+	"github.com/tigrisdata/tigris/server/config"
+	tgrpc "github.com/tigrisdata/tigris/server/grpc"
+	tHTTP "github.com/tigrisdata/tigris/server/http"
+	v1 "github.com/tigrisdata/tigris/server/services/v1"
+	"github.com/tigrisdata/tigris/server/types"
+	"github.com/tigrisdata/tigris/store/kv"
 )
 
 type Server interface {

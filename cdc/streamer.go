@@ -20,8 +20,8 @@ import (
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
-	"github.com/tigrisdata/tigrisdb/internal"
-	"github.com/tigrisdata/tigrisdb/server/config"
+	"github.com/tigrisdata/tigris/internal"
+	"github.com/tigrisdata/tigris/server/config"
 )
 
 type Streamer struct {

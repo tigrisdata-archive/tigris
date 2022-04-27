@@ -37,14 +37,14 @@ RUN rm -rf /etc/apt/*
 # Setup an unprivileged user
 RUN groupadd -r tigris && useradd -r -s /bin/false -g tigris tigris
 
-RUN mkdir -p /server /etc/tigrisdata/tigrisdb /etc/foundationdb/
+RUN mkdir -p /server /etc/tigrisdata/tigris /etc/foundationdb/
 
 COPY --from=build /build/server/service /server/service
-COPY --from=build /build/config/server.yaml /etc/tigrisdata/tigrisdb
+COPY --from=build /build/config/server.yaml /etc/tigrisdata/tigris
 COPY --from=build /usr/lib/libfdb_c.so /usr/lib/libfdb_c.so
 COPY --from=build /usr/bin/fdbcli /usr/bin/fdbcli
 
-RUN chown -R tigris:tigris /server /etc/tigrisdata/tigrisdb
+RUN chown -R tigris:tigris /server /etc/tigrisdata/tigris
 
 EXPOSE 8081
 

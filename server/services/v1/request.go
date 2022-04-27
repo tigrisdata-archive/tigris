@@ -15,8 +15,8 @@
 package v1
 
 import (
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"github.com/tigrisdata/tigrisdb/internal"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/internal"
 )
 
 const (

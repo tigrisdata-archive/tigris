@@ -15,8 +15,8 @@
 package filter
 
 import (
-	"github.com/tigrisdata/tigrisdb/keys"
-	"github.com/tigrisdata/tigrisdb/schema"
+	"github.com/tigrisdata/tigris/keys"
+	"github.com/tigrisdata/tigris/schema"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

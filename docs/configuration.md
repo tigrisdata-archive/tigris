@@ -18,11 +18,11 @@ have a higher precedence. The environment variables have the following
 structure:
 
 - The variables are in uppercase
-- They are prefixed by `TIGRISDB_SERVER_`
+- They are prefixed by `TIGRIS_SERVER_`
 - Multi-level variables are specified by replacing `.` with `_`
 
 Examples:
 
 - To specify the FoundationDB cluster file set the
-  variable `TIGRISDB_SERVER_FOUNDATIONDB_CLUSTER_FILE`
-- To specify the API listen port set the variable `TIGRISDB_SERVER_SERVER_PORT`
+  variable `TIGRIS_SERVER_FOUNDATIONDB_CLUSTER_FILE`
+- To specify the API listen port set the variable `TIGRIS_SERVER_SERVER_PORT`

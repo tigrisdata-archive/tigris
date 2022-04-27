@@ -17,14 +17,14 @@ package http
 import (
 	"net/http"
 
-	middleware "github.com/tigrisdata/tigrisdb/server/midddleware"
+	middleware "github.com/tigrisdata/tigris/server/midddleware"
 
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
-	"github.com/tigrisdata/tigrisdb/server/config"
-	"github.com/tigrisdata/tigrisdb/server/types"
+	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/types"
 )
 
 type Server struct {

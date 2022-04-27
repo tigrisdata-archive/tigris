@@ -16,12 +16,12 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    app.kubernetes.io/name: tigrisdb-server
-    app.kubernetes.io/part-of: tigrisdb
+    app.kubernetes.io/name: tigris-server
+    app.kubernetes.io/part-of: tigris
     app.kubernetes.io/component: server-grpc
   annotations:
     alb.ingress.kubernetes.io/backend-protocol-version: GRPC
-  name: tigrisdb-server-grpc
+  name: tigris-server-grpc
 spec:
   type: NodePort
   ports:
@@ -30,4 +30,4 @@ spec:
       protocol: TCP
       targetPort: 8080
   selector:
-    app.kubernetes.io/name: tigrisdb-server
+    app.kubernetes.io/name: tigris-server

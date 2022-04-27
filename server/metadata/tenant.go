@@ -25,11 +25,11 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"github.com/tigrisdata/tigrisdb/schema"
-	"github.com/tigrisdata/tigrisdb/server/metadata/encoding"
-	"github.com/tigrisdata/tigrisdb/server/transaction"
-	ulog "github.com/tigrisdata/tigrisdb/util/log"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/server/metadata/encoding"
+	"github.com/tigrisdata/tigris/server/transaction"
+	ulog "github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc/codes"
 )
 

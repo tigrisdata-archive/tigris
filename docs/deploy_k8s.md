@@ -27,7 +27,7 @@ which references the server configuration file `server.yaml`:
 
 ```yaml
 configMapGenerator:
-  - name: tigrisdb-server-config
+  - name: tigris-server-config
     files:
       - server.yaml
 ```
