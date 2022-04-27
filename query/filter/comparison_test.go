@@ -17,7 +17,7 @@ package filter
 import (
 	"testing"
 
-	"github.com/tigrisdata/tigrisdb/value"
+	"github.com/tigrisdata/tigris/value"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"

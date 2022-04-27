@@ -17,9 +17,9 @@ package grpc
 import (
 	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
-	"github.com/tigrisdata/tigrisdb/server/config"
-	middleware "github.com/tigrisdata/tigrisdb/server/midddleware"
-	"github.com/tigrisdata/tigrisdb/server/types"
+	"github.com/tigrisdata/tigris/server/config"
+	middleware "github.com/tigrisdata/tigris/server/midddleware"
+	"github.com/tigrisdata/tigris/server/types"
 	"google.golang.org/grpc"
 )
 

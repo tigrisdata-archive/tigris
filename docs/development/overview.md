@@ -2,7 +2,7 @@
 
 ## Building and Testing with Docker Containers
 
-Start local TigrisDB server listening on `http://localhost:8081` by running:
+Start local Tigris server listening on `http://localhost:8081` by running:
 
 ```sh
 make run
@@ -38,7 +38,7 @@ make osx_run
 ## Defining the schema
 
 The first part is to define the schema for the collection that will be stored in
-TigrisDB. In the schema define the fields and their types and then define the
+Tigris. In the schema define the fields and their types and then define the
 primary key fields.
 
 ```json

@@ -24,8 +24,8 @@ import (
 	"github.com/auth0/go-jwt-middleware/v2/validator"
 	"github.com/grpc-ecosystem/go-grpc-middleware/util/metautils"
 	"github.com/rs/zerolog/log"
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"github.com/tigrisdata/tigrisdb/server/config"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/server/config"
 	"google.golang.org/grpc/codes"
 )
 

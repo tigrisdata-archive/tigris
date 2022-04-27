@@ -24,10 +24,10 @@ import (
 	"github.com/apple/foundationdb/bindings/go/src/fdb/subspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"github.com/tigrisdata/tigrisdb/internal"
-	"github.com/tigrisdata/tigrisdb/server/config"
-	ulog "github.com/tigrisdata/tigrisdb/util/log"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/internal"
+	"github.com/tigrisdata/tigris/server/config"
+	ulog "github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc/codes"
 )
 

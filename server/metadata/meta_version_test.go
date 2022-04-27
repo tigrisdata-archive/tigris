@@ -19,9 +19,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/tigrisdata/tigrisdb/server/config"
-	"github.com/tigrisdata/tigrisdb/server/transaction"
-	"github.com/tigrisdata/tigrisdb/store/kv"
+	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/transaction"
+	"github.com/tigrisdata/tigris/store/kv"
 )
 
 func TestMetaVersion(t *testing.T) {

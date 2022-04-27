@@ -18,7 +18,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/tigrisdata/tigrisdb/schema"
+	"github.com/tigrisdata/tigris/schema"
 )
 
 func TestFilterUsingJSON(t *testing.T) {

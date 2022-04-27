@@ -90,10 +90,10 @@ clean:
 
 # OSX specific targets to run tests against FDB installed on the Mac OSX host (non-containerized)
 osx_test: generate test_client
-	TIGRISDB_SERVER_FOUNDATIONDB_CLUSTER_FILE=$(OSX_CLUSTER_FILE) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED)  go test $(TEST_PARAM) ./...
+	TIGRIS_SERVER_FOUNDATIONDB_CLUSTER_FILE=$(OSX_CLUSTER_FILE) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED)  go test $(TEST_PARAM) ./...
 
 osx_run: generate server
-	TIGRISDB_SERVER_FOUNDATIONDB_CLUSTER_FILE=$(OSX_CLUSTER_FILE) ./server/service
+	TIGRIS_SERVER_FOUNDATIONDB_CLUSTER_FILE=$(OSX_CLUSTER_FILE) ./server/service
 
 upgrade_api:
 	git submodule update --remote --recursive --rebase

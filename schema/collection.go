@@ -24,7 +24,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/santhosh-tekuri/jsonschema/v5"
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"google.golang.org/grpc/codes"
 )
 

@@ -27,7 +27,7 @@ services:
 
   tigris_server:
     container_name: tigris_server
-    image: tigrisdata/tigrisdb:alpha
+    image: tigrisdata/tigris:alpha
     volumes:
       - type: volume
         source: fdbdata

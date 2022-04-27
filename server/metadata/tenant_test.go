@@ -20,12 +20,12 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"github.com/tigrisdata/tigrisdb/schema"
-	"github.com/tigrisdata/tigrisdb/server/config"
-	"github.com/tigrisdata/tigrisdb/server/metadata/encoding"
-	"github.com/tigrisdata/tigrisdb/server/transaction"
-	"github.com/tigrisdata/tigrisdb/store/kv"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/metadata/encoding"
+	"github.com/tigrisdata/tigris/server/transaction"
+	"github.com/tigrisdata/tigris/store/kv"
 )
 
 func TestTenantManager_CreateTenant(t *testing.T) {
@@ -97,7 +97,7 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		tx, err = tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
 		_, err = m.CreateOrGetTenant(context.TODO(), tx, &TenantNamespace{"ns-test1", 3})
-		require.Equal(t, "id is already assigned to 'ns-test1'", err.(*api.TigrisDBError).Error())
+		require.Equal(t, "id is already assigned to 'ns-test1'", err.(*api.TigrisError).Error())
 		require.NoError(t, tx.Commit(context.TODO()))
 
 		_ = kv.DropTable(ctx, encoding.ReservedSubspaceKey)
@@ -117,7 +117,7 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		tx, err = tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
 		_, err = m.CreateOrGetTenant(ctx, tx, &TenantNamespace{"ns-test2", 2})
-		require.Equal(t, "id is already assigned to the namespace 'ns-test1'", err.(*api.TigrisDBError).Error())
+		require.Equal(t, "id is already assigned to the namespace 'ns-test1'", err.(*api.TigrisError).Error())
 		require.NoError(t, tx.Rollback(ctx))
 
 		_ = kv.DropTable(ctx, encoding.ReservedSubspaceKey)

@@ -18,8 +18,8 @@ import (
 	"bytes"
 	"time"
 
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	ulog "github.com/tigrisdata/tigrisdb/util/log"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/ugorji/go/codec"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/types/known/timestamppb"

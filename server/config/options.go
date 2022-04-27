@@ -17,7 +17,7 @@ package config
 import (
 	"time"
 
-	"github.com/tigrisdata/tigrisdb/util/log"
+	"github.com/tigrisdata/tigris/util/log"
 )
 
 type ServerConfig struct {

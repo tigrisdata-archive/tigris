@@ -18,8 +18,8 @@ import (
 	"context"
 	"unsafe"
 
-	"github.com/tigrisdata/tigrisdb/internal"
-	"github.com/tigrisdata/tigrisdb/server/config"
+	"github.com/tigrisdata/tigris/internal"
+	"github.com/tigrisdata/tigris/server/config"
 )
 
 type KeyValue struct {

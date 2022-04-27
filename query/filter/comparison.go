@@ -17,7 +17,7 @@ package filter
 import (
 	"fmt"
 
-	"github.com/tigrisdata/tigrisdb/value"
+	"github.com/tigrisdata/tigris/value"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

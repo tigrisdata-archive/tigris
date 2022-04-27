@@ -1,12 +1,12 @@
-# TigrisDB
+# Tigris Data
 
-[![Go Report](https://goreportcard.com/badge/github.com/tigrisdata/tigrisdb)](https://goreportcard.com/report/github.com/tigrisdata/tigrisdb)
-[![Build Status](https://github.com/tigrisdata/tigrisdb/workflows/Go/badge.svg)]()
+[![Go Report](https://goreportcard.com/badge/github.com/tigrisdata/tigris)](https://goreportcard.com/report/github.com/tigrisdata/tigris)
+[![Build Status](https://github.com/tigrisdata/tigris/workflows/Go/badge.svg)]()
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
 
 # Getting started
 
-These instructions will get you through setting up TigrisDB locally as Docker
+These instructions will get you through setting up Tigris Data locally as Docker
 containers.
 
 ## Prerequisites
@@ -20,7 +20,7 @@ containers.
 ## Running locally
 
 The [docker/local](docker/local) directory contains the docker-compose.yaml
-which describes the configuration of TigrisDB components. You can run TigrisDB
+which describes the configuration of Tigris Data components. You can run Tigris Data
 in a local environment by executing:
 
 ```shell
@@ -33,23 +33,23 @@ docker-compose up -d
 Install the CLI:
 
 ```shell
-go install github.com/tigrisdata/tigrisdb-cli@latest
+go install github.com/tigrisdata/tigris-cli@latest
 ```
 
 Make sure to include the installed binary in your PATH.
 
-Test that TigrisDB is up and running locally:
+Test that Tigris is up and running locally:
 
 ```shell
-export TIGRISDB_URL=http://localhost:8081
-tigrisdb-cli db list databases
+export TIGRIS_URL=http://localhost:8081
+tigris-cli db list databases
 ```
 
 More elaborate example of CLI usage can be
-found [here](https://github.com/tigrisdata/tigrisdb-cli/).
+found [here](https://github.com/tigrisdata/tigris-cli/).
 
 Golang client example can be
-found [here](https://github.com/tigrisdata/tigrisdb-client-go/).
+found [here](https://github.com/tigrisdata/tigris-client-go/).
 
 # Documentation
 
@@ -64,8 +64,8 @@ found [here](https://github.com/tigrisdata/tigrisdb-client-go/).
 # Community & Support
 
 * [Slack Community](https://join.slack.com/t/tigrisdatacommunity/shared_invite/zt-16fn5ogio-OjxJlgttJIV0ZDywcBItJQ)
-* [GitHub Issues](https://github.com/tigrisdata/tigrisdb/issues)
-* [GitHub Discussions](https://github.com/tigrisdata/tigrisdb/discussions)
+* [GitHub Issues](https://github.com/tigrisdata/tigris/issues)
+* [GitHub Discussions](https://github.com/tigrisdata/tigris/discussions)
 
 # License
 

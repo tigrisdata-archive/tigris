@@ -15,7 +15,7 @@
 package config
 
 import (
-	"github.com/tigrisdata/tigrisdb/server/config"
+	"github.com/tigrisdata/tigris/server/config"
 )
 
 func GetBaseURL() string {

@@ -26,11 +26,11 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-// TigrisDBError is our Tigris HTTP counterpart of grpc status. All the APIs should use this Error to return as a user facing
-// error. TigrisDBError will return grpcStatus to the muxer so that grpc client can see grpcStatus as the final output. For
+// TigrisError is our Tigris HTTP counterpart of grpc status. All the APIs should use this Error to return as a user facing
+// error. TigrisError will return grpcStatus to the muxer so that grpc client can see grpcStatus as the final output. For
 // HTTP clients see the **MarshalStatus** method where we are returning the response by not the grpc code as that is not
 // needed for HTTP clients.
-type TigrisDBError struct {
+type TigrisError struct {
 	// The status code, which should be an enum value of [google.rpc.Code][google.rpc.Code]. We don't need to marshal
 	// this code for HTTP clients.
 	Code codes.Code `json:"code,omitempty"`
@@ -41,12 +41,12 @@ type TigrisDBError struct {
 }
 
 // Error to return the underlying error message
-func (e *TigrisDBError) Error() string {
+func (e *TigrisError) Error() string {
 	return e.Message
 }
 
-// GRPCStatus converts the TigrisDBError and return status.Status. This is used to return grpc status to the grpc clients
-func (e *TigrisDBError) GRPCStatus() *status.Status {
+// GRPCStatus converts the TigrisError and return status.Status. This is used to return grpc status to the grpc clients
+func (e *TigrisError) GRPCStatus() *status.Status {
 	s := &spb.Status{
 		Code:    int32(e.Code),
 		Message: e.Message,
@@ -69,15 +69,15 @@ func (e *TigrisDBError) GRPCStatus() *status.Status {
 	return status.FromProto(s)
 }
 
-// WithDetails a helper method for adding details to the TigrisDBError
-func (e *TigrisDBError) WithDetails(details ...*ErrorDetails) *TigrisDBError {
+// WithDetails a helper method for adding details to the TigrisError
+func (e *TigrisError) WithDetails(details ...*ErrorDetails) *TigrisError {
 	e.Details = details
 	return e
 }
 
 // MarshalStatus marshal status object
 func MarshalStatus(status *spb.Status) ([]byte, error) {
-	var resp = &TigrisDBError{}
+	var resp = &TigrisError{}
 	resp.Message = status.Message
 	resp.Code = codes.Code(status.Code)
 	if len(status.Details) > 0 {
@@ -97,17 +97,17 @@ func MarshalStatus(status *spb.Status) ([]byte, error) {
 }
 
 // Errorf returns Error(c, fmt.Sprintf(format, a...)).
-func Errorf(c codes.Code, format string, a ...interface{}) *TigrisDBError {
+func Errorf(c codes.Code, format string, a ...interface{}) *TigrisError {
 	return Error(c, fmt.Sprintf(format, a...))
 }
 
 // Error returns an error representing c and msg.  If c is OK, returns nil.
-func Error(c codes.Code, msg string) *TigrisDBError {
+func Error(c codes.Code, msg string) *TigrisError {
 	if c == codes.OK {
 		return nil
 	}
 
-	return &TigrisDBError{
+	return &TigrisError{
 		Code:    c,
 		Message: msg,
 	}

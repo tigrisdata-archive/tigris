@@ -17,10 +17,10 @@ package main
 import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/pflag"
-	"github.com/tigrisdata/tigrisdb/server/config"
-	"github.com/tigrisdata/tigrisdb/server/muxer"
-	"github.com/tigrisdata/tigrisdb/store/kv"
-	ulog "github.com/tigrisdata/tigrisdb/util/log"
+	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/muxer"
+	"github.com/tigrisdata/tigris/store/kv"
+	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 //Version of this build

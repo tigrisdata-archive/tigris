@@ -16,10 +16,10 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    app.kubernetes.io/name: tigrisdb-server
-    app.kubernetes.io/part-of: tigrisdb
+    app.kubernetes.io/name: tigris-server
+    app.kubernetes.io/part-of: tigris
     app.kubernetes.io/component: server
-  name: tigrisdb-server
+  name: tigris-server
 spec:
   type: NodePort
   ports:
@@ -28,4 +28,4 @@ spec:
       protocol: TCP
       targetPort: 8080
   selector:
-    app.kubernetes.io/name: tigrisdb-server
+    app.kubernetes.io/name: tigris-server

@@ -21,8 +21,8 @@ on:
 
 env:
   AWS_REGION: "us-west-2"
-  ECR_REPOSITORY: "prod/tigrisdb"
-  DOCKER_REPOSITORY: "tigrisdata/tigrisdb"
+  ECR_REPOSITORY: "prod/tigris"
+  DOCKER_REPOSITORY: "tigrisdata/tigris"
 
 jobs:
   build-and-push-image:

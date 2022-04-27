@@ -22,7 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/tigrisdata/tigrisdb/test/config"
+	"github.com/tigrisdata/tigris/test/config"
 	"gopkg.in/gavv/httpexpect.v1"
 )
 
