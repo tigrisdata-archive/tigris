@@ -16,6 +16,7 @@ package api
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	jsoniter "github.com/json-iterator/go"
@@ -53,13 +54,20 @@ func (c *CustomMarshaler) Marshal(v interface{}) ([]byte, error) {
 // Note: This also means any changes in ReadResponse proto needs to make sure that we add that here and similarly
 // the openAPI specs needs to be specified Data as object instead of bytes.
 func (x *ReadResponse) MarshalJSON() ([]byte, error) {
+	type metadata struct {
+		CreatedAt time.Time `json:"created_at,omitempty"`
+		UpdatedAt time.Time `json:"created_at,omitempty"`
+	}
 	resp := struct {
-		Data        json.RawMessage   `json:"data"`
-		Metadata    *ResponseMetadata `json:"metadata"`
-		ResumeToken []byte            `json:"resume_token"`
+		Data        json.RawMessage `json:"data,omitempty"`
+		Metadata    metadata        `json:"metadata,omitempty"`
+		ResumeToken []byte          `json:"resume_token,omitempty"`
 	}{
-		Data:        x.Data,
-		Metadata:    x.Metadata,
+		Data: x.Data,
+		Metadata: metadata{
+			CreatedAt: x.Metadata.CreatedAt.AsTime(),
+			UpdatedAt: x.Metadata.CreatedAt.AsTime(),
+		},
 		ResumeToken: x.ResumeToken,
 	}
 	return json.Marshal(resp)
