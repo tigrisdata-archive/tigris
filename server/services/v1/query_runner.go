@@ -122,6 +122,13 @@ func NewBaseQueryRunner(encoder metadata.Encoder, cdcMgr *cdc.Manager) *BaseQuer
 }
 
 func (runner *BaseQueryRunner) GetDatabase(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, dbName string) (*metadata.Database, error) {
+	if tx.Context().GetStagedDB() != nil {
+		// this means that some DDL operation has modified the database object, then we need to perform all the operations
+		// on this staged database.
+		return tx.Context().GetStagedDB().(*metadata.Database), nil
+	}
+
+	// otherwise, simply read from the in-memory cache/disk.
 	db, err := tenant.GetDatabase(ctx, tx, dbName)
 	if err != nil {
 		return nil, err
@@ -241,6 +248,10 @@ func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	ts, err := runner.insertOrReplace(ctx, tx, tenant, db, coll, runner.req.GetDocuments(), true)
 	if err != nil {
+		if err == kv.ErrDuplicateKey {
+			return nil, ctx, api.Errorf(codes.AlreadyExists, err.Error())
+		}
+
 		return nil, ctx, err
 	}
 	return &Response{
@@ -505,66 +516,89 @@ func (runner *StreamingQueryRunner) iterate(ctx context.Context, tx transaction.
 type CollectionQueryRunner struct {
 	*BaseQueryRunner
 
-	drop           *api.DropCollectionRequest
-	list           *api.ListCollectionsRequest
-	createOrUpdate *api.CreateOrUpdateCollectionRequest
-	describe       *api.DescribeCollectionRequest
+	dropReq           *api.DropCollectionRequest
+	listReq           *api.ListCollectionsRequest
+	createOrUpdateReq *api.CreateOrUpdateCollectionRequest
+	describeReq       *api.DescribeCollectionRequest
 }
 
 func (runner *CollectionQueryRunner) SetCreateOrUpdateCollectionReq(create *api.CreateOrUpdateCollectionRequest) {
-	runner.createOrUpdate = create
+	runner.createOrUpdateReq = create
 }
 
 func (runner *CollectionQueryRunner) SetDropCollectionReq(drop *api.DropCollectionRequest) {
-	runner.drop = drop
+	runner.dropReq = drop
 }
 
 func (runner *CollectionQueryRunner) SetListCollectionReq(list *api.ListCollectionsRequest) {
-	runner.list = list
+	runner.listReq = list
 }
 
 func (runner *CollectionQueryRunner) SetDescribeCollectionReq(describe *api.DescribeCollectionRequest) {
-	runner.describe = describe
+	runner.describeReq = describe
 }
 
 func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	if runner.drop != nil {
-		db, err := runner.GetDatabase(ctx, tx, tenant, runner.drop.GetDb())
+	if runner.dropReq != nil {
+		db, err := runner.GetDatabase(ctx, tx, tenant, runner.dropReq.GetDb())
 		if err != nil {
 			return nil, ctx, err
 		}
 
-		if err = tenant.DropCollection(ctx, tx, db, runner.drop.GetCollection()); err != nil {
+		if tx.Context().GetStagedDB() == nil {
+			// do not modify the actual database object yet, just work on the clone
+			db = db.Clone()
+			tx.Context().AttachStagedDB(db, func() error {
+				tenant.InvalidateDBCache(db.Name())
+				return nil
+			})
+		}
+
+		if err = tenant.DropCollection(ctx, tx, db, runner.dropReq.GetCollection()); err != nil {
 			return nil, ctx, err
 		}
+
 		return &Response{
 			status: DroppedStatus,
 		}, ctx, nil
-	} else if runner.createOrUpdate != nil {
-		db, err := runner.GetDatabase(ctx, tx, tenant, runner.createOrUpdate.GetDb())
+	} else if runner.createOrUpdateReq != nil {
+		db, err := runner.GetDatabase(ctx, tx, tenant, runner.createOrUpdateReq.GetDb())
 		if err != nil {
 			return nil, ctx, err
 		}
 
-		if db.GetCollection(runner.createOrUpdate.GetCollection()) != nil && runner.createOrUpdate.OnlyCreate {
+		if db.GetCollection(runner.createOrUpdateReq.GetCollection()) != nil && runner.createOrUpdateReq.OnlyCreate {
 			// check if onlyCreate is set and if yes then return an error if collection already exist
-			return nil, ctx, api.Errorf(codes.AlreadyExists, "collection already exists")
+			return nil, ctx, api.Errorf(codes.AlreadyExists, "collection already exist")
 		}
 
-		schFactory, err := schema.Build(runner.createOrUpdate.GetCollection(), runner.createOrUpdate.GetSchema())
+		schFactory, err := schema.Build(runner.createOrUpdateReq.GetCollection(), runner.createOrUpdateReq.GetSchema())
 		if err != nil {
 			return nil, ctx, err
+		}
+
+		if tx.Context().GetStagedDB() == nil {
+			// do not modify the actual database object yet, just work on the clone
+			db = db.Clone()
+			tx.Context().AttachStagedDB(db, func() error {
+				tenant.InvalidateDBCache(db.Name())
+				return nil
+			})
 		}
 
 		if err = tenant.CreateCollection(ctx, tx, db, schFactory); err != nil {
+			if err == kv.ErrDuplicateKey {
+				// this simply means, concurrently CreateCollection is called,
+				return nil, ctx, api.Errorf(codes.Aborted, "concurrent create collection request, aborting")
+			}
 			return nil, ctx, err
 		}
 
 		return &Response{
 			status: CreatedStatus,
 		}, ctx, nil
-	} else if runner.list != nil {
-		db, err := runner.GetDatabase(ctx, tx, tenant, runner.list.GetDb())
+	} else if runner.listReq != nil {
+		db, err := runner.GetDatabase(ctx, tx, tenant, runner.listReq.GetDb())
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -581,13 +615,13 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 				Collections: collections,
 			},
 		}, ctx, nil
-	} else if runner.describe != nil {
-		db, err := runner.GetDatabase(ctx, tx, tenant, runner.describe.GetDb())
+	} else if runner.describeReq != nil {
+		db, err := runner.GetDatabase(ctx, tx, tenant, runner.describeReq.GetDb())
 		if err != nil {
 			return nil, ctx, err
 		}
 
-		coll, err := runner.GetCollections(db, runner.describe.GetCollection())
+		coll, err := runner.GetCollections(db, runner.describeReq.GetCollection())
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -635,7 +669,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			return nil, ctx, err
 		}
 		if db == nil {
-			return nil, ctx, api.Errorf(codes.NotFound, "database doesn't exists '%s'", runner.drop.GetDb())
+			return nil, ctx, api.Errorf(codes.NotFound, "database doesn't exist '%s'", runner.drop.GetDb())
 		}
 		if err := tenant.DropDatabase(ctx, tx, runner.drop.GetDb()); err != nil {
 			return nil, ctx, err
@@ -650,7 +684,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			return nil, ctx, err
 		}
 		if db != nil {
-			return nil, ctx, api.Errorf(codes.AlreadyExists, "database already exists")
+			return nil, ctx, api.Errorf(codes.AlreadyExists, "database already exist")
 		}
 
 		if err := tenant.CreateDatabase(ctx, tx, runner.create.GetDb()); err != nil {

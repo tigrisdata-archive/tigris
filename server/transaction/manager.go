@@ -20,6 +20,7 @@ import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
+	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/store/kv"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -48,6 +49,36 @@ type Tx interface {
 	Rollback(ctx context.Context) error
 	SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error
 	Get(ctx context.Context, key []byte) ([]byte, error)
+	Context() *SessionCtx
+}
+
+type StagedDB interface {
+	Name() string
+	GetCollection(string) *schema.DefaultCollection
+}
+
+// SessionCtx is used to store any baggage for the lifetime of the transaction. We use it to stage the database inside
+// a transaction when the transaction is performing any DDLs.
+type SessionCtx struct {
+	db StagedDB
+	cb func() error
+}
+
+func (c *SessionCtx) AttachStagedDB(db StagedDB, cb func() error) {
+	c.db = db
+	c.cb = cb
+}
+
+func (c *SessionCtx) GetStagedDB() StagedDB {
+	return c.db
+}
+
+func (c *SessionCtx) ExecuteCB() error {
+	if c.cb == nil {
+		return nil
+	}
+
+	return c.cb()
 }
 
 // Manager is used to track all the sessions and provide all the functionality related to transactions. Once created
@@ -244,4 +275,8 @@ func (b *baseTx) SetVersionstampedValue(ctx context.Context, key []byte, value [
 
 func (b *baseTx) Get(ctx context.Context, key []byte) ([]byte, error) {
 	return b.session.get(ctx, key)
+}
+
+func (b *baseTx) Context() *SessionCtx {
+	return b.session.context
 }

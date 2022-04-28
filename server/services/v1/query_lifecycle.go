@@ -62,6 +62,33 @@ func newQueryLifecycle(txMgr *transaction.Manager, tenantMgr *metadata.TenantMan
 	}
 }
 
+func (q *queryLifecycle) createOrGetTenant() (*metadata.Tenant, error) {
+	// ToDo: extract the namespace from the token. For now, just use the default tenant
+	tenant := q.tenantMgr.GetTenant(metadata.DefaultNamespaceName)
+	if tenant != nil {
+		log.Debug().Str("ns", tenant.String()).Msg("tenant found")
+		return tenant, nil
+	}
+
+	tx, err := q.txMgr.StartTxWithoutTracking(context.TODO())
+	if ulog.E(err) {
+		return nil, err
+	}
+
+	defer func() {
+		if err == nil {
+			err = tx.Commit(context.TODO())
+		} else {
+			err = tx.Rollback(context.TODO())
+		}
+	}()
+	log.Debug().Str("tenant", metadata.DefaultNamespaceName).Msg("tenant not found, creating")
+	if tenant, err = q.tenantMgr.CreateOrGetTenant(context.TODO(), tx, metadata.NewDefaultNamespace()); ulog.E(err) {
+		return nil, err
+	}
+	return tenant, nil
+}
+
 func (q *queryLifecycle) run(ctx context.Context, options *ReqOptions) (*Response, error) {
 	if options == nil {
 		return nil, api.Errorf(codes.Internal, "empty options")
@@ -70,10 +97,11 @@ func (q *queryLifecycle) run(ctx context.Context, options *ReqOptions) (*Respons
 		return nil, api.Errorf(codes.Internal, "query runner is missing")
 	}
 
-	// ToDo: extract the namespace from the token. For now, just use the default tenant
-	tenant := q.tenantMgr.GetTenant(metadata.DefaultNamespaceName)
-	if tenant != nil {
-		log.Debug().Str("ns", tenant.String()).Msg("tenant found")
+	// ToDo: extract the namespace from the token. For now, just use the default tenant.
+	// Tenant needs to be created in its own transaction.
+	tenant, err := q.createOrGetTenant()
+	if err != nil {
+		return nil, err
 	}
 
 	tx, err := q.txMgr.GetInheritedOrStartTx(ctx, options.txCtx, false)
@@ -81,19 +109,14 @@ func (q *queryLifecycle) run(ctx context.Context, options *ReqOptions) (*Respons
 		return nil, err
 	}
 
-	if tenant == nil {
-		log.Debug().Str("tenant", metadata.DefaultNamespaceName).Msg("tenant not found, creating")
-		if tenant, err = q.tenantMgr.CreateOrGetTenant(ctx, tx, metadata.NewDefaultNamespace()); ulog.E(err) {
-			return nil, err
-		}
-	}
-
 	var resp *Response
 	var txErr error
 	defer func() {
 		var err error
 		if txErr == nil {
-			err = tx.Commit(ctx)
+			if err = tx.Commit(ctx); err == nil {
+				_ = tx.Context().ExecuteCB()
+			}
 		} else {
 			err = tx.Rollback(ctx)
 		}

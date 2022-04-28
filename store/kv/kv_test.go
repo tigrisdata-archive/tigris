@@ -24,11 +24,9 @@ import (
 	"github.com/apple/foundationdb/bindings/go/src/fdb/subspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/server/config"
 	ulog "github.com/tigrisdata/tigris/util/log"
-	"google.golang.org/grpc/codes"
 )
 
 func readAllUsingIterator(t *testing.T, it Iterator) []KeyValue {
@@ -404,7 +402,7 @@ func testKVInsert(t *testing.T, kv baseKVStore) {
 			insert: []baseKeyValue{{BuildKey("p1"), nil, []byte("value1")}},
 			test:   []baseKeyValue{{BuildKey("p1"), nil, []byte("value2")}},
 			result: []baseKeyValue{{BuildKey("p1"), getFDBKey(table, BuildKey("p1")), []byte("value1")}},
-			err:    api.Errorf(codes.AlreadyExists, "duplicate key value, violates key constraint"),
+			err:    ErrDuplicateKey,
 		},
 	}
 

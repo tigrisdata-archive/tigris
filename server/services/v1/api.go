@@ -141,6 +141,8 @@ func (s *apiService) CommitTransaction(ctx context.Context, r *api.CommitTransac
 		return nil, err
 	}
 
+	_ = tx.Context().ExecuteCB()
+
 	return &api.CommitTransactionResponse{}, nil
 }
 
@@ -274,6 +276,7 @@ func (s *apiService) CreateOrUpdateCollection(ctx context.Context, r *api.Create
 	runner.SetCreateOrUpdateCollectionReq(r)
 
 	resp, err := s.Run(ctx, &ReqOptions{
+		txCtx:       api.GetTransaction(r),
 		queryRunner: runner,
 	})
 	if err != nil {
@@ -295,6 +298,7 @@ func (s *apiService) DropCollection(ctx context.Context, r *api.DropCollectionRe
 	runner.SetDropCollectionReq(r)
 
 	resp, err := s.Run(ctx, &ReqOptions{
+		txCtx:       api.GetTransaction(r),
 		queryRunner: runner,
 	})
 	if err != nil {
@@ -316,6 +320,7 @@ func (s *apiService) ListCollections(ctx context.Context, r *api.ListCollections
 	runner.SetListCollectionReq(r)
 
 	resp, err := s.Run(ctx, &ReqOptions{
+		txCtx:       api.GetTransaction(r),
 		queryRunner: runner,
 	})
 	if err != nil {

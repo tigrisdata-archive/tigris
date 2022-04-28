@@ -249,8 +249,9 @@ func (tenant *Tenant) GetNamespace() Namespace {
 	return tenant.namespace
 }
 
-// CreateDatabase is responsible for first creating a dictionary encoding of the database and then adding an entry for
-// this database in the tenant object.
+// CreateDatabase is responsible for creating a dictionary encoding of the database. This method is not adding the
+// entry to the tenant because the outer layer may still rollback the transaction so it is better to rely on the
+// GetDatabase call to reload this mapping.
 func (tenant *Tenant) CreateDatabase(ctx context.Context, tx transaction.Tx, dbName string) error {
 	tenant.Lock()
 	defer tenant.Unlock()
@@ -262,15 +263,9 @@ func (tenant *Tenant) CreateDatabase(ctx context.Context, tx transaction.Tx, dbN
 
 	// if there are concurrent requests on different workers then one of them will fail with duplicate entry and only
 	// one will succeed.
-	id, err := tenant.encoder.EncodeDatabaseName(ctx, tx, dbName, tenant.namespace.Id())
+	_, err := tenant.encoder.EncodeDatabaseName(ctx, tx, dbName, tenant.namespace.Id())
 	if err != nil {
 		return err
-	}
-
-	tenant.databases[dbName] = &Database{
-		id:          id,
-		name:        dbName,
-		collections: make(map[string]*collectionHolder),
 	}
 
 	return nil
@@ -305,9 +300,18 @@ func (tenant *Tenant) DropDatabase(ctx context.Context, tx transaction.Tx, dbNam
 		}
 	}
 
+	// deleting from map is fine at this point, because even if the transaction fails the GetDatabase call will reload
+	// the mapping.
 	delete(tenant.databases, db.name)
 
 	return nil
+}
+
+func (tenant *Tenant) InvalidateDBCache(dbName string) {
+	tenant.Lock()
+	defer tenant.Unlock()
+
+	delete(tenant.databases, dbName)
 }
 
 // GetDatabase returns the database object, or null if there is no database exist with the name passed in the param.
@@ -507,13 +511,29 @@ func (tenant *Tenant) String() string {
 	return fmt.Sprintf("id: %d, name: %s", tenant.namespace.Id(), tenant.namespace.Name())
 }
 
-// Database is to manage the collections for this database.
+// Database is to manage the collections for this database. Check the Clone method before changing this struct.
 type Database struct {
 	sync.RWMutex
 
 	id          uint32
 	name        string
 	collections map[string]*collectionHolder
+}
+
+// Clone is used to stage the database
+func (d *Database) Clone() *Database {
+	d.RLock()
+	defer d.RUnlock()
+
+	var copy Database
+	copy.id = d.id
+	copy.name = d.name
+	copy.collections = make(map[string]*collectionHolder)
+	for k, v := range d.collections {
+		copy.collections[k] = v.clone()
+	}
+
+	return &copy
 }
 
 // Name returns the database name.
@@ -551,6 +571,7 @@ func (d *Database) GetCollection(cname string) *schema.DefaultCollection {
 	return nil
 }
 
+// collectionHolder is to manage a single collection. Check the Clone method before changing this struct.
 type collectionHolder struct {
 	sync.RWMutex
 
@@ -566,6 +587,25 @@ type collectionHolder struct {
 	schema jsoniter.RawMessage
 	// if collection is not properly formed during restart then this is false and we need to reload it during request
 	fullFormed bool
+}
+
+// clone is used to stage the collectionHolder
+func (c *collectionHolder) clone() *collectionHolder {
+	c.RLock()
+	defer c.RUnlock()
+
+	var copy collectionHolder
+	copy.id = c.id
+	copy.name = c.name
+	copy.schema = c.schema
+
+	copy.collection, _ = c.createCollection(c.schema)
+	copy.idxNameToId = make(map[string]uint32)
+	for k, v := range c.idxNameToId {
+		copy.idxNameToId[k] = v
+	}
+
+	return &copy
 }
 
 // get returns the collection managed by this holder. At this point, a Collection object is safely constructed
@@ -586,24 +626,32 @@ func (c *collectionHolder) set(revision []byte) error {
 	c.Lock()
 	defer c.Unlock()
 
-	schFactory, err := schema.Build(c.name, revision)
+	collection, err := c.createCollection(revision)
 	if err != nil {
 		return err
+	}
+	c.collection = collection
+	c.schema = revision
+	c.fullFormed = true
+	return nil
+}
+
+func (c *collectionHolder) createCollection(revision []byte) (*schema.DefaultCollection, error) {
+	schFactory, err := schema.Build(c.name, revision)
+	if err != nil {
+		return nil, err
 	}
 
 	indexes := schFactory.Indexes.GetIndexes()
 	for _, index := range indexes {
 		id, ok := c.idxNameToId[index.Name]
 		if !ok {
-			return api.Errorf(codes.NotFound, "dictionary encoding is missing for index '%s'", index.Name)
+			return nil, api.Errorf(codes.NotFound, "dictionary encoding is missing for index '%s'", index.Name)
 		}
 		index.Id = id
 	}
 
-	c.collection = schema.NewDefaultCollection(c.name, c.id, schFactory.Fields, schFactory.Indexes, revision)
-	c.schema = revision
-	c.fullFormed = true
-	return nil
+	return schema.NewDefaultCollection(c.name, c.id, schFactory.Fields, schFactory.Indexes, revision), nil
 }
 
 func (c *collectionHolder) isFullyFormed() bool {

@@ -17,7 +17,7 @@ jobs:
       - name: Install dependencies
         run: /bin/bash scripts/install_build_deps.sh
       - name: Generated code
-        run: make generate test_client
+        run: make generate
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v2
         with:
