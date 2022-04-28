@@ -73,8 +73,6 @@ type DefaultCollection struct {
 }
 
 func NewDefaultCollection(cname string, id uint32, fields []*Field, indexes *Indexes, schema jsoniter.RawMessage) *DefaultCollection {
-	RegisterTigrisFormats()
-
 	url := cname + ".json"
 	compiler := jsonschema.NewCompiler()
 	compiler.Draft = jsonschema.Draft7 // Format is only working for draft7
@@ -136,7 +134,7 @@ func (d *DefaultCollection) Validate(document interface{}) error {
 	return api.Errorf(codes.InvalidArgument, err.Error())
 }
 
-func RegisterTigrisFormats() {
+func init() {
 	jsonschema.Formats[FieldNames[ByteType]] = func(i interface{}) bool {
 		switch i.(type) {
 		case string:

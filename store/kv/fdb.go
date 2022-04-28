@@ -24,11 +24,9 @@ import (
 	"github.com/apple/foundationdb/bindings/go/src/fdb/subspace"
 	"github.com/apple/foundationdb/bindings/go/src/fdb/tuple"
 	"github.com/rs/zerolog/log"
-	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/config"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"golang.org/x/xerrors"
-	"google.golang.org/grpc/codes"
 )
 
 const (
@@ -320,7 +318,7 @@ func (t *ftx) Insert(ctx context.Context, table []byte, key Key, data []byte) er
 		return err
 	}
 	if vv != nil {
-		return api.Errorf(codes.AlreadyExists, "duplicate key value, violates key constraint")
+		return ErrDuplicateKey
 	}
 
 	t.tx.Set(k, data)

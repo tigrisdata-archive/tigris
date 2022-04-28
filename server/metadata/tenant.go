@@ -249,8 +249,9 @@ func (tenant *Tenant) GetNamespace() Namespace {
 	return tenant.namespace
 }
 
-// CreateDatabase is responsible for first creating a dictionary encoding of the database and then adding an entry for
-// this database in the tenant object.
+// CreateDatabase is responsible for creating a dictionary encoding of the database. This method is not adding the
+// entry to the tenant because the outer layer may still rollback the transaction so it is better to rely on the
+// GetDatabase call to reload this mapping.
 func (tenant *Tenant) CreateDatabase(ctx context.Context, tx transaction.Tx, dbName string) error {
 	tenant.Lock()
 	defer tenant.Unlock()
@@ -262,15 +263,9 @@ func (tenant *Tenant) CreateDatabase(ctx context.Context, tx transaction.Tx, dbN
 
 	// if there are concurrent requests on different workers then one of them will fail with duplicate entry and only
 	// one will succeed.
-	id, err := tenant.encoder.EncodeDatabaseName(ctx, tx, dbName, tenant.namespace.Id())
+	_, err := tenant.encoder.EncodeDatabaseName(ctx, tx, dbName, tenant.namespace.Id())
 	if err != nil {
 		return err
-	}
-
-	tenant.databases[dbName] = &Database{
-		id:          id,
-		name:        dbName,
-		collections: make(map[string]*collectionHolder),
 	}
 
 	return nil
@@ -305,6 +300,8 @@ func (tenant *Tenant) DropDatabase(ctx context.Context, tx transaction.Tx, dbNam
 		}
 	}
 
+	// deleting from map is fine at this point, because even if the transaction fails the GetDatabase call will reload
+	// the mapping.
 	delete(tenant.databases, db.name)
 
 	return nil

@@ -99,7 +99,7 @@ func testClientBinary(t *testing.T, c driver.Driver) {
 	require.NoError(t, err)
 
 	err = c.CreateOrUpdateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
-	require.Error(t, api.Errorf(codes.AlreadyExists, "collection already exists"), err)
+	require.Error(t, api.Errorf(codes.AlreadyExists, "collection already exist"), err)
 
 	type doc struct {
 		K1 []byte
@@ -178,7 +178,7 @@ func testClient(t *testing.T, c driver.Driver) {
 	require.NoError(t, err)
 
 	err = c.CreateOrUpdateCollection(ctx, "db1", "c1", driver.Schema(schema), &driver.CollectionOptions{})
-	require.Error(t, api.Errorf(codes.AlreadyExists, "collection already exists"), err)
+	require.Error(t, api.Errorf(codes.AlreadyExists, "collection already exist"), err)
 
 	doc1 := driver.Document(`{"K1": "vK1", "K2": 1, "D1": "vD1"}`)
 

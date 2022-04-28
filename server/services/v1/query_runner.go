@@ -248,6 +248,10 @@ func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	ts, err := runner.insertOrReplace(ctx, tx, tenant, db, coll, runner.req.GetDocuments(), true)
 	if err != nil {
+		if err == kv.ErrDuplicateKey {
+			return nil, ctx, api.Errorf(codes.AlreadyExists, err.Error())
+		}
+
 		return nil, ctx, err
 	}
 	return &Response{
@@ -565,7 +569,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 
 		if db.GetCollection(runner.createOrUpdateReq.GetCollection()) != nil && runner.createOrUpdateReq.OnlyCreate {
 			// check if onlyCreate is set and if yes then return an error if collection already exist
-			return nil, ctx, api.Errorf(codes.AlreadyExists, "collection already exists")
+			return nil, ctx, api.Errorf(codes.AlreadyExists, "collection already exist")
 		}
 
 		schFactory, err := schema.Build(runner.createOrUpdateReq.GetCollection(), runner.createOrUpdateReq.GetSchema())
@@ -583,6 +587,10 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		}
 
 		if err = tenant.CreateCollection(ctx, tx, db, schFactory); err != nil {
+			if err == kv.ErrDuplicateKey {
+				// this simply means, concurrently CreateCollection is called,
+				return nil, ctx, api.Errorf(codes.Aborted, "concurrent create collection request, aborting")
+			}
 			return nil, ctx, err
 		}
 
@@ -661,7 +669,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			return nil, ctx, err
 		}
 		if db == nil {
-			return nil, ctx, api.Errorf(codes.NotFound, "database doesn't exists '%s'", runner.drop.GetDb())
+			return nil, ctx, api.Errorf(codes.NotFound, "database doesn't exist '%s'", runner.drop.GetDb())
 		}
 		if err := tenant.DropDatabase(ctx, tx, runner.drop.GetDb()); err != nil {
 			return nil, ctx, err
@@ -676,7 +684,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			return nil, ctx, err
 		}
 		if db != nil {
-			return nil, ctx, api.Errorf(codes.AlreadyExists, "database already exists")
+			return nil, ctx, api.Errorf(codes.AlreadyExists, "database already exist")
 		}
 
 		if err := tenant.CreateDatabase(ctx, tx, runner.create.GetDb()); err != nil {
