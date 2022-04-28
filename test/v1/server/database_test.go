@@ -55,7 +55,7 @@ func (s *DatabaseSuite) TestDropDatabase_NotFound() {
 	resp.Status(http.StatusNotFound).
 		JSON().
 		Object().
-		ValueEqual("message", "database doesn't exists 'test_drop_db_not_found'")
+		ValueEqual("message", "database doesn't exist 'test_drop_db_not_found'")
 }
 
 func (s *DatabaseSuite) TestDropDatabase() {

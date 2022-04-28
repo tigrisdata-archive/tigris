@@ -216,7 +216,7 @@ func (s *CollectionSuite) TestCreateCollection() {
 			Status(http.StatusConflict).
 			JSON().
 			Object().
-			ValueEqual("message", "collection already exists")
+			ValueEqual("message", "collection already exist")
 	})
 }
 

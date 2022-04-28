@@ -13,10 +13,30 @@ type Workload interface {
 	Setup(client driver.Driver) error
 	Start(client driver.Driver) error
 	Check(client driver.Driver) (bool, error)
+	Type() string
 }
 
 func CreateWorkloads() []Workload {
 	var workload []Workload
+	workload = append(workload, &workload2.DDLWorkload{
+		Threads:     16,
+		Database:    "test1",
+		Collections: []string{"c1"},
+		Schemas: [][]byte{
+			[]byte(`{
+	"title": "c1",
+	"properties": {
+		"F1": {
+			"type": "integer"
+		},
+		"F2": {
+			"type": "string"
+		}
+	},
+	"primary_key": ["F1"]
+}`)},
+	})
+
 	workload = append(workload, &workload2.InsertOnlyWorkload{
 		Threads:     64,
 		Records:     64,
@@ -87,6 +107,7 @@ func main() {
 
 	workloads := CreateWorkloads()
 	for _, w := range workloads {
+		log.Debug().Msgf("running workload type %s", w.Type())
 		if err = w.Setup(client); err != nil {
 			log.Panic().Err(err).Msg("workload setup failed")
 		}
@@ -100,9 +121,9 @@ func main() {
 			log.Panic().Err(err).Msg("workload check failed")
 		}
 		if !success {
-			log.Debug().Msgf("workload consistency issue")
+			log.Panic().Msgf("workload consistency issue, stopping %s", w.Type())
 		} else {
-			log.Debug().Msgf("workload is consistent")
+			log.Debug().Msgf("workload is consistent %s", w.Type())
 		}
 	}
 }
