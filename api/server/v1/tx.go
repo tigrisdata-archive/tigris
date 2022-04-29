@@ -15,12 +15,13 @@
 package api
 
 func IsTxSupported(req Request) bool {
-	switch RequestType(req) {
-	case Insert, Replace, Update, Delete, Read, CreateOrUpdateCollection, DropCollection, ListCollections:
+	switch req.(type) {
+	case *InsertRequest, *ReplaceRequest, *UpdateRequest, *DeleteRequest, *ReadRequest,
+		*CreateOrUpdateCollectionRequest, *DropCollectionRequest, *ListCollectionsRequest:
 		return true
+	default:
+		return false
 	}
-
-	return false
 }
 
 func GetTransaction(req Request) *TransactionCtx {

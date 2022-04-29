@@ -16,25 +16,6 @@ package api
 
 import (
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/reflect/protoreflect"
-)
-
-const (
-	Insert                   protoreflect.FullName = "InsertRequest"
-	Replace                  protoreflect.FullName = "ReplaceRequest"
-	Update                   protoreflect.FullName = "UpdateRequest"
-	Delete                   protoreflect.FullName = "DeleteRequest"
-	Read                     protoreflect.FullName = "ReadRequest"
-	BeginTransaction         protoreflect.FullName = "BeginTransactionRequest"
-	CommitTransaction        protoreflect.FullName = "CommitTransactionRequest"
-	RollbackTransaction      protoreflect.FullName = "RollbackTransactionRequest"
-	CreateOrUpdateCollection protoreflect.FullName = "CreateOrUpdateCollectionRequest"
-	DropCollection           protoreflect.FullName = "DropCollectionRequest"
-	ListCollections          protoreflect.FullName = "ListCollectionsRequest"
-	ListDatabases            protoreflect.FullName = "ListDatabasesRequest"
-	CreateDatabase           protoreflect.FullName = "CreateDatabaseRequest"
-	DropDatabase             protoreflect.FullName = "DropDatabaseRequest"
-	Stream                   protoreflect.FullName = "StreamRequest"
 )
 
 type Request interface {
@@ -46,5 +27,3 @@ type Request interface {
 type Response interface {
 	proto.Message
 }
-
-var RequestType = proto.MessageName
