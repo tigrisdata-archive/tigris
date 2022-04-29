@@ -70,7 +70,7 @@ func (w *InsertOnlyWorkload) Start(client driver.Driver) error {
 				}
 
 				for k := 0; k < len(w.Collections); k++ {
-					if _, err := client.Insert(context.TODO(), w.Database, w.Collections[k], []driver.Document{serialized}); err != nil {
+					if _, err := client.UseDatabase(w.Database).Insert(context.TODO(), w.Collections[k], []driver.Document{serialized}); err != nil {
 						insertErr = multierror.Append(insertErr, errors.Wrapf(err, "insert to collection failed '%s' '%s'", w.Database, w.Collections[j]))
 						return
 					}
@@ -91,7 +91,7 @@ func (w *InsertOnlyWorkload) Start(client driver.Driver) error {
 func (w *InsertOnlyWorkload) Check(client driver.Driver) (bool, error) {
 	isSuccess := false
 	for _, collection := range w.Collections {
-		it, err := client.Read(context.TODO(), w.Database, collection, driver.Filter(`{}`), nil)
+		it, err := client.UseDatabase(w.Database).Read(context.TODO(), collection, driver.Filter(`{}`), nil)
 		if err != nil {
 			return false, errors.Wrapf(err, "read to collection failed '%s' '%s'", w.Database, collection)
 		}

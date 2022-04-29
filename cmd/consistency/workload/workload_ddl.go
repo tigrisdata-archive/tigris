@@ -68,7 +68,7 @@ func (w *DDLWorkload) Check(client driver.Driver) (bool, error) {
 	}
 
 	// Cleanup the collection and try now rollback scenario
-	_ = client.DropCollection(context.TODO(), w.Database, w.Collections[0])
+	_ = client.UseDatabase(w.Database).DropCollection(context.TODO(), w.Collections[0])
 
 	wg = sync.WaitGroup{}
 	for i := int16(0); i < w.Threads; i++ {
@@ -149,7 +149,7 @@ func (w *DDLWorkload) validate(iteration int16, client driver.Driver, isCommit b
 		}
 	}
 
-	collections, err = client.ListCollections(context.TODO(), w.Database)
+	collections, err = client.UseDatabase(w.Database).ListCollections(context.TODO())
 	isExists = w.isCollectionExists(collections, w.Collections[0])
 	if isCommit {
 		// should be visible outside the transaction as well.
