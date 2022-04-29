@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/rs/zerolog/log"
+	clientConfig "github.com/tigrisdata/tigris-client-go/config"
 	"github.com/tigrisdata/tigris-client-go/driver"
 	workload2 "github.com/tigrisdata/tigris/cmd/consistency/workload"
 )
@@ -100,7 +101,9 @@ func CreateWorkloads() []Workload {
 
 func main() {
 	driver.DefaultProtocol = driver.HTTP
-	client, err := driver.NewDriver(context.TODO(), fmt.Sprintf("http://%s:%d", "localhost", 8081), nil)
+	client, err := driver.NewDriver(context.TODO(), &clientConfig.Config{
+		URL: fmt.Sprintf("http://%s:%d", "localhost", 8081),
+	})
 	if err != nil {
 		panic(err)
 	}
