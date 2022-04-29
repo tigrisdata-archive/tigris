@@ -248,11 +248,11 @@ func testTxClient(t *testing.T, c driver.Driver) {
 	require.NoError(t, err)
 
 	db1 = c.UseDatabase("db1")
-	err = db1.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema), &driver.CollectionOptions{})
-	require.NoError(t, err)
-
 	tx, err := c.BeginTx(ctx, "db1", &driver.TxOptions{})
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	err = tx.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema), &driver.CollectionOptions{})
+	require.NoError(t, err)
 
 	doc1 := driver.Document(`{"K1": "vK1", "K2": 1, "D1": "vD1"}`)
 
