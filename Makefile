@@ -20,7 +20,7 @@ all: server
 
 .PRECIOUS: ${PROTO_DIR}/%_openapi.yaml ${PROTO_DIR}/%.proto
 
-BUILD_PARAM=-tags=release -ldflags "-X 'main.Version=$(VERSION)' -X 'main.BuildHash=$(GIT_HASH)'" $(shell printenv BUILD_PARAM)
+BUILD_PARAM=-tags=release -ldflags "-X 'github.com/tigrisdata/tigris/util.Version=$(VERSION)' -X 'github.com/tigrisdata/tigris/util.BuildHash=$(GIT_HASH)'" $(shell printenv BUILD_PARAM)
 TEST_PARAM=-cover -race -tags=test,integration $(shell printenv TEST_PARAM)
 
 ${PROTO_DIR}/%.proto:

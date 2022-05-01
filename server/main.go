@@ -20,14 +20,9 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/muxer"
 	"github.com/tigrisdata/tigris/store/kv"
+	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
-
-//Version of this build
-var Version string
-
-//BuildHash keeps Git hash of the commit of this build
-var BuildHash string
 
 func main() {
 	pflag.String("api.port", "", "set port server listens on")
@@ -36,7 +31,7 @@ func main() {
 
 	ulog.Configure(config.DefaultConfig.Log)
 
-	log.Info().Str("version", Version).Str("BuildHash", BuildHash).Msgf("Starting server")
+	log.Info().Str("version", util.Version).Msgf("Starting server")
 
 	kvStore, err := kv.NewKeyValueStore(&config.DefaultConfig.FoundationDB)
 	if err != nil {
