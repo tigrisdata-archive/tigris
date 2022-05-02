@@ -74,6 +74,72 @@ func testRead(t *testing.T, c driver.Driver, filter driver.Filter, expected []dr
 	assert.NoError(t, it.Err())
 }
 
+func testTxReadWrite(t *testing.T, c driver.Driver) {
+	ctx := context.TODO()
+
+	_ = c.DropDatabase(ctx, "db1", &driver.DatabaseOptions{})
+	db1 := c.UseDatabase("db1")
+	_ = db1.DropCollection(ctx, "c1", &driver.CollectionOptions{})
+
+	schema := `{
+		"title": "c1",
+		"properties": {
+			"str_field": {
+				"type": "string"
+			},
+			"int_field": {
+				"type": "integer"
+			},
+			"bool_field": {
+				"type": "boolean"
+			}
+		},
+		"primary_key": ["str_field"]
+	}`
+
+	err := c.CreateDatabase(ctx, "db1", &driver.DatabaseOptions{})
+	require.NoError(t, err)
+	db1 = c.UseDatabase("db1")
+	err = db1.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema), &driver.CollectionOptions{})
+	require.NoError(t, err)
+
+	doc1 := driver.Document(`{"str_field": "value1", "int_field": 111, "bool_field": true}`)
+	doc2 := driver.Document(`{"str_field": "value2", "int_field": 222, "bool_field": false}`)
+	resp, err := db1.Insert(ctx, "c1", []driver.Document{
+		doc1,
+		doc2,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "inserted", resp.Status)
+
+	testRead(t, c, driver.Filter(`{"str_field": "value2"}`), []driver.Document{doc2})
+
+	delResp, err := db1.Delete(ctx, "c1", driver.Filter(`{"str_field": "value2"}`))
+	require.NoError(t, err)
+	require.Equal(t, "deleted", delResp.Status)
+
+	testRead(t, c, driver.Filter(`{"str_field": "value2"}`), nil)
+
+	tx, err := c.BeginTx(ctx, "db1")
+	require.NoError(t, err)
+
+	doc3 := driver.Document(`{"str_field": "value3", "int_field": 333, "bool_field": false}`)
+	resp, err = tx.Insert(ctx, "c1", []driver.Document{
+		doc2,
+		doc3,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "inserted", resp.Status)
+
+	it, err := tx.Read(ctx, "c1", driver.Filter(`{"str_field": "value2"}`), nil)
+	require.NoError(t, err)
+	var doc driver.Document
+	for it.Next(&doc) {
+		assert.JSONEq(t, string(doc2), string(doc))
+	}
+	require.NoError(t, tx.Commit(ctx))
+}
+
 func testClientBinary(t *testing.T, c driver.Driver) {
 	ctx := context.TODO()
 
@@ -335,6 +401,7 @@ func TestTxGRPCClient(t *testing.T) {
 	defer func() { _ = c.Close() }()
 
 	testTxClient(t, c)
+	testTxReadWrite(t, c)
 }
 
 func TestTxHTTPClient(t *testing.T) {
@@ -347,4 +414,5 @@ func TestTxHTTPClient(t *testing.T) {
 	defer func() { _ = c.Close() }()
 
 	testTxClient(t, c)
+	testTxReadWrite(t, c)
 }
