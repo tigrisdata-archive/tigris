@@ -49,8 +49,9 @@ func GetTransaction(req Request) *TransactionCtx {
 		return r.GetOptions().GetWriteOptions().GetTxCtx()
 	case *ReadRequest:
 		if r.GetOptions() == nil {
-			return r.GetOptions().GetTxCtx()
+			return nil
 		}
+		return r.GetOptions().GetTxCtx()
 	case *CreateOrUpdateCollectionRequest:
 		if r.GetOptions() == nil || r.GetOptions().GetTxCtx() == nil {
 			return nil
