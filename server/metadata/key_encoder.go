@@ -36,16 +36,21 @@ type Encoder interface {
 	//	   information i.e. whether the index is pkey, etc. The remaining elements are values for this index.
 	EncodeKey(ns Namespace, db *Database, coll *schema.DefaultCollection, idx *schema.Index, idxParts []interface{}) (keys.Key, error)
 
-	DecodeTableName(tableName []byte) (uint32, uint32, uint32)
+	// DecodeTableName is used to decode the key stored in FDB and extract namespace name, database name and collection name.
+	DecodeTableName(tableName []byte) (string, string, string, bool)
 	DecodeIndexName(indexName []byte) uint32
 }
 
 // NewEncoder creates Dictionary encoder to encode keys.
-func NewEncoder() Encoder {
-	return &DictKeyEncoder{}
+func NewEncoder(mgr *TenantManager) Encoder {
+	return &DictKeyEncoder{
+		mgr: mgr,
+	}
 }
 
-type DictKeyEncoder struct{}
+type DictKeyEncoder struct {
+	mgr *TenantManager
+}
 
 func (d *DictKeyEncoder) EncodeTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) []byte {
 	return d.encodedTableName(ns, db, coll)
@@ -88,12 +93,12 @@ func (d *DictKeyEncoder) encodedIdxName(idx *schema.Index) []byte {
 	return encoding.UInt32ToByte(idx.Id)
 }
 
-func (d *DictKeyEncoder) DecodeTableName(tableName []byte) (uint32, uint32, uint32) {
+func (d *DictKeyEncoder) DecodeTableName(tableName []byte) (string, string, string, bool) {
 	nsId := encoding.ByteToUInt32(tableName[0:4])
 	dbId := encoding.ByteToUInt32(tableName[4:8])
 	collId := encoding.ByteToUInt32(tableName[8:12])
 
-	return nsId, dbId, collId
+	return d.mgr.GetTableNameFromId(nsId, dbId, collId)
 }
 
 func (d *DictKeyEncoder) DecodeIndexName(indexName []byte) uint32 {

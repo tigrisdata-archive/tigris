@@ -103,14 +103,16 @@ func (n *TenantNamespace) Id() uint32 {
 type TenantManager struct {
 	sync.RWMutex
 
-	encoder *encoding.DictionaryEncoder
-	tenants map[string]*Tenant
+	encoder       *encoding.DictionaryEncoder
+	tenants       map[string]*Tenant
+	idToTenantMap map[uint32]string
 }
 
 func NewTenantManager() *TenantManager {
 	return &TenantManager{
-		encoder: encoding.NewDictionaryEncoder(),
-		tenants: make(map[string]*Tenant),
+		encoder:       encoding.NewDictionaryEncoder(),
+		tenants:       make(map[string]*Tenant),
+		idToTenantMap: make(map[uint32]string),
 	}
 }
 
@@ -146,7 +148,41 @@ func (m *TenantManager) CreateOrGetTenant(ctx context.Context, tx transaction.Tx
 
 	tenant = NewTenant(namespace, m.encoder)
 	m.tenants[namespace.Name()] = tenant
+	m.idToTenantMap[namespace.Id()] = namespace.Name()
 	return tenant, nil
+}
+
+// GetTableNameFromId returns tenant name, database name, collection name corresponding to their encoded ids.
+func (m *TenantManager) GetTableNameFromId(tenantId uint32, dbId uint32, collId uint32) (string, string, string, bool) {
+	m.RLock()
+	defer m.RUnlock()
+
+	// get tenant info
+	tenantName, ok := m.idToTenantMap[tenantId]
+	if !ok {
+		return "", "", "", ok
+	}
+	tenant, ok := m.tenants[tenantName]
+	if !ok {
+		return "", "", "", ok
+	}
+
+	// get db info
+	dbName, ok := tenant.idToDatabaseMap[dbId]
+	if !ok {
+		return tenantName, "", "", ok
+	}
+	db, ok := tenant.databases[dbName]
+	if !ok {
+		return tenantName, "", "", ok
+	}
+
+	// finally, the collection
+	collName, ok := db.idToCollectionMap[collId]
+	if !ok {
+		return tenantName, dbName, "", ok
+	}
+	return tenantName, dbName, collName, ok
 }
 
 // GetTenant returns tenants if exists in the tenant map or nil.
@@ -196,18 +232,20 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx) error {
 type Tenant struct {
 	sync.RWMutex
 
-	encoder     *encoding.DictionaryEncoder
-	schemaStore *encoding.SchemaSubspace
-	databases   map[string]*Database
-	namespace   Namespace
+	encoder         *encoding.DictionaryEncoder
+	schemaStore     *encoding.SchemaSubspace
+	databases       map[string]*Database
+	idToDatabaseMap map[uint32]string
+	namespace       Namespace
 }
 
 func NewTenant(namespace Namespace, encoder *encoding.DictionaryEncoder) *Tenant {
 	return &Tenant{
-		namespace:   namespace,
-		encoder:     encoder,
-		schemaStore: &encoding.SchemaSubspace{},
-		databases:   make(map[string]*Database),
+		namespace:       namespace,
+		encoder:         encoder,
+		schemaStore:     &encoding.SchemaSubspace{},
+		databases:       make(map[string]*Database),
+		idToDatabaseMap: make(map[uint32]string),
 	}
 }
 
@@ -226,9 +264,10 @@ func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx) error {
 	for db, id := range dbNameToId {
 		if _, ok := tenant.databases[db]; !ok {
 			tenant.databases[db] = &Database{
-				name:        db,
-				id:          id,
-				collections: make(map[string]*collectionHolder),
+				name:              db,
+				id:                id,
+				collections:       make(map[string]*collectionHolder),
+				idToCollectionMap: make(map[uint32]string),
 			}
 		}
 	}
@@ -250,7 +289,7 @@ func (tenant *Tenant) GetNamespace() Namespace {
 }
 
 // CreateDatabase is responsible for creating a dictionary encoding of the database. This method is not adding the
-// entry to the tenant because the outer layer may still rollback the transaction so it is better to rely on the
+// entry to the tenant because the outer layer may still rollback the transaction, so it is better to rely on the
 // GetDatabase call to reload this mapping.
 func (tenant *Tenant) CreateDatabase(ctx context.Context, tx transaction.Tx, dbName string) error {
 	tenant.Lock()
@@ -303,6 +342,7 @@ func (tenant *Tenant) DropDatabase(ctx context.Context, tx transaction.Tx, dbNam
 	// deleting from map is fine at this point, because even if the transaction fails the GetDatabase call will reload
 	// the mapping.
 	delete(tenant.databases, db.name)
+	delete(tenant.idToDatabaseMap, db.id)
 
 	return nil
 }
@@ -341,7 +381,7 @@ func (tenant *Tenant) GetDatabase(ctx context.Context, tx transaction.Tx, dbName
 	return tenant.databases[dbName], nil
 }
 
-func (tenant *Tenant) ListDatabases(ctx context.Context, tx transaction.Tx) []string {
+func (tenant *Tenant) ListDatabases(_ context.Context, _ transaction.Tx) []string {
 	tenant.RLock()
 	defer tenant.RUnlock()
 
@@ -355,11 +395,13 @@ func (tenant *Tenant) ListDatabases(ctx context.Context, tx transaction.Tx) []st
 
 func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbName string, dbId uint32) error {
 	dbObj := &Database{
-		id:          dbId,
-		name:        dbName,
-		collections: make(map[string]*collectionHolder),
+		id:                dbId,
+		name:              dbName,
+		collections:       make(map[string]*collectionHolder),
+		idToCollectionMap: make(map[uint32]string),
 	}
 	tenant.databases[dbName] = dbObj
+	tenant.idToDatabaseMap[dbId] = dbName
 
 	collNameToId, err := tenant.encoder.GetCollections(ctx, tx, tenant.namespace.Id(), dbObj.id)
 	if err != nil {
@@ -383,6 +425,7 @@ func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbN
 			id:          id,
 			idxNameToId: idxNameToId,
 		}
+		dbObj.idToCollectionMap[id] = coll
 
 		if e = dbObj.collections[coll].set(userSch); e != nil {
 			err = multierror.Append(err, e)
@@ -503,6 +546,7 @@ func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db 
 	}
 
 	delete(db.collections, cHolder.name)
+	delete(db.idToCollectionMap, cHolder.id)
 
 	return nil
 }
@@ -515,9 +559,10 @@ func (tenant *Tenant) String() string {
 type Database struct {
 	sync.RWMutex
 
-	id          uint32
-	name        string
-	collections map[string]*collectionHolder
+	id                uint32
+	name              string
+	collections       map[string]*collectionHolder
+	idToCollectionMap map[uint32]string
 }
 
 // Clone is used to stage the database
@@ -525,15 +570,19 @@ func (d *Database) Clone() *Database {
 	d.RLock()
 	defer d.RUnlock()
 
-	var copy Database
-	copy.id = d.id
-	copy.name = d.name
-	copy.collections = make(map[string]*collectionHolder)
+	var copyDB Database
+	copyDB.id = d.id
+	copyDB.name = d.name
+	copyDB.collections = make(map[string]*collectionHolder)
 	for k, v := range d.collections {
-		copy.collections[k] = v.clone()
+		copyDB.collections[k] = v.clone()
+	}
+	copyDB.idToCollectionMap = make(map[uint32]string)
+	for k, v := range d.idToCollectionMap {
+		copyDB.idToCollectionMap[k] = v
 	}
 
-	return &copy
+	return &copyDB
 }
 
 // Name returns the database name.
@@ -585,7 +634,7 @@ type collectionHolder struct {
 	idxNameToId map[string]uint32
 	// latest schema
 	schema jsoniter.RawMessage
-	// if collection is not properly formed during restart then this is false and we need to reload it during request
+	// if collection is not properly formed during restart then this is false, and we need to reload it during request
 	fullFormed bool
 }
 
@@ -594,18 +643,18 @@ func (c *collectionHolder) clone() *collectionHolder {
 	c.RLock()
 	defer c.RUnlock()
 
-	var copy collectionHolder
-	copy.id = c.id
-	copy.name = c.name
-	copy.schema = c.schema
+	var copyC collectionHolder
+	copyC.id = c.id
+	copyC.name = c.name
+	copyC.schema = c.schema
 
-	copy.collection, _ = c.createCollection(c.schema)
-	copy.idxNameToId = make(map[string]uint32)
+	copyC.collection, _ = c.createCollection(c.schema)
+	copyC.idxNameToId = make(map[string]uint32)
 	for k, v := range c.idxNameToId {
-		copy.idxNameToId[k] = v
+		copyC.idxNameToId[k] = v
 	}
 
-	return &copy
+	return &copyC
 }
 
 // get returns the collection managed by this holder. At this point, a Collection object is safely constructed
