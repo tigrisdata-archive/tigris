@@ -361,7 +361,8 @@ func (s *apiService) CreateDatabase(ctx context.Context, r *api.CreateDatabaseRe
 	queryRunner := s.queryRunnerFactory.GetDatabaseQueryRunner()
 	queryRunner.SetCreateDatabaseReq(r)
 	resp, err := s.Run(ctx, &ReqOptions{
-		queryRunner: queryRunner,
+		queryRunner:    queryRunner,
+		metadataChange: true,
 	})
 	if err != nil {
 		return nil, err
@@ -381,7 +382,8 @@ func (s *apiService) DropDatabase(ctx context.Context, r *api.DropDatabaseReques
 	queryRunner := s.queryRunnerFactory.GetDatabaseQueryRunner()
 	queryRunner.SetDropDatabaseReq(r)
 	resp, err := s.Run(ctx, &ReqOptions{
-		queryRunner: queryRunner,
+		queryRunner:    queryRunner,
+		metadataChange: true,
 	})
 	if err != nil {
 		return nil, err

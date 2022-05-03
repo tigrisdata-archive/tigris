@@ -15,6 +15,7 @@
 package metadata
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"reflect"
@@ -106,6 +107,8 @@ type TenantManager struct {
 	encoder       *encoding.DictionaryEncoder
 	tenants       map[string]*Tenant
 	idToTenantMap map[uint32]string
+	version       Version
+	versionMgr    *MetaVersionMgr
 }
 
 func NewTenantManager() *TenantManager {
@@ -113,6 +116,7 @@ func NewTenantManager() *TenantManager {
 		encoder:       encoding.NewDictionaryEncoder(),
 		tenants:       make(map[string]*Tenant),
 		idToTenantMap: make(map[uint32]string),
+		versionMgr:    &MetaVersionMgr{},
 	}
 }
 
@@ -133,7 +137,12 @@ func (m *TenantManager) CreateOrGetTenant(ctx context.Context, tx transaction.Tx
 		}
 	}
 
-	if err := m.reload(ctx, tx); ulog.E(err) {
+	currentVersion, err := m.versionMgr.Read(ctx, tx)
+	if ulog.E(err) {
+		return nil, err
+	}
+
+	if err := m.reload(ctx, tx, currentVersion); ulog.E(err) {
 		// first reload
 		return nil, err
 	}
@@ -146,7 +155,7 @@ func (m *TenantManager) CreateOrGetTenant(ctx context.Context, tx transaction.Tx
 		return nil, err
 	}
 
-	tenant = NewTenant(namespace, m.encoder)
+	tenant = NewTenant(namespace, m.encoder, m.versionMgr, currentVersion)
 	m.tenants[namespace.Name()] = tenant
 	m.idToTenantMap[namespace.Id()] = namespace.Name()
 	return tenant, nil
@@ -202,10 +211,22 @@ func (m *TenantManager) Reload(ctx context.Context, tx transaction.Tx) error {
 	m.Lock()
 	defer m.Unlock()
 
-	return m.reload(ctx, tx)
+	currentVersion, err := m.versionMgr.Read(ctx, tx)
+	if ulog.E(err) {
+		return err
+	}
+
+	if err = m.reload(ctx, tx, currentVersion); err != nil {
+		if m.version, err = m.versionMgr.Read(ctx, tx); ulog.E(err) {
+			return err
+		}
+		log.Debug().Msgf("latest meta version %v", m.version)
+	}
+
+	return err
 }
 
-func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx) error {
+func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVersion Version) error {
 	namespaces, err := m.encoder.GetNamespaces(ctx, tx)
 	if err != nil {
 		return err
@@ -214,13 +235,16 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx) error {
 
 	for namespace, id := range namespaces {
 		if _, ok := m.tenants[namespace]; !ok {
-			m.tenants[namespace] = NewTenant(NewTenantNamespace(namespace, id), m.encoder)
+			m.tenants[namespace] = NewTenant(NewTenantNamespace(namespace, id), m.encoder, m.versionMgr, currentVersion)
 		}
 	}
 
 	for _, tenant := range m.tenants {
 		log.Debug().Interface("tenant", tenant.String()).Msg("reloading tenant")
-		if err := tenant.reload(ctx, tx); err != nil {
+		tenant.Lock()
+		err := tenant.reload(ctx, tx, currentVersion)
+		tenant.Unlock()
+		if err != nil {
 			return err
 		}
 	}
@@ -237,25 +261,26 @@ type Tenant struct {
 	databases       map[string]*Database
 	idToDatabaseMap map[uint32]string
 	namespace       Namespace
+	version         Version
+	versionMgr      *MetaVersionMgr
 }
 
-func NewTenant(namespace Namespace, encoder *encoding.DictionaryEncoder) *Tenant {
+func NewTenant(namespace Namespace, encoder *encoding.DictionaryEncoder, versionMgr *MetaVersionMgr, currentVersion Version) *Tenant {
 	return &Tenant{
 		namespace:       namespace,
 		encoder:         encoder,
 		schemaStore:     &encoding.SchemaSubspace{},
 		databases:       make(map[string]*Database),
 		idToDatabaseMap: make(map[uint32]string),
+		versionMgr:      versionMgr,
+		version:         currentVersion,
 	}
 }
 
 // reload will reload all the databases for this tenant. This is only reloading all the databases that exists in the disk.
 // Loading all corresponding collections in this call is unnecessary and will be expensive. Rather that can happen
 // during reloadDatabase API call.
-func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx) error {
-	tenant.Lock()
-	defer tenant.Unlock()
-
+func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVersion Version) error {
 	dbNameToId, err := tenant.encoder.GetDatabases(ctx, tx, tenant.namespace.Id())
 	if err != nil {
 		return err
@@ -278,7 +303,28 @@ func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx) error {
 		}
 	}
 
+	if err == nil {
+		tenant.version = currentVersion
+	}
+
 	return err
+}
+
+func (tenant *Tenant) ReloadIfVersionChanged(ctx context.Context, tx transaction.Tx) error {
+	tenant.Lock()
+	defer tenant.Unlock()
+
+	currentVersion, err := tenant.versionMgr.Read(ctx, tx)
+	if err != nil {
+		return err
+	}
+
+	if bytes.Equal(currentVersion, tenant.version) {
+		return nil
+	}
+
+	log.Debug().Bytes("current", currentVersion).Bytes("our_version", tenant.version).Msg("version changed, reloading")
+	return tenant.reload(ctx, tx, currentVersion)
 }
 
 func (tenant *Tenant) GetNamespace() Namespace {
