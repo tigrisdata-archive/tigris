@@ -63,7 +63,6 @@ func newApiService(kv kv.KeyValueStore) *apiService {
 	u := &apiService{
 		kvStore: kv,
 		txMgr:   transaction.NewManager(kv),
-		encoder: metadata.NewEncoder(),
 	}
 
 	ctx := context.TODO()
@@ -80,6 +79,7 @@ func newApiService(kv kv.KeyValueStore) *apiService {
 	_ = tx.Commit(ctx)
 
 	u.tenantMgr = tenantMgr
+	u.encoder = metadata.NewEncoder(tenantMgr)
 	u.cdcMgr = cdc.NewManager()
 	u.queryLifecycleFactory = NewQueryLifecycleFactory(u.txMgr, u.tenantMgr, u.cdcMgr)
 	u.queryRunnerFactory = NewQueryRunnerFactory(u.txMgr, u.encoder, u.cdcMgr)
@@ -429,7 +429,7 @@ func (s *apiService) DescribeDatabase(ctx context.Context, r *api.DescribeDataba
 	return resp.Response.(*api.DescribeDatabaseResponse), nil
 }
 
-func (s *apiService) GetInfo(ctx context.Context, r *api.GetInfoRequest) (*api.GetInfoResponse, error) {
+func (s *apiService) GetInfo(_ context.Context, _ *api.GetInfoRequest) (*api.GetInfoResponse, error) {
 	return &api.GetInfoResponse{
 		ServerVersion: util.Version,
 	}, nil

@@ -50,6 +50,7 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		tenant := m.GetTenant("ns-test1")
 		require.Equal(t, "ns-test1", tenant.namespace.Name())
 		require.Equal(t, uint32(2), tenant.namespace.Id())
+		require.Equal(t, "ns-test1", m.idToTenantMap[uint32(2)])
 		require.Empty(t, tenant.databases)
 		require.NoError(t, tx.Commit(ctx))
 		_ = kv.DropTable(ctx, encoding.ReservedSubspaceKey)
@@ -71,13 +72,16 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		tenant := m.GetTenant("ns-test1")
 		require.Equal(t, "ns-test1", tenant.namespace.Name())
 		require.Equal(t, uint32(2), tenant.namespace.Id())
+		require.Equal(t, "ns-test1", m.idToTenantMap[uint32(2)])
+
 		require.Empty(t, tenant.databases)
+		require.Empty(t, tenant.idToDatabaseMap)
 
 		tenant = m.GetTenant("ns-test2")
 		require.Equal(t, "ns-test2", tenant.namespace.Name())
 		require.Equal(t, uint32(3), tenant.namespace.Id())
+		require.Equal(t, "ns-test2", m.idToTenantMap[uint32(3)])
 		require.Empty(t, tenant.databases)
-
 		require.NoError(t, tx.Commit(ctx))
 
 		_ = kv.DropTable(ctx, encoding.ReservedSubspaceKey)
@@ -119,6 +123,8 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		_, err = m.CreateOrGetTenant(ctx, tx, &TenantNamespace{"ns-test2", 2})
 		require.Equal(t, "id is already assigned to the namespace 'ns-test1'", err.(*api.TigrisError).Error())
 		require.NoError(t, tx.Rollback(ctx))
+		require.Equal(t, "ns-test1", m.idToTenantMap[uint32(2)])
+		require.Equal(t, 1, len(m.idToTenantMap))
 
 		_ = kv.DropTable(ctx, encoding.ReservedSubspaceKey)
 	})
@@ -150,11 +156,13 @@ func TestTenantManager_CreateDatabases(t *testing.T) {
 		db1, err := tenant.GetDatabase(ctx, tx, "db1")
 		require.NoError(t, err)
 		require.Equal(t, "db1", db1.name)
+		require.Equal(t, "db1", tenant.idToDatabaseMap[db1.id])
 
 		db2, err := tenant.GetDatabase(ctx, tx, "db2")
 		require.NoError(t, err)
 		require.Equal(t, "db2", db2.name)
 		require.NoError(t, tx.Commit(context.TODO()))
+		require.Equal(t, "db2", tenant.idToDatabaseMap[db2.id])
 
 		_ = kv.DropTable(ctx, encoding.ReservedSubspaceKey)
 		_ = kv.DropTable(ctx, encoding.EncodingSubspaceKey)
@@ -188,10 +196,14 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 		db1, err := tenant.GetDatabase(ctx, tx, "db1")
 		require.NoError(t, err)
 		require.Equal(t, "db1", db1.name)
+		require.Equal(t, "db1", tenant.idToDatabaseMap[db1.id])
 
 		db2, err := tenant.GetDatabase(ctx, tx, "db2")
 		require.NoError(t, err)
 		require.Equal(t, "db2", db2.name)
+		require.Equal(t, "db2", tenant.idToDatabaseMap[db2.id])
+		require.Equal(t, 2, len(tenant.idToDatabaseMap))
+		require.Equal(t, 2, len(tenant.databases))
 
 		jsSchema := []byte(`{
         "title": "test_collection",
@@ -213,7 +225,15 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 		factory, err := schema.Build("test_collection", jsoniter.RawMessage(jsSchema))
 		require.NoError(t, err)
 		require.NoError(t, tenant.CreateCollection(context.TODO(), tx, db2, factory))
-		require.Equal(t, "test_collection", db2.GetCollection("test_collection").Name)
+		tenant.InvalidateDBCache(db2.Name())
+
+		db2, err = tenant.GetDatabase(ctx, tx, "db2")
+		require.NoError(t, err)
+		collection := db2.GetCollection("test_collection")
+		require.Equal(t, "test_collection", collection.Name)
+		require.Equal(t, "test_collection", db2.idToCollectionMap[collection.Id])
+		require.Equal(t, 1, len(db2.idToCollectionMap))
+
 		require.NoError(t, tx.Commit(context.TODO()))
 
 		_ = kv.DropTable(ctx, encoding.ReservedSubspaceKey)
@@ -274,7 +294,8 @@ func TestTenantManager_DropCollection(t *testing.T) {
 
 		tx, err = tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
-		require.Equal(t, "test_collection", db2.GetCollection("test_collection").Name)
+		coll1 := db2.GetCollection("test_collection")
+		require.Equal(t, "test_collection", coll1.Name)
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTxWithoutTracking(ctx)
@@ -286,6 +307,7 @@ func TestTenantManager_DropCollection(t *testing.T) {
 		require.NoError(t, err)
 		coll := db2.GetCollection("test_collection")
 		require.Nil(t, coll)
+		require.Empty(t, db2.idToCollectionMap[coll1.Id])
 
 		_ = kv.DropTable(ctx, encoding.ReservedSubspaceKey)
 		_ = kv.DropTable(ctx, encoding.EncodingSubspaceKey)
