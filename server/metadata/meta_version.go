@@ -29,17 +29,17 @@ var (
 
 type Version []byte
 
-// MetaVersion is used to maintain a version for each schema change. Using this we can implement transactional DDL APIs.
+// MetaVersionMgr is used to maintain a version for each schema change. Using this we can implement transactional DDL APIs.
 // This will also be used to provide a strongly consistent Cache lookup on the schemas i.e. anytime version changes we
 // know that a DDL operation is performed which means we can invalidate the cache and reload from the disk.
-type MetaVersion struct{}
+type MetaVersionMgr struct{}
 
 // Increment is used to increment the metadata version
-func (m *MetaVersion) Increment(ctx context.Context, tx transaction.Tx) error {
+func (m *MetaVersionMgr) Increment(ctx context.Context, tx transaction.Tx) error {
 	return tx.SetVersionstampedValue(ctx, VersionKey, VersionValue)
 }
 
 // Read reads the latest metadata version
-func (m *MetaVersion) Read(ctx context.Context, tx transaction.Tx) (Version, error) {
+func (m *MetaVersionMgr) Read(ctx context.Context, tx transaction.Tx) (Version, error) {
 	return tx.Get(ctx, VersionKey)
 }
