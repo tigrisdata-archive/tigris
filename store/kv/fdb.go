@@ -474,7 +474,6 @@ func (t *ftx) Commit(ctx context.Context) error {
 		}
 
 		err = t.tx.Commit().Get()
-
 		if err == nil {
 			break
 		}
@@ -483,7 +482,11 @@ func (t *ftx) Commit(ctx context.Context) error {
 
 		var ep fdb.Error
 		if xerrors.As(err, &ep) {
-			err = t.tx.OnError(ep).Get()
+			if ep.Code == 1020 {
+				err = ErrConflictingTransaction
+			} else if err1 := t.tx.OnError(ep).Get(); err1 != nil {
+				err = err1
+			}
 		}
 
 		if err != nil {

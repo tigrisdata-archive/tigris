@@ -91,7 +91,7 @@ func (q *queryLifecycle) createOrGetTenant() (*metadata.Tenant, error) {
 	return tenant, nil
 }
 
-func (q *queryLifecycle) run(ctx context.Context, options *ReqOptions) (*Response, error) {
+func (q *queryLifecycle) run(ctx context.Context, options *ReqOptions) (resp *Response, txErr error) {
 	if options == nil {
 		return nil, api.Errorf(codes.Internal, "empty options")
 	}
@@ -111,8 +111,6 @@ func (q *queryLifecycle) run(ctx context.Context, options *ReqOptions) (*Respons
 		return nil, err
 	}
 
-	var resp *Response
-	var txErr error
 	defer func() {
 		var err error
 		if txErr == nil {
