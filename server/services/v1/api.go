@@ -28,6 +28,7 @@ import (
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
+	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -42,6 +43,8 @@ const (
 
 	documentPath        = collectionPath + "/documents"
 	documentPathPattern = documentPath + "/*"
+
+	infoPath = "/info"
 )
 
 type apiService struct {
@@ -60,7 +63,6 @@ func newApiService(kv kv.KeyValueStore) *apiService {
 	u := &apiService{
 		kvStore: kv,
 		txMgr:   transaction.NewManager(kv),
-		encoder: metadata.NewEncoder(),
 	}
 
 	ctx := context.TODO()
@@ -77,6 +79,7 @@ func newApiService(kv kv.KeyValueStore) *apiService {
 	_ = tx.Commit(ctx)
 
 	u.tenantMgr = tenantMgr
+	u.encoder = metadata.NewEncoder(tenantMgr)
 	u.cdcMgr = cdc.NewManager()
 	u.queryLifecycleFactory = NewQueryLifecycleFactory(u.txMgr, u.tenantMgr, u.cdcMgr)
 	u.queryRunnerFactory = NewQueryRunnerFactory(u.txMgr, u.encoder, u.cdcMgr)
@@ -103,7 +106,9 @@ func (s *apiService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel)
 	router.HandleFunc(apiPathPrefix+documentPathPattern, func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
 	})
-
+	router.HandleFunc(apiPathPrefix+infoPath, func(w http.ResponseWriter, r *http.Request) {
+		mux.ServeHTTP(w, r)
+	})
 	return nil
 }
 
@@ -356,7 +361,8 @@ func (s *apiService) CreateDatabase(ctx context.Context, r *api.CreateDatabaseRe
 	queryRunner := s.queryRunnerFactory.GetDatabaseQueryRunner()
 	queryRunner.SetCreateDatabaseReq(r)
 	resp, err := s.Run(ctx, &ReqOptions{
-		queryRunner: queryRunner,
+		queryRunner:    queryRunner,
+		metadataChange: true,
 	})
 	if err != nil {
 		return nil, err
@@ -376,7 +382,8 @@ func (s *apiService) DropDatabase(ctx context.Context, r *api.DropDatabaseReques
 	queryRunner := s.queryRunnerFactory.GetDatabaseQueryRunner()
 	queryRunner.SetDropDatabaseReq(r)
 	resp, err := s.Run(ctx, &ReqOptions{
-		queryRunner: queryRunner,
+		queryRunner:    queryRunner,
+		metadataChange: true,
 	})
 	if err != nil {
 		return nil, err
@@ -422,6 +429,12 @@ func (s *apiService) DescribeDatabase(ctx context.Context, r *api.DescribeDataba
 	}
 
 	return resp.Response.(*api.DescribeDatabaseResponse), nil
+}
+
+func (s *apiService) GetInfo(_ context.Context, _ *api.GetInfoRequest) (*api.GetInfoResponse, error) {
+	return &api.GetInfoResponse{
+		ServerVersion: util.Version,
+	}, nil
 }
 
 func (s *apiService) Run(ctx context.Context, req *ReqOptions) (*Response, error) {

@@ -49,16 +49,18 @@ func (f *QueryLifecycleFactory) Get() *queryLifecycle {
 // queryLifecycle manages the lifecycle of a query that it is handling. Single place that can be used to validate
 // the query, authorize the query, or to log or emit metrics related to this query.
 type queryLifecycle struct {
-	txMgr     *transaction.Manager
-	tenantMgr *metadata.TenantManager
-	cdcMgr    *cdc.Manager
+	txMgr      *transaction.Manager
+	tenantMgr  *metadata.TenantManager
+	cdcMgr     *cdc.Manager
+	versionMgr *metadata.MetaVersionMgr
 }
 
 func newQueryLifecycle(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, cdcMgr *cdc.Manager) *queryLifecycle {
 	return &queryLifecycle{
-		txMgr:     txMgr,
-		tenantMgr: tenantMgr,
-		cdcMgr:    cdcMgr,
+		txMgr:      txMgr,
+		tenantMgr:  tenantMgr,
+		cdcMgr:     cdcMgr,
+		versionMgr: &metadata.MetaVersionMgr{},
 	}
 }
 
@@ -114,8 +116,16 @@ func (q *queryLifecycle) run(ctx context.Context, options *ReqOptions) (*Respons
 	defer func() {
 		var err error
 		if txErr == nil {
-			if err = tx.Commit(ctx); err == nil {
-				_ = tx.Context().ExecuteCB()
+			if options.metadataChange {
+				// metadata change will bump up the metadata version
+				err = q.versionMgr.Increment(ctx, tx)
+			}
+			if err == nil {
+				if err = tx.Commit(ctx); err == nil {
+					_ = tx.Context().ExecuteCB()
+				}
+			} else {
+				err = tx.Rollback(ctx)
 			}
 		} else {
 			err = tx.Rollback(ctx)
@@ -124,6 +134,11 @@ func (q *queryLifecycle) run(ctx context.Context, options *ReqOptions) (*Respons
 			txErr = err
 		}
 	}()
+	if !options.metadataChange {
+		if txErr = tenant.ReloadIfVersionChanged(ctx, tx); ulog.E(txErr) {
+			return nil, txErr
+		}
+	}
 
 	resp, ctx, txErr = options.queryRunner.Run(ctx, tx, tenant)
 	return resp, txErr

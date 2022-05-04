@@ -22,13 +22,39 @@ import (
 	"github.com/tigrisdata/tigris/server/metadata/encoding"
 )
 
-func TestEncodeKey(t *testing.T) {
-	ns := NewTenantNamespace("hello", 1)
-	db := &Database{id: 3}
-	coll := &schema.DefaultCollection{Id: 5}
+func TestEncodeDecodeKey(t *testing.T) {
+	coll := &schema.DefaultCollection{
+		Id:   5,
+		Name: "test_coll",
+	}
 	idx := &schema.Index{Id: 10}
+	ns := NewTenantNamespace("test_ns", 1)
+	db := &Database{
+		id:   3,
+		name: "test_db",
+		idToCollectionMap: map[uint32]string{
+			coll.Id: coll.Name,
+		},
+	}
 
-	k := NewEncoder()
+	mgr := &TenantManager{
+		idToTenantMap: map[uint32]string{
+			ns.Id(): ns.Name(),
+		},
+		tenants: map[string]*Tenant{
+			ns.Name(): {
+				namespace: ns,
+				databases: map[string]*Database{
+					db.name: db,
+				},
+				idToDatabaseMap: map[uint32]string{
+					db.id: db.Name(),
+				},
+			},
+		},
+	}
+
+	k := NewEncoder(mgr)
 	encodedTable := k.EncodeTableName(ns, db, coll)
 	require.Equal(t, uint32(1), encoding.ByteToUInt32(encodedTable[0:4]))
 	require.Equal(t, uint32(3), encoding.ByteToUInt32(encodedTable[4:8]))
@@ -36,4 +62,10 @@ func TestEncodeKey(t *testing.T) {
 
 	encodedIdx := k.EncodeIndexName(idx)
 	require.Equal(t, uint32(10), encoding.ByteToUInt32(encodedIdx))
+
+	tenantName, dbName, collName, ok := k.DecodeTableName(encodedTable)
+	require.Equal(t, ns.Name(), tenantName)
+	require.Equal(t, db.name, dbName)
+	require.Equal(t, coll.Name, collName)
+	require.True(t, ok)
 }
