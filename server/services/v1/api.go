@@ -439,7 +439,11 @@ func (s *apiService) GetInfo(_ context.Context, _ *api.GetInfoRequest) (*api.Get
 
 func (s *apiService) Run(ctx context.Context, req *ReqOptions) (*Response, error) {
 	queryLifecycle := s.queryLifecycleFactory.Get()
-	return queryLifecycle.run(ctx, req)
+	resp, err := queryLifecycle.run(ctx, req)
+	if err == kv.ErrConflictingTransaction {
+		return nil, api.Errorf(codes.Aborted, err.Error())
+	}
+	return resp, err
 }
 
 func (s *apiService) Stream(r *api.StreamRequest, stream api.Tigris_StreamServer) error {
