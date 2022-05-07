@@ -465,24 +465,27 @@ func (s *apiService) Stream(r *api.StreamRequest, stream api.Tigris_StreamServer
 				return api.Error(codes.Canceled, "buffer overflow")
 			}
 
-			changes := make([]*api.StreamChange, 0)
-
 			for _, op := range tx.Ops {
 				data, err := jsoniter.Marshal(op)
 				if err != nil {
 					return err
 				}
 
-				changes = append(changes, &api.StreamChange{
-					CollectionName: "todo", // TODO: CDC extract name from op
-					Data:           data,
-				})
-			}
+				_, _, collection, ok := s.encoder.DecodeTableName(op.Table)
+				if !ok {
+					return api.Error(codes.Internal, "collection name decode failed")
+				}
 
-			if err := stream.Send(&api.StreamResponse{
-				Changes: changes,
-			}); ulog.E(err) {
-				return err
+				if r.Collection == "" || r.Collection == collection {
+					event := &api.StreamEvent{
+						Collection: collection,
+						Data:       data,
+					}
+
+					if err := stream.Send(event); ulog.E(err) {
+						return err
+					}
+				}
 			}
 		}
 	}
