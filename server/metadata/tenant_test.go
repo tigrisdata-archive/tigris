@@ -132,9 +132,11 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		ctx := context.TODO()
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 
+		require.Equal(t, 1, len(m.idToTenantMap)) // default exists
 		tx, err := tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
 		_, err = m.CreateOrGetTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
+		require.Equal(t, 2, len(m.idToTenantMap))
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
@@ -145,7 +147,7 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		require.Equal(t, "id is already assigned to the namespace 'ns-test1'", err.(*api.TigrisError).Error())
 		require.NoError(t, tx.Rollback(ctx))
 		require.Equal(t, "ns-test1", m.idToTenantMap[uint32(2)])
-		require.Equal(t, 1, len(m.idToTenantMap))
+		require.Equal(t, 2, len(m.idToTenantMap))
 
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
