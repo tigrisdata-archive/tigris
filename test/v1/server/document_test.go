@@ -30,6 +30,9 @@ import (
 	"gopkg.in/gavv/httpexpect.v1"
 )
 
+type Map map[string]interface{}
+type Doc Map
+
 type DocumentSuite struct {
 	suite.Suite
 
@@ -37,79 +40,71 @@ type DocumentSuite struct {
 	database   string
 }
 
+func expect(s httpexpect.LoggerReporter) *httpexpect.Expect {
+	return httpexpect.WithConfig(httpexpect.Config{
+		BaseURL:  config.GetBaseURL(),
+		Reporter: httpexpect.NewAssertReporter(s),
+	})
+}
+
 func getDocumentURL(databaseName, collectionName string, methodName string) string {
 	return fmt.Sprintf("/api/v1/databases/%s/collections/%s/documents/%s", databaseName, collectionName, methodName)
 }
 
 func (s *DocumentSuite) SetupSuite() {
-	createDatabase(s.T(), s.database)
-	createCollection(s.T(), s.database, s.collection, testCreateSchema)
+	dropDatabase(s.T(), s.database)
+	createDatabase(s.T(), s.database).Status(http.StatusOK)
+	createCollection(s.T(), s.database, s.collection, testCreateSchema).Status(http.StatusOK)
 }
 
 func (s *DocumentSuite) TearDownSuite() {
-	dropDatabase(s.T(), s.database)
+	dropDatabase(s.T(), s.database).Status(http.StatusOK)
 }
 
 func (s *DocumentSuite) TestInsert_Bad_NotFoundRequest() {
 	cases := []struct {
 		databaseName   string
 		collectionName string
-		documents      []interface{}
+		documents      []Doc
 		expMessage     string
 		status         int
 	}{
 		{
 			"random_database1",
 			s.collection,
-			[]interface{}{
-				map[string]interface{}{
-					"pkey_int": 1,
-				},
-			},
+			[]Doc{{"pkey_int": 1}},
 			"database doesn't exist 'random_database1'",
 			http.StatusNotFound,
 		}, {
 			s.database,
 			"random_collection",
-			[]interface{}{
-				map[string]interface{}{
-					"pkey_int": 1,
-				},
-			},
+			[]Doc{{"pkey_int": 1}},
 			"collection doesn't exist 'random_collection'",
 			http.StatusNotFound,
 		}, {
 			"",
 			s.collection,
-			[]interface{}{
-				map[string]interface{}{
-					"pkey_int": 1,
-				},
-			},
+			[]Doc{{"pkey_int": 1}},
 			"invalid database name",
 			http.StatusBadRequest,
 		}, {
 			s.database,
 			"",
-			[]interface{}{
-				map[string]interface{}{
-					"pkey_int": 1,
-				},
-			},
+			[]Doc{{"pkey_int": 1}},
 			"invalid collection name",
 			http.StatusBadRequest,
 		}, {
 			s.database,
 			s.collection,
-			[]interface{}{},
+			[]Doc{},
 			"empty documents received",
 			http.StatusBadRequest,
 		},
 	}
 	for _, c := range cases {
-		e := httpexpect.New(s.T(), config.GetBaseURL())
+		e := expect(s.T())
 		e.POST(getDocumentURL(c.databaseName, c.collectionName, "insert")).
-			WithJSON(map[string]interface{}{
+			WithJSON(Map{
 				"documents": c.documents,
 			}).
 			Expect().
@@ -121,8 +116,8 @@ func (s *DocumentSuite) TestInsert_Bad_NotFoundRequest() {
 }
 
 func (s *DocumentSuite) TestInsert_AlreadyExists() {
-	inputDocument := []interface{}{
-		map[string]interface{}{
+	inputDocument := []Doc{
+		{
 			"pkey_int":     1,
 			"int_value":    10,
 			"string_value": "simple_insert",
@@ -132,9 +127,9 @@ func (s *DocumentSuite) TestInsert_AlreadyExists() {
 		},
 	}
 
-	e := httpexpect.New(s.T(), config.GetBaseURL())
+	e := expect(s.T())
 	e.POST(getDocumentURL(s.database, s.collection, "insert")).
-		WithJSON(map[string]interface{}{
+		WithJSON(Map{
 			"documents": inputDocument,
 		}).
 		Expect().
@@ -144,7 +139,7 @@ func (s *DocumentSuite) TestInsert_AlreadyExists() {
 		ValueEqual("status", "inserted")
 
 	e.POST(getDocumentURL(s.database, s.collection, "insert")).
-		WithJSON(map[string]interface{}{
+		WithJSON(Map{
 			"documents": inputDocument,
 		}).
 		Expect().
@@ -156,56 +151,40 @@ func (s *DocumentSuite) TestInsert_AlreadyExists() {
 
 func (s *DocumentSuite) TestInsert_SchemaValidationError() {
 	cases := []struct {
-		documents  []interface{}
+		documents  []Doc
 		expMessage string
 	}{
 		{
-			[]interface{}{
-				map[string]interface{}{
+			[]Doc{
+				{
 					"pkey_int":  1,
 					"int_value": 10.20,
 				},
 			},
 			"json schema validation failed for field 'int_value' reason 'expected integer, but got number'",
 		}, {
-			[]interface{}{
-				map[string]interface{}{
+			[]Doc{
+				{
 					"pkey_int":     1,
 					"string_value": 12,
 				},
 			},
 			"json schema validation failed for field 'string_value' reason 'expected string, but got number'",
 		}, {
-			[]interface{}{
-				map[string]interface{}{
-					"bytes_value": 12.30,
-				},
-			},
+			[]Doc{{"bytes_value": 12.30}},
 			"json schema validation failed for field 'bytes_value' reason 'expected string, but got number'",
 		}, {
-			[]interface{}{
-				map[string]interface{}{
-					"bytes_value": "not enough",
-				},
-			},
+			[]Doc{{"bytes_value": "not enough"}},
 			"json schema validation failed for field 'bytes_value' reason ''not enough' is not valid 'byte''",
 		}, {
-			[]interface{}{
-				map[string]interface{}{
-					"date_time_value": "Mon, 02 Jan 2006",
-				},
-			},
+			[]Doc{{"date_time_value": "Mon, 02 Jan 2006"}},
 			"json schema validation failed for field 'date_time_value' reason ''Mon, 02 Jan 2006' is not valid 'date-time''",
 		}, {
-			[]interface{}{
-				map[string]interface{}{
-					"uuid_value": "abc-bcd",
-				},
-			},
+			[]Doc{{"uuid_value": "abc-bcd"}},
 			"json schema validation failed for field 'uuid_value' reason ''abc-bcd' is not valid 'uuid''",
 		}, {
-			[]interface{}{
-				map[string]interface{}{
+			[]Doc{
+				{
 					"pkey_int":  10,
 					"extra_key": "abc-bcd",
 				},
@@ -214,9 +193,9 @@ func (s *DocumentSuite) TestInsert_SchemaValidationError() {
 		},
 	}
 	for _, c := range cases {
-		e := httpexpect.New(s.T(), config.GetBaseURL())
+		e := expect(s.T())
 		e.POST(getDocumentURL(s.database, s.collection, "insert")).
-			WithJSON(map[string]interface{}{
+			WithJSON(Map{
 				"documents": c.documents,
 			}).
 			Expect().
@@ -235,19 +214,19 @@ func (s *DocumentSuite) TestInsert_SupportedPrimaryKeys() {
 	uuidValue := uuid.New().String()
 	collectionName := "test_supported_primary_keys"
 	cases := []struct {
-		schema           map[string]interface{}
-		inputDoc         []interface{}
-		primaryKeyLookup map[string]interface{}
+		schema           Map
+		inputDoc         []Doc
+		primaryKeyLookup Map
 	}{
 		{
-			schema: map[string]interface{}{
-				"schema": map[string]interface{}{
+			schema: Map{
+				"schema": Map{
 					"title": collectionName,
-					"properties": map[string]interface{}{
-						"int_value": map[string]interface{}{
+					"properties": Map{
+						"int_value": Map{
 							"type": "integer",
 						},
-						"bytes_value": map[string]interface{}{
+						"bytes_value": Map{
 							"type":   "string",
 							"format": "byte",
 						},
@@ -255,24 +234,24 @@ func (s *DocumentSuite) TestInsert_SupportedPrimaryKeys() {
 					"primary_key": []interface{}{"bytes_value"},
 				},
 			},
-			inputDoc: []interface{}{
-				map[string]interface{}{
+			inputDoc: []Doc{
+				{
 					"int_value":   10,
 					"bytes_value": base64Encoded,
 				},
 			},
-			primaryKeyLookup: map[string]interface{}{
+			primaryKeyLookup: Map{
 				"bytes_value": base64Encoded,
 			},
 		}, {
-			schema: map[string]interface{}{
-				"schema": map[string]interface{}{
+			schema: Map{
+				"schema": Map{
 					"title": collectionName,
-					"properties": map[string]interface{}{
-						"int_value": map[string]interface{}{
+					"properties": Map{
+						"int_value": Map{
 							"type": "integer",
 						},
-						"uuid_value": map[string]interface{}{
+						"uuid_value": Map{
 							"type":   "string",
 							"format": "uuid",
 						},
@@ -280,24 +259,24 @@ func (s *DocumentSuite) TestInsert_SupportedPrimaryKeys() {
 					"primary_key": []interface{}{"uuid_value"},
 				},
 			},
-			inputDoc: []interface{}{
-				map[string]interface{}{
+			inputDoc: []Doc{
+				{
 					"int_value":  10,
 					"uuid_value": uuidValue,
 				},
 			},
-			primaryKeyLookup: map[string]interface{}{
+			primaryKeyLookup: Map{
 				"uuid_value": uuidValue,
 			},
 		}, {
-			schema: map[string]interface{}{
-				"schema": map[string]interface{}{
+			schema: Map{
+				"schema": Map{
 					"title": collectionName,
-					"properties": map[string]interface{}{
-						"int_value": map[string]interface{}{
+					"properties": Map{
+						"int_value": Map{
 							"type": "integer",
 						},
-						"date_time_value": map[string]interface{}{
+						"date_time_value": Map{
 							"type":   "string",
 							"format": "date-time",
 						},
@@ -305,48 +284,48 @@ func (s *DocumentSuite) TestInsert_SupportedPrimaryKeys() {
 					"primary_key": []interface{}{"date_time_value"},
 				},
 			},
-			inputDoc: []interface{}{
-				map[string]interface{}{
+			inputDoc: []Doc{
+				{
 					"int_value":       10,
 					"date_time_value": "2015-12-21T17:42:34Z",
 				},
 			},
-			primaryKeyLookup: map[string]interface{}{
+			primaryKeyLookup: Map{
 				"date_time_value": "2015-12-21T17:42:34Z",
 			},
 		}, {
-			schema: map[string]interface{}{
-				"schema": map[string]interface{}{
+			schema: Map{
+				"schema": Map{
 					"title": collectionName,
-					"properties": map[string]interface{}{
-						"int_value": map[string]interface{}{
+					"properties": Map{
+						"int_value": Map{
 							"type": "integer",
 						},
-						"string_value": map[string]interface{}{
+						"string_value": Map{
 							"type": "string",
 						},
 					},
 					"primary_key": []interface{}{"string_value"},
 				},
 			},
-			inputDoc: []interface{}{
-				map[string]interface{}{
+			inputDoc: []Doc{
+				{
 					"int_value":    10,
 					"string_value": "hello",
 				},
 			},
-			primaryKeyLookup: map[string]interface{}{
+			primaryKeyLookup: Map{
 				"string_value": "hello",
 			},
 		},
 	}
 	for _, c := range cases {
 		dropCollection(s.T(), s.database, collectionName)
-		createCollection(s.T(), s.database, collectionName, c.schema)
+		createCollection(s.T(), s.database, collectionName, c.schema).Status(http.StatusOK)
 
-		e := httpexpect.New(s.T(), config.GetBaseURL())
+		e := expect(s.T())
 		e.POST(getDocumentURL(s.database, collectionName, "insert")).
-			WithJSON(map[string]interface{}{
+			WithJSON(Map{
 				"documents": c.inputDoc,
 			}).
 			Expect().
@@ -372,8 +351,8 @@ func (s *DocumentSuite) TestInsert_SingleRow() {
 	v, err := json.Marshal(base64)
 	require.NoError(s.T(), err)
 
-	inputDocument := []interface{}{
-		map[string]interface{}{
+	inputDocument := []Doc{
+		{
 			"pkey_int":        10,
 			"int_value":       10,
 			"string_value":    "simple_insert",
@@ -382,21 +361,21 @@ func (s *DocumentSuite) TestInsert_SingleRow() {
 			"bytes_value":     v,
 			"date_time_value": "2015-12-21T17:42:34Z",
 			"uuid_value":      uuid.New().String(),
-			"array_value": []interface{}{
-				map[string]interface{}{
+			"array_value": []Doc{
+				{
 					"id":      1,
 					"product": "foo",
 				},
 			},
-			"object_value": map[string]interface{}{
+			"object_value": Map{
 				"name": "hi",
 			},
 		},
 	}
 
-	e := httpexpect.New(s.T(), config.GetBaseURL())
+	e := expect(s.T())
 	e.POST(getDocumentURL(s.database, s.collection, "insert")).
-		WithJSON(map[string]interface{}{
+		WithJSON(Map{
 			"documents": inputDocument,
 		}).
 		Expect().
@@ -405,11 +384,12 @@ func (s *DocumentSuite) TestInsert_SingleRow() {
 		Object().
 		ValueEqual("status", "inserted")
 
-	readResp := readByFilter(s.T(), s.database, s.collection, map[string]interface{}{
+	readResp := readByFilter(s.T(), s.database, s.collection, Map{
 		"pkey_int": 10,
 	}, nil)
 
 	var doc map[string]json.RawMessage
+	require.Equal(s.T(), 1, len(readResp))
 	require.NoError(s.T(), json.Unmarshal(readResp[0]["result"], &doc))
 
 	var actualDoc = []byte(doc["data"])
@@ -419,8 +399,8 @@ func (s *DocumentSuite) TestInsert_SingleRow() {
 }
 
 func (s *DocumentSuite) TestInsert_MultipleRows() {
-	inputDocument := []interface{}{
-		map[string]interface{}{
+	inputDocument := []Doc{
+		{
 			"pkey_int":     20,
 			"int_value":    20,
 			"string_value": "simple_insert1",
@@ -428,7 +408,7 @@ func (s *DocumentSuite) TestInsert_MultipleRows() {
 			"double_value": 20.00001,
 			"bytes_value":  []byte(`"simple_insert1"`),
 		},
-		map[string]interface{}{
+		{
 			"pkey_int":     30,
 			"int_value":    30,
 			"string_value": "simple_insert2",
@@ -438,9 +418,9 @@ func (s *DocumentSuite) TestInsert_MultipleRows() {
 		},
 	}
 
-	e := httpexpect.New(s.T(), config.GetBaseURL())
+	e := expect(s.T())
 	e.POST(getDocumentURL(s.database, s.collection, "insert")).
-		WithJSON(map[string]interface{}{
+		WithJSON(Map{
 			"documents": inputDocument,
 		}).
 		Expect().
@@ -449,14 +429,10 @@ func (s *DocumentSuite) TestInsert_MultipleRows() {
 		Object().
 		ValueEqual("status", "inserted")
 
-	readResp := readByFilter(s.T(), s.database, s.collection, map[string]interface{}{
-		"$or": []interface{}{
-			map[string]interface{}{
-				"pkey_int": 20,
-			},
-			map[string]interface{}{
-				"pkey_int": 30,
-			},
+	readResp := readByFilter(s.T(), s.database, s.collection, Map{
+		"$or": []Doc{
+			{"pkey_int": 20},
+			{"pkey_int": 30},
 		},
 	}, nil)
 
@@ -476,20 +452,20 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 	cases := []struct {
 		database   string
 		collection string
-		fields     map[string]interface{}
-		filter     map[string]interface{}
+		fields     Map
+		filter     Map
 		expMessage string
 		status     int
 	}{
 		{
 			"random_database1",
 			s.collection,
-			map[string]interface{}{
-				"$set": map[string]interface{}{
+			Map{
+				"$set": Map{
 					"string_value": "simple_update",
 				},
 			},
-			map[string]interface{}{
+			Map{
 				"pkey_int": 1,
 			},
 			"database doesn't exist 'random_database1'",
@@ -497,12 +473,12 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 		}, {
 			s.database,
 			"random_collection",
-			map[string]interface{}{
-				"$set": map[string]interface{}{
+			Map{
+				"$set": Map{
 					"string_value": "simple_update",
 				},
 			},
-			map[string]interface{}{
+			Map{
 				"pkey_int": 1,
 			},
 			"collection doesn't exist 'random_collection'",
@@ -510,12 +486,12 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 		}, {
 			"",
 			s.collection,
-			map[string]interface{}{
-				"$set": map[string]interface{}{
+			Map{
+				"$set": Map{
 					"string_value": "simple_update",
 				},
 			},
-			map[string]interface{}{
+			Map{
 				"pkey_int": 1,
 			},
 			"invalid database name",
@@ -523,12 +499,12 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 		}, {
 			s.database,
 			"",
-			map[string]interface{}{
-				"$set": map[string]interface{}{
+			Map{
+				"$set": Map{
 					"string_value": "simple_update",
 				},
 			},
-			map[string]interface{}{
+			Map{
 				"pkey_int": 1,
 			},
 			"invalid collection name",
@@ -537,7 +513,7 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 			s.database,
 			s.collection,
 			nil,
-			map[string]interface{}{
+			Map{
 				"pkey_int": 1,
 			},
 			"empty fields received",
@@ -545,8 +521,8 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 		}, {
 			s.database,
 			s.collection,
-			map[string]interface{}{
-				"$set": map[string]interface{}{
+			Map{
+				"$set": Map{
 					"string_value": "simple_update",
 				},
 			},
@@ -556,9 +532,9 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 		},
 	}
 	for _, c := range cases {
-		e := httpexpect.New(s.T(), config.GetBaseURL())
+		e := expect(s.T())
 		e.PUT(getDocumentURL(c.database, c.collection, "update")).
-			WithJSON(map[string]interface{}{
+			WithJSON(Map{
 				"fields": c.fields,
 				"filter": c.filter,
 			}).
@@ -571,8 +547,8 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 }
 
 func (s *DocumentSuite) TestUpdate_SingleRow() {
-	inputDocument := []interface{}{
-		map[string]interface{}{
+	inputDocument := []Doc{
+		{
 			"pkey_int":     100,
 			"int_value":    100,
 			"string_value": "simple_insert1_update",
@@ -588,7 +564,7 @@ func (s *DocumentSuite) TestUpdate_SingleRow() {
 	readAndValidate(s.T(),
 		s.database,
 		s.collection,
-		map[string]interface{}{
+		Map{
 			"pkey_int": 100,
 		},
 		nil,
@@ -597,14 +573,14 @@ func (s *DocumentSuite) TestUpdate_SingleRow() {
 	updateByFilter(s.T(),
 		s.database,
 		s.collection,
-		map[string]interface{}{
-			"filter": map[string]interface{}{
+		Map{
+			"filter": Map{
 				"pkey_int": 100,
 			},
 		},
-		map[string]interface{}{
-			"fields": map[string]interface{}{
-				"$set": map[string]interface{}{
+		Map{
+			"fields": Map{
+				"$set": Map{
 					"int_value":    200,
 					"string_value": "simple_insert1_update_modified",
 					"bool_value":   false,
@@ -620,12 +596,12 @@ func (s *DocumentSuite) TestUpdate_SingleRow() {
 	readAndValidate(s.T(),
 		s.database,
 		s.collection,
-		map[string]interface{}{
+		Map{
 			"pkey_int": 100,
 		},
 		nil,
-		[]interface{}{
-			map[string]interface{}{
+		[]Doc{
+			{
 				"pkey_int":     100,
 				"int_value":    200,
 				"string_value": "simple_insert1_update_modified",
@@ -637,8 +613,8 @@ func (s *DocumentSuite) TestUpdate_SingleRow() {
 }
 
 func (s *DocumentSuite) TestUpdate_SchemaValidationError() {
-	inputDocument := []interface{}{
-		map[string]interface{}{
+	inputDocument := []Doc{
+		{
 			"pkey_int":     100,
 			"int_value":    100,
 			"string_value": "simple_insert1_update",
@@ -654,26 +630,26 @@ func (s *DocumentSuite) TestUpdate_SchemaValidationError() {
 	readAndValidate(s.T(),
 		s.database,
 		s.collection,
-		map[string]interface{}{
+		Map{
 			"pkey_int": 100,
 		},
 		nil,
 		inputDocument)
 
 	cases := []struct {
-		documents  map[string]interface{}
+		documents  Map
 		expMessage string
 	}{
 		{
-			map[string]interface{}{
-				"$set": map[string]interface{}{
+			Map{
+				"$set": Map{
 					"string_value": 1,
 				},
 			},
 			"json schema validation failed for field 'string_value' reason 'expected string, but got number'",
 		}, {
-			map[string]interface{}{
-				"$set": map[string]interface{}{
+			Map{
+				"$set": Map{
 					"int_value": "1",
 				},
 			},
@@ -681,11 +657,11 @@ func (s *DocumentSuite) TestUpdate_SchemaValidationError() {
 		},
 	}
 	for _, c := range cases {
-		e := httpexpect.New(s.T(), config.GetBaseURL())
+		e := expect(s.T())
 		e.PUT(getDocumentURL(s.database, s.collection, "update")).
-			WithJSON(map[string]interface{}{
+			WithJSON(Map{
 				"fields": c.documents,
-				"filter": map[string]interface{}{
+				"filter": Map{
 					"pkey_int": 1,
 				},
 			}).
@@ -698,8 +674,8 @@ func (s *DocumentSuite) TestUpdate_SchemaValidationError() {
 }
 
 func (s *DocumentSuite) TestUpdate_MultipleRows() {
-	inputDocument := []interface{}{
-		map[string]interface{}{
+	inputDocument := []Doc{
+		{
 			"pkey_int":     110,
 			"int_value":    1000,
 			"string_value": "simple_insert110",
@@ -707,7 +683,7 @@ func (s *DocumentSuite) TestUpdate_MultipleRows() {
 			"double_value": 1000.000001,
 			"bytes_value":  []byte(`"simple_insert110"`),
 		},
-		map[string]interface{}{
+		{
 			"pkey_int":     120,
 			"int_value":    2000,
 			"string_value": "simple_insert120",
@@ -715,7 +691,7 @@ func (s *DocumentSuite) TestUpdate_MultipleRows() {
 			"double_value": 2000.22221,
 			"bytes_value":  []byte(`"simple_insert120"`),
 		},
-		map[string]interface{}{
+		{
 			"pkey_int":     130,
 			"int_value":    3000,
 			"string_value": "simple_insert130",
@@ -729,17 +705,11 @@ func (s *DocumentSuite) TestUpdate_MultipleRows() {
 	insertDocuments(s.T(), s.database, s.collection, inputDocument, false).
 		Status(http.StatusOK)
 
-	readFilter := map[string]interface{}{
-		"$or": []interface{}{
-			map[string]interface{}{
-				"pkey_int": 110,
-			},
-			map[string]interface{}{
-				"pkey_int": 120,
-			},
-			map[string]interface{}{
-				"pkey_int": 130,
-			},
+	readFilter := Map{
+		"$or": []Doc{
+			{"pkey_int": 110},
+			{"pkey_int": 120},
+			{"pkey_int": 130},
 		},
 	}
 	readAndValidate(s.T(),
@@ -753,14 +723,14 @@ func (s *DocumentSuite) TestUpdate_MultipleRows() {
 	updateByFilter(s.T(),
 		s.database,
 		s.collection,
-		map[string]interface{}{
-			"filter": map[string]interface{}{
+		Map{
+			"filter": Map{
 				"pkey_int": 10000,
 			},
 		},
-		map[string]interface{}{
-			"fields": map[string]interface{}{
-				"$set": map[string]interface{}{
+		Map{
+			"fields": Map{
+				"$set": Map{
 					"int_value": 0,
 				},
 			},
@@ -781,21 +751,17 @@ func (s *DocumentSuite) TestUpdate_MultipleRows() {
 	updateByFilter(s.T(),
 		s.database,
 		s.collection,
-		map[string]interface{}{
-			"filter": map[string]interface{}{
-				"$or": []interface{}{
-					map[string]interface{}{
-						"pkey_int": 120,
-					},
-					map[string]interface{}{
-						"pkey_int": 130,
-					},
+		Map{
+			"filter": Map{
+				"$or": []Doc{
+					{"pkey_int": 120},
+					{"pkey_int": 130},
 				},
 			},
 		},
-		map[string]interface{}{
-			"fields": map[string]interface{}{
-				"$set": map[string]interface{}{
+		Map{
+			"fields": Map{
+				"$set": Map{
 					"int_value":          12345,
 					"string_value":       "modified_120_130",
 					"added_value_double": 1234.999999,
@@ -808,9 +774,9 @@ func (s *DocumentSuite) TestUpdate_MultipleRows() {
 		Object().
 		ValueEqual("modified_count", 2)
 
-	outDocument := []interface{}{
+	outDocument := []Doc{
 		// this didn't change as-is
-		map[string]interface{}{
+		{
 			"pkey_int":     110,
 			"int_value":    1000,
 			"string_value": "simple_insert110",
@@ -818,7 +784,7 @@ func (s *DocumentSuite) TestUpdate_MultipleRows() {
 			"double_value": 1000.000001,
 			"bytes_value":  []byte(`"simple_insert110"`),
 		},
-		map[string]interface{}{
+		{
 			"pkey_int":           120,
 			"int_value":          12345,
 			"string_value":       "modified_120_130",
@@ -828,7 +794,7 @@ func (s *DocumentSuite) TestUpdate_MultipleRows() {
 			"added_value_double": 1234.999999,
 			"added_string_value": "new_key_added",
 		},
-		map[string]interface{}{
+		{
 			"pkey_int":           130,
 			"int_value":          12345,
 			"string_value":       "modified_120_130",
@@ -851,14 +817,14 @@ func (s *DocumentSuite) TestDelete_BadRequest() {
 	cases := []struct {
 		databaseName   string
 		collectionName string
-		filter         map[string]interface{}
+		filter         Map
 		expMessage     string
 		status         int
 	}{
 		{
 			"random_database1",
 			s.collection,
-			map[string]interface{}{
+			Map{
 				"pkey_int": 1,
 			},
 			"database doesn't exist 'random_database1'",
@@ -866,7 +832,7 @@ func (s *DocumentSuite) TestDelete_BadRequest() {
 		}, {
 			s.database,
 			"random_collection",
-			map[string]interface{}{
+			Map{
 				"pkey_int": 1,
 			},
 			"collection doesn't exist 'random_collection'",
@@ -874,7 +840,7 @@ func (s *DocumentSuite) TestDelete_BadRequest() {
 		}, {
 			"",
 			s.collection,
-			map[string]interface{}{
+			Map{
 				"pkey_int": 1,
 			},
 			"invalid database name",
@@ -882,7 +848,7 @@ func (s *DocumentSuite) TestDelete_BadRequest() {
 		}, {
 			s.database,
 			"",
-			map[string]interface{}{
+			Map{
 				"pkey_int": 1,
 			},
 			"invalid collection name",
@@ -896,9 +862,9 @@ func (s *DocumentSuite) TestDelete_BadRequest() {
 		},
 	}
 	for _, c := range cases {
-		e := httpexpect.New(s.T(), config.GetBaseURL())
+		e := expect(s.T())
 		e.DELETE(getDocumentURL(c.databaseName, c.collectionName, "delete")).
-			WithJSON(map[string]interface{}{
+			WithJSON(Map{
 				"filter": c.filter,
 			}).
 			Expect().
@@ -910,8 +876,8 @@ func (s *DocumentSuite) TestDelete_BadRequest() {
 }
 
 func (s *DocumentSuite) TestDelete_SingleRow() {
-	inputDocument := []interface{}{
-		map[string]interface{}{
+	inputDocument := []Doc{
+		{
 			"pkey_int":  40,
 			"int_value": 10,
 		},
@@ -923,14 +889,14 @@ func (s *DocumentSuite) TestDelete_SingleRow() {
 	readAndValidate(s.T(),
 		s.database,
 		s.collection,
-		map[string]interface{}{
+		Map{
 			"pkey_int": 40,
 		},
 		nil,
 		inputDocument)
 
-	deleteByFilter(s.T(), s.database, s.collection, map[string]interface{}{
-		"filter": map[string]interface{}{
+	deleteByFilter(s.T(), s.database, s.collection, Map{
+		"filter": Map{
 			"pkey_int": 40,
 		},
 	}).Status(http.StatusOK).
@@ -941,7 +907,7 @@ func (s *DocumentSuite) TestDelete_SingleRow() {
 	readAndValidate(s.T(),
 		s.database,
 		s.collection,
-		map[string]interface{}{
+		Map{
 			"pkey_int": 40,
 		},
 		nil,
@@ -949,16 +915,16 @@ func (s *DocumentSuite) TestDelete_SingleRow() {
 }
 
 func (s *DocumentSuite) TestDelete_MultipleRows() {
-	inputDocument := []interface{}{
-		map[string]interface{}{
+	inputDocument := []Doc{
+		{
 			"pkey_int":     50,
 			"string_value": "simple_insert50",
 		},
-		map[string]interface{}{
+		{
 			"pkey_int":     60,
 			"string_value": "simple_insert60",
 		},
-		map[string]interface{}{
+		{
 			"pkey_int":     70,
 			"string_value": "simple_insert70",
 		},
@@ -968,17 +934,11 @@ func (s *DocumentSuite) TestDelete_MultipleRows() {
 	insertDocuments(s.T(), s.database, s.collection, inputDocument, false).
 		Status(http.StatusOK)
 
-	readFilter := map[string]interface{}{
-		"$or": []interface{}{
-			map[string]interface{}{
-				"pkey_int": 50,
-			},
-			map[string]interface{}{
-				"pkey_int": 60,
-			},
-			map[string]interface{}{
-				"pkey_int": 70,
-			},
+	readFilter := Map{
+		"$or": []Doc{
+			{"pkey_int": 50},
+			{"pkey_int": 60},
+			{"pkey_int": 70},
 		},
 	}
 	readAndValidate(s.T(),
@@ -989,8 +949,8 @@ func (s *DocumentSuite) TestDelete_MultipleRows() {
 		inputDocument)
 
 	// first try deleting a no-op operation i.e. random filter value
-	deleteByFilter(s.T(), s.database, s.collection, map[string]interface{}{
-		"filter": map[string]interface{}{
+	deleteByFilter(s.T(), s.database, s.collection, Map{
+		"filter": Map{
 			"pkey_int": 10000,
 		},
 	}).Status(http.StatusOK).
@@ -1007,15 +967,11 @@ func (s *DocumentSuite) TestDelete_MultipleRows() {
 		inputDocument)
 
 	// DELETE keys 50 and 70
-	deleteByFilter(s.T(), s.database, s.collection, map[string]interface{}{
-		"filter": map[string]interface{}{
-			"$or": []interface{}{
-				map[string]interface{}{
-					"pkey_int": 50,
-				},
-				map[string]interface{}{
-					"pkey_int": 70,
-				},
+	deleteByFilter(s.T(), s.database, s.collection, Map{
+		"filter": Map{
+			"$or": []Doc{
+				{"pkey_int": 50},
+				{"pkey_int": 70},
 			},
 		},
 	}).Status(http.StatusOK).
@@ -1028,8 +984,8 @@ func (s *DocumentSuite) TestDelete_MultipleRows() {
 		s.collection,
 		readFilter,
 		nil,
-		[]interface{}{
-			map[string]interface{}{
+		[]Doc{
+			{
 				"pkey_int":     60,
 				"string_value": "simple_insert60",
 			},
@@ -1038,8 +994,8 @@ func (s *DocumentSuite) TestDelete_MultipleRows() {
 }
 
 func (s *DocumentSuite) TestRead_MultipleRows() {
-	inputDocument := []interface{}{
-		map[string]interface{}{
+	inputDocument := []Doc{
+		{
 			"pkey_int":     210,
 			"int_value":    1000,
 			"string_value": "simple_insert110",
@@ -1047,7 +1003,7 @@ func (s *DocumentSuite) TestRead_MultipleRows() {
 			"double_value": 1000.000001,
 			"bytes_value":  []byte(`"simple_insert110"`),
 		},
-		map[string]interface{}{
+		{
 			"pkey_int":     220,
 			"int_value":    2000,
 			"string_value": "simple_insert120",
@@ -1055,7 +1011,7 @@ func (s *DocumentSuite) TestRead_MultipleRows() {
 			"double_value": 2000.22221,
 			"bytes_value":  []byte(`"simple_insert120"`),
 		},
-		map[string]interface{}{
+		{
 			"pkey_int":     230,
 			"string_value": "simple_insert130",
 			"bytes_value":  []byte(`"simple_insert130"`),
@@ -1066,81 +1022,75 @@ func (s *DocumentSuite) TestRead_MultipleRows() {
 	insertDocuments(s.T(), s.database, s.collection, inputDocument, false).
 		Status(http.StatusOK)
 
-	readFilter := map[string]interface{}{
-		"$or": []interface{}{
-			map[string]interface{}{
-				"pkey_int": 210,
-			},
-			map[string]interface{}{
-				"pkey_int": 220,
-			},
-			map[string]interface{}{
-				"pkey_int": 230,
-			},
+	readFilter := Map{
+		"$or": []Doc{
+			{"pkey_int": 210},
+			{"pkey_int": 220},
+			{"pkey_int": 230},
 		},
 	}
 
 	cases := []struct {
-		fields       map[string]interface{}
-		expDocuments []interface{}
+		fields       Map
+		expDocuments []Doc
 	}{
 		{
-			map[string]interface{}{
+			Map{
 				"int_value":    1,
 				"string_value": 1,
 				"bytes_value":  1,
 			},
-			[]interface{}{
-				map[string]interface{}{
+			[]Doc{
+				{
 					"int_value":    1000,
 					"string_value": "simple_insert110",
 					"bytes_value":  []byte(`"simple_insert110"`),
 				},
-				map[string]interface{}{
+				{
 					"int_value":    2000,
 					"string_value": "simple_insert120",
 					"bytes_value":  []byte(`"simple_insert120"`),
 				},
-				map[string]interface{}{
+				{
 					"string_value": "simple_insert130",
 					"bytes_value":  []byte(`"simple_insert130"`),
 				},
 			},
 		}, {
 			// bool is not present in the third document
-			map[string]interface{}{
+			Map{
 				"string_value": 1,
 				"bool_value":   1,
 			},
-			[]interface{}{
-				map[string]interface{}{
+			[]Doc{
+				{
 					"string_value": "simple_insert110",
 					"bool_value":   true,
 				},
-				map[string]interface{}{
+				{
 					"string_value": "simple_insert120",
 					"bool_value":   false,
 				},
-				map[string]interface{}{
+				{
 					"string_value": "simple_insert130",
 				},
 			},
 		}, {
 			// both are not present in the third document
-			map[string]interface{}{
+			Map{
 				"double_value": 1,
 				"bool_value":   1,
 			},
-			[]interface{}{
-				map[string]interface{}{
+			[]Doc{
+				{
 					"double_value": 1000.000001,
 					"bool_value":   true,
 				},
-				map[string]interface{}{
+				{
 					"double_value": 2000.22221,
 					"bool_value":   false,
 				},
-				map[string]interface{}{},
+				{},
 			},
 		},
 	}
@@ -1156,10 +1106,10 @@ func (s *DocumentSuite) TestRead_MultipleRows() {
 
 func (s *DocumentSuite) TestRead_EntireCollection() {
 	dropCollection(s.T(), s.database, s.collection)
-	createCollection(s.T(), s.database, s.collection, testCreateSchema)
+	createCollection(s.T(), s.database, s.collection, testCreateSchema).Status(http.StatusOK)
 
-	inputDocument := []interface{}{
-		map[string]interface{}{
+	inputDocument := []Doc{
+		{
 			"pkey_int":     1000,
 			"int_value":    1000,
 			"string_value": "simple_insert1000",
@@ -1167,7 +1117,7 @@ func (s *DocumentSuite) TestRead_EntireCollection() {
 			"double_value": 1000.000001,
 			"bytes_value":  []byte(`"simple_insert1000"`),
 		},
-		map[string]interface{}{
+		{
 			"pkey_int":     1010,
 			"int_value":    2000,
 			"string_value": "simple_insert1010",
@@ -1175,7 +1125,7 @@ func (s *DocumentSuite) TestRead_EntireCollection() {
 			"double_value": 2000.22221,
 			"bytes_value":  []byte(`"simple_insert1010"`),
 		},
-		map[string]interface{}{
+		{
 			"pkey_int":     1020,
 			"string_value": "simple_insert1020",
 			"bytes_value":  []byte(`"simple_insert1020"`),
@@ -1194,45 +1144,45 @@ func (s *DocumentSuite) TestRead_EntireCollection() {
 		inputDocument)
 }
 
-func insertDocuments(t *testing.T, db string, collection string, documents []interface{}, mustNotExist bool) *httpexpect.Response {
-	e := httpexpect.New(t, config.GetBaseURL())
+func insertDocuments(t *testing.T, db string, collection string, documents []Doc, mustNotExist bool) *httpexpect.Response {
+	e := expect(t)
 
 	if mustNotExist {
 		return e.POST(getDocumentURL(db, collection, "insert")).
-			WithJSON(map[string]interface{}{
+			WithJSON(Map{
 				"documents": documents,
 			}).Expect()
 	} else {
 		return e.PUT(getDocumentURL(db, collection, "replace")).
-			WithJSON(map[string]interface{}{
+			WithJSON(Map{
 				"documents": documents,
 			}).Expect()
 	}
 }
 
-func updateByFilter(t *testing.T, db string, collection string, filter map[string]interface{}, fields map[string]interface{}) *httpexpect.Response {
-	var payload = make(map[string]interface{})
+func updateByFilter(t *testing.T, db string, collection string, filter Map, fields Map) *httpexpect.Response {
+	var payload = make(Map)
 	for key, value := range filter {
 		payload[key] = value
 	}
 	for key, value := range fields {
 		payload[key] = value
 	}
-	e := httpexpect.New(t, config.GetBaseURL())
+	e := expect(t)
 	return e.PUT(getDocumentURL(db, collection, "update")).
 		WithJSON(payload).
 		Expect()
 }
 
-func deleteByFilter(t *testing.T, db string, collection string, filter map[string]interface{}) *httpexpect.Response {
-	e := httpexpect.New(t, config.GetBaseURL())
+func deleteByFilter(t *testing.T, db string, collection string, filter Map) *httpexpect.Response {
+	e := expect(t)
 	return e.DELETE(getDocumentURL(db, collection, "delete")).
 		WithJSON(filter).
 		Expect()
 }
 
-func readByFilter(t *testing.T, db string, collection string, filter map[string]interface{}, fields map[string]interface{}) []map[string]json.RawMessage {
-	var payload = make(map[string]interface{})
+func readByFilter(t *testing.T, db string, collection string, filter Map, fields Map) []map[string]json.RawMessage {
+	var payload = make(Map)
 	payload["fields"] = fields
 	if filter == nil {
 		payload["filter"] = json.RawMessage(`{}`)
@@ -1240,7 +1190,7 @@ func readByFilter(t *testing.T, db string, collection string, filter map[string]
 		payload["filter"] = filter
 	}
 
-	e := httpexpect.New(t, config.GetBaseURL())
+	e := expect(t)
 	str := e.POST(getDocumentURL(db, collection, "read")).
 		WithJSON(payload).
 		Expect().
@@ -1259,7 +1209,7 @@ func readByFilter(t *testing.T, db string, collection string, filter map[string]
 	return resp
 }
 
-func readAndValidate(t *testing.T, db string, collection string, filter map[string]interface{}, fields map[string]interface{}, inputDocument []interface{}) {
+func readAndValidate(t *testing.T, db string, collection string, filter Map, fields Map, inputDocument []Doc) {
 	readResp := readByFilter(t, db, collection, filter, fields)
 	require.Equal(t, len(inputDocument), len(readResp))
 	for i := 0; i < len(inputDocument); i++ {

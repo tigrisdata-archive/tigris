@@ -101,7 +101,7 @@ func CreateWorkloads() []Workload {
 
 func main() {
 	driver.DefaultProtocol = driver.HTTP
-	client, err := driver.NewDriver(context.TODO(), &clientConfig.Config{
+	client, err := driver.NewDriver(context.TODO(), &clientConfig.Driver{
 		URL: fmt.Sprintf("http://%s:%d", "localhost", 8081),
 	})
 	if err != nil {

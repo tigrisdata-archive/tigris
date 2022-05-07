@@ -17,6 +17,7 @@ package kv
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -56,8 +57,6 @@ func readAll(t *testing.T, it baseIterator) []baseKeyValue {
 }
 
 func testKeyValueStoreBasic(t *testing.T, kv KeyValueStore) {
-	ulog.Configure(ulog.LogConfig{Level: "trace"})
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -170,8 +169,6 @@ func testKeyValueStoreBasic(t *testing.T, kv KeyValueStore) {
 }
 
 func testKeyValueStoreFullScan(t *testing.T, kv KeyValueStore) {
-	ulog.Configure(ulog.LogConfig{Level: "trace"})
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -222,8 +219,6 @@ func testKeyValueStoreFullScan(t *testing.T, kv KeyValueStore) {
 }
 
 func testKVBasic(t *testing.T, kv baseKVStore) {
-	ulog.Configure(ulog.LogConfig{Level: "trace"})
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -326,8 +321,6 @@ func testKVBasic(t *testing.T, kv baseKVStore) {
 }
 
 func testFullScan(t *testing.T, kv baseKVStore) {
-	ulog.Configure(ulog.LogConfig{Level: "trace"})
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -575,4 +568,9 @@ func TestGetCtxTimeout(t *testing.T) {
 	ctx, cancel2 := context.WithDeadline(context.Background(), time.Now().Add(-10*time.Millisecond))
 	defer cancel2()
 	assert.Less(t, getCtxTimeout(ctx), int64(0))
+}
+
+func TestMain(m *testing.M) {
+	ulog.Configure(ulog.LogConfig{Level: "disabled"})
+	os.Exit(m.Run())
 }

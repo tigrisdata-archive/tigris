@@ -25,7 +25,7 @@ import (
 )
 
 func TestMetaVersion(t *testing.T) {
-	fdbCfg, err := config.GetTestFDBConfig("../../..")
+	fdbCfg, err := config.GetTestFDBConfig("../..")
 	require.NoError(t, err)
 
 	kv, err := kv.NewKeyValueStore(fdbCfg)

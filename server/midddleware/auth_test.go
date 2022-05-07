@@ -16,6 +16,7 @@ package middleware
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/auth0/go-jwt-middleware/v2/validator"
@@ -31,7 +32,7 @@ func TestAuth(t *testing.T) {
 	enforcedAuthConfig := config.Config{
 		Server: config.ServerConfig{},
 		Log: log.LogConfig{
-			Level: "trace",
+			Level: "error",
 		},
 		Auth: config.AuthConfig{
 			IssuerURL:        "",
@@ -95,4 +96,9 @@ func TestAuth(t *testing.T) {
 		require.Equal(t, err, api.Error(codes.FailedPrecondition, "hostname is not as per expected scheme"))
 	})
 
+}
+
+func TestMain(m *testing.M) {
+	log.Configure(log.LogConfig{Level: "disabled"})
+	os.Exit(m.Run())
 }

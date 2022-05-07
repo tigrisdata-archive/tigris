@@ -16,6 +16,7 @@ package metadata
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -25,10 +26,11 @@ import (
 	"github.com/tigrisdata/tigris/server/metadata/encoding"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
+	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 func TestTenantManager_CreateTenant(t *testing.T) {
-	fdbCfg, err := config.GetTestFDBConfig("../../..")
+	fdbCfg, err := config.GetTestFDBConfig("../..")
 	require.NoError(t, err)
 
 	kvStore, err := kv.NewKeyValueStore(fdbCfg)
@@ -150,7 +152,7 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 }
 
 func TestTenantManager_CreateDatabases(t *testing.T) {
-	fdbCfg, err := config.GetTestFDBConfig("../../..")
+	fdbCfg, err := config.GetTestFDBConfig("../..")
 	require.NoError(t, err)
 
 	kvStore, err := kv.NewKeyValueStore(fdbCfg)
@@ -194,7 +196,7 @@ func TestTenantManager_CreateDatabases(t *testing.T) {
 }
 
 func TestTenantManager_CreateCollections(t *testing.T) {
-	fdbCfg, err := config.GetTestFDBConfig("../../..")
+	fdbCfg, err := config.GetTestFDBConfig("../..")
 	require.NoError(t, err)
 
 	kvStore, err := kv.NewKeyValueStore(fdbCfg)
@@ -272,7 +274,7 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 }
 
 func TestTenantManager_DropCollection(t *testing.T) {
-	fdbCfg, err := config.GetTestFDBConfig("../../..")
+	fdbCfg, err := config.GetTestFDBConfig("../..")
 	require.NoError(t, err)
 
 	kvStore, err := kv.NewKeyValueStore(fdbCfg)
@@ -347,4 +349,9 @@ func TestTenantManager_DropCollection(t *testing.T) {
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.EncodingSubspaceName())
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.SchemaSubspaceName())
 	})
+}
+
+func TestMain(m *testing.M) {
+	ulog.Configure(ulog.LogConfig{Level: "disabled"})
+	os.Exit(m.Run())
 }

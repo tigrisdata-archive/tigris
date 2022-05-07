@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/tigrisdata/tigris/test/config"
 	"gopkg.in/gavv/httpexpect.v1"
 )
 
@@ -154,13 +153,12 @@ func getCollectionURL(databaseName, collectionName string, methodName string) st
 
 func (s *CollectionSuite) SetupSuite() {
 	// create the database for the collection test suite
-	createDatabase(s.T(), s.database)
+	createDatabase(s.T(), s.database).Status(http.StatusOK)
 }
 
 func (s *CollectionSuite) TearDownSuite() {
 	// drop the database for the collection test suite
-	dropDatabase(s.T(), s.database)
-
+	dropDatabase(s.T(), s.database).Status(http.StatusOK)
 }
 
 func (s *CollectionSuite) TestCreateCollection() {
@@ -201,7 +199,7 @@ func (s *CollectionSuite) TestCreateCollection() {
 			createOrUpdateOptions[key] = value
 		}
 
-		e := httpexpect.New(s.T(), config.GetBaseURL())
+		e := expect(s.T())
 		e.POST(getCollectionURL(s.database, "test_collection", "createOrUpdate")).
 			WithJSON(createOrUpdateOptions).
 			Expect().
@@ -221,7 +219,7 @@ func (s *CollectionSuite) TestCreateCollection() {
 }
 
 func (s *CollectionSuite) TestDropCollection() {
-	createCollection(s.T(), s.database, "test_collection", testCreateSchema)
+	createCollection(s.T(), s.database, "test_collection", testCreateSchema).Status(http.StatusOK)
 
 	resp := dropCollection(s.T(), s.database, "test_collection")
 	resp.Status(http.StatusOK).
@@ -238,7 +236,7 @@ func (s *CollectionSuite) TestDropCollection() {
 }
 
 func (s *CollectionSuite) TestDescribeCollection() {
-	createCollection(s.T(), s.database, "test_collection", testCreateSchema)
+	createCollection(s.T(), s.database, "test_collection", testCreateSchema).Status(http.StatusOK)
 	resp := describeCollection(s.T(), s.database, "test_collection", testCreateSchema)
 
 	resp.Status(http.StatusOK).
@@ -251,21 +249,21 @@ func (s *CollectionSuite) TestDescribeCollection() {
 }
 
 func createCollection(t *testing.T, database string, collection string, schema map[string]interface{}) *httpexpect.Response {
-	e := httpexpect.New(t, config.GetBaseURL())
+	e := expect(t)
 	return e.POST(getCollectionURL(database, collection, "createOrUpdate")).
 		WithJSON(schema).
 		Expect()
 }
 
 func describeCollection(t *testing.T, database string, collection string, schema map[string]interface{}) *httpexpect.Response {
-	e := httpexpect.New(t, config.GetBaseURL())
+	e := expect(t)
 	return e.POST(getCollectionURL(database, collection, "describe")).
 		WithJSON(schema).
 		Expect()
 }
 
 func dropCollection(t *testing.T, database string, collection string) *httpexpect.Response {
-	e := httpexpect.New(t, config.GetBaseURL())
+	e := expect(t)
 	return e.DELETE(getCollectionURL(database, collection, "drop")).
 		Expect()
 }

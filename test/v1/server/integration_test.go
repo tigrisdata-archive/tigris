@@ -17,6 +17,8 @@
 package server
 
 import (
+	"fmt"
+	"math/rand"
 	"os"
 	"testing"
 
@@ -28,11 +30,11 @@ func SetupSuites() []suite.TestingSuite {
 	suites = append(suites, &DatabaseSuite{})
 
 	suites = append(suites, &CollectionSuite{
-		database: "integration_db1",
+		database: fmt.Sprintf("integration_db1_%x", rand.Uint64()),
 	})
 
 	suites = append(suites, &DocumentSuite{
-		database:   "integration_db2",
+		database:   fmt.Sprintf("integration_db2_%x", rand.Uint64()),
 		collection: "test_collection",
 	})
 	return suites

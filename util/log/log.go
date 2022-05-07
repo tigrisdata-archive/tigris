@@ -56,7 +56,7 @@ func Configure(config LogConfig) {
 		log.Error().Err(err).Msg("error parsing log level. defaulting to info level")
 		lvl = zerolog.InfoLevel
 	}
-	log.Logger = zerolog.New(output).Level(lvl).With().Timestamp().CallerWithSkipFrameCount(2).Stack().Logger()
+	log.Logger = zerolog.New(output).Level(lvl).With().Timestamp().CallerWithSkipFrameCount(3).Stack().Logger()
 }
 
 func E(err error) bool {
