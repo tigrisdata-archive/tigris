@@ -119,11 +119,14 @@ func NewTenantManager() *TenantManager {
 }
 
 func newTenantManager(mdNameRegistry encoding.MDNameRegistry) *TenantManager {
+	idToTenantMap := make(map[uint32]string)
+	idToTenantMap[DefaultNamespaceId] = DefaultNamespaceName
+
 	return &TenantManager{
 		encoder:        encoding.NewDictionaryEncoder(mdNameRegistry),
 		schemaStore:    encoding.NewSchemaStore(mdNameRegistry),
 		tenants:        make(map[string]*Tenant),
-		idToTenantMap:  make(map[uint32]string),
+		idToTenantMap:  idToTenantMap,
 		versionMgr:     &MetaVersionMgr{},
 		mdNameRegistry: mdNameRegistry,
 	}
