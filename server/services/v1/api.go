@@ -482,7 +482,11 @@ func (s *apiService) Stream(r *api.StreamRequest, stream api.Tigris_StreamServer
 						Data:       data,
 					}
 
-					if err := stream.Send(event); ulog.E(err) {
+					response := &api.StreamResponse{
+						Event: event,
+					}
+
+					if err := stream.Send(response); ulog.E(err) {
 						return err
 					}
 				}
