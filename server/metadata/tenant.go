@@ -104,19 +104,28 @@ func (n *TenantNamespace) Id() uint32 {
 type TenantManager struct {
 	sync.RWMutex
 
-	encoder       *encoding.DictionaryEncoder
-	tenants       map[string]*Tenant
-	idToTenantMap map[uint32]string
-	version       Version
-	versionMgr    *MetaVersionMgr
+	encoder        *encoding.DictionaryEncoder
+	schemaStore    *encoding.SchemaSubspace
+	tenants        map[string]*Tenant
+	idToTenantMap  map[uint32]string
+	version        Version
+	versionMgr     *MetaVersionMgr
+	mdNameRegistry encoding.MDNameRegistry
 }
 
 func NewTenantManager() *TenantManager {
+	mdNameRegistry := &encoding.DefaultMDNameRegistry{}
+	return newTenantManager(mdNameRegistry)
+}
+
+func newTenantManager(mdNameRegistry encoding.MDNameRegistry) *TenantManager {
 	return &TenantManager{
-		encoder:       encoding.NewDictionaryEncoder(),
-		tenants:       make(map[string]*Tenant),
-		idToTenantMap: make(map[uint32]string),
-		versionMgr:    &MetaVersionMgr{},
+		encoder:        encoding.NewDictionaryEncoder(mdNameRegistry),
+		schemaStore:    encoding.NewSchemaStore(mdNameRegistry),
+		tenants:        make(map[string]*Tenant),
+		idToTenantMap:  make(map[uint32]string),
+		versionMgr:     &MetaVersionMgr{},
+		mdNameRegistry: mdNameRegistry,
 	}
 }
 
@@ -155,7 +164,7 @@ func (m *TenantManager) CreateOrGetTenant(ctx context.Context, tx transaction.Tx
 		return nil, err
 	}
 
-	tenant = NewTenant(namespace, m.encoder, m.versionMgr, currentVersion)
+	tenant = NewTenant(namespace, m.encoder, m.schemaStore, m.versionMgr, currentVersion)
 	m.tenants[namespace.Name()] = tenant
 	m.idToTenantMap[namespace.Id()] = namespace.Name()
 	return tenant, nil
@@ -235,7 +244,7 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVe
 
 	for namespace, id := range namespaces {
 		if _, ok := m.tenants[namespace]; !ok {
-			m.tenants[namespace] = NewTenant(NewTenantNamespace(namespace, id), m.encoder, m.versionMgr, currentVersion)
+			m.tenants[namespace] = NewTenant(NewTenantNamespace(namespace, id), m.encoder, m.schemaStore, m.versionMgr, currentVersion)
 		}
 	}
 
@@ -265,11 +274,11 @@ type Tenant struct {
 	versionMgr      *MetaVersionMgr
 }
 
-func NewTenant(namespace Namespace, encoder *encoding.DictionaryEncoder, versionMgr *MetaVersionMgr, currentVersion Version) *Tenant {
+func NewTenant(namespace Namespace, encoder *encoding.DictionaryEncoder, schemaStore *encoding.SchemaSubspace, versionMgr *MetaVersionMgr, currentVersion Version) *Tenant {
 	return &Tenant{
 		namespace:       namespace,
 		encoder:         encoder,
-		schemaStore:     &encoding.SchemaSubspace{},
+		schemaStore:     schemaStore,
 		databases:       make(map[string]*Database),
 		idToDatabaseMap: make(map[uint32]string),
 		versionMgr:      versionMgr,
