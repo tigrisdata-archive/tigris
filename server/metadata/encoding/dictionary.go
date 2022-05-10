@@ -81,12 +81,6 @@ const (
 	keyDroppedEnd = "dropped"
 )
 
-// subspaces - only reason of not declaring these as consts because tests in different packages can overwrite this.
-var (
-	ReservedSubspaceKey = []byte("reserved")
-	EncodingSubspaceKey = []byte("encoding")
-)
-
 var (
 	// versions
 	encVersion = []byte{0x01}
@@ -98,13 +92,16 @@ var (
 // reservedSubspace struct is used to manage reserved subspace.
 type reservedSubspace struct {
 	sync.RWMutex
+	MDNameRegistry
 
 	allocated     map[uint32]string
 	namespaceToId map[string]uint32
 }
 
-func newReservedSubspace() *reservedSubspace {
+func newReservedSubspace(mdNameRegistry MDNameRegistry) *reservedSubspace {
 	return &reservedSubspace{
+		MDNameRegistry: mdNameRegistry,
+
 		allocated:     make(map[uint32]string),
 		namespaceToId: make(map[string]uint32),
 	}
@@ -118,7 +115,7 @@ func (r *reservedSubspace) reload(ctx context.Context, tx transaction.Tx) error 
 	r.Lock()
 	defer r.Unlock()
 
-	key := keys.NewKey(ReservedSubspaceKey, namespaceKey)
+	key := keys.NewKey(r.ReservedSubspaceName(), namespaceKey)
 	it, err := tx.Read(ctx, key)
 	if err != nil {
 		return err
@@ -163,19 +160,19 @@ func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.
 		}
 	}
 
-	key := keys.NewKey(ReservedSubspaceKey, namespaceKey, namespace, keyEnd)
+	key := keys.NewKey(r.ReservedSubspaceName(), namespaceKey, namespace, keyEnd)
 	// now do an insert to fail if namespace already exists.
 	if err := tx.Insert(ctx, key, internal.NewTableData(UInt32ToByte(id))); err != nil {
-		log.Debug().Interface("key", key).Uint32("value", id).Err(err).Msg("reserving namespace failed")
+		log.Debug().Str("key", key.String()).Uint32("value", id).Err(err).Msg("reserving namespace failed")
 		return err
 	}
 
-	log.Debug().Interface("key", key).Uint32("value", id).Msg("reserving namespace succeed")
+	log.Debug().Str("key", key.String()).Uint32("value", id).Msg("reserving namespace succeed")
 	return nil
 }
 
 func (r *reservedSubspace) allocateToken(ctx context.Context, tx transaction.Tx, keyName string) (uint32, error) {
-	key := keys.NewKey(ReservedSubspaceKey, keyName, counterKey, keyEnd)
+	key := keys.NewKey(r.ReservedSubspaceName(), keyName, counterKey, keyEnd)
 	it, err := tx.Read(ctx, key)
 	if err != nil {
 		return 0, err
@@ -204,12 +201,15 @@ func (r *reservedSubspace) allocateToken(ctx context.Context, tx transaction.Tx,
 // DictionaryEncoder is used to replace variable length strings to their corresponding codes to encode it. Compression
 // is achieved by replacing long strings with a simple 4byte representation.
 type DictionaryEncoder struct {
+	MDNameRegistry
+
 	reservedSb *reservedSubspace
 }
 
-func NewDictionaryEncoder() *DictionaryEncoder {
+func NewDictionaryEncoder(mdNameRegistry MDNameRegistry) *DictionaryEncoder {
 	return &DictionaryEncoder{
-		reservedSb: newReservedSubspace(),
+		MDNameRegistry: mdNameRegistry,
+		reservedSb:     newReservedSubspace(mdNameRegistry),
 	}
 }
 
@@ -235,7 +235,7 @@ func (k *DictionaryEncoder) EncodeDatabaseName(ctx context.Context, tx transacti
 		return InvalidId, api.Errorf(codes.InvalidArgument, "database name is empty")
 	}
 
-	key := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyEnd)
+	key := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyEnd)
 	return k.encode(ctx, tx, key, dbKey)
 }
 
@@ -250,8 +250,8 @@ func (k *DictionaryEncoder) EncodeDatabaseAsDropped(ctx context.Context, tx tran
 	}
 
 	// remove existing entry
-	toDeleteKey := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyEnd)
-	newKey := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyDroppedEnd)
+	toDeleteKey := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyEnd)
+	newKey := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyDroppedEnd)
 	return k.encodeAsDropped(ctx, tx, toDeleteKey, newKey, existingId, dbKey)
 }
 
@@ -266,7 +266,7 @@ func (k *DictionaryEncoder) EncodeCollectionName(ctx context.Context, tx transac
 		return InvalidId, api.Errorf(codes.InvalidArgument, "collection name is empty")
 	}
 
-	key := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collection, keyEnd)
+	key := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collection, keyEnd)
 	return k.encode(ctx, tx, key, collectionKey)
 }
 
@@ -282,8 +282,8 @@ func (k *DictionaryEncoder) EncodeCollectionAsDropped(ctx context.Context, tx tr
 	}
 
 	// remove existing entry
-	toDeleteKey := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collection, keyEnd)
-	newKey := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collection, keyDroppedEnd)
+	toDeleteKey := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collection, keyEnd)
+	newKey := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collection, keyDroppedEnd)
 	return k.encodeAsDropped(ctx, tx, toDeleteKey, newKey, existingId, collectionKey)
 }
 
@@ -301,7 +301,7 @@ func (k *DictionaryEncoder) EncodeIndexName(ctx context.Context, tx transaction.
 		return InvalidId, api.Errorf(codes.InvalidArgument, "index name is empty")
 	}
 
-	key := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyEnd)
+	key := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyEnd)
 	return k.encode(ctx, tx, key, indexKey)
 }
 
@@ -319,8 +319,8 @@ func (k *DictionaryEncoder) EncodeIndexAsDropped(ctx context.Context, tx transac
 		return api.Errorf(codes.InvalidArgument, "index name is empty")
 	}
 
-	toDeleteKey := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyEnd)
-	newKey := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyDroppedEnd)
+	toDeleteKey := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyEnd)
+	newKey := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyDroppedEnd)
 	return k.encodeAsDropped(ctx, tx, toDeleteKey, newKey, existingId, indexKey)
 }
 
@@ -342,7 +342,7 @@ func (k *DictionaryEncoder) encodeAsDropped(ctx context.Context, tx transaction.
 }
 
 func (k *DictionaryEncoder) encode(ctx context.Context, tx transaction.Tx, key keys.Key, encName string) (uint32, error) {
-	reserveToken, err := k.reservedSb.allocateToken(ctx, tx, string(EncodingSubspaceKey))
+	reserveToken, err := k.reservedSb.allocateToken(ctx, tx, string(k.EncodingSubspaceName()))
 	if err != nil {
 		return InvalidId, err
 	}
@@ -380,7 +380,7 @@ func (k *DictionaryEncoder) validCollectionId(id uint32) error {
 
 func (k *DictionaryEncoder) GetDatabases(ctx context.Context, tx transaction.Tx, namespaceId uint32) (map[string]uint32, error) {
 	databases := make(map[string]uint32)
-	it, err := tx.Read(ctx, keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), dbKey))
+	it, err := tx.Read(ctx, keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), dbKey))
 	if err != nil {
 		return nil, err
 	}
@@ -427,7 +427,7 @@ func (k *DictionaryEncoder) GetDatabases(ctx context.Context, tx transaction.Tx,
 
 func (k *DictionaryEncoder) GetCollections(ctx context.Context, tx transaction.Tx, namespaceId uint32, databaseId uint32) (map[string]uint32, error) {
 	var collections = make(map[string]uint32)
-	it, err := tx.Read(ctx, keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(databaseId)))
+	it, err := tx.Read(ctx, keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(databaseId)))
 	if err != nil {
 		return nil, err
 	}
@@ -475,7 +475,7 @@ func (k *DictionaryEncoder) GetCollections(ctx context.Context, tx transaction.T
 
 func (k *DictionaryEncoder) GetIndexes(ctx context.Context, tx transaction.Tx, namespaceId uint32, databaseId uint32, collId uint32) (map[string]uint32, error) {
 	var indexes = make(map[string]uint32)
-	it, err := tx.Read(ctx, keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(databaseId), UInt32ToByte(collId)))
+	it, err := tx.Read(ctx, keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(databaseId), UInt32ToByte(collId)))
 	if err != nil {
 		return nil, err
 	}
@@ -522,17 +522,17 @@ func (k *DictionaryEncoder) GetIndexes(ctx context.Context, tx transaction.Tx, n
 }
 
 func (k *DictionaryEncoder) GetDatabaseId(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32) (uint32, error) {
-	key := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyEnd)
+	key := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyEnd)
 	return k.getId(ctx, tx, key)
 }
 
 func (k *DictionaryEncoder) GetCollectionId(ctx context.Context, tx transaction.Tx, collName string, namespaceId uint32, dbId uint32) (uint32, error) {
-	key := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collName, keyEnd)
+	key := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collName, keyEnd)
 	return k.getId(ctx, tx, key)
 }
 
 func (k *DictionaryEncoder) GetIndexId(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32, dbId uint32, collId uint32) (uint32, error) {
-	key := keys.NewKey(EncodingSubspaceKey, encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyEnd)
+	key := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyEnd)
 	return k.getId(ctx, tx, key)
 }
 

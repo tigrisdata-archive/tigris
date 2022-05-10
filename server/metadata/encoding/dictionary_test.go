@@ -28,9 +28,6 @@ import (
 )
 
 func TestDictionaryEncoding(t *testing.T) {
-	ReservedSubspaceKey = []byte("test_reserved")
-	EncodingSubspaceKey = []byte("test_encoding")
-
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
@@ -40,11 +37,14 @@ func TestDictionaryEncoding(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_ = kv.DropTable(ctx, EncodingSubspaceKey)
-	_ = kv.DropTable(ctx, ReservedSubspaceKey)
+	k := NewDictionaryEncoder(&TestMDNameRegistry{
+		ReserveSB:  "test_reserved",
+		EncodingSB: "test_encoding",
+	})
+	_ = kv.DropTable(ctx, k.EncodingSubspaceName())
+	_ = kv.DropTable(ctx, k.ReservedSubspaceName())
 
 	tm := transaction.NewManager(kv)
-	k := NewDictionaryEncoder()
 
 	tx, err := tm.StartTxWithoutTracking(ctx)
 	require.NoError(t, err)
@@ -92,9 +92,6 @@ func TestDictionaryEncoding(t *testing.T) {
 }
 
 func TestDictionaryEncodingDropped(t *testing.T) {
-	ReservedSubspaceKey = []byte("test_reserved")
-	EncodingSubspaceKey = []byte("test_encoding")
-
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
@@ -105,11 +102,15 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 	defer cancel()
 
 	t.Run("drop_database", func(t *testing.T) {
-		_ = kv.DropTable(ctx, EncodingSubspaceKey)
-		_ = kv.DropTable(ctx, ReservedSubspaceKey)
+		k := NewDictionaryEncoder(&TestMDNameRegistry{
+			ReserveSB:  "test_reserved",
+			EncodingSB: "test_encoding",
+		})
+
+		_ = kv.DropTable(ctx, k.EncodingSubspaceName())
+		_ = kv.DropTable(ctx, k.ReservedSubspaceName())
 
 		tm := transaction.NewManager(kv)
-		k := NewDictionaryEncoder()
 
 		tx, err := tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
@@ -143,12 +144,15 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 		require.Equal(t, v, InvalidId)
 	})
 	t.Run("drop_collection", func(t *testing.T) {
-		_ = kv.DropTable(ctx, EncodingSubspaceKey)
-		_ = kv.DropTable(ctx, ReservedSubspaceKey)
+		k := NewDictionaryEncoder(&TestMDNameRegistry{
+			ReserveSB:  "test_reserved",
+			EncodingSB: "test_encoding",
+		})
+
+		_ = kv.DropTable(ctx, k.EncodingSubspaceName())
+		_ = kv.DropTable(ctx, k.ReservedSubspaceName())
 
 		tm := transaction.NewManager(kv)
-		k := NewDictionaryEncoder()
-
 		tx, err := tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
 		require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", 1234))
@@ -187,12 +191,15 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 		require.Equal(t, v, InvalidId)
 	})
 	t.Run("drop_index", func(t *testing.T) {
-		_ = kv.DropTable(ctx, EncodingSubspaceKey)
-		_ = kv.DropTable(ctx, ReservedSubspaceKey)
+		k := NewDictionaryEncoder(&TestMDNameRegistry{
+			ReserveSB:  "test_reserved",
+			EncodingSB: "test_encoding",
+		})
+
+		_ = kv.DropTable(ctx, k.EncodingSubspaceName())
+		_ = kv.DropTable(ctx, k.ReservedSubspaceName())
 
 		tm := transaction.NewManager(kv)
-		k := NewDictionaryEncoder()
-
 		tx, err := tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
 		require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", 1234))
@@ -237,12 +244,15 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 		require.Equal(t, v, InvalidId)
 	})
 	t.Run("drop_collection_multiple", func(t *testing.T) {
-		_ = kv.DropTable(ctx, EncodingSubspaceKey)
-		_ = kv.DropTable(ctx, ReservedSubspaceKey)
+		k := NewDictionaryEncoder(&TestMDNameRegistry{
+			ReserveSB:  "test_reserved",
+			EncodingSB: "test_encoding",
+		})
+
+		_ = kv.DropTable(ctx, k.EncodingSubspaceName())
+		_ = kv.DropTable(ctx, k.ReservedSubspaceName())
 
 		tm := transaction.NewManager(kv)
-		k := NewDictionaryEncoder()
-
 		tx, err := tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
 		require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", 1234))
@@ -296,9 +306,6 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 }
 
 func TestDictionaryEncoding_Error(t *testing.T) {
-	ReservedSubspaceKey = []byte("test_reserved")
-	EncodingSubspaceKey = []byte("test_encoding")
-
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
@@ -308,12 +315,15 @@ func TestDictionaryEncoding_Error(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_ = kv.DropTable(ctx, EncodingSubspaceKey)
-	_ = kv.DropTable(ctx, ReservedSubspaceKey)
+	k := NewDictionaryEncoder(&TestMDNameRegistry{
+		ReserveSB:  "test_reserved",
+		EncodingSB: "test_encoding",
+	})
+
+	_ = kv.DropTable(ctx, k.EncodingSubspaceName())
+	_ = kv.DropTable(ctx, k.ReservedSubspaceName())
 
 	tm := transaction.NewManager(kv)
-	k := NewDictionaryEncoder()
-
 	tx, err := tm.StartTxWithoutTracking(ctx)
 	require.NoError(t, err)
 	dbId, err := k.EncodeDatabaseName(ctx, tx, "db-1", 0)
@@ -331,9 +341,6 @@ func TestDictionaryEncoding_Error(t *testing.T) {
 }
 
 func TestDictionaryEncoding_GetMethods(t *testing.T) {
-	ReservedSubspaceKey = []byte("test_reserved")
-	EncodingSubspaceKey = []byte("test_encoding")
-
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
@@ -344,11 +351,14 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 	defer cancel()
 
 	tm := transaction.NewManager(kv)
-	k := NewDictionaryEncoder()
-
 	t.Run("get_databases", func(t *testing.T) {
-		_ = kv.DropTable(ctx, EncodingSubspaceKey)
-		_ = kv.DropTable(ctx, ReservedSubspaceKey)
+		k := NewDictionaryEncoder(&TestMDNameRegistry{
+			ReserveSB:  "test_reserved",
+			EncodingSB: "test_encoding",
+		})
+
+		_ = kv.DropTable(ctx, k.EncodingSubspaceName())
+		_ = kv.DropTable(ctx, k.ReservedSubspaceName())
 
 		tx, err := tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
@@ -365,8 +375,13 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 		require.Equal(t, dbToId["db-2"], dbId2)
 	})
 	t.Run("get_collections", func(t *testing.T) {
-		_ = kv.DropTable(ctx, EncodingSubspaceKey)
-		_ = kv.DropTable(ctx, ReservedSubspaceKey)
+		k := NewDictionaryEncoder(&TestMDNameRegistry{
+			ReserveSB:  "test_reserved",
+			EncodingSB: "test_encoding",
+		})
+
+		_ = kv.DropTable(ctx, k.EncodingSubspaceName())
+		_ = kv.DropTable(ctx, k.ReservedSubspaceName())
 
 		tx, err := tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
@@ -386,8 +401,13 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 		require.Equal(t, collToId["coll-2"], cid2)
 	})
 	t.Run("get_indexes", func(t *testing.T) {
-		_ = kv.DropTable(ctx, EncodingSubspaceKey)
-		_ = kv.DropTable(ctx, ReservedSubspaceKey)
+		k := NewDictionaryEncoder(&TestMDNameRegistry{
+			ReserveSB:  "test_reserved",
+			EncodingSB: "test_encoding",
+		})
+
+		_ = kv.DropTable(ctx, k.EncodingSubspaceName())
+		_ = kv.DropTable(ctx, k.ReservedSubspaceName())
 
 		tx, err := tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
@@ -408,9 +428,6 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 }
 
 func TestReservedNamespace(t *testing.T) {
-	ReservedSubspaceKey = []byte("test_reserved")
-	EncodingSubspaceKey = []byte("test_encoding")
-
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
@@ -420,11 +437,15 @@ func TestReservedNamespace(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_ = kv.DropTable(ctx, EncodingSubspaceKey)
-	_ = kv.DropTable(ctx, ReservedSubspaceKey)
+	r := newReservedSubspace(&TestMDNameRegistry{
+		ReserveSB:  "test_reserved",
+		EncodingSB: "test_encoding",
+	})
+
+	_ = kv.DropTable(ctx, r.EncodingSubspaceName())
+	_ = kv.DropTable(ctx, r.ReservedSubspaceName())
 
 	tm := transaction.NewManager(kv)
-	r := newReservedSubspace()
 
 	tx, err := tm.StartTxWithoutTracking(ctx)
 	require.NoError(t, err)
@@ -446,7 +467,10 @@ func TestReservedNamespace(t *testing.T) {
 
 func TestDecode(t *testing.T) {
 	k := kv.BuildKey(encVersion, UInt32ToByte(1234), dbKey, "db-1", keyEnd)
-	mp, err := NewDictionaryEncoder().decode(context.TODO(), k)
+	mp, err := NewDictionaryEncoder(&TestMDNameRegistry{
+		ReserveSB:  "test_reserved",
+		EncodingSB: "test_encoding",
+	}).decode(context.TODO(), k)
 	require.NoError(t, err)
 	require.Equal(t, mp[dbKey], "db-1")
 }

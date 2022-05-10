@@ -27,28 +27,20 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-// SchemaSubspaceKey (the schema subspace) will be storing the actual schema of the user for a collection. The schema subspace will
-// look like below
-//    ["schema", 0x01, x, 0x01, 0x03, "created", 0x01] => {"title": "t1", properties: {"a": int}, primary_key: ["a"]}
-//
-//  where,
-//    - schema is the keyword for this table.
-//    - 0x01 is the schema subspace version
-//    - x is the value assigned for the namespace
-//    - 0x01 is the value for the database.
-//    - 0x03 is the value for the collection.
-//    - "created" is keyword.
-//    - 0x01 is the revision of the schema.
-var (
-	SchemaSubspaceKey = []byte("schema")
-)
-
 var (
 	schVersion = []byte{0x01}
 )
 
 // SchemaSubspace is used to manage schemas in schema subspace.
-type SchemaSubspace struct{}
+type SchemaSubspace struct {
+	MDNameRegistry
+}
+
+func NewSchemaStore(mdNameRegistry MDNameRegistry) *SchemaSubspace {
+	return &SchemaSubspace{
+		MDNameRegistry: mdNameRegistry,
+	}
+}
 
 // Put is to persist schema for a given namespace, database and collection.
 func (s *SchemaSubspace) Put(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbId uint32, collId uint32, schema []byte, revision int) error {
@@ -59,7 +51,7 @@ func (s *SchemaSubspace) Put(ctx context.Context, tx transaction.Tx, namespaceId
 		return api.Errorf(codes.InvalidArgument, "empty schema")
 	}
 
-	key := keys.NewKey(SchemaSubspaceKey, schVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), keyEnd, UInt32ToByte(uint32(revision)))
+	key := keys.NewKey(s.SchemaSubspaceName(), schVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), keyEnd, UInt32ToByte(uint32(revision)))
 	if err := tx.Insert(ctx, key, internal.NewTableData(schema)); err != nil {
 		log.Debug().Str("key", key.String()).Str("value", string(schema)).Err(err).Msg("storing schema failed")
 		return err
@@ -84,7 +76,7 @@ func (s *SchemaSubspace) GetLatest(ctx context.Context, tx transaction.Tx, names
 
 // Get returns all the version stored for a collection inside a given namespace and database.
 func (s *SchemaSubspace) Get(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbId uint32, collId uint32) ([][]byte, []int, error) {
-	key := keys.NewKey(SchemaSubspaceKey, schVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), keyEnd)
+	key := keys.NewKey(s.SchemaSubspaceName(), schVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), keyEnd)
 	it, err := tx.Read(ctx, key)
 	if err != nil {
 		return nil, nil, err
@@ -118,7 +110,7 @@ func (s *SchemaSubspace) Get(ctx context.Context, tx transaction.Tx, namespaceId
 
 // Delete is to remove schema for a given namespace, database and collection.
 func (s *SchemaSubspace) Delete(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbId uint32, collId uint32) error {
-	key := keys.NewKey(SchemaSubspaceKey, schVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), keyEnd)
+	key := keys.NewKey(s.SchemaSubspaceName(), schVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), keyEnd)
 	if err := tx.Delete(ctx, key); err != nil {
 		log.Debug().Str("key", key.String()).Err(err).Msg("deleting schema failed")
 		return err

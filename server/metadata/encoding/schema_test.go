@@ -38,11 +38,13 @@ func TestSchemaSubspace(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		_ = kvStore.DropTable(ctx, SchemaSubspaceKey)
+		s := NewSchemaStore(&TestMDNameRegistry{
+			SchemaSB: "test_schema",
+		})
+		_ = kvStore.DropTable(ctx, s.SchemaSubspaceName())
 		tm := transaction.NewManager(kvStore)
 		tx, err := tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
-		s := SchemaSubspace{}
 		require.Equal(t, api.Errorf(codes.InvalidArgument, "invalid schema version %d", 0), s.Put(ctx, tx, 1, 2, 3, nil, 0))
 		require.Equal(t, api.Errorf(codes.InvalidArgument, "empty schema"), s.Put(ctx, tx, 1, 2, 3, nil, 1))
 		require.NoError(t, tx.Rollback(ctx))
@@ -53,11 +55,13 @@ func TestSchemaSubspace(t *testing.T) {
 
 		schema := []byte(`{"title": "test schema1"}`)
 
-		_ = kvStore.DropTable(ctx, SchemaSubspaceKey)
+		s := NewSchemaStore(&TestMDNameRegistry{
+			SchemaSB: "test_schema",
+		})
+		_ = kvStore.DropTable(ctx, s.SchemaSubspaceName())
 		tm := transaction.NewManager(kvStore)
 		tx, err := tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
-		s := SchemaSubspace{}
 		require.NoError(t, s.Put(ctx, tx, 1, 2, 3, schema, 1))
 		require.Equal(t, kv.ErrDuplicateKey, s.Put(ctx, tx, 1, 2, 3, schema, 1))
 		require.NoError(t, tx.Rollback(ctx))
@@ -66,7 +70,10 @@ func TestSchemaSubspace(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		_ = kvStore.DropTable(ctx, SchemaSubspaceKey)
+		s := NewSchemaStore(&TestMDNameRegistry{
+			SchemaSB: "test_schema",
+		})
+		_ = kvStore.DropTable(ctx, s.SchemaSubspaceName())
 
 		schema := []byte(`{
 		"title": "collection1",
@@ -89,7 +96,6 @@ func TestSchemaSubspace(t *testing.T) {
 		tm := transaction.NewManager(kvStore)
 		tx, err := tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
-		s := SchemaSubspace{}
 		require.NoError(t, s.Put(ctx, tx, 1, 2, 3, schema, 1))
 		sch, rev, err := s.GetLatest(ctx, tx, 1, 2, 3)
 		require.NoError(t, err)
@@ -102,13 +108,16 @@ func TestSchemaSubspace(t *testing.T) {
 		require.Equal(t, 1, revisions[0])
 		require.NoError(t, tx.Commit(ctx))
 
-		_ = kvStore.DropTable(ctx, SchemaSubspaceKey)
+		_ = kvStore.DropTable(ctx, s.SchemaSubspaceName())
 	})
 	t.Run("put_get_multiple", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		_ = kvStore.DropTable(ctx, SchemaSubspaceKey)
+		s := NewSchemaStore(&TestMDNameRegistry{
+			SchemaSB: "test_schema",
+		})
+		_ = kvStore.DropTable(ctx, s.SchemaSubspaceName())
 
 		schema1 := []byte(`{
 		"title": "collection1",
@@ -144,7 +153,6 @@ func TestSchemaSubspace(t *testing.T) {
 		tm := transaction.NewManager(kvStore)
 		tx, err := tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
-		s := SchemaSubspace{}
 		require.NoError(t, s.Put(ctx, tx, 1, 2, 3, schema1, 1))
 		require.NoError(t, s.Put(ctx, tx, 1, 2, 3, schema2, 2))
 		sch, rev, err := s.GetLatest(ctx, tx, 1, 2, 3)
@@ -159,13 +167,15 @@ func TestSchemaSubspace(t *testing.T) {
 		require.Equal(t, 1, revisions[0])
 		require.Equal(t, 2, revisions[1])
 		require.NoError(t, tx.Commit(ctx))
-		_ = kvStore.DropTable(ctx, SchemaSubspaceKey)
 	})
 	t.Run("put_delete_get", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		_ = kvStore.DropTable(ctx, SchemaSubspaceKey)
+		s := NewSchemaStore(&TestMDNameRegistry{
+			SchemaSB: "test_schema",
+		})
+		_ = kvStore.DropTable(ctx, s.SchemaSubspaceName())
 
 		schema1 := []byte(`{
 		"title": "collection1",
@@ -201,7 +211,6 @@ func TestSchemaSubspace(t *testing.T) {
 		tm := transaction.NewManager(kvStore)
 		tx, err := tm.StartTxWithoutTracking(ctx)
 		require.NoError(t, err)
-		s := SchemaSubspace{}
 		require.NoError(t, s.Put(ctx, tx, 1, 2, 3, schema1, 1))
 		require.NoError(t, s.Put(ctx, tx, 1, 2, 3, schema2, 2))
 
@@ -225,7 +234,5 @@ func TestSchemaSubspace(t *testing.T) {
 		require.Len(t, schemas, 0)
 		require.Len(t, revisions, 0)
 		require.NoError(t, tx.Commit(ctx))
-
-		_ = kvStore.DropTable(ctx, SchemaSubspaceKey)
 	})
 }
