@@ -90,7 +90,7 @@ func (s *session) start(ctx context.Context) error {
 	}
 
 	var err error
-	if s.kTx, err = s.kvStore.Tx(ctx); err != nil {
+	if s.kTx, err = s.kvStore.BeginTx(ctx); err != nil {
 		return err
 	}
 	s.state = sessionActive

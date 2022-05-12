@@ -30,11 +30,12 @@ type baseTx interface {
 	baseKV
 	Commit(context.Context) error
 	Rollback(context.Context) error
+	IsRetriable() bool
 }
 
 type baseKVStore interface {
 	baseKV
-	Tx(ctx context.Context) (baseTx, error)
+	BeginTx(ctx context.Context) (baseTx, error)
 	Batch() (baseTx, error)
 	CreateTable(ctx context.Context, name []byte) error
 	DropTable(ctx context.Context, name []byte) error

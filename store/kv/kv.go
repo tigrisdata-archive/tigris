@@ -45,11 +45,12 @@ type Tx interface {
 	KV
 	Commit(context.Context) error
 	Rollback(context.Context) error
+	IsRetriable() bool
 }
 
 type KeyValueStore interface {
 	KV
-	Tx(ctx context.Context) (Tx, error)
+	BeginTx(ctx context.Context) (Tx, error)
 	CreateTable(ctx context.Context, name []byte) error
 	DropTable(ctx context.Context, name []byte) error
 	GetInternalDatabase() interface{} // TODO: CDC remove workaround
@@ -154,8 +155,8 @@ func (k *KeyValueStoreImpl) UpdateRange(ctx context.Context, table []byte, lKey 
 	})
 }
 
-func (k *KeyValueStoreImpl) Tx(ctx context.Context) (Tx, error) {
-	btx, err := k.fdbkv.Tx(ctx)
+func (k *KeyValueStoreImpl) BeginTx(ctx context.Context) (Tx, error) {
+	btx, err := k.fdbkv.BeginTx(ctx)
 	if err != nil {
 		return nil, err
 	}
