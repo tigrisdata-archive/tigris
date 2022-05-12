@@ -495,37 +495,27 @@ func (t *ftx) Get(_ context.Context, key []byte) ([]byte, error) {
 func (t *ftx) Commit(ctx context.Context) error {
 	l := GetListener(ctx)
 
-	for {
-		err := l.OnCommit(t.tx)
-		if err != nil {
-			return err
-		}
+	err := l.OnCommit(t.tx)
+	if err != nil {
+		return err
+	}
 
-		err = t.tx.Commit().Get()
-		if err == nil {
-			break
-		}
+	if err = t.tx.Commit().Get(); err == nil {
+		return nil
+	}
 
-		log.Err(err).Msg("tx Commit")
+	log.Err(err).Msg("tx Commit")
 
-		var ep fdb.Error
-		if errors.As(err, &ep) {
-			err = t.tx.OnError(ep).Get()
-
-			if err != nil && ep.Code == 1020 {
-				err = ErrConflictingTransaction
-			}
-		}
-
-		if err != nil {
-			t.tx.Cancel()
-			return err
+	var ep fdb.Error
+	if errors.As(err, &ep) {
+		if ep.Code == 1020 {
+			err = ErrConflictingTransaction
 		}
 	}
 
-	log.Debug().Msg("tx Commit")
+	t.tx.Cancel()
 
-	return nil
+	return err
 }
 
 func (t *ftx) Rollback(ctx context.Context) error {
