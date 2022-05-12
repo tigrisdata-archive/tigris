@@ -39,7 +39,7 @@ func (w *DDLWorkload) Setup(client driver.Driver) error {
 	return nil
 }
 
-func (w *DDLWorkload) Start(client driver.Driver) error { return nil }
+func (w *DDLWorkload) Start(client driver.Driver) (int64, error) { return 0, nil }
 
 func (w *DDLWorkload) Check(client driver.Driver) (bool, error) {
 	var wg sync.WaitGroup

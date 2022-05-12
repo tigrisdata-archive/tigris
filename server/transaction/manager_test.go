@@ -23,12 +23,6 @@ import (
 func TestManager(t *testing.T) {
 	t.Run("manager_creation", func(t *testing.T) {
 		m := NewManager(nil)
-		require.NotNil(t, m.tracker)
-	})
-	t.Run("manager_get_tx", func(t *testing.T) {
-		m := NewManager(nil)
-		tx, err := m.GetTx(nil)
-		require.Nil(t, tx)
-		require.Equal(t, ErrTxCtxMissing, err)
+		require.NotNil(t, m)
 	})
 }

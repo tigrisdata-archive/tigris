@@ -404,7 +404,6 @@ func (k *DictionaryEncoder) GetDatabases(ctx context.Context, tx transaction.Tx,
 			}
 
 			if end == keyDroppedEnd {
-				log.Debug().Str("database", name).Msg("dropped database found, ignoring")
 				droppedDatabase[name] = ByteToUInt32(v.Data.RawData)
 				continue
 			}
@@ -452,7 +451,6 @@ func (k *DictionaryEncoder) GetCollections(ctx context.Context, tx transaction.T
 			}
 
 			if end == keyDroppedEnd {
-				log.Debug().Str("collection", name).Msg("dropped collection found, ignoring")
 				droppedCollection[name] = ByteToUInt32(v.Data.RawData)
 				continue
 			}
@@ -500,7 +498,6 @@ func (k *DictionaryEncoder) GetIndexes(ctx context.Context, tx transaction.Tx, n
 			}
 
 			if end == keyDroppedEnd {
-				log.Debug().Str("index", name).Msg("dropped index found, ignoring")
 				droppedIndexes[name] = ByteToUInt32(v.Data.RawData)
 				continue
 			}

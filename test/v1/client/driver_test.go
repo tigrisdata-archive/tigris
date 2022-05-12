@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -76,7 +75,7 @@ func testRead(t *testing.T, db driver.Database, filter driver.Filter, expected [
 func testTxReadWrite(t *testing.T, c driver.Driver) {
 	ctx := context.TODO()
 
-	dbName := fmt.Sprintf("db_client_%x", rand.Uint64())
+	dbName := "db_client_test"
 	_ = c.DropDatabase(ctx, dbName)
 
 	schema := `{
@@ -118,30 +117,35 @@ func testTxReadWrite(t *testing.T, c driver.Driver) {
 
 	testRead(t, db1, driver.Filter(`{"str_field": "value2"}`), nil)
 
-	tx, err := c.BeginTx(ctx, dbName)
-	require.NoError(t, err)
+	for {
+		tx, err := c.BeginTx(ctx, dbName)
+		require.NoError(t, err)
 
-	doc3 := driver.Document(`{"str_field": "value3", "int_field": 333, "bool_field": false}`)
-	resp, err = tx.Insert(ctx, "c1", []driver.Document{
-		doc2,
-		doc3,
-	})
-	require.NoError(t, err)
-	require.Equal(t, "inserted", resp.Status)
+		doc3 := driver.Document(`{"str_field": "value3", "int_field": 333, "bool_field": false}`)
+		resp, err = tx.Insert(ctx, "c1", []driver.Document{
+			doc2,
+			doc3,
+		})
+		require.NoError(t, err)
+		require.Equal(t, "inserted", resp.Status)
 
-	it, err := tx.Read(ctx, "c1", driver.Filter(`{"str_field": "value2"}`), nil)
-	require.NoError(t, err)
-	var doc driver.Document
-	for it.Next(&doc) {
-		assert.JSONEq(t, string(doc2), string(doc))
+		it, err := tx.Read(ctx, "c1", driver.Filter(`{"str_field": "value2"}`), nil)
+		require.NoError(t, err)
+		var doc driver.Document
+		for it.Next(&doc) {
+			assert.JSONEq(t, string(doc2), string(doc))
+		}
+		if err = tx.Commit(ctx); err == nil || err.Error() != "transaction not committed due to conflict with another transaction" {
+			break
+		}
 	}
-	require.NoError(t, tx.Commit(ctx))
+	require.NoError(t, err)
 }
 
 func testDriverBinary(t *testing.T, c driver.Driver) {
 	ctx := context.TODO()
 
-	dbName := fmt.Sprintf("db_client_%x", rand.Uint64())
+	dbName := "db_client_test"
 	_ = c.DropDatabase(ctx, dbName, &driver.DatabaseOptions{})
 
 	db1 := c.UseDatabase(dbName)
@@ -163,7 +167,7 @@ func testDriverBinary(t *testing.T, c driver.Driver) {
 	}`
 
 	err := c.CreateDatabase(ctx, dbName)
-	require.NoError(t, err)
+	require.NoError(t, err, " dbName %s", dbName)
 
 	db1 = c.UseDatabase(dbName)
 	err = db1.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema))
@@ -225,7 +229,7 @@ func testDriverBinary(t *testing.T, c driver.Driver) {
 func testDriver(t *testing.T, c driver.Driver) {
 	ctx := context.TODO()
 
-	dbName := fmt.Sprintf("db_client_%x", rand.Uint64())
+	dbName := "db_client_test"
 	_ = c.DropDatabase(ctx, dbName)
 
 	schema := `{
@@ -293,7 +297,7 @@ func testDriver(t *testing.T, c driver.Driver) {
 func testTxClient(t *testing.T, c driver.Driver) {
 	ctx := context.TODO()
 
-	dbName := fmt.Sprintf("db_client_%x", rand.Uint64())
+	dbName := "db_client_test"
 	_ = c.DropDatabase(ctx, dbName)
 
 	schema := `{
@@ -317,29 +321,31 @@ func testTxClient(t *testing.T, c driver.Driver) {
 	err := c.CreateDatabase(ctx, dbName)
 	require.NoError(t, err)
 	defer func() {
-		_ = c.DropDatabase(ctx, dbName)
+		//_ = c.DropDatabase(ctx, dbName)
 	}()
 
 	db1 := c.UseDatabase(dbName)
-	tx, err := c.BeginTx(ctx, dbName)
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	err = tx.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema))
-	require.NoError(t, err)
 
 	doc1 := driver.Document(`{"K1": "vK1", "K2": 1, "D1": "vD1"}`)
-
-	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1})
-	require.NoError(t, err)
-
 	doc2, doc3 := driver.Document(`{"K1": "vK1", "K2": 2, "D1": "vD2"}`), driver.Document(`{"K1": "vK1", "K2": 3, "D1": "vD3"}`)
+	for {
+		tx, err := c.BeginTx(ctx, dbName)
+		err = tx.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema))
+		require.NoError(t, err)
 
-	// multiple docs
-	_, err = tx.Insert(ctx, "c1", []driver.Document{doc2, doc3})
-	require.NoError(t, err)
+		_, err = tx.Insert(ctx, "c1", []driver.Document{doc1})
+		require.NoError(t, err)
 
-	err = tx.Commit(ctx)
-	require.NoError(t, err)
+		// multiple docs
+		_, err = tx.Insert(ctx, "c1", []driver.Document{doc2, doc3})
+		require.NoError(t, err)
+
+		if err = tx.Commit(ctx); err != nil && err.Error() == "transaction not committed due to conflict with another transaction" {
+			continue
+		}
+		require.NoError(t, err)
+		break
+	}
 
 	fl := driver.Filter(`{ "$or" : [ {"$and" : [ {"K1" : "vK1"}, {"K2" : 1} ]}, {"$and" : [ {"K1" : "vK1"}, {"K2" : 3} ]} ]}`)
 	testRead(t, db1, fl, []driver.Document{doc1, doc3})
@@ -354,7 +360,7 @@ func testTxClient(t *testing.T, c driver.Driver) {
 
 	testRead(t, db1, driver.Filter("{}"), nil)
 
-	tx, err = c.BeginTx(ctx, dbName, &driver.TxOptions{})
+	tx, err := c.BeginTx(ctx, dbName, &driver.TxOptions{})
 
 	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1})
 	require.NoError(t, err)

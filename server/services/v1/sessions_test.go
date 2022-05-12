@@ -12,21 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package transaction
+package v1
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
-
-func TestSession(t *testing.T) {
-	sess, err := newSession(nil)
-	require.Nil(t, sess)
-	require.Equal(t, status.Errorf(codes.Internal, "session needs non-nil kv object"), err)
-}
 
 func TestSessionTracker(t *testing.T) {
 	s := newSessionTracker()
@@ -34,10 +26,10 @@ func TestSessionTracker(t *testing.T) {
 	require.NotNil(t, s.sessions)
 
 	// get is empty
-	require.Nil(t, s.GetSession("abc"))
+	require.Nil(t, s.get("abc"))
 
 	// put and get
-	sess := &session{}
-	s.PutSession("abc", sess)
-	require.Equal(t, sess, s.GetSession("abc"))
+	sess := &QuerySession{}
+	s.add("abc", sess)
+	require.Equal(t, sess, s.get("abc"))
 }

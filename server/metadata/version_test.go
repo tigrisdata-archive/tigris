@@ -32,40 +32,39 @@ func TestMetaVersion(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("read versions", func(t *testing.T) {
-		m := &MetaVersionMgr{}
+		m := &VersionHandler{}
 		ctx := context.TODO()
 		tm := transaction.NewManager(kv)
-		tx, err := tm.StartTxWithoutTracking(ctx)
+		tx1, err := tm.StartTx(ctx)
+		require.NoError(t, err)
+		first, err := m.Read(ctx, tx1)
 		require.NoError(t, err)
 
-		first, err := m.Read(ctx, tx)
+		tx2, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		require.NoError(t, tx.Commit(ctx))
-
-		tx, err = tm.StartTxWithoutTracking(ctx)
+		second, err := m.Read(ctx, tx2)
 		require.NoError(t, err)
 
-		second, err := m.Read(ctx, tx)
-		require.NoError(t, err)
-		require.NoError(t, tx.Commit(ctx))
+		require.NoError(t, tx1.Commit(ctx))
+		require.NoError(t, tx2.Commit(ctx))
 		require.Equal(t, first, second)
 	})
 	t.Run("bump and read", func(t *testing.T) {
-		m := &MetaVersionMgr{}
+		m := &VersionHandler{}
 		ctx := context.TODO()
 		tm := transaction.NewManager(kv)
-		tx, err := tm.StartTxWithoutTracking(ctx)
+		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
 		first, err := m.Read(ctx, tx)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
-		tx, err = tm.StartTxWithoutTracking(ctx)
+		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
 		require.NoError(t, m.Increment(ctx, tx))
 		require.NoError(t, tx.Commit(ctx))
 
-		tx, err = tm.StartTxWithoutTracking(ctx)
+		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
 		second, err := m.Read(ctx, tx)
 		require.NoError(t, err)

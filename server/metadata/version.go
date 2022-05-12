@@ -18,6 +18,7 @@ import (
 	"context"
 
 	"github.com/tigrisdata/tigris/server/transaction"
+	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 var (
@@ -29,17 +30,38 @@ var (
 
 type Version []byte
 
-// MetaVersionMgr is used to maintain a version for each schema change. Using this we can implement transactional DDL APIs.
+// VersionHandler is used to maintain a version for each schema change. Using this we can implement transactional DDL APIs.
 // This will also be used to provide a strongly consistent Cache lookup on the schemas i.e. anytime version changes we
 // know that a DDL operation is performed which means we can invalidate the cache and reload from the disk.
-type MetaVersionMgr struct{}
+type VersionHandler struct{}
 
 // Increment is used to increment the metadata version
-func (m *MetaVersionMgr) Increment(ctx context.Context, tx transaction.Tx) error {
+func (m *VersionHandler) Increment(ctx context.Context, tx transaction.Tx) error {
 	return tx.SetVersionstampedValue(ctx, VersionKey, VersionValue)
 }
 
 // Read reads the latest metadata version
-func (m *MetaVersionMgr) Read(ctx context.Context, tx transaction.Tx) (Version, error) {
+func (m *VersionHandler) Read(ctx context.Context, tx transaction.Tx) (Version, error) {
 	return tx.Get(ctx, VersionKey)
+}
+
+// ReadInOwnTxn creates a transaction and then read the version. This is mainly needed when a query is doing metadata
+// changed in that case it is bumping the metadata version and that means we can't read the metadata version in the
+// same transaction.
+func (m *VersionHandler) ReadInOwnTxn(ctx context.Context, txMgr *transaction.Manager) (version Version, err error) {
+	tx, e := txMgr.StartTx(ctx)
+	if ulog.E(e) {
+		return nil, e
+	}
+
+	defer func() {
+		if err == nil {
+			err = tx.Commit(ctx)
+		} else {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	version, err = tx.Get(ctx, VersionKey)
+	return version, err
 }
