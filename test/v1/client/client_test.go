@@ -44,8 +44,19 @@ func TestClientCollectionBasic(t *testing.T) {
 	}
 
 	h, p := getTestServerHostPort()
-	db, err := tigris.OpenDatabase(ctx, &config.Database{Driver: config.Driver{URL: fmt.Sprintf("%v:%d", h, p)}}, "db111222", &Coll1{}, &Coll2{})
-	require.NoError(t, err)
+	var db *tigris.Database
+	var err error
+	for {
+		db, err = tigris.OpenDatabase(ctx, &config.Database{Driver: config.Driver{URL: fmt.Sprintf("%v:%d", h, p)}}, "db111222", &Coll1{}, &Coll2{})
+		if err != nil && err.Error() == "transaction not committed due to conflict with another transaction" {
+			continue
+		}
+		require.NoError(t, err)
+		break
+	}
+	defer func() {
+		require.NoError(t, db.Drop(ctx))
+	}()
 
 	c := tigris.GetCollection[Coll1](db)
 
@@ -80,11 +91,11 @@ func TestClientCollectionBasic(t *testing.T) {
 		require.Equal(t, "", d.Key1)
 	}
 	require.NoError(t, it.Err())
-
 	it.Close()
 
 	it, err = c.ReadAll(ctx, projection.All)
 	require.NoError(t, err)
+	it.Close()
 
 	pd, err := c.ReadOne(ctx, filter.Eq("Key1", "aaa"))
 	require.NoError(t, err)
@@ -111,8 +122,20 @@ func TestClientCollectionTx(t *testing.T) {
 	}
 
 	h, p := getTestServerHostPort()
-	db, err := tigris.OpenDatabase(ctx, &config.Database{Driver: config.Driver{URL: fmt.Sprintf("%v:%d", h, p)}}, "db111333", &Coll1{})
-	require.NoError(t, err)
+	var err error
+	var db *tigris.Database
+	for {
+		db, err = tigris.OpenDatabase(ctx, &config.Database{Driver: config.Driver{URL: fmt.Sprintf("%v:%d", h, p)}}, "db111333", &Coll1{})
+		if err != nil && err.Error() == "transaction not committed due to conflict with another transaction" {
+			continue
+		}
+		require.NoError(t, err)
+		break
+	}
+
+	defer func() {
+		_ = db.Drop(ctx)
+	}()
 
 	err = db.Tx(ctx, func(ctx context.Context, tx *tigris.Tx) error {
 		c := tigris.GetTxCollection[Coll1](tx)
@@ -148,11 +171,11 @@ func TestClientCollectionTx(t *testing.T) {
 			require.Equal(t, "", d.Key1)
 		}
 		require.NoError(t, it.Err())
-
 		it.Close()
 
 		it, err = c.ReadAll(ctx, projection.All)
 		require.NoError(t, err)
+		it.Close()
 
 		_, err = c.DeleteAll(ctx)
 		require.NoError(t, err)
@@ -171,6 +194,9 @@ func TestClientCollectionTx(t *testing.T) {
 
 		return nil
 	})
+	if err != nil && err.Error() == "transaction not committed due to conflict with another transaction" {
+		return
+	}
 	require.NoError(t, err)
 
 	c := tigris.GetCollection[Coll1](db)
@@ -182,8 +208,8 @@ func TestClientCollectionTx(t *testing.T) {
 	assert.Equal(t, Coll1{Key1: "aaa", Field1: 567}, d)
 	require.True(t, it.Next(&d))
 	assert.Equal(t, Coll1{Key1: "bbb", Field1: 345}, d)
-
 	require.NoError(t, it.Err())
+	it.Close()
 
 	err = c.Drop(ctx)
 	require.NoError(t, err)

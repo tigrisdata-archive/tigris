@@ -153,6 +153,7 @@ func getCollectionURL(databaseName, collectionName string, methodName string) st
 
 func (s *CollectionSuite) SetupSuite() {
 	// create the database for the collection test suite
+	dropDatabase(s.T(), s.database)
 	createDatabase(s.T(), s.database).Status(http.StatusOK)
 }
 

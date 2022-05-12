@@ -46,19 +46,17 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 
 		ctx := context.TODO()
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
+		_ = kvStore.DropTable(ctx, m.mdNameRegistry.EncodingSubspaceName())
+		_ = kvStore.DropTable(ctx, m.mdNameRegistry.SchemaSubspaceName())
 
-		tx, err := tm.StartTxWithoutTracking(ctx)
+		_, err = m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test1", 2})
 		require.NoError(t, err)
 
-		_, err = m.CreateOrGetTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
-		require.NoError(t, err)
-
-		tenant := m.GetTenant("ns-test1")
+		tenant, _ := m.tenants["ns-test1"]
 		require.Equal(t, "ns-test1", tenant.namespace.Name())
 		require.Equal(t, uint32(2), tenant.namespace.Id())
 		require.Equal(t, "ns-test1", m.idToTenantMap[uint32(2)])
 		require.Empty(t, tenant.databases)
-		require.NoError(t, tx.Commit(ctx))
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
 	t.Run("create_multiple_tenants", func(t *testing.T) {
@@ -71,16 +69,13 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		ctx := context.TODO()
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 
-		tx, err := tm.StartTxWithoutTracking(ctx)
+		_, err = m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test1", 2})
 		require.NoError(t, err)
 
-		_, err = m.CreateOrGetTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
+		_, err = m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test2", 3})
 		require.NoError(t, err)
 
-		_, err = m.CreateOrGetTenant(ctx, tx, &TenantNamespace{"ns-test2", 3})
-		require.NoError(t, err)
-
-		tenant := m.GetTenant("ns-test1")
+		tenant, _ := m.tenants["ns-test1"]
 		require.Equal(t, "ns-test1", tenant.namespace.Name())
 		require.Equal(t, uint32(2), tenant.namespace.Id())
 		require.Equal(t, "ns-test1", m.idToTenantMap[uint32(2)])
@@ -88,12 +83,11 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		require.Empty(t, tenant.databases)
 		require.Empty(t, tenant.idToDatabaseMap)
 
-		tenant = m.GetTenant("ns-test2")
+		tenant, _ = m.tenants["ns-test2"]
 		require.Equal(t, "ns-test2", tenant.namespace.Name())
 		require.Equal(t, uint32(3), tenant.namespace.Id())
 		require.Equal(t, "ns-test2", m.idToTenantMap[uint32(3)])
 		require.Empty(t, tenant.databases)
-		require.NoError(t, tx.Commit(ctx))
 
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
@@ -107,18 +101,12 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		ctx := context.TODO()
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 
-		tx, err := tm.StartTxWithoutTracking(ctx)
+		_, err = m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test1", 2})
 		require.NoError(t, err)
-		_, err = m.CreateOrGetTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
-		require.NoError(t, err)
-		require.NoError(t, tx.Commit(ctx))
 
 		// should fail now
-		tx, err = tm.StartTxWithoutTracking(ctx)
-		require.NoError(t, err)
-		_, err = m.CreateOrGetTenant(context.TODO(), tx, &TenantNamespace{"ns-test1", 3})
+		_, err = m.CreateOrGetTenant(context.TODO(), tm, &TenantNamespace{"ns-test1", 3})
 		require.Equal(t, "id is already assigned to 'ns-test1'", err.(*api.TigrisError).Error())
-		require.NoError(t, tx.Commit(context.TODO()))
 
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
@@ -132,22 +120,15 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		ctx := context.TODO()
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 
-		require.Equal(t, 1, len(m.idToTenantMap)) // default exists
-		tx, err := tm.StartTxWithoutTracking(ctx)
+		_, err = m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test1", 2})
 		require.NoError(t, err)
-		_, err = m.CreateOrGetTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
-		require.Equal(t, 2, len(m.idToTenantMap))
-		require.NoError(t, err)
-		require.NoError(t, tx.Commit(ctx))
+		require.Equal(t, 1, len(m.idToTenantMap))
 
 		// should fail now
-		tx, err = tm.StartTxWithoutTracking(ctx)
-		require.NoError(t, err)
-		_, err = m.CreateOrGetTenant(ctx, tx, &TenantNamespace{"ns-test2", 2})
+		_, err = m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test2", 2})
 		require.Equal(t, "id is already assigned to the namespace 'ns-test1'", err.(*api.TigrisError).Error())
-		require.NoError(t, tx.Rollback(ctx))
 		require.Equal(t, "ns-test1", m.idToTenantMap[uint32(2)])
-		require.Equal(t, 2, len(m.idToTenantMap))
+		require.Equal(t, 1, len(m.idToTenantMap))
 
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
@@ -172,15 +153,18 @@ func TestTenantManager_CreateDatabases(t *testing.T) {
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.EncodingSubspaceName())
 
-		tx, err := tm.StartTxWithoutTracking(context.TODO())
+		_, err = m.CreateOrGetTenant(context.TODO(), tm, &TenantNamespace{"ns-test1", 2})
+		require.NoError(t, err)
+		tenant := m.tenants["ns-test1"]
+
+		tx, err := tm.StartTx(context.TODO())
+		require.NoError(t, err)
+		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db1")
+		require.NoError(t, err)
+		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db2")
 		require.NoError(t, err)
 
-		_, err = m.CreateOrGetTenant(context.TODO(), tx, &TenantNamespace{"ns-test1", 2})
-		require.NoError(t, err)
-		tenant := m.GetTenant("ns-test1")
-		require.NoError(t, tenant.CreateDatabase(ctx, tx, "tenant_db1"))
-		require.NoError(t, tenant.CreateDatabase(ctx, tx, "tenant_db2"))
-
+		require.NoError(t, tenant.reload(ctx, tx, nil))
 		db1, err := tenant.GetDatabase(ctx, tx, "tenant_db1")
 		require.NoError(t, err)
 		require.Equal(t, "tenant_db1", db1.name)
@@ -217,14 +201,18 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.EncodingSubspaceName())
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.SchemaSubspaceName())
 
-		tx, err := tm.StartTxWithoutTracking(context.TODO())
+		_, err = m.CreateOrGetTenant(context.TODO(), tm, &TenantNamespace{"ns-test1", 2})
 		require.NoError(t, err)
 
-		_, err = m.CreateOrGetTenant(context.TODO(), tx, &TenantNamespace{"ns-test1", 2})
+		tenant := m.tenants["ns-test1"]
+		tx, err := tm.StartTx(context.TODO())
 		require.NoError(t, err)
-		tenant := m.GetTenant("ns-test1")
-		require.NoError(t, tenant.CreateDatabase(ctx, tx, "tenant_db1"))
-		require.NoError(t, tenant.CreateDatabase(ctx, tx, "tenant_db2"))
+		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db1")
+		require.NoError(t, err)
+		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db2")
+		require.NoError(t, err)
+
+		require.NoError(t, tenant.reload(ctx, tx, nil))
 
 		db1, err := tenant.GetDatabase(ctx, tx, "tenant_db1")
 		require.NoError(t, err)
@@ -258,7 +246,8 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 		factory, err := schema.Build("test_collection", jsSchema)
 		require.NoError(t, err)
 		require.NoError(t, tenant.CreateCollection(context.TODO(), tx, db2, factory))
-		tenant.InvalidateDBCache(db2.Name())
+
+		require.NoError(t, tenant.reload(ctx, tx, nil))
 
 		db2, err = tenant.GetDatabase(ctx, tx, "tenant_db2")
 		require.NoError(t, err)
@@ -295,14 +284,19 @@ func TestTenantManager_DropCollection(t *testing.T) {
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.EncodingSubspaceName())
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.SchemaSubspaceName())
 
-		tx, err := tm.StartTxWithoutTracking(ctx)
+		_, err = m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test1", 2})
 		require.NoError(t, err)
 
-		_, err = m.CreateOrGetTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
+		tenant, _ := m.tenants["ns-test1"]
+
+		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		tenant := m.GetTenant("ns-test1")
-		require.NoError(t, tenant.CreateDatabase(ctx, tx, "tenant_db1"))
-		require.NoError(t, tenant.CreateDatabase(ctx, tx, "tenant_db2"))
+		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db1")
+		require.NoError(t, err)
+		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db2")
+		require.NoError(t, err)
+
+		require.NoError(t, tenant.reload(ctx, tx, nil))
 
 		db1, err := tenant.GetDatabase(ctx, tx, "tenant_db1")
 		require.NoError(t, err)
@@ -328,20 +322,21 @@ func TestTenantManager_DropCollection(t *testing.T) {
 		factory, err := schema.Build("test_collection", jsSchema)
 		require.NoError(t, err)
 		require.NoError(t, tenant.CreateCollection(ctx, tx, db2, factory))
+		require.NoError(t, tenant.reload(ctx, tx, nil))
 		require.NoError(t, tx.Commit(ctx))
 
-		tx, err = tm.StartTxWithoutTracking(ctx)
+		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
 		coll1 := db2.GetCollection("test_collection")
 		require.Equal(t, "test_collection", coll1.Name)
 		require.NoError(t, tx.Commit(ctx))
 
-		tx, err = tm.StartTxWithoutTracking(ctx)
+		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
 		require.NoError(t, tenant.DropCollection(ctx, tx, db2, "test_collection"))
 		require.NoError(t, tx.Commit(ctx))
 
-		tx, err = tm.StartTxWithoutTracking(ctx)
+		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
 		coll := db2.GetCollection("test_collection")
 		require.Nil(t, coll)

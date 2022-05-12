@@ -21,9 +21,6 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/hashicorp/go-multierror"
-	"github.com/pkg/errors"
-
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
@@ -109,7 +106,7 @@ type TenantManager struct {
 	tenants        map[string]*Tenant
 	idToTenantMap  map[uint32]string
 	version        Version
-	versionMgr     *MetaVersionMgr
+	versionH       *VersionHandler
 	mdNameRegistry encoding.MDNameRegistry
 }
 
@@ -119,15 +116,12 @@ func NewTenantManager() *TenantManager {
 }
 
 func newTenantManager(mdNameRegistry encoding.MDNameRegistry) *TenantManager {
-	idToTenantMap := make(map[uint32]string)
-	idToTenantMap[DefaultNamespaceId] = DefaultNamespaceName
-
 	return &TenantManager{
 		encoder:        encoding.NewDictionaryEncoder(mdNameRegistry),
 		schemaStore:    encoding.NewSchemaStore(mdNameRegistry),
 		tenants:        make(map[string]*Tenant),
-		idToTenantMap:  idToTenantMap,
-		versionMgr:     &MetaVersionMgr{},
+		idToTenantMap:  make(map[uint32]string),
+		versionH:       &VersionHandler{},
 		mdNameRegistry: mdNameRegistry,
 	}
 }
@@ -135,42 +129,74 @@ func newTenantManager(mdNameRegistry encoding.MDNameRegistry) *TenantManager {
 // CreateOrGetTenant is a thread safe implementation of creating a new tenant. It returns the tenant if it already exists.
 // This is mainly returning the tenant to avoid calling "Get" again after creating the tenant. This method is expensive
 // as it reloads the existing tenants from the disk if it sees the tenant is not present in the cache.
-func (m *TenantManager) CreateOrGetTenant(ctx context.Context, tx transaction.Tx, namespace Namespace) (*Tenant, error) {
+func (m *TenantManager) CreateOrGetTenant(ctx context.Context, txMgr *transaction.Manager, namespace Namespace) (tenant *Tenant, err error) {
 	m.Lock()
 	defer m.Unlock()
 
-	tenant, ok := m.tenants[namespace.Name()]
-	if ok {
+	var ok bool
+	if tenant, ok = m.tenants[namespace.Name()]; ok {
 		if tenant.namespace.Id() == namespace.Id() {
 			// tenant was present
+			log.Debug().Str("ns", tenant.String()).Msg("tenant found")
 			return tenant, nil
 		} else {
 			return nil, api.Errorf(codes.InvalidArgument, "id is already assigned to '%s'", tenant.namespace.Name())
 		}
 	}
 
-	currentVersion, err := m.versionMgr.Read(ctx, tx)
-	if ulog.E(err) {
-		return nil, err
+	tx, e := txMgr.StartTx(ctx)
+	if ulog.E(e) {
+		return nil, e
 	}
 
-	if err := m.reload(ctx, tx, currentVersion); ulog.E(err) {
-		// first reload
+	defer func() {
+		if err == nil {
+			if err = tx.Commit(ctx); err == nil {
+				// commit succeed, so we can safely cache it now, for other workers it may happen as part of the
+				// first call in query lifecycle
+				m.tenants[namespace.Name()] = tenant
+				m.idToTenantMap[namespace.Id()] = namespace.Name()
+			}
+		} else {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	return m.createOrGetTenantInternal(ctx, tx, namespace)
+}
+
+func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transaction.Tx, namespace Namespace) (*Tenant, error) {
+	namespaces, err := m.encoder.GetNamespaces(ctx, tx)
+	if err != nil {
 		return nil, err
 	}
-	if tenant, ok := m.tenants[namespace.Name()]; ok {
-		// if it is created by some other thread in parallel then we should see it now.
-		return tenant, nil
+	log.Debug().Interface("ns", namespaces).Msg("existing namespaces")
+	if _, ok := namespaces[namespace.Name()]; ok {
+		// only read the version if tenant already exists otherwise, we need to increment it.
+		currentVersion, err := m.versionH.Read(ctx, tx)
+		if ulog.E(err) {
+			return nil, err
+		}
+
+		tenant := NewTenant(namespace, m.encoder, m.schemaStore, m.versionH, currentVersion)
+		tenant.Lock()
+		err = tenant.reload(ctx, tx, currentVersion)
+		tenant.Unlock()
+		return tenant, err
+	}
+
+	log.Debug().Str("tenant", namespace.Name()).Msg("tenant not found, creating")
+
+	// bump the version first
+	if err := m.versionH.Increment(ctx, tx); ulog.E(err) {
+		return nil, err
 	}
 
 	if err := m.encoder.ReserveNamespace(ctx, tx, namespace.Name(), namespace.Id()); ulog.E(err) {
 		return nil, err
 	}
 
-	tenant = NewTenant(namespace, m.encoder, m.schemaStore, m.versionMgr, currentVersion)
-	m.tenants[namespace.Name()] = tenant
-	m.idToTenantMap[namespace.Id()] = namespace.Name()
-	return tenant, nil
+	return NewTenant(namespace, m.encoder, m.schemaStore, m.versionH, nil), nil
 }
 
 // GetTableNameFromId returns tenant name, database name, collection name corresponding to their encoded ids.
@@ -206,35 +232,24 @@ func (m *TenantManager) GetTableNameFromId(tenantId uint32, dbId uint32, collId 
 	return tenantName, dbName, collName, ok
 }
 
-// GetTenant returns tenants if exists in the tenant map or nil.
-func (m *TenantManager) GetTenant(namespace string) *Tenant {
-	m.RLock()
-	defer m.RUnlock()
-
-	// ToDo: add a mechanism to reload on version changed.
-	return m.tenants[namespace]
-}
-
 // Reload reads all the namespaces exists in the disk and build the in-memory map of the manager to track the tenants.
-// As this is an expensive call, the reloading happens during start time or in background. It is possible that reloading
-// fails during start time then we rely on background thread to reload all the mapping.
+// As this is an expensive call, the reloading happens during start time for now. It is possible that reloading
+// fails during start time then we rely on lazily reloading cache during serving user requests.
 func (m *TenantManager) Reload(ctx context.Context, tx transaction.Tx) error {
 	log.Debug().Msg("reloading tenants")
 	m.Lock()
 	defer m.Unlock()
 
-	currentVersion, err := m.versionMgr.Read(ctx, tx)
+	currentVersion, err := m.versionH.Read(ctx, tx)
 	if ulog.E(err) {
 		return err
 	}
 
-	if err = m.reload(ctx, tx, currentVersion); err != nil {
-		if m.version, err = m.versionMgr.Read(ctx, tx); ulog.E(err) {
-			return err
-		}
-		log.Debug().Msgf("latest meta version %v", m.version)
+	if err = m.reload(ctx, tx, currentVersion); ulog.E(err) {
+		return err
 	}
-
+	m.version = currentVersion
+	log.Debug().Msgf("latest meta version %v", m.version)
 	return err
 }
 
@@ -243,11 +258,11 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVe
 	if err != nil {
 		return err
 	}
-	log.Debug().Interface("ns", namespaces).Msg("existing namespaces")
+	log.Debug().Interface("ns", namespaces).Msg("existing reserved namespaces")
 
 	for namespace, id := range namespaces {
 		if _, ok := m.tenants[namespace]; !ok {
-			m.tenants[namespace] = NewTenant(NewTenantNamespace(namespace, id), m.encoder, m.schemaStore, m.versionMgr, currentVersion)
+			m.tenants[namespace] = NewTenant(NewTenantNamespace(namespace, id), m.encoder, m.schemaStore, m.versionH, currentVersion)
 		}
 	}
 
@@ -274,17 +289,17 @@ type Tenant struct {
 	idToDatabaseMap map[uint32]string
 	namespace       Namespace
 	version         Version
-	versionMgr      *MetaVersionMgr
+	versionH        *VersionHandler
 }
 
-func NewTenant(namespace Namespace, encoder *encoding.DictionaryEncoder, schemaStore *encoding.SchemaSubspace, versionMgr *MetaVersionMgr, currentVersion Version) *Tenant {
+func NewTenant(namespace Namespace, encoder *encoding.DictionaryEncoder, schemaStore *encoding.SchemaSubspace, versionH *VersionHandler, currentVersion Version) *Tenant {
 	return &Tenant{
 		namespace:       namespace,
 		encoder:         encoder,
 		schemaStore:     schemaStore,
 		databases:       make(map[string]*Database),
 		idToDatabaseMap: make(map[uint32]string),
-		versionMgr:      versionMgr,
+		versionH:        versionH,
 		version:         currentVersion,
 	}
 }
@@ -293,40 +308,46 @@ func NewTenant(namespace Namespace, encoder *encoding.DictionaryEncoder, schemaS
 // Loading all corresponding collections in this call is unnecessary and will be expensive. Rather that can happen
 // during reloadDatabase API call.
 func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVersion Version) error {
+	// reset
+	tenant.databases = make(map[string]*Database)
+	tenant.idToDatabaseMap = make(map[uint32]string)
+
 	dbNameToId, err := tenant.encoder.GetDatabases(ctx, tx, tenant.namespace.Id())
 	if err != nil {
 		return err
 	}
 
 	for db, id := range dbNameToId {
-		if _, ok := tenant.databases[db]; !ok {
-			tenant.databases[db] = &Database{
-				name:              db,
-				id:                id,
-				collections:       make(map[string]*collectionHolder),
-				idToCollectionMap: make(map[uint32]string),
-			}
+		database, err := tenant.reloadDatabase(ctx, tx, db, id)
+		if ulog.E(err) {
+			return err
 		}
-	}
-	for _, db := range tenant.databases {
-		if e := tenant.reloadDatabase(ctx, tx, db.name, db.id); e != nil {
-			err = multierror.Append(err, e)
-			continue
-		}
+
+		tenant.databases[database.name] = database
+		tenant.idToDatabaseMap[database.id] = database.name
 	}
 
-	if err == nil {
-		tenant.version = currentVersion
-	}
-
-	return err
+	tenant.version = currentVersion
+	return nil
 }
 
-func (tenant *Tenant) ReloadIfVersionChanged(ctx context.Context, tx transaction.Tx) error {
+func (tenant *Tenant) ReloadUsingOutsideVersion(ctx context.Context, tx transaction.Tx, version Version, id string) error {
 	tenant.Lock()
 	defer tenant.Unlock()
 
-	currentVersion, err := tenant.versionMgr.Read(ctx, tx)
+	if bytes.Equal(version, tenant.version) {
+		return nil
+	}
+
+	log.Debug().Str("tx_id", id).Msgf("reloading tenants")
+	return tenant.reload(ctx, tx, version)
+}
+
+func (tenant *Tenant) ReloadUsingTxVersion(ctx context.Context, tx transaction.Tx, id string) error {
+	tenant.Lock()
+	defer tenant.Unlock()
+
+	currentVersion, err := tenant.versionH.Read(ctx, tx)
 	if err != nil {
 		return err
 	}
@@ -335,7 +356,7 @@ func (tenant *Tenant) ReloadIfVersionChanged(ctx context.Context, tx transaction
 		return nil
 	}
 
-	log.Debug().Bytes("current", currentVersion).Bytes("our_version", tenant.version).Msg("version changed, reloading")
+	log.Debug().Str("tx_id", id).Msgf("reloading tenants")
 	return tenant.reload(ctx, tx, currentVersion)
 }
 
@@ -347,62 +368,49 @@ func (tenant *Tenant) GetNamespace() Namespace {
 }
 
 // CreateDatabase is responsible for creating a dictionary encoding of the database. This method is not adding the
-// entry to the tenant because the outer layer may still rollback the transaction, so it is better to rely on the
-// GetDatabase call to reload this mapping.
-func (tenant *Tenant) CreateDatabase(ctx context.Context, tx transaction.Tx, dbName string) error {
+// entry to the tenant because the outer layer may still rollback the transaction. The query lifecycle is also bumping
+// the metadata version so reloading happens at the next call when the tenant version is stale. This applies to the
+// reloading mechanism on all the tigris workers.
+// Returns "true" If the database already exists, else "false" and the error
+func (tenant *Tenant) CreateDatabase(ctx context.Context, tx transaction.Tx, dbName string) (bool, error) {
 	tenant.Lock()
 	defer tenant.Unlock()
 
 	if _, ok := tenant.databases[dbName]; ok {
-		log.Debug().Str("db", dbName).Msg("already exist, ignoring create request")
-		return nil
+		return true, nil
 	}
 
-	// if there are concurrent requests on different workers then one of them will fail with duplicate entry and only
-	// one will succeed.
+	// otherwise, proceed to create the database if there are concurrent requests on different workers then one of
+	// them will fail with duplicate entry and only one will succeed.
 	_, err := tenant.encoder.EncodeDatabaseName(ctx, tx, dbName, tenant.namespace.Id())
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return false, err
 }
 
 // DropDatabase is responsible for first dropping a dictionary encoding of the database and then adding a corresponding
-// dropped encoding in the table.
-func (tenant *Tenant) DropDatabase(ctx context.Context, tx transaction.Tx, dbName string) error {
-	// reloading
-	_, err := tenant.GetDatabase(ctx, tx, dbName)
-	if err != nil {
-		return err
-	}
-
+// dropped encoding in the table. Drop returns "false" if database doesn't exist so that caller can reason about.
+func (tenant *Tenant) DropDatabase(ctx context.Context, tx transaction.Tx, dbName string) (bool, error) {
 	tenant.Lock()
 	defer tenant.Unlock()
 
+	// check first if it exists
 	db, ok := tenant.databases[dbName]
 	if !ok {
-		return nil
+		return false, nil
 	}
 
 	// if there are concurrent requests on different workers then one of them will fail with duplicate entry and only
 	// one will succeed.
-	if err = tenant.encoder.EncodeDatabaseAsDropped(ctx, tx, dbName, tenant.namespace.Id(), db.id); err != nil {
-		return err
+	if err := tenant.encoder.EncodeDatabaseAsDropped(ctx, tx, dbName, tenant.namespace.Id(), db.id); err != nil {
+		return true, err
 	}
 
 	for _, c := range db.collections {
 		if err := tenant.dropCollection(ctx, tx, db, c.collection.Name); err != nil {
-			return err
+			return true, err
 		}
 	}
 
-	// deleting from map is fine at this point, because even if the transaction fails the GetDatabase call will reload
-	// the mapping.
-	delete(tenant.databases, db.name)
-	delete(tenant.idToDatabaseMap, db.id)
-
-	return nil
+	return true, nil
 }
 
 func (tenant *Tenant) InvalidateDBCache(dbName string) {
@@ -419,23 +427,6 @@ func (tenant *Tenant) GetDatabase(ctx context.Context, tx transaction.Tx, dbName
 	tenant.Lock()
 	defer tenant.Unlock()
 
-	// ToDo: if version has changed then reload
-	if _, ok := tenant.databases[dbName]; !ok {
-		id, err := tenant.encoder.GetDatabaseId(ctx, tx, dbName, tenant.namespace.Id())
-		if ulog.E(err) {
-			return nil, err
-		}
-		if id == encoding.InvalidId {
-			// nothing found
-			return nil, nil
-		}
-
-		if err := tenant.reloadDatabase(ctx, tx, dbName, id); ulog.E(err) {
-			// this will be treated as not found because later attempts should fix it.
-			return nil, err
-		}
-	}
-
 	return tenant.databases[dbName], nil
 }
 
@@ -451,72 +442,55 @@ func (tenant *Tenant) ListDatabases(_ context.Context, _ transaction.Tx) []strin
 	return databases
 }
 
-func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbName string, dbId uint32) error {
-	dbObj := &Database{
-		id:                dbId,
-		name:              dbName,
-		collections:       make(map[string]*collectionHolder),
-		idToCollectionMap: make(map[uint32]string),
-	}
-	tenant.databases[dbName] = dbObj
-	tenant.idToDatabaseMap[dbId] = dbName
+func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbName string, dbId uint32) (*Database, error) {
+	database := NewDatabase(dbId, dbName)
 
-	collNameToId, err := tenant.encoder.GetCollections(ctx, tx, tenant.namespace.Id(), dbObj.id)
+	collNameToId, err := tenant.encoder.GetCollections(ctx, tx, tenant.namespace.Id(), database.id)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for coll, id := range collNameToId {
-		idxNameToId, e := tenant.encoder.GetIndexes(ctx, tx, tenant.namespace.Id(), dbObj.id, id)
-		if e != nil {
-			err = multierror.Append(err, e)
+		idxNameToId, err := tenant.encoder.GetIndexes(ctx, tx, tenant.namespace.Id(), database.id, id)
+		if err != nil {
+			database.needFixingCollections[coll] = struct{}{}
+			log.Debug().Err(err).Str("collection", coll).Msg("skipping loading collection")
 			continue
 		}
 
-		userSch, _, e := tenant.schemaStore.GetLatest(ctx, tx, tenant.namespace.Id(), dbObj.id, id)
-		if e != nil {
-			err = multierror.Append(err, e)
+		schema, _, err := tenant.schemaStore.GetLatest(ctx, tx, tenant.namespace.Id(), database.id, id)
+		if err != nil {
+			database.needFixingCollections[coll] = struct{}{}
+			log.Debug().Err(err).Str("collection", coll).Msg("skipping loading collection")
 			continue
 		}
-		dbObj.collections[coll] = &collectionHolder{
-			name:        coll,
-			id:          id,
-			idxNameToId: idxNameToId,
-		}
-		dbObj.idToCollectionMap[id] = coll
 
-		if e = dbObj.collections[coll].set(userSch); e != nil {
-			err = multierror.Append(err, e)
+		collection, err := createCollection(id, coll, schema, idxNameToId)
+		if err != nil {
+			database.needFixingCollections[coll] = struct{}{}
+			log.Debug().Err(err).Str("collection", coll).Msg("skipping loading collection")
 			continue
 		}
+
+		database.collections[coll] = NewCollectionHolder(id, coll, collection, idxNameToId)
+		database.idToCollectionMap[id] = coll
 	}
 
-	return err
+	return database, nil
 }
 
 // CreateCollection is to create a collection inside tenant namespace.
-func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, dbObj *Database, schFactory *schema.Factory) error {
+func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, database *Database, schFactory *schema.Factory) error {
 	tenant.Lock()
 	defer tenant.Unlock()
 
-	if dbObj == nil {
+	if database == nil {
 		return api.Errorf(codes.NotFound, "database missing")
 	}
-	if c, ok := dbObj.collections[schFactory.CollectionName]; ok {
-		if !c.isFullyFormed() {
-			// if it is not formed fully first time then reload schema and try building collection again
-			userSch, _, err := tenant.schemaStore.GetLatest(ctx, tx, tenant.namespace.Id(), dbObj.id, c.id)
-			if err != nil {
-				return err
-			}
 
-			if err := c.set(userSch); err != nil {
-				return errors.Wrap(err, "previous incompatible version detected, drop collection first")
-			}
-		}
-
+	if c, ok := database.collections[schFactory.CollectionName]; ok {
 		// if collection already exists, check if it is same or different schema
-		equal, err := JSONSchemaEqual(c.schema, schFactory.Schema)
+		equal, err := IsSchemaEq(c.collection.Schema, schFactory.Schema)
 		if err != nil {
 			return err
 		}
@@ -526,7 +500,7 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 		return nil
 	}
 
-	collectionId, err := tenant.encoder.EncodeCollectionName(ctx, tx, schFactory.CollectionName, tenant.namespace.Id(), dbObj.id)
+	collectionId, err := tenant.encoder.EncodeCollectionName(ctx, tx, schFactory.CollectionName, tenant.namespace.Id(), database.id)
 	if err != nil {
 		return err
 	}
@@ -535,7 +509,7 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 	indexes := schFactory.Indexes.GetIndexes()
 	idxNameToId := make(map[string]uint32)
 	for _, i := range indexes {
-		id, err := tenant.encoder.EncodeIndexName(ctx, tx, i.Name, tenant.namespace.Id(), dbObj.id, collectionId)
+		id, err := tenant.encoder.EncodeIndexName(ctx, tx, i.Name, tenant.namespace.Id(), database.id, collectionId)
 		if err != nil {
 			return err
 		}
@@ -544,31 +518,15 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 	}
 
 	// all good now persist the schema
-	if err := tenant.schemaStore.Put(ctx, tx, tenant.namespace.Id(), dbObj.id, collectionId, schFactory.Schema, baseSchemaVersion); err != nil {
+	if err := tenant.schemaStore.Put(ctx, tx, tenant.namespace.Id(), database.id, collectionId, schFactory.Schema, baseSchemaVersion); err != nil {
 		return err
 	}
 
-	// store the collection to the databaseObject
-	dbObj.collections[schFactory.CollectionName] = &collectionHolder{
-		id:          collectionId,
-		idxNameToId: idxNameToId,
-		name:        schFactory.CollectionName,
-		schema:      schFactory.Schema,
-		collection:  schema.NewDefaultCollection(schFactory.CollectionName, collectionId, schFactory.Fields, schFactory.Indexes, schFactory.Schema),
-	}
-
+	// store the collection to the databaseObject, this is actually cloned database object passed by the query runner.
+	// So failure of the transaction won't impact the consistency of the cache
+	collection := schema.NewDefaultCollection(schFactory.CollectionName, collectionId, schFactory.Fields, schFactory.Indexes, schFactory.Schema)
+	database.collections[schFactory.CollectionName] = NewCollectionHolder(collectionId, schFactory.CollectionName, collection, idxNameToId)
 	return nil
-}
-
-func JSONSchemaEqual(s1, s2 []byte) (bool, error) {
-	var j, j2 interface{}
-	if err := jsoniter.Unmarshal(s1, &j); err != nil {
-		return false, err
-	}
-	if err := jsoniter.Unmarshal(s2, &j2); err != nil {
-		return false, err
-	}
-	return reflect.DeepEqual(j2, j), nil
 }
 
 // DropCollection is to drop a collection and its associated indexes. It removes the "created" entry from the encoding
@@ -577,7 +535,16 @@ func (tenant *Tenant) DropCollection(ctx context.Context, tx transaction.Tx, db 
 	tenant.Lock()
 	defer tenant.Unlock()
 
-	return tenant.dropCollection(ctx, tx, db, collectionName)
+	err := tenant.dropCollection(ctx, tx, db, collectionName)
+	if err != nil {
+		return err
+	}
+
+	// the passed database object is cloned copy, so cleanup the entries from the cloned copy as this cloned database
+	// may be used in further operations if it is an explicit transaction.
+	delete(db.idToCollectionMap, db.collections[collectionName].id)
+	delete(db.collections, collectionName)
+	return err
 }
 
 func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db *Database, collectionName string) error {
@@ -603,9 +570,6 @@ func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db 
 		return err
 	}
 
-	delete(db.collections, cHolder.name)
-	delete(db.idToCollectionMap, cHolder.id)
-
 	return nil
 }
 
@@ -617,16 +581,26 @@ func (tenant *Tenant) String() string {
 type Database struct {
 	sync.RWMutex
 
-	id                uint32
-	name              string
-	collections       map[string]*collectionHolder
-	idToCollectionMap map[uint32]string
+	id                    uint32
+	name                  string
+	collections           map[string]*collectionHolder
+	needFixingCollections map[string]struct{}
+	idToCollectionMap     map[uint32]string
+}
+
+func NewDatabase(id uint32, name string) *Database {
+	return &Database{
+		id:                id,
+		name:              name,
+		collections:       make(map[string]*collectionHolder),
+		idToCollectionMap: make(map[uint32]string),
+	}
 }
 
 // Clone is used to stage the database
 func (d *Database) Clone() *Database {
-	d.RLock()
-	defer d.RUnlock()
+	d.Lock()
+	defer d.Unlock()
 
 	var copyDB Database
 	copyDB.id = d.id
@@ -690,23 +664,31 @@ type collectionHolder struct {
 	collection *schema.DefaultCollection
 	// idxNameToId is a map storing dictionary encoding values of all the indexes that are part of this collection.
 	idxNameToId map[string]uint32
-	// latest schema
-	schema jsoniter.RawMessage
-	// if collection is not properly formed during restart then this is false, and we need to reload it during request
-	fullFormed bool
+}
+
+func NewCollectionHolder(id uint32, name string, collection *schema.DefaultCollection, idxNameToId map[string]uint32) *collectionHolder {
+	return &collectionHolder{
+		id:          id,
+		name:        name,
+		collection:  collection,
+		idxNameToId: idxNameToId,
+	}
 }
 
 // clone is used to stage the collectionHolder
 func (c *collectionHolder) clone() *collectionHolder {
-	c.RLock()
-	defer c.RUnlock()
+	c.Lock()
+	defer c.Unlock()
 
 	var copyC collectionHolder
 	copyC.id = c.id
 	copyC.name = c.name
-	copyC.schema = c.schema
 
-	copyC.collection, _ = c.createCollection(c.schema)
+	var err error
+	copyC.collection, err = createCollection(c.id, c.name, c.collection.Schema, c.idxNameToId)
+	if err != nil {
+		panic(err)
+	}
 	copyC.idxNameToId = make(map[string]uint32)
 	for k, v := range c.idxNameToId {
 		copyC.idxNameToId[k] = v
@@ -725,45 +707,31 @@ func (c *collectionHolder) get() *schema.DefaultCollection {
 	return c.collection
 }
 
-// set recreates the collection object from the schema fetched from the disk. First it recreates the schema factory
-// from the schema, then it uses idxNameToId map to assign dictionary encoded values to the indexes and finally create
-// the collection. This API is responsible for setting the dictionary values to the collection and to the corresponding
-// indexes.
-func (c *collectionHolder) set(revision []byte) error {
-	c.Lock()
-	defer c.Unlock()
-
-	collection, err := c.createCollection(revision)
-	if err != nil {
-		return err
-	}
-	c.collection = collection
-	c.schema = revision
-	c.fullFormed = true
-	return nil
-}
-
-func (c *collectionHolder) createCollection(revision []byte) (*schema.DefaultCollection, error) {
-	schFactory, err := schema.Build(c.name, revision)
+func createCollection(id uint32, name string, revision []byte, idxNameToId map[string]uint32) (*schema.DefaultCollection, error) {
+	schFactory, err := schema.Build(name, revision)
 	if err != nil {
 		return nil, err
 	}
 
 	indexes := schFactory.Indexes.GetIndexes()
 	for _, index := range indexes {
-		id, ok := c.idxNameToId[index.Name]
+		id, ok := idxNameToId[index.Name]
 		if !ok {
 			return nil, api.Errorf(codes.NotFound, "dictionary encoding is missing for index '%s'", index.Name)
 		}
 		index.Id = id
 	}
 
-	return schema.NewDefaultCollection(c.name, c.id, schFactory.Fields, schFactory.Indexes, revision), nil
+	return schema.NewDefaultCollection(name, id, schFactory.Fields, schFactory.Indexes, revision), nil
 }
 
-func (c *collectionHolder) isFullyFormed() bool {
-	c.RLock()
-	defer c.RUnlock()
-
-	return c.fullFormed
+func IsSchemaEq(s1, s2 []byte) (bool, error) {
+	var j, j2 interface{}
+	if err := jsoniter.Unmarshal(s1, &j); err != nil {
+		return false, err
+	}
+	if err := jsoniter.Unmarshal(s2, &j2); err != nil {
+		return false, err
+	}
+	return reflect.DeepEqual(j2, j), nil
 }
