@@ -21,19 +21,19 @@ import (
 )
 
 const (
-	InsertType      = "insert"
-	ReplaceType     = "replace"
-	UpdateType      = "update"
-	UpdateRangeType = "updateRange"
-	DeleteType      = "delete"
-	DeleteRangeType = "deleteRange"
+	InsertOp      = "insert"
+	ReplaceOp     = "replace"
+	UpdateOp      = "update"
+	UpdateRangeOp = "updateRange"
+	DeleteOp      = "delete"
+	DeleteRangeOp = "deleteRange"
 )
 
 type ListenerCtxKey struct{}
 
 type Listener interface {
-	OnSet(opType string, table []byte, key []byte, data []byte)
-	OnClearRange(opType string, table []byte, lKey []byte, rKey []byte)
+	OnSet(op string, table []byte, key []byte, data []byte)
+	OnClearRange(op string, table []byte, lKey []byte, rKey []byte)
 	OnCommit(tx *fdb.Transaction) error
 	OnCancel()
 }

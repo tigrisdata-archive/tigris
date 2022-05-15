@@ -21,10 +21,10 @@ import (
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/cdc"
+	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
@@ -466,20 +466,28 @@ func (s *apiService) Stream(r *api.StreamRequest, stream api.Tigris_StreamServer
 			}
 
 			for _, op := range tx.Ops {
-				data, err := jsoniter.Marshal(op)
-				if err != nil {
-					return err
-				}
-
 				_, _, collection, ok := s.encoder.DecodeTableName(op.Table)
 				if !ok {
-					return api.Error(codes.Internal, "collection name decode failed")
+					log.Err(err).Str("table", string(op.Table)).Msg("failed to decode collection name")
+					return api.Error(codes.Internal, "failed to decode collection name")
 				}
 
 				if r.Collection == "" || r.Collection == collection {
+					td, err := internal.Decode(op.Data)
+					if err != nil {
+						log.Err(err).Str("data", string(op.Data)).Msg("failed to decode data")
+						return api.Error(codes.Internal, "failed to decode data")
+					}
+
 					event := &api.StreamEvent{
+						TxId:       tx.Id,
 						Collection: collection,
-						Data:       data,
+						Op:         op.Op,
+						Key:        op.Key,
+						Lkey:       op.LKey,
+						Rkey:       op.RKey,
+						Data:       td.RawData,
+						Last:       op.Last,
 					}
 
 					response := &api.StreamResponse{

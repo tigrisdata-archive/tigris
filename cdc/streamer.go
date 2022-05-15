@@ -93,6 +93,8 @@ func (s *Streamer) read() error {
 				return nil, err
 			}
 
+			tx.Id = kv.Key
+
 			if len(s.Txs) < cap(s.Txs) {
 				s.lastKey = kv.Key
 				s.Txs <- tx
