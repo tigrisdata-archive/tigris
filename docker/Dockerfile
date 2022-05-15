@@ -27,7 +27,7 @@ RUN go mod download
 
 COPY . /build
 
-RUN rm -f server/service && make bins
+RUN --mount=type=cache,target=/root/.cache/go-build rm -f server/service && make bins
 
 FROM debian:bullseye-slim
 

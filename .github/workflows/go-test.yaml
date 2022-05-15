@@ -21,6 +21,9 @@ jobs:
         run: |
           echo "need_rebuild=true" >> $GITHUB_ENV
 
+      - name: Create cache directory
+        run: mkdir -p /home/runner/.cache/go-build
+
       - name: Pull build docker images
         if: env.need_rebuild
         run: |
