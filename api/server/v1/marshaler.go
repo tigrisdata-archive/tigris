@@ -319,3 +319,32 @@ func (x *DescribeDatabaseResponse) MarshalJSON() ([]byte, error) {
 
 	return json.Marshal(&resp)
 }
+
+func (x *StreamResponse) MarshalJSON() ([]byte, error) {
+	type event struct {
+		TxId       []byte          `json:"tx_id"`
+		Collection string          `json:"collection"`
+		Op         string          `json:"op"`
+		Key        []byte          `json:"key,omitempty"`
+		LKey       []byte          `json:"lkey,omitempty"`
+		RKey       []byte          `json:"rkey,omitempty"`
+		Data       json.RawMessage `json:"data,omitempty"`
+		Last       bool            `json:"last"`
+	}
+
+	resp := struct {
+		Event event `json:"event,omitempty"`
+	}{
+		Event: event{
+			TxId:       x.Event.TxId,
+			Collection: x.Event.Collection,
+			Op:         x.Event.Op,
+			Key:        x.Event.Key,
+			LKey:       x.Event.Lkey,
+			RKey:       x.Event.Rkey,
+			Data:       x.Event.Data,
+			Last:       x.Event.Last,
+		},
+	}
+	return json.Marshal(resp)
+}
