@@ -11,7 +11,7 @@ import (
 	"github.com/tigrisdata/tigris-client-go/driver"
 )
 
-type InsertOnlyWorkload struct {
+type ReplaceOnlyWorkload struct {
 	Threads      int16
 	Records      int64
 	Database     string
@@ -20,11 +20,11 @@ type InsertOnlyWorkload struct {
 	WorkloadData *Queue
 }
 
-func (w *InsertOnlyWorkload) Type() string {
-	return "insert_only_workload"
+func (w *ReplaceOnlyWorkload) Type() string {
+	return "replace_only_workload"
 }
 
-func (w *InsertOnlyWorkload) Setup(client driver.Driver) error {
+func (w *ReplaceOnlyWorkload) Setup(client driver.Driver) error {
 	w.WorkloadData = NewQueue(w.Collections)
 
 	// cleanup first
@@ -52,8 +52,8 @@ func (w *InsertOnlyWorkload) Setup(client driver.Driver) error {
 	return tx.Commit(context.TODO())
 }
 
-func (w *InsertOnlyWorkload) Start(client driver.Driver) (int64, error) {
-	var insertErr error
+func (w *ReplaceOnlyWorkload) Start(client driver.Driver) (int64, error) {
+	var replaceErr error
 	var wg sync.WaitGroup
 	for i := int16(0); i < w.Threads; i++ {
 		wg.Add(1)
@@ -61,32 +61,33 @@ func (w *InsertOnlyWorkload) Start(client driver.Driver) (int64, error) {
 		go func(id int64) {
 			defer wg.Done()
 			for j := int64(0); j < w.Records; j++ {
-				doc := NewDocument(id)
+				doc := NewDocument(1)
 				serialized, err := Serialize(doc)
 				if err != nil {
-					insertErr = multierror.Append(insertErr, err)
+					replaceErr = multierror.Append(replaceErr, err)
 					return
 				}
 
 				for k := 0; k < len(w.Collections); k++ {
-					if _, err := client.UseDatabase(w.Database).Insert(context.TODO(), w.Collections[k], []driver.Document{serialized}); err != nil {
-						insertErr = multierror.Append(insertErr, errors.Wrapf(err, "insert to collection failed '%s' '%s'", w.Database, w.Collections[k]))
+					if _, err := client.UseDatabase(w.Database).Replace(context.TODO(), w.Collections[k], []driver.Document{serialized}); err != nil {
+						replaceErr = multierror.Append(replaceErr, errors.Wrapf(err, "insert to collection failed '%s' '%s'", w.Database, w.Collections[k]))
 						return
 					}
 
 					w.WorkloadData.Add(w.Collections[k], doc)
-					//log.Debug().Msgf("inserted document '%s' '%s' '%v'\n", w.Database, w.Collections[k], doc)
+					//log.Debug().Msgf("replaced document '%s' '%s' '%v'\n", w.Database, w.Collections[k], doc)
 				}
 				id++
 			}
 		}(uniqueIdentifier)
 	}
+
 	wg.Wait()
 
-	return w.Records * int64(w.Threads), insertErr
+	return w.Records * int64(w.Threads), replaceErr
 }
 
-func (w *InsertOnlyWorkload) Check(client driver.Driver) (bool, error) {
+func (w *ReplaceOnlyWorkload) Check(client driver.Driver) (bool, error) {
 	isSuccess := false
 	for _, collection := range w.Collections {
 		it, err := client.UseDatabase(w.Database).Read(context.TODO(), collection, driver.Filter(`{}`), nil)
@@ -116,7 +117,14 @@ func (w *InsertOnlyWorkload) Check(client driver.Driver) (bool, error) {
 
 		isSuccess = reflect.DeepEqual(existing.Documents, queueDoc.Documents)
 		if !isSuccess {
-			log.Debug().Msgf("consistency issue for collection '%s' '%s', ignoring further checks", w.Database, collection)
+			for _, doc := range existing.Documents {
+				log.Debug().Msgf("existing document %v", doc)
+			}
+			for _, doc := range queueDoc.Documents {
+				log.Debug().Msgf("found document %v", doc)
+			}
+
+			log.Debug().Msgf("consistency issue for collection '%s' '%s', ignoring further checks %v %v", w.Database, collection, existing.Documents, queueDoc.Documents)
 		}
 		return isSuccess, nil
 	}

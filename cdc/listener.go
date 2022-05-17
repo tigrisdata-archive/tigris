@@ -21,16 +21,18 @@ import (
 )
 
 type Tx struct {
+	Id  []byte
 	Ops []Op
 }
 
 type Op struct {
-	Type  string
+	Op    string
 	Table []byte
 	Key   []byte `json:",omitempty"`
 	LKey  []byte `json:",omitempty"`
 	RKey  []byte `json:",omitempty"`
 	Data  []byte `json:",omitempty"`
+	Last  bool
 }
 
 func (tx *Tx) addOp(entry Op) {
@@ -42,18 +44,18 @@ type TxListener struct {
 	tx       *Tx
 }
 
-func (l *TxListener) OnSet(opType string, table []byte, key []byte, data []byte) {
+func (l *TxListener) OnSet(op string, table []byte, key []byte, data []byte) {
 	l.tx.addOp(Op{
-		Type:  opType,
+		Op:    op,
 		Table: table,
 		Key:   key,
 		Data:  data,
 	})
 }
 
-func (l *TxListener) OnClearRange(opType string, table []byte, lKey []byte, rKey []byte) {
+func (l *TxListener) OnClearRange(op string, table []byte, lKey []byte, rKey []byte) {
 	l.tx.addOp(Op{
-		Type:  opType,
+		Op:    op,
 		Table: table,
 		LKey:  lKey,
 		RKey:  rKey,
@@ -69,6 +71,8 @@ func (l *TxListener) OnCommit(fdbTx *fdb.Transaction) error {
 		return nil
 	}
 
+	l.tx.Ops[len(l.tx.Ops)-1].Last = true
+
 	json, err := jsoniter.Marshal(l.tx)
 	if err != nil {
 		return err
@@ -79,13 +83,13 @@ func (l *TxListener) OnCommit(fdbTx *fdb.Transaction) error {
 		return err
 	}
 
-	data := internal.NewTableDataWithEncoding(json, internal.JsonEncoding)
-	bytes, err := internal.Encode(data)
+	td := internal.NewTableDataWithEncoding(json, internal.JsonEncoding)
+	enc, err := internal.Encode(td)
 	if err != nil {
 		return err
 	}
 
-	fdbTx.SetVersionstampedKey(key, bytes)
+	fdbTx.SetVersionstampedKey(key, enc)
 
 	return nil
 }

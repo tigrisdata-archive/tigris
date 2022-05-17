@@ -122,10 +122,10 @@ func NewBaseQueryRunner(encoder metadata.Encoder, cdcMgr *cdc.Manager) *BaseQuer
 }
 
 func (runner *BaseQueryRunner) GetDatabase(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, dbName string) (*metadata.Database, error) {
-	if tx.Context().GetStagedDB() != nil {
+	if tx.Context().GetStagedDatabase() != nil {
 		// this means that some DDL operation has modified the database object, then we need to perform all the operations
 		// on this staged database.
-		return tx.Context().GetStagedDB().(*metadata.Database), nil
+		return tx.Context().GetStagedDatabase().(*metadata.Database), nil
 	}
 
 	// otherwise, simply read from the in-memory cache/disk.
@@ -545,13 +545,10 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			return nil, ctx, err
 		}
 
-		if tx.Context().GetStagedDB() == nil {
+		if tx.Context().GetStagedDatabase() == nil {
 			// do not modify the actual database object yet, just work on the clone
 			db = db.Clone()
-			tx.Context().AttachStagedDB(db, func() error {
-				tenant.InvalidateDBCache(db.Name())
-				return nil
-			})
+			tx.Context().StageDatabase(db)
 		}
 
 		if err = tenant.DropCollection(ctx, tx, db, runner.dropReq.GetCollection()); err != nil {
@@ -577,13 +574,10 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			return nil, ctx, err
 		}
 
-		if tx.Context().GetStagedDB() == nil {
+		if tx.Context().GetStagedDatabase() == nil {
 			// do not modify the actual database object yet, just work on the clone
 			db = db.Clone()
-			tx.Context().AttachStagedDB(db, func() error {
-				tenant.InvalidateDBCache(db.Name())
-				return nil
-			})
+			tx.Context().StageDatabase(db)
 		}
 
 		if err = tenant.CreateCollection(ctx, tx, db, schFactory); err != nil {
@@ -664,32 +658,26 @@ func (runner *DatabaseQueryRunner) SetDescribeDatabaseReq(describe *api.Describe
 
 func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	if runner.drop != nil {
-		db, err := tenant.GetDatabase(ctx, tx, runner.drop.GetDb())
+		exist, err := tenant.DropDatabase(ctx, tx, runner.drop.GetDb())
 		if err != nil {
 			return nil, ctx, err
 		}
-		if db == nil {
+		if !exist {
 			return nil, ctx, api.Errorf(codes.NotFound, "database doesn't exist '%s'", runner.drop.GetDb())
-		}
-		if err := tenant.DropDatabase(ctx, tx, runner.drop.GetDb()); err != nil {
-			return nil, ctx, err
 		}
 
 		return &Response{
 			status: DroppedStatus,
 		}, ctx, nil
 	} else if runner.create != nil {
-		db, err := tenant.GetDatabase(ctx, tx, runner.create.GetDb())
+		exist, err := tenant.CreateDatabase(ctx, tx, runner.create.GetDb())
 		if err != nil {
 			return nil, ctx, err
 		}
-		if db != nil {
+		if exist {
 			return nil, ctx, api.Errorf(codes.AlreadyExists, "database already exist")
 		}
 
-		if err := tenant.CreateDatabase(ctx, tx, runner.create.GetDb()); err != nil {
-			return nil, ctx, err
-		}
 		return &Response{
 			status: CreatedStatus,
 		}, ctx, nil

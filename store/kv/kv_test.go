@@ -16,7 +16,9 @@ package kv
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -56,8 +58,6 @@ func readAll(t *testing.T, it baseIterator) []baseKeyValue {
 }
 
 func testKeyValueStoreBasic(t *testing.T, kv KeyValueStore) {
-	ulog.Configure(ulog.LogConfig{Level: "trace"})
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -170,8 +170,6 @@ func testKeyValueStoreBasic(t *testing.T, kv KeyValueStore) {
 }
 
 func testKeyValueStoreFullScan(t *testing.T, kv KeyValueStore) {
-	ulog.Configure(ulog.LogConfig{Level: "trace"})
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -222,8 +220,6 @@ func testKeyValueStoreFullScan(t *testing.T, kv KeyValueStore) {
 }
 
 func testKVBasic(t *testing.T, kv baseKVStore) {
-	ulog.Configure(ulog.LogConfig{Level: "trace"})
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -326,8 +322,6 @@ func testKVBasic(t *testing.T, kv baseKVStore) {
 }
 
 func testFullScan(t *testing.T, kv baseKVStore) {
-	ulog.Configure(ulog.LogConfig{Level: "trace"})
-
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -443,6 +437,20 @@ func testKVInsert(t *testing.T, kv baseKVStore) {
 		testKVTimeout(t, kv)
 	})
 
+	t.Run("test_kv_retriable", func(t *testing.T) {
+		tx, err := kv.BeginTx(ctx)
+		require.NoError(t, err)
+		var ep fdb.Error
+		ep.Code = 1020
+		tx.(*ftx).err = ep
+		assert.True(t, tx.IsRetriable())
+		ep.Code = 2000
+		tx.(*ftx).err = ep
+		assert.False(t, tx.IsRetriable())
+		tx.(*ftx).err = fmt.Errorf("error")
+		assert.False(t, tx.IsRetriable())
+	})
+
 	err := kv.DropTable(ctx, table)
 	require.NoError(t, err)
 }
@@ -451,13 +459,14 @@ func testKVTimeout(t *testing.T, kv baseKVStore) {
 	ctx, cancel1 := context.WithTimeout(context.Background(), 3*time.Millisecond)
 	defer cancel1()
 
-	tx, err := kv.Tx(ctx)
+	tx, err := kv.BeginTx(ctx)
 	require.NoError(t, err)
 	time.Sleep(50 * time.Millisecond)
 	err = tx.Commit(context.Background())
 	assert.Error(t, err)
+	assert.False(t, tx.IsRetriable())
 
-	tx, err = kv.Tx(context.Background())
+	tx, err = kv.BeginTx(context.Background())
 	require.NoError(t, err)
 	time.Sleep(5 * time.Millisecond)
 	err = tx.Commit(context.Background())
@@ -465,7 +474,7 @@ func testKVTimeout(t *testing.T, kv baseKVStore) {
 
 	ctx, cancel2 := context.WithDeadline(context.Background(), time.Now().Add(-3*time.Millisecond))
 	defer cancel2()
-	_, err = kv.Tx(ctx)
+	_, err = kv.BeginTx(ctx)
 	assert.Equal(t, context.DeadlineExceeded, err)
 }
 
@@ -515,14 +524,18 @@ func testSetVersionstampedValue(t *testing.T, kv baseKVStore) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	tx, err := kv.Tx(ctx)
+	tx, err := kv.BeginTx(ctx)
 	require.NoError(t, err)
 
 	require.NoError(t, tx.SetVersionstampedValue(ctx, []byte("foo"), []byte("bar")))
 	err = tx.Commit(ctx)
-	require.Equal(t, 2000, err.(fdb.Error).Code)
 
-	tx, err = kv.Tx(ctx)
+	var ep fdb.Error
+	require.True(t, errors.As(err, &ep))
+	require.Equal(t, 2000, ep.Code)
+	assert.False(t, tx.IsRetriable())
+
+	tx, err = kv.BeginTx(ctx)
 	require.NoError(t, err)
 	require.NoError(t, tx.SetVersionstampedValue(ctx, []byte{0xff, '/', 'm', 'e', 't', 'a', 'd', 'a', 't', 'a', 'V', 'e', 'r', 's', 'i', 'o', 'n'}, []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}))
 	require.NoError(t, tx.Commit(ctx))
@@ -575,4 +588,9 @@ func TestGetCtxTimeout(t *testing.T) {
 	ctx, cancel2 := context.WithDeadline(context.Background(), time.Now().Add(-10*time.Millisecond))
 	defer cancel2()
 	assert.Less(t, getCtxTimeout(ctx), int64(0))
+}
+
+func TestMain(m *testing.M) {
+	ulog.Configure(ulog.LogConfig{Level: "disabled"})
+	os.Exit(m.Run())
 }

@@ -16,6 +16,7 @@ package kv
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 	"unsafe"
@@ -26,7 +27,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/server/config"
 	ulog "github.com/tigrisdata/tigris/util/log"
-	"golang.org/x/xerrors"
 )
 
 const (
@@ -45,8 +45,9 @@ type fbatch struct {
 }
 
 type ftx struct {
-	d  *fdbkv
-	tx *fdb.Transaction
+	d   *fdbkv
+	tx  *fdb.Transaction
+	err error
 }
 
 type fdbIterator struct {
@@ -79,7 +80,7 @@ func (d *fdbkv) init(cfg *config.FoundationDBConfig) (err error) {
 
 // Read returns all the keys which has prefix equal to "key" parameter
 func (d *fdbkv) Read(ctx context.Context, table []byte, key Key) (baseIterator, error) {
-	tx, err := d.Tx(ctx)
+	tx, err := d.BeginTx(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +92,7 @@ func (d *fdbkv) Read(ctx context.Context, table []byte, key Key) (baseIterator, 
 }
 
 func (d *fdbkv) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key) (baseIterator, error) {
-	tx, err := d.Tx(ctx)
+	tx, err := d.BeginTx(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -102,67 +103,91 @@ func (d *fdbkv) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key)
 	return &fdbIteratorTxCloser{it, tx}, nil
 }
 
-func (d *fdbkv) txWithTimeout(ctx context.Context, fn func(fdb.Transaction) (interface{}, error)) (interface{}, error) {
-	return d.db.Transact(func(tr fdb.Transaction) (interface{}, error) {
+func (d *fdbkv) txWithRetry(ctx context.Context, fn func(fdb.Transaction) (interface{}, error)) (interface{}, error) {
+	for {
+		tr, err := d.db.CreateTransaction()
+		if err != nil {
+			return nil, err
+		}
+		defer tr.Cancel()
+
 		if err := setTxTimeout(&tr, getCtxTimeout(ctx)); err != nil {
 			return nil, err
 		}
-		return fn(tr)
-	})
+
+		var res interface{}
+		if res, err = fn(tr); err != nil {
+			return nil, err
+		}
+
+		if err := tr.Commit().Get(); err == nil {
+			return res, nil
+		}
+
+		var ep fdb.Error
+		if errors.As(err, &ep) {
+			// OnError returns nil if error is retryable
+			err = tr.OnError(ep).Get()
+		}
+
+		if err != nil {
+			return nil, err
+		}
+	}
 }
 
 func (d *fdbkv) Insert(ctx context.Context, table []byte, key Key, data []byte) error {
-	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return nil, (&ftx{d, &tr}).Insert(ctx, table, key, data)
+	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+		return nil, (&ftx{d: d, tx: &tr}).Insert(ctx, table, key, data)
 	})
 	return err
 }
 
 func (d *fdbkv) Replace(ctx context.Context, table []byte, key Key, data []byte) error {
-	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return nil, (&ftx{d, &tr}).Replace(ctx, table, key, data)
+	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+		return nil, (&ftx{d: d, tx: &tr}).Replace(ctx, table, key, data)
 	})
 	return err
 }
 
 func (d *fdbkv) Delete(ctx context.Context, table []byte, key Key) error {
-	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return nil, (&ftx{d, &tr}).Delete(ctx, table, key)
+	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+		return nil, (&ftx{d: d, tx: &tr}).Delete(ctx, table, key)
 	})
 	return err
 }
 
 func (d *fdbkv) DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key) error {
-	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return nil, (&ftx{d, &tr}).DeleteRange(ctx, table, lKey, rKey)
+	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+		return nil, (&ftx{d: d, tx: &tr}).DeleteRange(ctx, table, lKey, rKey)
 	})
 	return err
 }
 
 func (d *fdbkv) Update(ctx context.Context, table []byte, key Key, apply func([]byte) ([]byte, error)) (int32, error) {
-	count, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return (&ftx{d, &tr}).Update(ctx, table, key, apply)
+	count, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+		return (&ftx{d: d, tx: &tr}).Update(ctx, table, key, apply)
 	})
 	return count.(int32), err
 }
 
 func (d *fdbkv) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) (int32, error) {
-	count, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return (&ftx{d, &tr}).UpdateRange(ctx, table, lKey, rKey, apply)
+	count, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+		return (&ftx{d: d, tx: &tr}).UpdateRange(ctx, table, lKey, rKey, apply)
 	})
 	return count.(int32), err
 }
 
 func (d *fdbkv) SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error {
-	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return nil, (&ftx{d, &tr}).SetVersionstampedValue(ctx, key, value)
+	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+		return nil, (&ftx{d: d, tx: &tr}).SetVersionstampedValue(ctx, key, value)
 	})
 	return err
 }
 
 func (d *fdbkv) Get(ctx context.Context, key []byte) ([]byte, error) {
-	val, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return (&ftx{d, &tr}).Get(ctx, key)
+	val, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+		return (&ftx{d: d, tx: &tr}).Get(ctx, key)
 	})
 	return val.([]byte), err
 }
@@ -175,7 +200,7 @@ func (d *fdbkv) CreateTable(_ context.Context, name []byte) error {
 func (d *fdbkv) DropTable(ctx context.Context, name []byte) error {
 	s := subspace.FromBytes(name)
 
-	_, err := d.txWithTimeout(ctx, func(tr fdb.Transaction) (interface{}, error) {
+	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
 		tr.ClearRange(s)
 		return nil, nil
 	})
@@ -293,7 +318,11 @@ func (b *fbatch) Rollback(ctx context.Context) error {
 	return b.tx.Rollback(ctx)
 }
 
-func (d *fdbkv) Tx(ctx context.Context) (baseTx, error) {
+func (b *fbatch) IsRetriable() bool {
+	return false
+}
+
+func (d *fdbkv) BeginTx(ctx context.Context) (baseTx, error) {
 	tx, err := d.db.CreateTransaction()
 	if ulog.E(err) {
 		return nil, err
@@ -322,7 +351,7 @@ func (t *ftx) Insert(ctx context.Context, table []byte, key Key, data []byte) er
 	}
 
 	t.tx.Set(k, data)
-	l.OnSet(InsertType, table, k, data)
+	l.OnSet(InsertOp, table, k, data)
 
 	log.Err(err).Str("table", string(table)).Interface("key", key).Msg("Insert")
 
@@ -334,7 +363,7 @@ func (t *ftx) Replace(ctx context.Context, table []byte, key Key, data []byte) e
 	k := getFDBKey(table, key)
 
 	t.tx.Set(k, data)
-	l.OnSet(ReplaceType, table, k, data)
+	l.OnSet(ReplaceOp, table, k, data)
 
 	log.Debug().Str("table", string(table)).Interface("key", key).Msg("tx Replace")
 
@@ -349,7 +378,7 @@ func (t *ftx) Delete(ctx context.Context, table []byte, key Key) error {
 	}
 
 	t.tx.ClearRange(kr)
-	l.OnClearRange(DeleteType, table, kr.Begin.FDBKey(), kr.End.FDBKey())
+	l.OnClearRange(DeleteOp, table, kr.Begin.FDBKey(), kr.End.FDBKey())
 
 	log.Debug().Str("table", string(table)).Interface("key", key).Msg("tx delete")
 
@@ -362,7 +391,7 @@ func (t *ftx) DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key)
 	rk := getFDBKey(table, rKey)
 
 	t.tx.ClearRange(fdb.KeyRange{Begin: lk, End: rk})
-	l.OnClearRange(DeleteRangeType, table, lk, rk)
+	l.OnClearRange(DeleteRangeOp, table, lk, rk)
 
 	log.Debug().Str("table", string(table)).Interface("lKey", lKey).Interface("rKey", rKey).Msg("tx delete range")
 
@@ -391,7 +420,7 @@ func (t *ftx) Update(ctx context.Context, table []byte, key Key, apply func([]by
 		}
 
 		t.tx.Set(kv.Key, v)
-		l.OnSet(UpdateType, table, kv.Key, v)
+		l.OnSet(UpdateOp, table, kv.Key, v)
 
 		modifiedCount++
 	}
@@ -421,7 +450,7 @@ func (t *ftx) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key,
 		}
 
 		t.tx.Set(kv.Key, v)
-		l.OnSet(UpdateRangeType, table, kv.Key, v)
+		l.OnSet(UpdateRangeOp, table, kv.Key, v)
 
 		modifiedCount++
 	}
@@ -467,36 +496,27 @@ func (t *ftx) Get(_ context.Context, key []byte) ([]byte, error) {
 func (t *ftx) Commit(ctx context.Context) error {
 	l := GetListener(ctx)
 
-	for {
-		err := l.OnCommit(t.tx)
-		if err != nil {
-			return err
-		}
+	t.err = l.OnCommit(t.tx)
+	if t.err != nil {
+		return t.err
+	}
 
-		err = t.tx.Commit().Get()
-		if err == nil {
-			break
-		}
+	if t.err = t.tx.Commit().Get(); t.err == nil {
+		return nil
+	}
 
-		log.Err(err).Msg("tx Commit")
+	log.Err(t.err).Msg("tx Commit")
 
-		var ep fdb.Error
-		if xerrors.As(err, &ep) {
-			if ep.Code == 1020 {
-				err = ErrConflictingTransaction
-			} else if err1 := t.tx.OnError(ep).Get(); err1 != nil {
-				err = err1
-			}
-		}
-
-		if err != nil {
-			return err
+	var ep fdb.Error
+	if errors.As(t.err, &ep) {
+		if ep.Code == 1020 {
+			t.err = ErrConflictingTransaction
 		}
 	}
 
-	log.Debug().Msg("tx Commit")
+	t.tx.Cancel()
 
-	return nil
+	return t.err
 }
 
 func (t *ftx) Rollback(ctx context.Context) error {
@@ -508,6 +528,23 @@ func (t *ftx) Rollback(ctx context.Context) error {
 	log.Debug().Msg("tx Rollback")
 
 	return nil
+}
+
+// IsRetriable returns true if transaction can be retried after error
+func (t *ftx) IsRetriable() bool {
+	if t.err == nil {
+		return false
+	}
+
+	var ep fdb.Error
+	if errors.As(t.err, &ep) {
+		err := t.tx.OnError(ep).Get()
+		if err == nil {
+			return true
+		}
+	}
+
+	return false
 }
 
 func tupleToKey(t *tuple.Tuple) Key {

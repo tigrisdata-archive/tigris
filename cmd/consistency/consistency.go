@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"math/rand"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	clientConfig "github.com/tigrisdata/tigris-client-go/config"
@@ -12,40 +14,15 @@ import (
 
 type Workload interface {
 	Setup(client driver.Driver) error
-	Start(client driver.Driver) error
+	Start(client driver.Driver) (int64, error)
 	Check(client driver.Driver) (bool, error)
 	Type() string
 }
 
-func CreateWorkloads() []Workload {
-	var workload []Workload
-	workload = append(workload, &workload2.DDLWorkload{
-		Threads:     16,
-		Database:    "test1",
-		Collections: []string{"c1"},
-		Schemas: [][]byte{
-			[]byte(`{
-	"title": "c1",
-	"properties": {
-		"F1": {
-			"type": "integer"
-		},
-		"F2": {
-			"type": "string"
-		}
-	},
-	"primary_key": ["F1"]
-}`)},
-	})
-
-	workload = append(workload, &workload2.InsertOnlyWorkload{
-		Threads:     64,
-		Records:     64,
-		Database:    "test1",
-		Collections: []string{"c1", "c2"},
-		// first is integer primary key, second is string primary key
-		Schemas: [][]byte{
-			[]byte(`{
+func collectionsForLoadTest() ([]string, [][]byte) {
+	// first is integer primary key, second is string primary key
+	return []string{"c1", "c2"}, [][]byte{
+		[]byte(`{
 	"title": "c1",
 	"properties": {
 		"F1": {
@@ -69,7 +46,7 @@ func CreateWorkloads() []Workload {
 	},
 	"primary_key": ["F1"]
 }`),
-			[]byte(`{
+		[]byte(`{
 	"title": "c2",
 	"properties": {
 		"F1": {
@@ -93,15 +70,54 @@ func CreateWorkloads() []Workload {
 	},
 	"primary_key": ["F2"]
 }`),
-		},
+	}
+}
+
+func CreateWorkloads() []Workload {
+	collections, schemas := collectionsForLoadTest()
+	var workload []Workload
+	workload = append(workload, &workload2.DDLWorkload{
+		Threads:     1,
+		Database:    "test1",
+		Collections: []string{collections[0]},
+		Schemas:     [][]byte{schemas[0]},
+	})
+
+	workload = append(workload, &workload2.InsertOnlyWorkload{
+		Threads:     64,
+		Records:     64,
+		Database:    "test1",
+		Collections: collections,
+		// first is integer primary key, second is string primary key
+		Schemas: schemas,
+	})
+
+	workload = append(workload, &workload2.ReplaceOnlyWorkload{
+		Threads:     32,
+		Records:     32,
+		Database:    "test1",
+		Collections: collections,
+		// first is integer primary key, second is string primary key
+		Schemas: schemas,
+	})
+
+	workload = append(workload, &workload2.SmallConciseWorkload{
+		Threads:     16,
+		Records:     10,
+		Database:    "test1",
+		Collections: collections,
+		// first is integer primary key, second is string primary key
+		Schemas: schemas,
 	})
 
 	return workload
 }
 
 func main() {
+	rand.Seed(time.Now().Unix())
+
 	driver.DefaultProtocol = driver.HTTP
-	client, err := driver.NewDriver(context.TODO(), &clientConfig.Config{
+	client, err := driver.NewDriver(context.TODO(), &clientConfig.Driver{
 		URL: fmt.Sprintf("http://%s:%d", "localhost", 8081),
 	})
 	if err != nil {
@@ -115,9 +131,13 @@ func main() {
 			log.Panic().Err(err).Msg("workload setup failed")
 		}
 
-		if err = w.Start(client); err != nil {
+		start := time.Now()
+		records, err := w.Start(client)
+		if err != nil {
 			log.Panic().Err(err).Msg("workload start failed")
 		}
+		log.Debug().Msgf("load generated in %v, total records %d", time.Since(start), records)
+
 		var success bool
 		success, err = w.Check(client)
 		if err != nil {

@@ -18,401 +18,199 @@ package client
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	api "github.com/tigrisdata/tigris-client-go/api/server/v1"
-	clientConfig "github.com/tigrisdata/tigris-client-go/config"
-	"github.com/tigrisdata/tigris-client-go/driver"
-	"github.com/tigrisdata/tigris/server/config"
-	"google.golang.org/grpc/codes"
+	"github.com/tigrisdata/tigris-client-go/config"
+	"github.com/tigrisdata/tigris-client-go/filter"
+	"github.com/tigrisdata/tigris-client-go/projection"
+	"github.com/tigrisdata/tigris-client-go/tigris"
+	"github.com/tigrisdata/tigris-client-go/update"
 )
 
-func getTestServerHostPort() (string, int16) {
-	config.LoadEnvironment() // Move this to test.Main
-
-	if config.GetEnvironment() == config.EnvTest {
-		return "tigris_server", 8081
-	}
-	return "localhost", 8081
-}
-
-func getDocuments(t *testing.T, c driver.Driver, filter driver.Filter) []driver.Document {
-	ctx := context.Background()
-
-	db1 := c.UseDatabase("db1")
-	it, err := db1.Read(ctx, "c1", filter, nil, &driver.ReadOptions{})
-	require.NoError(t, err)
-
-	var documents []driver.Document
-	var doc driver.Document
-	for it.Next(&doc) {
-		documents = append(documents, doc)
-	}
-	return documents
-}
-
-func testRead(t *testing.T, c driver.Driver, filter driver.Filter, expected []driver.Document) {
-	ctx := context.Background()
-
-	db1 := c.UseDatabase("db1")
-	it, err := db1.Read(ctx, "c1", filter, nil, &driver.ReadOptions{})
-	require.NoError(t, err)
-
-	var doc driver.Document
-	var i int
-	for it.Next(&doc) {
-		require.Greater(t, len(expected), i)
-		assert.JSONEq(t, string(expected[i]), string(doc))
-		i++
-	}
-
-	require.Equal(t, len(expected), i)
-	assert.NoError(t, it.Err())
-}
-
-func testTxReadWrite(t *testing.T, c driver.Driver) {
+func TestClientCollectionBasic(t *testing.T) {
 	ctx := context.TODO()
 
-	_ = c.DropDatabase(ctx, "db1", &driver.DatabaseOptions{})
-	db1 := c.UseDatabase("db1")
-	_ = db1.DropCollection(ctx, "c1", &driver.CollectionOptions{})
-
-	schema := `{
-		"title": "c1",
-		"properties": {
-			"str_field": {
-				"type": "string"
-			},
-			"int_field": {
-				"type": "integer"
-			},
-			"bool_field": {
-				"type": "boolean"
-			}
-		},
-		"primary_key": ["str_field"]
-	}`
-
-	err := c.CreateDatabase(ctx, "db1", &driver.DatabaseOptions{})
-	require.NoError(t, err)
-	db1 = c.UseDatabase("db1")
-	err = db1.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema), &driver.CollectionOptions{})
-	require.NoError(t, err)
-
-	doc1 := driver.Document(`{"str_field": "value1", "int_field": 111, "bool_field": true}`)
-	doc2 := driver.Document(`{"str_field": "value2", "int_field": 222, "bool_field": false}`)
-	resp, err := db1.Insert(ctx, "c1", []driver.Document{
-		doc1,
-		doc2,
-	})
-	require.NoError(t, err)
-	require.Equal(t, "inserted", resp.Status)
-
-	testRead(t, c, driver.Filter(`{"str_field": "value2"}`), []driver.Document{doc2})
-
-	delResp, err := db1.Delete(ctx, "c1", driver.Filter(`{"str_field": "value2"}`))
-	require.NoError(t, err)
-	require.Equal(t, "deleted", delResp.Status)
-
-	testRead(t, c, driver.Filter(`{"str_field": "value2"}`), nil)
-
-	tx, err := c.BeginTx(ctx, "db1")
-	require.NoError(t, err)
-
-	doc3 := driver.Document(`{"str_field": "value3", "int_field": 333, "bool_field": false}`)
-	resp, err = tx.Insert(ctx, "c1", []driver.Document{
-		doc2,
-		doc3,
-	})
-	require.NoError(t, err)
-	require.Equal(t, "inserted", resp.Status)
-
-	it, err := tx.Read(ctx, "c1", driver.Filter(`{"str_field": "value2"}`), nil)
-	require.NoError(t, err)
-	var doc driver.Document
-	for it.Next(&doc) {
-		assert.JSONEq(t, string(doc2), string(doc))
+	type Coll1 struct {
+		Key1   string `tigris:"primary_key"`
+		Field1 int64
 	}
-	require.NoError(t, tx.Commit(ctx))
+
+	type Coll2 struct {
+		Key1   string `tigris:"primary_key"`
+		Field1 int64
+	}
+
+	h, p := getTestServerHostPort()
+	var db *tigris.Database
+	var err error
+	for {
+		db, err = tigris.OpenDatabase(ctx, &config.Database{Driver: config.Driver{URL: fmt.Sprintf("%v:%d", h, p)}}, "db111222", &Coll1{}, &Coll2{})
+		if err != nil && err.Error() == "transaction not committed due to conflict with another transaction" {
+			continue
+		}
+		require.NoError(t, err)
+		break
+	}
+	defer func() {
+		require.NoError(t, db.Drop(ctx))
+	}()
+
+	c := tigris.GetCollection[Coll1](db)
+
+	d1 := &Coll1{Key1: "aaa", Field1: 123}
+	d2 := &Coll1{Key1: "bbb", Field1: 123}
+
+	_, err = c.Insert(ctx, d1, d2)
+	require.NoError(t, err)
+
+	_, err = c.InsertOrReplace(ctx, d2)
+	require.NoError(t, err)
+
+	_, err = c.Update(ctx, filter.Or(
+		filter.Eq("Key1", "aaa"),
+		filter.Eq("Key1", "bbb")),
+		update.Set("Field1", 345),
+	)
+	require.NoError(t, err)
+
+	it, err := c.Read(ctx, filter.Or(
+		filter.Eq("Key1", "aaa"),
+		filter.Eq("Key1", "ccc")),
+		projection.Exclude("Key1").
+			Include("Field1"),
+	)
+	require.NoError(t, err)
+
+	d1.Field1 = 345
+	var d Coll1
+	for it.Next(&d) {
+		require.Equal(t, d1.Field1, d.Field1)
+		require.Equal(t, "", d.Key1)
+	}
+	require.NoError(t, it.Err())
+	it.Close()
+
+	it, err = c.ReadAll(ctx, projection.All)
+	require.NoError(t, err)
+	it.Close()
+
+	pd, err := c.ReadOne(ctx, filter.Eq("Key1", "aaa"))
+	require.NoError(t, err)
+	require.Equal(t, d1, pd)
+
+	_, err = c.Delete(ctx, filter.Or(
+		filter.Eq("Key1", "aaa"),
+		filter.Eq("Key1", "ccc")))
+	require.NoError(t, err)
+
+	_, err = c.DeleteAll(ctx)
+	require.NoError(t, err)
+
+	err = c.Drop(ctx)
+	require.NoError(t, err)
 }
 
-func testClientBinary(t *testing.T, c driver.Driver) {
+func TestClientCollectionTx(t *testing.T) {
 	ctx := context.TODO()
 
-	_ = c.DropDatabase(ctx, "db1", &driver.DatabaseOptions{})
-
-	db1 := c.UseDatabase("db1")
-	_ = db1.DropCollection(ctx, "c1", &driver.CollectionOptions{})
-
-	schema := `{
-		"title": "c1",
-		"properties": {
-			"K1": {
-				"type": "string",
-				"format": "byte"
-			},
-			"D1": {
-				"type": "string",
-				"maxLength": 128
-			}
-		},
-		"primary_key": ["K1"]
-	}`
-
-	err := c.CreateDatabase(ctx, "db1", &driver.DatabaseOptions{})
-	require.NoError(t, err)
-
-	db1 = c.UseDatabase("db1")
-	err = db1.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema), &driver.CollectionOptions{})
-	require.NoError(t, err)
-
-	err = db1.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema), &driver.CollectionOptions{})
-	require.Error(t, api.Errorf(codes.AlreadyExists, "collection already exist"), err)
-
-	type doc struct {
-		K1 []byte
-		D1 string
+	type Coll1 struct {
+		Key1   string `tigris:"primary_key"`
+		Field1 int64
 	}
 
-	doc1 := doc{
-		K1: []byte("vK1"),
-		D1: "vD1",
+	h, p := getTestServerHostPort()
+	var err error
+	var db *tigris.Database
+	for {
+		db, err = tigris.OpenDatabase(ctx, &config.Database{Driver: config.Driver{URL: fmt.Sprintf("%v:%d", h, p)}}, "db111333", &Coll1{})
+		if err != nil && err.Error() == "transaction not committed due to conflict with another transaction" {
+			continue
+		}
+		require.NoError(t, err)
+		break
 	}
-	docEnc, err := json.Marshal(doc1)
-	require.NoError(t, err)
 
-	_, err = db1.Insert(ctx, "c1", []driver.Document{docEnc}, &driver.InsertOptions{})
-	require.NoError(t, err)
+	defer func() {
+		_ = db.Drop(ctx)
+	}()
 
-	doc2 := doc{
-		K1: []byte(`1234`),
-		D1: "vD2",
+	err = db.Tx(ctx, func(ctx context.Context, tx *tigris.Tx) error {
+		c := tigris.GetTxCollection[Coll1](tx)
+
+		d1 := &Coll1{Key1: "aaa", Field1: 123}
+		d2 := &Coll1{Key1: "bbb", Field1: 123}
+
+		_, err := c.Insert(ctx, d1, d2)
+		require.NoError(t, err)
+
+		_, err = c.InsertOrReplace(ctx, d2)
+		require.NoError(t, err)
+
+		_, err = c.Update(ctx, filter.Or(
+			filter.Eq("Key1", "aaa"),
+			filter.Eq("Key1", "bbb")),
+			update.Set("Field1", 345),
+		)
+		require.NoError(t, err)
+
+		it, err := c.Read(ctx, filter.Or(
+			filter.Eq("Key1", "aaa"),
+			filter.Eq("Key1", "ccc")),
+			projection.Exclude("Key1").
+				Include("Field1"),
+		)
+		require.NoError(t, err)
+
+		d1.Field1 = 345
+		var d Coll1
+		for it.Next(&d) {
+			require.Equal(t, d1.Field1, d.Field1)
+			require.Equal(t, "", d.Key1)
+		}
+		require.NoError(t, it.Err())
+		it.Close()
+
+		it, err = c.ReadAll(ctx, projection.All)
+		require.NoError(t, err)
+		it.Close()
+
+		_, err = c.DeleteAll(ctx)
+		require.NoError(t, err)
+
+		pd, err := c.ReadOne(ctx, filter.Eq("Key1", "aaa"))
+		require.NoError(t, err)
+		require.Equal(t, d1, pd)
+
+		_, err = c.Delete(ctx, filter.Or(
+			filter.Eq("Key1", "aaa"),
+			filter.Eq("Key1", "ccc")))
+		require.NoError(t, err)
+
+		_, err = c.Insert(ctx, &Coll1{Key1: "aaa", Field1: 567})
+		require.NoError(t, err)
+
+		return nil
+	})
+	if err != nil && err.Error() == "transaction not committed due to conflict with another transaction" {
+		return
 	}
-	docEnc, err = json.Marshal(doc2)
 	require.NoError(t, err)
 
-	_, err = db1.Insert(ctx, "c1", []driver.Document{docEnc}, &driver.InsertOptions{})
+	c := tigris.GetCollection[Coll1](db)
+	it, err := c.ReadAll(ctx, projection.All)
 	require.NoError(t, err)
 
-	filterEnc, err := json.Marshal(map[string]interface{}{
-		"K1": []byte("vK1"),
-	})
+	var d Coll1
+	require.True(t, it.Next(&d))
+	assert.Equal(t, Coll1{Key1: "aaa", Field1: 567}, d)
+	require.True(t, it.Next(&d))
+	assert.Equal(t, Coll1{Key1: "bbb", Field1: 345}, d)
+	require.NoError(t, it.Err())
+	it.Close()
+
+	err = c.Drop(ctx)
 	require.NoError(t, err)
-
-	var actualDoc doc
-	require.NoError(t, json.Unmarshal(getDocuments(t, c, driver.Filter(filterEnc))[0], &actualDoc))
-	require.Equal(t, doc1, actualDoc)
-
-	filterEnc, err = json.Marshal(map[string]interface{}{
-		"K1": []byte(`1234`),
-	})
-	require.NoError(t, err)
-
-	require.NoError(t, json.Unmarshal(getDocuments(t, c, driver.Filter(filterEnc))[0], &actualDoc))
-	require.Equal(t, doc2, actualDoc)
-
-	err = db1.DropCollection(ctx, "c1", &driver.CollectionOptions{})
-	require.NoError(t, err)
-}
-
-func testClient(t *testing.T, c driver.Driver) {
-	ctx := context.TODO()
-
-	_ = c.DropDatabase(ctx, "db1", &driver.DatabaseOptions{})
-
-	db1 := c.UseDatabase("db1")
-	_ = db1.DropCollection(ctx, "c1", &driver.CollectionOptions{})
-
-	schema := `{
-		"title": "c1",
-		"description": "this schema is for client integration tests",
-		"properties": {
-			"K1": {
-				"type": "string"
-			},
-			"K2": {
-				"type": "integer"
-			},
-			"D1": {
-				"type": "string",
-				"maxLength": 128
-			}
-		},
-		"primary_key": ["K1", "K2"]
-	}`
-
-	err := c.CreateDatabase(ctx, "db1", &driver.DatabaseOptions{})
-	require.NoError(t, err)
-
-	db1 = c.UseDatabase("db1")
-	err = db1.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema), &driver.CollectionOptions{})
-	require.NoError(t, err)
-
-	err = db1.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema), &driver.CollectionOptions{})
-	require.Error(t, api.Errorf(codes.AlreadyExists, "collection already exist"), err)
-
-	doc1 := driver.Document(`{"K1": "vK1", "K2": 1, "D1": "vD1"}`)
-
-	_, err = db1.Insert(ctx, "c1", []driver.Document{doc1}, &driver.InsertOptions{})
-	require.NoError(t, err)
-
-	_, err = db1.Insert(ctx, "c1", []driver.Document{doc1}, &driver.InsertOptions{})
-	require.Error(t, api.Errorf(codes.AlreadyExists, "row already exists"), err)
-
-	doc2, doc3 := driver.Document(`{"K1": "vK1", "K2": 2, "D1": "vD2"}`), driver.Document(`{"K1": "vK1", "K2": 3, "D1": "vD3"}`)
-
-	// multiple docs
-	_, err = db1.Insert(ctx, "c1", []driver.Document{doc2, doc3}, &driver.InsertOptions{})
-	require.NoError(t, err)
-
-	fl := driver.Filter(`{ "$or" : [ {"$and" : [ {"K1" : "vK1"}, {"K2" : 1} ]}, {"$and" : [ {"K1" : "vK1"}, {"K2" : 3} ]} ]}`)
-	testRead(t, c, fl, []driver.Document{doc1, doc3})
-
-	flupd := driver.Filter(`{"$and" : [ {"K1" : "vK1"}, {"K2" : 2} ]}`)
-	_, err = db1.Update(ctx, "c1", flupd, driver.Update(`{"D1": "1000"}`), &driver.UpdateOptions{})
-
-	_, err = db1.Delete(ctx, "c1", fl, &driver.DeleteOptions{})
-	require.NoError(t, err)
-
-	testRead(t, c, driver.Filter("{}"), []driver.Document{doc2})
-
-	err = db1.DropCollection(ctx, "c1", &driver.CollectionOptions{})
-	require.NoError(t, err)
-}
-
-func testTxClient(t *testing.T, c driver.Driver) {
-	ctx := context.TODO()
-
-	_ = c.DropDatabase(ctx, "db1", &driver.DatabaseOptions{})
-
-	db1 := c.UseDatabase("db1")
-	_ = db1.DropCollection(ctx, "c1", &driver.CollectionOptions{})
-
-	schema := `{
-		"title": "c1",
-		"description": "this schema is for client integration tests",
-		"properties": {
-			"K1": {
-				"type": "string"
-			},
-			"K2": {
-				"type": "integer"
-			},
-			"D1": {
-				"type": "string",
-				"maxLength": 128
-			}
-		},
-		"primary_key": ["K1", "K2"]
-	}`
-
-	err := c.CreateDatabase(ctx, "db1", &driver.DatabaseOptions{})
-	require.NoError(t, err)
-
-	db1 = c.UseDatabase("db1")
-	tx, err := c.BeginTx(ctx, "db1", &driver.TxOptions{})
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	err = tx.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema), &driver.CollectionOptions{})
-	require.NoError(t, err)
-
-	doc1 := driver.Document(`{"K1": "vK1", "K2": 1, "D1": "vD1"}`)
-
-	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1}, &driver.InsertOptions{})
-	require.NoError(t, err)
-
-	doc2, doc3 := driver.Document(`{"K1": "vK1", "K2": 2, "D1": "vD2"}`), driver.Document(`{"K1": "vK1", "K2": 3, "D1": "vD3"}`)
-
-	// multiple docs
-	_, err = tx.Insert(ctx, "c1", []driver.Document{doc2, doc3}, &driver.InsertOptions{})
-	require.NoError(t, err)
-
-	err = tx.Commit(ctx)
-	require.NoError(t, err)
-
-	fl := driver.Filter(`{ "$or" : [ {"$and" : [ {"K1" : "vK1"}, {"K2" : 1} ]}, {"$and" : [ {"K1" : "vK1"}, {"K2" : 3} ]} ]}`)
-	testRead(t, c, fl, []driver.Document{doc1, doc3})
-
-	_, err = db1.Delete(ctx, "c1", fl, &driver.DeleteOptions{})
-	require.NoError(t, err)
-
-	testRead(t, c, driver.Filter("{}"), []driver.Document{doc2})
-
-	_, err = db1.Delete(ctx, "c1", driver.Filter(`{"K1" : "vK1", "K2" : 2}`), &driver.DeleteOptions{})
-	require.NoError(t, err)
-
-	testRead(t, c, driver.Filter("{}"), nil)
-
-	tx, err = c.BeginTx(ctx, "db1", &driver.TxOptions{})
-
-	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1}, &driver.InsertOptions{})
-	require.NoError(t, err)
-
-	//multiple documents
-	_, err = tx.Insert(ctx, "c1", []driver.Document{doc2, doc3}, &driver.InsertOptions{})
-	require.NoError(t, err)
-
-	err = tx.Rollback(ctx)
-	require.NoError(t, err)
-
-	testRead(t, c, driver.Filter("{}"), nil)
-
-	err = db1.DropCollection(ctx, "c1", &driver.CollectionOptions{})
-	require.NoError(t, err)
-}
-
-func TestGRPCClient(t *testing.T) {
-	h, p := getTestServerHostPort()
-	driver.DefaultProtocol = driver.GRPC
-	c, err := driver.NewDriver(context.Background(), &clientConfig.Config{
-		URL: fmt.Sprintf("%s:%d", h, p),
-	})
-	require.NoError(t, err)
-	defer func() { _ = c.Close() }()
-
-	testClient(t, c)
-	testClientBinary(t, c)
-}
-
-func TestHTTPClient(t *testing.T) {
-	h, p := getTestServerHostPort()
-	driver.DefaultProtocol = driver.HTTP
-	c, err := driver.NewDriver(context.Background(), &clientConfig.Config{
-		URL: fmt.Sprintf("http://%s:%d", h, p),
-	})
-	require.NoError(t, err)
-	defer func() { _ = c.Close() }()
-
-	testClient(t, c)
-	testClientBinary(t, c)
-}
-
-func TestTxGRPCClient(t *testing.T) {
-	h, p := getTestServerHostPort()
-	driver.DefaultProtocol = driver.GRPC
-	c, err := driver.NewDriver(context.Background(), &clientConfig.Config{
-		URL: fmt.Sprintf("%s:%d", h, p),
-	})
-	require.NoError(t, err)
-	defer func() { _ = c.Close() }()
-
-	testTxClient(t, c)
-	testTxReadWrite(t, c)
-}
-
-func TestTxHTTPClient(t *testing.T) {
-	h, p := getTestServerHostPort()
-	driver.DefaultProtocol = driver.HTTP
-	c, err := driver.NewDriver(context.Background(), &clientConfig.Config{
-		URL: fmt.Sprintf("http://%s:%d", h, p),
-	})
-	require.NoError(t, err)
-	defer func() { _ = c.Close() }()
-
-	testTxClient(t, c)
-	testTxReadWrite(t, c)
 }

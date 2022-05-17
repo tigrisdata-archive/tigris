@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/tigrisdata/tigris/test/config"
 	"gopkg.in/gavv/httpexpect.v1"
 )
 
@@ -67,18 +66,18 @@ func (s *DatabaseSuite) TestDropDatabase() {
 }
 
 func createDatabase(t *testing.T, databaseName string) *httpexpect.Response {
-	e := httpexpect.New(t, config.GetBaseURL())
+	e := expect(t)
 	return e.POST(getDatabaseURL(databaseName, "create")).
 		Expect()
 }
 
 func dropDatabase(t *testing.T, databaseName string) *httpexpect.Response {
-	e := httpexpect.New(t, config.GetBaseURL())
+	e := expect(t)
 	return e.DELETE(getDatabaseURL(databaseName, "drop")).
 		Expect()
 }
 
 func describeDatabase(t *testing.T, databaseName string) *httpexpect.Response {
-	e := httpexpect.New(t, config.GetBaseURL())
+	e := expect(t)
 	return e.POST(getDatabaseURL(databaseName, "describe")).Expect()
 }
