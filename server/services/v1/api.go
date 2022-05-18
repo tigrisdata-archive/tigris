@@ -26,6 +26,7 @@ import (
 	"github.com/tigrisdata/tigris/cdc"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/server/metadata"
+	middleware "github.com/tigrisdata/tigris/server/midddleware"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/util"
@@ -89,9 +90,10 @@ func newApiService(kv kv.KeyValueStore) *apiService {
 }
 
 func (s *apiService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {
-	mux := runtime.NewServeMux(runtime.WithMarshalerOption(runtime.MIMEWildcard, &api.CustomMarshaler{
-		JSONBuiltin: &runtime.JSONBuiltin{},
-	}))
+	mux := runtime.NewServeMux(
+		runtime.WithMarshalerOption(runtime.MIMEWildcard, &api.CustomMarshaler{JSONBuiltin: &runtime.JSONBuiltin{}}),
+		runtime.WithIncomingHeaderMatcher(middleware.CustomMatcher),
+	)
 
 	if err := api.RegisterTigrisHandlerClient(context.TODO(), mux, api.NewTigrisClient(inproc)); err != nil {
 		return err
