@@ -23,6 +23,7 @@ import (
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/midddleware"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	ulog "github.com/tigrisdata/tigris/util/log"
@@ -133,6 +134,7 @@ func (sessMgr *SessionManager) Execute(ctx context.Context, req *ReqOptions) (*R
 }
 
 func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, req *ReqOptions) (resp *Response, err error) {
+	delta := time.Duration(50) * time.Millisecond
 	start := time.Now()
 	for {
 		var session *QuerySession
@@ -150,12 +152,24 @@ func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, req *ReqOpt
 		if err != kv.ErrConflictingTransaction {
 			return
 		}
-		if time.Since(start) > 2*time.Second {
-			return
-		}
 
-		log.Debug().Msgf("retrying transactions id: %s, since: %v", session.txCtx.Id, time.Since(start))
-		time.Sleep(time.Duration(rand.Intn(50)) * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			d, ok := ctx.Deadline()
+			if ok && time.Until(d) <= delta {
+				// if remaining is less than delta then probably not worth retrying
+				return
+			}
+			if !ok && time.Since(start) > (middleware.DefaultTimeout-delta) {
+				// this should not happen, adding a safeguard
+				return
+			}
+
+			log.Debug().Msgf("retrying transactions id: %s, since: %v", session.txCtx.Id, time.Since(start))
+			time.Sleep(time.Duration(rand.Intn(25)) * time.Millisecond)
+		}
 	}
 }
 
