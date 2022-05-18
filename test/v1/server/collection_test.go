@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"gopkg.in/gavv/httpexpect.v1"
 )
 
@@ -167,19 +168,13 @@ func (s *CollectionSuite) TestCreateCollection() {
 		dropCollection(s.T(), s.database, "test_collection")
 
 		resp := createCollection(s.T(), s.database, "", nil)
-		resp.Status(http.StatusBadRequest).
-			JSON().
-			Object().
-			ValueEqual("message", "invalid collection name")
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "invalid collection name")
 	})
 	s.Run("status_400_schema_nil", func() {
 		dropCollection(s.T(), s.database, "test_collection")
 
 		resp := createCollection(s.T(), s.database, "test_collection", nil)
-		resp.Status(http.StatusBadRequest).
-			JSON().
-			Object().
-			ValueEqual("message", "schema is a required during collection creation")
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "schema is a required during collection creation")
 	})
 	s.Run("status_success", func() {
 		dropCollection(s.T(), s.database, "test_collection")
@@ -209,13 +204,10 @@ func (s *CollectionSuite) TestCreateCollection() {
 			Object().
 			ValueEqual("message", "collection created successfully")
 
-		e.POST(getCollectionURL(s.database, "test_collection", "createOrUpdate")).
+		resp := e.POST(getCollectionURL(s.database, "test_collection", "createOrUpdate")).
 			WithJSON(createOrUpdateOptions).
-			Expect().
-			Status(http.StatusConflict).
-			JSON().
-			Object().
-			ValueEqual("message", "collection already exist")
+			Expect()
+		testError(resp, http.StatusConflict, api.Code_ALREADY_EXISTS, "collection already exist")
 	})
 }
 
@@ -230,10 +222,7 @@ func (s *CollectionSuite) TestDropCollection() {
 
 	// dropping again should return in a NOT FOUND error
 	resp = dropCollection(s.T(), s.database, "test_collection")
-	resp.Status(http.StatusNotFound).
-		JSON().
-		Object().
-		ValueEqual("message", "collection doesn't exists 'test_collection'")
+	testError(resp, http.StatusNotFound, api.Code_NOT_FOUND, "collection doesn't exists 'test_collection'")
 }
 
 func (s *CollectionSuite) TestDescribeCollection() {

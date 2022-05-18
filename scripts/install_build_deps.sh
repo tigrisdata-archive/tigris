@@ -17,11 +17,11 @@ set -ex
 
 export GO111MODULE=on
 
-go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.27.1
-go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.2.0
-go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2.7.3
-go install github.com/google/gnostic/cmd/protoc-gen-openapi@v0.6.6 #generate openapi 3.0 spec
-go install github.com/deepmap/oapi-codegen/cmd/oapi-codegen@v1.9.1 #generate go http client
+go install google.golang.org/protobuf/cmd/protoc-gen-go@v1
+go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1
+go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2
+go install github.com/google/gnostic/cmd/protoc-gen-openapi@v0 #generate openapi 3.0 spec
+go install github.com/deepmap/oapi-codegen/cmd/oapi-codegen@v1 #generate go http client
 go install github.com/mikefarah/yq/v4@latest # used to fix OpenAPI spec in scripts/fix_openapi.sh
 
 FDB_VERSION=6.3.23

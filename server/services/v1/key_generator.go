@@ -14,7 +14,6 @@ import (
 	"github.com/tigrisdata/tigris/server/metadata/encoding"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
-	"google.golang.org/grpc/codes"
 )
 
 const (
@@ -50,7 +49,7 @@ func (g *generator) get(ctx context.Context, table []byte, field *schema.Field) 
 	case schema.Int32Type:
 		return g.generateInTx(ctx, table)
 	}
-	return nil, api.Errorf(codes.InvalidArgument, "unsupported type found in auto-generator")
+	return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported type found in auto-generator")
 }
 
 // generateInTx is used to generate an id in a transaction for int32 field only. This is mainly used to guarantee

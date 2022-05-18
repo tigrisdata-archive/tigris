@@ -20,7 +20,6 @@ import (
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/metadata/encoding"
-	"google.golang.org/grpc/codes"
 )
 
 var (
@@ -59,10 +58,10 @@ type DictKeyEncoder struct {
 
 func (d *DictKeyEncoder) EncodeTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) ([]byte, error) {
 	if db == nil {
-		return nil, api.Errorf(codes.InvalidArgument, "database is missing")
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "database is missing")
 	}
 	if coll == nil {
-		return nil, api.Errorf(codes.InvalidArgument, "collection is missing")
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "collection is missing")
 	}
 	return d.encodedTableName(ns, db, coll), nil
 }
@@ -73,7 +72,7 @@ func (d *DictKeyEncoder) EncodeIndexName(idx *schema.Index) []byte {
 
 func (d *DictKeyEncoder) EncodeKey(encodedTable []byte, idx *schema.Index, idxParts []interface{}) (keys.Key, error) {
 	if idx == nil {
-		return nil, api.Errorf(codes.InvalidArgument, "index is missing")
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "index is missing")
 	}
 
 	encodedIdxName := d.encodedIdxName(idx)

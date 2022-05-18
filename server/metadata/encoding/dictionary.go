@@ -28,7 +28,6 @@ import (
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	ulog "github.com/tigrisdata/tigris/util/log"
-	"google.golang.org/grpc/codes"
 )
 
 // There are three subspaces(tables) introduced by this package. The first is reserved to which is used for two things
@@ -124,12 +123,12 @@ func (r *reservedSubspace) reload(ctx context.Context, tx transaction.Tx) error 
 	var row kv.KeyValue
 	for it.Next(&row) {
 		if len(row.Key) < 3 {
-			return api.Errorf(codes.Internal, "not a valid key %v", row.Key)
+			return api.Errorf(api.Code_INTERNAL, "not a valid key %v", row.Key)
 		}
 
 		allocatedTo := row.Key[len(row.Key)-2]
 		if _, ok := allocatedTo.(string); !ok {
-			return api.Errorf(codes.Internal, "unable to deduce the encoded key from fdb key %T", allocatedTo)
+			return api.Errorf(api.Code_INTERNAL, "unable to deduce the encoded key from fdb key %T", allocatedTo)
 		}
 
 		allocatedValue := ByteToUInt32(row.Data.RawData)
@@ -142,7 +141,7 @@ func (r *reservedSubspace) reload(ctx context.Context, tx transaction.Tx) error 
 
 func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.Tx, namespace string, id uint32) error {
 	if len(namespace) == 0 {
-		return api.Errorf(codes.InvalidArgument, "namespace is empty")
+		return api.Errorf(api.Code_INVALID_ARGUMENT, "namespace is empty")
 	}
 
 	if err := r.reload(ctx, tx); ulog.E(err) {
@@ -156,7 +155,7 @@ func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.
 		if allocatedTo == namespace {
 			return nil
 		} else {
-			return api.Errorf(codes.AlreadyExists, "id is already assigned to the namespace '%s'", allocatedTo)
+			return api.Errorf(api.Code_ALREADY_EXISTS, "id is already assigned to the namespace '%s'", allocatedTo)
 		}
 	}
 
@@ -232,7 +231,7 @@ func (k *DictionaryEncoder) EncodeDatabaseName(ctx context.Context, tx transacti
 		return InvalidId, err
 	}
 	if len(dbName) == 0 {
-		return InvalidId, api.Errorf(codes.InvalidArgument, "database name is empty")
+		return InvalidId, api.Errorf(api.Code_INVALID_ARGUMENT, "database name is empty")
 	}
 
 	key := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyEnd)
@@ -246,7 +245,7 @@ func (k *DictionaryEncoder) EncodeDatabaseAsDropped(ctx context.Context, tx tran
 		return err
 	}
 	if len(dbName) == 0 {
-		return api.Errorf(codes.InvalidArgument, "database name is empty")
+		return api.Errorf(api.Code_INVALID_ARGUMENT, "database name is empty")
 	}
 
 	// remove existing entry
@@ -263,7 +262,7 @@ func (k *DictionaryEncoder) EncodeCollectionName(ctx context.Context, tx transac
 		return InvalidId, err
 	}
 	if len(collection) == 0 {
-		return InvalidId, api.Errorf(codes.InvalidArgument, "collection name is empty")
+		return InvalidId, api.Errorf(api.Code_INVALID_ARGUMENT, "collection name is empty")
 	}
 
 	key := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collection, keyEnd)
@@ -278,7 +277,7 @@ func (k *DictionaryEncoder) EncodeCollectionAsDropped(ctx context.Context, tx tr
 		return err
 	}
 	if len(collection) == 0 {
-		return api.Errorf(codes.InvalidArgument, "collection name is empty")
+		return api.Errorf(api.Code_INVALID_ARGUMENT, "collection name is empty")
 	}
 
 	// remove existing entry
@@ -298,7 +297,7 @@ func (k *DictionaryEncoder) EncodeIndexName(ctx context.Context, tx transaction.
 		return InvalidId, err
 	}
 	if len(indexName) == 0 {
-		return InvalidId, api.Errorf(codes.InvalidArgument, "index name is empty")
+		return InvalidId, api.Errorf(api.Code_INVALID_ARGUMENT, "index name is empty")
 	}
 
 	key := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyEnd)
@@ -316,7 +315,7 @@ func (k *DictionaryEncoder) EncodeIndexAsDropped(ctx context.Context, tx transac
 		return err
 	}
 	if len(indexName) == 0 {
-		return api.Errorf(codes.InvalidArgument, "index name is empty")
+		return api.Errorf(api.Code_INVALID_ARGUMENT, "index name is empty")
 	}
 
 	toDeleteKey := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyEnd)
@@ -359,21 +358,21 @@ func (k *DictionaryEncoder) encode(ctx context.Context, tx transaction.Tx, key k
 
 func (k *DictionaryEncoder) validNamespaceId(id uint32) error {
 	if id == InvalidId {
-		return api.Errorf(codes.InvalidArgument, "invalid namespace id")
+		return api.Errorf(api.Code_INVALID_ARGUMENT, "invalid namespace id")
 	}
 	return nil
 }
 
 func (k *DictionaryEncoder) validDatabaseId(id uint32) error {
 	if id == InvalidId {
-		return api.Errorf(codes.InvalidArgument, "invalid database id")
+		return api.Errorf(api.Code_INVALID_ARGUMENT, "invalid database id")
 	}
 	return nil
 }
 
 func (k *DictionaryEncoder) validCollectionId(id uint32) error {
 	if id == InvalidId {
-		return api.Errorf(codes.InvalidArgument, "invalid collection id")
+		return api.Errorf(api.Code_INVALID_ARGUMENT, "invalid collection id")
 	}
 	return nil
 }
@@ -389,18 +388,18 @@ func (k *DictionaryEncoder) GetDatabases(ctx context.Context, tx transaction.Tx,
 	var v kv.KeyValue
 	for it.Next(&v) {
 		if len(v.Key) < 5 {
-			return nil, api.Errorf(codes.Internal, "not a valid key %v", v.Key)
+			return nil, api.Errorf(api.Code_INTERNAL, "not a valid key %v", v.Key)
 		}
 		if len(v.Key) == 5 {
 			// format <version,namespace-id,db,dbName,keyEnd>
 			end, ok := v.Key[4].(string)
 			if !ok || (end != keyEnd && end != keyDroppedEnd) {
-				return nil, api.Errorf(codes.Internal, "database encoding is missing %v", v.Key)
+				return nil, api.Errorf(api.Code_INTERNAL, "database encoding is missing %v", v.Key)
 			}
 
 			name, ok := v.Key[3].(string)
 			if !ok {
-				return nil, api.Errorf(codes.Internal, "database name not found %T %v", v.Key[3], v.Key[3])
+				return nil, api.Errorf(api.Code_INTERNAL, "database name not found %T %v", v.Key[3], v.Key[3])
 			}
 
 			if end == keyDroppedEnd {
@@ -417,7 +416,7 @@ func (k *DictionaryEncoder) GetDatabases(ctx context.Context, tx transaction.Tx,
 	log.Debug().Interface("existing_created", databases).Msg("created databases")
 	for droppedDB, droppedValue := range droppedDatabase {
 		if createdValue, ok := databases[droppedDB]; ok && droppedValue >= createdValue {
-			return nil, api.Errorf(codes.Internal, "retrogression found in database assigned value database [%s] droppedValue [%d] createdValue [%d]", droppedDB, droppedValue, createdValue)
+			return nil, api.Errorf(api.Code_INTERNAL, "retrogression found in database assigned value database [%s] droppedValue [%d] createdValue [%d]", droppedDB, droppedValue, createdValue)
 		}
 	}
 
@@ -435,19 +434,19 @@ func (k *DictionaryEncoder) GetCollections(ctx context.Context, tx transaction.T
 	var v kv.KeyValue
 	for it.Next(&v) {
 		if len(v.Key) < 6 {
-			return nil, api.Errorf(codes.Internal, "not a valid key %v", v.Key)
+			return nil, api.Errorf(api.Code_INTERNAL, "not a valid key %v", v.Key)
 		}
 
 		if len(v.Key) == 6 {
 			// format <version,namespace-id,db-id,coll,coll-name,keyEnd>
 			end, ok := v.Key[5].(string)
 			if !ok || (end != keyEnd && end != keyDroppedEnd) {
-				return nil, api.Errorf(codes.Internal, "collection encoding is missing %v", v.Key)
+				return nil, api.Errorf(api.Code_INTERNAL, "collection encoding is missing %v", v.Key)
 			}
 
 			name, ok := v.Key[4].(string)
 			if !ok {
-				return nil, api.Errorf(codes.Internal, "collection name not found %T %v", v.Key[4], v.Key[4])
+				return nil, api.Errorf(api.Code_INTERNAL, "collection name not found %T %v", v.Key[4], v.Key[4])
 			}
 
 			if end == keyDroppedEnd {
@@ -464,7 +463,7 @@ func (k *DictionaryEncoder) GetCollections(ctx context.Context, tx transaction.T
 	log.Debug().Uint32("db", databaseId).Interface("existing_created", collections).Msg("created collections")
 	for droppedC, droppedValue := range droppedCollection {
 		if createdValue, ok := collections[droppedC]; ok && droppedValue >= createdValue {
-			return nil, api.Errorf(codes.Internal, "retrogression found in collection assigned value collection [%s] droppedValue [%d] createdValue [%d]", droppedC, droppedValue, createdValue)
+			return nil, api.Errorf(api.Code_INTERNAL, "retrogression found in collection assigned value collection [%s] droppedValue [%d] createdValue [%d]", droppedC, droppedValue, createdValue)
 		}
 	}
 
@@ -482,7 +481,7 @@ func (k *DictionaryEncoder) GetIndexes(ctx context.Context, tx transaction.Tx, n
 	var v kv.KeyValue
 	for it.Next(&v) {
 		if len(v.Key) < 6 {
-			return nil, api.Errorf(codes.Internal, "not a valid key %v", v.Key)
+			return nil, api.Errorf(api.Code_INTERNAL, "not a valid key %v", v.Key)
 		}
 		if len(v.Key) == 7 {
 			// if it is the format <version,namespace-id,db-id,coll-id,indexName,index-name,keyEnd>
@@ -494,7 +493,7 @@ func (k *DictionaryEncoder) GetIndexes(ctx context.Context, tx transaction.Tx, n
 
 			name, ok := v.Key[5].(string)
 			if !ok {
-				return nil, api.Errorf(codes.Internal, "index name not found %T %v", v.Key[5], v.Key[5])
+				return nil, api.Errorf(api.Code_INTERNAL, "index name not found %T %v", v.Key[5], v.Key[5])
 			}
 
 			if end == keyDroppedEnd {
@@ -511,7 +510,7 @@ func (k *DictionaryEncoder) GetIndexes(ctx context.Context, tx transaction.Tx, n
 	// retrogression check
 	for droppedC, droppedValue := range droppedIndexes {
 		if createdValue, ok := indexes[droppedC]; ok && droppedValue >= createdValue {
-			return nil, api.Errorf(codes.Internal, "retrogression found in indexes assigned value index [%s] droppedValue [%d] createdValue [%d]", droppedC, droppedValue, createdValue)
+			return nil, api.Errorf(api.Code_INTERNAL, "retrogression found in indexes assigned value index [%s] droppedValue [%d] createdValue [%d]", droppedC, droppedValue, createdValue)
 		}
 	}
 

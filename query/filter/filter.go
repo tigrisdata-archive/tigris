@@ -16,6 +16,7 @@ package filter
 
 import (
 	"bytes"
+
 	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
@@ -23,8 +24,6 @@ import (
 	"github.com/tigrisdata/tigris/schema"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/tigrisdata/tigris/value"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 var (
@@ -89,7 +88,7 @@ func (factory *Factory) Build(reqFilter []byte) ([]Filter, error) {
 			return err
 		}
 		if _, ok := seen[string(k)]; ok {
-			return api.Errorf(codes.InvalidArgument, "duplicate filter '%s'", string(k))
+			return api.Errorf(api.Code_INVALID_ARGUMENT, "duplicate filter '%s'", string(k))
 		}
 		seen[string(k)] = struct{}{}
 		filters = append(filters, filter)
@@ -174,7 +173,7 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 		}
 	}
 	if field == nil {
-		return nil, api.Errorf(codes.InvalidArgument, "querying on non schema field '%s'", string(k))
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "querying on non schema field '%s'", string(k))
 	}
 
 	switch dataType {
@@ -193,13 +192,13 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 
 		return NewSelector(string(k), valueMatcher), nil
 	default:
-		return nil, api.Errorf(codes.InvalidArgument, "unable to parse the comparison operator")
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "unable to parse the comparison operator")
 	}
 }
 
 func buildComparisonOperator(input jsoniter.RawMessage, field *schema.Field) (ValueMatcher, error) {
 	if len(input) == 0 {
-		return nil, status.Errorf(codes.InvalidArgument, "empty object")
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "empty object")
 	}
 
 	var valueMatcher ValueMatcher
@@ -223,7 +222,7 @@ func buildComparisonOperator(input jsoniter.RawMessage, field *schema.Field) (Va
 				return err
 			}
 		default:
-			return status.Errorf(codes.InvalidArgument, "expression is not supported inside comparison operator %s", string(key))
+			return api.Errorf(api.Code_INVALID_ARGUMENT, "expression is not supported inside comparison operator %s", string(key))
 		}
 		return nil
 	})

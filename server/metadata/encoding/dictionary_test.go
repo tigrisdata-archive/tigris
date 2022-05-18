@@ -26,14 +26,13 @@ import (
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	ulog "github.com/tigrisdata/tigris/util/log"
-	"google.golang.org/grpc/codes"
 )
 
 func TestDictionaryEncoding(t *testing.T) {
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
-	kv, err := kv.NewKeyValueStore(fdbCfg)
+	kvs, err := kv.NewKeyValueStore(fdbCfg)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -43,10 +42,10 @@ func TestDictionaryEncoding(t *testing.T) {
 		ReserveSB:  "test_reserved",
 		EncodingSB: "test_encoding",
 	})
-	_ = kv.DropTable(ctx, k.EncodingSubspaceName())
-	_ = kv.DropTable(ctx, k.ReservedSubspaceName())
+	_ = kvs.DropTable(ctx, k.EncodingSubspaceName())
+	_ = kvs.DropTable(ctx, k.ReservedSubspaceName())
 
-	tm := transaction.NewManager(kv)
+	tm := transaction.NewManager(kvs)
 
 	tx, err := tm.StartTx(ctx)
 	require.NoError(t, err)
@@ -97,7 +96,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
-	kv, err := kv.NewKeyValueStore(fdbCfg)
+	kvs, err := kv.NewKeyValueStore(fdbCfg)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -109,10 +108,10 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 			EncodingSB: "test_encoding",
 		})
 
-		_ = kv.DropTable(ctx, k.EncodingSubspaceName())
-		_ = kv.DropTable(ctx, k.ReservedSubspaceName())
+		_ = kvs.DropTable(ctx, k.EncodingSubspaceName())
+		_ = kvs.DropTable(ctx, k.ReservedSubspaceName())
 
-		tm := transaction.NewManager(kv)
+		tm := transaction.NewManager(kvs)
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
@@ -151,10 +150,10 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 			EncodingSB: "test_encoding",
 		})
 
-		_ = kv.DropTable(ctx, k.EncodingSubspaceName())
-		_ = kv.DropTable(ctx, k.ReservedSubspaceName())
+		_ = kvs.DropTable(ctx, k.EncodingSubspaceName())
+		_ = kvs.DropTable(ctx, k.ReservedSubspaceName())
 
-		tm := transaction.NewManager(kv)
+		tm := transaction.NewManager(kvs)
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
 		require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", 1234))
@@ -198,10 +197,10 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 			EncodingSB: "test_encoding",
 		})
 
-		_ = kv.DropTable(ctx, k.EncodingSubspaceName())
-		_ = kv.DropTable(ctx, k.ReservedSubspaceName())
+		_ = kvs.DropTable(ctx, k.EncodingSubspaceName())
+		_ = kvs.DropTable(ctx, k.ReservedSubspaceName())
 
-		tm := transaction.NewManager(kv)
+		tm := transaction.NewManager(kvs)
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
 		require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", 1234))
@@ -251,10 +250,10 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 			EncodingSB: "test_encoding",
 		})
 
-		_ = kv.DropTable(ctx, k.EncodingSubspaceName())
-		_ = kv.DropTable(ctx, k.ReservedSubspaceName())
+		_ = kvs.DropTable(ctx, k.EncodingSubspaceName())
+		_ = kvs.DropTable(ctx, k.ReservedSubspaceName())
 
-		tm := transaction.NewManager(kv)
+		tm := transaction.NewManager(kvs)
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
 		require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", 1234))
@@ -311,7 +310,7 @@ func TestDictionaryEncoding_Error(t *testing.T) {
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
-	kv, err := kv.NewKeyValueStore(fdbCfg)
+	kvs, err := kv.NewKeyValueStore(fdbCfg)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -322,22 +321,22 @@ func TestDictionaryEncoding_Error(t *testing.T) {
 		EncodingSB: "test_encoding",
 	})
 
-	_ = kv.DropTable(ctx, k.EncodingSubspaceName())
-	_ = kv.DropTable(ctx, k.ReservedSubspaceName())
+	_ = kvs.DropTable(ctx, k.EncodingSubspaceName())
+	_ = kvs.DropTable(ctx, k.ReservedSubspaceName())
 
-	tm := transaction.NewManager(kv)
+	tm := transaction.NewManager(kvs)
 	tx, err := tm.StartTx(ctx)
 	require.NoError(t, err)
 	dbId, err := k.EncodeDatabaseName(ctx, tx, "db-1", 0)
-	require.Error(t, api.Errorf(codes.InvalidArgument, "invalid namespace id"), err)
+	require.Error(t, api.Errorf(api.Code_INVALID_ARGUMENT, "invalid namespace id"), err)
 	require.Equal(t, InvalidId, dbId)
 
 	collId, err := k.EncodeCollectionName(ctx, tx, "coll-1", 1234, 0)
-	require.Error(t, api.Errorf(codes.InvalidArgument, "invalid database id"), err)
+	require.Error(t, api.Errorf(api.Code_INVALID_ARGUMENT, "invalid database id"), err)
 	require.Equal(t, InvalidId, collId)
 
 	indexId, err := k.EncodeIndexName(ctx, tx, "pkey", 1234, 1, 0)
-	require.Error(t, api.Errorf(codes.InvalidArgument, "invalid collection id"), err)
+	require.Error(t, api.Errorf(api.Code_INVALID_ARGUMENT, "invalid collection id"), err)
 	require.Equal(t, InvalidId, indexId)
 	require.NoError(t, tx.Rollback(context.TODO()))
 }
@@ -346,21 +345,21 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
-	kv, err := kv.NewKeyValueStore(fdbCfg)
+	kvs, err := kv.NewKeyValueStore(fdbCfg)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	tm := transaction.NewManager(kv)
+	tm := transaction.NewManager(kvs)
 	t.Run("get_databases", func(t *testing.T) {
 		k := NewDictionaryEncoder(&TestMDNameRegistry{
 			ReserveSB:  "test_reserved",
 			EncodingSB: "test_encoding",
 		})
 
-		_ = kv.DropTable(ctx, k.EncodingSubspaceName())
-		_ = kv.DropTable(ctx, k.ReservedSubspaceName())
+		_ = kvs.DropTable(ctx, k.EncodingSubspaceName())
+		_ = kvs.DropTable(ctx, k.ReservedSubspaceName())
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
@@ -382,8 +381,8 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 			EncodingSB: "test_encoding",
 		})
 
-		_ = kv.DropTable(ctx, k.EncodingSubspaceName())
-		_ = kv.DropTable(ctx, k.ReservedSubspaceName())
+		_ = kvs.DropTable(ctx, k.EncodingSubspaceName())
+		_ = kvs.DropTable(ctx, k.ReservedSubspaceName())
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
@@ -408,8 +407,8 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 			EncodingSB: "test_encoding",
 		})
 
-		_ = kv.DropTable(ctx, k.EncodingSubspaceName())
-		_ = kv.DropTable(ctx, k.ReservedSubspaceName())
+		_ = kvs.DropTable(ctx, k.EncodingSubspaceName())
+		_ = kvs.DropTable(ctx, k.ReservedSubspaceName())
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
@@ -433,7 +432,7 @@ func TestReservedNamespace(t *testing.T) {
 	fdbCfg, err := config.GetTestFDBConfig("../../..")
 	require.NoError(t, err)
 
-	kv, err := kv.NewKeyValueStore(fdbCfg)
+	kvs, err := kv.NewKeyValueStore(fdbCfg)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -444,10 +443,10 @@ func TestReservedNamespace(t *testing.T) {
 		EncodingSB: "test_encoding",
 	})
 
-	_ = kv.DropTable(ctx, r.EncodingSubspaceName())
-	_ = kv.DropTable(ctx, r.ReservedSubspaceName())
+	_ = kvs.DropTable(ctx, r.EncodingSubspaceName())
+	_ = kvs.DropTable(ctx, r.ReservedSubspaceName())
 
-	tm := transaction.NewManager(kv)
+	tm := transaction.NewManager(kvs)
 
 	tx, err := tm.StartTx(ctx)
 	require.NoError(t, err)
@@ -463,7 +462,7 @@ func TestReservedNamespace(t *testing.T) {
 	// try assigning the same namespace id to some other namespace
 	tx, err = tm.StartTx(context.TODO())
 	require.NoError(t, err)
-	expError := api.Errorf(codes.AlreadyExists, "id is already assigned to the namespace 'p1-o1'")
+	expError := api.Errorf(api.Code_ALREADY_EXISTS, "id is already assigned to the namespace 'p1-o1'")
 	require.Equal(t, expError, r.reserveNamespace(context.TODO(), tx, "p2-o2", 123))
 }
 

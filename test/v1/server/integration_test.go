@@ -23,6 +23,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	"gopkg.in/gavv/httpexpect.v1"
 )
 
 func SetupSuites() []suite.TestingSuite {
@@ -51,4 +53,10 @@ func TestServer(t *testing.T) {
 
 func TestMain(m *testing.M) {
 	os.Exit(m.Run())
+}
+
+func testError(resp *httpexpect.Response, status int, code api.Code, message string) {
+	resp.Status(status).
+		JSON().Path("$.error").Object().
+		ValueEqual("message", message).ValueEqual("code", api.CodeToString(code))
 }

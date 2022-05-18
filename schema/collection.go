@@ -25,7 +25,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-	"google.golang.org/grpc/codes"
 )
 
 const (
@@ -127,11 +126,11 @@ func (d *DefaultCollection) Validate(document interface{}) error {
 			if len(field) > 0 && field[0] == '/' {
 				field = field[1:]
 			}
-			return api.Errorf(codes.InvalidArgument, "json schema validation failed for field '%s' reason '%s'", field, v.Causes[0].Message)
+			return api.Errorf(api.Code_INVALID_ARGUMENT, "json schema validation failed for field '%s' reason '%s'", field, v.Causes[0].Message)
 		}
 	}
 
-	return api.Errorf(codes.InvalidArgument, err.Error())
+	return api.Errorf(api.Code_INVALID_ARGUMENT, err.Error())
 }
 
 func init() {
@@ -176,5 +175,5 @@ func parseInt(i interface{}) (int64, error) {
 		}
 		return n, nil
 	}
-	return 0, api.Errorf(codes.InvalidArgument, "expected integer but found %T", i)
+	return 0, api.Errorf(api.Code_INVALID_ARGUMENT, "expected integer but found %T", i)
 }

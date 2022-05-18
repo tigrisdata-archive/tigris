@@ -17,8 +17,6 @@ package schema
 import (
 	"testing"
 
-	"google.golang.org/grpc/codes"
-
 	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 )
@@ -221,7 +219,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 	"primary_key": ["id"]
 }`)
 		_, err := Build("t1", schema)
-		require.Equal(t, api.Errorf(codes.InvalidArgument, "missing items for array field"), err)
+		require.Equal(t, api.Errorf(api.Code_INVALID_ARGUMENT, "missing items for array field"), err)
 	})
 	t.Run("test_object_missing_properties_error", func(t *testing.T) {
 		schema := []byte(`{
@@ -237,7 +235,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 	"primary_key": ["id"]
 }`)
 		_, err := Build("t1", schema)
-		require.Equal(t, api.Errorf(codes.InvalidArgument, "missing properties for object field"), err)
+		require.Equal(t, api.Errorf(api.Code_INVALID_ARGUMENT, "missing properties for object field"), err)
 	})
 	t.Run("test_auto-generated", func(t *testing.T) {
 		schema := []byte(`{

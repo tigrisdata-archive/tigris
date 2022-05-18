@@ -19,7 +19,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-	"google.golang.org/grpc/codes"
 )
 
 func TestFieldBuilder_Build(t *testing.T) {
@@ -42,7 +41,7 @@ func TestFieldBuilder_Build(t *testing.T) {
 			},
 			{
 				builder:  &FieldBuilder{FieldName: "test", Type: "bool"},
-				expError: api.Errorf(codes.InvalidArgument, "unsupported type detected 'bool'"),
+				expError: api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported type detected 'bool'"),
 			},
 			{
 				builder:  &FieldBuilder{FieldName: "test", Type: "string", Format: "uuid"},
@@ -54,7 +53,7 @@ func TestFieldBuilder_Build(t *testing.T) {
 			},
 			{
 				builder:  &FieldBuilder{FieldName: "test", Type: "number", Primary: &boolTrue},
-				expError: api.Errorf(codes.InvalidArgument, "unsupported primary key type detected 'number'"),
+				expError: api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported primary key type detected 'number'"),
 			},
 			{
 				builder:  &FieldBuilder{FieldName: "test", Type: "integer", Primary: &boolTrue},
@@ -77,11 +76,11 @@ func TestFieldBuilder_Build(t *testing.T) {
 			},
 			{
 				[]byte(`{"unique": true}`),
-				api.Errorf(codes.InvalidArgument, "unsupported property found 'unique'"),
+				api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported property found 'unique'"),
 			},
 			{
 				[]byte(`{"max_length": 100}`),
-				api.Errorf(codes.InvalidArgument, "unsupported property found 'max_length'"),
+				api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported property found 'max_length'"),
 			},
 			{
 				[]byte(`{"maxLength": 100}`),

@@ -16,11 +16,11 @@ package expression
 
 import (
 	"fmt"
+
 	"github.com/tigrisdata/tigris/value"
 
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-	"google.golang.org/grpc/codes"
 )
 
 // Expr can be any operator, filter, field literal, etc. It is useful for parsing complex grammar, it can be nested.
@@ -52,10 +52,10 @@ func Unmarshal(input jsoniter.RawMessage, objCb func(jsoniter.RawMessage) (Expr,
 	case jsoniter.ObjectValue:
 		return objCb(input)
 	case jsoniter.NilValue:
-		return nil, api.Errorf(codes.InvalidArgument, "null is not a valid expression")
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "null is not a valid expression")
 	}
 
-	return nil, api.Errorf(codes.InvalidArgument, "not a valid expression")
+	return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "not a valid expression")
 }
 
 func UnmarshalArray(input jsoniter.RawMessage, objCb func(jsoniter.RawMessage) (Expr, error)) ([]Expr, error) {
@@ -73,7 +73,7 @@ func UnmarshalArray(input jsoniter.RawMessage, objCb func(jsoniter.RawMessage) (
 		}
 
 		if e == nil {
-			return nil, api.Errorf(codes.InvalidArgument, "empty object detected")
+			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "empty object detected")
 		}
 
 		expr = append(expr, e)

@@ -19,9 +19,8 @@ import (
 	"strconv"
 	"time"
 
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 var (
@@ -52,7 +51,7 @@ func TimeoutUnaryServerInterceptor(timeout time.Duration) grpc.UnaryServerInterc
 				cancel()
 			}
 			if ctx.Err() == context.DeadlineExceeded {
-				err = status.Errorf(codes.DeadlineExceeded, "context deadline exceeded")
+				err = api.Errorf(api.Code_DEADLINE_EXCEEDED, "context deadline exceeded")
 			}
 		}()
 

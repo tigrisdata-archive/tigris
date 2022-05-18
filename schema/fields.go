@@ -20,7 +20,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/lib/set"
-	"google.golang.org/grpc/codes"
 )
 
 type FieldType int
@@ -174,7 +173,7 @@ func (f *FieldBuilder) Validate(v []byte) error {
 
 	for key := range fieldProperties {
 		if !SupportedFieldProperties.Contains(key) {
-			return api.Errorf(codes.InvalidArgument, "unsupported property found '%s'", key)
+			return api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported property found '%s'", key)
 		}
 	}
 
@@ -185,22 +184,22 @@ func (f *FieldBuilder) Build() (*Field, error) {
 	fieldType := ToFieldType(f.Type, f.Encoding, f.Format)
 	if fieldType == UnknownType {
 		if len(f.Encoding) > 0 {
-			return nil, api.Errorf(codes.InvalidArgument, "unsupported encoding '%s'", f.Encoding)
+			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported encoding '%s'", f.Encoding)
 		}
 		if len(f.Format) > 0 {
-			return nil, api.Errorf(codes.InvalidArgument, "unsupported format '%s'", f.Format)
+			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported format '%s'", f.Format)
 		}
 
-		return nil, api.Errorf(codes.InvalidArgument, "unsupported type detected '%s'", f.Type)
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported type detected '%s'", f.Type)
 	}
 	if f.Primary != nil && *f.Primary {
 		// validate the primary key types
 		if !IsValidIndexType(fieldType) {
-			return nil, api.Errorf(codes.InvalidArgument, "unsupported primary key type detected '%s'", f.Type)
+			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported primary key type detected '%s'", f.Type)
 		}
 	}
 	if f.Primary == nil && f.Auto != nil && *f.Auto {
-		return nil, api.Errorf(codes.InvalidArgument, "only primary fields can be set as auto-generated '%s'", f.FieldName)
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "only primary fields can be set as auto-generated '%s'", f.FieldName)
 	}
 
 	var field = &Field{}

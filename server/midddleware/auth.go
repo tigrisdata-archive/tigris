@@ -26,7 +26,6 @@ import (
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/config"
-	"google.golang.org/grpc/codes"
 )
 
 var (
@@ -55,10 +54,10 @@ func (c CustomClaim) Validate(ctx context.Context) error {
 		return err
 	}
 	if len(c.Org.Code) == 0 {
-		return api.Error(codes.PermissionDenied, "empty organization code in token")
+		return api.Errorf(api.Code_PERMISSION_DENIED, "empty organization code in token")
 	}
 	if orgName != c.Org.Code {
-		return api.Error(codes.PermissionDenied, "your token is not valid for this URL")
+		return api.Errorf(api.Code_PERMISSION_DENIED, "your token is not valid for this URL")
 	}
 	return nil
 }
@@ -74,14 +73,14 @@ func getHeader(ctx context.Context, header string) string {
 func AuthFromMD(ctx context.Context, expectedScheme string) (string, error) {
 	val := getHeader(ctx, headerAuthorize)
 	if val == "" {
-		return "", api.Error(codes.Unauthenticated, "request unauthenticated with "+expectedScheme)
+		return "", api.Errorf(api.Code_UNAUTHENTICATED, "request unauthenticated with "+expectedScheme)
 	}
 	splits := strings.SplitN(val, " ", 2)
 	if len(splits) < 2 {
-		return "", api.Error(codes.Unauthenticated, "bad authorization string")
+		return "", api.Errorf(api.Code_UNAUTHENTICATED, "bad authorization string")
 	}
 	if !strings.EqualFold(splits[0], expectedScheme) {
-		return "", api.Error(codes.Unauthenticated, "request unauthenticated with bearer")
+		return "", api.Errorf(api.Code_UNAUTHENTICATED, "request unauthenticated with bearer")
 	}
 	return splits[1], nil
 }
@@ -126,7 +125,7 @@ func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config
 
 	validToken, err := jwtValidator.ValidateToken(ctx, token)
 	if err != nil {
-		return ctx, api.Error(codes.Unauthenticated, err.Error())
+		return ctx, api.Errorf(api.Code_UNAUTHENTICATED, err.Error())
 	}
 
 	log.Debug().Msg("Valid token received")
@@ -141,11 +140,11 @@ func getOrganizationName(ctx context.Context) (string, error) {
 	// <project>-<org-name>.<env>.tigrisdata.cloud
 	parts := strings.Split(host, ".")
 	if len(parts) < 3 {
-		return "", api.Error(codes.FailedPrecondition, "hostname is not as per expected scheme")
+		return "", api.Errorf(api.Code_FAILED_PRECONDITION, "hostname is not as per expected scheme")
 	}
 	subParts := strings.Split(parts[0], "-")
 	if len(subParts) > 2 {
-		return "", api.Error(codes.FailedPrecondition, "hostname is not as per expected scheme")
+		return "", api.Errorf(api.Code_FAILED_PRECONDITION, "hostname is not as per expected scheme")
 	}
 	organizationName := subParts[0]
 	if len(subParts) > 1 {

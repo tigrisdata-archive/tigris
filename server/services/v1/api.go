@@ -32,7 +32,6 @@ import (
 	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 )
 
 const (
@@ -144,7 +143,7 @@ func (s *apiService) CommitTransaction(ctx context.Context, r *api.CommitTransac
 
 	session := s.sessions.Get(r.TxCtx.GetId())
 	if session == nil {
-		return nil, api.Errorf(codes.NotFound, "session not found")
+		return nil, api.Errorf(api.Code_NOT_FOUND, "session not found")
 	}
 	defer s.sessions.Remove(session.txCtx.Id)
 
@@ -163,7 +162,7 @@ func (s *apiService) RollbackTransaction(ctx context.Context, r *api.RollbackTra
 
 	session := s.sessions.Get(r.TxCtx.GetId())
 	if session == nil {
-		return nil, api.Errorf(codes.NotFound, "session not found")
+		return nil, api.Errorf(api.Code_NOT_FOUND, "session not found")
 	}
 	defer s.sessions.Remove(session.txCtx.Id)
 
@@ -460,21 +459,21 @@ func (s *apiService) Stream(r *api.StreamRequest, stream api.Tigris_StreamServer
 		select {
 		case tx, ok := <-streamer.Txs:
 			if !ok {
-				return api.Error(codes.Canceled, "buffer overflow")
+				return api.Errorf(api.Code_CANCELLED, "buffer overflow")
 			}
 
 			for _, op := range tx.Ops {
 				_, _, collection, ok := s.encoder.DecodeTableName(op.Table)
 				if !ok {
 					log.Err(err).Str("table", string(op.Table)).Msg("failed to decode collection name")
-					return api.Error(codes.Internal, "failed to decode collection name")
+					return api.Errorf(api.Code_INTERNAL, "failed to decode collection name")
 				}
 
 				if r.Collection == "" || r.Collection == collection {
 					td, err := internal.Decode(op.Data)
 					if err != nil {
 						log.Err(err).Str("data", string(op.Data)).Msg("failed to decode data")
-						return api.Error(codes.Internal, "failed to decode data")
+						return api.Errorf(api.Code_INTERNAL, "failed to decode data")
 					}
 
 					event := &api.StreamEvent{

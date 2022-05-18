@@ -25,19 +25,17 @@ import (
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/store/kv"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 var (
 	// ErrSessionIsNotStarted is returned when the session is not started but is getting used
-	ErrSessionIsNotStarted = status.Errorf(codes.Internal, "session not started")
+	ErrSessionIsNotStarted = api.Errorf(api.Code_INTERNAL, "session not started")
 
 	// ErrSessionIsGone is returned when the session is gone but getting used
-	ErrSessionIsGone = status.Errorf(codes.Internal, "session is gone")
+	ErrSessionIsGone = api.Errorf(api.Code_INTERNAL, "session is gone")
 
 	// ErrTxCtxMissing is returned when the caller needs an existing transaction but passed a nil tx ctx object
-	ErrTxCtxMissing = status.Errorf(codes.Internal, "tx ctx is missing")
+	//ErrTxCtxMissing = api.Errorf(api.Code_INTERNAL, "tx ctx is missing")
 )
 
 // Tx interface exposes a method to execute and then other method to end the transaction. When Tx is returned at that
@@ -91,7 +89,7 @@ func NewManager(kvStore kv.KeyValueStore) *Manager {
 func (m *Manager) StartTx(ctx context.Context) (Tx, error) {
 	session, err := newTxSession(m.kvStore)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "issue creating a session %v", err)
+		return nil, api.Errorf(api.Code_INTERNAL, "issue creating a session %v", err)
 	}
 
 	if err = session.start(ctx); err != nil {
@@ -124,7 +122,7 @@ type TxSession struct {
 
 func newTxSession(kv kv.KeyValueStore) (*TxSession, error) {
 	if kv == nil {
-		return nil, status.Errorf(codes.Internal, "session needs non-nil kv object")
+		return nil, api.Errorf(api.Code_INTERNAL, "session needs non-nil kv object")
 	}
 	return &TxSession{
 		context: &SessionCtx{},
@@ -138,7 +136,7 @@ func (s *TxSession) GetTxCtx() *api.TransactionCtx {
 	return s.txCtx
 }
 
-func (s *TxSession) SetState(state sessionState) {
+func (s *TxSession) setState(state sessionState) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -149,7 +147,7 @@ func (s *TxSession) SetState(state sessionState) {
 	s.state = state
 }
 
-func (s *TxSession) GetState() sessionState {
+func (s *TxSession) getState() sessionState {
 	s.RLock()
 	defer s.RUnlock()
 
@@ -161,7 +159,7 @@ func (s *TxSession) start(ctx context.Context) error {
 	defer s.Unlock()
 
 	if s.state != sessionCreated {
-		return status.Errorf(codes.Internal, "session state is misused")
+		return api.Errorf(api.Code_INTERNAL, "session state is misused")
 	}
 
 	var err error

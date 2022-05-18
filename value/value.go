@@ -22,7 +22,6 @@ import (
 	"github.com/pkg/errors"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/schema"
-	"google.golang.org/grpc/codes"
 )
 
 type Comparable interface {
@@ -51,22 +50,22 @@ func NewValue(fieldType schema.FieldType, value []byte) (Value, error) {
 	case schema.BoolType:
 		b, err := strconv.ParseBool(string(value))
 		if err != nil {
-			return nil, api.Error(codes.InvalidArgument, errors.Wrap(err, "unsupported value type ").Error())
+			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, errors.Wrap(err, "unsupported value type ").Error())
 		}
 		return NewBoolValue(b), nil
 	case schema.DoubleType:
 		val, err := strconv.ParseFloat(string(value), 64)
 		if err != nil {
-			return nil, api.Error(codes.InvalidArgument, errors.Wrap(err, "unsupported value type ").Error())
+			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, errors.Wrap(err, "unsupported value type ").Error())
 		}
 		return NewDoubleValue(val), nil
 	case schema.Int32Type, schema.Int64Type:
 		val, err := strconv.ParseInt(string(value), 10, 64)
 		if err != nil {
-			return nil, api.Error(codes.InvalidArgument, errors.Wrap(err, "unsupported value type ").Error())
+			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, errors.Wrap(err, "unsupported value type ").Error())
 		}
 
-		return NewIntValue(int64(val)), nil
+		return NewIntValue(val), nil
 	case schema.StringType, schema.UUIDType, schema.DateTimeType:
 		return NewStringValue(string(value)), nil
 	case schema.ByteType:
@@ -78,7 +77,7 @@ func NewValue(fieldType schema.FieldType, value []byte) (Value, error) {
 		}
 	}
 
-	return nil, api.Errorf(codes.InvalidArgument, "unsupported value type")
+	return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported value type")
 }
 
 func isIntegral(val float64) bool {
