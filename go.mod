@@ -26,7 +26,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.10.1
 	github.com/stretchr/testify v1.7.1
-	github.com/tigrisdata/tigris-client-go v1.0.0-alpha.12
+	github.com/tigrisdata/tigris-client-go v1.0.0-alpha.14
 	github.com/ugorji/go/codec v1.2.7
 	github.com/valyala/bytebufferpool v1.0.0
 	google.golang.org/genproto v0.0.0-20220503193339-ba3ae3f07e29

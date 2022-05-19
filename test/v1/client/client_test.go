@@ -24,10 +24,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris-client-go/config"
+	"github.com/tigrisdata/tigris-client-go/fields"
 	"github.com/tigrisdata/tigris-client-go/filter"
-	"github.com/tigrisdata/tigris-client-go/projection"
 	"github.com/tigrisdata/tigris-client-go/tigris"
-	"github.com/tigrisdata/tigris-client-go/update"
 )
 
 func TestClientCollectionBasic(t *testing.T) {
@@ -72,14 +71,14 @@ func TestClientCollectionBasic(t *testing.T) {
 	_, err = c.Update(ctx, filter.Or(
 		filter.Eq("Key1", "aaa"),
 		filter.Eq("Key1", "bbb")),
-		update.Set("Field1", 345),
+		fields.Set("Field1", 345),
 	)
 	require.NoError(t, err)
 
 	it, err := c.Read(ctx, filter.Or(
 		filter.Eq("Key1", "aaa"),
 		filter.Eq("Key1", "ccc")),
-		projection.Exclude("Key1").
+		fields.Exclude("Key1").
 			Include("Field1"),
 	)
 	require.NoError(t, err)
@@ -93,7 +92,7 @@ func TestClientCollectionBasic(t *testing.T) {
 	require.NoError(t, it.Err())
 	it.Close()
 
-	it, err = c.ReadAll(ctx, projection.All)
+	it, err = c.ReadAll(ctx, fields.All)
 	require.NoError(t, err)
 	it.Close()
 
@@ -137,8 +136,8 @@ func TestClientCollectionTx(t *testing.T) {
 		_ = db.Drop(ctx)
 	}()
 
-	err = db.Tx(ctx, func(ctx context.Context, tx *tigris.Tx) error {
-		c := tigris.GetTxCollection[Coll1](tx)
+	err = db.Tx(ctx, func(ctx context.Context) error {
+		c := tigris.GetCollection[Coll1](db)
 
 		d1 := &Coll1{Key1: "aaa", Field1: 123}
 		d2 := &Coll1{Key1: "bbb", Field1: 123}
@@ -152,14 +151,14 @@ func TestClientCollectionTx(t *testing.T) {
 		_, err = c.Update(ctx, filter.Or(
 			filter.Eq("Key1", "aaa"),
 			filter.Eq("Key1", "bbb")),
-			update.Set("Field1", 345),
+			fields.Set("Field1", 345),
 		)
 		require.NoError(t, err)
 
 		it, err := c.Read(ctx, filter.Or(
 			filter.Eq("Key1", "aaa"),
 			filter.Eq("Key1", "ccc")),
-			projection.Exclude("Key1").
+			fields.Exclude("Key1").
 				Include("Field1"),
 		)
 		require.NoError(t, err)
@@ -173,7 +172,7 @@ func TestClientCollectionTx(t *testing.T) {
 		require.NoError(t, it.Err())
 		it.Close()
 
-		it, err = c.ReadAll(ctx, projection.All)
+		it, err = c.ReadAll(ctx, fields.All)
 		require.NoError(t, err)
 		it.Close()
 
@@ -200,7 +199,7 @@ func TestClientCollectionTx(t *testing.T) {
 	require.NoError(t, err)
 
 	c := tigris.GetCollection[Coll1](db)
-	it, err := c.ReadAll(ctx, projection.All)
+	it, err := c.ReadAll(ctx, fields.All)
 	require.NoError(t, err)
 
 	var d Coll1
