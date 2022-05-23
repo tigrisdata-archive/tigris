@@ -69,6 +69,7 @@ func (x *ReadResponse) MarshalJSON() ([]byte, error) {
 type Metadata struct {
 	CreatedAt *time.Time `json:"created_at,omitempty"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
 
 func CreateMDFromResponseMD(x *ResponseMetadata) Metadata {
@@ -80,6 +81,10 @@ func CreateMDFromResponseMD(x *ResponseMetadata) Metadata {
 	if x.UpdatedAt != nil {
 		tm := x.UpdatedAt.AsTime()
 		md.UpdatedAt = &tm
+	}
+	if x.DeletedAt != nil {
+		tm := x.DeletedAt.AsTime()
+		md.DeletedAt = &tm
 	}
 
 	return md
@@ -347,4 +352,27 @@ func (x *StreamResponse) MarshalJSON() ([]byte, error) {
 		},
 	}
 	return json.Marshal(resp)
+}
+
+// Proper marshal timestamp in metadata
+type dmlResponse struct {
+	Metadata      Metadata `json:"metadata,omitempty"`
+	Status        string   `json:"status,omitempty"`
+	ModifiedCount int32    `json:"modified_count,omitempty"`
+}
+
+func (x *InsertResponse) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status})
+}
+
+func (x *ReplaceResponse) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status})
+}
+
+func (x *DeleteResponse) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status})
+}
+
+func (x *UpdateResponse) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status, ModifiedCount: x.ModifiedCount})
 }

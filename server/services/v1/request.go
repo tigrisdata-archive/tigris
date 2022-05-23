@@ -46,5 +46,6 @@ type Response struct {
 	status        string
 	createdAt     *internal.Timestamp
 	updatedAt     *internal.Timestamp
+	deletedAt     *internal.Timestamp
 	modifiedCount int32
 }

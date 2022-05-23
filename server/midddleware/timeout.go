@@ -16,6 +16,7 @@ package middleware
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"google.golang.org/grpc"
@@ -24,8 +25,8 @@ import (
 )
 
 var (
-	DefaultTimeout = 5 * time.Second
-	MaximumTimeout = 300 * time.Second
+	DefaultTimeout = 2 * time.Second
+	MaximumTimeout = 5 * time.Second
 )
 
 // TimeoutUnaryServerInterceptor returns a new unary server interceptor
@@ -34,10 +35,9 @@ func TimeoutUnaryServerInterceptor(timeout time.Duration) grpc.UnaryServerInterc
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (iface interface{}, err error) {
 		var cancel context.CancelFunc
 
-		//FIXME: pass and use HTTP timeout
+		ctx, cancel = setDeadlineUsingHeader(ctx)
 
 		d, ok := ctx.Deadline()
-
 		if ok && time.Until(d) > MaximumTimeout {
 			timeout = MaximumTimeout
 			ok = false
@@ -52,10 +52,30 @@ func TimeoutUnaryServerInterceptor(timeout time.Duration) grpc.UnaryServerInterc
 				cancel()
 			}
 			if ctx.Err() == context.DeadlineExceeded {
-				err = status.Errorf(codes.DeadlineExceeded, "Timeout")
+				err = status.Errorf(codes.DeadlineExceeded, "context deadline exceeded")
 			}
 		}()
 
 		return handler(ctx, req)
 	}
+}
+
+func setDeadlineUsingHeader(ctx context.Context) (context.Context, context.CancelFunc) {
+	value := getHeader(ctx, RequestTimeoutHeader)
+	if len(value) == 0 {
+		return ctx, nil
+	}
+
+	// header is set for timeout
+	parsedV, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		// use the default timeout
+		return ctx, nil
+	}
+
+	milliseconds := int64(parsedV * 1000)
+	if _, ok := ctx.Deadline(); !ok {
+		return context.WithDeadline(ctx, time.Now().Add(time.Duration(milliseconds)*time.Millisecond))
+	}
+	return ctx, nil
 }

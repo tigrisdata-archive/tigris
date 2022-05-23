@@ -390,7 +390,7 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	return &Response{
 		status:    DeletedStatus,
-		updatedAt: ts,
+		deletedAt: ts,
 	}, ctx, nil
 }
 

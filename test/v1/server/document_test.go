@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
@@ -373,8 +374,8 @@ func (s *DocumentSuite) TestInsert_SingleRow() {
 		},
 	}
 
-	e := expect(s.T())
-	e.POST(getDocumentURL(s.database, s.collection, "insert")).
+	tstart := time.Now()
+	expect(s.T()).POST(getDocumentURL(s.database, s.collection, "insert")).
 		WithJSON(Map{
 			"documents": inputDocument,
 		}).
@@ -382,7 +383,9 @@ func (s *DocumentSuite) TestInsert_SingleRow() {
 		Status(http.StatusOK).
 		JSON().
 		Object().
-		ValueEqual("status", "inserted")
+		ValueEqual("status", "inserted").
+		Path("$.metadata").Object().
+		Value("created_at").String().DateTime(time.RFC3339Nano).InRange(tstart, time.Now())
 
 	readResp := readByFilter(s.T(), s.database, s.collection, Map{
 		"pkey_int": 10,
@@ -570,6 +573,7 @@ func (s *DocumentSuite) TestUpdate_SingleRow() {
 		nil,
 		inputDocument)
 
+	tstart := time.Now()
 	updateByFilter(s.T(),
 		s.database,
 		s.collection,
@@ -591,7 +595,9 @@ func (s *DocumentSuite) TestUpdate_SingleRow() {
 		}).Status(http.StatusOK).
 		JSON().
 		Object().
-		ValueEqual("modified_count", 1)
+		ValueEqual("modified_count", 1).
+		Path("$.metadata").Object().
+		Value("updated_at").String().DateTime(time.RFC3339Nano).InRange(tstart, time.Now())
 
 	readAndValidate(s.T(),
 		s.database,
@@ -895,6 +901,7 @@ func (s *DocumentSuite) TestDelete_SingleRow() {
 		nil,
 		inputDocument)
 
+	tstart := time.Now()
 	deleteByFilter(s.T(), s.database, s.collection, Map{
 		"filter": Map{
 			"pkey_int": 40,
@@ -902,7 +909,9 @@ func (s *DocumentSuite) TestDelete_SingleRow() {
 	}).Status(http.StatusOK).
 		JSON().
 		Object().
-		ValueEqual("status", "deleted")
+		ValueEqual("status", "deleted").
+		Path("$.metadata").Object().
+		Value("deleted_at").String().DateTime(time.RFC3339Nano).InRange(tstart, time.Now())
 
 	readAndValidate(s.T(),
 		s.database,
