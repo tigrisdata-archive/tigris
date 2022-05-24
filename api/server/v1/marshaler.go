@@ -356,17 +356,26 @@ func (x *StreamResponse) MarshalJSON() ([]byte, error) {
 
 // Proper marshal timestamp in metadata
 type dmlResponse struct {
-	Metadata      Metadata `json:"metadata,omitempty"`
-	Status        string   `json:"status,omitempty"`
-	ModifiedCount int32    `json:"modified_count,omitempty"`
+	Metadata      Metadata          `json:"metadata,omitempty"`
+	Status        string            `json:"status,omitempty"`
+	ModifiedCount int32             `json:"modified_count,omitempty"`
+	Keys          []json.RawMessage `json:"keys,omitempty"`
 }
 
 func (x *InsertResponse) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status})
+	var keys []json.RawMessage
+	for _, k := range x.Keys {
+		keys = append(keys, k)
+	}
+	return json.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status, Keys: keys})
 }
 
 func (x *ReplaceResponse) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status})
+	var keys []json.RawMessage
+	for _, k := range x.Keys {
+		keys = append(keys, k)
+	}
+	return json.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status, Keys: keys})
 }
 
 func (x *DeleteResponse) MarshalJSON() ([]byte, error) {
