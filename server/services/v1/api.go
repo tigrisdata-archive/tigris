@@ -192,6 +192,7 @@ func (s *apiService) Insert(ctx context.Context, r *api.InsertRequest) (*api.Ins
 		Metadata: &api.ResponseMetadata{
 			CreatedAt: resp.createdAt.GetProtoTS(),
 		},
+		Keys: resp.allKeys,
 	}, nil
 }
 
@@ -213,6 +214,7 @@ func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.R
 		Metadata: &api.ResponseMetadata{
 			CreatedAt: resp.createdAt.GetProtoTS(),
 		},
+		Keys: resp.allKeys,
 	}, nil
 }
 

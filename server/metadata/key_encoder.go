@@ -25,7 +25,7 @@ import (
 // Encoder is used to encode/decode values of the Key.
 type Encoder interface {
 	// EncodeTableName returns encoded bytes which are formed by combining namespace, database, and collection.
-	EncodeTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) []byte
+	EncodeTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) ([]byte, error)
 	// EncodeIndexName returns encoded bytes for the index name
 	EncodeIndexName(idx *schema.Index) []byte
 	// EncodeKey returns encoded bytes of the key which will be used to store the values in fdb. The Key return by this
@@ -34,7 +34,7 @@ type Encoder interface {
 	//   - IndexParts: This has the index identifier and value(s) associated with a single or composite index. This is appended
 	//	   to the table name to form the Key. The first element of this list is the dictionary encoding of index type key
 	//	   information i.e. whether the index is pkey, etc. The remaining elements are values for this index.
-	EncodeKey(ns Namespace, db *Database, coll *schema.DefaultCollection, idx *schema.Index, idxParts []interface{}) (keys.Key, error)
+	EncodeKey(encodedTable []byte, idx *schema.Index, idxParts []interface{}) (keys.Key, error)
 
 	// DecodeTableName is used to decode the key stored in FDB and extract namespace name, database name and collection name.
 	DecodeTableName(tableName []byte) (string, string, string, bool)
@@ -52,26 +52,25 @@ type DictKeyEncoder struct {
 	mgr *TenantManager
 }
 
-func (d *DictKeyEncoder) EncodeTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) []byte {
-	return d.encodedTableName(ns, db, coll)
-}
-
-func (d *DictKeyEncoder) EncodeIndexName(idx *schema.Index) []byte {
-	return d.encodedIdxName(idx)
-}
-
-func (d *DictKeyEncoder) EncodeKey(ns Namespace, db *Database, coll *schema.DefaultCollection, idx *schema.Index, idxParts []interface{}) (keys.Key, error) {
+func (d *DictKeyEncoder) EncodeTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) ([]byte, error) {
 	if db == nil {
 		return nil, api.Errorf(codes.InvalidArgument, "database is missing")
 	}
 	if coll == nil {
 		return nil, api.Errorf(codes.InvalidArgument, "collection is missing")
 	}
+	return d.encodedTableName(ns, db, coll), nil
+}
+
+func (d *DictKeyEncoder) EncodeIndexName(idx *schema.Index) []byte {
+	return d.encodedIdxName(idx)
+}
+
+func (d *DictKeyEncoder) EncodeKey(encodedTable []byte, idx *schema.Index, idxParts []interface{}) (keys.Key, error) {
 	if idx == nil {
 		return nil, api.Errorf(codes.InvalidArgument, "index is missing")
 	}
 
-	encodedTable := d.encodedTableName(ns, db, coll)
 	encodedIdxName := d.encodedIdxName(idx)
 
 	var remainingKeyParts []interface{}

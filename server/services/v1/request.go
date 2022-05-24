@@ -48,4 +48,5 @@ type Response struct {
 	updatedAt     *internal.Timestamp
 	deletedAt     *internal.Timestamp
 	modifiedCount int32
+	allKeys       [][]byte
 }
