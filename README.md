@@ -1,71 +1,104 @@
-# Tigris Data
+<p align="center">
+  <a href="https://www.tigrisdata.com/"><img src="docs/assets/tigris-logo-wordmark.svg" alt="Tigris" width="298" /></a> 
+</p>
 
-[![Go Report](https://goreportcard.com/badge/github.com/tigrisdata/tigris)](https://goreportcard.com/report/github.com/tigrisdata/tigris)
-[![Build Status](https://github.com/tigrisdata/tigris/workflows/Go/badge.svg)]()
-[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
+<p align="center">
+For developers who want to build scalable web and mobile apps fast!
+</p>
 
-# Getting started
+<p align="center">
+With a zero-ops scalable pub/sub messaging system and fault-tolerant 
+cloud-native database, <br/> Tigris provides everything you need to get up and 
+running quickly and efficiently.
+</p>
 
-These instructions will get you through setting up Tigris Data locally as Docker
-containers.
+<p align="center">
+<a href="https://goreportcard.com/report/github.com/tigrisdata/tigris"> 
+<img src="https://goreportcard.com/badge/github.com/tigrisdata/tigris" alt="Go Report">
+</a>
+<a href="">
+<img src="https://github.com/tigrisdata/tigris/workflows/Go/badge.svg" alt="Build Status">
+</a>
+<a href="CODE_OF_CONDUCT.md">
+<img src="https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg" alt="Contributor Covenant">
+</a>
+</p>
 
-## Prerequisites
+<p align="center">
+  <a href="https://www.tigrisdata.com/">Website</a> |
+  <a href="https://docs.tigrisdata.com/quickstart/with-go">Quickstart</a> |
+  <a href="https://docs.tigrisdata.com/apidocs/">API Reference</a> |
+  <a href="https://join.slack.com/t/tigrisdatacommunity/shared_invite/zt-16fn5ogio-OjxJlgttJIV0ZDywcBItJQ">Slack Community</a> | 
+  <a href="https://twitter.com/TigrisData">Twitter</a>
+</p>
 
-* Make sure that you have Docker and Docker Compose installed
-    * Windows or
-      MacOS: [Install Docker Desktop](https://www.docker.com/get-started)
-    * Linux: [Install Docker](https://www.docker.com/get-started) and then
-      [Docker Compose](https://github.com/docker/compose)
+# Helpful Links
 
-## Running locally
-
-The [docker/local](docker/local) directory contains the docker-compose.yaml
-which describes the configuration of Tigris Data components. You can run Tigris Data
-in a local environment by executing:
-
-```shell
-cd docker/local
-docker-compose up -d
-```
-
-## Connecting using CLI
-
-Install the CLI:
-
-```shell
-go install github.com/tigrisdata/tigris-cli@latest
-```
-
-Make sure to include the installed binary in your PATH.
-
-Test that Tigris is up and running locally:
-
-```shell
-export TIGRIS_URL=http://localhost:8081
-tigris-cli db list databases
-```
-
-More elaborate example of CLI usage can be
-found [here](https://github.com/tigrisdata/tigris-cli/).
-
-Golang client example can be
-found [here](https://github.com/tigrisdata/tigris-client-go/).
-
-# Documentation
-
-* [Development Overview](docs/development/overview.md)
-* [Testing](docs/development/testing.md)
-* [Configuration](docs/configuration.md)
-* [Deployment to Kubernetes](docs/deploy_k8s.md)
-
-# Roadmap
-* [Alpha Release](https://github.com/orgs/tigrisdata/projects/1/views/1)
+- [Key Concepts](https://docs.tigrisdata.com/overview/key-concepts)
+- [Quickstarts](https://docs.tigrisdata.com/category/quickstart)
+- [Data Modeling](https://docs.tigrisdata.com/category/data-modeling)
+- [Guides](https://docs.tigrisdata.com/category/guides)
+- [Client Library: Go](https://docs.tigrisdata.com/client-libraries/go)
+- [Client Library: Java](https://docs.tigrisdata.com/client-libraries/java/overview)
+- [Command Line Interface](https://docs.tigrisdata.com/cli)
 
 # Community & Support
 
 * [Slack Community](https://join.slack.com/t/tigrisdatacommunity/shared_invite/zt-16fn5ogio-OjxJlgttJIV0ZDywcBItJQ)
 * [GitHub Issues](https://github.com/tigrisdata/tigris/issues)
 * [GitHub Discussions](https://github.com/tigrisdata/tigris/discussions)
+
+# Developing
+
+### Building with Docker Containers
+
+Start local Tigris server listening on `http://localhost:8081` by running:
+
+```sh
+make run
+```
+
+This would bring dependencies and server up in the docker containers with all
+your changes.
+
+### Running tests in docker containers
+
+Tests are executed using `make test`. This runs both unit and integration
+tests. The FoundationDB container auto-generates the cluster file which is
+shared between containers using a docker volume.
+
+The docker volume `fdbdata` is mounted at:
+
+* /var/fdb/fdb.cluster in tigris_fdb container
+* /etc/foundationdb/fdb.cluster in tigris_test and tigris_server containers,
+  which is the default location where the client will search for the cluster
+  file
+
+### Building and Testing on Apple M1
+
+Due to various issues with Docker on Apple M1, it is recommended to install
+FoundationDB on the host and run the server on the host directly as well.
+
+To run the server on the host, required dependencies need to be installed by
+running:
+
+```shell
+sh scripts/install_build_deps.sh
+sh scripts/install_test_deps.sh
+```
+
+Once the dependencies are installed, you can start up the server on the host as
+follows:
+
+```shell
+make osx_run
+```
+
+You can run the test on your local machine as follows:
+
+```shell
+make osx_test
+```
 
 # License
 
