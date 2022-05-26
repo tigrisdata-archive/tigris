@@ -590,10 +590,11 @@ type Database struct {
 
 func NewDatabase(id uint32, name string) *Database {
 	return &Database{
-		id:                id,
-		name:              name,
-		collections:       make(map[string]*collectionHolder),
-		idToCollectionMap: make(map[uint32]string),
+		id:                    id,
+		name:                  name,
+		collections:           make(map[string]*collectionHolder),
+		idToCollectionMap:     make(map[uint32]string),
+		needFixingCollections: make(map[string]struct{}),
 	}
 }
 

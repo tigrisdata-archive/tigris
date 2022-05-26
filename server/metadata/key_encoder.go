@@ -15,11 +15,16 @@
 package metadata
 
 import (
+	"bytes"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/metadata/encoding"
 	"google.golang.org/grpc/codes"
+)
+
+var (
+	userTableKeyPrefix = []byte("data")
 )
 
 // Encoder is used to encode/decode values of the Key.
@@ -82,6 +87,7 @@ func (d *DictKeyEncoder) EncodeKey(encodedTable []byte, idx *schema.Index, idxPa
 
 func (d *DictKeyEncoder) encodedTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) []byte {
 	var appendTo []byte
+	appendTo = append(appendTo, userTableKeyPrefix...)
 	appendTo = append(appendTo, encoding.UInt32ToByte(ns.Id())...)
 	appendTo = append(appendTo, encoding.UInt32ToByte(db.id)...)
 	appendTo = append(appendTo, encoding.UInt32ToByte(coll.Id)...)
@@ -93,9 +99,13 @@ func (d *DictKeyEncoder) encodedIdxName(idx *schema.Index) []byte {
 }
 
 func (d *DictKeyEncoder) DecodeTableName(tableName []byte) (string, string, string, bool) {
-	nsId := encoding.ByteToUInt32(tableName[0:4])
-	dbId := encoding.ByteToUInt32(tableName[4:8])
-	collId := encoding.ByteToUInt32(tableName[8:12])
+	if len(tableName) < 16 || !bytes.Equal(tableName[0:4], userTableKeyPrefix) {
+		return "", "", "", false
+	}
+
+	nsId := encoding.ByteToUInt32(tableName[4:8])
+	dbId := encoding.ByteToUInt32(tableName[8:12])
+	collId := encoding.ByteToUInt32(tableName[12:16])
 
 	return d.mgr.GetTableNameFromId(nsId, dbId, collId)
 }
