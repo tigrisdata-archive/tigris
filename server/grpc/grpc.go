@@ -21,6 +21,7 @@ import (
 	middleware "github.com/tigrisdata/tigris/server/midddleware"
 	"github.com/tigrisdata/tigris/server/types"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 type Server struct {
@@ -32,7 +33,7 @@ func NewServer(cfg *config.Config) *Server {
 
 	unary, stream := middleware.Get(cfg)
 	s.Server = grpc.NewServer(grpc.StreamInterceptor(stream), grpc.UnaryInterceptor(unary))
-
+	reflection.Register(s)
 	return s
 }
 
