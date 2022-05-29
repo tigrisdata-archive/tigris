@@ -263,6 +263,7 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVe
 	for namespace, id := range namespaces {
 		if _, ok := m.tenants[namespace]; !ok {
 			m.tenants[namespace] = NewTenant(NewTenantNamespace(namespace, id), m.encoder, m.schemaStore, m.versionH, currentVersion)
+			m.idToTenantMap[id] = namespace
 		}
 	}
 
