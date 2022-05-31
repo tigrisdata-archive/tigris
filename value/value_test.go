@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/schema"
-	"google.golang.org/grpc/codes"
 )
 
 func TestNewValue(t *testing.T) {
@@ -41,7 +40,7 @@ func TestNewValue(t *testing.T) {
 			schema.Int32Type,
 			[]byte(`"1"`),
 			nil,
-			api.Errorf(codes.InvalidArgument, "unsupported value type : strconv.ParseInt: parsing \"\\\"1\\\"\": invalid syntax"),
+			api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported value type : strconv.ParseInt: parsing \"\\\"1\\\"\": invalid syntax"),
 		}, {
 			schema.DoubleType,
 			[]byte(`1.01`),

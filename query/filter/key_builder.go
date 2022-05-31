@@ -15,10 +15,9 @@
 package filter
 
 import (
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/schema"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // KeyBuilder is responsible for building internal Keys. A composer is caller by the builder to build the internal keys
@@ -116,17 +115,17 @@ func (s *StrictEqKeyComposer) Compose(selectors []*Selector, userDefinedKeys []*
 				repeatedFields = append(repeatedFields, sel)
 			}
 			if sel.Matcher.Type() != EQ {
-				return nil, status.Errorf(codes.InvalidArgument, "filters only supporting $eq comparison, found '%s'", sel.Matcher.Type())
+				return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "filters only supporting $eq comparison, found '%s'", sel.Matcher.Type())
 			}
 		}
 
 		if len(repeatedFields) == 0 {
 			// nothing found or a gap
-			return nil, status.Errorf(codes.InvalidArgument, "filters doesn't contains primary key fields")
+			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "filters doesn't contains primary key fields")
 		}
 		if len(repeatedFields) > 1 && parent == AndOP {
 			// with AND there is no use of EQ on the same field
-			return nil, status.Errorf(codes.InvalidArgument, "reusing same fields for conditions on equality")
+			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "reusing same fields for conditions on equality")
 		}
 
 		compositeKeys[0] = append(compositeKeys[0], repeatedFields[0])
@@ -159,7 +158,7 @@ func (s *StrictEqKeyComposer) Compose(selectors []*Selector, userDefinedKeys []*
 			for _, sel := range k {
 				if len(userDefinedKeys) > 1 {
 					// this means OR can't build independently these keys
-					return nil, status.Errorf(codes.InvalidArgument, "OR is not supported with composite primary keys")
+					return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "OR is not supported with composite primary keys")
 				}
 
 				key, err := s.keyEncodingFunc(sel.Matcher.GetValue().AsInterface())

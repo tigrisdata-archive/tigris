@@ -24,7 +24,6 @@ import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/util/log"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -52,21 +51,21 @@ func TestAuth(t *testing.T) {
 	t.Run("enforcing mode: no token", func(t *testing.T) {
 		_, err := AuthFunction(context.TODO(), &validator.Validator{}, &enforcedAuthConfig)
 		require.NotNil(t, err)
-		require.Equal(t, err, api.Error(codes.Unauthenticated, "request unauthenticated with bearer"))
+		require.Equal(t, err, api.Errorf(api.Code_UNAUTHENTICATED, "request unauthenticated with bearer"))
 	})
 
 	t.Run("enforcing mode: Bad authorization string1", func(t *testing.T) {
 		incomingCtx := metadata.NewIncomingContext(context.TODO(), metadata.Pairs("authorization", "bearer"))
 		_, err := AuthFunction(incomingCtx, &validator.Validator{}, &enforcedAuthConfig)
 		require.NotNil(t, err)
-		require.Equal(t, err, api.Error(codes.Unauthenticated, "bad authorization string"))
+		require.Equal(t, err, api.Errorf(api.Code_UNAUTHENTICATED, "bad authorization string"))
 	})
 
 	t.Run("enforcing mode: Bad token", func(t *testing.T) {
 		incomingCtx := metadata.NewIncomingContext(context.TODO(), metadata.Pairs("authorization", "bearer somebadtoken"))
 		_, err := AuthFunction(incomingCtx, &validator.Validator{}, &enforcedAuthConfig)
 		require.NotNil(t, err)
-		require.Equal(t, err, api.Error(codes.Unauthenticated, "could not parse the token: square/go-jose: compact JWS format must have three parts"))
+		require.Equal(t, err, api.Errorf(api.Code_UNAUTHENTICATED, "could not parse the token: square/go-jose: compact JWS format must have three parts"))
 	})
 
 	t.Run("enforcing mode: Bad token 2", func(t *testing.T) {
@@ -93,7 +92,7 @@ func TestAuth(t *testing.T) {
 	t.Run("test invalid extraction of organization name - 2", func(t *testing.T) {
 		incomingCtx := metadata.NewIncomingContext(context.TODO(), metadata.Pairs("host", "project1-tigris-data.dev.tigrisdata.cloud"))
 		_, err := getOrganizationName(incomingCtx)
-		require.Equal(t, err, api.Error(codes.FailedPrecondition, "hostname is not as per expected scheme"))
+		require.Equal(t, err, api.Errorf(api.Code_FAILED_PRECONDITION, "hostname is not as per expected scheme"))
 	})
 
 }

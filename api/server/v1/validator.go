@@ -14,10 +14,6 @@
 
 package api
 
-import (
-	"google.golang.org/grpc/codes"
-)
-
 type Validator interface {
 	Validate() error
 }
@@ -52,7 +48,7 @@ func (x *InsertRequest) Validate() error {
 	}
 
 	if len(x.GetDocuments()) == 0 {
-		return Errorf(codes.InvalidArgument, "empty documents received")
+		return Errorf(Code_INVALID_ARGUMENT, "empty documents received")
 	}
 	return nil
 }
@@ -63,7 +59,7 @@ func (x *ReplaceRequest) Validate() error {
 	}
 
 	if len(x.GetDocuments()) == 0 {
-		return Errorf(codes.InvalidArgument, "empty documents received")
+		return Errorf(Code_INVALID_ARGUMENT, "empty documents received")
 	}
 	return nil
 }
@@ -74,11 +70,11 @@ func (x *UpdateRequest) Validate() error {
 	}
 
 	if len(x.GetFields()) == 0 {
-		return Errorf(codes.InvalidArgument, "empty fields received")
+		return Errorf(Code_INVALID_ARGUMENT, "empty fields received")
 	}
 
 	if len(x.GetFilter()) == 0 {
-		return Errorf(codes.InvalidArgument, "filter is a required field")
+		return Errorf(Code_INVALID_ARGUMENT, "filter is a required field")
 	}
 	return nil
 }
@@ -89,7 +85,7 @@ func (x *DeleteRequest) Validate() error {
 	}
 
 	if len(x.GetFilter()) == 0 {
-		return Errorf(codes.InvalidArgument, "filter is a required field")
+		return Errorf(Code_INVALID_ARGUMENT, "filter is a required field")
 	}
 	return nil
 }
@@ -108,12 +104,12 @@ func (x *CreateOrUpdateCollectionRequest) Validate() error {
 	}
 
 	if x.Schema == nil {
-		return Errorf(codes.InvalidArgument, "schema is a required during collection creation")
+		return Errorf(Code_INVALID_ARGUMENT, "schema is a required during collection creation")
 	}
 
 	if !IsTxSupported(x) {
 		if transaction := GetTransaction(x); transaction != nil {
-			return Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
+			return Errorf(Code_INVALID_ARGUMENT, "interactive tx not supported but transaction token found")
 		}
 	}
 
@@ -127,7 +123,7 @@ func (x *DropCollectionRequest) Validate() error {
 
 	if !IsTxSupported(x) {
 		if transaction := GetTransaction(x); transaction != nil {
-			return Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
+			return Errorf(Code_INVALID_ARGUMENT, "interactive tx not supported but transaction token found")
 		}
 	}
 
@@ -137,7 +133,7 @@ func (x *DropCollectionRequest) Validate() error {
 func (x *ListCollectionsRequest) Validate() error {
 	if !IsTxSupported(x) {
 		if transaction := GetTransaction(x); transaction != nil {
-			return Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
+			return Errorf(Code_INVALID_ARGUMENT, "interactive tx not supported but transaction token found")
 		}
 	}
 
@@ -147,7 +143,7 @@ func (x *ListCollectionsRequest) Validate() error {
 func (x *DescribeCollectionRequest) Validate() error {
 	if !IsTxSupported(x) {
 		if transaction := GetTransaction(x); transaction != nil {
-			return Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
+			return Errorf(Code_INVALID_ARGUMENT, "interactive tx not supported but transaction token found")
 		}
 	}
 
@@ -157,7 +153,7 @@ func (x *DescribeCollectionRequest) Validate() error {
 func (x *DescribeDatabaseRequest) Validate() error {
 	if !IsTxSupported(x) {
 		if transaction := GetTransaction(x); transaction != nil {
-			return Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
+			return Errorf(Code_INVALID_ARGUMENT, "interactive tx not supported but transaction token found")
 		}
 	}
 
@@ -171,7 +167,7 @@ func (x *CreateDatabaseRequest) Validate() error {
 
 	if !IsTxSupported(x) {
 		if transaction := GetTransaction(x); transaction != nil {
-			return Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
+			return Errorf(Code_INVALID_ARGUMENT, "interactive tx not supported but transaction token found")
 		}
 	}
 
@@ -185,7 +181,7 @@ func (x *DropDatabaseRequest) Validate() error {
 
 	if !IsTxSupported(x) {
 		if transaction := GetTransaction(x); transaction != nil {
-			return Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
+			return Errorf(Code_INVALID_ARGUMENT, "interactive tx not supported but transaction token found")
 		}
 	}
 
@@ -195,7 +191,7 @@ func (x *DropDatabaseRequest) Validate() error {
 func (x *ListDatabasesRequest) Validate() error {
 	if !IsTxSupported(x) {
 		if transaction := GetTransaction(x); transaction != nil {
-			return Errorf(codes.InvalidArgument, "interactive tx not supported but transaction token found")
+			return Errorf(Code_INVALID_ARGUMENT, "interactive tx not supported but transaction token found")
 		}
 	}
 	return nil
@@ -211,7 +207,7 @@ func (x *StreamRequest) Validate() error {
 
 func isValidCollection(name string) error {
 	if len(name) == 0 {
-		return Error(codes.InvalidArgument, "invalid collection name")
+		return Errorf(Code_INVALID_ARGUMENT, "invalid collection name")
 	}
 
 	return nil
@@ -219,7 +215,7 @@ func isValidCollection(name string) error {
 
 func isValidDatabase(name string) error {
 	if len(name) == 0 {
-		return Error(codes.InvalidArgument, "invalid database name")
+		return Errorf(Code_INVALID_ARGUMENT, "invalid database name")
 	}
 
 	return nil

@@ -28,7 +28,6 @@ import (
 	"github.com/tigrisdata/tigris/server/metadata/encoding"
 	"github.com/tigrisdata/tigris/server/transaction"
 	ulog "github.com/tigrisdata/tigris/util/log"
-	"google.golang.org/grpc/codes"
 )
 
 type NamespaceType string
@@ -140,7 +139,7 @@ func (m *TenantManager) CreateOrGetTenant(ctx context.Context, txMgr *transactio
 			log.Debug().Str("ns", tenant.String()).Msg("tenant found")
 			return tenant, nil
 		} else {
-			return nil, api.Errorf(codes.InvalidArgument, "id is already assigned to '%s'", tenant.namespace.Name())
+			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "id is already assigned to '%s'", tenant.namespace.Name())
 		}
 	}
 
@@ -263,6 +262,7 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVe
 	for namespace, id := range namespaces {
 		if _, ok := m.tenants[namespace]; !ok {
 			m.tenants[namespace] = NewTenant(NewTenantNamespace(namespace, id), m.encoder, m.schemaStore, m.versionH, currentVersion)
+			m.idToTenantMap[id] = namespace
 		}
 	}
 
@@ -485,7 +485,7 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 	defer tenant.Unlock()
 
 	if database == nil {
-		return api.Errorf(codes.NotFound, "database missing")
+		return api.Errorf(api.Code_NOT_FOUND, "database missing")
 	}
 
 	if c, ok := database.collections[schFactory.CollectionName]; ok {
@@ -495,7 +495,7 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 			return err
 		}
 		if !equal {
-			return api.Errorf(codes.InvalidArgument, "schema changes are not supported")
+			return api.Errorf(api.Code_INVALID_ARGUMENT, "schema changes are not supported")
 		}
 		return nil
 	}
@@ -549,12 +549,12 @@ func (tenant *Tenant) DropCollection(ctx context.Context, tx transaction.Tx, db 
 
 func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db *Database, collectionName string) error {
 	if db == nil {
-		return api.Errorf(codes.NotFound, "database missing")
+		return api.Errorf(api.Code_NOT_FOUND, "database missing")
 	}
 
 	cHolder, ok := db.collections[collectionName]
 	if !ok {
-		return api.Errorf(codes.NotFound, "collection doesn't exists '%s'", collectionName)
+		return api.Errorf(api.Code_NOT_FOUND, "collection doesn't exists '%s'", collectionName)
 	}
 
 	if err := tenant.encoder.EncodeCollectionAsDropped(ctx, tx, cHolder.name, tenant.namespace.Id(), db.id, cHolder.id); err != nil {
@@ -590,10 +590,11 @@ type Database struct {
 
 func NewDatabase(id uint32, name string) *Database {
 	return &Database{
-		id:                id,
-		name:              name,
-		collections:       make(map[string]*collectionHolder),
-		idToCollectionMap: make(map[uint32]string),
+		id:                    id,
+		name:                  name,
+		collections:           make(map[string]*collectionHolder),
+		idToCollectionMap:     make(map[uint32]string),
+		needFixingCollections: make(map[string]struct{}),
 	}
 }
 
@@ -717,7 +718,7 @@ func createCollection(id uint32, name string, revision []byte, idxNameToId map[s
 	for _, index := range indexes {
 		id, ok := idxNameToId[index.Name]
 		if !ok {
-			return nil, api.Errorf(codes.NotFound, "dictionary encoding is missing for index '%s'", index.Name)
+			return nil, api.Errorf(api.Code_NOT_FOUND, "dictionary encoding is missing for index '%s'", index.Name)
 		}
 		index.Id = id
 	}

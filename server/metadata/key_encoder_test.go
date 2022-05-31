@@ -55,10 +55,12 @@ func TestEncodeDecodeKey(t *testing.T) {
 	}
 
 	k := NewEncoder(mgr)
-	encodedTable := k.EncodeTableName(ns, db, coll)
-	require.Equal(t, uint32(1), encoding.ByteToUInt32(encodedTable[0:4]))
-	require.Equal(t, uint32(3), encoding.ByteToUInt32(encodedTable[4:8]))
-	require.Equal(t, uint32(5), encoding.ByteToUInt32(encodedTable[8:12]))
+	encodedTable, err := k.EncodeTableName(ns, db, coll)
+	require.NoError(t, err)
+	require.Equal(t, userTableKeyPrefix, encodedTable[0:4])
+	require.Equal(t, uint32(1), encoding.ByteToUInt32(encodedTable[4:8]))
+	require.Equal(t, uint32(3), encoding.ByteToUInt32(encodedTable[8:12]))
+	require.Equal(t, uint32(5), encoding.ByteToUInt32(encodedTable[12:16]))
 
 	encodedIdx := k.EncodeIndexName(idx)
 	require.Equal(t, uint32(10), encoding.ByteToUInt32(encodedIdx))

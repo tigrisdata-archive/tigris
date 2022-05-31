@@ -24,7 +24,6 @@ import (
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
-	"google.golang.org/grpc/codes"
 )
 
 var (
@@ -45,10 +44,10 @@ func NewSchemaStore(mdNameRegistry MDNameRegistry) *SchemaSubspace {
 // Put is to persist schema for a given namespace, database and collection.
 func (s *SchemaSubspace) Put(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbId uint32, collId uint32, schema []byte, revision int) error {
 	if revision <= 0 {
-		return api.Errorf(codes.InvalidArgument, "invalid schema version %d", revision)
+		return api.Errorf(api.Code_INVALID_ARGUMENT, "invalid schema version %d", revision)
 	}
 	if len(schema) == 0 {
-		return api.Errorf(codes.InvalidArgument, "empty schema")
+		return api.Errorf(api.Code_INVALID_ARGUMENT, "empty schema")
 	}
 
 	key := keys.NewKey(s.SchemaSubspaceName(), schVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), keyEnd, UInt32ToByte(uint32(revision)))
@@ -88,7 +87,7 @@ func (s *SchemaSubspace) Get(ctx context.Context, tx transaction.Tx, namespaceId
 	for it.Next(&row) {
 		revision, ok := row.Key[len(row.Key)-1].([]byte)
 		if !ok {
-			return nil, nil, api.Errorf(codes.Internal, "not able to extract revision from schema %v", row.Key)
+			return nil, nil, api.Errorf(api.Code_INTERNAL, "not able to extract revision from schema %v", row.Key)
 		}
 		revisionToSchemaMapping[ByteToUInt32(revision)] = row.Data.RawData
 		revisions = append(revisions, int(ByteToUInt32(revision)))

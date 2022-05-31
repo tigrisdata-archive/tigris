@@ -21,7 +21,6 @@ import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/ugorji/go/codec"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -123,5 +122,5 @@ func decodeInternal(dataType DataType, encoded []byte) (*TableData, error) {
 		return v, nil
 	}
 
-	return nil, api.Errorf(codes.Internal, "unable to decode '%v'", dataType)
+	return nil, api.Errorf(api.Code_INTERNAL, "unable to decode '%v'", dataType)
 }

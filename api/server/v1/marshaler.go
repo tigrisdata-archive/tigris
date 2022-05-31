@@ -21,16 +21,22 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	jsoniter "github.com/json-iterator/go"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
-// CustomMarshaler is a marshaler to customize the response. Currently it is only used to marshal custom error message
-// otherwise it just use the inbuilt mux marshaller.
+// CustomMarshaler is a marshaler to customize the response. Currently, it is only used to marshal custom error message
+// otherwise it just uses the inbuilt mux marshaller.
 type CustomMarshaler struct {
 	*runtime.JSONBuiltin
 }
 
 func (c *CustomMarshaler) Marshal(v interface{}) ([]byte, error) {
 	switch ty := v.(type) {
+	case map[string]proto.Message:
+		// this comes from GRPC-gateway streaming code
+		if e, ok := ty["error"]; ok {
+			return MarshalStatus(e.(*spb.Status))
+		}
 	case *spb.Status:
 		return MarshalStatus(ty)
 	case *ListCollectionsResponse:
@@ -74,6 +80,9 @@ type Metadata struct {
 
 func CreateMDFromResponseMD(x *ResponseMetadata) Metadata {
 	var md Metadata
+	if x == nil {
+		return md
+	}
 	if x.CreatedAt != nil {
 		tm := x.CreatedAt.AsTime()
 		md.CreatedAt = &tm
@@ -356,17 +365,26 @@ func (x *StreamResponse) MarshalJSON() ([]byte, error) {
 
 // Proper marshal timestamp in metadata
 type dmlResponse struct {
-	Metadata      Metadata `json:"metadata,omitempty"`
-	Status        string   `json:"status,omitempty"`
-	ModifiedCount int32    `json:"modified_count,omitempty"`
+	Metadata      Metadata          `json:"metadata,omitempty"`
+	Status        string            `json:"status,omitempty"`
+	ModifiedCount int32             `json:"modified_count,omitempty"`
+	Keys          []json.RawMessage `json:"keys,omitempty"`
 }
 
 func (x *InsertResponse) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status})
+	var keys []json.RawMessage
+	for _, k := range x.Keys {
+		keys = append(keys, k)
+	}
+	return json.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status, Keys: keys})
 }
 
 func (x *ReplaceResponse) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status})
+	var keys []json.RawMessage
+	for _, k := range x.Keys {
+		keys = append(keys, k)
+	}
+	return json.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status, Keys: keys})
 }
 
 func (x *DeleteResponse) MarshalJSON() ([]byte, error) {

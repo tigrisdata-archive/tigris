@@ -19,7 +19,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-	"google.golang.org/grpc/codes"
 )
 
 func TestEncode_Decode(t *testing.T) {
@@ -35,7 +34,7 @@ func TestEncode_Decode(t *testing.T) {
 	})
 	t.Run("not_implemented", func(t *testing.T) {
 		data, err := Decode([]byte(`{"a": 1, "b": "foo"}`))
-		require.Equal(t, api.Error(codes.Internal, "unable to decode '123'"), err)
+		require.Equal(t, api.Errorf(api.Code_INTERNAL, "unable to decode '123'"), err)
 		require.Nil(t, data)
 	})
 

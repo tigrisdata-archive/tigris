@@ -17,9 +17,8 @@ package filter
 import (
 	"fmt"
 
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/value"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -51,7 +50,7 @@ func NewMatcher(key string, v value.Value) (ValueMatcher, error) {
 			Value: v,
 		}, nil
 	default:
-		return nil, status.Errorf(codes.InvalidArgument, "unsupported operand '%s'", key)
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported operand '%s'", key)
 	}
 }
 

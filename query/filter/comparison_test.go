@@ -17,11 +17,9 @@ package filter
 import (
 	"testing"
 
-	"github.com/tigrisdata/tigris/value"
-
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/value"
 )
 
 func TestNewMatcher(t *testing.T) {
@@ -32,6 +30,6 @@ func TestNewMatcher(t *testing.T) {
 	require.True(t, ok)
 
 	matcher, err = NewMatcher("foo", value.NewIntValue(1))
-	require.Equal(t, status.Errorf(codes.InvalidArgument, "unsupported operand 'foo'"), err)
+	require.Equal(t, api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported operand 'foo'"), err)
 	require.Nil(t, matcher)
 }

@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"gopkg.in/gavv/httpexpect.v1"
 )
 
@@ -51,10 +52,7 @@ func (s *DatabaseSuite) TestDescribeDatabase() {
 
 func (s *DatabaseSuite) TestDropDatabase_NotFound() {
 	resp := dropDatabase(s.T(), "test_drop_db_not_found")
-	resp.Status(http.StatusNotFound).
-		JSON().
-		Object().
-		ValueEqual("message", "database doesn't exist 'test_drop_db_not_found'")
+	testError(resp, http.StatusNotFound, api.Code_NOT_FOUND, "database doesn't exist 'test_drop_db_not_found'")
 }
 
 func (s *DatabaseSuite) TestDropDatabase() {

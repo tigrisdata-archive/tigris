@@ -20,8 +20,6 @@ import (
 	"github.com/pkg/errors"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/lib/set"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 /**
@@ -97,16 +95,16 @@ type Factory struct {
 func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 	var schema = &JSONSchema{}
 	if err := jsoniter.Unmarshal(reqSchema, schema); err != nil {
-		return nil, api.Errorf(codes.Internal, errors.Wrap(err, "unmarshalling failed").Error())
+		return nil, api.Errorf(api.Code_INTERNAL, errors.Wrap(err, "unmarshalling failed").Error())
 	}
 	if collection != schema.Name {
-		return nil, api.Errorf(codes.InvalidArgument, "collection name is not same as schema name '%s' '%s'", collection, schema.Name)
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "collection name is not same as schema name '%s' '%s'", collection, schema.Name)
 	}
 	if len(schema.Properties) == 0 {
-		return nil, api.Errorf(codes.InvalidArgument, "missing properties field in schema")
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "missing properties field in schema")
 	}
 	if len(schema.PrimaryKeys) == 0 {
-		return nil, api.Errorf(codes.InvalidArgument, "missing primary key field in schema")
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "missing primary key field in schema")
 	}
 	var primaryKeysSet = set.New(schema.PrimaryKeys...)
 	fields, err := deserializeProperties(schema.Properties, primaryKeysSet)
@@ -125,7 +123,7 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 			}
 		}
 		if !found {
-			return nil, status.Errorf(codes.InvalidArgument, "missing primary key '%s' field in schema", pkeyField)
+			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "missing primary key '%s' field in schema", pkeyField)
 		}
 	}
 
@@ -147,7 +145,7 @@ func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet set.Ha
 	var err error
 	err = jsonparser.ObjectEach(properties, func(key []byte, v []byte, dataType jsonparser.ValueType, offset int) error {
 		if err != nil {
-			return api.Errorf(codes.Internal, errors.Wrap(err, "failed to iterate on user schema").Error())
+			return api.Errorf(api.Code_INTERNAL, errors.Wrap(err, "failed to iterate on user schema").Error())
 		}
 
 		var builder FieldBuilder
@@ -159,13 +157,13 @@ func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet set.Ha
 		// set field name and try to unmarshal the value into field builder
 		builder.FieldName = string(key)
 		if err = jsoniter.Unmarshal(v, &builder); err != nil {
-			return api.Errorf(codes.Internal, err.Error())
+			return api.Errorf(api.Code_INTERNAL, err.Error())
 		}
 		if builder.Type == jsonSpecArray && builder.Items == nil {
-			return api.Errorf(codes.InvalidArgument, "missing items for array field")
+			return api.Errorf(api.Code_INVALID_ARGUMENT, "missing items for array field")
 		}
 		if builder.Type == jsonSpecObject && len(builder.Properties) == 0 {
-			return api.Errorf(codes.InvalidArgument, "missing properties for object field")
+			return api.Errorf(api.Code_INVALID_ARGUMENT, "missing properties for object field")
 		}
 
 		if builder.Items != nil {

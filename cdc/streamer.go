@@ -15,6 +15,7 @@
 package cdc
 
 import (
+	"bytes"
 	"time"
 
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
@@ -35,9 +36,8 @@ type Streamer struct {
 
 func (s *Streamer) start() error {
 	key, err := s.db.ReadTransact(func(rtx fdb.ReadTransaction) (interface{}, error) {
-		begin := fdb.FirstGreaterThan(s.keySpace.beginKey)
-		end := fdb.LastLessThan(s.keySpace.endKey)
-		r := rtx.GetRange(fdb.SelectorRange{Begin: begin, End: end}, fdb.RangeOptions{Limit: 1, Reverse: true})
+		kr := fdb.KeyRange{Begin: s.keySpace.beginKey, End: s.keySpace.endKey}
+		r := rtx.GetRange(kr, fdb.RangeOptions{Limit: 1, Reverse: true})
 
 		i := r.Iterator()
 		if i.Advance() {
@@ -71,15 +71,18 @@ func (s *Streamer) start() error {
 
 func (s *Streamer) read() error {
 	_, err := s.db.ReadTransact(func(rtx fdb.ReadTransaction) (interface{}, error) {
-		begin := fdb.FirstGreaterThan(s.lastKey)
-		end := fdb.LastLessThan(s.keySpace.endKey)
-		r := rtx.GetRange(fdb.SelectorRange{Begin: begin, End: end}, fdb.RangeOptions{Limit: s.cfg.StreamBatch})
+		kr := fdb.KeyRange{Begin: s.lastKey, End: s.keySpace.endKey}
+		r := rtx.GetRange(kr, fdb.RangeOptions{Limit: s.cfg.StreamBatch})
 
 		i := r.Iterator()
 		for i.Advance() {
 			kv, err := i.Get()
 			if err != nil {
 				return nil, err
+			}
+
+			if bytes.Equal(s.lastKey, kv.Key) {
+				continue
 			}
 
 			data, err := internal.Decode(kv.Value)

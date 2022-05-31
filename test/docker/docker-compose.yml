@@ -57,9 +57,6 @@ services:
       - type: bind
         source: ../../
         target: /go/src/tigris
-      - type: bind
-        source: ~/.cache/go-build
-        target: /root/.cache/go-build
       - type: volume
         source: fdbdata
         target: /etc/foundationdb/

@@ -23,11 +23,10 @@ import (
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/metadata"
-	"github.com/tigrisdata/tigris/server/midddleware"
+	middleware "github.com/tigrisdata/tigris/server/midddleware"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	ulog "github.com/tigrisdata/tigris/util/log"
-	"google.golang.org/grpc/codes"
 )
 
 // SessionManager is used to manage all the explicit query sessions. The execute method is executing the query.
@@ -126,7 +125,7 @@ func (sessMgr *SessionManager) Execute(ctx context.Context, req *ReqOptions) (*R
 	} else {
 		resp, err := sessMgr.executeWithRetry(ctx, req)
 		if err == kv.ErrConflictingTransaction {
-			return nil, api.Errorf(codes.Aborted, err.Error())
+			return nil, api.Errorf(api.Code_ABORTED, err.Error())
 		}
 
 		return resp, err
