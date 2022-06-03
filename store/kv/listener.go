@@ -16,48 +16,85 @@ package kv
 
 import (
 	"context"
-
-	"github.com/apple/foundationdb/bindings/go/src/fdb"
 )
 
 const (
-	InsertOp      = "insert"
-	ReplaceOp     = "replace"
-	UpdateOp      = "update"
-	UpdateRangeOp = "updateRange"
-	DeleteOp      = "delete"
-	DeleteRangeOp = "deleteRange"
+	InsertEvent      = "insert"
+	ReplaceEvent     = "replace"
+	UpdateEvent      = "update"
+	UpdateRangeEvent = "updateRange"
+	DeleteEvent      = "delete"
+	DeleteRangeEvent = "deleteRange"
 )
 
-type ListenerCtxKey struct{}
+type EventListenerCtxKey struct{}
 
-type Listener interface {
+// EventListener is listener to buffer all the changes in a transaction. It is attached by server layer in the context,
+// and it is only responsible for buffering of the events but doesn't participate in the outcome of the transaction
+// i.e. EventListener has no knowledge whether the transaction was committed or rolled back. The lifecycle of this
+// listener is managed by QuerySession in server package.
+type EventListener interface {
+	// OnSet buffers insert/replace/update events
 	OnSet(op string, table []byte, key []byte, data []byte)
+	// OnClearRange buffers delete events
 	OnClearRange(op string, table []byte, lKey []byte, rKey []byte)
-	OnCommit(tx *fdb.Transaction) error
-	OnCancel()
+	// GetEvents is used to access buffered events. These events may be shared by different participants callers are
+	// strongly discourage to modify the event and if needed copy it to some other buffer. Once transaction completes
+	// session may discard all the buffered events.
+	GetEvents() []*Event
 }
 
-type NoListener struct{}
-
-func (l *NoListener) OnSet(string, []byte, []byte, []byte) {
+type Event struct {
+	Op    string
+	Table []byte
+	Key   []byte `json:",omitempty"`
+	LKey  []byte `json:",omitempty"`
+	RKey  []byte `json:",omitempty"`
+	Data  []byte `json:",omitempty"`
+	Last  bool
 }
 
-func (l *NoListener) OnClearRange(string, []byte, []byte, []byte) {
+type DefaultListener struct {
+	Events []*Event
 }
 
-func (l *NoListener) OnCommit(*fdb.Transaction) error {
-	return nil
+func (l *DefaultListener) OnSet(op string, table []byte, key []byte, data []byte) {
+	l.Events = append(l.Events, &Event{
+		Op:    op,
+		Table: table,
+		Key:   key,
+		Data:  data,
+	})
+}
+func (l *DefaultListener) OnClearRange(op string, table []byte, lKey []byte, rKey []byte) {
+	l.Events = append(l.Events, &Event{
+		Op:    op,
+		Table: table,
+		LKey:  lKey,
+		RKey:  rKey,
+	})
+}
+func (l *DefaultListener) GetEvents() []*Event {
+	return l.Events
 }
 
-func (l *NoListener) OnCancel() {
+type NoopEventListener struct{}
+
+func (l *NoopEventListener) OnSet(op string, table []byte, key []byte, data []byte)         {}
+func (l *NoopEventListener) OnClearRange(op string, table []byte, lKey []byte, rKey []byte) {}
+func (l *NoopEventListener) GetEvents() []*Event                                            { return nil }
+
+func WrapEventListenerCtx(ctx context.Context) context.Context {
+	return context.WithValue(ctx, EventListenerCtxKey{}, &DefaultListener{})
 }
 
-func GetListener(ctx context.Context) Listener {
-	l, ok := ctx.Value(ListenerCtxKey{}).(Listener)
-	if l != nil && ok {
-		return l
-	} else {
-		return &NoListener{}
+func GetEventListener(ctx context.Context) EventListener {
+	a := ctx.Value(EventListenerCtxKey{})
+	if a != nil {
+		if conv, ok := a.(EventListener); ok {
+			return conv
+		}
 	}
+
+	return &NoopEventListener{}
 }
