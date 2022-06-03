@@ -15,6 +15,7 @@ RUN apt update && apt install -y \
     cmake \
     golang \
     libjemalloc2 \
+    libjemalloc-dev \
     liblz4-dev \
     libssl-dev \
     mono-devel \
