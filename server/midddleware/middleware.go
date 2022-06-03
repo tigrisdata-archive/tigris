@@ -41,6 +41,7 @@ func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerI
 	// Note: we don't add validate here and rather call it in server code because the validator interceptor returns gRPC
 	// error which is not convertible to the internal rest error code.
 	stream := middleware.ChainStreamServer(
+		forwarderStreamServerInterceptor(),
 		grpc_ratelimit.StreamServerInterceptor(&RateLimiter{}),
 		grpc_auth.StreamServerInterceptor(authFunction),
 		grpc_logging.StreamServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger), []grpc_logging.Option{}...),
@@ -55,13 +56,14 @@ func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerI
 	// Note: we don't add validate here and rather call it in server code because the validator interceptor returns gRPC
 	// error which is not convertible to the internal rest error code.
 	unary := middleware.ChainUnaryServer(
+		forwarderUnaryServerInterceptor(),
 		pprofUnaryServerInterceptor(),
 		grpc_ratelimit.UnaryServerInterceptor(&RateLimiter{}),
 		grpc_auth.UnaryServerInterceptor(authFunction),
 		grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger)),
 		// grpc_logging.PayloadUnaryServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger), alwaysLoggingDeciderServer, time.RFC3339), //To log payload
 		validatorUnaryServerInterceptor(),
-		TimeoutUnaryServerInterceptor(DefaultTimeout),
+		timeoutUnaryServerInterceptor(DefaultTimeout),
 		grpc_opentracing.UnaryServerInterceptor(),
 		grpc_recovery.UnaryServerInterceptor(),
 	)

@@ -12,54 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package http
+package muxer
 
 import (
-	"net/http"
-
-	middleware "github.com/tigrisdata/tigris/server/midddleware"
-
-	"github.com/fullstorydev/grpchan/inprocgrpc"
-	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
 	"github.com/tigrisdata/tigris/server/config"
-	"github.com/tigrisdata/tigris/server/types"
+	middleware "github.com/tigrisdata/tigris/server/midddleware"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
-type Server struct {
-	Router chi.Router
-	httpS  *http.Server
-	Inproc *inprocgrpc.Channel
+type GRPCServer struct {
+	*grpc.Server
 }
 
-func NewServer(cfg *config.Config) *Server {
-	r := chi.NewRouter()
-	s := &Server{
-		Inproc: &inprocgrpc.Channel{},
-		Router: r,
-		httpS: &http.Server{
-			Handler: r,
-		},
-	}
+func NewGRPCServer(cfg *config.Config) *GRPCServer {
+	s := &GRPCServer{}
 
 	unary, stream := middleware.Get(cfg)
-
-	s.Inproc.WithServerStreamInterceptor(stream)
-	s.Inproc.WithServerUnaryInterceptor(unary)
-
+	s.Server = grpc.NewServer(grpc.StreamInterceptor(stream), grpc.UnaryInterceptor(unary))
+	reflection.Register(s)
 	return s
 }
 
-func (s *Server) Start(mux cmux.CMux) error {
-	match := mux.Match(cmux.HTTP1Fast())
+func (s *GRPCServer) Start(mux cmux.CMux) error {
+	// MatchWithWriters is needed as it needs SETTINGS frame from the server otherwise the client will block
+	match := mux.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
 	go func() {
-		err := s.httpS.Serve(match)
+		err := s.Serve(match)
 		log.Fatal().Err(err).Msg("start http server")
 	}()
 	return nil
-}
-
-func (s *Server) GetType() string {
-	return types.HTTPServer
 }

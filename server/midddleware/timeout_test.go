@@ -12,7 +12,7 @@ import (
 func TestTimeout(t *testing.T) {
 	ctx := context.Background()
 	ctx = metadata.NewIncomingContext(ctx, metadata.New(map[string]string{
-		RequestTimeoutHeader: "0.2",
+		requestTimeoutHeader: "0.2",
 	}))
 	ctx, _ = setDeadlineUsingHeader(ctx)
 	deadline, ok := ctx.Deadline()

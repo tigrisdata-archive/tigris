@@ -21,16 +21,12 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
 	"github.com/tigrisdata/tigris/server/config"
-	tgrpc "github.com/tigrisdata/tigris/server/grpc"
-	tHTTP "github.com/tigrisdata/tigris/server/http"
 	v1 "github.com/tigrisdata/tigris/server/services/v1"
-	"github.com/tigrisdata/tigris/server/types"
 	"github.com/tigrisdata/tigris/store/kv"
 )
 
 type Server interface {
 	Start(mux cmux.CMux) error
-	GetType() string
 }
 
 type Muxer struct {
@@ -39,8 +35,8 @@ type Muxer struct {
 
 func NewMuxer(cfg *config.Config) *Muxer {
 	var s []Server
-	s = append(s, tHTTP.NewServer(cfg))
-	s = append(s, tgrpc.NewServer(cfg))
+	s = append(s, NewHTTPServer(cfg))
+	s = append(s, NewGRPCServer(cfg))
 	m := &Muxer{
 		servers: s,
 	}
@@ -51,11 +47,11 @@ func NewMuxer(cfg *config.Config) *Muxer {
 func (m *Muxer) RegisterServices(kvStore kv.KeyValueStore) {
 	services := v1.GetRegisteredServices(kvStore)
 	for _, r := range services {
-		for _, s := range m.servers {
-			if s.GetType() == types.GRPCServer {
-				_ = r.RegisterGRPC(s.(*tgrpc.Server).Server)
-			} else if s.GetType() == types.HTTPServer {
-				_ = r.RegisterHTTP(s.(*tHTTP.Server).Router, s.(*tHTTP.Server).Inproc)
+		for _, v := range m.servers {
+			if s, ok := v.(*GRPCServer); ok {
+				_ = r.RegisterGRPC(s.Server)
+			} else if s, ok := v.(*HTTPServer); ok {
+				_ = r.RegisterHTTP(s.Router, s.Inproc)
 			}
 		}
 	}

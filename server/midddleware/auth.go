@@ -22,15 +22,13 @@ import (
 
 	"github.com/auth0/go-jwt-middleware/v2/jwks"
 	"github.com/auth0/go-jwt-middleware/v2/validator"
-	"github.com/grpc-ecosystem/go-grpc-middleware/util/metautils"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/config"
 )
 
 var (
-	headerAuthorize   = "authorization"
-	grpcGatewayPrefix = "grpc-gateway-"
+	headerAuthorize = "authorization"
 )
 
 type Organization struct {
@@ -60,14 +58,6 @@ func (c CustomClaim) Validate(ctx context.Context) error {
 		return api.Errorf(api.Code_PERMISSION_DENIED, "your token is not valid for this URL")
 	}
 	return nil
-}
-
-func getHeader(ctx context.Context, header string) string {
-	if val := metautils.ExtractIncoming(ctx).Get(header); val != "" {
-		return val
-	}
-
-	return metautils.ExtractIncoming(ctx).Get(grpcGatewayPrefix + header)
 }
 
 func AuthFromMD(ctx context.Context, expectedScheme string) (string, error) {
