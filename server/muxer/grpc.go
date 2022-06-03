@@ -12,24 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package grpc
+package muxer
 
 import (
 	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
 	"github.com/tigrisdata/tigris/server/config"
 	middleware "github.com/tigrisdata/tigris/server/midddleware"
-	"github.com/tigrisdata/tigris/server/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
 
-type Server struct {
+type GRPCServer struct {
 	*grpc.Server
 }
 
-func NewServer(cfg *config.Config) *Server {
-	s := &Server{}
+func NewGRPCServer(cfg *config.Config) *GRPCServer {
+	s := &GRPCServer{}
 
 	unary, stream := middleware.Get(cfg)
 	s.Server = grpc.NewServer(grpc.StreamInterceptor(stream), grpc.UnaryInterceptor(unary))
@@ -37,7 +36,7 @@ func NewServer(cfg *config.Config) *Server {
 	return s
 }
 
-func (s *Server) Start(mux cmux.CMux) error {
+func (s *GRPCServer) Start(mux cmux.CMux) error {
 	// MatchWithWriters is needed as it needs SETTINGS frame from the server otherwise the client will block
 	match := mux.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
 	go func() {
@@ -45,8 +44,4 @@ func (s *Server) Start(mux cmux.CMux) error {
 		log.Fatal().Err(err).Msg("start http server")
 	}()
 	return nil
-}
-
-func (s *Server) GetType() string {
-	return types.GRPCServer
 }

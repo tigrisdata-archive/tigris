@@ -579,8 +579,6 @@ func (i *fdbIterator) Next(kv *baseKeyValue) bool {
 		return false
 	}
 
-	log.Debug().Str("key", tkv.Key.String()).Msg("fdbIterator.Next")
-
 	t, err := i.subspace.Unpack(tkv.Key)
 	if ulog.E(err) {
 		i.err = err
@@ -592,6 +590,8 @@ func (i *fdbIterator) Next(kv *baseKeyValue) bool {
 		kv.FDBKey = tkv.Key
 		kv.Value = tkv.Value
 	}
+
+	log.Debug().Interface("key", tupleToKey(&t)).Str("table", i.subspace.FDBKey().String()).Msg("fdbIterator.Next")
 
 	return true
 }
@@ -624,7 +624,7 @@ func getFDBKey(table []byte, key Key) fdb.Key {
 		p := unsafe.Pointer(&key)
 		k = s.Pack(*(*tuple.Tuple)(p))
 	}
-	log.Debug().Str("key", k.String()).Msg("getFDBKey")
+	log.Debug().Interface("key", key).Str("table", s.FDBKey().String()).Msg("getFDBKey")
 	return k
 }
 
@@ -640,7 +640,7 @@ func getCtxTimeout(ctx context.Context) int64 {
 }
 
 // setTxTimeout sets transaction timeout
-// Zero input sets unlimited timeout timeout
+// Zero input sets unlimited timeout
 func setTxTimeout(tx *fdb.Transaction, ms int64) error {
 	if ms < 0 {
 		return context.DeadlineExceeded

@@ -49,7 +49,6 @@ func GetTransaction(ctx context.Context, req proto.Message) *TransactionCtx {
 func GetTransactionLegacy(req proto.Message) *TransactionCtx {
 	switch r := req.(type) {
 	case *InsertRequest:
-		r.GetOptions().ProtoReflect()
 		if r.GetOptions() == nil || r.GetOptions().GetWriteOptions() == nil {
 			return nil
 		}

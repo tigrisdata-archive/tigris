@@ -16,7 +16,6 @@ package transaction
 
 import (
 	"context"
-	"os"
 	"sync"
 
 	"github.com/google/uuid"
@@ -24,6 +23,7 @@ import (
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/server/types"
 	"github.com/tigrisdata/tigris/store/kv"
 )
 
@@ -297,9 +297,8 @@ func (s *TxSession) Context() *SessionCtx {
 }
 
 func generateTransactionCtx() *api.TransactionCtx {
-	origin, _ := os.Hostname() // not necessarily it needs to be hostname, something sticky for routing
 	return &api.TransactionCtx{
 		Id:     uuid.New().String(),
-		Origin: origin,
+		Origin: types.MyOrigin,
 	}
 }

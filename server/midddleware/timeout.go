@@ -28,9 +28,9 @@ var (
 	MaximumTimeout = 5 * time.Second
 )
 
-// TimeoutUnaryServerInterceptor returns a new unary server interceptor
+// timeoutUnaryServerInterceptor returns a new unary server interceptor
 // that sets request timeout if it's not set in the context
-func TimeoutUnaryServerInterceptor(timeout time.Duration) grpc.UnaryServerInterceptor {
+func timeoutUnaryServerInterceptor(timeout time.Duration) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (iface interface{}, err error) {
 		var cancel context.CancelFunc
 
