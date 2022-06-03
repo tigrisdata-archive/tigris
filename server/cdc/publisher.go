@@ -76,14 +76,3 @@ func (p *Publisher) NewStreamer(kvStore kv.KeyValueStore) (*Streamer, error) {
 
 	return &s, nil
 }
-
-func (p *Publisher) NewListener() kv.Listener {
-	if config.DefaultConfig.Cdc.Enabled {
-		return &TxListener{
-			tx:       &Tx{},
-			keySpace: p.keySpace,
-		}
-	} else {
-		return &kv.NoListener{}
-	}
-}

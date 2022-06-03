@@ -23,8 +23,8 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-	"github.com/tigrisdata/tigris/cdc"
 	"github.com/tigrisdata/tigris/internal"
+	"github.com/tigrisdata/tigris/server/cdc"
 	"github.com/tigrisdata/tigris/server/metadata"
 	middleware "github.com/tigrisdata/tigris/server/midddleware"
 	"github.com/tigrisdata/tigris/server/transaction"
@@ -83,7 +83,7 @@ func newApiService(kv kv.KeyValueStore) *apiService {
 	u.tenantMgr = tenantMgr
 	u.encoder = metadata.NewEncoder(tenantMgr)
 	u.cdcMgr = cdc.NewManager()
-	u.sessions = NewSessionManager(u.txMgr, u.tenantMgr, u.versionH)
+	u.sessions = NewSessionManager(u.txMgr, u.tenantMgr, u.versionH, u.cdcMgr)
 	u.runnerFactory = NewQueryRunnerFactory(u.txMgr, u.encoder, u.cdcMgr)
 	return u
 }
@@ -147,7 +147,7 @@ func (s *apiService) CommitTransaction(ctx context.Context, r *api.CommitTransac
 	}
 	defer s.sessions.Remove(session.txCtx.Id)
 
-	err := session.Commit(ctx, s.versionH, session.tx.Context().GetStagedDatabase() != nil, nil)
+	err := session.Commit(s.versionH, session.tx.Context().GetStagedDatabase() != nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +166,7 @@ func (s *apiService) RollbackTransaction(ctx context.Context, r *api.RollbackTra
 	}
 	defer s.sessions.Remove(session.txCtx.Id)
 
-	_ = session.Rollback(ctx)
+	_ = session.Rollback()
 
 	return &api.RollbackTransactionResponse{}, nil
 }

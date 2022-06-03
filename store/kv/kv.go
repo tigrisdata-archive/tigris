@@ -38,6 +38,7 @@ type KV interface {
 	Update(ctx context.Context, table []byte, key Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error)
 	UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error)
 	SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error
+	SetVersionstampedKey(ctx context.Context, key []byte, value []byte) error
 	Get(ctx context.Context, key []byte) ([]byte, error)
 }
 

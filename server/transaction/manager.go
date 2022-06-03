@@ -33,9 +33,6 @@ var (
 
 	// ErrSessionIsGone is returned when the session is gone but getting used
 	ErrSessionIsGone = api.Errorf(api.Code_INTERNAL, "session is gone")
-
-	// ErrTxCtxMissing is returned when the caller needs an existing transaction but passed a nil tx ctx object
-	//ErrTxCtxMissing = api.Errorf(api.Code_INTERNAL, "tx ctx is missing")
 )
 
 // Tx interface exposes a method to execute and then other method to end the transaction. When Tx is returned at that
@@ -52,6 +49,7 @@ type Tx interface {
 	Commit(ctx context.Context) error
 	Rollback(ctx context.Context) error
 	SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error
+	SetVersionstampedKey(ctx context.Context, key []byte, value []byte) error
 }
 
 type StagedDB interface {
@@ -246,6 +244,17 @@ func (s *TxSession) SetVersionstampedValue(ctx context.Context, key []byte, valu
 	}
 
 	return s.kTx.SetVersionstampedValue(ctx, key, value)
+}
+
+func (s *TxSession) SetVersionstampedKey(ctx context.Context, key []byte, value []byte) error {
+	s.Lock()
+	defer s.Unlock()
+
+	if err := s.validateSession(); err != nil {
+		return nil
+	}
+
+	return s.kTx.SetVersionstampedKey(ctx, key, value)
 }
 
 func (s *TxSession) Get(ctx context.Context, key []byte) ([]byte, error) {

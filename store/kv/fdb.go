@@ -185,6 +185,13 @@ func (d *fdbkv) SetVersionstampedValue(ctx context.Context, key []byte, value []
 	return err
 }
 
+func (d *fdbkv) SetVersionstampedKey(ctx context.Context, key []byte, value []byte) error {
+	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+		return nil, (&ftx{d: d, tx: &tr}).SetVersionstampedKey(ctx, key, value)
+	})
+	return err
+}
+
 func (d *fdbkv) Get(ctx context.Context, key []byte) ([]byte, error) {
 	val, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
 		return (&ftx{d: d, tx: &tr}).Get(ctx, key)
@@ -306,6 +313,10 @@ func (b *fbatch) SetVersionstampedValue(_ context.Context, _ []byte, _ []byte) e
 	return fmt.Errorf("batch doesn't support setting versionstamped value")
 }
 
+func (b *fbatch) SetVersionstampedKey(_ context.Context, _ []byte, _ []byte) error {
+	return fmt.Errorf("batch doesn't support setting versionstamped key")
+}
+
 func (b *fbatch) Get(_ context.Context, _ []byte) ([]byte, error) {
 	return nil, fmt.Errorf("not implemented")
 }
@@ -337,7 +348,7 @@ func (d *fdbkv) BeginTx(ctx context.Context) (baseTx, error) {
 }
 
 func (t *ftx) Insert(ctx context.Context, table []byte, key Key, data []byte) error {
-	l := GetListener(ctx)
+	listener := GetEventListener(ctx)
 	k := getFDBKey(table, key)
 
 	// Read the value and if exists reject the request.
@@ -351,7 +362,7 @@ func (t *ftx) Insert(ctx context.Context, table []byte, key Key, data []byte) er
 	}
 
 	t.tx.Set(k, data)
-	l.OnSet(InsertOp, table, k, data)
+	listener.OnSet(InsertEvent, table, k, data)
 
 	log.Err(err).Str("table", string(table)).Interface("key", key).Msg("Insert")
 
@@ -359,11 +370,11 @@ func (t *ftx) Insert(ctx context.Context, table []byte, key Key, data []byte) er
 }
 
 func (t *ftx) Replace(ctx context.Context, table []byte, key Key, data []byte) error {
-	l := GetListener(ctx)
+	listener := GetEventListener(ctx)
 	k := getFDBKey(table, key)
 
 	t.tx.Set(k, data)
-	l.OnSet(ReplaceOp, table, k, data)
+	listener.OnSet(ReplaceEvent, table, k, data)
 
 	log.Debug().Str("table", string(table)).Interface("key", key).Msg("tx Replace")
 
@@ -371,14 +382,14 @@ func (t *ftx) Replace(ctx context.Context, table []byte, key Key, data []byte) e
 }
 
 func (t *ftx) Delete(ctx context.Context, table []byte, key Key) error {
-	l := GetListener(ctx)
+	listener := GetEventListener(ctx)
 	kr, err := fdb.PrefixRange(getFDBKey(table, key))
 	if ulog.E(err) {
 		return err
 	}
 
 	t.tx.ClearRange(kr)
-	l.OnClearRange(DeleteOp, table, kr.Begin.FDBKey(), kr.End.FDBKey())
+	listener.OnClearRange(DeleteEvent, table, kr.Begin.FDBKey(), kr.End.FDBKey())
 
 	log.Debug().Str("table", string(table)).Interface("key", key).Msg("tx delete")
 
@@ -386,12 +397,12 @@ func (t *ftx) Delete(ctx context.Context, table []byte, key Key) error {
 }
 
 func (t *ftx) DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key) error {
-	l := GetListener(ctx)
+	listener := GetEventListener(ctx)
 	lk := getFDBKey(table, lKey)
 	rk := getFDBKey(table, rKey)
 
 	t.tx.ClearRange(fdb.KeyRange{Begin: lk, End: rk})
-	l.OnClearRange(DeleteRangeOp, table, lk, rk)
+	listener.OnClearRange(DeleteRangeEvent, table, lk, rk)
 
 	log.Debug().Str("table", string(table)).Interface("lKey", lKey).Interface("rKey", rKey).Msg("tx delete range")
 
@@ -399,7 +410,7 @@ func (t *ftx) DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key)
 }
 
 func (t *ftx) Update(ctx context.Context, table []byte, key Key, apply func([]byte) ([]byte, error)) (int32, error) {
-	l := GetListener(ctx)
+	listener := GetEventListener(ctx)
 	k, err := fdb.PrefixRange(getFDBKey(table, key))
 	if ulog.E(err) {
 		return -1, err
@@ -420,7 +431,7 @@ func (t *ftx) Update(ctx context.Context, table []byte, key Key, apply func([]by
 		}
 
 		t.tx.Set(kv.Key, v)
-		l.OnSet(UpdateOp, table, kv.Key, v)
+		listener.OnSet(UpdateEvent, table, kv.Key, v)
 
 		modifiedCount++
 	}
@@ -431,7 +442,7 @@ func (t *ftx) Update(ctx context.Context, table []byte, key Key, apply func([]by
 }
 
 func (t *ftx) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) (int32, error) {
-	l := GetListener(ctx)
+	listener := GetEventListener(ctx)
 	lk := getFDBKey(table, lKey)
 	rk := getFDBKey(table, rKey)
 
@@ -450,7 +461,7 @@ func (t *ftx) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key,
 		}
 
 		t.tx.Set(kv.Key, v)
-		l.OnSet(UpdateRangeOp, table, kv.Key, v)
+		listener.OnSet(UpdateRangeEvent, table, kv.Key, v)
 
 		modifiedCount++
 	}
@@ -489,14 +500,18 @@ func (t *ftx) SetVersionstampedValue(_ context.Context, key []byte, value []byte
 	return nil
 }
 
+func (t *ftx) SetVersionstampedKey(ctx context.Context, key []byte, value []byte) error {
+	t.tx.SetVersionstampedKey(fdb.Key(key), value)
+
+	log.Debug().Str("key", string(key)).Msg("setting SetVersionstampedKey")
+	return nil
+}
+
 func (t *ftx) Get(_ context.Context, key []byte) ([]byte, error) {
 	return t.tx.Get(fdb.Key(key)).Get()
 }
 
 func (t *ftx) Commit(ctx context.Context) error {
-	l := GetListener(ctx)
-
-	t.err = l.OnCommit(t.tx)
 	if t.err != nil {
 		return t.err
 	}
@@ -520,10 +535,7 @@ func (t *ftx) Commit(ctx context.Context) error {
 }
 
 func (t *ftx) Rollback(ctx context.Context) error {
-	l := GetListener(ctx)
-
 	t.tx.Cancel()
-	l.OnCancel()
 
 	log.Debug().Msg("tx Rollback")
 
