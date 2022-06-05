@@ -6,13 +6,14 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"google.golang.org/grpc/metadata"
 )
 
 func TestTimeout(t *testing.T) {
 	ctx := context.Background()
 	ctx = metadata.NewIncomingContext(ctx, metadata.New(map[string]string{
-		RequestTimeoutHeader: "0.2",
+		api.HeaderRequestTimeout: "0.2",
 	}))
 	ctx, _ = setDeadlineUsingHeader(ctx)
 	deadline, ok := ctx.Deadline()
