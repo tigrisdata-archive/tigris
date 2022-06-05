@@ -107,12 +107,6 @@ func (x *CreateOrUpdateCollectionRequest) Validate() error {
 		return Errorf(Code_INVALID_ARGUMENT, "schema is a required during collection creation")
 	}
 
-	if !IsTxSupported(x) {
-		if transaction := GetTransaction(x); transaction != nil {
-			return Errorf(Code_INVALID_ARGUMENT, "interactive tx not supported but transaction token found")
-		}
-	}
-
 	return nil
 }
 
@@ -121,54 +115,24 @@ func (x *DropCollectionRequest) Validate() error {
 		return err
 	}
 
-	if !IsTxSupported(x) {
-		if transaction := GetTransaction(x); transaction != nil {
-			return Errorf(Code_INVALID_ARGUMENT, "interactive tx not supported but transaction token found")
-		}
-	}
-
 	return nil
 }
 
 func (x *ListCollectionsRequest) Validate() error {
-	if !IsTxSupported(x) {
-		if transaction := GetTransaction(x); transaction != nil {
-			return Errorf(Code_INVALID_ARGUMENT, "interactive tx not supported but transaction token found")
-		}
-	}
-
 	return nil
 }
 
 func (x *DescribeCollectionRequest) Validate() error {
-	if !IsTxSupported(x) {
-		if transaction := GetTransaction(x); transaction != nil {
-			return Errorf(Code_INVALID_ARGUMENT, "interactive tx not supported but transaction token found")
-		}
-	}
-
 	return nil
 }
 
 func (x *DescribeDatabaseRequest) Validate() error {
-	if !IsTxSupported(x) {
-		if transaction := GetTransaction(x); transaction != nil {
-			return Errorf(Code_INVALID_ARGUMENT, "interactive tx not supported but transaction token found")
-		}
-	}
-
 	return nil
 }
 
 func (x *CreateDatabaseRequest) Validate() error {
 	if err := isValidDatabase(x.Db); err != nil {
 		return err
-	}
-
-	if !IsTxSupported(x) {
-		if transaction := GetTransaction(x); transaction != nil {
-			return Errorf(Code_INVALID_ARGUMENT, "interactive tx not supported but transaction token found")
-		}
 	}
 
 	return nil
@@ -179,21 +143,10 @@ func (x *DropDatabaseRequest) Validate() error {
 		return err
 	}
 
-	if !IsTxSupported(x) {
-		if transaction := GetTransaction(x); transaction != nil {
-			return Errorf(Code_INVALID_ARGUMENT, "interactive tx not supported but transaction token found")
-		}
-	}
-
 	return nil
 }
 
 func (x *ListDatabasesRequest) Validate() error {
-	if !IsTxSupported(x) {
-		if transaction := GetTransaction(x); transaction != nil {
-			return Errorf(Code_INVALID_ARGUMENT, "interactive tx not supported but transaction token found")
-		}
-	}
 	return nil
 }
 

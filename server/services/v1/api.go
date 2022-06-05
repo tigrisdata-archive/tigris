@@ -120,11 +120,7 @@ func (s *apiService) RegisterGRPC(grpc *grpc.Server) error {
 	return nil
 }
 
-func (s *apiService) BeginTransaction(ctx context.Context, r *api.BeginTransactionRequest) (*api.BeginTransactionResponse, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-
+func (s *apiService) BeginTransaction(ctx context.Context, _ *api.BeginTransactionRequest) (*api.BeginTransactionResponse, error) {
 	// explicit transactions needed to be tracked
 	session, err := s.sessions.Create(ctx, true, true)
 	if err != nil {
@@ -137,10 +133,6 @@ func (s *apiService) BeginTransaction(ctx context.Context, r *api.BeginTransacti
 }
 
 func (s *apiService) CommitTransaction(ctx context.Context, r *api.CommitTransactionRequest) (*api.CommitTransactionResponse, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-
 	session := s.sessions.Get(r.TxCtx.GetId())
 	if session == nil {
 		return nil, api.Errorf(api.Code_NOT_FOUND, "session not found")
@@ -156,10 +148,6 @@ func (s *apiService) CommitTransaction(ctx context.Context, r *api.CommitTransac
 }
 
 func (s *apiService) RollbackTransaction(ctx context.Context, r *api.RollbackTransactionRequest) (*api.RollbackTransactionResponse, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-
 	session := s.sessions.Get(r.TxCtx.GetId())
 	if session == nil {
 		return nil, api.Errorf(api.Code_NOT_FOUND, "session not found")
@@ -174,12 +162,8 @@ func (s *apiService) RollbackTransaction(ctx context.Context, r *api.RollbackTra
 // Insert new object returns an error if object already exists
 // Operations done individually not in actual batch
 func (s *apiService) Insert(ctx context.Context, r *api.InsertRequest) (*api.InsertResponse, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-
 	resp, err := s.sessions.Execute(ctx, &ReqOptions{
-		txCtx:       api.GetTransaction(r),
+		txCtx:       api.GetTransaction(ctx, r),
 		queryRunner: s.runnerFactory.GetInsertQueryRunner(r),
 	})
 	if err != nil {
@@ -196,12 +180,8 @@ func (s *apiService) Insert(ctx context.Context, r *api.InsertRequest) (*api.Ins
 }
 
 func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.ReplaceResponse, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-
 	resp, err := s.sessions.Execute(ctx, &ReqOptions{
-		txCtx:       api.GetTransaction(r),
+		txCtx:       api.GetTransaction(ctx, r),
 		queryRunner: s.runnerFactory.GetReplaceQueryRunner(r),
 	})
 	if err != nil {
@@ -218,12 +198,8 @@ func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.R
 }
 
 func (s *apiService) Update(ctx context.Context, r *api.UpdateRequest) (*api.UpdateResponse, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-
 	resp, err := s.sessions.Execute(ctx, &ReqOptions{
-		txCtx:       api.GetTransaction(r),
+		txCtx:       api.GetTransaction(ctx, r),
 		queryRunner: s.runnerFactory.GetUpdateQueryRunner(r),
 	})
 	if err != nil {
@@ -240,12 +216,8 @@ func (s *apiService) Update(ctx context.Context, r *api.UpdateRequest) (*api.Upd
 }
 
 func (s *apiService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.DeleteResponse, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-
 	resp, err := s.sessions.Execute(ctx, &ReqOptions{
-		txCtx:       api.GetTransaction(r),
+		txCtx:       api.GetTransaction(ctx, r),
 		queryRunner: s.runnerFactory.GetDeleteQueryRunner(r),
 	})
 	if err != nil {
@@ -261,12 +233,8 @@ func (s *apiService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.Del
 }
 
 func (s *apiService) Read(r *api.ReadRequest, stream api.Tigris_ReadServer) error {
-	if err := r.Validate(); err != nil {
-		return err
-	}
-
 	_, err := s.sessions.Execute(stream.Context(), &ReqOptions{
-		txCtx:       api.GetTransaction(r),
+		txCtx:       api.GetTransaction(stream.Context(), r),
 		queryRunner: s.runnerFactory.GetStreamingQueryRunner(r, stream),
 	})
 	if err != nil {
@@ -277,15 +245,11 @@ func (s *apiService) Read(r *api.ReadRequest, stream api.Tigris_ReadServer) erro
 }
 
 func (s *apiService) CreateOrUpdateCollection(ctx context.Context, r *api.CreateOrUpdateCollectionRequest) (*api.CreateOrUpdateCollectionResponse, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-
 	runner := s.runnerFactory.GetCollectionQueryRunner()
 	runner.SetCreateOrUpdateCollectionReq(r)
 
 	resp, err := s.sessions.Execute(ctx, &ReqOptions{
-		txCtx:          api.GetTransaction(r),
+		txCtx:          api.GetTransaction(ctx, r),
 		queryRunner:    runner,
 		metadataChange: true,
 	})
@@ -300,15 +264,11 @@ func (s *apiService) CreateOrUpdateCollection(ctx context.Context, r *api.Create
 }
 
 func (s *apiService) DropCollection(ctx context.Context, r *api.DropCollectionRequest) (*api.DropCollectionResponse, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-
 	runner := s.runnerFactory.GetCollectionQueryRunner()
 	runner.SetDropCollectionReq(r)
 
 	resp, err := s.sessions.Execute(ctx, &ReqOptions{
-		txCtx:          api.GetTransaction(r),
+		txCtx:          api.GetTransaction(ctx, r),
 		queryRunner:    runner,
 		metadataChange: true,
 	})
@@ -323,15 +283,11 @@ func (s *apiService) DropCollection(ctx context.Context, r *api.DropCollectionRe
 }
 
 func (s *apiService) ListCollections(ctx context.Context, r *api.ListCollectionsRequest) (*api.ListCollectionsResponse, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-
 	runner := s.runnerFactory.GetCollectionQueryRunner()
 	runner.SetListCollectionReq(r)
 
 	resp, err := s.sessions.Execute(ctx, &ReqOptions{
-		txCtx:       api.GetTransaction(r),
+		txCtx:       api.GetTransaction(ctx, r),
 		queryRunner: runner,
 	})
 	if err != nil {
@@ -342,10 +298,6 @@ func (s *apiService) ListCollections(ctx context.Context, r *api.ListCollections
 }
 
 func (s *apiService) ListDatabases(ctx context.Context, r *api.ListDatabasesRequest) (*api.ListDatabasesResponse, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-
 	queryRunner := s.runnerFactory.GetDatabaseQueryRunner()
 	queryRunner.SetListDatabaseReq(r)
 
@@ -360,10 +312,6 @@ func (s *apiService) ListDatabases(ctx context.Context, r *api.ListDatabasesRequ
 }
 
 func (s *apiService) CreateDatabase(ctx context.Context, r *api.CreateDatabaseRequest) (*api.CreateDatabaseResponse, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-
 	queryRunner := s.runnerFactory.GetDatabaseQueryRunner()
 	queryRunner.SetCreateDatabaseReq(r)
 	resp, err := s.sessions.Execute(ctx, &ReqOptions{
@@ -381,10 +329,6 @@ func (s *apiService) CreateDatabase(ctx context.Context, r *api.CreateDatabaseRe
 }
 
 func (s *apiService) DropDatabase(ctx context.Context, r *api.DropDatabaseRequest) (*api.DropDatabaseResponse, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-
 	queryRunner := s.runnerFactory.GetDatabaseQueryRunner()
 	queryRunner.SetDropDatabaseReq(r)
 	resp, err := s.sessions.Execute(ctx, &ReqOptions{
@@ -402,10 +346,6 @@ func (s *apiService) DropDatabase(ctx context.Context, r *api.DropDatabaseReques
 }
 
 func (s *apiService) DescribeCollection(ctx context.Context, r *api.DescribeCollectionRequest) (*api.DescribeCollectionResponse, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-
 	runner := s.runnerFactory.GetCollectionQueryRunner()
 	runner.SetDescribeCollectionReq(r)
 
@@ -420,10 +360,6 @@ func (s *apiService) DescribeCollection(ctx context.Context, r *api.DescribeColl
 }
 
 func (s *apiService) DescribeDatabase(ctx context.Context, r *api.DescribeDatabaseRequest) (*api.DescribeDatabaseResponse, error) {
-	if err := r.Validate(); err != nil {
-		return nil, err
-	}
-
 	runner := s.runnerFactory.GetDatabaseQueryRunner()
 	runner.SetDescribeDatabaseReq(r)
 
@@ -444,10 +380,6 @@ func (s *apiService) GetInfo(_ context.Context, _ *api.GetInfoRequest) (*api.Get
 }
 
 func (s *apiService) Stream(r *api.StreamRequest, stream api.Tigris_StreamServer) error {
-	if err := r.Validate(); err != nil {
-		return err
-	}
-
 	publisher := s.cdcMgr.GetPublisher(r.GetDb())
 	streamer, err := publisher.NewStreamer(s.kvStore)
 	if err != nil {

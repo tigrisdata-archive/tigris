@@ -14,17 +14,56 @@
 
 package api
 
-func IsTxSupported(req Request) bool {
-	switch req.(type) {
-	case *InsertRequest, *ReplaceRequest, *UpdateRequest, *DeleteRequest, *ReadRequest,
-		*CreateOrUpdateCollectionRequest, *DropCollectionRequest, *ListCollectionsRequest:
+import (
+	"context"
+
+	"github.com/grpc-ecosystem/go-grpc-middleware/util/metautils"
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
+)
+
+var (
+	HeaderPrefix = "Tigris-"
+
+	HeaderTxID     = "Tigris-Tx-Id"
+	HeaderTxOrigin = "Tigris-Tx-Origin"
+
+	grpcGatewayPrefix = "grpc-gateway-"
+)
+
+func IsTxSupported(ctx context.Context) bool {
+	m, _ := grpc.Method(ctx)
+	switch m {
+	case "Insert", "Replace", "Update", "Delete", "Read",
+		"CreateOrUpdateCollection", "DropCollection", "ListCollections":
 		return true
 	default:
 		return false
 	}
 }
 
-func GetTransaction(req Request) *TransactionCtx {
+func getHeader(ctx context.Context, header string) string {
+	if val := metautils.ExtractIncoming(ctx).Get(header); val != "" {
+		return val
+	}
+
+	return metautils.ExtractIncoming(ctx).Get(grpcGatewayPrefix + header)
+}
+
+func GetTransaction(ctx context.Context, req proto.Message) *TransactionCtx {
+	tx := &TransactionCtx{
+		Id:     getHeader(ctx, HeaderTxID),
+		Origin: getHeader(ctx, HeaderTxOrigin),
+	}
+
+	if tx.Id != "" {
+		return tx
+	}
+
+	return GetTransactionLegacy(req)
+}
+
+func GetTransactionLegacy(req proto.Message) *TransactionCtx {
 	switch r := req.(type) {
 	case *InsertRequest:
 		r.GetOptions().ProtoReflect()

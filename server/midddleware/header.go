@@ -1,6 +1,11 @@
 package middleware
 
-import "github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+import (
+	"strings"
+
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+)
 
 const (
 	// RequestTimeoutHeader is an end-to-end request header that indicates the maximum time that a client is
@@ -14,6 +19,9 @@ func CustomMatcher(key string) (string, bool) {
 	case RequestTimeoutHeader:
 		return key, true
 	default:
+		if strings.HasPrefix(key, api.HeaderPrefix) {
+			return key, true
+		}
 		return runtime.DefaultHeaderMatcher(key)
 	}
 }
