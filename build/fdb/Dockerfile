@@ -37,6 +37,16 @@ RUN git clone ${SOURCE} && \
 RUN mkdir build_output
 ENV CXX_FLAGS="--param ggc-min-expand=20"
 RUN cmake -S foundationdb -B build_output -G Ninja
-RUN ninja -j4 -C build_output
-RUN cd build_output && cpack -G DEB
+RUN ninja -j3 -C build_output
 
+FROM devel as pkg
+ADD ~/packages /packages
+RUN cd build_output && cpack -G DEB
+RUN cp build_output/packages/*.deb* /packages
+
+FROM --platform=linux/arm64/v8 ubuntu:latest as release
+ADD ~/packages /packages
+RUN dpkg -i ~/packages/foundationdb-clients*.deb
+RUN mkdir /var/lib/foundationdb
+RUN chown foundationdb:foundationdb /var/lib/foundationdb
+RUN dpkg -i ~/packages/foundationdb-server.deb
