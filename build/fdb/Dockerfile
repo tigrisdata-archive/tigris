@@ -40,13 +40,16 @@ RUN cmake -S foundationdb -B build_output -G Ninja
 RUN ninja -j3 -C build_output
 
 FROM devel as pkg
-ADD ~/packages /packages
+COPY --from=devel /build_output /build_output
 RUN cd build_output && cpack -G DEB
+RUN mkdir /packages
 RUN cp build_output/packages/*.deb* /packages
 
 FROM --platform=linux/arm64/v8 ubuntu:latest as release
-ADD ~/packages /packages
+RUN mkdir /packages
+COPY --from=devel /build_output/packages/* /packages
 RUN dpkg -i ~/packages/foundationdb-clients*.deb
 RUN mkdir /var/lib/foundationdb
 RUN chown foundationdb:foundationdb /var/lib/foundationdb
 RUN dpkg -i ~/packages/foundationdb-server.deb
+RUN rm -rf /packages
