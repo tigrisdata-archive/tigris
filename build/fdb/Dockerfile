@@ -1,7 +1,7 @@
 FROM --platform=linux/arm64/v8 ubuntu:latest as build
 
-ENV SOURCE=https://github.com/apple/foundationdb/
-ENV VERSION=7.1.7
+ENV SOURCE=https://github.com/rbarabas/foundationdb
+ENV VERSION=rb/7.1.7_arm64
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Setup TZ
@@ -25,6 +25,8 @@ RUN apt update && apt install -y \
     python3 \
     ruby-dev
 
+FROM build as devel
+
 # Check out repository
 RUN git clone ${SOURCE} && \
     cd foundationdb && \
@@ -33,6 +35,8 @@ RUN git clone ${SOURCE} && \
 
 # Build
 RUN mkdir build_output
+ENV CXX_FLAGS="--param ggc-min-expand=20"
 RUN cmake -S foundationdb -B build_output -G Ninja
-RUN ninja -C build_output
+RUN ninja -j4 -C build_output
+RUN cd build_output && cpack -G DEB
 
