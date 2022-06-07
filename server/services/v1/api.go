@@ -21,11 +21,13 @@ import (
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/server/cdc"
 	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/metrics"
 	middleware "github.com/tigrisdata/tigris/server/midddleware"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
@@ -44,7 +46,8 @@ const (
 	documentPath        = collectionPath + "/documents"
 	documentPathPattern = documentPath + "/*"
 
-	infoPath = "/info"
+	infoPath    = "/info"
+	metricsPath = "/metrics"
 )
 
 type apiService struct {
@@ -112,6 +115,7 @@ func (s *apiService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel)
 	router.HandleFunc(apiPathPrefix+infoPath, func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
 	})
+	router.Handle(metricsPath, promhttp.HandlerFor(metrics.PrometheusRegistry, promhttp.HandlerOpts{}))
 	return nil
 }
 
