@@ -22,8 +22,11 @@ import (
 )
 
 const (
-	EQ = "$eq"
-	GT = "$gt"
+	EQ  = "$eq"
+	GT  = "$gt"
+	LT  = "$lt"
+	GTE = "$gte"
+	LTE = "$lte"
 )
 
 // ValueMatcher is an interface that has method like Matches.
@@ -47,6 +50,18 @@ func NewMatcher(key string, v value.Value) (ValueMatcher, error) {
 		}, nil
 	case GT:
 		return &GreaterThanMatcher{
+			Value: v,
+		}, nil
+	case GTE:
+		return &GreaterThanEqMatcher{
+			Value: v,
+		}, nil
+	case LT:
+		return &LessThanMatcher{
+			Value: v,
+		}, nil
+	case LTE:
+		return &LessThanEqMatcher{
 			Value: v,
 		}, nil
 	default:
@@ -109,5 +124,70 @@ func (g *GreaterThanMatcher) Type() string {
 
 func (g *GreaterThanMatcher) String() string {
 	return fmt.Sprintf("{$gt:%v}", g.Value)
+}
 
+// GreaterThanEqMatcher implements "$gte" operand.
+type GreaterThanEqMatcher struct {
+	Value value.Value
+}
+
+func (g *GreaterThanEqMatcher) GetValue() value.Value {
+	return g.Value
+}
+
+func (g *GreaterThanEqMatcher) Matches(input value.Value) bool {
+	res, _ := g.Value.CompareTo(input)
+	return res >= 0
+}
+
+func (g *GreaterThanEqMatcher) Type() string {
+	return "$gte"
+}
+
+func (g *GreaterThanEqMatcher) String() string {
+	return fmt.Sprintf("{$gte:%v}", g.Value)
+}
+
+// LessThanMatcher implements "$lt" operand.
+type LessThanMatcher struct {
+	Value value.Value
+}
+
+func (l *LessThanMatcher) GetValue() value.Value {
+	return l.Value
+}
+
+func (l *LessThanMatcher) Matches(input value.Value) bool {
+	res, _ := l.Value.CompareTo(input)
+	return res < 0
+}
+
+func (l *LessThanMatcher) Type() string {
+	return "$lt"
+}
+
+func (l *LessThanMatcher) String() string {
+	return fmt.Sprintf("{$lt:%v}", l.Value)
+}
+
+// LessThanEqMatcher implements "$lte" operand.
+type LessThanEqMatcher struct {
+	Value value.Value
+}
+
+func (l *LessThanEqMatcher) GetValue() value.Value {
+	return l.Value
+}
+
+func (l *LessThanEqMatcher) Matches(input value.Value) bool {
+	res, _ := l.Value.CompareTo(input)
+	return res <= 0
+}
+
+func (l *LessThanEqMatcher) Type() string {
+	return "$lte"
+}
+
+func (l *LessThanEqMatcher) String() string {
+	return fmt.Sprintf("{$lte:%v}", l.Value)
 }

@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/server/config"
 	"gopkg.in/gavv/httpexpect.v1"
 )
 
@@ -52,6 +53,8 @@ func TestServer(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	config.LoadEnvironment()
+
 	os.Exit(m.Run())
 }
 

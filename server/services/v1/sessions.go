@@ -27,6 +27,7 @@ import (
 	"github.com/tigrisdata/tigris/server/midddleware"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
+	"github.com/tigrisdata/tigris/store/search"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
@@ -41,12 +42,14 @@ type SessionManager struct {
 	tenantMgr   *metadata.TenantManager
 	versionH    *metadata.VersionHandler
 	tracker     *sessionTracker
+	searchStore search.Store
 	txListeners []TxListener
 }
 
-func NewSessionManager(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, versionH *metadata.VersionHandler, cdc *cdc.Manager) *SessionManager {
+func NewSessionManager(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, versionH *metadata.VersionHandler, cdc *cdc.Manager, searchStore search.Store, encoder metadata.Encoder) *SessionManager {
 	var txListeners []TxListener
 	txListeners = append(txListeners, cdc)
+	txListeners = append(txListeners, NewSearchIndexer(searchStore, encoder))
 
 	return &SessionManager{
 		txMgr:       txMgr,
@@ -54,6 +57,7 @@ func NewSessionManager(txMgr *transaction.Manager, tenantMgr *metadata.TenantMan
 		versionH:    versionH,
 		tracker:     newSessionTracker(),
 		txListeners: txListeners,
+		searchStore: searchStore,
 	}
 }
 
@@ -198,7 +202,7 @@ func (s *QuerySession) Rollback() error {
 	defer s.cancel()
 
 	for _, listener := range s.txListeners {
-		listener.OnRollback(s.ctx, kv.GetEventListener(s.ctx))
+		listener.OnRollback(s.ctx, s.tenant, kv.GetEventListener(s.ctx))
 	}
 	return s.tx.Rollback(s.ctx)
 }
@@ -221,14 +225,17 @@ func (s *QuerySession) Commit(versionMgr *metadata.VersionHandler, incVersion bo
 	}
 
 	for _, listener := range s.txListeners {
-		if err = listener.OnPreCommit(s.ctx, s.tx, kv.GetEventListener(s.ctx)); err != nil {
+		if err = listener.OnPreCommit(s.ctx, s.tenant, s.tx, kv.GetEventListener(s.ctx)); err != nil {
 			return err
 		}
 	}
 
 	if err = s.tx.Commit(s.ctx); err == nil {
 		for _, listener := range s.txListeners {
-			_ = listener.OnPostCommit(s.ctx, kv.GetEventListener(s.ctx))
+			if err = listener.OnPostCommit(s.ctx, s.tenant, kv.GetEventListener(s.ctx)); err != nil {
+				log.Err(err).Msg("post commit failure")
+				return api.Errorf(api.Code_DEADLINE_EXCEEDED, err.Error())
+			}
 		}
 	}
 

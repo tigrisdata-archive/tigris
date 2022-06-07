@@ -46,6 +46,23 @@ func (s *Selector) Matches(doc []byte) bool {
 	return false
 }
 
+func (s *Selector) ToSearchFilter() string {
+	var op string
+	switch s.Matcher.Type() {
+	case EQ:
+		op = "%s:=%v"
+	case GT:
+		op = "%s:>%v"
+	case GTE:
+		op = "%s:>=%v"
+	case LT:
+		op = "%s:<%v"
+	case LTE:
+		op = "%s:<=%v"
+	}
+	return fmt.Sprintf(op, s.Field, s.Matcher.GetValue().AsInterface())
+}
+
 // String a helpful method for logging.
 func (s *Selector) String() string {
 	return fmt.Sprintf("{%v:%v}", s.Field, s.Matcher)

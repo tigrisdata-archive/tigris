@@ -70,6 +70,7 @@ func (l *DefaultListener) OnClearRange(op string, table []byte, lKey []byte, rKe
 	l.Events = append(l.Events, &Event{
 		Op:    op,
 		Table: table,
+		Key:   lKey,
 		LKey:  lKey,
 		RKey:  rKey,
 	})

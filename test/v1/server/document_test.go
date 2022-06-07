@@ -201,9 +201,7 @@ func (s *DocumentSuite) TestInsert_SchemaValidationError() {
 }
 
 func (s *DocumentSuite) TestInsert_SupportedPrimaryKeys() {
-	base64 := []byte(`"base64 string"`)
-	base64Encoded, err := json.Marshal(base64)
-	require.NoError(s.T(), err)
+	b64 := base64.StdEncoding.EncodeToString([]byte(`base64 string`))
 
 	uuidValue := uuid.New().String()
 	collectionName := "test_supported_primary_keys"
@@ -231,11 +229,11 @@ func (s *DocumentSuite) TestInsert_SupportedPrimaryKeys() {
 			inputDoc: []Doc{
 				{
 					"int_value":   10,
-					"bytes_value": base64Encoded,
+					"bytes_value": b64,
 				},
 			},
 			primaryKeyLookup: Map{
-				"bytes_value": base64Encoded,
+				"bytes_value": b64,
 			},
 		}, {
 			schema: Map{
@@ -349,9 +347,7 @@ func (s *DocumentSuite) TestInsert_SupportedPrimaryKeys() {
 }
 
 func (s *DocumentSuite) TestInsert_SingleRow() {
-	base64 := []byte(`"base64 string"`)
-	v, err := json.Marshal(base64)
-	require.NoError(s.T(), err)
+	b64 := base64.StdEncoding.EncodeToString([]byte(`base64 string`))
 
 	inputDocument := []Doc{
 		{
@@ -360,7 +356,7 @@ func (s *DocumentSuite) TestInsert_SingleRow() {
 			"string_value":    "simple_insert",
 			"bool_value":      true,
 			"double_value":    10.01,
-			"bytes_value":     v,
+			"bytes_value":     b64,
 			"date_time_value": "2015-12-21T17:42:34Z",
 			"uuid_value":      uuid.New().String(),
 			"array_value": []Doc{

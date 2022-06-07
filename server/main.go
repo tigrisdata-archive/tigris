@@ -20,6 +20,7 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/muxer"
 	"github.com/tigrisdata/tigris/store/kv"
+	"github.com/tigrisdata/tigris/store/search"
 	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
@@ -38,8 +39,13 @@ func main() {
 		log.Fatal().Err(err).Msg("error initializing kv store")
 	}
 
+	searchStore, err := search.NewStore(&config.DefaultConfig.Search)
+	if err != nil {
+		log.Fatal().Err(err).Msg("error initializing search store")
+	}
+
 	mx := muxer.NewMuxer(&config.DefaultConfig)
-	mx.RegisterServices(kvStore)
+	mx.RegisterServices(kvStore, searchStore)
 	if err := mx.Start(config.DefaultConfig.Server.Host, config.DefaultConfig.Server.Port); err != nil {
 		log.Fatal().Err(err).Msgf("error starting server")
 	}

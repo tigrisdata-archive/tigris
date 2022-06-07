@@ -26,6 +26,7 @@ import (
 	v1 "github.com/tigrisdata/tigris/server/services/v1"
 	"github.com/tigrisdata/tigris/server/types"
 	"github.com/tigrisdata/tigris/store/kv"
+	"github.com/tigrisdata/tigris/store/search"
 )
 
 type Server interface {
@@ -48,8 +49,8 @@ func NewMuxer(cfg *config.Config) *Muxer {
 	return m
 }
 
-func (m *Muxer) RegisterServices(kvStore kv.KeyValueStore) {
-	services := v1.GetRegisteredServices(kvStore)
+func (m *Muxer) RegisterServices(kvStore kv.KeyValueStore, searchStore search.Store) {
+	services := v1.GetRegisteredServices(kvStore, searchStore)
 	for _, r := range services {
 		for _, s := range m.servers {
 			if s.GetType() == types.GRPCServer {
