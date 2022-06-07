@@ -25,9 +25,20 @@ services:
     ports:
       - "4500:4500"
 
+  tigris_search:
+    container_name: tigris_search
+    image: typesense/typesense:0.23.0
+    environment:
+      - TYPESENSE_DATA_DIR=/tmp
+      - TYPESENSE_API_KEY=ts_test_key
+    ports:
+      - "8108:8108"
+
   tigris_server:
     container_name: tigris_server
     image: tigris_server
+    environment:
+      - TIGRIS_ENVIRONMENT=test
     build:
       context: ../../
       dockerfile: docker/Dockerfile
@@ -41,6 +52,7 @@ services:
       bash -c 'fdbcli --exec "configure new single memory" && /server/service'
     depends_on:
       - tigris_fdb
+      - tigris_search
 
   tigris_test:
     image: tigris_test

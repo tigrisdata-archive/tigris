@@ -28,7 +28,7 @@ func testFilters(t testing.TB, fields []*schema.Field, input []byte) []Filter {
 	var factory = Factory{
 		fields: fields,
 	}
-	filters, err := factory.Build(input)
+	filters, err := factory.Factorize(input)
 	require.NoError(t, err)
 	require.NotNil(t, filters)
 

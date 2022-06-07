@@ -30,7 +30,7 @@ func TestFilterUsingJSON(t *testing.T) {
 				{FieldName: "f2", DataType: schema.Int64Type},
 			},
 		}
-		filters, err := factory.Build(js)
+		filters, err := factory.Factorize(js)
 		require.NoError(t, err)
 		require.Len(t, filters, 2)
 		for _, f := range filters {
@@ -46,7 +46,7 @@ func TestFilterUsingJSON(t *testing.T) {
 				{FieldName: "f3", DataType: schema.Int64Type},
 			},
 		}
-		filters, err := factory.Build(js)
+		filters, err := factory.Factorize(js)
 		require.NoError(t, err)
 		require.Len(t, filters, 1)
 		require.Len(t, filters[0].(*OrFilter).filter, 2)
@@ -66,7 +66,7 @@ func TestFilterUsingJSON(t *testing.T) {
 				{FieldName: "f", DataType: schema.Int64Type},
 			},
 		}
-		filters, err := factory.Build(js)
+		filters, err := factory.Factorize(js)
 		require.NoError(t, err)
 		require.Len(t, filters, 1)
 		require.Len(t, filters[0].(*AndFilter).filter, 3)
@@ -92,7 +92,7 @@ func TestFilterUsingJSON(t *testing.T) {
 				{FieldName: "f", DataType: schema.Int64Type},
 			},
 		}
-		filters, err := factory.Build(js)
+		filters, err := factory.Factorize(js)
 		require.NoError(t, err)
 		require.Len(t, filters, 4)
 
@@ -124,7 +124,7 @@ func TestFilterDuplicateKey(t *testing.T) {
 			{FieldName: "b", DataType: schema.Int64Type},
 		},
 	}
-	filters, err := factory.Build([]byte(`{"a": 10, "b": {"$eq": 10}, "b": 15}`))
+	filters, err := factory.Factorize([]byte(`{"a": 10, "b": {"$eq": 10}, "b": 15}`))
 	require.Nil(t, filters)
 	require.Contains(t, err.Error(), "duplicate filter 'b'")
 }

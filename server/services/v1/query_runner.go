@@ -17,12 +17,7 @@ package v1
 import (
 	"bytes"
 	"context"
-	"fmt"
-
-	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
@@ -34,8 +29,8 @@ import (
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
+	"github.com/tigrisdata/tigris/store/search"
 	ulog "github.com/tigrisdata/tigris/util/log"
-	"github.com/tigrisdata/tigris/value"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -46,44 +41,46 @@ type QueryRunner interface {
 
 // QueryRunnerFactory is responsible for creating query runners for different queries
 type QueryRunnerFactory struct {
-	txMgr   *transaction.Manager
-	encoder metadata.Encoder
-	cdcMgr  *cdc.Manager
+	txMgr       *transaction.Manager
+	encoder     metadata.Encoder
+	cdcMgr      *cdc.Manager
+	searchStore search.Store
 }
 
 // NewQueryRunnerFactory returns QueryRunnerFactory object
-func NewQueryRunnerFactory(txMgr *transaction.Manager, encoder metadata.Encoder, cdcMgr *cdc.Manager) *QueryRunnerFactory {
+func NewQueryRunnerFactory(txMgr *transaction.Manager, encoder metadata.Encoder, cdcMgr *cdc.Manager, searchStore search.Store) *QueryRunnerFactory {
 	return &QueryRunnerFactory{
-		txMgr:   txMgr,
-		encoder: encoder,
-		cdcMgr:  cdcMgr,
+		txMgr:       txMgr,
+		encoder:     encoder,
+		cdcMgr:      cdcMgr,
+		searchStore: searchStore,
 	}
 }
 
 func (f *QueryRunnerFactory) GetInsertQueryRunner(r *api.InsertRequest) *InsertQueryRunner {
 	return &InsertQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
 		req:             r,
 	}
 }
 
 func (f *QueryRunnerFactory) GetReplaceQueryRunner(r *api.ReplaceRequest) *ReplaceQueryRunner {
 	return &ReplaceQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
 		req:             r,
 	}
 }
 
 func (f *QueryRunnerFactory) GetUpdateQueryRunner(r *api.UpdateRequest) *UpdateQueryRunner {
 	return &UpdateQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
 		req:             r,
 	}
 }
 
 func (f *QueryRunnerFactory) GetDeleteQueryRunner(r *api.DeleteRequest) *DeleteQueryRunner {
 	return &DeleteQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
 		req:             r,
 	}
 }
@@ -91,7 +88,7 @@ func (f *QueryRunnerFactory) GetDeleteQueryRunner(r *api.DeleteRequest) *DeleteQ
 // GetStreamingQueryRunner returns StreamingQueryRunner
 func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streaming Streaming) *StreamingQueryRunner {
 	return &StreamingQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
 		req:             r,
 		streaming:       streaming,
 	}
@@ -99,27 +96,29 @@ func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streami
 
 func (f *QueryRunnerFactory) GetCollectionQueryRunner() *CollectionQueryRunner {
 	return &CollectionQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
 	}
 }
 
 func (f *QueryRunnerFactory) GetDatabaseQueryRunner() *DatabaseQueryRunner {
 	return &DatabaseQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
 	}
 }
 
 type BaseQueryRunner struct {
-	encoder   metadata.Encoder
-	cdcMgr    *cdc.Manager
-	generator *generator
+	encoder     metadata.Encoder
+	cdcMgr      *cdc.Manager
+	generator   *generator
+	searchStore search.Store
 }
 
-func NewBaseQueryRunner(encoder metadata.Encoder, cdcMgr *cdc.Manager, txMgr *transaction.Manager) *BaseQueryRunner {
+func NewBaseQueryRunner(encoder metadata.Encoder, cdcMgr *cdc.Manager, txMgr *transaction.Manager, searchStore search.Store) *BaseQueryRunner {
 	return &BaseQueryRunner{
-		encoder:   encoder,
-		cdcMgr:    cdcMgr,
-		generator: newGenerator(txMgr),
+		encoder:     encoder,
+		cdcMgr:      cdcMgr,
+		generator:   newGenerator(txMgr),
+		searchStore: searchStore,
 	}
 }
 
@@ -152,82 +151,6 @@ func (runner *BaseQueryRunner) GetCollections(db *metadata.Database, collName st
 	return collection, nil
 }
 
-// extractIndexParts extract the keys out from the document and return the following
-//  - []byte: the document is returned because it may be modified if autoGenerated is set on any field
-//  - []interface - a slice of values for the primary keys
-//  - []byte - this is returned because we need to return the keys of all the rows
-//  - bool - if we need to call insert instead of Replace(for autoGenerate special cases)
-//  - error - if any error occurred
-func (runner *BaseQueryRunner) extractIndexParts(ctx context.Context, table []byte, userDefinedKeys []*schema.Field, doc []byte) ([]byte, []interface{}, []byte, bool, error) {
-	var appendTo []interface{}
-	var keysReturnedInResp []byte
-	var autoGeneratedTypes []schema.FieldType
-	for _, v := range userDefinedKeys {
-		jsonVal, dtp, _, err := jsonparser.Get(doc, v.FieldName)
-
-		// Auto generate the key if it's marked as autogenerated and
-		//   * is not present in the doc
-		//   * or has zero value of its type
-		//   * or explicitly set to "null", "undefined" in the doc
-		generate := v.IsAutoGenerated() && (dtp == jsonparser.NotExist ||
-			err == nil && (isNull(v.Type(), jsonVal) || dtp == jsonparser.Null))
-		if generate {
-			if jsonVal, err = runner.generator.get(ctx, table, v); err != nil {
-				return nil, nil, nil, false, err
-			}
-
-			// Set this value in the document and assign this back to the doc so that it can be returned
-			// to the caller.
-			if doc, err = jsonparser.Set(doc, jsonVal, v.FieldName); err != nil {
-				return nil, nil, nil, false, err
-			}
-			autoGeneratedTypes = append(autoGeneratedTypes, v.DataType)
-		}
-
-		if err != nil {
-			return nil, nil, nil, false, api.Errorf(api.Code_INVALID_ARGUMENT, errors.Wrapf(err, "missing index key column(s) '%s'", v.FieldName).Error())
-		}
-
-		val, err := value.NewValue(v.DataType, jsonVal)
-		if err != nil {
-			return nil, nil, nil, false, err
-		}
-		appendTo = append(appendTo, val.AsInterface())
-
-		var keyValueResp []byte
-		if !generate && dtp == jsonparser.String {
-			// make sure to quote jsonVal; The above AutoGenerated check already quoted the jsonVal. This is needed
-			// for non autogenerated pkeys because we are returning the primary keys in the response as well.
-			keyValueResp = []byte(fmt.Sprintf(`"%s":"%s"`, v.FieldName, jsonVal))
-		} else {
-			// double quotes only needed on key, for auto-generated strings we are already adding it in generator
-			keyValueResp = []byte(fmt.Sprintf(`"%s":%s`, v.FieldName, jsonVal))
-		}
-		if len(keysReturnedInResp) > 0 {
-			keysReturnedInResp = append(keysReturnedInResp, []byte(`,`)...)
-			keysReturnedInResp = append(keysReturnedInResp, keyValueResp...)
-		} else {
-			keysReturnedInResp = keyValueResp
-		}
-	}
-	if len(appendTo) == 0 {
-		return nil, nil, nil, false, ulog.CE("missing index key column(s)")
-	}
-
-	var shouldUseInsert = false
-	if len(autoGeneratedTypes) > 0 {
-		// if we have autogenerated pkey and if it is prone to conflict then force to use Insert API
-		if len(autoGeneratedTypes) == 1 &&
-			autoGeneratedTypes[0] == schema.Int64Type ||
-			autoGeneratedTypes[0] == schema.DateTimeType {
-			shouldUseInsert = true
-		}
-	}
-	// make it JSON
-	keysReturnedInResp = []byte(fmt.Sprintf(`{%s}`, keysReturnedInResp))
-	return doc, appendTo, keysReturnedInResp, shouldUseInsert, nil
-}
-
 func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection, documents [][]byte, insert bool) (*internal.Timestamp, [][]byte, error) {
 	var err error
 	var ts = internal.NewTimestamp()
@@ -250,25 +173,20 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 			return nil, nil, err
 		}
 
-		encodedTable, err := runner.encoder.EncodeTableName(tenant.GetNamespace(), db, coll)
+		table, err := runner.encoder.EncodeTableName(tenant.GetNamespace(), db, coll)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		var indexParts []interface{}
-		var keyReturnedInResp []byte
-		var forceInsertUse bool
-		if doc, indexParts, keyReturnedInResp, forceInsertUse, err = runner.extractIndexParts(ctx, encodedTable, coll.Indexes.PrimaryKey.Fields, doc); ulog.E(err) {
+		keyGen := newKeyGenerator(doc, runner.generator, coll.Indexes.PrimaryKey)
+		key, err := keyGen.generate(ctx, runner.encoder, table)
+		if err != nil {
 			return nil, nil, err
 		}
 
-		var key keys.Key
-		if key, err = runner.encoder.EncodeKey(encodedTable, coll.Indexes.PrimaryKey, indexParts); ulog.E(err) {
-			return nil, nil, err
-		}
-
-		tableData := internal.NewTableDataWithTS(ts, nil, doc)
-		if insert || forceInsertUse {
+		// we need to use keyGen updated document as it may be mutated by adding auto-generated keys.
+		tableData := internal.NewTableDataWithTS(ts, nil, keyGen.document)
+		if insert || keyGen.forceInsert {
 			// we use Insert API, in case user is using autogenerated primary key and has primary key field
 			// as Int64 or timestamp to ensure uniqueness if multiple workers end up generating same timestamp.
 			err = tx.Insert(ctx, key, tableData)
@@ -278,14 +196,14 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 		if err != nil {
 			return nil, nil, err
 		}
-		allKeys = append(allKeys, keyReturnedInResp)
+		allKeys = append(allKeys, keyGen.getKeysForResp())
 	}
 	return ts, allKeys, err
 }
 
 func (runner *BaseQueryRunner) buildKeysUsingFilter(tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection, reqFilter []byte) ([]keys.Key, error) {
 	filterFactory := filter.NewFactory(coll.Fields)
-	filters, err := filterFactory.Build(reqFilter)
+	filters, err := filterFactory.Factorize(reqFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -502,70 +420,51 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 		return nil, ctx, err
 	}
 
+	var rowReader RowReader
 	if filter.IsFullCollectionScan(runner.req.GetFilter()) {
 		table, err := runner.encoder.EncodeTableName(tenant.GetNamespace(), db, collection)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		resp, err := runner.iterateCollection(ctx, tx, table, fieldFactory)
+		if rowReader, err = MakeDatabaseRowReader(ctx, tx, []keys.Key{keys.NewKey(table)}); ulog.E(err) {
+			return nil, ctx, err
+		}
+	} else {
+		filterFactory := filter.NewFactory(collection.Fields)
+		filters, err := filterFactory.Factorize(runner.req.Filter)
 		if err != nil {
-			log.Debug().Str("db", db.Name()).Str("coll", collection.Name).Bytes("encoding", table).Err(err).Msg("full scan")
+			return nil, ctx, err
 		}
 
-		return resp, ctx, err
+		// or this is a read request that needs to be streamed after filtering the keys.
+		var iKeys []keys.Key
+		if iKeys, err = runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter); err == nil {
+			rowReader, err = MakeDatabaseRowReader(ctx, tx, iKeys)
+		} else {
+			rowReader, err = MakeSearchRowReader(ctx, collection.SearchSchema.Name, nil, filters, runner.searchStore)
+		}
+		if err != nil {
+			return nil, ctx, err
+		}
 	}
 
-	// or this is a read request that needs to be streamed after filtering the keys.
-	iKeys, err := runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter)
-	if err != nil {
+	if err = runner.iterate(rowReader, fieldFactory); err != nil {
 		return nil, ctx, err
 	}
 
-	resp, err := runner.iterateKeys(ctx, tx, iKeys, fieldFactory)
-	if err != nil {
-		log.Debug().Str("db", db.Name()).Str("coll", collection.Name).Err(err).Msg("iterate keys")
-	}
-	return resp, ctx, err
+	return &Response{}, ctx, nil
 }
 
-// iterateCollection is used to scan the entire collection.
-func (runner *StreamingQueryRunner) iterateCollection(ctx context.Context, tx transaction.Tx, table []byte, fieldFactory *read.FieldFactory) (*Response, error) {
-	var totalResults int64 = 0
-	if err := runner.iterate(ctx, tx, keys.NewKey(table), fieldFactory, &totalResults); err != nil {
-		return nil, err
-	}
-
-	return &Response{}, nil
-}
-
-// iterateKeys is responsible for building keys from the filter and then executing the query. A key could be a primary
-// key or an index key.
-func (runner *StreamingQueryRunner) iterateKeys(ctx context.Context, tx transaction.Tx, iKeys []keys.Key, fieldFactory *read.FieldFactory) (*Response, error) {
-	var totalResults int64 = 0
-	for _, key := range iKeys {
-		if err := runner.iterate(ctx, tx, key, fieldFactory, &totalResults); err != nil {
-			return nil, err
-		}
-	}
-
-	return &Response{}, nil
-}
-
-func (runner *StreamingQueryRunner) iterate(ctx context.Context, tx transaction.Tx, key keys.Key, fieldFactory *read.FieldFactory, totalResults *int64) error {
-	it, err := tx.Read(ctx, key)
-	if ulog.E(err) {
-		return err
-	}
-
-	var limit int64 = 0
+func (runner *StreamingQueryRunner) iterate(reader RowReader, fieldFactory *read.FieldFactory) error {
+	limit, totalResults := int64(0), int64(0)
 	if runner.req.GetOptions() != nil {
 		limit = runner.req.GetOptions().Limit
 	}
 
-	var row kv.KeyValue
-	for it.Next(&row) {
-		if limit > 0 && limit <= *totalResults {
+	var row Row
+	for reader.NextRow(&row) {
+		if limit > 0 && limit <= totalResults {
 			return nil
 		}
 
@@ -587,15 +486,15 @@ func (runner *StreamingQueryRunner) iterate(ctx context.Context, tx transaction.
 				CreatedAt: createdAt,
 				UpdatedAt: updatedAt,
 			},
-			ResumeToken: row.FDBKey,
+			ResumeToken: row.Key,
 		}); ulog.E(err) {
 			return err
 		}
 
-		*totalResults++
+		totalResults++
 	}
 
-	return it.Err()
+	return reader.Err()
 }
 
 type CollectionQueryRunner struct {
@@ -636,7 +535,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			tx.Context().StageDatabase(db)
 		}
 
-		if err = tenant.DropCollection(ctx, tx, db, runner.dropReq.GetCollection()); err != nil {
+		if err = tenant.DropCollection(ctx, tx, db, runner.dropReq.GetCollection(), runner.searchStore); err != nil {
 			return nil, ctx, err
 		}
 
@@ -665,7 +564,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			tx.Context().StageDatabase(db)
 		}
 
-		if err = tenant.CreateCollection(ctx, tx, db, schFactory); err != nil {
+		if err = tenant.CreateCollection(ctx, tx, db, schFactory, runner.searchStore); err != nil {
 			if err == kv.ErrDuplicateKey {
 				// this simply means, concurrently CreateCollection is called,
 				return nil, ctx, api.Errorf(api.Code_ABORTED, "concurrent create collection request, aborting")
@@ -743,7 +642,7 @@ func (runner *DatabaseQueryRunner) SetDescribeDatabaseReq(describe *api.Describe
 
 func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	if runner.drop != nil {
-		exist, err := tenant.DropDatabase(ctx, tx, runner.drop.GetDb())
+		exist, err := tenant.DropDatabase(ctx, tx, runner.drop.GetDb(), runner.searchStore)
 		if err != nil {
 			return nil, ctx, err
 		}

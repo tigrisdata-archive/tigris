@@ -81,6 +81,17 @@ func (a *AndFilter) GetFilters() []Filter {
 	return a.filter
 }
 
+func (a *AndFilter) ToSearchFilter() string {
+	var str string
+	for i, f := range a.filter {
+		str += f.ToSearchFilter()
+		if i < len(a.filter)-1 {
+			str += "&&"
+		}
+	}
+	return str
+}
+
 // String a helpful method for logging.
 func (a *AndFilter) String() string {
 	var str = "{$and"
@@ -135,6 +146,17 @@ func (o *OrFilter) Matches(doc []byte) bool {
 // GetFilters returns all the nested filters for OrFilter
 func (o *OrFilter) GetFilters() []Filter {
 	return o.filter
+}
+
+func (o *OrFilter) ToSearchFilter() string {
+	var str string
+	for i, f := range o.filter {
+		str += f.ToSearchFilter()
+		if i < len(o.filter)-1 {
+			str += ""
+		}
+	}
+	return str
 }
 
 // String a helpful method for logging.
