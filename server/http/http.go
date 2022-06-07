@@ -17,13 +17,12 @@ package http
 import (
 	"net/http"
 
-	middleware "github.com/tigrisdata/tigris/server/midddleware"
-
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
 	"github.com/tigrisdata/tigris/server/config"
+	middleware "github.com/tigrisdata/tigris/server/midddleware"
 	"github.com/tigrisdata/tigris/server/types"
 )
 

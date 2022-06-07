@@ -63,5 +63,24 @@ services:
     depends_on:
       - tigris_server
 
+  tigris_prometheus:
+    container_name: tigris_prometheus
+    image: prom/prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    depends_on:
+      - tigris_server
+
+  tigris_grafana:
+    container_name: tigris_grafana
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - tigris_prometheus
+      - tigris_server
+
 volumes:
   fdbdata:
