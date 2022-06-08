@@ -15,7 +15,7 @@ if [ "x${PROMETHEUS_URL}" == "x" ]; then
 fi
 
 function add_prometheus {
-	curl \
+	curl -s \
 		-u admin:"${GRAFANA_PASSWORD}" \
 		"${GRAFANA_URL}/api/datasources" \
 		-X POST \
@@ -28,6 +28,8 @@ for i in $(seq 1 ${max_tries}); do
 	if add_prometheus; then
 		echo
 		echo "Successfully added prometheus data source"
+		echo "Grafana available at: $GRAFANA_URL"
+		echo "Prometheus available at: http://localhost:9090"
 		break
 	else
 		echo "Adding prometheus was not successful, retrying soon"
