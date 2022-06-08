@@ -14,17 +14,39 @@
 
 package api
 
-func IsTxSupported(req Request) bool {
-	switch req.(type) {
-	case *InsertRequest, *ReplaceRequest, *UpdateRequest, *DeleteRequest, *ReadRequest,
-		*CreateOrUpdateCollectionRequest, *DropCollectionRequest, *ListCollectionsRequest:
+import (
+	"context"
+
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
+)
+
+func IsTxSupported(ctx context.Context) bool {
+	m, _ := grpc.Method(ctx)
+	switch m {
+	case "Insert", "Replace", "Update", "Delete", "Read",
+		"CreateOrUpdateCollection", "DropCollection", "ListCollections",
+		"CommitTransaction", "RollbackTransaction":
 		return true
 	default:
 		return false
 	}
 }
 
-func GetTransaction(req Request) *TransactionCtx {
+func GetTransaction(ctx context.Context, req proto.Message) *TransactionCtx {
+	tx := &TransactionCtx{
+		Id:     GetHeader(ctx, HeaderTxID),
+		Origin: GetHeader(ctx, HeaderTxOrigin),
+	}
+
+	if tx.Id != "" {
+		return tx
+	}
+
+	return GetTransactionLegacy(req)
+}
+
+func GetTransactionLegacy(req proto.Message) *TransactionCtx {
 	switch r := req.(type) {
 	case *InsertRequest:
 		r.GetOptions().ProtoReflect()
@@ -67,6 +89,10 @@ func GetTransaction(req Request) *TransactionCtx {
 			return nil
 		}
 		return r.GetOptions().GetTxCtx()
+	case *CommitTransactionRequest:
+		return r.GetTxCtx()
+	case *RollbackTransactionRequest:
+		return r.GetTxCtx()
 	}
 	return nil
 }

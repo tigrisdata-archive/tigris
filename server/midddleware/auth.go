@@ -22,15 +22,13 @@ import (
 
 	"github.com/auth0/go-jwt-middleware/v2/jwks"
 	"github.com/auth0/go-jwt-middleware/v2/validator"
-	"github.com/grpc-ecosystem/go-grpc-middleware/util/metautils"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/config"
 )
 
 var (
-	headerAuthorize   = "authorization"
-	grpcGatewayPrefix = "grpc-gateway-"
+	headerAuthorize = "authorization"
 )
 
 type Organization struct {
@@ -62,16 +60,8 @@ func (c CustomClaim) Validate(ctx context.Context) error {
 	return nil
 }
 
-func getHeader(ctx context.Context, header string) string {
-	if val := metautils.ExtractIncoming(ctx).Get(header); val != "" {
-		return val
-	}
-
-	return metautils.ExtractIncoming(ctx).Get(grpcGatewayPrefix + header)
-}
-
 func AuthFromMD(ctx context.Context, expectedScheme string) (string, error) {
-	val := getHeader(ctx, headerAuthorize)
+	val := api.GetHeader(ctx, headerAuthorize)
 	if val == "" {
 		return "", api.Errorf(api.Code_UNAUTHENTICATED, "request unauthenticated with "+expectedScheme)
 	}
@@ -133,9 +123,9 @@ func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config
 }
 
 func getOrganizationName(ctx context.Context) (string, error) {
-	host := getHeader(ctx, ":authority")
+	host := api.GetHeader(ctx, ":authority")
 	if host == "" {
-		host = getHeader(ctx, "host")
+		host = api.GetHeader(ctx, "host")
 	}
 	// <project>-<org-name>.<env>.tigrisdata.cloud
 	parts := strings.Split(host, ".")

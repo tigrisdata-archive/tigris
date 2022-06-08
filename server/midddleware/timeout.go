@@ -60,7 +60,7 @@ func TimeoutUnaryServerInterceptor(timeout time.Duration) grpc.UnaryServerInterc
 }
 
 func setDeadlineUsingHeader(ctx context.Context) (context.Context, context.CancelFunc) {
-	value := getHeader(ctx, RequestTimeoutHeader)
+	value := api.GetHeader(ctx, api.HeaderRequestTimeout)
 	if len(value) == 0 {
 		return ctx, nil
 	}

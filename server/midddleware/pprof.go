@@ -21,7 +21,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-func PprofUnaryServerInterceptor() grpc.UnaryServerInterceptor {
+func pprofUnaryServerInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		defer pprof.SetGoroutineLabels(ctx)
 		ctx = pprof.WithLabels(ctx, pprof.Labels("full-method", info.FullMethod, "worker", "grpc"))

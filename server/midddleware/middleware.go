@@ -26,6 +26,7 @@ import (
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"google.golang.org/grpc"
 )
 
@@ -44,7 +45,8 @@ func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerI
 		grpc_ratelimit.StreamServerInterceptor(&RateLimiter{}),
 		grpc_auth.StreamServerInterceptor(authFunction),
 		grpc_logging.StreamServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger), []grpc_logging.Option{}...),
-		// grpc_logging.PayloadStreamServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger), alwaysLoggingDeciderServer, time.RFC3339), // To log payload
+		metrics.GRPCMetrics.StreamServerInterceptor(),
+		validatorStreamServerInterceptor(),
 		grpc_opentracing.StreamServerInterceptor(),
 		grpc_recovery.StreamServerInterceptor(),
 	)
@@ -54,12 +56,13 @@ func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerI
 	// Note: we don't add validate here and rather call it in server code because the validator interceptor returns gRPC
 	// error which is not convertible to the internal rest error code.
 	unary := middleware.ChainUnaryServer(
-		PprofUnaryServerInterceptor(),
+		pprofUnaryServerInterceptor(),
 		grpc_ratelimit.UnaryServerInterceptor(&RateLimiter{}),
 		grpc_auth.UnaryServerInterceptor(authFunction),
 		grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger)),
-		// grpc_logging.PayloadUnaryServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger), alwaysLoggingDeciderServer, time.RFC3339), //To log payload
+		validatorUnaryServerInterceptor(),
 		TimeoutUnaryServerInterceptor(DefaultTimeout),
+		metrics.GRPCMetrics.UnaryServerInterceptor(),
 		grpc_opentracing.UnaryServerInterceptor(),
 		grpc_recovery.UnaryServerInterceptor(),
 	)

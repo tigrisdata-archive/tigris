@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
@@ -31,6 +32,27 @@ func newGenerator(txMgr *transaction.Manager) *generator {
 	return &generator{
 		txMgr: txMgr,
 	}
+}
+
+var zeroTimeStringSlice = []byte(time.Time{}.Format(time.RFC3339Nano))
+var zeroUUIDStringSlice = []byte(uuid.New().String())
+var zeroIntStringSlice = []byte("0")
+
+// isNull checks if the value is "zero" value of it's type
+func isNull(tp schema.FieldType, val []byte) bool {
+	switch tp {
+	case schema.Int32Type:
+		return bytes.Compare(val, zeroIntStringSlice) == 0
+	case schema.Int64Type:
+		return bytes.Compare(val, zeroIntStringSlice) == 0
+	case schema.UUIDType:
+		return bytes.Compare(val, zeroUUIDStringSlice) == 0
+	case schema.DateTimeType:
+		return bytes.Compare(val, zeroTimeStringSlice) == 0
+	case schema.StringType, schema.ByteType:
+		return val == nil || len(val) == 0
+	}
+	return false
 }
 
 // get returns generated id for the supported primary key fields.

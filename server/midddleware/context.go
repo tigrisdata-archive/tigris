@@ -18,6 +18,7 @@ import (
 	"context"
 	"time"
 
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"google.golang.org/grpc"
 )
 
@@ -29,7 +30,7 @@ const (
 
 func TxCtxUnaryServerInterceptor(timeout time.Duration) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (iface interface{}, err error) {
-		ctx = context.WithValue(ctx, token, getHeader(ctx, string(token)))
+		ctx = context.WithValue(ctx, token, api.GetHeader(ctx, string(token)))
 		return handler(ctx, req)
 	}
 }

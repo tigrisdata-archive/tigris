@@ -18,8 +18,11 @@ import (
 	"context"
 	"sync"
 
+	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 )
+
+type DatabaseNameCtxKey struct{}
 
 type Manager struct {
 	sync.RWMutex
@@ -45,10 +48,42 @@ func (m *Manager) GetPublisher(dbName string) *Publisher {
 
 func (m *Manager) WrapContext(ctx context.Context, dbName string) context.Context {
 	if len(dbName) == 0 {
-		return context.WithValue(ctx, kv.ListenerCtxKey{}, kv.NoListener{})
+		return ctx
+	}
+	return context.WithValue(ctx, DatabaseNameCtxKey{}, dbName)
+}
+
+func (m *Manager) OnPreCommit(ctx context.Context, tx transaction.Tx, events kv.EventListener) error {
+	dbName := GetDatabaseName(ctx)
+	if len(dbName) == 0 {
+		return nil
 	}
 
 	p := m.GetPublisher(dbName)
-	l := p.NewListener()
-	return context.WithValue(ctx, kv.ListenerCtxKey{}, l)
+	return p.OnCommit(ctx, tx, events)
+}
+
+func (m *Manager) OnPostCommit(_ context.Context, _ kv.EventListener) error {
+	return nil
+}
+
+func (m *Manager) OnRollback(ctx context.Context, events kv.EventListener) {
+	dbName := GetDatabaseName(ctx)
+	if len(dbName) == 0 {
+		return
+	}
+
+	p := m.GetPublisher(dbName)
+	p.OnRollback(ctx, events)
+}
+
+func GetDatabaseName(ctx context.Context) string {
+	a := ctx.Value(DatabaseNameCtxKey{})
+	if a != nil {
+		if conv, ok := a.(string); ok {
+			return conv
+		}
+	}
+
+	return ""
 }
