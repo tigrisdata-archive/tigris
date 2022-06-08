@@ -12,24 +12,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.18-bullseye AS build
+FROM ubuntu:jammy-20220531 AS build
 
-RUN apt-get update && apt-get install -y --no-install-recommends apt-transport-https sudo
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    apt-transport-https \
+    ca-certificates \
+    curl \
+    gcc \
+    git \
+    golang \
+    make \
+    sudo
 
 RUN mkdir /build
 
 #Download deps once, during docker build. Rebuild only on go.mod change
+ENV PATH="${PATH}:/root/go/bin"
 COPY scripts/install_build_deps.sh /build
-RUN sh /build/install_build_deps.sh
 COPY go.mod /build
 WORKDIR /build
 RUN go mod download
-
 COPY . /build
-
+RUN sh /build/install_build_deps.sh
 RUN --mount=type=cache,target=/root/.cache/go-build rm -f server/service && make bins
 
-FROM debian:bullseye-slim
+
+FROM ubuntu:jammy-20220531 AS server
 
 # Remove apt configuration
 RUN rm -rf /etc/apt/*
