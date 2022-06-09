@@ -30,7 +30,7 @@ const (
 
 var (
 	zeroIntStringSlice  = []byte("0")
-	zeroUUIDStringSlice = []byte(uuid.New().String())
+	zeroUUIDStringSlice = []byte(uuid.NullUUID.String())
 	zeroTimeStringSlice = []byte(time.Time{}.Format(time.RFC3339Nano))
 )
 
