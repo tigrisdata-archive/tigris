@@ -9,13 +9,9 @@ PROTO_DIR=${API_DIR}/proto/server/${V}
 DATA_PROTO_DIR=internal
 
 # Needed to be able to build amd64 binaries on MacOS M1
-DOCKER_PLATFORM="linux/amd64"
 DOCKER_DIR=test/docker
-DOCKER_COMPOSE=COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 DOCKER_DEFAULT_PLATFORM=$(DOCKER_PLATFORM) docker-compose -f ${DOCKER_DIR}/docker-compose.yml
-GOARCH="amd64"
+DOCKER_COMPOSE=COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker-compose -f ${DOCKER_DIR}/docker-compose.yml
 CGO_ENABLED=1
-
-OSX_CLUSTER_FILE="/usr/local/etc/foundationdb/fdb.cluster"
 
 all: server
 
@@ -38,7 +34,7 @@ generate: ${GEN_DIR}/api.pb.go ${GEN_DIR}/api.pb.gw.go ${GEN_DIR}/health.pb.go $
 
 server: server/service
 server/service: $(GO_SRC) generate
-	GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED) go build $(BUILD_PARAM) -o server/service ./server
+	CGO_ENABLED=$(CGO_ENABLED) go build $(BUILD_PARAM) -o server/service ./server
 
 lint: generate
 	yq --exit-status 'tag == "!!map" or tag== "!!seq"' .github/workflows/*.yaml config/*.yaml
@@ -80,13 +76,5 @@ clean:
 	rm -f server/service api/server/${V}/*.pb.go \
 		api/server/${V}/*.pb.gw.go \
 
-# OSX specific targets to run tests against FDB installed on the Mac OSX host (non-containerized)
-osx_test: generate
-	TIGRIS_SERVER_FOUNDATIONDB_CLUSTER_FILE=$(OSX_CLUSTER_FILE) GOARCH=$(GOARCH) CGO_ENABLED=$(CGO_ENABLED)  go test $(TEST_PARAM) ./...
-
-osx_run: generate server
-	TIGRIS_SERVER_FOUNDATIONDB_CLUSTER_FILE=$(OSX_CLUSTER_FILE) ./server/service
-
 upgrade_api:
 	git submodule update --remote --recursive --rebase
-

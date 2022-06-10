@@ -74,26 +74,6 @@ The docker volume `fdbdata` is mounted at:
   which is the default location where the client will search for the cluster
   file
 
-### Building and Testing on Apple M1
-
-Due to various issues with Docker on Apple M1, it is recommended to install
-FoundationDB on the host and run the server on the host directly as well.
-
-To run the server on the host, required dependencies need to be installed by
-running:
-
-```shell
-sh scripts/install_build_deps.sh
-sh scripts/install_test_deps.sh
-```
-
-Once the dependencies are installed, you can start up the server on the host as
-follows:
-
-```shell
-make osx_run
-```
-
 You can run the test on your local machine as follows:
 
 ```shell
