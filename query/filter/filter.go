@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	fullScanFilter = []byte(`{}`)
+	filterAll = []byte(`{}`)
 )
 
 // A Filter represents a query filter that can have any multiple conditions, logical filtering, nested conditions, etc
@@ -46,10 +46,31 @@ var (
 type Filter interface {
 	// Matches returns true if the input doc passes the filter, otherwise false
 	Matches(doc []byte) bool
+	// MatchesDoc similar to Matches but used when document is already parsed
+	MatchesDoc(doc *map[string]interface{}) bool
+	ToSearchFilter() string
 }
 
-func IsFullCollectionScan(reqFilter []byte) bool {
-	return bytes.Equal(reqFilter, fullScanFilter)
+type WrappedFilter struct {
+	Filter Filter
+}
+
+func NewWrappedFilter(filters []Filter) *WrappedFilter {
+	if len(filters) <= 1 {
+		return &WrappedFilter{
+			Filter: filters[0],
+		}
+	}
+
+	return &WrappedFilter{
+		Filter: &AndFilter{
+			filter: filters,
+		},
+	}
+}
+
+func All(reqFilter []byte) bool {
+	return bytes.Equal(reqFilter, filterAll)
 }
 
 type Factory struct {
@@ -62,7 +83,16 @@ func NewFactory(fields []*schema.Field) *Factory {
 	}
 }
 
-func (factory *Factory) Build(reqFilter []byte) ([]Filter, error) {
+func (factory *Factory) WrappedFilter(reqFilter []byte) (*WrappedFilter, error) {
+	filters, err := factory.Factorize(reqFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewWrappedFilter(filters), nil
+}
+
+func (factory *Factory) Factorize(reqFilter []byte) ([]Filter, error) {
 	if len(reqFilter) == 0 {
 		return nil, nil
 	}
@@ -183,14 +213,14 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 			return nil, err
 		}
 
-		return NewSelector(string(k), NewEqualityMatcher(val)), nil
+		return NewSelector(field, NewEqualityMatcher(val)), nil
 	case jsonparser.Object:
 		valueMatcher, err := buildComparisonOperator(v, field)
 		if err != nil {
 			return nil, err
 		}
 
-		return NewSelector(string(k), valueMatcher), nil
+		return NewSelector(field, valueMatcher), nil
 	default:
 		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "unable to parse the comparison operator")
 	}
@@ -209,7 +239,7 @@ func buildComparisonOperator(input jsoniter.RawMessage, field *schema.Field) (Va
 		}
 
 		switch string(key) {
-		case EQ, GT:
+		case EQ, GT, GTE, LT, LTE:
 			switch dataType {
 			case jsonparser.Boolean, jsonparser.Number, jsonparser.String, jsonparser.Null:
 				var val value.Value

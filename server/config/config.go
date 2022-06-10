@@ -99,7 +99,7 @@ func LoadConfig(name string, config interface{}) {
 	err = viper.BindPFlags(pflag.CommandLine)
 	log.Err(err).Msg("bind flags")
 
-	err = viper.ReadInConfig()
+	err = viper.MergeInConfig()
 	if err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			log.Warn().Err(err).Msgf("config file not found")

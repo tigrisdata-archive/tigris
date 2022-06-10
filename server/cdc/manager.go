@@ -18,6 +18,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 )
@@ -53,7 +54,7 @@ func (m *Manager) WrapContext(ctx context.Context, dbName string) context.Contex
 	return context.WithValue(ctx, DatabaseNameCtxKey{}, dbName)
 }
 
-func (m *Manager) OnPreCommit(ctx context.Context, tx transaction.Tx, events kv.EventListener) error {
+func (m *Manager) OnPreCommit(ctx context.Context, _ *metadata.Tenant, tx transaction.Tx, events kv.EventListener) error {
 	dbName := GetDatabaseName(ctx)
 	if len(dbName) == 0 {
 		return nil
@@ -63,11 +64,11 @@ func (m *Manager) OnPreCommit(ctx context.Context, tx transaction.Tx, events kv.
 	return p.OnCommit(ctx, tx, events)
 }
 
-func (m *Manager) OnPostCommit(_ context.Context, _ kv.EventListener) error {
+func (m *Manager) OnPostCommit(_ context.Context, _ *metadata.Tenant, _ kv.EventListener) error {
 	return nil
 }
 
-func (m *Manager) OnRollback(ctx context.Context, events kv.EventListener) {
+func (m *Manager) OnRollback(ctx context.Context, _ *metadata.Tenant, events kv.EventListener) {
 	dbName := GetDatabaseName(ctx)
 	if len(dbName) == 0 {
 		return

@@ -30,11 +30,11 @@ func TestFilterUsingJSON(t *testing.T) {
 				{FieldName: "f2", DataType: schema.Int64Type},
 			},
 		}
-		filters, err := factory.Build(js)
+		filters, err := factory.Factorize(js)
 		require.NoError(t, err)
 		require.Len(t, filters, 2)
 		for _, f := range filters {
-			require.True(t, f.(*Selector).Field == "f1" || f.(*Selector).Field == "f2")
+			require.True(t, f.(*Selector).Field.Name() == "f1" || f.(*Selector).Field.Name() == "f2")
 		}
 	})
 	t.Run("filter_or_nested_and", func(t *testing.T) {
@@ -46,14 +46,14 @@ func TestFilterUsingJSON(t *testing.T) {
 				{FieldName: "f3", DataType: schema.Int64Type},
 			},
 		}
-		filters, err := factory.Build(js)
+		filters, err := factory.Factorize(js)
 		require.NoError(t, err)
 		require.Len(t, filters, 1)
 		require.Len(t, filters[0].(*OrFilter).filter, 2)
-		require.Equal(t, "f1", filters[0].(*OrFilter).filter[0].(*Selector).Field)
+		require.Equal(t, "f1", filters[0].(*OrFilter).filter[0].(*Selector).Field.Name())
 		require.Len(t, filters[0].(*OrFilter).filter[1].(*AndFilter).filter, 2)
-		require.Equal(t, "f2", filters[0].(*OrFilter).filter[1].(*AndFilter).filter[0].(*Selector).Field)
-		require.Equal(t, "f3", filters[0].(*OrFilter).filter[1].(*AndFilter).filter[1].(*Selector).Field)
+		require.Equal(t, "f2", filters[0].(*OrFilter).filter[1].(*AndFilter).filter[0].(*Selector).Field.Name())
+		require.Equal(t, "f3", filters[0].(*OrFilter).filter[1].(*AndFilter).filter[1].(*Selector).Field.Name())
 	})
 	t.Run("filter_and_or_nested", func(t *testing.T) {
 		js := []byte(`{"$and": [{"a": 20}, {"$or": [{"b":5}, {"c": 6}]}, {"$and": [{"e":5}, {"f": 6}]}]}`)
@@ -66,15 +66,15 @@ func TestFilterUsingJSON(t *testing.T) {
 				{FieldName: "f", DataType: schema.Int64Type},
 			},
 		}
-		filters, err := factory.Build(js)
+		filters, err := factory.Factorize(js)
 		require.NoError(t, err)
 		require.Len(t, filters, 1)
 		require.Len(t, filters[0].(*AndFilter).filter, 3)
-		require.Equal(t, "a", filters[0].(*AndFilter).filter[0].(*Selector).Field)
+		require.Equal(t, "a", filters[0].(*AndFilter).filter[0].(*Selector).Field.Name())
 		require.Len(t, filters[0].(*AndFilter).filter[1].(*OrFilter).filter, 2)
 		require.Len(t, filters[0].(*AndFilter).filter[2].(*AndFilter).filter, 2)
-		require.Equal(t, "b", filters[0].(*AndFilter).filter[1].(*OrFilter).filter[0].(*Selector).Field)
-		require.Equal(t, "e", filters[0].(*AndFilter).filter[2].(*AndFilter).filter[0].(*Selector).Field)
+		require.Equal(t, "b", filters[0].(*AndFilter).filter[1].(*OrFilter).filter[0].(*Selector).Field.Name())
+		require.Equal(t, "e", filters[0].(*AndFilter).filter[2].(*AndFilter).filter[0].(*Selector).Field.Name())
 	})
 	t.Run("filter_mix", func(t *testing.T) {
 		js := []byte(`{"f1": 10, "f2": 10, "$or": [{"f3": 20}, {"$and": [{"f4":5}, {"f5": 6}]}], "$and": [{"a": 20}, {"$or": [{"b":5}, {"c": 6}]}, {"$and": [{"e":5}, {"f": 6}]}]}`)
@@ -92,7 +92,7 @@ func TestFilterUsingJSON(t *testing.T) {
 				{FieldName: "f", DataType: schema.Int64Type},
 			},
 		}
-		filters, err := factory.Build(js)
+		filters, err := factory.Factorize(js)
 		require.NoError(t, err)
 		require.Len(t, filters, 4)
 
@@ -100,7 +100,7 @@ func TestFilterUsingJSON(t *testing.T) {
 		for _, f := range filters {
 			if _, ok := f.(*Selector); ok {
 				countSelectors++
-				require.True(t, f.(*Selector).Field == "f1" || f.(*Selector).Field == "f2")
+				require.True(t, f.(*Selector).Field.Name() == "f1" || f.(*Selector).Field.Name() == "f2")
 			}
 			if _, ok := f.(*OrFilter); ok {
 				require.Len(t, f.(*OrFilter).filter, 2)
@@ -124,7 +124,7 @@ func TestFilterDuplicateKey(t *testing.T) {
 			{FieldName: "b", DataType: schema.Int64Type},
 		},
 	}
-	filters, err := factory.Build([]byte(`{"a": 10, "b": {"$eq": 10}, "b": 15}`))
+	filters, err := factory.Factorize([]byte(`{"a": 10, "b": {"$eq": 10}, "b": 15}`))
 	require.Nil(t, filters)
 	require.Contains(t, err.Error(), "duplicate filter 'b'")
 }

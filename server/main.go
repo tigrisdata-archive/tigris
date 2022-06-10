@@ -18,8 +18,10 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/pflag"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/muxer"
 	"github.com/tigrisdata/tigris/store/kv"
+	"github.com/tigrisdata/tigris/store/search"
 	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
@@ -31,6 +33,12 @@ func main() {
 
 	ulog.Configure(config.DefaultConfig.Log)
 
+	// Initialize metrics once
+	closer := metrics.InitializeMetrics()
+	defer func() {
+		ulog.E(closer.Close())
+	}()
+
 	log.Info().Str("version", util.Version).Msgf("Starting server")
 
 	kvStore, err := kv.NewKeyValueStore(&config.DefaultConfig.FoundationDB)
@@ -38,8 +46,13 @@ func main() {
 		log.Fatal().Err(err).Msg("error initializing kv store")
 	}
 
+	searchStore, err := search.NewStore(&config.DefaultConfig.Search)
+	if err != nil {
+		log.Fatal().Err(err).Msg("error initializing search store")
+	}
+
 	mx := muxer.NewMuxer(&config.DefaultConfig)
-	mx.RegisterServices(kvStore)
+	mx.RegisterServices(kvStore, searchStore)
 	if err := mx.Start(config.DefaultConfig.Server.Host, config.DefaultConfig.Server.Port); err != nil {
 		log.Fatal().Err(err).Msgf("error starting server")
 	}

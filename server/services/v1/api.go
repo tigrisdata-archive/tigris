@@ -21,7 +21,6 @@ import (
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/internal"
@@ -30,6 +29,7 @@ import (
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
+	"github.com/tigrisdata/tigris/store/search"
 	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc"
@@ -60,13 +60,15 @@ type apiService struct {
 	sessions      *SessionManager
 	runnerFactory *QueryRunnerFactory
 	versionH      *metadata.VersionHandler
+	searchStore   search.Store
 }
 
-func newApiService(kv kv.KeyValueStore) *apiService {
+func newApiService(kv kv.KeyValueStore, searchStore search.Store) *apiService {
 	u := &apiService{
-		kvStore:  kv,
-		txMgr:    transaction.NewManager(kv),
-		versionH: &metadata.VersionHandler{},
+		kvStore:     kv,
+		txMgr:       transaction.NewManager(kv),
+		versionH:    &metadata.VersionHandler{},
+		searchStore: searchStore,
 	}
 
 	ctx := context.TODO()
@@ -85,8 +87,8 @@ func newApiService(kv kv.KeyValueStore) *apiService {
 	u.tenantMgr = tenantMgr
 	u.encoder = metadata.NewEncoder(tenantMgr)
 	u.cdcMgr = cdc.NewManager()
-	u.sessions = NewSessionManager(u.txMgr, u.tenantMgr, u.versionH, u.cdcMgr)
-	u.runnerFactory = NewQueryRunnerFactory(u.txMgr, u.encoder, u.cdcMgr)
+	u.sessions = NewSessionManager(u.txMgr, u.tenantMgr, u.versionH, u.cdcMgr, u.searchStore, u.encoder)
+	u.runnerFactory = NewQueryRunnerFactory(u.txMgr, u.encoder, u.cdcMgr, u.searchStore)
 	return u
 }
 
@@ -114,7 +116,7 @@ func (s *apiService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel)
 	router.HandleFunc(apiPathPrefix+infoPath, func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
 	})
-	router.Handle(metricsPath, promhttp.HandlerFor(metrics.PrometheusRegistry, promhttp.HandlerOpts{}))
+	router.Handle(metricsPath, metrics.Reporter.HTTPHandler())
 	return nil
 }
 

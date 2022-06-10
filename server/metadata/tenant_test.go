@@ -26,6 +26,7 @@ import (
 	"github.com/tigrisdata/tigris/server/metadata/encoding"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
+	"github.com/tigrisdata/tigris/store/search"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
@@ -245,7 +246,7 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 
 		factory, err := schema.Build("test_collection", jsSchema)
 		require.NoError(t, err)
-		require.NoError(t, tenant.CreateCollection(context.TODO(), tx, db2, factory))
+		require.NoError(t, tenant.CreateCollection(context.TODO(), tx, db2, factory, &search.NoopStore{}))
 
 		require.NoError(t, tenant.reload(ctx, tx, nil))
 
@@ -321,7 +322,7 @@ func TestTenantManager_DropCollection(t *testing.T) {
 
 		factory, err := schema.Build("test_collection", jsSchema)
 		require.NoError(t, err)
-		require.NoError(t, tenant.CreateCollection(ctx, tx, db2, factory))
+		require.NoError(t, tenant.CreateCollection(ctx, tx, db2, factory, &search.NoopStore{}))
 		require.NoError(t, tenant.reload(ctx, tx, nil))
 		require.NoError(t, tx.Commit(ctx))
 
@@ -333,7 +334,7 @@ func TestTenantManager_DropCollection(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		require.NoError(t, tenant.DropCollection(ctx, tx, db2, "test_collection"))
+		require.NoError(t, tenant.DropCollection(ctx, tx, db2, "test_collection", &search.NoopStore{}))
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTx(ctx)

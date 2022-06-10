@@ -25,6 +25,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
 const (
@@ -69,9 +70,12 @@ type DefaultCollection struct {
 	Validator *jsonschema.Schema
 	// JSON schema
 	Schema jsoniter.RawMessage
+
+	// search schema
+	Search *tsApi.CollectionSchema
 }
 
-func NewDefaultCollection(cname string, id uint32, fields []*Field, indexes *Indexes, schema jsoniter.RawMessage) *DefaultCollection {
+func NewDefaultCollection(cname string, id uint32, fields []*Field, indexes *Indexes, schema jsoniter.RawMessage, searchCollectionName string) *DefaultCollection {
 	url := cname + ".json"
 	compiler := jsonschema.NewCompiler()
 	compiler.Draft = jsonschema.Draft7 // Format is only working for draft7
@@ -87,6 +91,8 @@ func NewDefaultCollection(cname string, id uint32, fields []*Field, indexes *Ind
 	// flag. Later probably we can relax it. Starting with strict validation is better than not validating extra keys.
 	validator.AdditionalProperties = false
 
+	search := buildSearchSchema(searchCollectionName, fields)
+
 	return &DefaultCollection{
 		Id:        id,
 		Name:      cname,
@@ -94,6 +100,7 @@ func NewDefaultCollection(cname string, id uint32, fields []*Field, indexes *Ind
 		Indexes:   indexes,
 		Validator: validator,
 		Schema:    schema,
+		Search:    search,
 	}
 }
 
@@ -131,6 +138,32 @@ func (d *DefaultCollection) Validate(document interface{}) error {
 	}
 
 	return api.Errorf(api.Code_INVALID_ARGUMENT, err.Error())
+}
+
+func (d *DefaultCollection) SearchCollectionName() string {
+	return d.Search.Name
+}
+func buildSearchSchema(name string, fields []*Field) *tsApi.CollectionSchema {
+	var searchFields []tsApi.Field
+
+	var ptrTrue = true
+	for _, f := range fields {
+		indexable := IndexableField(f)
+		facetable := FacetableField(f)
+
+		searchFields = append(searchFields, tsApi.Field{
+			Name:     f.FieldName,
+			Facet:    &facetable,
+			Type:     ToSearchFieldType(f),
+			Optional: &ptrTrue,
+			Index:    &indexable,
+		})
+	}
+
+	return &tsApi.CollectionSchema{
+		Name:   name,
+		Fields: searchFields,
+	}
 }
 
 func init() {

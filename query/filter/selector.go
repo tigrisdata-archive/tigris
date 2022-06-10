@@ -16,6 +16,9 @@ package filter
 
 import (
 	"fmt"
+
+	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/value"
 )
 
 // Selector is a condition defined inside a filter. It has a field which corresponding the field on which condition
@@ -28,16 +31,31 @@ import (
 //    {f:20} (default is "$eq" so we automatically append EqualityMatcher for this case in parser)
 //    {f:<Expr>}
 type Selector struct {
-	Field   string
+	Field   *schema.Field
 	Matcher ValueMatcher
 }
 
 // NewSelector returns Selector object
-func NewSelector(field string, matcher ValueMatcher) *Selector {
+func NewSelector(field *schema.Field, matcher ValueMatcher) *Selector {
 	return &Selector{
 		Field:   field,
 		Matcher: matcher,
 	}
+}
+
+func (s *Selector) MatchesDoc(doc *map[string]interface{}) bool {
+	v, ok := (*doc)[s.Field.Name()]
+	if !ok {
+		return true
+	}
+
+	switch s.Field.Type() {
+	case schema.StringType:
+	default:
+		return true
+	}
+
+	return s.Matcher.Matches(value.NewStringValue(v.(string)))
 }
 
 // Matches returns true if the input doc matches this filter.
@@ -46,7 +64,24 @@ func (s *Selector) Matches(doc []byte) bool {
 	return false
 }
 
+func (s *Selector) ToSearchFilter() string {
+	var op string
+	switch s.Matcher.Type() {
+	case EQ:
+		op = "%s:=%v"
+	case GT:
+		op = "%s:>%v"
+	case GTE:
+		op = "%s:>=%v"
+	case LT:
+		op = "%s:<%v"
+	case LTE:
+		op = "%s:<=%v"
+	}
+	return fmt.Sprintf(op, s.Field.Name(), s.Matcher.GetValue().AsInterface())
+}
+
 // String a helpful method for logging.
 func (s *Selector) String() string {
-	return fmt.Sprintf("{%v:%v}", s.Field, s.Matcher)
+	return fmt.Sprintf("{%v:%v}", s.Field.Name(), s.Matcher)
 }

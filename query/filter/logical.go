@@ -76,9 +76,30 @@ func (a *AndFilter) Matches(doc []byte) bool {
 	return true
 }
 
+func (a *AndFilter) MatchesDoc(doc *map[string]interface{}) bool {
+	for _, f := range a.filter {
+		if !f.MatchesDoc(doc) {
+			return false
+		}
+	}
+
+	return true
+}
+
 // GetFilters returns all the nested filters for AndFilter
 func (a *AndFilter) GetFilters() []Filter {
 	return a.filter
+}
+
+func (a *AndFilter) ToSearchFilter() string {
+	var str string
+	for i, f := range a.filter {
+		str += f.ToSearchFilter()
+		if i < len(a.filter)-1 {
+			str += "&&"
+		}
+	}
+	return str
 }
 
 // String a helpful method for logging.
@@ -132,9 +153,30 @@ func (o *OrFilter) Matches(doc []byte) bool {
 	return false
 }
 
+func (o *OrFilter) MatchesDoc(doc *map[string]interface{}) bool {
+	for _, f := range o.filter {
+		if f.MatchesDoc(doc) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // GetFilters returns all the nested filters for OrFilter
 func (o *OrFilter) GetFilters() []Filter {
 	return o.filter
+}
+
+func (o *OrFilter) ToSearchFilter() string {
+	var str string
+	for i, f := range o.filter {
+		str += f.ToSearchFilter()
+		if i < len(o.filter)-1 {
+			str += ""
+		}
+	}
+	return str
 }
 
 // String a helpful method for logging.

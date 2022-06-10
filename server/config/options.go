@@ -26,11 +26,12 @@ type ServerConfig struct {
 }
 
 type Config struct {
-	Server       ServerConfig `yaml:"server" json:"server"`
 	Log          log.LogConfig
-	Auth         AuthConfig `yaml:"auth" json:"auth"`
+	Server       ServerConfig `yaml:"server" json:"server"`
+	Auth         AuthConfig   `yaml:"auth" json:"auth"`
+	Cdc          CdcConfig    `yaml:"cdc" json:"cdc"`
+	Search       SearchConfig `yaml:"search" json:"search"`
 	FoundationDB FoundationDBConfig
-	Cdc          CdcConfig
 }
 
 type AuthConfig struct {
@@ -67,9 +68,23 @@ var DefaultConfig = Config{
 		StreamBatch:    100,
 		StreamBuffer:   200,
 	},
+	Search: SearchConfig{
+		Host:         "localhost",
+		Port:         8108,
+		ReadEnabled:  true,
+		WriteEnabled: true,
+	},
 }
 
 // FoundationDBConfig keeps FoundationDB configuration parameters
 type FoundationDBConfig struct {
 	ClusterFile string `mapstructure:"cluster_file" json:"cluster_file" yaml:"cluster_file"`
+}
+
+type SearchConfig struct {
+	Host         string
+	Port         int16
+	AuthKey      string `mapstructure:"auth_key" json:"auth_key" yaml:"auth_key"`
+	ReadEnabled  bool
+	WriteEnabled bool
 }
