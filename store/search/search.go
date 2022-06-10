@@ -29,7 +29,7 @@ type Store interface {
 	DropCollection(ctx context.Context, table string) error
 	IndexDocuments(ctx context.Context, table string, documents io.Reader, options IndexDocumentsOptions) error
 	DeleteDocuments(ctx context.Context, table string, key string) error
-	Search(ctx context.Context, table string, filterBy string) ([]tsApi.SearchResult, error)
+	Search(ctx context.Context, table string, filterBy string, page int, perPage int) ([]tsApi.SearchResult, error)
 }
 
 func NewStore(config *config.SearchConfig) (Store, error) {
@@ -43,14 +43,14 @@ func NewStore(config *config.SearchConfig) (Store, error) {
 
 type NoopStore struct{}
 
-func (n *NoopStore) CreateCollection(ctx context.Context, schema *tsApi.CollectionSchema) error {
+func (n *NoopStore) CreateCollection(_ context.Context, _ *tsApi.CollectionSchema) error {
 	return nil
 }
-func (n *NoopStore) DropCollection(ctx context.Context, table string) error { return nil }
-func (n *NoopStore) IndexDocuments(ctx context.Context, table string, reader io.Reader, options IndexDocumentsOptions) error {
+func (n *NoopStore) DropCollection(_ context.Context, _ string) error { return nil }
+func (n *NoopStore) IndexDocuments(_ context.Context, _ string, _ io.Reader, _ IndexDocumentsOptions) error {
 	return nil
 }
-func (n *NoopStore) DeleteDocuments(ctx context.Context, table string, key string) error { return nil }
-func (n *NoopStore) Search(ctx context.Context, table string, filterBy string) ([]tsApi.SearchResult, error) {
+func (n *NoopStore) DeleteDocuments(_ context.Context, _ string, _ string) error { return nil }
+func (n *NoopStore) Search(_ context.Context, _ string, _ string, _ int, _ int) ([]tsApi.SearchResult, error) {
 	return nil, nil
 }

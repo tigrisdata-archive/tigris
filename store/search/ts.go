@@ -17,11 +17,11 @@ package search
 import (
 	"context"
 	"fmt"
-	ulog "github.com/tigrisdata/tigris/util/log"
 	"io"
 	"net/http"
 
 	jsoniter "github.com/json-iterator/go"
+	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/typesense/typesense-go/typesense"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
@@ -91,7 +91,7 @@ func (s *storeImpl) IndexDocuments(_ context.Context, table string, reader io.Re
 	return nil
 }
 
-func (s *storeImpl) Search(_ context.Context, table string, filterBy string) ([]tsApi.SearchResult, error) {
+func (s *storeImpl) Search(_ context.Context, table string, filterBy string, page int, perPage int) ([]tsApi.SearchResult, error) {
 	q := "*"
 	res, err := s.client.MultiSearch.Perform(&tsApi.MultiSearchParams{}, tsApi.MultiSearchSearchesParameter{
 		Searches: []tsApi.MultiSearchCollectionParameters{
@@ -100,6 +100,8 @@ func (s *storeImpl) Search(_ context.Context, table string, filterBy string) ([]
 				MultiSearchParameters: tsApi.MultiSearchParameters{
 					FilterBy: &filterBy,
 					Q:        &q,
+					Page:     &page,
+					PerPage:  &perPage,
 				},
 			},
 		},

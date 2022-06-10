@@ -16,6 +16,11 @@ package v1
 
 import tsApi "github.com/typesense/typesense-go/typesense/api"
 
+type pageResponse struct {
+	hits   *HitsResponse
+	facets *FacetResponse
+}
+
 type SearchResponse struct {
 	Hits   *HitsResponse
 	Facets *FacetResponse
@@ -30,6 +35,10 @@ func NewHitsResponse() *HitsResponse {
 	return &HitsResponse{
 		Hits: &hits,
 	}
+}
+
+func (h *HitsResponse) Count() int {
+	return len(*h.Hits)
 }
 
 func (h *HitsResponse) Append(hits *[]tsApi.SearchResultHit) {

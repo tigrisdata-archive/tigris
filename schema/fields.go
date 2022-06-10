@@ -25,6 +25,11 @@ import (
 type FieldType int
 
 const (
+	searchDoubleType = "float"
+	searchArrayType  = "[]"
+)
+
+const (
 	UnknownType FieldType = iota
 	NullType
 	BoolType
@@ -138,6 +143,59 @@ func IsValidIndexType(t FieldType) bool {
 	default:
 		return false
 	}
+}
+
+func IndexableField(field *Field) bool {
+	switch field.Type() {
+	case BoolType, Int32Type, Int64Type, UUIDType, StringType, DateTimeType, DoubleType:
+		return true
+	default:
+		return false
+	}
+}
+
+func FacetableField(field *Field) bool {
+	switch field.Type() {
+	case Int32Type, Int64Type, StringType, DoubleType:
+		return true
+	default:
+		return false
+	}
+}
+
+func PackSearchField(field *Field) bool {
+	switch field.Type() {
+	case ObjectType:
+		return true
+	case ArrayType:
+		return len(field.Fields) > 1 || field.Fields[0].Type() == ArrayType || field.Fields[0].Type() == ObjectType
+	}
+
+	return false
+}
+
+func ToSearchFieldType(field *Field) string {
+	switch field.Type() {
+	case BoolType:
+		return FieldNames[field.Type()]
+	case Int32Type, Int64Type:
+		return FieldNames[field.Type()]
+	case StringType, ByteType, UUIDType, DateTimeType:
+		return FieldNames[StringType]
+	case DoubleType:
+		return searchDoubleType
+	case ObjectType:
+		return FieldNames[StringType]
+	case ArrayType:
+		if len(field.Fields) == 1 && field.Fields[0].Type() != ArrayType && field.Fields[0].Type() != ObjectType {
+			arrayType := ToSearchFieldType(field.Fields[0])
+			return arrayType + searchArrayType
+		}
+
+		return FieldNames[StringType]
+	}
+
+	return ""
 }
 
 var SupportedFieldProperties = set.New(
