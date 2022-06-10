@@ -1,16 +1,28 @@
 package metrics
 
 import (
-	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
-	"github.com/prometheus/client_golang/prometheus"
+	"io"
+	"time"
+
+	prom "github.com/m3db/prometheus_client_golang/prometheus"
+	"github.com/uber-go/tally"
+	promreporter "github.com/uber-go/tally/prometheus"
 )
 
 var (
-	GRPCMetrics        = grpc_prometheus.NewServerMetrics()
-	PrometheusRegistry = prometheus.NewRegistry()
+	Root     tally.Scope
+	Reporter promreporter.Reporter
 )
 
-func init() {
-	GRPCMetrics.EnableHandlingTimeHistogram()
-	PrometheusRegistry.MustRegister(GRPCMetrics)
+func InitializeMetrics() io.Closer {
+	var closer io.Closer
+	registry := prom.NewRegistry()
+	Reporter = promreporter.NewReporter(promreporter.Options{Registerer: registry})
+	Root, closer = tally.NewRootScope(tally.ScopeOptions{
+		Prefix:         "tigris",
+		Tags:           map[string]string{},
+		CachedReporter: Reporter,
+		Separator:      promreporter.DefaultSeparator,
+	}, 1*time.Second)
+	return closer
 }

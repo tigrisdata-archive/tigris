@@ -18,6 +18,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/pflag"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/muxer"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
@@ -31,6 +32,12 @@ func main() {
 	config.LoadConfig("server", &config.DefaultConfig)
 
 	ulog.Configure(config.DefaultConfig.Log)
+
+	// Initialize metrics once
+	closer := metrics.InitializeMetrics()
+	defer func() {
+		ulog.E(closer.Close())
+	}()
 
 	log.Info().Str("version", util.Version).Msgf("Starting server")
 
