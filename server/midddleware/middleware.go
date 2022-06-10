@@ -16,7 +16,6 @@ package middleware
 
 import (
 	"context"
-
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_zerolog "github.com/grpc-ecosystem/go-grpc-middleware/providers/zerolog/v2"
 	grpc_opentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
@@ -26,7 +25,6 @@ import (
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/server/config"
-	"github.com/tigrisdata/tigris/server/metrics"
 	"google.golang.org/grpc"
 )
 
@@ -45,8 +43,8 @@ func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerI
 		grpc_ratelimit.StreamServerInterceptor(&RateLimiter{}),
 		grpc_auth.StreamServerInterceptor(authFunction),
 		grpc_logging.StreamServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger), []grpc_logging.Option{}...),
-		metrics.GRPCMetrics.StreamServerInterceptor(),
 		validatorStreamServerInterceptor(),
+		StreamMetricsServerInterceptor(),
 		grpc_opentracing.StreamServerInterceptor(),
 		grpc_recovery.StreamServerInterceptor(),
 	)
@@ -62,7 +60,7 @@ func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerI
 		grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger)),
 		validatorUnaryServerInterceptor(),
 		TimeoutUnaryServerInterceptor(DefaultTimeout),
-		metrics.GRPCMetrics.UnaryServerInterceptor(),
+		UnaryMetricsServerInterceptor(),
 		grpc_opentracing.UnaryServerInterceptor(),
 		grpc_recovery.UnaryServerInterceptor(),
 	)

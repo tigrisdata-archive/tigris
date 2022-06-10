@@ -21,7 +21,6 @@ import (
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/internal"
@@ -117,7 +116,7 @@ func (s *apiService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel)
 	router.HandleFunc(apiPathPrefix+infoPath, func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
 	})
-	router.Handle(metricsPath, promhttp.HandlerFor(metrics.PrometheusRegistry, promhttp.HandlerOpts{}))
+	router.Handle(metricsPath, metrics.Reporter.HTTPHandler())
 	return nil
 }
 
