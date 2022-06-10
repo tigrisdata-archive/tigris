@@ -143,53 +143,21 @@ func (d *DefaultCollection) Validate(document interface{}) error {
 func (d *DefaultCollection) SearchCollectionName() string {
 	return d.SearchSchema.Name
 }
-
 func buildSearchSchema(name string, fields []*Field) *tsApi.CollectionSchema {
 	var searchFields []tsApi.Field
 
 	var ptrTrue = true
 	for _, f := range fields {
-		if f.Type() == ArrayType || f.Type() == ObjectType {
-			continue
-		}
+		indexable := IndexableField(f)
+		facetable := FacetableField(f)
 
-		var tsField tsApi.Field
-		switch f.DataType {
-		case StringType:
-			tsField = tsApi.Field{
-				Name:     f.FieldName,
-				Facet:    &ptrTrue,
-				Type:     FieldNames[StringType],
-				Optional: &ptrTrue,
-			}
-		case ByteType, UUIDType, DateTimeType:
-			tsField = tsApi.Field{
-				Name:     f.FieldName,
-				Type:     FieldNames[StringType],
-				Optional: &ptrTrue,
-			}
-		case Int32Type, Int64Type:
-			tsField = tsApi.Field{
-				Name:     f.FieldName,
-				Type:     FieldNames[f.DataType],
-				Facet:    &ptrTrue,
-				Optional: &ptrTrue,
-			}
-		case DoubleType:
-			tsField = tsApi.Field{
-				Name:     f.FieldName,
-				Type:     "float",
-				Facet:    &ptrTrue,
-				Optional: &ptrTrue,
-			}
-		default:
-			tsField = tsApi.Field{
-				Name:     f.FieldName,
-				Type:     FieldNames[f.DataType],
-				Optional: &ptrTrue,
-			}
-		}
-		searchFields = append(searchFields, tsField)
+		searchFields = append(searchFields, tsApi.Field{
+			Name:     f.FieldName,
+			Facet:    &facetable,
+			Type:     ToSearchFieldType(f),
+			Optional: &ptrTrue,
+			Index:    &indexable,
+		})
 	}
 
 	return &tsApi.CollectionSchema{

@@ -17,6 +17,7 @@ package v1
 import (
 	"bytes"
 	"context"
+
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/internal"
@@ -442,28 +443,28 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 		if iKeys, err = runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter); err == nil {
 			rowReader, err = MakeDatabaseRowReader(ctx, tx, iKeys)
 		} else {
-			rowReader, err = MakeSearchRowReader(ctx, collection.SearchSchema.Name, nil, filters, runner.searchStore)
+			rowReader, err = MakeSearchRowReader(ctx, collection, nil, filters, runner.searchStore)
 		}
 		if err != nil {
 			return nil, ctx, err
 		}
 	}
 
-	if err = runner.iterate(rowReader, fieldFactory); err != nil {
+	if err = runner.iterate(ctx, rowReader, fieldFactory); err != nil {
 		return nil, ctx, err
 	}
 
 	return &Response{}, ctx, nil
 }
 
-func (runner *StreamingQueryRunner) iterate(reader RowReader, fieldFactory *read.FieldFactory) error {
+func (runner *StreamingQueryRunner) iterate(ctx context.Context, reader RowReader, fieldFactory *read.FieldFactory) error {
 	limit, totalResults := int64(0), int64(0)
 	if runner.req.GetOptions() != nil {
 		limit = runner.req.GetOptions().Limit
 	}
 
 	var row Row
-	for reader.NextRow(&row) {
+	for reader.NextRow(ctx, &row) {
 		if limit > 0 && limit <= totalResults {
 			return nil
 		}
