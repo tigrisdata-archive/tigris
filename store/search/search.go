@@ -34,7 +34,7 @@ type Store interface {
 
 func NewStore(config *config.SearchConfig) (Store, error) {
 	client := typesense.NewClient(
-		typesense.WithServer(fmt.Sprintf("http://%s:%d", config.GetHost(), config.Port)),
+		typesense.WithServer(fmt.Sprintf("http://%s:%d", config.Host, config.Port)),
 		typesense.WithAPIKey(config.AuthKey))
 	return &storeImpl{
 		client: client,

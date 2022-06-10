@@ -69,11 +69,10 @@ var DefaultConfig = Config{
 		StreamBuffer:   200,
 	},
 	Search: SearchConfig{
-		Host:         "0.0.0.0",
+		Host:         "localhost",
 		Port:         8108,
 		ReadEnabled:  true,
 		WriteEnabled: true,
-		AuthKey:      "ts_test_key",
 	},
 }
 
@@ -85,14 +84,7 @@ type FoundationDBConfig struct {
 type SearchConfig struct {
 	Host         string
 	Port         int16
-	AuthKey      string
+	AuthKey      string `mapstructure:"auth_key" json:"auth_key" yaml:"auth_key"`
 	ReadEnabled  bool
 	WriteEnabled bool
-}
-
-func (s *SearchConfig) GetHost() string {
-	if GetEnvironment() == EnvTest {
-		return "tigris_search"
-	}
-	return "0.0.0.0"
 }

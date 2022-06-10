@@ -39,6 +39,8 @@ services:
     image: tigris_server
     environment:
       - TIGRIS_ENVIRONMENT=test
+      - TIGRIS_SERVER_SEARCH_AUTH_KEY=ts_test_key
+      - TIGRIS_SERVER_SEARCH_HOST=tigris_search
     build:
       context: ../../
       dockerfile: docker/Dockerfile
