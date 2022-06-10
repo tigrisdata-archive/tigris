@@ -76,6 +76,16 @@ func (a *AndFilter) Matches(doc []byte) bool {
 	return true
 }
 
+func (a *AndFilter) MatchesDoc(doc *map[string]interface{}) bool {
+	for _, f := range a.filter {
+		if !f.MatchesDoc(doc) {
+			return false
+		}
+	}
+
+	return true
+}
+
 // GetFilters returns all the nested filters for AndFilter
 func (a *AndFilter) GetFilters() []Filter {
 	return a.filter
@@ -136,6 +146,16 @@ func (o *OrFilter) Type() LogicalOP {
 func (o *OrFilter) Matches(doc []byte) bool {
 	for _, f := range o.filter {
 		if f.Matches(doc) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (o *OrFilter) MatchesDoc(doc *map[string]interface{}) bool {
+	for _, f := range o.filter {
+		if f.MatchesDoc(doc) {
 			return true
 		}
 	}

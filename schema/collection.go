@@ -72,7 +72,7 @@ type DefaultCollection struct {
 	Schema jsoniter.RawMessage
 
 	// search schema
-	SearchSchema *tsApi.CollectionSchema
+	Search *tsApi.CollectionSchema
 }
 
 func NewDefaultCollection(cname string, id uint32, fields []*Field, indexes *Indexes, schema jsoniter.RawMessage, searchCollectionName string) *DefaultCollection {
@@ -94,13 +94,13 @@ func NewDefaultCollection(cname string, id uint32, fields []*Field, indexes *Ind
 	search := buildSearchSchema(searchCollectionName, fields)
 
 	return &DefaultCollection{
-		Id:           id,
-		Name:         cname,
-		Fields:       fields,
-		Indexes:      indexes,
-		Validator:    validator,
-		Schema:       schema,
-		SearchSchema: search,
+		Id:        id,
+		Name:      cname,
+		Fields:    fields,
+		Indexes:   indexes,
+		Validator: validator,
+		Schema:    schema,
+		Search:    search,
 	}
 }
 
@@ -141,7 +141,7 @@ func (d *DefaultCollection) Validate(document interface{}) error {
 }
 
 func (d *DefaultCollection) SearchCollectionName() string {
-	return d.SearchSchema.Name
+	return d.Search.Name
 }
 func buildSearchSchema(name string, fields []*Field) *tsApi.CollectionSchema {
 	var searchFields []tsApi.Field

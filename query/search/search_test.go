@@ -29,10 +29,9 @@ func TestSearchBuilder(t *testing.T) {
 		{FieldName: "int_value", DataType: schema.Int64Type},
 		{FieldName: "string_value1", DataType: schema.StringType},
 	})
-	filters, err := f.Factorize(js)
+	wrappedF, err := f.WrappedFilter(js)
 	require.NoError(t, err)
-	require.Len(t, filters, 2)
 
 	b := Builder{}
-	require.Equal(t, "a:=4&&int_value:=1&&string_value1:=shoe", b.FromFilter(filters))
+	require.Equal(t, "a:=4&&int_value:=1&&string_value1:=shoe", b.FromFilter(wrappedF))
 }

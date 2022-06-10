@@ -538,7 +538,7 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 	// So failure of the transaction won't impact the consistency of the cache
 	collection := schema.NewDefaultCollection(schFactory.CollectionName, collectionId, schFactory.Fields, schFactory.Indexes, schFactory.Schema, tenant.getSearchCollName(database.name, schFactory.CollectionName))
 	database.collections[schFactory.CollectionName] = NewCollectionHolder(collectionId, schFactory.CollectionName, collection, idxNameToId)
-	if err := searchStore.CreateCollection(ctx, collection.SearchSchema); err != nil {
+	if err := searchStore.CreateCollection(ctx, collection.Search); err != nil {
 		if err != search.ErrDuplicateEntity {
 			return err
 		}
