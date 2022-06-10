@@ -30,11 +30,11 @@ RUN mkdir /build
 #Download deps once, during docker build. Rebuild only on go.mod change
 ENV PATH="${PATH}:/root/go/bin"
 COPY scripts/install_build_deps.sh /build
+RUN sh /build/install_build_deps.sh
 COPY go.mod /build
 WORKDIR /build
 RUN go mod download
 COPY . /build
-RUN sh /build/install_build_deps.sh
 RUN --mount=type=cache,target=/root/.cache/go-build rm -f server/service && make bins
 
 
