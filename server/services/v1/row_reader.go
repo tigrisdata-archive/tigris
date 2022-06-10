@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	perPage = 5
+	perPage = 10
 )
 
 type Row struct {
@@ -48,6 +48,7 @@ type page struct {
 	idx        int
 	err        error
 	resp       *pageResponse
+	wrappedF   *filter.WrappedFilter
 	collection *schema.DefaultCollection
 }
 
@@ -56,7 +57,8 @@ func (p *page) readRow(row *Row) bool {
 		return false
 	}
 
-	for document, more := p.resp.hits.GetDocument(p.idx); more; {
+	for p.resp.hits.HasMoreHits(p.idx) {
+		document, _ := p.resp.hits.GetDocument(p.idx)
 		p.idx++
 		if document == nil {
 			continue
@@ -64,6 +66,11 @@ func (p *page) readRow(row *Row) bool {
 
 		if p.err = UnpackSearchFields(document, p.collection); p.err != nil {
 			return false
+		}
+
+		// now apply the filter
+		if !p.wrappedF.Filter.MatchesDoc(document) {
+			continue
 		}
 
 		data, err := json.Marshal(*document)
@@ -85,32 +92,31 @@ type SearchRowReader struct {
 	page       *page
 	err        error
 	lastPage   bool
-	filter     string
+	tsFilter   string
 	store      search.Store
-	result     *SearchResponse
+	response   *SearchResponse
+	wrappedF   *filter.WrappedFilter
 	collection *schema.DefaultCollection
 }
 
-func MakeSearchRowReader(ctx context.Context, collection *schema.DefaultCollection, _ []read.Field, filters []filter.Filter, store search.Store) (*SearchRowReader, error) {
+func MakeSearchRowReader(ctx context.Context, c *schema.DefaultCollection, _ []read.Field, w *filter.WrappedFilter, s search.Store) (*SearchRowReader, error) {
 	builder := qsearch.NewBuilder()
-	searchFilter := builder.FromFilter(filters)
 
-	s := &SearchRowReader{
+	return &SearchRowReader{
 		pageNo:     1,
-		store:      store,
-		filter:     searchFilter,
-		collection: collection,
-	}
-
-	return s, nil
+		store:      s,
+		wrappedF:   w,
+		collection: c,
+		tsFilter:   builder.FromFilter(w),
+	}, nil
 }
 
-func MakeSearchRowReaderUsingFilter(ctx context.Context, collection *schema.DefaultCollection, filters []filter.Filter, store search.Store) (*SearchRowReader, error) {
-	return MakeSearchRowReader(ctx, collection, nil, filters, store)
+func MakeSearchRowReaderUsingFilter(ctx context.Context, c *schema.DefaultCollection, w *filter.WrappedFilter, s search.Store) (*SearchRowReader, error) {
+	return MakeSearchRowReader(ctx, c, nil, w, s)
 }
 
 func (s *SearchRowReader) readPage(ctx context.Context) (bool, error) {
-	result, err := s.store.Search(ctx, s.collection.SearchSchema.Name, s.filter, s.pageNo, perPage)
+	result, err := s.store.Search(ctx, s.collection.SearchCollectionName(), s.tsFilter, s.pageNo, perPage)
 	if err != nil {
 		return false, err
 	}
@@ -127,6 +133,7 @@ func (s *SearchRowReader) readPage(ctx context.Context) (bool, error) {
 			hits:   hitsResp,
 			facets: CreateFacetResponse(result[0].FacetCounts),
 		},
+		wrappedF: s.wrappedF,
 	}
 
 	return hitsResp.Count() < perPage, nil
@@ -163,10 +170,10 @@ func (s *SearchRowReader) Err() error {
 
 type DatabaseRowReader struct {
 	idx        int
-	tx         transaction.Tx
-	ctx        context.Context
 	err        error
 	keys       []keys.Key
+	tx         transaction.Tx
+	ctx        context.Context
 	kvIterator kv.Iterator
 }
 

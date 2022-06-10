@@ -422,7 +422,7 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 	}
 
 	var rowReader RowReader
-	if filter.IsFullCollectionScan(runner.req.GetFilter()) {
+	if filter.All(runner.req.GetFilter()) {
 		table, err := runner.encoder.EncodeTableName(tenant.GetNamespace(), db, collection)
 		if err != nil {
 			return nil, nil, err
@@ -433,7 +433,7 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 		}
 	} else {
 		filterFactory := filter.NewFactory(collection.Fields)
-		filters, err := filterFactory.Factorize(runner.req.Filter)
+		wrappedFilter, err := filterFactory.WrappedFilter(runner.req.Filter)
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -443,7 +443,7 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 		if iKeys, err = runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter); err == nil {
 			rowReader, err = MakeDatabaseRowReader(ctx, tx, iKeys)
 		} else {
-			rowReader, err = MakeSearchRowReader(ctx, collection, nil, filters, runner.searchStore)
+			rowReader, err = MakeSearchRowReader(ctx, collection, nil, wrappedFilter, runner.searchStore)
 		}
 		if err != nil {
 			return nil, ctx, err

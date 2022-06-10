@@ -111,7 +111,7 @@ func (s *StrictEqKeyComposer) Compose(selectors []*Selector, userDefinedKeys []*
 	for _, k := range userDefinedKeys {
 		var repeatedFields []*Selector
 		for _, sel := range selectors {
-			if k.FieldName == sel.Field {
+			if k.FieldName == sel.Field.Name() {
 				repeatedFields = append(repeatedFields, sel)
 			}
 			if sel.Matcher.Type() != EQ {

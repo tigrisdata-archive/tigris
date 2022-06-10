@@ -76,7 +76,7 @@ func (i *SearchIndexer) OnPostCommit(ctx context.Context, tenant *metadata.Tenan
 		}
 
 		if event.Op == kv.DeleteEvent {
-			if err = i.searchStore.DeleteDocuments(ctx, collection.SearchSchema.Name, searchKey); err != nil {
+			if err = i.searchStore.DeleteDocuments(ctx, collection.SearchCollectionName(), searchKey); err != nil {
 				if err != search.ErrNotFound {
 					return err
 				}
@@ -102,7 +102,7 @@ func (i *SearchIndexer) OnPostCommit(ctx context.Context, tenant *metadata.Tenan
 			}
 
 			reader := bytes.NewReader(searchData)
-			if err = i.searchStore.IndexDocuments(ctx, collection.SearchSchema.Name, reader, search.IndexDocumentsOptions{
+			if err = i.searchStore.IndexDocuments(ctx, collection.SearchCollectionName(), reader, search.IndexDocumentsOptions{
 				Action:    action,
 				BatchSize: 1,
 			}); err != nil {

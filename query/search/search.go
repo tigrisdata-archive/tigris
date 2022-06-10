@@ -31,13 +31,6 @@ func NewBuilder() *Builder {
 	return &Builder{}
 }
 
-func (f *Builder) FromFilter(filters []filter.Filter) string {
-	var str string
-	for i, f := range filters {
-		str += f.ToSearchFilter()
-		if i < len(filters)-1 {
-			str += "&&"
-		}
-	}
-	return str
+func (f *Builder) FromFilter(w *filter.WrappedFilter) string {
+	return w.Filter.ToSearchFilter()
 }
