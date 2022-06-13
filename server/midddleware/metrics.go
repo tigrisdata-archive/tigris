@@ -16,91 +16,56 @@ package middleware
 
 import (
 	"context"
+
 	"github.com/tigrisdata/tigris/server/metrics"
-	"github.com/uber-go/tally"
 	"google.golang.org/grpc"
-	"strings"
 )
 
-type grpcReqMetrics struct {
-	grpcMethod string
-	grpcType   string
+func receiveMessage(fullMethod string) {
+	metrics.GetServerRequestCounter(fullMethod, metrics.ServerRequestsReceivedTotal).Counter.Inc(1)
 }
 
-func newGrpcReqMetrics(grpcMethod string, grpcType string) grpcReqMetrics {
-	return grpcReqMetrics{grpcMethod: grpcMethod, grpcType: grpcType}
+func handleMessage(fullMethod string) {
+	metrics.GetServerRequestCounter(fullMethod, metrics.ServerRequestsHandledTotal).Counter.Inc(1)
 }
 
-func (g *grpcReqMetrics) getTags() map[string]string {
-	fullMethodParts := strings.Split(g.grpcMethod, "/")
-	return map[string]string{
-		"grpc_method":  fullMethodParts[2],
-		"grpc_service": fullMethodParts[1],
-		"grpc_type":    g.grpcType,
-	}
+func errorMessage(fullMethod string) {
+	metrics.GetServerRequestCounter(fullMethod, metrics.ServerRequestsErrorTotal).Counter.Inc(1)
 }
 
-func (g *grpcReqMetrics) getGrpcCounter(name string) tally.Counter {
-	tags := g.getTags()
-	return metrics.Root.Tagged(tags).Counter(name)
+func okMessage(fullMethod string) {
+	metrics.GetServerRequestCounter(fullMethod, metrics.ServerRequestsOkTotal).Counter.Inc(1)
 }
 
-func (g *grpcReqMetrics) increaseGrpcCounter(counter tally.Counter, value int64) {
-	counter.Inc(value)
-}
-
-func (g *grpcReqMetrics) receiveMessage() {
-	counter := g.getGrpcCounter("grpc_server_msg_received_total")
-	g.increaseGrpcCounter(counter, 1)
-}
-
-func (g *grpcReqMetrics) handleMessage() {
-	counter := g.getGrpcCounter("grpc_server_msg_handled_total")
-	g.increaseGrpcCounter(counter, 1)
-}
-
-func (g *grpcReqMetrics) errorMessage() {
-	counter := g.getGrpcCounter("grpc_server_msg_error_total")
-	g.increaseGrpcCounter(counter, 1)
-}
-
-func (g *grpcReqMetrics) okMessage() {
-	counter := g.getGrpcCounter("grpc_server_msg_ok_total")
-	g.increaseGrpcCounter(counter, 1)
-}
-
-func (g *grpcReqMetrics) getTimeHistogram() tally.Histogram {
-	tags := g.getTags()
-	return metrics.Root.Tagged(tags).Histogram("grpc_server_handling_time_bucket", tally.DefaultBuckets)
+func getTimeHistogram(fullMethod string) *metrics.ServerRequestHistogram {
+	return metrics.GetServerRequestHistogram(fullMethod, metrics.ServerRequestsHandlingTimeBucket)
 }
 
 func UnaryMetricsServerInterceptor() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		reqMetrics := newGrpcReqMetrics(info.FullMethod, "unary")
-		defer reqMetrics.getTimeHistogram().Start().Stop()
-		reqMetrics.receiveMessage()
+		defer getTimeHistogram(info.FullMethod).Histogram.Start().Stop()
+		receiveMessage(info.FullMethod)
 		resp, err := handler(ctx, req)
-		reqMetrics.handleMessage()
+		handleMessage(info.FullMethod)
 		if err != nil {
-			reqMetrics.errorMessage()
+			errorMessage(info.FullMethod)
 		} else {
-			reqMetrics.okMessage()
+			okMessage(info.FullMethod)
 		}
 		return resp, err
 	}
 }
 func StreamMetricsServerInterceptor() grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		reqMetrics := newGrpcReqMetrics(info.FullMethod, "stream")
-		defer reqMetrics.getTimeHistogram().Start().Stop()
-		reqMetrics.receiveMessage()
+		defer getTimeHistogram(info.FullMethod).Histogram.Start().Stop()
+		receiveMessage(info.FullMethod)
 		wrapper := &recvWrapper{stream}
-		reqMetrics.handleMessage()
+		handleMessage(info.FullMethod)
 		err := handler(srv, wrapper)
 		if err != nil {
-			reqMetrics.okMessage()
+			errorMessage(info.FullMethod)
 		} else {
-			reqMetrics.errorMessage()
+			okMessage(info.FullMethod)
 		}
 		return err
 	}

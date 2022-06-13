@@ -21,6 +21,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/metrics"
 	v1 "github.com/tigrisdata/tigris/server/services/v1"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
@@ -51,6 +52,8 @@ func (m *Muxer) RegisterServices(kvStore kv.KeyValueStore, searchStore search.St
 		for _, v := range m.servers {
 			if s, ok := v.(*GRPCServer); ok {
 				_ = r.RegisterGRPC(s.Server)
+				// Initialize the metrics for each GRPC service
+				metrics.InitRequestMetricsForServer(s.Server)
 			} else if s, ok := v.(*HTTPServer); ok {
 				_ = r.RegisterHTTP(s.Router, s.Inproc)
 			}
@@ -70,6 +73,5 @@ func (m *Muxer) Start(host string, port int16) error {
 	for _, s := range m.servers {
 		_ = s.Start(cm)
 	}
-
 	return cm.Serve()
 }
