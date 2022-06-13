@@ -25,6 +25,7 @@ import (
 )
 
 func TestNewValue(t *testing.T) {
+	double, _ := NewDoubleValue("1.01")
 	cases := []struct {
 		field     schema.FieldType
 		jsonValue []byte
@@ -44,7 +45,7 @@ func TestNewValue(t *testing.T) {
 		}, {
 			schema.DoubleType,
 			[]byte(`1.01`),
-			NewDoubleValue(1.01),
+			double,
 			nil,
 		}, {
 			schema.StringType,
@@ -154,4 +155,27 @@ func TestValue(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 1, r)
 	})
+}
+
+func TestFloatingPoint(t *testing.T) {
+	v1, err := NewDoubleValue(`9999999.1234567`)
+	require.NoError(t, err)
+
+	v2, err := NewDoubleValue(`9999999.1234567`)
+	require.NoError(t, err)
+
+	r, _ := v1.CompareTo(v2)
+	require.Equal(t, 0, r)
+
+	v2, err = NewDoubleValue(`9999999.1234568`)
+	require.NoError(t, err)
+
+	r, _ = v1.CompareTo(v2)
+	require.Equal(t, -1, r)
+
+	v2, err = NewDoubleValue(`9999999.1234566`)
+	require.NoError(t, err)
+
+	r, _ = v1.CompareTo(v2)
+	require.Equal(t, 1, r)
 }

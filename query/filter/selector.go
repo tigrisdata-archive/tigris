@@ -49,13 +49,17 @@ func (s *Selector) MatchesDoc(doc *map[string]interface{}) bool {
 		return true
 	}
 
+	var val value.Value
 	switch s.Field.Type() {
 	case schema.StringType:
+		val = value.NewStringValue(v.(string))
+	case schema.DoubleType:
+		val = value.NewDoubleUsingFloat(v.(float64))
 	default:
 		return true
 	}
 
-	return s.Matcher.Matches(value.NewStringValue(v.(string)))
+	return s.Matcher.Matches(val)
 }
 
 // Matches returns true if the input doc matches this filter.
@@ -78,7 +82,14 @@ func (s *Selector) ToSearchFilter() string {
 	case LTE:
 		op = "%s:<=%v"
 	}
-	return fmt.Sprintf(op, s.Field.Name(), s.Matcher.GetValue().AsInterface())
+
+	v := s.Matcher.GetValue()
+	switch s.Field.Type() {
+	case schema.DoubleType:
+		// for double, we pass string in the filter to search backend
+		return fmt.Sprintf(op, s.Field.Name(), v.String())
+	}
+	return fmt.Sprintf(op, s.Field.Name(), v.AsInterface())
 }
 
 // String a helpful method for logging.

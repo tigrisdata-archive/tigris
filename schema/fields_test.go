@@ -65,7 +65,7 @@ func TestFieldBuilder_Build(t *testing.T) {
 			require.Equal(t, c.expError, err)
 		}
 	})
-	t.Run("test_supported properties", func(t *testing.T) {
+	t.Run("test supported properties", func(t *testing.T) {
 		cases := []struct {
 			propertySchema []byte
 			expError       error
@@ -95,5 +95,10 @@ func TestFieldBuilder_Build(t *testing.T) {
 				require.NoError(t, f.Validate(c.propertySchema))
 			}
 		}
+	})
+	t.Run("test reserved fields", func(t *testing.T) {
+		builder := &FieldBuilder{FieldName: "created_at", Type: "date-time"}
+		_, err := builder.Build()
+		require.Error(t, err)
 	})
 }
