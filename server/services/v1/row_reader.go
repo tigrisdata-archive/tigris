@@ -64,7 +64,8 @@ func (p *page) readRow(row *Row) bool {
 			continue
 		}
 
-		if p.err = UnpackSearchFields(document, p.collection); p.err != nil {
+		var searchKey string
+		if searchKey, p.err = UnpackSearchFields(document, p.collection); p.err != nil {
 			return false
 		}
 
@@ -79,8 +80,12 @@ func (p *page) readRow(row *Row) bool {
 			return false
 		}
 
-		row.Key = []byte((*document)[searchID].(string))
+		row.Key = []byte(searchKey)
 		row.Data = &internal.TableData{RawData: data}
+
+		// unpack and set internal timestamp, or other metadata
+		UnpackAndSetMD(document, row.Data)
+
 		return true
 	}
 

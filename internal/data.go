@@ -42,6 +42,16 @@ const (
 	JsonEncoding = iota + 1
 )
 
+// CreateNewTimestamp is a method used to construct timestamp from unixNano. In search backend we store internal
+// timestamps as unixNano.
+func CreateNewTimestamp(nano int64) *Timestamp {
+	ts := time.Unix(0, nano).UTC()
+	return &Timestamp{
+		Seconds:     ts.Unix(),
+		Nanoseconds: int64(ts.Nanosecond()),
+	}
+}
+
 func NewTimestamp() *Timestamp {
 	ts := time.Now().UTC()
 	return &Timestamp{
@@ -50,16 +60,21 @@ func NewTimestamp() *Timestamp {
 	}
 }
 
-func (ts *Timestamp) ToRFC3339() string {
-	gotime := time.Unix(ts.Seconds, ts.Nanoseconds).UTC()
-	return gotime.Format(time.RFC3339)
+func (x *Timestamp) ToRFC3339() string {
+	goTime := time.Unix(x.Seconds, x.Nanoseconds).UTC()
+	return goTime.Format(time.RFC3339)
 }
 
-func (ts *Timestamp) GetProtoTS() *timestamppb.Timestamp {
+func (x *Timestamp) GetProtoTS() *timestamppb.Timestamp {
 	return &timestamppb.Timestamp{
-		Seconds: ts.Seconds,
-		Nanos:   int32(ts.Nanoseconds),
+		Seconds: x.Seconds,
+		Nanos:   int32(x.Nanoseconds),
 	}
+}
+
+// UnixNano returns t as a Unix time, the number of nanoseconds elapsed since January 1, 1970 UTC
+func (x *Timestamp) UnixNano() int64 {
+	return x.Seconds*int64(time.Second) + x.Nanoseconds
 }
 
 // NewTableData returns a table data type by setting the ts to the current value.

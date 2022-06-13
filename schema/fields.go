@@ -239,6 +239,10 @@ func (f *FieldBuilder) Validate(v []byte) error {
 }
 
 func (f *FieldBuilder) Build() (*Field, error) {
+	if IsReservedField(f.FieldName) {
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "following reserved fields are not allowed %q", ReservedFields)
+	}
+
 	fieldType := ToFieldType(f.Type, f.Encoding, f.Format)
 	if fieldType == UnknownType {
 		if len(f.Encoding) > 0 {
