@@ -64,6 +64,8 @@ A sample user JSON schema looks like below,
 
 const (
 	PrimaryKeyIndexName = "pkey"
+	AutoPrimaryKeyF     = "_id"
+	PrimaryKeySchemaK   = "primary_key"
 )
 
 var (
@@ -93,8 +95,13 @@ type Factory struct {
 
 // Build is used to deserialize the user json schema into a schema factory.
 func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
+	var err error
+	if reqSchema, err = addPrimaryKeyIfMissing(reqSchema); err != nil {
+		return nil, err
+	}
+
 	var schema = &JSONSchema{}
-	if err := jsoniter.Unmarshal(reqSchema, schema); err != nil {
+	if err = jsoniter.Unmarshal(reqSchema, schema); err != nil {
 		return nil, api.Errorf(api.Code_INTERNAL, errors.Wrap(err, "unmarshalling failed").Error())
 	}
 	if collection != schema.Name {
@@ -103,9 +110,11 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 	if len(schema.Properties) == 0 {
 		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "missing properties field in schema")
 	}
+
 	if len(schema.PrimaryKeys) == 0 {
 		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "missing primary key field in schema")
 	}
+
 	var primaryKeysSet = set.New(schema.PrimaryKeys...)
 	fields, err := deserializeProperties(schema.Properties, primaryKeysSet)
 	if err != nil {
@@ -138,6 +147,27 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 		CollectionName: collection,
 		Schema:         reqSchema,
 	}, nil
+}
+
+func addPrimaryKeyIfMissing(reqSchema jsoniter.RawMessage) (jsoniter.RawMessage, error) {
+	var schema map[string]interface{}
+	if err := jsoniter.Unmarshal(reqSchema, &schema); err != nil {
+		return nil, err
+	}
+
+	if _, ok := schema[PrimaryKeySchemaK]; ok {
+		return reqSchema, nil
+	}
+
+	schema[PrimaryKeySchemaK] = []string{AutoPrimaryKeyF}
+	if p, ok := schema["properties"]; ok {
+		p.(map[string]interface{})[AutoPrimaryKeyF] = map[string]string{
+			"type":   jsonSpecString,
+			"format": jsonSpecFormatUUID,
+		}
+	}
+
+	return jsoniter.Marshal(schema)
 }
 
 func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet set.HashSet) ([]*Field, error) {
