@@ -18,28 +18,31 @@ import (
 	"testing"
 
 	"github.com/tigrisdata/tigris/server/metrics"
+	"google.golang.org/grpc"
 )
 
-func TestGRPCMetrics(t *testing.T) {
+func TestGrpcMetrics(t *testing.T) {
 	metrics.InitializeMetrics()
-	callData := newGrpcReqMetrics("/tigrisdata.v1.Tigris/TestMethod", "unary")
+	svcName := "tigrisdata.v1.Tigris"
+	methodName := "TestMethod"
+	methodInfo := grpc.MethodInfo{
+		Name:           methodName,
+		IsServerStream: false,
+		IsClientStream: false,
+	}
+	fullMethodName := "/tigrisdata.v1.Tigris/TestMethod"
 
-	t.Run("Increase test_counter", func(t *testing.T) {
-		testCounter := callData.getGrpcCounter("test_counter")
-		callData.increaseGrpcCounter(testCounter, 1)
-	})
+	metrics.InitServerRequestCounters(svcName, methodInfo)
+	metrics.InitServerRequestHistograms(svcName, methodInfo)
 
-	t.Run("Test message counters", func(t *testing.T) {
-		callData.receiveMessage()
-		callData.handleMessage()
-		callData.errorMessage()
-		callData.okMessage()
+	t.Run("Test counters", func(t *testing.T) {
+		receiveMessage(fullMethodName)
+		handleMessage(fullMethodName)
+		errorMessage(fullMethodName)
+		okMessage(fullMethodName)
 	})
 
 	t.Run("Test histogram", func(t *testing.T) {
-		testHistogram := callData.getTimeHistogram()
-		stopWatch := testHistogram.Start()
-		stopWatch.Stop()
+		getTimeHistogram(fullMethodName)
 	})
-
 }
