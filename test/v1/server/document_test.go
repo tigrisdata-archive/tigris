@@ -1328,6 +1328,30 @@ func (s *DocumentSuite) TestRead_EntireCollection() {
 		inputDocument)
 }
 
+func TestTransaction_BadID(t *testing.T) {
+	dbName := "db_" + t.Name()
+	collName := "test_collection"
+	createTestCollection(t, dbName, collName, testCreateSchema)
+
+	e := expect(t)
+	r := e.POST(fmt.Sprintf("/api/v1/databases/%s/transactions/begin", dbName)).
+		Expect().Status(http.StatusOK).
+		Body().Raw()
+
+	res := struct {
+		TxCtx api.TransactionCtx `json:"tx_ctx"`
+	}{}
+
+	err := json.Unmarshal([]byte(r), &res)
+	require.NoError(t, err)
+
+	resp := e.POST(getDocumentURL(dbName, collName, "insert")).
+		WithJSON(Map{"documents": []Doc{{}}}).
+		WithHeader("Tigris-Tx-Id", "some id").
+		WithHeader("Tigris-Tx-Origin", res.TxCtx.Origin).Expect()
+	testError(resp, http.StatusInternalServerError, api.Code_INTERNAL, "session is gone")
+}
+
 func insertDocuments(t *testing.T, db string, collection string, documents []Doc, mustNotExist bool) *httpexpect.Response {
 	e := expect(t)
 

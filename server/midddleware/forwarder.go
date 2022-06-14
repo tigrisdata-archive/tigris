@@ -9,6 +9,7 @@ import (
 	"github.com/tigrisdata/tigris/server/types"
 	"github.com/tigrisdata/tigris/util"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -33,7 +34,7 @@ func getClient(ctx context.Context, origin string) (*grpc.ClientConn, error) {
 		grpc.FailOnNonTempDialError(true),
 		grpc.WithReturnConnectionError(),
 		grpc.WithUserAgent(UserAgent),
-		grpc.WithBlock(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
 
 	conn, err := grpc.DialContext(ctx, origin, opts...)

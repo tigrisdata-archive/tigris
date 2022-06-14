@@ -245,6 +245,13 @@ func createCollection(t *testing.T, database string, collection string, schema m
 		Expect()
 }
 
+func createTestCollection(t *testing.T, database string, collection string, schema map[string]interface{}) {
+	dropDatabase(t, database)
+	createDatabase(t, database)
+	dropCollection(t, database, collection)
+	createCollection(t, database, collection, schema).Status(http.StatusOK)
+}
+
 func describeCollection(t *testing.T, database string, collection string, schema map[string]interface{}) *httpexpect.Response {
 	e := expect(t)
 	return e.POST(getCollectionURL(database, collection, "describe")).

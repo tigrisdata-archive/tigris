@@ -24,7 +24,7 @@ import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/cdc"
 	"github.com/tigrisdata/tigris/server/metadata"
-	"github.com/tigrisdata/tigris/server/midddleware"
+	middleware "github.com/tigrisdata/tigris/server/midddleware"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
@@ -127,19 +127,20 @@ func (sessMgr *SessionManager) Remove(id string) {
 // needs to run without calling Commit/Rollback.
 func (sessMgr *SessionManager) Execute(ctx context.Context, req *ReqOptions) (*Response, error) {
 	if req.txCtx != nil {
-		id := req.txCtx.Id
-		session := sessMgr.tracker.get(id)
+		session := sessMgr.tracker.get(req.txCtx.Id)
+		if session == nil {
+			return nil, transaction.ErrSessionIsGone
+		}
 		resp, ctx, err := session.Run(req.queryRunner)
 		session.ctx = ctx
 		return resp, err
-	} else {
-		resp, err := sessMgr.executeWithRetry(ctx, req)
-		if err == kv.ErrConflictingTransaction {
-			return nil, api.Errorf(api.Code_ABORTED, err.Error())
-		}
-
-		return resp, err
 	}
+
+	resp, err := sessMgr.executeWithRetry(ctx, req)
+	if err == kv.ErrConflictingTransaction {
+		return nil, api.Errorf(api.Code_ABORTED, err.Error())
+	}
+	return resp, err
 }
 
 func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, req *ReqOptions) (resp *Response, err error) {
