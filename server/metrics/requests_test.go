@@ -27,6 +27,8 @@ func TestGRPCMetrics(t *testing.T) {
 	unaryMethodName := "TestUnaryMethod"
 	streamingMethodName := "TestStreamingMethod"
 
+	fullMethod := "/tigrisdata.v1.Tigris/TestMethod"
+
 	unaryMethodInfo := grpc.MethodInfo{
 		Name:           unaryMethodName,
 		IsServerStream: false,
@@ -85,7 +87,7 @@ func TestGRPCMetrics(t *testing.T) {
 		InitServerRequestCounters(svcName, unaryMethodInfo)
 		InitServerRequestHistograms(svcName, unaryMethodInfo)
 
-		for _, counterName := range ServerRequestsCounterNames {
+		for _, counterName := range InitializedServerRequestsCounterNames {
 			GetServerRequestCounter(unaryEndPointMetadata.getFullMethod(), counterName)
 		}
 
@@ -98,12 +100,48 @@ func TestGRPCMetrics(t *testing.T) {
 		InitServerRequestCounters(svcName, streamingMethodInfo)
 		InitServerRequestHistograms(svcName, streamingMethodInfo)
 
-		for _, counterName := range ServerRequestsCounterNames {
+		for _, counterName := range InitializedServerRequestsCounterNames {
 			GetServerRequestCounter(streamingEndpointMetadata.getFullMethod(), counterName)
 		}
 
 		for _, histogramName := range ServerRequestsHistogramNames {
 			GetServerRequestHistogram(streamingEndpointMetadata.getFullMethod(), histogramName)
 		}
+	})
+
+	t.Run("Test specific error tags", func(t *testing.T) {
+		error_tags := unaryEndPointMetadata.getSpecificErrorTags("test_source", "test_error")
+		assert.Equal(t, error_tags["source"], "test_source")
+		assert.Equal(t, error_tags["code"], "test_error")
+	})
+
+	t.Run("Test endpoint metadata from full method", func(t *testing.T) {
+		unaryFromFullMethod := getGrpcEndPointMetadataFromFullMethod(fullMethod, "unary")
+		assert.Equal(t, unaryFromFullMethod.grpcServiceName, svcName)
+		assert.Equal(t, unaryFromFullMethod.grpcMethodName, "TestMethod")
+		assert.Equal(t, unaryFromFullMethod.grpcTypeName, "unary")
+
+		streamingFromFullMethod := getGrpcEndPointMetadataFromFullMethod(fullMethod, "stream")
+		assert.Equal(t, streamingFromFullMethod.grpcServiceName, svcName)
+		assert.Equal(t, streamingFromFullMethod.grpcMethodName, "TestMethod")
+		assert.Equal(t, streamingFromFullMethod.grpcTypeName, "stream")
+	})
+
+	t.Run("Test specific error counter", func(t *testing.T) {
+		errorCounterUnary := GetSpecificErrorCounter(fullMethod, "unary", "test_err_source", "test_err_code")
+		assert.Equal(t, errorCounterUnary.Name, ServerRequestsSpecificErrorTotal)
+		assert.Equal(t, errorCounterUnary.Tags["method"], "TestMethod")
+		assert.Equal(t, errorCounterUnary.Tags["service"], svcName)
+		assert.Equal(t, errorCounterUnary.Tags["type"], "unary")
+		assert.Equal(t, errorCounterUnary.Tags["source"], "test_err_source")
+		assert.Equal(t, errorCounterUnary.Tags["code"], "test_err_code")
+
+		errorCounterStreaming := GetSpecificErrorCounter(fullMethod, "stream", "test_err_source", "test_err_code")
+		assert.Equal(t, errorCounterStreaming.Name, ServerRequestsSpecificErrorTotal)
+		assert.Equal(t, errorCounterStreaming.Tags["method"], "TestMethod")
+		assert.Equal(t, errorCounterStreaming.Tags["service"], svcName)
+		assert.Equal(t, errorCounterStreaming.Tags["type"], "stream")
+		assert.Equal(t, errorCounterStreaming.Tags["source"], "test_err_source")
+		assert.Equal(t, errorCounterStreaming.Tags["code"], "test_err_code")
 	})
 }

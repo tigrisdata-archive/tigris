@@ -16,6 +16,7 @@ package metrics
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/uber-go/tally"
 	"google.golang.org/grpc"
@@ -24,16 +25,17 @@ import (
 const (
 	ServerRequestsReceivedTotal      = "server_requests_received_total"
 	ServerRequestsHandledTotal       = "server_requests_handled_total"
-	ServerRequestsErrorTotal         = "server_requests_error_total"
+	ServerRequestsUnknownErrorTotal  = "server_requests_unknown_error_total"
+	ServerRequestsSpecificErrorTotal = "server_requests_specific_error_total"
 	ServerRequestsOkTotal            = "server_requests_ok_total"
 	ServerRequestsHandlingTimeBucket = "server_requests_handling_time_bucket"
 )
 
 var (
-	ServerRequestsCounterNames = []string{
+	InitializedServerRequestsCounterNames = []string{
 		ServerRequestsReceivedTotal,
 		ServerRequestsHandledTotal,
-		ServerRequestsErrorTotal,
+		ServerRequestsUnknownErrorTotal,
 		ServerRequestsOkTotal,
 	}
 	ServerRequestsHistogramNames = []string{
@@ -47,6 +49,18 @@ type ServerEndpointMetadata struct {
 	grpcTypeName    string
 }
 
+type ServerRequestCounter struct {
+	Name    string
+	Tags    map[string]string
+	Counter tally.Counter
+}
+
+type ServerRequestHistogram struct {
+	Name      string
+	Tags      map[string]string
+	Histogram tally.Histogram
+}
+
 func newServerEndpointMetadata(grpcServiceName string, grpcMethodName string, grpcTypeName string) ServerEndpointMetadata {
 	return ServerEndpointMetadata{grpcServiceName: grpcServiceName, grpcMethodName: grpcMethodName, grpcTypeName: grpcTypeName}
 }
@@ -56,6 +70,16 @@ func (g *ServerEndpointMetadata) getTags() map[string]string {
 		"method":  g.grpcMethodName,
 		"service": g.grpcServiceName,
 		"type":    g.grpcTypeName,
+	}
+}
+
+func (g *ServerEndpointMetadata) getSpecificErrorTags(source string, code string) map[string]string {
+	return map[string]string{
+		"method":  g.grpcMethodName,
+		"service": g.grpcServiceName,
+		"type":    g.grpcTypeName,
+		"source":  source,
+		"code":    code,
 	}
 }
 
@@ -71,7 +95,39 @@ func getGrpcEndPointMetadata(svcName string, methodInfo grpc.MethodInfo) ServerE
 		endpointMetadata = newServerEndpointMetadata(svcName, methodInfo.Name, "unary")
 	}
 	return endpointMetadata
+}
 
+func getGrpcEndPointMetadataFromFullMethod(fullMethod string, methodType string) ServerEndpointMetadata {
+	var methodInfo grpc.MethodInfo
+	methodList := strings.Split(fullMethod, "/")
+	svcName := methodList[1]
+	methodName := methodList[2]
+	if methodType == "unary" {
+		methodInfo = grpc.MethodInfo{
+			Name:           methodName,
+			IsClientStream: false,
+			IsServerStream: false,
+		}
+	}
+	if methodType == "stream" {
+		methodInfo = grpc.MethodInfo{
+			Name:           methodName,
+			IsClientStream: false,
+			IsServerStream: true,
+		}
+	}
+	return getGrpcEndPointMetadata(svcName, methodInfo)
+}
+
+func GetSpecificErrorCounter(fullMethod string, methodType string, errSource string, errCode string) *ServerRequestCounter {
+	endpointMetadata := getGrpcEndPointMetadataFromFullMethod(fullMethod, methodType)
+	tags := endpointMetadata.getSpecificErrorTags(errSource, errCode)
+	counter := ServerRequestCounter{
+		Name:    ServerRequestsSpecificErrorTotal,
+		Tags:    tags,
+		Counter: Root.Tagged(tags).Counter(ServerRequestsSpecificErrorTotal),
+	}
+	return &counter
 }
 
 func InitServerRequestCounters(svcName string, methodInfo grpc.MethodInfo) {
@@ -79,7 +135,7 @@ func InitServerRequestCounters(svcName string, methodInfo grpc.MethodInfo) {
 	fullMethodName := endpointMetadata.getFullMethod()
 	tags := endpointMetadata.getTags()
 
-	for _, counterName := range ServerRequestsCounterNames {
+	for _, counterName := range InitializedServerRequestsCounterNames {
 		counter := ServerRequestCounter{
 			Name:    counterName,
 			Tags:    tags,
@@ -91,7 +147,6 @@ func InitServerRequestCounters(svcName string, methodInfo grpc.MethodInfo) {
 		}
 		ServerRequestCounters[fullMethodName][counterName] = &counter
 	}
-
 }
 
 func InitServerRequestHistograms(svcName string, methodInfo grpc.MethodInfo) {
