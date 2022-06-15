@@ -23,18 +23,6 @@ import (
 	promreporter "github.com/uber-go/tally/prometheus"
 )
 
-type ServerRequestCounter struct {
-	Name    string
-	Tags    map[string]string
-	Counter tally.Counter
-}
-
-type ServerRequestHistogram struct {
-	Name      string
-	Tags      map[string]string
-	Histogram tally.Histogram
-}
-
 var (
 	Root     tally.Scope
 	Reporter promreporter.Reporter
@@ -42,7 +30,8 @@ var (
 	// method name and counter name
 	ServerRequestCounters map[string]map[string]*ServerRequestCounter
 	// method name and histogram name
-	ServerRequestHistograms map[string]map[string]*ServerRequestHistogram
+	ServerRequestHistograms        map[string]map[string]*ServerRequestHistogram
+	ServerRequestErrorCodeCounters map[string]map[string]map[string]*ServerRequestCounter
 )
 
 func InitializeMetrics() io.Closer {
@@ -55,7 +44,14 @@ func InitializeMetrics() io.Closer {
 		CachedReporter: Reporter,
 		Separator:      promreporter.DefaultSeparator,
 	}, 1*time.Second)
+
+	// Request level metrics (HTTP and GRPC)
+	// These are populated at the time of initializing the GRPC servers
 	ServerRequestCounters = make(map[string]map[string]*ServerRequestCounter)
 	ServerRequestHistograms = make(map[string]map[string]*ServerRequestHistogram)
+	// Error code counters are created once and on the fly, then stored here
+	// By full method name, error type and code
+	ServerRequestErrorCodeCounters = make(map[string]map[string]map[string]*ServerRequestCounter)
+
 	return closer
 }

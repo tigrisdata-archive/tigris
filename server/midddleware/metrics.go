@@ -16,7 +16,11 @@ package middleware
 
 import (
 	"context"
+	"errors"
+	"strconv"
 
+	"github.com/apple/foundationdb/bindings/go/src/fdb"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"google.golang.org/grpc"
 )
@@ -30,7 +34,24 @@ func handleMessage(fullMethod string) {
 }
 
 func errorMessage(fullMethod string) {
-	metrics.GetServerRequestCounter(fullMethod, metrics.ServerRequestsErrorTotal).Counter.Inc(1)
+	metrics.GetServerRequestCounter(fullMethod, metrics.ServerRequestsUnknownErrorTotal).Counter.Inc(1)
+}
+
+func specificErrorMessage(fullMethod string, methodType, errSource string, errCode string) {
+	var counter *metrics.ServerRequestCounter
+	if _, ok := metrics.ServerRequestErrorCodeCounters[fullMethod]; !ok {
+		metrics.ServerRequestErrorCodeCounters[fullMethod] = make(map[string]map[string]*metrics.ServerRequestCounter)
+	}
+	if _, ok := metrics.ServerRequestErrorCodeCounters[fullMethod][errSource]; !ok {
+		metrics.ServerRequestErrorCodeCounters[fullMethod][errSource] = make(map[string]*metrics.ServerRequestCounter)
+	}
+	if _, ok := metrics.ServerRequestErrorCodeCounters[fullMethod][errSource][errCode]; !ok {
+		counter = metrics.GetSpecificErrorCounter(fullMethod, methodType, errSource, errCode)
+		metrics.ServerRequestErrorCodeCounters[fullMethod][errSource][errCode] = counter
+	} else {
+		counter = metrics.ServerRequestErrorCodeCounters[fullMethod][errSource][errCode]
+	}
+	counter.Counter.Inc(1)
 }
 
 func okMessage(fullMethod string) {
@@ -48,7 +69,15 @@ func UnaryMetricsServerInterceptor() func(ctx context.Context, req interface{}, 
 		resp, err := handler(ctx, req)
 		handleMessage(info.FullMethod)
 		if err != nil {
-			errorMessage(info.FullMethod)
+			var terr *api.TigrisError
+			var ferr fdb.Error
+			if errors.As(err, &terr) {
+				specificErrorMessage(info.FullMethod, "unary", "tigris", terr.Code.String())
+			} else if errors.As(err, &ferr) {
+				specificErrorMessage(info.FullMethod, "unary", "fdb", strconv.Itoa(ferr.Code))
+			} else {
+				errorMessage(info.FullMethod)
+			}
 		} else {
 			okMessage(info.FullMethod)
 		}
@@ -63,7 +92,15 @@ func StreamMetricsServerInterceptor() grpc.StreamServerInterceptor {
 		handleMessage(info.FullMethod)
 		err := handler(srv, wrapper)
 		if err != nil {
-			errorMessage(info.FullMethod)
+			var terr *api.TigrisError
+			var ferr fdb.Error
+			if errors.As(err, &terr) {
+				specificErrorMessage(info.FullMethod, "stream", "tigris", terr.Code.String())
+			} else if errors.As(err, &ferr) {
+				specificErrorMessage(info.FullMethod, "stream", "fdb", strconv.Itoa(ferr.Code))
+			} else {
+				errorMessage(info.FullMethod)
+			}
 		} else {
 			okMessage(info.FullMethod)
 		}
