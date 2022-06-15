@@ -19,7 +19,7 @@ metadata:
     app.kubernetes.io/name: tigris-server
     app.kubernetes.io/part-of: tigris
     app.kubernetes.io/component: search
-  name: tigris-server-search
+  name: tigris-search
 spec:
   type: NodePort
   ports:
