@@ -19,7 +19,7 @@ metadata:
     app.kubernetes.io/name: tigris-server
     app.kubernetes.io/part-of: tigris
     app.kubernetes.io/component: server
-  name: tigris-server
+  name: tigris-http
 spec:
   type: NodePort
   ports:

@@ -21,7 +21,7 @@ metadata:
     app.kubernetes.io/component: server-grpc
   annotations:
     alb.ingress.kubernetes.io/backend-protocol-version: GRPC
-  name: tigris-server-grpc
+  name: tigris-grpc
 spec:
   type: NodePort
   ports:
