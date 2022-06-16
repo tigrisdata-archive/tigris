@@ -3,14 +3,12 @@ module github.com/tigrisdata/tigris
 go 1.18
 
 require (
-	github.com/apple/foundationdb/bindings/go v0.0.0-20211207225159-47b9a81d1c10
+	github.com/apple/foundationdb/bindings/go v0.0.0-20220521054011-a88e049b28d8
 	github.com/auth0/go-jwt-middleware/v2 v2.0.1
 	github.com/buger/jsonparser v1.1.1
 	github.com/davecgh/go-spew v1.1.1
-	github.com/deepmap/oapi-codegen v1.11.0
 	github.com/fsnotify/fsnotify v1.5.4
 	github.com/fullstorydev/grpchan v1.1.1
-	github.com/getkin/kin-openapi v0.97.0
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/golang/protobuf v1.5.2
 	github.com/google/gnostic v0.6.9
@@ -30,12 +28,12 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.12.0
 	github.com/stretchr/testify v1.7.2
-	github.com/tigrisdata/tigris-client-go v1.0.0-alpha.17
+	github.com/tigrisdata/tigris-client-go v1.0.0-alpha.18
 	github.com/typesense/typesense-go v0.4.0
 	github.com/uber-go/tally v3.5.0+incompatible
 	github.com/ugorji/go/codec v1.2.7
 	github.com/valyala/bytebufferpool v1.0.0
-	google.golang.org/genproto v0.0.0-20220608133413-ed9918b62aac
+	google.golang.org/genproto v0.0.0-20220615141314-f1464d18c36b
 	google.golang.org/grpc v1.47.0
 	google.golang.org/protobuf v1.28.0
 	gopkg.in/gavv/httpexpect.v1 v1.1.3
@@ -47,9 +45,11 @@ require (
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/andybalholm/brotli v1.0.4 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/deepmap/oapi-codegen v1.11.0 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424 // indirect
 	github.com/gertd/go-pluralize v0.2.1 // indirect
+	github.com/getkin/kin-openapi v0.97.0 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/swag v0.21.1 // indirect
 	github.com/google/go-querystring v1.0.0 // indirect
@@ -96,9 +96,9 @@ require (
 	github.com/yudai/pp v2.0.1+incompatible // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e // indirect
-	golang.org/x/net v0.0.0-20220607020251-c690dde0001d // indirect
+	golang.org/x/net v0.0.0-20220615171555-694bf12d69de // indirect
 	golang.org/x/oauth2 v0.0.0-20220608161450-d0670ef3b1eb // indirect
-	golang.org/x/sys v0.0.0-20220610221304-9f5ed59c137d // indirect
+	golang.org/x/sys v0.0.0-20220615213510-4f61da869c0c // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/xerrors v0.0.0-20220609144429-65e65417b02f // indirect
 	google.golang.org/appengine v1.6.7 // indirect

@@ -37,7 +37,7 @@ func NewStore(config *config.SearchConfig) (Store, error) {
 	client := typesense.NewClient(
 		typesense.WithServer(fmt.Sprintf("http://%s:%d", config.Host, config.Port)),
 		typesense.WithAPIKey(config.AuthKey))
-	log.Info().Msg("initialized search store")
+	log.Info().Str("host", config.Host).Int16("port", config.Port).Msg("initialized search store")
 	return &storeImpl{
 		client: client,
 	}, nil

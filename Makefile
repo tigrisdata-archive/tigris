@@ -62,6 +62,10 @@ local_test: generate
 run: clean generate
 	$(DOCKER_COMPOSE) up --build --detach tigris_server
 
+local_run: server
+	$(DOCKER_COMPOSE) up --no-build --detach tigris_search tigris_fdb
+	TIGRIS_ENVIRONMENT=dev ./server/service
+
 # Runs tigris server and foundationdb, plus additional tools for it like:
 # - prometheus and grafana for monitoring
 run_full: clean generate

@@ -61,24 +61,27 @@ make run
 This would bring dependencies and server up in the docker containers with all
 your changes.
 
-### Running tests in docker containers
+Alternatively, you can run `make run_full` to bring up monitoring tools as well.
+  * Graphana: http://localhost:3000
+  * Prometheus: http://localhost:9090
+
+### Running tests
+
+#### Run in the docker container
 
 Tests are executed using `make test`. This runs both unit and integration
-tests. The FoundationDB container auto-generates the cluster file which is
-shared between containers using a docker volume.
+tests in the docker containers.
 
-The docker volume `fdbdata` is mounted at:
+#### Run in the IDE
 
-* /var/fdb/fdb.cluster in tigris_fdb container
-* /etc/foundationdb/fdb.cluster in tigris_test and tigris_server containers,
-  which is the default location where the client will search for the cluster
-  file
+Run `make run` to bring the server up in the docker container.
+Now you can run individual tests in the IDE of your choice.
+Entire test suite can be run using `make local_test`.
 
-You can run the test on your local machine as follows:
+#### Debugging the server in the IDE
 
-```shell
-make osx_test
-```
+Run `make local_run` to start Tigris server on the host.
+Now you can attach to the process and debug from the IDE.
 
 # License
 

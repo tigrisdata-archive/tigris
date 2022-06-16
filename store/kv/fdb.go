@@ -31,6 +31,8 @@ import (
 
 const (
 	maxTxSizeBytes = 10000000
+
+	fdbAPIVersion = 710
 )
 
 // fdbkv is an implementation of kv on top of FoundationDB
@@ -71,8 +73,8 @@ func newFoundationDB(cfg *config.FoundationDBConfig) (*fdbkv, error) {
 }
 
 func (d *fdbkv) init(cfg *config.FoundationDBConfig) (err error) {
-	log.Err(err).Int("api_version", 630).Str("cluster_file", cfg.ClusterFile).Msg("initializing foundation db")
-	fdb.MustAPIVersion(630)
+	log.Info().Int("api_version", fdbAPIVersion).Str("cluster_file", cfg.ClusterFile).Msg("initializing foundation db")
+	fdb.MustAPIVersion(fdbAPIVersion)
 	d.db, err = fdb.OpenDatabase(cfg.ClusterFile)
 	log.Err(err).Msg("initialized foundation db")
 	return

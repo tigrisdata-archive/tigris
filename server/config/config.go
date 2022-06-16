@@ -69,6 +69,8 @@ func LoadConfig(name string, config interface{}) {
 		name += "." + GetEnvironment()
 	}
 
+	log.Info().Msgf("TIGRIS_ENVIRONMENT=%s", GetEnvironment())
+
 	viper.SetConfigName(name)
 	viper.SetConfigType("yaml")
 
