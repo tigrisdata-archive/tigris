@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/typesense/typesense-go/typesense"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
@@ -36,6 +37,7 @@ func NewStore(config *config.SearchConfig) (Store, error) {
 	client := typesense.NewClient(
 		typesense.WithServer(fmt.Sprintf("http://%s:%d", config.Host, config.Port)),
 		typesense.WithAPIKey(config.AuthKey))
+	log.Info().Msg("initialized search store")
 	return &storeImpl{
 		client: client,
 	}, nil
