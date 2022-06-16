@@ -22,87 +22,88 @@ import (
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/uber-go/tally"
 	"google.golang.org/grpc"
 )
 
-func receiveMessage(fullMethod string) {
-	metrics.GetServerRequestCounter(fullMethod, metrics.ServerRequestsReceivedTotal).Counter.Inc(1)
+func increaseCounter(fullMethod string, methodType string, counterName string, value int64) {
+	tags := metrics.GetPreinitializedTagsFromFullMethod(fullMethod, methodType)
+	metrics.Requests.Tagged(tags).Counter(counterName).Inc(value)
 }
 
-func handleMessage(fullMethod string) {
-	metrics.GetServerRequestCounter(fullMethod, metrics.ServerRequestsHandledTotal).Counter.Inc(1)
+func countReceivedMessage(fullMethod string, methodType string) {
+	// Tags are pre-created when initializing the metrics
+	increaseCounter(fullMethod, methodType, "received", 1)
 }
 
-func errorMessage(fullMethod string) {
-	metrics.GetServerRequestCounter(fullMethod, metrics.ServerRequestsUnknownErrorTotal).Counter.Inc(1)
+func countHandledMessage(fullMethod string, methodType string) {
+	// Tags are pre-created when initializing the metrics
+	increaseCounter(fullMethod, methodType, "handled", 1)
 }
 
-func specificErrorMessage(fullMethod string, methodType, errSource string, errCode string) {
-	var counter *metrics.ServerRequestCounter
-	if _, ok := metrics.ServerRequestErrorCodeCounters[fullMethod]; !ok {
-		metrics.ServerRequestErrorCodeCounters[fullMethod] = make(map[string]map[string]*metrics.ServerRequestCounter)
-	}
-	if _, ok := metrics.ServerRequestErrorCodeCounters[fullMethod][errSource]; !ok {
-		metrics.ServerRequestErrorCodeCounters[fullMethod][errSource] = make(map[string]*metrics.ServerRequestCounter)
-	}
-	if _, ok := metrics.ServerRequestErrorCodeCounters[fullMethod][errSource][errCode]; !ok {
-		counter = metrics.GetSpecificErrorCounter(fullMethod, methodType, errSource, errCode)
-		metrics.ServerRequestErrorCodeCounters[fullMethod][errSource][errCode] = counter
-	} else {
-		counter = metrics.ServerRequestErrorCodeCounters[fullMethod][errSource][errCode]
-	}
-	counter.Counter.Inc(1)
+func countOkMessage(fullMethod string, methodType string) {
+	// Tags are pre-created when initializing the metrics
+	increaseCounter(fullMethod, methodType, "ok", 1)
 }
 
-func okMessage(fullMethod string) {
-	metrics.GetServerRequestCounter(fullMethod, metrics.ServerRequestsOkTotal).Counter.Inc(1)
+func countUnknownErrorMessage(fullMethod string, methodType string) {
+	// tigris_server_requests_error is s scope, so different scope needs to be used here
+	tags := metrics.GetPreinitializedTagsFromFullMethod(fullMethod, methodType)
+	metrics.ErrorRequests.Tagged(tags).Counter("unknown").Inc(1)
 }
 
-func getTimeHistogram(fullMethod string) *metrics.ServerRequestHistogram {
-	return metrics.GetServerRequestHistogram(fullMethod, metrics.ServerRequestsHandlingTimeBucket)
+func countSpecificErrorMessage(fullMethod string, methodType, errSource string, errCode string) {
+	// For specific errors the tags are not pre-initialized because it has the error code in it
+	metaData := metrics.GetGrpcEndPointMetadataFromFullMethod(fullMethod, methodType)
+	tags := metaData.GetSpecificErrorTags(errSource, errCode)
+	metrics.ErrorRequests.Tagged(tags).Counter("specific").Inc(1)
 }
 
 func UnaryMetricsServerInterceptor() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		defer getTimeHistogram(info.FullMethod).Histogram.Start().Stop()
-		receiveMessage(info.FullMethod)
+		methodType := "unary"
+		tags := metrics.GetPreinitializedTagsFromFullMethod(info.FullMethod, methodType)
+		defer metrics.RequestsRespTime.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
+		countReceivedMessage(info.FullMethod, methodType)
 		resp, err := handler(ctx, req)
-		handleMessage(info.FullMethod)
+		countHandledMessage(info.FullMethod, methodType)
 		if err != nil {
 			var terr *api.TigrisError
 			var ferr fdb.Error
 			if errors.As(err, &terr) {
-				specificErrorMessage(info.FullMethod, "unary", "tigris", terr.Code.String())
+				countSpecificErrorMessage(info.FullMethod, methodType, "tigris_server", terr.Code.String())
 			} else if errors.As(err, &ferr) {
-				specificErrorMessage(info.FullMethod, "unary", "fdb", strconv.Itoa(ferr.Code))
+				countSpecificErrorMessage(info.FullMethod, methodType, "fdb_server", strconv.Itoa(ferr.Code))
 			} else {
-				errorMessage(info.FullMethod)
+				countUnknownErrorMessage(info.FullMethod, methodType)
 			}
 		} else {
-			okMessage(info.FullMethod)
+			countOkMessage(info.FullMethod, methodType)
 		}
 		return resp, err
 	}
 }
 func StreamMetricsServerInterceptor() grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		defer getTimeHistogram(info.FullMethod).Histogram.Start().Stop()
-		receiveMessage(info.FullMethod)
+		methodType := "stream"
+		tags := metrics.GetPreinitializedTagsFromFullMethod(info.FullMethod, methodType)
+		defer metrics.RequestsRespTime.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
+		countReceivedMessage(info.FullMethod, methodType)
 		wrapper := &recvWrapper{stream}
-		handleMessage(info.FullMethod)
+		countHandledMessage(info.FullMethod, methodType)
 		err := handler(srv, wrapper)
 		if err != nil {
 			var terr *api.TigrisError
 			var ferr fdb.Error
 			if errors.As(err, &terr) {
-				specificErrorMessage(info.FullMethod, "stream", "tigris", terr.Code.String())
+				countSpecificErrorMessage(info.FullMethod, methodType, "tigris_server", terr.Code.String())
 			} else if errors.As(err, &ferr) {
-				specificErrorMessage(info.FullMethod, "stream", "fdb", strconv.Itoa(ferr.Code))
+				countSpecificErrorMessage(info.FullMethod, methodType, "fdb_server", strconv.Itoa(ferr.Code))
 			} else {
-				errorMessage(info.FullMethod)
+				countUnknownErrorMessage(info.FullMethod, methodType)
 			}
 		} else {
-			okMessage(info.FullMethod)
+			countOkMessage(info.FullMethod, methodType)
 		}
 		return err
 	}
