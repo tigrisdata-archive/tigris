@@ -33,6 +33,10 @@ type Streaming interface {
 	api.Tigris_ReadServer
 }
 
+type SearchStreaming interface {
+	api.Tigris_SearchServer
+}
+
 // ReqOptions are options used by queryLifecycle to execute a query
 type ReqOptions struct {
 	txCtx          *api.TransactionCtx

@@ -131,6 +131,47 @@ func (x *ReadRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// UnmarshalJSON for SearchRequest
+func (x *SearchRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return nil
+	}
+	for key, value := range mp {
+		switch key {
+		case "db":
+			if err := jsoniter.Unmarshal(value, &x.Db); err != nil {
+				return err
+			}
+		case "collection":
+			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
+				return err
+			}
+		case "search_fields":
+			if err := jsoniter.Unmarshal(value, &x.SearchFields); err != nil {
+				return err
+			}
+		case "q":
+			if err := jsoniter.Unmarshal(value, &x.Q); err != nil {
+				return err
+			}
+		case "filter":
+			// not decoding it here and let it decode during filter parsing
+			x.Filter = value
+		case "facet":
+			// delaying the facet deserialization to dedicated handler
+			x.Facet = value
+		case "sort":
+			// delaying the sort deserialization
+			x.Sort = value
+		case "fields":
+			// not decoding it here and let it decode during fields parsing
+			x.Fields = value
+		}
+	}
+	return nil
+}
+
 // UnmarshalJSON on InsertRequest avoids unmarshalling user document. We only need to extract primary/index keys from
 // the document and want to store the document as-is in the database. This way there is no extra cost of serialization/deserialization
 // and also less error-prone because we are not touching the user document. The req handler needs to extract out
@@ -393,4 +434,17 @@ func (x *DeleteResponse) MarshalJSON() ([]byte, error) {
 
 func (x *UpdateResponse) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status, ModifiedCount: x.ModifiedCount})
+}
+
+func (x *SearchResponse) MarshalJSON() ([]byte, error) {
+	resp := struct {
+		Hits   []*SearchHit            `json:"hits,omitempty"`
+		Facets map[string]*SearchFacet `json:"facets,omitempty"`
+		Meta   *SearchMetadata         `json:"meta,omitempty"`
+	}{
+		Hits:   x.Hits,
+		Facets: x.Facets,
+		Meta:   x.Meta,
+	}
+	return json.Marshal(resp)
 }

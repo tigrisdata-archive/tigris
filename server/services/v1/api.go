@@ -251,6 +251,18 @@ func (s *apiService) Read(r *api.ReadRequest, stream api.Tigris_ReadServer) erro
 	return nil
 }
 
+func (s *apiService) Search(r *api.SearchRequest, stream api.Tigris_SearchServer) error {
+	_, err := s.sessions.Execute(stream.Context(), &ReqOptions{
+		txCtx:       api.GetTransaction(stream.Context(), r),
+		queryRunner: s.runnerFactory.GetSearchQueryRunner(r, stream),
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (s *apiService) CreateOrUpdateCollection(ctx context.Context, r *api.CreateOrUpdateCollectionRequest) (*api.CreateOrUpdateCollectionResponse, error) {
 	runner := s.runnerFactory.GetCollectionQueryRunner()
 	runner.SetCreateOrUpdateCollectionReq(r)
