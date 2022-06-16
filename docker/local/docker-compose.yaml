@@ -17,13 +17,22 @@ version: '3.3'
 services:
   tigris_fdb:
     container_name: tigris_fdb
-    image: foundationdb/foundationdb:6.3.23
+    image: tigrisdata/foundationdb:7.1.7
     volumes:
       - type: volume
         source: fdbdata
-        target: /var/fdb/
+        target: /var/lib/foundationdb/
     ports:
       - "4500:4500"
+
+  tigris_search:
+    container_name: tigris_search
+    image: typesense/typesense:0.23.0
+    environment:
+      - TYPESENSE_DATA_DIR=/tmp
+      - TYPESENSE_API_KEY=ts_test_key
+    ports:
+      - "8108:8108"
 
   tigris_server:
     container_name: tigris_server
