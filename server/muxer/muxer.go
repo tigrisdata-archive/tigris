@@ -73,5 +73,6 @@ func (m *Muxer) Start(host string, port int16) error {
 	for _, s := range m.servers {
 		_ = s.Start(cm)
 	}
+	log.Info().Msg("server started, servicing requests")
 	return cm.Serve()
 }
