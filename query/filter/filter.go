@@ -27,7 +27,8 @@ import (
 )
 
 var (
-	filterAll = []byte(`{}`)
+	filterAll   = []byte(`{}`)
+	emptyFilter = &WrappedFilter{Filter: &EmptyFilter{}}
 )
 
 // A Filter represents a query filter that can have any multiple conditions, logical filtering, nested conditions, etc
@@ -51,11 +52,21 @@ type Filter interface {
 	ToSearchFilter() string
 }
 
+type EmptyFilter struct{}
+
+func (f *EmptyFilter) Matches(_ []byte) bool                     { return true }
+func (f *EmptyFilter) MatchesDoc(_ *map[string]interface{}) bool { return true }
+func (f *EmptyFilter) ToSearchFilter() string                    { return "" }
+
 type WrappedFilter struct {
 	Filter Filter
 }
 
 func NewWrappedFilter(filters []Filter) *WrappedFilter {
+	if len(filters) == 0 {
+		return emptyFilter
+	}
+
 	if len(filters) <= 1 {
 		return &WrappedFilter{
 			Filter: filters[0],

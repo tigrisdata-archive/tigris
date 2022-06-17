@@ -16,21 +16,11 @@ package v1
 
 import tsApi "github.com/typesense/typesense-go/typesense/api"
 
-type pageResponse struct {
-	hits   *HitsResponse
-	facets *FacetResponse
-}
-
-type SearchResponse struct {
-	Hits   *HitsResponse
-	Facets *FacetResponse
-}
-
 type HitsResponse struct {
 	Hits *[]tsApi.SearchResultHit
 }
 
-func NewHitsResponse() *HitsResponse {
+func NewHits() *HitsResponse {
 	var hits []tsApi.SearchResultHit
 	return &HitsResponse{
 		Hits: &hits,
@@ -41,10 +31,8 @@ func (h *HitsResponse) Count() int {
 	return len(*h.Hits)
 }
 
-func (h *HitsResponse) Append(hits *[]tsApi.SearchResultHit) {
-	if hits != nil {
-		*h.Hits = append(*h.Hits, *hits...)
-	}
+func (h *HitsResponse) Append(hit tsApi.SearchResultHit) {
+	*h.Hits = append(*h.Hits, hit)
 }
 
 func (h *HitsResponse) GetDocument(idx int) (*map[string]interface{}, bool) {
@@ -57,18 +45,4 @@ func (h *HitsResponse) GetDocument(idx int) (*map[string]interface{}, bool) {
 
 func (h *HitsResponse) HasMoreHits(idx int) bool {
 	return idx < len(*h.Hits)
-}
-
-type FacetResponse struct {
-	Facets *[]tsApi.FacetCounts
-}
-
-func CreateFacetResponse(facets *[]tsApi.FacetCounts) *FacetResponse {
-	if facets != nil {
-		return &FacetResponse{
-			Facets: facets,
-		}
-	}
-
-	return nil
 }

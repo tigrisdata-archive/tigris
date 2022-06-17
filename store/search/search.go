@@ -20,6 +20,7 @@ import (
 	"io"
 
 	"github.com/rs/zerolog/log"
+	qsearch "github.com/tigrisdata/tigris/query/search"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/typesense/typesense-go/typesense"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
@@ -30,7 +31,7 @@ type Store interface {
 	DropCollection(ctx context.Context, table string) error
 	IndexDocuments(ctx context.Context, table string, documents io.Reader, options IndexDocumentsOptions) error
 	DeleteDocuments(ctx context.Context, table string, key string) error
-	Search(ctx context.Context, table string, filterBy string, page int, perPage int) ([]tsApi.SearchResult, error)
+	Search(ctx context.Context, table string, query *qsearch.Query, pageNo int) ([]tsApi.SearchResult, error)
 }
 
 func NewStore(config *config.SearchConfig) (Store, error) {
@@ -53,6 +54,6 @@ func (n *NoopStore) IndexDocuments(_ context.Context, _ string, _ io.Reader, _ I
 	return nil
 }
 func (n *NoopStore) DeleteDocuments(_ context.Context, _ string, _ string) error { return nil }
-func (n *NoopStore) Search(_ context.Context, _ string, _ string, _ int, _ int) ([]tsApi.SearchResult, error) {
+func (n *NoopStore) Search(_ context.Context, _ string, _ *qsearch.Query, _ int) ([]tsApi.SearchResult, error) {
 	return nil, nil
 }
