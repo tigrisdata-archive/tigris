@@ -19,39 +19,40 @@ import (
 	"time"
 
 	prom "github.com/m3db/prometheus_client_golang/prometheus"
+	"github.com/rs/zerolog/log"
 	"github.com/uber-go/tally"
 	promreporter "github.com/uber-go/tally/prometheus"
 )
 
 var (
-	Root     tally.Scope
+	root     tally.Scope
 	Reporter promreporter.Reporter
-	// Both counters and histograms are initialized during server startup in muxer.go
-	// method name and counter name
-	ServerRequestCounters map[string]map[string]*ServerRequestCounter
-	// method name and histogram name
-	ServerRequestHistograms        map[string]map[string]*ServerRequestHistogram
-	ServerRequestErrorCodeCounters map[string]map[string]map[string]*ServerRequestCounter
+	server   tally.Scope
+	// GRPC and HTTP related metrics
+	Requests         tally.Scope
+	ErrorRequests    tally.Scope
+	RequestsRespTime tally.Scope
 )
 
 func InitializeMetrics() io.Closer {
 	var closer io.Closer
+	log.Debug().Msg("Initializing metrics")
 	registry := prom.NewRegistry()
 	Reporter = promreporter.NewReporter(promreporter.Options{Registerer: registry})
-	Root, closer = tally.NewRootScope(tally.ScopeOptions{
+	root, closer = tally.NewRootScope(tally.ScopeOptions{
 		Prefix:         "tigris",
 		Tags:           map[string]string{},
 		CachedReporter: Reporter,
 		Separator:      promreporter.DefaultSeparator,
 	}, 1*time.Second)
-
 	// Request level metrics (HTTP and GRPC)
-	// These are populated at the time of initializing the GRPC servers
-	ServerRequestCounters = make(map[string]map[string]*ServerRequestCounter)
-	ServerRequestHistograms = make(map[string]map[string]*ServerRequestHistogram)
-	// Error code counters are created once and on the fly, then stored here
-	// By full method name, error type and code
-	ServerRequestErrorCodeCounters = make(map[string]map[string]map[string]*ServerRequestCounter)
-
+	// metric names: tigris_server
+	server = root.SubScope("server")
+	// metric names: tigris_server_requests
+	Requests = server.SubScope("requests")
+	// metric names: tigris_server_requests_errors
+	ErrorRequests = Requests.SubScope("error")
+	// metric names: tigirs_server_requests_resptime
+	RequestsRespTime = server.SubScope("resptime")
 	return closer
 }

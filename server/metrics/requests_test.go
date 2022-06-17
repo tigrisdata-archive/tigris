@@ -15,6 +15,7 @@
 package metrics
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,8 +28,6 @@ func TestGRPCMetrics(t *testing.T) {
 	unaryMethodName := "TestUnaryMethod"
 	streamingMethodName := "TestStreamingMethod"
 
-	fullMethod := "/tigrisdata.v1.Tigris/TestMethod"
-
 	unaryMethodInfo := grpc.MethodInfo{
 		Name:           unaryMethodName,
 		IsServerStream: false,
@@ -40,108 +39,62 @@ func TestGRPCMetrics(t *testing.T) {
 		IsClientStream: false,
 	}
 
-	unaryEndPointMetadata := getGrpcEndPointMetadata(svcName, unaryMethodInfo)
-	streamingEndpointMetadata := getGrpcEndPointMetadata(svcName, streamingMethodInfo)
+	unaryEndPointMetadata := newRequestEndpointMetadata(svcName, unaryMethodInfo)
+	streamingEndpointMetadata := newRequestEndpointMetadata(svcName, streamingMethodInfo)
+
+	t.Run("Test full method names", func(t *testing.T) {
+		assert.Equal(t, unaryEndPointMetadata.getFullMethod(), fmt.Sprintf("/%s/%s", svcName, unaryMethodName))
+		assert.Equal(t, streamingEndpointMetadata.getFullMethod(), fmt.Sprintf("/%s/%s", svcName, streamingMethodName))
+	})
 
 	t.Run("Test unary endpoint metadata", func(t *testing.T) {
-		assert.Equal(t, unaryEndPointMetadata.grpcServiceName, svcName)
-		assert.Equal(t, unaryEndPointMetadata.grpcMethodName, unaryMethodName)
-		assert.Equal(t, unaryEndPointMetadata.grpcTypeName, "unary")
+		assert.Equal(t, unaryEndPointMetadata.serviceName, svcName)
+		assert.Equal(t, unaryEndPointMetadata.methodInfo.Name, unaryMethodName)
+		assert.False(t, unaryEndPointMetadata.methodInfo.IsServerStream)
 	})
 
 	t.Run("Test streaming endpoint metadata", func(t *testing.T) {
-		assert.Equal(t, streamingEndpointMetadata.grpcServiceName, svcName)
-		assert.Equal(t, streamingEndpointMetadata.grpcMethodName, streamingMethodName)
-		assert.Equal(t, streamingEndpointMetadata.grpcTypeName, "stream")
+		assert.Equal(t, streamingEndpointMetadata.serviceName, svcName)
+		assert.Equal(t, streamingEndpointMetadata.methodInfo.Name, streamingMethodName)
+		assert.True(t, streamingEndpointMetadata.methodInfo.IsServerStream)
 	})
 
-	t.Run("Test tags", func(t *testing.T) {
-		tags := unaryEndPointMetadata.getTags()
+	t.Run("Test unary method preinitialized tags", func(t *testing.T) {
+		tags := unaryEndPointMetadata.GetPreInitializedTags()
 		for tagName, tagValue := range tags {
 			switch tagName {
-			case "grpc_method":
+			case "tigris_server_request_method":
 				assert.Equal(t, tagValue, "TestUnaryMethod")
-			case "grpc_service":
+			case "tigris_server_request_service_name":
 				assert.Equal(t, tagValue, "tigrisdata.v1.Tigris")
-			case "grpc_type":
+			case "tigris_server_request_type":
 				assert.Equal(t, tagValue, "unary")
 			}
 		}
 	})
 
-	t.Run("Test streaming tags", func(t *testing.T) {
-		tags := streamingEndpointMetadata.getTags()
+	t.Run("Test streaming method preinitialized tags", func(t *testing.T) {
+		tags := streamingEndpointMetadata.GetPreInitializedTags()
 		for tagName, tagValue := range tags {
 			switch tagName {
-			case "grpc_method":
+			case "tigris_server_request_method":
 				assert.Equal(t, tagValue, "TestStreamingMethod")
-			case "grpc_service":
+			case "tigris_server_request_service_name":
 				assert.Equal(t, tagValue, "tigrisdata.v1.Tigris")
-			case "grpc_type":
+			case "tigris_server_request_type":
 				assert.Equal(t, tagValue, "stream")
 			}
 		}
 	})
 
-	t.Run("Test unary metrics", func(t *testing.T) {
-		InitServerRequestCounters(svcName, unaryMethodInfo)
-		InitServerRequestHistograms(svcName, unaryMethodInfo)
-
-		for _, counterName := range InitializedServerRequestsCounterNames {
-			GetServerRequestCounter(unaryEndPointMetadata.getFullMethod(), counterName)
-		}
-
-		for _, histogramName := range ServerRequestsHistogramNames {
-			GetServerRequestHistogram(unaryEndPointMetadata.getFullMethod(), histogramName)
-		}
-	})
-
-	t.Run("Test streaming metrics", func(t *testing.T) {
-		InitServerRequestCounters(svcName, streamingMethodInfo)
-		InitServerRequestHistograms(svcName, streamingMethodInfo)
-
-		for _, counterName := range InitializedServerRequestsCounterNames {
-			GetServerRequestCounter(streamingEndpointMetadata.getFullMethod(), counterName)
-		}
-
-		for _, histogramName := range ServerRequestsHistogramNames {
-			GetServerRequestHistogram(streamingEndpointMetadata.getFullMethod(), histogramName)
-		}
+	t.Run("Test metrics initialization", func(t *testing.T) {
+		InitServerRequestMetrics(svcName, unaryMethodInfo)
+		InitServerRequestMetrics(svcName, streamingMethodInfo)
 	})
 
 	t.Run("Test specific error tags", func(t *testing.T) {
-		error_tags := unaryEndPointMetadata.getSpecificErrorTags("test_source", "test_error")
-		assert.Equal(t, error_tags["source"], "test_source")
-		assert.Equal(t, error_tags["code"], "test_error")
-	})
-
-	t.Run("Test endpoint metadata from full method", func(t *testing.T) {
-		unaryFromFullMethod := getGrpcEndPointMetadataFromFullMethod(fullMethod, "unary")
-		assert.Equal(t, unaryFromFullMethod.grpcServiceName, svcName)
-		assert.Equal(t, unaryFromFullMethod.grpcMethodName, "TestMethod")
-		assert.Equal(t, unaryFromFullMethod.grpcTypeName, "unary")
-
-		streamingFromFullMethod := getGrpcEndPointMetadataFromFullMethod(fullMethod, "stream")
-		assert.Equal(t, streamingFromFullMethod.grpcServiceName, svcName)
-		assert.Equal(t, streamingFromFullMethod.grpcMethodName, "TestMethod")
-		assert.Equal(t, streamingFromFullMethod.grpcTypeName, "stream")
-	})
-
-	t.Run("Test specific error counter", func(t *testing.T) {
-		errorCounterUnary := GetSpecificErrorCounter(fullMethod, "unary", "test_err_source", "test_err_code")
-		assert.Equal(t, errorCounterUnary.Name, ServerRequestsSpecificErrorTotal)
-		assert.Equal(t, errorCounterUnary.Tags["method"], "TestMethod")
-		assert.Equal(t, errorCounterUnary.Tags["service"], svcName)
-		assert.Equal(t, errorCounterUnary.Tags["type"], "unary")
-		assert.Equal(t, errorCounterUnary.Tags["source"], "test_err_source")
-		assert.Equal(t, errorCounterUnary.Tags["code"], "test_err_code")
-
-		errorCounterStreaming := GetSpecificErrorCounter(fullMethod, "stream", "test_err_source", "test_err_code")
-		assert.Equal(t, errorCounterStreaming.Name, ServerRequestsSpecificErrorTotal)
-		assert.Equal(t, errorCounterStreaming.Tags["method"], "TestMethod")
-		assert.Equal(t, errorCounterStreaming.Tags["service"], svcName)
-		assert.Equal(t, errorCounterStreaming.Tags["type"], "stream")
-		assert.Equal(t, errorCounterStreaming.Tags["source"], "test_err_source")
-		assert.Equal(t, errorCounterStreaming.Tags["code"], "test_err_code")
+		error_tags := unaryEndPointMetadata.GetSpecificErrorTags("test_source", "test_code")
+		assert.Equal(t, error_tags["tigris_server_request_error_source"], "test_source")
+		assert.Equal(t, error_tags["tigris_server_request_error_code"], "test_code")
 	})
 }

@@ -22,82 +22,40 @@ import (
 	"google.golang.org/grpc"
 )
 
-const (
-	ServerRequestsReceivedTotal      = "server_requests_received_total"
-	ServerRequestsHandledTotal       = "server_requests_handled_total"
-	ServerRequestsUnknownErrorTotal  = "server_requests_unknown_error_total"
-	ServerRequestsSpecificErrorTotal = "server_requests_specific_error_total"
-	ServerRequestsOkTotal            = "server_requests_ok_total"
-	ServerRequestsHandlingTimeBucket = "server_requests_handling_time_bucket"
-)
-
 var (
-	InitializedServerRequestsCounterNames = []string{
-		ServerRequestsReceivedTotal,
-		ServerRequestsHandledTotal,
-		ServerRequestsUnknownErrorTotal,
-		ServerRequestsOkTotal,
-	}
-	ServerRequestsHistogramNames = []string{
-		ServerRequestsHandlingTimeBucket,
-	}
+	preInitCounterNames = []string{"received", "handled", "ok"}
 )
 
-type ServerEndpointMetadata struct {
-	grpcServiceName string
-	grpcMethodName  string
-	grpcTypeName    string
+type RequestEndpointMetadata struct {
+	serviceName string
+	methodInfo  grpc.MethodInfo
 }
 
-type ServerRequestCounter struct {
-	Name    string
-	Tags    map[string]string
-	Counter tally.Counter
+func newRequestEndpointMetadata(serviceName string, methodInfo grpc.MethodInfo) RequestEndpointMetadata {
+	return RequestEndpointMetadata{serviceName: serviceName, methodInfo: methodInfo}
 }
 
-type ServerRequestHistogram struct {
-	Name      string
-	Tags      map[string]string
-	Histogram tally.Histogram
-}
-
-func newServerEndpointMetadata(grpcServiceName string, grpcMethodName string, grpcTypeName string) ServerEndpointMetadata {
-	return ServerEndpointMetadata{grpcServiceName: grpcServiceName, grpcMethodName: grpcMethodName, grpcTypeName: grpcTypeName}
-}
-
-func (g *ServerEndpointMetadata) getTags() map[string]string {
+func (g *RequestEndpointMetadata) GetPreInitializedTags() map[string]string {
 	return map[string]string{
-		"method":  g.grpcMethodName,
-		"service": g.grpcServiceName,
-		"type":    g.grpcTypeName,
+		"tigris_server_request_method":       g.methodInfo.Name,
+		"tigris_server_request_service_name": g.serviceName,
 	}
 }
 
-func (g *ServerEndpointMetadata) getSpecificErrorTags(source string, code string) map[string]string {
+func (g *RequestEndpointMetadata) GetSpecificErrorTags(source string, code string) map[string]string {
 	return map[string]string{
-		"method":  g.grpcMethodName,
-		"service": g.grpcServiceName,
-		"type":    g.grpcTypeName,
-		"source":  source,
-		"code":    code,
+		"tigris_server_request_method":       g.methodInfo.Name,
+		"tigris_server_request_service_name": g.serviceName,
+		"tigris_server_request_error_source": source,
+		"tigris_server_request_error_code":   code,
 	}
 }
 
-func (g *ServerEndpointMetadata) getFullMethod() string {
-	return fmt.Sprintf("/%s/%s", g.grpcServiceName, g.grpcMethodName)
+func (g *RequestEndpointMetadata) getFullMethod() string {
+	return fmt.Sprintf("/%s/%s", g.serviceName, g.methodInfo.Name)
 }
 
-func getGrpcEndPointMetadata(svcName string, methodInfo grpc.MethodInfo) ServerEndpointMetadata {
-	var endpointMetadata ServerEndpointMetadata
-	if methodInfo.IsServerStream {
-		endpointMetadata = newServerEndpointMetadata(svcName, methodInfo.Name, "stream")
-	} else {
-		endpointMetadata = newServerEndpointMetadata(svcName, methodInfo.Name, "unary")
-	}
-	return endpointMetadata
-}
-
-func getGrpcEndPointMetadataFromFullMethod(fullMethod string, methodType string) ServerEndpointMetadata {
+func GetGrpcEndPointMetadataFromFullMethod(fullMethod string, methodType string) RequestEndpointMetadata {
 	var methodInfo grpc.MethodInfo
 	methodList := strings.Split(fullMethod, "/")
 	svcName := methodList[1]
@@ -108,79 +66,45 @@ func getGrpcEndPointMetadataFromFullMethod(fullMethod string, methodType string)
 			IsClientStream: false,
 			IsServerStream: false,
 		}
-	}
-	if methodType == "stream" {
+	} else if methodType == "stream" {
 		methodInfo = grpc.MethodInfo{
 			Name:           methodName,
 			IsClientStream: false,
 			IsServerStream: true,
 		}
 	}
-	return getGrpcEndPointMetadata(svcName, methodInfo)
+	return newRequestEndpointMetadata(svcName, methodInfo)
 }
 
-func GetSpecificErrorCounter(fullMethod string, methodType string, errSource string, errCode string) *ServerRequestCounter {
-	endpointMetadata := getGrpcEndPointMetadataFromFullMethod(fullMethod, methodType)
-	tags := endpointMetadata.getSpecificErrorTags(errSource, errCode)
-	counter := ServerRequestCounter{
-		Name:    ServerRequestsSpecificErrorTotal,
-		Tags:    tags,
-		Counter: Root.Tagged(tags).Counter(ServerRequestsSpecificErrorTotal),
-	}
-	return &counter
+func GetPreinitializedTagsFromFullMethod(fullMethod string, methodType string) map[string]string {
+	metaData := GetGrpcEndPointMetadataFromFullMethod(fullMethod, methodType)
+	return metaData.GetPreInitializedTags()
 }
 
-func InitServerRequestCounters(svcName string, methodInfo grpc.MethodInfo) {
-	endpointMetadata := getGrpcEndPointMetadata(svcName, methodInfo)
-	fullMethodName := endpointMetadata.getFullMethod()
-	tags := endpointMetadata.getTags()
+func InitServerRequestMetrics(svcName string, methodInfo grpc.MethodInfo) {
+	endPointMetadata := newRequestEndpointMetadata(svcName, methodInfo)
+	tags := endPointMetadata.GetPreInitializedTags()
 
-	for _, counterName := range InitializedServerRequestsCounterNames {
-		counter := ServerRequestCounter{
-			Name:    counterName,
-			Tags:    tags,
-			Counter: Root.Tagged(tags).Counter(counterName),
-		}
-		if _, ok := ServerRequestCounters[fullMethodName]; !ok {
-			child := make(map[string]*ServerRequestCounter)
-			ServerRequestCounters[fullMethodName] = child
-		}
-		ServerRequestCounters[fullMethodName][counterName] = &counter
+	// Counters with default tags
+	for _, counterName := range preInitCounterNames {
+		Requests.Tagged(tags).Counter(counterName)
 	}
-}
 
-func InitServerRequestHistograms(svcName string, methodInfo grpc.MethodInfo) {
-	endpointMetadata := getGrpcEndPointMetadata(svcName, methodInfo)
-	fullMethodName := endpointMetadata.getFullMethod()
-	tags := endpointMetadata.getTags()
+	// Counters for unknown errors
+	ErrorRequests.Tagged(tags).Counter("unknown")
 
-	for _, histogramName := range ServerRequestsHistogramNames {
-		histogram := ServerRequestHistogram{
-			Name:      histogramName,
-			Tags:      tags,
-			Histogram: Root.Tagged(tags).Histogram(histogramName, tally.DefaultBuckets),
-		}
-		if _, ok := ServerRequestHistograms[fullMethodName]; !ok {
-			child := make(map[string]*ServerRequestHistogram)
-			ServerRequestHistograms[fullMethodName] = child
-		}
-		ServerRequestHistograms[fullMethodName][histogramName] = &histogram
-	}
+	// Specific error counters can't be initialized here because the tags should contain the error code.
+	// They are part of the ErrorRequests subscope with different tags. Those are initialized after the first
+	// occurrence of the specific error.
+
+	// Response time histograms
+	RequestsRespTime.Tagged(tags).Histogram("histogram", tally.DefaultBuckets)
 }
 
 func InitRequestMetricsForServer(s *grpc.Server) {
 	for svcName, info := range s.GetServiceInfo() {
 		for _, method := range info.Methods {
-			InitServerRequestCounters(svcName, method)
-			InitServerRequestHistograms(svcName, method)
+			InitServerRequestMetrics(svcName, method)
 		}
 	}
-}
-
-func GetServerRequestCounter(fullMethod string, counterName string) *ServerRequestCounter {
-	return ServerRequestCounters[fullMethod][counterName]
-}
-
-func GetServerRequestHistogram(fullMethod string, histogramName string) *ServerRequestHistogram {
-	return ServerRequestHistograms[fullMethod][histogramName]
 }
