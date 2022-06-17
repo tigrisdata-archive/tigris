@@ -17,8 +17,8 @@ package v1
 import (
 	"bytes"
 	"context"
-
 	jsoniter "github.com/json-iterator/go"
+	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
@@ -89,6 +89,15 @@ func (f *QueryRunnerFactory) GetDeleteQueryRunner(r *api.DeleteRequest) *DeleteQ
 // GetStreamingQueryRunner returns StreamingQueryRunner
 func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streaming Streaming) *StreamingQueryRunner {
 	return &StreamingQueryRunner{
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		req:             r,
+		streaming:       streaming,
+	}
+}
+
+// GetSearchQueryRunner for executing Search
+func (f *QueryRunnerFactory) GetSearchQueryRunner(r *api.SearchRequest, streaming SearchStreaming) *SearchQueryRunner {
+	return &SearchQueryRunner{
 		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
 		req:             r,
 		streaming:       streaming,
@@ -496,6 +505,20 @@ func (runner *StreamingQueryRunner) iterate(ctx context.Context, reader RowReade
 	}
 
 	return reader.Err()
+}
+
+// SearchQueryRunner is a runner used for Queries that are reads and needs to return result in streaming fashion
+type SearchQueryRunner struct {
+	*BaseQueryRunner
+
+	req       *api.SearchRequest
+	streaming SearchStreaming
+}
+
+func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
+	log.Debug().Msg("Search request:" + runner.req.String())
+
+	return nil, ctx, api.Errorf(api.Code_METHOD_NOT_ALLOWED, "Not implemented")
 }
 
 type CollectionQueryRunner struct {
