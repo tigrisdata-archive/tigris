@@ -64,7 +64,7 @@ A sample user JSON schema looks like below,
 
 const (
 	PrimaryKeyIndexName = "pkey"
-	AutoPrimaryKeyF     = "_id"
+	AutoPrimaryKeyF     = "id"
 	PrimaryKeySchemaK   = "primary_key"
 )
 
@@ -156,14 +156,24 @@ func addPrimaryKeyIfMissing(reqSchema jsoniter.RawMessage) (jsoniter.RawMessage,
 	}
 
 	if _, ok := schema[PrimaryKeySchemaK]; ok {
+		// primary key exists, no need to do anything.
 		return reqSchema, nil
 	}
 
 	schema[PrimaryKeySchemaK] = []string{AutoPrimaryKeyF}
 	if p, ok := schema["properties"]; ok {
-		p.(map[string]interface{})[AutoPrimaryKeyF] = map[string]string{
-			"type":   jsonSpecString,
-			"format": jsonSpecFormatUUID,
+		propertiesMap, ok := p.(map[string]interface{})
+		if !ok {
+			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "properties object is invalid")
+		}
+
+		if _, ok = propertiesMap[AutoPrimaryKeyF]; !ok {
+			// if user doesn't have the ID field then add it of type UUID
+			propertiesMap[AutoPrimaryKeyF] = map[string]interface{}{
+				"type":         jsonSpecString,
+				"format":       jsonSpecFormatUUID,
+				"autoGenerate": true,
+			}
 		}
 	}
 

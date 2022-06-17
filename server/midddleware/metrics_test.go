@@ -25,6 +25,7 @@ func TestGrpcMetrics(t *testing.T) {
 	metrics.InitializeMetrics()
 	svcName := "tigrisdata.v1.Tigris"
 	methodName := "TestMethod"
+	methodType := "unary"
 	methodInfo := grpc.MethodInfo{
 		Name:           methodName,
 		IsServerStream: false,
@@ -32,17 +33,13 @@ func TestGrpcMetrics(t *testing.T) {
 	}
 	fullMethodName := "/tigrisdata.v1.Tigris/TestMethod"
 
-	metrics.InitServerRequestCounters(svcName, methodInfo)
-	metrics.InitServerRequestHistograms(svcName, methodInfo)
+	metrics.InitServerRequestMetrics(svcName, methodInfo)
 
 	t.Run("Test counters", func(t *testing.T) {
-		receiveMessage(fullMethodName)
-		handleMessage(fullMethodName)
-		errorMessage(fullMethodName)
-		okMessage(fullMethodName)
-	})
-
-	t.Run("Test histogram", func(t *testing.T) {
-		getTimeHistogram(fullMethodName)
+		countReceivedMessage(fullMethodName, methodType)
+		countHandledMessage(fullMethodName, methodType)
+		countUnknownErrorMessage(fullMethodName, methodType)
+		countOkMessage(fullMethodName, methodType)
+		countSpecificErrorMessage(fullMethodName, methodType, "test_source", "test_code")
 	})
 }
