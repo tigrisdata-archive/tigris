@@ -17,13 +17,14 @@ package v1
 import (
 	"bytes"
 	"context"
+
 	jsoniter "github.com/json-iterator/go"
-	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/query/filter"
 	"github.com/tigrisdata/tigris/query/read"
+	qsearch "github.com/tigrisdata/tigris/query/search"
 	"github.com/tigrisdata/tigris/query/update"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/cdc"
@@ -441,8 +442,7 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 			return nil, ctx, err
 		}
 	} else {
-		filterFactory := filter.NewFactory(collection.Fields)
-		wrappedFilter, err := filterFactory.WrappedFilter(runner.req.Filter)
+		wrappedFilter, err := filter.NewFactory(collection.Fields).WrappedFilter(runner.req.Filter)
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -452,7 +452,10 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 		if iKeys, err = runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter); err == nil {
 			rowReader, err = MakeDatabaseRowReader(ctx, tx, iKeys)
 		} else {
-			rowReader, err = MakeSearchRowReader(ctx, collection, nil, wrappedFilter, runner.searchStore)
+			rowReader, err = NewSearchReader(ctx, runner.searchStore, collection, qsearch.NewBuilder().
+				Filter(wrappedFilter).
+				PageSize(defaultPerPage).
+				Build())
 		}
 		if err != nil {
 			return nil, ctx, err
@@ -473,7 +476,7 @@ func (runner *StreamingQueryRunner) iterate(ctx context.Context, reader RowReade
 	}
 
 	var row Row
-	for reader.NextRow(ctx, &row) {
+	for reader.Next(ctx, &row) {
 		if limit > 0 && limit <= totalResults {
 			return nil
 		}
@@ -516,9 +519,71 @@ type SearchQueryRunner struct {
 }
 
 func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	log.Debug().Msg("Search request:" + runner.req.String())
+	db, err := runner.GetDatabase(ctx, tx, tenant, runner.req.GetDb())
+	if err != nil {
+		return nil, ctx, err
+	}
 
-	return nil, ctx, api.Errorf(api.Code_METHOD_NOT_ALLOWED, "Not implemented")
+	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
+
+	collection, err := runner.GetCollections(db, runner.req.GetCollection())
+	if err != nil {
+		return nil, ctx, err
+	}
+
+	wrappedF, err := filter.NewFactory(collection.Fields).WrappedFilter(runner.req.Filter)
+	if err != nil {
+		return nil, ctx, err
+	}
+
+	var searchFields = runner.req.SearchFields
+	if len(searchFields) == 0 {
+		fields := collection.GetFields()
+		for _, f := range fields {
+			if f.DataType == schema.StringType {
+				searchFields = append(searchFields, f.FieldName)
+			}
+		}
+	}
+
+	searchQ := qsearch.NewBuilder().
+		Query(runner.req.Q).
+		SearchFields(searchFields).
+		PageSize(defaultPerPage).
+		Filter(wrappedF).
+		Build()
+
+	rowReader, err := NewSearchReader(ctx, runner.searchStore, collection, searchQ)
+	if err != nil {
+		return nil, ctx, err
+	}
+
+	for {
+		// batch the results in a single grpc row
+		var resp = &api.SearchResponse{
+			Facets: rowReader.getFacets(),
+		}
+
+		var row Row
+		for rowReader.Next(ctx, &row) {
+			resp.Hits = append(resp.Hits, &api.SearchHit{
+				Data: row.Data.RawData,
+			})
+
+			if len(resp.Hits) == defaultPerPage {
+				break
+			}
+		}
+		if len(resp.Hits) == 0 {
+			break
+		}
+
+		if err := runner.streaming.Send(resp); err != nil {
+			return nil, ctx, err
+		}
+	}
+
+	return &Response{}, ctx, nil
 }
 
 type CollectionQueryRunner struct {

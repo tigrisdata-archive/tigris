@@ -448,3 +448,14 @@ func (x *SearchResponse) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(resp)
 }
+
+func (x *SearchHit) MarshalJSON() ([]byte, error) {
+	resp := struct {
+		Data json.RawMessage `json:"data,omitempty"`
+		Meta *SearchHitMeta  `json:"meta,omitempty"`
+	}{
+		Data: x.Data,
+		Meta: x.Meta,
+	}
+	return json.Marshal(resp)
+}
