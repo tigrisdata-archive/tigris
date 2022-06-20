@@ -64,8 +64,8 @@ func UnaryMetricsServerInterceptor() func(ctx context.Context, req interface{}, 
 		methodType := "unary"
 		tags := metrics.GetPreinitializedTagsFromFullMethod(info.FullMethod, methodType)
 		defer metrics.RequestsRespTime.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
-		countReceivedMessage(info.FullMethod, methodType)
 		resp, err := handler(ctx, req)
+		countReceivedMessage(info.FullMethod, methodType)
 		countHandledMessage(info.FullMethod, methodType)
 		if err != nil {
 			var terr *api.TigrisError

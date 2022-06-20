@@ -16,10 +16,15 @@ package kv
 
 import (
 	"context"
+	"errors"
+	"strconv"
 	"unsafe"
 
+	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/uber-go/tally"
 )
 
 type KeyValue struct {
@@ -54,7 +59,7 @@ type KeyValueStore interface {
 	BeginTx(ctx context.Context) (Tx, error)
 	CreateTable(ctx context.Context, name []byte) error
 	DropTable(ctx context.Context, name []byte) error
-	GetInternalDatabase() interface{} // TODO: CDC remove workaround
+	GetInternalDatabase() (interface{}, error) // TODO: CDC remove workaround
 }
 
 type Iterator interface {
@@ -64,6 +69,10 @@ type Iterator interface {
 
 type KeyValueStoreImpl struct {
 	*fdbkv
+}
+
+type KeyValueStoreImplWithMetrics struct {
+	kv KeyValueStore
 }
 
 func NewKeyValueStore(cfg *config.FoundationDBConfig) (KeyValueStore, error) {
@@ -76,6 +85,100 @@ func NewKeyValueStore(cfg *config.FoundationDBConfig) (KeyValueStore, error) {
 	}, nil
 }
 
+func NewKeyValueStoreWithMetrics(cfg *config.FoundationDBConfig) (KeyValueStore, error) {
+	kv, err := newFoundationDB(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &KeyValueStoreImplWithMetrics{
+		&KeyValueStoreImpl{
+			fdbkv: kv,
+		},
+	}, nil
+}
+
+func measureLow(name string, f func() error, isTx bool) {
+	// Low level measurement wrapper that is called by the measure functions on the appropriate receiver
+	tags := metrics.GetFdbReqTags(name, isTx)
+	defer metrics.FdbRequests.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
+	var fdberr fdb.Error
+	err := f()
+	if err == nil {
+		// Request was ok
+		metrics.FdbRequests.Tagged(tags).Counter("ok").Inc(1)
+		return
+	}
+	errTags := metrics.GetFdbReqSpecificErrorTags(name, strconv.Itoa(fdberr.Code), isTx)
+	// An error is either known or unknown, tagging is different, known errors have more rich metadata
+	if errors.As(err, &fdberr) {
+		// Error with a specific FDB error code
+		metrics.FdbErrorRequests.Tagged(errTags).Counter("specific").Inc(1)
+	} else {
+		// Unknown error
+		metrics.FdbErrorRequests.Tagged(tags).Counter("unknown").Inc(1)
+	}
+}
+
+func (m *KeyValueStoreImplWithMetrics) measure(name string, f func() error) {
+	measureLow(name, f, false)
+}
+
+func (m *KeyValueStoreImplWithMetrics) Delete(ctx context.Context, table []byte, key Key) (err error) {
+	m.measure("Delete", func() error {
+		err = m.kv.Delete(ctx, table, key)
+		return err
+	})
+	return
+}
+
+func (m *KeyValueStoreImplWithMetrics) DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key) (err error) {
+	m.measure("DeleteRange", func() error {
+		err = m.kv.DeleteRange(ctx, table, lKey, rKey)
+		return err
+	})
+	return
+}
+
+func (m *KeyValueStoreImplWithMetrics) CreateTable(_ context.Context, name []byte) (err error) {
+	m.measure("CreateTable", func() error {
+		err = m.kv.CreateTable(nil, name)
+		return err
+	})
+	return
+}
+
+func (m *KeyValueStoreImplWithMetrics) DropTable(ctx context.Context, name []byte) (err error) {
+	m.measure("DropTable", func() error {
+		err = m.kv.DropTable(ctx, name)
+		return err
+	})
+	return
+}
+
+func (m *KeyValueStoreImplWithMetrics) SetVersionstampedValue(ctx context.Context, key []byte, value []byte) (err error) {
+	m.measure("SetVersionstampedValue", func() error {
+		err = m.kv.SetVersionstampedValue(ctx, key, value)
+		return err
+	})
+	return
+}
+
+func (m *KeyValueStoreImplWithMetrics) SetVersionstampedKey(ctx context.Context, key []byte, value []byte) (err error) {
+	m.measure("SetVersionstampedKey", func() error {
+		err = m.kv.SetVersionstampedKey(ctx, key, value)
+		return err
+	})
+	return
+}
+
+func (m *KeyValueStoreImplWithMetrics) Get(ctx context.Context, key []byte) (val []byte, err error) {
+	m.measure("Get", func() error {
+		val, err = m.kv.Get(ctx, key)
+		return err
+	})
+	return
+}
+
 func (k *KeyValueStoreImpl) Insert(ctx context.Context, table []byte, key Key, data *internal.TableData) error {
 	enc, err := internal.Encode(data)
 	if err != nil {
@@ -85,6 +188,15 @@ func (k *KeyValueStoreImpl) Insert(ctx context.Context, table []byte, key Key, d
 	return k.fdbkv.Insert(ctx, table, key, enc)
 }
 
+func (m *KeyValueStoreImplWithMetrics) Insert(ctx context.Context, table []byte, key Key, data *internal.TableData) (err error) {
+	// Whatever parameters can be passed to measure before the func
+	m.measure("Insert", func() error {
+		err = m.kv.Insert(ctx, table, key, data)
+		return err
+	})
+	return
+}
+
 func (k *KeyValueStoreImpl) Replace(ctx context.Context, table []byte, key Key, data *internal.TableData) error {
 	enc, err := internal.Encode(data)
 	if err != nil {
@@ -92,6 +204,14 @@ func (k *KeyValueStoreImpl) Replace(ctx context.Context, table []byte, key Key, 
 	}
 
 	return k.fdbkv.Replace(ctx, table, key, enc)
+}
+
+func (m *KeyValueStoreImplWithMetrics) Replace(ctx context.Context, table []byte, key Key, data *internal.TableData) (err error) {
+	m.measure("Replace", func() error {
+		err = m.kv.Replace(ctx, table, key, data)
+		return err
+	})
+	return
 }
 
 func (k *KeyValueStoreImpl) Read(ctx context.Context, table []byte, key Key) (Iterator, error) {
@@ -104,6 +224,14 @@ func (k *KeyValueStoreImpl) Read(ctx context.Context, table []byte, key Key) (It
 	}, nil
 }
 
+func (m *KeyValueStoreImplWithMetrics) Read(ctx context.Context, table []byte, key Key) (it Iterator, err error) {
+	m.measure("Read", func() error {
+		it, err = m.kv.Read(ctx, table, key)
+		return err
+	})
+	return
+}
+
 func (k *KeyValueStoreImpl) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key) (Iterator, error) {
 	iter, err := k.fdbkv.ReadRange(ctx, table, lkey, rkey)
 	if err != nil {
@@ -112,6 +240,14 @@ func (k *KeyValueStoreImpl) ReadRange(ctx context.Context, table []byte, lkey Ke
 	return &IteratorImpl{
 		baseIterator: iter,
 	}, nil
+}
+
+func (m *KeyValueStoreImplWithMetrics) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key) (it Iterator, err error) {
+	m.measure("ReadRange", func() error {
+		it, err = m.kv.ReadRange(ctx, table, lkey, rkey)
+		return err
+	})
+	return
 }
 
 func (k *KeyValueStoreImpl) Update(ctx context.Context, table []byte, key Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error) {
@@ -135,6 +271,14 @@ func (k *KeyValueStoreImpl) Update(ctx context.Context, table []byte, key Key, a
 	})
 }
 
+func (m *KeyValueStoreImplWithMetrics) Update(ctx context.Context, table []byte, key Key, apply func(*internal.TableData) (*internal.TableData, error)) (encoded int32, err error) {
+	m.measure("Update", func() error {
+		encoded, err = m.kv.Update(ctx, table, key, apply)
+		return err
+	})
+	return
+}
+
 func (k *KeyValueStoreImpl) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error) {
 	return k.fdbkv.UpdateRange(ctx, table, lKey, rKey, func(existing []byte) ([]byte, error) {
 		decoded, err := internal.Decode(existing)
@@ -156,6 +300,14 @@ func (k *KeyValueStoreImpl) UpdateRange(ctx context.Context, table []byte, lKey 
 	})
 }
 
+func (m *KeyValueStoreImplWithMetrics) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func(*internal.TableData) (*internal.TableData, error)) (encoded int32, err error) {
+	m.measure("UpdateRange", func() error {
+		encoded, err = m.kv.UpdateRange(ctx, table, lKey, rKey, apply)
+		return err
+	})
+	return
+}
+
 func (k *KeyValueStoreImpl) BeginTx(ctx context.Context) (Tx, error) {
 	btx, err := k.fdbkv.BeginTx(ctx)
 	if err != nil {
@@ -167,12 +319,102 @@ func (k *KeyValueStoreImpl) BeginTx(ctx context.Context) (Tx, error) {
 	}, nil
 }
 
-func (k *KeyValueStoreImpl) GetInternalDatabase() interface{} {
-	return k.db
+func (m *KeyValueStoreImplWithMetrics) BeginTx(ctx context.Context) (Tx, error) {
+	// This needs to be a special case in order to have the tx metrics as well
+	var btx Tx
+	var err error
+	m.measure("BeginTx", func() error {
+		btx, err = m.kv.BeginTx(ctx)
+		return err
+	})
+	return &TxImplWithMetrics{
+		btx,
+	}, err
+
+}
+
+func (k *KeyValueStoreImpl) GetInternalDatabase() (interface{}, error) {
+	return k.db, nil
+}
+
+func (m *KeyValueStoreImplWithMetrics) GetInternalDatabase() (k interface{}, err error) {
+	m.measure("GetInternalDatabase", func() error {
+		k, err = m.kv.GetInternalDatabase()
+		return err
+	})
+	return
 }
 
 type TxImpl struct {
 	*ftx
+}
+
+type TxImplWithMetrics struct {
+	tx Tx
+}
+
+func (m *TxImplWithMetrics) measure(name string, f func() error) {
+	measureLow(name, f, true)
+}
+
+func (m *TxImplWithMetrics) Delete(ctx context.Context, table []byte, key Key) (err error) {
+	m.measure("Delete", func() error {
+		err = m.tx.Delete(ctx, table, key)
+		return err
+	})
+	return
+}
+
+func (m *TxImplWithMetrics) DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key) (err error) {
+	m.measure("DeleteRange", func() error {
+		err = m.tx.DeleteRange(ctx, table, lKey, rKey)
+		return err
+	})
+	return
+}
+
+func (m *TxImplWithMetrics) SetVersionstampedValue(ctx context.Context, key []byte, value []byte) (err error) {
+	m.measure("SetVersionstampedValue", func() error {
+		err = m.tx.SetVersionstampedValue(ctx, key, value)
+		return err
+	})
+	return
+}
+
+func (m *TxImplWithMetrics) SetVersionstampedKey(ctx context.Context, key []byte, value []byte) (err error) {
+	m.measure("SetVersionstampedKey", func() error {
+		err = m.tx.SetVersionstampedKey(ctx, key, value)
+		return err
+	})
+	return
+}
+
+func (m *TxImplWithMetrics) Get(ctx context.Context, key []byte) (val []byte, err error) {
+	m.measure("Get", func() error {
+		val, err = m.tx.Get(ctx, key)
+		return err
+	})
+	return
+}
+
+func (m *TxImplWithMetrics) Commit(ctx context.Context) (err error) {
+	m.measure("Commit", func() error {
+		err = m.tx.Commit(ctx)
+		return err
+	})
+	return
+}
+
+func (m *TxImplWithMetrics) Rollback(ctx context.Context) (err error) {
+	m.measure("Rollback", func() error {
+		err = m.tx.Rollback(ctx)
+		return err
+	})
+	return
+}
+
+func (m *TxImplWithMetrics) IsRetriable() bool {
+	return m.tx.IsRetriable()
 }
 
 func (tx *TxImpl) Insert(ctx context.Context, table []byte, key Key, data *internal.TableData) error {
@@ -184,6 +426,14 @@ func (tx *TxImpl) Insert(ctx context.Context, table []byte, key Key, data *inter
 	return tx.ftx.Insert(ctx, table, key, enc)
 }
 
+func (m *TxImplWithMetrics) Insert(ctx context.Context, table []byte, key Key, data *internal.TableData) (err error) {
+	m.measure("Insert", func() error {
+		err = m.tx.Insert(ctx, table, key, data)
+		return err
+	})
+	return
+}
+
 func (tx *TxImpl) Replace(ctx context.Context, table []byte, key Key, data *internal.TableData) error {
 	enc, err := internal.Encode(data)
 	if err != nil {
@@ -191,6 +441,14 @@ func (tx *TxImpl) Replace(ctx context.Context, table []byte, key Key, data *inte
 	}
 
 	return tx.ftx.Replace(ctx, table, key, enc)
+}
+
+func (m *TxImplWithMetrics) Replace(ctx context.Context, table []byte, key Key, data *internal.TableData) (err error) {
+	m.measure("Replace", func() error {
+		err = m.tx.Replace(ctx, table, key, data)
+		return err
+	})
+	return
 }
 
 func (tx *TxImpl) Read(ctx context.Context, table []byte, key Key) (Iterator, error) {
@@ -203,6 +461,14 @@ func (tx *TxImpl) Read(ctx context.Context, table []byte, key Key) (Iterator, er
 	}, nil
 }
 
+func (m *TxImplWithMetrics) Read(ctx context.Context, table []byte, key Key) (it Iterator, err error) {
+	m.measure("Read", func() error {
+		it, err = m.tx.Read(ctx, table, key)
+		return err
+	})
+	return
+}
+
 func (tx *TxImpl) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key) (Iterator, error) {
 	iter, err := tx.ftx.ReadRange(ctx, table, lkey, rkey)
 	if err != nil {
@@ -211,6 +477,14 @@ func (tx *TxImpl) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Ke
 	return &IteratorImpl{
 		baseIterator: iter,
 	}, nil
+}
+
+func (m *TxImplWithMetrics) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key) (it Iterator, err error) {
+	m.measure("ReadRange", func() error {
+		it, err = m.tx.ReadRange(ctx, table, lkey, rkey)
+		return err
+	})
+	return
 }
 
 func (tx *TxImpl) Update(ctx context.Context, table []byte, key Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error) {
@@ -234,6 +508,14 @@ func (tx *TxImpl) Update(ctx context.Context, table []byte, key Key, apply func(
 	})
 }
 
+func (m *TxImplWithMetrics) Update(ctx context.Context, table []byte, key Key, apply func(*internal.TableData) (*internal.TableData, error)) (encoded int32, err error) {
+	m.measure("Update", func() error {
+		encoded, err = m.tx.Update(ctx, table, key, apply)
+		return err
+	})
+	return
+}
+
 func (tx *TxImpl) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error) {
 	return tx.ftx.UpdateRange(ctx, table, lKey, rKey, func(existing []byte) ([]byte, error) {
 		decoded, err := internal.Decode(existing)
@@ -253,6 +535,14 @@ func (tx *TxImpl) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey 
 
 		return encoded, nil
 	})
+}
+
+func (m *TxImplWithMetrics) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func(*internal.TableData) (*internal.TableData, error)) (encoded int32, err error) {
+	m.measure("UpdateRange", func() error {
+		encoded, err = m.tx.UpdateRange(ctx, table, lKey, rKey, apply)
+		return err
+	})
+	return
 }
 
 type IteratorImpl struct {
