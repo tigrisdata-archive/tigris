@@ -398,7 +398,7 @@ func (s *apiService) GetInfo(_ context.Context, _ *api.GetInfoRequest) (*api.Get
 	}, nil
 }
 
-func (s *apiService) Stream(r *api.EventsRequest, stream api.Tigris_EventsServer) error {
+func (s *apiService) Events(r *api.EventsRequest, stream api.Tigris_EventsServer) error {
 	publisher := s.cdcMgr.GetPublisher(r.GetDb())
 	streamer, err := publisher.NewStreamer(s.kvStore)
 	if err != nil {
