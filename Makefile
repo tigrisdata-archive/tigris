@@ -64,6 +64,7 @@ run: clean generate
 
 local_run: server
 	$(DOCKER_COMPOSE) up --no-build --detach tigris_search tigris_fdb
+	fdbcli -C ./test/config/fdb.cluster --exec "configure new single memory"
 	TIGRIS_ENVIRONMENT=dev ./server/service
 
 # Runs tigris server and foundationdb, plus additional tools for it like:
