@@ -20,6 +20,7 @@ import (
 	"github.com/apple/foundationdb/bindings/go/src/fdb/tuple"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/store/kv"
+	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 type Publisher struct {
@@ -63,14 +64,17 @@ func NewPublisher(dbName string) *Publisher {
 }
 
 func (p *Publisher) NewStreamer(kvStore kv.KeyValueStore) (*Streamer, error) {
+	intDb, err := kvStore.GetInternalDatabase()
+	if ulog.E(err) {
+		return nil, err
+	}
 	s := Streamer{
 		keySpace: p.keySpace,
-		db:       kvStore.GetInternalDatabase().(fdb.Database),
+		db:       intDb.(fdb.Database),
 		cfg:      config.DefaultConfig.Cdc,
 	}
 
-	err := s.start()
-	if err != nil {
+	if err = s.start(); err != nil {
 		return nil, err
 	}
 

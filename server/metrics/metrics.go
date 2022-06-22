@@ -32,6 +32,8 @@ var (
 	Requests         tally.Scope
 	ErrorRequests    tally.Scope
 	RequestsRespTime tally.Scope
+	fdb              tally.Scope
+	FdbRequests      tally.Scope
 )
 
 func InitializeMetrics() io.Closer {
@@ -54,5 +56,11 @@ func InitializeMetrics() io.Closer {
 	ErrorRequests = Requests.SubScope("error")
 	// metric names: tigirs_server_requests_resptime
 	RequestsRespTime = server.SubScope("resptime")
+
+	// FDB level metrics
+	fdb = root.SubScope("fdb")
+	FdbRequests = fdb.SubScope("requests")
+	InitializeFdbMetrics()
+
 	return closer
 }
