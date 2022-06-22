@@ -81,6 +81,8 @@ type JSONSchema struct {
 
 // Factory is used as an intermediate step so that collection can be initialized with properly encoded values.
 type Factory struct {
+	// Name is the collection name of this schema.
+	Name string
 	// Fields are derived from the user schema.
 	Fields []*Field
 	// Indexes is a wrapper on the indexes part of this collection. At this point the dictionary encoded value is not
@@ -89,8 +91,6 @@ type Factory struct {
 	// Schema is the raw JSON schema received as part of CreateOrUpdateCollection request. This is stored as-is in the
 	// schema subspace.
 	Schema jsoniter.RawMessage
-	// CollectionName is the collection name of this schema.
-	CollectionName string
 }
 
 // Build is used to deserialize the user json schema into a schema factory.
@@ -144,8 +144,8 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 				Fields: primaryKeyFields,
 			},
 		},
-		CollectionName: collection,
-		Schema:         reqSchema,
+		Name:   collection,
+		Schema: reqSchema,
 	}, nil
 }
 

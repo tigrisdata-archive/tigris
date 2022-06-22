@@ -25,6 +25,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/lib/set"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
@@ -32,33 +33,13 @@ const (
 	UserDefinedSchema = "user_defined_schema"
 )
 
-// Indexes is to wrap different index that a collection can have.
-type Indexes struct {
-	PrimaryKey *Index
-}
-
-func (i *Indexes) GetIndexes() []*Index {
-	var indexes []*Index
-	indexes = append(indexes, i.PrimaryKey)
-	return indexes
-}
-
-// Index can be composite so it has a list of fields, each index has name and encoded id. The encoded is used for key
-// building.
-type Index struct {
-	// Fields that are part of this index. An index can have a single or composite fields.
-	Fields []*Field
-	// Name is used by dictionary encoder for this index.
-	Name string
-	// Id is assigned to this index by the dictionary encoder.
-	Id uint32
-}
-
 // DefaultCollection is used to represent a collection. The tenant in the metadata package is responsible for creating
 // the collection.
 type DefaultCollection struct {
 	// Id is the dictionary encoded value for this collection.
 	Id uint32
+	// SchVer returns the schema version
+	SchVer int
 	// Name is the name of the collection.
 	Name string
 	// Fields are derived from the user schema.
@@ -75,8 +56,8 @@ type DefaultCollection struct {
 	Search *tsApi.CollectionSchema
 }
 
-func NewDefaultCollection(cname string, id uint32, fields []*Field, indexes *Indexes, schema jsoniter.RawMessage, searchCollectionName string) *DefaultCollection {
-	url := cname + ".json"
+func NewDefaultCollection(name string, id uint32, schVer int, fields []*Field, indexes *Indexes, schema jsoniter.RawMessage, searchCollectionName string) *DefaultCollection {
+	url := name + ".json"
 	compiler := jsonschema.NewCompiler()
 	compiler.Draft = jsonschema.Draft7 // Format is only working for draft7
 	if err := compiler.AddResource(url, bytes.NewReader(schema)); err != nil {
@@ -87,6 +68,7 @@ func NewDefaultCollection(cname string, id uint32, fields []*Field, indexes *Ind
 	if err != nil {
 		panic(err)
 	}
+
 	// this is to not support additional properties, this is intentional to avoid caller not passing additional properties
 	// flag. Later probably we can relax it. Starting with strict validation is better than not validating extra keys.
 	validator.AdditionalProperties = false
@@ -95,7 +77,8 @@ func NewDefaultCollection(cname string, id uint32, fields []*Field, indexes *Ind
 
 	return &DefaultCollection{
 		Id:        id,
-		Name:      cname,
+		SchVer:    schVer,
+		Name:      name,
 		Fields:    fields,
 		Indexes:   indexes,
 		Validator: validator,
@@ -143,6 +126,36 @@ func (d *DefaultCollection) Validate(document interface{}) error {
 func (d *DefaultCollection) SearchCollectionName() string {
 	return d.Search.Name
 }
+
+func GetSearchDeltaFields(existingFields []*Field, incomingFields []*Field) []tsApi.Field {
+	var existingFieldSet = set.New()
+	for _, f := range existingFields {
+		existingFieldSet.Insert(f.FieldName)
+	}
+
+	var ptrTrue = true
+	var searchFieldsDelta []tsApi.Field
+	for _, f := range incomingFields {
+		if existingFieldSet.Contains(f.FieldName) {
+			continue
+		}
+
+		indexable := IndexableField(f)
+		facetable := FacetableField(f)
+
+		searchField := tsApi.Field{
+			Name:     f.FieldName,
+			Facet:    &facetable,
+			Type:     ToSearchFieldType(f),
+			Optional: &ptrTrue,
+			Index:    &indexable,
+		}
+		searchFieldsDelta = append(searchFieldsDelta, searchField)
+	}
+
+	return searchFieldsDelta
+}
+
 func buildSearchSchema(name string, fields []*Field) *tsApi.CollectionSchema {
 	var searchFields []tsApi.Field
 
