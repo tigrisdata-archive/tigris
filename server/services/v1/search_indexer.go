@@ -194,34 +194,48 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 	return jsoniter.Marshal(decData)
 }
 
-func UnpackSearchFields(doc *map[string]interface{}, collection *schema.DefaultCollection) (string, error) {
+func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCollection) (string, *internal.TableData, error) {
 	for _, f := range collection.Fields {
 		if schema.PackSearchField(f) {
-			if v, ok := (*doc)[f.FieldName]; ok {
+			if v, ok := doc[f.FieldName]; ok {
 				var value interface{}
 				if err := jsoniter.UnmarshalFromString(v.(string), &value); err != nil {
-					return "", err
+					return "", nil, err
 				}
-				(*doc)[f.FieldName] = value
+				doc[f.FieldName] = value
 			}
 		}
 	}
 
-	var searchKey = (*doc)[searchID].(string)
-	if value, ok := (*doc)[schema.ReservedFields[schema.IdToSearchKey]]; ok {
+	var searchKey = doc[searchID].(string)
+	if value, ok := doc[schema.ReservedFields[schema.IdToSearchKey]]; ok {
 		// if user has an id field then check it and set it back
-		(*doc)["id"] = value
-		delete(*doc, schema.ReservedFields[schema.IdToSearchKey])
+		doc["id"] = value
+		delete(doc, schema.ReservedFields[schema.IdToSearchKey])
+	} else {
+		// otherwise, remove the search id from the result
+		delete(doc, searchID)
 	}
 
-	return searchKey, nil
+	// set tableData with metadata
+	var tableData = &internal.TableData{}
+	if value, ok := doc[schema.ReservedFields[schema.CreatedAt]]; ok {
+		tableData.CreatedAt = internal.CreateNewTimestamp(int64(value.(float64)))
+		delete(doc, schema.ReservedFields[schema.CreatedAt])
+	}
+	if value, ok := (doc)[schema.ReservedFields[schema.UpdatedAt]]; ok {
+		tableData.UpdatedAt = internal.CreateNewTimestamp(int64(value.(float64)))
+		delete(doc, schema.ReservedFields[schema.UpdatedAt])
+	}
+
+	return searchKey, tableData, nil
 }
 
-func UnpackAndSetMD(doc *map[string]interface{}, tableData *internal.TableData) {
-	if v, ok := (*doc)[schema.ReservedFields[schema.CreatedAt]]; ok {
+func UnpackAndSetMD(doc map[string]interface{}, tableData *internal.TableData) {
+	if v, ok := doc[schema.ReservedFields[schema.CreatedAt]]; ok {
 		tableData.CreatedAt = internal.CreateNewTimestamp(int64(v.(float64)))
 	}
-	if v, ok := (*doc)[schema.ReservedFields[schema.UpdatedAt]]; ok {
+	if v, ok := doc[schema.ReservedFields[schema.UpdatedAt]]; ok {
 		tableData.UpdatedAt = internal.CreateNewTimestamp(int64(v.(float64)))
 	}
 }

@@ -25,17 +25,49 @@ const (
 type Query struct {
 	Q        string
 	Fields   []string
+	Facets   Facets
 	WrappedF *filter.WrappedFilter
 	PageSize int
+}
+
+func (q *Query) ToSearchFacetSize() int {
+	var maxSize = 0
+	for _, f := range q.Facets.Fields {
+		if maxSize < f.Size {
+			maxSize = f.Size
+		}
+	}
+
+	if len(q.Facets.Fields) > 0 && maxSize == 0 {
+		return defaultFacetSize
+	}
+
+	return maxSize
+}
+
+func (q *Query) ToSearchFacets() string {
+	if len(q.Facets.Fields) == 0 {
+		return ""
+	}
+
+	var facets string
+	for i, f := range q.Facets.Fields {
+		if i != 0 {
+			facets += ","
+		}
+		facets += f.Name
+	}
+
+	return facets
 }
 
 func (q *Query) ToSearchFields() string {
 	var fields string
 	for i, f := range q.Fields {
-		fields += f
-		if i < len(q.Fields)-1 {
+		if i != 0 {
 			fields += ","
 		}
+		fields += f
 	}
 	return fields
 }
@@ -63,6 +95,11 @@ func (b *Builder) Query(q string) *Builder {
 
 func (b *Builder) Filter(w *filter.WrappedFilter) *Builder {
 	b.query.WrappedF = w
+	return b
+}
+
+func (b *Builder) Facets(facets Facets) *Builder {
+	b.query.Facets = facets
 	return b
 }
 
