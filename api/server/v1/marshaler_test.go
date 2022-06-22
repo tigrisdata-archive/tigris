@@ -49,8 +49,8 @@ func TestJSONEncoding(t *testing.T) {
 	t.Run("marshal SearchResponse", func(t *testing.T) {
 		resp := &SearchResponse{
 			Hits: []*SearchHit{{
-				Data: nil,
-				Meta: &SearchHitMeta{},
+				Data:     nil,
+				Metadata: &SearchHitMeta{},
 			}},
 			Facets: map[string]*SearchFacet{
 				"myField": {
@@ -73,6 +73,6 @@ func TestJSONEncoding(t *testing.T) {
 			}}
 		r, err := json.Marshal(resp)
 		require.NoError(t, err)
-		require.Equal(t, []byte(`{"hits":[{"meta":{}}],"facets":{"myField":{"counts":[{"count":32,"value":"adidas"}],"stats":{"avg":40,"count":50}}},"meta":{"found":1234,"page":{"current":2,"per_page":10}}}`), r)
+		require.Equal(t, []byte(`{"hits":[{"metadata":{}}],"facets":{"myField":{"counts":[{"count":32,"value":"adidas"}],"stats":{"avg":40,"count":50}}},"meta":{"found":1234,"page":{"current":2,"per_page":10}}}`), r)
 	})
 }

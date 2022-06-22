@@ -43,8 +43,8 @@ func NewSelector(field *schema.Field, matcher ValueMatcher) *Selector {
 	}
 }
 
-func (s *Selector) MatchesDoc(doc *map[string]interface{}) bool {
-	v, ok := (*doc)[s.Field.Name()]
+func (s *Selector) MatchesDoc(doc map[string]interface{}) bool {
+	v, ok := doc[s.Field.Name()]
 	if !ok {
 		return true
 	}

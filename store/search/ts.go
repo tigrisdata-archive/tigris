@@ -104,6 +104,12 @@ func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query
 	if fields := query.ToSearchFields(); len(fields) > 0 {
 		multiSearchParam.QueryBy = &fields
 	}
+	if facets := query.ToSearchFacets(); len(facets) > 0 {
+		multiSearchParam.FacetBy = &facets
+		if size := query.ToSearchFacetSize(); size > 0 {
+			multiSearchParam.MaxFacetValues = &size
+		}
+	}
 
 	var searchParams []tsApi.MultiSearchCollectionParameters
 	searchParams = append(searchParams, tsApi.MultiSearchCollectionParameters{

@@ -158,7 +158,7 @@ func (x *ListDatabasesRequest) Validate() error {
 	return nil
 }
 
-func (x *StreamRequest) Validate() error {
+func (x *EventsRequest) Validate() error {
 	if err := isValidDatabase(x.Db); err != nil {
 		return err
 	}

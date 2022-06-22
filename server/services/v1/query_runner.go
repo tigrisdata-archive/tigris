@@ -33,7 +33,6 @@ import (
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
 	ulog "github.com/tigrisdata/tigris/util/log"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // QueryRunner is responsible for executing the current query and return the response
@@ -485,19 +484,12 @@ func (runner *StreamingQueryRunner) iterate(ctx context.Context, reader RowReade
 		if ulog.E(err) {
 			return err
 		}
-		var createdAt, updatedAt *timestamppb.Timestamp
-		if row.Data.CreatedAt != nil {
-			createdAt = row.Data.CreatedAt.GetProtoTS()
-		}
-		if row.Data.UpdatedAt != nil {
-			updatedAt = row.Data.UpdatedAt.GetProtoTS()
-		}
 
 		if err := runner.streaming.Send(&api.ReadResponse{
 			Data: newValue,
 			Metadata: &api.ResponseMetadata{
-				CreatedAt: createdAt,
-				UpdatedAt: updatedAt,
+				CreatedAt: row.Data.CreateToProtoTS(),
+				UpdatedAt: row.Data.UpdatedToProtoTS(),
 			},
 			ResumeToken: row.Key,
 		}); ulog.E(err) {
@@ -538,6 +530,7 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	var searchFields = runner.req.SearchFields
 	if len(searchFields) == 0 {
+		// this is to include all searchable fields if not present in the query
 		fields := collection.GetFields()
 		for _, f := range fields {
 			if f.DataType == schema.StringType {
@@ -546,14 +539,30 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		}
 	}
 
+	facets, err := qsearch.UnmarshalFacet(runner.req.Facet)
+	if err != nil {
+		return nil, ctx, err
+	}
+
+	pageSize := int(runner.req.PageSize)
+	if pageSize == 0 {
+		pageSize = defaultPerPage
+	}
+
 	searchQ := qsearch.NewBuilder().
 		Query(runner.req.Q).
 		SearchFields(searchFields).
-		PageSize(defaultPerPage).
+		Facets(facets).
+		PageSize(pageSize).
 		Filter(wrappedF).
 		Build()
 
-	rowReader, err := NewSearchReader(ctx, runner.searchStore, collection, searchQ)
+	var rowReader *SearchRowReader
+	if runner.req.Page != 0 {
+		rowReader, err = SinglePageSearchReader(ctx, runner.searchStore, collection, searchQ, runner.req.Page)
+	} else {
+		rowReader, err = NewSearchReader(ctx, runner.searchStore, collection, searchQ)
+	}
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -568,9 +577,13 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		for rowReader.Next(ctx, &row) {
 			resp.Hits = append(resp.Hits, &api.SearchHit{
 				Data: row.Data.RawData,
+				Metadata: &api.SearchHitMeta{
+					CreatedAt: row.Data.CreateToProtoTS(),
+					UpdatedAt: row.Data.UpdatedToProtoTS(),
+				},
 			})
 
-			if len(resp.Hits) == defaultPerPage {
+			if len(resp.Hits) == pageSize {
 				break
 			}
 		}

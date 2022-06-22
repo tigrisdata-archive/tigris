@@ -101,6 +101,20 @@ func NewTableDataWithEncoding(data []byte, encoding int32) *TableData {
 	}
 }
 
+func (x *TableData) CreateToProtoTS() *timestamppb.Timestamp {
+	if x.CreatedAt != nil {
+		return x.CreatedAt.GetProtoTS()
+	}
+	return nil
+}
+
+func (x *TableData) UpdatedToProtoTS() *timestamppb.Timestamp {
+	if x.UpdatedAt != nil {
+		return x.UpdatedAt.GetProtoTS()
+	}
+	return nil
+}
+
 // Encode is used to encode data to the raw bytes which is used to store in storage as value. The first byte is storing
 // the type corresponding to this Data. This is important and used by the decoder later to decode back.
 func Encode(data *TableData) ([]byte, error) {

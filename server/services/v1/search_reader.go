@@ -19,7 +19,6 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/query/filter"
 	qsearch "github.com/tigrisdata/tigris/query/search"
 	"github.com/tigrisdata/tigris/schema"
@@ -77,24 +76,23 @@ func (p *page) readRow(row *Row) bool {
 			continue
 		}
 
+		doc := *document
 		var searchKey string
-		if searchKey, p.err = UnpackSearchFields(document, p.collection); p.err != nil {
+		if searchKey, row.Data, p.err = UnpackSearchFields(doc, p.collection); p.err != nil {
 			return false
 		}
+		row.Key = []byte(searchKey)
 
 		// now apply the filter
-		if !p.wrappedF.Filter.MatchesDoc(document) {
+		if !p.wrappedF.Filter.MatchesDoc(doc) {
 			continue
 		}
 
-		data, err := jsoniter.Marshal(*document)
-		if err != nil {
-			p.err = err
+		// set the raw data now after marshaling it
+		if row.Data.RawData, p.err = jsoniter.Marshal(doc); p.err != nil {
 			return false
 		}
 
-		row.Key = []byte(searchKey)
-		row.Data = &internal.TableData{RawData: data}
 		return true
 	}
 
@@ -147,7 +145,7 @@ func (p *pageReader) read(ctx context.Context, pageNo int) error {
 	}
 
 	// check if we need to build facets
-	if p.cachedFacets == nil {
+	if len(p.cachedFacets) == 0 {
 		for _, r := range result {
 			p.buildFacets(r.FacetCounts)
 		}
@@ -209,6 +207,9 @@ func (p *pageReader) buildStats(stats tsApi.FacetCounts) *api.FacetStats {
 	if stats.Stats.Sum != nil {
 		stat.Sum = int64(*stats.Stats.Sum)
 	}
+	if stats.Stats.TotalValues != nil {
+		stat.Count = int64(*stats.Stats.TotalValues)
+	}
 	return stat
 }
 
@@ -217,6 +218,7 @@ func (p *pageReader) buildStats(stats tsApi.FacetCounts) *api.FacetStats {
 type SearchRowReader struct {
 	pageNo     int
 	last       bool
+	single     bool
 	err        error
 	page       *page
 	query      *qsearch.Query
@@ -225,14 +227,25 @@ type SearchRowReader struct {
 	collection *schema.DefaultCollection
 }
 
-func NewSearchReader(ctx context.Context, store search.Store, coll *schema.DefaultCollection, query *qsearch.Query) (*SearchRowReader, error) {
+func SinglePageSearchReader(ctx context.Context, store search.Store, coll *schema.DefaultCollection, query *qsearch.Query, pageNo int32) (*SearchRowReader, error) {
 	return &SearchRowReader{
-		pageNo:     1,
+		pageNo:     int(pageNo),
+		single:     true,
 		query:      query,
 		store:      store,
 		collection: coll,
 		pageReader: newPageReader(store, coll, query),
 	}, nil
+}
+
+func NewSearchReader(ctx context.Context, store search.Store, coll *schema.DefaultCollection, query *qsearch.Query) (*SearchRowReader, error) {
+	s, err := SinglePageSearchReader(ctx, store, coll, query, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	s.single = false
+	return s, nil
 }
 
 func (s *SearchRowReader) Next(ctx context.Context, row *Row) bool {
@@ -256,6 +269,9 @@ func (s *SearchRowReader) Next(ctx context.Context, row *Row) bool {
 		}
 
 		if s.last {
+			return false
+		}
+		if s.single {
 			return false
 		}
 
