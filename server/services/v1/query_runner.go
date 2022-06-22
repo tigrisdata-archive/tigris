@@ -218,20 +218,17 @@ func (runner *BaseQueryRunner) buildKeysUsingFilter(tenant *metadata.Tenant, db 
 		return nil, err
 	}
 
-	primaryKeyIndex := coll.Indexes.PrimaryKey
-	kb := filter.NewKeyBuilder(filter.NewStrictEqKeyComposer(func(indexParts ...interface{}) (keys.Key, error) {
-		encodedTable, err := runner.encoder.EncodeTableName(tenant.GetNamespace(), db, coll)
-		if err != nil {
-			return nil, err
-		}
-		return runner.encoder.EncodeKey(encodedTable, primaryKeyIndex, indexParts)
-	}))
-	iKeys, err := kb.Build(filters, coll.Indexes.PrimaryKey.Fields)
+	encodedTable, err := runner.encoder.EncodeTableName(tenant.GetNamespace(), db, coll)
 	if err != nil {
 		return nil, err
 	}
 
-	return iKeys, nil
+	primaryKeyIndex := coll.Indexes.PrimaryKey
+	kb := filter.NewKeyBuilder(filter.NewStrictEqKeyComposer(func(indexParts ...interface{}) (keys.Key, error) {
+		return runner.encoder.EncodeKey(encodedTable, primaryKeyIndex, indexParts)
+	}))
+
+	return kb.Build(filters, coll.Indexes.PrimaryKey.Fields)
 }
 
 type InsertQueryRunner struct {

@@ -45,11 +45,15 @@ type DocumentSuite struct {
 	database   string
 }
 
-func expect(s httpexpect.LoggerReporter) *httpexpect.Expect {
+func expectLow(s httpexpect.LoggerReporter, url string) *httpexpect.Expect {
 	return httpexpect.WithConfig(httpexpect.Config{
-		BaseURL:  config.GetBaseURL(),
+		BaseURL:  url,
 		Reporter: httpexpect.NewAssertReporter(s),
 	})
+}
+
+func expect(s httpexpect.LoggerReporter) *httpexpect.Expect {
+	return expectLow(s, config.GetBaseURL())
 }
 
 func getDocumentURL(databaseName, collectionName string, methodName string) string {

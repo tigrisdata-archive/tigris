@@ -17,6 +17,7 @@ package v1
 import (
 	"context"
 
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/server/transaction"
@@ -49,6 +50,9 @@ func MakeDatabaseRowReader(ctx context.Context, tx transaction.Tx, keys []keys.K
 		tx:   tx,
 		ctx:  ctx,
 		keys: keys,
+	}
+	if d.idx >= len(d.keys) {
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "no keys to read")
 	}
 	if d.kvIterator, d.err = d.readNextKey(d.ctx, d.keys[d.idx]); d.err != nil {
 		return nil, d.err
@@ -89,7 +93,6 @@ func (d *DatabaseRowReader) readNextKey(ctx context.Context, key keys.Key) (kv.I
 		return nil, err
 	}
 	return it, nil
-
 }
 
 func (d *DatabaseRowReader) Err() error { return d.err }
