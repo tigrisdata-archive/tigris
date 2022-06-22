@@ -29,7 +29,7 @@ require (
 	github.com/spf13/viper v1.12.0
 	github.com/stretchr/testify v1.7.2
 	github.com/tigrisdata/tigris-client-go v1.0.0-alpha.18
-	github.com/typesense/typesense-go v0.4.0
+	github.com/typesense/typesense-go v0.5.0
 	github.com/uber-go/tally v3.5.0+incompatible
 	github.com/ugorji/go/codec v1.2.7
 	github.com/valyala/bytebufferpool v1.0.0

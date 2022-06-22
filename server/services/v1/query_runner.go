@@ -638,7 +638,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		}
 
 		if db.GetCollection(runner.createOrUpdateReq.GetCollection()) != nil && runner.createOrUpdateReq.OnlyCreate {
-			// check if onlyCreate is set and if yes then return an error if collection already exist
+			// check if onlyCreate is set and if set then return an error if collection already exist
 			return nil, ctx, api.Errorf(api.Code_ALREADY_EXISTS, "collection already exist")
 		}
 

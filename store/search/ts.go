@@ -126,6 +126,11 @@ func (s *storeImpl) CreateCollection(_ context.Context, schema *tsApi.Collection
 	return s.convertToInternalError(err)
 }
 
+func (s *storeImpl) UpdateCollection(_ context.Context, name string, schema *tsApi.CollectionUpdateSchema) error {
+	_, err := s.client.Collection(name).Update(schema)
+	return s.convertToInternalError(err)
+}
+
 func (s *storeImpl) DropCollection(_ context.Context, table string) error {
 	_, err := s.client.Collection(table).Delete()
 	return s.convertToInternalError(err)
