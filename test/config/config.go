@@ -26,3 +26,12 @@ func GetBaseURL() string {
 	}
 	return "http://localhost:8081"
 }
+
+func GetBaseURL2() string {
+	config.LoadEnvironment()
+
+	if config.GetEnvironment() == config.EnvTest {
+		return "http://tigris_server2:8081"
+	}
+	return "http://localhost:8082"
+}

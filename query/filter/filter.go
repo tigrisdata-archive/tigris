@@ -81,7 +81,7 @@ func NewWrappedFilter(filters []Filter) *WrappedFilter {
 }
 
 func All(reqFilter []byte) bool {
-	return bytes.Equal(reqFilter, filterAll)
+	return len(reqFilter) == 0 || bytes.Equal(reqFilter, filterAll)
 }
 
 type Factory struct {
