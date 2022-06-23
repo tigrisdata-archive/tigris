@@ -218,7 +218,7 @@ func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet set.Ha
 			} else {
 				// if it is simple item type
 				var f *Field
-				if f, err = builder.Items.Build(); err != nil {
+				if f, err = builder.Items.Build(true); err != nil {
 					return err
 				}
 				builder.Fields = append(nestedFields, f)
@@ -240,7 +240,7 @@ func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet set.Ha
 		}
 
 		var f *Field
-		f, err = builder.Build()
+		f, err = builder.Build(false)
 		if err != nil {
 			return err
 		}

@@ -15,6 +15,7 @@
 package schema
 
 import (
+	"regexp"
 	"strings"
 
 	jsoniter "github.com/json-iterator/go"
@@ -61,6 +62,30 @@ var FieldNames = [...]string{
 	ArrayType:    "array",
 	ObjectType:   "object",
 }
+
+var (
+	MsgFieldNameAsLanguageKeyword = "Invalid collection field name, It contains language keyword for fieldName = '%s'"
+	MsgFieldNameInvalidPattern    = "Invalid collection field name, field name can only contain [a-zA-Z0-9_$] and it can only start with [a-zA-Z_$] for fieldName = '%s'"
+	LanguageKeywords              = set.New("abstract", "add", "alias", "and", "any", "args", "arguments", "array",
+		"as", "as?", "ascending", "assert", "async", "await", "base", "bool", "boolean", "break", "by", "byte",
+		"callable", "case", "catch", "chan", "char", "checked", "class", "clone", "const", "constructor", "continue",
+		"debugger", "decimal", "declare", "def", "default", "defer", "del", "delegate", "delete", "descending", "die",
+		"do", "double", "dynamic", "echo", "elif", "else", "elseif", "empty", "enddeclare", "endfor", "endforeach",
+		"endif", "endswitch", "endwhile", "enum", "equals", "eval", "event", "except", "exception", "exit", "explicit",
+		"export", "extends", "extern", "fallthrough", "false", "final", "finally", "fixed", "float", "fn", "for",
+		"foreach", "from", "fun", "func", "function", "get", "global", "go", "goto", "group", "if", "implements",
+		"implicit", "import", "in", "include", "include_once", "init", "instanceof", "insteadof", "int", "integer",
+		"interface", "internal", "into", "is", "isset", "join", "lambda", "let", "list", "lock", "long", "managed",
+		"map", "match", "module", "nameof", "namespace", "native", "new", "nint", "none", "nonlocal", "not", "notnull",
+		"nuint", "null", "number", "object", "of", "on", "operator", "or", "orderby", "out", "override", "package",
+		"params", "partial", "pass", "print", "private", "protected", "public", "raise", "range", "readonly", "record",
+		"ref", "remove", "require", "require_once", "return", "sbyte", "sealed", "select", "set", "short", "sizeof",
+		"stackalloc", "static", "strictfp", "string", "struct", "super", "switch", "symbol", "synchronized", "this",
+		"throw", "throws", "trait", "transient", "true", "try", "type", "typealias", "typeof", "uint", "ulong",
+		"unchecked", "unmanaged", "unsafe", "unset", "use", "ushort", "using", "val", "value", "var", "virtual", "void",
+		"volatile", "when", "where", "while", "with", "xor", "yield")
+	ValidFieldNamePattern = regexp.MustCompile(`^[a-zA-Z_$][a-zA-Z0-9_$]*$`)
+)
 
 const (
 	jsonSpecNull   = "null"
@@ -285,9 +310,20 @@ func (f *FieldBuilder) Validate(v []byte) error {
 	return nil
 }
 
-func (f *FieldBuilder) Build() (*Field, error) {
+func (f *FieldBuilder) Build(isArrayElement bool) (*Field, error) {
 	if IsReservedField(f.FieldName) {
 		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "following reserved fields are not allowed %q", ReservedFields)
+	}
+
+	// check for language keywords
+	if LanguageKeywords.Contains(strings.ToLower(f.FieldName)) {
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, MsgFieldNameAsLanguageKeyword, f.FieldName)
+	}
+
+	// for array elements, items will have field name empty so skip the test for that.
+	// make sure they start with [a-z], [A-Z], $, _ and can only contain [a-z], [A-Z], $, _, [0-9]
+	if !isArrayElement && !ValidFieldNamePattern.MatchString(f.FieldName) {
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, MsgFieldNameInvalidPattern, f.FieldName)
 	}
 
 	fieldType := ToFieldType(f.Type, f.Encoding, f.Format)
