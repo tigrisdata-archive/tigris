@@ -28,7 +28,6 @@ import (
 	clientConfig "github.com/tigrisdata/tigris-client-go/config"
 	"github.com/tigrisdata/tigris-client-go/driver"
 	"github.com/tigrisdata/tigris/server/config"
-	"google.golang.org/grpc/codes"
 )
 
 func getTestServerHostPort() (string, int16) {
@@ -174,7 +173,7 @@ func testDriverBinary(t *testing.T, c driver.Driver) {
 	require.NoError(t, err)
 
 	err = db1.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema))
-	require.Error(t, api.Errorf(codes.AlreadyExists, "collection already exist"), err)
+	require.Error(t, api.Errorf(api.Code_ALREADY_EXISTS, "collection already exist"), err)
 
 	type doc struct {
 		K1 []byte
@@ -261,7 +260,7 @@ func testDriver(t *testing.T, c driver.Driver) {
 	require.NoError(t, err)
 
 	err = db1.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema))
-	require.Error(t, api.Errorf(codes.AlreadyExists, "collection already exist"), err)
+	require.Error(t, api.Errorf(api.Code_ALREADY_EXISTS, "collection already exist"), err)
 
 	doc1 := driver.Document(`{"K1": "vK1", "K2": 1, "D1": "vD1"}`)
 
@@ -269,7 +268,7 @@ func testDriver(t *testing.T, c driver.Driver) {
 	require.NoError(t, err)
 
 	_, err = db1.Insert(ctx, "c1", []driver.Document{doc1})
-	require.Error(t, api.Errorf(codes.AlreadyExists, "row already exists"), err)
+	require.Error(t, api.Errorf(api.Code_ALREADY_EXISTS, "row already exists"), err)
 
 	doc2, doc3 := driver.Document(`{"K1": "vK1", "K2": 2, "D1": "vD2"}`), driver.Document(`{"K1": "vK1", "K2": 3, "D1": "vD3"}`)
 

@@ -15,6 +15,7 @@
 package schema
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -61,11 +62,11 @@ func TestFieldBuilder_Build(t *testing.T) {
 			},
 		}
 		for _, c := range cases {
-			_, err := c.builder.Build()
+			_, err := c.builder.Build(false)
 			require.Equal(t, c.expError, err)
 		}
 	})
-	t.Run("test_supported properties", func(t *testing.T) {
+	t.Run("test supported properties", func(t *testing.T) {
 		cases := []struct {
 			propertySchema []byte
 			expError       error
@@ -94,6 +95,40 @@ func TestFieldBuilder_Build(t *testing.T) {
 			} else {
 				require.NoError(t, f.Validate(c.propertySchema))
 			}
+		}
+	})
+	t.Run("test reserved fields", func(t *testing.T) {
+		builder := &FieldBuilder{FieldName: "created_at", Type: "date-time"}
+		_, err := builder.Build(false)
+		require.Error(t, err)
+	})
+
+	t.Run("test programming language keywords as field name", func(t *testing.T) {
+		keywords := []string{"abstract", "integer", "yield"}
+		for _, keyword := range keywords {
+			_, err := (&FieldBuilder{FieldName: keyword, Type: "string"}).Build(false) // one time builder, thrown away after test concluded
+			require.Equal(t, err, api.Errorf(api.Code_INVALID_ARGUMENT,
+				fmt.Sprintf("Invalid collection field name, It contains language keyword for fieldName = '%s'", keyword)))
+		}
+	})
+
+	t.Run("test invalid field name pattern", func(t *testing.T) {
+		invalidFieldNames := []string{"0id", "0ID", "("}
+		for _, invalidFieldName := range invalidFieldNames {
+			_, err := (&FieldBuilder{FieldName: invalidFieldName, Type: "string"}).Build(false) // one time builder, thrown away after test concluded
+			require.Equal(t, err,
+				api.Errorf(api.Code_INVALID_ARGUMENT,
+					"Invalid collection field name, field name can only contain [a-zA-Z0-9_$] and it can only start"+
+						" with [a-zA-Z_$] for fieldName = '%s'",
+					invalidFieldName))
+		}
+	})
+
+	t.Run("test valid field name pattern", func(t *testing.T) {
+		validFieldNames := []string{"a1", "$a1", "$_a1", "$_", "A1", "Z1"}
+		for _, validFieldName := range validFieldNames {
+			_, err := (&FieldBuilder{FieldName: validFieldName, Type: "string"}).Build(false) // one time builder, thrown away after test concluded
+			require.NoError(t, err)
 		}
 	})
 }

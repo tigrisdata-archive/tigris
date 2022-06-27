@@ -24,6 +24,7 @@ import (
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/query/filter"
 	"github.com/tigrisdata/tigris/query/read"
+	qsearch "github.com/tigrisdata/tigris/query/search"
 	"github.com/tigrisdata/tigris/query/update"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/cdc"
@@ -32,7 +33,6 @@ import (
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
 	ulog "github.com/tigrisdata/tigris/util/log"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // QueryRunner is responsible for executing the current query and return the response
@@ -89,6 +89,15 @@ func (f *QueryRunnerFactory) GetDeleteQueryRunner(r *api.DeleteRequest) *DeleteQ
 // GetStreamingQueryRunner returns StreamingQueryRunner
 func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streaming Streaming) *StreamingQueryRunner {
 	return &StreamingQueryRunner{
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		req:             r,
+		streaming:       streaming,
+	}
+}
+
+// GetSearchQueryRunner for executing Search
+func (f *QueryRunnerFactory) GetSearchQueryRunner(r *api.SearchRequest, streaming SearchStreaming) *SearchQueryRunner {
+	return &SearchQueryRunner{
 		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
 		req:             r,
 		streaming:       streaming,
@@ -209,20 +218,17 @@ func (runner *BaseQueryRunner) buildKeysUsingFilter(tenant *metadata.Tenant, db 
 		return nil, err
 	}
 
-	primaryKeyIndex := coll.Indexes.PrimaryKey
-	kb := filter.NewKeyBuilder(filter.NewStrictEqKeyComposer(func(indexParts ...interface{}) (keys.Key, error) {
-		encodedTable, err := runner.encoder.EncodeTableName(tenant.GetNamespace(), db, coll)
-		if err != nil {
-			return nil, err
-		}
-		return runner.encoder.EncodeKey(encodedTable, primaryKeyIndex, indexParts)
-	}))
-	iKeys, err := kb.Build(filters, coll.Indexes.PrimaryKey.Fields)
+	encodedTable, err := runner.encoder.EncodeTableName(tenant.GetNamespace(), db, coll)
 	if err != nil {
 		return nil, err
 	}
 
-	return iKeys, nil
+	primaryKeyIndex := coll.Indexes.PrimaryKey
+	kb := filter.NewKeyBuilder(filter.NewStrictEqKeyComposer(func(indexParts ...interface{}) (keys.Key, error) {
+		return runner.encoder.EncodeKey(encodedTable, primaryKeyIndex, indexParts)
+	}))
+
+	return kb.Build(filters, coll.Indexes.PrimaryKey.Fields)
 }
 
 type InsertQueryRunner struct {
@@ -432,8 +438,7 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 			return nil, ctx, err
 		}
 	} else {
-		filterFactory := filter.NewFactory(collection.Fields)
-		wrappedFilter, err := filterFactory.WrappedFilter(runner.req.Filter)
+		wrappedFilter, err := filter.NewFactory(collection.Fields).WrappedFilter(runner.req.Filter)
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -443,7 +448,10 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 		if iKeys, err = runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter); err == nil {
 			rowReader, err = MakeDatabaseRowReader(ctx, tx, iKeys)
 		} else {
-			rowReader, err = MakeSearchRowReader(ctx, collection, nil, wrappedFilter, runner.searchStore)
+			rowReader, err = NewSearchReader(ctx, runner.searchStore, collection, qsearch.NewBuilder().
+				Filter(wrappedFilter).
+				PageSize(defaultPerPage).
+				Build())
 		}
 		if err != nil {
 			return nil, ctx, err
@@ -464,7 +472,7 @@ func (runner *StreamingQueryRunner) iterate(ctx context.Context, reader RowReade
 	}
 
 	var row Row
-	for reader.NextRow(ctx, &row) {
+	for reader.Next(ctx, &row) {
 		if limit > 0 && limit <= totalResults {
 			return nil
 		}
@@ -473,19 +481,12 @@ func (runner *StreamingQueryRunner) iterate(ctx context.Context, reader RowReade
 		if ulog.E(err) {
 			return err
 		}
-		var createdAt, updatedAt *timestamppb.Timestamp
-		if row.Data.CreatedAt != nil {
-			createdAt = row.Data.CreatedAt.GetProtoTS()
-		}
-		if row.Data.UpdatedAt != nil {
-			updatedAt = row.Data.UpdatedAt.GetProtoTS()
-		}
 
 		if err := runner.streaming.Send(&api.ReadResponse{
 			Data: newValue,
 			Metadata: &api.ResponseMetadata{
-				CreatedAt: createdAt,
-				UpdatedAt: updatedAt,
+				CreatedAt: row.Data.CreateToProtoTS(),
+				UpdatedAt: row.Data.UpdatedToProtoTS(),
 			},
 			ResumeToken: row.Key,
 		}); ulog.E(err) {
@@ -496,6 +497,103 @@ func (runner *StreamingQueryRunner) iterate(ctx context.Context, reader RowReade
 	}
 
 	return reader.Err()
+}
+
+// SearchQueryRunner is a runner used for Queries that are reads and needs to return result in streaming fashion
+type SearchQueryRunner struct {
+	*BaseQueryRunner
+
+	req       *api.SearchRequest
+	streaming SearchStreaming
+}
+
+func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
+	db, err := runner.GetDatabase(ctx, tx, tenant, runner.req.GetDb())
+	if err != nil {
+		return nil, ctx, err
+	}
+
+	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
+
+	collection, err := runner.GetCollections(db, runner.req.GetCollection())
+	if err != nil {
+		return nil, ctx, err
+	}
+
+	wrappedF, err := filter.NewFactory(collection.Fields).WrappedFilter(runner.req.Filter)
+	if err != nil {
+		return nil, ctx, err
+	}
+
+	var searchFields = runner.req.SearchFields
+	if len(searchFields) == 0 {
+		// this is to include all searchable fields if not present in the query
+		fields := collection.GetFields()
+		for _, f := range fields {
+			if f.DataType == schema.StringType {
+				searchFields = append(searchFields, f.FieldName)
+			}
+		}
+	}
+
+	facets, err := qsearch.UnmarshalFacet(runner.req.Facet)
+	if err != nil {
+		return nil, ctx, err
+	}
+
+	pageSize := int(runner.req.PageSize)
+	if pageSize == 0 {
+		pageSize = defaultPerPage
+	}
+
+	searchQ := qsearch.NewBuilder().
+		Query(runner.req.Q).
+		SearchFields(searchFields).
+		Facets(facets).
+		PageSize(pageSize).
+		Filter(wrappedF).
+		Build()
+
+	var rowReader *SearchRowReader
+	if runner.req.Page != 0 {
+		rowReader, err = SinglePageSearchReader(ctx, runner.searchStore, collection, searchQ, runner.req.Page)
+	} else {
+		rowReader, err = NewSearchReader(ctx, runner.searchStore, collection, searchQ)
+	}
+	if err != nil {
+		return nil, ctx, err
+	}
+
+	for {
+		// batch the results in a single grpc row
+		var resp = &api.SearchResponse{
+			Facets: rowReader.getFacets(),
+		}
+
+		var row Row
+		for rowReader.Next(ctx, &row) {
+			resp.Hits = append(resp.Hits, &api.SearchHit{
+				Data: row.Data.RawData,
+				Metadata: &api.SearchHitMeta{
+					CreatedAt: row.Data.CreateToProtoTS(),
+					UpdatedAt: row.Data.UpdatedToProtoTS(),
+				},
+			})
+
+			if len(resp.Hits) == pageSize {
+				break
+			}
+		}
+		if len(resp.Hits) == 0 {
+			break
+		}
+
+		if err := runner.streaming.Send(resp); err != nil {
+			return nil, ctx, err
+		}
+	}
+
+	return &Response{}, ctx, nil
 }
 
 type CollectionQueryRunner struct {
@@ -550,7 +648,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		}
 
 		if db.GetCollection(runner.createOrUpdateReq.GetCollection()) != nil && runner.createOrUpdateReq.OnlyCreate {
-			// check if onlyCreate is set and if yes then return an error if collection already exist
+			// check if onlyCreate is set and if set then return an error if collection already exist
 			return nil, ctx, api.Errorf(api.Code_ALREADY_EXISTS, "collection already exist")
 		}
 

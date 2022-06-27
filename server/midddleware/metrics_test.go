@@ -18,28 +18,54 @@ import (
 	"testing"
 
 	"github.com/tigrisdata/tigris/server/metrics"
+	"google.golang.org/grpc"
 )
 
-func TestGRPCMetrics(t *testing.T) {
+func TestGrpcMetrics(t *testing.T) {
 	metrics.InitializeMetrics()
-	callData := newGrpcReqMetrics("/tigrisdata.v1.Tigris/TestMethod", "unary")
+	svcName := "tigrisdata.v1.Tigris"
+	methodName := "TestMethod"
+	methodType := "unary"
+	methodInfo := grpc.MethodInfo{
+		Name:           methodName,
+		IsServerStream: false,
+		IsClientStream: false,
+	}
+	fullMethodName := "/tigrisdata.v1.Tigris/TestMethod"
 
-	t.Run("Increase test_counter", func(t *testing.T) {
-		testCounter := callData.getGrpcCounter("test_counter")
-		callData.increaseGrpcCounter(testCounter, 1)
+	metrics.InitServerRequestMetrics(svcName, methodInfo)
+
+	t.Run("Test tigris server counters", func(t *testing.T) {
+		countReceivedMessage(fullMethodName, methodType)
+		countHandledMessage(fullMethodName, methodType)
+		countUnknownErrorMessage(fullMethodName, methodType)
+		countOkMessage(fullMethodName, methodType)
+		countSpecificErrorMessage(fullMethodName, methodType, "test_source", "test_code")
 	})
+}
 
-	t.Run("Test message counters", func(t *testing.T) {
-		callData.receiveMessage()
-		callData.handleMessage()
-		callData.errorMessage()
-		callData.okMessage()
+func TestFdbMetrics(t *testing.T) {
+	metrics.InitializeFdbMetrics()
+
+	testNormalTags := []map[string]string{
+		metrics.GetFdbReqTags("Commit", false),
+		metrics.GetFdbReqTags("Insert", false),
+		metrics.GetFdbReqTags("Insert", true),
+	}
+
+	testKnownErrorTags := []map[string]string{
+		metrics.GetFdbReqSpecificErrorTags("Commit", "1", false),
+		metrics.GetFdbReqSpecificErrorTags("Insert", "2", false),
+		metrics.GetFdbReqSpecificErrorTags("Insert", "3", true),
+	}
+
+	t.Run("Test FDB counters", func(t *testing.T) {
+		for _, tags := range testNormalTags {
+			metrics.FdbRequests.Tagged(tags).Counter("ok").Inc(1)
+			metrics.FdbErrorRequests.Tagged(tags).Counter("unknown").Inc(1)
+		}
+		for _, tags := range testKnownErrorTags {
+			metrics.FdbErrorRequests.Tagged(tags).Counter("specific").Inc(1)
+		}
 	})
-
-	t.Run("Test histogram", func(t *testing.T) {
-		testHistogram := callData.getTimeHistogram()
-		stopWatch := testHistogram.Start()
-		stopWatch.Stop()
-	})
-
 }

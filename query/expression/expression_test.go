@@ -29,6 +29,6 @@ func TestExpression(t *testing.T) {
 	require.Equal(t, "$foo", string(*listExpr[0].(value.Value).(*value.StringValue)))
 	require.Equal(t, "bar", string(*listExpr[1].(value.Value).(*value.StringValue)))
 	require.Equal(t, int64(1), int64(*listExpr[2].(value.Value).(*value.IntValue)))
-	require.Equal(t, float64(1.01), float64(*listExpr[3].(value.Value).(*value.DoubleValue)))
+	require.Equal(t, float64(1.01), listExpr[3].(value.Value).(*value.DoubleValue).Double)
 	require.Equal(t, false, bool(*listExpr[4].(value.Value).(*value.BoolValue)))
 }

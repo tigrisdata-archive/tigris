@@ -1,0 +1,66 @@
+package v1
+
+import (
+	"fmt"
+	"testing"
+	"time"
+
+	"github.com/buger/jsonparser"
+	jsoniter "github.com/json-iterator/go"
+	"github.com/stretchr/testify/require"
+)
+
+// Benchmarking to test if it makes sense to decode the data and then add fields to the decoded map and then encode
+// again and this benchmark shows if we are setting more than one field then it is better to decode.
+func BenchmarkEncDec(b *testing.B) {
+	js := []byte(`{
+	"name": "Women's Fiona Handbag",
+	"brand": "Michael Cors",
+	"labels": "Handbag, Purse, Women's fashion",
+	"price": 99999.12345,
+	"key": "1",
+	"categories": ["random", "fashion", "handbags", "women's"],
+	"description": "A typical product catalog will have many json objects like this. This benchmark is testing if decoding/encoding is better than mutating JSON directly.",
+	"random": "abc defg hij klm nopqr stuv wxyz 1234 56 78 90 abcd efghijkl mnopqrstuvwxyzA BCD EFGHIJKL MNOPQRS TUVW XYZ"
+}`)
+
+	var id = "1"
+	for i := 0; i < b.N; i++ {
+		var data map[string]interface{}
+		if err := jsoniter.Unmarshal(js, &data); err != nil {
+			require.NoError(b, err)
+		}
+
+		data[searchID] = id
+		data["created_at"] = time.Now().UTC().Format(time.RFC3339Nano)
+		data["updated_at"] = time.Now().UTC().Format(time.RFC3339Nano)
+		_, err := jsoniter.Marshal(data)
+		require.NoError(b, err)
+	}
+}
+
+func BenchmarkJSONSet(b *testing.B) {
+	js := []byte(`{
+	"name": "Women's Fiona Handbag",
+	"brand": "Michael Cors",
+	"labels": "Handbag, Purse, Women's fashion",
+	"price": 99999.12345,
+	"key": "1",
+	"categories": ["random", "fashion", "handbags", "women's"],
+	"description": "A typical product catalog will have many json objects like this. This benchmark is testing if decoding/encoding is better than mutating JSON directly.",
+	"random": "abc defg hij klm nopqr stuv wxyz 1234 56 78 90 abcd efghijkl mnopqrstuvwxyzA BCD EFGHIJKL MNOPQRS TUVW XYZ"
+}`)
+
+	var err error
+	var id = "1"
+	for i := 0; i < b.N; i++ {
+		js, err = jsonparser.Set(js, []byte(fmt.Sprintf(`"%s"`, id)), searchID)
+		require.NoError(b, err)
+
+		js, err = jsonparser.Set(js, []byte(fmt.Sprintf(`"%s"`, "created_at")), time.Now().UTC().Format(time.RFC3339Nano))
+		require.NoError(b, err)
+
+		js, err = jsonparser.Set(js, []byte(fmt.Sprintf(`"%s"`, "updated_at")), time.Now().UTC().Format(time.RFC3339Nano))
+		require.NoError(b, err)
+	}
+}

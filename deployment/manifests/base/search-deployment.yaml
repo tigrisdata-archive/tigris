@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/name: tigris-search
+    app.kubernetes.io/part-of: tigris
+    app.kubernetes.io/component: search
+  name: tigris-search
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tigris-search
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tigris-search
+    spec:
+      containers:
+        - name: tigris-search
+          env:
+            - name: TYPESENSE_DATA_DIR
+              value: /tmp
+            - name: TYPESENSE_API_KEY
+              value: ts_test_key
+          image: typesense/typesense:0.23.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8108

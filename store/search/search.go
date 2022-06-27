@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/rs/zerolog/log"
+	qsearch "github.com/tigrisdata/tigris/query/search"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/typesense/typesense-go/typesense"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
@@ -26,16 +28,18 @@ import (
 
 type Store interface {
 	CreateCollection(ctx context.Context, schema *tsApi.CollectionSchema) error
+	UpdateCollection(ctx context.Context, name string, schema *tsApi.CollectionUpdateSchema) error
 	DropCollection(ctx context.Context, table string) error
 	IndexDocuments(ctx context.Context, table string, documents io.Reader, options IndexDocumentsOptions) error
 	DeleteDocuments(ctx context.Context, table string, key string) error
-	Search(ctx context.Context, table string, filterBy string, page int, perPage int) ([]tsApi.SearchResult, error)
+	Search(ctx context.Context, table string, query *qsearch.Query, pageNo int) ([]tsApi.SearchResult, error)
 }
 
 func NewStore(config *config.SearchConfig) (Store, error) {
 	client := typesense.NewClient(
 		typesense.WithServer(fmt.Sprintf("http://%s:%d", config.Host, config.Port)),
 		typesense.WithAPIKey(config.AuthKey))
+	log.Info().Str("host", config.Host).Int16("port", config.Port).Msg("initialized search store")
 	return &storeImpl{
 		client: client,
 	}, nil
@@ -43,14 +47,15 @@ func NewStore(config *config.SearchConfig) (Store, error) {
 
 type NoopStore struct{}
 
-func (n *NoopStore) CreateCollection(_ context.Context, _ *tsApi.CollectionSchema) error {
+func (n *NoopStore) CreateCollection(context.Context, *tsApi.CollectionSchema) error { return nil }
+func (n *NoopStore) UpdateCollection(context.Context, string, *tsApi.CollectionUpdateSchema) error {
 	return nil
 }
-func (n *NoopStore) DropCollection(_ context.Context, _ string) error { return nil }
-func (n *NoopStore) IndexDocuments(_ context.Context, _ string, _ io.Reader, _ IndexDocumentsOptions) error {
+func (n *NoopStore) DropCollection(context.Context, string) error { return nil }
+func (n *NoopStore) IndexDocuments(context.Context, string, io.Reader, IndexDocumentsOptions) error {
 	return nil
 }
-func (n *NoopStore) DeleteDocuments(_ context.Context, _ string, _ string) error { return nil }
-func (n *NoopStore) Search(_ context.Context, _ string, _ string, _ int, _ int) ([]tsApi.SearchResult, error) {
+func (n *NoopStore) DeleteDocuments(context.Context, string, string) error { return nil }
+func (n *NoopStore) Search(context.Context, string, *qsearch.Query, int) ([]tsApi.SearchResult, error) {
 	return nil, nil
 }

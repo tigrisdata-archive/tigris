@@ -238,11 +238,70 @@ func (s *CollectionSuite) TestDescribeCollection() {
 	dropCollection(s.T(), s.database, "test_collection")
 }
 
+func TestCollection_Update(t *testing.T) {
+	dbName := fmt.Sprintf("db_test")
+
+	dropDatabase(t, dbName)
+	createDatabase(t, dbName)
+	defer dropDatabase(t, dbName)
+
+	collectionName := fmt.Sprintf("test_collection")
+	createCollection(t, dbName, collectionName,
+		Map{
+			"schema": Map{
+				"title": collectionName,
+				"properties": Map{
+					"int_field": Map{
+						"type": "integer",
+					},
+					"string_field": Map{
+						"type": "string",
+					},
+				},
+				"primary_key": []any{"int_field"},
+			},
+		}).Status(http.StatusOK)
+
+	cases := []struct {
+		schema  Map
+		expCode int
+	}{
+		{
+			// primary key missing
+			Map{"schema": Map{"title": collectionName, "properties": Map{"int_field": Map{"type": "integer"}, "string_field": Map{"type": "string"}}}},
+			http.StatusBadRequest,
+		},
+		{
+			// type change
+			Map{"schema": Map{"title": collectionName, "properties": Map{"int_field": Map{"type": "string"}, "string_field": Map{"type": "string"}}, "primary_key": []any{"int_field"}}},
+			http.StatusBadRequest,
+		}, {
+			// field removed
+			Map{"schema": Map{"title": collectionName, "properties": Map{"int_field": Map{"type": "integer"}}, "primary_key": []any{"int_field"}}},
+			http.StatusBadRequest,
+		}, {
+			// success, adding a field
+			Map{"schema": Map{"title": collectionName, "properties": Map{"int_field": Map{"type": "integer"}, "string_field": Map{"type": "string"}, "extra_field": Map{"type": "string"}}, "primary_key": []any{"int_field"}}},
+			http.StatusOK,
+		},
+	}
+	for _, c := range cases {
+		createCollection(t, dbName, collectionName, c.schema).Status(c.expCode)
+	}
+}
+
 func createCollection(t *testing.T, database string, collection string, schema map[string]interface{}) *httpexpect.Response {
 	e := expect(t)
 	return e.POST(getCollectionURL(database, collection, "createOrUpdate")).
 		WithJSON(schema).
 		Expect()
+}
+
+func createTestCollection(t *testing.T, database string, collection string, schema map[string]interface{}) {
+	dropDatabase(t, database)
+	createDatabase(t, database)
+	dropCollection(t, database, collection)
+	createCollection(t, database, collection, schema).Status(http.StatusOK)
 }
 
 func describeCollection(t *testing.T, database string, collection string, schema map[string]interface{}) *httpexpect.Response {

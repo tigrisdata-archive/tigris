@@ -22,7 +22,6 @@ import (
 
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	"github.com/apple/foundationdb/bindings/go/src/fdb/subspace"
-	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/schema"
@@ -96,7 +95,7 @@ func (i *SearchIndexer) OnPostCommit(ctx context.Context, tenant *metadata.Tenan
 				return err
 			}
 
-			searchData, err := PackSearchFields(tableData.RawData, collection, searchKey)
+			searchData, err := PackSearchFields(tableData, collection, searchKey)
 			if err != nil {
 				return err
 			}
@@ -158,7 +157,7 @@ func CreateSearchKey(table []byte, fdbKey []byte) (string, error) {
 	}
 }
 
-func PackSearchFields(doc []byte, collection *schema.DefaultCollection, id string) ([]byte, error) {
+func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollection, id string) ([]byte, error) {
 	var complexFields []string
 	for _, f := range collection.Fields {
 		if schema.PackSearchField(f) {
@@ -167,43 +166,76 @@ func PackSearchFields(doc []byte, collection *schema.DefaultCollection, id strin
 	}
 
 	var err error
-	if len(complexFields) > 0 {
-		// better to decode it and then update the JSON
-		var data map[string]interface{}
-		if err = jsoniter.Unmarshal(doc, &data); err != nil {
-			return nil, err
-		}
-
-		for _, complex := range complexFields {
-			if value, ok := data[complex]; ok {
-				if data[complex], err = jsoniter.MarshalToString(value); err != nil {
-					return nil, err
-				}
-			}
-		}
-		data[searchID] = id
-
-		return jsoniter.Marshal(data)
-	} else if doc, err = jsonparser.Set(doc, []byte(fmt.Sprintf(`"%s"`, id)), searchID); err != nil {
+	// better to decode it and then update the JSON
+	var decData map[string]interface{}
+	if err = jsoniter.Unmarshal(data.RawData, &decData); err != nil {
 		return nil, err
 	}
 
-	return doc, nil
-}
+	if value, ok := decData[searchID]; ok {
+		// if user schema collection has id field already set then change it
+		decData[schema.ReservedFields[schema.IdToSearchKey]] = value
+	}
 
-func UnpackSearchFields(doc *map[string]interface{}, collection *schema.DefaultCollection) error {
-	for _, f := range collection.Fields {
-		if schema.PackSearchField(f) {
-			if v, ok := (*doc)[f.FieldName]; ok {
-				var value interface{}
-				if err := jsoniter.UnmarshalFromString(v.(string), &value); err != nil {
-					return err
-				}
-				(*doc)[f.FieldName] = value
+	for _, complex := range complexFields {
+		if value, ok := decData[complex]; ok {
+			if decData[complex], err = jsoniter.MarshalToString(value); err != nil {
+				return nil, err
 			}
-
 		}
 	}
 
-	return nil
+	decData[searchID] = id
+	decData[schema.ReservedFields[schema.CreatedAt]] = data.CreatedAt.UnixNano()
+	if data.UpdatedAt != nil {
+		decData[schema.ReservedFields[schema.UpdatedAt]] = data.UpdatedAt.UnixNano()
+	}
+
+	return jsoniter.Marshal(decData)
+}
+
+func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCollection) (string, *internal.TableData, error) {
+	for _, f := range collection.Fields {
+		if schema.PackSearchField(f) {
+			if v, ok := doc[f.FieldName]; ok {
+				var value interface{}
+				if err := jsoniter.UnmarshalFromString(v.(string), &value); err != nil {
+					return "", nil, err
+				}
+				doc[f.FieldName] = value
+			}
+		}
+	}
+
+	var searchKey = doc[searchID].(string)
+	if value, ok := doc[schema.ReservedFields[schema.IdToSearchKey]]; ok {
+		// if user has an id field then check it and set it back
+		doc["id"] = value
+		delete(doc, schema.ReservedFields[schema.IdToSearchKey])
+	} else {
+		// otherwise, remove the search id from the result
+		delete(doc, searchID)
+	}
+
+	// set tableData with metadata
+	var tableData = &internal.TableData{}
+	if value, ok := doc[schema.ReservedFields[schema.CreatedAt]]; ok {
+		tableData.CreatedAt = internal.CreateNewTimestamp(int64(value.(float64)))
+		delete(doc, schema.ReservedFields[schema.CreatedAt])
+	}
+	if value, ok := (doc)[schema.ReservedFields[schema.UpdatedAt]]; ok {
+		tableData.UpdatedAt = internal.CreateNewTimestamp(int64(value.(float64)))
+		delete(doc, schema.ReservedFields[schema.UpdatedAt])
+	}
+
+	return searchKey, tableData, nil
+}
+
+func UnpackAndSetMD(doc map[string]interface{}, tableData *internal.TableData) {
+	if v, ok := doc[schema.ReservedFields[schema.CreatedAt]]; ok {
+		tableData.CreatedAt = internal.CreateNewTimestamp(int64(v.(float64)))
+	}
+	if v, ok := doc[schema.ReservedFields[schema.UpdatedAt]]; ok {
+		tableData.UpdatedAt = internal.CreateNewTimestamp(int64(v.(float64)))
+	}
 }

@@ -16,91 +16,94 @@ package middleware
 
 import (
 	"context"
+	"errors"
+	"strconv"
+
+	"github.com/apple/foundationdb/bindings/go/src/fdb"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/uber-go/tally"
 	"google.golang.org/grpc"
-	"strings"
 )
 
-type grpcReqMetrics struct {
-	grpcMethod string
-	grpcType   string
+func increaseCounter(fullMethod string, methodType string, counterName string, value int64) {
+	tags := metrics.GetPreinitializedTagsFromFullMethod(fullMethod, methodType)
+	metrics.Requests.Tagged(tags).Counter(counterName).Inc(value)
 }
 
-func newGrpcReqMetrics(grpcMethod string, grpcType string) grpcReqMetrics {
-	return grpcReqMetrics{grpcMethod: grpcMethod, grpcType: grpcType}
+func countReceivedMessage(fullMethod string, methodType string) {
+	// Tags are pre-created when initializing the metrics
+	increaseCounter(fullMethod, methodType, "received", 1)
 }
 
-func (g *grpcReqMetrics) getTags() map[string]string {
-	fullMethodParts := strings.Split(g.grpcMethod, "/")
-	return map[string]string{
-		"grpc_method":  fullMethodParts[2],
-		"grpc_service": fullMethodParts[1],
-		"grpc_type":    g.grpcType,
-	}
+func countHandledMessage(fullMethod string, methodType string) {
+	// Tags are pre-created when initializing the metrics
+	increaseCounter(fullMethod, methodType, "handled", 1)
 }
 
-func (g *grpcReqMetrics) getGrpcCounter(name string) tally.Counter {
-	tags := g.getTags()
-	return metrics.Root.Tagged(tags).Counter(name)
+func countOkMessage(fullMethod string, methodType string) {
+	// Tags are pre-created when initializing the metrics
+	increaseCounter(fullMethod, methodType, "ok", 1)
 }
 
-func (g *grpcReqMetrics) increaseGrpcCounter(counter tally.Counter, value int64) {
-	counter.Inc(value)
+func countUnknownErrorMessage(fullMethod string, methodType string) {
+	// tigris_server_requests_error is s scope, so different scope needs to be used here
+	tags := metrics.GetPreinitializedTagsFromFullMethod(fullMethod, methodType)
+	metrics.ErrorRequests.Tagged(tags).Counter("unknown").Inc(1)
 }
 
-func (g *grpcReqMetrics) receiveMessage() {
-	counter := g.getGrpcCounter("grpc_server_msg_received_total")
-	g.increaseGrpcCounter(counter, 1)
-}
-
-func (g *grpcReqMetrics) handleMessage() {
-	counter := g.getGrpcCounter("grpc_server_msg_handled_total")
-	g.increaseGrpcCounter(counter, 1)
-}
-
-func (g *grpcReqMetrics) errorMessage() {
-	counter := g.getGrpcCounter("grpc_server_msg_error_total")
-	g.increaseGrpcCounter(counter, 1)
-}
-
-func (g *grpcReqMetrics) okMessage() {
-	counter := g.getGrpcCounter("grpc_server_msg_ok_total")
-	g.increaseGrpcCounter(counter, 1)
-}
-
-func (g *grpcReqMetrics) getTimeHistogram() tally.Histogram {
-	tags := g.getTags()
-	return metrics.Root.Tagged(tags).Histogram("grpc_server_handling_time_bucket", tally.DefaultBuckets)
+func countSpecificErrorMessage(fullMethod string, methodType, errSource string, errCode string) {
+	// For specific errors the tags are not pre-initialized because it has the error code in it
+	metaData := metrics.GetGrpcEndPointMetadataFromFullMethod(fullMethod, methodType)
+	tags := metaData.GetSpecificErrorTags(errSource, errCode)
+	metrics.ErrorRequests.Tagged(tags).Counter("specific").Inc(1)
 }
 
 func UnaryMetricsServerInterceptor() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		reqMetrics := newGrpcReqMetrics(info.FullMethod, "unary")
-		defer reqMetrics.getTimeHistogram().Start().Stop()
-		reqMetrics.receiveMessage()
+		methodType := "unary"
+		tags := metrics.GetPreinitializedTagsFromFullMethod(info.FullMethod, methodType)
+		defer metrics.RequestsRespTime.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
 		resp, err := handler(ctx, req)
-		reqMetrics.handleMessage()
+		countReceivedMessage(info.FullMethod, methodType)
+		countHandledMessage(info.FullMethod, methodType)
 		if err != nil {
-			reqMetrics.errorMessage()
+			var terr *api.TigrisError
+			var ferr fdb.Error
+			if errors.As(err, &terr) {
+				countSpecificErrorMessage(info.FullMethod, methodType, "tigris_server", terr.Code.String())
+			} else if errors.As(err, &ferr) {
+				countSpecificErrorMessage(info.FullMethod, methodType, "fdb_server", strconv.Itoa(ferr.Code))
+			} else {
+				countUnknownErrorMessage(info.FullMethod, methodType)
+			}
 		} else {
-			reqMetrics.okMessage()
+			countOkMessage(info.FullMethod, methodType)
 		}
 		return resp, err
 	}
 }
 func StreamMetricsServerInterceptor() grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		reqMetrics := newGrpcReqMetrics(info.FullMethod, "stream")
-		defer reqMetrics.getTimeHistogram().Start().Stop()
-		reqMetrics.receiveMessage()
+		methodType := "stream"
+		tags := metrics.GetPreinitializedTagsFromFullMethod(info.FullMethod, methodType)
+		defer metrics.RequestsRespTime.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
+		countReceivedMessage(info.FullMethod, methodType)
 		wrapper := &recvWrapper{stream}
-		reqMetrics.handleMessage()
+		countHandledMessage(info.FullMethod, methodType)
 		err := handler(srv, wrapper)
 		if err != nil {
-			reqMetrics.okMessage()
+			var terr *api.TigrisError
+			var ferr fdb.Error
+			if errors.As(err, &terr) {
+				countSpecificErrorMessage(info.FullMethod, methodType, "tigris_server", terr.Code.String())
+			} else if errors.As(err, &ferr) {
+				countSpecificErrorMessage(info.FullMethod, methodType, "fdb_server", strconv.Itoa(ferr.Code))
+			} else {
+				countUnknownErrorMessage(info.FullMethod, methodType)
+			}
 		} else {
-			reqMetrics.errorMessage()
+			countOkMessage(info.FullMethod, methodType)
 		}
 		return err
 	}

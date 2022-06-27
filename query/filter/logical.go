@@ -76,7 +76,7 @@ func (a *AndFilter) Matches(doc []byte) bool {
 	return true
 }
 
-func (a *AndFilter) MatchesDoc(doc *map[string]interface{}) bool {
+func (a *AndFilter) MatchesDoc(doc map[string]interface{}) bool {
 	for _, f := range a.filter {
 		if !f.MatchesDoc(doc) {
 			return false
@@ -153,7 +153,7 @@ func (o *OrFilter) Matches(doc []byte) bool {
 	return false
 }
 
-func (o *OrFilter) MatchesDoc(doc *map[string]interface{}) bool {
+func (o *OrFilter) MatchesDoc(doc map[string]interface{}) bool {
 	for _, f := range o.filter {
 		if f.MatchesDoc(doc) {
 			return true

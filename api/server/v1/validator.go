@@ -98,6 +98,14 @@ func (x *ReadRequest) Validate() error {
 	return nil
 }
 
+func (x *SearchRequest) Validate() error {
+	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (x *CreateOrUpdateCollectionRequest) Validate() error {
 	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
 		return err
@@ -150,7 +158,7 @@ func (x *ListDatabasesRequest) Validate() error {
 	return nil
 }
 
-func (x *StreamRequest) Validate() error {
+func (x *EventsRequest) Validate() error {
 	if err := isValidDatabase(x.Db); err != nil {
 		return err
 	}

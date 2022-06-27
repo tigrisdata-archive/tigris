@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package http
+package muxer
 
 import (
 	"net/http"
@@ -23,18 +23,17 @@ import (
 	"github.com/soheilhy/cmux"
 	"github.com/tigrisdata/tigris/server/config"
 	middleware "github.com/tigrisdata/tigris/server/midddleware"
-	"github.com/tigrisdata/tigris/server/types"
 )
 
-type Server struct {
+type HTTPServer struct {
 	Router chi.Router
 	httpS  *http.Server
 	Inproc *inprocgrpc.Channel
 }
 
-func NewServer(cfg *config.Config) *Server {
+func NewHTTPServer(cfg *config.Config) *HTTPServer {
 	r := chi.NewRouter()
-	s := &Server{
+	s := &HTTPServer{
 		Inproc: &inprocgrpc.Channel{},
 		Router: r,
 		httpS: &http.Server{
@@ -50,15 +49,11 @@ func NewServer(cfg *config.Config) *Server {
 	return s
 }
 
-func (s *Server) Start(mux cmux.CMux) error {
+func (s *HTTPServer) Start(mux cmux.CMux) error {
 	match := mux.Match(cmux.HTTP1Fast())
 	go func() {
 		err := s.httpS.Serve(match)
 		log.Fatal().Err(err).Msg("start http server")
 	}()
 	return nil
-}
-
-func (s *Server) GetType() string {
-	return types.HTTPServer
 }

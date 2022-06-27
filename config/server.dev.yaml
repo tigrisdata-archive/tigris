@@ -12,16 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - deployment.yaml
-  - search-deployment.yaml
-  - service.yaml
-  - service_grpc.yaml
-  - service_search.yaml
-  - network-policy.yaml
-configMapGenerator:
-  - name: tigris-server-config
-    files:
-      - server.yaml
+server:
+  host: localhost
+  port: 8081
+
+search:
+  host: localhost
+  port: 8108
+  auth_key: ts_test_key
+
+log:
+  level: trace
+
+foundationdb:
+  cluster_file: "./test/config/fdb.cluster"

@@ -18,19 +18,101 @@ import (
 	"github.com/tigrisdata/tigris/query/filter"
 )
 
-type Query struct{}
+const (
+	all = "*"
+)
 
-type Spec struct {
-	Query  Query
-	Filter []filter.Filter
+type Query struct {
+	Q        string
+	Fields   []string
+	Facets   Facets
+	WrappedF *filter.WrappedFilter
+	PageSize int
 }
 
-type Builder struct{}
+func (q *Query) ToSearchFacetSize() int {
+	var maxSize = 0
+	for _, f := range q.Facets.Fields {
+		if maxSize < f.Size {
+			maxSize = f.Size
+		}
+	}
+
+	if len(q.Facets.Fields) > 0 && maxSize == 0 {
+		return defaultFacetSize
+	}
+
+	return maxSize
+}
+
+func (q *Query) ToSearchFacets() string {
+	if len(q.Facets.Fields) == 0 {
+		return ""
+	}
+
+	var facets string
+	for i, f := range q.Facets.Fields {
+		if i != 0 {
+			facets += ","
+		}
+		facets += f.Name
+	}
+
+	return facets
+}
+
+func (q *Query) ToSearchFields() string {
+	var fields string
+	for i, f := range q.Fields {
+		if i != 0 {
+			fields += ","
+		}
+		fields += f
+	}
+	return fields
+}
+
+func (q *Query) ToSearchFilter() string {
+	return q.WrappedF.Filter.ToSearchFilter()
+}
+
+type Builder struct {
+	query *Query
+}
 
 func NewBuilder() *Builder {
-	return &Builder{}
+	return &Builder{
+		query: &Query{
+			Q: all,
+		},
+	}
 }
 
-func (f *Builder) FromFilter(w *filter.WrappedFilter) string {
-	return w.Filter.ToSearchFilter()
+func (b *Builder) Query(q string) *Builder {
+	b.query.Q = q
+	return b
+}
+
+func (b *Builder) Filter(w *filter.WrappedFilter) *Builder {
+	b.query.WrappedF = w
+	return b
+}
+
+func (b *Builder) Facets(facets Facets) *Builder {
+	b.query.Facets = facets
+	return b
+}
+
+func (b *Builder) SearchFields(f []string) *Builder {
+	b.query.Fields = f
+	return b
+}
+
+func (b *Builder) PageSize(s int) *Builder {
+	b.query.PageSize = s
+	return b
+}
+
+func (b *Builder) Build() *Query {
+	return b.query
 }

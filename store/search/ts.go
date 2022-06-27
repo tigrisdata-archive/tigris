@@ -21,6 +21,7 @@ import (
 	"net/http"
 
 	jsoniter "github.com/json-iterator/go"
+	qsearch "github.com/tigrisdata/tigris/query/search"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/typesense/typesense-go/typesense"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
@@ -91,20 +92,33 @@ func (s *storeImpl) IndexDocuments(_ context.Context, table string, reader io.Re
 	return nil
 }
 
-func (s *storeImpl) Search(_ context.Context, table string, filterBy string, page int, perPage int) ([]tsApi.SearchResult, error) {
-	q := "*"
+func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query, pageNo int) ([]tsApi.SearchResult, error) {
+	var multiSearchParam = tsApi.MultiSearchParameters{
+		Q:       &query.Q,
+		PerPage: &query.PageSize,
+		Page:    &pageNo,
+	}
+	if filter := query.ToSearchFilter(); len(filter) > 0 {
+		multiSearchParam.FilterBy = &filter
+	}
+	if fields := query.ToSearchFields(); len(fields) > 0 {
+		multiSearchParam.QueryBy = &fields
+	}
+	if facets := query.ToSearchFacets(); len(facets) > 0 {
+		multiSearchParam.FacetBy = &facets
+		if size := query.ToSearchFacetSize(); size > 0 {
+			multiSearchParam.MaxFacetValues = &size
+		}
+	}
+
+	var searchParams []tsApi.MultiSearchCollectionParameters
+	searchParams = append(searchParams, tsApi.MultiSearchCollectionParameters{
+		Collection:            table,
+		MultiSearchParameters: multiSearchParam,
+	})
+
 	res, err := s.client.MultiSearch.Perform(&tsApi.MultiSearchParams{}, tsApi.MultiSearchSearchesParameter{
-		Searches: []tsApi.MultiSearchCollectionParameters{
-			{
-				Collection: table,
-				MultiSearchParameters: tsApi.MultiSearchParameters{
-					FilterBy: &filterBy,
-					Q:        &q,
-					Page:     &page,
-					PerPage:  &perPage,
-				},
-			},
-		},
+		Searches: searchParams,
 	})
 	if err != nil {
 		return nil, err
@@ -115,6 +129,11 @@ func (s *storeImpl) Search(_ context.Context, table string, filterBy string, pag
 
 func (s *storeImpl) CreateCollection(_ context.Context, schema *tsApi.CollectionSchema) error {
 	_, err := s.client.Collections().Create(schema)
+	return s.convertToInternalError(err)
+}
+
+func (s *storeImpl) UpdateCollection(_ context.Context, name string, schema *tsApi.CollectionUpdateSchema) error {
+	_, err := s.client.Collection(name).Update(schema)
 	return s.convertToInternalError(err)
 }
 

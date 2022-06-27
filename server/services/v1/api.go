@@ -251,6 +251,18 @@ func (s *apiService) Read(r *api.ReadRequest, stream api.Tigris_ReadServer) erro
 	return nil
 }
 
+func (s *apiService) Search(r *api.SearchRequest, stream api.Tigris_SearchServer) error {
+	_, err := s.sessions.Execute(stream.Context(), &ReqOptions{
+		txCtx:       api.GetTransaction(stream.Context(), r),
+		queryRunner: s.runnerFactory.GetSearchQueryRunner(r, stream),
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (s *apiService) CreateOrUpdateCollection(ctx context.Context, r *api.CreateOrUpdateCollectionRequest) (*api.CreateOrUpdateCollectionResponse, error) {
 	runner := s.runnerFactory.GetCollectionQueryRunner()
 	runner.SetCreateOrUpdateCollectionReq(r)
@@ -386,7 +398,7 @@ func (s *apiService) GetInfo(_ context.Context, _ *api.GetInfoRequest) (*api.Get
 	}, nil
 }
 
-func (s *apiService) Stream(r *api.StreamRequest, stream api.Tigris_StreamServer) error {
+func (s *apiService) Events(r *api.EventsRequest, stream api.Tigris_EventsServer) error {
 	publisher := s.cdcMgr.GetPublisher(r.GetDb())
 	streamer, err := publisher.NewStreamer(s.kvStore)
 	if err != nil {
@@ -426,7 +438,7 @@ func (s *apiService) Stream(r *api.StreamRequest, stream api.Tigris_StreamServer
 						Last:       op.Last,
 					}
 
-					response := &api.StreamResponse{
+					response := &api.EventsResponse{
 						Event: event,
 					}
 

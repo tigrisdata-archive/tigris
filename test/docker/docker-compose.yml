@@ -56,6 +56,27 @@ services:
       - tigris_fdb
       - tigris_search
 
+  tigris_server2:
+    container_name: tigris_server2
+    image: tigris_server
+    environment:
+      - TIGRIS_ENVIRONMENT=test
+      - TIGRIS_SERVER_SEARCH_AUTH_KEY=ts_test_key
+      - TIGRIS_SERVER_SEARCH_HOST=tigris_search
+    build:
+      context: ../../
+      dockerfile: docker/Dockerfile
+    volumes:
+      - type: volume
+        source: fdbdata
+        target: /etc/foundationdb/
+    ports:
+      - "8082:8081"
+    command: >
+      bash -c '/server/service'
+    depends_on:
+      - tigris_server
+
   tigris_test:
     image: tigris_test
     environment:
@@ -75,7 +96,7 @@ services:
         source: fdbdata
         target: /etc/foundationdb/
     depends_on:
-      - tigris_server
+      - tigris_server2
 
   tigris_prometheus:
     container_name: tigris_prometheus

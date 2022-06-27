@@ -12,16 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - deployment.yaml
-  - search-deployment.yaml
-  - service.yaml
-  - service_grpc.yaml
-  - service_search.yaml
-  - network-policy.yaml
-configMapGenerator:
-  - name: tigris-server-config
-    files:
-      - server.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: tigris-server
+    app.kubernetes.io/part-of: tigris
+    app.kubernetes.io/component: search
+  name: tigris-search
+spec:
+  type: NodePort
+  ports:
+    - port: 80
+      name: http
+      protocol: TCP
+      targetPort: 8108
+  selector:
+    app.kubernetes.io/name: tigris-search
+          

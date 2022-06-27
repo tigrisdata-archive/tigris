@@ -60,7 +60,12 @@ local_test: generate
 	go test $(TEST_PARAM) ./...
 
 run: clean generate
-	$(DOCKER_COMPOSE) up --build --detach tigris_server
+	$(DOCKER_COMPOSE) up --build --detach tigris_server2
+
+local_run: server
+	$(DOCKER_COMPOSE) up --no-build --detach tigris_search tigris_fdb
+	fdbcli -C ./test/config/fdb.cluster --exec "configure new single memory"
+	TIGRIS_ENVIRONMENT=dev ./server/service
 
 # Runs tigris server and foundationdb, plus additional tools for it like:
 # - prometheus and grafana for monitoring

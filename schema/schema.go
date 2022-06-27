@@ -64,6 +64,8 @@ A sample user JSON schema looks like below,
 
 const (
 	PrimaryKeyIndexName = "pkey"
+	AutoPrimaryKeyF     = "id"
+	PrimaryKeySchemaK   = "primary_key"
 )
 
 var (
@@ -79,6 +81,8 @@ type JSONSchema struct {
 
 // Factory is used as an intermediate step so that collection can be initialized with properly encoded values.
 type Factory struct {
+	// Name is the collection name of this schema.
+	Name string
 	// Fields are derived from the user schema.
 	Fields []*Field
 	// Indexes is a wrapper on the indexes part of this collection. At this point the dictionary encoded value is not
@@ -87,14 +91,17 @@ type Factory struct {
 	// Schema is the raw JSON schema received as part of CreateOrUpdateCollection request. This is stored as-is in the
 	// schema subspace.
 	Schema jsoniter.RawMessage
-	// CollectionName is the collection name of this schema.
-	CollectionName string
 }
 
 // Build is used to deserialize the user json schema into a schema factory.
 func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
+	var err error
+	if reqSchema, err = addPrimaryKeyIfMissing(reqSchema); err != nil {
+		return nil, err
+	}
+
 	var schema = &JSONSchema{}
-	if err := jsoniter.Unmarshal(reqSchema, schema); err != nil {
+	if err = jsoniter.Unmarshal(reqSchema, schema); err != nil {
 		return nil, api.Errorf(api.Code_INTERNAL, errors.Wrap(err, "unmarshalling failed").Error())
 	}
 	if collection != schema.Name {
@@ -103,9 +110,11 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 	if len(schema.Properties) == 0 {
 		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "missing properties field in schema")
 	}
+
 	if len(schema.PrimaryKeys) == 0 {
 		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "missing primary key field in schema")
 	}
+
 	var primaryKeysSet = set.New(schema.PrimaryKeys...)
 	fields, err := deserializeProperties(schema.Properties, primaryKeysSet)
 	if err != nil {
@@ -135,9 +144,40 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 				Fields: primaryKeyFields,
 			},
 		},
-		CollectionName: collection,
-		Schema:         reqSchema,
+		Name:   collection,
+		Schema: reqSchema,
 	}, nil
+}
+
+func addPrimaryKeyIfMissing(reqSchema jsoniter.RawMessage) (jsoniter.RawMessage, error) {
+	var schema map[string]interface{}
+	if err := jsoniter.Unmarshal(reqSchema, &schema); err != nil {
+		return nil, err
+	}
+
+	if _, ok := schema[PrimaryKeySchemaK]; ok {
+		// primary key exists, no need to do anything.
+		return reqSchema, nil
+	}
+
+	schema[PrimaryKeySchemaK] = []string{AutoPrimaryKeyF}
+	if p, ok := schema["properties"]; ok {
+		propertiesMap, ok := p.(map[string]interface{})
+		if !ok {
+			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "properties object is invalid")
+		}
+
+		if _, ok = propertiesMap[AutoPrimaryKeyF]; !ok {
+			// if user doesn't have the ID field then add it of type UUID
+			propertiesMap[AutoPrimaryKeyF] = map[string]interface{}{
+				"type":         jsonSpecString,
+				"format":       jsonSpecFormatUUID,
+				"autoGenerate": true,
+			}
+		}
+	}
+
+	return jsoniter.Marshal(schema)
 }
 
 func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet set.HashSet) ([]*Field, error) {
@@ -178,7 +218,7 @@ func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet set.Ha
 			} else {
 				// if it is simple item type
 				var f *Field
-				if f, err = builder.Items.Build(); err != nil {
+				if f, err = builder.Items.Build(true); err != nil {
 					return err
 				}
 				builder.Fields = append(nestedFields, f)
@@ -200,7 +240,7 @@ func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet set.Ha
 		}
 
 		var f *Field
-		f, err = builder.Build()
+		f, err = builder.Build(false)
 		if err != nil {
 			return err
 		}

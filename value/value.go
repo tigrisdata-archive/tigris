@@ -17,6 +17,7 @@ package value
 import (
 	"encoding/base64"
 	"fmt"
+	"math"
 	"strconv"
 
 	"github.com/pkg/errors"
@@ -38,6 +39,7 @@ type Comparable interface {
 // JSON has encoded the byte array to base64 so to make sure we are using the user provided value in building the key
 // and the filter we must first decode this field. This allows us later to perform prefix scans.
 type Value interface {
+	fmt.Stringer
 	Comparable
 
 	// AsInterface to return the value as interface
@@ -54,11 +56,7 @@ func NewValue(fieldType schema.FieldType, value []byte) (Value, error) {
 		}
 		return NewBoolValue(b), nil
 	case schema.DoubleType:
-		val, err := strconv.ParseFloat(string(value), 64)
-		if err != nil {
-			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, errors.Wrap(err, "unsupported value type ").Error())
-		}
-		return NewDoubleValue(val), nil
+		return NewDoubleValue(string(value))
 	case schema.Int32Type, schema.Int64Type:
 		val, err := strconv.ParseInt(string(value), 10, 64)
 		if err != nil {
@@ -122,11 +120,32 @@ func (i *IntValue) String() string {
 	return fmt.Sprintf("%d", *i)
 }
 
-type DoubleValue float64
+type DoubleValue struct {
+	Double   float64
+	asString string
+	bin64Enc uint64
+}
 
-func NewDoubleValue(v float64) *DoubleValue {
-	i := DoubleValue(v)
-	return &i
+func NewDoubleUsingFloat(v float64) *DoubleValue {
+	return &DoubleValue{
+		Double:   v,
+		bin64Enc: math.Float64bits(v),
+		asString: strconv.FormatFloat(v, 'f', -1, 64),
+	}
+}
+
+func NewDoubleValue(raw string) (*DoubleValue, error) {
+	val, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, errors.Wrap(err, "unsupported value type ").Error())
+	}
+
+	i := &DoubleValue{
+		Double:   val,
+		asString: raw,
+		bin64Enc: math.Float64bits(val),
+	}
+	return i, nil
 }
 
 func (d *DoubleValue) CompareTo(v Value) (int, error) {
@@ -139,9 +158,9 @@ func (d *DoubleValue) CompareTo(v Value) (int, error) {
 		return -2, fmt.Errorf("wrong type compared ")
 	}
 
-	if *d == *converted {
+	if d.bin64Enc == converted.bin64Enc {
 		return 0, nil
-	} else if *d < *converted {
+	} else if d.bin64Enc < converted.bin64Enc {
 		return -1, nil
 	} else {
 		return 1, nil
@@ -149,7 +168,7 @@ func (d *DoubleValue) CompareTo(v Value) (int, error) {
 }
 
 func (d *DoubleValue) AsInterface() interface{} {
-	return float64(*d)
+	return d.Double
 }
 
 func (d *DoubleValue) String() string {
@@ -157,7 +176,7 @@ func (d *DoubleValue) String() string {
 		return ""
 	}
 
-	return fmt.Sprintf("%f", *d)
+	return d.asString
 }
 
 type StringValue string

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"os"
 	"testing"
 	"time"
@@ -541,6 +542,29 @@ func testSetVersionstampedValue(t *testing.T, kv baseKVStore) {
 	require.NoError(t, tx.Commit(ctx))
 }
 
+func testMeasureLow() {
+	metrics.InitializeMetrics()
+
+	testFunctions := []func() error{
+		func() error {
+			return nil
+		},
+		func() error {
+			return errors.New("unkown error")
+		},
+		func() error {
+			return fdb.Error{Code: 1}
+		},
+	}
+
+	for _, f := range testFunctions {
+		measureLow("Commit", f, true)
+		measureLow("Insert", f, true)
+		measureLow("Insert", f, false)
+		measureLow("BeginTx", f, true)
+	}
+}
+
 func TestKVFDB(t *testing.T) {
 	cfg, err := config.GetTestFDBConfig("../..")
 	require.NoError(t, err)
@@ -571,6 +595,9 @@ func TestKVFDB(t *testing.T) {
 	})
 	t.Run("TestSetVersionstampedValue", func(t *testing.T) {
 		testSetVersionstampedValue(t, kv)
+	})
+	t.Run("TestMeasureCounters", func(t *testing.T) {
+		testMeasureLow()
 	})
 }
 

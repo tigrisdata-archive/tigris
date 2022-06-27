@@ -42,7 +42,7 @@ func Unmarshal(input jsoniter.RawMessage, objCb func(jsoniter.RawMessage) (Expr,
 			return value.NewIntValue(i), nil
 		}
 		if i, err := number.Float64(); err == nil {
-			return value.NewDoubleValue(i), nil
+			return value.NewDoubleUsingFloat(i), nil
 		}
 		return nil, fmt.Errorf("not able to decode number")
 	case jsoniter.BoolValue:

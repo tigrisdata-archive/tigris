@@ -32,6 +32,8 @@ func TestSearchBuilder(t *testing.T) {
 	wrappedF, err := f.WrappedFilter(js)
 	require.NoError(t, err)
 
-	b := Builder{}
-	require.Equal(t, "a:=4&&int_value:=1&&string_value1:=shoe", b.FromFilter(wrappedF))
+	b := NewBuilder()
+	q := b.Filter(wrappedF).Query("test").Build()
+	require.Equal(t, "a:=4&&int_value:=1&&string_value1:=shoe", q.ToSearchFilter())
+	require.Equal(t, "test", q.Q)
 }
