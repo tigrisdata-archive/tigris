@@ -86,7 +86,7 @@ func (e *EqualityMatcher) GetValue() value.Value {
 }
 
 func (e *EqualityMatcher) Matches(input value.Value) bool {
-	res, _ := e.Value.CompareTo(input)
+	res, _ := input.CompareTo(e.Value)
 	return res == 0
 }
 
@@ -114,7 +114,7 @@ func (g *GreaterThanMatcher) GetValue() value.Value {
 }
 
 func (g *GreaterThanMatcher) Matches(input value.Value) bool {
-	res, _ := g.Value.CompareTo(input)
+	res, _ := input.CompareTo(g.Value)
 	return res > 0
 }
 
@@ -136,7 +136,7 @@ func (g *GreaterThanEqMatcher) GetValue() value.Value {
 }
 
 func (g *GreaterThanEqMatcher) Matches(input value.Value) bool {
-	res, _ := g.Value.CompareTo(input)
+	res, _ := input.CompareTo(g.Value)
 	return res >= 0
 }
 
@@ -158,7 +158,7 @@ func (l *LessThanMatcher) GetValue() value.Value {
 }
 
 func (l *LessThanMatcher) Matches(input value.Value) bool {
-	res, _ := l.Value.CompareTo(input)
+	res, _ := input.CompareTo(l.Value)
 	return res < 0
 }
 
@@ -180,7 +180,7 @@ func (l *LessThanEqMatcher) GetValue() value.Value {
 }
 
 func (l *LessThanEqMatcher) Matches(input value.Value) bool {
-	res, _ := l.Value.CompareTo(input)
+	res, _ := input.CompareTo(l.Value)
 	return res <= 0
 }
 

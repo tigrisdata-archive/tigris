@@ -34,6 +34,6 @@ func TestSearchBuilder(t *testing.T) {
 
 	b := NewBuilder()
 	q := b.Filter(wrappedF).Query("test").Build()
-	require.Equal(t, "a:=4&&int_value:=1&&string_value1:=shoe", q.ToSearchFilter())
+	require.Equal(t, []string{"a:=4&&int_value:=1&&string_value1:=shoe"}, q.ToSearchFilter())
 	require.Equal(t, "test", q.Q)
 }

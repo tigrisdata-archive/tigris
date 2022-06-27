@@ -92,33 +92,47 @@ func (s *storeImpl) IndexDocuments(_ context.Context, table string, reader io.Re
 	return nil
 }
 
-func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query, pageNo int) ([]tsApi.SearchResult, error) {
-	var multiSearchParam = tsApi.MultiSearchParameters{
+func (s *storeImpl) getBaseSearchParam(query *qsearch.Query, pageNo int) tsApi.MultiSearchParameters {
+	var baseParam = tsApi.MultiSearchParameters{
 		Q:       &query.Q,
-		PerPage: &query.PageSize,
 		Page:    &pageNo,
-	}
-	if filter := query.ToSearchFilter(); len(filter) > 0 {
-		multiSearchParam.FilterBy = &filter
+		PerPage: &query.PageSize,
 	}
 	if fields := query.ToSearchFields(); len(fields) > 0 {
-		multiSearchParam.QueryBy = &fields
+		baseParam.QueryBy = &fields
 	}
 	if facets := query.ToSearchFacets(); len(facets) > 0 {
-		multiSearchParam.FacetBy = &facets
+		baseParam.FacetBy = &facets
 		if size := query.ToSearchFacetSize(); size > 0 {
-			multiSearchParam.MaxFacetValues = &size
+			baseParam.MaxFacetValues = &size
 		}
 	}
 
-	var searchParams []tsApi.MultiSearchCollectionParameters
-	searchParams = append(searchParams, tsApi.MultiSearchCollectionParameters{
-		Collection:            table,
-		MultiSearchParameters: multiSearchParam,
-	})
+	return baseParam
+}
+
+func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query, pageNo int) ([]tsApi.SearchResult, error) {
+	var params []tsApi.MultiSearchCollectionParameters
+	searchFilter := query.ToSearchFilter()
+	if len(searchFilter) > 0 {
+		for i := 0; i < len(searchFilter); i++ {
+			//ToDo: check all places
+			param := s.getBaseSearchParam(query, pageNo)
+			param.FilterBy = &searchFilter[i]
+			params = append(params, tsApi.MultiSearchCollectionParameters{
+				Collection:            table,
+				MultiSearchParameters: param,
+			})
+		}
+	} else {
+		params = append(params, tsApi.MultiSearchCollectionParameters{
+			Collection:            table,
+			MultiSearchParameters: s.getBaseSearchParam(query, pageNo),
+		})
+	}
 
 	res, err := s.client.MultiSearch.Perform(&tsApi.MultiSearchParams{}, tsApi.MultiSearchSearchesParameter{
-		Searches: searchParams,
+		Searches: params,
 	})
 	if err != nil {
 		return nil, err
