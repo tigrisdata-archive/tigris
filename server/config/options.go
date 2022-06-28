@@ -27,10 +27,11 @@ type ServerConfig struct {
 
 type Config struct {
 	Log          log.LogConfig
-	Server       ServerConfig `yaml:"server" json:"server"`
-	Auth         AuthConfig   `yaml:"auth" json:"auth"`
-	Cdc          CdcConfig    `yaml:"cdc" json:"cdc"`
-	Search       SearchConfig `yaml:"search" json:"search"`
+	Server       ServerConfig  `yaml:"server" json:"server"`
+	Auth         AuthConfig    `yaml:"auth" json:"auth"`
+	Cdc          CdcConfig     `yaml:"cdc" json:"cdc"`
+	Search       SearchConfig  `yaml:"search" json:"search"`
+	Tracing      TracingConfig `yaml:"tracing" json:"tracing"`
 	FoundationDB FoundationDBConfig
 }
 
@@ -46,6 +47,13 @@ type CdcConfig struct {
 	StreamInterval time.Duration
 	StreamBatch    int
 	StreamBuffer   int
+}
+
+type TracingConfig struct {
+	Enabled           bool
+	WithUDS           string
+	WithAgentAddr     string
+	WithDogStatsdAddr string
 }
 
 var DefaultConfig = Config{
@@ -73,6 +81,10 @@ var DefaultConfig = Config{
 		Port:         8108,
 		ReadEnabled:  true,
 		WriteEnabled: true,
+	},
+	Tracing: TracingConfig{
+		Enabled: true,
+		WithUDS: "/var/run/datadog/apm.socket",
 	},
 }
 
