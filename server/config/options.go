@@ -84,7 +84,6 @@ var DefaultConfig = Config{
 	},
 	Tracing: TracingConfig{
 		Enabled: true,
-		WithUDS: "/var/run/datadog/apm.socket",
 	},
 }
 
