@@ -564,12 +564,24 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, ctx, err
 	}
 
+	var pageNo = int32(defaultPageNo)
+	if runner.req.Page != 0 {
+		pageNo = runner.req.Page
+	}
 	for {
 		// batch the results in a single grpc row
 		var resp = &api.SearchResponse{
 			Facets: rowReader.getFacets(),
+			Meta: &api.SearchMetadata{
+				Found: rowReader.getTotalFound(),
+				Page: &api.Page{
+					Current: pageNo,
+					PerPage: int32(searchQ.PageSize),
+				},
+			},
 		}
 
+		var totalInPage = int32(0)
 		var row Row
 		for rowReader.Next(ctx, &row) {
 			resp.Hits = append(resp.Hits, &api.SearchHit{
@@ -579,6 +591,7 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 					UpdatedAt: row.Data.UpdatedToProtoTS(),
 				},
 			})
+			totalInPage++
 
 			if len(resp.Hits) == pageSize {
 				break
@@ -588,9 +601,12 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			break
 		}
 
+		resp.Meta.Page.Total = totalInPage
 		if err := runner.streaming.Send(resp); err != nil {
 			return nil, ctx, err
 		}
+
+		pageNo++
 	}
 
 	return &Response{}, ctx, nil
