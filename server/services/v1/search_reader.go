@@ -102,6 +102,7 @@ func (p *page) readRow(row *Row) bool {
 
 type pageReader struct {
 	reqPage      int
+	found        int64
 	pages        []*page
 	query        *qsearch.Query
 	store        search.Store
@@ -116,6 +117,7 @@ func newPageReader(store search.Store, coll *schema.DefaultCollection, query *qs
 		collection:   coll,
 		reqPage:      int(firstPage),
 		cachedFacets: make(map[string]*api.SearchFacet),
+		found:        -1,
 	}
 }
 
@@ -152,6 +154,14 @@ func (p *pageReader) read(ctx context.Context) error {
 	if len(p.cachedFacets) == 0 {
 		for _, r := range result {
 			p.buildFacets(r.FacetCounts)
+		}
+	}
+
+	if p.found == -1 {
+		for _, r := range result {
+			if r.Found != nil {
+				p.found += int64(*r.Found)
+			}
 		}
 	}
 
@@ -287,4 +297,8 @@ func (s *SearchRowReader) Err() error {
 
 func (s *SearchRowReader) getFacets() map[string]*api.SearchFacet {
 	return s.pageReader.cachedFacets
+}
+
+func (s *SearchRowReader) getTotalFound() int64 {
+	return s.pageReader.found
 }
