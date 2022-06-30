@@ -27,7 +27,8 @@ import (
 )
 
 const (
-	defaultPerPage = 250
+	defaultPerPage = 10
+	defaultPageNo  = 1
 )
 
 type page struct {
@@ -55,7 +56,7 @@ func (p *page) append(h tsApi.SearchResultHit) bool {
 	}
 
 	p.hits.Append(h)
-	return true
+	return p.hasCapacity()
 }
 
 func (p *page) hasCapacity() bool {
@@ -100,6 +101,8 @@ func (p *page) readRow(row *Row) bool {
 }
 
 type pageReader struct {
+	reqPage      int
+	found        int64
 	pages        []*page
 	query        *qsearch.Query
 	store        search.Store
@@ -107,20 +110,23 @@ type pageReader struct {
 	cachedFacets map[string]*api.SearchFacet
 }
 
-func newPageReader(store search.Store, coll *schema.DefaultCollection, query *qsearch.Query) *pageReader {
+func newPageReader(store search.Store, coll *schema.DefaultCollection, query *qsearch.Query, firstPage int32) *pageReader {
 	return &pageReader{
 		query:        query,
 		store:        store,
 		collection:   coll,
+		reqPage:      int(firstPage),
 		cachedFacets: make(map[string]*api.SearchFacet),
+		found:        -1,
 	}
 }
 
-func (p *pageReader) read(ctx context.Context, pageNo int) error {
-	result, err := p.store.Search(ctx, p.collection.SearchCollectionName(), p.query, pageNo)
+func (p *pageReader) read(ctx context.Context) error {
+	result, err := p.store.Search(ctx, p.collection.SearchCollectionName(), p.query, p.reqPage)
 	if err != nil {
 		return err
 	}
+	p.reqPage++
 
 	var added = true
 	var pg = newPage(p.collection, p.query)
@@ -134,14 +140,14 @@ func (p *pageReader) read(ctx context.Context, pageNo int) error {
 			if !pg.append(h) {
 				p.pages = append(p.pages, pg)
 				pg = newPage(p.collection, p.query)
+
 				added = true
 			}
 		}
-
-		if !added {
-			p.pages = append(p.pages, pg)
-			pg = newPage(p.collection, p.query)
-		}
+	}
+	if !added {
+		p.pages = append(p.pages, pg)
+		pg = newPage(p.collection, p.query)
 	}
 
 	// check if we need to build facets
@@ -151,12 +157,20 @@ func (p *pageReader) read(ctx context.Context, pageNo int) error {
 		}
 	}
 
+	if p.found == -1 {
+		for _, r := range result {
+			if r.Found != nil {
+				p.found += int64(*r.Found)
+			}
+		}
+	}
+
 	return nil
 }
 
-func (p *pageReader) next(ctx context.Context, pageNo int) (bool, *page, error) {
+func (p *pageReader) next(ctx context.Context) (bool, *page, error) {
 	if len(p.pages) == 0 {
-		if err := p.read(ctx, pageNo); err != nil {
+		if err := p.read(ctx); err != nil {
 			return false, nil, err
 		}
 	}
@@ -165,9 +179,9 @@ func (p *pageReader) next(ctx context.Context, pageNo int) (bool, *page, error) 
 		return true, nil, nil
 	}
 
-	pg, last := p.pages[0], p.pages[0].hasCapacity()
-	p.pages = p.pages[:0]
-	return last, pg, nil
+	pg, _ := p.pages[0], p.pages[0].hasCapacity()
+	p.pages = p.pages[1:]
+	return false, pg, nil
 }
 
 func (p *pageReader) buildFacets(facets *[]tsApi.FacetCounts) {
@@ -216,7 +230,6 @@ func (p *pageReader) buildStats(stats tsApi.FacetCounts) *api.FacetStats {
 // SearchRowReader is responsible for iterating on the search results. It uses pageReader internally to read page
 // and then iterate on documents inside hits.
 type SearchRowReader struct {
-	pageNo     int
 	last       bool
 	single     bool
 	err        error
@@ -227,19 +240,18 @@ type SearchRowReader struct {
 	collection *schema.DefaultCollection
 }
 
-func SinglePageSearchReader(ctx context.Context, store search.Store, coll *schema.DefaultCollection, query *qsearch.Query, pageNo int32) (*SearchRowReader, error) {
+func SinglePageSearchReader(_ context.Context, store search.Store, coll *schema.DefaultCollection, query *qsearch.Query, pageNo int32) (*SearchRowReader, error) {
 	return &SearchRowReader{
-		pageNo:     int(pageNo),
 		single:     true,
 		query:      query,
 		store:      store,
 		collection: coll,
-		pageReader: newPageReader(store, coll, query),
+		pageReader: newPageReader(store, coll, query, pageNo),
 	}, nil
 }
 
 func NewSearchReader(ctx context.Context, store search.Store, coll *schema.DefaultCollection, query *qsearch.Query) (*SearchRowReader, error) {
-	s, err := SinglePageSearchReader(ctx, store, coll, query, 1)
+	s, err := SinglePageSearchReader(ctx, store, coll, query, defaultPageNo)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +267,7 @@ func (s *SearchRowReader) Next(ctx context.Context, row *Row) bool {
 
 	for {
 		if s.page == nil {
-			if s.last, s.page, s.err = s.pageReader.next(ctx, s.pageNo); s.err != nil {
+			if s.last, s.page, s.err = s.pageReader.next(ctx); s.err != nil {
 				return false
 			}
 		}
@@ -276,7 +288,6 @@ func (s *SearchRowReader) Next(ctx context.Context, row *Row) bool {
 		}
 
 		s.page = nil
-		s.pageNo++
 	}
 }
 
@@ -286,4 +297,8 @@ func (s *SearchRowReader) Err() error {
 
 func (s *SearchRowReader) getFacets() map[string]*api.SearchFacet {
 	return s.pageReader.cachedFacets
+}
+
+func (s *SearchRowReader) getTotalFound() int64 {
+	return s.pageReader.found
 }

@@ -18,8 +18,8 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     apt-transport-https \
     ca-certificates \
-    wget \
     curl \
+    wget \
     gcc \
     git \
     make \
@@ -42,13 +42,22 @@ RUN --mount=type=cache,target=/root/.cache/go-build rm -f server/service && make
 
 FROM ubuntu:20.04 AS server
 
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    tree
+
+COPY scripts/install_local_docker_deps.sh /tmp/
+RUN /bin/bash /tmp/install_local_docker_deps.sh && rm /tmp/install_local_docker_deps.sh
+
 # Remove apt configuration
-RUN rm -rf /etc/apt/*
+RUN rm -rf /etc/apt/* /var/lib/dpkg/* /var/lib/apt/* 
 
 # Setup an unprivileged user
 RUN groupadd -r tigris && useradd -r -s /bin/false -g tigris tigris
 
-RUN mkdir -p /server /etc/tigrisdata/tigris /etc/foundationdb/
+RUN mkdir -p /server /etc/tigrisdata/tigris /etc/foundationdb /var/lib/foundationdb/logs
 
 COPY --from=build /build/server/service /server/service
 COPY --from=build /build/config/server.yaml /etc/tigrisdata/tigris
@@ -57,11 +66,20 @@ COPY --from=build /usr/bin/fdbcli /usr/bin/fdbcli
 
 RUN chown -R tigris:tigris /server /etc/tigrisdata/tigris
 
+#RUN echo "docker:docker@127.0.0.1:4500" >/etc/foundationdb/fdb.cluster
+RUN echo "#!/bin/bash\n \
+	/usr/bin/typesense-server --config=/etc/typesense/typesense-server.ini & \n \
+	fdbserver --listen-address 127.0.0.1:4500 --public-address 127.0.0.1:4500 --datadir /var/lib/foundationdb/data --logdir /var/lib/foundationdb/logs --locality-zoneid tigris --locality-machineid tigris & \n\
+	export TIGRIS_SERVER_SEARCH_AUTH_KEY=ts_dev_key \n \
+	export TIGRIS_SERVER_SEARCH_HOST=localhost \n \
+	fdbcli --exec 'configure new single memory' \n \
+	/server/service\n" >/server/service.sh
+
 EXPOSE 8081
 
 WORKDIR /server
 
 # Set the default effective user to an unprivileged user
-USER tigris
+#USER tigris
 
-CMD ["/server/service"]
+CMD ["/bin/bash", "/server/service.sh"]

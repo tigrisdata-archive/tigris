@@ -26,8 +26,8 @@ type Query struct {
 	Q        string
 	Fields   []string
 	Facets   Facets
-	WrappedF *filter.WrappedFilter
 	PageSize int
+	WrappedF *filter.WrappedFilter
 }
 
 func (q *Query) ToSearchFacetSize() int {
@@ -72,7 +72,7 @@ func (q *Query) ToSearchFields() string {
 	return fields
 }
 
-func (q *Query) ToSearchFilter() string {
+func (q *Query) ToSearchFilter() []string {
 	return q.WrappedF.Filter.ToSearchFilter()
 }
 

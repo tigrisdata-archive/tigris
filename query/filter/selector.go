@@ -68,7 +68,7 @@ func (s *Selector) Matches(doc []byte) bool {
 	return false
 }
 
-func (s *Selector) ToSearchFilter() string {
+func (s *Selector) ToSearchFilter() []string {
 	var op string
 	switch s.Matcher.Type() {
 	case EQ:
@@ -87,9 +87,9 @@ func (s *Selector) ToSearchFilter() string {
 	switch s.Field.Type() {
 	case schema.DoubleType:
 		// for double, we pass string in the filter to search backend
-		return fmt.Sprintf(op, s.Field.Name(), v.String())
+		return []string{fmt.Sprintf(op, s.Field.Name(), v.String())}
 	}
-	return fmt.Sprintf(op, s.Field.Name(), v.AsInterface())
+	return []string{fmt.Sprintf(op, s.Field.Name(), v.AsInterface())}
 }
 
 // String a helpful method for logging.

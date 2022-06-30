@@ -22,6 +22,7 @@ FDB_VERSION=7.1.7
 # and set environment specifics
 ARCH=$(uname -m)
 OS=$(uname -s)
+
 case "${OS}-${ARCH}" in
 	"Darwin-arm64")
 		BINARIES="brew curl go"
@@ -33,15 +34,15 @@ case "${OS}-${ARCH}" in
 		;;
 	"Linux-aarch64")
 		BINARIES="apt-get curl go"
-		FDB_SHA=8173952f0aa8dabfc7da9cb23b8eff4de08831a02a3fce846fc7f996f0d3bed33588caf6f7d837ffde71ecf4b512e5e17e3af7e4c52acf838f10b3131656274e
+		FDB_SHA=c994ebb01a660cff9ef699a0e38482a561679db04c02c256efae25ba687cf903
 		;;
 	"Linux-arm64")
 		BINARIES="apt-get curl go"
-		FDB_SHA=8173952f0aa8dabfc7da9cb23b8eff4de08831a02a3fce846fc7f996f0d3bed33588caf6f7d837ffde71ecf4b512e5e17e3af7e4c52acf838f10b3131656274e
+		FDB_SHA=c994ebb01a660cff9ef699a0e38482a561679db04c02c256efae25ba687cf903
 		;;
 	"Linux-x86_64")
 		BINARIES="apt-get curl go"
-		FDB_SHA=03b1b0705ae8297aa5da8ff7ae2f982208a25a7c6604c4029ff37b19856136528092788ea93b9ffc4deea604b07ab863cdc6f8152f76133ad04aba8794041185
+		FDB_SHA=471f6bf4a7af40abc69027aa0d4f452ee83715a43a555008303ca255f6bd6db1
 		;;
 	*)
 		echo "Unsupported architecture ${ARCH} or operating system ${OS}."
@@ -86,10 +87,10 @@ case "${OS}" in
 		sudo installer -pkg "$FDB_PACKAGE_PATH" -target /
 		;;
 	"Linux")
-		FDB_PACKAGE_NAME="FoundationDB-${FDB_VERSION}_${ARCH}.deb"
+		FDB_PACKAGE_NAME="foundationdb-clients_${FDB_VERSION}-1_${ARCH}.deb"
 		FDB_PACKAGE_PATH="$(mktemp -p /tmp/ -u)/${FDB_PACKAGE_NAME}"
-		curl --create-dirs -Lo "$FDB_PACKAGE_PATH" "https://tigrisdata-pub.s3.us-west-2.amazonaws.com/${FDB_PACKAGE_NAME}"
-		echo "$FDB_SHA  $FDB_PACKAGE_PATH" | sha512sum -c
+		curl --create-dirs -Lo "$FDB_PACKAGE_PATH" "https://tigrisdata-pub.s3.us-west-2.amazonaws.com/ubuntu/focal/${FDB_PACKAGE_NAME}"
+		echo "$FDB_SHA $FDB_PACKAGE_PATH" | sha256sum -c
 		sudo dpkg -i "$FDB_PACKAGE_PATH" # provides /lib/libfdb_c.so shared library in the docker for CGO
 		;;
 esac

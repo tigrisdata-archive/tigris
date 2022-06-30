@@ -91,17 +91,6 @@ func (a *AndFilter) GetFilters() []Filter {
 	return a.filter
 }
 
-func (a *AndFilter) ToSearchFilter() string {
-	var str string
-	for i, f := range a.filter {
-		str += f.ToSearchFilter()
-		if i < len(a.filter)-1 {
-			str += "&&"
-		}
-	}
-	return str
-}
-
 // String a helpful method for logging.
 func (a *AndFilter) String() string {
 	var str = "{$and"
@@ -109,6 +98,57 @@ func (a *AndFilter) String() string {
 		str += fmt.Sprintf("%s", f)
 	}
 	return str + "}"
+}
+
+func (a *AndFilter) ToSearchFilter() []string {
+	var selectors []*Selector
+	var logical []Filter
+	for _, f := range a.filter {
+		if s, ok := f.(*Selector); ok {
+			selectors = append(selectors, s)
+		} else {
+			logical = append(logical, f)
+		}
+	}
+
+	var str string
+	for i, s := range selectors {
+		// first "&&" all selectors
+		if i != 0 {
+			str += "&&"
+		}
+		str += s.ToSearchFilter()[0]
+	}
+
+	var flattened []string
+	if len(logical) > 0 {
+		flattened = a.flattenAnd(str, logical)
+	}
+	if len(flattened) == 0 {
+		flattened = append(flattened, str)
+	}
+	return flattened
+}
+
+func (a *AndFilter) flattenAnd(soFar string, filters []Filter) []string {
+	var combs []string
+
+	for _, e := range filters[0].ToSearchFilter() {
+		var temp = soFar
+		if len(temp) > 0 {
+			temp = temp + "&&" + e
+		} else {
+			temp = e
+		}
+
+		if len(filters) > 1 {
+			combs = append(combs, a.flattenAnd(temp, filters[1:])...)
+		} else {
+			combs = append(combs, temp)
+		}
+	}
+
+	return combs
 }
 
 // OrFilter performs a logical OR operation on an array of two or more expressions. The or filter looks like this,
@@ -168,15 +208,12 @@ func (o *OrFilter) GetFilters() []Filter {
 	return o.filter
 }
 
-func (o *OrFilter) ToSearchFilter() string {
-	var str string
-	for i, f := range o.filter {
-		str += f.ToSearchFilter()
-		if i < len(o.filter)-1 {
-			str += ""
-		}
+func (o *OrFilter) ToSearchFilter() []string {
+	var ORs []string
+	for _, f := range o.filter {
+		ORs = append(ORs, f.ToSearchFilter()...)
 	}
-	return str
+	return ORs
 }
 
 // String a helpful method for logging.

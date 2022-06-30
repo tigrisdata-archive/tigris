@@ -24,7 +24,26 @@ import (
 	"github.com/tigrisdata/tigris/store/search"
 	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
+	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
+	"gopkg.in/DataDog/dd-trace-go.v1/profiler"
 )
+
+func getTracingOptions() []tracer.StartOption {
+	var opts []tracer.StartOption
+	tc := config.DefaultConfig.Tracing
+	opts = append(opts, tracer.WithTraceEnabled(tc.Enabled))
+	if tc.WithUDS != "" {
+		opts = append(opts, tracer.WithUDS(tc.WithUDS))
+	}
+	if tc.WithAgentAddr != "" {
+		opts = append(opts, tracer.WithAgentAddr(tc.WithAgentAddr))
+	}
+	if tc.WithDogStatsdAddr != "" {
+		opts = append(opts, tracer.WithAgentAddr(tc.WithAgentAddr))
+	}
+
+	return opts
+}
 
 func main() {
 	pflag.String("api.port", "", "set port server listens on")
@@ -32,6 +51,16 @@ func main() {
 	config.LoadConfig("server", &config.DefaultConfig)
 
 	ulog.Configure(config.DefaultConfig.Log)
+
+	tracer.Start(getTracingOptions()...)
+	defer tracer.Stop()
+
+	if config.DefaultConfig.Profiling.Enabled {
+		if err := profiler.Start(); err != nil {
+			ulog.E(err)
+		}
+		defer profiler.Stop()
+	}
 
 	// Initialize metrics once
 	closer := metrics.InitializeMetrics()

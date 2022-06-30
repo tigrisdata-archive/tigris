@@ -27,6 +27,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/server/config"
 	"google.golang.org/grpc"
+	grpctrace "gopkg.in/DataDog/dd-trace-go.v1/contrib/google.golang.org/grpc"
 )
 
 func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor) {
@@ -44,6 +45,7 @@ func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerI
 		forwarderStreamServerInterceptor(),
 		grpc_ratelimit.StreamServerInterceptor(&RateLimiter{}),
 		grpc_auth.StreamServerInterceptor(authFunction),
+		grpctrace.StreamServerInterceptor(grpctrace.WithServiceName("tigris-server")),
 		grpc_logging.StreamServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger), []grpc_logging.Option{}...),
 		validatorStreamServerInterceptor(),
 		StreamMetricsServerInterceptor(),
@@ -60,6 +62,7 @@ func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerI
 		pprofUnaryServerInterceptor(),
 		grpc_ratelimit.UnaryServerInterceptor(&RateLimiter{}),
 		grpc_auth.UnaryServerInterceptor(authFunction),
+		grpctrace.UnaryServerInterceptor(grpctrace.WithServiceName("tigris-server")),
 		grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger)),
 		validatorUnaryServerInterceptor(),
 		timeoutUnaryServerInterceptor(DefaultTimeout),

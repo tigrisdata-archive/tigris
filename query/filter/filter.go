@@ -49,14 +49,14 @@ type Filter interface {
 	Matches(doc []byte) bool
 	// MatchesDoc similar to Matches but used when document is already parsed
 	MatchesDoc(doc map[string]interface{}) bool
-	ToSearchFilter() string
+	ToSearchFilter() []string
 }
 
 type EmptyFilter struct{}
 
 func (f *EmptyFilter) Matches(_ []byte) bool                    { return true }
 func (f *EmptyFilter) MatchesDoc(_ map[string]interface{}) bool { return true }
-func (f *EmptyFilter) ToSearchFilter() string                   { return "" }
+func (f *EmptyFilter) ToSearchFilter() []string                 { return nil }
 
 type WrappedFilter struct {
 	Filter Filter
