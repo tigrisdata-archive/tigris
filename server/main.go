@@ -25,6 +25,7 @@ import (
 	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
+	"gopkg.in/DataDog/dd-trace-go.v1/profiler"
 )
 
 func getTracingOptions() []tracer.StartOption {
@@ -53,6 +54,13 @@ func main() {
 
 	tracer.Start(getTracingOptions()...)
 	defer tracer.Stop()
+
+	if config.DefaultConfig.Profiling.Enabled {
+		if err := profiler.Start(); err != nil {
+			ulog.E(err)
+		}
+		defer profiler.Stop()
+	}
 
 	// Initialize metrics once
 	closer := metrics.InitializeMetrics()
