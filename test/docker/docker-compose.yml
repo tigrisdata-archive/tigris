@@ -15,12 +15,12 @@
 version: '3.3'
 
 services:
-  tigris_fdb:
-    container_name: tigris_fdb
+  tigris_db:
+    container_name: tigris_db
     image: tigrisdata/foundationdb:7.1.7
     volumes:
       - type: volume
-        source: fdbdata
+        source: dbdata
         target: /var/lib/foundationdb/
     ports:
       - "4500:4500"
@@ -46,14 +46,14 @@ services:
       dockerfile: docker/Dockerfile
     volumes:
       - type: volume
-        source: fdbdata
+        source: dbdata
         target: /etc/foundationdb/
     ports:
       - "8081:8081"
     command: >
       bash -c 'fdbcli --exec "configure new single memory" && /server/service'
     depends_on:
-      - tigris_fdb
+      - tigris_db
       - tigris_search
 
   tigris_server2:
@@ -68,7 +68,7 @@ services:
       dockerfile: docker/Dockerfile
     volumes:
       - type: volume
-        source: fdbdata
+        source: dbdata
         target: /etc/foundationdb/
     ports:
       - "8082:8081"
@@ -78,6 +78,7 @@ services:
       - tigris_server
 
   tigris_test:
+    container_name: tigris_test
     image: tigris_test
     environment:
       # Instruct test to use default location in the docker
@@ -93,8 +94,11 @@ services:
         source: ../../
         target: /go/src/tigris
       - type: volume
-        source: fdbdata
+        source: dbdata
         target: /etc/foundationdb/
+      - type: volume
+        source: go_test_cache
+        target: /root/.cache/go-build
     depends_on:
       - tigris_server2
 
@@ -118,4 +122,5 @@ services:
       - tigris_server
 
 volumes:
-  fdbdata:
+  dbdata:
+  go_test_cache:

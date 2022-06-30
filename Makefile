@@ -10,7 +10,7 @@ DATA_PROTO_DIR=internal
 
 # Needed to be able to build amd64 binaries on MacOS M1
 DOCKER_DIR=test/docker
-DOCKER_COMPOSE=COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker-compose -f ${DOCKER_DIR}/docker-compose.yml
+DOCKER_COMPOSE=COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker compose -f ${DOCKER_DIR}/docker-compose.yml
 CGO_ENABLED=1
 
 all: server
@@ -48,28 +48,28 @@ docker_compose_build:
 # dependency on generate needed to create generated file outside of docker with
 # current user owner instead of root
 docker_test: generate
-	$(DOCKER_COMPOSE) up --build --abort-on-container-exit --exit-code-from tigris_test tigris_test
+	$(DOCKER_COMPOSE) up --build tigris_test tigris_test
 
 docker_test_no_build:
-	$(DOCKER_COMPOSE) up --no-build --abort-on-container-exit --exit-code-from tigris_test tigris_test
+	$(DOCKER_COMPOSE) up --no-build tigris_test tigris_test
 
-test: clean docker_test
+test: docker_test
 
 # Use this target to run the test from inside docker container
 local_test: generate
 	go test $(TEST_PARAM) ./...
 
-run: clean generate
+run: generate
 	$(DOCKER_COMPOSE) up --build --detach tigris_server2
 
 local_run: server
-	$(DOCKER_COMPOSE) up --no-build --detach tigris_search tigris_fdb
-	fdbcli -C ./test/config/fdb.cluster --exec "configure new single memory"
+	$(DOCKER_COMPOSE) up --no-build --detach tigris_search tigris_db
+	fdbcli -C ./test/config/fdb.cluster --exec "configure new single memory" || true
 	TIGRIS_ENVIRONMENT=dev ./server/service
 
 # Runs tigris server and foundationdb, plus additional tools for it like:
 # - prometheus and grafana for monitoring
-run_full: clean generate
+run_full: generate
 	${DOCKER_COMPOSE} up --build --detach tigris_grafana
 	./${DOCKER_DIR}/grafana/set_admin_password.sh
 	./${DOCKER_DIR}/grafana/add_prometheus_datasource.sh
