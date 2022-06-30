@@ -27,11 +27,12 @@ type ServerConfig struct {
 
 type Config struct {
 	Log          log.LogConfig
-	Server       ServerConfig  `yaml:"server" json:"server"`
-	Auth         AuthConfig    `yaml:"auth" json:"auth"`
-	Cdc          CdcConfig     `yaml:"cdc" json:"cdc"`
-	Search       SearchConfig  `yaml:"search" json:"search"`
-	Tracing      TracingConfig `yaml:"tracing" json:"tracing"`
+	Server       ServerConfig    `yaml:"server" json:"server"`
+	Auth         AuthConfig      `yaml:"auth" json:"auth"`
+	Cdc          CdcConfig       `yaml:"cdc" json:"cdc"`
+	Search       SearchConfig    `yaml:"search" json:"search"`
+	Tracing      TracingConfig   `yaml:"tracing" json:"tracing"`
+	Profiling    ProfilingConfig `yaml:"profiling" json:"profiling"`
 	FoundationDB FoundationDBConfig
 }
 
@@ -54,6 +55,15 @@ type TracingConfig struct {
 	WithUDS           string
 	WithAgentAddr     string
 	WithDogStatsdAddr string
+}
+
+type ProfilingConfig struct {
+	Enabled         bool
+	EnableCPU       bool
+	EnableHeap      bool
+	EnableBlock     bool
+	EnableMutex     bool
+	EnableGoroutine bool
 }
 
 var DefaultConfig = Config{
@@ -84,6 +94,11 @@ var DefaultConfig = Config{
 	},
 	Tracing: TracingConfig{
 		Enabled: true,
+	},
+	Profiling: ProfilingConfig{
+		Enabled:    true,
+		EnableCPU:  true,
+		EnableHeap: true,
 	},
 }
 
