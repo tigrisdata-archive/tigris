@@ -68,7 +68,7 @@ func TestJSONEncoding(t *testing.T) {
 				Found: 1234,
 				Page: &Page{
 					Current: 2,
-					PerPage: 10,
+					Size:    10,
 				},
 			}}
 		r, err := json.Marshal(resp)

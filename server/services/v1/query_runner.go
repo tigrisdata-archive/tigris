@@ -576,7 +576,7 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 				Found: rowReader.getTotalFound(),
 				Page: &api.Page{
 					Current: pageNo,
-					PerPage: int32(searchQ.PageSize),
+					Size:    int32(searchQ.PageSize),
 				},
 			},
 		}
