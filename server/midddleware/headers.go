@@ -21,7 +21,7 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-var OutgoingHeaders = metadata.New(map[string]string{"Access-Control-Allow-Origin": "*"})
+var OutgoingHeaders = metadata.New(map[string]string{})
 
 func headersUnaryServerInterceptor() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {

@@ -19,6 +19,7 @@ import (
 
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
 	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
 	"github.com/tigrisdata/tigris/server/config"
@@ -27,18 +28,17 @@ import (
 
 type HTTPServer struct {
 	Router chi.Router
-	httpS  *http.Server
 	Inproc *inprocgrpc.Channel
 }
 
 func NewHTTPServer(cfg *config.Config) *HTTPServer {
 	r := chi.NewRouter()
+
+	r.Use(cors.AllowAll().Handler)
+
 	s := &HTTPServer{
 		Inproc: &inprocgrpc.Channel{},
 		Router: r,
-		httpS: &http.Server{
-			Handler: r,
-		},
 	}
 
 	unary, stream := middleware.Get(cfg)
@@ -52,7 +52,8 @@ func NewHTTPServer(cfg *config.Config) *HTTPServer {
 func (s *HTTPServer) Start(mux cmux.CMux) error {
 	match := mux.Match(cmux.HTTP1Fast())
 	go func() {
-		err := s.httpS.Serve(match)
+		srv := &http.Server{Handler: s.Router}
+		err := srv.Serve(match)
 		log.Fatal().Err(err).Msg("start http server")
 	}()
 	return nil
