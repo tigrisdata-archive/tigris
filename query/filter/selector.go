@@ -31,12 +31,12 @@ import (
 //    {f:20} (default is "$eq" so we automatically append EqualityMatcher for this case in parser)
 //    {f:<Expr>}
 type Selector struct {
-	Field   *schema.Field
+	Field   *schema.QueryableField
 	Matcher ValueMatcher
 }
 
 // NewSelector returns Selector object
-func NewSelector(field *schema.Field, matcher ValueMatcher) *Selector {
+func NewSelector(field *schema.QueryableField, matcher ValueMatcher) *Selector {
 	return &Selector{
 		Field:   field,
 		Matcher: matcher,
@@ -50,7 +50,7 @@ func (s *Selector) MatchesDoc(doc map[string]interface{}) bool {
 	}
 
 	var val value.Value
-	switch s.Field.Type() {
+	switch s.Field.DataType {
 	case schema.StringType:
 		val = value.NewStringValue(v.(string))
 	case schema.DoubleType:
@@ -84,7 +84,7 @@ func (s *Selector) ToSearchFilter() []string {
 	}
 
 	v := s.Matcher.GetValue()
-	switch s.Field.Type() {
+	switch s.Field.DataType {
 	case schema.DoubleType:
 		// for double, we pass string in the filter to search backend
 		return []string{fmt.Sprintf(op, s.Field.Name(), v.String())}

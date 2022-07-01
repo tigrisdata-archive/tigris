@@ -38,6 +38,11 @@ import (
 type Map map[string]interface{}
 type Doc Map
 
+const (
+	defaultDatabaseTestName   = "integration_db2"
+	defaultCollectionTestName = "test_collection"
+)
+
 type DocumentSuite struct {
 	suite.Suite
 
@@ -58,6 +63,21 @@ func expect(s httpexpect.LoggerReporter) *httpexpect.Expect {
 
 func getDocumentURL(databaseName, collectionName string, methodName string) string {
 	return fmt.Sprintf("/api/v1/databases/%s/collections/%s/documents/%s", databaseName, collectionName, methodName)
+}
+
+func SetupDatabaseSuite(t *testing.T, dbName string) {
+	dropDatabase(t, dbName)
+	createDatabase(t, dbName).Status(http.StatusOK)
+}
+
+func SetupSuite(t *testing.T, dbName string, collectionName string) {
+	dropDatabase(t, dbName)
+	createDatabase(t, dbName).Status(http.StatusOK)
+	createCollection(t, dbName, collectionName, testCreateSchema).Status(http.StatusOK)
+}
+
+func TearDownSuite(t *testing.T, dbName string) {
+	dropDatabase(t, dbName).Status(http.StatusOK)
 }
 
 func (s *DocumentSuite) SetupSuite() {
@@ -1258,7 +1278,10 @@ func (s *DocumentSuite) TestDelete_MultipleRows() {
 	)
 }
 
-func (s *DocumentSuite) TestRead_MultipleRows() {
+func TestRead_MultipleRows(t *testing.T) {
+	SetupSuite(t, defaultDatabaseTestName, defaultCollectionTestName)
+	defer TearDownSuite(t, defaultDatabaseTestName)
+
 	inputDocument := []Doc{
 		{
 			"pkey_int":     210,
@@ -1284,7 +1307,7 @@ func (s *DocumentSuite) TestRead_MultipleRows() {
 	}
 
 	// should always succeed with mustNotExists as false
-	insertDocuments(s.T(), s.database, s.collection, inputDocument, false).
+	insertDocuments(t, defaultDatabaseTestName, defaultCollectionTestName, inputDocument, false).
 		Status(http.StatusOK)
 
 	readFilter := Map{
@@ -1360,18 +1383,18 @@ func (s *DocumentSuite) TestRead_MultipleRows() {
 		},
 	}
 	for _, c := range cases {
-		readAndValidate(s.T(),
-			s.database,
-			s.collection,
+		readAndValidate(t,
+			defaultDatabaseTestName,
+			defaultCollectionTestName,
 			readFilter,
 			c.fields,
 			c.expDocuments)
 	}
 }
 
-func (s *DocumentSuite) TestRead_EntireCollection() {
-	dropCollection(s.T(), s.database, s.collection)
-	createCollection(s.T(), s.database, s.collection, testCreateSchema).Status(http.StatusOK)
+func TestRead_EntireCollection(t *testing.T) {
+	SetupSuite(t, defaultDatabaseTestName, defaultCollectionTestName)
+	defer TearDownSuite(t, defaultDatabaseTestName)
 
 	inputDocument := []Doc{
 		{
@@ -1398,15 +1421,62 @@ func (s *DocumentSuite) TestRead_EntireCollection() {
 	}
 
 	// should always succeed with mustNotExists as false
-	insertDocuments(s.T(), s.database, s.collection, inputDocument, false).
+	insertDocuments(t, defaultDatabaseTestName, defaultCollectionTestName, inputDocument, false).
 		Status(http.StatusOK)
 
-	readAndValidate(s.T(),
-		s.database,
-		s.collection,
+	readAndValidate(t,
+		defaultDatabaseTestName,
+		defaultCollectionTestName,
 		nil,
 		nil,
 		inputDocument)
+}
+
+func TestRead_NestedFields(t *testing.T) {
+	SetupDatabaseSuite(t, defaultDatabaseTestName)
+	defer TearDownSuite(t, defaultDatabaseTestName)
+
+	createCollection(t, defaultDatabaseTestName, defaultCollectionTestName,
+		Map{
+			"schema": Map{
+				"title": defaultCollectionTestName,
+				"properties": Map{
+					"id": Map{"type": "integer"},
+					"object_field": Map{
+						"type": "object",
+						"properties": Map{
+							"nested_id":  Map{"type": "integer"},
+							"nested_str": Map{"type": "string"},
+						},
+					},
+				},
+			},
+		}).Status(http.StatusOK)
+
+	var inputDoc = []Doc{{"id": 1, "object_field": Map{"nested_id": 1, "nested_str": "foo"}}, {"id": 2, "object_field": Map{"nested_id": 2, "nested_str": "bar"}}}
+	e := expect(t)
+	e.POST(getDocumentURL(defaultDatabaseTestName, defaultCollectionTestName, "insert")).
+		WithJSON(Map{
+			"documents": inputDoc,
+		}).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("status", "inserted")
+
+	readResp := readByFilter(t, defaultDatabaseTestName, defaultCollectionTestName, Map{
+		"object_field.nested_str": "bar",
+	}, nil)
+
+	var doc map[string]json.RawMessage
+	require.Equal(t, 1, len(readResp))
+	require.NoError(t, json.Unmarshal(readResp[0]["result"], &doc))
+
+	var actualDoc = []byte(doc["data"])
+	expDoc, err := json.Marshal(inputDoc[1])
+	require.NoError(t, err)
+	require.JSONEq(t, string(expDoc), string(actualDoc))
 }
 
 func TestTransaction_BadID(t *testing.T) {

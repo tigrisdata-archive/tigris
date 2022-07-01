@@ -24,7 +24,7 @@ import (
 	"github.com/tigrisdata/tigris/schema"
 )
 
-func testFilters(t testing.TB, fields []*schema.Field, input []byte) []Filter {
+func testFilters(t testing.TB, fields []*schema.QueryableField, input []byte) []Filter {
 	var factory = Factory{
 		fields: fields,
 	}
@@ -37,7 +37,7 @@ func testFilters(t testing.TB, fields []*schema.Field, input []byte) []Filter {
 
 func TestKeyBuilder(t *testing.T) {
 	cases := []struct {
-		userFields []*schema.Field
+		userFields []*schema.QueryableField
 		userKeys   []*schema.Field
 		userInput  []byte
 		expError   error
@@ -45,7 +45,7 @@ func TestKeyBuilder(t *testing.T) {
 	}{
 		{
 			// fewer fields in user input
-			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
+			[]*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
 			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
 			[]byte(`{"a": 10, "c": 10}`),
 			api.Errorf(api.Code_INVALID_ARGUMENT, "filters doesn't contains primary key fields"),
@@ -53,7 +53,7 @@ func TestKeyBuilder(t *testing.T) {
 		},
 		{
 			// some fields are not with eq
-			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
+			[]*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
 			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
 			[]byte(`{"a": 10, "b": {"$eq": 10}, "c": {"$gt": 15}}`),
 			api.Errorf(api.Code_INVALID_ARGUMENT, "filters only supporting $eq comparison, found '$gt'"),
@@ -61,7 +61,7 @@ func TestKeyBuilder(t *testing.T) {
 		},
 		{
 			// some fields are repeated
-			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
+			[]*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
 			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
 			[]byte(`{"$and": [{"a": 10}, {"b": {"$eq": 10}}, {"b": 15}]}`),
 			api.Errorf(api.Code_INVALID_ARGUMENT, "reusing same fields for conditions on equality"),
@@ -69,7 +69,7 @@ func TestKeyBuilder(t *testing.T) {
 		},
 		{
 			// single user defined key
-			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
+			[]*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
 			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}},
 			[]byte(`{"b": 10, "a": {"$eq": 1}}`),
 			nil,
@@ -77,7 +77,7 @@ func TestKeyBuilder(t *testing.T) {
 		},
 		{
 			// composite user defined key
-			[]*schema.Field{{FieldName: "a", DataType: schema.BoolType}, {FieldName: "c", DataType: schema.StringType}, {FieldName: "b", DataType: schema.Int64Type}},
+			[]*schema.QueryableField{{FieldName: "a", DataType: schema.BoolType}, {FieldName: "c", DataType: schema.StringType}, {FieldName: "b", DataType: schema.Int64Type}},
 			[]*schema.Field{{FieldName: "a", DataType: schema.BoolType}, {FieldName: "b", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.StringType}},
 			[]byte(`{"b": 10, "a": {"$eq": true}, "c": "foo"}`),
 			nil,
@@ -85,7 +85,7 @@ func TestKeyBuilder(t *testing.T) {
 		},
 		{
 			// single with AND/OR filter
-			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "f1", DataType: schema.Int64Type}, {FieldName: "f2", DataType: schema.Int64Type}},
+			[]*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "f1", DataType: schema.Int64Type}, {FieldName: "f2", DataType: schema.Int64Type}},
 			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}},
 			[]byte(`{"$or": [{"a": 1}, {"$and": [{"a":2}, {"f1": 3}]}], "$and": [{"a": 4}, {"$or": [{"a":5}, {"f2": 6}]}, {"$or": [{"a":5}, {"a": 6}]}]}`),
 			nil,
@@ -93,20 +93,20 @@ func TestKeyBuilder(t *testing.T) {
 		},
 		{
 			// composite with AND filter
-			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.StringType}, {FieldName: "c", DataType: schema.Int64Type}},
+			[]*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.StringType}, {FieldName: "c", DataType: schema.Int64Type}},
 			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.StringType}},
 			[]byte(`{"$and":[{"a":1},{"b":"aaa"},{"$and":[{"a":2},{"c":5},{"b":"bbb"}]}]}`),
 			nil,
 			[]keys.Key{keys.NewKey(nil, int64(1), "aaa"), keys.NewKey(nil, int64(2), "bbb")},
 		}, {
-			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.StringType}, {FieldName: "f1", DataType: schema.Int64Type}},
+			[]*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.StringType}, {FieldName: "f1", DataType: schema.Int64Type}},
 			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}},
 			[]byte(`{"b":10,"a":1,"c":"ccc","$or":[{"f1":10},{"a":2}]}`),
 			nil,
 			[]keys.Key{keys.NewKey(nil, int64(1)), keys.NewKey(nil, int64(2))},
 		}, {
 			// composite with OR parent filter
-			[]*schema.Field{{FieldName: "K1", DataType: schema.StringType}, {FieldName: "K2", DataType: schema.Int64Type}},
+			[]*schema.QueryableField{{FieldName: "K1", DataType: schema.StringType}, {FieldName: "K2", DataType: schema.Int64Type}},
 			[]*schema.Field{{FieldName: "K1", DataType: schema.StringType}, {FieldName: "K2", DataType: schema.Int64Type}},
 			[]byte(`{"$or":[{"$and":[{"K1":"bar"},{"K2":3}]},{"$and":[{"K1":"foo"},{"K2":2}]}]}`),
 			nil,
@@ -135,7 +135,7 @@ func TestKeyBuilder(t *testing.T) {
 func BenchmarkStrictEqKeyComposer_Compose(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		kb := NewKeyBuilder(NewStrictEqKeyComposer(dummyEncodeFunc))
-		filters := testFilters(b, []*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.Int64Type}}, []byte(`{"b": 10, "a": {"$eq": 10}, "c": "foo"}}`))
+		filters := testFilters(b, []*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.Int64Type}}, []byte(`{"b": 10, "a": {"$eq": 10}, "c": "foo"}}`))
 		_, err := kb.Build(filters, []*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.Int64Type}})
 		require.NoError(b, err)
 	}
