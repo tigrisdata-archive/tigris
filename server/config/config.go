@@ -44,9 +44,11 @@ var envEnv = "tigris_environment"
 var environment string
 
 const (
+	EnvDevelopment = "dev"
+	EnvProduction  = "prod"
+	EnvSandbox     = "sbx"
 	EnvTest        = "test"
-	EnvDevelopment = "development"
-	EnvProduction  = "production"
+	EnvLocal       = "local"
 )
 
 func GetEnvironment() string {
@@ -54,20 +56,22 @@ func GetEnvironment() string {
 }
 
 func LoadEnvironment() {
-	env := os.Getenv(envEnv)
-	if env == "" {
-		env = os.Getenv(strings.ToUpper(envEnv))
+	resolutionOrder := []string{
+		os.Getenv(envEnv),
+		os.Getenv(strings.ToUpper(envEnv)),
+		EnvLocal,
 	}
 
-	environment = env
+	for _, resolvedEnv := range resolutionOrder {
+		if resolvedEnv != "" {
+			environment = resolvedEnv
+			break
+		}
+	}
 }
 
 func LoadConfig(name string, config interface{}) {
 	LoadEnvironment()
-
-	if GetEnvironment() != "" {
-		name += "." + GetEnvironment()
-	}
 
 	log.Info().Msgf("TIGRIS_ENVIRONMENT=%s", GetEnvironment())
 

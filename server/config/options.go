@@ -17,6 +17,7 @@ package config
 import (
 	"time"
 
+	"github.com/tigrisdata/tigris/util"
 	"github.com/tigrisdata/tigris/util/log"
 )
 
@@ -33,6 +34,7 @@ type Config struct {
 	Search       SearchConfig    `yaml:"search" json:"search"`
 	Tracing      TracingConfig   `yaml:"tracing" json:"tracing"`
 	Profiling    ProfilingConfig `yaml:"profiling" json:"profiling"`
+	Tags         TagsConfig      `yaml:"tags" json:"tags"`
 	FoundationDB FoundationDBConfig
 }
 
@@ -51,19 +53,25 @@ type CdcConfig struct {
 }
 
 type TracingConfig struct {
-	Enabled           bool
-	WithUDS           string
-	WithAgentAddr     string
-	WithDogStatsdAddr string
+	Enabled           bool   `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	WithUDS           string `mapstructure:"agent_socket" yaml:"agent_socket" json:"agent_socket"`
+	WithAgentAddr     string `mapstructure:"agent_addr" yaml:"agent_addr" json:"agent_addr"`
+	WithDogStatsdAddr string `mapstructure:"dogstatsd_addr" yaml:"dogstatsd_addr" json:"dogstatsd_addr"`
 }
 
 type ProfilingConfig struct {
-	Enabled         bool
-	EnableCPU       bool
-	EnableHeap      bool
-	EnableBlock     bool
-	EnableMutex     bool
-	EnableGoroutine bool
+	Enabled         bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	EnableCPU       bool `mapstructure:"enable_cpu" yaml:"enable_cpu" json:"enable_cpu"`
+	EnableHeap      bool `mapstructure:"enable_heap" yaml:"enable_heap" json:"enable_heap"`
+	EnableBlock     bool `mapstructure:"enable_block" yaml:"enable_block" json:"enable_block"`
+	EnableMutex     bool `mapstructure:"enable_mutex" yaml:"enable_mutex" json:"enable_mutex"`
+	EnableGoroutine bool `mapstructure:"enable_goroutine" yaml:"enable_goroutine" json:"enable_goroutine"`
+}
+
+type TagsConfig struct {
+	Service     string `mapstructure:"service" yaml:"service" json:"service"`
+	Environment string `mapstructure:"env" yaml:"env" json:"env"`
+	Version     string `mapstructure:"version" yaml:"version" json:"version"`
 }
 
 var DefaultConfig = Config{
@@ -93,12 +101,17 @@ var DefaultConfig = Config{
 		WriteEnabled: true,
 	},
 	Tracing: TracingConfig{
-		Enabled: true,
+		Enabled: false,
 	},
 	Profiling: ProfilingConfig{
-		Enabled:    true,
+		Enabled:    false,
 		EnableCPU:  true,
 		EnableHeap: true,
+	},
+	Tags: TagsConfig{
+		Service:     util.Service,
+		Environment: environment,
+		Version:     util.Version,
 	},
 }
 
