@@ -212,7 +212,7 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 }
 
 func (runner *BaseQueryRunner) buildKeysUsingFilter(tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection, reqFilter []byte) ([]keys.Key, error) {
-	filterFactory := filter.NewFactory(coll.Fields)
+	filterFactory := filter.NewFactory(coll.QueryableFields)
 	filters, err := filterFactory.Factorize(reqFilter)
 	if err != nil {
 		return nil, err
@@ -438,7 +438,7 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 			return nil, ctx, err
 		}
 	} else {
-		wrappedFilter, err := filter.NewFactory(collection.Fields).WrappedFilter(runner.req.Filter)
+		wrappedFilter, err := filter.NewFactory(collection.QueryableFields).WrappedFilter(runner.req.Filter)
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -520,7 +520,7 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, ctx, err
 	}
 
-	wrappedF, err := filter.NewFactory(collection.Fields).WrappedFilter(runner.req.Filter)
+	wrappedF, err := filter.NewFactory(collection.QueryableFields).WrappedFilter(runner.req.Filter)
 	if err != nil {
 		return nil, ctx, err
 	}

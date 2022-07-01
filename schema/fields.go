@@ -27,7 +27,6 @@ type FieldType int
 
 const (
 	searchDoubleType = "float"
-	searchArrayType  = "[]"
 )
 
 const (
@@ -170,8 +169,8 @@ func IsValidIndexType(t FieldType) bool {
 	}
 }
 
-func IndexableField(field *Field) bool {
-	switch field.Type() {
+func IndexableField(fieldType FieldType) bool {
+	switch fieldType {
 	case BoolType, Int32Type, Int64Type, UUIDType, StringType, DateTimeType, DoubleType:
 		return true
 	default:
@@ -179,8 +178,8 @@ func IndexableField(field *Field) bool {
 	}
 }
 
-func FacetableField(field *Field) bool {
-	switch field.Type() {
+func FacetableField(fieldType FieldType) bool {
+	switch fieldType {
 	case Int32Type, Int64Type, StringType, DoubleType:
 		return true
 	default:
@@ -188,35 +187,17 @@ func FacetableField(field *Field) bool {
 	}
 }
 
-func PackSearchField(field *Field) bool {
-	switch field.Type() {
-	case ObjectType:
-		return true
-	case ArrayType:
-		return len(field.Fields) > 1 || field.Fields[0].Type() == ArrayType || field.Fields[0].Type() == ObjectType
-	}
-
-	return false
-}
-
-func ToSearchFieldType(field *Field) string {
-	switch field.Type() {
+func toSearchFieldType(fieldType FieldType) string {
+	switch fieldType {
 	case BoolType:
-		return FieldNames[field.Type()]
+		return FieldNames[fieldType]
 	case Int32Type, Int64Type:
-		return FieldNames[field.Type()]
+		return FieldNames[fieldType]
 	case StringType, ByteType, UUIDType, DateTimeType:
 		return FieldNames[StringType]
 	case DoubleType:
 		return searchDoubleType
-	case ObjectType:
-		return FieldNames[StringType]
 	case ArrayType:
-		if len(field.Fields) == 1 && field.Fields[0].Type() != ArrayType && field.Fields[0].Type() != ObjectType {
-			arrayType := ToSearchFieldType(field.Fields[0])
-			return arrayType + searchArrayType
-		}
-
 		return FieldNames[StringType]
 	}
 
@@ -245,7 +226,7 @@ func (i *Indexes) GetIndexes() []*Index {
 	return indexes
 }
 
-// Index can be composite so it has a list of fields, each index has name and encoded id. The encoded is used for key
+// Index can be composite, so it has a list of fields, each index has name and encoded id. The encoded is used for key
 // building.
 type Index struct {
 	// Fields that are part of this index. An index can have a single or composite fields.
@@ -393,4 +374,66 @@ func (f *Field) IsCompatible(f1 *Field) error {
 	}
 
 	return nil
+}
+
+type QueryableField struct {
+	FieldName  string
+	Faceted    bool
+	Indexed    bool
+	DataType   FieldType
+	SearchType string
+}
+
+func NewQueryableField(name string, tigrisType FieldType) *QueryableField {
+	return &QueryableField{
+		FieldName:  name,
+		Indexed:    IndexableField(tigrisType),
+		Faceted:    FacetableField(tigrisType),
+		SearchType: toSearchFieldType(tigrisType),
+		DataType:   tigrisType,
+	}
+}
+
+func (q *QueryableField) Name() string {
+	return q.FieldName
+}
+
+func (q *QueryableField) ShouldPack() bool {
+	return q.DataType == ArrayType
+}
+
+func buildQueryableFields(fields []*Field) []*QueryableField {
+	var queryableFields []*QueryableField
+
+	for _, f := range fields {
+		if f.DataType == ObjectType {
+			queryableFields = append(queryableFields, buildQueryableForObject(f.FieldName, f.Fields)...)
+		} else {
+			queryableFields = append(queryableFields, buildQueryableField("", f))
+		}
+	}
+
+	return queryableFields
+}
+
+func buildQueryableForObject(parent string, fields []*Field) []*QueryableField {
+	var queryable []*QueryableField
+	for _, nested := range fields {
+		if nested.DataType != ObjectType {
+			queryable = append(queryable, buildQueryableField(parent, nested))
+		} else {
+			queryable = append(queryable, buildQueryableForObject(parent+ObjFlattenDelimiter+nested.FieldName, nested.Fields)...)
+		}
+	}
+
+	return queryable
+}
+
+func buildQueryableField(parent string, f *Field) *QueryableField {
+	name := f.FieldName
+	if len(parent) > 0 {
+		name = parent + ObjFlattenDelimiter + f.FieldName
+	}
+
+	return NewQueryableField(name, f.Type())
 }

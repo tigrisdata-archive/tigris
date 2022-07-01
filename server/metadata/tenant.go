@@ -608,7 +608,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 		return err
 	}
 
-	deltaFields := schema.GetSearchDeltaFields(c.collection.Fields, schFactory.Fields)
+	deltaFields := schema.GetSearchDeltaFields(c.collection.QueryableFields, schFactory.Fields)
 
 	// store the collection to the databaseObject, this is actually cloned database object passed by the query runner.
 	// So failure of the transaction won't impact the consistency of the cache

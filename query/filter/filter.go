@@ -85,10 +85,10 @@ func All(reqFilter []byte) bool {
 }
 
 type Factory struct {
-	fields []*schema.Field
+	fields []*schema.QueryableField
 }
 
-func NewFactory(fields []*schema.Field) *Factory {
+func NewFactory(fields []*schema.QueryableField) *Factory {
 	return &Factory{
 		fields: fields,
 	}
@@ -207,9 +207,9 @@ func convertExprListToFilters(expr []expression.Expr) ([]Filter, error) {
 // ParseSelector is a short-circuit for Selector i.e. when we know the filter passed is not logical then we directly
 // call this because if it is not logical then it is simply a Selector filter.
 func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.ValueType) (Filter, error) {
-	var field *schema.Field
+	var field *schema.QueryableField
 	for _, f := range factory.fields {
-		if f.FieldName == string(k) {
+		if f.Name() == string(k) {
 			field = f
 		}
 	}
@@ -237,7 +237,7 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 	}
 }
 
-func buildComparisonOperator(input jsoniter.RawMessage, field *schema.Field) (ValueMatcher, error) {
+func buildComparisonOperator(input jsoniter.RawMessage, field *schema.QueryableField) (ValueMatcher, error) {
 	if len(input) == 0 {
 		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "empty object")
 	}
