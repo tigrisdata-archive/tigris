@@ -9,7 +9,7 @@ import (
 
 func TestLogicalToSearch(t *testing.T) {
 	var factory = Factory{
-		fields: []*schema.Field{
+		fields: []*schema.QueryableField{
 			{FieldName: "f1", DataType: schema.Int64Type},
 			{FieldName: "f2", DataType: schema.Int64Type},
 			{FieldName: "f3", DataType: schema.Int64Type},

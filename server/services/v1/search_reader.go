@@ -76,10 +76,10 @@ func (p *page) readRow(row *Row) bool {
 		if document == nil {
 			continue
 		}
-
 		doc := *document
+
 		var searchKey string
-		if searchKey, row.Data, p.err = UnpackSearchFields(doc, p.collection); p.err != nil {
+		if searchKey, row.Data, doc, p.err = UnpackSearchFields(doc, p.collection); p.err != nil {
 			return false
 		}
 		row.Key = []byte(searchKey)

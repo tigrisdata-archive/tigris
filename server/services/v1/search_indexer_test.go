@@ -2,6 +2,7 @@ package v1
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -9,6 +10,19 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
 )
+
+func TestFlattenObj(t *testing.T) {
+	rawData := []byte(`{"a":1, "b": {"c": {"d": "foo", "c_nested": {"c_2": 10}}, "e": 3, "f": [1, 2, 3]}, "out": 10, "all_out": {"yes": 5}}`)
+	var UnFlattenMap map[string]any
+	require.NoError(t, jsoniter.Unmarshal(rawData, &UnFlattenMap))
+
+	flattened := FlattenObjects(UnFlattenMap)
+	require.Equal(t, "foo", flattened["b.c.d"])
+	require.Equal(t, float64(3), flattened["b.e"])
+	require.Equal(t, []interface{}{float64(1), float64(2), float64(3)}, flattened["b.f"])
+
+	require.True(t, reflect.DeepEqual(UnFlattenMap, UnFlattenObjects(flattened)))
+}
 
 // Benchmarking to test if it makes sense to decode the data and then add fields to the decoded map and then encode
 // again and this benchmark shows if we are setting more than one field then it is better to decode.

@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"strings"
 
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	"github.com/apple/foundationdb/bindings/go/src/fdb/subspace"
@@ -158,16 +159,9 @@ func CreateSearchKey(table []byte, fdbKey []byte) (string, error) {
 }
 
 func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollection, id string) ([]byte, error) {
-	var complexFields []string
-	for _, f := range collection.Fields {
-		if schema.PackSearchField(f) {
-			complexFields = append(complexFields, f.FieldName)
-		}
-	}
-
 	var err error
 	// better to decode it and then update the JSON
-	var decData map[string]interface{}
+	var decData map[string]any
 	if err = jsoniter.Unmarshal(data.RawData, &decData); err != nil {
 		return nil, err
 	}
@@ -177,9 +171,13 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 		decData[schema.ReservedFields[schema.IdToSearchKey]] = value
 	}
 
-	for _, complex := range complexFields {
-		if value, ok := decData[complex]; ok {
-			if decData[complex], err = jsoniter.MarshalToString(value); err != nil {
+	decData = FlattenObjects(decData)
+
+	// now if there is any array we need to pack it
+	for key, value := range decData {
+		if _, ok := value.([]any); ok {
+			// pack any array field
+			if decData[key], err = jsoniter.MarshalToString(value); err != nil {
 				return nil, err
 			}
 		}
@@ -194,18 +192,21 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 	return jsoniter.Marshal(decData)
 }
 
-func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCollection) (string, *internal.TableData, error) {
-	for _, f := range collection.Fields {
-		if schema.PackSearchField(f) {
-			if v, ok := doc[f.FieldName]; ok {
+func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCollection) (string, *internal.TableData, map[string]interface{}, error) {
+	for _, f := range collection.QueryableFields {
+		if f.ShouldPack() {
+			if v, ok := doc[f.Name()]; ok {
 				var value interface{}
 				if err := jsoniter.UnmarshalFromString(v.(string), &value); err != nil {
-					return "", nil, err
+					return "", nil, nil, err
 				}
-				doc[f.FieldName] = value
+				doc[f.Name()] = value
 			}
 		}
 	}
+
+	// unFlatten the map now
+	doc = UnFlattenObjects(doc)
 
 	var searchKey = doc[searchID].(string)
 	if value, ok := doc[schema.ReservedFields[schema.IdToSearchKey]]; ok {
@@ -228,7 +229,7 @@ func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCo
 		delete(doc, schema.ReservedFields[schema.UpdatedAt])
 	}
 
-	return searchKey, tableData, nil
+	return searchKey, tableData, doc, nil
 }
 
 func UnpackAndSetMD(doc map[string]interface{}, tableData *internal.TableData) {
@@ -238,4 +239,42 @@ func UnpackAndSetMD(doc map[string]interface{}, tableData *internal.TableData) {
 	if v, ok := doc[schema.ReservedFields[schema.UpdatedAt]]; ok {
 		tableData.UpdatedAt = internal.CreateNewTimestamp(int64(v.(float64)))
 	}
+}
+
+func FlattenObjects(data map[string]any) map[string]any {
+	resp := make(map[string]any)
+	flattenObjects("", data, resp)
+	return resp
+}
+
+func flattenObjects(key string, obj map[string]any, resp map[string]any) {
+	if key != "" {
+		key += schema.ObjFlattenDelimiter
+	}
+
+	for k, v := range obj {
+		switch vMap := v.(type) {
+		case map[string]any:
+			flattenObjects(key+k, vMap, resp)
+		default:
+			resp[key+k] = v
+		}
+	}
+}
+
+func UnFlattenObjects(flat map[string]any) map[string]any {
+	result := make(map[string]any)
+	for k, v := range flat {
+		keys := strings.Split(k, schema.ObjFlattenDelimiter)
+		m := result
+		for i := 1; i < len(keys); i++ {
+			if _, ok := m[keys[i-1]]; !ok {
+				m[keys[i-1]] = make(map[string]any)
+			}
+			m = m[keys[i-1]].(map[string]any)
+		}
+		m[keys[len(keys)-1]] = v
+	}
+
+	return result
 }
