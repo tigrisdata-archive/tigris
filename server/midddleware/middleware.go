@@ -48,9 +48,10 @@ func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerI
 		grpctrace.StreamServerInterceptor(grpctrace.WithServiceName("tigris-server")),
 		grpc_logging.StreamServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger), []grpc_logging.Option{}...),
 		validatorStreamServerInterceptor(),
-		StreamMetricsServerInterceptor(),
+		metricsStreamServerInterceptor(),
 		grpc_opentracing.StreamServerInterceptor(),
 		grpc_recovery.StreamServerInterceptor(),
+		headersStreamServerInterceptor(),
 	)
 
 	// adding all the middlewares for the unary stream
@@ -66,9 +67,10 @@ func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerI
 		grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger)),
 		validatorUnaryServerInterceptor(),
 		timeoutUnaryServerInterceptor(DefaultTimeout),
-		UnaryMetricsServerInterceptor(),
+		metricsUnaryServerInterceptor(),
 		grpc_opentracing.UnaryServerInterceptor(),
 		grpc_recovery.UnaryServerInterceptor(),
+		headersUnaryServerInterceptor(),
 	)
 
 	return unary, stream

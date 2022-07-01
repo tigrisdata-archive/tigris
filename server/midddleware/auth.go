@@ -27,6 +27,8 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 )
 
+type TokenCtxkey struct{}
+
 var (
 	headerAuthorize = "authorization"
 )
@@ -108,18 +110,18 @@ func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config
 		}
 	}()
 
-	token, err := AuthFromMD(ctx, "bearer")
+	tkn, err := AuthFromMD(ctx, "bearer")
 	if err != nil {
 		return ctx, err
 	}
 
-	validToken, err := jwtValidator.ValidateToken(ctx, token)
+	validToken, err := jwtValidator.ValidateToken(ctx, tkn)
 	if err != nil {
 		return ctx, api.Errorf(api.Code_UNAUTHENTICATED, err.Error())
 	}
 
 	log.Debug().Msg("Valid token received")
-	return context.WithValue(ctx, key("token"), validToken), nil
+	return context.WithValue(ctx, TokenCtxkey{}, validToken), nil
 }
 
 func getOrganizationName(ctx context.Context) (string, error) {

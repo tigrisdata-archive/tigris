@@ -96,6 +96,7 @@ func (s *apiService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel)
 	mux := runtime.NewServeMux(
 		runtime.WithMarshalerOption(runtime.MIMEWildcard, &api.CustomMarshaler{JSONBuiltin: &runtime.JSONBuiltin{}}),
 		runtime.WithIncomingHeaderMatcher(api.CustomMatcher),
+		runtime.WithOutgoingHeaderMatcher(api.CustomMatcher),
 	)
 
 	if err := api.RegisterTigrisHandlerClient(context.TODO(), mux, api.NewTigrisClient(inproc)); err != nil {

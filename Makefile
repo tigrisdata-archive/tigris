@@ -51,7 +51,7 @@ docker_test: generate
 	$(DOCKER_COMPOSE) up --build tigris_test tigris_test
 
 docker_test_no_build:
-	$(DOCKER_COMPOSE) up --no-build tigris_test tigris_test
+	$(DOCKER_COMPOSE) up --exit-code-from tigris_test --no-build tigris_test tigris_test
 
 test: docker_test
 

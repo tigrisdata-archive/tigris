@@ -59,7 +59,7 @@ func countSpecificErrorMessage(fullMethod string, methodType, errSource string, 
 	metrics.ErrorRequests.Tagged(tags).Counter("specific").Inc(1)
 }
 
-func UnaryMetricsServerInterceptor() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func metricsUnaryServerInterceptor() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		methodType := "unary"
 		tags := metrics.GetPreinitializedTagsFromFullMethod(info.FullMethod, methodType)
@@ -83,7 +83,7 @@ func UnaryMetricsServerInterceptor() func(ctx context.Context, req interface{}, 
 		return resp, err
 	}
 }
-func StreamMetricsServerInterceptor() grpc.StreamServerInterceptor {
+func metricsStreamServerInterceptor() grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		methodType := "stream"
 		tags := metrics.GetPreinitializedTagsFromFullMethod(info.FullMethod, methodType)

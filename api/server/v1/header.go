@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"net/textproto"
 	"strings"
 
 	"github.com/grpc-ecosystem/go-grpc-middleware/util/metautils"
@@ -14,17 +15,20 @@ const (
 	// values. For ex, 0.1 means 100milliseconds.
 	HeaderRequestTimeout = "Request-Timeout"
 
+	HeaderAccessControlAllowOrigin = "Access-Control-Allow-Origin"
+
 	HeaderPrefix = "Tigris-"
 
 	HeaderTxID     = "Tigris-Tx-Id"
 	HeaderTxOrigin = "Tigris-Tx-Origin"
 
-	grpcGatewayPrefix = "grpc-gateway-"
+	grpcGatewayPrefix = "Grpc-Gateway-"
 )
 
 func CustomMatcher(key string) (string, bool) {
+	key = textproto.CanonicalMIMEHeaderKey(key)
 	switch key {
-	case HeaderRequestTimeout:
+	case HeaderRequestTimeout, HeaderAccessControlAllowOrigin:
 		return key, true
 	default:
 		if strings.HasPrefix(key, HeaderPrefix) {
