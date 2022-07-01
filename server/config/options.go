@@ -17,6 +17,8 @@ package config
 import (
 	"time"
 
+	"github.com/tigrisdata/tigris/util"
+
 	"github.com/tigrisdata/tigris/util/log"
 )
 
@@ -33,6 +35,7 @@ type Config struct {
 	Search       SearchConfig    `yaml:"search" json:"search"`
 	Tracing      TracingConfig   `yaml:"tracing" json:"tracing"`
 	Profiling    ProfilingConfig `yaml:"profiling" json:"profiling"`
+	Tags         TagsConfig      `yaml:"tags" json:"tags"`
 	FoundationDB FoundationDBConfig
 }
 
@@ -51,19 +54,25 @@ type CdcConfig struct {
 }
 
 type TracingConfig struct {
-	Enabled           bool
+	Enabled           bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 	WithUDS           string
-	WithAgentAddr     string
+	WithAgentAddr     string `mapstructure:"agent_addr" yaml:"agent_addr" json:"agent_addr"`
 	WithDogStatsdAddr string
 }
 
 type ProfilingConfig struct {
-	Enabled         bool
-	EnableCPU       bool
+	Enabled         bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	EnableCPU       bool `mapstructure:"enable_cpu" yaml:"enable_cpu" json:"enable_cpu"`
 	EnableHeap      bool
 	EnableBlock     bool
 	EnableMutex     bool
 	EnableGoroutine bool
+}
+
+type TagsConfig struct {
+	Service     string
+	Environment string
+	Version     string
 }
 
 var DefaultConfig = Config{
@@ -93,12 +102,17 @@ var DefaultConfig = Config{
 		WriteEnabled: true,
 	},
 	Tracing: TracingConfig{
-		Enabled: true,
+		Enabled: false,
 	},
 	Profiling: ProfilingConfig{
-		Enabled:    true,
+		Enabled:    false,
 		EnableCPU:  true,
 		EnableHeap: true,
+	},
+	Tags: TagsConfig{
+		Service:     util.Service,
+		Environment: "local",
+		Version:     util.Version,
 	},
 }
 
