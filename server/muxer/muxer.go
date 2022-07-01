@@ -21,8 +21,10 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
 	v1 "github.com/tigrisdata/tigris/server/services/v1"
+	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
 )
@@ -46,8 +48,8 @@ func NewMuxer(cfg *config.Config) *Muxer {
 	return m
 }
 
-func (m *Muxer) RegisterServices(kvStore kv.KeyValueStore, searchStore search.Store) {
-	services := v1.GetRegisteredServices(kvStore, searchStore)
+func (m *Muxer) RegisterServices(kvStore kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) {
+	services := v1.GetRegisteredServices(kvStore, searchStore, tenantMgr, txMgr)
 	for _, r := range services {
 		for _, v := range m.servers {
 			if s, ok := v.(*GRPCServer); ok {

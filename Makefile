@@ -30,7 +30,7 @@ ${PROTO_DIR}/%_openapi.yaml ${GEN_DIR}/%.pb.go ${GEN_DIR}/%.pb.gw.go: ${PROTO_DI
 ${DATA_PROTO_DIR}/%.pb.go: ${DATA_PROTO_DIR}/%.proto
 	protoc -I${DATA_PROTO_DIR} --go_out=${DATA_PROTO_DIR} --go_opt=paths=source_relative $<
 
-generate: ${GEN_DIR}/api.pb.go ${GEN_DIR}/api.pb.gw.go ${GEN_DIR}/health.pb.go ${GEN_DIR}/health.pb.gw.go ${DATA_PROTO_DIR}/data.pb.go
+generate: ${GEN_DIR}/api.pb.go ${GEN_DIR}/api.pb.gw.go ${GEN_DIR}/health.pb.go ${GEN_DIR}/health.pb.gw.go ${GEN_DIR}/admin.pb.go ${GEN_DIR}/admin.pb.gw.go ${DATA_PROTO_DIR}/data.pb.go
 
 server: server/service
 server/service: $(GO_SRC) generate

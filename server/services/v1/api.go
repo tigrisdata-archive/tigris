@@ -63,10 +63,10 @@ type apiService struct {
 	searchStore   search.Store
 }
 
-func newApiService(kv kv.KeyValueStore, searchStore search.Store) *apiService {
+func newApiService(kv kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) *apiService {
 	u := &apiService{
 		kvStore:     kv,
-		txMgr:       transaction.NewManager(kv),
+		txMgr:       txMgr,
 		versionH:    &metadata.VersionHandler{},
 		searchStore: searchStore,
 	}
@@ -77,7 +77,6 @@ func newApiService(kv kv.KeyValueStore, searchStore search.Store) *apiService {
 		log.Fatal().Err(err).Msgf("error starting server: starting transaction failed")
 	}
 
-	tenantMgr := metadata.NewTenantManager()
 	if err := tenantMgr.Reload(ctx, tx); ulog.E(err) {
 		// ToDo: no need to panic, probably handle through async thread.
 		log.Err(err).Msgf("error starting server: reloading tenants failed")
@@ -85,7 +84,7 @@ func newApiService(kv kv.KeyValueStore, searchStore search.Store) *apiService {
 	_ = tx.Commit(ctx)
 
 	u.tenantMgr = tenantMgr
-	u.encoder = metadata.NewEncoder(tenantMgr)
+	u.encoder = metadata.NewEncoder(u.tenantMgr)
 	u.cdcMgr = cdc.NewManager()
 	u.sessions = NewSessionManager(u.txMgr, u.tenantMgr, u.versionH, u.cdcMgr, u.searchStore, u.encoder)
 	u.runnerFactory = NewQueryRunnerFactory(u.txMgr, u.encoder, u.cdcMgr, u.searchStore)
