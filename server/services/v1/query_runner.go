@@ -601,7 +601,7 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			break
 		}
 
-		resp.Meta.Page.Total = totalInPage
+		resp.Meta.Page.Size = totalInPage
 		if err := runner.streaming.Send(resp); err != nil {
 			return nil, ctx, err
 		}

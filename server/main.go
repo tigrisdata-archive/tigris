@@ -18,8 +18,10 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/pflag"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/muxer"
+	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
 	"github.com/tigrisdata/tigris/util"
@@ -80,8 +82,10 @@ func main() {
 		log.Fatal().Err(err).Msg("error initializing search store")
 	}
 
+	tenantMgr := metadata.NewTenantManager()
+	txMgr := transaction.NewManager(kvStore)
 	mx := muxer.NewMuxer(&config.DefaultConfig)
-	mx.RegisterServices(kvStore, searchStore)
+	mx.RegisterServices(kvStore, searchStore, tenantMgr, txMgr)
 	if err := mx.Start(config.DefaultConfig.Server.Host, config.DefaultConfig.Server.Port); err != nil {
 		log.Fatal().Err(err).Msgf("error starting server")
 	}

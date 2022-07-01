@@ -30,7 +30,7 @@ import (
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
-func TestTenantManager_CreateTenant(t *testing.T) {
+func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 	fdbCfg, err := config.GetTestFDBConfig("../..")
 	require.NoError(t, err)
 
@@ -60,6 +60,7 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		require.Empty(t, tenant.databases)
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
+
 	t.Run("create_multiple_tenants", func(t *testing.T) {
 		m := newTenantManager(&encoding.TestMDNameRegistry{
 			ReserveSB:  "test_tenant_reserve",
@@ -131,6 +132,104 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		require.Equal(t, "ns-test1", m.idToTenantMap[uint32(2)])
 		require.Equal(t, 1, len(m.idToTenantMap))
 
+		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
+	})
+}
+
+func TestTenantManager_CreateTenant(t *testing.T) {
+	fdbCfg, err := config.GetTestFDBConfig("../..")
+	require.NoError(t, err)
+
+	kvStore, err := kv.NewKeyValueStore(fdbCfg)
+	require.NoError(t, err)
+
+	tm := transaction.NewManager(kvStore)
+	t.Run("create_tenant", func(t *testing.T) {
+		m := newTenantManager(&encoding.TestMDNameRegistry{
+			ReserveSB:  "test_tenant_reserve",
+			EncodingSB: "test_tenant_encoding",
+			SchemaSB:   "test_tenant_schema",
+		})
+
+		ctx := context.TODO()
+		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
+		_ = kvStore.DropTable(ctx, m.mdNameRegistry.EncodingSubspaceName())
+		_ = kvStore.DropTable(ctx, m.mdNameRegistry.SchemaSubspaceName())
+		tx, e := tm.StartTx(ctx)
+		require.NoError(t, e)
+		err = m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
+		require.NoError(t, err)
+		namespaces, err := m.encoder.GetNamespaces(ctx, tx)
+		require.NoError(t, err)
+		id := namespaces["ns-test1"]
+		require.Equal(t, uint32(2), id)
+		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
+	})
+	t.Run("create_multiple_tenants", func(t *testing.T) {
+		m := newTenantManager(&encoding.TestMDNameRegistry{
+			ReserveSB:  "test_tenant_reserve",
+			EncodingSB: "test_tenant_encoding",
+			SchemaSB:   "test_tenant_schema",
+		})
+
+		ctx := context.TODO()
+		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
+
+		tx, e := tm.StartTx(ctx)
+		require.NoError(t, e)
+
+		err = m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
+		require.NoError(t, err)
+
+		err = m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test2", 3})
+		require.NoError(t, err)
+		namespaces, err := m.encoder.GetNamespaces(ctx, tx)
+		require.NoError(t, err)
+
+		id, _ := namespaces["ns-test1"]
+		require.Equal(t, uint32(2), id)
+
+		id, _ = namespaces["ns-test2"]
+		require.Equal(t, uint32(3), id)
+		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
+	})
+	t.Run("create_duplicate_tenant_error", func(t *testing.T) {
+		m := newTenantManager(&encoding.TestMDNameRegistry{
+			ReserveSB:  "test_tenant_reserve",
+			EncodingSB: "test_tenant_encoding",
+			SchemaSB:   "test_tenant_schema",
+		})
+
+		ctx := context.TODO()
+		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
+		tx, e := tm.StartTx(ctx)
+		require.NoError(t, e)
+		err = m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
+		require.NoError(t, err)
+
+		// should fail now
+		err = m.CreateTenant(context.TODO(), tx, &TenantNamespace{"ns-test1", 3})
+		require.Equal(t, "namespace with same name already exists with id '2'", err.(*api.TigrisError).Error())
+
+		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
+	})
+	t.Run("create_duplicate_tenant_id_error", func(t *testing.T) {
+		m := newTenantManager(&encoding.TestMDNameRegistry{
+			ReserveSB:  "test_tenant_reserve",
+			EncodingSB: "test_tenant_encoding",
+			SchemaSB:   "test_tenant_schema",
+		})
+
+		ctx := context.TODO()
+		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
+		tx, e := tm.StartTx(ctx)
+		require.NoError(t, e)
+		err = m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
+		require.NoError(t, err)
+
+		// should fail now
+		err = m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test2", 2})
+		require.Equal(t, "namespace with same id already exists with name 'ns-test1'", err.(*api.TigrisError).Error())
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
 }
