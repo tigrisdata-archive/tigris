@@ -53,7 +53,7 @@ func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 		_, err = m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test1", 2})
 		require.NoError(t, err)
 
-		tenant, _ := m.tenants["ns-test1"]
+		tenant := m.tenants["ns-test1"]
 		require.Equal(t, "ns-test1", tenant.namespace.Name())
 		require.Equal(t, uint32(2), tenant.namespace.Id())
 		require.Equal(t, "ns-test1", m.idToTenantMap[uint32(2)])
@@ -77,7 +77,7 @@ func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 		_, err = m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test2", 3})
 		require.NoError(t, err)
 
-		tenant, _ := m.tenants["ns-test1"]
+		tenant := m.tenants["ns-test1"]
 		require.Equal(t, "ns-test1", tenant.namespace.Name())
 		require.Equal(t, uint32(2), tenant.namespace.Id())
 		require.Equal(t, "ns-test1", m.idToTenantMap[uint32(2)])
@@ -85,7 +85,7 @@ func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 		require.Empty(t, tenant.databases)
 		require.Empty(t, tenant.idToDatabaseMap)
 
-		tenant, _ = m.tenants["ns-test2"]
+		tenant = m.tenants["ns-test2"]
 		require.Equal(t, "ns-test2", tenant.namespace.Name())
 		require.Equal(t, uint32(3), tenant.namespace.Id())
 		require.Equal(t, "ns-test2", m.idToTenantMap[uint32(3)])
@@ -186,10 +186,10 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		namespaces, err := m.encoder.GetNamespaces(ctx, tx)
 		require.NoError(t, err)
 
-		id, _ := namespaces["ns-test1"]
+		id := namespaces["ns-test1"]
 		require.Equal(t, uint32(2), id)
 
-		id, _ = namespaces["ns-test2"]
+		id = namespaces["ns-test2"]
 		require.Equal(t, uint32(3), id)
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
@@ -387,7 +387,7 @@ func TestTenantManager_DropCollection(t *testing.T) {
 		_, err = m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test1", 2})
 		require.NoError(t, err)
 
-		tenant, _ := m.tenants["ns-test1"]
+		tenant := m.tenants["ns-test1"]
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
@@ -436,7 +436,7 @@ func TestTenantManager_DropCollection(t *testing.T) {
 		require.NoError(t, tenant.DropCollection(ctx, tx, db2, "test_collection", &search.NoopStore{}))
 		require.NoError(t, tx.Commit(ctx))
 
-		tx, err = tm.StartTx(ctx)
+		_, err = tm.StartTx(ctx)
 		require.NoError(t, err)
 		coll := db2.GetCollection("test_collection")
 		require.Nil(t, coll)

@@ -128,7 +128,6 @@ func (p *pageReader) read(ctx context.Context) error {
 	}
 	p.reqPage++
 
-	var added = true
 	var pg = newPage(p.collection, p.query)
 	for _, r := range result {
 		if r.Hits == nil {
@@ -136,18 +135,14 @@ func (p *pageReader) read(ctx context.Context) error {
 		}
 
 		for _, h := range *r.Hits {
-			added = false
 			if !pg.append(h) {
 				p.pages = append(p.pages, pg)
 				pg = newPage(p.collection, p.query)
-
-				added = true
 			}
 		}
 	}
-	if !added {
+	if pg.hits.Count() > 0 {
 		p.pages = append(p.pages, pg)
-		pg = newPage(p.collection, p.query)
 	}
 
 	// check if we need to build facets

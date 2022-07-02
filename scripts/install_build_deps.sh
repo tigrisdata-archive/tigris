@@ -50,8 +50,8 @@ case "${OS}-${ARCH}" in
 esac
 
 # Check if required binaries are available in PATH
-for bin in $(echo "${BINARIES}"); do
-	binpath=$(which "${bin}")
+for bin in ${BINARIES}; do
+	binpath=$(command -v "${bin}")
 	if [ -z "${binpath}" ] || ! test -x "${binpath}"; then
 		echo "Please ensure that $bin binary is installed and in PATH."
 		exit 1

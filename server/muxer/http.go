@@ -36,17 +36,13 @@ func NewHTTPServer(cfg *config.Config) *HTTPServer {
 
 	r.Use(cors.AllowAll().Handler)
 
-	s := &HTTPServer{
-		Inproc: &inprocgrpc.Channel{},
-		Router: r,
-	}
-
 	unary, stream := middleware.Get(cfg)
 
-	s.Inproc.WithServerStreamInterceptor(stream)
-	s.Inproc.WithServerUnaryInterceptor(unary)
+	inproc := &inprocgrpc.Channel{}
+	inproc.WithServerStreamInterceptor(stream)
+	inproc.WithServerUnaryInterceptor(unary)
 
-	return s
+	return &HTTPServer{Inproc: inproc, Router: r}
 }
 
 func (s *HTTPServer) Start(mux cmux.CMux) error {

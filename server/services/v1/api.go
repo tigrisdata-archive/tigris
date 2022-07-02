@@ -406,47 +406,42 @@ func (s *apiService) Events(r *api.EventsRequest, stream api.Tigris_EventsServer
 	}
 	defer streamer.Close()
 
-	for {
-		select {
-		case tx, ok := <-streamer.Txs:
+	for tx := range streamer.Txs {
+		for _, op := range tx.Ops {
+			_, _, collection, ok := s.encoder.DecodeTableName(op.Table)
 			if !ok {
-				return api.Errorf(api.Code_CANCELLED, "buffer overflow")
+				log.Err(err).Str("table", string(op.Table)).Msg("failed to decode collection name")
+				return api.Errorf(api.Code_INTERNAL, "failed to decode collection name")
 			}
 
-			for _, op := range tx.Ops {
-				_, _, collection, ok := s.encoder.DecodeTableName(op.Table)
-				if !ok {
-					log.Err(err).Str("table", string(op.Table)).Msg("failed to decode collection name")
-					return api.Errorf(api.Code_INTERNAL, "failed to decode collection name")
+			if r.Collection == "" || r.Collection == collection {
+				td, err := internal.Decode(op.Data)
+				if err != nil {
+					log.Err(err).Str("data", string(op.Data)).Msg("failed to decode data")
+					return api.Errorf(api.Code_INTERNAL, "failed to decode data")
 				}
 
-				if r.Collection == "" || r.Collection == collection {
-					td, err := internal.Decode(op.Data)
-					if err != nil {
-						log.Err(err).Str("data", string(op.Data)).Msg("failed to decode data")
-						return api.Errorf(api.Code_INTERNAL, "failed to decode data")
-					}
+				event := &api.StreamEvent{
+					TxId:       tx.Id,
+					Collection: collection,
+					Op:         op.Op,
+					Key:        op.Key,
+					Lkey:       op.LKey,
+					Rkey:       op.RKey,
+					Data:       td.RawData,
+					Last:       op.Last,
+				}
 
-					event := &api.StreamEvent{
-						TxId:       tx.Id,
-						Collection: collection,
-						Op:         op.Op,
-						Key:        op.Key,
-						Lkey:       op.LKey,
-						Rkey:       op.RKey,
-						Data:       td.RawData,
-						Last:       op.Last,
-					}
+				response := &api.EventsResponse{
+					Event: event,
+				}
 
-					response := &api.EventsResponse{
-						Event: event,
-					}
-
-					if err := stream.Send(response); ulog.E(err) {
-						return err
-					}
+				if err := stream.Send(response); ulog.E(err) {
+					return err
 				}
 			}
 		}
 	}
+
+	return nil
 }

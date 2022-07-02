@@ -127,10 +127,12 @@ func CreateSearchKey(table []byte, fdbKey []byte) (string, error) {
 		return "", err
 	}
 
-	// ToDo: add a pkey check here
-	if tp[0] != schema.PrimaryKeyIndexName {
-		// this won't work as tp[0] is dictionary encoded value of PrimaryKeyIndexName
-	}
+	// TODO: add a pkey check here
+	/*
+		if tp[0] != schema.PrimaryKeyIndexName {
+			// this won't work as tp[0] is dictionary encoded value of PrimaryKeyIndexName
+		}
+	*/
 
 	// the zeroth entry represents index key name
 	tp = tp[1:]

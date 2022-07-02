@@ -181,9 +181,9 @@ func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.Co
 
 func init() {
 	jsonschema.Formats[FieldNames[ByteType]] = func(i interface{}) bool {
-		switch i.(type) {
+		switch v := i.(type) {
 		case string:
-			_, err := base64.StdEncoding.DecodeString(i.(string))
+			_, err := base64.StdEncoding.DecodeString(v)
 			return err == nil
 		}
 		return false
@@ -200,15 +200,8 @@ func init() {
 		return true
 	}
 	jsonschema.Formats[FieldNames[Int64Type]] = func(i interface{}) bool {
-		val, err := parseInt(i)
-		if err != nil {
-			return false
-		}
-
-		if val < math.MinInt64 || val > math.MaxInt64 {
-			return false
-		}
-		return true
+		_, err := parseInt(i)
+		return err == nil
 	}
 }
 

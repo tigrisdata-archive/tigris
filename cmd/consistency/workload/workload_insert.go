@@ -117,8 +117,8 @@ func (w *InsertOnlyWorkload) Check(client driver.Driver) (bool, error) {
 		isSuccess = reflect.DeepEqual(existing.Documents, queueDoc.Documents)
 		if !isSuccess {
 			log.Debug().Msgf("consistency issue for collection '%s' '%s', ignoring further checks", w.Database, collection)
+			return false, nil
 		}
-		return isSuccess, nil
 	}
 
 	return true, nil

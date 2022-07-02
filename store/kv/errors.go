@@ -18,9 +18,8 @@ var (
 )
 
 type StoreError struct {
-	code    StoreErrCode
-	msg     string
-	wrapped error
+	code StoreErrCode
+	msg  string
 }
 
 func NewStoreError(code StoreErrCode, msg string, args ...interface{}) error {

@@ -139,9 +139,9 @@ func (m *KeyValueStoreImplWithMetrics) DeleteRange(ctx context.Context, table []
 	return
 }
 
-func (m *KeyValueStoreImplWithMetrics) CreateTable(_ context.Context, name []byte) (err error) {
+func (m *KeyValueStoreImplWithMetrics) CreateTable(ctx context.Context, name []byte) (err error) {
 	m.measure("CreateTable", func() error {
-		err = m.kv.CreateTable(nil, name)
+		err = m.kv.CreateTable(ctx, name)
 		return err
 	})
 	return
