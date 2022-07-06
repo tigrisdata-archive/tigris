@@ -7,6 +7,7 @@ V=v1
 GEN_DIR=${API_DIR}/server/${V}
 PROTO_DIR=${API_DIR}/proto/server/${V}
 DATA_PROTO_DIR=internal
+LINT_TIMEOUT=5m
 
 # Needed to be able to build amd64 binaries on MacOS M1
 DOCKER_DIR=test/docker
@@ -40,7 +41,7 @@ lint: generate
 	yq --exit-status 'tag == "!!map" or tag== "!!seq"' .github/workflows/*.yaml config/*.yaml
 	shellcheck scripts/*
 	shellcheck test/docker/grafana/*
-	golangci-lint run
+	golangci-lint --timeout=$(LINT_TIMEOUT) run
 
 docker_compose_build:
 	$(DOCKER_COMPOSE) build
