@@ -26,7 +26,7 @@ running quickly and efficiently.
 
 <p align="center">
   <a href="https://www.tigrisdata.com/">Website</a> |
-  <a href="https://docs.tigrisdata.com/quickstart/with-go">Quickstart</a> |
+  <a href="https://docs.tigrisdata.com/quickstart">Quickstart</a> |
   <a href="https://docs.tigrisdata.com/apidocs/">API Reference</a> |
   <a href="https://join.slack.com/t/tigrisdatacommunity/shared_invite/zt-16fn5ogio-OjxJlgttJIV0ZDywcBItJQ">Slack Community</a> | 
   <a href="https://twitter.com/TigrisData">Twitter</a>
@@ -34,12 +34,13 @@ running quickly and efficiently.
 
 # Helpful Links
 
-- [Key Concepts](https://docs.tigrisdata.com/overview/key-concepts)
-- [Quickstarts](https://docs.tigrisdata.com/category/quickstart)
-- [Data Modeling](https://docs.tigrisdata.com/category/data-modeling)
-- [Guides](https://docs.tigrisdata.com/category/guides)
-- [Client Library: Go](https://docs.tigrisdata.com/client-libraries/go)
-- [Client Library: Java](https://docs.tigrisdata.com/client-libraries/java/overview)
+- [Key Concepts](https://docs.tigrisdata.com/overview/concepts)
+- [Quickstart](https://docs.tigrisdata.com/quickstart)
+- [Data Modeling](https://docs.tigrisdata.com/overview/datamodel)
+- [Tutorials](https://docs.tigrisdata.com/category/tutorials)
+- [Client Library: Go](https://docs.tigrisdata.com/golang/getting-started)
+- [Client Library: Java](https://docs.tigrisdata.com/java/getting-started)
+- [Client Library: TypeScript](https://docs.tigrisdata.com/typescript/getting-started)
 - [Command Line Interface](https://docs.tigrisdata.com/cli)
 
 # Community & Support
