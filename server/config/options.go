@@ -53,10 +53,12 @@ type CdcConfig struct {
 }
 
 type TracingConfig struct {
-	Enabled           bool   `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	WithUDS           string `mapstructure:"agent_socket" yaml:"agent_socket" json:"agent_socket"`
-	WithAgentAddr     string `mapstructure:"agent_addr" yaml:"agent_addr" json:"agent_addr"`
-	WithDogStatsdAddr string `mapstructure:"dogstatsd_addr" yaml:"dogstatsd_addr" json:"dogstatsd_addr"`
+	Enabled             bool   `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	CodeHotspotsEnabled bool   `mapstructure:"codehotspots_enabled" yaml:"codehotspots_enabled" json:"codehotspots_enabled"`
+	EndpointsEnabled    bool   `mapstructure:"endpoints_enabled" yaml:"endpoints_enabled" json:"endpoints_enabled"`
+	WithUDS             string `mapstructure:"agent_socket" yaml:"agent_socket" json:"agent_socket"`
+	WithAgentAddr       string `mapstructure:"agent_addr" yaml:"agent_addr" json:"agent_addr"`
+	WithDogStatsdAddr   string `mapstructure:"dogstatsd_addr" yaml:"dogstatsd_addr" json:"dogstatsd_addr"`
 }
 
 type ProfilingConfig struct {
@@ -101,7 +103,9 @@ var DefaultConfig = Config{
 		WriteEnabled: true,
 	},
 	Tracing: TracingConfig{
-		Enabled: false,
+		Enabled:             false,
+		CodeHotspotsEnabled: true,
+		EndpointsEnabled:    true,
 	},
 	Profiling: ProfilingConfig{
 		Enabled:    false,

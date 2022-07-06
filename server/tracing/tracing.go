@@ -9,6 +9,8 @@ import (
 func getTracingOptions(config *config.Config) []tracer.StartOption {
 	var opts []tracer.StartOption
 	opts = append(opts, tracer.WithTraceEnabled(config.Tracing.Enabled))
+	opts = append(opts, tracer.WithProfilerEndpoints(config.Tracing.EndpointsEnabled))
+	opts = append(opts, tracer.WithProfilerCodeHotspots(config.Tracing.CodeHotspotsEnabled))
 	opts = append(opts, tracer.WithService(config.Tags.Service))
 	opts = append(opts, tracer.WithEnv(config.Tags.Environment))
 	opts = append(opts, tracer.WithServiceVersion(config.Tags.Version))
