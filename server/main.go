@@ -16,7 +16,6 @@ package main
 
 import (
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/pflag"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
@@ -30,9 +29,7 @@ import (
 )
 
 func main() {
-	pflag.String("api.port", "", "set port server listens on")
-
-	config.LoadConfig("server", &config.DefaultConfig)
+	config.LoadConfig(&config.DefaultConfig)
 
 	ulog.Configure(config.DefaultConfig.Log)
 
