@@ -19,6 +19,7 @@ import (
 
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
+	chi_middleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
@@ -35,6 +36,7 @@ func NewHTTPServer(cfg *config.Config) *HTTPServer {
 	r := chi.NewRouter()
 
 	r.Use(cors.AllowAll().Handler)
+	r.Mount("/debug", chi_middleware.Profiler())
 
 	unary, stream := middleware.Get(cfg)
 
