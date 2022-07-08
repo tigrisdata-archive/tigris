@@ -362,9 +362,12 @@ func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVers
 }
 
 func (tenant *Tenant) ReloadUsingOutsideVersion(ctx context.Context, tx transaction.Tx, version Version, id string) error {
+	if !tenant.shouldReload(version) {
+		return nil
+	}
+
 	tenant.Lock()
 	defer tenant.Unlock()
-
 	if bytes.Equal(version, tenant.version) {
 		return nil
 	}
@@ -374,20 +377,29 @@ func (tenant *Tenant) ReloadUsingOutsideVersion(ctx context.Context, tx transact
 }
 
 func (tenant *Tenant) ReloadUsingTxVersion(ctx context.Context, tx transaction.Tx, id string) error {
-	tenant.Lock()
-	defer tenant.Unlock()
-
 	currentVersion, err := tenant.versionH.Read(ctx, tx)
 	if err != nil {
 		return err
 	}
 
-	if bytes.Equal(currentVersion, tenant.version) {
+	if !tenant.shouldReload(currentVersion) {
 		return nil
 	}
 
+	tenant.Lock()
+	defer tenant.Unlock()
+	if bytes.Equal(currentVersion, tenant.version) {
+		return nil
+	}
 	log.Debug().Str("tx_id", id).Msgf("reloading tenants")
 	return tenant.reload(ctx, tx, currentVersion)
+}
+
+func (tenant *Tenant) shouldReload(currentVersion Version) bool {
+	tenant.RLock()
+	defer tenant.RUnlock()
+
+	return !bytes.Equal(currentVersion, tenant.version)
 }
 
 func (tenant *Tenant) GetNamespace() Namespace {

@@ -64,7 +64,6 @@ func (s *storeImpl) IndexDocuments(_ context.Context, table string, reader io.Re
 	if err != nil {
 		return err
 	}
-
 	defer func() { ulog.E(closer.Close()) }()
 
 	type resp struct {

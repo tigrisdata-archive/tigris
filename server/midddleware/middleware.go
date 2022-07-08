@@ -64,7 +64,7 @@ func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerI
 		grpc_ratelimit.UnaryServerInterceptor(&RateLimiter{}),
 		grpc_auth.UnaryServerInterceptor(authFunction),
 		grpctrace.UnaryServerInterceptor(grpctrace.WithServiceName(config.Tags.Service)),
-		grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger)),
+		//grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger)),
 		validatorUnaryServerInterceptor(),
 		timeoutUnaryServerInterceptor(DefaultTimeout),
 		metricsUnaryServerInterceptor(),
