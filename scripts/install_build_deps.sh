@@ -64,6 +64,7 @@ case "${OS}" in
 		brew install protobuf
 		;;
 	"Linux")
+		sudo apt-get update
 		sudo apt-get install -y protobuf-compiler
 		;;
 esac
