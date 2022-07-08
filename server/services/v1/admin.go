@@ -71,11 +71,14 @@ func (a *adminService) CreateNamespace(ctx context.Context, req *api.CreateNames
 	}
 }
 
-func (h *adminService) RegisterHTTP(router chi.Router, _ *inprocgrpc.Channel) error {
-	mux := runtime.NewServeMux(runtime.WithMarshalerOption(string(JSON), &runtime.JSONBuiltin{}))
-	if err := api.RegisterAdminHandlerServer(context.TODO(), mux, h); err != nil {
+func (a *adminService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {
+	mux := runtime.NewServeMux(
+		runtime.WithMarshalerOption(runtime.MIMEWildcard, &api.CustomMarshaler{JSONBuiltin: &runtime.JSONBuiltin{}}),
+	)
+	if err := api.RegisterAdminHandlerClient(context.TODO(), mux, api.NewAdminClient(inproc)); err != nil {
 		return err
 	}
+	api.RegisterAdminServer(inproc, a)
 	router.HandleFunc(adminPath+namespacePathPattern, func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
 	})

@@ -43,11 +43,14 @@ func (h *healthService) Health(_ context.Context, _ *api.HealthCheckInput) (*api
 	}, nil
 }
 
-func (h *healthService) RegisterHTTP(router chi.Router, _ *inprocgrpc.Channel) error {
-	mux := runtime.NewServeMux(runtime.WithMarshalerOption(string(JSON), &runtime.JSONBuiltin{}))
-	if err := api.RegisterHealthAPIHandlerServer(context.TODO(), mux, h); err != nil {
+func (h *healthService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {
+	mux := runtime.NewServeMux(
+		runtime.WithMarshalerOption(runtime.MIMEWildcard, &api.CustomMarshaler{JSONBuiltin: &runtime.JSONBuiltin{}}),
+	)
+	if err := api.RegisterHealthAPIHandlerClient(context.TODO(), mux, api.NewHealthAPIClient(inproc)); err != nil {
 		return err
 	}
+	api.RegisterHealthAPIServer(inproc, h)
 	router.HandleFunc(apiPathPrefix+healthPath, func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
 	})
