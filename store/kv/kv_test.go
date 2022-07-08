@@ -617,7 +617,7 @@ func testSetVersionstampedValue(t *testing.T, kv baseKVStore) {
 }
 
 func testMeasureLow() {
-	metrics.InitializeMetrics()
+	metrics.InitializeFdbMetrics()
 
 	testFunctions := []func() error{
 		func() error {
@@ -675,6 +675,7 @@ func TestKVFDB(t *testing.T) {
 		testSetVersionstampedValue(t, kv)
 	})
 	t.Run("TestMeasureCounters", func(t *testing.T) {
+		metrics.InitializeMetrics()
 		testMeasureLow()
 	})
 }

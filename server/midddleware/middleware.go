@@ -41,24 +41,39 @@ func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerI
 	//
 	// Note: we don't add validate here and rather call it in server code because the validator interceptor returns gRPC
 	// error which is not convertible to the internal rest error code.
-	stream := middleware.ChainStreamServer(
+
+	// The order of the interceptors matter with optional elements in them
+	streamInterceptors := []grpc.StreamServerInterceptor{
 		forwarderStreamServerInterceptor(),
 		grpc_ratelimit.StreamServerInterceptor(&RateLimiter{}),
 		grpc_auth.StreamServerInterceptor(authFunction),
 		grpctrace.StreamServerInterceptor(grpctrace.WithServiceName(config.Tags.Service)),
 		grpc_logging.StreamServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger), []grpc_logging.Option{}...),
 		validatorStreamServerInterceptor(),
-		metricsStreamServerInterceptor(),
+	}
+
+	if config.Metrics.Grpc.Enabled && config.Metrics.Grpc.ResponseTime {
+		streamInterceptors = append(streamInterceptors, metricsStreamServerInterceptorResponseTime())
+	}
+
+	if config.Metrics.Grpc.Enabled && config.Metrics.Grpc.Counters {
+		streamInterceptors = append(streamInterceptors, metricsStreamServerInterceptorCounter())
+	}
+
+	streamInterceptors = append(streamInterceptors, []grpc.StreamServerInterceptor{
 		grpc_opentracing.StreamServerInterceptor(),
 		grpc_recovery.StreamServerInterceptor(),
 		headersStreamServerInterceptor(),
-	)
+	}...)
+	stream := middleware.ChainStreamServer(streamInterceptors...)
 
 	// adding all the middlewares for the unary stream
 	//
 	// Note: we don't add validate here and rather call it in server code because the validator interceptor returns gRPC
 	// error which is not convertible to the internal rest error code.
-	unary := middleware.ChainUnaryServer(
+
+	// The order of the interceptors matter with optional elements in them
+	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		forwarderUnaryServerInterceptor(),
 		pprofUnaryServerInterceptor(),
 		grpc_ratelimit.UnaryServerInterceptor(&RateLimiter{}),
@@ -67,11 +82,22 @@ func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerI
 		//grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger)),
 		validatorUnaryServerInterceptor(),
 		timeoutUnaryServerInterceptor(DefaultTimeout),
-		metricsUnaryServerInterceptor(),
+	}
+
+	if config.Metrics.Grpc.Enabled && config.Metrics.Grpc.ResponseTime {
+		unaryInterceptors = append(unaryInterceptors, metricsUnaryServerInterceptorResponseTime())
+	}
+
+	if config.Metrics.Grpc.Enabled && config.Metrics.Grpc.Counters {
+		unaryInterceptors = append(unaryInterceptors, metricsUnaryServerInterceptorCounters())
+	}
+
+	unaryInterceptors = append(unaryInterceptors, []grpc.UnaryServerInterceptor{
 		grpc_opentracing.UnaryServerInterceptor(),
 		grpc_recovery.UnaryServerInterceptor(),
 		headersUnaryServerInterceptor(),
-	)
+	}...)
+	unary := middleware.ChainUnaryServer(unaryInterceptors...)
 
 	return unary, stream
 }
