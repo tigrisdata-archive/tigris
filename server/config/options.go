@@ -78,7 +78,7 @@ type TagsConfig struct {
 
 var DefaultConfig = Config{
 	Log: log.LogConfig{
-		Level: "trace",
+		Level: "info",
 	},
 	Server: ServerConfig{
 		Host: "0.0.0.0",

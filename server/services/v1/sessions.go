@@ -23,6 +23,7 @@ import (
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/cdc"
+	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	middleware "github.com/tigrisdata/tigris/server/midddleware"
 	"github.com/tigrisdata/tigris/server/transaction"
@@ -49,7 +50,10 @@ type SessionManager struct {
 func NewSessionManager(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, versionH *metadata.VersionHandler, cdc *cdc.Manager, searchStore search.Store, encoder metadata.Encoder) *SessionManager {
 	var txListeners []TxListener
 	txListeners = append(txListeners, cdc)
-	txListeners = append(txListeners, NewSearchIndexer(searchStore, encoder))
+	if config.DefaultConfig.Search.WriteEnabled {
+		// just for testing so that we can disable it if needed
+		txListeners = append(txListeners, NewSearchIndexer(searchStore, encoder))
+	}
 
 	return &SessionManager{
 		txMgr:       txMgr,

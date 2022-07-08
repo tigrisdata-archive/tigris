@@ -26,14 +26,15 @@ import (
 	"github.com/tigrisdata/tigris/store/search"
 	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
+	"runtime"
 )
 
 func main() {
 	config.LoadConfig(&config.DefaultConfig)
-
 	ulog.Configure(config.DefaultConfig.Log)
 
 	log.Info().Msgf("Environment: %v\n", config.GetEnvironment())
+	log.Info().Msgf("Number of CPUs: %v", runtime.NumCPU())
 
 	closerFunc, err := tracing.InitTracer(&config.DefaultConfig)
 	if err != nil {
