@@ -103,7 +103,7 @@ func GetJWTValidator(config *config.Config) *validator.Validator {
 func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config *config.Config) (ctxResult context.Context, err error) {
 	defer func() {
 		if err != nil {
-			log.Warn().Bool("log_only?", config.Auth.LogOnly).Str("error", err.Error()).Err(err).Msg("could not validate token")
+			//log.Warn().Bool("log_only?", config.Auth.LogOnly).Str("error", err.Error()).Err(err).Msg("could not validate token")
 			if config.Auth.LogOnly {
 				err = nil
 			}

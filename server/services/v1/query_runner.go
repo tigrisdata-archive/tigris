@@ -17,8 +17,8 @@ package v1
 import (
 	"bytes"
 	"context"
-
 	jsoniter "github.com/json-iterator/go"
+
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
