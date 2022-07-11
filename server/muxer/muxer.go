@@ -27,6 +27,7 @@ import (
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
+	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 type Server interface {
@@ -46,11 +47,15 @@ func (m *Muxer) RegisterServices(kvStore kv.KeyValueStore, searchStore search.St
 	for _, r := range services {
 		for _, v := range m.servers {
 			if s, ok := v.(*GRPCServer); ok {
-				_ = r.RegisterGRPC(s.Server)
+				if err := r.RegisterGRPC(s.Server); err != nil {
+					ulog.E(err)
+				}
 				// Initialize the metrics for each GRPC service
 				metrics.InitRequestMetricsForServer(s.Server)
 			} else if s, ok := v.(*HTTPServer); ok {
-				_ = r.RegisterHTTP(s.Router, s.Inproc)
+				if err := r.RegisterHTTP(s.Router, s.Inproc); err != nil {
+					ulog.E(err)
+				}
 			}
 		}
 	}

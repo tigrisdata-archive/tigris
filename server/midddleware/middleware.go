@@ -17,6 +17,8 @@ package middleware
 import (
 	"context"
 
+	"github.com/tigrisdata/tigris/util"
+
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_zerolog "github.com/grpc-ecosystem/go-grpc-middleware/providers/zerolog/v2"
 	grpc_opentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
@@ -27,6 +29,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/lib/set"
 	"github.com/tigrisdata/tigris/server/config"
+	tigrisconfig "github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"google.golang.org/grpc"
@@ -53,6 +56,11 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 	//
 	// Note: we don't add validate here and rather call it in server code because the validator interceptor returns gRPC
 	// error which is not convertible to the internal rest error code.
+	taggedLogger := log.Logger.With().
+		Str("env", tigrisconfig.GetEnvironment()).
+		Str("service", util.Service).
+		Str("version", util.Version).
+		Logger()
 
 	// The order of the interceptors matter with optional elements in them
 	streamInterceptors := []grpc.StreamServerInterceptor{
@@ -60,8 +68,8 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 		grpc_ratelimit.StreamServerInterceptor(&RateLimiter{}),
 		grpc_auth.StreamServerInterceptor(authFunction),
 		namespaceInitializer.NamespaceSetterStreamServerInterceptor(),
-		grpctrace.StreamServerInterceptor(grpctrace.WithServiceName(config.Tags.Service)),
-		grpc_logging.StreamServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger), []grpc_logging.Option{}...),
+		grpctrace.StreamServerInterceptor(grpctrace.WithServiceName(util.Service)),
+		grpc_logging.StreamServerInterceptor(grpc_zerolog.InterceptorLogger(taggedLogger), []grpc_logging.Option{}...),
 		validatorStreamServerInterceptor(),
 	}
 
@@ -92,8 +100,8 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 		grpc_ratelimit.UnaryServerInterceptor(&RateLimiter{}),
 		grpc_auth.UnaryServerInterceptor(authFunction),
 		namespaceInitializer.NamespaceSetterUnaryServerInterceptor(),
-		grpctrace.UnaryServerInterceptor(grpctrace.WithServiceName(config.Tags.Service)),
-		//grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger)),
+		grpctrace.UnaryServerInterceptor(grpctrace.WithServiceName(util.Service)),
+		grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(taggedLogger)),
 		validatorUnaryServerInterceptor(),
 		timeoutUnaryServerInterceptor(DefaultTimeout),
 	}
