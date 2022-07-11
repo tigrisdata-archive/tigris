@@ -16,10 +16,10 @@ package metrics
 
 import (
 	"fmt"
-	"github.com/tigrisdata/tigris/server/config"
-	"github.com/uber-go/tally"
 	"strings"
 
+	"github.com/tigrisdata/tigris/server/config"
+	"github.com/uber-go/tally"
 	"google.golang.org/grpc"
 )
 
@@ -34,17 +34,17 @@ func newRequestEndpointMetadata(serviceName string, methodInfo grpc.MethodInfo) 
 
 func (g *RequestEndpointMetadata) GetPreInitializedTags() map[string]string {
 	return map[string]string{
-		"tigris_server_request_method":       g.methodInfo.Name,
-		"tigris_server_request_service_name": g.serviceName,
+		"method": g.methodInfo.Name,
+		//"service": g.serviceName,
 	}
 }
 
 func (g *RequestEndpointMetadata) GetSpecificErrorTags(source string, code string) map[string]string {
 	return map[string]string{
-		"tigris_server_request_method":       g.methodInfo.Name,
-		"tigris_server_request_service_name": g.serviceName,
-		"tigris_server_request_error_source": source,
-		"tigris_server_request_error_code":   code,
+		"method": g.methodInfo.Name,
+		//"service": g.serviceName,
+		"source": source,
+		"code":   code,
 	}
 }
 

@@ -15,14 +15,18 @@
 package metrics
 
 import (
-	"github.com/stretchr/testify/require"
 	"testing"
 )
 
 func TestInitializeMetrics(t *testing.T) {
 	t.Run("Test Global tags", func(t *testing.T) {
 		globalTags := GetGlobalTags()
-		require.Equal(t, globalTags, map[string]string{})
+		keysToCheck := []string{"service", "env", "version"}
+		for _, key := range keysToCheck {
+			if _, ok := globalTags[key]; !ok {
+				t.Errorf("Key %s not found in global tags", key)
+			}
+		}
 	})
 
 	t.Run("Initialize metrics", func(t *testing.T) {
