@@ -32,40 +32,11 @@ func TestGrpcMetrics(t *testing.T) {
 		IsClientStream: false,
 	}
 	fullMethodName := "/tigrisdata.v1.Tigris/TestMethod"
-
 	metrics.InitServerRequestMetrics(svcName, methodInfo)
 
 	t.Run("Test tigris server counters", func(t *testing.T) {
-		countReceivedMessage(fullMethodName, methodType)
-		countHandledMessage(fullMethodName, methodType)
 		countUnknownErrorMessage(fullMethodName, methodType)
 		countOkMessage(fullMethodName, methodType)
 		countSpecificErrorMessage(fullMethodName, methodType, "test_source", "test_code")
-	})
-}
-
-func TestFdbMetrics(t *testing.T) {
-	metrics.InitializeFdbMetrics()
-
-	testNormalTags := []map[string]string{
-		metrics.GetFdbReqTags("Commit", false),
-		metrics.GetFdbReqTags("Insert", false),
-		metrics.GetFdbReqTags("Insert", true),
-	}
-
-	testKnownErrorTags := []map[string]string{
-		metrics.GetFdbReqSpecificErrorTags("Commit", "1", false),
-		metrics.GetFdbReqSpecificErrorTags("Insert", "2", false),
-		metrics.GetFdbReqSpecificErrorTags("Insert", "3", true),
-	}
-
-	t.Run("Test FDB counters", func(t *testing.T) {
-		for _, tags := range testNormalTags {
-			metrics.FdbRequests.Tagged(tags).Counter("ok").Inc(1)
-			metrics.FdbErrorRequests.Tagged(tags).Counter("unknown").Inc(1)
-		}
-		for _, tags := range testKnownErrorTags {
-			metrics.FdbErrorRequests.Tagged(tags).Counter("specific").Inc(1)
-		}
 	})
 }

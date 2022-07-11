@@ -17,56 +17,53 @@ package middleware
 import (
 	"context"
 	"errors"
+	"github.com/uber-go/tally"
 	"strconv"
 
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/metrics"
-	"github.com/uber-go/tally"
 	"google.golang.org/grpc"
 )
 
-func increaseCounter(fullMethod string, methodType string, counterName string, value int64) {
-	tags := metrics.GetPreinitializedTagsFromFullMethod(fullMethod, methodType)
-	metrics.Requests.Tagged(tags).Counter(counterName).Inc(value)
-}
-
-func countReceivedMessage(fullMethod string, methodType string) {
-	// Tags are pre-created when initializing the metrics
-	increaseCounter(fullMethod, methodType, "received", 1)
-}
-
-func countHandledMessage(fullMethod string, methodType string) {
-	// Tags are pre-created when initializing the metrics
-	increaseCounter(fullMethod, methodType, "handled", 1)
-}
+// There is no need to handle metrics configuration in the interceptors themselves, because they are not
+// loaded if the metrics are not enabled. It is more efficient this way, but if we want dynamic reloading,
+// we may want to change this in the future.
 
 func countOkMessage(fullMethod string, methodType string) {
-	// Tags are pre-created when initializing the metrics
-	increaseCounter(fullMethod, methodType, "ok", 1)
+	// tigris_server_requests_ok
+	tags := metrics.GetPreinitializedTagsFromFullMethod(fullMethod, methodType)
+	metrics.Requests.Tagged(tags).Counter("ok").Inc(1)
 }
 
 func countUnknownErrorMessage(fullMethod string, methodType string) {
-	// tigris_server_requests_error is s scope, so different scope needs to be used here
+	// tigris_server_requests_error
 	tags := metrics.GetPreinitializedTagsFromFullMethod(fullMethod, methodType)
 	metrics.ErrorRequests.Tagged(tags).Counter("unknown").Inc(1)
 }
 
 func countSpecificErrorMessage(fullMethod string, methodType, errSource string, errCode string) {
+	// tigris_server_requests_error
 	// For specific errors the tags are not pre-initialized because it has the error code in it
 	metaData := metrics.GetGrpcEndPointMetadataFromFullMethod(fullMethod, methodType)
 	tags := metaData.GetSpecificErrorTags(errSource, errCode)
 	metrics.ErrorRequests.Tagged(tags).Counter("specific").Inc(1)
 }
 
-func metricsUnaryServerInterceptor() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func metricsUnaryServerInterceptorResponseTime() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		methodType := "unary"
 		tags := metrics.GetPreinitializedTagsFromFullMethod(info.FullMethod, methodType)
 		defer metrics.RequestsRespTime.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
 		resp, err := handler(ctx, req)
-		countReceivedMessage(info.FullMethod, methodType)
-		countHandledMessage(info.FullMethod, methodType)
+		return resp, err
+	}
+}
+
+func metricsUnaryServerInterceptorCounters() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		resp, err := handler(ctx, req)
+		methodType := "unary"
 		if err != nil {
 			var terr *api.TigrisError
 			var ferr fdb.Error
@@ -83,15 +80,23 @@ func metricsUnaryServerInterceptor() func(ctx context.Context, req interface{}, 
 		return resp, err
 	}
 }
-func metricsStreamServerInterceptor() grpc.StreamServerInterceptor {
+
+func metricsStreamServerInterceptorResponseTime() grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		methodType := "stream"
 		tags := metrics.GetPreinitializedTagsFromFullMethod(info.FullMethod, methodType)
 		defer metrics.RequestsRespTime.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
-		countReceivedMessage(info.FullMethod, methodType)
 		wrapper := &recvWrapper{stream}
-		countHandledMessage(info.FullMethod, methodType)
 		err := handler(srv, wrapper)
+		return err
+	}
+}
+
+func metricsStreamServerInterceptorCounter() grpc.StreamServerInterceptor {
+	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		wrapper := &recvWrapper{stream}
+		err := handler(srv, wrapper)
+		methodType := "stream"
 		if err != nil {
 			var terr *api.TigrisError
 			var ferr fdb.Error

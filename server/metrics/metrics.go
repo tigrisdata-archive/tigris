@@ -15,6 +15,7 @@
 package metrics
 
 import (
+	"github.com/tigrisdata/tigris/server/config"
 	"io"
 	"time"
 
@@ -28,13 +29,18 @@ var (
 	root     tally.Scope
 	Reporter promreporter.Reporter
 	server   tally.Scope
-	// GRPC and HTTP related metrics
+	// GRPC and HTTP related metric scopes
 	Requests         tally.Scope
 	ErrorRequests    tally.Scope
 	RequestsRespTime tally.Scope
-	fdb              tally.Scope
-	FdbRequests      tally.Scope
+	// Fdb related metric scopes
+	FdbMetrics tally.Scope
 )
+
+func GetGlobalTags() map[string]string {
+	// TODO: add version here
+	return map[string]string{}
+}
 
 func InitializeMetrics() io.Closer {
 	var closer io.Closer
@@ -43,24 +49,21 @@ func InitializeMetrics() io.Closer {
 	Reporter = promreporter.NewReporter(promreporter.Options{Registerer: registry})
 	root, closer = tally.NewRootScope(tally.ScopeOptions{
 		Prefix:         "tigris",
-		Tags:           map[string]string{},
+		Tags:           GetGlobalTags(),
 		CachedReporter: Reporter,
 		Separator:      promreporter.DefaultSeparator,
 	}, 1*time.Second)
 	// Request level metrics (HTTP and GRPC)
 	// metric names: tigris_server
-	server = root.SubScope("server")
-	// metric names: tigris_server_requests
-	Requests = server.SubScope("requests")
-	// metric names: tigris_server_requests_errors
-	ErrorRequests = Requests.SubScope("error")
-	// metric names: tigirs_server_requests_resptime
-	RequestsRespTime = server.SubScope("resptime")
-
+	if config.DefaultConfig.Metrics.Grpc.Enabled {
+		InitializeRequestScopes()
+		// Request level metrics are initialized during GRPC server registration
+	}
 	// FDB level metrics
-	fdb = root.SubScope("fdb")
-	FdbRequests = fdb.SubScope("requests")
-	InitializeFdbMetrics()
-
+	if config.DefaultConfig.Metrics.Fdb.Enabled {
+		FdbMetrics = root.SubScope("fdb")
+		InitializeFdbScopes()
+		InitializeFdbMetrics()
+	}
 	return closer
 }

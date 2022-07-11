@@ -35,6 +35,7 @@ type Config struct {
 	Tracing      TracingConfig   `yaml:"tracing" json:"tracing"`
 	Profiling    ProfilingConfig `yaml:"profiling" json:"profiling"`
 	Tags         TagsConfig      `yaml:"tags" json:"tags"`
+	Metrics      MetricsConfig
 	FoundationDB FoundationDBConfig
 }
 
@@ -74,6 +75,26 @@ type TagsConfig struct {
 	Service     string `mapstructure:"service" yaml:"service" json:"service"`
 	Environment string `mapstructure:"env" yaml:"env" json:"env"`
 	Version     string `mapstructure:"version" yaml:"version" json:"version"`
+}
+
+type MetricsConfig struct {
+	// Global switch
+	Enabled bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	// Individual metric group configs
+	Grpc GrpcMetricsConfig
+	Fdb  FdbMetricsConfig
+}
+
+type GrpcMetricsConfig struct {
+	Enabled      bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Counters     bool `mapstructure:"counters" yaml:"counters" json:"counters"`
+	ResponseTime bool `mapstructure:"response_time" yaml:"response_time" json:"response_time"`
+}
+
+type FdbMetricsConfig struct {
+	Enabled      bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Counters     bool `mapstructure:"counters" yaml:"counters" json:"counters"`
+	ResponseTime bool `mapstructure:"response_time" yaml:"response_time" json:"response_time"`
 }
 
 var DefaultConfig = Config{
@@ -116,6 +137,19 @@ var DefaultConfig = Config{
 		Service:     util.Service,
 		Environment: environment,
 		Version:     util.Version,
+	},
+	Metrics: MetricsConfig{
+		Enabled: true,
+		Grpc: GrpcMetricsConfig{
+			Enabled:      true,
+			Counters:     true,
+			ResponseTime: true,
+		},
+		Fdb: FdbMetricsConfig{
+			Enabled:      true,
+			Counters:     true,
+			ResponseTime: true,
+		},
 	},
 }
 
