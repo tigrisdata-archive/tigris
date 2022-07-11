@@ -38,8 +38,11 @@ var (
 )
 
 func GetGlobalTags() map[string]string {
-	// TODO: add version here
-	return map[string]string{}
+	return map[string]string{
+		"service": config.DefaultConfig.Tags.Service,
+		"env":     config.GetEnvironment(),
+		"version": config.DefaultConfig.Tags.Version,
+	}
 }
 
 func InitializeMetrics() io.Closer {
@@ -48,10 +51,10 @@ func InitializeMetrics() io.Closer {
 	registry := prom.NewRegistry()
 	Reporter = promreporter.NewReporter(promreporter.Options{Registerer: registry})
 	root, closer = tally.NewRootScope(tally.ScopeOptions{
-		Prefix:         "tigris",
 		Tags:           GetGlobalTags(),
 		CachedReporter: Reporter,
-		Separator:      promreporter.DefaultSeparator,
+		// Panics with .
+		Separator: promreporter.DefaultSeparator,
 	}, 1*time.Second)
 	// Request level metrics (HTTP and GRPC)
 	// metric names: tigris_server
