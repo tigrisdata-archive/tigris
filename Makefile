@@ -61,7 +61,7 @@ local_test: generate
 	go test $(TEST_PARAM) ./...
 
 run: generate
-	$(DOCKER_COMPOSE) up --build --detach tigris_server2
+	$(DOCKER_COMPOSE) up --build --detach tigris_server_2
 
 local_run: server
 	$(DOCKER_COMPOSE) up --no-build --detach tigris_search tigris_db

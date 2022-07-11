@@ -17,6 +17,7 @@ package v1
 import (
 	"bytes"
 	"context"
+
 	jsoniter "github.com/json-iterator/go"
 
 	api "github.com/tigrisdata/tigris/api/server/v1"
@@ -537,6 +538,7 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}
 
 	facets, err := qsearch.UnmarshalFacet(runner.req.Facet)
+	// test if facet field is actually a schema field
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -565,23 +567,12 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}
 
 	var pageNo = int32(defaultPageNo)
-	if runner.req.Page != 0 {
+	sentOnce := false
+	if runner.req.Page > 0 {
 		pageNo = runner.req.Page
 	}
 	for {
-		// batch the results in a single grpc row
-		var resp = &api.SearchResponse{
-			Facets: rowReader.getFacets(),
-			Meta: &api.SearchMetadata{
-				Found: rowReader.getTotalFound(),
-				Page: &api.Page{
-					Current: pageNo,
-					Size:    int32(searchQ.PageSize),
-				},
-			},
-		}
-
-		var totalInPage = int32(0)
+		var resp = &api.SearchResponse{}
 		var row Row
 		for rowReader.Next(ctx, &row) {
 			resp.Hits = append(resp.Hits, &api.SearchHit{
@@ -591,19 +582,35 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 					UpdatedAt: row.Data.UpdatedToProtoTS(),
 				},
 			})
-			totalInPage++
 
 			if len(resp.Hits) == pageSize {
 				break
 			}
 		}
-		if len(resp.Hits) == 0 {
+		resp.Facets = rowReader.getFacets()
+		ps := int64(pageSize)
+		totalPages := int32(rowReader.getTotalFound()/ps) + 1
+		resp.Meta = &api.SearchMetadata{
+			Found:      rowReader.getTotalFound(),
+			TotalPages: totalPages,
+			Page: &api.Page{
+				Current: pageNo,
+				Size:    int32(searchQ.PageSize),
+			},
+		}
+
+		// break the stream after sending at least 1 response
+		if len(resp.Hits) == 0 && sentOnce {
 			break
 		}
 
-		resp.Meta.Page.Size = totalInPage
 		if err := runner.streaming.Send(resp); err != nil {
 			return nil, ctx, err
+		}
+		sentOnce = true
+
+		if rowReader.err != nil {
+			return nil, ctx, rowReader.err
 		}
 
 		pageNo++

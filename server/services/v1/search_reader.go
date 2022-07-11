@@ -18,16 +18,17 @@ import (
 	"context"
 
 	jsoniter "github.com/json-iterator/go"
+	tsApi "github.com/typesense/typesense-go/typesense/api"
+
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/query/filter"
 	qsearch "github.com/tigrisdata/tigris/query/search"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/store/search"
-	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
 const (
-	defaultPerPage = 10
+	defaultPerPage = 20
 	defaultPageNo  = 1
 )
 
@@ -153,13 +154,13 @@ func (p *pageReader) read(ctx context.Context) error {
 	}
 
 	if p.found == -1 {
+		p.found = 0
 		for _, r := range result {
 			if r.Found != nil {
 				p.found += int64(*r.Found)
 			}
 		}
 	}
-
 	return nil
 }
 
@@ -205,16 +206,16 @@ func (p *pageReader) buildStats(stats tsApi.FacetCounts) *api.FacetStats {
 
 	var stat = &api.FacetStats{}
 	if stats.Stats.Avg != nil {
-		stat.Avg = *stats.Stats.Avg
+		stat.Avg = float64(*stats.Stats.Avg)
 	}
 	if stats.Stats.Min != nil {
-		stat.Min = int64(*stats.Stats.Min)
+		stat.Min = float64(*stats.Stats.Min)
 	}
 	if stats.Stats.Max != nil {
-		stat.Max = int64(*stats.Stats.Max)
+		stat.Max = float64(*stats.Stats.Max)
 	}
 	if stats.Stats.Sum != nil {
-		stat.Sum = int64(*stats.Stats.Sum)
+		stat.Sum = float64(*stats.Stats.Sum)
 	}
 	if stats.Stats.TotalValues != nil {
 		stat.Count = int64(*stats.Stats.TotalValues)
