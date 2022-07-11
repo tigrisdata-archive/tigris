@@ -17,8 +17,8 @@ package v1
 import (
 	"bytes"
 	"context"
-	jsoniter "github.com/json-iterator/go"
 
+	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
@@ -508,6 +508,10 @@ type SearchQueryRunner struct {
 }
 
 func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
+	if err := runner.validateRequestParams(); err != nil {
+		return nil, ctx, err
+	}
+
 	db, err := runner.GetDatabase(ctx, tx, tenant, runner.req.GetDb())
 	if err != nil {
 		return nil, ctx, err
@@ -525,18 +529,12 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, ctx, err
 	}
 
-	var searchFields = runner.req.SearchFields
-	if len(searchFields) == 0 {
-		// this is to include all searchable fields if not present in the query
-		fields := collection.GetFields()
-		for _, f := range fields {
-			if f.DataType == schema.StringType {
-				searchFields = append(searchFields, f.FieldName)
-			}
-		}
+	searchFields, err := runner.getSearchFields(collection.GetFields())
+	if err != nil {
+		return nil, ctx, err
 	}
 
-	facets, err := qsearch.UnmarshalFacet(runner.req.Facet)
+	facets, err := runner.getFacetFields(collection.GetFields())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -565,23 +563,11 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}
 
 	var pageNo = int32(defaultPageNo)
-	if runner.req.Page != 0 {
+	if runner.req.Page > 0 {
 		pageNo = runner.req.Page
 	}
 	for {
-		// batch the results in a single grpc row
-		var resp = &api.SearchResponse{
-			Facets: rowReader.getFacets(),
-			Meta: &api.SearchMetadata{
-				Found: rowReader.getTotalFound(),
-				Page: &api.Page{
-					Current: pageNo,
-					Size:    int32(searchQ.PageSize),
-				},
-			},
-		}
-
-		var totalInPage = int32(0)
+		var resp = &api.SearchResponse{}
 		var row Row
 		for rowReader.Next(ctx, &row) {
 			resp.Hits = append(resp.Hits, &api.SearchHit{
@@ -591,17 +577,36 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 					UpdatedAt: row.Data.UpdatedToProtoTS(),
 				},
 			})
-			totalInPage++
 
 			if len(resp.Hits) == pageSize {
 				break
 			}
 		}
+
+		resp.Facets = rowReader.getFacets()
+		ps := int64(pageSize)
+		totalPages := int32(rowReader.getTotalFound()/ps) + 1
+		resp.Meta = &api.SearchMetadata{
+			Found:      rowReader.getTotalFound(),
+			TotalPages: totalPages,
+			Page: &api.Page{
+				Current: pageNo,
+				Size:    int32(searchQ.PageSize),
+			},
+		}
+		// if no hits, got error, send only error
+		// if no hits, no error, at least one response and break
+		// if some hits, got an error, send current hits and then error (will be zero hits next time)
+		// if some hits, no error, continue to send response
 		if len(resp.Hits) == 0 {
-			break
+			if rowReader.err != nil {
+				return nil, ctx, rowReader.err
+			}
+			if pageNo > defaultPageNo && pageNo > runner.req.Page {
+				break
+			}
 		}
 
-		resp.Meta.Page.Size = totalInPage
 		if err := runner.streaming.Send(resp); err != nil {
 			return nil, ctx, err
 		}
@@ -610,6 +615,71 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}
 
 	return &Response{}, ctx, nil
+}
+
+func (runner *SearchQueryRunner) validateRequestParams() error {
+	if runner.req.PageSize < 0 {
+		return api.Errorf(api.Code_INVALID_ARGUMENT, "`page_size`")
+	}
+
+	if runner.req.Page < 0 {
+		return api.Errorf(api.Code_INVALID_ARGUMENT, "`page`")
+	}
+	return nil
+}
+
+func (runner *SearchQueryRunner) getSearchFields(collFields []*schema.Field) ([]string, error) {
+	var searchFields = runner.req.SearchFields
+	if len(searchFields) == 0 {
+		// this is to include all searchable fields if not present in the query
+		for _, cf := range collFields {
+			if cf.DataType == schema.StringType {
+				searchFields = append(searchFields, cf.FieldName)
+			}
+		}
+	} else {
+		for _, sf := range searchFields {
+			found := false
+			for _, cf := range collFields {
+				if sf != cf.FieldName {
+					continue
+				}
+				if cf.DataType != schema.StringType {
+					return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "`%s` is not a searchable field. Only string fields can be queried", sf)
+				}
+				found = true
+				break
+			}
+			if !found {
+				return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "`%s` is not a schema field", sf)
+			}
+		}
+	}
+	return searchFields, nil
+}
+
+func (runner *SearchQueryRunner) getFacetFields(collFields []*schema.Field) (qsearch.Facets, error) {
+	var empty = qsearch.Facets{}
+	facets, err := qsearch.UnmarshalFacet(runner.req.Facet)
+	if err != nil {
+		return empty, err
+	}
+
+	for _, ff := range facets.Fields {
+		found := false
+		for _, cf := range collFields {
+			if ff.Name != cf.FieldName {
+				continue
+			}
+			found = true
+			break
+		}
+		if !found {
+			return empty, api.Errorf(api.Code_INVALID_ARGUMENT, "`%s` is not a schema field", ff.Name)
+		}
+	}
+
+	return facets, nil
 }
 
 type CollectionQueryRunner struct {
