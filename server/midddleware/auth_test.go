@@ -34,10 +34,11 @@ func TestAuth(t *testing.T) {
 			Level: "error",
 		},
 		Auth: config.AuthConfig{
-			IssuerURL:        "",
-			Audience:         "",
-			JWKSCacheTimeout: 0,
-			LogOnly:          false,
+			IssuerURL:                "",
+			Audience:                 "",
+			JWKSCacheTimeout:         0,
+			LogOnly:                  false,
+			EnableNamespaceIsolation: false,
 		},
 		FoundationDB: config.FoundationDBConfig{},
 	}
@@ -74,27 +75,6 @@ func TestAuth(t *testing.T) {
 		require.NotNil(t, err)
 		require.Contains(t, err.Error(), "could not parse the token: illegal base64 data")
 	})
-
-	t.Run("test valid extraction of organization name - 1", func(t *testing.T) {
-		incomingCtx := metadata.NewIncomingContext(context.TODO(), metadata.Pairs("host", "project1-tigrisdata.dev.tigrisdata.cloud"))
-		organizationName, err := getOrganizationName(incomingCtx)
-		require.Nil(t, err)
-		require.Equal(t, "tigrisdata", organizationName)
-	})
-
-	t.Run("test invalid extraction of organization name - 1", func(t *testing.T) {
-		incomingCtx := metadata.NewIncomingContext(context.TODO(), metadata.Pairs("host", "project1tigrisdata.dev.tigrisdata.cloud"))
-		organizationName, err := getOrganizationName(incomingCtx)
-		require.Nil(t, err)
-		require.Equal(t, organizationName, "project1tigrisdata")
-	})
-
-	t.Run("test invalid extraction of organization name - 2", func(t *testing.T) {
-		incomingCtx := metadata.NewIncomingContext(context.TODO(), metadata.Pairs("host", "project1-tigris-data.dev.tigrisdata.cloud"))
-		_, err := getOrganizationName(incomingCtx)
-		require.Equal(t, err, api.Errorf(api.Code_FAILED_PRECONDITION, "hostname is not as per expected scheme"))
-	})
-
 }
 
 func TestMain(m *testing.M) {

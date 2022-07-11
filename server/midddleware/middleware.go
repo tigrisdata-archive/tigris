@@ -25,18 +25,30 @@ import (
 	grpc_ratelimit "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/ratelimit"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"github.com/rs/zerolog/log"
+	"github.com/tigrisdata/tigris/lib/set"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/transaction"
 	"google.golang.org/grpc"
 	grpctrace "gopkg.in/DataDog/dd-trace-go.v1/contrib/google.golang.org/grpc"
 )
 
-func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor) {
+func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor) {
 	jwtValidator := GetJWTValidator(config)
 	// inline closure to access the state of jwtValidator
 	authFunction := func(ctx context.Context) (context.Context, error) {
 		return AuthFunction(ctx, jwtValidator, config)
 	}
 
+	excludedMethods := set.New()
+	excludedMethods.Insert("/HealthAPI/Health")
+	excludedMethods.Insert("/tigrisdata.admin.v1.Admin/createNamespace")
+	namespaceInitializer := NamespaceSetter{
+		tenantManager:      tenantMgr,
+		namespaceExtractor: &AccessTokenNamespaceExtractor{},
+		excludedMethods:    excludedMethods,
+		config:             config,
+	}
 	// adding all the middlewares for the server stream
 	//
 	// Note: we don't add validate here and rather call it in server code because the validator interceptor returns gRPC
@@ -64,6 +76,7 @@ func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerI
 		grpc_opentracing.StreamServerInterceptor(),
 		grpc_recovery.StreamServerInterceptor(),
 		headersStreamServerInterceptor(),
+		namespaceInitializer.NamespaceSetterStreamServerInterceptor(),
 	}...)
 	stream := middleware.ChainStreamServer(streamInterceptors...)
 
@@ -96,6 +109,7 @@ func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerI
 		grpc_opentracing.UnaryServerInterceptor(),
 		grpc_recovery.UnaryServerInterceptor(),
 		headersUnaryServerInterceptor(),
+		namespaceInitializer.NamespaceSetterUnaryServerInterceptor(),
 	}...)
 	unary := middleware.ChainUnaryServer(unaryInterceptors...)
 
