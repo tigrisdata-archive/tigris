@@ -25,7 +25,7 @@ import (
 	"github.com/tigrisdata/tigris/server/cdc"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
-	middleware "github.com/tigrisdata/tigris/server/midddleware"
+	"github.com/tigrisdata/tigris/server/midddleware"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
@@ -69,11 +69,28 @@ func NewSessionManager(txMgr *transaction.Manager, tenantMgr *metadata.TenantMan
 // It first creates or get a tenant, read the metadata version and based on that reload the tenant cache and then finally
 // create a transaction which will be used to execute all the query in this session.
 func (sessMgr *SessionManager) Create(ctx context.Context, reloadVerOutside bool, track bool) (*QuerySession, error) {
-	tenant, err := sessMgr.tenantMgr.CreateOrGetTenant(ctx, sessMgr.txMgr, metadata.NewDefaultNamespace())
+	namespaceForThisSession, err := middleware.GetNamespace(ctx)
 	if err != nil {
 		return nil, err
 	}
+	var tenant *metadata.Tenant
+	if namespaceForThisSession == metadata.DefaultNamespaceName {
+		tenant, err = sessMgr.tenantMgr.CreateOrGetTenant(ctx, sessMgr.txMgr, metadata.NewDefaultNamespace())
+	} else {
+		// this call will validate if namespace is not already present
+		namespace := sessMgr.tenantMgr.GetNamespace(namespaceForThisSession)
+		if namespace == nil {
+			return nil, api.Errorf(api.Code_NOT_FOUND, "Namespace not found %s", namespaceForThisSession)
+		}
+		tenant, err = sessMgr.tenantMgr.CreateOrGetTenant(ctx, sessMgr.txMgr, namespace)
+		if err != nil {
+			return nil, api.Errorf(api.Code_INTERNAL, "Could not create or get tenant from the input namespace")
+		}
+	}
 
+	if err != nil {
+		return nil, err
+	}
 	var version metadata.Version
 	if reloadVerOutside {
 		version, err = sessMgr.versionH.ReadInOwnTxn(ctx, sessMgr.txMgr)

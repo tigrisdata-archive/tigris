@@ -41,6 +41,9 @@ RUN --mount=type=cache,target=/root/.cache/go-build rm -f server/service && make
 
 
 FROM ubuntu:20.04 AS server
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    ca-certificates
 
 # Remove apt configuration
 RUN rm -rf /etc/apt/*

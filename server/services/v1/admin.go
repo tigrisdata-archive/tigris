@@ -50,12 +50,15 @@ func newAdminService(tenantMgr *metadata.TenantManager, txMgr *transaction.Manag
 }
 
 func (a *adminService) CreateNamespace(ctx context.Context, req *api.CreateNamespaceRequest) (*api.CreateNamespaceResponse, error) {
+	if req.Name == metadata.DefaultNamespaceName {
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, metadata.DefaultNamespaceName+" is reserved name")
+	}
 	namespace := metadata.NewTenantNamespace(req.Name, uint32(req.Id))
 	tx, err := a.txMgr.StartTx(ctx)
 	if err != nil {
 		return nil, api.Errorf(api.Code_INTERNAL, "Failed to create namespace")
 	}
-	err = a.tenantMgr.CreateTenant(ctx, tx, namespace)
+	_, err = a.tenantMgr.CreateTenant(ctx, tx, namespace)
 	if err != nil {
 		_ = tx.Rollback(ctx)
 		return nil, err

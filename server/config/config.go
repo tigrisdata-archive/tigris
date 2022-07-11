@@ -75,6 +75,8 @@ func LoadEnvironment() {
 }
 
 func LoadConfig(config interface{}) {
+	LoadEnvironment()
+
 	pflag.StringVarP(&configFile, "config", "c", "", "server configuration file")
 	ulog.E(viper.BindPFlags(pflag.CommandLine))
 	pflag.Parse()
