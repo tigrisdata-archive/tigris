@@ -44,16 +44,16 @@ var (
 
 func GetFdbReqTags(reqMethodName string, tx bool) map[string]string {
 	return map[string]string{
-		"fdb_request_method": reqMethodName,
-		"fdb_tx":             strconv.FormatBool(tx),
+		"method": reqMethodName,
+		"tx":     strconv.FormatBool(tx),
 	}
 }
 
 func GetFdbReqSpecificErrorTags(reqMethodName string, code string, tx bool) map[string]string {
 	return map[string]string{
-		"fdb_request_method": reqMethodName,
-		"fdb_error_code":     code,
-		"fdb_tx":             strconv.FormatBool(tx),
+		"method":     reqMethodName,
+		"error_code": code,
+		"tx":         strconv.FormatBool(tx),
 	}
 }
 
