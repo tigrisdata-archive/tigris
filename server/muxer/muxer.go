@@ -16,13 +16,13 @@ package muxer
 
 import (
 	"fmt"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"net"
 
 	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
-	"github.com/tigrisdata/tigris/server/metrics"
 	v1 "github.com/tigrisdata/tigris/server/services/v1"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"

@@ -60,11 +60,13 @@ func TestGRPCMetrics(t *testing.T) {
 		assert.Equal(t, unaryTags, map[string]string{
 			"method":       unaryMethodInfo.Name,
 			"grpc_service": "tigrisdata.v1.Tigris",
+			"namespace":    "default_namespace",
 		})
 		streamTags := streamingEndpointMetadata.GetPreInitializedTags()
 		assert.Equal(t, streamTags, map[string]string{
 			"method":       streamingMethodInfo.Name,
 			"grpc_service": "tigrisdata.v1.Tigris",
+			"namespace":    "default_namespace",
 		})
 	})
 

@@ -36,6 +36,7 @@ func (g *RequestEndpointMetadata) GetPreInitializedTags() map[string]string {
 	return map[string]string{
 		"method":       g.methodInfo.Name,
 		"grpc_service": g.serviceName,
+		"namespace":    "default_namespace",
 	}
 }
 
@@ -45,6 +46,7 @@ func (g *RequestEndpointMetadata) GetSpecificErrorTags(source string, code strin
 		"grpc_service": g.serviceName,
 		"source":       source,
 		"code":         code,
+		"namespace":    "default_namespace",
 	}
 }
 

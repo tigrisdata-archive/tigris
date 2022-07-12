@@ -17,6 +17,7 @@ package middleware
 import (
 	"context"
 	"errors"
+	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/uber-go/tally"
 	"strconv"
 
@@ -30,30 +31,50 @@ import (
 // loaded if the metrics are not enabled. It is more efficient this way, but if we want dynamic reloading,
 // we may want to change this in the future.
 
-func countOkMessage(fullMethod string, methodType string) {
+func getOkMethodTags(ctx context.Context, methodName string, methodType string) map[string]string {
+	tags := metrics.GetPreinitializedTagsFromFullMethod(methodName, methodType)
+	namespace, err := GetNamespace(ctx)
+	if err != nil {
+		ulog.E(err)
+	}
+	tags["namespace"] = namespace
+	return tags
+}
+
+func getErrorMethodTags(ctx context.Context, fullMethod string, methodType string, errSource string, errCode string) map[string]string {
+	metaData := metrics.GetGrpcEndPointMetadataFromFullMethod(fullMethod, methodType)
+	tags := metaData.GetSpecificErrorTags(errSource, errCode)
+	namespace, err := GetNamespace(ctx)
+	if err != nil {
+		ulog.E(err)
+	}
+	tags["namespace"] = namespace
+	return tags
+}
+
+func countOkMessage(ctx context.Context, fullMethod string, methodType string) {
 	// tigris_server_requests_ok
-	tags := metrics.GetPreinitializedTagsFromFullMethod(fullMethod, methodType)
+	tags := getOkMethodTags(ctx, fullMethod, methodType)
 	metrics.Requests.Tagged(tags).Counter("ok").Inc(1)
 }
 
-func countUnknownErrorMessage(fullMethod string, methodType string) {
+func countUnknownErrorMessage(ctx context.Context, fullMethod string, methodType string) {
 	// tigris_server_requests_error
-	tags := metrics.GetPreinitializedTagsFromFullMethod(fullMethod, methodType)
+	tags := getOkMethodTags(ctx, fullMethod, methodType)
 	metrics.ErrorRequests.Tagged(tags).Counter("unknown").Inc(1)
 }
 
-func countSpecificErrorMessage(fullMethod string, methodType, errSource string, errCode string) {
+func countSpecificErrorMessage(ctx context.Context, fullMethod string, methodType, errSource string, errCode string) {
 	// tigris_server_requests_error
 	// For specific errors the tags are not pre-initialized because it has the error code in it
-	metaData := metrics.GetGrpcEndPointMetadataFromFullMethod(fullMethod, methodType)
-	tags := metaData.GetSpecificErrorTags(errSource, errCode)
+	tags := getErrorMethodTags(ctx, fullMethod, methodType, errSource, errCode)
 	metrics.ErrorRequests.Tagged(tags).Counter("specific").Inc(1)
 }
 
 func metricsUnaryServerInterceptorResponseTime() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		methodType := "unary"
-		tags := metrics.GetPreinitializedTagsFromFullMethod(info.FullMethod, methodType)
+		tags := getOkMethodTags(ctx, info.FullMethod, methodType)
 		defer metrics.RequestsRespTime.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
 		resp, err := handler(ctx, req)
 		return resp, err
@@ -68,14 +89,14 @@ func metricsUnaryServerInterceptorCounters() func(ctx context.Context, req inter
 			var terr *api.TigrisError
 			var ferr fdb.Error
 			if errors.As(err, &terr) {
-				countSpecificErrorMessage(info.FullMethod, methodType, "tigris_server", terr.Code.String())
+				countSpecificErrorMessage(ctx, info.FullMethod, methodType, "tigris_server", terr.Code.String())
 			} else if errors.As(err, &ferr) {
-				countSpecificErrorMessage(info.FullMethod, methodType, "fdb_server", strconv.Itoa(ferr.Code))
+				countSpecificErrorMessage(ctx, info.FullMethod, methodType, "fdb_server", strconv.Itoa(ferr.Code))
 			} else {
-				countUnknownErrorMessage(info.FullMethod, methodType)
+				countUnknownErrorMessage(ctx, info.FullMethod, methodType)
 			}
 		} else {
-			countOkMessage(info.FullMethod, methodType)
+			countOkMessage(ctx, info.FullMethod, methodType)
 		}
 		return resp, err
 	}
@@ -84,7 +105,8 @@ func metricsUnaryServerInterceptorCounters() func(ctx context.Context, req inter
 func metricsStreamServerInterceptorResponseTime() grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		methodType := "stream"
-		tags := metrics.GetPreinitializedTagsFromFullMethod(info.FullMethod, methodType)
+		ctx := stream.Context()
+		tags := getOkMethodTags(ctx, info.FullMethod, methodType)
 		defer metrics.RequestsRespTime.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
 		wrapper := &recvWrapper{stream}
 		err := handler(srv, wrapper)
@@ -95,20 +117,21 @@ func metricsStreamServerInterceptorResponseTime() grpc.StreamServerInterceptor {
 func metricsStreamServerInterceptorCounter() grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		wrapper := &recvWrapper{stream}
+		ctx := stream.Context()
 		err := handler(srv, wrapper)
 		methodType := "stream"
 		if err != nil {
 			var terr *api.TigrisError
 			var ferr fdb.Error
 			if errors.As(err, &terr) {
-				countSpecificErrorMessage(info.FullMethod, methodType, "tigris_server", terr.Code.String())
+				countSpecificErrorMessage(ctx, info.FullMethod, methodType, "tigris_server", terr.Code.String())
 			} else if errors.As(err, &ferr) {
-				countSpecificErrorMessage(info.FullMethod, methodType, "fdb_server", strconv.Itoa(ferr.Code))
+				countSpecificErrorMessage(ctx, info.FullMethod, methodType, "fdb_server", strconv.Itoa(ferr.Code))
 			} else {
-				countUnknownErrorMessage(info.FullMethod, methodType)
+				countUnknownErrorMessage(ctx, info.FullMethod, methodType)
 			}
 		} else {
-			countOkMessage(info.FullMethod, methodType)
+			countOkMessage(ctx, info.FullMethod, methodType)
 		}
 		return err
 	}
