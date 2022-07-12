@@ -18,7 +18,9 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/metadata"
 	middleware "github.com/tigrisdata/tigris/server/midddleware"
+	"github.com/tigrisdata/tigris/server/transaction"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -27,10 +29,10 @@ type GRPCServer struct {
 	*grpc.Server
 }
 
-func NewGRPCServer(cfg *config.Config) *GRPCServer {
+func NewGRPCServer(cfg *config.Config, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) *GRPCServer {
 	s := &GRPCServer{}
 
-	unary, stream := middleware.Get(cfg)
+	unary, stream := middleware.Get(cfg, tenantMgr, txMgr)
 	s.Server = grpc.NewServer(grpc.StreamInterceptor(stream), grpc.UnaryInterceptor(unary))
 	reflection.Register(s)
 	return s

@@ -167,30 +167,37 @@ func (m *TenantManager) CreateOrGetTenant(ctx context.Context, txMgr *transactio
 }
 
 // CreateTenant is a thread safe implementation of creating a new tenant. It returns the error if it already exists.
-func (m *TenantManager) CreateTenant(ctx context.Context, tx transaction.Tx, namespace Namespace) error {
+func (m *TenantManager) CreateTenant(ctx context.Context, tx transaction.Tx, namespace Namespace) (Namespace, error) {
 	m.Lock()
 	defer m.Unlock()
 	namespaces, err := m.encoder.GetNamespaces(ctx, tx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if id, found := namespaces[namespace.Name()]; found {
-		return api.Errorf(api.Code_CONFLICT, "namespace with same name already exists with id '%s'", fmt.Sprint(id))
+		return nil, api.Errorf(api.Code_CONFLICT, "namespace with same name already exists with id '%s'", fmt.Sprint(id))
 	}
 	for name, id := range namespaces {
 		if id == namespace.Id() {
-			return api.Errorf(api.Code_CONFLICT, "namespace with same id already exists with name '%s'", name)
+			return nil, api.Errorf(api.Code_CONFLICT, "namespace with same id already exists with name '%s'", name)
 		}
 	}
-	if err := m.versionH.Increment(ctx, tx); ulog.E(err) {
-		return err
-	}
-
 	if err := m.encoder.ReserveNamespace(ctx, tx, namespace.Name(), namespace.Id()); ulog.E(err) {
-		return err
+		return nil, err
 	}
+	if err := m.versionH.Increment(ctx, tx); ulog.E(err) {
+		return nil, err
+	}
+	return namespace, nil
+}
 
+func (m *TenantManager) GetNamespace(namespaceName string) Namespace {
+	m.RLock()
+	defer m.RUnlock()
+	if tenant, found := m.tenants[namespaceName]; found {
+		return tenant.namespace
+	}
 	return nil
 }
 

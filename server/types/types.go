@@ -14,7 +14,9 @@
 
 package types
 
-import "os"
+import (
+	"os"
+)
 
 type ContentType string
 

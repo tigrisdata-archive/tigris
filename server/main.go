@@ -15,6 +15,8 @@
 package main
 
 import (
+	"runtime"
+
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
@@ -26,7 +28,6 @@ import (
 	"github.com/tigrisdata/tigris/store/search"
 	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
-	"runtime"
 )
 
 func main() {
@@ -68,7 +69,7 @@ func main() {
 
 	tenantMgr := metadata.NewTenantManager()
 	txMgr := transaction.NewManager(kvStore)
-	mx := muxer.NewMuxer(&config.DefaultConfig)
+	mx := muxer.NewMuxer(&config.DefaultConfig, tenantMgr, txMgr)
 	mx.RegisterServices(kvStore, searchStore, tenantMgr, txMgr)
 	if err := mx.Start(config.DefaultConfig.Server.Host, config.DefaultConfig.Server.Port); err != nil {
 		log.Fatal().Err(err).Msgf("error starting server")
