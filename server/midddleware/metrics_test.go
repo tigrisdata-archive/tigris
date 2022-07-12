@@ -15,28 +15,29 @@
 package middleware
 
 import (
+	"context"
 	"testing"
 
 	"github.com/tigrisdata/tigris/server/metrics"
-	"google.golang.org/grpc"
 )
 
 func TestGrpcMetrics(t *testing.T) {
 	metrics.InitializeMetrics()
-	svcName := "tigrisdata.v1.Tigris"
-	methodName := "TestMethod"
 	methodType := "unary"
-	methodInfo := grpc.MethodInfo{
-		Name:           methodName,
-		IsServerStream: false,
-		IsClientStream: false,
-	}
 	fullMethodName := "/tigrisdata.v1.Tigris/TestMethod"
-	metrics.InitServerRequestMetrics(svcName, methodInfo)
+
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, RequestMetadataCtxKey{}, &RequestMetadata{
+		accessToken: &AccessToken{
+			Namespace: "test-namespace-1",
+			Sub:       "test@tigrisdata.com",
+		},
+		namespace: "test-namespace-1",
+	})
 
 	t.Run("Test tigris server counters", func(t *testing.T) {
-		countUnknownErrorMessage(fullMethodName, methodType)
-		countOkMessage(fullMethodName, methodType)
-		countSpecificErrorMessage(fullMethodName, methodType, "test_source", "test_code")
+		countUnknownErrorMessage(ctx, fullMethodName, methodType)
+		countOkMessage(ctx, fullMethodName, methodType)
+		countSpecificErrorMessage(ctx, fullMethodName, methodType, "test_source", "test_code")
 	})
 }

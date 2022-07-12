@@ -34,17 +34,19 @@ func newRequestEndpointMetadata(serviceName string, methodInfo grpc.MethodInfo) 
 
 func (g *RequestEndpointMetadata) GetPreInitializedTags() map[string]string {
 	return map[string]string{
-		"method": g.methodInfo.Name,
-		//"service": g.serviceName,
+		"method":       g.methodInfo.Name,
+		"grpc_service": g.serviceName,
+		"namespace":    "default_namespace",
 	}
 }
 
 func (g *RequestEndpointMetadata) GetSpecificErrorTags(source string, code string) map[string]string {
 	return map[string]string{
-		"method": g.methodInfo.Name,
-		//"service": g.serviceName,
-		"source": source,
-		"code":   code,
+		"method":       g.methodInfo.Name,
+		"grpc_service": g.serviceName,
+		"source":       source,
+		"code":         code,
+		"namespace":    "default_namespace",
 	}
 }
 

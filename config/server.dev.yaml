@@ -23,6 +23,7 @@ search:
 
 log:
   level: trace
+  format: console
 
 foundationdb:
   cluster_file: "./test/config/fdb.cluster"

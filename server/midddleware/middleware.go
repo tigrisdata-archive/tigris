@@ -59,6 +59,7 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 		forwarderStreamServerInterceptor(),
 		grpc_ratelimit.StreamServerInterceptor(&RateLimiter{}),
 		grpc_auth.StreamServerInterceptor(authFunction),
+		namespaceInitializer.NamespaceSetterStreamServerInterceptor(),
 		grpctrace.StreamServerInterceptor(grpctrace.WithServiceName(config.Tags.Service)),
 		grpc_logging.StreamServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger), []grpc_logging.Option{}...),
 		validatorStreamServerInterceptor(),
@@ -76,7 +77,6 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 		grpc_opentracing.StreamServerInterceptor(),
 		grpc_recovery.StreamServerInterceptor(),
 		headersStreamServerInterceptor(),
-		namespaceInitializer.NamespaceSetterStreamServerInterceptor(),
 	}...)
 	stream := middleware.ChainStreamServer(streamInterceptors...)
 
@@ -91,6 +91,7 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 		pprofUnaryServerInterceptor(),
 		grpc_ratelimit.UnaryServerInterceptor(&RateLimiter{}),
 		grpc_auth.UnaryServerInterceptor(authFunction),
+		namespaceInitializer.NamespaceSetterUnaryServerInterceptor(),
 		grpctrace.UnaryServerInterceptor(grpctrace.WithServiceName(config.Tags.Service)),
 		//grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(log.Logger)),
 		validatorUnaryServerInterceptor(),
@@ -109,7 +110,6 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 		grpc_opentracing.UnaryServerInterceptor(),
 		grpc_recovery.UnaryServerInterceptor(),
 		headersUnaryServerInterceptor(),
-		namespaceInitializer.NamespaceSetterUnaryServerInterceptor(),
 	}...)
 	unary := middleware.ChainUnaryServer(unaryInterceptors...)
 
