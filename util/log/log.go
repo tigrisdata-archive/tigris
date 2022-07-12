@@ -26,8 +26,9 @@ import (
 )
 
 type LogConfig struct {
-	Level  string
-	Format string
+	Level      string
+	Format     string
+	SampleRate float64
 }
 
 // trim full path. output in the form directory/file.go

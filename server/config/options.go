@@ -93,7 +93,8 @@ type FdbMetricsConfig struct {
 
 var DefaultConfig = Config{
 	Log: log.LogConfig{
-		Level: "info",
+		Level:      "info",
+		SampleRate: 0.01,
 	},
 	Server: ServerConfig{
 		Host: "0.0.0.0",

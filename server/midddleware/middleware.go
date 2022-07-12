@@ -17,8 +17,6 @@ package middleware
 import (
 	"context"
 
-	"github.com/tigrisdata/tigris/util"
-
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_zerolog "github.com/grpc-ecosystem/go-grpc-middleware/providers/zerolog/v2"
 	grpc_opentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
@@ -26,12 +24,14 @@ import (
 	grpc_logging "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	grpc_ratelimit "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/ratelimit"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/lib/set"
 	"github.com/tigrisdata/tigris/server/config"
 	tigrisconfig "github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/transaction"
+	"github.com/tigrisdata/tigris/util"
 	"google.golang.org/grpc"
 	grpctrace "gopkg.in/DataDog/dd-trace-go.v1/contrib/google.golang.org/grpc"
 )
@@ -56,7 +56,8 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 	//
 	// Note: we don't add validate here and rather call it in server code because the validator interceptor returns gRPC
 	// error which is not convertible to the internal rest error code.
-	taggedLogger := log.Logger.With().
+	sampler := zerolog.BasicSampler{N: uint32(1 / tigrisconfig.DefaultConfig.Log.SampleRate)}
+	sampledTaggedLogger := log.Logger.Sample(&sampler).With().
 		Str("env", tigrisconfig.GetEnvironment()).
 		Str("service", util.Service).
 		Str("version", util.Version).
@@ -69,7 +70,7 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 		grpc_auth.StreamServerInterceptor(authFunction),
 		namespaceInitializer.NamespaceSetterStreamServerInterceptor(),
 		grpctrace.StreamServerInterceptor(grpctrace.WithServiceName(util.Service)),
-		grpc_logging.StreamServerInterceptor(grpc_zerolog.InterceptorLogger(taggedLogger), []grpc_logging.Option{}...),
+		grpc_logging.StreamServerInterceptor(grpc_zerolog.InterceptorLogger(sampledTaggedLogger), []grpc_logging.Option{}...),
 		validatorStreamServerInterceptor(),
 	}
 
@@ -101,7 +102,7 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 		grpc_auth.UnaryServerInterceptor(authFunction),
 		namespaceInitializer.NamespaceSetterUnaryServerInterceptor(),
 		grpctrace.UnaryServerInterceptor(grpctrace.WithServiceName(util.Service)),
-		grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(taggedLogger)),
+		grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(sampledTaggedLogger)),
 		validatorUnaryServerInterceptor(),
 		timeoutUnaryServerInterceptor(DefaultTimeout),
 	}
