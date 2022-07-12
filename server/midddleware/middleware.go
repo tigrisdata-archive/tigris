@@ -46,6 +46,7 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 	excludedMethods := set.New()
 	excludedMethods.Insert("/HealthAPI/Health")
 	excludedMethods.Insert("/tigrisdata.admin.v1.Admin/createNamespace")
+	excludedMethods.Insert("/tigrisdata.admin.v1.Admin/listNamespaces")
 	namespaceInitializer := NamespaceSetter{
 		tenantManager:      tenantMgr,
 		namespaceExtractor: &AccessTokenNamespaceExtractor{},

@@ -39,6 +39,8 @@ func SetupSuites() []suite.TestingSuite {
 		database:   fmt.Sprintf("integration_db2_%x", rand.Uint64()),
 		collection: "test_collection",
 	})
+
+	suites = append(suites, &AdminSuite{})
 	return suites
 }
 

@@ -74,6 +74,35 @@ func (a *adminService) CreateNamespace(ctx context.Context, req *api.CreateNames
 	}
 }
 
+func (a *adminService) ListNamespaces(ctx context.Context, _ *api.ListNamespacesRequest) (*api.ListNamespacesResponse, error) {
+	tx, err := a.txMgr.StartTx(ctx)
+	if err != nil {
+		return nil, api.Errorf(api.Code_INTERNAL, "Failed to begin transaction")
+	}
+	namespaces, err := a.tenantMgr.ListNamespaces(ctx, tx)
+	if err != nil {
+		_ = tx.Rollback(ctx)
+		return nil, err
+	}
+	_ = tx.Commit(ctx)
+	if namespaces == nil {
+		return &api.ListNamespacesResponse{
+			Namespaces: nil,
+		}, nil
+	}
+
+	var namespacesInfo []*api.NamespaceInfo
+	for _, namespace := range namespaces {
+		namespacesInfo = append(namespacesInfo, &api.NamespaceInfo{
+			Id:   int32(namespace.Id()),
+			Name: namespace.Name(),
+		})
+	}
+	return &api.ListNamespacesResponse{
+		Namespaces: namespacesInfo,
+	}, nil
+}
+
 func (a *adminService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {
 	mux := runtime.NewServeMux(
 		runtime.WithMarshalerOption(runtime.MIMEWildcard, &api.CustomMarshaler{JSONBuiltin: &runtime.JSONBuiltin{}}),

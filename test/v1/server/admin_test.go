@@ -16,6 +16,27 @@ type AdminSuite struct {
 	suite.Suite
 }
 
+var expectedListNamespaceResponse = map[string]interface{}{
+	"namespaces": []interface{}{map[string]interface{}{
+		"id":   1,
+		"name": "default_namespace",
+	},
+		map[string]interface{}{
+			"id":   2,
+			"name": "namespace-a",
+		},
+	},
+}
+
+func (s *AdminSuite) TestCreateNamespace() {
+	s.Run("create_namespace", func() {
+		resp := createNamespace(s.T(), "namespace-a", 2)
+		resp.Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("message", "Namespace created, with id=2, and name=namespace-a")
+	})
+}
 func adminExpectLow(s httpexpect.LoggerReporter, url string) *httpexpect.Expect {
 	return httpexpect.WithConfig(httpexpect.Config{
 		BaseURL:  url,
@@ -27,12 +48,13 @@ func adminExpect(s httpexpect.LoggerReporter) *httpexpect.Expect {
 	return adminExpectLow(s, config.GetBaseURL())
 }
 
-func (s *AdminSuite) TestCreateNamespace() {
-	resp := createNamespace(s.T(), "namespace-a", 1)
-	resp.Status(http.StatusOK).
-		JSON().
-		Object().
-		ValueEqual("message", "database created successfully")
+func (s *AdminSuite) TestListNamespaces() {
+	s.Run("info_handler", func() {
+		resp := listNamespaces(s.T())
+		resp.Status(http.StatusOK).
+			JSON().
+			Equal(expectedListNamespaceResponse)
+	})
 }
 
 func createNamespace(t *testing.T, namespaceName string, namespaceId int32) *httpexpect.Response {
@@ -42,6 +64,16 @@ func createNamespace(t *testing.T, namespaceName string, namespaceId int32) *htt
 		Expect()
 }
 
+func listNamespaces(t *testing.T) *httpexpect.Response {
+	e := adminExpect(t)
+	return e.POST(listNamespaceUrl()).
+		WithJSON(AdminTestMap{"id": ""}).
+		Expect()
+}
+
 func getCreateNamespaceURL(namespaceName string) string {
 	return fmt.Sprintf("/admin/v1/namespaces/%s/create", namespaceName)
+}
+func listNamespaceUrl() string {
+	return "/admin/v1/namespaces/list"
 }

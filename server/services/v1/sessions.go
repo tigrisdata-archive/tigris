@@ -77,23 +77,16 @@ func (sessMgr *SessionManager) Create(ctx context.Context, reloadVerOutside bool
 	if namespaceForThisSession == metadata.DefaultNamespaceName {
 		tenant, err = sessMgr.tenantMgr.CreateOrGetTenant(ctx, sessMgr.txMgr, metadata.NewDefaultNamespace())
 	} else {
-		// this call will validate if namespace is not already present
-		namespace, err := sessMgr.tenantMgr.GetNamespace(ctx, namespaceForThisSession, sessMgr.txMgr)
-		if namespace == nil {
-			return nil, api.Errorf(api.Code_NOT_FOUND, "Namespace not found %s", namespaceForThisSession)
-		}
-		if err != nil {
-			return nil, err
-		}
-		tenant, err = sessMgr.tenantMgr.CreateOrGetTenant(ctx, sessMgr.txMgr, namespace)
-		if err != nil {
-			return nil, api.Errorf(api.Code_INTERNAL, "Could not create or get tenant from the input namespace")
-		}
+		tenant, err = sessMgr.tenantMgr.GetTenant(ctx, namespaceForThisSession, sessMgr.txMgr)
+	}
+	if tenant == nil {
+		return nil, api.Errorf(api.Code_NOT_FOUND, "Tenant %s not found", namespaceForThisSession)
+	}
+	if err != nil {
+		log.Warn().Err(err).Msgf("Could not find tenant, this must not happen with right authn/authz configured")
+		return nil, api.Errorf(api.Code_NOT_FOUND, "Tenant %s not found", namespaceForThisSession)
 	}
 
-	if err != nil {
-		return nil, err
-	}
 	var version metadata.Version
 	if reloadVerOutside {
 		version, err = sessMgr.versionH.ReadInOwnTxn(ctx, sessMgr.txMgr)
