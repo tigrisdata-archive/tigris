@@ -15,9 +15,11 @@
 package metrics
 
 import (
-	"github.com/tigrisdata/tigris/server/config"
 	"io"
 	"time"
+
+	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/util"
 
 	prom "github.com/m3db/prometheus_client_golang/prometheus"
 	"github.com/rs/zerolog/log"
@@ -39,9 +41,9 @@ var (
 
 func GetGlobalTags() map[string]string {
 	return map[string]string{
-		"service": config.DefaultConfig.Tags.Service,
-		"env":     config.DefaultConfig.Tags.Environment,
-		"version": config.DefaultConfig.Tags.Version,
+		"service": util.Service,
+		"env":     config.GetEnvironment(),
+		"version": util.Version,
 	}
 }
 

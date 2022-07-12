@@ -68,7 +68,9 @@ func main() {
 	}
 
 	tenantMgr := metadata.NewTenantManager()
+	log.Info().Msg("initialized tenant manager")
 	txMgr := transaction.NewManager(kvStore)
+	log.Info().Msg("initialized transaction manager")
 	mx := muxer.NewMuxer(&config.DefaultConfig, tenantMgr, txMgr)
 	mx.RegisterServices(kvStore, searchStore, tenantMgr, txMgr)
 	if err := mx.Start(config.DefaultConfig.Server.Host, config.DefaultConfig.Server.Port); err != nil {
