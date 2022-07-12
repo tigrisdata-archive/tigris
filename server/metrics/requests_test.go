@@ -58,11 +58,13 @@ func TestGRPCMetrics(t *testing.T) {
 	t.Run("Test GetPreinitializedTagsFromFullMethod", func(t *testing.T) {
 		unaryTags := unaryEndPointMetadata.GetPreInitializedTags()
 		assert.Equal(t, unaryTags, map[string]string{
-			"method": unaryMethodInfo.Name,
+			"method":       unaryMethodInfo.Name,
+			"grpc_service": "tigrisdata.v1.Tigris",
 		})
 		streamTags := streamingEndpointMetadata.GetPreInitializedTags()
 		assert.Equal(t, streamTags, map[string]string{
-			"method": streamingMethodInfo.Name,
+			"method":       streamingMethodInfo.Name,
+			"grpc_service": "tigrisdata.v1.Tigris",
 		})
 	})
 
@@ -87,12 +89,10 @@ func TestGRPCMetrics(t *testing.T) {
 		tags := unaryEndPointMetadata.GetPreInitializedTags()
 		for tagName, tagValue := range tags {
 			switch tagName {
-			case "tigris_server_request_method":
+			case "method":
 				assert.Equal(t, tagValue, "TestUnaryMethod")
-			case "tigris_server_request_service_name":
+			case "grpc_service":
 				assert.Equal(t, tagValue, "tigrisdata.v1.Tigris")
-			case "tigris_server_request_type":
-				assert.Equal(t, tagValue, "unary")
 			}
 		}
 	})
