@@ -17,7 +17,6 @@ package config
 import (
 	"time"
 
-	"github.com/tigrisdata/tigris/util"
 	"github.com/tigrisdata/tigris/util/log"
 )
 
@@ -34,7 +33,6 @@ type Config struct {
 	Search       SearchConfig    `yaml:"search" json:"search"`
 	Tracing      TracingConfig   `yaml:"tracing" json:"tracing"`
 	Profiling    ProfilingConfig `yaml:"profiling" json:"profiling"`
-	Tags         TagsConfig      `yaml:"tags" json:"tags"`
 	Metrics      MetricsConfig
 	FoundationDB FoundationDBConfig
 }
@@ -70,12 +68,6 @@ type ProfilingConfig struct {
 	EnableBlock     bool `mapstructure:"enable_block" yaml:"enable_block" json:"enable_block"`
 	EnableMutex     bool `mapstructure:"enable_mutex" yaml:"enable_mutex" json:"enable_mutex"`
 	EnableGoroutine bool `mapstructure:"enable_goroutine" yaml:"enable_goroutine" json:"enable_goroutine"`
-}
-
-type TagsConfig struct {
-	Service     string `mapstructure:"service" yaml:"service" json:"service"`
-	Environment string `mapstructure:"env" yaml:"env" json:"env"`
-	Version     string `mapstructure:"version" yaml:"version" json:"version"`
 }
 
 type MetricsConfig struct {
@@ -134,11 +126,6 @@ var DefaultConfig = Config{
 		Enabled:    false,
 		EnableCPU:  true,
 		EnableHeap: true,
-	},
-	Tags: TagsConfig{
-		Service:     util.Service,
-		Environment: environment,
-		Version:     util.Version,
 	},
 	Metrics: MetricsConfig{
 		Enabled: true,
