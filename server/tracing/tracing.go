@@ -9,9 +9,11 @@ import (
 
 func getTracingOptions(c *config.Config) []tracer.StartOption {
 	var opts []tracer.StartOption
+	rules := []tracer.SamplingRule{tracer.ServiceRule(util.Service, c.Tracing.SampleRate)}
 	opts = append(opts, tracer.WithTraceEnabled(c.Tracing.Enabled))
 	opts = append(opts, tracer.WithProfilerEndpoints(c.Tracing.EndpointsEnabled))
 	opts = append(opts, tracer.WithProfilerCodeHotspots(c.Tracing.CodeHotspotsEnabled))
+	opts = append(opts, tracer.WithSamplingRules(rules))
 	opts = append(opts, tracer.WithService(util.Service))
 	opts = append(opts, tracer.WithEnv(config.GetEnvironment()))
 	opts = append(opts, tracer.WithServiceVersion(util.Version))
