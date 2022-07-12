@@ -192,13 +192,40 @@ func (m *TenantManager) CreateTenant(ctx context.Context, tx transaction.Tx, nam
 	return namespace, nil
 }
 
-func (m *TenantManager) GetNamespace(namespaceName string) Namespace {
+func (m *TenantManager) GetNamespace(ctx context.Context, namespaceName string, txMgr *transaction.Manager) (Namespace, error) {
 	m.RLock()
-	defer m.RUnlock()
 	if tenant, found := m.tenants[namespaceName]; found {
-		return tenant.namespace
+		m.RUnlock()
+		return tenant.namespace, nil
 	}
-	return nil
+	m.RUnlock()
+
+	m.Lock()
+	defer m.Unlock()
+	if tenant, found := m.tenants[namespaceName]; found {
+		return tenant.namespace, nil
+	}
+	// this will never create new namespace
+	// this is for reading namespaces from storage into cache
+	tx, err := txMgr.StartTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	namespaces, err := m.encoder.GetNamespaces(ctx, tx)
+	if err != nil {
+		_ = tx.Rollback(ctx)
+		log.Warn().Msg("Could not get namespaces")
+		return nil, err
+	}
+	err = tx.Commit(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if id, ok := namespaces[namespaceName]; ok {
+		return NewTenantNamespace(namespaceName, id), nil
+	}
+	return nil, api.Errorf(api.Code_NOT_FOUND, "Namespace not found")
 }
 
 func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transaction.Tx, namespace Namespace) (*Tenant, error) {
