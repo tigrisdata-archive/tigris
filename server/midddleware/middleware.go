@@ -101,7 +101,7 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 		grpc_auth.UnaryServerInterceptor(authFunction),
 		namespaceInitializer.NamespaceSetterUnaryServerInterceptor(),
 		grpctrace.UnaryServerInterceptor(grpctrace.WithServiceName(util.Service)),
-		grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(taggedLogger)),
+		//grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(taggedLogger)),
 		validatorUnaryServerInterceptor(),
 		timeoutUnaryServerInterceptor(DefaultTimeout),
 	}
