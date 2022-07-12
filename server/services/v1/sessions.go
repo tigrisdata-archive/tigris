@@ -78,9 +78,12 @@ func (sessMgr *SessionManager) Create(ctx context.Context, reloadVerOutside bool
 		tenant, err = sessMgr.tenantMgr.CreateOrGetTenant(ctx, sessMgr.txMgr, metadata.NewDefaultNamespace())
 	} else {
 		// this call will validate if namespace is not already present
-		namespace := sessMgr.tenantMgr.GetNamespace(namespaceForThisSession)
+		namespace, err := sessMgr.tenantMgr.GetNamespace(ctx, namespaceForThisSession, sessMgr.txMgr)
 		if namespace == nil {
 			return nil, api.Errorf(api.Code_NOT_FOUND, "Namespace not found %s", namespaceForThisSession)
+		}
+		if err != nil {
+			return nil, err
 		}
 		tenant, err = sessMgr.tenantMgr.CreateOrGetTenant(ctx, sessMgr.txMgr, namespace)
 		if err != nil {

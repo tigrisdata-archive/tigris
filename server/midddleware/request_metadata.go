@@ -39,14 +39,15 @@ func GetRequestMetadata(ctx context.Context) (*RequestMetadata, error) {
 }
 
 func setAccessToken(ctx context.Context, token *AccessToken) context.Context {
-	requestMetadata, err := GetRequestMetadata(ctx)
-	var result = ctx
-	if err != nil && requestMetadata == nil {
+	requestMetadata, _ := GetRequestMetadata(ctx)
+	if requestMetadata == nil {
 		requestMetadata = &RequestMetadata{}
-		result = context.WithValue(ctx, RequestMetadataCtxKey{}, requestMetadata)
+		requestMetadata.accessToken = token
+		return context.WithValue(ctx, RequestMetadataCtxKey{}, requestMetadata)
+	} else {
+		requestMetadata.accessToken = token
+		return context.WithValue(ctx, RequestMetadataCtxKey{}, requestMetadata)
 	}
-	requestMetadata.accessToken = token
-	return result
 }
 
 func setNamespace(ctx context.Context, namespace string) context.Context {
@@ -61,9 +62,9 @@ func setNamespace(ctx context.Context, namespace string) context.Context {
 }
 func GetAccessToken(ctx context.Context) (*AccessToken, error) {
 	// read token
-	value := ctx.Value(&RequestMetadataCtxKey{})
+	value := ctx.Value(RequestMetadataCtxKey{})
 	if value != nil {
-		if requestMetadata, ok := value.(RequestMetadata); ok {
+		if requestMetadata, ok := value.(*RequestMetadata); ok {
 			return requestMetadata.accessToken, nil
 		}
 	}
