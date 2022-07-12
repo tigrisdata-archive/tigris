@@ -40,7 +40,7 @@ var (
 func GetGlobalTags() map[string]string {
 	return map[string]string{
 		"service": config.DefaultConfig.Tags.Service,
-		"env":     config.GetEnvironment(),
+		"env":     config.DefaultConfig.Tags.Environment,
 		"version": config.DefaultConfig.Tags.Version,
 	}
 }
