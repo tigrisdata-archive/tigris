@@ -191,41 +191,84 @@ func (m *TenantManager) CreateTenant(ctx context.Context, tx transaction.Tx, nam
 	}
 	return namespace, nil
 }
-
-func (m *TenantManager) GetNamespace(ctx context.Context, namespaceName string, txMgr *transaction.Manager) (Namespace, error) {
+func (m *TenantManager) getTenantFromCache(namespaceName string) (tenant *Tenant) {
 	m.RLock()
+	defer m.RUnlock()
 	if tenant, found := m.tenants[namespaceName]; found {
-		m.RUnlock()
-		return tenant.namespace, nil
+		return tenant
 	}
-	m.RUnlock()
+	return nil
+}
+
+// GetTenant is responsible for returning the tenant from the cache. If the tenant is not available in the cache then
+// this method will attempt to load it from the disk and will update the tenant manager cache accordingly.
+func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string, txMgr *transaction.Manager) (tenant *Tenant, err error) {
+	tenant = m.getTenantFromCache(namespaceName)
+	if tenant != nil {
+		return tenant, nil
+	}
 
 	m.Lock()
 	defer m.Unlock()
 	if tenant, found := m.tenants[namespaceName]; found {
-		return tenant.namespace, nil
+		return tenant, nil
 	}
 	// this will never create new namespace
+	// when the authn/authz is setup correctly
 	// this is for reading namespaces from storage into cache
 	tx, err := txMgr.StartTx(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	defer func() {
+		if err == nil {
+			if err = tx.Commit(ctx); err == nil && tenant != nil {
+				m.tenants[tenant.namespace.Name()] = tenant
+				m.idToTenantMap[tenant.namespace.Id()] = tenant.namespace.Name()
+			}
+		} else {
+			log.Warn().Msg("Could not get namespaces")
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	var namespaces map[string]uint32
+	if namespaces, err = m.encoder.GetNamespaces(ctx, tx); err != nil {
+		return nil, err
+	}
+	id, ok := namespaces[namespaceName]
+	if !ok {
+		return nil, nil
+	}
+
+	currentVersion, err := m.versionH.Read(ctx, tx)
+	if ulog.E(err) {
+		return nil, err
+	}
+
+	namespace := NewTenantNamespace(namespaceName, id)
+	tenant = NewTenant(namespace, m.encoder, m.schemaStore, m.versionH, currentVersion)
+	if err = tenant.reload(ctx, tx, currentVersion); err != nil {
+		return nil, err
+	}
+	return
+}
+
+func (m *TenantManager) ListNamespaces(ctx context.Context, tx transaction.Tx) ([]Namespace, error) {
+	m.RLock()
+	defer m.RUnlock()
 	namespaces, err := m.encoder.GetNamespaces(ctx, tx)
 	if err != nil {
 		_ = tx.Rollback(ctx)
-		log.Warn().Msg("Could not get namespaces")
+		log.Warn().Err(err).Msg("Could not list namespaces")
 		return nil, err
 	}
-	err = tx.Commit(ctx)
-	if err != nil {
-		return nil, err
+	var result []Namespace
+	for k, v := range namespaces {
+		result = append(result, NewTenantNamespace(k, v))
 	}
-	if id, ok := namespaces[namespaceName]; ok {
-		return NewTenantNamespace(namespaceName, id), nil
-	}
-	return nil, api.Errorf(api.Code_NOT_FOUND, "Namespace not found")
+	return result, nil
 }
 
 func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transaction.Tx, namespace Namespace) (*Tenant, error) {
