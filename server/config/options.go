@@ -40,10 +40,11 @@ type Config struct {
 }
 
 type AuthConfig struct {
-	IssuerURL        string
-	Audience         string
-	JWKSCacheTimeout time.Duration
-	LogOnly          bool
+	IssuerURL                string
+	Audience                 string
+	JWKSCacheTimeout         time.Duration
+	LogOnly                  bool
+	EnableNamespaceIsolation bool
 }
 
 type CdcConfig struct {
@@ -106,10 +107,11 @@ var DefaultConfig = Config{
 		Port: 8081,
 	},
 	Auth: AuthConfig{
-		IssuerURL:        "https://tigrisdata-dev.us.auth0.com/",
-		Audience:         "https://tigris-db-api",
-		JWKSCacheTimeout: 5 * time.Minute,
-		LogOnly:          true,
+		IssuerURL:                "https://tigrisdata-dev.us.auth0.com/",
+		Audience:                 "https://tigris-db-dev-preview-test",
+		JWKSCacheTimeout:         5 * time.Minute,
+		LogOnly:                  true,
+		EnableNamespaceIsolation: false,
 	},
 	Cdc: CdcConfig{
 		Enabled:        true,

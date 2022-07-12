@@ -33,7 +33,7 @@ var (
 	headerAuthorize = "authorization"
 )
 
-type Organization struct {
+type Namespace struct {
 	Code string `json:"code"`
 }
 
@@ -42,22 +42,13 @@ type User struct {
 }
 
 type CustomClaim struct {
-	Roles []string     `json:"https://tigris-db-api/r"`
-	Org   Organization `json:"https://tigris-db-api/o"`
-	User  User         `json:"https://tigris-db-api/u"`
+	Namespace Namespace `json:"https://tigris-db-api/n"`
+	User      User      `json:"https://tigris-db-api/u"`
 }
 
-func (c CustomClaim) Validate(ctx context.Context) error {
-	// org code claim verification
-	orgName, err := getOrganizationName(ctx)
-	if err != nil {
-		return err
-	}
-	if len(c.Org.Code) == 0 {
-		return api.Errorf(api.Code_PERMISSION_DENIED, "empty organization code in token")
-	}
-	if orgName != c.Org.Code {
-		return api.Errorf(api.Code_PERMISSION_DENIED, "your token is not valid for this URL")
+func (c CustomClaim) Validate(_ context.Context) error {
+	if len(c.Namespace.Code) == 0 {
+		return api.Errorf(api.Code_PERMISSION_DENIED, "empty namespace code in token")
 	}
 	return nil
 }
@@ -115,32 +106,21 @@ func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config
 		return ctx, err
 	}
 
-	validToken, err := jwtValidator.ValidateToken(ctx, tkn)
+	validatedToken, err := jwtValidator.ValidateToken(ctx, tkn)
 	if err != nil {
 		return ctx, api.Errorf(api.Code_UNAUTHENTICATED, err.Error())
 	}
 
-	log.Debug().Msg("Valid token received")
-	return context.WithValue(ctx, TokenCtxkey{}, validToken), nil
-}
-
-func getOrganizationName(ctx context.Context) (string, error) {
-	host := api.GetHeader(ctx, ":authority")
-	if host == "" {
-		host = api.GetHeader(ctx, "host")
+	if validatedClaims, ok := validatedToken.(*validator.ValidatedClaims); ok {
+		if customClaims, ok := validatedClaims.CustomClaims.(*CustomClaim); ok {
+			log.Debug().Msg("Valid token received")
+			token := &AccessToken{
+				Namespace: customClaims.Namespace.Code,
+				Sub:       validatedClaims.RegisteredClaims.Subject,
+			}
+			return setAccessToken(ctx, token), nil
+		}
 	}
-	// <project>-<org-name>.<env>.tigrisdata.cloud
-	parts := strings.Split(host, ".")
-	if len(parts) < 3 {
-		return "", api.Errorf(api.Code_FAILED_PRECONDITION, "hostname is not as per expected scheme")
-	}
-	subParts := strings.Split(parts[0], "-")
-	if len(subParts) > 2 {
-		return "", api.Errorf(api.Code_FAILED_PRECONDITION, "hostname is not as per expected scheme")
-	}
-	organizationName := subParts[0]
-	if len(subParts) > 1 {
-		organizationName = subParts[1]
-	}
-	return organizationName, nil
+	// this should never happen.
+	return ctx, api.Errorf(api.Code_UNAUTHENTICATED, "You are not authorized to perform this action")
 }
