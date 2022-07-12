@@ -27,7 +27,13 @@ func TestGrpcMetrics(t *testing.T) {
 	fullMethodName := "/tigrisdata.v1.Tigris/TestMethod"
 
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, RequestMetadataCtxKey{}, "test_namespace")
+	ctx = context.WithValue(ctx, RequestMetadataCtxKey{}, &RequestMetadata{
+		accessToken: &AccessToken{
+			Namespace: "test-namespace-1",
+			Sub:       "test@tigrisdata.com",
+		},
+		namespace: "test-namespace-1",
+	})
 
 	t.Run("Test tigris server counters", func(t *testing.T) {
 		countUnknownErrorMessage(ctx, fullMethodName, methodType)
