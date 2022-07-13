@@ -28,7 +28,7 @@ import (
 type LogConfig struct {
 	Level      string
 	Format     string
-	SampleRate float64
+	SampleRate float64 `mapstructure:"sample_rate" yaml:"sample_rate" json:"sample_rate"`
 }
 
 // trim full path. output in the form directory/file.go
