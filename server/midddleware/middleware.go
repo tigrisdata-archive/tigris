@@ -46,11 +46,15 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 	excludedMethods := set.New()
 	excludedMethods.Insert("/HealthAPI/Health")
 	excludedMethods.Insert("/tigrisdata.admin.v1.Admin/createNamespace")
-	namespaceInitializer := NamespaceSetter{
-		tenantManager:      tenantMgr,
-		namespaceExtractor: &AccessTokenNamespaceExtractor{},
-		excludedMethods:    excludedMethods,
-		config:             config,
+
+	adminMethods := set.New()
+	adminMethods.Insert("/tigrisdata.admin.v1.Admin/createNamespace")
+	namespaceInitializer := RequestMetadataSetter{
+		tenantManager:            tenantMgr,
+		namespaceExtractor:       &AccessTokenNamespaceExtractor{},
+		namespaceExemptedMethods: excludedMethods,
+		adminMethods:             adminMethods,
+		config:                   config,
 	}
 	// adding all the middlewares for the server stream
 	//

@@ -68,4 +68,25 @@ func TestRequestMetadata(t *testing.T) {
 		require.Equal(t, api.Errorf(api.Code_NOT_FOUND, "Access token not found"), err)
 	})
 
+	t.Run("extraction of isAdmin tag1", func(t *testing.T) {
+		ctx := context.TODO()
+		ctx = setIsAdminApi(ctx, true)
+		isAdminApi, err := IsAdminApi(ctx)
+		require.Nil(t, err)
+		require.Equal(t, true, isAdminApi)
+	})
+
+	t.Run("extraction of isAdmin tag2", func(t *testing.T) {
+		ctx := context.TODO()
+		ctx = setIsAdminApi(ctx, false)
+		isAdminApi, err := IsAdminApi(ctx)
+		require.Nil(t, err)
+		require.Equal(t, false, isAdminApi)
+	})
+
+	t.Run("extraction of isAdmin failure", func(t *testing.T) {
+		ctx := context.TODO()
+		_, err := IsAdminApi(ctx)
+		require.NotNil(t, err)
+	})
 }

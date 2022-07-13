@@ -17,6 +17,7 @@ type AccessToken struct {
 type RequestMetadata struct {
 	accessToken *AccessToken
 	namespace   string
+	isAdminApi  bool
 }
 
 // NamespaceExtractor - extract the namespace from context
@@ -60,8 +61,29 @@ func setNamespace(ctx context.Context, namespace string) context.Context {
 	requestMetadata.namespace = namespace
 	return result
 }
+
+func setIsAdminApi(ctx context.Context, isAdminApi bool) context.Context {
+	requestMetadata, err := GetRequestMetadata(ctx)
+	var result = ctx
+	if err != nil && requestMetadata == nil {
+		requestMetadata = &RequestMetadata{}
+		result = context.WithValue(ctx, RequestMetadataCtxKey{}, requestMetadata)
+	}
+	requestMetadata.isAdminApi = isAdminApi
+	return result
+}
+func IsAdminApi(ctx context.Context) (bool, error) {
+	// read metadata
+	value := ctx.Value(RequestMetadataCtxKey{})
+	if value != nil {
+		if requestMetadata, ok := value.(*RequestMetadata); ok {
+			return requestMetadata.isAdminApi, nil
+		}
+	}
+	return false, api.Errorf(api.Code_NOT_FOUND, "Access token not found")
+}
 func GetAccessToken(ctx context.Context) (*AccessToken, error) {
-	// read token
+	// read metadata
 	value := ctx.Value(RequestMetadataCtxKey{})
 	if value != nil {
 		if requestMetadata, ok := value.(*RequestMetadata); ok {
