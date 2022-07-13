@@ -17,6 +17,7 @@ package config
 import (
 	"time"
 
+	"github.com/tigrisdata/tigris/lib/set"
 	"github.com/tigrisdata/tigris/util/log"
 )
 
@@ -43,6 +44,7 @@ type AuthConfig struct {
 	JWKSCacheTimeout         time.Duration
 	LogOnly                  bool
 	EnableNamespaceIsolation bool
+	AdminNamespaces          set.HashSet
 }
 
 type CdcConfig struct {
@@ -102,10 +104,11 @@ var DefaultConfig = Config{
 	},
 	Auth: AuthConfig{
 		IssuerURL:                "https://tigrisdata-dev.us.auth0.com/",
-		Audience:                 "https://tigris-db-dev-preview-test",
+		Audience:                 "https://tigris-api",
 		JWKSCacheTimeout:         5 * time.Minute,
 		LogOnly:                  true,
 		EnableNamespaceIsolation: false,
+		AdminNamespaces:          set.New("tigris-admin"),
 	},
 	Cdc: CdcConfig{
 		Enabled:        true,

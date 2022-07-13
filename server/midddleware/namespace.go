@@ -20,7 +20,7 @@ type NamespaceSetter struct {
 
 func (r *NamespaceSetter) NamespaceSetterUnaryServerInterceptor() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		if !r.config.Auth.EnableNamespaceIsolation || r.excludedMethods.Contains(info.FullMethod) {
+		if !r.config.Auth.EnableNamespaceIsolation {
 			return handler(setNamespace(ctx, metadata.DefaultNamespaceName), req)
 		} else {
 			namespace, err := r.namespaceExtractor.Extract(ctx)
@@ -28,7 +28,7 @@ func (r *NamespaceSetter) NamespaceSetterUnaryServerInterceptor() func(ctx conte
 				return nil, err
 			}
 			if namespace == "" {
-				return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "Could not find namespace")
+				return handler(setNamespace(ctx, "unknown"), req)
 			}
 			return handler(setNamespace(ctx, namespace), req)
 		}
@@ -37,7 +37,7 @@ func (r *NamespaceSetter) NamespaceSetterUnaryServerInterceptor() func(ctx conte
 
 func (r *NamespaceSetter) NamespaceSetterStreamServerInterceptor() grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		if !r.config.Auth.EnableNamespaceIsolation || r.excludedMethods.Contains(info.FullMethod) {
+		if !r.config.Auth.EnableNamespaceIsolation {
 			wrapped := middleware.WrapServerStream(stream)
 			wrapped.WrappedContext = setNamespace(stream.Context(), metadata.DefaultNamespaceName)
 			return handler(srv, wrapped)
