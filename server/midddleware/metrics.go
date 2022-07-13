@@ -17,9 +17,11 @@ package middleware
 import (
 	"context"
 	"errors"
+	"strconv"
+
+	"github.com/tigrisdata/tigris/server/request"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/uber-go/tally"
-	"strconv"
 
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	api "github.com/tigrisdata/tigris/api/server/v1"
@@ -33,22 +35,24 @@ import (
 
 func getOkMethodTags(ctx context.Context, methodName string, methodType string) map[string]string {
 	tags := metrics.GetPreinitializedTagsFromFullMethod(methodName, methodType)
-	namespace, err := GetNamespace(ctx)
-	if err != nil {
-		ulog.E(err)
+	namespace, err := request.GetNamespace(ctx)
+	if ulog.E(err) && err == request.ErrNamespaceNotFound {
+		tags["tigris_tenant"] = metrics.DefaultReportedTigrisTenant
+	} else {
+		tags["tigris_tenant"] = namespace
 	}
-	tags["namespace"] = namespace
 	return tags
 }
 
 func getErrorMethodTags(ctx context.Context, fullMethod string, methodType string, errSource string, errCode string) map[string]string {
 	metaData := metrics.GetGrpcEndPointMetadataFromFullMethod(fullMethod, methodType)
 	tags := metaData.GetSpecificErrorTags(errSource, errCode)
-	namespace, err := GetNamespace(ctx)
-	if err != nil {
-		ulog.E(err)
+	namespace, err := request.GetNamespace(ctx)
+	if ulog.E(err) && err == request.ErrNamespaceNotFound {
+		tags["tigris_tenant"] = metrics.DefaultReportedTigrisTenant
+	} else {
+		tags["tigris_tenant"] = namespace
 	}
-	tags["namespace"] = namespace
 	return tags
 }
 

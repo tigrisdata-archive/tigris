@@ -25,7 +25,8 @@ import (
 	"github.com/tigrisdata/tigris/server/cdc"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
-	"github.com/tigrisdata/tigris/server/midddleware"
+	middleware "github.com/tigrisdata/tigris/server/midddleware"
+	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
@@ -69,7 +70,7 @@ func NewSessionManager(txMgr *transaction.Manager, tenantMgr *metadata.TenantMan
 // It first creates or get a tenant, read the metadata version and based on that reload the tenant cache and then finally
 // create a transaction which will be used to execute all the query in this session.
 func (sessMgr *SessionManager) Create(ctx context.Context, reloadVerOutside bool, track bool) (*QuerySession, error) {
-	namespaceForThisSession, err := middleware.GetNamespace(ctx)
+	namespaceForThisSession, err := request.GetNamespace(ctx)
 	if err != nil {
 		return nil, err
 	}

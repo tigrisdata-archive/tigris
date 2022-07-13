@@ -15,9 +15,10 @@
 package metrics
 
 import (
-	"github.com/tigrisdata/tigris/server/config"
+	"context"
+	"github.com/tigrisdata/tigris/server/request"
+	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/uber-go/tally"
-	"strconv"
 )
 
 var (
@@ -38,52 +39,43 @@ var (
 		"Update",
 		"UpdateRange",
 		"BeginTx",
-		"GetInternalDatabase",
 	}
 )
 
-func GetFdbReqTags(reqMethodName string, tx bool) map[string]string {
+func getFdbReqTags(reqMethodName string) map[string]string {
 	return map[string]string{
-		"method": reqMethodName,
-		"tx":     strconv.FormatBool(tx),
+		"method":        reqMethodName,
+		"tigris_tenant": DefaultReportedTigrisTenant,
 	}
 }
 
-func GetFdbReqSpecificErrorTags(reqMethodName string, code string, tx bool) map[string]string {
+func getFdbReqSpecificErrorTags(reqMethodName string, code string) map[string]string {
 	return map[string]string{
-		"method":     reqMethodName,
-		"error_code": code,
-		"tx":         strconv.FormatBool(tx),
+		"method":        reqMethodName,
+		"error_code":    code,
+		"tigris_tenant": DefaultReportedTigrisTenant,
 	}
+}
+
+func addTigrisTenantToTags(ctx context.Context, tags map[string]string) map[string]string {
+	namespace, err := request.GetNamespace(ctx)
+	if ulog.E(err) {
+		tags["tigris_tenant"] = DefaultReportedTigrisTenant
+	} else {
+		tags["tigris_tenant"] = namespace
+	}
+	return tags
+}
+
+func GetFdbTags(ctx context.Context, reqMethodName string) map[string]string {
+	return addTigrisTenantToTags(ctx, getFdbReqTags(reqMethodName))
+}
+
+func GetFdbSpecificErrorTags(ctx context.Context, reqMethodName string, code string) map[string]string {
+	return addTigrisTenantToTags(ctx, getFdbReqSpecificErrorTags(reqMethodName, code))
 }
 
 func InitializeFdbScopes() {
 	FdbRequests = FdbMetrics.SubScope("requests")
 	FdbErrorRequests = FdbRequests.SubScope("error")
-}
-
-func InitializeFdbMetrics() {
-	for _, reqMethodName := range MeasuredFdbRequests {
-		nonTxTags := GetFdbReqTags(reqMethodName, false)
-		txTags := GetFdbReqTags(reqMethodName, true)
-		// TODO: metrics_fix
-		if config.DefaultConfig.Metrics.Fdb.Enabled && config.DefaultConfig.Metrics.Fdb.Counters {
-			// Counter for ok requests
-			FdbRequests.Tagged(nonTxTags).Counter("ok")
-			FdbRequests.Tagged(txTags).Counter("ok")
-
-			// Counter for unknown errors
-			FdbErrorRequests.Tagged(nonTxTags).Counter("unknown")
-			FdbErrorRequests.Tagged(txTags).Counter("unknown")
-
-			// Counters for known errors are only initialized for the first occurrence.
-			// The error code is part of the tags.
-		}
-
-		if config.DefaultConfig.Metrics.Fdb.Enabled && config.DefaultConfig.Metrics.Fdb.ResponseTime {
-			// Response time histograms
-			FdbRequests.Tagged(nonTxTags).Histogram("histogram", tally.DefaultBuckets)
-			FdbRequests.Tagged(txTags).Histogram("histogram", tally.DefaultBuckets)
-		}
-	}
 }

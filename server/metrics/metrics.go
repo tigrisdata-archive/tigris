@@ -18,13 +18,16 @@ import (
 	"io"
 	"time"
 
-	"github.com/tigrisdata/tigris/server/config"
-	"github.com/tigrisdata/tigris/util"
-
 	prom "github.com/m3db/prometheus_client_golang/prometheus"
 	"github.com/rs/zerolog/log"
+	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/util"
 	"github.com/uber-go/tally"
 	promreporter "github.com/uber-go/tally/prometheus"
+)
+
+const (
+	DefaultReportedTigrisTenant string = "unknown"
 )
 
 var (
@@ -62,13 +65,11 @@ func InitializeMetrics() io.Closer {
 	// metric names: tigris_server
 	if config.DefaultConfig.Metrics.Grpc.Enabled {
 		InitializeRequestScopes()
-		// Request level metrics are initialized during GRPC server registration
 	}
 	// FDB level metrics
 	if config.DefaultConfig.Metrics.Fdb.Enabled {
 		FdbMetrics = root.SubScope("fdb")
 		InitializeFdbScopes()
-		InitializeFdbMetrics()
 	}
 	return closer
 }

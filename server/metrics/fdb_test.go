@@ -15,24 +15,29 @@
 package metrics
 
 import (
+	"context"
+	"testing"
+
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/uber-go/tally"
-	"testing"
 )
 
 func TestFdbMetrics(t *testing.T) {
 	config.DefaultConfig.Metrics.Fdb.Enabled = true
 	InitializeMetrics()
+
+	ctx := context.Background()
+
 	testNormalTags := []map[string]string{
-		GetFdbReqTags("Commit", false),
-		GetFdbReqTags("Insert", false),
-		GetFdbReqTags("Insert", true),
+		GetFdbTags(ctx, "Commit"),
+		GetFdbTags(ctx, "Insert"),
+		GetFdbTags(ctx, "Insert"),
 	}
 
 	testKnownErrorTags := []map[string]string{
-		GetFdbReqSpecificErrorTags("Commit", "1", false),
-		GetFdbReqSpecificErrorTags("Insert", "2", false),
-		GetFdbReqSpecificErrorTags("Insert", "3", true),
+		GetFdbSpecificErrorTags(ctx, "Commit", "1"),
+		GetFdbSpecificErrorTags(ctx, "Insert", "2"),
+		GetFdbSpecificErrorTags(ctx, "Insert", "3"),
 	}
 
 	config.DefaultConfig.Metrics.Fdb.Counters = true
@@ -48,7 +53,7 @@ func TestFdbMetrics(t *testing.T) {
 
 	config.DefaultConfig.Metrics.Fdb.ResponseTime = true
 	t.Run("Test FDB histograms", func(t *testing.T) {
-		testHistogramTags := GetFdbReqTags("Insert", true)
+		testHistogramTags := GetFdbTags(ctx, "Insert")
 		defer FdbMetrics.Tagged(testHistogramTags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
 	})
 }
