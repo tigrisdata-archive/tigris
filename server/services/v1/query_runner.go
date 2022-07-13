@@ -659,10 +659,9 @@ func (runner *SearchQueryRunner) getSearchFields(collFields []*schema.Field) ([]
 }
 
 func (runner *SearchQueryRunner) getFacetFields(collFields []*schema.Field) (qsearch.Facets, error) {
-	var empty = qsearch.Facets{}
 	facets, err := qsearch.UnmarshalFacet(runner.req.Facet)
 	if err != nil {
-		return empty, err
+		return qsearch.Facets{}, err
 	}
 
 	for _, ff := range facets.Fields {
@@ -671,11 +670,15 @@ func (runner *SearchQueryRunner) getFacetFields(collFields []*schema.Field) (qse
 			if ff.Name != cf.FieldName {
 				continue
 			}
+			if cf.DataType == schema.Int64Type || cf.DataType == schema.Int32Type || cf.DataType == schema.DoubleType {
+				return qsearch.Facets{}, api.Errorf(api.Code_INVALID_ARGUMENT, "Cannot generate facets for `%s`. Faceting is not supported for numeric fields", ff)
+			}
 			found = true
 			break
+
 		}
 		if !found {
-			return empty, api.Errorf(api.Code_INVALID_ARGUMENT, "`%s` is not a schema field", ff.Name)
+			return qsearch.Facets{}, api.Errorf(api.Code_INVALID_ARGUMENT, "`%s` is not a schema field", ff.Name)
 		}
 	}
 
