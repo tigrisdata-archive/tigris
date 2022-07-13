@@ -508,10 +508,6 @@ type SearchQueryRunner struct {
 }
 
 func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	if err := runner.validateRequestParams(); err != nil {
-		return nil, ctx, err
-	}
-
 	db, err := runner.GetDatabase(ctx, tx, tenant, runner.req.GetDb())
 	if err != nil {
 		return nil, ctx, err
@@ -617,17 +613,6 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	return &Response{}, ctx, nil
 }
 
-func (runner *SearchQueryRunner) validateRequestParams() error {
-	if runner.req.PageSize < 0 {
-		return api.Errorf(api.Code_INVALID_ARGUMENT, "`page_size`")
-	}
-
-	if runner.req.Page < 0 {
-		return api.Errorf(api.Code_INVALID_ARGUMENT, "`page`")
-	}
-	return nil
-}
-
 func (runner *SearchQueryRunner) getSearchFields(collFields []*schema.Field) ([]string, error) {
 	var searchFields = runner.req.SearchFields
 	if len(searchFields) == 0 {
@@ -651,7 +636,7 @@ func (runner *SearchQueryRunner) getSearchFields(collFields []*schema.Field) ([]
 				break
 			}
 			if !found {
-				return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "`%s` is not a schema field", sf)
+				return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "Field `%s` is not present in collection", sf)
 			}
 		}
 	}
@@ -670,8 +655,8 @@ func (runner *SearchQueryRunner) getFacetFields(collFields []*schema.Field) (qse
 			if ff.Name != cf.FieldName {
 				continue
 			}
-			if cf.DataType == schema.Int64Type || cf.DataType == schema.Int32Type || cf.DataType == schema.DoubleType {
-				return qsearch.Facets{}, api.Errorf(api.Code_INVALID_ARGUMENT, "Cannot generate facets for `%s`. Faceting is not supported for numeric fields", ff)
+			if cf.DataType != schema.StringType {
+				return qsearch.Facets{}, api.Errorf(api.Code_INVALID_ARGUMENT, "Cannot generate facets for `%s`. Faceting is only supported for text fields", ff.Name)
 			}
 			found = true
 			break
