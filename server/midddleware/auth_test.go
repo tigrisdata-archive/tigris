@@ -22,6 +22,7 @@ import (
 	"github.com/auth0/go-jwt-middleware/v2/validator"
 	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/lib/set"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc/metadata"
@@ -39,6 +40,7 @@ func TestAuth(t *testing.T) {
 			JWKSCacheTimeout:         0,
 			LogOnly:                  false,
 			EnableNamespaceIsolation: false,
+			AdminNamespaces:          set.New("tigris-admin"),
 		},
 		FoundationDB: config.FoundationDBConfig{},
 	}

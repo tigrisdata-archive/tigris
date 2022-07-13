@@ -2,7 +2,10 @@ package middleware
 
 import (
 	"context"
+	"strings"
 
+	"github.com/fullstorydev/grpchan/inprocgrpc"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 )
 
@@ -85,7 +88,7 @@ func (tokenNamespaceExtractor *AccessTokenNamespaceExtractor) Extract(ctx contex
 	// read token
 	token, err := GetAccessToken(ctx)
 	if err != nil {
-		return "", err
+		return "unknown", nil
 	}
 
 	if token != nil {
@@ -95,4 +98,16 @@ func (tokenNamespaceExtractor *AccessTokenNamespaceExtractor) Extract(ctx contex
 		}
 	}
 	return "", api.Errorf(api.Code_INVALID_ARGUMENT, "Namespace does not exist")
+}
+
+func IsAdminApi(fullMethodName string) bool {
+	return strings.HasPrefix(fullMethodName, "/tigrisdata.admin.v1.Admin/")
+}
+
+func GetFullMethodName(ctx context.Context) (string, bool) {
+	clientCtx := inprocgrpc.ClientContext(ctx)
+	if clientCtx != nil {
+		return runtime.RPCMethod(clientCtx)
+	}
+	return "", false
 }
