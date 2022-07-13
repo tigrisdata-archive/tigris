@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	defaultPerPage = 10
+	defaultPerPage = 20
 	defaultPageNo  = 1
 )
 
@@ -153,13 +153,13 @@ func (p *pageReader) read(ctx context.Context) error {
 	}
 
 	if p.found == -1 {
+		p.found = 0
 		for _, r := range result {
 			if r.Found != nil {
 				p.found += int64(*r.Found)
 			}
 		}
 	}
-
 	return nil
 }
 
@@ -180,6 +180,10 @@ func (p *pageReader) next(ctx context.Context) (bool, *page, error) {
 }
 
 func (p *pageReader) buildFacets(facets *[]tsApi.FacetCounts) {
+	if facets == nil {
+		return
+	}
+
 	for _, f := range *facets {
 		var facet = &api.SearchFacet{
 			Stats: p.buildStats(f),

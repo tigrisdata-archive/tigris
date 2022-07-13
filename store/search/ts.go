@@ -16,6 +16,7 @@ package search
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -45,6 +46,11 @@ func (s *storeImpl) convertToInternalError(err error) error {
 			return ErrNotFound
 		}
 		return NewSearchError(e.Status, ErrCodeUnhandled, e.Error())
+	}
+
+	if e, ok := err.(*json.UnmarshalTypeError); ok {
+		ulog.E(e)
+		return NewSearchError(http.StatusInternalServerError, ErrCodeUnhandled, "Search read failed")
 	}
 
 	return err
@@ -134,7 +140,7 @@ func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query
 		Searches: params,
 	})
 	if err != nil {
-		return nil, err
+		return nil, s.convertToInternalError(err)
 	}
 
 	return res.Results, nil

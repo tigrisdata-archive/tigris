@@ -419,9 +419,9 @@ func (x *ReadResponse) MarshalJSON() ([]byte, error) {
 
 func (x *SearchResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
-		Hits   []*SearchHit            `json:"hits,omitempty"`
-		Facets map[string]*SearchFacet `json:"facets,omitempty"`
-		Meta   *SearchMetadata         `json:"meta,omitempty"`
+		Hits   []*SearchHit            `json:"hits"`
+		Facets map[string]*SearchFacet `json:"facets"`
+		Meta   *SearchMetadata         `json:"meta"`
 	}{
 		Hits:   x.Hits,
 		Facets: x.Facets,
@@ -437,6 +437,47 @@ func (x *SearchHit) MarshalJSON() ([]byte, error) {
 	}{
 		Data:     x.Data,
 		Metadata: CreateMDFromSearchMD(x.Metadata),
+	}
+	return json.Marshal(resp)
+}
+
+func (x *SearchMetadata) MarshalJSON() ([]byte, error) {
+	resp := struct {
+		Found      int64 `json:"found"`
+		TotalPages int32 `json:"totalPages"`
+		Page       *Page `json:"page"`
+	}{
+		Found:      x.Found,
+		TotalPages: x.TotalPages,
+		Page:       x.Page,
+	}
+	return json.Marshal(resp)
+}
+
+func (x *SearchFacet) MarshalJSON() ([]byte, error) {
+	resp := struct {
+		Counts []*FacetCount `json:"counts"`
+		Stats  *FacetStats   `json:"stats"`
+	}{
+		Counts: x.Counts,
+		Stats:  x.Stats,
+	}
+	return json.Marshal(resp)
+}
+
+func (x *FacetStats) MarshalJSON() ([]byte, error) {
+	resp := struct {
+		Avg   float64 `json:"avg,omitempty"`
+		Max   float64 `json:"max,omitempty"`
+		Min   float64 `json:"min,omitempty"`
+		Sum   float64 `json:"sum,omitempty"`
+		Count int64   `json:"count"`
+	}{
+		Avg:   x.Avg,
+		Max:   x.Max,
+		Min:   x.Min,
+		Sum:   x.Sum,
+		Count: x.Count,
 	}
 	return json.Marshal(resp)
 }

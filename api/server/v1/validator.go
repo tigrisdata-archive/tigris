@@ -103,6 +103,14 @@ func (x *SearchRequest) Validate() error {
 		return err
 	}
 
+	if err := isValidPaginationParam("page", int(x.Page)); err != nil {
+		return err
+	}
+
+	if err := isValidPaginationParam("page_size", int(x.PageSize)); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -191,5 +199,12 @@ func isValidCollectionAndDatabase(c string, db string) error {
 		return err
 	}
 
+	return nil
+}
+
+func isValidPaginationParam(param string, value int) error {
+	if value < 0 {
+		return Errorf(Code_INVALID_ARGUMENT, "invalid value for `%s`", param)
+	}
 	return nil
 }
