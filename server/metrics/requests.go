@@ -18,12 +18,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/tigrisdata/tigris/server/config"
 	"github.com/uber-go/tally"
 	"google.golang.org/grpc"
-)
-
-var (
-	preInitCounterNames = []string{"received", "handled", "ok"}
 )
 
 type RequestEndpointMetadata struct {
@@ -37,17 +34,19 @@ func newRequestEndpointMetadata(serviceName string, methodInfo grpc.MethodInfo) 
 
 func (g *RequestEndpointMetadata) GetPreInitializedTags() map[string]string {
 	return map[string]string{
-		"tigris_server_request_method":       g.methodInfo.Name,
-		"tigris_server_request_service_name": g.serviceName,
+		"method":       g.methodInfo.Name,
+		"grpc_service": g.serviceName,
+		"namespace":    "default_namespace",
 	}
 }
 
 func (g *RequestEndpointMetadata) GetSpecificErrorTags(source string, code string) map[string]string {
 	return map[string]string{
-		"tigris_server_request_method":       g.methodInfo.Name,
-		"tigris_server_request_service_name": g.serviceName,
-		"tigris_server_request_error_source": source,
-		"tigris_server_request_error_code":   code,
+		"method":       g.methodInfo.Name,
+		"grpc_service": g.serviceName,
+		"source":       source,
+		"code":         code,
+		"namespace":    "default_namespace",
 	}
 }
 
@@ -86,19 +85,22 @@ func InitServerRequestMetrics(svcName string, methodInfo grpc.MethodInfo) {
 	tags := endPointMetadata.GetPreInitializedTags()
 
 	// Counters with default tags
-	for _, counterName := range preInitCounterNames {
-		Requests.Tagged(tags).Counter(counterName)
-	}
+	if config.DefaultConfig.Metrics.Grpc.Enabled && config.DefaultConfig.Metrics.Grpc.Counters {
+		// Counters for ok requests
+		Requests.Tagged(tags).Counter("ok")
 
-	// Counters for unknown errors
-	ErrorRequests.Tagged(tags).Counter("unknown")
+		// Counters for unknown errors
+		ErrorRequests.Tagged(tags).Counter("unknown")
+	}
 
 	// Specific error counters can't be initialized here because the tags should contain the error code.
 	// They are part of the ErrorRequests subscope with different tags. Those are initialized after the first
 	// occurrence of the specific error.
 
-	// Response time histograms
-	RequestsRespTime.Tagged(tags).Histogram("histogram", tally.DefaultBuckets)
+	// Response time
+	if config.DefaultConfig.Metrics.Grpc.Enabled && config.DefaultConfig.Metrics.Grpc.ResponseTime {
+		RequestsRespTime.Tagged(tags).Histogram("histogram", tally.DefaultBuckets)
+	}
 }
 
 func InitRequestMetricsForServer(s *grpc.Server) {
@@ -106,5 +108,19 @@ func InitRequestMetricsForServer(s *grpc.Server) {
 		for _, method := range info.Methods {
 			InitServerRequestMetrics(svcName, method)
 		}
+	}
+}
+
+func InitializeRequestScopes() {
+	server = root.SubScope("server")
+	// metric names: tigris_server_requests
+	if config.DefaultConfig.Metrics.Grpc.Enabled && config.DefaultConfig.Metrics.Grpc.Counters {
+		Requests = server.SubScope("requests")
+		// metric names: tigris_server_requests_errors
+		ErrorRequests = Requests.SubScope("error")
+	}
+	if config.DefaultConfig.Metrics.Grpc.Enabled && config.DefaultConfig.Metrics.Grpc.ResponseTime {
+		// metric names: tigirs_server_requests_resptime
+		RequestsRespTime = server.SubScope("resptime")
 	}
 }

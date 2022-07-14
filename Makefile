@@ -7,6 +7,7 @@ V=v1
 GEN_DIR=${API_DIR}/server/${V}
 PROTO_DIR=${API_DIR}/proto/server/${V}
 DATA_PROTO_DIR=internal
+LINT_TIMEOUT=5m
 
 # Needed to be able to build amd64 binaries on MacOS M1
 DOCKER_DIR=test/docker
@@ -30,7 +31,7 @@ ${PROTO_DIR}/%_openapi.yaml ${GEN_DIR}/%.pb.go ${GEN_DIR}/%.pb.gw.go: ${PROTO_DI
 ${DATA_PROTO_DIR}/%.pb.go: ${DATA_PROTO_DIR}/%.proto
 	protoc -I${DATA_PROTO_DIR} --go_out=${DATA_PROTO_DIR} --go_opt=paths=source_relative $<
 
-generate: ${GEN_DIR}/api.pb.go ${GEN_DIR}/api.pb.gw.go ${GEN_DIR}/health.pb.go ${GEN_DIR}/health.pb.gw.go ${DATA_PROTO_DIR}/data.pb.go
+generate: ${GEN_DIR}/api.pb.go ${GEN_DIR}/api.pb.gw.go ${GEN_DIR}/health.pb.go ${GEN_DIR}/health.pb.gw.go ${GEN_DIR}/admin.pb.go ${GEN_DIR}/admin.pb.gw.go ${DATA_PROTO_DIR}/data.pb.go
 
 server: server/service
 server/service: $(GO_SRC) generate
@@ -40,7 +41,7 @@ lint: generate
 	yq --exit-status 'tag == "!!map" or tag== "!!seq"' .github/workflows/*.yaml config/*.yaml
 	shellcheck scripts/*
 	shellcheck test/docker/grafana/*
-	golangci-lint run
+	golangci-lint --timeout=$(LINT_TIMEOUT) run
 
 docker_compose_build:
 	$(DOCKER_COMPOSE) build
@@ -51,7 +52,7 @@ docker_test: generate
 	$(DOCKER_COMPOSE) up --build tigris_test tigris_test
 
 docker_test_no_build:
-	$(DOCKER_COMPOSE) up --no-build tigris_test tigris_test
+	$(DOCKER_COMPOSE) up --exit-code-from tigris_test --no-build tigris_test tigris_test
 
 test: docker_test
 

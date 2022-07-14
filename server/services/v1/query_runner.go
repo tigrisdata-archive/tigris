@@ -212,7 +212,7 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 }
 
 func (runner *BaseQueryRunner) buildKeysUsingFilter(tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection, reqFilter []byte) ([]keys.Key, error) {
-	filterFactory := filter.NewFactory(coll.Fields)
+	filterFactory := filter.NewFactory(coll.QueryableFields)
 	filters, err := filterFactory.Factorize(reqFilter)
 	if err != nil {
 		return nil, err
@@ -438,7 +438,7 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 			return nil, ctx, err
 		}
 	} else {
-		wrappedFilter, err := filter.NewFactory(collection.Fields).WrappedFilter(runner.req.Filter)
+		wrappedFilter, err := filter.NewFactory(collection.QueryableFields).WrappedFilter(runner.req.Filter)
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -520,23 +520,17 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, ctx, err
 	}
 
-	wrappedF, err := filter.NewFactory(collection.Fields).WrappedFilter(runner.req.Filter)
+	wrappedF, err := filter.NewFactory(collection.QueryableFields).WrappedFilter(runner.req.Filter)
 	if err != nil {
 		return nil, ctx, err
 	}
 
-	var searchFields = runner.req.SearchFields
-	if len(searchFields) == 0 {
-		// this is to include all searchable fields if not present in the query
-		fields := collection.GetFields()
-		for _, f := range fields {
-			if f.DataType == schema.StringType {
-				searchFields = append(searchFields, f.FieldName)
-			}
-		}
+	searchFields, err := runner.getSearchFields(collection.GetFields())
+	if err != nil {
+		return nil, ctx, err
 	}
 
-	facets, err := qsearch.UnmarshalFacet(runner.req.Facet)
+	facets, err := runner.getFacetFields(collection.GetFields())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -565,23 +559,11 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}
 
 	var pageNo = int32(defaultPageNo)
-	if runner.req.Page != 0 {
+	if runner.req.Page > 0 {
 		pageNo = runner.req.Page
 	}
 	for {
-		// batch the results in a single grpc row
-		var resp = &api.SearchResponse{
-			Facets: rowReader.getFacets(),
-			Meta: &api.SearchMetadata{
-				Found: rowReader.getTotalFound(),
-				Page: &api.Page{
-					Current: pageNo,
-					Size:    int32(searchQ.PageSize),
-				},
-			},
-		}
-
-		var totalInPage = int32(0)
+		var resp = &api.SearchResponse{}
 		var row Row
 		for rowReader.Next(ctx, &row) {
 			resp.Hits = append(resp.Hits, &api.SearchHit{
@@ -591,17 +573,36 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 					UpdatedAt: row.Data.UpdatedToProtoTS(),
 				},
 			})
-			totalInPage++
 
 			if len(resp.Hits) == pageSize {
 				break
 			}
 		}
+
+		resp.Facets = rowReader.getFacets()
+		ps := int64(pageSize)
+		totalPages := int32(rowReader.getTotalFound()/ps) + 1
+		resp.Meta = &api.SearchMetadata{
+			Found:      rowReader.getTotalFound(),
+			TotalPages: totalPages,
+			Page: &api.Page{
+				Current: pageNo,
+				Size:    int32(searchQ.PageSize),
+			},
+		}
+		// if no hits, got error, send only error
+		// if no hits, no error, at least one response and break
+		// if some hits, got an error, send current hits and then error (will be zero hits next time)
+		// if some hits, no error, continue to send response
 		if len(resp.Hits) == 0 {
-			break
+			if rowReader.err != nil {
+				return nil, ctx, rowReader.err
+			}
+			if pageNo > defaultPageNo && pageNo > runner.req.Page {
+				break
+			}
 		}
 
-		resp.Meta.Page.Total = totalInPage
 		if err := runner.streaming.Send(resp); err != nil {
 			return nil, ctx, err
 		}
@@ -610,6 +611,63 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}
 
 	return &Response{}, ctx, nil
+}
+
+func (runner *SearchQueryRunner) getSearchFields(collFields []*schema.Field) ([]string, error) {
+	var searchFields = runner.req.SearchFields
+	if len(searchFields) == 0 {
+		// this is to include all searchable fields if not present in the query
+		for _, cf := range collFields {
+			if cf.DataType == schema.StringType {
+				searchFields = append(searchFields, cf.FieldName)
+			}
+		}
+	} else {
+		for _, sf := range searchFields {
+			found := false
+			for _, cf := range collFields {
+				if sf != cf.FieldName {
+					continue
+				}
+				if cf.DataType != schema.StringType {
+					return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "`%s` is not a searchable field. Only string fields can be queried", sf)
+				}
+				found = true
+				break
+			}
+			if !found {
+				return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "Field `%s` is not present in collection", sf)
+			}
+		}
+	}
+	return searchFields, nil
+}
+
+func (runner *SearchQueryRunner) getFacetFields(collFields []*schema.Field) (qsearch.Facets, error) {
+	facets, err := qsearch.UnmarshalFacet(runner.req.Facet)
+	if err != nil {
+		return qsearch.Facets{}, err
+	}
+
+	for _, ff := range facets.Fields {
+		found := false
+		for _, cf := range collFields {
+			if ff.Name != cf.FieldName {
+				continue
+			}
+			if cf.DataType != schema.StringType {
+				return qsearch.Facets{}, api.Errorf(api.Code_INVALID_ARGUMENT, "Cannot generate facets for `%s`. Faceting is only supported for text fields", ff.Name)
+			}
+			found = true
+			break
+
+		}
+		if !found {
+			return qsearch.Facets{}, api.Errorf(api.Code_INVALID_ARGUMENT, "`%s` is not a schema field", ff.Name)
+		}
+	}
+
+	return facets, nil
 }
 
 type CollectionQueryRunner struct {

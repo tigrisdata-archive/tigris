@@ -15,11 +15,13 @@
 package metrics
 
 import (
+	"github.com/tigrisdata/tigris/server/config"
 	"github.com/uber-go/tally"
 	"strconv"
 )
 
 var (
+	FdbRequests         tally.Scope
 	FdbErrorRequests    tally.Scope
 	MeasuredFdbRequests = []string{
 		"Delete",
@@ -42,37 +44,46 @@ var (
 
 func GetFdbReqTags(reqMethodName string, tx bool) map[string]string {
 	return map[string]string{
-		"fdb_request_method": reqMethodName,
-		"fdb_tx":             strconv.FormatBool(tx),
+		"method": reqMethodName,
+		"tx":     strconv.FormatBool(tx),
 	}
 }
 
 func GetFdbReqSpecificErrorTags(reqMethodName string, code string, tx bool) map[string]string {
 	return map[string]string{
-		"fdb_request_method": reqMethodName,
-		"fdb_error_code":     code,
-		"fdb_tx":             strconv.FormatBool(tx),
+		"method":     reqMethodName,
+		"error_code": code,
+		"tx":         strconv.FormatBool(tx),
 	}
 }
 
-func InitializeFdbMetrics() {
+func InitializeFdbScopes() {
+	FdbRequests = FdbMetrics.SubScope("requests")
 	FdbErrorRequests = FdbRequests.SubScope("error")
+}
+
+func InitializeFdbMetrics() {
 	for _, reqMethodName := range MeasuredFdbRequests {
-		non_tx_tags := GetFdbReqTags(reqMethodName, false)
-		tx_tags := GetFdbReqTags(reqMethodName, true)
-		// Counter for ok requests
-		FdbRequests.Tagged(non_tx_tags).Counter("ok")
-		FdbRequests.Tagged(tx_tags).Counter("ok")
+		nonTxTags := GetFdbReqTags(reqMethodName, false)
+		txTags := GetFdbReqTags(reqMethodName, true)
+		// TODO: metrics_fix
+		if config.DefaultConfig.Metrics.Fdb.Enabled && config.DefaultConfig.Metrics.Fdb.Counters {
+			// Counter for ok requests
+			FdbRequests.Tagged(nonTxTags).Counter("ok")
+			FdbRequests.Tagged(txTags).Counter("ok")
 
-		// Counter for unknown errors
-		FdbErrorRequests.Tagged(non_tx_tags).Counter("unknown")
-		FdbErrorRequests.Tagged(tx_tags).Counter("unknown")
+			// Counter for unknown errors
+			FdbErrorRequests.Tagged(nonTxTags).Counter("unknown")
+			FdbErrorRequests.Tagged(txTags).Counter("unknown")
 
-		// Counters for known errors are only initialized for the first occurrence.
-		// The error code is part of the tags.
+			// Counters for known errors are only initialized for the first occurrence.
+			// The error code is part of the tags.
+		}
 
-		// Response time histograms
-		FdbRequests.Tagged(non_tx_tags).Histogram("histogram", tally.DefaultBuckets)
-		FdbRequests.Tagged(tx_tags).Histogram("histogram", tally.DefaultBuckets)
+		if config.DefaultConfig.Metrics.Fdb.Enabled && config.DefaultConfig.Metrics.Fdb.ResponseTime {
+			// Response time histograms
+			FdbRequests.Tagged(nonTxTags).Histogram("histogram", tally.DefaultBuckets)
+			FdbRequests.Tagged(txTags).Histogram("histogram", tally.DefaultBuckets)
+		}
 	}
 }

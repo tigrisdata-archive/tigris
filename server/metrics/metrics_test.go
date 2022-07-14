@@ -12,25 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package middleware
+package metrics
 
 import (
-	"context"
-	"time"
-
-	api "github.com/tigrisdata/tigris/api/server/v1"
-	"google.golang.org/grpc"
+	"testing"
 )
 
-type key string
+func TestInitializeMetrics(t *testing.T) {
+	t.Run("Test Global tags", func(t *testing.T) {
+		globalTags := GetGlobalTags()
+		keysToCheck := []string{"service", "env", "version"}
+		for _, key := range keysToCheck {
+			if _, ok := globalTags[key]; !ok {
+				t.Errorf("Key %s not found in global tags", key)
+			}
+		}
+	})
 
-const (
-	token key = "token"
-)
-
-func TxCtxUnaryServerInterceptor(timeout time.Duration) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (iface interface{}, err error) {
-		ctx = context.WithValue(ctx, token, api.GetHeader(ctx, string(token)))
-		return handler(ctx, req)
-	}
+	t.Run("Initialize metrics", func(t *testing.T) {
+		// Will panic if the high level structure cannot be created
+		InitializeMetrics()
+	})
 }

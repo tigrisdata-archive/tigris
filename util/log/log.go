@@ -26,7 +26,9 @@ import (
 )
 
 type LogConfig struct {
-	Level string
+	Level      string
+	Format     string
+	SampleRate float64 `mapstructure:"sample_rate" yaml:"sample_rate" json:"sample_rate"`
 }
 
 // trim full path. output in the form directory/file.go
@@ -49,14 +51,18 @@ func consoleFormatCaller(i interface{}) string {
 func Configure(config LogConfig) {
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-	output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}
-	output.FormatCaller = consoleFormatCaller
 	lvl, err := zerolog.ParseLevel(config.Level)
 	if err != nil {
 		log.Error().Err(err).Msg("error parsing log level. defaulting to info level")
 		lvl = zerolog.InfoLevel
 	}
-	log.Logger = zerolog.New(output).Level(lvl).With().Timestamp().CallerWithSkipFrameCount(3).Stack().Logger()
+	if config.Format == "console" {
+		output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}
+		output.FormatCaller = consoleFormatCaller
+		log.Logger = zerolog.New(output).Level(lvl).With().Timestamp().CallerWithSkipFrameCount(3).Stack().Logger()
+	} else {
+		log.Logger = zerolog.New(os.Stdout).Level(lvl).With().Timestamp().CallerWithSkipFrameCount(3).Stack().Logger()
+	}
 }
 
 func E(err error) bool {

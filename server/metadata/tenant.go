@@ -166,6 +166,111 @@ func (m *TenantManager) CreateOrGetTenant(ctx context.Context, txMgr *transactio
 	return m.createOrGetTenantInternal(ctx, tx, namespace)
 }
 
+// CreateTenant is a thread safe implementation of creating a new tenant. It returns the error if it already exists.
+func (m *TenantManager) CreateTenant(ctx context.Context, tx transaction.Tx, namespace Namespace) (Namespace, error) {
+	m.Lock()
+	defer m.Unlock()
+	namespaces, err := m.encoder.GetNamespaces(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	if id, found := namespaces[namespace.Name()]; found {
+		return nil, api.Errorf(api.Code_CONFLICT, "namespace with same name already exists with id '%s'", fmt.Sprint(id))
+	}
+	for name, id := range namespaces {
+		if id == namespace.Id() {
+			return nil, api.Errorf(api.Code_CONFLICT, "namespace with same id already exists with name '%s'", name)
+		}
+	}
+	if err := m.encoder.ReserveNamespace(ctx, tx, namespace.Name(), namespace.Id()); ulog.E(err) {
+		return nil, err
+	}
+	if err := m.versionH.Increment(ctx, tx); ulog.E(err) {
+		return nil, err
+	}
+	return namespace, nil
+}
+func (m *TenantManager) getTenantFromCache(namespaceName string) (tenant *Tenant) {
+	m.RLock()
+	defer m.RUnlock()
+	if tenant, found := m.tenants[namespaceName]; found {
+		return tenant
+	}
+	return nil
+}
+
+// GetTenant is responsible for returning the tenant from the cache. If the tenant is not available in the cache then
+// this method will attempt to load it from the disk and will update the tenant manager cache accordingly.
+func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string, txMgr *transaction.Manager) (tenant *Tenant, err error) {
+	tenant = m.getTenantFromCache(namespaceName)
+	if tenant != nil {
+		return tenant, nil
+	}
+
+	m.Lock()
+	defer m.Unlock()
+	if tenant, found := m.tenants[namespaceName]; found {
+		return tenant, nil
+	}
+	// this will never create new namespace
+	// when the authn/authz is setup correctly
+	// this is for reading namespaces from storage into cache
+	tx, err := txMgr.StartTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		if err == nil {
+			if err = tx.Commit(ctx); err == nil && tenant != nil {
+				m.tenants[tenant.namespace.Name()] = tenant
+				m.idToTenantMap[tenant.namespace.Id()] = tenant.namespace.Name()
+			}
+		} else {
+			log.Warn().Msg("Could not get namespaces")
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	var namespaces map[string]uint32
+	if namespaces, err = m.encoder.GetNamespaces(ctx, tx); err != nil {
+		return nil, err
+	}
+	id, ok := namespaces[namespaceName]
+	if !ok {
+		return nil, nil
+	}
+
+	currentVersion, err := m.versionH.Read(ctx, tx)
+	if ulog.E(err) {
+		return nil, err
+	}
+
+	namespace := NewTenantNamespace(namespaceName, id)
+	tenant = NewTenant(namespace, m.encoder, m.schemaStore, m.versionH, currentVersion)
+	if err = tenant.reload(ctx, tx, currentVersion); err != nil {
+		return nil, err
+	}
+	return
+}
+
+func (m *TenantManager) ListNamespaces(ctx context.Context, tx transaction.Tx) ([]Namespace, error) {
+	m.RLock()
+	defer m.RUnlock()
+	namespaces, err := m.encoder.GetNamespaces(ctx, tx)
+	if err != nil {
+		_ = tx.Rollback(ctx)
+		log.Warn().Err(err).Msg("Could not list namespaces")
+		return nil, err
+	}
+	var result []Namespace
+	for k, v := range namespaces {
+		result = append(result, NewTenantNamespace(k, v))
+	}
+	return result, nil
+}
+
 func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transaction.Tx, namespace Namespace) (*Tenant, error) {
 	namespaces, err := m.encoder.GetNamespaces(ctx, tx)
 	if err != nil {
@@ -334,9 +439,12 @@ func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVers
 }
 
 func (tenant *Tenant) ReloadUsingOutsideVersion(ctx context.Context, tx transaction.Tx, version Version, id string) error {
+	if !tenant.shouldReload(version) {
+		return nil
+	}
+
 	tenant.Lock()
 	defer tenant.Unlock()
-
 	if bytes.Equal(version, tenant.version) {
 		return nil
 	}
@@ -346,20 +454,29 @@ func (tenant *Tenant) ReloadUsingOutsideVersion(ctx context.Context, tx transact
 }
 
 func (tenant *Tenant) ReloadUsingTxVersion(ctx context.Context, tx transaction.Tx, id string) error {
-	tenant.Lock()
-	defer tenant.Unlock()
-
 	currentVersion, err := tenant.versionH.Read(ctx, tx)
 	if err != nil {
 		return err
 	}
 
-	if bytes.Equal(currentVersion, tenant.version) {
+	if !tenant.shouldReload(currentVersion) {
 		return nil
 	}
 
+	tenant.Lock()
+	defer tenant.Unlock()
+	if bytes.Equal(currentVersion, tenant.version) {
+		return nil
+	}
 	log.Debug().Str("tx_id", id).Msgf("reloading tenants")
 	return tenant.reload(ctx, tx, currentVersion)
+}
+
+func (tenant *Tenant) shouldReload(currentVersion Version) bool {
+	tenant.RLock()
+	defer tenant.RUnlock()
+
+	return !bytes.Equal(currentVersion, tenant.version)
 }
 
 func (tenant *Tenant) GetNamespace() Namespace {
@@ -580,7 +697,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 		return err
 	}
 
-	deltaFields := schema.GetSearchDeltaFields(c.collection.Fields, schFactory.Fields)
+	deltaFields := schema.GetSearchDeltaFields(c.collection.QueryableFields, schFactory.Fields)
 
 	// store the collection to the databaseObject, this is actually cloned database object passed by the query runner.
 	// So failure of the transaction won't impact the consistency of the cache

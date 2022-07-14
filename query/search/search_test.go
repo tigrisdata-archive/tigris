@@ -24,7 +24,7 @@ import (
 
 func TestSearchBuilder(t *testing.T) {
 	js := []byte(`{"a": 4, "$and": [{"int_value":1}, {"string_value1": "shoe"}]}`)
-	f := filter.NewFactory([]*schema.Field{
+	f := filter.NewFactory([]*schema.QueryableField{
 		{FieldName: "a", DataType: schema.Int64Type},
 		{FieldName: "int_value", DataType: schema.Int64Type},
 		{FieldName: "string_value1", DataType: schema.StringType},

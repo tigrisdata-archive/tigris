@@ -30,7 +30,8 @@ import (
 )
 
 const (
-	UserDefinedSchema = "user_defined_schema"
+	UserDefinedSchema   = "user_defined_schema"
+	ObjFlattenDelimiter = "."
 )
 
 // DefaultCollection is used to represent a collection. The tenant in the metadata package is responsible for creating
@@ -51,9 +52,12 @@ type DefaultCollection struct {
 	Validator *jsonschema.Schema
 	// JSON schema
 	Schema jsoniter.RawMessage
-
 	// search schema
 	Search *tsApi.CollectionSchema
+	// QueryableFields are similar to Fields but these are flattened forms of fields. For instance, a simple field
+	// will be one to one mapped to queryable field but complex fields like object type field there may be more than
+	// one queryableFields. As queryableFields represent a flattened state these can be used as-is to index in memory.
+	QueryableFields []*QueryableField
 }
 
 func NewDefaultCollection(name string, id uint32, schVer int, fields []*Field, indexes *Indexes, schema jsoniter.RawMessage, searchCollectionName string) *DefaultCollection {
@@ -69,21 +73,22 @@ func NewDefaultCollection(name string, id uint32, schVer int, fields []*Field, i
 		panic(err)
 	}
 
-	// this is to not support additional properties, this is intentional to avoid caller not passing additional properties
-	// flag. Later probably we can relax it. Starting with strict validation is better than not validating extra keys.
+	// Tigris doesn't allow additional fields as part of the write requests. Setting it to false ensures strict
+	// schema validation.
 	validator.AdditionalProperties = false
 
-	search := buildSearchSchema(searchCollectionName, fields)
+	queryableFields := buildQueryableFields(fields)
 
 	return &DefaultCollection{
-		Id:        id,
-		SchVer:    schVer,
-		Name:      name,
-		Fields:    fields,
-		Indexes:   indexes,
-		Validator: validator,
-		Schema:    schema,
-		Search:    search,
+		Id:              id,
+		SchVer:          schVer,
+		Name:            name,
+		Fields:          fields,
+		Indexes:         indexes,
+		Validator:       validator,
+		Schema:          schema,
+		Search:          buildSearchSchema(searchCollectionName, queryableFields),
+		QueryableFields: queryableFields,
 	}
 }
 
@@ -127,63 +132,58 @@ func (d *DefaultCollection) SearchCollectionName() string {
 	return d.Search.Name
 }
 
-func GetSearchDeltaFields(existingFields []*Field, incomingFields []*Field) []tsApi.Field {
+func GetSearchDeltaFields(existingFields []*QueryableField, incomingFields []*Field) []tsApi.Field {
+	incomingQueryable := buildQueryableFields(incomingFields)
+
 	var existingFieldSet = set.New()
 	for _, f := range existingFields {
 		existingFieldSet.Insert(f.FieldName)
 	}
 
 	var ptrTrue = true
-	var searchFieldsDelta []tsApi.Field
-	for _, f := range incomingFields {
+	var tsFields []tsApi.Field
+	for _, f := range incomingQueryable {
 		if existingFieldSet.Contains(f.FieldName) {
 			continue
 		}
 
-		indexable := IndexableField(f)
-		facetable := FacetableField(f)
-
-		searchField := tsApi.Field{
+		tsFields = append(tsFields, tsApi.Field{
 			Name:     f.FieldName,
-			Facet:    &facetable,
-			Type:     ToSearchFieldType(f),
+			Type:     f.SearchType,
+			Facet:    &f.Faceted,
+			Index:    &f.Indexed,
 			Optional: &ptrTrue,
-			Index:    &indexable,
-		}
-		searchFieldsDelta = append(searchFieldsDelta, searchField)
+		})
+
 	}
 
-	return searchFieldsDelta
+	return tsFields
 }
 
-func buildSearchSchema(name string, fields []*Field) *tsApi.CollectionSchema {
-	var searchFields []tsApi.Field
-
+func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.CollectionSchema {
 	var ptrTrue = true
-	for _, f := range fields {
-		indexable := IndexableField(f)
-		facetable := FacetableField(f)
-
-		searchFields = append(searchFields, tsApi.Field{
-			Name:     f.FieldName,
-			Facet:    &facetable,
-			Type:     ToSearchFieldType(f),
+	var tsFields []tsApi.Field
+	for _, s := range queryableFields {
+		tsFields = append(tsFields, tsApi.Field{
+			Name:     s.FieldName,
+			Type:     s.SearchType,
+			Facet:    &s.Faceted,
+			Index:    &s.Indexed,
 			Optional: &ptrTrue,
-			Index:    &indexable,
 		})
 	}
 
 	return &tsApi.CollectionSchema{
 		Name:   name,
-		Fields: searchFields,
+		Fields: tsFields,
 	}
 }
 
 func init() {
 	jsonschema.Formats[FieldNames[ByteType]] = func(i interface{}) bool {
-		switch i.(type) {
+		switch v := i.(type) {
 		case string:
-			_, err := base64.StdEncoding.DecodeString(i.(string))
+			_, err := base64.StdEncoding.DecodeString(v)
 			return err == nil
 		}
 		return false
@@ -200,15 +200,8 @@ func init() {
 		return true
 	}
 	jsonschema.Formats[FieldNames[Int64Type]] = func(i interface{}) bool {
-		val, err := parseInt(i)
-		if err != nil {
-			return false
-		}
-
-		if val < math.MinInt64 || val > math.MaxInt64 {
-			return false
-		}
-		return true
+		_, err := parseInt(i)
+		return err == nil
 	}
 }
 

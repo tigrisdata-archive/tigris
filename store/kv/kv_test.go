@@ -18,17 +18,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/tigrisdata/tigris/server/metrics"
 	"os"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	"github.com/apple/foundationdb/bindings/go/src/fdb/subspace"
+	"github.com/google/uuid"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/metrics"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
@@ -218,6 +222,76 @@ func testKeyValueStoreFullScan(t *testing.T, kv KeyValueStore) {
 
 	err = kv.DropTable(ctx, table)
 	require.NoError(t, err)
+}
+
+type TestCollection struct {
+	Key    string `json:"key"`
+	Field1 []byte `json:"field1"`
+	Field2 []byte `json:"field2"`
+	Field3 []byte `json:"field3"`
+	Field4 []byte `json:"field4"`
+}
+
+func createDocument(t *testing.T) (string, []byte) {
+	doc := &TestCollection{
+		Key:    uuid.New().String(),
+		Field1: []byte(`this is a random string`),
+		Field2: []byte(`this is a random string`),
+		Field3: []byte(`this is a random string`),
+	}
+
+	b, err := jsoniter.Marshal(doc)
+	require.NoError(t, err)
+
+	return doc.Key, b
+}
+
+func benchKV(t *testing.T, kv baseKVStore) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	table := []byte("t1")
+	err := kv.DropTable(ctx, table)
+	require.NoError(t, err)
+
+	err = kv.CreateTable(ctx, table)
+	require.NoError(t, err)
+
+	var ops int64
+	timer := time.NewTimer(1 * time.Second)
+	start := time.Now()
+	var sigClose = make(chan struct{})
+	var wg sync.WaitGroup
+	for i := 0; i < 256; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; ; j++ {
+				select {
+				case _, ok := <-sigClose:
+					if !ok {
+						return
+					}
+				default:
+					tx, err := kv.BeginTx(ctx)
+					require.NoError(t, err)
+
+					key, doc := createDocument(t)
+					err = tx.Replace(ctx, table, BuildKey(key), doc)
+					require.NoError(t, err)
+					require.NoError(t, tx.Commit(ctx))
+					atomic.AddInt64(&ops, 1)
+				}
+			}
+		}()
+	}
+
+	<-timer.C
+	close(sigClose)
+	wg.Wait()
+	require.NoError(t, kv.DropTable(ctx, table))
+
+	t.Logf("total elapsed time for [%v] records [%v]", ops, time.Since(start))
 }
 
 func testKVBasic(t *testing.T, kv baseKVStore) {
@@ -543,7 +617,7 @@ func testSetVersionstampedValue(t *testing.T, kv baseKVStore) {
 }
 
 func testMeasureLow() {
-	metrics.InitializeMetrics()
+	metrics.InitializeFdbMetrics()
 
 	testFunctions := []func() error{
 		func() error {
@@ -575,6 +649,10 @@ func TestKVFDB(t *testing.T) {
 	kv, err := newFoundationDB(cfg)
 	require.NoError(t, err)
 
+	t.Run("TestKVFBench", func(t *testing.T) {
+		benchKV(t, kv)
+	})
+
 	t.Run("TestKVFDBBasic", func(t *testing.T) {
 		testKVBasic(t, kv)
 	})
@@ -597,6 +675,7 @@ func TestKVFDB(t *testing.T) {
 		testSetVersionstampedValue(t, kv)
 	})
 	t.Run("TestMeasureCounters", func(t *testing.T) {
+		metrics.InitializeMetrics()
 		testMeasureLow()
 	})
 }

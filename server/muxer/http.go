@@ -19,40 +19,41 @@ import (
 
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
+	chi_middleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/metadata"
 	middleware "github.com/tigrisdata/tigris/server/midddleware"
+	"github.com/tigrisdata/tigris/server/transaction"
 )
 
 type HTTPServer struct {
 	Router chi.Router
-	httpS  *http.Server
 	Inproc *inprocgrpc.Channel
 }
 
-func NewHTTPServer(cfg *config.Config) *HTTPServer {
+func NewHTTPServer(cfg *config.Config, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) *HTTPServer {
 	r := chi.NewRouter()
-	s := &HTTPServer{
-		Inproc: &inprocgrpc.Channel{},
-		Router: r,
-		httpS: &http.Server{
-			Handler: r,
-		},
-	}
 
-	unary, stream := middleware.Get(cfg)
+	r.Use(cors.AllowAll().Handler)
+	r.Mount("/debug", chi_middleware.Profiler())
 
-	s.Inproc.WithServerStreamInterceptor(stream)
-	s.Inproc.WithServerUnaryInterceptor(unary)
+	unary, stream := middleware.Get(cfg, tenantMgr, txMgr)
 
-	return s
+	inproc := &inprocgrpc.Channel{}
+	inproc.WithServerStreamInterceptor(stream)
+	inproc.WithServerUnaryInterceptor(unary)
+
+	return &HTTPServer{Inproc: inproc, Router: r}
 }
 
 func (s *HTTPServer) Start(mux cmux.CMux) error {
 	match := mux.Match(cmux.HTTP1Fast())
 	go func() {
-		err := s.httpS.Serve(match)
+		srv := &http.Server{Handler: s.Router}
+		err := srv.Serve(match)
 		log.Fatal().Err(err).Msg("start http server")
 	}()
 	return nil

@@ -25,7 +25,7 @@ func TestFilterUsingJSON(t *testing.T) {
 	t.Run("basic_filter", func(t *testing.T) {
 		js := []byte(`{"f1": 10, "f2": 10}`)
 		var factory = Factory{
-			fields: []*schema.Field{
+			fields: []*schema.QueryableField{
 				{FieldName: "f1", DataType: schema.Int64Type},
 				{FieldName: "f2", DataType: schema.Int64Type},
 			},
@@ -40,7 +40,7 @@ func TestFilterUsingJSON(t *testing.T) {
 	t.Run("filter_or_nested_and", func(t *testing.T) {
 		js := []byte(`{"$or": [{"f1": 20}, {"$and": [{"f2":5}, {"f3": 6}]}]}`)
 		var factory = Factory{
-			fields: []*schema.Field{
+			fields: []*schema.QueryableField{
 				{FieldName: "f1", DataType: schema.Int64Type},
 				{FieldName: "f2", DataType: schema.Int64Type},
 				{FieldName: "f3", DataType: schema.Int64Type},
@@ -58,7 +58,7 @@ func TestFilterUsingJSON(t *testing.T) {
 	t.Run("filter_and_or_nested", func(t *testing.T) {
 		js := []byte(`{"$and": [{"a": 20}, {"$or": [{"b":5}, {"c": 6}]}, {"$and": [{"e":5}, {"f": 6}]}]}`)
 		var factory = Factory{
-			fields: []*schema.Field{
+			fields: []*schema.QueryableField{
 				{FieldName: "a", DataType: schema.Int64Type},
 				{FieldName: "b", DataType: schema.Int64Type},
 				{FieldName: "c", DataType: schema.Int64Type},
@@ -79,7 +79,7 @@ func TestFilterUsingJSON(t *testing.T) {
 	t.Run("filter_mix", func(t *testing.T) {
 		js := []byte(`{"f1": 10, "f2": 10, "$or": [{"f3": 20}, {"$and": [{"f4":5}, {"f5": 6}]}], "$and": [{"a": 20}, {"$or": [{"b":5}, {"c": 6}]}, {"$and": [{"e":5}, {"f": 6}]}]}`)
 		var factory = Factory{
-			fields: []*schema.Field{
+			fields: []*schema.QueryableField{
 				{FieldName: "f1", DataType: schema.Int64Type},
 				{FieldName: "f2", DataType: schema.Int64Type},
 				{FieldName: "f3", DataType: schema.Int64Type},
@@ -119,7 +119,7 @@ func TestFilterUsingJSON(t *testing.T) {
 
 func TestFilterDuplicateKey(t *testing.T) {
 	var factory = Factory{
-		fields: []*schema.Field{
+		fields: []*schema.QueryableField{
 			{FieldName: "a", DataType: schema.Int64Type},
 			{FieldName: "b", DataType: schema.Int64Type},
 		},

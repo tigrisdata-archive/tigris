@@ -17,14 +17,14 @@ package kv
 import (
 	"context"
 	"errors"
+	"github.com/apple/foundationdb/bindings/go/src/fdb"
+	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/uber-go/tally"
 	"strconv"
 	"unsafe"
 
-	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/server/config"
-	"github.com/tigrisdata/tigris/server/metrics"
-	"github.com/uber-go/tally"
 )
 
 type KeyValue struct {
@@ -80,9 +80,7 @@ func NewKeyValueStore(cfg *config.FoundationDBConfig) (KeyValueStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &KeyValueStoreImpl{
-		fdbkv: kv,
-	}, nil
+	return &KeyValueStoreImpl{fdbkv: kv}, nil
 }
 
 func NewKeyValueStoreWithMetrics(cfg *config.FoundationDBConfig) (KeyValueStore, error) {
@@ -100,22 +98,26 @@ func NewKeyValueStoreWithMetrics(cfg *config.FoundationDBConfig) (KeyValueStore,
 func measureLow(name string, f func() error, isTx bool) {
 	// Low level measurement wrapper that is called by the measure functions on the appropriate receiver
 	tags := metrics.GetFdbReqTags(name, isTx)
-	defer metrics.FdbRequests.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
-	var fdberr fdb.Error
+	if config.DefaultConfig.Metrics.Fdb.ResponseTime {
+		defer metrics.FdbRequests.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
+	}
 	err := f()
 	if err == nil {
 		// Request was ok
-		metrics.FdbRequests.Tagged(tags).Counter("ok").Inc(1)
+		//metrics.FdbRequests.Tagged(tags).Counter("ok").Inc(1)
 		return
 	}
-	errTags := metrics.GetFdbReqSpecificErrorTags(name, strconv.Itoa(fdberr.Code), isTx)
-	// An error is either known or unknown, tagging is different, known errors have more rich metadata
-	if errors.As(err, &fdberr) {
-		// Error with a specific FDB error code
-		metrics.FdbErrorRequests.Tagged(errTags).Counter("specific").Inc(1)
-	} else {
-		// Unknown error
-		metrics.FdbErrorRequests.Tagged(tags).Counter("unknown").Inc(1)
+	var fdberr fdb.Error
+	if config.DefaultConfig.Metrics.Fdb.Counters {
+		errTags := metrics.GetFdbReqSpecificErrorTags(name, strconv.Itoa(fdberr.Code), isTx)
+		// An error is either known or unknown, tagging is different, known errors have more rich metadata
+		if errors.As(err, &fdberr) {
+			// Error with a specific FDB error code
+			metrics.FdbErrorRequests.Tagged(errTags).Counter("specific").Inc(1)
+		} else {
+			// Unknown error
+			metrics.FdbErrorRequests.Tagged(tags).Counter("unknown").Inc(1)
+		}
 	}
 }
 
@@ -139,9 +141,9 @@ func (m *KeyValueStoreImplWithMetrics) DeleteRange(ctx context.Context, table []
 	return
 }
 
-func (m *KeyValueStoreImplWithMetrics) CreateTable(_ context.Context, name []byte) (err error) {
+func (m *KeyValueStoreImplWithMetrics) CreateTable(ctx context.Context, name []byte) (err error) {
 	m.measure("CreateTable", func() error {
-		err = m.kv.CreateTable(nil, name)
+		err = m.kv.CreateTable(ctx, name)
 		return err
 	})
 	return

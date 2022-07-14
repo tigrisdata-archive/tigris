@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	defaultPerPage = 10
+	defaultPerPage = 20
 	defaultPageNo  = 1
 )
 
@@ -76,10 +76,10 @@ func (p *page) readRow(row *Row) bool {
 		if document == nil {
 			continue
 		}
-
 		doc := *document
+
 		var searchKey string
-		if searchKey, row.Data, p.err = UnpackSearchFields(doc, p.collection); p.err != nil {
+		if searchKey, row.Data, doc, p.err = UnpackSearchFields(doc, p.collection); p.err != nil {
 			return false
 		}
 		row.Key = []byte(searchKey)
@@ -128,7 +128,6 @@ func (p *pageReader) read(ctx context.Context) error {
 	}
 	p.reqPage++
 
-	var added = true
 	var pg = newPage(p.collection, p.query)
 	for _, r := range result {
 		if r.Hits == nil {
@@ -136,18 +135,14 @@ func (p *pageReader) read(ctx context.Context) error {
 		}
 
 		for _, h := range *r.Hits {
-			added = false
 			if !pg.append(h) {
 				p.pages = append(p.pages, pg)
 				pg = newPage(p.collection, p.query)
-
-				added = true
 			}
 		}
 	}
-	if !added {
+	if pg.hits.Count() > 0 {
 		p.pages = append(p.pages, pg)
-		pg = newPage(p.collection, p.query)
 	}
 
 	// check if we need to build facets
@@ -158,13 +153,13 @@ func (p *pageReader) read(ctx context.Context) error {
 	}
 
 	if p.found == -1 {
+		p.found = 0
 		for _, r := range result {
 			if r.Found != nil {
 				p.found += int64(*r.Found)
 			}
 		}
 	}
-
 	return nil
 }
 
@@ -185,6 +180,10 @@ func (p *pageReader) next(ctx context.Context) (bool, *page, error) {
 }
 
 func (p *pageReader) buildFacets(facets *[]tsApi.FacetCounts) {
+	if facets == nil {
+		return
+	}
+
 	for _, f := range *facets {
 		var facet = &api.SearchFacet{
 			Stats: p.buildStats(f),
@@ -210,16 +209,16 @@ func (p *pageReader) buildStats(stats tsApi.FacetCounts) *api.FacetStats {
 
 	var stat = &api.FacetStats{}
 	if stats.Stats.Avg != nil {
-		stat.Avg = *stats.Stats.Avg
+		stat.Avg = float64(*stats.Stats.Avg)
 	}
 	if stats.Stats.Min != nil {
-		stat.Min = int64(*stats.Stats.Min)
+		stat.Min = float64(*stats.Stats.Min)
 	}
 	if stats.Stats.Max != nil {
-		stat.Max = int64(*stats.Stats.Max)
+		stat.Max = float64(*stats.Stats.Max)
 	}
 	if stats.Stats.Sum != nil {
-		stat.Sum = int64(*stats.Stats.Sum)
+		stat.Sum = float64(*stats.Stats.Sum)
 	}
 	if stats.Stats.TotalValues != nil {
 		stat.Count = int64(*stats.Stats.TotalValues)

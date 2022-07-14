@@ -63,10 +63,10 @@ type apiService struct {
 	searchStore   search.Store
 }
 
-func newApiService(kv kv.KeyValueStore, searchStore search.Store) *apiService {
+func newApiService(kv kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) *apiService {
 	u := &apiService{
 		kvStore:     kv,
-		txMgr:       transaction.NewManager(kv),
+		txMgr:       txMgr,
 		versionH:    &metadata.VersionHandler{},
 		searchStore: searchStore,
 	}
@@ -77,7 +77,6 @@ func newApiService(kv kv.KeyValueStore, searchStore search.Store) *apiService {
 		log.Fatal().Err(err).Msgf("error starting server: starting transaction failed")
 	}
 
-	tenantMgr := metadata.NewTenantManager()
 	if err := tenantMgr.Reload(ctx, tx); ulog.E(err) {
 		// ToDo: no need to panic, probably handle through async thread.
 		log.Err(err).Msgf("error starting server: reloading tenants failed")
@@ -85,7 +84,7 @@ func newApiService(kv kv.KeyValueStore, searchStore search.Store) *apiService {
 	_ = tx.Commit(ctx)
 
 	u.tenantMgr = tenantMgr
-	u.encoder = metadata.NewEncoder(tenantMgr)
+	u.encoder = metadata.NewEncoder(u.tenantMgr)
 	u.cdcMgr = cdc.NewManager()
 	u.sessions = NewSessionManager(u.txMgr, u.tenantMgr, u.versionH, u.cdcMgr, u.searchStore, u.encoder)
 	u.runnerFactory = NewQueryRunnerFactory(u.txMgr, u.encoder, u.cdcMgr, u.searchStore)
@@ -96,6 +95,7 @@ func (s *apiService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel)
 	mux := runtime.NewServeMux(
 		runtime.WithMarshalerOption(runtime.MIMEWildcard, &api.CustomMarshaler{JSONBuiltin: &runtime.JSONBuiltin{}}),
 		runtime.WithIncomingHeaderMatcher(api.CustomMatcher),
+		runtime.WithOutgoingHeaderMatcher(api.CustomMatcher),
 	)
 
 	if err := api.RegisterTigrisHandlerClient(context.TODO(), mux, api.NewTigrisClient(inproc)); err != nil {
@@ -406,47 +406,42 @@ func (s *apiService) Events(r *api.EventsRequest, stream api.Tigris_EventsServer
 	}
 	defer streamer.Close()
 
-	for {
-		select {
-		case tx, ok := <-streamer.Txs:
+	for tx := range streamer.Txs {
+		for _, op := range tx.Ops {
+			_, _, collection, ok := s.encoder.DecodeTableName(op.Table)
 			if !ok {
-				return api.Errorf(api.Code_CANCELLED, "buffer overflow")
+				log.Err(err).Str("table", string(op.Table)).Msg("failed to decode collection name")
+				return api.Errorf(api.Code_INTERNAL, "failed to decode collection name")
 			}
 
-			for _, op := range tx.Ops {
-				_, _, collection, ok := s.encoder.DecodeTableName(op.Table)
-				if !ok {
-					log.Err(err).Str("table", string(op.Table)).Msg("failed to decode collection name")
-					return api.Errorf(api.Code_INTERNAL, "failed to decode collection name")
+			if r.Collection == "" || r.Collection == collection {
+				td, err := internal.Decode(op.Data)
+				if err != nil {
+					log.Err(err).Str("data", string(op.Data)).Msg("failed to decode data")
+					return api.Errorf(api.Code_INTERNAL, "failed to decode data")
 				}
 
-				if r.Collection == "" || r.Collection == collection {
-					td, err := internal.Decode(op.Data)
-					if err != nil {
-						log.Err(err).Str("data", string(op.Data)).Msg("failed to decode data")
-						return api.Errorf(api.Code_INTERNAL, "failed to decode data")
-					}
+				event := &api.StreamEvent{
+					TxId:       tx.Id,
+					Collection: collection,
+					Op:         op.Op,
+					Key:        op.Key,
+					Lkey:       op.LKey,
+					Rkey:       op.RKey,
+					Data:       td.RawData,
+					Last:       op.Last,
+				}
 
-					event := &api.StreamEvent{
-						TxId:       tx.Id,
-						Collection: collection,
-						Op:         op.Op,
-						Key:        op.Key,
-						Lkey:       op.LKey,
-						Rkey:       op.RKey,
-						Data:       td.RawData,
-						Last:       op.Last,
-					}
+				response := &api.EventsResponse{
+					Event: event,
+				}
 
-					response := &api.EventsResponse{
-						Event: event,
-					}
-
-					if err := stream.Send(response); ulog.E(err) {
-						return err
-					}
+				if err := stream.Send(response); ulog.E(err) {
+					return err
 				}
 			}
 		}
 	}
+
+	return nil
 }

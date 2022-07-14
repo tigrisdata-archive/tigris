@@ -38,7 +38,6 @@ type Error struct {
 	httpCode int
 	code     ErrCode
 	msg      string
-	wrapped  error
 }
 
 func NewSearchError(httpCode int, code ErrCode, msg string, args ...interface{}) error {

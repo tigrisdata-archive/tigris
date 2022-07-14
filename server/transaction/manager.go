@@ -134,24 +134,6 @@ func (s *TxSession) GetTxCtx() *api.TransactionCtx {
 	return s.txCtx
 }
 
-func (s *TxSession) setState(state sessionState) {
-	s.Lock()
-	defer s.Unlock()
-
-	if s.state == sessionEnded {
-		return
-	}
-
-	s.state = state
-}
-
-func (s *TxSession) getState() sessionState {
-	s.RLock()
-	defer s.RUnlock()
-
-	return s.state
-}
-
 func (s *TxSession) start(ctx context.Context) error {
 	s.Lock()
 	defer s.Unlock()

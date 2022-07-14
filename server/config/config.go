@@ -20,6 +20,8 @@ import (
 	"os/exec"
 	"strings"
 
+	ulog "github.com/tigrisdata/tigris/util/log"
+
 	"github.com/spf13/pflag"
 
 	"github.com/davecgh/go-spew/spew"
@@ -36,6 +38,8 @@ var configPath = []string{
 	"./",
 }
 
+var configFile string
+
 // envPrefix is used by viper to detect environment variables that should be used.
 // viper will automatically uppercase this and append _ to it
 var envPrefix = "tigris_server"
@@ -44,9 +48,11 @@ var envEnv = "tigris_environment"
 var environment string
 
 const (
+	EnvDevelopment = "dev"
+	EnvProduction  = "prod"
+	EnvSandbox     = "sbx"
 	EnvTest        = "test"
-	EnvDevelopment = "development"
-	EnvProduction  = "production"
+	EnvLocal       = "local"
 )
 
 func GetEnvironment() string {
@@ -54,28 +60,37 @@ func GetEnvironment() string {
 }
 
 func LoadEnvironment() {
-	env := os.Getenv(envEnv)
-	if env == "" {
-		env = os.Getenv(strings.ToUpper(envEnv))
+	resolutionOrder := []string{
+		os.Getenv(envEnv),
+		os.Getenv(strings.ToUpper(envEnv)),
+		EnvLocal,
 	}
 
-	environment = env
+	for _, resolvedEnv := range resolutionOrder {
+		if resolvedEnv != "" {
+			environment = resolvedEnv
+			break
+		}
+	}
 }
 
-func LoadConfig(name string, config interface{}) {
+func LoadConfig(config interface{}) {
 	LoadEnvironment()
 
-	if GetEnvironment() != "" {
-		name += "." + GetEnvironment()
-	}
+	pflag.StringVarP(&configFile, "config", "c", "", "server configuration file")
+	ulog.E(viper.BindPFlags(pflag.CommandLine))
+	pflag.Parse()
 
-	log.Info().Msgf("TIGRIS_ENVIRONMENT=%s", GetEnvironment())
-
-	viper.SetConfigName(name)
-	viper.SetConfigType("yaml")
-
-	for _, v := range configPath {
-		viper.AddConfigPath(v)
+	// Deactivates lookup process for default server.yaml if
+	// configuration file is specified via the command line
+	if configFile != "" {
+		viper.SetConfigFile(configFile)
+	} else {
+		viper.SetConfigName("server")
+		viper.SetConfigType("yaml")
+		for _, v := range configPath {
+			viper.AddConfigPath(v)
+		}
 	}
 
 	// This is needed to automatically bind environment variables to config struct
@@ -96,10 +111,6 @@ func LoadConfig(name string, config interface{}) {
 	// This allows us to override the config values using environment variables.
 	viper.SetEnvPrefix(envPrefix)
 	viper.AutomaticEnv()
-
-	pflag.Parse()
-	err = viper.BindPFlags(pflag.CommandLine)
-	log.Err(err).Msg("bind flags")
 
 	err = viper.MergeInConfig()
 	if err != nil {

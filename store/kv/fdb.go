@@ -107,35 +107,45 @@ func (d *fdbkv) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key)
 
 func (d *fdbkv) txWithRetry(ctx context.Context, fn func(fdb.Transaction) (interface{}, error)) (interface{}, error) {
 	for {
-		tr, err := d.db.CreateTransaction()
-		if err != nil {
-			return nil, err
-		}
-		defer tr.Cancel()
-
-		if err := setTxTimeout(&tr, getCtxTimeout(ctx)); err != nil {
-			return nil, err
-		}
-
-		var res interface{}
-		if res, err = fn(tr); err != nil {
-			return nil, err
-		}
-
-		if err := tr.Commit().Get(); err == nil {
-			return res, nil
-		}
-
-		var ep fdb.Error
-		if errors.As(err, &ep) {
-			// OnError returns nil if error is retryable
-			err = tr.OnError(ep).Get()
-		}
-
-		if err != nil {
-			return nil, err
+		retry, res, err := d.txWithRetryLow(ctx, fn)
+		if !retry {
+			return res, err
 		}
 	}
+}
+
+func (d *fdbkv) txWithRetryLow(ctx context.Context, fn func(fdb.Transaction) (interface{}, error)) (bool, interface{}, error) {
+	tr, err := d.db.CreateTransaction()
+	defer tr.Cancel()
+
+	if err != nil {
+		return false, nil, err
+	}
+
+	if err := setTxTimeout(&tr, getCtxTimeout(ctx)); err != nil {
+		return false, nil, err
+	}
+
+	var res interface{}
+	if res, err = fn(tr); err != nil {
+		return false, nil, err
+	}
+
+	if err := tr.Commit().Get(); err == nil {
+		return false, res, nil
+	}
+
+	var ep fdb.Error
+	if errors.As(err, &ep) {
+		// OnError returns nil if error is retryable
+		err = tr.OnError(ep).Get()
+	}
+
+	if err != nil {
+		return false, nil, err
+	}
+
+	return true, nil, nil
 }
 
 func (d *fdbkv) Insert(ctx context.Context, table []byte, key Key, data []byte) error {
@@ -366,7 +376,7 @@ func (t *ftx) Insert(ctx context.Context, table []byte, key Key, data []byte) er
 	t.tx.Set(k, data)
 	listener.OnSet(InsertEvent, table, k, data)
 
-	log.Err(err).Str("table", string(table)).Interface("key", key).Msg("Insert")
+	log.Debug().Str("table", string(table)).Interface("key", key).Msg("Insert")
 
 	return err
 }

@@ -15,52 +15,33 @@
 package main
 
 import (
+	"runtime"
+
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/pflag"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/muxer"
+	"github.com/tigrisdata/tigris/server/tracing"
+	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
 	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
-	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
-	"gopkg.in/DataDog/dd-trace-go.v1/profiler"
 )
 
-func getTracingOptions() []tracer.StartOption {
-	var opts []tracer.StartOption
-	tc := config.DefaultConfig.Tracing
-	opts = append(opts, tracer.WithTraceEnabled(tc.Enabled))
-	if tc.WithUDS != "" {
-		opts = append(opts, tracer.WithUDS(tc.WithUDS))
-	}
-	if tc.WithAgentAddr != "" {
-		opts = append(opts, tracer.WithAgentAddr(tc.WithAgentAddr))
-	}
-	if tc.WithDogStatsdAddr != "" {
-		opts = append(opts, tracer.WithAgentAddr(tc.WithAgentAddr))
-	}
-
-	return opts
-}
-
 func main() {
-	pflag.String("api.port", "", "set port server listens on")
-
-	config.LoadConfig("server", &config.DefaultConfig)
-
+	config.LoadConfig(&config.DefaultConfig)
 	ulog.Configure(config.DefaultConfig.Log)
 
-	tracer.Start(getTracingOptions()...)
-	defer tracer.Stop()
+	log.Info().Msgf("Environment: %v\n", config.GetEnvironment())
+	log.Info().Msgf("Number of CPUs: %v", runtime.NumCPU())
 
-	if config.DefaultConfig.Profiling.Enabled {
-		if err := profiler.Start(); err != nil {
-			ulog.E(err)
-		}
-		defer profiler.Stop()
+	closerFunc, err := tracing.InitTracer(&config.DefaultConfig)
+	if err != nil {
+		ulog.E(err)
 	}
+	defer closerFunc()
 
 	// Initialize metrics once
 	closer := metrics.InitializeMetrics()
@@ -70,7 +51,13 @@ func main() {
 
 	log.Info().Str("version", util.Version).Msgf("Starting server")
 
-	kvStore, err := kv.NewKeyValueStoreWithMetrics(&config.DefaultConfig.FoundationDB)
+	var kvStore kv.KeyValueStore
+	if config.DefaultConfig.Metrics.Fdb.Enabled {
+		kvStore, err = kv.NewKeyValueStoreWithMetrics(&config.DefaultConfig.FoundationDB)
+	} else {
+		kvStore, err = kv.NewKeyValueStore(&config.DefaultConfig.FoundationDB)
+	}
+
 	if err != nil {
 		log.Fatal().Err(err).Msg("error initializing kv store")
 	}
@@ -80,8 +67,12 @@ func main() {
 		log.Fatal().Err(err).Msg("error initializing search store")
 	}
 
-	mx := muxer.NewMuxer(&config.DefaultConfig)
-	mx.RegisterServices(kvStore, searchStore)
+	tenantMgr := metadata.NewTenantManager()
+	log.Info().Msg("initialized tenant manager")
+	txMgr := transaction.NewManager(kvStore)
+	log.Info().Msg("initialized transaction manager")
+	mx := muxer.NewMuxer(&config.DefaultConfig, tenantMgr, txMgr)
+	mx.RegisterServices(kvStore, searchStore, tenantMgr, txMgr)
 	if err := mx.Start(config.DefaultConfig.Server.Host, config.DefaultConfig.Server.Port); err != nil {
 		log.Fatal().Err(err).Msgf("error starting server")
 	}

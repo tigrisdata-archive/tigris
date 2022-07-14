@@ -18,9 +18,14 @@ server:
 search:
   host: tigris-search
   port: 80
+  auth_key: ts_test_key
 
 log:
   level: info
+  sample_rate: 0.0001
 
 foundationdb:
   cluster_file: "/mnt/fdb-config-volume/cluster-file"
+
+tracing:
+  sample_rate: 0.0001

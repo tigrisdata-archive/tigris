@@ -33,14 +33,16 @@ type Config struct {
 	Search       SearchConfig    `yaml:"search" json:"search"`
 	Tracing      TracingConfig   `yaml:"tracing" json:"tracing"`
 	Profiling    ProfilingConfig `yaml:"profiling" json:"profiling"`
+	Metrics      MetricsConfig
 	FoundationDB FoundationDBConfig
 }
 
 type AuthConfig struct {
-	IssuerURL        string
-	Audience         string
-	JWKSCacheTimeout time.Duration
-	LogOnly          bool
+	IssuerURL                string
+	Audience                 string
+	JWKSCacheTimeout         time.Duration
+	LogOnly                  bool
+	EnableNamespaceIsolation bool
 }
 
 type CdcConfig struct {
@@ -51,34 +53,59 @@ type CdcConfig struct {
 }
 
 type TracingConfig struct {
-	Enabled           bool
-	WithUDS           string
-	WithAgentAddr     string
-	WithDogStatsdAddr string
+	Enabled             bool    `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	SampleRate          float64 `mapstructure:"sample_rate" yaml:"sample_rate" json:"sample_rate"`
+	CodeHotspotsEnabled bool    `mapstructure:"codehotspots_enabled" yaml:"codehotspots_enabled" json:"codehotspots_enabled"`
+	EndpointsEnabled    bool    `mapstructure:"endpoints_enabled" yaml:"endpoints_enabled" json:"endpoints_enabled"`
+	WithUDS             string  `mapstructure:"agent_socket" yaml:"agent_socket" json:"agent_socket"`
+	WithAgentAddr       string  `mapstructure:"agent_addr" yaml:"agent_addr" json:"agent_addr"`
+	WithDogStatsdAddr   string  `mapstructure:"dogstatsd_addr" yaml:"dogstatsd_addr" json:"dogstatsd_addr"`
 }
 
 type ProfilingConfig struct {
-	Enabled         bool
-	EnableCPU       bool
-	EnableHeap      bool
-	EnableBlock     bool
-	EnableMutex     bool
-	EnableGoroutine bool
+	Enabled         bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	EnableCPU       bool `mapstructure:"enable_cpu" yaml:"enable_cpu" json:"enable_cpu"`
+	EnableHeap      bool `mapstructure:"enable_heap" yaml:"enable_heap" json:"enable_heap"`
+	EnableBlock     bool `mapstructure:"enable_block" yaml:"enable_block" json:"enable_block"`
+	EnableMutex     bool `mapstructure:"enable_mutex" yaml:"enable_mutex" json:"enable_mutex"`
+	EnableGoroutine bool `mapstructure:"enable_goroutine" yaml:"enable_goroutine" json:"enable_goroutine"`
+}
+
+type MetricsConfig struct {
+	// Global switch
+	Enabled bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	// Individual metric group configs
+	Grpc GrpcMetricsConfig
+	Fdb  FdbMetricsConfig
+}
+
+type GrpcMetricsConfig struct {
+	Enabled      bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Counters     bool `mapstructure:"counters" yaml:"counters" json:"counters"`
+	ResponseTime bool `mapstructure:"response_time" yaml:"response_time" json:"response_time"`
+}
+
+type FdbMetricsConfig struct {
+	Enabled      bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Counters     bool `mapstructure:"counters" yaml:"counters" json:"counters"`
+	ResponseTime bool `mapstructure:"response_time" yaml:"response_time" json:"response_time"`
 }
 
 var DefaultConfig = Config{
 	Log: log.LogConfig{
-		Level: "trace",
+		Level:      "info",
+		SampleRate: 0.01,
 	},
 	Server: ServerConfig{
 		Host: "0.0.0.0",
 		Port: 8081,
 	},
 	Auth: AuthConfig{
-		IssuerURL:        "https://tigrisdata-dev.us.auth0.com/",
-		Audience:         "https://tigris-db-api",
-		JWKSCacheTimeout: 5 * time.Minute,
-		LogOnly:          true,
+		IssuerURL:                "https://tigrisdata-dev.us.auth0.com/",
+		Audience:                 "https://tigris-db-dev-preview-test",
+		JWKSCacheTimeout:         5 * time.Minute,
+		LogOnly:                  true,
+		EnableNamespaceIsolation: false,
 	},
 	Cdc: CdcConfig{
 		Enabled:        true,
@@ -93,12 +120,28 @@ var DefaultConfig = Config{
 		WriteEnabled: true,
 	},
 	Tracing: TracingConfig{
-		Enabled: true,
+		Enabled:             false,
+		SampleRate:          0.01,
+		CodeHotspotsEnabled: true,
+		EndpointsEnabled:    true,
 	},
 	Profiling: ProfilingConfig{
-		Enabled:    true,
+		Enabled:    false,
 		EnableCPU:  true,
 		EnableHeap: true,
+	},
+	Metrics: MetricsConfig{
+		Enabled: true,
+		Grpc: GrpcMetricsConfig{
+			Enabled:      true,
+			Counters:     true,
+			ResponseTime: true,
+		},
+		Fdb: FdbMetricsConfig{
+			Enabled:      true,
+			Counters:     true,
+			ResponseTime: true,
+		},
 	},
 }
 

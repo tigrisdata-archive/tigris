@@ -23,8 +23,9 @@ import (
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/cdc"
+	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
-	middleware "github.com/tigrisdata/tigris/server/midddleware"
+	"github.com/tigrisdata/tigris/server/midddleware"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
@@ -49,7 +50,10 @@ type SessionManager struct {
 func NewSessionManager(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, versionH *metadata.VersionHandler, cdc *cdc.Manager, searchStore search.Store, encoder metadata.Encoder) *SessionManager {
 	var txListeners []TxListener
 	txListeners = append(txListeners, cdc)
-	txListeners = append(txListeners, NewSearchIndexer(searchStore, encoder))
+	if config.DefaultConfig.Search.WriteEnabled {
+		// just for testing so that we can disable it if needed
+		txListeners = append(txListeners, NewSearchIndexer(searchStore, encoder))
+	}
 
 	return &SessionManager{
 		txMgr:       txMgr,
@@ -65,9 +69,22 @@ func NewSessionManager(txMgr *transaction.Manager, tenantMgr *metadata.TenantMan
 // It first creates or get a tenant, read the metadata version and based on that reload the tenant cache and then finally
 // create a transaction which will be used to execute all the query in this session.
 func (sessMgr *SessionManager) Create(ctx context.Context, reloadVerOutside bool, track bool) (*QuerySession, error) {
-	tenant, err := sessMgr.tenantMgr.CreateOrGetTenant(ctx, sessMgr.txMgr, metadata.NewDefaultNamespace())
+	namespaceForThisSession, err := middleware.GetNamespace(ctx)
 	if err != nil {
 		return nil, err
+	}
+	var tenant *metadata.Tenant
+	if namespaceForThisSession == metadata.DefaultNamespaceName {
+		tenant, err = sessMgr.tenantMgr.CreateOrGetTenant(ctx, sessMgr.txMgr, metadata.NewDefaultNamespace())
+	} else {
+		tenant, err = sessMgr.tenantMgr.GetTenant(ctx, namespaceForThisSession, sessMgr.txMgr)
+	}
+	if tenant == nil {
+		return nil, api.Errorf(api.Code_NOT_FOUND, "Tenant %s not found", namespaceForThisSession)
+	}
+	if err != nil {
+		log.Warn().Err(err).Msgf("Could not find tenant, this must not happen with right authn/authz configured")
+		return nil, api.Errorf(api.Code_NOT_FOUND, "Tenant %s not found", namespaceForThisSession)
 	}
 
 	var version metadata.Version

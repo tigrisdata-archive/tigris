@@ -150,6 +150,10 @@ func (w *DDLWorkload) validate(iteration int16, client driver.Driver, isCommit b
 	}
 
 	collections, err = client.UseDatabase(w.Database).ListCollections(context.TODO())
+	if err != nil {
+		log.Debug().Err(err).Msgf("list collections error for collection %s", w.Collections[0])
+	}
+
 	isExists = w.isCollectionExists(collections, w.Collections[0])
 	if isCommit {
 		// should be visible outside the transaction as well.

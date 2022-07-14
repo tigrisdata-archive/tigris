@@ -125,8 +125,8 @@ func (w *ReplaceOnlyWorkload) Check(client driver.Driver) (bool, error) {
 			}
 
 			log.Debug().Msgf("consistency issue for collection '%s' '%s', ignoring further checks %v %v", w.Database, collection, existing.Documents, queueDoc.Documents)
+			return false, nil
 		}
-		return isSuccess, nil
 	}
 
 	return true, nil

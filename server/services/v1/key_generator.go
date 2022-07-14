@@ -134,15 +134,15 @@ func newGenerator(txMgr *transaction.Manager) *generator {
 func isNull(tp schema.FieldType, val []byte) bool {
 	switch tp {
 	case schema.Int32Type:
-		return bytes.Compare(val, zeroIntStringSlice) == 0
+		return bytes.Equal(val, zeroIntStringSlice)
 	case schema.Int64Type:
-		return bytes.Compare(val, zeroIntStringSlice) == 0
+		return bytes.Equal(val, zeroIntStringSlice)
 	case schema.UUIDType:
-		return bytes.Compare(val, zeroUUIDStringSlice) == 0
+		return bytes.Equal(val, zeroUUIDStringSlice)
 	case schema.DateTimeType:
-		return bytes.Compare(val, zeroTimeStringSlice) == 0
+		return bytes.Equal(val, zeroTimeStringSlice)
 	case schema.StringType, schema.ByteType:
-		return val == nil || len(val) == 0
+		return len(val) == 0
 	}
 	return false
 }
@@ -154,15 +154,15 @@ func (g *generator) get(ctx context.Context, table []byte, field *schema.Field) 
 	switch field.Type() {
 	case schema.StringType, schema.UUIDType:
 		value := value.NewStringValue(uuid.NewUUIDAsString())
-		return []byte(fmt.Sprintf(`%s`, *value)), value, nil
+		return []byte(*value), value, nil
 	case schema.ByteType:
 		value := value.NewBytesValue([]byte(uuid.NewUUIDAsString()))
 		b64 := base64.StdEncoding.EncodeToString([]byte(*value))
-		return []byte(fmt.Sprintf(`%s`, b64)), value, nil
+		return []byte(b64), value, nil
 	case schema.DateTimeType:
 		// use timestamp nano to reduce the contention if multiple workers end up generating same timestamp.
 		value := value.NewStringValue(time.Now().UTC().Format(time.RFC3339Nano))
-		return []byte(fmt.Sprintf(`%s`, *value)), value, nil
+		return []byte(*value), value, nil
 	case schema.Int64Type:
 		// use timestamp nano to reduce the contention if multiple workers end up generating same timestamp.
 		value := value.NewIntValue(time.Now().UTC().UnixNano())

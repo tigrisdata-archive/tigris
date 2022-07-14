@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 
-if [ "x${GRAFANA_PASSWORD}" == "x" ]; then
+if [ -z "${GRAFANA_PASSWORD}" ]; then
 	# default password is used
 	GRAFANA_PASSWORD="admin"
 fi
 
-if [ "x${GRAFANA_URL}" == "x" ]; then
+if [ -z "${GRAFANA_URL}" ]; then
 	# default grafana url is used
 	GRAFANA_URL="http://localhost:3000"
 fi
 
-if [ "x${PROMETHEUS_URL}" == "x" ]; then
+if [ -z "${PROMETHEUS_URL}" ]; then
 	PROMETHEUS_URL="http://tigris_prometheus:9090"
 fi
 
@@ -32,7 +32,7 @@ for i in $(seq 1 ${max_tries}); do
 		echo "Prometheus available at: http://localhost:9090"
 		break
 	else
-		echo "Adding prometheus was not successful, retrying soon"
+		echo "Adding prometheus was not successful, retrying soon. Iteration: $i"
 		sleep 0.5
 	fi
 done

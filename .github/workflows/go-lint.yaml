@@ -14,13 +14,13 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: '1.18'
-      - name: Install dependencies
+      # To be able to run make generate
+      - name: Install build dependencies
         run: /bin/bash scripts/install_build_deps.sh
+      # To install golangci-lint
+      - name: Install test dependencies
+        run: /bin/bash scripts/install_test_deps.sh
       - name: Generated code
         run: make generate
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v2
-        with:
-          version: v1.45.2
-          skip-pkg-cache: true
-          skip-build-cache: true
+      - name: Lint
+        run: make lint

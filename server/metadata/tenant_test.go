@@ -30,7 +30,7 @@ import (
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
-func TestTenantManager_CreateTenant(t *testing.T) {
+func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 	fdbCfg, err := config.GetTestFDBConfig("../..")
 	require.NoError(t, err)
 
@@ -53,13 +53,14 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		_, err = m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test1", 2})
 		require.NoError(t, err)
 
-		tenant, _ := m.tenants["ns-test1"]
+		tenant := m.tenants["ns-test1"]
 		require.Equal(t, "ns-test1", tenant.namespace.Name())
 		require.Equal(t, uint32(2), tenant.namespace.Id())
 		require.Equal(t, "ns-test1", m.idToTenantMap[uint32(2)])
 		require.Empty(t, tenant.databases)
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
+
 	t.Run("create_multiple_tenants", func(t *testing.T) {
 		m := newTenantManager(&encoding.TestMDNameRegistry{
 			ReserveSB:  "test_tenant_reserve",
@@ -76,7 +77,7 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		_, err = m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test2", 3})
 		require.NoError(t, err)
 
-		tenant, _ := m.tenants["ns-test1"]
+		tenant := m.tenants["ns-test1"]
 		require.Equal(t, "ns-test1", tenant.namespace.Name())
 		require.Equal(t, uint32(2), tenant.namespace.Id())
 		require.Equal(t, "ns-test1", m.idToTenantMap[uint32(2)])
@@ -84,7 +85,7 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		require.Empty(t, tenant.databases)
 		require.Empty(t, tenant.idToDatabaseMap)
 
-		tenant, _ = m.tenants["ns-test2"]
+		tenant = m.tenants["ns-test2"]
 		require.Equal(t, "ns-test2", tenant.namespace.Name())
 		require.Equal(t, uint32(3), tenant.namespace.Id())
 		require.Equal(t, "ns-test2", m.idToTenantMap[uint32(3)])
@@ -131,6 +132,104 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		require.Equal(t, "ns-test1", m.idToTenantMap[uint32(2)])
 		require.Equal(t, 1, len(m.idToTenantMap))
 
+		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
+	})
+}
+
+func TestTenantManager_CreateTenant(t *testing.T) {
+	fdbCfg, err := config.GetTestFDBConfig("../..")
+	require.NoError(t, err)
+
+	kvStore, err := kv.NewKeyValueStore(fdbCfg)
+	require.NoError(t, err)
+
+	tm := transaction.NewManager(kvStore)
+	t.Run("create_tenant", func(t *testing.T) {
+		m := newTenantManager(&encoding.TestMDNameRegistry{
+			ReserveSB:  "test_tenant_reserve",
+			EncodingSB: "test_tenant_encoding",
+			SchemaSB:   "test_tenant_schema",
+		})
+
+		ctx := context.TODO()
+		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
+		_ = kvStore.DropTable(ctx, m.mdNameRegistry.EncodingSubspaceName())
+		_ = kvStore.DropTable(ctx, m.mdNameRegistry.SchemaSubspaceName())
+		tx, e := tm.StartTx(ctx)
+		require.NoError(t, e)
+		_, err := m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
+		require.NoError(t, err)
+		namespaces, err := m.encoder.GetNamespaces(ctx, tx)
+		require.NoError(t, err)
+		id := namespaces["ns-test1"]
+		require.Equal(t, uint32(2), id)
+		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
+	})
+	t.Run("create_multiple_tenants", func(t *testing.T) {
+		m := newTenantManager(&encoding.TestMDNameRegistry{
+			ReserveSB:  "test_tenant_reserve",
+			EncodingSB: "test_tenant_encoding",
+			SchemaSB:   "test_tenant_schema",
+		})
+
+		ctx := context.TODO()
+		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
+
+		tx, e := tm.StartTx(ctx)
+		require.NoError(t, e)
+
+		_, err = m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
+		require.NoError(t, err)
+
+		_, err = m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test2", 3})
+		require.NoError(t, err)
+		namespaces, err := m.encoder.GetNamespaces(ctx, tx)
+		require.NoError(t, err)
+
+		id := namespaces["ns-test1"]
+		require.Equal(t, uint32(2), id)
+
+		id = namespaces["ns-test2"]
+		require.Equal(t, uint32(3), id)
+		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
+	})
+	t.Run("create_duplicate_tenant_error", func(t *testing.T) {
+		m := newTenantManager(&encoding.TestMDNameRegistry{
+			ReserveSB:  "test_tenant_reserve",
+			EncodingSB: "test_tenant_encoding",
+			SchemaSB:   "test_tenant_schema",
+		})
+
+		ctx := context.TODO()
+		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
+		tx, e := tm.StartTx(ctx)
+		require.NoError(t, e)
+		_, err = m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
+		require.NoError(t, err)
+
+		// should fail now
+		_, err = m.CreateTenant(context.TODO(), tx, &TenantNamespace{"ns-test1", 3})
+		require.Equal(t, "namespace with same name already exists with id '2'", err.(*api.TigrisError).Error())
+
+		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
+	})
+	t.Run("create_duplicate_tenant_id_error", func(t *testing.T) {
+		m := newTenantManager(&encoding.TestMDNameRegistry{
+			ReserveSB:  "test_tenant_reserve",
+			EncodingSB: "test_tenant_encoding",
+			SchemaSB:   "test_tenant_schema",
+		})
+
+		ctx := context.TODO()
+		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
+		tx, e := tm.StartTx(ctx)
+		require.NoError(t, e)
+		_, err = m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
+		require.NoError(t, err)
+
+		// should fail now
+		_, err = m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test2", 2})
+		require.Equal(t, "namespace with same id already exists with name 'ns-test1'", err.(*api.TigrisError).Error())
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
 }
@@ -288,7 +387,7 @@ func TestTenantManager_DropCollection(t *testing.T) {
 		_, err = m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test1", 2})
 		require.NoError(t, err)
 
-		tenant, _ := m.tenants["ns-test1"]
+		tenant := m.tenants["ns-test1"]
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
@@ -337,7 +436,7 @@ func TestTenantManager_DropCollection(t *testing.T) {
 		require.NoError(t, tenant.DropCollection(ctx, tx, db2, "test_collection", &search.NoopStore{}))
 		require.NoError(t, tx.Commit(ctx))
 
-		tx, err = tm.StartTx(ctx)
+		_, err = tm.StartTx(ctx)
 		require.NoError(t, err)
 		coll := db2.GetCollection("test_collection")
 		require.Nil(t, coll)

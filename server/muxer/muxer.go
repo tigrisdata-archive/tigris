@@ -16,15 +16,18 @@ package muxer
 
 import (
 	"fmt"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"net"
 
 	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
 	"github.com/tigrisdata/tigris/server/config"
-	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/tigrisdata/tigris/server/metadata"
 	v1 "github.com/tigrisdata/tigris/server/services/v1"
+	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
+	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 type Server interface {
@@ -35,27 +38,24 @@ type Muxer struct {
 	servers []Server
 }
 
-func NewMuxer(cfg *config.Config) *Muxer {
-	var s []Server
-	s = append(s, NewHTTPServer(cfg))
-	s = append(s, NewGRPCServer(cfg))
-	m := &Muxer{
-		servers: s,
-	}
-
-	return m
+func NewMuxer(cfg *config.Config, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) *Muxer {
+	return &Muxer{servers: []Server{NewHTTPServer(cfg, tenantMgr, txMgr), NewGRPCServer(cfg, tenantMgr, txMgr)}}
 }
 
-func (m *Muxer) RegisterServices(kvStore kv.KeyValueStore, searchStore search.Store) {
-	services := v1.GetRegisteredServices(kvStore, searchStore)
+func (m *Muxer) RegisterServices(kvStore kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) {
+	services := v1.GetRegisteredServices(kvStore, searchStore, tenantMgr, txMgr)
 	for _, r := range services {
 		for _, v := range m.servers {
 			if s, ok := v.(*GRPCServer); ok {
-				_ = r.RegisterGRPC(s.Server)
+				if err := r.RegisterGRPC(s.Server); err != nil {
+					ulog.E(err)
+				}
 				// Initialize the metrics for each GRPC service
 				metrics.InitRequestMetricsForServer(s.Server)
 			} else if s, ok := v.(*HTTPServer); ok {
-				_ = r.RegisterHTTP(s.Router, s.Inproc)
+				if err := r.RegisterHTTP(s.Router, s.Inproc); err != nil {
+					ulog.E(err)
+				}
 			}
 		}
 	}
