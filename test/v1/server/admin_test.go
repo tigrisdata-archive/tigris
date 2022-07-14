@@ -16,18 +16,6 @@ type AdminSuite struct {
 	suite.Suite
 }
 
-var expectedListNamespaceResponse = map[string]interface{}{
-	"namespaces": []interface{}{map[string]interface{}{
-		"id":   1,
-		"name": "default_namespace",
-	},
-		map[string]interface{}{
-			"id":   2,
-			"name": "namespace-a",
-		},
-	},
-}
-
 func (s *AdminSuite) TestCreateNamespace() {
 	s.Run("create_namespace", func() {
 		resp := createNamespace(s.T(), "namespace-a", 2)
@@ -49,11 +37,24 @@ func adminExpect(s httpexpect.LoggerReporter) *httpexpect.Expect {
 }
 
 func (s *AdminSuite) TestListNamespaces() {
-	s.Run("info_handler", func() {
+	s.Run("list_namespaces", func() {
+		_ = createNamespace(s.T(), "namespace-a", 2)
 		resp := listNamespaces(s.T())
-		resp.Status(http.StatusOK).
+		namespaces := resp.Status(http.StatusOK).
 			JSON().
-			Equal(expectedListNamespaceResponse)
+			Object().
+			Value("namespaces").
+			Array().
+			Raw()
+		var found = false
+		for _, namespace := range namespaces {
+			if converted, ok := namespace.(map[string]interface{}); ok {
+				if converted["name"] == "namespace-a" {
+					found = true
+				}
+			}
+		}
+		s.True(found)
 	})
 }
 
