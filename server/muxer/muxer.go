@@ -16,7 +16,6 @@ package muxer
 
 import (
 	"fmt"
-	"github.com/tigrisdata/tigris/server/metrics"
 	"net"
 
 	"github.com/rs/zerolog/log"
@@ -50,8 +49,6 @@ func (m *Muxer) RegisterServices(kvStore kv.KeyValueStore, searchStore search.St
 				if err := r.RegisterGRPC(s.Server); err != nil {
 					ulog.E(err)
 				}
-				// Initialize the metrics for each GRPC service
-				metrics.InitRequestMetricsForServer(s.Server)
 			} else if s, ok := v.(*HTTPServer); ok {
 				if err := r.RegisterHTTP(s.Router, s.Inproc); err != nil {
 					ulog.E(err)

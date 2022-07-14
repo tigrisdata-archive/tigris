@@ -26,6 +26,7 @@ import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/lib/set"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/request"
 )
 
 type TokenCtxkey struct{}
@@ -103,7 +104,7 @@ func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config
 		}
 	}()
 	// disable health check authn/z
-	fullMethodName, fullMethodNameFound := GetFullMethodName(ctx)
+	fullMethodName, fullMethodNameFound := request.GetFullMethodName(ctx)
 	if fullMethodNameFound && BypassAuthForTheseMethods.Contains(fullMethodName) {
 		return ctx, nil
 	}
@@ -121,10 +122,10 @@ func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config
 		if customClaims, ok := validatedClaims.CustomClaims.(*CustomClaim); ok {
 			// if incoming namespace is empty, set it to unknown for observables and reject request
 			if customClaims.Namespace.Code == "" {
-				ctx = setNamespace(ctx, UnknownNamespace)
+				ctx = request.SetNamespace(ctx, UnknownNamespace)
 				return ctx, api.Errorf(api.Code_UNAUTHENTICATED, "You are not authorized to perform this admin action")
 			}
-			isAdmin := fullMethodNameFound && IsAdminApi(fullMethodName)
+			isAdmin := fullMethodNameFound && request.IsAdminApi(fullMethodName)
 			if isAdmin {
 				// admin api being called, let's check if the user is of admin allowed namespaces
 				if !config.Auth.AdminNamespaces.Contains(customClaims.Namespace.Code) {
@@ -133,11 +134,11 @@ func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config
 			}
 
 			log.Debug().Msg("Valid token received")
-			token := &AccessToken{
+			token := &request.AccessToken{
 				Namespace: customClaims.Namespace.Code,
 				Sub:       validatedClaims.RegisteredClaims.Subject,
 			}
-			return setAccessToken(ctx, token), nil
+			return request.SetAccessToken(ctx, token), nil
 		}
 	}
 	// this should never happen.

@@ -30,6 +30,7 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 	tigrisconfig "github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/util"
 	"google.golang.org/grpc"
@@ -49,7 +50,7 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 	excludedMethods.Insert("/tigrisdata.admin.v1.Admin/listNamespaces")
 	namespaceInitializer := NamespaceSetter{
 		tenantManager:      tenantMgr,
-		namespaceExtractor: &AccessTokenNamespaceExtractor{},
+		namespaceExtractor: &request.AccessTokenNamespaceExtractor{},
 		excludedMethods:    excludedMethods,
 		config:             config,
 	}

@@ -617,7 +617,7 @@ func testSetVersionstampedValue(t *testing.T, kv baseKVStore) {
 }
 
 func testMeasureLow() {
-	metrics.InitializeFdbMetrics()
+	ctx := context.Background()
 
 	testFunctions := []func() error{
 		func() error {
@@ -632,10 +632,10 @@ func testMeasureLow() {
 	}
 
 	for _, f := range testFunctions {
-		measureLow("Commit", f, true)
-		measureLow("Insert", f, true)
-		measureLow("Insert", f, false)
-		measureLow("BeginTx", f, true)
+		measureLow(ctx, "Commit", f)
+		measureLow(ctx, "Insert", f)
+		measureLow(ctx, "Insert", f)
+		measureLow(ctx, "BeginTx", f)
 	}
 }
 
