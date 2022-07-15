@@ -17,7 +17,6 @@ package config
 import (
 	"time"
 
-	"github.com/tigrisdata/tigris/lib/set"
 	"github.com/tigrisdata/tigris/util/log"
 )
 
@@ -39,12 +38,12 @@ type Config struct {
 }
 
 type AuthConfig struct {
-	IssuerURL                string
-	Audience                 string
-	JWKSCacheTimeout         time.Duration
-	LogOnly                  bool
-	EnableNamespaceIsolation bool
-	AdminNamespaces          set.HashSet
+	IssuerURL                string        `yaml:"issuer_url" json:"issuer_url"`
+	Audience                 string        `yaml:"audience" json:"audience"`
+	JWKSCacheTimeout         time.Duration `yaml:"jwks_cache_timeout" json:"jwks_cache_timeout"`
+	LogOnly                  bool          `yaml:"log_only" json:"log_only"`
+	EnableNamespaceIsolation bool          `yaml:"enable_namespace_isolation" json:"enable_namespace_isolation"`
+	AdminNamespaces          []string      `yaml:"admin_namespaces" json:"admin_namespaces"`
 }
 
 type CdcConfig struct {
@@ -108,7 +107,7 @@ var DefaultConfig = Config{
 		JWKSCacheTimeout:         5 * time.Minute,
 		LogOnly:                  true,
 		EnableNamespaceIsolation: false,
-		AdminNamespaces:          set.New("tigris-admin"),
+		AdminNamespaces:          []string{"tigris-admin"},
 	},
 	Cdc: CdcConfig{
 		Enabled:        true,
