@@ -38,12 +38,12 @@ type Config struct {
 }
 
 type AuthConfig struct {
-	IssuerURL                string        `yaml:"issuer_url" json:"issuer_url"`
-	Audience                 string        `yaml:"audience" json:"audience"`
-	JWKSCacheTimeout         time.Duration `yaml:"jwks_cache_timeout" json:"jwks_cache_timeout"`
-	LogOnly                  bool          `yaml:"log_only" json:"log_only"`
-	EnableNamespaceIsolation bool          `yaml:"enable_namespace_isolation" json:"enable_namespace_isolation"`
-	AdminNamespaces          []string      `yaml:"admin_namespaces" json:"admin_namespaces"`
+	IssuerURL                string        `mapstructure:"issuer_url" yaml:"issuer_url" json:"issuer_url"`
+	Audience                 string        `mapstructure:"audience" yaml:"audience" json:"audience"`
+	JWKSCacheTimeout         time.Duration `mapstructure:"jwks_cache_timeout" yaml:"jwks_cache_timeout" json:"jwks_cache_timeout"`
+	LogOnly                  bool          `mapstructure:"log_only" yaml:"log_only" json:"log_only"`
+	EnableNamespaceIsolation bool          `mapstructure:"enable_namespace_isolation" yaml:"enable_namespace_isolation" json:"enable_namespace_isolation"`
+	AdminNamespaces          []string      `mapstructure:"admin_namespaces" yaml:"admin_namespaces" json:"admin_namespaces"`
 }
 
 type CdcConfig struct {
