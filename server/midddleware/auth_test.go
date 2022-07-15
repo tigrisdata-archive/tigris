@@ -22,7 +22,6 @@ import (
 	"github.com/auth0/go-jwt-middleware/v2/validator"
 	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-	"github.com/tigrisdata/tigris/lib/set"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc/metadata"
@@ -40,7 +39,7 @@ func TestAuth(t *testing.T) {
 			JWKSCacheTimeout:         0,
 			LogOnly:                  false,
 			EnableNamespaceIsolation: false,
-			AdminNamespaces:          set.New("tigris-admin"),
+			AdminNamespaces:          []string{"tigris-admin"},
 		},
 		FoundationDB: config.FoundationDBConfig{},
 	}
@@ -76,6 +75,11 @@ func TestAuth(t *testing.T) {
 		_, err := AuthFunction(incomingCtx, &validator.Validator{}, &enforcedAuthConfig)
 		require.NotNil(t, err)
 		require.Contains(t, err.Error(), "could not parse the token: illegal base64 data")
+	})
+
+	t.Run("isAdminNamespace", func(t *testing.T) {
+		require.False(t, isAdminNamespace("test-name", &enforcedAuthConfig))
+		require.True(t, isAdminNamespace("tigris-admin", &enforcedAuthConfig))
 	})
 }
 

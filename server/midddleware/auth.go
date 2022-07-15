@@ -129,7 +129,7 @@ func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config
 			isAdmin := fullMethodNameFound && request.IsAdminApi(fullMethodName)
 			if isAdmin {
 				// admin api being called, let's check if the user is of admin allowed namespaces
-				if !config.Auth.AdminNamespaces.Contains(customClaims.Namespace.Code) {
+				if !isAdminNamespace(customClaims.Namespace.Code, config) {
 					log.Warn().
 						Interface("AdminNamespaces", config.Auth.AdminNamespaces).
 						Str("IncomingNamespace", customClaims.Namespace.Code).
@@ -148,4 +148,13 @@ func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config
 	}
 	// this should never happen.
 	return ctx, api.Errorf(api.Code_UNAUTHENTICATED, "You are not authorized to perform this action")
+}
+
+func isAdminNamespace(incomingNamespace string, config *config.Config) bool {
+	for _, allowedAdminNamespace := range config.Auth.AdminNamespaces {
+		if incomingNamespace == allowedAdminNamespace {
+			return true
+		}
+	}
+	return false
 }
