@@ -508,14 +508,12 @@ func (t *ftx) ReadRange(_ context.Context, table []byte, lKey Key, rKey Key) (ba
 func (t *ftx) SetVersionstampedValue(_ context.Context, key []byte, value []byte) error {
 	t.tx.SetVersionstampedValue(fdb.Key(key), value)
 
-	log.Debug().Str("key", string(key)).Msg("setting metadata version key")
 	return nil
 }
 
 func (t *ftx) SetVersionstampedKey(ctx context.Context, key []byte, value []byte) error {
 	t.tx.SetVersionstampedKey(fdb.Key(key), value)
 
-	log.Debug().Str("key", string(key)).Msg("setting SetVersionstampedKey")
 	return nil
 }
 
@@ -603,7 +601,7 @@ func (i *fdbIterator) Next(kv *baseKeyValue) bool {
 		kv.Value = tkv.Value
 	}
 
-	log.Debug().Interface("key", tupleToKey(&t)).Str("table", i.subspace.FDBKey().String()).Msg("fdbIterator.Next")
+	//log.Debug().Interface("key", tupleToKey(&t)).Str("table", i.subspace.FDBKey().String()).Msg("fdbIterator.Next")
 
 	return true
 }
@@ -636,7 +634,7 @@ func getFDBKey(table []byte, key Key) fdb.Key {
 		p := unsafe.Pointer(&key)
 		k = s.Pack(*(*tuple.Tuple)(p))
 	}
-	log.Debug().Interface("key", key).Str("table", s.FDBKey().String()).Msg("getFDBKey")
+
 	return k
 }
 
