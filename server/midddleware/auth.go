@@ -122,6 +122,7 @@ func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config
 		if customClaims, ok := validatedClaims.CustomClaims.(*CustomClaim); ok {
 			// if incoming namespace is empty, set it to unknown for observables and reject request
 			if customClaims.Namespace.Code == "" {
+				log.Warn().Msg("Valid token with empty namespace received")
 				ctx = request.SetNamespace(ctx, UnknownNamespace)
 				return ctx, api.Errorf(api.Code_UNAUTHENTICATED, "You are not authorized to perform this admin action")
 			}
@@ -129,6 +130,10 @@ func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config
 			if isAdmin {
 				// admin api being called, let's check if the user is of admin allowed namespaces
 				if !config.Auth.AdminNamespaces.Contains(customClaims.Namespace.Code) {
+					log.Warn().
+						Interface("AdminNamespaces", config.Auth.AdminNamespaces).
+						Str("IncomingNamespace", customClaims.Namespace.Code).
+						Msg("Valid token received for admin action - but not allowed to administer from this namespace")
 					return ctx, api.Errorf(api.Code_UNAUTHENTICATED, "You are not authorized to perform this admin action")
 				}
 			}
