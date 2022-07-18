@@ -76,8 +76,9 @@ type MetricsConfig struct {
 	// Global switch
 	Enabled bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 	// Individual metric group configs
-	Grpc GrpcMetricsConfig
-	Fdb  FdbMetricsConfig
+	Grpc   GrpcMetricsConfig
+	Fdb    FdbMetricsConfig
+	Search SearchMetricsConfig
 }
 
 type GrpcMetricsConfig struct {
@@ -87,6 +88,12 @@ type GrpcMetricsConfig struct {
 }
 
 type FdbMetricsConfig struct {
+	Enabled      bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Counters     bool `mapstructure:"counters" yaml:"counters" json:"counters"`
+	ResponseTime bool `mapstructure:"response_time" yaml:"response_time" json:"response_time"`
+}
+
+type SearchMetricsConfig struct {
 	Enabled      bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 	Counters     bool `mapstructure:"counters" yaml:"counters" json:"counters"`
 	ResponseTime bool `mapstructure:"response_time" yaml:"response_time" json:"response_time"`
@@ -140,6 +147,11 @@ var DefaultConfig = Config{
 			ResponseTime: true,
 		},
 		Fdb: FdbMetricsConfig{
+			Enabled:      true,
+			Counters:     true,
+			ResponseTime: true,
+		},
+		Search: SearchMetricsConfig{
 			Enabled:      true,
 			Counters:     true,
 			ResponseTime: true,

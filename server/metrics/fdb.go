@@ -16,8 +16,6 @@ package metrics
 
 import (
 	"context"
-	"github.com/tigrisdata/tigris/server/request"
-	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/uber-go/tally"
 )
 
@@ -55,16 +53,6 @@ func getFdbReqSpecificErrorTags(reqMethodName string, code string) map[string]st
 		"error_code":    code,
 		"tigris_tenant": DefaultReportedTigrisTenant,
 	}
-}
-
-func addTigrisTenantToTags(ctx context.Context, tags map[string]string) map[string]string {
-	namespace, err := request.GetNamespace(ctx)
-	if ulog.E(err) {
-		tags["tigris_tenant"] = DefaultReportedTigrisTenant
-	} else {
-		tags["tigris_tenant"] = namespace
-	}
-	return tags
 }
 
 func GetFdbTags(ctx context.Context, reqMethodName string) map[string]string {
