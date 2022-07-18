@@ -26,10 +26,6 @@ import (
 	promreporter "github.com/uber-go/tally/prometheus"
 )
 
-const (
-	DefaultReportedTigrisTenant string = "unknown"
-)
-
 var (
 	root     tally.Scope
 	Reporter promreporter.Reporter
@@ -40,6 +36,8 @@ var (
 	RequestsRespTime tally.Scope
 	// Fdb related metric scopes
 	FdbMetrics tally.Scope
+	// Search related metrics scopes
+	SearchMetrics tally.Scope
 )
 
 func GetGlobalTags() map[string]string {
@@ -70,6 +68,11 @@ func InitializeMetrics() io.Closer {
 	if config.DefaultConfig.Metrics.Fdb.Enabled {
 		FdbMetrics = root.SubScope("fdb")
 		InitializeFdbScopes()
+	}
+	// Search level metrics
+	if config.DefaultConfig.Metrics.Search.Enabled {
+		SearchMetrics = root.SubScope("search")
+		InitializeSearchScopes()
 	}
 	return closer
 }
