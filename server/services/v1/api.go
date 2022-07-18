@@ -25,6 +25,7 @@ import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/server/cdc"
+	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/transaction"
@@ -399,6 +400,9 @@ func (s *apiService) GetInfo(_ context.Context, _ *api.GetInfoRequest) (*api.Get
 }
 
 func (s *apiService) Events(r *api.EventsRequest, stream api.Tigris_EventsServer) error {
+	if !config.DefaultConfig.Cdc.Enabled {
+		return api.Errorf(api.Code_METHOD_NOT_ALLOWED, "change streams is disabled for this collection")
+	}
 	publisher := s.cdcMgr.GetPublisher(r.GetDb())
 	streamer, err := publisher.NewStreamer(s.kvStore)
 	if err != nil {
