@@ -427,6 +427,13 @@ func (x *SearchResponse) MarshalJSON() ([]byte, error) {
 		Facets: x.Facets,
 		Meta:   x.Meta,
 	}
+
+	if resp.Hits == nil {
+		resp.Hits = make([]*SearchHit, 0)
+	}
+	if resp.Facets == nil {
+		resp.Facets = make(map[string]*SearchFacet)
+	}
 	return json.Marshal(resp)
 }
 
@@ -461,6 +468,9 @@ func (x *SearchFacet) MarshalJSON() ([]byte, error) {
 	}{
 		Counts: x.Counts,
 		Stats:  x.Stats,
+	}
+	if resp.Counts == nil {
+		resp.Counts = make([]*FacetCount, 0)
 	}
 	return json.Marshal(resp)
 }
