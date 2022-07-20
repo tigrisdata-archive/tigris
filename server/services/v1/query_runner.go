@@ -17,6 +17,7 @@ package v1
 import (
 	"bytes"
 	"context"
+	"math"
 
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
@@ -539,6 +540,7 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	if pageSize == 0 {
 		pageSize = defaultPerPage
 	}
+	var totalPages *int32
 
 	searchQ := qsearch.NewBuilder().
 		Query(runner.req.Q).
@@ -580,11 +582,14 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		}
 
 		resp.Facets = rowReader.getFacets()
-		ps := int64(pageSize)
-		totalPages := int32(rowReader.getTotalFound()/ps) + 1
+		if totalPages == nil {
+			tp := int32(math.Ceil(float64(rowReader.getTotalFound()) / float64(pageSize)))
+			totalPages = &tp
+		}
+
 		resp.Meta = &api.SearchMetadata{
 			Found:      rowReader.getTotalFound(),
-			TotalPages: totalPages,
+			TotalPages: *totalPages,
 			Page: &api.Page{
 				Current: pageNo,
 				Size:    int32(searchQ.PageSize),
