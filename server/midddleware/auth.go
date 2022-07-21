@@ -115,7 +115,8 @@ func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config
 
 	validatedToken, err := jwtValidator.ValidateToken(ctx, tkn)
 	if err != nil {
-		return ctx, api.Errorf(api.Code_UNAUTHENTICATED, err.Error())
+		log.Warn().Err(err).Msg("Failed to validate access token")
+		return ctx, api.Errorf(api.Code_UNAUTHENTICATED, "Failed to validate access token")
 	}
 
 	if validatedClaims, ok := validatedToken.(*validator.ValidatedClaims); ok {
