@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/tigrisdata/tigris/server/config"
 	"reflect"
 	"sync"
 
@@ -653,9 +654,12 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 	// So failure of the transaction won't impact the consistency of the cache
 	collection := schema.NewDefaultCollection(schFactory.Name, collectionId, baseSchemaVersion, schFactory.Fields, schFactory.Indexes, schFactory.Schema, tenant.getSearchCollName(database.name, schFactory.Name))
 	database.collections[schFactory.Name] = NewCollectionHolder(collectionId, schFactory.Name, collection, idxNameToId)
-	if err := searchStore.CreateCollection(ctx, collection.Search); err != nil {
-		if err != search.ErrDuplicateEntity {
-			return err
+
+	if config.DefaultConfig.Search.WriteEnabled {
+		if err := searchStore.CreateCollection(ctx, collection.Search); err != nil {
+			if err != search.ErrDuplicateEntity {
+				return err
+			}
 		}
 	}
 
@@ -755,9 +759,11 @@ func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db 
 		return err
 	}
 
-	if err := searchStore.DropCollection(ctx, cHolder.collection.SearchCollectionName()); err != nil {
-		if err != search.ErrNotFound {
-			return err
+	if config.DefaultConfig.Search.WriteEnabled {
+		if err := searchStore.DropCollection(ctx, cHolder.collection.SearchCollectionName()); err != nil {
+			if err != search.ErrNotFound {
+				return err
+			}
 		}
 	}
 
