@@ -536,6 +536,11 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, ctx, err
 	}
 
+	fieldSelection, err := runner.getFieldSelection(collection.GetFields())
+	if err != nil {
+		return nil, ctx, err
+	}
+
 	pageSize := int(runner.req.PageSize)
 	if pageSize == 0 {
 		pageSize = defaultPerPage
@@ -548,6 +553,7 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		Facets(facets).
 		PageSize(pageSize).
 		Filter(wrappedF).
+		ReadFields(fieldSelection).
 		Build()
 
 	var rowReader *SearchRowReader
@@ -665,7 +671,6 @@ func (runner *SearchQueryRunner) getFacetFields(collFields []*schema.Field) (qse
 			}
 			found = true
 			break
-
 		}
 		if !found {
 			return qsearch.Facets{}, api.Errorf(api.Code_INVALID_ARGUMENT, "`%s` is not a schema field", ff.Name)
@@ -673,6 +678,43 @@ func (runner *SearchQueryRunner) getFacetFields(collFields []*schema.Field) (qse
 	}
 
 	return facets, nil
+}
+
+func (runner *SearchQueryRunner) getFieldSelection(collFields []*schema.Field) (*read.FieldFactory, error) {
+	var selectionFields []string
+
+	// Only one of include/exclude. Honor inclusion over exclusion
+	if len(runner.req.IncludeFields) > 0 {
+		selectionFields = runner.req.IncludeFields
+	} else if len(runner.req.ExcludeFields) > 0 {
+		selectionFields = runner.req.ExcludeFields
+	} else {
+		return nil, nil
+	}
+
+	factory := &read.FieldFactory{
+		Include: map[string]read.Field{},
+		Exclude: map[string]read.Field{},
+	}
+
+	for _, sf := range selectionFields {
+		found := false
+		for _, cf := range collFields {
+			if sf == cf.FieldName {
+				found = true
+			}
+		}
+		if !found {
+			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "`%s` is not a schema field", sf)
+		}
+
+		factory.AddField(&read.SimpleField{
+			Name: sf,
+			Incl: len(runner.req.IncludeFields) > 0,
+		})
+	}
+
+	return factory, nil
 }
 
 type CollectionQueryRunner struct {

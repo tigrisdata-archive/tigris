@@ -16,6 +16,7 @@ package search
 
 import (
 	"github.com/tigrisdata/tigris/query/filter"
+	"github.com/tigrisdata/tigris/query/read"
 )
 
 const (
@@ -23,11 +24,12 @@ const (
 )
 
 type Query struct {
-	Q        string
-	Fields   []string
-	Facets   Facets
-	PageSize int
-	WrappedF *filter.WrappedFilter
+	Q            string
+	SearchFields []string
+	Facets       Facets
+	PageSize     int
+	WrappedF     *filter.WrappedFilter
+	ReadFields   *read.FieldFactory
 }
 
 func (q *Query) ToSearchFacetSize() int {
@@ -63,7 +65,7 @@ func (q *Query) ToSearchFacets() string {
 
 func (q *Query) ToSearchFields() string {
 	var fields string
-	for i, f := range q.Fields {
+	for i, f := range q.SearchFields {
 		if i != 0 {
 			fields += ","
 		}
@@ -104,7 +106,12 @@ func (b *Builder) Facets(facets Facets) *Builder {
 }
 
 func (b *Builder) SearchFields(f []string) *Builder {
-	b.query.Fields = f
+	b.query.SearchFields = f
+	return b
+}
+
+func (b *Builder) ReadFields(f *read.FieldFactory) *Builder {
+	b.query.ReadFields = f
 	return b
 }
 

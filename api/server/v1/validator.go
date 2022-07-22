@@ -103,6 +103,10 @@ func (x *SearchRequest) Validate() error {
 		return err
 	}
 
+	if len(x.IncludeFields) > 0 && len(x.ExcludeFields) > 0 {
+		return Errorf(Code_INVALID_ARGUMENT, "Cannot use both `include_fields` and `exclude_fields` together")
+	}
+
 	if err := isValidPaginationParam("page", int(x.Page)); err != nil {
 		return err
 	}
