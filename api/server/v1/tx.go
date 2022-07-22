@@ -18,80 +18,41 @@ import (
 	"context"
 
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/proto"
+)
+
+var (
+	methodPrefix             = "/tigrisdata.v1.Tigris/"
+	insert                   = methodPrefix + "Insert"
+	replace                  = methodPrefix + "Replace"
+	update                   = methodPrefix + "Update"
+	delete                   = methodPrefix + "Delete"
+	read                     = methodPrefix + "Read"
+	commitTransaction        = methodPrefix + "CommitTransaction"
+	rollbackTransaction      = methodPrefix + "RollbackTransaction"
+	dropCollection           = methodPrefix + "DropCollection"
+	listCollection           = methodPrefix + "ListCollections"
+	createOrUpdateCollection = methodPrefix + "CreateOrUpdateCollection"
 )
 
 func IsTxSupported(ctx context.Context) bool {
 	m, _ := grpc.Method(ctx)
 	switch m {
-	case "Insert", "Replace", "Update", "Delete", "Read",
-		"CreateOrUpdateCollection", "DropCollection", "ListCollections",
-		"CommitTransaction", "RollbackTransaction":
+	case insert, replace, update, delete, read, commitTransaction, rollbackTransaction,
+		dropCollection, listCollection, createOrUpdateCollection:
 		return true
 	default:
 		return false
 	}
 }
 
-func GetTransaction(ctx context.Context, req proto.Message) *TransactionCtx {
-	tx := &TransactionCtx{
+func GetTransaction(ctx context.Context) *TransactionCtx {
+	origin := GetHeader(ctx, HeaderTxOrigin)
+	if len(origin) == 0 {
+		return nil
+	}
+
+	return &TransactionCtx{
 		Id:     GetHeader(ctx, HeaderTxID),
-		Origin: GetHeader(ctx, HeaderTxOrigin),
+		Origin: origin,
 	}
-
-	if tx.Id != "" {
-		return tx
-	}
-
-	return GetTransactionLegacy(req)
-}
-
-func GetTransactionLegacy(req proto.Message) *TransactionCtx {
-	switch r := req.(type) {
-	case *InsertRequest:
-		if r.GetOptions() == nil || r.GetOptions().GetWriteOptions() == nil {
-			return nil
-		}
-		return r.GetOptions().GetWriteOptions().GetTxCtx()
-	case *ReplaceRequest:
-		if r.GetOptions() == nil || r.GetOptions().GetWriteOptions() == nil {
-			return nil
-		}
-		return r.GetOptions().GetWriteOptions().GetTxCtx()
-	case *UpdateRequest:
-		if r.GetOptions() == nil || r.GetOptions().GetWriteOptions() == nil {
-			return nil
-		}
-		return r.GetOptions().GetWriteOptions().GetTxCtx()
-	case *DeleteRequest:
-		if r.GetOptions() == nil || r.GetOptions().GetWriteOptions() == nil {
-			return nil
-		}
-		return r.GetOptions().GetWriteOptions().GetTxCtx()
-	case *ReadRequest:
-		if r.GetOptions() == nil {
-			return nil
-		}
-		return r.GetOptions().GetTxCtx()
-	case *CreateOrUpdateCollectionRequest:
-		if r.GetOptions() == nil || r.GetOptions().GetTxCtx() == nil {
-			return nil
-		}
-		return r.GetOptions().GetTxCtx()
-	case *DropCollectionRequest:
-		if r.GetOptions() == nil || r.GetOptions().GetTxCtx() == nil {
-			return nil
-		}
-		return r.GetOptions().GetTxCtx()
-	case *ListCollectionsRequest:
-		if r.GetOptions() == nil || r.GetOptions().GetTxCtx() == nil {
-			return nil
-		}
-		return r.GetOptions().GetTxCtx()
-	case *CommitTransactionRequest:
-		return r.GetTxCtx()
-	case *RollbackTransactionRequest:
-		return r.GetTxCtx()
-	}
-	return nil
 }

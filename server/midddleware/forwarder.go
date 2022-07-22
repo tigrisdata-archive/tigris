@@ -80,7 +80,7 @@ func getClient(ctx context.Context, origin string) (*grpc.ClientConn, error) {
 }
 
 func proxyDirector(ctx context.Context, method string) (context.Context, *grpc.ClientConn, proto.Message, proto.Message, error) {
-	client, err := getClient(ctx, api.GetTransaction(ctx, nil).GetOrigin())
+	client, err := getClient(ctx, api.GetTransaction(ctx).GetOrigin())
 
 	req, resp := requestToResponse(method)
 	md, _ := metadata.FromIncomingContext(ctx)
@@ -90,7 +90,7 @@ func proxyDirector(ctx context.Context, method string) (context.Context, *grpc.C
 
 func forwarderStreamServerInterceptor() grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		txCtx := api.GetTransaction(stream.Context(), nil)
+		txCtx := api.GetTransaction(stream.Context())
 
 		if txCtx != nil && txCtx.GetOrigin() != types.MyOrigin {
 			err := proxyHandler(srv, stream)
@@ -102,7 +102,7 @@ func forwarderStreamServerInterceptor() grpc.StreamServerInterceptor {
 	}
 }
 
-func forwardRequest(ctx context.Context, txCtx *api.TransactionCtx, method string, req proto.Message) (interface{}, error) {
+func forwardRequest(ctx context.Context, method string, req proto.Message) (interface{}, error) {
 	oCtx, client, _, resp, err := proxyDirector(ctx, method)
 	if err != nil {
 		return nil, err
@@ -117,10 +117,10 @@ func forwardRequest(ctx context.Context, txCtx *api.TransactionCtx, method strin
 
 func forwarderUnaryServerInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (iface interface{}, err error) {
-		txCtx := api.GetTransaction(ctx, req.(proto.Message))
+		txCtx := api.GetTransaction(ctx)
 
 		if txCtx != nil && txCtx.GetOrigin() != types.MyOrigin {
-			iface, err := forwardRequest(ctx, txCtx, info.FullMethod, req.(proto.Message))
+			iface, err := forwardRequest(ctx, info.FullMethod, req.(proto.Message))
 			log.Err(err).Str("method", info.FullMethod).Msg("forwarded request")
 			return iface, err
 		}

@@ -138,8 +138,8 @@ func (s *apiService) BeginTransaction(ctx context.Context, _ *api.BeginTransacti
 	}, nil
 }
 
-func (s *apiService) CommitTransaction(ctx context.Context, r *api.CommitTransactionRequest) (*api.CommitTransactionResponse, error) {
-	txCtx := api.GetTransaction(ctx, r)
+func (s *apiService) CommitTransaction(ctx context.Context, _ *api.CommitTransactionRequest) (*api.CommitTransactionResponse, error) {
+	txCtx := api.GetTransaction(ctx)
 	session := s.sessions.Get(txCtx.GetId())
 	if session == nil {
 		return nil, api.Errorf(api.Code_NOT_FOUND, "session not found")
@@ -154,8 +154,8 @@ func (s *apiService) CommitTransaction(ctx context.Context, r *api.CommitTransac
 	return &api.CommitTransactionResponse{}, nil
 }
 
-func (s *apiService) RollbackTransaction(ctx context.Context, r *api.RollbackTransactionRequest) (*api.RollbackTransactionResponse, error) {
-	txCtx := api.GetTransaction(ctx, r)
+func (s *apiService) RollbackTransaction(ctx context.Context, _ *api.RollbackTransactionRequest) (*api.RollbackTransactionResponse, error) {
+	txCtx := api.GetTransaction(ctx)
 	session := s.sessions.Get(txCtx.GetId())
 	if session == nil {
 		return nil, api.Errorf(api.Code_NOT_FOUND, "session not found")
@@ -171,7 +171,7 @@ func (s *apiService) RollbackTransaction(ctx context.Context, r *api.RollbackTra
 // Operations done individually not in actual batch
 func (s *apiService) Insert(ctx context.Context, r *api.InsertRequest) (*api.InsertResponse, error) {
 	resp, err := s.sessions.Execute(ctx, &ReqOptions{
-		txCtx:       api.GetTransaction(ctx, r),
+		txCtx:       api.GetTransaction(ctx),
 		queryRunner: s.runnerFactory.GetInsertQueryRunner(r),
 	})
 	if err != nil {
@@ -189,7 +189,7 @@ func (s *apiService) Insert(ctx context.Context, r *api.InsertRequest) (*api.Ins
 
 func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.ReplaceResponse, error) {
 	resp, err := s.sessions.Execute(ctx, &ReqOptions{
-		txCtx:       api.GetTransaction(ctx, r),
+		txCtx:       api.GetTransaction(ctx),
 		queryRunner: s.runnerFactory.GetReplaceQueryRunner(r),
 	})
 	if err != nil {
@@ -207,7 +207,7 @@ func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.R
 
 func (s *apiService) Update(ctx context.Context, r *api.UpdateRequest) (*api.UpdateResponse, error) {
 	resp, err := s.sessions.Execute(ctx, &ReqOptions{
-		txCtx:       api.GetTransaction(ctx, r),
+		txCtx:       api.GetTransaction(ctx),
 		queryRunner: s.runnerFactory.GetUpdateQueryRunner(r),
 	})
 	if err != nil {
@@ -225,7 +225,7 @@ func (s *apiService) Update(ctx context.Context, r *api.UpdateRequest) (*api.Upd
 
 func (s *apiService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.DeleteResponse, error) {
 	resp, err := s.sessions.Execute(ctx, &ReqOptions{
-		txCtx:       api.GetTransaction(ctx, r),
+		txCtx:       api.GetTransaction(ctx),
 		queryRunner: s.runnerFactory.GetDeleteQueryRunner(r),
 	})
 	if err != nil {
@@ -242,7 +242,7 @@ func (s *apiService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.Del
 
 func (s *apiService) Read(r *api.ReadRequest, stream api.Tigris_ReadServer) error {
 	_, err := s.sessions.Execute(stream.Context(), &ReqOptions{
-		txCtx:       api.GetTransaction(stream.Context(), r),
+		txCtx:       api.GetTransaction(stream.Context()),
 		queryRunner: s.runnerFactory.GetStreamingQueryRunner(r, stream),
 	})
 	if err != nil {
@@ -254,7 +254,7 @@ func (s *apiService) Read(r *api.ReadRequest, stream api.Tigris_ReadServer) erro
 
 func (s *apiService) Search(r *api.SearchRequest, stream api.Tigris_SearchServer) error {
 	_, err := s.sessions.Execute(stream.Context(), &ReqOptions{
-		txCtx:       api.GetTransaction(stream.Context(), r),
+		txCtx:       api.GetTransaction(stream.Context()),
 		queryRunner: s.runnerFactory.GetSearchQueryRunner(r, stream),
 	})
 	if err != nil {
@@ -269,7 +269,7 @@ func (s *apiService) CreateOrUpdateCollection(ctx context.Context, r *api.Create
 	runner.SetCreateOrUpdateCollectionReq(r)
 
 	resp, err := s.sessions.Execute(ctx, &ReqOptions{
-		txCtx:          api.GetTransaction(ctx, r),
+		txCtx:          api.GetTransaction(ctx),
 		queryRunner:    runner,
 		metadataChange: true,
 	})
@@ -288,7 +288,7 @@ func (s *apiService) DropCollection(ctx context.Context, r *api.DropCollectionRe
 	runner.SetDropCollectionReq(r)
 
 	resp, err := s.sessions.Execute(ctx, &ReqOptions{
-		txCtx:          api.GetTransaction(ctx, r),
+		txCtx:          api.GetTransaction(ctx),
 		queryRunner:    runner,
 		metadataChange: true,
 	})
@@ -307,7 +307,7 @@ func (s *apiService) ListCollections(ctx context.Context, r *api.ListCollections
 	runner.SetListCollectionReq(r)
 
 	resp, err := s.sessions.Execute(ctx, &ReqOptions{
-		txCtx:       api.GetTransaction(ctx, r),
+		txCtx:       api.GetTransaction(ctx),
 		queryRunner: runner,
 	})
 	if err != nil {

@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/tigrisdata/tigris/server/config"
 	"reflect"
 	"sync"
 
@@ -26,8 +25,10 @@ import (
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata/encoding"
 	"github.com/tigrisdata/tigris/server/transaction"
+	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
@@ -105,6 +106,7 @@ type TenantManager struct {
 
 	encoder        *encoding.DictionaryEncoder
 	schemaStore    *encoding.SchemaSubspace
+	kvStore        kv.KeyValueStore
 	tenants        map[string]*Tenant
 	idToTenantMap  map[uint32]string
 	version        Version
@@ -112,13 +114,14 @@ type TenantManager struct {
 	mdNameRegistry encoding.MDNameRegistry
 }
 
-func NewTenantManager() *TenantManager {
+func NewTenantManager(kvStore kv.KeyValueStore) *TenantManager {
 	mdNameRegistry := &encoding.DefaultMDNameRegistry{}
-	return newTenantManager(mdNameRegistry)
+	return newTenantManager(kvStore, mdNameRegistry)
 }
 
-func newTenantManager(mdNameRegistry encoding.MDNameRegistry) *TenantManager {
+func newTenantManager(kvStore kv.KeyValueStore, mdNameRegistry encoding.MDNameRegistry) *TenantManager {
 	return &TenantManager{
+		kvStore:        kvStore,
 		encoder:        encoding.NewDictionaryEncoder(mdNameRegistry),
 		schemaStore:    encoding.NewSchemaStore(mdNameRegistry),
 		tenants:        make(map[string]*Tenant),
@@ -249,7 +252,7 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string, txM
 	}
 
 	namespace := NewTenantNamespace(namespaceName, id)
-	tenant = NewTenant(namespace, m.encoder, m.schemaStore, m.versionH, currentVersion)
+	tenant = NewTenant(namespace, m.kvStore, m.encoder, m.schemaStore, m.versionH, currentVersion)
 	if err = tenant.reload(ctx, tx, currentVersion); err != nil {
 		return nil, err
 	}
@@ -285,7 +288,7 @@ func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transa
 			return nil, err
 		}
 
-		tenant := NewTenant(namespace, m.encoder, m.schemaStore, m.versionH, currentVersion)
+		tenant := NewTenant(namespace, m.kvStore, m.encoder, m.schemaStore, m.versionH, currentVersion)
 		tenant.Lock()
 		err = tenant.reload(ctx, tx, currentVersion)
 		tenant.Unlock()
@@ -303,7 +306,7 @@ func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transa
 		return nil, err
 	}
 
-	return NewTenant(namespace, m.encoder, m.schemaStore, m.versionH, nil), nil
+	return NewTenant(namespace, m.kvStore, m.encoder, m.schemaStore, m.versionH, nil), nil
 }
 
 // GetTableNameFromId returns tenant name, database name, collection name corresponding to their encoded ids.
@@ -369,7 +372,7 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVe
 
 	for namespace, id := range namespaces {
 		if _, ok := m.tenants[namespace]; !ok {
-			m.tenants[namespace] = NewTenant(NewTenantNamespace(namespace, id), m.encoder, m.schemaStore, m.versionH, currentVersion)
+			m.tenants[namespace] = NewTenant(NewTenantNamespace(namespace, id), m.kvStore, m.encoder, m.schemaStore, m.versionH, currentVersion)
 			m.idToTenantMap[id] = namespace
 		}
 	}
@@ -391,6 +394,7 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVe
 type Tenant struct {
 	sync.RWMutex
 
+	kvStore         kv.KeyValueStore
 	encoder         *encoding.DictionaryEncoder
 	schemaStore     *encoding.SchemaSubspace
 	databases       map[string]*Database
@@ -400,8 +404,9 @@ type Tenant struct {
 	versionH        *VersionHandler
 }
 
-func NewTenant(namespace Namespace, encoder *encoding.DictionaryEncoder, schemaStore *encoding.SchemaSubspace, versionH *VersionHandler, currentVersion Version) *Tenant {
+func NewTenant(namespace Namespace, kvStore kv.KeyValueStore, encoder *encoding.DictionaryEncoder, schemaStore *encoding.SchemaSubspace, versionH *VersionHandler, currentVersion Version) *Tenant {
 	return &Tenant{
+		kvStore:         kvStore,
 		namespace:       namespace,
 		encoder:         encoder,
 		schemaStore:     schemaStore,
@@ -446,7 +451,8 @@ func (tenant *Tenant) ReloadUsingOutsideVersion(ctx context.Context, tx transact
 
 	tenant.Lock()
 	defer tenant.Unlock()
-	if bytes.Equal(version, tenant.version) {
+	if bytes.Compare(version, tenant.version) < 1 {
+		// do not reload if version retrogressed
 		return nil
 	}
 
@@ -466,7 +472,8 @@ func (tenant *Tenant) ReloadUsingTxVersion(ctx context.Context, tx transaction.T
 
 	tenant.Lock()
 	defer tenant.Unlock()
-	if bytes.Equal(currentVersion, tenant.version) {
+	if bytes.Compare(currentVersion, tenant.version) < 1 {
+		// do not reload if version retrogressed
 		return nil
 	}
 	log.Debug().Str("tx_id", id).Msgf("reloading tenants")
@@ -477,7 +484,7 @@ func (tenant *Tenant) shouldReload(currentVersion Version) bool {
 	tenant.RLock()
 	defer tenant.RUnlock()
 
-	return !bytes.Equal(currentVersion, tenant.version)
+	return bytes.Compare(currentVersion, tenant.version) > 0
 }
 
 func (tenant *Tenant) GetNamespace() Namespace {
@@ -508,7 +515,7 @@ func (tenant *Tenant) CreateDatabase(ctx context.Context, tx transaction.Tx, dbN
 
 // DropDatabase is responsible for first dropping a dictionary encoding of the database and then adding a corresponding
 // dropped encoding in the table. Drop returns "false" if database doesn't exist so that caller can reason about.
-func (tenant *Tenant) DropDatabase(ctx context.Context, tx transaction.Tx, dbName string, searchStore search.Store) (bool, error) {
+func (tenant *Tenant) DropDatabase(ctx context.Context, tx transaction.Tx, dbName string, searchStore search.Store, rowKeyEncoder Encoder) (bool, error) {
 	tenant.Lock()
 	defer tenant.Unlock()
 
@@ -525,7 +532,7 @@ func (tenant *Tenant) DropDatabase(ctx context.Context, tx transaction.Tx, dbNam
 	}
 
 	for _, c := range db.collections {
-		if err := tenant.dropCollection(ctx, tx, db, c.collection.Name, searchStore); err != nil {
+		if err := tenant.dropCollection(ctx, tx, db, c.collection.Name, searchStore, rowKeyEncoder); err != nil {
 			return true, err
 		}
 	}
@@ -720,11 +727,11 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 
 // DropCollection is to drop a collection and its associated indexes. It removes the "created" entry from the encoding
 // subspace and adds a "dropped" entry for the same collection key.
-func (tenant *Tenant) DropCollection(ctx context.Context, tx transaction.Tx, db *Database, collectionName string, searchStore search.Store) error {
+func (tenant *Tenant) DropCollection(ctx context.Context, tx transaction.Tx, db *Database, collectionName string, searchStore search.Store, rowKeyEncoder Encoder) error {
 	tenant.Lock()
 	defer tenant.Unlock()
 
-	err := tenant.dropCollection(ctx, tx, db, collectionName, searchStore)
+	err := tenant.dropCollection(ctx, tx, db, collectionName, searchStore, rowKeyEncoder)
 	if err != nil {
 		return err
 	}
@@ -736,7 +743,7 @@ func (tenant *Tenant) DropCollection(ctx context.Context, tx transaction.Tx, db 
 	return err
 }
 
-func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db *Database, collectionName string, searchStore search.Store) error {
+func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db *Database, collectionName string, searchStore search.Store, rowKeyEncoder Encoder) error {
 	if db == nil {
 		return api.Errorf(api.Code_NOT_FOUND, "database missing")
 	}
@@ -757,6 +764,17 @@ func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db 
 	}
 	if err := tenant.schemaStore.Delete(ctx, tx, tenant.namespace.Id(), db.id, cHolder.id); err != nil {
 		return err
+	}
+
+	if config.DefaultConfig.Server.FDBDelete {
+		tableName, err := rowKeyEncoder.EncodeTableName(tenant.namespace, db, cHolder.collection)
+		if err != nil {
+			return err
+		}
+
+		if err = tenant.kvStore.DropTable(ctx, tableName); err != nil {
+			return err
+		}
 	}
 
 	if config.DefaultConfig.Search.WriteEnabled {

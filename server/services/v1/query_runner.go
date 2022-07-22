@@ -713,7 +713,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			tx.Context().StageDatabase(db)
 		}
 
-		if err = tenant.DropCollection(ctx, tx, db, runner.dropReq.GetCollection(), runner.searchStore); err != nil {
+		if err = tenant.DropCollection(ctx, tx, db, runner.dropReq.GetCollection(), runner.searchStore, runner.encoder); err != nil {
 			return nil, ctx, err
 		}
 
@@ -820,7 +820,7 @@ func (runner *DatabaseQueryRunner) SetDescribeDatabaseReq(describe *api.Describe
 
 func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	if runner.drop != nil {
-		exist, err := tenant.DropDatabase(ctx, tx, runner.drop.GetDb(), runner.searchStore)
+		exist, err := tenant.DropDatabase(ctx, tx, runner.drop.GetDb(), runner.searchStore, runner.encoder)
 		if err != nil {
 			return nil, ctx, err
 		}

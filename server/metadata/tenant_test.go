@@ -39,7 +39,7 @@ func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 
 	tm := transaction.NewManager(kvStore)
 	t.Run("create_tenant", func(t *testing.T) {
-		m := newTenantManager(&encoding.TestMDNameRegistry{
+		m := newTenantManager(kvStore, &encoding.TestMDNameRegistry{
 			ReserveSB:  "test_tenant_reserve",
 			EncodingSB: "test_tenant_encoding",
 			SchemaSB:   "test_tenant_schema",
@@ -62,7 +62,7 @@ func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 	})
 
 	t.Run("create_multiple_tenants", func(t *testing.T) {
-		m := newTenantManager(&encoding.TestMDNameRegistry{
+		m := newTenantManager(kvStore, &encoding.TestMDNameRegistry{
 			ReserveSB:  "test_tenant_reserve",
 			EncodingSB: "test_tenant_encoding",
 			SchemaSB:   "test_tenant_schema",
@@ -94,7 +94,7 @@ func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
 	t.Run("create_duplicate_tenant_error", func(t *testing.T) {
-		m := newTenantManager(&encoding.TestMDNameRegistry{
+		m := newTenantManager(kvStore, &encoding.TestMDNameRegistry{
 			ReserveSB:  "test_tenant_reserve",
 			EncodingSB: "test_tenant_encoding",
 			SchemaSB:   "test_tenant_schema",
@@ -113,7 +113,7 @@ func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
 	t.Run("create_duplicate_tenant_id_error", func(t *testing.T) {
-		m := newTenantManager(&encoding.TestMDNameRegistry{
+		m := newTenantManager(kvStore, &encoding.TestMDNameRegistry{
 			ReserveSB:  "test_tenant_reserve",
 			EncodingSB: "test_tenant_encoding",
 			SchemaSB:   "test_tenant_schema",
@@ -145,7 +145,7 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 
 	tm := transaction.NewManager(kvStore)
 	t.Run("create_tenant", func(t *testing.T) {
-		m := newTenantManager(&encoding.TestMDNameRegistry{
+		m := newTenantManager(kvStore, &encoding.TestMDNameRegistry{
 			ReserveSB:  "test_tenant_reserve",
 			EncodingSB: "test_tenant_encoding",
 			SchemaSB:   "test_tenant_schema",
@@ -166,7 +166,7 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
 	t.Run("create_multiple_tenants", func(t *testing.T) {
-		m := newTenantManager(&encoding.TestMDNameRegistry{
+		m := newTenantManager(kvStore, &encoding.TestMDNameRegistry{
 			ReserveSB:  "test_tenant_reserve",
 			EncodingSB: "test_tenant_encoding",
 			SchemaSB:   "test_tenant_schema",
@@ -194,7 +194,7 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
 	t.Run("create_duplicate_tenant_error", func(t *testing.T) {
-		m := newTenantManager(&encoding.TestMDNameRegistry{
+		m := newTenantManager(kvStore, &encoding.TestMDNameRegistry{
 			ReserveSB:  "test_tenant_reserve",
 			EncodingSB: "test_tenant_encoding",
 			SchemaSB:   "test_tenant_schema",
@@ -214,7 +214,7 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
 	t.Run("create_duplicate_tenant_id_error", func(t *testing.T) {
-		m := newTenantManager(&encoding.TestMDNameRegistry{
+		m := newTenantManager(kvStore, &encoding.TestMDNameRegistry{
 			ReserveSB:  "test_tenant_reserve",
 			EncodingSB: "test_tenant_encoding",
 			SchemaSB:   "test_tenant_schema",
@@ -243,7 +243,7 @@ func TestTenantManager_CreateDatabases(t *testing.T) {
 
 	tm := transaction.NewManager(kvStore)
 	t.Run("create_databases", func(t *testing.T) {
-		m := newTenantManager(&encoding.TestMDNameRegistry{
+		m := newTenantManager(kvStore, &encoding.TestMDNameRegistry{
 			ReserveSB:  "test_tenant_reserve",
 			EncodingSB: "test_tenant_encoding",
 			SchemaSB:   "test_tenant_schema",
@@ -290,7 +290,7 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 
 	tm := transaction.NewManager(kvStore)
 	t.Run("create_collections", func(t *testing.T) {
-		m := newTenantManager(&encoding.TestMDNameRegistry{
+		m := newTenantManager(kvStore, &encoding.TestMDNameRegistry{
 			ReserveSB:  "test_tenant_reserve",
 			EncodingSB: "test_tenant_encoding",
 			SchemaSB:   "test_tenant_schema",
@@ -373,7 +373,7 @@ func TestTenantManager_DropCollection(t *testing.T) {
 
 	tm := transaction.NewManager(kvStore)
 	t.Run("drop_collection", func(t *testing.T) {
-		m := newTenantManager(&encoding.TestMDNameRegistry{
+		m := newTenantManager(kvStore, &encoding.TestMDNameRegistry{
 			ReserveSB:  "test_tenant_reserve",
 			EncodingSB: "test_tenant_encoding",
 			SchemaSB:   "test_tenant_schema",
@@ -433,7 +433,7 @@ func TestTenantManager_DropCollection(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		require.NoError(t, tenant.DropCollection(ctx, tx, db2, "test_collection", &search.NoopStore{}))
+		require.NoError(t, tenant.DropCollection(ctx, tx, db2, "test_collection", &search.NoopStore{}, NewEncoder(m)))
 		require.NoError(t, tx.Commit(ctx))
 
 		_, err = tm.StartTx(ctx)

@@ -38,7 +38,7 @@ func adminExpect(s httpexpect.LoggerReporter) *httpexpect.Expect {
 
 func (s *AdminSuite) TestListNamespaces() {
 	s.Run("list_namespaces", func() {
-		_ = createNamespace(s.T(), "namespace-a", 2)
+		_ = createNamespace(s.T(), "namespace-b", 3)
 		resp := listNamespaces(s.T())
 		namespaces := resp.Status(http.StatusOK).
 			JSON().
@@ -49,7 +49,7 @@ func (s *AdminSuite) TestListNamespaces() {
 		var found = false
 		for _, namespace := range namespaces {
 			if converted, ok := namespace.(map[string]interface{}); ok {
-				if converted["name"] == "namespace-a" {
+				if converted["name"] == "namespace-b" {
 					found = true
 				}
 			}

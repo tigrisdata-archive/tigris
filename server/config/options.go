@@ -21,8 +21,9 @@ import (
 )
 
 type ServerConfig struct {
-	Host string
-	Port int16
+	Host      string
+	Port      int16
+	FDBDelete bool `mapstructure:"fdb_delete" yaml:"fdb_delete" json:"fdb_delete"`
 }
 
 type Config struct {
@@ -105,8 +106,9 @@ var DefaultConfig = Config{
 		SampleRate: 0.01,
 	},
 	Server: ServerConfig{
-		Host: "0.0.0.0",
-		Port: 8081,
+		Host:      "0.0.0.0",
+		Port:      8081,
+		FDBDelete: false,
 	},
 	Auth: AuthConfig{
 		IssuerURL:                "https://tigrisdata-dev.us.auth0.com/",
