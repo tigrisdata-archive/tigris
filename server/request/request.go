@@ -1,8 +1,11 @@
-package middleware
+package request
 
 import (
 	"context"
+	"strings"
 
+	"github.com/fullstorydev/grpchan/inprocgrpc"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 )
 
@@ -27,6 +30,8 @@ type NamespaceExtractor interface {
 type AccessTokenNamespaceExtractor struct {
 }
 
+var ErrNamespaceNotFound = api.Errorf(api.Code_NOT_FOUND, "namespace not found")
+
 func GetRequestMetadata(ctx context.Context) (*RequestMetadata, error) {
 	// read token
 	value := ctx.Value(RequestMetadataCtxKey{})
@@ -38,7 +43,7 @@ func GetRequestMetadata(ctx context.Context) (*RequestMetadata, error) {
 	return nil, api.Errorf(api.Code_NOT_FOUND, "RequestMetadata not found")
 }
 
-func setAccessToken(ctx context.Context, token *AccessToken) context.Context {
+func SetAccessToken(ctx context.Context, token *AccessToken) context.Context {
 	requestMetadata, _ := GetRequestMetadata(ctx)
 	if requestMetadata == nil {
 		requestMetadata = &RequestMetadata{}
@@ -50,7 +55,7 @@ func setAccessToken(ctx context.Context, token *AccessToken) context.Context {
 	}
 }
 
-func setNamespace(ctx context.Context, namespace string) context.Context {
+func SetNamespace(ctx context.Context, namespace string) context.Context {
 	requestMetadata, err := GetRequestMetadata(ctx)
 	var result = ctx
 	if err != nil && requestMetadata == nil {
@@ -60,6 +65,7 @@ func setNamespace(ctx context.Context, namespace string) context.Context {
 	requestMetadata.namespace = namespace
 	return result
 }
+
 func GetAccessToken(ctx context.Context) (*AccessToken, error) {
 	// read token
 	value := ctx.Value(RequestMetadataCtxKey{})
@@ -70,6 +76,7 @@ func GetAccessToken(ctx context.Context) (*AccessToken, error) {
 	}
 	return nil, api.Errorf(api.Code_NOT_FOUND, "Access token not found")
 }
+
 func GetNamespace(ctx context.Context) (string, error) {
 	// read token
 	value := ctx.Value(RequestMetadataCtxKey{})
@@ -78,14 +85,14 @@ func GetNamespace(ctx context.Context) (string, error) {
 			return requestMetadata.namespace, nil
 		}
 	}
-	return "", api.Errorf(api.Code_NOT_FOUND, "Namespace not found")
+	return "", ErrNamespaceNotFound
 }
 
 func (tokenNamespaceExtractor *AccessTokenNamespaceExtractor) Extract(ctx context.Context) (string, error) {
 	// read token
 	token, err := GetAccessToken(ctx)
 	if err != nil {
-		return "", err
+		return "unknown", nil
 	}
 
 	if token != nil {
@@ -95,4 +102,16 @@ func (tokenNamespaceExtractor *AccessTokenNamespaceExtractor) Extract(ctx contex
 		}
 	}
 	return "", api.Errorf(api.Code_INVALID_ARGUMENT, "Namespace does not exist")
+}
+
+func IsAdminApi(fullMethodName string) bool {
+	return strings.HasPrefix(fullMethodName, "/tigrisdata.admin.v1.Admin/")
+}
+
+func GetFullMethodName(ctx context.Context) (string, bool) {
+	clientCtx := inprocgrpc.ClientContext(ctx)
+	if clientCtx != nil {
+		return runtime.RPCMethod(clientCtx)
+	}
+	return "", false
 }

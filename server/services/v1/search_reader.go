@@ -183,6 +183,11 @@ func (p *pageReader) buildFacets(facets *[]tsApi.FacetCounts) {
 	if facets == nil {
 		return
 	}
+	// count of values to include in response
+	facetSizeRequested := map[string]int{}
+	for _, f := range p.query.Facets.Fields {
+		facetSizeRequested[f.Name] = f.Size
+	}
 
 	for _, f := range *facets {
 		var facet = &api.SearchFacet{
@@ -190,7 +195,10 @@ func (p *pageReader) buildFacets(facets *[]tsApi.FacetCounts) {
 		}
 
 		if f.Counts != nil {
-			for _, c := range *f.Counts {
+			for i, c := range *f.Counts {
+				if i >= facetSizeRequested[*f.FieldName] {
+					break
+				}
 				facet.Counts = append(facet.Counts, &api.FacetCount{
 					Count: int64(*c.Count),
 					Value: *c.Value,

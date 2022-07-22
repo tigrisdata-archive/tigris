@@ -19,8 +19,12 @@ import (
 	"strings"
 
 	"github.com/tigrisdata/tigris/server/config"
-	"github.com/uber-go/tally"
 	"google.golang.org/grpc"
+)
+
+const (
+	AdminServiceName       = "tigrisdata.admin.v1.Admin"
+	SystemTigrisTenantName = "system"
 )
 
 type RequestEndpointMetadata struct {
@@ -33,20 +37,38 @@ func newRequestEndpointMetadata(serviceName string, methodInfo grpc.MethodInfo) 
 }
 
 func (g *RequestEndpointMetadata) GetPreInitializedTags() map[string]string {
-	return map[string]string{
-		"method":       g.methodInfo.Name,
-		"grpc_service": g.serviceName,
-		"namespace":    "default_namespace",
+	if g.serviceName == AdminServiceName {
+		return map[string]string{
+			"method":        g.methodInfo.Name,
+			"grpc_service":  g.serviceName,
+			"tigris_tenant": SystemTigrisTenantName,
+		}
+	} else {
+		return map[string]string{
+			"method":        g.methodInfo.Name,
+			"grpc_service":  g.serviceName,
+			"tigris_tenant": DefaultReportedTigrisTenant,
+		}
 	}
 }
 
 func (g *RequestEndpointMetadata) GetSpecificErrorTags(source string, code string) map[string]string {
-	return map[string]string{
-		"method":       g.methodInfo.Name,
-		"grpc_service": g.serviceName,
-		"source":       source,
-		"code":         code,
-		"namespace":    "default_namespace",
+	if g.serviceName == AdminServiceName {
+		return map[string]string{
+			"method":        g.methodInfo.Name,
+			"grpc_service":  g.serviceName,
+			"source":        source,
+			"code":          code,
+			"tigris_tenant": SystemTigrisTenantName,
+		}
+	} else {
+		return map[string]string{
+			"method":        g.methodInfo.Name,
+			"grpc_service":  g.serviceName,
+			"source":        source,
+			"code":          code,
+			"tigris_tenant": DefaultReportedTigrisTenant,
+		}
 	}
 }
 
@@ -78,37 +100,6 @@ func GetGrpcEndPointMetadataFromFullMethod(fullMethod string, methodType string)
 func GetPreinitializedTagsFromFullMethod(fullMethod string, methodType string) map[string]string {
 	metaData := GetGrpcEndPointMetadataFromFullMethod(fullMethod, methodType)
 	return metaData.GetPreInitializedTags()
-}
-
-func InitServerRequestMetrics(svcName string, methodInfo grpc.MethodInfo) {
-	endPointMetadata := newRequestEndpointMetadata(svcName, methodInfo)
-	tags := endPointMetadata.GetPreInitializedTags()
-
-	// Counters with default tags
-	if config.DefaultConfig.Metrics.Grpc.Enabled && config.DefaultConfig.Metrics.Grpc.Counters {
-		// Counters for ok requests
-		Requests.Tagged(tags).Counter("ok")
-
-		// Counters for unknown errors
-		ErrorRequests.Tagged(tags).Counter("unknown")
-	}
-
-	// Specific error counters can't be initialized here because the tags should contain the error code.
-	// They are part of the ErrorRequests subscope with different tags. Those are initialized after the first
-	// occurrence of the specific error.
-
-	// Response time
-	if config.DefaultConfig.Metrics.Grpc.Enabled && config.DefaultConfig.Metrics.Grpc.ResponseTime {
-		RequestsRespTime.Tagged(tags).Histogram("histogram", tally.DefaultBuckets)
-	}
-}
-
-func InitRequestMetricsForServer(s *grpc.Server) {
-	for svcName, info := range s.GetServiceInfo() {
-		for _, method := range info.Methods {
-			InitServerRequestMetrics(svcName, method)
-		}
-	}
 }
 
 func InitializeRequestScopes() {

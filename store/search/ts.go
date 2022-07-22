@@ -18,18 +18,90 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-
 	jsoniter "github.com/json-iterator/go"
 	qsearch "github.com/tigrisdata/tigris/query/search"
+	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/metrics"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/typesense/typesense-go/typesense"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
+	"github.com/uber-go/tally"
+	"io"
+	"net/http"
 )
 
 type storeImpl struct {
 	client *typesense.Client
+}
+
+type storeImplWithMetrics struct {
+	s Store
+}
+
+func (m *storeImplWithMetrics) CreateCollection(ctx context.Context, schema *tsApi.CollectionSchema) (err error) {
+	m.measure(ctx, "CreateCollection", func() error {
+		err = m.s.CreateCollection(ctx, schema)
+		return err
+	})
+	return
+}
+
+func (m *storeImplWithMetrics) UpdateCollection(ctx context.Context, name string, schema *tsApi.CollectionUpdateSchema) (err error) {
+	m.measure(ctx, "UpdateCollection", func() error {
+		err = m.s.UpdateCollection(ctx, name, schema)
+		return err
+	})
+	return
+}
+
+func (m *storeImplWithMetrics) DropCollection(ctx context.Context, table string) (err error) {
+	m.measure(ctx, "DropCollection", func() error {
+		err = m.s.DropCollection(ctx, table)
+		return err
+	})
+	return
+}
+
+func (m *storeImplWithMetrics) IndexDocuments(ctx context.Context, table string, documents io.Reader, options IndexDocumentsOptions) (err error) {
+	m.measure(ctx, "IndexDocuments", func() error {
+		err = m.s.IndexDocuments(ctx, table, documents, options)
+		return err
+	})
+	return
+}
+
+func (m *storeImplWithMetrics) DeleteDocuments(ctx context.Context, table string, key string) (err error) {
+	m.measure(ctx, "DeleteDocuments", func() error {
+		err = m.s.DeleteDocuments(ctx, table, key)
+		return err
+	})
+	return
+}
+
+func (m *storeImplWithMetrics) Search(ctx context.Context, table string, query *qsearch.Query, pageNo int) (result []tsApi.SearchResult, err error) {
+	m.measure(ctx, "Search", func() error {
+		result, err = m.s.Search(ctx, table, query, pageNo)
+		return err
+	})
+	return
+}
+
+func (m *storeImplWithMetrics) measure(ctx context.Context, name string, f func() error) {
+	// Low level measurement wrapper that is called by the measure functions on the appropriate receiver
+	tags := metrics.GetSearchTags(ctx, name)
+	if config.DefaultConfig.Metrics.Search.ResponseTime {
+		metrics.SearchRequests.Tagged(tags).Histogram("histogram", tally.DefaultBuckets)
+		defer metrics.SearchRequests.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
+	}
+	err := f()
+	if err == nil {
+		// Request was ok
+		metrics.SearchRequests.Tagged(tags).Counter("ok").Inc(1)
+		return
+	}
+	if config.DefaultConfig.Metrics.Search.Counters {
+		metrics.SearchErrorRequests.Tagged(tags).Counter("unknown").Inc(1)
+	}
 }
 
 type IndexDocumentsOptions struct {

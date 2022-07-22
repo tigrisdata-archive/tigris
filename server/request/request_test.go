@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package middleware
+package request
 
 import (
 	"context"
@@ -56,9 +56,8 @@ func TestRequestMetadata(t *testing.T) {
 	t.Run("extraction of namespace name - failure", func(t *testing.T) {
 		ctx := context.TODO()
 		extractor := &AccessTokenNamespaceExtractor{}
-		namespaceName, err := extractor.Extract(ctx)
-		require.Equal(t, "", namespaceName)
-		require.Equal(t, api.Errorf(api.Code_NOT_FOUND, "Access token not found"), err)
+		namespaceName, _ := extractor.Extract(ctx)
+		require.Equal(t, "unknown", namespaceName)
 	})
 
 	t.Run("extraction of token - failure", func(t *testing.T) {
@@ -66,6 +65,13 @@ func TestRequestMetadata(t *testing.T) {
 		token, err := GetAccessToken(ctx)
 		require.Nil(t, token)
 		require.Equal(t, api.Errorf(api.Code_NOT_FOUND, "Access token not found"), err)
+	})
+
+	t.Run("isAdmin test", func(t *testing.T) {
+		require.True(t, IsAdminApi("/tigrisdata.admin.v1.Admin/CreateNamespace"))
+		require.True(t, IsAdminApi("/tigrisdata.admin.v1.Admin/ListNamespaces"))
+		require.False(t, IsAdminApi("/.HealthAPI/Health"))
+		require.False(t, IsAdminApi("some-random"))
 	})
 
 }

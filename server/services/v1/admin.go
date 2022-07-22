@@ -23,9 +23,14 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/lib/set"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"google.golang.org/grpc"
+)
+
+var (
+	ReservedNamespaceNames = set.New(metadata.DefaultNamespaceName, "unknown")
 )
 
 const (
@@ -50,8 +55,8 @@ func newAdminService(tenantMgr *metadata.TenantManager, txMgr *transaction.Manag
 }
 
 func (a *adminService) CreateNamespace(ctx context.Context, req *api.CreateNamespaceRequest) (*api.CreateNamespaceResponse, error) {
-	if req.Name == metadata.DefaultNamespaceName {
-		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, metadata.DefaultNamespaceName+" is reserved name")
+	if ReservedNamespaceNames.Contains(req.Name) {
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, req.Name+" is reserved name")
 	}
 	namespace := metadata.NewTenantNamespace(req.Name, uint32(req.Id))
 	tx, err := a.txMgr.StartTx(ctx)

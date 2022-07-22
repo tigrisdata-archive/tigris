@@ -16,10 +16,10 @@ package metrics
 
 import (
 	"fmt"
-	"github.com/tigrisdata/tigris/server/config"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/tigrisdata/tigris/server/config"
 	"google.golang.org/grpc"
 )
 
@@ -58,15 +58,15 @@ func TestGRPCMetrics(t *testing.T) {
 	t.Run("Test GetPreinitializedTagsFromFullMethod", func(t *testing.T) {
 		unaryTags := unaryEndPointMetadata.GetPreInitializedTags()
 		assert.Equal(t, unaryTags, map[string]string{
-			"method":       unaryMethodInfo.Name,
-			"grpc_service": "tigrisdata.v1.Tigris",
-			"namespace":    "default_namespace",
+			"method":        unaryMethodInfo.Name,
+			"grpc_service":  "tigrisdata.v1.Tigris",
+			"tigris_tenant": DefaultReportedTigrisTenant,
 		})
 		streamTags := streamingEndpointMetadata.GetPreInitializedTags()
 		assert.Equal(t, streamTags, map[string]string{
-			"method":       streamingMethodInfo.Name,
-			"grpc_service": "tigrisdata.v1.Tigris",
-			"namespace":    "default_namespace",
+			"method":        streamingMethodInfo.Name,
+			"grpc_service":  "tigrisdata.v1.Tigris",
+			"tigris_tenant": DefaultReportedTigrisTenant,
 		})
 	})
 
@@ -109,16 +109,5 @@ func TestGRPCMetrics(t *testing.T) {
 				assert.Equal(t, tagValue, "tigrisdata.v1.Tigris")
 			}
 		}
-	})
-
-	t.Run("Test metrics initialization", func(t *testing.T) {
-		InitServerRequestMetrics(svcName, unaryMethodInfo)
-		InitServerRequestMetrics(svcName, streamingMethodInfo)
-	})
-
-	t.Run("Test specific error tags", func(t *testing.T) {
-		error_tags := unaryEndPointMetadata.GetSpecificErrorTags("test_source", "test_code")
-		assert.Equal(t, error_tags["source"], "test_source")
-		assert.Equal(t, error_tags["code"], "test_code")
 	})
 }

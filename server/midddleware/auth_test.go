@@ -39,6 +39,7 @@ func TestAuth(t *testing.T) {
 			JWKSCacheTimeout:         0,
 			LogOnly:                  false,
 			EnableNamespaceIsolation: false,
+			AdminNamespaces:          []string{"tigris-admin"},
 		},
 		FoundationDB: config.FoundationDBConfig{},
 	}
@@ -66,14 +67,19 @@ func TestAuth(t *testing.T) {
 		incomingCtx := metadata.NewIncomingContext(context.TODO(), metadata.Pairs("authorization", "bearer somebadtoken"))
 		_, err := AuthFunction(incomingCtx, &validator.Validator{}, &enforcedAuthConfig)
 		require.NotNil(t, err)
-		require.Equal(t, err, api.Errorf(api.Code_UNAUTHENTICATED, "could not parse the token: square/go-jose: compact JWS format must have three parts"))
+		require.Equal(t, err, api.Errorf(api.Code_UNAUTHENTICATED, "Failed to validate access token"))
 	})
 
 	t.Run("enforcing mode: Bad token 2", func(t *testing.T) {
 		incomingCtx := metadata.NewIncomingContext(context.TODO(), metadata.Pairs("authorization", "bearer some.bad.token"))
 		_, err := AuthFunction(incomingCtx, &validator.Validator{}, &enforcedAuthConfig)
 		require.NotNil(t, err)
-		require.Contains(t, err.Error(), "could not parse the token: illegal base64 data")
+		require.Contains(t, err.Error(), "Failed to validate access token")
+	})
+
+	t.Run("isAdminNamespace", func(t *testing.T) {
+		require.False(t, isAdminNamespace("test-name", &enforcedAuthConfig))
+		require.True(t, isAdminNamespace("tigris-admin", &enforcedAuthConfig))
 	})
 }
 

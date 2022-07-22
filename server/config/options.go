@@ -21,8 +21,9 @@ import (
 )
 
 type ServerConfig struct {
-	Host string
-	Port int16
+	Host      string
+	Port      int16
+	FDBDelete bool `mapstructure:"fdb_delete" yaml:"fdb_delete" json:"fdb_delete"`
 }
 
 type Config struct {
@@ -38,15 +39,16 @@ type Config struct {
 }
 
 type AuthConfig struct {
-	IssuerURL                string
-	Audience                 string
-	JWKSCacheTimeout         time.Duration
-	LogOnly                  bool
-	EnableNamespaceIsolation bool
+	IssuerURL                string        `mapstructure:"issuer_url" yaml:"issuer_url" json:"issuer_url"`
+	Audience                 string        `mapstructure:"audience" yaml:"audience" json:"audience"`
+	JWKSCacheTimeout         time.Duration `mapstructure:"jwks_cache_timeout" yaml:"jwks_cache_timeout" json:"jwks_cache_timeout"`
+	LogOnly                  bool          `mapstructure:"log_only" yaml:"log_only" json:"log_only"`
+	EnableNamespaceIsolation bool          `mapstructure:"enable_namespace_isolation" yaml:"enable_namespace_isolation" json:"enable_namespace_isolation"`
+	AdminNamespaces          []string      `mapstructure:"admin_namespaces" yaml:"admin_namespaces" json:"admin_namespaces"`
 }
 
 type CdcConfig struct {
-	Enabled        bool
+	Enabled        bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 	StreamInterval time.Duration
 	StreamBatch    int
 	StreamBuffer   int
@@ -75,8 +77,9 @@ type MetricsConfig struct {
 	// Global switch
 	Enabled bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 	// Individual metric group configs
-	Grpc GrpcMetricsConfig
-	Fdb  FdbMetricsConfig
+	Grpc   GrpcMetricsConfig
+	Fdb    FdbMetricsConfig
+	Search SearchMetricsConfig
 }
 
 type GrpcMetricsConfig struct {
@@ -91,24 +94,32 @@ type FdbMetricsConfig struct {
 	ResponseTime bool `mapstructure:"response_time" yaml:"response_time" json:"response_time"`
 }
 
+type SearchMetricsConfig struct {
+	Enabled      bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Counters     bool `mapstructure:"counters" yaml:"counters" json:"counters"`
+	ResponseTime bool `mapstructure:"response_time" yaml:"response_time" json:"response_time"`
+}
+
 var DefaultConfig = Config{
 	Log: log.LogConfig{
 		Level:      "info",
 		SampleRate: 0.01,
 	},
 	Server: ServerConfig{
-		Host: "0.0.0.0",
-		Port: 8081,
+		Host:      "0.0.0.0",
+		Port:      8081,
+		FDBDelete: false,
 	},
 	Auth: AuthConfig{
 		IssuerURL:                "https://tigrisdata-dev.us.auth0.com/",
-		Audience:                 "https://tigris-db-dev-preview-test",
+		Audience:                 "https://tigris-api",
 		JWKSCacheTimeout:         5 * time.Minute,
 		LogOnly:                  true,
 		EnableNamespaceIsolation: false,
+		AdminNamespaces:          []string{"tigris-admin"},
 	},
 	Cdc: CdcConfig{
-		Enabled:        true,
+		Enabled:        false,
 		StreamInterval: 500 * time.Millisecond,
 		StreamBatch:    100,
 		StreamBuffer:   200,
@@ -142,6 +153,11 @@ var DefaultConfig = Config{
 			Counters:     true,
 			ResponseTime: true,
 		},
+		Search: SearchMetricsConfig{
+			Enabled:      true,
+			Counters:     true,
+			ResponseTime: true,
+		},
 	},
 }
 
@@ -151,9 +167,9 @@ type FoundationDBConfig struct {
 }
 
 type SearchConfig struct {
-	Host         string
-	Port         int16
+	Host         string `mapstructure:"host" json:"host" yaml:"host"`
+	Port         int16  `mapstructure:"port" json:"port" yaml:"port"`
 	AuthKey      string `mapstructure:"auth_key" json:"auth_key" yaml:"auth_key"`
-	ReadEnabled  bool
-	WriteEnabled bool
+	ReadEnabled  bool   `mapstructure:"read_enabled" yaml:"read_enabled" json:"read_enabled"`
+	WriteEnabled bool   `mapstructure:"write_enabled" yaml:"write_enabled" json:"write_enabled"`
 }

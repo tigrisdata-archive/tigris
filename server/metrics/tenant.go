@@ -12,25 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package middleware
+package metrics
 
 import (
 	"context"
-	"testing"
-
-	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/tigrisdata/tigris/server/request"
+	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
-func TestGrpcMetrics(t *testing.T) {
-	metrics.InitializeMetrics()
-	methodType := "unary"
-	fullMethodName := "/tigrisdata.v1.Tigris/TestMethod"
+const (
+	DefaultReportedTigrisTenant string = "unknown"
+)
 
-	ctx := context.Background()
-
-	t.Run("Test tigris server counters", func(t *testing.T) {
-		countUnknownErrorMessage(ctx, fullMethodName, methodType)
-		countOkMessage(ctx, fullMethodName, methodType)
-		countSpecificErrorMessage(ctx, fullMethodName, methodType, "test_source", "test_code")
-	})
+func addTigrisTenantToTags(ctx context.Context, tags map[string]string) map[string]string {
+	namespace, err := request.GetNamespace(ctx)
+	if ulog.E(err) {
+		tags["tigris_tenant"] = DefaultReportedTigrisTenant
+	} else {
+		tags["tigris_tenant"] = namespace
+	}
+	return tags
 }

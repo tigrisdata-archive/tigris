@@ -12,25 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package middleware
+package metrics
 
 import (
 	"context"
-	"testing"
-
-	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/uber-go/tally"
 )
 
-func TestGrpcMetrics(t *testing.T) {
-	metrics.InitializeMetrics()
-	methodType := "unary"
-	fullMethodName := "/tigrisdata.v1.Tigris/TestMethod"
+var (
+	SearchRequests      tally.Scope
+	SearchErrorRequests tally.Scope
+)
 
-	ctx := context.Background()
+func InitializeSearchScopes() {
+	SearchRequests = SearchMetrics.SubScope("requests")
+	SearchErrorRequests = SearchRequests.SubScope("error")
+}
 
-	t.Run("Test tigris server counters", func(t *testing.T) {
-		countUnknownErrorMessage(ctx, fullMethodName, methodType)
-		countOkMessage(ctx, fullMethodName, methodType)
-		countSpecificErrorMessage(ctx, fullMethodName, methodType, "test_source", "test_code")
-	})
+func GetSearchTags(ctx context.Context, reqMethodName string) map[string]string {
+	return addTigrisTenantToTags(ctx, getSearchReqTags(reqMethodName))
+}
+
+func getSearchReqTags(reqMethodName string) map[string]string {
+	return map[string]string{
+		"method":        reqMethodName,
+		"tigris_tenant": DefaultReportedTigrisTenant,
+	}
 }

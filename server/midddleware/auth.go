@@ -24,13 +24,17 @@ import (
 	"github.com/auth0/go-jwt-middleware/v2/validator"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/lib/set"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/request"
 )
 
 type TokenCtxkey struct{}
 
 var (
-	headerAuthorize = "authorization"
+	headerAuthorize           = "authorization"
+	UnknownNamespace          = "unknown"
+	BypassAuthForTheseMethods = set.New("/.HealthAPI/Health")
 )
 
 type Namespace struct {
@@ -42,8 +46,8 @@ type User struct {
 }
 
 type CustomClaim struct {
-	Namespace Namespace `json:"https://tigris-db-api/n"`
-	User      User      `json:"https://tigris-db-api/u"`
+	Namespace Namespace `json:"https://tigris/n"`
+	User      User      `json:"https://tigris/u"`
 }
 
 func (c CustomClaim) Validate(_ context.Context) error {
@@ -90,7 +94,6 @@ func GetJWTValidator(config *config.Config) *validator.Validator {
 	}
 	return jwtValidator
 }
-
 func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config *config.Config) (ctxResult context.Context, err error) {
 	defer func() {
 		if err != nil {
@@ -100,7 +103,11 @@ func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config
 			}
 		}
 	}()
-
+	// disable health check authn/z
+	fullMethodName, fullMethodNameFound := request.GetFullMethodName(ctx)
+	if fullMethodNameFound && BypassAuthForTheseMethods.Contains(fullMethodName) {
+		return ctx, nil
+	}
 	tkn, err := AuthFromMD(ctx, "bearer")
 	if err != nil {
 		return ctx, err
@@ -108,19 +115,47 @@ func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config
 
 	validatedToken, err := jwtValidator.ValidateToken(ctx, tkn)
 	if err != nil {
-		return ctx, api.Errorf(api.Code_UNAUTHENTICATED, err.Error())
+		log.Warn().Err(err).Msg("Failed to validate access token")
+		return ctx, api.Errorf(api.Code_UNAUTHENTICATED, "Failed to validate access token")
 	}
 
 	if validatedClaims, ok := validatedToken.(*validator.ValidatedClaims); ok {
 		if customClaims, ok := validatedClaims.CustomClaims.(*CustomClaim); ok {
+			// if incoming namespace is empty, set it to unknown for observables and reject request
+			if customClaims.Namespace.Code == "" {
+				log.Warn().Msg("Valid token with empty namespace received")
+				ctx = request.SetNamespace(ctx, UnknownNamespace)
+				return ctx, api.Errorf(api.Code_UNAUTHENTICATED, "You are not authorized to perform this admin action")
+			}
+			isAdmin := fullMethodNameFound && request.IsAdminApi(fullMethodName)
+			if isAdmin {
+				// admin api being called, let's check if the user is of admin allowed namespaces
+				if !isAdminNamespace(customClaims.Namespace.Code, config) {
+					log.Warn().
+						Interface("AdminNamespaces", config.Auth.AdminNamespaces).
+						Str("IncomingNamespace", customClaims.Namespace.Code).
+						Msg("Valid token received for admin action - but not allowed to administer from this namespace")
+					return ctx, api.Errorf(api.Code_UNAUTHENTICATED, "You are not authorized to perform this admin action")
+				}
+			}
+
 			log.Debug().Msg("Valid token received")
-			token := &AccessToken{
+			token := &request.AccessToken{
 				Namespace: customClaims.Namespace.Code,
 				Sub:       validatedClaims.RegisteredClaims.Subject,
 			}
-			return setAccessToken(ctx, token), nil
+			return request.SetAccessToken(ctx, token), nil
 		}
 	}
 	// this should never happen.
 	return ctx, api.Errorf(api.Code_UNAUTHENTICATED, "You are not authorized to perform this action")
+}
+
+func isAdminNamespace(incomingNamespace string, config *config.Config) bool {
+	for _, allowedAdminNamespace := range config.Auth.AdminNamespaces {
+		if incomingNamespace == allowedAdminNamespace {
+			return true
+		}
+	}
+	return false
 }
