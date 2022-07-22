@@ -67,7 +67,7 @@ func main() {
 		log.Fatal().Err(err).Msg("error initializing search store")
 	}
 
-	tenantMgr := metadata.NewTenantManager()
+	tenantMgr := metadata.NewTenantManager(kvStore)
 	log.Info().Msg("initialized tenant manager")
 	txMgr := transaction.NewManager(kvStore)
 	log.Info().Msg("initialized transaction manager")
