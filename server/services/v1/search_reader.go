@@ -20,9 +20,11 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/query/filter"
+	"github.com/tigrisdata/tigris/query/read"
 	qsearch "github.com/tigrisdata/tigris/query/search"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/store/search"
+	ulog "github.com/tigrisdata/tigris/util/log"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
@@ -38,6 +40,7 @@ type page struct {
 	hits       *HitsResponse
 	wrappedF   *filter.WrappedFilter
 	collection *schema.DefaultCollection
+	readFields *read.FieldFactory
 }
 
 func newPage(collection *schema.DefaultCollection, query *qsearch.Query) *page {
@@ -47,6 +50,7 @@ func newPage(collection *schema.DefaultCollection, query *qsearch.Query) *page {
 		cap:        query.PageSize,
 		wrappedF:   query.WrappedF,
 		collection: collection,
+		readFields: query.ReadFields,
 	}
 }
 
@@ -89,9 +93,23 @@ func (p *page) readRow(row *Row) bool {
 			continue
 		}
 
-		// set the raw data now after marshaling it
-		if row.Data.RawData, p.err = jsoniter.Marshal(doc); p.err != nil {
+		var rawData []byte
+
+		// marshal the doc as bytes
+		rawData, p.err = jsoniter.Marshal(doc)
+		if p.err != nil {
 			return false
+		}
+
+		// apply field selection
+		if p.readFields != nil {
+			newValue, err := p.readFields.Apply(rawData)
+			if ulog.E(err) {
+				return false
+			}
+			row.Data.RawData = newValue
+		} else {
+			row.Data.RawData = rawData
 		}
 
 		return true

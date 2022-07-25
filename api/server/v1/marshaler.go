@@ -118,9 +118,14 @@ func (x *SearchRequest) UnmarshalJSON(data []byte) error {
 		case "sort":
 			// delaying the sort deserialization
 			x.Sort = value
-		case "fields":
-			// not decoding it here and let it decode during fields parsing
-			x.Fields = value
+		case "include_fields":
+			if err := jsoniter.Unmarshal(value, &x.IncludeFields); err != nil {
+				return err
+			}
+		case "exclude_fields":
+			if err := jsoniter.Unmarshal(value, &x.ExcludeFields); err != nil {
+				return err
+			}
 		case "page_size":
 			if err := jsoniter.Unmarshal(value, &x.PageSize); err != nil {
 				return err
