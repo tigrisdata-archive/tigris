@@ -98,6 +98,10 @@ func NewKeyValueStoreWithMetrics(cfg *config.FoundationDBConfig) (KeyValueStore,
 func measureLow(ctx context.Context, name string, f func() error) {
 	// Low level measurement wrapper that is called by the measure functions on the appropriate receiver
 	tags := metrics.GetFdbTags(ctx, name)
+	spanMeta := metrics.NewSpanMeta(metrics.KvTracingServiceName, name, "fdb_kv", tags)
+	var finishTracing func()
+	ctx, finishTracing = spanMeta.StartTracing(ctx, true)
+	defer finishTracing()
 	if config.DefaultConfig.Metrics.Fdb.ResponseTime {
 		metrics.FdbRequests.Tagged(tags).Histogram("histogram", tally.DefaultBuckets)
 		defer metrics.FdbRequests.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()

@@ -16,12 +16,9 @@ package metrics
 
 import (
 	"context"
+
 	"github.com/tigrisdata/tigris/server/request"
 	ulog "github.com/tigrisdata/tigris/util/log"
-)
-
-const (
-	DefaultReportedTigrisTenant string = "unknown"
 )
 
 func addTigrisTenantToTags(ctx context.Context, tags map[string]string) map[string]string {
