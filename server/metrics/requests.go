@@ -21,7 +21,6 @@ import (
 
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/request"
-	ulog "github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc"
 )
 
@@ -38,12 +37,10 @@ type RequestEndpointMetadata struct {
 }
 
 func getNamespaceName(ctx context.Context) string {
-	namespace, err := request.GetNamespace(ctx)
-	if ulog.E(err) && err == request.ErrNamespaceNotFound {
-		return DefaultReportedTigrisTenant
-	} else {
+	if namespace, _ := request.GetNamespace(ctx); namespace != "" {
 		return namespace
 	}
+	return DefaultReportedTigrisTenant
 }
 
 func newRequestEndpointMetadata(ctx context.Context, serviceName string, methodInfo grpc.MethodInfo) RequestEndpointMetadata {

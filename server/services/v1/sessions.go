@@ -62,15 +62,7 @@ func (sessMgr *SessionManager) Create(ctx context.Context, reloadVerOutside bool
 	if err != nil {
 		return nil, err
 	}
-	var tenant *metadata.Tenant
-	if namespaceForThisSession == metadata.DefaultNamespaceName {
-		tenant, err = sessMgr.tenantMgr.CreateOrGetTenant(ctx, sessMgr.txMgr, metadata.NewDefaultNamespace())
-	} else {
-		tenant, err = sessMgr.tenantMgr.GetTenant(ctx, namespaceForThisSession, sessMgr.txMgr)
-	}
-	if tenant == nil {
-		return nil, api.Errorf(api.Code_NOT_FOUND, "Tenant %s not found", namespaceForThisSession)
-	}
+	tenant, err := sessMgr.tenantMgr.GetTenant(ctx, namespaceForThisSession, sessMgr.txMgr)
 	if err != nil {
 		log.Warn().Err(err).Msgf("Could not find tenant, this must not happen with right authn/authz configured")
 		return nil, api.Errorf(api.Code_NOT_FOUND, "Tenant %s not found", namespaceForThisSession)

@@ -22,7 +22,6 @@ import (
 	grpc_opentracing "github.com/grpc-ecosystem/go-grpc-middleware/tracing/opentracing"
 	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/auth"
 	grpc_logging "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
-	grpc_ratelimit "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/ratelimit"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -84,7 +83,7 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 	}
 
 	streamInterceptors = append(streamInterceptors, []grpc.StreamServerInterceptor{
-		grpc_ratelimit.StreamServerInterceptor(&RateLimiter{}),
+		quotaStreamServerInterceptor(),
 		grpc_logging.StreamServerInterceptor(grpc_zerolog.InterceptorLogger(sampledTaggedLogger), []grpc_logging.Option{}...),
 		validatorStreamServerInterceptor(),
 		grpc_opentracing.StreamServerInterceptor(),
@@ -120,7 +119,7 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 	unaryInterceptors = append(unaryInterceptors, []grpc.UnaryServerInterceptor{
 		//grpctrace.UnaryServerInterceptor(grpctrace.WithServiceName(util.Service)),
 		pprofUnaryServerInterceptor(),
-		grpc_ratelimit.UnaryServerInterceptor(&RateLimiter{}),
+		quotaUnaryServerInterceptor(),
 		grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(sampledTaggedLogger)),
 		validatorUnaryServerInterceptor(),
 		timeoutUnaryServerInterceptor(DefaultTimeout),

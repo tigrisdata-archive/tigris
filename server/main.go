@@ -22,6 +22,7 @@ import (
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/muxer"
+	"github.com/tigrisdata/tigris/server/quota"
 	"github.com/tigrisdata/tigris/server/tracing"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
@@ -78,8 +79,15 @@ func main() {
 	txMgr := transaction.NewManager(kvStore)
 	log.Info().Msg("initialized transaction manager")
 
+	if err = tenantMgr.EnsureDefaultNamespace(txMgr); err != nil {
+		log.Fatal().Err(err).Msg("error initializing default namespace")
+	}
+
+	quota.Init(tenantMgr, txMgr, &config.DefaultConfig.Quota)
+
 	mx := muxer.NewMuxer(&config.DefaultConfig, tenantMgr, txMgr)
 	mx.RegisterServices(kvStore, searchStore, tenantMgr, txMgr)
+
 	if err := mx.Start(config.DefaultConfig.Server.Host, config.DefaultConfig.Server.Port); err != nil {
 		log.Fatal().Err(err).Msgf("error starting server")
 	}

@@ -18,8 +18,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math/rand"
 	"reflect"
 	"sync"
+	"time"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
@@ -135,6 +137,13 @@ func newTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, mdName
 	}
 }
 
+func (m *TenantManager) EnsureDefaultNamespace(txMgr *transaction.Manager) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := m.CreateOrGetTenant(ctx, txMgr, NewDefaultNamespace())
+	return err
+}
+
 // CreateOrGetTenant is a thread safe implementation of creating a new tenant. It returns the tenant if it already exists.
 // This is mainly returning the tenant to avoid calling "Get" again after creating the tenant. This method is expensive
 // as it reloads the existing tenants from the disk if it sees the tenant is not present in the cache.
@@ -212,9 +221,8 @@ func (m *TenantManager) getTenantFromCache(namespaceName string) (tenant *Tenant
 // GetTenant is responsible for returning the tenant from the cache. If the tenant is not available in the cache then
 // this method will attempt to load it from the disk and will update the tenant manager cache accordingly.
 func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string, txMgr *transaction.Manager) (tenant *Tenant, err error) {
-	tenant = m.getTenantFromCache(namespaceName)
-	if tenant != nil {
-		return tenant, nil
+	if tenant = m.getTenantFromCache(namespaceName); tenant != nil {
+		return
 	}
 
 	m.Lock()
@@ -237,7 +245,7 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string, txM
 				m.idToTenantMap[tenant.namespace.Id()] = tenant.namespace.Name()
 			}
 		} else {
-			log.Warn().Msg("Could not get namespaces")
+			log.Err(err).Str("ns", namespaceName).Msg("Could not get namespace")
 			_ = tx.Rollback(ctx)
 		}
 	}()
@@ -248,11 +256,11 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string, txM
 	}
 	id, ok := namespaces[namespaceName]
 	if !ok {
-		return nil, nil
+		return nil, fmt.Errorf("namespace not found: %s", namespaceName)
 	}
 
 	currentVersion, err := m.versionH.Read(ctx, tx)
-	if ulog.E(err) {
+	if err != nil {
 		return nil, err
 	}
 
@@ -1006,4 +1014,21 @@ func IsSchemaEq(s1, s2 []byte) (bool, error) {
 		return false, err
 	}
 	return reflect.DeepEqual(j2, j), nil
+}
+
+// NewTestTenantMgr creates new TenantManager for tests
+func NewTestTenantMgr(kvStore kv.KeyValueStore) (*TenantManager, context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	m := newTenantManager(kvStore, &search.NoopStore{}, &encoding.TestMDNameRegistry{
+		ReserveSB:  fmt.Sprintf("test_tenant_reserve_%x", rand.Uint64()),
+		EncodingSB: fmt.Sprintf("test_tenant_encoding_%x", rand.Uint64()),
+		SchemaSB:   fmt.Sprintf("test_tenant_schema_%x", rand.Uint64()),
+	})
+
+	_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
+	_ = kvStore.DropTable(ctx, m.mdNameRegistry.EncodingSubspaceName())
+	_ = kvStore.DropTable(ctx, m.mdNameRegistry.SchemaSubspaceName())
+
+	return m, ctx, cancel
 }

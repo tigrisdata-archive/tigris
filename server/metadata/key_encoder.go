@@ -54,6 +54,10 @@ func NewEncoder() Encoder {
 type DictKeyEncoder struct {
 }
 
+// EncodeTableName creates storage friendly table name from namespace, database and collection ids
+// Database and collection objects can be omitted to get table name prefix.
+// If the collection is ommitted then result name includes all the collections in the database
+// If both database and collections are omitted then result name includes all databases in the namespace
 func (d *DictKeyEncoder) EncodeTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) ([]byte, error) {
 	return d.encodedTableName(ns, db, coll), nil
 }
