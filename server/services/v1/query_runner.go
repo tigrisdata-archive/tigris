@@ -50,10 +50,10 @@ type QueryRunnerFactory struct {
 }
 
 // NewQueryRunnerFactory returns QueryRunnerFactory object
-func NewQueryRunnerFactory(txMgr *transaction.Manager, encoder metadata.Encoder, cdcMgr *cdc.Manager, searchStore search.Store) *QueryRunnerFactory {
+func NewQueryRunnerFactory(txMgr *transaction.Manager, cdcMgr *cdc.Manager, searchStore search.Store) *QueryRunnerFactory {
 	return &QueryRunnerFactory{
 		txMgr:       txMgr,
-		encoder:     encoder,
+		encoder:     metadata.NewEncoder(),
 		cdcMgr:      cdcMgr,
 		searchStore: searchStore,
 	}
@@ -755,7 +755,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			tx.Context().StageDatabase(db)
 		}
 
-		if err = tenant.DropCollection(ctx, tx, db, runner.dropReq.GetCollection(), runner.searchStore, runner.encoder); err != nil {
+		if err = tenant.DropCollection(ctx, tx, db, runner.dropReq.GetCollection()); err != nil {
 			return nil, ctx, err
 		}
 
@@ -784,7 +784,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			tx.Context().StageDatabase(db)
 		}
 
-		if err = tenant.CreateCollection(ctx, tx, db, schFactory, runner.searchStore); err != nil {
+		if err = tenant.CreateCollection(ctx, tx, db, schFactory); err != nil {
 			if err == kv.ErrDuplicateKey {
 				// this simply means, concurrently CreateCollection is called,
 				return nil, ctx, api.Errorf(api.Code_ABORTED, "concurrent create collection request, aborting")
@@ -823,11 +823,18 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		if err != nil {
 			return nil, ctx, err
 		}
+
+		size, err := tenant.CollectionSize(ctx, db, coll)
+		if err != nil {
+			return nil, ctx, err
+		}
+
 		return &Response{
 			Response: &api.DescribeCollectionResponse{
 				Collection: coll.Name,
 				Metadata:   &api.CollectionMetadata{},
 				Schema:     coll.Schema,
+				Size:       size,
 			},
 		}, ctx, nil
 	}
@@ -862,7 +869,7 @@ func (runner *DatabaseQueryRunner) SetDescribeDatabaseReq(describe *api.Describe
 
 func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	if runner.drop != nil {
-		exist, err := tenant.DropDatabase(ctx, tx, runner.drop.GetDb(), runner.searchStore, runner.encoder)
+		exist, err := tenant.DropDatabase(ctx, tx, runner.drop.GetDb())
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -909,11 +916,21 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 
 		var collections = make([]*api.CollectionDescription, len(collectionList))
 		for i, c := range collectionList {
+			size, err := tenant.CollectionSize(ctx, db, c)
+			if err != nil {
+				return nil, ctx, err
+			}
 			collections[i] = &api.CollectionDescription{
 				Collection: c.GetName(),
 				Metadata:   &api.CollectionMetadata{},
 				Schema:     c.Schema,
+				Size:       size,
 			}
+		}
+
+		size, err := tenant.DatabaseSize(ctx, db)
+		if err != nil {
+			return nil, ctx, err
 		}
 
 		return &Response{
@@ -921,6 +938,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 				Db:          db.Name(),
 				Metadata:    &api.DatabaseMetadata{},
 				Collections: collections,
+				Size:        size,
 			},
 		}, ctx, nil
 	}

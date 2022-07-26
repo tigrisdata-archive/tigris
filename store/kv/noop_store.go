@@ -2,6 +2,7 @@ package kv
 
 import (
 	"context"
+
 	"github.com/tigrisdata/tigris/internal"
 )
 
@@ -24,10 +25,11 @@ type NoopKVStore struct {
 	*NoopKV
 }
 
-func (n *NoopKVStore) BeginTx(ctx context.Context) (Tx, error)            { return &NoopTx{}, nil }
-func (n *NoopKVStore) CreateTable(ctx context.Context, name []byte) error { return nil }
-func (n *NoopKVStore) DropTable(ctx context.Context, name []byte) error   { return nil }
-func (n *NoopKVStore) GetInternalDatabase() (interface{}, error)          { return nil, nil }
+func (n *NoopKVStore) BeginTx(_ context.Context) (Tx, error)                { return &NoopTx{}, nil }
+func (n *NoopKVStore) CreateTable(_ context.Context, _ []byte) error        { return nil }
+func (n *NoopKVStore) DropTable(_ context.Context, _ []byte) error          { return nil }
+func (n *NoopKVStore) GetInternalDatabase() (interface{}, error)            { return nil, nil }
+func (n *NoopKVStore) TableSize(_ context.Context, _ []byte) (int64, error) { return 0, nil }
 
 type NoopKV struct{}
 

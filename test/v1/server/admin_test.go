@@ -2,60 +2,55 @@ package server
 
 import (
 	"fmt"
+	"math/rand"
 	"net/http"
 	"testing"
 
-	"github.com/stretchr/testify/suite"
+	"github.com/stretchr/testify/assert"
 	"github.com/tigrisdata/tigris/test/config"
 	"gopkg.in/gavv/httpexpect.v1"
 )
 
 type AdminTestMap map[string]interface{}
 
-type AdminSuite struct {
-	suite.Suite
+func TestCreateNamespace(t *testing.T) {
+	name := fmt.Sprintf("namespace-a-%x", rand.Int63())
+	id := rand.Int31()
+	resp := createNamespace(t, name, id)
+	resp.Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("message", fmt.Sprintf("Namespace created, with id=%d, and name=%s", id, name))
 }
 
-func (s *AdminSuite) TestCreateNamespace() {
-	s.Run("create_namespace", func() {
-		resp := createNamespace(s.T(), "namespace-a", 2)
-		resp.Status(http.StatusOK).
-			JSON().
-			Object().
-			ValueEqual("message", "Namespace created, with id=2, and name=namespace-a")
-	})
-}
-func adminExpectLow(s httpexpect.LoggerReporter, url string) *httpexpect.Expect {
+func adminExpect(s httpexpect.LoggerReporter) *httpexpect.Expect {
 	return httpexpect.WithConfig(httpexpect.Config{
-		BaseURL:  url,
+		BaseURL:  config.GetBaseURL(),
 		Reporter: httpexpect.NewAssertReporter(s),
 	})
 }
 
-func adminExpect(s httpexpect.LoggerReporter) *httpexpect.Expect {
-	return adminExpectLow(s, config.GetBaseURL())
-}
-
-func (s *AdminSuite) TestListNamespaces() {
-	s.Run("list_namespaces", func() {
-		_ = createNamespace(s.T(), "namespace-b", 3)
-		resp := listNamespaces(s.T())
-		namespaces := resp.Status(http.StatusOK).
-			JSON().
-			Object().
-			Value("namespaces").
-			Array().
-			Raw()
-		var found = false
-		for _, namespace := range namespaces {
-			if converted, ok := namespace.(map[string]interface{}); ok {
-				if converted["name"] == "namespace-b" {
-					found = true
-				}
+func TestListNamespaces(t *testing.T) {
+	name := fmt.Sprintf("namespace-b-%x", rand.Int63())
+	id := rand.Int31()
+	_ = createNamespace(t, name, id)
+	resp := listNamespaces(t)
+	namespaces := resp.Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("namespaces").
+		Array().
+		Raw()
+	var found = false
+	for _, namespace := range namespaces {
+		if converted, ok := namespace.(map[string]interface{}); ok {
+			if converted["name"] == name {
+				found = true
+				assert.Equal(t, float64(id), converted["id"])
 			}
 		}
-		s.True(found)
-	})
+	}
+	assert.True(t, found)
 }
 
 func createNamespace(t *testing.T, namespaceName string, namespaceId int32) *httpexpect.Response {
@@ -75,6 +70,7 @@ func listNamespaces(t *testing.T) *httpexpect.Response {
 func getCreateNamespaceURL(namespaceName string) string {
 	return fmt.Sprintf("/admin/v1/namespaces/%s/create", namespaceName)
 }
+
 func listNamespaceUrl() string {
 	return "/admin/v1/namespaces/list"
 }

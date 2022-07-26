@@ -60,6 +60,7 @@ type KeyValueStore interface {
 	CreateTable(ctx context.Context, name []byte) error
 	DropTable(ctx context.Context, name []byte) error
 	GetInternalDatabase() (interface{}, error) // TODO: CDC remove workaround
+	TableSize(ctx context.Context, name []byte) (int64, error)
 }
 
 type Iterator interface {
@@ -157,6 +158,14 @@ func (m *KeyValueStoreImplWithMetrics) CreateTable(ctx context.Context, name []b
 func (m *KeyValueStoreImplWithMetrics) DropTable(ctx context.Context, name []byte) (err error) {
 	m.measure(ctx, "DropTable", func() error {
 		err = m.kv.DropTable(ctx, name)
+		return err
+	})
+	return
+}
+
+func (m *KeyValueStoreImplWithMetrics) TableSize(ctx context.Context, name []byte) (size int64, err error) {
+	m.measure(ctx, "TableSize", func() error {
+		size, err = m.kv.TableSize(ctx, name)
 		return err
 	})
 	return

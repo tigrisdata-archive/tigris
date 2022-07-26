@@ -21,6 +21,7 @@ import (
 	"math/rand"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 	api "github.com/tigrisdata/tigris/api/server/v1"
@@ -29,8 +30,6 @@ import (
 
 func SetupSuites() []suite.TestingSuite {
 	var suites []suite.TestingSuite
-	suites = append(suites, &DatabaseSuite{})
-
 	suites = append(suites, &CollectionSuite{
 		database: fmt.Sprintf("integration_db1_%x", rand.Uint64()),
 	})
@@ -40,7 +39,6 @@ func SetupSuites() []suite.TestingSuite {
 		collection: "test_collection",
 	})
 
-	suites = append(suites, &AdminSuite{})
 	return suites
 }
 
@@ -54,6 +52,7 @@ func TestServer(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	rand.Seed(time.Now().Unix())
 	os.Exit(m.Run())
 }
 

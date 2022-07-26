@@ -311,6 +311,7 @@ type collDesc struct {
 	Collection string              `json:"collection"`
 	Metadata   *CollectionMetadata `json:"metadata"`
 	Schema     json.RawMessage     `json:"schema"`
+	Size       int64               `json:"size"`
 }
 
 func (x *DescribeCollectionResponse) MarshalJSON() ([]byte, error) {
@@ -318,6 +319,7 @@ func (x *DescribeCollectionResponse) MarshalJSON() ([]byte, error) {
 		Collection: x.Collection,
 		Metadata:   x.Metadata,
 		Schema:     x.Schema,
+		Size:       x.Size,
 	})
 }
 
@@ -326,9 +328,11 @@ func (x *DescribeDatabaseResponse) MarshalJSON() ([]byte, error) {
 		Db          string            `json:"db"`
 		Metadata    *DatabaseMetadata `json:"metadata"`
 		Collections []*collDesc       `json:"collections"`
+		Size        int64             `json:"size"`
 	}{
 		Db:       x.Db,
 		Metadata: x.Metadata,
+		Size:     x.Size,
 	}
 
 	for _, v := range x.Collections {
@@ -336,6 +340,7 @@ func (x *DescribeDatabaseResponse) MarshalJSON() ([]byte, error) {
 			Collection: v.Collection,
 			Metadata:   v.Metadata,
 			Schema:     v.Schema,
+			Size:       v.Size,
 		})
 	}
 

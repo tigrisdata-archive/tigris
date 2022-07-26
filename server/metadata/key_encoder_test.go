@@ -54,7 +54,7 @@ func TestEncodeDecodeKey(t *testing.T) {
 		},
 	}
 
-	k := NewEncoder(mgr)
+	k := NewEncoder()
 	encodedTable, err := k.EncodeTableName(ns, db, coll)
 	require.NoError(t, err)
 	require.Equal(t, userTableKeyPrefix, encodedTable[0:4])
@@ -65,7 +65,12 @@ func TestEncodeDecodeKey(t *testing.T) {
 	encodedIdx := k.EncodeIndexName(idx)
 	require.Equal(t, uint32(10), encoding.ByteToUInt32(encodedIdx))
 
-	tenantName, dbName, collName, ok := k.DecodeTableName(encodedTable)
+	tenantID, dbID, collID, ok := k.DecodeTableName(encodedTable)
+	require.True(t, ok)
+
+	tenantName, dbName, collName, ok := mgr.getTableNameFromId(tenantID, dbID, collID)
+	require.True(t, ok)
+
 	require.Equal(t, ns.Name(), tenantName)
 	require.Equal(t, db.name, dbName)
 	require.Equal(t, coll.Name, collName)

@@ -65,6 +65,20 @@ func Configure(config LogConfig) {
 	}
 }
 
+// E is a helper function to shortcut condition checking and logging
+// in the case of error
+// Used like this:
+//
+// if E(err) {
+//     return err
+// }
+//
+// to replace:
+//
+// if err != nil {
+//     log.Msgf(err.Error())
+//     return err
+// }
 func E(err error) bool {
 	if err == nil {
 		return false
@@ -75,6 +89,17 @@ func E(err error) bool {
 	return true
 }
 
+// CE is a helper to shortcut error creation and logging
+// Used like this:
+//
+// return CE("msg, value %v", value)
+//
+// to replace:
+//
+// err := fmt.Errorf("msg, value %v", value)
+// log.Msgf("msg, value %v", value)
+// return err
+//
 func CE(format string, args ...interface{}) error {
 	err := fmt.Errorf(format, args...)
 

@@ -197,16 +197,16 @@ func (r *reservedSubspace) allocateToken(ctx context.Context, tx transaction.Tx,
 	return newReservedValue, nil
 }
 
-// DictionaryEncoder is used to replace variable length strings to their corresponding codes to encode it. Compression
+// MetadataDictionary is used to replace variable length strings to their corresponding codes to allocateAndSave it. Compression
 // is achieved by replacing long strings with a simple 4byte representation.
-type DictionaryEncoder struct {
+type MetadataDictionary struct {
 	MDNameRegistry
 
 	reservedSb *reservedSubspace
 }
 
-func NewDictionaryEncoder(mdNameRegistry MDNameRegistry) *DictionaryEncoder {
-	return &DictionaryEncoder{
+func NewMetadataDictionary(mdNameRegistry MDNameRegistry) *MetadataDictionary {
+	return &MetadataDictionary{
 		MDNameRegistry: mdNameRegistry,
 		reservedSb:     newReservedSubspace(mdNameRegistry),
 	}
@@ -214,11 +214,11 @@ func NewDictionaryEncoder(mdNameRegistry MDNameRegistry) *DictionaryEncoder {
 
 // ReserveNamespace is the first step in the encoding and the mapping is passed the caller. As this is the first encoded
 // integer the caller needs to make sure a unique value is assigned to this namespace.
-func (k *DictionaryEncoder) ReserveNamespace(ctx context.Context, tx transaction.Tx, namespace string, id uint32) error {
+func (k *MetadataDictionary) ReserveNamespace(ctx context.Context, tx transaction.Tx, namespace string, id uint32) error {
 	return k.reservedSb.reserveNamespace(ctx, tx, namespace, id)
 }
 
-func (k *DictionaryEncoder) GetNamespaces(ctx context.Context, tx transaction.Tx) (map[string]uint32, error) {
+func (k *MetadataDictionary) GetNamespaces(ctx context.Context, tx transaction.Tx) (map[string]uint32, error) {
 	if err := k.reservedSb.reload(ctx, tx); err != nil {
 		return nil, err
 	}
@@ -226,7 +226,7 @@ func (k *DictionaryEncoder) GetNamespaces(ctx context.Context, tx transaction.Tx
 	return k.reservedSb.getNamespaces(), nil
 }
 
-func (k *DictionaryEncoder) EncodeDatabaseName(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32) (uint32, error) {
+func (k *MetadataDictionary) CreateDatabase(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32) (uint32, error) {
 	if err := k.validNamespaceId(namespaceId); err != nil {
 		return InvalidId, err
 	}
@@ -235,12 +235,12 @@ func (k *DictionaryEncoder) EncodeDatabaseName(ctx context.Context, tx transacti
 	}
 
 	key := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyEnd)
-	return k.encode(ctx, tx, key, dbKey)
+	return k.allocateAndSave(ctx, tx, key, dbKey)
 }
 
-// EncodeDatabaseAsDropped will remove the "created" entry from the encoding subspace and will add a "dropped" entry with the same
+// DropDatabase will remove the "created" entry from the encoding subspace and will add a "dropped" entry with the same
 // value.
-func (k *DictionaryEncoder) EncodeDatabaseAsDropped(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32, existingId uint32) error {
+func (k *MetadataDictionary) DropDatabase(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32, existingId uint32) error {
 	if err := k.validNamespaceId(namespaceId); err != nil {
 		return err
 	}
@@ -251,10 +251,10 @@ func (k *DictionaryEncoder) EncodeDatabaseAsDropped(ctx context.Context, tx tran
 	// remove existing entry
 	toDeleteKey := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyEnd)
 	newKey := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyDroppedEnd)
-	return k.encodeAsDropped(ctx, tx, toDeleteKey, newKey, existingId, dbKey)
+	return k.delete(ctx, tx, toDeleteKey, newKey, existingId, dbKey)
 }
 
-func (k *DictionaryEncoder) EncodeCollectionName(ctx context.Context, tx transaction.Tx, collection string, namespaceId uint32, dbId uint32) (uint32, error) {
+func (k *MetadataDictionary) CreateCollection(ctx context.Context, tx transaction.Tx, collection string, namespaceId uint32, dbId uint32) (uint32, error) {
 	if err := k.validNamespaceId(namespaceId); err != nil {
 		return InvalidId, err
 	}
@@ -266,10 +266,10 @@ func (k *DictionaryEncoder) EncodeCollectionName(ctx context.Context, tx transac
 	}
 
 	key := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collection, keyEnd)
-	return k.encode(ctx, tx, key, collectionKey)
+	return k.allocateAndSave(ctx, tx, key, collectionKey)
 }
 
-func (k *DictionaryEncoder) EncodeCollectionAsDropped(ctx context.Context, tx transaction.Tx, collection string, namespaceId uint32, dbId uint32, existingId uint32) error {
+func (k *MetadataDictionary) DropCollection(ctx context.Context, tx transaction.Tx, collection string, namespaceId uint32, dbId uint32, existingId uint32) error {
 	if err := k.validNamespaceId(namespaceId); err != nil {
 		return err
 	}
@@ -283,10 +283,10 @@ func (k *DictionaryEncoder) EncodeCollectionAsDropped(ctx context.Context, tx tr
 	// remove existing entry
 	toDeleteKey := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collection, keyEnd)
 	newKey := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collection, keyDroppedEnd)
-	return k.encodeAsDropped(ctx, tx, toDeleteKey, newKey, existingId, collectionKey)
+	return k.delete(ctx, tx, toDeleteKey, newKey, existingId, collectionKey)
 }
 
-func (k *DictionaryEncoder) EncodeIndexName(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32, dbId uint32, collId uint32) (uint32, error) {
+func (k *MetadataDictionary) CreateIndex(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32, dbId uint32, collId uint32) (uint32, error) {
 	if err := k.validNamespaceId(namespaceId); err != nil {
 		return InvalidId, err
 	}
@@ -301,10 +301,10 @@ func (k *DictionaryEncoder) EncodeIndexName(ctx context.Context, tx transaction.
 	}
 
 	key := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyEnd)
-	return k.encode(ctx, tx, key, indexKey)
+	return k.allocateAndSave(ctx, tx, key, indexKey)
 }
 
-func (k *DictionaryEncoder) EncodeIndexAsDropped(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32, dbId uint32, collId uint32, existingId uint32) error {
+func (k *MetadataDictionary) DropIndex(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32, dbId uint32, collId uint32, existingId uint32) error {
 	if err := k.validNamespaceId(namespaceId); err != nil {
 		return err
 	}
@@ -320,10 +320,10 @@ func (k *DictionaryEncoder) EncodeIndexAsDropped(ctx context.Context, tx transac
 
 	toDeleteKey := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyEnd)
 	newKey := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyDroppedEnd)
-	return k.encodeAsDropped(ctx, tx, toDeleteKey, newKey, existingId, indexKey)
+	return k.delete(ctx, tx, toDeleteKey, newKey, existingId, indexKey)
 }
 
-func (k *DictionaryEncoder) encodeAsDropped(ctx context.Context, tx transaction.Tx, toDeleteKey keys.Key, newKey keys.Key, newValue uint32, encName string) error {
+func (k *MetadataDictionary) delete(ctx context.Context, tx transaction.Tx, toDeleteKey keys.Key, newKey keys.Key, newValue uint32, encName string) error {
 	if err := tx.Delete(ctx, toDeleteKey); err != nil {
 		log.Debug().Str("key", toDeleteKey.String()).Err(err).Str("type", encName).Msg("existing entry deletion failed")
 		return err
@@ -340,7 +340,7 @@ func (k *DictionaryEncoder) encodeAsDropped(ctx context.Context, tx transaction.
 	return nil
 }
 
-func (k *DictionaryEncoder) encode(ctx context.Context, tx transaction.Tx, key keys.Key, encName string) (uint32, error) {
+func (k *MetadataDictionary) allocateAndSave(ctx context.Context, tx transaction.Tx, key keys.Key, encName string) (uint32, error) {
 	reserveToken, err := k.reservedSb.allocateToken(ctx, tx, string(k.EncodingSubspaceName()))
 	if err != nil {
 		return InvalidId, err
@@ -356,28 +356,28 @@ func (k *DictionaryEncoder) encode(ctx context.Context, tx transaction.Tx, key k
 	return reserveToken, nil
 }
 
-func (k *DictionaryEncoder) validNamespaceId(id uint32) error {
+func (k *MetadataDictionary) validNamespaceId(id uint32) error {
 	if id == InvalidId {
 		return api.Errorf(api.Code_INVALID_ARGUMENT, "invalid namespace id")
 	}
 	return nil
 }
 
-func (k *DictionaryEncoder) validDatabaseId(id uint32) error {
+func (k *MetadataDictionary) validDatabaseId(id uint32) error {
 	if id == InvalidId {
 		return api.Errorf(api.Code_INVALID_ARGUMENT, "invalid database id")
 	}
 	return nil
 }
 
-func (k *DictionaryEncoder) validCollectionId(id uint32) error {
+func (k *MetadataDictionary) validCollectionId(id uint32) error {
 	if id == InvalidId {
 		return api.Errorf(api.Code_INVALID_ARGUMENT, "invalid collection id")
 	}
 	return nil
 }
 
-func (k *DictionaryEncoder) GetDatabases(ctx context.Context, tx transaction.Tx, namespaceId uint32) (map[string]uint32, error) {
+func (k *MetadataDictionary) GetDatabases(ctx context.Context, tx transaction.Tx, namespaceId uint32) (map[string]uint32, error) {
 	databases := make(map[string]uint32)
 	it, err := tx.Read(ctx, keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), dbKey))
 	if err != nil {
@@ -423,7 +423,7 @@ func (k *DictionaryEncoder) GetDatabases(ctx context.Context, tx transaction.Tx,
 	return databases, it.Err()
 }
 
-func (k *DictionaryEncoder) GetCollections(ctx context.Context, tx transaction.Tx, namespaceId uint32, databaseId uint32) (map[string]uint32, error) {
+func (k *MetadataDictionary) GetCollections(ctx context.Context, tx transaction.Tx, namespaceId uint32, databaseId uint32) (map[string]uint32, error) {
 	var collections = make(map[string]uint32)
 	it, err := tx.Read(ctx, keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(databaseId)))
 	if err != nil {
@@ -470,7 +470,7 @@ func (k *DictionaryEncoder) GetCollections(ctx context.Context, tx transaction.T
 	return collections, it.Err()
 }
 
-func (k *DictionaryEncoder) GetIndexes(ctx context.Context, tx transaction.Tx, namespaceId uint32, databaseId uint32, collId uint32) (map[string]uint32, error) {
+func (k *MetadataDictionary) GetIndexes(ctx context.Context, tx transaction.Tx, namespaceId uint32, databaseId uint32, collId uint32) (map[string]uint32, error) {
 	var indexes = make(map[string]uint32)
 	it, err := tx.Read(ctx, keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(databaseId), UInt32ToByte(collId)))
 	if err != nil {
@@ -517,22 +517,22 @@ func (k *DictionaryEncoder) GetIndexes(ctx context.Context, tx transaction.Tx, n
 	return indexes, it.Err()
 }
 
-func (k *DictionaryEncoder) GetDatabaseId(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32) (uint32, error) {
+func (k *MetadataDictionary) GetDatabaseId(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32) (uint32, error) {
 	key := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyEnd)
 	return k.getId(ctx, tx, key)
 }
 
-func (k *DictionaryEncoder) GetCollectionId(ctx context.Context, tx transaction.Tx, collName string, namespaceId uint32, dbId uint32) (uint32, error) {
+func (k *MetadataDictionary) GetCollectionId(ctx context.Context, tx transaction.Tx, collName string, namespaceId uint32, dbId uint32) (uint32, error) {
 	key := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collName, keyEnd)
 	return k.getId(ctx, tx, key)
 }
 
-func (k *DictionaryEncoder) GetIndexId(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32, dbId uint32, collId uint32) (uint32, error) {
+func (k *MetadataDictionary) GetIndexId(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32, dbId uint32, collId uint32) (uint32, error) {
 	key := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyEnd)
 	return k.getId(ctx, tx, key)
 }
 
-func (k *DictionaryEncoder) getId(ctx context.Context, tx transaction.Tx, key keys.Key) (uint32, error) {
+func (k *MetadataDictionary) getId(ctx context.Context, tx transaction.Tx, key keys.Key) (uint32, error) {
 	it, err := tx.Read(ctx, key)
 	if err != nil {
 		return InvalidId, err
@@ -553,7 +553,7 @@ func (k *DictionaryEncoder) getId(ctx context.Context, tx transaction.Tx, key ke
 
 // decode is currently only use for debugging purpose, once we have a layer on top of this encoding then we leverage this
 // method
-func (k *DictionaryEncoder) decode(_ context.Context, fdbKey kv.Key) (map[string]interface{}, error) {
+func (k *MetadataDictionary) decode(_ context.Context, fdbKey kv.Key) (map[string]interface{}, error) {
 	var decoded = make(map[string]interface{})
 	if len(fdbKey) > 0 {
 		decoded["version"] = fdbKey[0]

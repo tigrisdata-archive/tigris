@@ -55,7 +55,6 @@ type apiService struct {
 
 	kvStore       kv.KeyValueStore
 	txMgr         *transaction.Manager
-	encoder       metadata.Encoder
 	tenantMgr     *metadata.TenantManager
 	cdcMgr        *cdc.Manager
 	sessions      *SessionManager
@@ -70,6 +69,8 @@ func newApiService(kv kv.KeyValueStore, searchStore search.Store, tenantMgr *met
 		txMgr:       txMgr,
 		versionH:    &metadata.VersionHandler{},
 		searchStore: searchStore,
+		cdcMgr:      cdc.NewManager(),
+		tenantMgr:   tenantMgr,
 	}
 
 	ctx := context.TODO()
@@ -82,13 +83,20 @@ func newApiService(kv kv.KeyValueStore, searchStore search.Store, tenantMgr *met
 		// ToDo: no need to panic, probably handle through async thread.
 		log.Err(err).Msgf("error starting server: reloading tenants failed")
 	}
-	_ = tx.Commit(ctx)
+	ulog.E(tx.Commit(ctx))
 
-	u.tenantMgr = tenantMgr
-	u.encoder = metadata.NewEncoder(u.tenantMgr)
-	u.cdcMgr = cdc.NewManager()
-	u.sessions = NewSessionManager(u.txMgr, u.tenantMgr, u.versionH, u.cdcMgr, u.searchStore, u.encoder)
-	u.runnerFactory = NewQueryRunnerFactory(u.txMgr, u.encoder, u.cdcMgr, u.searchStore)
+	var txListeners []TxListener
+	if config.DefaultConfig.Cdc.Enabled {
+		txListeners = append(txListeners, u.cdcMgr)
+	}
+	if config.DefaultConfig.Search.WriteEnabled {
+		// just for testing so that we can disable it if needed
+		txListeners = append(txListeners, NewSearchIndexer(searchStore, tenantMgr))
+	}
+
+	u.sessions = NewSessionManager(u.txMgr, u.tenantMgr, u.versionH, txListeners)
+	u.runnerFactory = NewQueryRunnerFactory(u.txMgr, u.cdcMgr, u.searchStore)
+
 	return u
 }
 
@@ -412,7 +420,7 @@ func (s *apiService) Events(r *api.EventsRequest, stream api.Tigris_EventsServer
 
 	for tx := range streamer.Txs {
 		for _, op := range tx.Ops {
-			_, _, collection, ok := s.encoder.DecodeTableName(op.Table)
+			_, _, collection, ok := s.tenantMgr.DecodeTableName(op.Table)
 			if !ok {
 				log.Err(err).Str("table", string(op.Table)).Msg("failed to decode collection name")
 				return api.Errorf(api.Code_INTERNAL, "failed to decode collection name")
