@@ -62,15 +62,22 @@ func main() {
 		log.Fatal().Err(err).Msg("error initializing kv store")
 	}
 
-	searchStore, err := search.NewStore(&config.DefaultConfig.Search)
+	var searchStore search.Store
+	if config.DefaultConfig.Tracing.Enabled {
+		searchStore, err = search.NewStoreWithMetrics(&config.DefaultConfig.Search)
+	} else {
+		searchStore, err = search.NewStore(&config.DefaultConfig.Search)
+	}
 	if err != nil {
 		log.Fatal().Err(err).Msg("error initializing search store")
 	}
 
 	tenantMgr := metadata.NewTenantManager(kvStore)
 	log.Info().Msg("initialized tenant manager")
+
 	txMgr := transaction.NewManager(kvStore)
 	log.Info().Msg("initialized transaction manager")
+
 	mx := muxer.NewMuxer(&config.DefaultConfig, tenantMgr, txMgr)
 	mx.RegisterServices(kvStore, searchStore, tenantMgr, txMgr)
 	if err := mx.Start(config.DefaultConfig.Server.Host, config.DefaultConfig.Server.Port); err != nil {

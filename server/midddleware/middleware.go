@@ -34,7 +34,6 @@ import (
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/util"
 	"google.golang.org/grpc"
-	grpctrace "gopkg.in/DataDog/dd-trace-go.v1/contrib/google.golang.org/grpc"
 )
 
 func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor) {
@@ -68,12 +67,12 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 	// The order of the interceptors matter with optional elements in them
 	streamInterceptors := []grpc.StreamServerInterceptor{
 		forwarderStreamServerInterceptor(),
-		grpc_ratelimit.StreamServerInterceptor(&RateLimiter{}),
 		grpc_auth.StreamServerInterceptor(authFunction),
 		namespaceInitializer.NamespaceSetterStreamServerInterceptor(),
-		grpctrace.StreamServerInterceptor(grpctrace.WithServiceName(util.Service)),
-		grpc_logging.StreamServerInterceptor(grpc_zerolog.InterceptorLogger(sampledTaggedLogger), []grpc_logging.Option{}...),
-		validatorStreamServerInterceptor(),
+	}
+
+	if config.Tracing.Enabled {
+		streamInterceptors = append(streamInterceptors, traceStream())
 	}
 
 	if config.Metrics.Grpc.Enabled && config.Metrics.Grpc.ResponseTime {
@@ -85,6 +84,9 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 	}
 
 	streamInterceptors = append(streamInterceptors, []grpc.StreamServerInterceptor{
+		grpc_ratelimit.StreamServerInterceptor(&RateLimiter{}),
+		grpc_logging.StreamServerInterceptor(grpc_zerolog.InterceptorLogger(sampledTaggedLogger), []grpc_logging.Option{}...),
+		validatorStreamServerInterceptor(),
 		grpc_opentracing.StreamServerInterceptor(),
 		grpc_recovery.StreamServerInterceptor(),
 		headersStreamServerInterceptor(),
@@ -99,14 +101,12 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 	// The order of the interceptors matter with optional elements in them
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		forwarderUnaryServerInterceptor(),
-		pprofUnaryServerInterceptor(),
-		grpc_ratelimit.UnaryServerInterceptor(&RateLimiter{}),
 		grpc_auth.UnaryServerInterceptor(authFunction),
 		namespaceInitializer.NamespaceSetterUnaryServerInterceptor(),
-		grpctrace.UnaryServerInterceptor(grpctrace.WithServiceName(util.Service)),
-		grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(sampledTaggedLogger)),
-		validatorUnaryServerInterceptor(),
-		timeoutUnaryServerInterceptor(DefaultTimeout),
+	}
+
+	if config.Tracing.Enabled {
+		unaryInterceptors = append(unaryInterceptors, traceUnary())
 	}
 
 	if config.Metrics.Grpc.Enabled && config.Metrics.Grpc.ResponseTime {
@@ -118,6 +118,12 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 	}
 
 	unaryInterceptors = append(unaryInterceptors, []grpc.UnaryServerInterceptor{
+		//grpctrace.UnaryServerInterceptor(grpctrace.WithServiceName(util.Service)),
+		pprofUnaryServerInterceptor(),
+		grpc_ratelimit.UnaryServerInterceptor(&RateLimiter{}),
+		grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(sampledTaggedLogger)),
+		validatorUnaryServerInterceptor(),
+		timeoutUnaryServerInterceptor(DefaultTimeout),
 		grpc_opentracing.UnaryServerInterceptor(),
 		grpc_recovery.UnaryServerInterceptor(),
 		headersUnaryServerInterceptor(),
