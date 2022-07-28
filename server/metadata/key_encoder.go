@@ -18,13 +18,10 @@ import (
 	"bytes"
 
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/metadata/encoding"
-)
-
-var (
-	userTableKeyPrefix = []byte("data")
 )
 
 // Encoder is used to encode/decode values of the Key.
@@ -82,7 +79,7 @@ func (d *DictKeyEncoder) EncodeKey(encodedTable []byte, idx *schema.Index, idxPa
 
 func (d *DictKeyEncoder) encodedTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) []byte {
 	var appendTo []byte
-	appendTo = append(appendTo, userTableKeyPrefix...)
+	appendTo = append(appendTo, internal.UserTableKeyPrefix...)
 	appendTo = append(appendTo, encoding.UInt32ToByte(ns.Id())...)
 	if db != nil {
 		appendTo = append(appendTo, encoding.UInt32ToByte(db.id)...)
@@ -98,7 +95,7 @@ func (d *DictKeyEncoder) encodedIdxName(idx *schema.Index) []byte {
 }
 
 func (d *DictKeyEncoder) DecodeTableName(tableName []byte) (uint32, uint32, uint32, bool) {
-	if len(tableName) < 16 || !bytes.Equal(tableName[0:4], userTableKeyPrefix) {
+	if len(tableName) < 16 || !bytes.Equal(tableName[0:4], internal.UserTableKeyPrefix) {
 		return 0, 0, 0, false
 	}
 
