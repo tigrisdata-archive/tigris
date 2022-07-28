@@ -183,6 +183,10 @@ func (m *TenantManager) CreateOrGetTenant(ctx context.Context, txMgr *transactio
 	return m.createOrGetTenantInternal(ctx, tx, namespace)
 }
 
+func (m *TenantManager) GetEncoder() Encoder {
+	return m.encoder
+}
+
 // CreateTenant is a thread safe implementation of creating a new tenant. It returns the error if it already exists.
 func (m *TenantManager) CreateTenant(ctx context.Context, tx transaction.Tx, namespace Namespace) (Namespace, error) {
 	m.Lock()
@@ -322,8 +326,8 @@ func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transa
 	return NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.encoder, m.versionH, nil), nil
 }
 
-// getTableNameFromId returns tenant name, database name, collection name corresponding to their encoded ids.
-func (m *TenantManager) getTableNameFromId(tenantId uint32, dbId uint32, collId uint32) (string, string, string, bool) {
+// GetTableNameFromIds returns tenant name, database name, collection name corresponding to their encoded ids.
+func (m *TenantManager) GetTableNameFromIds(tenantId uint32, dbId uint32, collId uint32) (string, string, string, bool) {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -355,13 +359,36 @@ func (m *TenantManager) getTableNameFromId(tenantId uint32, dbId uint32, collId 
 	return tenantName, dbName, collName, ok
 }
 
+// GetDatabaseAndCollectionId returns the id of db and c in the default namespace. This is just a temporary API for
+// the streams to know if database and collection exists at the start of streaming and their corresponding IDs.
+func (m *TenantManager) GetDatabaseAndCollectionId(db string, c string) (uint32, uint32) {
+	m.RLock()
+	defer m.RUnlock()
+
+	tenant, ok := m.tenants[DefaultNamespaceName]
+	if !ok {
+		return 0, 0
+	}
+	database, ok := tenant.databases[db]
+	if !ok {
+		return 0, 0
+	}
+
+	coll, ok := database.collections[c]
+	if !ok {
+		return 0, 0
+	}
+
+	return database.id, coll.id
+}
+
 func (m *TenantManager) DecodeTableName(tableName []byte) (string, string, string, bool) {
 	n, d, c, ok := m.encoder.DecodeTableName(tableName)
 	if !ok {
 		return "", "", "", false
 	}
 
-	return m.getTableNameFromId(n, d, c)
+	return m.GetTableNameFromIds(n, d, c)
 }
 
 // Reload reads all the namespaces exists in the disk and build the in-memory map of the manager to track the tenants.
