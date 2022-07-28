@@ -25,6 +25,10 @@ import (
 )
 
 var (
+	UserTableKeyPrefix = []byte("data")
+)
+
+var (
 	bh codec.BincHandle
 )
 
