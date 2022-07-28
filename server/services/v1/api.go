@@ -426,7 +426,7 @@ func (s *apiService) Events(r *api.EventsRequest, stream api.Tigris_EventsServer
 				return api.Errorf(api.Code_INTERNAL, "failed to decode collection name")
 			}
 
-			if r.Collection == "" || r.Collection == collection {
+			if (r.Collection == "" || r.Collection == collection) && op.Op != kv.DeleteEvent && op.Op != kv.DeleteRangeEvent {
 				td, err := internal.Decode(op.Data)
 				if err != nil {
 					log.Err(err).Str("data", string(op.Data)).Msg("failed to decode data")
