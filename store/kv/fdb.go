@@ -229,6 +229,26 @@ func (d *fdbkv) DropTable(ctx context.Context, name []byte) error {
 	return nil
 }
 
+// TableSize calculates approximate table size in bytes
+// It also works with the prefix of the table name,
+// allowing to calculate sizes of multiple table with the same prefix
+func (d *fdbkv) TableSize(ctx context.Context, name []byte) (int64, error) {
+	s := subspace.FromBytes(name)
+
+	var sz int64
+	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+		var err error
+		sz, err = tr.GetEstimatedRangeSizeBytes(s).Get()
+		return nil, err
+	})
+
+	if err != nil {
+		log.Err(err).Str("name", string(name)).Int64("size", sz).Msg("table size")
+	}
+
+	return sz, err
+}
+
 func (d *fdbkv) Batch() (baseTx, error) {
 	tx, err := d.db.CreateTransaction()
 	if ulog.E(err) {

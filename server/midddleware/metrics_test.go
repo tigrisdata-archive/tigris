@@ -23,14 +23,11 @@ import (
 
 func TestGrpcMetrics(t *testing.T) {
 	metrics.InitializeMetrics()
-	methodType := "unary"
-	fullMethodName := "/tigrisdata.v1.Tigris/TestMethod"
-
-	ctx := context.Background()
+	grpcMeta := metrics.GetGrpcEndPointMetadataFromFullMethod(context.Background(), "/tigrisdata.v1.Tigris/TestMethod", "unary")
 
 	t.Run("Test tigris server counters", func(t *testing.T) {
-		countUnknownErrorMessage(ctx, fullMethodName, methodType)
-		countOkMessage(ctx, fullMethodName, methodType)
-		countSpecificErrorMessage(ctx, fullMethodName, methodType, "test_source", "test_code")
+		countUnknownErrorMessage(grpcMeta)
+		countOkMessage(grpcMeta)
+		countSpecificErrorMessage(grpcMeta, "test_source", "test_code")
 	})
 }

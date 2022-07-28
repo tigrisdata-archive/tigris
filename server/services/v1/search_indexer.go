@@ -47,20 +47,21 @@ const (
 
 type SearchIndexer struct {
 	searchStore search.Store
-	encoder     metadata.Encoder
+	tenantMgr   *metadata.TenantManager
 }
 
-func NewSearchIndexer(searchStore search.Store, encoder metadata.Encoder) *SearchIndexer {
+func NewSearchIndexer(searchStore search.Store, tenantMgr *metadata.TenantManager) *SearchIndexer {
 	return &SearchIndexer{
 		searchStore: searchStore,
-		encoder:     encoder,
+		tenantMgr:   tenantMgr,
 	}
 }
 
 func (i *SearchIndexer) OnPostCommit(ctx context.Context, tenant *metadata.Tenant, eventListener kv.EventListener) error {
 	for _, event := range eventListener.GetEvents() {
 		var err error
-		_, db, coll, ok := i.encoder.DecodeTableName(event.Table)
+
+		_, db, coll, ok := i.tenantMgr.DecodeTableName(event.Table)
 		if !ok {
 			continue
 		}

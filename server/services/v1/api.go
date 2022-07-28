@@ -55,7 +55,6 @@ type apiService struct {
 
 	kvStore       kv.KeyValueStore
 	txMgr         *transaction.Manager
-	encoder       metadata.Encoder
 	tenantMgr     *metadata.TenantManager
 	cdcMgr        *cdc.Manager
 	sessions      *SessionManager
@@ -70,6 +69,8 @@ func newApiService(kv kv.KeyValueStore, searchStore search.Store, tenantMgr *met
 		txMgr:       txMgr,
 		versionH:    &metadata.VersionHandler{},
 		searchStore: searchStore,
+		cdcMgr:      cdc.NewManager(),
+		tenantMgr:   tenantMgr,
 	}
 
 	ctx := context.TODO()
@@ -82,13 +83,20 @@ func newApiService(kv kv.KeyValueStore, searchStore search.Store, tenantMgr *met
 		// ToDo: no need to panic, probably handle through async thread.
 		log.Err(err).Msgf("error starting server: reloading tenants failed")
 	}
-	_ = tx.Commit(ctx)
+	ulog.E(tx.Commit(ctx))
 
-	u.tenantMgr = tenantMgr
-	u.encoder = metadata.NewEncoder(u.tenantMgr)
-	u.cdcMgr = cdc.NewManager()
-	u.sessions = NewSessionManager(u.txMgr, u.tenantMgr, u.versionH, u.cdcMgr, u.searchStore, u.encoder)
-	u.runnerFactory = NewQueryRunnerFactory(u.txMgr, u.encoder, u.cdcMgr, u.searchStore)
+	var txListeners []TxListener
+	if config.DefaultConfig.Cdc.Enabled {
+		txListeners = append(txListeners, u.cdcMgr)
+	}
+	if config.DefaultConfig.Search.WriteEnabled {
+		// just for testing so that we can disable it if needed
+		txListeners = append(txListeners, NewSearchIndexer(searchStore, tenantMgr))
+	}
+
+	u.sessions = NewSessionManager(u.txMgr, u.tenantMgr, u.versionH, txListeners)
+	u.runnerFactory = NewQueryRunnerFactory(u.txMgr, u.cdcMgr, u.searchStore)
+
 	return u
 }
 
@@ -403,6 +411,11 @@ func (s *apiService) Events(r *api.EventsRequest, stream api.Tigris_EventsServer
 	if !config.DefaultConfig.Cdc.Enabled {
 		return api.Errorf(api.Code_METHOD_NOT_ALLOWED, "change streams is disabled for this collection")
 	}
+
+	if len(r.Collection) == 0 {
+		return api.Errorf(api.Code_INVALID_ARGUMENT, "collection name is missing")
+	}
+
 	publisher := s.cdcMgr.GetPublisher(r.GetDb())
 	streamer, err := publisher.NewStreamer(s.kvStore)
 	if err != nil {
@@ -410,15 +423,28 @@ func (s *apiService) Events(r *api.EventsRequest, stream api.Tigris_EventsServer
 	}
 	defer streamer.Close()
 
+	reqDatabaseId, reqCollectionId := uint32(0), uint32(0)
 	for tx := range streamer.Txs {
 		for _, op := range tx.Ops {
-			_, _, collection, ok := s.encoder.DecodeTableName(op.Table)
-			if !ok {
-				log.Err(err).Str("table", string(op.Table)).Msg("failed to decode collection name")
-				return api.Errorf(api.Code_INTERNAL, "failed to decode collection name")
+			if reqDatabaseId == 0 || reqCollectionId == 0 {
+				if reqDatabaseId, reqCollectionId = s.tenantMgr.GetDatabaseAndCollectionId(r.GetDb(), r.Collection); reqDatabaseId == 0 || reqCollectionId == 0 {
+					// neither is ready yet
+					continue
+				}
 			}
 
-			if r.Collection == "" || r.Collection == collection {
+			_, dbId, cId, ok := s.tenantMgr.GetEncoder().DecodeTableName(op.Table)
+			if !ok {
+				log.Err(err).Str("table", string(op.Table)).Msg("unexpected key in event streams")
+				return api.Errorf(api.Code_INTERNAL, "unexpected key in event streams")
+			}
+
+			if dbId != reqDatabaseId || cId != reqCollectionId {
+				// this probably means database/collection is dropped and this entry is some old entry in the log, ignore it
+				continue
+			}
+
+			if op.Op != kv.DeleteEvent && op.Op != kv.DeleteRangeEvent {
 				td, err := internal.Decode(op.Data)
 				if err != nil {
 					log.Err(err).Str("data", string(op.Data)).Msg("failed to decode data")
@@ -427,7 +453,7 @@ func (s *apiService) Events(r *api.EventsRequest, stream api.Tigris_EventsServer
 
 				event := &api.StreamEvent{
 					TxId:       tx.Id,
-					Collection: collection,
+					Collection: r.Collection,
 					Op:         op.Op,
 					Key:        op.Key,
 					Lkey:       op.LKey,

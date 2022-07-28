@@ -18,8 +18,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math/rand"
 	"reflect"
 	"sync"
+	"time"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
@@ -104,31 +106,42 @@ func (n *TenantNamespace) Id() uint32 {
 type TenantManager struct {
 	sync.RWMutex
 
-	encoder        *encoding.DictionaryEncoder
+	metaStore      *encoding.MetadataDictionary
 	schemaStore    *encoding.SchemaSubspace
 	kvStore        kv.KeyValueStore
+	searchStore    search.Store
 	tenants        map[string]*Tenant
 	idToTenantMap  map[uint32]string
 	version        Version
 	versionH       *VersionHandler
 	mdNameRegistry encoding.MDNameRegistry
+	encoder        Encoder
 }
 
-func NewTenantManager(kvStore kv.KeyValueStore) *TenantManager {
+func NewTenantManager(kvStore kv.KeyValueStore, searchStore search.Store) *TenantManager {
 	mdNameRegistry := &encoding.DefaultMDNameRegistry{}
-	return newTenantManager(kvStore, mdNameRegistry)
+	return newTenantManager(kvStore, searchStore, mdNameRegistry)
 }
 
-func newTenantManager(kvStore kv.KeyValueStore, mdNameRegistry encoding.MDNameRegistry) *TenantManager {
+func newTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, mdNameRegistry encoding.MDNameRegistry) *TenantManager {
 	return &TenantManager{
 		kvStore:        kvStore,
-		encoder:        encoding.NewDictionaryEncoder(mdNameRegistry),
+		searchStore:    searchStore,
+		encoder:        NewEncoder(),
+		metaStore:      encoding.NewMetadataDictionary(mdNameRegistry),
 		schemaStore:    encoding.NewSchemaStore(mdNameRegistry),
 		tenants:        make(map[string]*Tenant),
 		idToTenantMap:  make(map[uint32]string),
 		versionH:       &VersionHandler{},
 		mdNameRegistry: mdNameRegistry,
 	}
+}
+
+func (m *TenantManager) EnsureDefaultNamespace(txMgr *transaction.Manager) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := m.CreateOrGetTenant(ctx, txMgr, NewDefaultNamespace())
+	return err
 }
 
 // CreateOrGetTenant is a thread safe implementation of creating a new tenant. It returns the tenant if it already exists.
@@ -170,11 +183,15 @@ func (m *TenantManager) CreateOrGetTenant(ctx context.Context, txMgr *transactio
 	return m.createOrGetTenantInternal(ctx, tx, namespace)
 }
 
+func (m *TenantManager) GetEncoder() Encoder {
+	return m.encoder
+}
+
 // CreateTenant is a thread safe implementation of creating a new tenant. It returns the error if it already exists.
 func (m *TenantManager) CreateTenant(ctx context.Context, tx transaction.Tx, namespace Namespace) (Namespace, error) {
 	m.Lock()
 	defer m.Unlock()
-	namespaces, err := m.encoder.GetNamespaces(ctx, tx)
+	namespaces, err := m.metaStore.GetNamespaces(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +204,7 @@ func (m *TenantManager) CreateTenant(ctx context.Context, tx transaction.Tx, nam
 			return nil, api.Errorf(api.Code_CONFLICT, "namespace with same id already exists with name '%s'", name)
 		}
 	}
-	if err := m.encoder.ReserveNamespace(ctx, tx, namespace.Name(), namespace.Id()); ulog.E(err) {
+	if err := m.metaStore.ReserveNamespace(ctx, tx, namespace.Name(), namespace.Id()); ulog.E(err) {
 		return nil, err
 	}
 	if err := m.versionH.Increment(ctx, tx); ulog.E(err) {
@@ -195,6 +212,7 @@ func (m *TenantManager) CreateTenant(ctx context.Context, tx transaction.Tx, nam
 	}
 	return namespace, nil
 }
+
 func (m *TenantManager) getTenantFromCache(namespaceName string) (tenant *Tenant) {
 	m.RLock()
 	defer m.RUnlock()
@@ -207,9 +225,8 @@ func (m *TenantManager) getTenantFromCache(namespaceName string) (tenant *Tenant
 // GetTenant is responsible for returning the tenant from the cache. If the tenant is not available in the cache then
 // this method will attempt to load it from the disk and will update the tenant manager cache accordingly.
 func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string, txMgr *transaction.Manager) (tenant *Tenant, err error) {
-	tenant = m.getTenantFromCache(namespaceName)
-	if tenant != nil {
-		return tenant, nil
+	if tenant = m.getTenantFromCache(namespaceName); tenant != nil {
+		return
 	}
 
 	m.Lock()
@@ -232,27 +249,27 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string, txM
 				m.idToTenantMap[tenant.namespace.Id()] = tenant.namespace.Name()
 			}
 		} else {
-			log.Warn().Msg("Could not get namespaces")
+			log.Err(err).Str("ns", namespaceName).Msg("Could not get namespace")
 			_ = tx.Rollback(ctx)
 		}
 	}()
 
 	var namespaces map[string]uint32
-	if namespaces, err = m.encoder.GetNamespaces(ctx, tx); err != nil {
+	if namespaces, err = m.metaStore.GetNamespaces(ctx, tx); err != nil {
 		return nil, err
 	}
 	id, ok := namespaces[namespaceName]
 	if !ok {
-		return nil, nil
+		return nil, fmt.Errorf("namespace not found: %s", namespaceName)
 	}
 
 	currentVersion, err := m.versionH.Read(ctx, tx)
-	if ulog.E(err) {
+	if err != nil {
 		return nil, err
 	}
 
 	namespace := NewTenantNamespace(namespaceName, id)
-	tenant = NewTenant(namespace, m.kvStore, m.encoder, m.schemaStore, m.versionH, currentVersion)
+	tenant = NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.encoder, m.versionH, currentVersion)
 	if err = tenant.reload(ctx, tx, currentVersion); err != nil {
 		return nil, err
 	}
@@ -262,7 +279,7 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string, txM
 func (m *TenantManager) ListNamespaces(ctx context.Context, tx transaction.Tx) ([]Namespace, error) {
 	m.RLock()
 	defer m.RUnlock()
-	namespaces, err := m.encoder.GetNamespaces(ctx, tx)
+	namespaces, err := m.metaStore.GetNamespaces(ctx, tx)
 	if err != nil {
 		_ = tx.Rollback(ctx)
 		log.Warn().Err(err).Msg("Could not list namespaces")
@@ -276,7 +293,7 @@ func (m *TenantManager) ListNamespaces(ctx context.Context, tx transaction.Tx) (
 }
 
 func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transaction.Tx, namespace Namespace) (*Tenant, error) {
-	namespaces, err := m.encoder.GetNamespaces(ctx, tx)
+	namespaces, err := m.metaStore.GetNamespaces(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -288,7 +305,7 @@ func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transa
 			return nil, err
 		}
 
-		tenant := NewTenant(namespace, m.kvStore, m.encoder, m.schemaStore, m.versionH, currentVersion)
+		tenant := NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.encoder, m.versionH, currentVersion)
 		tenant.Lock()
 		err = tenant.reload(ctx, tx, currentVersion)
 		tenant.Unlock()
@@ -302,15 +319,15 @@ func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transa
 		return nil, err
 	}
 
-	if err := m.encoder.ReserveNamespace(ctx, tx, namespace.Name(), namespace.Id()); ulog.E(err) {
+	if err := m.metaStore.ReserveNamespace(ctx, tx, namespace.Name(), namespace.Id()); ulog.E(err) {
 		return nil, err
 	}
 
-	return NewTenant(namespace, m.kvStore, m.encoder, m.schemaStore, m.versionH, nil), nil
+	return NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.encoder, m.versionH, nil), nil
 }
 
-// GetTableNameFromId returns tenant name, database name, collection name corresponding to their encoded ids.
-func (m *TenantManager) GetTableNameFromId(tenantId uint32, dbId uint32, collId uint32) (string, string, string, bool) {
+// GetTableNameFromIds returns tenant name, database name, collection name corresponding to their encoded ids.
+func (m *TenantManager) GetTableNameFromIds(tenantId uint32, dbId uint32, collId uint32) (string, string, string, bool) {
 	m.RLock()
 	defer m.RUnlock()
 
@@ -342,6 +359,38 @@ func (m *TenantManager) GetTableNameFromId(tenantId uint32, dbId uint32, collId 
 	return tenantName, dbName, collName, ok
 }
 
+// GetDatabaseAndCollectionId returns the id of db and c in the default namespace. This is just a temporary API for
+// the streams to know if database and collection exists at the start of streaming and their corresponding IDs.
+func (m *TenantManager) GetDatabaseAndCollectionId(db string, c string) (uint32, uint32) {
+	m.RLock()
+	defer m.RUnlock()
+
+	tenant, ok := m.tenants[DefaultNamespaceName]
+	if !ok {
+		return 0, 0
+	}
+	database, ok := tenant.databases[db]
+	if !ok {
+		return 0, 0
+	}
+
+	coll, ok := database.collections[c]
+	if !ok {
+		return 0, 0
+	}
+
+	return database.id, coll.id
+}
+
+func (m *TenantManager) DecodeTableName(tableName []byte) (string, string, string, bool) {
+	n, d, c, ok := m.encoder.DecodeTableName(tableName)
+	if !ok {
+		return "", "", "", false
+	}
+
+	return m.GetTableNameFromIds(n, d, c)
+}
+
 // Reload reads all the namespaces exists in the disk and build the in-memory map of the manager to track the tenants.
 // As this is an expensive call, the reloading happens during start time for now. It is possible that reloading
 // fails during start time then we rely on lazily reloading cache during serving user requests.
@@ -364,7 +413,7 @@ func (m *TenantManager) Reload(ctx context.Context, tx transaction.Tx) error {
 }
 
 func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVersion Version) error {
-	namespaces, err := m.encoder.GetNamespaces(ctx, tx)
+	namespaces, err := m.metaStore.GetNamespaces(ctx, tx)
 	if err != nil {
 		return err
 	}
@@ -372,7 +421,7 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVe
 
 	for namespace, id := range namespaces {
 		if _, ok := m.tenants[namespace]; !ok {
-			m.tenants[namespace] = NewTenant(NewTenantNamespace(namespace, id), m.kvStore, m.encoder, m.schemaStore, m.versionH, currentVersion)
+			m.tenants[namespace] = NewTenant(NewTenantNamespace(namespace, id), m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.encoder, m.versionH, currentVersion)
 			m.idToTenantMap[id] = namespace
 		}
 	}
@@ -395,8 +444,10 @@ type Tenant struct {
 	sync.RWMutex
 
 	kvStore         kv.KeyValueStore
-	encoder         *encoding.DictionaryEncoder
+	searchStore     search.Store
 	schemaStore     *encoding.SchemaSubspace
+	metaStore       *encoding.MetadataDictionary
+	Encoder         Encoder
 	databases       map[string]*Database
 	idToDatabaseMap map[uint32]string
 	namespace       Namespace
@@ -404,16 +455,18 @@ type Tenant struct {
 	versionH        *VersionHandler
 }
 
-func NewTenant(namespace Namespace, kvStore kv.KeyValueStore, encoder *encoding.DictionaryEncoder, schemaStore *encoding.SchemaSubspace, versionH *VersionHandler, currentVersion Version) *Tenant {
+func NewTenant(namespace Namespace, kvStore kv.KeyValueStore, searchStore search.Store, dict *encoding.MetadataDictionary, schemaStore *encoding.SchemaSubspace, encoder Encoder, versionH *VersionHandler, currentVersion Version) *Tenant {
 	return &Tenant{
 		kvStore:         kvStore,
+		searchStore:     searchStore,
 		namespace:       namespace,
-		encoder:         encoder,
+		metaStore:       dict,
 		schemaStore:     schemaStore,
 		databases:       make(map[string]*Database),
 		idToDatabaseMap: make(map[uint32]string),
 		versionH:        versionH,
 		version:         currentVersion,
+		Encoder:         encoder,
 	}
 }
 
@@ -425,7 +478,7 @@ func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVers
 	tenant.databases = make(map[string]*Database)
 	tenant.idToDatabaseMap = make(map[uint32]string)
 
-	dbNameToId, err := tenant.encoder.GetDatabases(ctx, tx, tenant.namespace.Id())
+	dbNameToId, err := tenant.metaStore.GetDatabases(ctx, tx, tenant.namespace.Id())
 	if err != nil {
 		return err
 	}
@@ -509,13 +562,13 @@ func (tenant *Tenant) CreateDatabase(ctx context.Context, tx transaction.Tx, dbN
 
 	// otherwise, proceed to create the database if there are concurrent requests on different workers then one of
 	// them will fail with duplicate entry and only one will succeed.
-	_, err := tenant.encoder.EncodeDatabaseName(ctx, tx, dbName, tenant.namespace.Id())
+	_, err := tenant.metaStore.CreateDatabase(ctx, tx, dbName, tenant.namespace.Id())
 	return false, err
 }
 
 // DropDatabase is responsible for first dropping a dictionary encoding of the database and then adding a corresponding
 // dropped encoding in the table. Drop returns "false" if database doesn't exist so that caller can reason about.
-func (tenant *Tenant) DropDatabase(ctx context.Context, tx transaction.Tx, dbName string, searchStore search.Store, rowKeyEncoder Encoder) (bool, error) {
+func (tenant *Tenant) DropDatabase(ctx context.Context, tx transaction.Tx, dbName string) (bool, error) {
 	tenant.Lock()
 	defer tenant.Unlock()
 
@@ -527,12 +580,12 @@ func (tenant *Tenant) DropDatabase(ctx context.Context, tx transaction.Tx, dbNam
 
 	// if there are concurrent requests on different workers then one of them will fail with duplicate entry and only
 	// one will succeed.
-	if err := tenant.encoder.EncodeDatabaseAsDropped(ctx, tx, dbName, tenant.namespace.Id(), db.id); err != nil {
+	if err := tenant.metaStore.DropDatabase(ctx, tx, dbName, tenant.namespace.Id(), db.id); err != nil {
 		return true, err
 	}
 
 	for _, c := range db.collections {
-		if err := tenant.dropCollection(ctx, tx, db, c.collection.Name, searchStore, rowKeyEncoder); err != nil {
+		if err := tenant.dropCollection(ctx, tx, db, c.collection.Name); err != nil {
 			return true, err
 		}
 	}
@@ -572,13 +625,13 @@ func (tenant *Tenant) ListDatabases(_ context.Context, _ transaction.Tx) []strin
 func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbName string, dbId uint32) (*Database, error) {
 	database := NewDatabase(dbId, dbName)
 
-	collNameToId, err := tenant.encoder.GetCollections(ctx, tx, tenant.namespace.Id(), database.id)
+	collNameToId, err := tenant.metaStore.GetCollections(ctx, tx, tenant.namespace.Id(), database.id)
 	if err != nil {
 		return nil, err
 	}
 
 	for coll, id := range collNameToId {
-		idxNameToId, err := tenant.encoder.GetIndexes(ctx, tx, tenant.namespace.Id(), database.id, id)
+		idxNameToId, err := tenant.metaStore.GetIndexes(ctx, tx, tenant.namespace.Id(), database.id, id)
 		if err != nil {
 			database.needFixingCollections[coll] = struct{}{}
 			log.Debug().Err(err).Str("collection", coll).Msg("skipping loading collection")
@@ -618,7 +671,7 @@ func (tenant *Tenant) GetCollection(db string, collection string) *schema.Defaul
 }
 
 // CreateCollection is to create a collection inside tenant namespace.
-func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, database *Database, schFactory *schema.Factory, searchStore search.Store) error {
+func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, database *Database, schFactory *schema.Factory) error {
 	tenant.Lock()
 	defer tenant.Unlock()
 
@@ -632,10 +685,10 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 			// shortcut to just check if schema is eq then return early
 			return err
 		}
-		return tenant.updateCollection(ctx, tx, database, c, schFactory, searchStore)
+		return tenant.updateCollection(ctx, tx, database, c, schFactory, tenant.searchStore)
 	}
 
-	collectionId, err := tenant.encoder.EncodeCollectionName(ctx, tx, schFactory.Name, tenant.namespace.Id(), database.id)
+	collectionId, err := tenant.metaStore.CreateCollection(ctx, tx, schFactory.Name, tenant.namespace.Id(), database.id)
 	if err != nil {
 		return err
 	}
@@ -644,7 +697,7 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 	indexes := schFactory.Indexes.GetIndexes()
 	idxNameToId := make(map[string]uint32)
 	for _, i := range indexes {
-		id, err := tenant.encoder.EncodeIndexName(ctx, tx, i.Name, tenant.namespace.Id(), database.id, collectionId)
+		id, err := tenant.metaStore.CreateIndex(ctx, tx, i.Name, tenant.namespace.Id(), database.id, collectionId)
 		if err != nil {
 			return err
 		}
@@ -663,7 +716,7 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 	database.collections[schFactory.Name] = NewCollectionHolder(collectionId, schFactory.Name, collection, idxNameToId)
 
 	if config.DefaultConfig.Search.WriteEnabled {
-		if err := searchStore.CreateCollection(ctx, collection.Search); err != nil {
+		if err := tenant.searchStore.CreateCollection(ctx, collection.Search); err != nil {
 			if err != search.ErrDuplicateEntity {
 				return err
 			}
@@ -683,7 +736,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 
 	for _, idx := range newIndexes {
 		// these are the new indexes present in the new collection
-		id, err := tenant.encoder.EncodeIndexName(ctx, tx, idx.Name, tenant.namespace.Id(), database.id, c.id)
+		id, err := tenant.metaStore.CreateIndex(ctx, tx, idx.Name, tenant.namespace.Id(), database.id, c.id)
 		if err != nil {
 			return err
 		}
@@ -727,11 +780,11 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 
 // DropCollection is to drop a collection and its associated indexes. It removes the "created" entry from the encoding
 // subspace and adds a "dropped" entry for the same collection key.
-func (tenant *Tenant) DropCollection(ctx context.Context, tx transaction.Tx, db *Database, collectionName string, searchStore search.Store, rowKeyEncoder Encoder) error {
+func (tenant *Tenant) DropCollection(ctx context.Context, tx transaction.Tx, db *Database, collectionName string) error {
 	tenant.Lock()
 	defer tenant.Unlock()
 
-	err := tenant.dropCollection(ctx, tx, db, collectionName, searchStore, rowKeyEncoder)
+	err := tenant.dropCollection(ctx, tx, db, collectionName)
 	if err != nil {
 		return err
 	}
@@ -743,7 +796,7 @@ func (tenant *Tenant) DropCollection(ctx context.Context, tx transaction.Tx, db 
 	return err
 }
 
-func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db *Database, collectionName string, searchStore search.Store, rowKeyEncoder Encoder) error {
+func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db *Database, collectionName string) error {
 	if db == nil {
 		return api.Errorf(api.Code_NOT_FOUND, "database missing")
 	}
@@ -753,12 +806,12 @@ func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db 
 		return api.Errorf(api.Code_NOT_FOUND, "collection doesn't exists '%s'", collectionName)
 	}
 
-	if err := tenant.encoder.EncodeCollectionAsDropped(ctx, tx, cHolder.name, tenant.namespace.Id(), db.id, cHolder.id); err != nil {
+	if err := tenant.metaStore.DropCollection(ctx, tx, cHolder.name, tenant.namespace.Id(), db.id, cHolder.id); err != nil {
 		return err
 	}
 
 	for idxName, idxId := range cHolder.idxNameToId {
-		if err := tenant.encoder.EncodeIndexAsDropped(ctx, tx, idxName, tenant.namespace.Id(), db.id, cHolder.id, idxId); err != nil {
+		if err := tenant.metaStore.DropIndex(ctx, tx, idxName, tenant.namespace.Id(), db.id, cHolder.id, idxId); err != nil {
 			return err
 		}
 	}
@@ -766,8 +819,9 @@ func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db 
 		return err
 	}
 
+	// TODO: Move actual deletion out of the mutex
 	if config.DefaultConfig.Server.FDBDelete {
-		tableName, err := rowKeyEncoder.EncodeTableName(tenant.namespace, db, cHolder.collection)
+		tableName, err := tenant.Encoder.EncodeTableName(tenant.namespace, db, cHolder.collection)
 		if err != nil {
 			return err
 		}
@@ -778,7 +832,7 @@ func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db 
 	}
 
 	if config.DefaultConfig.Search.WriteEnabled {
-		if err := searchStore.DropCollection(ctx, cHolder.collection.SearchCollectionName()); err != nil {
+		if err := tenant.searchStore.DropCollection(ctx, cHolder.collection.SearchCollectionName()); err != nil {
 			if err != search.ErrNotFound {
 				return err
 			}
@@ -794,6 +848,32 @@ func (tenant *Tenant) getSearchCollName(dbName string, collName string) string {
 
 func (tenant *Tenant) String() string {
 	return fmt.Sprintf("id: %d, name: %s", tenant.namespace.Id(), tenant.namespace.Name())
+}
+
+// Size returns approximate data size on disk for all the collections in the namespace
+func (tenant *Tenant) Size(ctx context.Context) (int64, error) {
+	tenant.Lock()
+	nsName, _ := tenant.Encoder.EncodeTableName(tenant.namespace, nil, nil)
+	tenant.Unlock()
+
+	return tenant.kvStore.TableSize(ctx, nsName)
+}
+
+func (tenant *Tenant) DatabaseSize(ctx context.Context, db *Database) (int64, error) {
+	tenant.Lock()
+	nsName, _ := tenant.Encoder.EncodeTableName(tenant.namespace, db, nil)
+	tenant.Unlock()
+
+	return tenant.kvStore.TableSize(ctx, nsName)
+}
+
+func (tenant *Tenant) CollectionSize(ctx context.Context, db *Database, coll *schema.DefaultCollection) (int64, error) {
+	tenant.Lock()
+
+	nsName, _ := tenant.Encoder.EncodeTableName(tenant.namespace, db, coll)
+	tenant.Unlock()
+
+	return tenant.kvStore.TableSize(ctx, nsName)
 }
 
 // Database is to manage the collections for this database. Check the Clone method before changing this struct.
@@ -961,4 +1041,21 @@ func IsSchemaEq(s1, s2 []byte) (bool, error) {
 		return false, err
 	}
 	return reflect.DeepEqual(j2, j), nil
+}
+
+// NewTestTenantMgr creates new TenantManager for tests
+func NewTestTenantMgr(kvStore kv.KeyValueStore) (*TenantManager, context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+	m := newTenantManager(kvStore, &search.NoopStore{}, &encoding.TestMDNameRegistry{
+		ReserveSB:  fmt.Sprintf("test_tenant_reserve_%x", rand.Uint64()),
+		EncodingSB: fmt.Sprintf("test_tenant_encoding_%x", rand.Uint64()),
+		SchemaSB:   fmt.Sprintf("test_tenant_schema_%x", rand.Uint64()),
+	})
+
+	_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
+	_ = kvStore.DropTable(ctx, m.mdNameRegistry.EncodingSubspaceName())
+	_ = kvStore.DropTable(ctx, m.mdNameRegistry.SchemaSubspaceName())
+
+	return m, ctx, cancel
 }

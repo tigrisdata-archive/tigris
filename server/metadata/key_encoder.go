@@ -16,14 +16,12 @@ package metadata
 
 import (
 	"bytes"
+
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/metadata/encoding"
-)
-
-var (
-	userTableKeyPrefix = []byte("data")
 )
 
 // Encoder is used to encode/decode values of the Key.
@@ -40,29 +38,24 @@ type Encoder interface {
 	//	   information i.e. whether the index is pkey, etc. The remaining elements are values for this index.
 	EncodeKey(encodedTable []byte, idx *schema.Index, idxParts []interface{}) (keys.Key, error)
 
-	// DecodeTableName is used to decode the key stored in FDB and extract namespace name, database name and collection name.
-	DecodeTableName(tableName []byte) (string, string, string, bool)
+	// DecodeTableName is used to decode the key stored in FDB and extract namespace name, database name and collection ids.
+	DecodeTableName(tableName []byte) (uint32, uint32, uint32, bool)
 	DecodeIndexName(indexName []byte) uint32
 }
 
-// NewEncoder creates Dictionary encoder to encode keys.
-func NewEncoder(mgr *TenantManager) Encoder {
-	return &DictKeyEncoder{
-		mgr: mgr,
-	}
+// NewEncoder creates Dictionary metaStore to encode keys.
+func NewEncoder() Encoder {
+	return &DictKeyEncoder{}
 }
 
 type DictKeyEncoder struct {
-	mgr *TenantManager
 }
 
+// EncodeTableName creates storage friendly table name from namespace, database and collection ids
+// Database and collection objects can be omitted to get table name prefix.
+// If the collection is ommitted then result name includes all the collections in the database
+// If both database and collections are omitted then result name includes all databases in the namespace
 func (d *DictKeyEncoder) EncodeTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) ([]byte, error) {
-	if db == nil {
-		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "database is missing")
-	}
-	if coll == nil {
-		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "collection is missing")
-	}
 	return d.encodedTableName(ns, db, coll), nil
 }
 
@@ -86,10 +79,14 @@ func (d *DictKeyEncoder) EncodeKey(encodedTable []byte, idx *schema.Index, idxPa
 
 func (d *DictKeyEncoder) encodedTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) []byte {
 	var appendTo []byte
-	appendTo = append(appendTo, userTableKeyPrefix...)
+	appendTo = append(appendTo, internal.UserTableKeyPrefix...)
 	appendTo = append(appendTo, encoding.UInt32ToByte(ns.Id())...)
-	appendTo = append(appendTo, encoding.UInt32ToByte(db.id)...)
-	appendTo = append(appendTo, encoding.UInt32ToByte(coll.Id)...)
+	if db != nil {
+		appendTo = append(appendTo, encoding.UInt32ToByte(db.id)...)
+	}
+	if coll != nil {
+		appendTo = append(appendTo, encoding.UInt32ToByte(coll.Id)...)
+	}
 	return appendTo
 }
 
@@ -97,16 +94,16 @@ func (d *DictKeyEncoder) encodedIdxName(idx *schema.Index) []byte {
 	return encoding.UInt32ToByte(idx.Id)
 }
 
-func (d *DictKeyEncoder) DecodeTableName(tableName []byte) (string, string, string, bool) {
-	if len(tableName) < 16 || !bytes.Equal(tableName[0:4], userTableKeyPrefix) {
-		return "", "", "", false
+func (d *DictKeyEncoder) DecodeTableName(tableName []byte) (uint32, uint32, uint32, bool) {
+	if len(tableName) < 16 || !bytes.Equal(tableName[0:4], internal.UserTableKeyPrefix) {
+		return 0, 0, 0, false
 	}
 
 	nsId := encoding.ByteToUInt32(tableName[4:8])
 	dbId := encoding.ByteToUInt32(tableName[8:12])
 	collId := encoding.ByteToUInt32(tableName[12:16])
 
-	return d.mgr.GetTableNameFromId(nsId, dbId, collId)
+	return nsId, dbId, collId, true
 }
 
 func (d *DictKeyEncoder) DecodeIndexName(indexName []byte) uint32 {

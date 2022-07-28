@@ -60,6 +60,7 @@ type KeyValueStore interface {
 	CreateTable(ctx context.Context, name []byte) error
 	DropTable(ctx context.Context, name []byte) error
 	GetInternalDatabase() (interface{}, error) // TODO: CDC remove workaround
+	TableSize(ctx context.Context, name []byte) (int64, error)
 }
 
 type Iterator interface {
@@ -98,6 +99,10 @@ func NewKeyValueStoreWithMetrics(cfg *config.FoundationDBConfig) (KeyValueStore,
 func measureLow(ctx context.Context, name string, f func() error) {
 	// Low level measurement wrapper that is called by the measure functions on the appropriate receiver
 	tags := metrics.GetFdbTags(ctx, name)
+	spanMeta := metrics.NewSpanMeta(metrics.KvTracingServiceName, name, "fdb_kv", tags)
+	var finishTracing func()
+	ctx, finishTracing = spanMeta.StartTracing(ctx, true)
+	defer finishTracing()
 	if config.DefaultConfig.Metrics.Fdb.ResponseTime {
 		metrics.FdbRequests.Tagged(tags).Histogram("histogram", tally.DefaultBuckets)
 		defer metrics.FdbRequests.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
@@ -153,6 +158,14 @@ func (m *KeyValueStoreImplWithMetrics) CreateTable(ctx context.Context, name []b
 func (m *KeyValueStoreImplWithMetrics) DropTable(ctx context.Context, name []byte) (err error) {
 	m.measure(ctx, "DropTable", func() error {
 		err = m.kv.DropTable(ctx, name)
+		return err
+	})
+	return
+}
+
+func (m *KeyValueStoreImplWithMetrics) TableSize(ctx context.Context, name []byte) (size int64, err error) {
+	m.measure(ctx, "TableSize", func() error {
+		size, err = m.kv.TableSize(ctx, name)
 		return err
 	})
 	return

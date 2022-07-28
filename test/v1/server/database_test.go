@@ -21,42 +21,39 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/stretchr/testify/suite"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"gopkg.in/gavv/httpexpect.v1"
 )
-
-type DatabaseSuite struct {
-	suite.Suite
-}
 
 func getDatabaseURL(databaseName string, methodName string) string {
 	return fmt.Sprintf("/api/v1/databases/%s/%s", databaseName, methodName)
 }
 
-func (s *DatabaseSuite) TestCreateDatabase() {
-	resp := createDatabase(s.T(), "test_db")
+func TestCreateDatabase(t *testing.T) {
+	resp := createDatabase(t, "test_db")
 	resp.Status(http.StatusOK).
 		JSON().
 		Object().
 		ValueEqual("message", "database created successfully")
 }
 
-func (s *DatabaseSuite) TestDescribeDatabase() {
-	resp := describeDatabase(s.T(), "test_db")
+func TestDescribeDatabase(t *testing.T) {
+	createCollection(t, "test_db", "test_collection", testCreateSchema).Status(http.StatusOK)
+	resp := describeDatabase(t, "test_db")
 	resp.Status(http.StatusOK).
 		JSON().
 		Object().
-		ValueEqual("db", "test_db")
+		ValueEqual("db", "test_db").
+		ValueEqual("size", 0)
 }
 
-func (s *DatabaseSuite) TestDropDatabase_NotFound() {
-	resp := dropDatabase(s.T(), "test_drop_db_not_found")
+func TestDropDatabase_NotFound(t *testing.T) {
+	resp := dropDatabase(t, "test_drop_db_not_found")
 	testError(resp, http.StatusNotFound, api.Code_NOT_FOUND, "database doesn't exist 'test_drop_db_not_found'")
 }
 
-func (s *DatabaseSuite) TestDropDatabase() {
-	resp := dropDatabase(s.T(), "test_db")
+func TestDropDatabase(t *testing.T) {
+	resp := dropDatabase(t, "test_db")
 	resp.Status(http.StatusOK).
 		JSON().
 		Object().

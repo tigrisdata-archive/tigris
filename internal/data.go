@@ -25,6 +25,10 @@ import (
 )
 
 var (
+	UserTableKeyPrefix = []byte("data")
+)
+
+var (
 	bh codec.BincHandle
 )
 
@@ -135,6 +139,9 @@ func Encode(data *TableData) ([]byte, error) {
 // Decode is used to decode the raw bytes to TableData. The raw bytes are returned from the storage and the kvStore is
 // calling Decode to convert these raw bytes back to TableData.
 func Decode(b []byte) (*TableData, error) {
+	if len(b) == 0 {
+		return nil, api.Errorf(api.Code_INTERNAL, "unable to decode table data is empty")
+	}
 	dataType := DataType(b[0])
 	return decodeInternal(dataType, b[1:])
 }

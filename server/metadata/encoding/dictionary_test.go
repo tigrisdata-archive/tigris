@@ -38,7 +38,7 @@ func TestDictionaryEncoding(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	k := NewDictionaryEncoder(&TestMDNameRegistry{
+	k := NewMetadataDictionary(&TestMDNameRegistry{
 		ReserveSB:  "test_reserved",
 		EncodingSB: "test_encoding",
 	})
@@ -54,19 +54,19 @@ func TestDictionaryEncoding(t *testing.T) {
 
 	tx, err = tm.StartTx(ctx)
 	require.NoError(t, err)
-	dbId, err := k.EncodeDatabaseName(ctx, tx, "db-1", 1234)
+	dbId, err := k.CreateDatabase(ctx, tx, "db-1", 1234)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit(ctx))
 
 	tx, err = tm.StartTx(ctx)
 	require.NoError(t, err)
-	collId, err := k.EncodeCollectionName(ctx, tx, "coll-1", 1234, 1)
+	collId, err := k.CreateCollection(ctx, tx, "coll-1", 1234, 1)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit(ctx))
 
 	tx, err = tm.StartTx(ctx)
 	require.NoError(t, err)
-	indexId, err := k.EncodeIndexName(ctx, tx, "pkey", 1234, 1, 2)
+	indexId, err := k.CreateIndex(ctx, tx, "pkey", 1234, 1, 2)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit(ctx))
 
@@ -103,7 +103,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 	defer cancel()
 
 	t.Run("drop_database", func(t *testing.T) {
-		k := NewDictionaryEncoder(&TestMDNameRegistry{
+		k := NewMetadataDictionary(&TestMDNameRegistry{
 			ReserveSB:  "test_reserved",
 			EncodingSB: "test_encoding",
 		})
@@ -120,7 +120,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		dbId, err := k.EncodeDatabaseName(ctx, tx, "db-1", 1234)
+		dbId, err := k.CreateDatabase(ctx, tx, "db-1", 1234)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
@@ -133,7 +133,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		err = k.EncodeDatabaseAsDropped(ctx, tx, "db-1", 1234, dbId)
+		err = k.DropDatabase(ctx, tx, "db-1", 1234, dbId)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
@@ -145,7 +145,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 		require.Equal(t, v, InvalidId)
 	})
 	t.Run("drop_collection", func(t *testing.T) {
-		k := NewDictionaryEncoder(&TestMDNameRegistry{
+		k := NewMetadataDictionary(&TestMDNameRegistry{
 			ReserveSB:  "test_reserved",
 			EncodingSB: "test_encoding",
 		})
@@ -161,13 +161,13 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		dbId, err := k.EncodeDatabaseName(ctx, tx, "db-1", 1234)
+		dbId, err := k.CreateDatabase(ctx, tx, "db-1", 1234)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		collId, err := k.EncodeCollectionName(ctx, tx, "coll-1", 1234, dbId)
+		collId, err := k.CreateCollection(ctx, tx, "coll-1", 1234, dbId)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
@@ -180,7 +180,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		err = k.EncodeCollectionAsDropped(ctx, tx, "coll-1", 1234, dbId, collId)
+		err = k.DropCollection(ctx, tx, "coll-1", 1234, dbId, collId)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
@@ -192,7 +192,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 		require.Equal(t, v, InvalidId)
 	})
 	t.Run("drop_index", func(t *testing.T) {
-		k := NewDictionaryEncoder(&TestMDNameRegistry{
+		k := NewMetadataDictionary(&TestMDNameRegistry{
 			ReserveSB:  "test_reserved",
 			EncodingSB: "test_encoding",
 		})
@@ -208,19 +208,19 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		dbId, err := k.EncodeDatabaseName(ctx, tx, "db-1", 1234)
+		dbId, err := k.CreateDatabase(ctx, tx, "db-1", 1234)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		collId, err := k.EncodeCollectionName(ctx, tx, "coll-1", 1234, dbId)
+		collId, err := k.CreateCollection(ctx, tx, "coll-1", 1234, dbId)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		idxId, err := k.EncodeIndexName(ctx, tx, "idx-1", 1234, dbId, collId)
+		idxId, err := k.CreateIndex(ctx, tx, "idx-1", 1234, dbId, collId)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
@@ -233,7 +233,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		err = k.EncodeIndexAsDropped(ctx, tx, "idx-1", 1234, dbId, collId, idxId)
+		err = k.DropIndex(ctx, tx, "idx-1", 1234, dbId, collId, idxId)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
@@ -245,7 +245,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 		require.Equal(t, v, InvalidId)
 	})
 	t.Run("drop_collection_multiple", func(t *testing.T) {
-		k := NewDictionaryEncoder(&TestMDNameRegistry{
+		k := NewMetadataDictionary(&TestMDNameRegistry{
 			ReserveSB:  "test_reserved",
 			EncodingSB: "test_encoding",
 		})
@@ -261,13 +261,13 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		dbId, err := k.EncodeDatabaseName(ctx, tx, "db-1", 1234)
+		dbId, err := k.CreateDatabase(ctx, tx, "db-1", 1234)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		collId, err := k.EncodeCollectionName(ctx, tx, "coll-1", 1234, dbId)
+		collId, err := k.CreateCollection(ctx, tx, "coll-1", 1234, dbId)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
@@ -280,7 +280,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		err = k.EncodeCollectionAsDropped(ctx, tx, "coll-1", 1234, dbId, collId)
+		err = k.DropCollection(ctx, tx, "coll-1", 1234, dbId, collId)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
@@ -293,7 +293,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		newCollId, err := k.EncodeCollectionName(ctx, tx, "coll-1", 1234, dbId)
+		newCollId, err := k.CreateCollection(ctx, tx, "coll-1", 1234, dbId)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
@@ -316,7 +316,7 @@ func TestDictionaryEncoding_Error(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	k := NewDictionaryEncoder(&TestMDNameRegistry{
+	k := NewMetadataDictionary(&TestMDNameRegistry{
 		ReserveSB:  "test_reserved",
 		EncodingSB: "test_encoding",
 	})
@@ -327,15 +327,15 @@ func TestDictionaryEncoding_Error(t *testing.T) {
 	tm := transaction.NewManager(kvs)
 	tx, err := tm.StartTx(ctx)
 	require.NoError(t, err)
-	dbId, err := k.EncodeDatabaseName(ctx, tx, "db-1", 0)
+	dbId, err := k.CreateDatabase(ctx, tx, "db-1", 0)
 	require.Error(t, api.Errorf(api.Code_INVALID_ARGUMENT, "invalid namespace id"), err)
 	require.Equal(t, InvalidId, dbId)
 
-	collId, err := k.EncodeCollectionName(ctx, tx, "coll-1", 1234, 0)
+	collId, err := k.CreateCollection(ctx, tx, "coll-1", 1234, 0)
 	require.Error(t, api.Errorf(api.Code_INVALID_ARGUMENT, "invalid database id"), err)
 	require.Equal(t, InvalidId, collId)
 
-	indexId, err := k.EncodeIndexName(ctx, tx, "pkey", 1234, 1, 0)
+	indexId, err := k.CreateIndex(ctx, tx, "pkey", 1234, 1, 0)
 	require.Error(t, api.Errorf(api.Code_INVALID_ARGUMENT, "invalid collection id"), err)
 	require.Equal(t, InvalidId, indexId)
 	require.NoError(t, tx.Rollback(context.TODO()))
@@ -353,7 +353,7 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 
 	tm := transaction.NewManager(kvs)
 	t.Run("get_databases", func(t *testing.T) {
-		k := NewDictionaryEncoder(&TestMDNameRegistry{
+		k := NewMetadataDictionary(&TestMDNameRegistry{
 			ReserveSB:  "test_reserved",
 			EncodingSB: "test_encoding",
 		})
@@ -363,9 +363,9 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		dbId1, err := k.EncodeDatabaseName(ctx, tx, "db-1", 1)
+		dbId1, err := k.CreateDatabase(ctx, tx, "db-1", 1)
 		require.NoError(t, err)
-		dbId2, err := k.EncodeDatabaseName(ctx, tx, "db-2", 1)
+		dbId2, err := k.CreateDatabase(ctx, tx, "db-2", 1)
 		require.NoError(t, err)
 
 		dbToId, err := k.GetDatabases(ctx, tx, 1)
@@ -376,7 +376,7 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 		require.Equal(t, dbToId["db-2"], dbId2)
 	})
 	t.Run("get_collections", func(t *testing.T) {
-		k := NewDictionaryEncoder(&TestMDNameRegistry{
+		k := NewMetadataDictionary(&TestMDNameRegistry{
 			ReserveSB:  "test_reserved",
 			EncodingSB: "test_encoding",
 		})
@@ -386,12 +386,12 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		dbId, err := k.EncodeDatabaseName(ctx, tx, "db-1", 1)
+		dbId, err := k.CreateDatabase(ctx, tx, "db-1", 1)
 		require.NoError(t, err)
 
-		cid1, err := k.EncodeCollectionName(ctx, tx, "coll-1", 1, dbId)
+		cid1, err := k.CreateCollection(ctx, tx, "coll-1", 1, dbId)
 		require.NoError(t, err)
-		cid2, err := k.EncodeCollectionName(ctx, tx, "coll-2", 1, dbId)
+		cid2, err := k.CreateCollection(ctx, tx, "coll-2", 1, dbId)
 		require.NoError(t, err)
 
 		collToId, err := k.GetCollections(ctx, tx, 1, dbId)
@@ -402,7 +402,7 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 		require.Equal(t, collToId["coll-2"], cid2)
 	})
 	t.Run("get_indexes", func(t *testing.T) {
-		k := NewDictionaryEncoder(&TestMDNameRegistry{
+		k := NewMetadataDictionary(&TestMDNameRegistry{
 			ReserveSB:  "test_reserved",
 			EncodingSB: "test_encoding",
 		})
@@ -412,13 +412,13 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		dbId, err := k.EncodeDatabaseName(ctx, tx, "db-1", 1)
+		dbId, err := k.CreateDatabase(ctx, tx, "db-1", 1)
 		require.NoError(t, err)
 
-		cid1, err := k.EncodeCollectionName(ctx, tx, "coll-1", 1, dbId)
+		cid1, err := k.CreateCollection(ctx, tx, "coll-1", 1, dbId)
 		require.NoError(t, err)
 
-		pkid, err := k.EncodeIndexName(ctx, tx, "pkey", 1, dbId, cid1)
+		pkid, err := k.CreateIndex(ctx, tx, "pkey", 1, dbId, cid1)
 		require.NoError(t, err)
 		idxToId, err := k.GetIndexes(ctx, tx, 1, dbId, cid1)
 		require.NoError(t, err)
@@ -468,7 +468,7 @@ func TestReservedNamespace(t *testing.T) {
 
 func TestDecode(t *testing.T) {
 	k := kv.BuildKey(encVersion, UInt32ToByte(1234), dbKey, "db-1", keyEnd)
-	mp, err := NewDictionaryEncoder(&TestMDNameRegistry{
+	mp, err := NewMetadataDictionary(&TestMDNameRegistry{
 		ReserveSB:  "test_reserved",
 		EncodingSB: "test_encoding",
 	}).decode(context.TODO(), k)

@@ -36,6 +36,7 @@ type Config struct {
 	Profiling    ProfilingConfig `yaml:"profiling" json:"profiling"`
 	Metrics      MetricsConfig
 	FoundationDB FoundationDBConfig
+	Quota        QuotaConfig
 }
 
 type AuthConfig struct {
@@ -159,6 +160,12 @@ var DefaultConfig = Config{
 			ResponseTime: true,
 		},
 	},
+	Quota: QuotaConfig{
+		Enabled:              false,
+		RateLimit:            1000,        // requests per second
+		WriteThroughputLimit: 10000000,    // bytes per second
+		DataSizeLimit:        10000000000, // bytes
+	},
 }
 
 // FoundationDBConfig keeps FoundationDB configuration parameters
@@ -172,4 +179,11 @@ type SearchConfig struct {
 	AuthKey      string `mapstructure:"auth_key" json:"auth_key" yaml:"auth_key"`
 	ReadEnabled  bool   `mapstructure:"read_enabled" yaml:"read_enabled" json:"read_enabled"`
 	WriteEnabled bool   `mapstructure:"write_enabled" yaml:"write_enabled" json:"write_enabled"`
+}
+
+type QuotaConfig struct {
+	Enabled              bool
+	RateLimit            int   `mapstructure:"rate_limit" yaml:"rate_limit" json:"rate_limit"`
+	WriteThroughputLimit int   `mapstructure:"write_throughput_limit" yaml:"write_throughput_limit" json:"write_throughput_limit"`
+	DataSizeLimit        int64 `mapstructure:"data_size_limit" yaml:"data_size_limit" json:"data_size_limit"`
 }

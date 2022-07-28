@@ -52,7 +52,7 @@ func BuildFields(reqFields jsoniter.RawMessage) (*FieldFactory, error) {
 				return err
 			}
 
-			factory.addField(&SimpleField{
+			factory.AddField(&SimpleField{
 				Name: string(key),
 				Incl: include,
 			})
@@ -64,7 +64,7 @@ func BuildFields(reqFields jsoniter.RawMessage) (*FieldFactory, error) {
 				return err
 			}
 
-			factory.addField(&SimpleField{
+			factory.AddField(&SimpleField{
 				Name: string(key),
 				Incl: include == 1,
 			})
@@ -74,7 +74,7 @@ func BuildFields(reqFields jsoniter.RawMessage) (*FieldFactory, error) {
 			if err != nil {
 				return err
 			}
-			factory.addField(NewExprField(string(key), expr))
+			factory.AddField(NewExprField(string(key), expr))
 		default:
 			return api.Errorf(api.Code_INVALID_ARGUMENT, "only boolean/integer is supported as value")
 		}
@@ -93,7 +93,7 @@ type FieldFactory struct {
 	FetchedValues map[string]*JSONObject
 }
 
-func (factory *FieldFactory) addField(f Field) {
+func (factory *FieldFactory) AddField(f Field) {
 	if !f.Include() {
 		factory.Exclude[f.Alias()] = f
 		return

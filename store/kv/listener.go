@@ -15,7 +15,10 @@
 package kv
 
 import (
+	"bytes"
 	"context"
+
+	"github.com/tigrisdata/tigris/internal"
 )
 
 const (
@@ -58,7 +61,15 @@ type DefaultListener struct {
 	Events []*Event
 }
 
+func (l *DefaultListener) skip(table []byte) bool {
+	return !bytes.Equal(table[0:4], internal.UserTableKeyPrefix)
+}
+
 func (l *DefaultListener) OnSet(op string, table []byte, key []byte, data []byte) {
+	if l.skip(table) {
+		return
+	}
+
 	l.Events = append(l.Events, &Event{
 		Op:    op,
 		Table: table,
@@ -67,6 +78,10 @@ func (l *DefaultListener) OnSet(op string, table []byte, key []byte, data []byte
 	})
 }
 func (l *DefaultListener) OnClearRange(op string, table []byte, lKey []byte, rKey []byte) {
+	if l.skip(table) {
+		return
+	}
+
 	l.Events = append(l.Events, &Event{
 		Op:    op,
 		Table: table,

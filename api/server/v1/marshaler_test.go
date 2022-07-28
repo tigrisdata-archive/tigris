@@ -33,7 +33,7 @@ func TestJSONEncoding(t *testing.T) {
 	t.Run("unmarshal SearchRequest", func(t *testing.T) {
 		inputDoc := []byte(`{"q":"my search text","search_fields":["first_name","last_name"],
 							"filter":{"last_name":"Steve"},"facet":{"facet stat":0},
-							"sort":[{"salary":"$asc"}],"fields":["employment","history"]}`)
+							"sort":[{"salary":"$asc"}],"include_fields":["employment","history"]}`)
 
 		req := &SearchRequest{}
 		err := json.Unmarshal(inputDoc, req)
@@ -43,7 +43,7 @@ func TestJSONEncoding(t *testing.T) {
 		require.Equal(t, []byte(`{"last_name":"Steve"}`), req.GetFilter())
 		require.Equal(t, []byte(`{"facet stat":0}`), req.GetFacet())
 		require.Equal(t, []byte(`[{"salary":"$asc"}]`), req.GetSort())
-		require.Equal(t, []byte(`["employment","history"]`), req.GetFields())
+		require.Equal(t, []string{"employment", "history"}, req.GetIncludeFields())
 	})
 
 	t.Run("marshal SearchResponse", func(t *testing.T) {
