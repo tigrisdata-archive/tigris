@@ -108,6 +108,10 @@ func (d *DefaultCollection) GetIndexes() *Indexes {
 	return d.Indexes
 }
 
+func (d *DefaultCollection) GetQueryableFields() []*QueryableField {
+	return d.QueryableFields
+}
+
 // Validate expects an unmarshalled document which it will validate again the schema of this collection.
 func (d *DefaultCollection) Validate(document interface{}) error {
 	err := d.Validator.Validate(document)
