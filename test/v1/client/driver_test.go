@@ -20,6 +20,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -71,6 +73,46 @@ func testRead(t *testing.T, db driver.Database, filter driver.Filter, expected [
 	assert.NoError(t, it.Err())
 }
 
+func testTxEventsStream(ctx context.Context, t *testing.T, rit *driver.EventIterator, db1 driver.Database, coll string, doc1, doc2, doc3 driver.Document) {
+	var ev driver.Event
+	var err error
+
+	*rit, err = db1.Events(ctx, coll)
+	require.NoError(t, err)
+	it := *rit
+	defer require.NoError(t, it.Err())
+
+	require.True(t, it.Next(&ev))
+	assert.Equal(t, "insert", ev.Op)
+	assert.JSONEq(t, string(doc1), string(ev.Data))
+	assert.Equal(t, coll, ev.Collection)
+
+	require.True(t, it.Next(&ev))
+	assert.Equal(t, "insert", ev.Op)
+	assert.JSONEq(t, string(doc2), string(ev.Data))
+	assert.Equal(t, coll, ev.Collection)
+
+	require.True(t, it.Next(&ev))
+	assert.Equal(t, "delete", ev.Op)
+	assert.Contains(t, string(ev.Key), "value2")
+	assert.Equal(t, coll, ev.Collection)
+
+	require.True(t, it.Next(&ev))
+	assert.Equal(t, "insert", ev.Op)
+	assert.JSONEq(t, string(doc2), string(ev.Data))
+	assert.Equal(t, coll, ev.Collection)
+
+	require.True(t, it.Next(&ev))
+	assert.Equal(t, "insert", ev.Op)
+	assert.JSONEq(t, string(doc3), string(ev.Data))
+	assert.Equal(t, coll, ev.Collection)
+
+	require.True(t, it.Next(&ev))
+	assert.Equal(t, "update", ev.Op)
+	assert.JSONEq(t, strings.Replace(string(doc2), "222", "555", -1), string(ev.Data))
+	assert.Equal(t, coll, ev.Collection)
+}
+
 func testTxReadWrite(t *testing.T, c driver.Driver) {
 	ctx := context.TODO()
 
@@ -99,8 +141,20 @@ func testTxReadWrite(t *testing.T, c driver.Driver) {
 	err = db1.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema))
 	require.NoError(t, err)
 
+	var wg sync.WaitGroup
+
 	doc1 := driver.Document(`{"str_field": "value1", "int_field": 111, "bool_field": true}`)
 	doc2 := driver.Document(`{"str_field": "value2", "int_field": 222, "bool_field": false}`)
+	doc3 := driver.Document(`{"str_field": "value3", "int_field": 333, "bool_field": false}`)
+
+	var it driver.EventIterator
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		testTxEventsStream(ctx, t, &it, db1, "c1", doc1, doc2, doc3)
+	}()
+
 	resp, err := db1.Insert(ctx, "c1", []driver.Document{
 		doc1,
 		doc2,
@@ -108,19 +162,20 @@ func testTxReadWrite(t *testing.T, c driver.Driver) {
 	require.NoError(t, err)
 	require.Equal(t, "inserted", resp.Status)
 
-	testRead(t, db1, driver.Filter(`{"str_field": "value2"}`), []driver.Document{doc2})
+	fldoc2 := driver.Filter(`{"str_field": "value2"}`)
 
-	delResp, err := db1.Delete(ctx, "c1", driver.Filter(`{"str_field": "value2"}`))
+	testRead(t, db1, fldoc2, []driver.Document{doc2})
+
+	delResp, err := db1.Delete(ctx, "c1", fldoc2)
 	require.NoError(t, err)
 	require.Equal(t, "deleted", delResp.Status)
 
-	testRead(t, db1, driver.Filter(`{"str_field": "value2"}`), nil)
+	testRead(t, db1, fldoc2, nil)
 
 	for {
 		tx, err := c.BeginTx(ctx, dbName)
 		require.NoError(t, err)
 
-		doc3 := driver.Document(`{"str_field": "value3", "int_field": 333, "bool_field": false}`)
 		resp, err = tx.Insert(ctx, "c1", []driver.Document{
 			doc2,
 			doc3,
@@ -128,17 +183,48 @@ func testTxReadWrite(t *testing.T, c driver.Driver) {
 		require.NoError(t, err)
 		require.Equal(t, "inserted", resp.Status)
 
-		it, err := tx.Read(ctx, "c1", driver.Filter(`{"str_field": "value2"}`), nil)
+		it, err := tx.Read(ctx, "c1", fldoc2, nil)
 		require.NoError(t, err)
 		var doc driver.Document
 		for it.Next(&doc) {
 			assert.JSONEq(t, string(doc2), string(doc))
 		}
+
+		_, err = tx.Update(ctx, "c1", fldoc2, driver.Update(`{"$set":{"int_field": 555}}`))
+		require.NoError(t, err)
+
 		if err = tx.Commit(ctx); err == nil || err.Error() != "transaction not committed due to conflict with another transaction" {
 			break
 		}
 	}
 	require.NoError(t, err)
+
+	wg.Wait()
+
+	fldoc3 := driver.Filter(`{"str_field": "value3"}`)
+	_, err = db1.Delete(ctx, "c1", fldoc3)
+	require.NoError(t, err)
+
+	_, err = db1.Insert(ctx, "c1", []driver.Document{doc3})
+	require.NoError(t, err)
+
+	// Check the unread events continues after drop and recreate with the same name
+	require.NoError(t, db1.DropCollection(ctx, "c1"))
+	require.NoError(t, db1.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema)))
+
+	var ev driver.Event
+
+	require.True(t, it.Next(&ev))
+	assert.Equal(t, "delete", ev.Op)
+	assert.Contains(t, string(ev.Key), "value3")
+	assert.Equal(t, "c1", ev.Collection)
+
+	require.True(t, it.Next(&ev))
+	assert.Equal(t, "insert", ev.Op)
+	assert.JSONEq(t, string(doc3), string(ev.Data))
+	assert.Equal(t, "c1", ev.Collection)
+
+	require.NoError(t, db1.DropCollection(ctx, "c1"))
 }
 
 func testDriverBinary(t *testing.T, c driver.Driver) {
