@@ -41,6 +41,7 @@ const (
 )
 
 const (
+	searchCreate string = "create"
 	searchUpsert string = "upsert"
 	searchUpdate string = "update"
 )
@@ -86,7 +87,9 @@ func (i *SearchIndexer) OnPostCommit(ctx context.Context, tenant *metadata.Tenan
 		} else {
 			var action string
 			switch event.Op {
-			case kv.InsertEvent, kv.ReplaceEvent:
+			case kv.InsertEvent:
+				action = searchCreate
+			case kv.ReplaceEvent:
 				action = searchUpsert
 			case kv.UpdateEvent:
 				action = searchUpdate

@@ -120,16 +120,16 @@ func (f *QueryRunnerFactory) GetDatabaseQueryRunner() *DatabaseQueryRunner {
 type BaseQueryRunner struct {
 	encoder     metadata.Encoder
 	cdcMgr      *cdc.Manager
-	generator   *generator
 	searchStore search.Store
+	txMgr       *transaction.Manager
 }
 
 func NewBaseQueryRunner(encoder metadata.Encoder, cdcMgr *cdc.Manager, txMgr *transaction.Manager, searchStore search.Store) *BaseQueryRunner {
 	return &BaseQueryRunner{
 		encoder:     encoder,
 		cdcMgr:      cdcMgr,
-		generator:   newGenerator(txMgr),
 		searchStore: searchStore,
+		txMgr:       txMgr,
 	}
 }
 
@@ -189,8 +189,8 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 			return nil, nil, err
 		}
 
-		keyGen := newKeyGenerator(doc, runner.generator, coll.Indexes.PrimaryKey)
-		key, err := keyGen.generate(ctx, runner.encoder, table)
+		keyGen := newKeyGenerator(doc, tenant.TableKeyGenerator, coll.Indexes.PrimaryKey)
+		key, err := keyGen.generate(ctx, runner.txMgr, runner.encoder, table)
 		if err != nil {
 			return nil, nil, err
 		}
