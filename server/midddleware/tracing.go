@@ -16,6 +16,7 @@ package middleware
 
 import (
 	"context"
+	"github.com/tigrisdata/tigris/util"
 
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/tigrisdata/tigris/server/metrics"
@@ -26,7 +27,7 @@ func traceUnary() func(ctx context.Context, req interface{}, info *grpc.UnarySer
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		var finisher func()
 		grpcMeta := metrics.GetGrpcEndPointMetadataFromFullMethod(ctx, info.FullMethod, "unary")
-		spanMeta := metrics.NewSpanMeta(metrics.GrpcTracingServiceName, info.FullMethod, "unary_rpc", grpcMeta.GetTags())
+		spanMeta := metrics.NewSpanMeta(util.Service, info.FullMethod, "unary_rpc", grpcMeta.GetTags())
 		ctx, finisher = spanMeta.StartTracing(ctx, false)
 		defer finisher()
 		resp, err := handler(ctx, req)
@@ -40,7 +41,7 @@ func traceStream() grpc.StreamServerInterceptor {
 		wrapped := middleware.WrapServerStream(stream)
 		wrapped.WrappedContext = stream.Context()
 		grpcMeta := metrics.GetGrpcEndPointMetadataFromFullMethod(wrapped.WrappedContext, info.FullMethod, "stream")
-		spanMeta := metrics.NewSpanMeta(metrics.GrpcTracingServiceName, info.FullMethod, "stream_rpc", grpcMeta.GetTags())
+		spanMeta := metrics.NewSpanMeta(util.Service, info.FullMethod, "stream_rpc", grpcMeta.GetTags())
 		wrapped.WrappedContext, finisher = spanMeta.StartTracing(wrapped.WrappedContext, false)
 		defer finisher()
 		wrapper := &recvWrapper{wrapped}
