@@ -23,7 +23,7 @@ import (
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/metadata"
-	middleware "github.com/tigrisdata/tigris/server/midddleware"
+	"github.com/tigrisdata/tigris/server/middleware"
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"

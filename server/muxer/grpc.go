@@ -19,7 +19,7 @@ import (
 	"github.com/soheilhy/cmux"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
-	middleware "github.com/tigrisdata/tigris/server/midddleware"
+	"github.com/tigrisdata/tigris/server/middleware"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
