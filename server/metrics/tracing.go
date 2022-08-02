@@ -24,6 +24,7 @@ import (
 const (
 	KvTracingServiceName        = "kv"
 	TxManagerTracingServiceName = "txmanager"
+	TraceServiceName            = "tigris.grpc.server"
 )
 
 type SpanMeta struct {
@@ -60,7 +61,7 @@ func (s *SpanMeta) StartTracing(ctx context.Context, childOnly bool) (context.Co
 		// There is no parent span, no need to start tracing here
 		return ctx, func() {}
 	}
-	span := tracer.StartSpan(s.resourceName, spanOpts...)
+	span := tracer.StartSpan(TraceServiceName, spanOpts...)
 	for k, v := range s.tags {
 		span.SetTag(k, v)
 	}
