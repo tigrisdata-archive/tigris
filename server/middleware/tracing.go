@@ -35,6 +35,9 @@ func traceUnary() func(ctx context.Context, req interface{}, info *grpc.UnarySer
 		ctx, finisher = spanMeta.StartTracing(ctx, false)
 		defer finisher()
 		resp, err := handler(ctx, req)
+		if err != nil {
+			spanMeta.FinishWithError(err)
+		}
 		return resp, err
 	}
 }
@@ -50,6 +53,9 @@ func traceStream() grpc.StreamServerInterceptor {
 		defer finisher()
 		wrapper := &recvWrapper{wrapped}
 		err := handler(srv, wrapper)
+		if err != nil {
+			spanMeta.FinishWithError(err)
+		}
 		return err
 	}
 }
