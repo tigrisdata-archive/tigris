@@ -81,7 +81,7 @@ func newApiService(kv kv.KeyValueStore, searchStore search.Store, tenantMgr *met
 
 	if err := tenantMgr.Reload(ctx, tx); ulog.E(err) {
 		// ToDo: no need to panic, probably handle through async thread.
-		log.Err(err).Msgf("error starting server: reloading tenants failed")
+		log.Fatal().Err(err).Msgf("error starting server: reloading tenants failed")
 	}
 	ulog.E(tx.Commit(ctx))
 
@@ -94,7 +94,7 @@ func newApiService(kv kv.KeyValueStore, searchStore search.Store, tenantMgr *met
 		txListeners = append(txListeners, NewSearchIndexer(searchStore, tenantMgr))
 	}
 
-	u.sessions = NewSessionManager(u.txMgr, u.tenantMgr, u.versionH, txListeners)
+	u.sessions = NewSessionManager(u.txMgr, u.tenantMgr, u.versionH, txListeners, metadata.NewCacheTracker(tenantMgr, txMgr))
 	u.runnerFactory = NewQueryRunnerFactory(u.txMgr, u.cdcMgr, u.searchStore)
 
 	return u
@@ -136,7 +136,7 @@ func (s *apiService) RegisterGRPC(grpc *grpc.Server) error {
 
 func (s *apiService) BeginTransaction(ctx context.Context, _ *api.BeginTransactionRequest) (*api.BeginTransactionResponse, error) {
 	// explicit transactions needed to be tracked
-	session, err := s.sessions.Create(ctx, true, true)
+	session, err := s.sessions.Create(ctx, true, true, true)
 	if err != nil {
 		return nil, err
 	}
@@ -250,8 +250,9 @@ func (s *apiService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.Del
 
 func (s *apiService) Read(r *api.ReadRequest, stream api.Tigris_ReadServer) error {
 	_, err := s.sessions.Execute(stream.Context(), &ReqOptions{
-		txCtx:       api.GetTransaction(stream.Context()),
-		queryRunner: s.runnerFactory.GetStreamingQueryRunner(r, stream),
+		txCtx:              api.GetTransaction(stream.Context()),
+		queryRunner:        s.runnerFactory.GetStreamingQueryRunner(r, stream),
+		instantVerTracking: true,
 	})
 	if err != nil {
 		return err
@@ -262,8 +263,9 @@ func (s *apiService) Read(r *api.ReadRequest, stream api.Tigris_ReadServer) erro
 
 func (s *apiService) Search(r *api.SearchRequest, stream api.Tigris_SearchServer) error {
 	_, err := s.sessions.Execute(stream.Context(), &ReqOptions{
-		txCtx:       api.GetTransaction(stream.Context()),
-		queryRunner: s.runnerFactory.GetSearchQueryRunner(r, stream),
+		txCtx:              api.GetTransaction(stream.Context()),
+		queryRunner:        s.runnerFactory.GetSearchQueryRunner(r, stream),
+		instantVerTracking: true,
 	})
 	if err != nil {
 		return err
@@ -277,9 +279,10 @@ func (s *apiService) CreateOrUpdateCollection(ctx context.Context, r *api.Create
 	runner.SetCreateOrUpdateCollectionReq(r)
 
 	resp, err := s.sessions.Execute(ctx, &ReqOptions{
-		txCtx:          api.GetTransaction(ctx),
-		queryRunner:    runner,
-		metadataChange: true,
+		txCtx:              api.GetTransaction(ctx),
+		queryRunner:        runner,
+		metadataChange:     true,
+		instantVerTracking: true,
 	})
 	if err != nil {
 		return nil, err
@@ -296,9 +299,10 @@ func (s *apiService) DropCollection(ctx context.Context, r *api.DropCollectionRe
 	runner.SetDropCollectionReq(r)
 
 	resp, err := s.sessions.Execute(ctx, &ReqOptions{
-		txCtx:          api.GetTransaction(ctx),
-		queryRunner:    runner,
-		metadataChange: true,
+		txCtx:              api.GetTransaction(ctx),
+		queryRunner:        runner,
+		metadataChange:     true,
+		instantVerTracking: true,
 	})
 	if err != nil {
 		return nil, err
@@ -343,8 +347,9 @@ func (s *apiService) CreateDatabase(ctx context.Context, r *api.CreateDatabaseRe
 	queryRunner := s.runnerFactory.GetDatabaseQueryRunner()
 	queryRunner.SetCreateDatabaseReq(r)
 	resp, err := s.sessions.Execute(ctx, &ReqOptions{
-		queryRunner:    queryRunner,
-		metadataChange: true,
+		queryRunner:        queryRunner,
+		metadataChange:     true,
+		instantVerTracking: true,
 	})
 	if err != nil {
 		return nil, err
@@ -360,8 +365,9 @@ func (s *apiService) DropDatabase(ctx context.Context, r *api.DropDatabaseReques
 	queryRunner := s.runnerFactory.GetDatabaseQueryRunner()
 	queryRunner.SetDropDatabaseReq(r)
 	resp, err := s.sessions.Execute(ctx, &ReqOptions{
-		queryRunner:    queryRunner,
-		metadataChange: true,
+		queryRunner:        queryRunner,
+		metadataChange:     true,
+		instantVerTracking: true,
 	})
 	if err != nil {
 		return nil, err

@@ -204,11 +204,11 @@ func (d *fdbkv) SetVersionstampedKey(ctx context.Context, key []byte, value []by
 	return err
 }
 
-func (d *fdbkv) Get(ctx context.Context, key []byte) ([]byte, error) {
+func (d *fdbkv) Get(ctx context.Context, key []byte, isSnapshot bool) (Future, error) {
 	val, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return (&ftx{d: d, tx: &tr}).Get(ctx, key)
+		return (&ftx{d: d, tx: &tr}).Get(ctx, key, isSnapshot)
 	})
-	return val.([]byte), err
+	return val.(fdb.FutureByteSlice), err
 }
 
 func (d *fdbkv) CreateTable(_ context.Context, name []byte) error {
@@ -349,7 +349,7 @@ func (b *fbatch) SetVersionstampedKey(_ context.Context, _ []byte, _ []byte) err
 	return fmt.Errorf("batch doesn't support setting versionstamped key")
 }
 
-func (b *fbatch) Get(_ context.Context, _ []byte) ([]byte, error) {
+func (b *fbatch) Get(_ context.Context, _ []byte, _ bool) (Future, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
@@ -537,8 +537,11 @@ func (t *ftx) SetVersionstampedKey(ctx context.Context, key []byte, value []byte
 	return nil
 }
 
-func (t *ftx) Get(_ context.Context, key []byte) ([]byte, error) {
-	return t.tx.Get(fdb.Key(key)).Get()
+func (t *ftx) Get(_ context.Context, key []byte, isSnapshot bool) (Future, error) {
+	if isSnapshot {
+		return t.tx.Snapshot().Get(fdb.Key(key)), nil
+	}
+	return t.tx.Get(fdb.Key(key)), nil
 }
 
 func (t *ftx) Commit(ctx context.Context) error {
