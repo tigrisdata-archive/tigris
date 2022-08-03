@@ -440,35 +440,37 @@ func (s *apiService) Events(r *api.EventsRequest, stream api.Tigris_EventsServer
 			}
 
 			if dbId != reqDatabaseId || cId != reqCollectionId {
-				// this probably means database/collection is dropped and this entry is some old entry in the log, ignore it
+				//  the event is no for the collection we are listening to
 				continue
 			}
 
+			var data []byte
 			if op.Op != kv.DeleteEvent && op.Op != kv.DeleteRangeEvent {
 				td, err := internal.Decode(op.Data)
 				if err != nil {
 					log.Err(err).Str("data", string(op.Data)).Msg("failed to decode data")
 					return api.Errorf(api.Code_INTERNAL, "failed to decode data")
 				}
+				data = td.RawData
+			}
 
-				event := &api.StreamEvent{
-					TxId:       tx.Id,
-					Collection: r.Collection,
-					Op:         op.Op,
-					Key:        op.Key,
-					Lkey:       op.LKey,
-					Rkey:       op.RKey,
-					Data:       td.RawData,
-					Last:       op.Last,
-				}
+			event := &api.StreamEvent{
+				TxId:       tx.Id,
+				Collection: r.Collection,
+				Op:         op.Op,
+				Key:        op.Key,
+				Lkey:       op.LKey,
+				Rkey:       op.RKey,
+				Data:       data,
+				Last:       op.Last,
+			}
 
-				response := &api.EventsResponse{
-					Event: event,
-				}
+			response := &api.EventsResponse{
+				Event: event,
+			}
 
-				if err := stream.Send(response); ulog.E(err) {
-					return err
-				}
+			if err := stream.Send(response); ulog.E(err) {
+				return err
 			}
 		}
 	}

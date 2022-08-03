@@ -120,16 +120,16 @@ func (f *QueryRunnerFactory) GetDatabaseQueryRunner() *DatabaseQueryRunner {
 type BaseQueryRunner struct {
 	encoder     metadata.Encoder
 	cdcMgr      *cdc.Manager
-	generator   *generator
 	searchStore search.Store
+	txMgr       *transaction.Manager
 }
 
 func NewBaseQueryRunner(encoder metadata.Encoder, cdcMgr *cdc.Manager, txMgr *transaction.Manager, searchStore search.Store) *BaseQueryRunner {
 	return &BaseQueryRunner{
 		encoder:     encoder,
 		cdcMgr:      cdcMgr,
-		generator:   newGenerator(txMgr),
 		searchStore: searchStore,
+		txMgr:       txMgr,
 	}
 }
 
@@ -189,8 +189,8 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 			return nil, nil, err
 		}
 
-		keyGen := newKeyGenerator(doc, runner.generator, coll.Indexes.PrimaryKey)
-		key, err := keyGen.generate(ctx, runner.encoder, table)
+		keyGen := newKeyGenerator(doc, tenant.TableKeyGenerator, coll.Indexes.PrimaryKey)
+		key, err := keyGen.generate(ctx, runner.txMgr, runner.encoder, table)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -526,17 +526,17 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, ctx, err
 	}
 
-	searchFields, err := runner.getSearchFields(collection.GetFields())
+	searchFields, err := runner.getSearchFields(collection.GetQueryableFields())
 	if err != nil {
 		return nil, ctx, err
 	}
 
-	facets, err := runner.getFacetFields(collection.GetFields())
+	facets, err := runner.getFacetFields(collection.GetQueryableFields())
 	if err != nil {
 		return nil, ctx, err
 	}
 
-	fieldSelection, err := runner.getFieldSelection(collection.GetFields())
+	fieldSelection, err := runner.getFieldSelection(collection.GetQueryableFields())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -624,7 +624,7 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	return &Response{}, ctx, nil
 }
 
-func (runner *SearchQueryRunner) getSearchFields(collFields []*schema.Field) ([]string, error) {
+func (runner *SearchQueryRunner) getSearchFields(collFields []*schema.QueryableField) ([]string, error) {
 	var searchFields = runner.req.SearchFields
 	if len(searchFields) == 0 {
 		// this is to include all searchable fields if not present in the query
@@ -654,7 +654,7 @@ func (runner *SearchQueryRunner) getSearchFields(collFields []*schema.Field) ([]
 	return searchFields, nil
 }
 
-func (runner *SearchQueryRunner) getFacetFields(collFields []*schema.Field) (qsearch.Facets, error) {
+func (runner *SearchQueryRunner) getFacetFields(collFields []*schema.QueryableField) (qsearch.Facets, error) {
 	facets, err := qsearch.UnmarshalFacet(runner.req.Facet)
 	if err != nil {
 		return qsearch.Facets{}, err
@@ -665,6 +665,9 @@ func (runner *SearchQueryRunner) getFacetFields(collFields []*schema.Field) (qse
 		for _, cf := range collFields {
 			if ff.Name != cf.FieldName {
 				continue
+			}
+			if !cf.Faceted {
+				return qsearch.Facets{}, api.Errorf(api.Code_INVALID_ARGUMENT, "Faceting not enabled for `%s`", ff.Name)
 			}
 			if cf.DataType != schema.StringType {
 				return qsearch.Facets{}, api.Errorf(api.Code_INVALID_ARGUMENT, "Cannot generate facets for `%s`. Faceting is only supported for text fields", ff.Name)
@@ -680,7 +683,7 @@ func (runner *SearchQueryRunner) getFacetFields(collFields []*schema.Field) (qse
 	return facets, nil
 }
 
-func (runner *SearchQueryRunner) getFieldSelection(collFields []*schema.Field) (*read.FieldFactory, error) {
+func (runner *SearchQueryRunner) getFieldSelection(collFields []*schema.QueryableField) (*read.FieldFactory, error) {
 	var selectionFields []string
 
 	// Only one of include/exclude. Honor inclusion over exclusion

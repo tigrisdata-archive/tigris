@@ -16,15 +16,19 @@ package metrics
 
 import (
 	"context"
-
+	"errors"
+	"github.com/apple/foundationdb/bindings/go/src/fdb"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/config"
+	"google.golang.org/grpc/status"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
+	"strconv"
 )
 
 const (
-	GrpcTracingServiceName      = "tigris.grpc"
-	KvTracingServiceName        = "tigris.fdb.kv"
-	TxManagerTracingServiceName = "tigris.tx.manager"
+	KvTracingServiceName        = "kv"
+	TxManagerTracingServiceName = "txmanager"
+	TraceServiceName            = "tigris.grpc.server"
 )
 
 type SpanMeta struct {
@@ -32,6 +36,7 @@ type SpanMeta struct {
 	resourceName string
 	spanType     string
 	tags         map[string]string
+	span         tracer.Span
 }
 
 func NewSpanMeta(serviceName string, resourceName string, spanType string, tags map[string]string) *SpanMeta {
@@ -61,12 +66,33 @@ func (s *SpanMeta) StartTracing(ctx context.Context, childOnly bool) (context.Co
 		// There is no parent span, no need to start tracing here
 		return ctx, func() {}
 	}
-	span := tracer.StartSpan(s.resourceName, spanOpts...)
+	s.span = tracer.StartSpan(TraceServiceName, spanOpts...)
 	for k, v := range s.tags {
-		span.SetTag(k, v)
+		s.span.SetTag(k, v)
 	}
-	ctx = tracer.ContextWithSpan(ctx, span)
+	ctx = tracer.ContextWithSpan(ctx, s.span)
 	return ctx, func() {
-		span.Finish()
+		s.span.Finish()
 	}
+}
+
+func (s *SpanMeta) FinishWithError(err error) {
+	if s.span == nil {
+		return
+	}
+	errCode := status.Code(err)
+	s.span.SetTag("grpc.code", errCode.String())
+	var tigrisErr *api.TigrisError
+	var fdbErr fdb.Error
+	if errors.As(err, &fdbErr) {
+		s.span.SetTag("error_source", "fdb")
+		s.span.SetTag("fdb_error_code", strconv.Itoa(fdbErr.Code))
+	}
+	if errors.As(err, &tigrisErr) {
+		s.span.SetTag("error_source", "tigris_server")
+		s.span.SetTag("tigris_server_error", tigrisErr.Code.String())
+	}
+	// TODO: handle known search errors
+	finishOptions := []tracer.FinishOption{tracer.WithError(err)}
+	s.span.Finish(finishOptions...)
 }

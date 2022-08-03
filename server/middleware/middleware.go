@@ -117,7 +117,6 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 	}
 
 	unaryInterceptors = append(unaryInterceptors, []grpc.UnaryServerInterceptor{
-		//grpctrace.UnaryServerInterceptor(grpctrace.WithServiceName(util.Service)),
 		pprofUnaryServerInterceptor(),
 		quotaUnaryServerInterceptor(),
 		grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(sampledTaggedLogger)),

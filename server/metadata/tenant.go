@@ -106,16 +106,17 @@ func (n *TenantNamespace) Id() uint32 {
 type TenantManager struct {
 	sync.RWMutex
 
-	metaStore      *encoding.MetadataDictionary
-	schemaStore    *encoding.SchemaSubspace
-	kvStore        kv.KeyValueStore
-	searchStore    search.Store
-	tenants        map[string]*Tenant
-	idToTenantMap  map[uint32]string
-	version        Version
-	versionH       *VersionHandler
-	mdNameRegistry encoding.MDNameRegistry
-	encoder        Encoder
+	metaStore         *encoding.MetadataDictionary
+	schemaStore       *encoding.SchemaSubspace
+	kvStore           kv.KeyValueStore
+	searchStore       search.Store
+	tenants           map[string]*Tenant
+	idToTenantMap     map[uint32]string
+	version           Version
+	versionH          *VersionHandler
+	mdNameRegistry    encoding.MDNameRegistry
+	encoder           Encoder
+	tableKeyGenerator *TableKeyGenerator
 }
 
 func NewTenantManager(kvStore kv.KeyValueStore, searchStore search.Store) *TenantManager {
@@ -125,15 +126,16 @@ func NewTenantManager(kvStore kv.KeyValueStore, searchStore search.Store) *Tenan
 
 func newTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, mdNameRegistry encoding.MDNameRegistry) *TenantManager {
 	return &TenantManager{
-		kvStore:        kvStore,
-		searchStore:    searchStore,
-		encoder:        NewEncoder(),
-		metaStore:      encoding.NewMetadataDictionary(mdNameRegistry),
-		schemaStore:    encoding.NewSchemaStore(mdNameRegistry),
-		tenants:        make(map[string]*Tenant),
-		idToTenantMap:  make(map[uint32]string),
-		versionH:       &VersionHandler{},
-		mdNameRegistry: mdNameRegistry,
+		kvStore:           kvStore,
+		searchStore:       searchStore,
+		encoder:           NewEncoder(),
+		metaStore:         encoding.NewMetadataDictionary(mdNameRegistry),
+		schemaStore:       encoding.NewSchemaStore(mdNameRegistry),
+		tenants:           make(map[string]*Tenant),
+		idToTenantMap:     make(map[uint32]string),
+		versionH:          &VersionHandler{},
+		mdNameRegistry:    mdNameRegistry,
+		tableKeyGenerator: NewTableKeyGenerator(),
 	}
 }
 
@@ -269,7 +271,7 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string, txM
 	}
 
 	namespace := NewTenantNamespace(namespaceName, id)
-	tenant = NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.encoder, m.versionH, currentVersion)
+	tenant = NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
 	if err = tenant.reload(ctx, tx, currentVersion); err != nil {
 		return nil, err
 	}
@@ -305,7 +307,7 @@ func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transa
 			return nil, err
 		}
 
-		tenant := NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.encoder, m.versionH, currentVersion)
+		tenant := NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
 		tenant.Lock()
 		err = tenant.reload(ctx, tx, currentVersion)
 		tenant.Unlock()
@@ -323,7 +325,7 @@ func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transa
 		return nil, err
 	}
 
-	return NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.encoder, m.versionH, nil), nil
+	return NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.encoder, m.versionH, nil, m.tableKeyGenerator), nil
 }
 
 // GetTableNameFromIds returns tenant name, database name, collection name corresponding to their encoded ids.
@@ -421,7 +423,7 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVe
 
 	for namespace, id := range namespaces {
 		if _, ok := m.tenants[namespace]; !ok {
-			m.tenants[namespace] = NewTenant(NewTenantNamespace(namespace, id), m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.encoder, m.versionH, currentVersion)
+			m.tenants[namespace] = NewTenant(NewTenantNamespace(namespace, id), m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
 			m.idToTenantMap[id] = namespace
 		}
 	}
@@ -443,19 +445,20 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVe
 type Tenant struct {
 	sync.RWMutex
 
-	kvStore         kv.KeyValueStore
-	searchStore     search.Store
-	schemaStore     *encoding.SchemaSubspace
-	metaStore       *encoding.MetadataDictionary
-	Encoder         Encoder
-	databases       map[string]*Database
-	idToDatabaseMap map[uint32]string
-	namespace       Namespace
-	version         Version
-	versionH        *VersionHandler
+	kvStore           kv.KeyValueStore
+	searchStore       search.Store
+	schemaStore       *encoding.SchemaSubspace
+	metaStore         *encoding.MetadataDictionary
+	Encoder           Encoder
+	databases         map[string]*Database
+	idToDatabaseMap   map[uint32]string
+	namespace         Namespace
+	version           Version
+	versionH          *VersionHandler
+	TableKeyGenerator *TableKeyGenerator
 }
 
-func NewTenant(namespace Namespace, kvStore kv.KeyValueStore, searchStore search.Store, dict *encoding.MetadataDictionary, schemaStore *encoding.SchemaSubspace, encoder Encoder, versionH *VersionHandler, currentVersion Version) *Tenant {
+func NewTenant(namespace Namespace, kvStore kv.KeyValueStore, searchStore search.Store, dict *encoding.MetadataDictionary, schemaStore *encoding.SchemaSubspace, encoder Encoder, versionH *VersionHandler, currentVersion Version, tableKeyGenerator *TableKeyGenerator) *Tenant {
 	return &Tenant{
 		kvStore:         kvStore,
 		searchStore:     searchStore,
@@ -819,8 +822,16 @@ func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db 
 		return err
 	}
 
+	tableName, err := tenant.Encoder.EncodeTableName(tenant.namespace, db, cHolder.collection)
+	if err != nil {
+		return err
+	}
+	if err := tenant.TableKeyGenerator.removeCounter(ctx, tx, tableName); err != nil {
+		return err
+	}
+
 	// TODO: Move actual deletion out of the mutex
-	if config.DefaultConfig.Server.FDBDelete {
+	if config.DefaultConfig.Server.FDBHardDrop {
 		tableName, err := tenant.Encoder.EncodeTableName(tenant.namespace, db, cHolder.collection)
 		if err != nil {
 			return err

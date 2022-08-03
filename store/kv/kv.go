@@ -125,6 +125,7 @@ func measureLow(ctx context.Context, name string, f func() error) {
 			metrics.FdbErrorRequests.Tagged(tags).Counter("unknown").Inc(1)
 		}
 	}
+	spanMeta.FinishWithError(err)
 }
 
 func (m *KeyValueStoreImplWithMetrics) measure(ctx context.Context, name string, f func() error) {
