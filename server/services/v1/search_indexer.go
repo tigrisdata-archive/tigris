@@ -25,6 +25,7 @@ import (
 	"github.com/apple/foundationdb/bindings/go/src/fdb/subspace"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tigrisdata/tigris/internal"
+	"github.com/tigrisdata/tigris/lib/json"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/transaction"
@@ -155,7 +156,7 @@ func CreateSearchKey(table []byte, fdbKey []byte) (string, error) {
 		case string:
 			value = t
 		case []byte:
-			value = string(t)
+			value = base64.StdEncoding.EncodeToString(t)
 		}
 		return value, nil
 	} else {
@@ -165,10 +166,9 @@ func CreateSearchKey(table []byte, fdbKey []byte) (string, error) {
 }
 
 func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollection, id string) ([]byte, error) {
-	var err error
 	// better to decode it and then update the JSON
-	var decData map[string]any
-	if err = jsoniter.Unmarshal(data.RawData, &decData); err != nil {
+	decData, err := json.Decode(data.RawData)
+	if err != nil {
 		return nil, err
 	}
 
@@ -195,7 +195,12 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 		decData[schema.ReservedFields[schema.UpdatedAt]] = data.UpdatedAt.UnixNano()
 	}
 
-	return jsoniter.Marshal(decData)
+	encoded, err := json.Encode(decData)
+	if err != nil {
+		return nil, err
+	}
+
+	return encoded, nil
 }
 
 func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCollection) (string, *internal.TableData, map[string]interface{}, error) {
