@@ -37,12 +37,12 @@ func TestMetaVersion(t *testing.T) {
 		tm := transaction.NewManager(kv)
 		tx1, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		first, err := m.Read(ctx, tx1)
+		first, err := m.Read(ctx, tx1, true)
 		require.NoError(t, err)
 
 		tx2, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		second, err := m.Read(ctx, tx2)
+		second, err := m.Read(ctx, tx2, true)
 		require.NoError(t, err)
 
 		require.NoError(t, tx1.Commit(ctx))
@@ -55,7 +55,7 @@ func TestMetaVersion(t *testing.T) {
 		tm := transaction.NewManager(kv)
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		first, err := m.Read(ctx, tx)
+		first, err := m.Read(ctx, tx, true)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
@@ -66,7 +66,7 @@ func TestMetaVersion(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		second, err := m.Read(ctx, tx)
+		second, err := m.Read(ctx, tx, true)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 		require.NotEqual(t, first, second)

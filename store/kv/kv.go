@@ -33,6 +33,8 @@ type KeyValue struct {
 	Data   *internal.TableData
 }
 
+type Future fdb.FutureByteSlice
+
 type KV interface {
 	Insert(ctx context.Context, table []byte, key Key, data *internal.TableData) error
 	Replace(ctx context.Context, table []byte, key Key, data *internal.TableData) error
@@ -44,7 +46,7 @@ type KV interface {
 	UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error)
 	SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error
 	SetVersionstampedKey(ctx context.Context, key []byte, value []byte) error
-	Get(ctx context.Context, key []byte) ([]byte, error)
+	Get(ctx context.Context, key []byte, isSnapshot bool) (Future, error)
 }
 
 type Tx interface {
@@ -188,9 +190,9 @@ func (m *KeyValueStoreImplWithMetrics) SetVersionstampedKey(ctx context.Context,
 	return
 }
 
-func (m *KeyValueStoreImplWithMetrics) Get(ctx context.Context, key []byte) (val []byte, err error) {
+func (m *KeyValueStoreImplWithMetrics) Get(ctx context.Context, key []byte, isSnapshot bool) (val Future, err error) {
 	m.measure(ctx, "Get", func() error {
-		val, err = m.kv.Get(ctx, key)
+		val, err = m.kv.Get(ctx, key, isSnapshot)
 		return err
 	})
 	return
@@ -403,9 +405,9 @@ func (m *TxImplWithMetrics) SetVersionstampedKey(ctx context.Context, key []byte
 	return
 }
 
-func (m *TxImplWithMetrics) Get(ctx context.Context, key []byte) (val []byte, err error) {
+func (m *TxImplWithMetrics) Get(ctx context.Context, key []byte, isSnapshot bool) (val Future, err error) {
 	m.measure(ctx, "Get", func() error {
-		val, err = m.tx.Get(ctx, key)
+		val, err = m.tx.Get(ctx, key, isSnapshot)
 		return err
 	})
 	return

@@ -18,6 +18,7 @@ import (
 	"context"
 
 	"github.com/tigrisdata/tigris/server/transaction"
+	"github.com/tigrisdata/tigris/store/kv"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
@@ -29,6 +30,7 @@ var (
 )
 
 type Version []byte
+type VersionFuture kv.Future
 
 // VersionHandler is used to maintain a version for each schema change. Using this we can implement transactional DDL APIs.
 // This will also be used to provide a strongly consistent Cache lookup on the schemas i.e. anytime version changes we
@@ -40,15 +42,25 @@ func (m *VersionHandler) Increment(ctx context.Context, tx transaction.Tx) error
 	return tx.SetVersionstampedValue(ctx, VersionKey, VersionValue)
 }
 
-// Read reads the latest metadata version
-func (m *VersionHandler) Read(ctx context.Context, tx transaction.Tx) (Version, error) {
-	return tx.Get(ctx, VersionKey)
+// Read is blocking and returns the latest metadata version.
+func (m *VersionHandler) Read(ctx context.Context, tx transaction.Tx, isSnapshot bool) (Version, error) {
+	vf, err := m.ReadFuture(ctx, tx, isSnapshot)
+	if err != nil {
+		return nil, err
+	}
+
+	return vf.Get()
 }
 
-// ReadInOwnTxn creates a transaction and then read the version. This is mainly needed when a query is doing metadata
-// changed in that case it is bumping the metadata version and that means we can't read the metadata version in the
-// same transaction.
-func (m *VersionHandler) ReadInOwnTxn(ctx context.Context, txMgr *transaction.Manager) (version Version, err error) {
+// ReadFuture is a non-blocking API to return the future corresponding to the latest metadata version
+func (m *VersionHandler) ReadFuture(ctx context.Context, tx transaction.Tx, isSnapshot bool) (VersionFuture, error) {
+	return tx.Get(ctx, VersionKey, isSnapshot)
+}
+
+// ReadInOwnTxn creates a transaction and then reads the version. This is useful when a transaction is also changing
+// the metadata then it is better to read the metadata version in its own transaction as the read-write-read or write-read
+// metadata version is not allowed in a transaction.
+func (m *VersionHandler) ReadInOwnTxn(ctx context.Context, txMgr *transaction.Manager, isSnapshot bool) (version Version, err error) {
 	tx, e := txMgr.StartTx(ctx)
 	if ulog.E(e) {
 		return nil, e
@@ -62,6 +74,9 @@ func (m *VersionHandler) ReadInOwnTxn(ctx context.Context, txMgr *transaction.Ma
 		}
 	}()
 
-	version, err = tx.Get(ctx, VersionKey)
-	return version, err
+	versionF, err := m.ReadFuture(ctx, tx, isSnapshot)
+	if err != nil {
+		return nil, err
+	}
+	return versionF.Get()
 }

@@ -18,10 +18,10 @@ import (
 	"context"
 	"sync"
 
-	"github.com/google/uuid"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
+	"github.com/tigrisdata/tigris/lib/uuid"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metrics"
@@ -48,7 +48,7 @@ type Tx interface {
 	Update(ctx context.Context, key keys.Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error)
 	Delete(ctx context.Context, key keys.Key) error
 	Read(ctx context.Context, key keys.Key) (kv.Iterator, error)
-	Get(ctx context.Context, key []byte) ([]byte, error)
+	Get(ctx context.Context, key []byte, isSnapshot bool) (kv.Future, error)
 	Commit(ctx context.Context) error
 	Rollback(ctx context.Context) error
 	SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error
@@ -344,7 +344,7 @@ func (m *TxSessionWithMetrics) SetVersionstampedKey(ctx context.Context, key []b
 	return
 }
 
-func (s *TxSession) Get(ctx context.Context, key []byte) ([]byte, error) {
+func (s *TxSession) Get(ctx context.Context, key []byte, isSnapshot bool) (kv.Future, error) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -352,12 +352,12 @@ func (s *TxSession) Get(ctx context.Context, key []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	return s.kTx.Get(ctx, key)
+	return s.kTx.Get(ctx, key, isSnapshot)
 }
 
-func (m *TxSessionWithMetrics) Get(ctx context.Context, key []byte) (val []byte, err error) {
+func (m *TxSessionWithMetrics) Get(ctx context.Context, key []byte, isSnapshot bool) (val kv.Future, err error) {
 	m.measure(ctx, "Get", func(ctx context.Context) error {
-		val, err = m.t.Get(ctx, key)
+		val, err = m.t.Get(ctx, key, isSnapshot)
 		return err
 	})
 	return
