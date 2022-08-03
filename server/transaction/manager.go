@@ -48,6 +48,7 @@ type Tx interface {
 	Update(ctx context.Context, key keys.Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error)
 	Delete(ctx context.Context, key keys.Key) error
 	Read(ctx context.Context, key keys.Key) (kv.Iterator, error)
+	ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key) (kv.Iterator, error)
 	Get(ctx context.Context, key []byte, isSnapshot bool) (kv.Future, error)
 	Commit(ctx context.Context) error
 	Rollback(ctx context.Context) error
@@ -298,9 +299,28 @@ func (s *TxSession) Read(ctx context.Context, key keys.Key) (kv.Iterator, error)
 	return s.kTx.Read(ctx, key.Table(), kv.BuildKey(key.IndexParts()...))
 }
 
+func (s *TxSession) ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key) (kv.Iterator, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	if err := s.validateSession(); err != nil {
+		return nil, err
+	}
+
+	return s.kTx.ReadRange(ctx, lKey.Table(), kv.BuildKey(lKey.IndexParts()...), kv.BuildKey(rKey.IndexParts()...))
+}
+
 func (m *TxSessionWithMetrics) Read(ctx context.Context, key keys.Key) (it kv.Iterator, err error) {
 	m.measure(ctx, "Read", func(ctx context.Context) error {
 		it, err = m.t.Read(ctx, key)
+		return err
+	})
+	return
+}
+
+func (m *TxSessionWithMetrics) ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key) (it kv.Iterator, err error) {
+	m.measure(ctx, "ReadRange", func(ctx context.Context) error {
+		it, err = m.t.ReadRange(ctx, lKey, rKey)
 		return err
 	})
 	return

@@ -95,9 +95,19 @@ type Factory struct {
 
 // Build is used to deserialize the user json schema into a schema factory.
 func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
+	return BuildWithType(collection, reqSchema, api.CollectionType_DOCUMENTS)
+}
+
+func BuildWithType(collection string, reqSchema jsoniter.RawMessage, cType api.CollectionType) (*Factory, error) {
 	var err error
-	if reqSchema, err = addPrimaryKeyIfMissing(reqSchema); err != nil {
-		return nil, err
+	if cType == api.CollectionType_MESSAGES {
+		if reqSchema, err = setPrimaryKeyForMessages(reqSchema); err != nil {
+			return nil, err
+		}
+	} else {
+		if reqSchema, err = addPrimaryKeyIfMissing(reqSchema); err != nil {
+			return nil, err
+		}
 	}
 
 	var schema = &JSONSchema{}
@@ -174,6 +184,29 @@ func addPrimaryKeyIfMissing(reqSchema jsoniter.RawMessage) (jsoniter.RawMessage,
 				"format":       jsonSpecFormatUUID,
 				"autoGenerate": true,
 			}
+		}
+	}
+
+	return jsoniter.Marshal(schema)
+}
+
+func setPrimaryKeyForMessages(reqSchema jsoniter.RawMessage) (jsoniter.RawMessage, error) {
+	var schema map[string]interface{}
+	if err := jsoniter.Unmarshal(reqSchema, &schema); err != nil {
+		return nil, err
+	}
+
+	schema[PrimaryKeySchemaK] = []string{AutoPrimaryKeyF}
+	if p, ok := schema["properties"]; ok {
+		propertiesMap, ok := p.(map[string]interface{})
+		if !ok {
+			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "properties object is invalid")
+		}
+
+		propertiesMap[AutoPrimaryKeyF] = map[string]interface{}{
+			"type":         jsonSpecString,
+			"format":       jsonSpecFormatDateTime,
+			"autoGenerate": true,
 		}
 	}
 

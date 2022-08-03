@@ -302,6 +302,17 @@ func (x *CreateOrUpdateCollectionRequest) UnmarshalJSON(data []byte) error {
 			if err := jsoniter.Unmarshal(value, &x.Options); err != nil {
 				return err
 			}
+		case "type":
+			var t string
+			if err := jsoniter.Unmarshal(value, &t); err != nil {
+				return err
+			}
+			switch t {
+			case "documents":
+				x.Type = CollectionType_DOCUMENTS
+			case "messages":
+				x.Type = CollectionType_MESSAGES
+			}
 		}
 	}
 	return nil

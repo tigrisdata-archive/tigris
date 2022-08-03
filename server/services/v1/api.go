@@ -483,3 +483,33 @@ func (s *apiService) Events(r *api.EventsRequest, stream api.Tigris_EventsServer
 
 	return nil
 }
+
+func (s *apiService) Publish(ctx context.Context, r *api.PublishRequest) (*api.PublishResponse, error) {
+	resp, err := s.Replace(ctx, &api.ReplaceRequest{
+		Db:         r.Db,
+		Collection: r.Collection,
+		Documents:  r.Messages,
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.PublishResponse{
+		Metadata: resp.Metadata,
+		Status:   resp.Status,
+		Keys:     resp.Keys,
+	}, nil
+}
+
+func (s *apiService) Subscribe(r *api.SubscribeRequest, stream api.Tigris_SubscribeServer) error {
+	_, err := s.sessions.Execute(stream.Context(), &ReqOptions{
+		txCtx:       api.GetTransaction(stream.Context()),
+		queryRunner: s.runnerFactory.GetSubscribeQueryRunner(r, stream),
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

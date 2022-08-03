@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"math"
+	"time"
 
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
@@ -99,6 +100,15 @@ func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streami
 // GetSearchQueryRunner for executing Search
 func (f *QueryRunnerFactory) GetSearchQueryRunner(r *api.SearchRequest, streaming SearchStreaming) *SearchQueryRunner {
 	return &SearchQueryRunner{
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		req:             r,
+		streaming:       streaming,
+	}
+}
+
+// GetSubscribeQueryRunner returns SubscribeQueryRunner
+func (f *QueryRunnerFactory) GetSubscribeQueryRunner(r *api.SubscribeRequest, streaming SubscribeStreaming) *SubscribeQueryRunner {
+	return &SubscribeQueryRunner{
 		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
 		req:             r,
 		streaming:       streaming,
@@ -720,6 +730,100 @@ func (runner *SearchQueryRunner) getFieldSelection(collFields []*schema.Queryabl
 	return factory, nil
 }
 
+type SubscribeQueryRunner struct {
+	*BaseQueryRunner
+
+	req       *api.SubscribeRequest
+	streaming SubscribeStreaming
+}
+
+func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
+	db, err := runner.GetDatabase(ctx, tx, tenant, runner.req.GetDb())
+	if ulog.E(err) {
+		return nil, ctx, err
+	}
+
+	collection, err := runner.GetCollections(db, runner.req.GetCollection())
+	if ulog.E(err) {
+		return nil, ctx, err
+	}
+
+	table, err := runner.encoder.EncodeTableName(tenant.GetNamespace(), db, collection)
+	if ulog.E(err) {
+		return nil, ctx, err
+	}
+
+	startTime := time.Now().UTC().Format(time.RFC3339Nano)
+	endTime := time.Now().AddDate(34, 0, 0).Format(time.RFC3339Nano)
+	endKey, err := runner.encoder.EncodeKey(table, collection.Indexes.PrimaryKey, []interface{}{endTime})
+	if ulog.E(err) {
+		return nil, ctx, err
+	}
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		tickerTx, err := runner.txMgr.StartTx(ctx)
+		if ulog.E(err) {
+			return nil, ctx, err
+		}
+
+		startKey, err := runner.encoder.EncodeKey(table, collection.Indexes.PrimaryKey, []interface{}{startTime})
+		if ulog.E(err) {
+			return nil, ctx, err
+		}
+
+		kvIterator, err := tickerTx.ReadRange(ctx, startKey, endKey)
+		if ulog.E(err) {
+			return nil, ctx, err
+		}
+
+		var last []byte
+		for {
+			var keyValue kv.KeyValue
+			if kvIterator.Next(&keyValue) {
+				err = runner.streaming.Send(&api.SubscribeResponse{
+					Message: keyValue.Data.RawData,
+				})
+				if ulog.E(err) {
+					return nil, ctx, err
+				}
+
+				last = keyValue.Data.RawData
+			} else {
+				break
+			}
+
+			if ulog.E(kvIterator.Err()) {
+				return nil, ctx, kvIterator.Err()
+			}
+		}
+
+		if last != nil {
+			var data map[string]any
+			err = jsoniter.Unmarshal(last, &data)
+			if ulog.E(err) {
+				return nil, ctx, err
+			}
+
+			lastTime, err := time.Parse(time.RFC3339, data[schema.AutoPrimaryKeyF].(string))
+			if ulog.E(err) {
+				return nil, ctx, err
+			}
+
+			startTime = lastTime.Add(1 * time.Nanosecond).Format(time.RFC3339)
+		}
+
+		err = tickerTx.Commit(ctx)
+		if ulog.E(err) {
+			return nil, ctx, err
+		}
+	}
+
+	return &Response{}, ctx, nil
+}
+
 type CollectionQueryRunner struct {
 	*BaseQueryRunner
 
@@ -776,7 +880,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			return nil, ctx, api.Errorf(api.Code_ALREADY_EXISTS, "collection already exist")
 		}
 
-		schFactory, err := schema.Build(runner.createOrUpdateReq.GetCollection(), runner.createOrUpdateReq.GetSchema())
+		schFactory, err := schema.BuildWithType(runner.createOrUpdateReq.GetCollection(), runner.createOrUpdateReq.GetSchema(), runner.createOrUpdateReq.GetType())
 		if err != nil {
 			return nil, ctx, err
 		}
