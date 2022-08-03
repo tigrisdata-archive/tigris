@@ -17,8 +17,8 @@ package v1
 import (
 	"context"
 
-	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/lib/json"
 	"github.com/tigrisdata/tigris/query/filter"
 	"github.com/tigrisdata/tigris/query/read"
 	qsearch "github.com/tigrisdata/tigris/query/search"
@@ -94,10 +94,8 @@ func (p *page) readRow(row *Row) bool {
 		}
 
 		var rawData []byte
-
 		// marshal the doc as bytes
-		rawData, p.err = jsoniter.Marshal(doc)
-		if p.err != nil {
+		if rawData, p.err = json.Encode(doc); p.err != nil {
 			return false
 		}
 

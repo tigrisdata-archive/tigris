@@ -12,16 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package uuid
+package json
 
-import uuid2 "github.com/google/uuid"
+import (
+	"bytes"
 
-var NullUUID = uuid2.UUID{}
+	jsoniter "github.com/json-iterator/go"
+)
 
-func NewUUIDAsString() string {
-	return uuid2.New().String()
+func Encode(data map[string]any) ([]byte, error) {
+	var buffer bytes.Buffer
+	encoder := jsoniter.NewEncoder(&buffer)
+	err := encoder.Encode(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return buffer.Bytes(), nil
 }
 
-func New() uuid2.UUID {
-	return uuid2.New()
+func Decode(data []byte) (map[string]any, error) {
+	var decoded map[string]any
+
+	decoder := jsoniter.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	if err := decoder.Decode(&decoded); err != nil {
+		return nil, err
+	}
+
+	return decoded, nil
 }
