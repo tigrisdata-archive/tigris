@@ -46,6 +46,10 @@ type AuthConfig struct {
 	LogOnly                  bool          `mapstructure:"log_only" yaml:"log_only" json:"log_only"`
 	EnableNamespaceIsolation bool          `mapstructure:"enable_namespace_isolation" yaml:"enable_namespace_isolation" json:"enable_namespace_isolation"`
 	AdminNamespaces          []string      `mapstructure:"admin_namespaces" yaml:"admin_namespaces" json:"admin_namespaces"`
+	OAuthProvider            string        `mapstructure:"oauth_provider" yaml:"oauth_provider" json:"oauth_provider"`
+	ClientId                 string        `mapstructure:"client_id" yaml:"client_id" json:"client_id"`
+	ExternalTokenURL         string        `mapstructure:"external_token_url" yaml:"external_token_url" json:"external_token_url"`
+	EnableOauth              bool          `mapstructure:"enable_oauth" yaml:"enable_oauth" json:"enable_oauth"`
 }
 
 type CdcConfig struct {
@@ -112,12 +116,11 @@ var DefaultConfig = Config{
 		FDBHardDrop: false,
 	},
 	Auth: AuthConfig{
-		IssuerURL:                "https://tigrisdata-dev.us.auth0.com/",
-		Audience:                 "https://tigris-api",
-		JWKSCacheTimeout:         5 * time.Minute,
-		LogOnly:                  true,
-		EnableNamespaceIsolation: false,
-		AdminNamespaces:          []string{"tigris-admin"},
+		IssuerURL:        "https://tigrisdata-dev.us.auth0.com/",
+		Audience:         "https://tigris-api",
+		JWKSCacheTimeout: 5 * time.Minute,
+		LogOnly:          true,
+		AdminNamespaces:  []string{"tigris-admin"},
 	},
 	Cdc: CdcConfig{
 		Enabled:        false,
