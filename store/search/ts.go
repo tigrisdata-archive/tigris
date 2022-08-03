@@ -59,6 +59,7 @@ func (m *storeImplWithMetrics) measure(ctx context.Context, name string, f func(
 	if config.DefaultConfig.Metrics.Search.Counters {
 		metrics.SearchErrorRequests.Tagged(tags).Counter("unknown").Inc(1)
 	}
+	spanMeta.FinishWithError(err)
 }
 
 func (m *storeImplWithMetrics) CreateCollection(ctx context.Context, schema *tsApi.CollectionSchema) (err error) {
