@@ -101,11 +101,11 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 func BuildWithType(collection string, reqSchema jsoniter.RawMessage, cType api.CollectionType) (*Factory, error) {
 	var err error
 	if cType == api.CollectionType_MESSAGES {
-		if reqSchema, err = setPrimaryKeyForMessages(reqSchema); err != nil {
+		if reqSchema, err = setPrimaryKey(reqSchema, jsonSpecFormatDateTime, false); err != nil {
 			return nil, err
 		}
 	} else {
-		if reqSchema, err = addPrimaryKeyIfMissing(reqSchema); err != nil {
+		if reqSchema, err = setPrimaryKey(reqSchema, jsonSpecFormatUUID, true); err != nil {
 			return nil, err
 		}
 	}
@@ -159,13 +159,13 @@ func BuildWithType(collection string, reqSchema jsoniter.RawMessage, cType api.C
 	}, nil
 }
 
-func addPrimaryKeyIfMissing(reqSchema jsoniter.RawMessage) (jsoniter.RawMessage, error) {
+func setPrimaryKey(reqSchema jsoniter.RawMessage, format string, ifMissing bool) (jsoniter.RawMessage, error) {
 	var schema map[string]interface{}
 	if err := jsoniter.Unmarshal(reqSchema, &schema); err != nil {
 		return nil, err
 	}
 
-	if _, ok := schema[PrimaryKeySchemaK]; ok {
+	if _, ok := schema[PrimaryKeySchemaK]; ifMissing && ok {
 		// primary key exists, no need to do anything.
 		return reqSchema, nil
 	}
@@ -177,36 +177,12 @@ func addPrimaryKeyIfMissing(reqSchema jsoniter.RawMessage) (jsoniter.RawMessage,
 			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "properties object is invalid")
 		}
 
-		if _, ok = propertiesMap[AutoPrimaryKeyF]; !ok {
-			// if user doesn't have the ID field then add it of type UUID
+		if _, ok = propertiesMap[AutoPrimaryKeyF]; !ifMissing || !ok {
 			propertiesMap[AutoPrimaryKeyF] = map[string]interface{}{
 				"type":         jsonSpecString,
-				"format":       jsonSpecFormatUUID,
+				"format":       format,
 				"autoGenerate": true,
 			}
-		}
-	}
-
-	return jsoniter.Marshal(schema)
-}
-
-func setPrimaryKeyForMessages(reqSchema jsoniter.RawMessage) (jsoniter.RawMessage, error) {
-	var schema map[string]interface{}
-	if err := jsoniter.Unmarshal(reqSchema, &schema); err != nil {
-		return nil, err
-	}
-
-	schema[PrimaryKeySchemaK] = []string{AutoPrimaryKeyF}
-	if p, ok := schema["properties"]; ok {
-		propertiesMap, ok := p.(map[string]interface{})
-		if !ok {
-			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "properties object is invalid")
-		}
-
-		propertiesMap[AutoPrimaryKeyF] = map[string]interface{}{
-			"type":         jsonSpecString,
-			"format":       jsonSpecFormatDateTime,
-			"autoGenerate": true,
 		}
 	}
 

@@ -753,14 +753,10 @@ func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 		return nil, ctx, err
 	}
 
+	skipFirst := false
 	startTime := time.Now().UTC().Format(time.RFC3339Nano)
-	endTime := time.Now().AddDate(34, 0, 0).Format(time.RFC3339Nano)
-	endKey, err := runner.encoder.EncodeKey(table, collection.Indexes.PrimaryKey, []interface{}{endTime})
-	if ulog.E(err) {
-		return nil, ctx, err
-	}
 
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -774,47 +770,47 @@ func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 			return nil, ctx, err
 		}
 
+		end, err := time.Parse(time.RFC3339, startTime)
+		if ulog.E(err) {
+			return nil, ctx, err
+		}
+
+		endTime := end.Add(34 * time.Second).Format(time.RFC3339)
+		endKey, err := runner.encoder.EncodeKey(table, collection.Indexes.PrimaryKey, []interface{}{endTime})
+		if ulog.E(err) {
+			return nil, ctx, err
+		}
+
 		kvIterator, err := tickerTx.ReadRange(ctx, startKey, endKey)
 		if ulog.E(err) {
 			return nil, ctx, err
 		}
 
-		var last []byte
-		for {
-			var keyValue kv.KeyValue
-			if kvIterator.Next(&keyValue) {
-				err = runner.streaming.Send(&api.SubscribeResponse{
-					Message: keyValue.Data.RawData,
-				})
-				if ulog.E(err) {
-					return nil, ctx, err
-				}
-
-				last = keyValue.Data.RawData
-			} else {
-				break
-			}
-
+		first := true
+		var keyValue kv.KeyValue
+		for kvIterator.Next(&keyValue) {
 			if ulog.E(kvIterator.Err()) {
 				return nil, ctx, kvIterator.Err()
 			}
-		}
 
-		if last != nil {
-			var data map[string]any
-			err = jsoniter.Unmarshal(last, &data)
+			if skipFirst && first {
+				first = false
+				continue
+			}
+
+			err = runner.streaming.Send(&api.SubscribeResponse{
+				Message: keyValue.Data.RawData,
+			})
 			if ulog.E(err) {
 				return nil, ctx, err
 			}
 
-			lastTime, err := time.Parse(time.RFC3339, data[schema.AutoPrimaryKeyF].(string))
-			if ulog.E(err) {
-				return nil, ctx, err
-			}
-
-			startTime = lastTime.Add(1 * time.Nanosecond).Format(time.RFC3339)
+			first = false
+			skipFirst = true
+			startTime = keyValue.Key[1].(string)
 		}
 
+		// TODO: read-only transaction should ignore any error like transaction timed-out
 		err = tickerTx.Commit(ctx)
 		if ulog.E(err) {
 			return nil, ctx, err
