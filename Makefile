@@ -50,6 +50,7 @@ docker_compose_build:
 # current user owner instead of root
 docker_test: generate
 	$(DOCKER_COMPOSE) up --build tigris_test tigris_test
+	@[ $$(docker inspect tigris_test --format='{{.State.ExitCode}}') = "0" ]
 
 docker_test_no_build:
 	$(DOCKER_COMPOSE) up --exit-code-from tigris_test --no-build tigris_test tigris_test
@@ -64,9 +65,9 @@ run: generate
 	$(DOCKER_COMPOSE) up --build --detach tigris_server2
 
 local_run: server
-	$(DOCKER_COMPOSE) up --no-build --detach tigris_search tigris_db
+	$(DOCKER_COMPOSE) up --no-build --detach tigris_search tigris_db2
 	fdbcli -C ./test/config/fdb.cluster --exec "configure new single memory" || true
-	TIGRIS_ENVIRONMENT=dev ./server/service
+	./server/service -c config/server.dev.yaml
 
 # Runs tigris server and foundationdb, plus additional tools for it like:
 # - prometheus and grafana for monitoring
