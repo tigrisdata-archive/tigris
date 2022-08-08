@@ -65,7 +65,8 @@ func TestJSONEncoding(t *testing.T) {
 				},
 			},
 			Meta: &SearchMetadata{
-				Found: 1234,
+				TotalPages: 0,
+				Found:      1234,
 				Page: &Page{
 					Current: 2,
 					Size:    10,
@@ -73,6 +74,6 @@ func TestJSONEncoding(t *testing.T) {
 			}}
 		r, err := json.Marshal(resp)
 		require.NoError(t, err)
-		require.Equal(t, []byte(`{"hits":[{"metadata":{}}],"facets":{"myField":{"counts":[{"count":32,"value":"adidas"}],"stats":{"avg":40,"count":50}}},"meta":{"found":1234,"totalPages":0,"page":{"current":2,"size":10}}}`), r)
+		require.JSONEq(t, `{"hits":[{"metadata":{}}],"facets":{"myField":{"counts":[{"count":32,"value":"adidas"}],"stats":{"avg":40,"count":50}}},"meta":{"found":1234,"total_pages":0,"page":{"current":2,"size":10}}}`, string(r))
 	})
 }

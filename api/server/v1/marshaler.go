@@ -85,7 +85,7 @@ func (x *ReadRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// UnmarshalJSON for SearchRequest
+// UnmarshalJSON for SearchRequest avoids unmarshalling filter, facets, sort and fields
 func (x *SearchRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
 	if err := jsoniter.Unmarshal(data, &mp); err != nil {
@@ -438,6 +438,9 @@ func (x *ReadResponse) MarshalJSON() ([]byte, error) {
 	return json.Marshal(resp)
 }
 
+// Explicit custom marshalling of some search data structures required
+// to retain schema in the output even when fields are empty.
+
 func (x *SearchResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
 		Hits   []*SearchHit            `json:"hits"`
@@ -472,7 +475,7 @@ func (x *SearchHit) MarshalJSON() ([]byte, error) {
 func (x *SearchMetadata) MarshalJSON() ([]byte, error) {
 	resp := struct {
 		Found      int64 `json:"found"`
-		TotalPages int32 `json:"totalPages"`
+		TotalPages int32 `json:"total_pages"`
 		Page       *Page `json:"page"`
 	}{
 		Found:      x.Found,
@@ -516,7 +519,6 @@ func (x *FacetStats) MarshalJSON() ([]byte, error) {
 type SearchHitMetadata struct {
 	CreatedAt *time.Time `json:"created_at,omitempty"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
-	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 }
 
 type Metadata struct {
