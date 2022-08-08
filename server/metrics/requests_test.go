@@ -26,9 +26,7 @@ import (
 
 func TestGRPCMetrics(t *testing.T) {
 	InitializeMetrics()
-	config.DefaultConfig.Metrics.Grpc.Enabled = true
-	config.DefaultConfig.Metrics.Grpc.Counters = true
-	config.DefaultConfig.Metrics.Grpc.ResponseTime = true
+	config.DefaultConfig.Tracing.Enabled = true
 
 	svcName := "tigrisdata.v1.Tigris"
 	unaryMethodName := "TestUnaryMethod"
@@ -56,23 +54,6 @@ func TestGRPCMetrics(t *testing.T) {
 
 		streamMetadata := GetGrpcEndPointMetadataFromFullMethod(ctx, streamingEndpointMetadata.getFullMethod(), "stream")
 		assert.Equal(t, streamMetadata, streamingEndpointMetadata)
-	})
-
-	t.Run("Test GetPreinitializedTagsFromFullMethod", func(t *testing.T) {
-		unaryTags := unaryEndPointMetadata.GetTags()
-		assert.Equal(t, unaryTags, map[string]string{
-			"grpc_method":       unaryMethodInfo.Name,
-			"grpc_service":      "tigrisdata.v1.Tigris",
-			"grpc_service_type": "unary",
-			"tigris_tenant":     DefaultReportedTigrisTenant,
-		})
-		streamTags := streamingEndpointMetadata.GetTags()
-		assert.Equal(t, streamTags, map[string]string{
-			"grpc_method":       streamingMethodInfo.Name,
-			"grpc_service":      "tigrisdata.v1.Tigris",
-			"grpc_service_type": "stream",
-			"tigris_tenant":     DefaultReportedTigrisTenant,
-		})
 	})
 
 	t.Run("Test full method names", func(t *testing.T) {

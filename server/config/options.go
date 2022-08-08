@@ -34,7 +34,6 @@ type Config struct {
 	Search       SearchConfig    `yaml:"search" json:"search"`
 	Tracing      TracingConfig   `yaml:"tracing" json:"tracing"`
 	Profiling    ProfilingConfig `yaml:"profiling" json:"profiling"`
-	Metrics      MetricsConfig
 	FoundationDB FoundationDBConfig
 	Quota        QuotaConfig
 }
@@ -76,15 +75,6 @@ type ProfilingConfig struct {
 	EnableBlock     bool `mapstructure:"enable_block" yaml:"enable_block" json:"enable_block"`
 	EnableMutex     bool `mapstructure:"enable_mutex" yaml:"enable_mutex" json:"enable_mutex"`
 	EnableGoroutine bool `mapstructure:"enable_goroutine" yaml:"enable_goroutine" json:"enable_goroutine"`
-}
-
-type MetricsConfig struct {
-	// Global switch
-	Enabled bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	// Individual metric group configs
-	Grpc   GrpcMetricsConfig
-	Fdb    FdbMetricsConfig
-	Search SearchMetricsConfig
 }
 
 type GrpcMetricsConfig struct {
@@ -144,24 +134,6 @@ var DefaultConfig = Config{
 		Enabled:    false,
 		EnableCPU:  true,
 		EnableHeap: true,
-	},
-	Metrics: MetricsConfig{
-		Enabled: true,
-		Grpc: GrpcMetricsConfig{
-			Enabled:      true,
-			Counters:     true,
-			ResponseTime: true,
-		},
-		Fdb: FdbMetricsConfig{
-			Enabled:      true,
-			Counters:     true,
-			ResponseTime: true,
-		},
-		Search: SearchMetricsConfig{
-			Enabled:      true,
-			Counters:     true,
-			ResponseTime: true,
-		},
 	},
 	Quota: QuotaConfig{
 		Enabled:              false,

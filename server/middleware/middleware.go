@@ -74,14 +74,6 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 		streamInterceptors = append(streamInterceptors, traceStream())
 	}
 
-	if config.Metrics.Grpc.Enabled && config.Metrics.Grpc.ResponseTime {
-		streamInterceptors = append(streamInterceptors, metricsStreamServerInterceptorResponseTime())
-	}
-
-	if config.Metrics.Grpc.Enabled && config.Metrics.Grpc.Counters {
-		streamInterceptors = append(streamInterceptors, metricsStreamServerInterceptorCounter())
-	}
-
 	streamInterceptors = append(streamInterceptors, []grpc.StreamServerInterceptor{
 		quotaStreamServerInterceptor(),
 		grpc_logging.StreamServerInterceptor(grpc_zerolog.InterceptorLogger(sampledTaggedLogger), []grpc_logging.Option{}...),
@@ -106,14 +98,6 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 
 	if config.Tracing.Enabled {
 		unaryInterceptors = append(unaryInterceptors, traceUnary())
-	}
-
-	if config.Metrics.Grpc.Enabled && config.Metrics.Grpc.ResponseTime {
-		unaryInterceptors = append(unaryInterceptors, metricsUnaryServerInterceptorResponseTime())
-	}
-
-	if config.Metrics.Grpc.Enabled && config.Metrics.Grpc.Counters {
-		unaryInterceptors = append(unaryInterceptors, metricsUnaryServerInterceptorCounters())
 	}
 
 	unaryInterceptors = append(unaryInterceptors, []grpc.UnaryServerInterceptor{
