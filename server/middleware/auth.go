@@ -60,13 +60,16 @@ func (c CustomClaim) Validate(_ context.Context) error {
 func AuthFromMD(ctx context.Context, expectedScheme string) (string, error) {
 	val := api.GetHeader(ctx, headerAuthorize)
 	if val == "" {
+		log.Warn().Msg("No authorization header present")
 		return "", api.Errorf(api.Code_UNAUTHENTICATED, "request unauthenticated with "+expectedScheme)
 	}
 	splits := strings.SplitN(val, " ", 2)
 	if len(splits) < 2 {
+		log.Warn().Msg("Invalid authorization header present")
 		return "", api.Errorf(api.Code_UNAUTHENTICATED, "bad authorization string")
 	}
 	if !strings.EqualFold(splits[0], expectedScheme) {
+		log.Warn().Msg("Unsupported authorization scheme")
 		return "", api.Errorf(api.Code_UNAUTHENTICATED, "request unauthenticated with bearer")
 	}
 	return splits[1], nil
@@ -97,9 +100,10 @@ func GetJWTValidator(config *config.Config) *validator.Validator {
 func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config *config.Config) (ctxResult context.Context, err error) {
 	defer func() {
 		if err != nil {
-			//log.Warn().Bool("log_only?", config.Auth.LogOnly).Str("error", err.Error()).Err(err).Msg("could not validate token")
 			if config.Auth.LogOnly {
 				err = nil
+			} else {
+				log.Warn().Str("error", err.Error()).Err(err).Msg("could not validate token")
 			}
 		}
 	}()
