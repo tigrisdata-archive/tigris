@@ -233,16 +233,20 @@ func (p *pageReader) buildStats(stats tsApi.FacetCounts) *api.FacetStats {
 
 	var stat = &api.FacetStats{}
 	if stats.Stats.Avg != nil {
-		stat.Avg = float64(*stats.Stats.Avg)
+		avg := float64(*stats.Stats.Avg)
+		stat.Avg = &avg
 	}
 	if stats.Stats.Min != nil {
-		stat.Min = float64(*stats.Stats.Min)
+		min := float64(*stats.Stats.Min)
+		stat.Min = &min
 	}
 	if stats.Stats.Max != nil {
-		stat.Max = float64(*stats.Stats.Max)
+		max := float64(*stats.Stats.Max)
+		stat.Max = &max
 	}
 	if stats.Stats.Sum != nil {
-		stat.Sum = float64(*stats.Stats.Sum)
+		sum := float64(*stats.Stats.Sum)
+		stat.Sum = &sum
 	}
 	if stats.Stats.TotalValues != nil {
 		stat.Count = int64(*stats.Stats.TotalValues)

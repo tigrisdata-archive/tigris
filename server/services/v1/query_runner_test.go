@@ -37,7 +37,7 @@ func TestSearchQueryRunner_getFacetFields(t *testing.T) {
 	t.Run("requested facet field is not faceted in collection", func(t *testing.T) {
 		runner.req.Facet = []byte(`{"parent.field_2":{"size":10},"field_3":{"size":10}}`)
 		facets, err := runner.getFacetFields(collFields)
-		assert.ErrorContains(t, err, "Faceting not enabled for `field_3`")
+		assert.ErrorContains(t, err, "only supported for numeric and text fields")
 		assert.NotNil(t, facets)
 		assert.Empty(t, facets.Fields)
 	})
@@ -46,14 +46,6 @@ func TestSearchQueryRunner_getFacetFields(t *testing.T) {
 		runner.req.Facet = []byte(`{"field_1":{"size":10},"field_5":{"size":10}}`)
 		facets, err := runner.getFacetFields(collFields)
 		assert.ErrorContains(t, err, "`field_5` is not a schema field")
-		assert.NotNil(t, facets)
-		assert.Empty(t, facets.Fields)
-	})
-
-	t.Run("requested facet fields are not of String datatype", func(t *testing.T) {
-		runner.req.Facet = []byte(`{"field_1":{"size":10},"field_4":{"size":10}}`)
-		facets, err := runner.getFacetFields(collFields)
-		assert.ErrorContains(t, err, "Cannot generate facets for `field_4`")
 		assert.NotNil(t, facets)
 		assert.Empty(t, facets.Fields)
 	})

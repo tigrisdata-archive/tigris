@@ -677,10 +677,7 @@ func (runner *SearchQueryRunner) getFacetFields(collFields []*schema.QueryableFi
 				continue
 			}
 			if !cf.Faceted {
-				return qsearch.Facets{}, api.Errorf(api.Code_INVALID_ARGUMENT, "Faceting not enabled for `%s`", ff.Name)
-			}
-			if cf.DataType != schema.StringType {
-				return qsearch.Facets{}, api.Errorf(api.Code_INVALID_ARGUMENT, "Cannot generate facets for `%s`. Faceting is only supported for text fields", ff.Name)
+				return qsearch.Facets{}, api.Errorf(api.Code_INVALID_ARGUMENT, "Cannot generate facets for `%s`. Faceting is only supported for numeric and text fields", ff.Name)
 			}
 			found = true
 			break
