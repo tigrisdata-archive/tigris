@@ -27,15 +27,16 @@ type ServerConfig struct {
 }
 
 type Config struct {
-	Log          log.LogConfig
-	Server       ServerConfig    `yaml:"server" json:"server"`
-	Auth         AuthConfig      `yaml:"auth" json:"auth"`
-	Cdc          CdcConfig       `yaml:"cdc" json:"cdc"`
-	Search       SearchConfig    `yaml:"search" json:"search"`
-	Tracing      TracingConfig   `yaml:"tracing" json:"tracing"`
-	Profiling    ProfilingConfig `yaml:"profiling" json:"profiling"`
-	FoundationDB FoundationDBConfig
-	Quota        QuotaConfig
+	Log           log.LogConfig
+	Server        ServerConfig    `yaml:"server" json:"server"`
+	Auth          AuthConfig      `yaml:"auth" json:"auth"`
+	Cdc           CdcConfig       `yaml:"cdc" json:"cdc"`
+	Search        SearchConfig    `yaml:"search" json:"search"`
+	Tracing       TracingConfig   `yaml:"tracing" json:"tracing"`
+	Profiling     ProfilingConfig `yaml:"profiling" json:"profiling"`
+	FoundationDB  FoundationDBConfig
+	Quota         QuotaConfig
+	Observability ObservabilityConfig `yaml:"observability" json:"observability"`
 }
 
 type AuthConfig struct {
@@ -141,6 +142,10 @@ var DefaultConfig = Config{
 		WriteThroughputLimit: 10000000,    // bytes per second
 		DataSizeLimit:        10000000000, // bytes
 	},
+	Observability: ObservabilityConfig{
+		Provider:                   "datadog",
+		EnableObservabilityService: false,
+	},
 }
 
 // FoundationDBConfig keeps FoundationDB configuration parameters
@@ -161,4 +166,12 @@ type QuotaConfig struct {
 	RateLimit            int   `mapstructure:"rate_limit" yaml:"rate_limit" json:"rate_limit"`
 	WriteThroughputLimit int   `mapstructure:"write_throughput_limit" yaml:"write_throughput_limit" json:"write_throughput_limit"`
 	DataSizeLimit        int64 `mapstructure:"data_size_limit" yaml:"data_size_limit" json:"data_size_limit"`
+}
+
+type ObservabilityConfig struct {
+	Provider                   string `yaml:"provider" json:"provider"`
+	EnableObservabilityService bool   `yaml:"enable_observability_service" json:"enable_observability_service"`
+	ApiKey                     string `yaml:"api_key" json:"api_key"`
+	AppKey                     string `yaml:"app_key" json:"app_key"`
+	ProviderUrl                string `yaml:"provider_url" json:"provider_url"`
 }
