@@ -27,15 +27,16 @@ type ServerConfig struct {
 }
 
 type Config struct {
-	Log          log.LogConfig
-	Server       ServerConfig    `yaml:"server" json:"server"`
-	Auth         AuthConfig      `yaml:"auth" json:"auth"`
-	Cdc          CdcConfig       `yaml:"cdc" json:"cdc"`
-	Search       SearchConfig    `yaml:"search" json:"search"`
-	Tracing      TracingConfig   `yaml:"tracing" json:"tracing"`
-	Profiling    ProfilingConfig `yaml:"profiling" json:"profiling"`
-	FoundationDB FoundationDBConfig
-	Quota        QuotaConfig
+	Log           log.LogConfig
+	Server        ServerConfig    `yaml:"server" json:"server"`
+	Auth          AuthConfig      `yaml:"auth" json:"auth"`
+	Cdc           CdcConfig       `yaml:"cdc" json:"cdc"`
+	Search        SearchConfig    `yaml:"search" json:"search"`
+	Tracing       TracingConfig   `yaml:"tracing" json:"tracing"`
+	Profiling     ProfilingConfig `yaml:"profiling" json:"profiling"`
+	FoundationDB  FoundationDBConfig
+	Quota         QuotaConfig
+	Observability ObservabilityConfig `yaml:"observability" json:"observability"`
 }
 
 type AuthConfig struct {
@@ -142,6 +143,11 @@ var DefaultConfig = Config{
 		ReadThroughputLimit:  10000000,    // bytes per second
 		DataSizeLimit:        10000000000, // bytes
 	},
+	Observability: ObservabilityConfig{
+		Provider:                   "datadog",
+		EnableObservabilityService: false,
+		AllowedMetrics:             []string{"tigris.requests_count_ok"},
+	},
 }
 
 // FoundationDBConfig keeps FoundationDB configuration parameters
@@ -163,4 +169,13 @@ type QuotaConfig struct {
 	WriteThroughputLimit int   `mapstructure:"write_throughput_limit" yaml:"write_throughput_limit" json:"write_throughput_limit"`
 	ReadThroughputLimit  int   `mapstructure:"read_throughput_limit" yaml:"read_throughput_limit" json:"read_throughput_limit"`
 	DataSizeLimit        int64 `mapstructure:"data_size_limit" yaml:"data_size_limit" json:"data_size_limit"`
+}
+
+type ObservabilityConfig struct {
+	Provider                   string   `yaml:"provider" json:"provider"`
+	EnableObservabilityService bool     `yaml:"enable_observability_service" json:"enable_observability_service"`
+	ApiKey                     string   `yaml:"api_key" json:"api_key"`
+	AppKey                     string   `yaml:"app_key" json:"app_key"`
+	ProviderUrl                string   `yaml:"provider_url" json:"provider_url"`
+	AllowedMetrics             []string `yaml:"allowed_metrics" json:"allowed_metrics"`
 }

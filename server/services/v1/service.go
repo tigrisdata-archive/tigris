@@ -42,5 +42,6 @@ func GetRegisteredServices(kvStore kv.KeyValueStore, searchStore search.Store, t
 	v1Services = append(v1Services, newHealthService())
 	v1Services = append(v1Services, newAdminService(tenantMgr, txMgr))
 	v1Services = append(v1Services, newAuthService())
+	v1Services = append(v1Services, newObservabilityService())
 	return v1Services
 }
