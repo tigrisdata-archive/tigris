@@ -27,7 +27,6 @@ import (
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/types"
 	"github.com/tigrisdata/tigris/store/kv"
-	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 var (
@@ -159,13 +158,15 @@ func newTxSessionWithMetrics(kv kv.KeyValueStore) (*TxSessionWithMetrics, error)
 }
 
 func (m *TxSessionWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
-	var finishTracing func()
+	// No counters here, just tracing, will be removed in the future
 	tags := metrics.GetFdbTags(ctx, name)
 	spanMeta := metrics.NewSpanMeta(metrics.TxManagerTracingServiceName, name, "tx_manager", tags)
-	ctx, finishTracing = spanMeta.StartTracing(ctx, true)
-	defer finishTracing()
-	// TODO: better error handling (error in trace, etc)
-	ulog.E(f(ctx))
+	ctx = spanMeta.StartTracing(ctx, true)
+	if err := f(ctx); err != nil {
+		spanMeta.FinishWithError(ctx, err)
+		return
+	}
+	_ = spanMeta.FinishTracing(ctx)
 }
 
 func (s *TxSession) GetTxCtx() *api.TransactionCtx {

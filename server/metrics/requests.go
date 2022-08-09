@@ -25,9 +25,9 @@ import (
 )
 
 const (
-	AdminServiceName            = "tigrisdata.admin.v1.Admin"
-	SystemTigrisTenantName      = "system"
-	DefaultReportedTigrisTenant = "unknown"
+	AdminServiceName       = "tigrisdata.admin.v1.Admin"
+	SystemTigrisTenantName = "system"
+	UnknownValue           = "unknown"
 )
 
 type RequestEndpointMetadata struct {
@@ -40,7 +40,7 @@ func getNamespaceName(ctx context.Context) string {
 	if namespace, _ := request.GetNamespace(ctx); namespace != "" {
 		return namespace
 	}
-	return DefaultReportedTigrisTenant
+	return UnknownValue
 }
 
 func newRequestEndpointMetadata(ctx context.Context, serviceName string, methodInfo grpc.MethodInfo) RequestEndpointMetadata {
@@ -66,6 +66,8 @@ func (r *RequestEndpointMetadata) GetTags() map[string]string {
 			"grpc_service":      r.serviceName,
 			"tigris_tenant":     r.namespaceName,
 			"grpc_service_type": r.GetServiceType(),
+			"db":                UnknownValue,
+			"collection":        UnknownValue,
 		}
 	} else {
 		return map[string]string{
@@ -73,6 +75,8 @@ func (r *RequestEndpointMetadata) GetTags() map[string]string {
 			"grpc_service":      r.serviceName,
 			"tigris_tenant":     r.namespaceName,
 			"grpc_service_type": r.GetServiceType(),
+			"db":                UnknownValue,
+			"collection":        UnknownValue,
 		}
 	}
 }
@@ -85,6 +89,8 @@ func (r *RequestEndpointMetadata) GetSpecificErrorTags(source string, code strin
 			"error_source":  source,
 			"error_code":    code,
 			"tigris_tenant": SystemTigrisTenantName,
+			"db":            UnknownValue,
+			"collection":    UnknownValue,
 		}
 	} else {
 		return map[string]string{
@@ -92,7 +98,8 @@ func (r *RequestEndpointMetadata) GetSpecificErrorTags(source string, code strin
 			"grpc_service":  r.serviceName,
 			"error_source":  source,
 			"error_code":    code,
-			"tigris_tenant": DefaultReportedTigrisTenant,
+			"tigris_tenant": UnknownValue,
+			"db":            UnknownValue,
 		}
 	}
 }
@@ -123,15 +130,12 @@ func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod strin
 }
 
 func InitializeRequestScopes() {
-	server = root.SubScope("server")
 	// metric names: tigris_server_requests
-	if config.DefaultConfig.Metrics.Grpc.Enabled && config.DefaultConfig.Metrics.Grpc.Counters {
-		Requests = server.SubScope("requests")
+	if config.DefaultConfig.Tracing.Enabled {
+		OkRequests = Requests.SubScope("requests")
 		// metric names: tigris_server_requests_errors
 		ErrorRequests = Requests.SubScope("error")
-	}
-	if config.DefaultConfig.Metrics.Grpc.Enabled && config.DefaultConfig.Metrics.Grpc.ResponseTime {
 		// metric names: tigirs_server_requests_resptime
-		RequestsRespTime = server.SubScope("resptime")
+		RequestsRespTime = Requests.SubScope("resptime")
 	}
 }

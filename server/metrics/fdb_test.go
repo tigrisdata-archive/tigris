@@ -23,7 +23,7 @@ import (
 )
 
 func TestFdbMetrics(t *testing.T) {
-	config.DefaultConfig.Metrics.Fdb.Enabled = true
+	config.DefaultConfig.Tracing.Enabled = true
 	InitializeMetrics()
 
 	ctx := context.Background()
@@ -40,7 +40,6 @@ func TestFdbMetrics(t *testing.T) {
 		GetFdbSpecificErrorTags(ctx, "Insert", "3"),
 	}
 
-	config.DefaultConfig.Metrics.Fdb.Counters = true
 	t.Run("Test FDB counters", func(t *testing.T) {
 		for _, tags := range testNormalTags {
 			FdbRequests.Tagged(tags).Counter("ok").Inc(1)
@@ -51,7 +50,6 @@ func TestFdbMetrics(t *testing.T) {
 		}
 	})
 
-	config.DefaultConfig.Metrics.Fdb.ResponseTime = true
 	t.Run("Test FDB histograms", func(t *testing.T) {
 		testHistogramTags := GetFdbTags(ctx, "Insert")
 		defer FdbMetrics.Tagged(testHistogramTags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()

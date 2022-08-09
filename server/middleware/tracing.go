@@ -16,46 +16,90 @@ package middleware
 
 import (
 	"context"
-	"github.com/tigrisdata/tigris/util"
 
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/tigrisdata/tigris/util"
+	ulog "github.com/tigrisdata/tigris/util/log"
+	"github.com/uber-go/tally"
 	"google.golang.org/grpc"
 )
 
 const (
-	TraceSpanType string = "rpc"
+	TigrisStreamSpan string = "rpcstream"
+	TraceSpanType    string = "rpc"
 )
+
+type wrappedStream struct {
+	*middleware.WrappedServerStream
+	spanMeta *metrics.SpanMeta
+}
 
 func traceUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		var finisher func()
 		grpcMeta := metrics.GetGrpcEndPointMetadataFromFullMethod(ctx, info.FullMethod, "unary")
-		spanMeta := metrics.NewSpanMeta(util.Service, info.FullMethod, TraceSpanType, grpcMeta.GetTags())
-		ctx, finisher = spanMeta.StartTracing(ctx, false)
-		defer finisher()
+		tags := grpcMeta.GetTags()
+		spanMeta := metrics.NewSpanMeta(util.Service, info.FullMethod, TraceSpanType, tags)
+		spanMeta.AddTags(metrics.GetDbCollTagsForReq(req))
+		defer metrics.RequestsRespTime.Tagged(spanMeta.GetTags()).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
+		ctx = spanMeta.StartTracing(ctx, false)
 		resp, err := handler(ctx, req)
 		if err != nil {
-			spanMeta.FinishWithError(err)
+			// Request had an error
+			spanMeta.CountErrorForScope(metrics.OkRequests, err)
+			spanMeta.FinishWithError(ctx, err)
+			ulog.E(err)
+			return nil, err
 		}
+		// Request was ok
+		spanMeta.CountOkForScope(metrics.OkRequests)
+		_ = spanMeta.FinishTracing(ctx)
 		return resp, err
 	}
 }
 
 func traceStream() grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		var finisher func()
-		wrapped := middleware.WrapServerStream(stream)
+		wrapped := &wrappedStream{WrappedServerStream: middleware.WrapServerStream(stream)}
 		wrapped.WrappedContext = stream.Context()
 		grpcMeta := metrics.GetGrpcEndPointMetadataFromFullMethod(wrapped.WrappedContext, info.FullMethod, "stream")
-		spanMeta := metrics.NewSpanMeta(util.Service, info.FullMethod, TraceSpanType, grpcMeta.GetTags())
-		wrapped.WrappedContext, finisher = spanMeta.StartTracing(wrapped.WrappedContext, false)
-		defer finisher()
+		tags := grpcMeta.GetTags()
+		spanMeta := metrics.NewSpanMeta(util.Service, info.FullMethod, TraceSpanType, tags)
+		defer metrics.RequestsRespTime.Tagged(spanMeta.GetTags()).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
+		wrapped.spanMeta = spanMeta
+		wrapped.WrappedContext = spanMeta.StartTracing(wrapped.WrappedContext, false)
 		wrapper := &recvWrapper{wrapped}
 		err := handler(srv, wrapper)
 		if err != nil {
-			spanMeta.FinishWithError(err)
+			spanMeta.CountErrorForScope(metrics.OkRequests, err)
+			spanMeta.FinishWithError(wrapped.WrappedContext, err)
+			ulog.E(err)
+			return err
 		}
+		spanMeta.CountOkForScope(metrics.OkRequests)
+		wrapped.WrappedContext = spanMeta.FinishTracing(wrapped.WrappedContext)
 		return err
 	}
+}
+
+func (w *wrappedStream) RecvMsg(m interface{}) error {
+	parentSpanMeta := w.spanMeta
+	childSpanMeta := metrics.NewSpanMeta(TigrisStreamSpan, "RecvMsg", TraceSpanType, parentSpanMeta.GetTags())
+	w.WrappedContext = childSpanMeta.StartTracing(w.WrappedContext, true)
+	err := w.ServerStream.RecvMsg(m)
+	parentSpanMeta.AddTags(metrics.GetDbCollTagsForReq(m))
+	childSpanMeta.AddTags(metrics.GetDbCollTagsForReq(m))
+	w.WrappedContext = childSpanMeta.FinishTracing(w.WrappedContext)
+	return err
+}
+
+func (w *wrappedStream) SendMsg(m interface{}) error {
+	parentSpanMeta := w.spanMeta
+	childSpanMeta := metrics.NewSpanMeta(TigrisStreamSpan, "SendMsg", TraceSpanType, parentSpanMeta.GetTags())
+	w.WrappedContext = childSpanMeta.StartTracing(w.WrappedContext, true)
+	err := w.ServerStream.SendMsg(m)
+	parentSpanMeta.AddTags(metrics.GetDbCollTagsForReq(m))
+	childSpanMeta.AddTags(metrics.GetDbCollTagsForReq(m))
+	w.WrappedContext = childSpanMeta.FinishTracing(w.WrappedContext)
+	return err
 }

@@ -16,19 +16,19 @@ package metrics
 
 import (
 	"context"
-	"errors"
-	"github.com/apple/foundationdb/bindings/go/src/fdb"
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"fmt"
+
 	"github.com/tigrisdata/tigris/server/config"
+	ulog "github.com/tigrisdata/tigris/util/log"
+	"github.com/uber-go/tally"
 	"google.golang.org/grpc/status"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
-	"strconv"
 )
 
 const (
-	KvTracingServiceName        = "kv"
-	TxManagerTracingServiceName = "txmanager"
-	TraceServiceName            = "tigris.grpc.server"
+	KvTracingServiceName        string = "kv"
+	TxManagerTracingServiceName string = "txmanager"
+	TraceServiceName            string = "tigris.grpc.server"
 )
 
 type SpanMeta struct {
@@ -37,10 +37,49 @@ type SpanMeta struct {
 	spanType     string
 	tags         map[string]string
 	span         tracer.Span
+	parent       *SpanMeta
+}
+
+type SpanMetaCtxKey struct {
 }
 
 func NewSpanMeta(serviceName string, resourceName string, spanType string, tags map[string]string) *SpanMeta {
 	return &SpanMeta{serviceName: serviceName, resourceName: resourceName, spanType: spanType, tags: tags}
+}
+
+func SpanMetaFromContext(ctx context.Context) (*SpanMeta, bool) {
+	s, ok := ctx.Value(SpanMetaCtxKey{}).(*SpanMeta)
+	return s, ok
+}
+
+func ClearSpanMetaContext(ctx context.Context) context.Context {
+	return context.WithValue(ctx, SpanMetaCtxKey{}, nil)
+}
+
+func (s *SpanMeta) CountOkForScope(scope tally.Scope) {
+	scope.Tagged(s.GetTags()).Counter("ok").Inc(1)
+}
+
+func (s *SpanMeta) CountErrorForScope(scope tally.Scope, err error) {
+	scope.Tagged(mergeTags(s.GetTags(), getErrorTags(err))).Counter("error").Inc(1)
+}
+
+func (s *SpanMeta) GetTags() map[string]string {
+	res := s.tags
+	for _, tagKey := range getOkTagKeys() {
+		if _, ok := s.tags[tagKey]; !ok {
+			res[tagKey] = UnknownValue
+		}
+	}
+	return res
+}
+
+func (s *SpanMeta) SaveSpanMetaToContext(ctx context.Context) (context.Context, error) {
+	if s.span == nil {
+		return nil, fmt.Errorf("Parent span was not created")
+	}
+	ctx = context.WithValue(ctx, SpanMetaCtxKey{}, s)
+	return ctx, nil
 }
 
 func (s *SpanMeta) GetSpanOptions() []tracer.StartSpanOption {
@@ -52,47 +91,72 @@ func (s *SpanMeta) GetSpanOptions() []tracer.StartSpanOption {
 	}
 }
 
-func (s *SpanMeta) StartTracing(ctx context.Context, childOnly bool) (context.Context, func()) {
+func (s *SpanMeta) AddTags(tags map[string]string) {
+	for k, v := range tags {
+		if _, exists := s.tags[k]; !exists || s.tags[k] == UnknownValue {
+			s.tags[k] = v
+		}
+	}
+}
+
+func (s *SpanMeta) StartTracing(ctx context.Context, childOnly bool) context.Context {
 	if !config.DefaultConfig.Tracing.Enabled {
-		return ctx, func() {}
+		return ctx
 	}
 	spanOpts := s.GetSpanOptions()
-	parentSpan, exists := tracer.SpanFromContext(ctx)
-	if exists {
+	parentSpanMeta, parentExists := SpanMetaFromContext(ctx)
+	if parentExists {
 		// This is a child span, parents need to be marked
-		spanOpts = append(spanOpts, tracer.ChildOf(parentSpan.Context()))
+		spanOpts = append(spanOpts, tracer.ChildOf(parentSpanMeta.span.Context()))
+		s.parent = parentSpanMeta
+		for _, tag := range getOkTagKeys() {
+			s.tags[tag] = s.parent.tags[tag]
+		}
 	}
-	if childOnly && !exists {
+	if childOnly && !parentExists {
 		// There is no parent span, no need to start tracing here
-		return ctx, func() {}
+		return ctx
 	}
 	s.span = tracer.StartSpan(TraceServiceName, spanOpts...)
 	for k, v := range s.tags {
 		s.span.SetTag(k, v)
 	}
-	ctx = tracer.ContextWithSpan(ctx, s.span)
-	return ctx, func() {
-		s.span.Finish()
+	ctx, err := s.SaveSpanMetaToContext(ctx)
+	if err != nil {
+		ulog.E(err)
 	}
+	return ctx
 }
 
-func (s *SpanMeta) FinishWithError(err error) {
+func (s *SpanMeta) FinishTracing(ctx context.Context) context.Context {
+	if s.span != nil {
+		s.span.Finish()
+	}
+	var err error
+	if s.parent != nil {
+		ctx, err = s.parent.SaveSpanMetaToContext(ctx)
+		if err != nil {
+			ulog.E(err)
+		}
+	} else {
+		// This was the top level span meta
+		ctx = ClearSpanMetaContext(ctx)
+	}
+	return ctx
+}
+
+func (s *SpanMeta) FinishWithError(ctx context.Context, err error) {
 	if s.span == nil {
 		return
 	}
 	errCode := status.Code(err)
 	s.span.SetTag("grpc.code", errCode.String())
-	var tigrisErr *api.TigrisError
-	var fdbErr fdb.Error
-	if errors.As(err, &fdbErr) {
-		s.span.SetTag("error_source", "fdb")
-		s.span.SetTag("fdb_error_code", strconv.Itoa(fdbErr.Code))
+	errTags := getErrorTags(err)
+	for k, v := range errTags {
+		s.span.SetTag(k, v)
 	}
-	if errors.As(err, &tigrisErr) {
-		s.span.SetTag("error_source", "tigris_server")
-		s.span.SetTag("tigris_server_error", tigrisErr.Code.String())
-	}
-	// TODO: handle known search errors
 	finishOptions := []tracer.FinishOption{tracer.WithError(err)}
 	s.span.Finish(finishOptions...)
+	s.span = nil
+	ClearSpanMetaContext(ctx)
 }

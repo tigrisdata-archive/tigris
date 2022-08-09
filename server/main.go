@@ -53,7 +53,7 @@ func main() {
 	log.Info().Str("version", util.Version).Msgf("Starting server")
 
 	var kvStore kv.KeyValueStore
-	if config.DefaultConfig.Metrics.Fdb.Enabled {
+	if config.DefaultConfig.Tracing.Enabled {
 		kvStore, err = kv.NewKeyValueStoreWithMetrics(&config.DefaultConfig.FoundationDB)
 	} else {
 		kvStore, err = kv.NewKeyValueStore(&config.DefaultConfig.FoundationDB)

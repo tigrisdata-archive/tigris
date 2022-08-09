@@ -27,3 +27,12 @@ type Request interface {
 type Response interface {
 	proto.Message
 }
+
+type RequestWithDb interface {
+	GetDb() string
+}
+
+type RequestWithDbAndCollection interface {
+	GetDb() string
+	GetCollection() string
+}

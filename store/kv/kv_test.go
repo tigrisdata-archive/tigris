@@ -32,7 +32,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/server/config"
-	"github.com/tigrisdata/tigris/server/metrics"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
@@ -616,29 +615,6 @@ func testSetVersionstampedValue(t *testing.T, kv baseKVStore) {
 	require.NoError(t, tx.Commit(ctx))
 }
 
-func testMeasureLow() {
-	ctx := context.Background()
-
-	testFunctions := []func() error{
-		func() error {
-			return nil
-		},
-		func() error {
-			return errors.New("unkown error")
-		},
-		func() error {
-			return fdb.Error{Code: 1}
-		},
-	}
-
-	for _, f := range testFunctions {
-		measureLow(ctx, "Commit", f)
-		measureLow(ctx, "Insert", f)
-		measureLow(ctx, "Insert", f)
-		measureLow(ctx, "BeginTx", f)
-	}
-}
-
 func TestKVFDB(t *testing.T) {
 	cfg, err := config.GetTestFDBConfig("../..")
 	require.NoError(t, err)
@@ -673,10 +649,6 @@ func TestKVFDB(t *testing.T) {
 	})
 	t.Run("TestSetVersionstampedValue", func(t *testing.T) {
 		testSetVersionstampedValue(t, kv)
-	})
-	t.Run("TestMeasureCounters", func(t *testing.T) {
-		metrics.InitializeMetrics()
-		testMeasureLow()
 	})
 }
 
