@@ -16,8 +16,6 @@ package kv
 
 import (
 	"context"
-	"errors"
-	"strconv"
 	"unsafe"
 
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
@@ -102,32 +100,18 @@ func measureLow(ctx context.Context, name string, f func() error) {
 	// Low level measurement wrapper that is called by the measure functions on the appropriate receiver
 	tags := metrics.GetFdbTags(ctx, name)
 	spanMeta := metrics.NewSpanMeta(metrics.KvTracingServiceName, name, "fdb_kv", tags)
-	var finishTracing func()
-	ctx, finishTracing = spanMeta.StartTracing(ctx, true)
-	defer finishTracing()
-	if config.DefaultConfig.Metrics.Fdb.ResponseTime {
-		metrics.FdbRequests.Tagged(tags).Histogram("histogram", tally.DefaultBuckets)
-		defer metrics.FdbRequests.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
-	}
+	defer metrics.FdbRespTime.Tagged(spanMeta.GetTags()).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
+	ctx = spanMeta.StartTracing(ctx, true)
 	err := f()
 	if err == nil {
 		// Request was ok
-		metrics.FdbRequests.Tagged(tags).Counter("ok").Inc(1)
+		spanMeta.CountOkForScope(metrics.FdbRequests)
+		_ = spanMeta.FinishTracing(ctx)
 		return
 	}
-	var fdberr fdb.Error
-	if config.DefaultConfig.Metrics.Fdb.Counters {
-		errTags := metrics.GetFdbSpecificErrorTags(ctx, name, strconv.Itoa(fdberr.Code))
-		// An error is either known or unknown, tagging is different, known errors have more rich metadata
-		if errors.As(err, &fdberr) {
-			// Error with a specific FDB error code
-			metrics.FdbErrorRequests.Tagged(errTags).Counter("specific").Inc(1)
-		} else {
-			// Unknown error
-			metrics.FdbErrorRequests.Tagged(tags).Counter("unknown").Inc(1)
-		}
-	}
-	spanMeta.FinishWithError(err)
+	// Request had an error
+	spanMeta.CountErrorForScope(metrics.FdbRequests, err)
+	spanMeta.FinishWithError(ctx, err)
 }
 
 func (m *KeyValueStoreImplWithMetrics) measure(ctx context.Context, name string, f func() error) {

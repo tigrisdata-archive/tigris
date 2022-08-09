@@ -16,13 +16,14 @@ package metrics
 
 import (
 	"context"
+	"testing"
+
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/uber-go/tally"
-	"testing"
 )
 
 func TestSearchMetrics(t *testing.T) {
-	config.DefaultConfig.Metrics.Search.Enabled = true
+	config.DefaultConfig.Tracing.Enabled = true
 	InitializeMetrics()
 
 	ctx := context.Background()
@@ -36,7 +37,6 @@ func TestSearchMetrics(t *testing.T) {
 		GetSearchTags(ctx, "Search"),
 	}
 
-	config.DefaultConfig.Metrics.Search.Counters = true
 	t.Run("Test Search counters", func(t *testing.T) {
 		for _, tags := range testNormalTags {
 			SearchRequests.Tagged(tags).Counter("ok").Inc(1)
@@ -44,7 +44,6 @@ func TestSearchMetrics(t *testing.T) {
 		}
 	})
 
-	config.DefaultConfig.Metrics.Search.ResponseTime = true
 	t.Run("Test Search histograms", func(t *testing.T) {
 		testHistogramTags := GetSearchTags(ctx, "IndexDocuments")
 		defer SearchMetrics.Tagged(testHistogramTags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()

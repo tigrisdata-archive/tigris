@@ -24,7 +24,7 @@ import (
 func addTigrisTenantToTags(ctx context.Context, tags map[string]string) map[string]string {
 	namespace, err := request.GetNamespace(ctx)
 	if ulog.E(err) {
-		tags["tigris_tenant"] = DefaultReportedTigrisTenant
+		tags["tigris_tenant"] = UnknownValue
 	} else {
 		tags["tigris_tenant"] = namespace
 	}

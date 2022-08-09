@@ -16,17 +16,22 @@ package metrics
 
 import (
 	"context"
+
 	"github.com/uber-go/tally"
 )
 
 var (
 	SearchRequests      tally.Scope
+	SearchOkRequests    tally.Scope
 	SearchErrorRequests tally.Scope
+	SearchRespTime      tally.Scope
 )
 
 func InitializeSearchScopes() {
 	SearchRequests = SearchMetrics.SubScope("requests")
+	SearchOkRequests = SearchRequests.SubScope("ok")
 	SearchErrorRequests = SearchRequests.SubScope("error")
+	SearchRespTime = SearchRequests.SubScope("resptime")
 }
 
 func GetSearchTags(ctx context.Context, reqMethodName string) map[string]string {
@@ -36,6 +41,6 @@ func GetSearchTags(ctx context.Context, reqMethodName string) map[string]string 
 func getSearchReqTags(reqMethodName string) map[string]string {
 	return map[string]string{
 		"method":        reqMethodName,
-		"tigris_tenant": DefaultReportedTigrisTenant,
+		"tigris_tenant": UnknownValue,
 	}
 }
