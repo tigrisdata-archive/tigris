@@ -47,6 +47,7 @@ func TestJSONEncoding(t *testing.T) {
 	})
 
 	t.Run("marshal SearchResponse", func(t *testing.T) {
+		avg := float64(40)
 		resp := &SearchResponse{
 			Hits: []*SearchHit{{
 				Data:     nil,
@@ -60,7 +61,7 @@ func TestJSONEncoding(t *testing.T) {
 					}},
 					Stats: &FacetStats{
 						Count: 50,
-						Avg:   40,
+						Avg:   &avg,
 					},
 				},
 			},
