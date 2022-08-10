@@ -501,11 +501,11 @@ func (x *SearchFacet) MarshalJSON() ([]byte, error) {
 
 func (x *FacetStats) MarshalJSON() ([]byte, error) {
 	resp := struct {
-		Avg   float64 `json:"avg,omitempty"`
-		Max   float64 `json:"max,omitempty"`
-		Min   float64 `json:"min,omitempty"`
-		Sum   float64 `json:"sum,omitempty"`
-		Count int64   `json:"count"`
+		Avg   *float64 `json:"avg,omitempty"`
+		Max   *float64 `json:"max,omitempty"`
+		Min   *float64 `json:"min,omitempty"`
+		Sum   *float64 `json:"sum,omitempty"`
+		Count int64    `json:"count"`
 	}{
 		Avg:   x.Avg,
 		Max:   x.Max,
