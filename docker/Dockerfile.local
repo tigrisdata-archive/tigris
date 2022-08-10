@@ -21,6 +21,8 @@ RUN apt-get update && \
     curl \
     wget \
     gcc \
+    libc6-dev \
+    unzip \
     git \
     make \
     sudo

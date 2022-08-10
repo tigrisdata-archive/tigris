@@ -22,6 +22,8 @@ RUN apt-get update && \
     gcc \
     git \
     golang \
+    unzip \
+    libc6-dev \
     make \
     sudo
 
