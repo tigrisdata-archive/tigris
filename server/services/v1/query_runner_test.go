@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/query/search"
+	"github.com/tigrisdata/tigris/schema"
 )
 
 func TestSearchQueryRunner_getFacetFields(t *testing.T) {

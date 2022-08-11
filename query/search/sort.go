@@ -6,7 +6,8 @@ import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 )
 
-const maxSortOrders = 3
+// TODO: Update this to 3 once https://github.com/typesense/typesense/issues/690 is resolved
+const maxSortOrders = 2
 
 const (
 	ASC  = "$asc"

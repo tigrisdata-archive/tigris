@@ -17,10 +17,10 @@ package search
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/query/filter"
 	"github.com/tigrisdata/tigris/schema"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestSearchBuilder(t *testing.T) {

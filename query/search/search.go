@@ -15,9 +15,10 @@
 package search
 
 import (
+	"fmt"
+
 	"github.com/tigrisdata/tigris/query/filter"
 	"github.com/tigrisdata/tigris/query/read"
-	"fmt"
 )
 
 const (

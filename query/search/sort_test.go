@@ -2,17 +2,18 @@ package search
 
 import (
 	"testing"
+
 	"github.com/stretchr/testify/assert"
 )
 
 func TestUnmarshalSort(t *testing.T) {
-	t.Run("Unmarshal 3 sort orders", func(t *testing.T) {
-		rawInput := []byte(`[{"field_1":"$asc"},{"field_2":"$desc"},{"field_3":"$asc"}]`)
+	t.Run("Unmarshal 2 sort orders", func(t *testing.T) {
+		rawInput := []byte(`[{"field_1":"$asc"},{"field_2":"$desc"}]`)
 		sort, err := UnmarshalSort(rawInput)
 
 		assert.NoError(t, err)
 		assert.NotNil(t, sort)
-		assert.Len(t, *sort, 3)
+		assert.Len(t, *sort, 2)
 
 		expected := []SortField{
 			{
@@ -23,11 +24,6 @@ func TestUnmarshalSort(t *testing.T) {
 			{
 				Name:               "field_2",
 				Ascending:          false,
-				MissingValuesFirst: false,
-			},
-			{
-				Name:               "field_3",
-				Ascending:          true,
 				MissingValuesFirst: false,
 			},
 		}
@@ -87,7 +83,7 @@ func TestUnmarshalSort(t *testing.T) {
 	t.Run("Unmarshal 4 sort orders", func(t *testing.T) {
 		rawInput := []byte(`[{"field_1":"$asc"},{"field_2":"$desc"},{"field_3":"$asc"},{"field_4":"$asc"}]`)
 		sort, err := UnmarshalSort(rawInput)
-		assert.ErrorContains(t, err, "Sorting can support up to `3` fields")
+		assert.ErrorContains(t, err, "Sorting can support up to `2` fields")
 		assert.Nil(t, sort)
 	})
 
