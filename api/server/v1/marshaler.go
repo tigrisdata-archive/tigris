@@ -16,18 +16,61 @@ package api
 
 import (
 	"encoding/json"
+	"io"
+	"net/url"
 	"time"
 
+	"github.com/ajg/form"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	jsoniter "github.com/json-iterator/go"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
+const (
+	refreshToken = "refresh_token"
+)
+
+type CustomDecoder struct {
+	formDecoder *form.Decoder
+	jsonDecoder *json.Decoder
+	reader      io.Reader
+}
+
+func (f CustomDecoder) Decode(dst interface{}) error {
+	switch dst.(type) {
+	case *GetAccessTokenRequest:
+		{
+			byteArr, err := io.ReadAll(f.reader)
+			if err != nil {
+				return err
+			}
+			return unmarshalInternal(byteArr, dst)
+		}
+	}
+	return f.jsonDecoder.Decode(dst)
+}
+
 // CustomMarshaler is a marshaler to customize the response. Currently, it is only used to marshal custom error message
 // otherwise it just uses the inbuilt mux marshaller.
 type CustomMarshaler struct {
-	*runtime.JSONBuiltin
+	JSONBuiltin *runtime.JSONBuiltin
+}
+
+func (c *CustomMarshaler) NewDecoder(r io.Reader) runtime.Decoder {
+	return CustomDecoder{
+		formDecoder: form.NewDecoder(r),
+		jsonDecoder: json.NewDecoder(r),
+		reader:      r,
+	}
+}
+
+func (c *CustomMarshaler) NewEncoder(w io.Writer) runtime.Encoder {
+	return c.JSONBuiltin.NewEncoder(w)
+}
+
+func (c *CustomMarshaler) ContentType(v interface{}) string {
+	return c.JSONBuiltin.ContentType(v)
 }
 
 func (c *CustomMarshaler) Marshal(v interface{}) ([]byte, error) {
@@ -51,6 +94,31 @@ func (c *CustomMarshaler) Marshal(v interface{}) ([]byte, error) {
 		return c.JSONBuiltin.Marshal(v)
 	}
 	return c.JSONBuiltin.Marshal(v)
+}
+
+func (c *CustomMarshaler) Unmarshal(data []byte, v interface{}) error {
+	switch v.(type) {
+	case *GetAccessTokenRequest:
+		{
+			return unmarshalInternal(data, v)
+		}
+	}
+	return c.JSONBuiltin.Unmarshal(data, v)
+}
+
+func unmarshalInternal(data []byte, v interface{}) error {
+	switch v := v.(type) {
+	case *GetAccessTokenRequest:
+		{
+			values, err := url.ParseQuery(string(data))
+			if err != nil {
+				return err
+			}
+			v.RefreshToken = values.Get(refreshToken)
+			return nil
+		}
+	}
+	return Errorf(Code_INTERNAL, "not supported")
 }
 
 // UnmarshalJSON on ReadRequest avoids unmarshalling filter and instead this way we can write a custom struct to do
