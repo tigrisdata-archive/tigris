@@ -137,8 +137,9 @@ var DefaultConfig = Config{
 	},
 	Quota: QuotaConfig{
 		Enabled:              false,
-		RateLimit:            1000,        // requests per second
+		RateLimit:            1000,        // requests per second both reads and writes
 		WriteThroughputLimit: 10000000,    // bytes per second
+		ReadThroughputLimit:  10000000,    // bytes per second
 		DataSizeLimit:        10000000000, // bytes
 	},
 }
@@ -160,5 +161,6 @@ type QuotaConfig struct {
 	Enabled              bool
 	RateLimit            int   `mapstructure:"rate_limit" yaml:"rate_limit" json:"rate_limit"`
 	WriteThroughputLimit int   `mapstructure:"write_throughput_limit" yaml:"write_throughput_limit" json:"write_throughput_limit"`
+	ReadThroughputLimit  int   `mapstructure:"read_throughput_limit" yaml:"read_throughput_limit" json:"read_throughput_limit"`
 	DataSizeLimit        int64 `mapstructure:"data_size_limit" yaml:"data_size_limit" json:"data_size_limit"`
 }

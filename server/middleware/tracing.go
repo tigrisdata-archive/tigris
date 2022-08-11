@@ -17,7 +17,7 @@ package middleware
 import (
 	"context"
 
-	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
@@ -68,8 +68,7 @@ func traceStream() grpc.StreamServerInterceptor {
 		defer metrics.RequestsRespTime.Tagged(spanMeta.GetTags()).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
 		wrapped.spanMeta = spanMeta
 		wrapped.WrappedContext = spanMeta.StartTracing(wrapped.WrappedContext, false)
-		wrapper := &recvWrapper{wrapped}
-		err := handler(srv, wrapper)
+		err := handler(srv, wrapped)
 		if err != nil {
 			spanMeta.CountErrorForScope(metrics.OkRequests, err)
 			spanMeta.FinishWithError(wrapped.WrappedContext, err)

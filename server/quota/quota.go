@@ -24,6 +24,7 @@ var (
 type State struct {
 	Rate            *rate.Limiter
 	WriteThroughput *rate.Limiter
+	ReadThroughput  *rate.Limiter
 	Size            atomic.Int64
 	SizeUpdateAt    atomic.Int64
 	SizeLock        sync.Mutex
@@ -42,6 +43,8 @@ func Init(t *metadata.TenantManager, tx *transaction.Manager, c *config.QuotaCon
 	mgr = *newManager(t, tx, c)
 }
 
+// Allow checks rate, write throughput and storage size limits for the namespace
+// and returns error if at least one of them is exceeded
 func Allow(ctx context.Context, namespace string, reqSize int) error {
 	if !mgr.cfg.Enabled {
 		return nil
@@ -53,18 +56,28 @@ func newManager(t *metadata.TenantManager, tx *transaction.Manager, c *config.Qu
 	return &Manager{cfg: c, tenantMgr: t, txMgr: tx}
 }
 
-func (m *Manager) check(ctx context.Context, namespace string, size int) error {
+// GetState returns quota state of the given namespace
+func GetState(namespace string) *State {
+	return mgr.getState(namespace)
+}
+
+func (m *Manager) getState(namespace string) *State {
 	is, ok := m.tenantQuota.Load(namespace)
 	if !ok {
 		// Create new state if didn't exist before
 		is = &State{
 			Rate:            rate.NewLimiter(rate.Limit(m.cfg.RateLimit), 10),
 			WriteThroughput: rate.NewLimiter(rate.Limit(m.cfg.WriteThroughputLimit), m.cfg.WriteThroughputLimit),
+			ReadThroughput:  rate.NewLimiter(rate.Limit(m.cfg.ReadThroughputLimit), m.cfg.ReadThroughputLimit),
 		}
 		m.tenantQuota.Store(namespace, is)
 	}
 
-	s := is.(*State)
+	return is.(*State)
+}
+
+func (m *Manager) check(ctx context.Context, namespace string, size int) error {
+	s := m.getState(namespace)
 
 	if !s.Rate.Allow() {
 		return ErrRateExceeded

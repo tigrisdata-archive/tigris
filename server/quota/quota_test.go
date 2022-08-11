@@ -25,7 +25,8 @@ func TestQuotaManager(t *testing.T) {
 	tenantMgr, ctx, cancel := metadata.NewTestTenantMgr(kvStore)
 	defer cancel()
 
-	m := newManager(tenantMgr, txMgr, &config.QuotaConfig{Enabled: true,
+	m := newManager(tenantMgr, txMgr, &config.QuotaConfig{
+		Enabled:              true,
 		RateLimit:            6,
 		WriteThroughputLimit: 100,
 		DataSizeLimit:        10000,
@@ -97,6 +98,18 @@ func TestQuotaManager(t *testing.T) {
 	for err != ErrRateExceeded {
 		err = m.check(ctx, ns, 0)
 	}
+
+	Init(tenantMgr, txMgr, &config.QuotaConfig{
+		Enabled:              false,
+		RateLimit:            6,
+		WriteThroughputLimit: 100,
+		DataSizeLimit:        10000,
+	})
+	s := GetState(ns)
+	require.Nil(t, Allow(ctx, ns, 0))
+	mgr.cfg.Enabled = true
+	require.Nil(t, Allow(ctx, ns, 0))
+	require.NotNil(t, s)
 }
 
 func TestMain(m *testing.M) {
