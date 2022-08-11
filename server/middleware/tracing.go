@@ -38,7 +38,7 @@ type wrappedStream struct {
 func traceUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		grpcMeta := metrics.GetGrpcEndPointMetadataFromFullMethod(ctx, info.FullMethod, "unary")
-		tags := grpcMeta.GetTags()
+		tags := grpcMeta.GetOkTags()
 		spanMeta := metrics.NewSpanMeta(util.Service, info.FullMethod, TraceSpanType, tags)
 		spanMeta.AddTags(metrics.GetDbCollTagsForReq(req))
 		defer metrics.RequestsRespTime.Tagged(spanMeta.GetTags()).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
@@ -63,7 +63,7 @@ func traceStream() grpc.StreamServerInterceptor {
 		wrapped := &wrappedStream{WrappedServerStream: middleware.WrapServerStream(stream)}
 		wrapped.WrappedContext = stream.Context()
 		grpcMeta := metrics.GetGrpcEndPointMetadataFromFullMethod(wrapped.WrappedContext, info.FullMethod, "stream")
-		tags := grpcMeta.GetTags()
+		tags := grpcMeta.GetOkTags()
 		spanMeta := metrics.NewSpanMeta(util.Service, info.FullMethod, TraceSpanType, tags)
 		defer metrics.RequestsRespTime.Tagged(spanMeta.GetTags()).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
 		wrapped.spanMeta = spanMeta

@@ -57,7 +57,7 @@ type apiService struct {
 	txMgr         *transaction.Manager
 	tenantMgr     *metadata.TenantManager
 	cdcMgr        *cdc.Manager
-	sessions      *SessionManager
+	sessions      Session
 	runnerFactory *QueryRunnerFactory
 	versionH      *metadata.VersionHandler
 	searchStore   search.Store
@@ -94,7 +94,11 @@ func newApiService(kv kv.KeyValueStore, searchStore search.Store, tenantMgr *met
 		txListeners = append(txListeners, NewSearchIndexer(searchStore, tenantMgr))
 	}
 
-	u.sessions = NewSessionManager(u.txMgr, u.tenantMgr, u.versionH, txListeners, metadata.NewCacheTracker(tenantMgr, txMgr))
+	if config.DefaultConfig.Tracing.Enabled {
+		u.sessions = NewSessionManagerWithMetrics(u.txMgr, u.tenantMgr, u.versionH, txListeners, metadata.NewCacheTracker(tenantMgr, txMgr))
+	} else {
+		u.sessions = NewSessionManager(u.txMgr, u.tenantMgr, u.versionH, txListeners, metadata.NewCacheTracker(tenantMgr, txMgr))
+	}
 	u.runnerFactory = NewQueryRunnerFactory(u.txMgr, u.cdcMgr, u.searchStore)
 
 	return u
@@ -147,12 +151,15 @@ func (s *apiService) BeginTransaction(ctx context.Context, _ *api.BeginTransacti
 }
 
 func (s *apiService) CommitTransaction(ctx context.Context, _ *api.CommitTransactionRequest) (*api.CommitTransactionResponse, error) {
-	txCtx := api.GetTransaction(ctx)
-	session := s.sessions.Get(txCtx.GetId())
+	session, _ := s.sessions.Get(ctx)
 	if session == nil {
 		return nil, api.Errorf(api.Code_NOT_FOUND, "session not found")
 	}
-	defer s.sessions.Remove(session.txCtx.Id)
+	defer func() {
+		if err := s.sessions.Remove(ctx); err != nil {
+			ulog.E(err)
+		}
+	}()
 
 	err := session.Commit(s.versionH, session.tx.Context().GetStagedDatabase() != nil, nil)
 	if err != nil {
@@ -163,12 +170,15 @@ func (s *apiService) CommitTransaction(ctx context.Context, _ *api.CommitTransac
 }
 
 func (s *apiService) RollbackTransaction(ctx context.Context, _ *api.RollbackTransactionRequest) (*api.RollbackTransactionResponse, error) {
-	txCtx := api.GetTransaction(ctx)
-	session := s.sessions.Get(txCtx.GetId())
+	session, _ := s.sessions.Get(ctx)
 	if session == nil {
 		return nil, api.Errorf(api.Code_NOT_FOUND, "session not found")
 	}
-	defer s.sessions.Remove(session.txCtx.Id)
+	defer func() {
+		if err := s.sessions.Remove(ctx); err != nil {
+			ulog.E(err)
+		}
+	}()
 
 	_ = session.Rollback()
 

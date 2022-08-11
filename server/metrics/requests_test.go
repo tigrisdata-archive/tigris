@@ -74,7 +74,7 @@ func TestGRPCMetrics(t *testing.T) {
 	})
 
 	t.Run("Test unary method preinitialized tags", func(t *testing.T) {
-		tags := unaryEndPointMetadata.GetTags()
+		tags := unaryEndPointMetadata.GetOkTags()
 		for tagName, tagValue := range tags {
 			switch tagName {
 			case "grpc_method":
@@ -86,7 +86,7 @@ func TestGRPCMetrics(t *testing.T) {
 	})
 
 	t.Run("Test streaming method preinitialized tags", func(t *testing.T) {
-		tags := streamingEndpointMetadata.GetTags()
+		tags := streamingEndpointMetadata.GetOkTags()
 		for tagName, tagValue := range tags {
 			switch tagName {
 			case "grpc_method":
