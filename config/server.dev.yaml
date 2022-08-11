@@ -16,6 +16,9 @@ server:
   host: localhost
   port: 8081
 
+cdc:
+  enabled: true
+
 search:
   host: localhost
   port: 8108

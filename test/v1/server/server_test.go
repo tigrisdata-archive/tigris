@@ -25,30 +25,23 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/test/config"
 	"gopkg.in/gavv/httpexpect.v1"
 )
 
-type ServerSuite struct {
-	suite.Suite
-}
+func TestInfo(t *testing.T) {
+	resp := info(t)
 
-func (s *ServerSuite) TestInfo() {
-	s.Run("info_handler", func() {
-		resp := info(s.T())
-
-		resp.Status(http.StatusOK).
-			JSON().
-			Object().
-			Value("server_version").NotNull()
-	})
+	resp.Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("server_version").NotNull()
 }
 
 func info(t *testing.T) *httpexpect.Response {
 	e := httpexpect.New(t, config.GetBaseURL())
-	return e.GET(config.GetBaseURL() + "/info").
+	return e.GET(config.GetBaseURL() + "/api/v1/info").
 		Expect()
 }
 

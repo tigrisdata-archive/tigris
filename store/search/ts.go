@@ -23,7 +23,6 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	qsearch "github.com/tigrisdata/tigris/query/search"
-	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metrics"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/typesense/typesense-go/typesense"
@@ -42,24 +41,20 @@ type storeImplWithMetrics struct {
 func (m *storeImplWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
 	// Low level measurement wrapper that is called by the measure functions on the appropriate receiver
 	tags := metrics.GetSearchTags(ctx, name)
-	var finishTrace func()
 	spanMeta := metrics.NewSpanMeta("tigris.search", name, "search", tags)
-	ctx, finishTrace = spanMeta.StartTracing(ctx, true)
-	defer finishTrace()
-	if config.DefaultConfig.Metrics.Search.ResponseTime {
-		metrics.SearchRequests.Tagged(tags).Histogram("histogram", tally.DefaultBuckets)
-		defer metrics.SearchRequests.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
-	}
+	ctx = spanMeta.StartTracing(ctx, true)
+	defer metrics.SearchRespTime.Tagged(spanMeta.GetTags()).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
 	err := f(ctx)
 	if err == nil {
 		// Request was ok
+		spanMeta.CountOkForScope(metrics.SearchRequests)
 		metrics.SearchRequests.Tagged(tags).Counter("ok").Inc(1)
+		_ = spanMeta.FinishTracing(ctx)
 		return
 	}
-	if config.DefaultConfig.Metrics.Search.Counters {
-		metrics.SearchErrorRequests.Tagged(tags).Counter("unknown").Inc(1)
-	}
-	spanMeta.FinishWithError(err)
+	// Request had error
+	spanMeta.CountErrorForScope(metrics.SearchMetrics, err)
+	spanMeta.FinishWithError(ctx, err)
 }
 
 func (m *storeImplWithMetrics) CreateCollection(ctx context.Context, schema *tsApi.CollectionSchema) (err error) {

@@ -18,16 +18,15 @@ import (
 	"context"
 	"sync"
 
-	"github.com/google/uuid"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
+	"github.com/tigrisdata/tigris/lib/uuid"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/types"
 	"github.com/tigrisdata/tigris/store/kv"
-	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 var (
@@ -48,7 +47,8 @@ type Tx interface {
 	Update(ctx context.Context, key keys.Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error)
 	Delete(ctx context.Context, key keys.Key) error
 	Read(ctx context.Context, key keys.Key) (kv.Iterator, error)
-	Get(ctx context.Context, key []byte) ([]byte, error)
+	ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key) (kv.Iterator, error)
+	Get(ctx context.Context, key []byte, isSnapshot bool) (kv.Future, error)
 	Commit(ctx context.Context) error
 	Rollback(ctx context.Context) error
 	SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error
@@ -158,13 +158,15 @@ func newTxSessionWithMetrics(kv kv.KeyValueStore) (*TxSessionWithMetrics, error)
 }
 
 func (m *TxSessionWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
-	var finishTracing func()
+	// No counters here, just tracing, will be removed in the future
 	tags := metrics.GetFdbTags(ctx, name)
 	spanMeta := metrics.NewSpanMeta(metrics.TxManagerTracingServiceName, name, "tx_manager", tags)
-	ctx, finishTracing = spanMeta.StartTracing(ctx, true)
-	defer finishTracing()
-	// TODO: better error handling (error in trace, etc)
-	ulog.E(f(ctx))
+	ctx = spanMeta.StartTracing(ctx, true)
+	if err := f(ctx); err != nil {
+		spanMeta.FinishWithError(ctx, err)
+		return
+	}
+	_ = spanMeta.FinishTracing(ctx)
 }
 
 func (s *TxSession) GetTxCtx() *api.TransactionCtx {
@@ -298,9 +300,28 @@ func (s *TxSession) Read(ctx context.Context, key keys.Key) (kv.Iterator, error)
 	return s.kTx.Read(ctx, key.Table(), kv.BuildKey(key.IndexParts()...))
 }
 
+func (s *TxSession) ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key) (kv.Iterator, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	if err := s.validateSession(); err != nil {
+		return nil, err
+	}
+
+	return s.kTx.ReadRange(ctx, lKey.Table(), kv.BuildKey(lKey.IndexParts()...), kv.BuildKey(rKey.IndexParts()...))
+}
+
 func (m *TxSessionWithMetrics) Read(ctx context.Context, key keys.Key) (it kv.Iterator, err error) {
 	m.measure(ctx, "Read", func(ctx context.Context) error {
 		it, err = m.t.Read(ctx, key)
+		return err
+	})
+	return
+}
+
+func (m *TxSessionWithMetrics) ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key) (it kv.Iterator, err error) {
+	m.measure(ctx, "ReadRange", func(ctx context.Context) error {
+		it, err = m.t.ReadRange(ctx, lKey, rKey)
 		return err
 	})
 	return
@@ -344,7 +365,7 @@ func (m *TxSessionWithMetrics) SetVersionstampedKey(ctx context.Context, key []b
 	return
 }
 
-func (s *TxSession) Get(ctx context.Context, key []byte) ([]byte, error) {
+func (s *TxSession) Get(ctx context.Context, key []byte, isSnapshot bool) (kv.Future, error) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -352,12 +373,12 @@ func (s *TxSession) Get(ctx context.Context, key []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	return s.kTx.Get(ctx, key)
+	return s.kTx.Get(ctx, key, isSnapshot)
 }
 
-func (m *TxSessionWithMetrics) Get(ctx context.Context, key []byte) (val []byte, err error) {
+func (m *TxSessionWithMetrics) Get(ctx context.Context, key []byte, isSnapshot bool) (val kv.Future, err error) {
 	m.measure(ctx, "Get", func(ctx context.Context) error {
-		val, err = m.t.Get(ctx, key)
+		val, err = m.t.Get(ctx, key, isSnapshot)
 		return err
 	})
 	return

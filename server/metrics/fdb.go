@@ -16,12 +16,14 @@ package metrics
 
 import (
 	"context"
+
 	"github.com/uber-go/tally"
 )
 
 var (
 	FdbRequests         tally.Scope
 	FdbErrorRequests    tally.Scope
+	FdbRespTime         tally.Scope
 	MeasuredFdbRequests = []string{
 		"Delete",
 		"DeleteRange",
@@ -43,7 +45,7 @@ var (
 func getFdbReqTags(reqMethodName string) map[string]string {
 	return map[string]string{
 		"method":        reqMethodName,
-		"tigris_tenant": DefaultReportedTigrisTenant,
+		"tigris_tenant": UnknownValue,
 	}
 }
 
@@ -51,7 +53,7 @@ func getFdbReqSpecificErrorTags(reqMethodName string, code string) map[string]st
 	return map[string]string{
 		"method":        reqMethodName,
 		"error_code":    code,
-		"tigris_tenant": DefaultReportedTigrisTenant,
+		"tigris_tenant": UnknownValue,
 	}
 }
 
@@ -66,4 +68,5 @@ func GetFdbSpecificErrorTags(ctx context.Context, reqMethodName string, code str
 func InitializeFdbScopes() {
 	FdbRequests = FdbMetrics.SubScope("requests")
 	FdbErrorRequests = FdbRequests.SubScope("error")
+	FdbRespTime = FdbRequests.SubScope("resptime")
 }

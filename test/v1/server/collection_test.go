@@ -17,176 +17,39 @@
 package server
 
 import (
-	"fmt"
 	"net/http"
 	"testing"
 
-	"github.com/stretchr/testify/suite"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-	"gopkg.in/gavv/httpexpect.v1"
 )
 
-/**
-{
-	"title": "test_collection",
-	"description": "this schema is for integration tests",
-	"properties": {
-		"pkey_int": {
-			"description": "primary key field",
-			"type": "integer"
-		},
-		"int_value": {
-			"description": "simple integer field",
-			"type": "integer"
-		},
-		"string_value": {
-			"description": "simple string field",
-			"type": "string",
-			"maxLength": 128,
-		},
-		"bool_value": {
-			"description": "simple boolean field",
-			"type": "boolean"
-		},
-		"double_value": {
-			"description": "simple double field",
-			"type": "number"
-		},
-		"bytes_value": {
-			"description": "simple bytes field",
-			"type": "string",
-			"format": "byte"
-		}
-	},
-	"primary_key": [
-		"cust_id",
-		"order_id"
-	]
-}
-*/
-var testCreateSchema = map[string]interface{}{
-	"schema": map[string]interface{}{
-		"title":       "test_collection",
-		"description": "this schema is for integration tests",
-		"properties": map[string]interface{}{
-			"pkey_int": map[string]interface{}{
-				"description": "primary key field",
-				"type":        "integer",
-			},
-			"int_value": map[string]interface{}{
-				"description": "simple int field",
-				"type":        "integer",
-			},
-			"string_value": map[string]interface{}{
-				"description": "simple string field",
-				"type":        "string",
-				"maxLength":   128,
-			},
-			"added_string_value": map[string]interface{}{
-				"description": "simple string field",
-				"type":        "string",
-			},
-			"bool_value": map[string]interface{}{
-				"description": "simple boolean field",
-				"type":        "boolean",
-			},
-			"double_value": map[string]interface{}{
-				"description": "simple double field",
-				"type":        "number",
-			},
-			"added_value_double": map[string]interface{}{
-				"description": "simple double field",
-				"type":        "number",
-			},
-			"bytes_value": map[string]interface{}{
-				"description": "simple bytes field",
-				"type":        "string",
-				"format":      "byte",
-			},
-			"uuid_value": map[string]interface{}{
-				"description": "uuid field",
-				"type":        "string",
-				"format":      "uuid",
-			},
-			"date_time_value": map[string]interface{}{
-				"description": "date time field",
-				"type":        "string",
-				"format":      "date-time",
-			},
-			"array_value": map[string]interface{}{
-				"description": "array field",
-				"type":        "array",
-				"items": map[string]interface{}{
-					"type": "object",
-					"properties": map[string]interface{}{
-						"id": map[string]interface{}{
-							"type": "integer",
-						},
-						"product": map[string]interface{}{
-							"type": "string",
-						},
-					},
-				},
-			},
-			"object_value": map[string]interface{}{
-				"description": "object field",
-				"type":        "object",
-				"properties": map[string]interface{}{
-					"name": map[string]interface{}{
-						"type": "string",
-					},
-				},
-			},
-		},
-		"primary_key": []interface{}{"pkey_int"},
-	},
-}
+func TestCreateCollection(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
 
-type CollectionSuite struct {
-	suite.Suite
+	t.Run("status_400_empty_name", func(t *testing.T) {
+		dropCollection(t, db, coll)
 
-	database string
-}
-
-func getCollectionURL(databaseName, collectionName string, methodName string) string {
-	return fmt.Sprintf("/api/v1/databases/%s/collections/%s/%s", databaseName, collectionName, methodName)
-}
-
-func (s *CollectionSuite) SetupSuite() {
-	// create the database for the collection test suite
-	dropDatabase(s.T(), s.database)
-	createDatabase(s.T(), s.database).Status(http.StatusOK)
-}
-
-func (s *CollectionSuite) TearDownSuite() {
-	// drop the database for the collection test suite
-	dropDatabase(s.T(), s.database).Status(http.StatusOK)
-}
-
-func (s *CollectionSuite) TestCreateCollection() {
-	s.Run("status_400_empty_name", func() {
-		dropCollection(s.T(), s.database, "test_collection")
-
-		resp := createCollection(s.T(), s.database, "", nil)
+		resp := createCollection(t, db, "", nil)
 		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "invalid collection name")
 	})
-	s.Run("status_400_schema_nil", func() {
-		dropCollection(s.T(), s.database, "test_collection")
+	t.Run("status_400_schema_nil", func(t *testing.T) {
+		dropCollection(t, db, coll)
 
-		resp := createCollection(s.T(), s.database, "test_collection", nil)
+		resp := createCollection(t, db, coll, nil)
 		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "schema is a required during collection creation")
 	})
-	s.Run("status_success", func() {
-		dropCollection(s.T(), s.database, "test_collection")
+	t.Run("status_success", func(t *testing.T) {
+		dropCollection(t, db, coll)
 
-		resp := createCollection(s.T(), s.database, "test_collection", testCreateSchema)
+		resp := createCollection(t, db, coll, testCreateSchema)
 		resp.Status(http.StatusOK).
 			JSON().
 			Object().
 			ValueEqual("message", "collection created successfully")
 	})
-	s.Run("status_conflict", func() {
-		dropCollection(s.T(), s.database, "test_collection")
+	t.Run("status_conflict", func(t *testing.T) {
+		dropCollection(t, db, coll)
 
 		var createOrUpdateOptions = map[string]interface{}{
 			"only_create": true,
@@ -195,8 +58,8 @@ func (s *CollectionSuite) TestCreateCollection() {
 			createOrUpdateOptions[key] = value
 		}
 
-		e := expect(s.T())
-		e.POST(getCollectionURL(s.database, "test_collection", "createOrUpdate")).
+		e := expect(t)
+		e.POST(getCollectionURL(db, coll, "createOrUpdate")).
 			WithJSON(createOrUpdateOptions).
 			Expect().
 			Status(http.StatusOK).
@@ -204,53 +67,56 @@ func (s *CollectionSuite) TestCreateCollection() {
 			Object().
 			ValueEqual("message", "collection created successfully")
 
-		resp := e.POST(getCollectionURL(s.database, "test_collection", "createOrUpdate")).
+		resp := e.POST(getCollectionURL(db, coll, "createOrUpdate")).
 			WithJSON(createOrUpdateOptions).
 			Expect()
 		testError(resp, http.StatusConflict, api.Code_ALREADY_EXISTS, "collection already exist")
 	})
 }
 
-func (s *CollectionSuite) TestDropCollection() {
-	createCollection(s.T(), s.database, "test_collection", testCreateSchema).Status(http.StatusOK)
+func TestDropCollection(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
 
-	resp := dropCollection(s.T(), s.database, "test_collection")
+	createCollection(t, db, coll, testCreateSchema).Status(http.StatusOK)
+
+	resp := dropCollection(t, db, coll)
 	resp.Status(http.StatusOK).
 		JSON().
 		Object().
 		ValueEqual("message", "collection dropped successfully")
 
 	// dropping again should return in a NOT FOUND error
-	resp = dropCollection(s.T(), s.database, "test_collection")
+	resp = dropCollection(t, db, coll)
 	testError(resp, http.StatusNotFound, api.Code_NOT_FOUND, "collection doesn't exists 'test_collection'")
 }
 
-func (s *CollectionSuite) TestDescribeCollection() {
-	createCollection(s.T(), s.database, "test_collection", testCreateSchema).Status(http.StatusOK)
-	resp := describeCollection(s.T(), s.database, "test_collection", testCreateSchema)
+func TestDescribeCollection(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	createCollection(t, db, coll, testCreateSchema).Status(http.StatusOK)
+	resp := describeCollection(t, db, coll, testCreateSchema)
 
 	resp.Status(http.StatusOK).
 		JSON().
 		Object().
-		ValueEqual("collection", "test_collection").
+		ValueEqual("collection", coll).
 		ValueEqual("size", 0)
 
 	// cleanup
-	dropCollection(s.T(), s.database, "test_collection")
+	dropCollection(t, db, coll)
 }
 
 func TestCollection_Update(t *testing.T) {
-	dbName := fmt.Sprintf("db_test")
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
 
-	dropDatabase(t, dbName)
-	createDatabase(t, dbName)
-	defer dropDatabase(t, dbName)
-
-	collectionName := fmt.Sprintf("test_collection")
-	createCollection(t, dbName, collectionName,
+	dropCollection(t, db, coll)
+	createCollection(t, db, coll,
 		Map{
 			"schema": Map{
-				"title": collectionName,
+				"title": coll,
 				"properties": Map{
 					"int_field": Map{
 						"type": "integer",
@@ -264,56 +130,32 @@ func TestCollection_Update(t *testing.T) {
 		}).Status(http.StatusOK)
 
 	cases := []struct {
+		name    string
 		schema  Map
 		expCode int
 	}{
 		{
-			// primary key missing
-			Map{"schema": Map{"title": collectionName, "properties": Map{"int_field": Map{"type": "integer"}, "string_field": Map{"type": "string"}}}},
+			"primary key missing",
+			Map{"schema": Map{"title": coll, "properties": Map{"int_field": Map{"type": "integer"}, "string_field": Map{"type": "string"}}}},
 			http.StatusBadRequest,
 		},
 		{
-			// type change
-			Map{"schema": Map{"title": collectionName, "properties": Map{"int_field": Map{"type": "string"}, "string_field": Map{"type": "string"}}, "primary_key": []any{"int_field"}}},
+			"type change",
+			Map{"schema": Map{"title": coll, "properties": Map{"int_field": Map{"type": "string"}, "string_field": Map{"type": "string"}}, "primary_key": []any{"int_field"}}},
 			http.StatusBadRequest,
 		}, {
-			// field removed
-			Map{"schema": Map{"title": collectionName, "properties": Map{"int_field": Map{"type": "integer"}}, "primary_key": []any{"int_field"}}},
+			"field removed",
+			Map{"schema": Map{"title": coll, "properties": Map{"int_field": Map{"type": "integer"}}, "primary_key": []any{"int_field"}}},
 			http.StatusBadRequest,
 		}, {
-			// success, adding a field
-			Map{"schema": Map{"title": collectionName, "properties": Map{"int_field": Map{"type": "integer"}, "string_field": Map{"type": "string"}, "extra_field": Map{"type": "string"}}, "primary_key": []any{"int_field"}}},
+			"success adding a field",
+			Map{"schema": Map{"title": coll, "properties": Map{"int_field": Map{"type": "integer"}, "string_field": Map{"type": "string"}, "extra_field": Map{"type": "string"}}, "primary_key": []any{"int_field"}}},
 			http.StatusOK,
 		},
 	}
 	for _, c := range cases {
-		createCollection(t, dbName, collectionName, c.schema).Status(c.expCode)
+		t.Run(c.name, func(t *testing.T) {
+			createCollection(t, db, coll, c.schema).Status(c.expCode)
+		})
 	}
-}
-
-func createCollection(t *testing.T, database string, collection string, schema map[string]interface{}) *httpexpect.Response {
-	e := expect(t)
-	return e.POST(getCollectionURL(database, collection, "createOrUpdate")).
-		WithJSON(schema).
-		Expect()
-}
-
-func createTestCollection(t *testing.T, database string, collection string, schema map[string]interface{}) {
-	dropDatabase(t, database)
-	createDatabase(t, database)
-	dropCollection(t, database, collection)
-	createCollection(t, database, collection, schema).Status(http.StatusOK)
-}
-
-func describeCollection(t *testing.T, database string, collection string, schema map[string]interface{}) *httpexpect.Response {
-	e := expect(t)
-	return e.POST(getCollectionURL(database, collection, "describe")).
-		WithJSON(schema).
-		Expect()
-}
-
-func dropCollection(t *testing.T, database string, collection string) *httpexpect.Response {
-	e := expect(t)
-	return e.DELETE(getCollectionURL(database, collection, "drop")).
-		Expect()
 }

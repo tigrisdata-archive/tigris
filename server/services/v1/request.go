@@ -37,11 +37,16 @@ type SearchStreaming interface {
 	api.Tigris_SearchServer
 }
 
+type SubscribeStreaming interface {
+	api.Tigris_SubscribeServer
+}
+
 // ReqOptions are options used by queryLifecycle to execute a query
 type ReqOptions struct {
-	txCtx          *api.TransactionCtx
-	queryRunner    QueryRunner
-	metadataChange bool
+	txCtx              *api.TransactionCtx
+	queryRunner        QueryRunner
+	metadataChange     bool
+	instantVerTracking bool
 }
 
 // Response is a wrapper on api.Response

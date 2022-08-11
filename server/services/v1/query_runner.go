@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"math"
+	"time"
 
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
@@ -99,6 +100,15 @@ func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streami
 // GetSearchQueryRunner for executing Search
 func (f *QueryRunnerFactory) GetSearchQueryRunner(r *api.SearchRequest, streaming SearchStreaming) *SearchQueryRunner {
 	return &SearchQueryRunner{
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		req:             r,
+		streaming:       streaming,
+	}
+}
+
+// GetSubscribeQueryRunner returns SubscribeQueryRunner
+func (f *QueryRunnerFactory) GetSubscribeQueryRunner(r *api.SubscribeRequest, streaming SubscribeStreaming) *SubscribeQueryRunner {
+	return &SubscribeQueryRunner{
 		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
 		req:             r,
 		streaming:       streaming,
@@ -331,6 +341,15 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		v, err := fieldOperators.DeserializeDoc()
 		if err != nil {
 			return nil, ctx, err
+		}
+
+		if vMap, ok := v.(map[string]interface{}); ok {
+			for k, v := range vMap {
+				// remove fields that are set as null as we don't need them for the validation
+				if v == nil {
+					delete(vMap, k)
+				}
+			}
 		}
 
 		if err = collection.Validate(v); err != nil {
@@ -667,10 +686,7 @@ func (runner *SearchQueryRunner) getFacetFields(collFields []*schema.QueryableFi
 				continue
 			}
 			if !cf.Faceted {
-				return qsearch.Facets{}, api.Errorf(api.Code_INVALID_ARGUMENT, "Faceting not enabled for `%s`", ff.Name)
-			}
-			if cf.DataType != schema.StringType {
-				return qsearch.Facets{}, api.Errorf(api.Code_INVALID_ARGUMENT, "Cannot generate facets for `%s`. Faceting is only supported for text fields", ff.Name)
+				return qsearch.Facets{}, api.Errorf(api.Code_INVALID_ARGUMENT, "Cannot generate facets for `%s`. Faceting is only supported for numeric and text fields", ff.Name)
 			}
 			found = true
 			break
@@ -718,6 +734,96 @@ func (runner *SearchQueryRunner) getFieldSelection(collFields []*schema.Queryabl
 	}
 
 	return factory, nil
+}
+
+type SubscribeQueryRunner struct {
+	*BaseQueryRunner
+
+	req       *api.SubscribeRequest
+	streaming SubscribeStreaming
+}
+
+func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
+	db, err := runner.GetDatabase(ctx, tx, tenant, runner.req.GetDb())
+	if ulog.E(err) {
+		return nil, ctx, err
+	}
+
+	collection, err := runner.GetCollections(db, runner.req.GetCollection())
+	if ulog.E(err) {
+		return nil, ctx, err
+	}
+
+	table, err := runner.encoder.EncodeTableName(tenant.GetNamespace(), db, collection)
+	if ulog.E(err) {
+		return nil, ctx, err
+	}
+
+	skipFirst := false
+	startTime := time.Now().UTC().Format(time.RFC3339Nano)
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		tickerTx, err := runner.txMgr.StartTx(ctx)
+		if ulog.E(err) {
+			return nil, ctx, err
+		}
+
+		startKey, err := runner.encoder.EncodeKey(table, collection.Indexes.PrimaryKey, []interface{}{startTime})
+		if ulog.E(err) {
+			return nil, ctx, err
+		}
+
+		end, err := time.Parse(time.RFC3339, startTime)
+		if ulog.E(err) {
+			return nil, ctx, err
+		}
+
+		endTime := end.Add(34 * time.Second).Format(time.RFC3339)
+		endKey, err := runner.encoder.EncodeKey(table, collection.Indexes.PrimaryKey, []interface{}{endTime})
+		if ulog.E(err) {
+			return nil, ctx, err
+		}
+
+		kvIterator, err := tickerTx.ReadRange(ctx, startKey, endKey)
+		if ulog.E(err) {
+			return nil, ctx, err
+		}
+
+		first := true
+		var keyValue kv.KeyValue
+		for kvIterator.Next(&keyValue) {
+			if ulog.E(kvIterator.Err()) {
+				return nil, ctx, kvIterator.Err()
+			}
+
+			if skipFirst && first {
+				first = false
+				continue
+			}
+
+			err = runner.streaming.Send(&api.SubscribeResponse{
+				Message: keyValue.Data.RawData,
+			})
+			if ulog.E(err) {
+				return nil, ctx, err
+			}
+
+			first = false
+			skipFirst = true
+			startTime = keyValue.Key[1].(string)
+		}
+
+		// TODO: read-only transaction should ignore any error like transaction timed-out
+		err = tickerTx.Commit(ctx)
+		if ulog.E(err) {
+			return nil, ctx, err
+		}
+	}
+
+	return &Response{}, ctx, nil
 }
 
 type CollectionQueryRunner struct {
@@ -776,7 +882,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			return nil, ctx, api.Errorf(api.Code_ALREADY_EXISTS, "collection already exist")
 		}
 
-		schFactory, err := schema.Build(runner.createOrUpdateReq.GetCollection(), runner.createOrUpdateReq.GetSchema())
+		schFactory, err := schema.BuildWithType(runner.createOrUpdateReq.GetCollection(), runner.createOrUpdateReq.GetSchema(), runner.createOrUpdateReq.GetType())
 		if err != nil {
 			return nil, ctx, err
 		}

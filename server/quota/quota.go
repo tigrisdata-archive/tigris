@@ -50,10 +50,6 @@ func Allow(ctx context.Context, namespace string, reqSize int) error {
 }
 
 func newManager(t *metadata.TenantManager, tx *transaction.Manager, c *config.QuotaConfig) *Manager {
-	mgr.cfg = c
-	mgr.tenantMgr = t
-	mgr.txMgr = tx
-
 	return &Manager{cfg: c, tenantMgr: t, txMgr: tx}
 }
 

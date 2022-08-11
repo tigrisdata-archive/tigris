@@ -56,7 +56,7 @@ func TestQuotaManager(t *testing.T) {
 	factory, err := schema.Build("test_collection", jsSchema)
 	require.NoError(t, err)
 
-	err = tenant.ReloadUsingOutsideVersion(ctx, tx, []byte("aaa"), "")
+	err = tenant.Reload(ctx, tx, []byte("aaa"))
 	require.NoError(t, err)
 
 	db1, err := tenant.GetDatabase(ctx, tx, "tenant_db1")

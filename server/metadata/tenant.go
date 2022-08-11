@@ -189,7 +189,7 @@ func (m *TenantManager) GetEncoder() Encoder {
 	return m.encoder
 }
 
-// CreateTenant is a thread safe implementation of creating a new tenant. It returns the error if it already exists.
+// CreateTenant is a thread safe implementation of creating a new tenant. It returns an error if it already exists.
 func (m *TenantManager) CreateTenant(ctx context.Context, tx transaction.Tx, namespace Namespace) (Namespace, error) {
 	m.Lock()
 	defer m.Unlock()
@@ -225,7 +225,7 @@ func (m *TenantManager) getTenantFromCache(namespaceName string) (tenant *Tenant
 }
 
 // GetTenant is responsible for returning the tenant from the cache. If the tenant is not available in the cache then
-// this method will attempt to load it from the disk and will update the tenant manager cache accordingly.
+// this method will attempt to load it from the database and will update the tenant manager cache accordingly.
 func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string, txMgr *transaction.Manager) (tenant *Tenant, err error) {
 	if tenant = m.getTenantFromCache(namespaceName); tenant != nil {
 		return
@@ -265,7 +265,7 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string, txM
 		return nil, fmt.Errorf("namespace not found: %s", namespaceName)
 	}
 
-	currentVersion, err := m.versionH.Read(ctx, tx)
+	currentVersion, err := m.versionH.Read(ctx, tx, false)
 	if err != nil {
 		return nil, err
 	}
@@ -278,6 +278,7 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string, txM
 	return
 }
 
+// ListNamespaces returns all the namespaces(tenants) exist in this cluster.
 func (m *TenantManager) ListNamespaces(ctx context.Context, tx transaction.Tx) ([]Namespace, error) {
 	m.RLock()
 	defer m.RUnlock()
@@ -302,7 +303,7 @@ func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transa
 	log.Debug().Interface("ns", namespaces).Msg("existing namespaces")
 	if _, ok := namespaces[namespace.Name()]; ok {
 		// only read the version if tenant already exists otherwise, we need to increment it.
-		currentVersion, err := m.versionH.Read(ctx, tx)
+		currentVersion, err := m.versionH.Read(ctx, tx, false)
 		if ulog.E(err) {
 			return nil, err
 		}
@@ -393,15 +394,16 @@ func (m *TenantManager) DecodeTableName(tableName []byte) (string, string, strin
 	return m.GetTableNameFromIds(n, d, c)
 }
 
-// Reload reads all the namespaces exists in the disk and build the in-memory map of the manager to track the tenants.
-// As this is an expensive call, the reloading happens during start time for now. It is possible that reloading
-// fails during start time then we rely on lazily reloading cache during serving user requests.
+// Reload reads all the tenants exist in the database and builds an in-memory view of the manager to track the tenants.
+// As this is an expensive call, the reloading happens only during the start of the server. It is possible that reloading
+// fails during start time then we rely on each transaction to detect it and trigger reload. The consistency shouldn’t
+// be impacted if we fail to load the in-memory view.
 func (m *TenantManager) Reload(ctx context.Context, tx transaction.Tx) error {
 	log.Debug().Msg("reloading tenants")
 	m.Lock()
 	defer m.Unlock()
 
-	currentVersion, err := m.versionH.Read(ctx, tx)
+	currentVersion, err := m.versionH.Read(ctx, tx, false)
 	if ulog.E(err) {
 		return err
 	}
@@ -473,9 +475,8 @@ func NewTenant(namespace Namespace, kvStore kv.KeyValueStore, searchStore search
 	}
 }
 
-// reload will reload all the databases for this tenant. This is only reloading all the databases that exists in the disk.
-// Loading all corresponding collections in this call is unnecessary and will be expensive. Rather that can happen
-// during reloadDatabase API call.
+// reload will reload all the databases for this tenant. This is only reloading all the databases that exists in the
+// tenant.
 func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVersion Version) error {
 	// reset
 	tenant.databases = make(map[string]*Database)
@@ -500,7 +501,12 @@ func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVers
 	return nil
 }
 
-func (tenant *Tenant) ReloadUsingOutsideVersion(ctx context.Context, tx transaction.Tx, version Version, id string) error {
+// Reload is used to reload this tenant. The reload method compares the currently attached version to the tenant to the
+// version passed in the API call to detect whether reloading is needed. This check is needed to ensure only a single
+// thread will actually perform reload. This is a blocking API which means if most of the requests detected that the
+// tenant state is stale then they all will block till one of them will reload the tenant state from the database. All
+// the blocking transactions will be restarted to ensure they see the latest view of the tenant.
+func (tenant *Tenant) Reload(ctx context.Context, tx transaction.Tx, version Version) error {
 	if !tenant.shouldReload(version) {
 		return nil
 	}
@@ -512,28 +518,7 @@ func (tenant *Tenant) ReloadUsingOutsideVersion(ctx context.Context, tx transact
 		return nil
 	}
 
-	log.Debug().Str("tx_id", id).Msgf("reloading tenants")
 	return tenant.reload(ctx, tx, version)
-}
-
-func (tenant *Tenant) ReloadUsingTxVersion(ctx context.Context, tx transaction.Tx, id string) error {
-	currentVersion, err := tenant.versionH.Read(ctx, tx)
-	if err != nil {
-		return err
-	}
-
-	if !tenant.shouldReload(currentVersion) {
-		return nil
-	}
-
-	tenant.Lock()
-	defer tenant.Unlock()
-	if bytes.Compare(currentVersion, tenant.version) < 1 {
-		// do not reload if version retrogressed
-		return nil
-	}
-	log.Debug().Str("tx_id", id).Msgf("reloading tenants")
-	return tenant.reload(ctx, tx, currentVersion)
 }
 
 func (tenant *Tenant) shouldReload(currentVersion Version) bool {
@@ -543,6 +528,7 @@ func (tenant *Tenant) shouldReload(currentVersion Version) bool {
 	return bytes.Compare(currentVersion, tenant.version) > 0
 }
 
+// GetNamespace returns the namespace of this tenant.
 func (tenant *Tenant) GetNamespace() Namespace {
 	tenant.RLock()
 	defer tenant.RUnlock()
@@ -550,11 +536,11 @@ func (tenant *Tenant) GetNamespace() Namespace {
 	return tenant.namespace
 }
 
-// CreateDatabase is responsible for creating a dictionary encoding of the database. This method is not adding the
-// entry to the tenant because the outer layer may still rollback the transaction. The query lifecycle is also bumping
-// the metadata version so reloading happens at the next call when the tenant version is stale. This applies to the
-// reloading mechanism on all the tigris workers.
-// Returns "true" If the database already exists, else "false" and the error
+// CreateDatabase is responsible for creating a dictionary encoding of the database name. This method is not adding the
+// entry to the tenant because the outer layer may still roll back the transaction. The session manager is bumping the
+// metadata version once the commit is successful so reloading happens at the next call when a transaction sees a stale
+// tenant version. This applies to the reloading mechanism on all the servers. It returns "true" If the database already
+// exists, else "false" and the error
 func (tenant *Tenant) CreateDatabase(ctx context.Context, tx transaction.Tx, dbName string) (bool, error) {
 	tenant.Lock()
 	defer tenant.Unlock()
@@ -570,7 +556,9 @@ func (tenant *Tenant) CreateDatabase(ctx context.Context, tx transaction.Tx, dbN
 }
 
 // DropDatabase is responsible for first dropping a dictionary encoding of the database and then adding a corresponding
-// dropped encoding in the table. Drop returns "false" if database doesn't exist so that caller can reason about.
+// dropped encoding entry in the encoding table. Drop returns "false" if the database doesn't exist so that caller can
+// reason about it. DropDatabase is more involved than CreateDatabase as with Drop we also need to iterate over all the
+// collections present in this database and call drop collection on each one of them.
 func (tenant *Tenant) DropDatabase(ctx context.Context, tx transaction.Tx, dbName string) (bool, error) {
 	tenant.Lock()
 	defer tenant.Unlock()
@@ -596,16 +584,9 @@ func (tenant *Tenant) DropDatabase(ctx context.Context, tx transaction.Tx, dbNam
 	return true, nil
 }
 
-func (tenant *Tenant) InvalidateDBCache(dbName string) {
-	tenant.Lock()
-	defer tenant.Unlock()
-
-	delete(tenant.databases, dbName)
-}
-
-// GetDatabase returns the database object, or null if there is no database exist with the name passed in the param.
-// This API is also responsible for reloading the tenant knowledge of the databases to ensure caller sees a consistent
-// view of all the schemas. This is achieved by first checking the meta version and if it is changed then call reload.
+// GetDatabase returns the database object, or null if there is no database existing with the name passed in the param.
+// As reloading of tenant state is happening at the session manager layer so GetDatabase calls assume that the caller
+// just needs the state from the cache.
 func (tenant *Tenant) GetDatabase(_ context.Context, _ transaction.Tx, dbName string) (*Database, error) {
 	tenant.Lock()
 	defer tenant.Unlock()
@@ -613,6 +594,7 @@ func (tenant *Tenant) GetDatabase(_ context.Context, _ transaction.Tx, dbName st
 	return tenant.databases[dbName], nil
 }
 
+// ListDatabases is used to list all database available for this tenant.
 func (tenant *Tenant) ListDatabases(_ context.Context, _ transaction.Tx) []string {
 	tenant.RLock()
 	defer tenant.RUnlock()
@@ -625,6 +607,7 @@ func (tenant *Tenant) ListDatabases(_ context.Context, _ transaction.Tx) []strin
 	return databases
 }
 
+// reloadDatabase is called by tenant to reload the database state.
 func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbName string, dbId uint32) (*Database, error) {
 	database := NewDatabase(dbId, dbName)
 
@@ -684,7 +667,7 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 
 	// first check if we need to run update collection
 	if c, ok := database.collections[schFactory.Name]; ok {
-		if eq, err := IsSchemaEq(c.collection.Schema, schFactory.Schema); eq || err != nil {
+		if eq, err := isSchemaEq(c.collection.Schema, schFactory.Schema); eq || err != nil {
 			// shortcut to just check if schema is eq then return early
 			return err
 		}
@@ -861,7 +844,7 @@ func (tenant *Tenant) String() string {
 	return fmt.Sprintf("id: %d, name: %s", tenant.namespace.Id(), tenant.namespace.Name())
 }
 
-// Size returns approximate data size on disk for all the collections in the namespace
+// Size returns approximate data size on disk for all the collections, databases for this tenant.
 func (tenant *Tenant) Size(ctx context.Context) (int64, error) {
 	tenant.Lock()
 	nsName, _ := tenant.Encoder.EncodeTableName(tenant.namespace, nil, nil)
@@ -870,6 +853,7 @@ func (tenant *Tenant) Size(ctx context.Context) (int64, error) {
 	return tenant.kvStore.TableSize(ctx, nsName)
 }
 
+// DatabaseSize returns approximate data size on disk for all the database for this tenant.
 func (tenant *Tenant) DatabaseSize(ctx context.Context, db *Database) (int64, error) {
 	tenant.Lock()
 	nsName, _ := tenant.Encoder.EncodeTableName(tenant.namespace, db, nil)
@@ -878,6 +862,7 @@ func (tenant *Tenant) DatabaseSize(ctx context.Context, db *Database) (int64, er
 	return tenant.kvStore.TableSize(ctx, nsName)
 }
 
+// CollectionSize returns approximate data size on disk for all the collections for the database provided by the caller.
 func (tenant *Tenant) CollectionSize(ctx context.Context, db *Database, coll *schema.DefaultCollection) (int64, error) {
 	tenant.Lock()
 
@@ -1043,7 +1028,7 @@ func createCollection(id uint32, schVer int, name string, revision []byte, idxNa
 	return schema.NewDefaultCollection(name, id, schVer, schFactory.Fields, schFactory.Indexes, revision, searchCollectionName), nil
 }
 
-func IsSchemaEq(s1, s2 []byte) (bool, error) {
+func isSchemaEq(s1, s2 []byte) (bool, error) {
 	var j, j2 interface{}
 	if err := jsoniter.Unmarshal(s1, &j); err != nil {
 		return false, err

@@ -59,4 +59,6 @@ func (n *NoopKV) SetVersionstampedValue(ctx context.Context, key []byte, value [
 func (n *NoopKV) SetVersionstampedKey(ctx context.Context, key []byte, value []byte) error {
 	return nil
 }
-func (n *NoopKV) Get(ctx context.Context, key []byte) ([]byte, error) { return nil, nil }
+func (n *NoopKV) Get(ctx context.Context, key []byte, isSnapshot bool) (Future, error) {
+	return nil, nil
+}

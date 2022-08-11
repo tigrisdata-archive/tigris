@@ -95,9 +95,19 @@ type Factory struct {
 
 // Build is used to deserialize the user json schema into a schema factory.
 func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
+	return BuildWithType(collection, reqSchema, api.CollectionType_DOCUMENTS)
+}
+
+func BuildWithType(collection string, reqSchema jsoniter.RawMessage, cType api.CollectionType) (*Factory, error) {
 	var err error
-	if reqSchema, err = addPrimaryKeyIfMissing(reqSchema); err != nil {
-		return nil, err
+	if cType == api.CollectionType_MESSAGES {
+		if reqSchema, err = setPrimaryKey(reqSchema, jsonSpecFormatDateTime, false); err != nil {
+			return nil, err
+		}
+	} else {
+		if reqSchema, err = setPrimaryKey(reqSchema, jsonSpecFormatUUID, true); err != nil {
+			return nil, err
+		}
 	}
 
 	var schema = &JSONSchema{}
@@ -149,13 +159,13 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 	}, nil
 }
 
-func addPrimaryKeyIfMissing(reqSchema jsoniter.RawMessage) (jsoniter.RawMessage, error) {
+func setPrimaryKey(reqSchema jsoniter.RawMessage, format string, ifMissing bool) (jsoniter.RawMessage, error) {
 	var schema map[string]interface{}
 	if err := jsoniter.Unmarshal(reqSchema, &schema); err != nil {
 		return nil, err
 	}
 
-	if _, ok := schema[PrimaryKeySchemaK]; ok {
+	if _, ok := schema[PrimaryKeySchemaK]; ifMissing && ok {
 		// primary key exists, no need to do anything.
 		return reqSchema, nil
 	}
@@ -167,11 +177,10 @@ func addPrimaryKeyIfMissing(reqSchema jsoniter.RawMessage) (jsoniter.RawMessage,
 			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "properties object is invalid")
 		}
 
-		if _, ok = propertiesMap[AutoPrimaryKeyF]; !ok {
-			// if user doesn't have the ID field then add it of type UUID
+		if _, ok = propertiesMap[AutoPrimaryKeyF]; !ifMissing || !ok {
 			propertiesMap[AutoPrimaryKeyF] = map[string]interface{}{
 				"type":         jsonSpecString,
-				"format":       jsonSpecFormatUUID,
+				"format":       format,
 				"autoGenerate": true,
 			}
 		}

@@ -28,68 +28,14 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-	"github.com/tigrisdata/tigris/test/config"
 	"gopkg.in/gavv/httpexpect.v1"
 )
 
-type Map map[string]interface{}
-type Doc Map
+func TestInsert_Bad_NotFoundRequest(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
 
-const (
-	defaultDatabaseTestName   = "integration_db2"
-	defaultCollectionTestName = "test_collection"
-)
-
-type DocumentSuite struct {
-	suite.Suite
-
-	collection string
-	database   string
-}
-
-func expectLow(s httpexpect.LoggerReporter, url string) *httpexpect.Expect {
-	return httpexpect.WithConfig(httpexpect.Config{
-		BaseURL:  url,
-		Reporter: httpexpect.NewAssertReporter(s),
-	})
-}
-
-func expect(s httpexpect.LoggerReporter) *httpexpect.Expect {
-	return expectLow(s, config.GetBaseURL())
-}
-
-func getDocumentURL(databaseName, collectionName string, methodName string) string {
-	return fmt.Sprintf("/api/v1/databases/%s/collections/%s/documents/%s", databaseName, collectionName, methodName)
-}
-
-func SetupDatabaseSuite(t *testing.T, dbName string) {
-	dropDatabase(t, dbName)
-	createDatabase(t, dbName).Status(http.StatusOK)
-}
-
-func SetupSuite(t *testing.T, dbName string, collectionName string) {
-	dropDatabase(t, dbName)
-	createDatabase(t, dbName).Status(http.StatusOK)
-	createCollection(t, dbName, collectionName, testCreateSchema).Status(http.StatusOK)
-}
-
-func TearDownSuite(t *testing.T, dbName string) {
-	dropDatabase(t, dbName).Status(http.StatusOK)
-}
-
-func (s *DocumentSuite) SetupSuite() {
-	dropDatabase(s.T(), s.database)
-	createDatabase(s.T(), s.database).Status(http.StatusOK)
-	createCollection(s.T(), s.database, s.collection, testCreateSchema).Status(http.StatusOK)
-}
-
-func (s *DocumentSuite) TearDownSuite() {
-	dropDatabase(s.T(), s.database).Status(http.StatusOK)
-}
-
-func (s *DocumentSuite) TestInsert_Bad_NotFoundRequest() {
 	cases := []struct {
 		databaseName   string
 		collectionName string
@@ -99,38 +45,38 @@ func (s *DocumentSuite) TestInsert_Bad_NotFoundRequest() {
 	}{
 		{
 			"random_database1",
-			s.collection,
+			coll,
 			[]Doc{{"pkey_int": 1}},
 			"database doesn't exist 'random_database1'",
 			http.StatusNotFound,
 		}, {
-			s.database,
+			db,
 			"random_collection",
 			[]Doc{{"pkey_int": 1}},
 			"collection doesn't exist 'random_collection'",
 			http.StatusNotFound,
 		}, {
 			"",
-			s.collection,
+			coll,
 			[]Doc{{"pkey_int": 1}},
 			"invalid database name",
 			http.StatusBadRequest,
 		}, {
-			s.database,
+			db,
 			"",
 			[]Doc{{"pkey_int": 1}},
 			"invalid collection name",
 			http.StatusBadRequest,
 		}, {
-			s.database,
-			s.collection,
+			db,
+			coll,
 			[]Doc{},
 			"empty documents received",
 			http.StatusBadRequest,
 		},
 	}
 	for _, c := range cases {
-		resp := expect(s.T()).POST(getDocumentURL(c.databaseName, c.collectionName, "insert")).
+		resp := expect(t).POST(getDocumentURL(c.databaseName, c.collectionName, "insert")).
 			WithJSON(Map{
 				"documents": c.documents,
 			}).
@@ -144,7 +90,10 @@ func (s *DocumentSuite) TestInsert_Bad_NotFoundRequest() {
 	}
 }
 
-func (s *DocumentSuite) TestInsert_AlreadyExists() {
+func TestInsert_AlreadyExists(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
 	inputDocument := []Doc{
 		{
 			"pkey_int":     1,
@@ -156,8 +105,8 @@ func (s *DocumentSuite) TestInsert_AlreadyExists() {
 		},
 	}
 
-	e := expect(s.T())
-	e.POST(getDocumentURL(s.database, s.collection, "insert")).
+	e := expect(t)
+	e.POST(getDocumentURL(db, coll, "insert")).
 		WithJSON(Map{
 			"documents": inputDocument,
 		}).
@@ -167,12 +116,15 @@ func (s *DocumentSuite) TestInsert_AlreadyExists() {
 		Object().
 		ValueEqual("status", "inserted")
 
-	resp := e.POST(getDocumentURL(s.database, s.collection, "insert")).
+	resp := e.POST(getDocumentURL(db, coll, "insert")).
 		WithJSON(Map{"documents": inputDocument}).Expect()
 	testError(resp, http.StatusConflict, api.Code_ALREADY_EXISTS, "duplicate key value, violates key constraint")
 }
 
-func (s *DocumentSuite) TestInsert_SchemaValidationError() {
+func TestInsert_SchemaValidationError(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
 	cases := []struct {
 		documents  []Doc
 		expMessage string
@@ -216,14 +168,17 @@ func (s *DocumentSuite) TestInsert_SchemaValidationError() {
 		},
 	}
 	for _, c := range cases {
-		resp := expect(s.T()).POST(getDocumentURL(s.database, s.collection, "insert")).
+		resp := expect(t).POST(getDocumentURL(db, coll, "insert")).
 			WithJSON(Map{"documents": c.documents}).Expect()
 
 		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, c.expMessage)
 	}
 }
 
-func (s *DocumentSuite) TestInsert_SupportedPrimaryKeys() {
+func TestInsert_SupportedPrimaryKeys(t *testing.T) {
+	db, _ := setupTests(t)
+	defer cleanupTests(t, db)
+
 	b64 := base64.StdEncoding.EncodeToString([]byte(`base64 string`))
 
 	uuidValue := uuid.New().String()
@@ -335,8 +290,8 @@ func (s *DocumentSuite) TestInsert_SupportedPrimaryKeys() {
 		},
 	}
 	for _, c := range cases {
-		dropCollection(s.T(), s.database, collectionName)
-		createCollection(s.T(), s.database, collectionName, c.schema).Status(http.StatusOK)
+		dropCollection(t, db, collectionName)
+		createCollection(t, db, collectionName, c.schema).Status(http.StatusOK)
 
 		var key string
 		var value interface{}
@@ -344,8 +299,8 @@ func (s *DocumentSuite) TestInsert_SupportedPrimaryKeys() {
 			key = k
 			value = v
 		}
-		e := expect(s.T())
-		e.POST(getDocumentURL(s.database, collectionName, "insert")).
+		e := expect(t)
+		e.POST(getDocumentURL(db, collectionName, "insert")).
 			WithJSON(Map{
 				"documents": c.inputDoc,
 			}).
@@ -356,20 +311,23 @@ func (s *DocumentSuite) TestInsert_SupportedPrimaryKeys() {
 			ValueEqual("status", "inserted").
 			ValueEqual("keys", []map[string]interface{}{{key: value}})
 
-		readResp := readByFilter(s.T(), s.database, collectionName, c.primaryKeyLookup, nil)
+		readResp := readByFilter(t, db, collectionName, c.primaryKeyLookup, nil)
 
 		var doc map[string]json.RawMessage
-		require.Greater(s.T(), len(readResp), 0)
-		require.NoError(s.T(), json.Unmarshal(readResp[0]["result"], &doc))
+		require.Greater(t, len(readResp), 0)
+		require.NoError(t, json.Unmarshal(readResp[0]["result"], &doc))
 
 		var actualDoc = []byte(doc["data"])
 		expDoc, err := json.Marshal(c.inputDoc[0])
-		require.NoError(s.T(), err)
-		require.Equal(s.T(), expDoc, actualDoc)
+		require.NoError(t, err)
+		require.Equal(t, expDoc, actualDoc)
 	}
 }
 
-func (s *DocumentSuite) TestInsert_SingleRow() {
+func TestInsert_SingleRow(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
 	b64 := base64.StdEncoding.EncodeToString([]byte(`base64 string`))
 
 	inputDocument := []Doc{
@@ -395,7 +353,7 @@ func (s *DocumentSuite) TestInsert_SingleRow() {
 	}
 
 	tstart := time.Now().UTC()
-	expect(s.T()).POST(getDocumentURL(s.database, s.collection, "insert")).
+	expect(t).POST(getDocumentURL(db, coll, "insert")).
 		WithJSON(Map{
 			"documents": inputDocument,
 		}).
@@ -408,21 +366,24 @@ func (s *DocumentSuite) TestInsert_SingleRow() {
 		Path("$.metadata").Object().
 		Value("created_at").String().DateTime(time.RFC3339Nano).InRange(tstart, time.Now().UTC().Add(1*time.Second))
 
-	readResp := readByFilter(s.T(), s.database, s.collection, Map{
+	readResp := readByFilter(t, db, coll, Map{
 		"pkey_int": 10,
 	}, nil)
 
 	var doc map[string]json.RawMessage
-	require.Equal(s.T(), 1, len(readResp))
-	require.NoError(s.T(), json.Unmarshal(readResp[0]["result"], &doc))
+	require.Equal(t, 1, len(readResp))
+	require.NoError(t, json.Unmarshal(readResp[0]["result"], &doc))
 
 	var actualDoc = []byte(doc["data"])
 	expDoc, err := json.Marshal(inputDocument[0])
-	require.NoError(s.T(), err)
-	require.Equal(s.T(), expDoc, actualDoc)
+	require.NoError(t, err)
+	require.Equal(t, expDoc, actualDoc)
 }
 
-func (s *DocumentSuite) TestInsert_MultipleRows() {
+func TestInsert_MultipleRows(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
 	inputDocument := []Doc{
 		{
 			"pkey_int":     20,
@@ -442,8 +403,8 @@ func (s *DocumentSuite) TestInsert_MultipleRows() {
 		},
 	}
 
-	e := expect(s.T())
-	e.POST(getDocumentURL(s.database, s.collection, "insert")).
+	e := expect(t)
+	e.POST(getDocumentURL(db, coll, "insert")).
 		WithJSON(Map{
 			"documents": inputDocument,
 		}).
@@ -454,48 +415,48 @@ func (s *DocumentSuite) TestInsert_MultipleRows() {
 		ValueEqual("status", "inserted").
 		ValueEqual("keys", []map[string]interface{}{{"pkey_int": 20}, {"pkey_int": 30}})
 
-	readResp := readByFilter(s.T(), s.database, s.collection, Map{
+	readResp := readByFilter(t, db, coll, Map{
 		"$or": []Doc{
 			{"pkey_int": 20},
 			{"pkey_int": 30},
 		},
 	}, nil)
 
-	require.Equal(s.T(), 2, len(readResp))
+	require.Equal(t, 2, len(readResp))
 	for i := 0; i < len(inputDocument); i++ {
 		var doc map[string]json.RawMessage
-		require.NoError(s.T(), json.Unmarshal(readResp[i]["result"], &doc))
+		require.NoError(t, json.Unmarshal(readResp[i]["result"], &doc))
 
 		var actualDoc = []byte(doc["data"])
 		expDoc, err := json.Marshal(inputDocument[i])
-		require.NoError(s.T(), err)
-		require.Equal(s.T(), expDoc, actualDoc)
+		require.NoError(t, err)
+		require.Equal(t, expDoc, actualDoc)
 	}
 }
 
 func TestInsert_AutoGenerated(t *testing.T) {
-	SetupSuite(t, defaultDatabaseTestName, defaultCollectionTestName)
-	defer TearDownSuite(t, defaultDatabaseTestName)
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
 
-	testAutoGenerated(t, defaultDatabaseTestName, defaultCollectionTestName, Map{"type": "string", "autoGenerate": true})
-	testAutoGenerated(t, defaultDatabaseTestName, defaultCollectionTestName, Map{
+	testAutoGenerated(t, db, coll, Map{"type": "string", "autoGenerate": true})
+	testAutoGenerated(t, db, coll, Map{
 		"type":         "string",
 		"autoGenerate": true,
 		"format":       "byte"})
-	testAutoGenerated(t, defaultDatabaseTestName, defaultCollectionTestName, Map{
+	testAutoGenerated(t, db, coll, Map{
 		"type":         "string",
 		"format":       "uuid",
 		"autoGenerate": true})
-	testAutoGenerated(t, defaultDatabaseTestName, defaultCollectionTestName, Map{
+	testAutoGenerated(t, db, coll, Map{
 		"type":         "string",
 		"format":       "date-time",
 		"autoGenerate": true})
-	testAutoGenerated(t, defaultDatabaseTestName, defaultCollectionTestName, Map{
+	testAutoGenerated(t, db, coll, Map{
 		"type":         "integer",
 		"format":       "int32",
 		"autoGenerate": true,
 	})
-	testAutoGenerated(t, defaultDatabaseTestName, defaultCollectionTestName, Map{"type": "integer", "autoGenerate": true})
+	testAutoGenerated(t, db, coll, Map{"type": "integer", "autoGenerate": true})
 }
 
 func TestInsert_SchemaUpdate(t *testing.T) {
@@ -735,7 +696,10 @@ func testAutoGenerated(t *testing.T, dbName string, collectionName string, pkey 
 	validate(decodedResult[4], fifthDoc[0], 4)
 }
 
-func (s *DocumentSuite) TestUpdate_BadRequest() {
+func TestUpdate_BadRequest(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
 	cases := []struct {
 		database   string
 		collection string
@@ -746,7 +710,7 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 	}{
 		{
 			"random_database1",
-			s.collection,
+			coll,
 			Map{
 				"$set": Map{
 					"string_value": "simple_update",
@@ -758,7 +722,7 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 			"database doesn't exist 'random_database1'",
 			http.StatusNotFound,
 		}, {
-			s.database,
+			db,
 			"random_collection",
 			Map{
 				"$set": Map{
@@ -772,7 +736,7 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 			http.StatusNotFound,
 		}, {
 			"",
-			s.collection,
+			coll,
 			Map{
 				"$set": Map{
 					"string_value": "simple_update",
@@ -784,7 +748,7 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 			"invalid database name",
 			http.StatusBadRequest,
 		}, {
-			s.database,
+			db,
 			"",
 			Map{
 				"$set": Map{
@@ -797,8 +761,8 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 			"invalid collection name",
 			http.StatusBadRequest,
 		}, {
-			s.database,
-			s.collection,
+			db,
+			coll,
 			nil,
 			Map{
 				"pkey_int": 1,
@@ -806,8 +770,8 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 			"empty fields received",
 			http.StatusBadRequest,
 		}, {
-			s.database,
-			s.collection,
+			db,
+			coll,
 			Map{
 				"$set": Map{
 					"string_value": "simple_update",
@@ -819,7 +783,7 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 		},
 	}
 	for _, c := range cases {
-		resp := expect(s.T()).PUT(getDocumentURL(c.database, c.collection, "update")).
+		resp := expect(t).PUT(getDocumentURL(c.database, c.collection, "update")).
 			WithJSON(Map{
 				"fields": c.fields,
 				"filter": c.filter,
@@ -834,7 +798,10 @@ func (s *DocumentSuite) TestUpdate_BadRequest() {
 	}
 }
 
-func (s *DocumentSuite) TestUpdate_SingleRow() {
+func TestUpdate_SingleRow(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
 	inputDocument := []Doc{
 		{
 			"pkey_int":     100,
@@ -846,12 +813,12 @@ func (s *DocumentSuite) TestUpdate_SingleRow() {
 		},
 	}
 
-	insertDocuments(s.T(), s.database, s.collection, inputDocument, false).
+	insertDocuments(t, db, coll, inputDocument, false).
 		Status(http.StatusOK)
 
-	readAndValidate(s.T(),
-		s.database,
-		s.collection,
+	readAndValidate(t,
+		db,
+		coll,
 		Map{
 			"pkey_int": 100,
 		},
@@ -859,9 +826,9 @@ func (s *DocumentSuite) TestUpdate_SingleRow() {
 		inputDocument)
 
 	tstart := time.Now().UTC()
-	updateByFilter(s.T(),
-		s.database,
-		s.collection,
+	updateByFilter(t,
+		db,
+		coll,
 		Map{
 			"filter": Map{
 				"pkey_int": 100,
@@ -884,9 +851,9 @@ func (s *DocumentSuite) TestUpdate_SingleRow() {
 		Path("$.metadata").Object().
 		Value("updated_at").String().DateTime(time.RFC3339Nano).InRange(tstart, time.Now().UTC().Add(1*time.Second))
 
-	readAndValidate(s.T(),
-		s.database,
-		s.collection,
+	readAndValidate(t,
+		db,
+		coll,
 		Map{
 			"pkey_int": 100,
 		},
@@ -903,7 +870,10 @@ func (s *DocumentSuite) TestUpdate_SingleRow() {
 		})
 }
 
-func (s *DocumentSuite) TestUpdate_SchemaValidationError() {
+func TestUpdate_NullField(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
 	inputDocument := []Doc{
 		{
 			"pkey_int":     100,
@@ -915,12 +885,84 @@ func (s *DocumentSuite) TestUpdate_SchemaValidationError() {
 		},
 	}
 
-	insertDocuments(s.T(), s.database, s.collection, inputDocument, false).
+	insertDocuments(t, db, coll, inputDocument, false).
 		Status(http.StatusOK)
 
-	readAndValidate(s.T(),
-		s.database,
-		s.collection,
+	readAndValidate(t,
+		db,
+		coll,
+		Map{
+			"pkey_int": 100,
+		},
+		nil,
+		inputDocument)
+
+	tstart := time.Now().UTC()
+	updateByFilter(t,
+		db,
+		coll,
+		Map{
+			"filter": Map{
+				"pkey_int": 100,
+			},
+		},
+		Map{
+			"fields": Map{
+				"$set": Map{
+					"int_value":    nil,
+					"string_value": "simple_insert1_update_modified",
+					"bool_value":   false,
+					"double_value": 200.00001,
+					"bytes_value":  []byte(`"simple_insert1_update_modified"`),
+				},
+			},
+		}).Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("modified_count", 1).
+		Path("$.metadata").Object().
+		Value("updated_at").String().DateTime(time.RFC3339Nano).InRange(tstart, time.Now().UTC().Add(1*time.Second))
+
+	readAndValidate(t,
+		db,
+		coll,
+		Map{
+			"pkey_int": 100,
+		},
+		nil,
+		[]Doc{
+			{
+				"pkey_int":     100,
+				"int_value":    nil,
+				"string_value": "simple_insert1_update_modified",
+				"bool_value":   false,
+				"double_value": 200.00001,
+				"bytes_value":  []byte(`"simple_insert1_update_modified"`),
+			},
+		})
+}
+
+func TestUpdate_SchemaValidationError(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	inputDocument := []Doc{
+		{
+			"pkey_int":     100,
+			"int_value":    100,
+			"string_value": "simple_insert1_update",
+			"bool_value":   true,
+			"double_value": 100.00001,
+			"bytes_value":  []byte(`"simple_insert1_update"`),
+		},
+	}
+
+	insertDocuments(t, db, coll, inputDocument, false).
+		Status(http.StatusOK)
+
+	readAndValidate(t,
+		db,
+		coll,
 		Map{
 			"pkey_int": 100,
 		},
@@ -951,7 +993,7 @@ func (s *DocumentSuite) TestUpdate_SchemaValidationError() {
 		},
 	}
 	for _, c := range cases {
-		resp := expect(s.T()).PUT(getDocumentURL(s.database, s.collection, "update")).
+		resp := expect(t).PUT(getDocumentURL(db, coll, "update")).
 			WithJSON(Map{
 				"fields": c.documents,
 				"filter": Map{
@@ -962,7 +1004,10 @@ func (s *DocumentSuite) TestUpdate_SchemaValidationError() {
 	}
 }
 
-func (s *DocumentSuite) TestUpdate_MultipleRows() {
+func TestUpdate_MultipleRows(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
 	inputDocument := []Doc{
 		{
 			"pkey_int":     110,
@@ -991,7 +1036,7 @@ func (s *DocumentSuite) TestUpdate_MultipleRows() {
 	}
 
 	// should always succeed with mustNotExists as false
-	insertDocuments(s.T(), s.database, s.collection, inputDocument, false).
+	insertDocuments(t, db, coll, inputDocument, false).
 		Status(http.StatusOK)
 
 	readFilter := Map{
@@ -1001,17 +1046,17 @@ func (s *DocumentSuite) TestUpdate_MultipleRows() {
 			{"pkey_int": 130},
 		},
 	}
-	readAndValidate(s.T(),
-		s.database,
-		s.collection,
+	readAndValidate(t,
+		db,
+		coll,
 		readFilter,
 		nil,
 		inputDocument)
 
 	// first try updating a no-op operation i.e. random filter value
-	updateByFilter(s.T(),
-		s.database,
-		s.collection,
+	updateByFilter(t,
+		db,
+		coll,
 		Map{
 			"filter": Map{
 				"pkey_int": 10000,
@@ -1029,17 +1074,17 @@ func (s *DocumentSuite) TestUpdate_MultipleRows() {
 		ValueEqual("status", "updated")
 
 	// read all documents back
-	readAndValidate(s.T(),
-		s.database,
-		s.collection,
+	readAndValidate(t,
+		db,
+		coll,
 		readFilter,
 		nil,
 		inputDocument)
 
 	// Update keys 120 and 130
-	updateByFilter(s.T(),
-		s.database,
-		s.collection,
+	updateByFilter(t,
+		db,
+		coll,
 		Map{
 			"filter": Map{
 				"$or": []Doc{
@@ -1094,15 +1139,18 @@ func (s *DocumentSuite) TestUpdate_MultipleRows() {
 			"added_string_value": "new_key_added",
 		},
 	}
-	readAndValidate(s.T(),
-		s.database,
-		s.collection,
+	readAndValidate(t,
+		db,
+		coll,
 		readFilter,
 		nil,
 		outDocument)
 }
 
-func (s *DocumentSuite) TestDelete_BadRequest() {
+func TestDelete_BadRequest(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
 	cases := []struct {
 		databaseName   string
 		collectionName string
@@ -1112,38 +1160,38 @@ func (s *DocumentSuite) TestDelete_BadRequest() {
 	}{
 		{
 			"random_database1",
-			s.collection,
+			coll,
 			Map{"pkey_int": 1},
 			"database doesn't exist 'random_database1'",
 			http.StatusNotFound,
 		}, {
-			s.database,
+			db,
 			"random_collection",
 			Map{"pkey_int": 1},
 			"collection doesn't exist 'random_collection'",
 			http.StatusNotFound,
 		}, {
 			"",
-			s.collection,
+			coll,
 			Map{"pkey_int": 1},
 			"invalid database name",
 			http.StatusBadRequest,
 		}, {
-			s.database,
+			db,
 			"",
 			Map{"pkey_int": 1},
 			"invalid collection name",
 			http.StatusBadRequest,
 		}, {
-			s.database,
-			s.collection,
+			db,
+			coll,
 			nil,
 			"filter is a required field",
 			http.StatusBadRequest,
 		},
 	}
 	for _, c := range cases {
-		resp := expect(s.T()).DELETE(getDocumentURL(c.databaseName, c.collectionName, "delete")).
+		resp := expect(t).DELETE(getDocumentURL(c.databaseName, c.collectionName, "delete")).
 			WithJSON(Map{
 				"filter": c.filter,
 			}).
@@ -1157,7 +1205,10 @@ func (s *DocumentSuite) TestDelete_BadRequest() {
 	}
 }
 
-func (s *DocumentSuite) TestDelete_SingleRow() {
+func TestDelete_SingleRow(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
 	inputDocument := []Doc{
 		{
 			"pkey_int":  40,
@@ -1165,18 +1216,18 @@ func (s *DocumentSuite) TestDelete_SingleRow() {
 		},
 	}
 
-	insertDocuments(s.T(), s.database, s.collection, inputDocument, false).
+	insertDocuments(t, db, coll, inputDocument, false).
 		Status(http.StatusOK)
 
-	readAndValidate(s.T(),
-		s.database,
-		s.collection,
+	readAndValidate(t,
+		db,
+		coll,
 		Map{"pkey_int": 40},
 		nil,
 		inputDocument)
 
 	tstart := time.Now().UTC()
-	deleteByFilter(s.T(), s.database, s.collection, Map{
+	deleteByFilter(t, db, coll, Map{
 		"filter": Map{"pkey_int": 40},
 	}).Status(http.StatusOK).
 		JSON().
@@ -1185,15 +1236,18 @@ func (s *DocumentSuite) TestDelete_SingleRow() {
 		Path("$.metadata").Object().
 		Value("deleted_at").String().DateTime(time.RFC3339Nano).InRange(tstart, time.Now().UTC().Add(1*time.Second))
 
-	readAndValidate(s.T(),
-		s.database,
-		s.collection,
+	readAndValidate(t,
+		db,
+		coll,
 		Map{"pkey_int": 40},
 		nil,
 		nil)
 }
 
-func (s *DocumentSuite) TestDelete_MultipleRows() {
+func TestDelete_MultipleRows(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
 	inputDocument := []Doc{
 		{
 			"pkey_int":     50,
@@ -1210,7 +1264,7 @@ func (s *DocumentSuite) TestDelete_MultipleRows() {
 	}
 
 	// should always succeed with mustNotExists as false
-	insertDocuments(s.T(), s.database, s.collection, inputDocument, false).
+	insertDocuments(t, db, coll, inputDocument, false).
 		Status(http.StatusOK)
 
 	readFilter := Map{
@@ -1220,15 +1274,15 @@ func (s *DocumentSuite) TestDelete_MultipleRows() {
 			{"pkey_int": 70},
 		},
 	}
-	readAndValidate(s.T(),
-		s.database,
-		s.collection,
+	readAndValidate(t,
+		db,
+		coll,
 		readFilter,
 		nil,
 		inputDocument)
 
 	// first try deleting a no-op operation i.e. random filter value
-	deleteByFilter(s.T(), s.database, s.collection, Map{
+	deleteByFilter(t, db, coll, Map{
 		"filter": Map{
 			"pkey_int": 10000,
 		},
@@ -1238,15 +1292,15 @@ func (s *DocumentSuite) TestDelete_MultipleRows() {
 		ValueEqual("status", "deleted")
 
 	// read all documents back
-	readAndValidate(s.T(),
-		s.database,
-		s.collection,
+	readAndValidate(t,
+		db,
+		coll,
 		readFilter,
 		nil,
 		inputDocument)
 
 	// DELETE keys 50 and 70
-	deleteByFilter(s.T(), s.database, s.collection, Map{
+	deleteByFilter(t, db, coll, Map{
 		"filter": Map{
 			"$or": []Doc{
 				{"pkey_int": 50},
@@ -1258,9 +1312,9 @@ func (s *DocumentSuite) TestDelete_MultipleRows() {
 		Object().
 		ValueEqual("status", "deleted")
 
-	readAndValidate(s.T(),
-		s.database,
-		s.collection,
+	readAndValidate(t,
+		db,
+		coll,
 		readFilter,
 		nil,
 		[]Doc{
@@ -1273,8 +1327,8 @@ func (s *DocumentSuite) TestDelete_MultipleRows() {
 }
 
 func TestRead_MultipleRows(t *testing.T) {
-	SetupSuite(t, defaultDatabaseTestName, defaultCollectionTestName)
-	defer TearDownSuite(t, defaultDatabaseTestName)
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
 
 	inputDocument := []Doc{
 		{
@@ -1301,7 +1355,7 @@ func TestRead_MultipleRows(t *testing.T) {
 	}
 
 	// should always succeed with mustNotExists as false
-	insertDocuments(t, defaultDatabaseTestName, defaultCollectionTestName, inputDocument, false).
+	insertDocuments(t, db, coll, inputDocument, false).
 		Status(http.StatusOK)
 
 	readFilter := Map{
@@ -1378,8 +1432,8 @@ func TestRead_MultipleRows(t *testing.T) {
 	}
 	for _, c := range cases {
 		readAndValidate(t,
-			defaultDatabaseTestName,
-			defaultCollectionTestName,
+			db,
+			coll,
 			readFilter,
 			c.fields,
 			c.expDocuments)
@@ -1387,8 +1441,8 @@ func TestRead_MultipleRows(t *testing.T) {
 }
 
 func TestRead_EntireCollection(t *testing.T) {
-	SetupSuite(t, defaultDatabaseTestName, defaultCollectionTestName)
-	defer TearDownSuite(t, defaultDatabaseTestName)
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
 
 	inputDocument := []Doc{
 		{
@@ -1415,25 +1469,26 @@ func TestRead_EntireCollection(t *testing.T) {
 	}
 
 	// should always succeed with mustNotExists as false
-	insertDocuments(t, defaultDatabaseTestName, defaultCollectionTestName, inputDocument, false).
+	insertDocuments(t, db, coll, inputDocument, false).
 		Status(http.StatusOK)
 
 	readAndValidate(t,
-		defaultDatabaseTestName,
-		defaultCollectionTestName,
+		db,
+		coll,
 		nil,
 		nil,
 		inputDocument)
 }
 
 func TestRead_NestedFields(t *testing.T) {
-	SetupDatabaseSuite(t, defaultDatabaseTestName)
-	defer TearDownSuite(t, defaultDatabaseTestName)
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
 
-	createCollection(t, defaultDatabaseTestName, defaultCollectionTestName,
+	dropCollection(t, db, coll)
+	createCollection(t, db, coll,
 		Map{
 			"schema": Map{
-				"title": defaultCollectionTestName,
+				"title": coll,
 				"properties": Map{
 					"id": Map{"type": "integer"},
 					"object_field": Map{
@@ -1449,7 +1504,7 @@ func TestRead_NestedFields(t *testing.T) {
 
 	var inputDoc = []Doc{{"id": 1, "object_field": Map{"nested_id": 1, "nested_str": "foo"}}, {"id": 2, "object_field": Map{"nested_id": 2, "nested_str": "bar"}}}
 	e := expect(t)
-	e.POST(getDocumentURL(defaultDatabaseTestName, defaultCollectionTestName, "insert")).
+	e.POST(getDocumentURL(db, coll, "insert")).
 		WithJSON(Map{
 			"documents": inputDoc,
 		}).
@@ -1459,7 +1514,7 @@ func TestRead_NestedFields(t *testing.T) {
 		Object().
 		ValueEqual("status", "inserted")
 
-	readResp := readByFilter(t, defaultDatabaseTestName, defaultCollectionTestName, Map{
+	readResp := readByFilter(t, db, coll, Map{
 		"object_field.nested_str": "bar",
 	}, nil)
 
@@ -1474,12 +1529,11 @@ func TestRead_NestedFields(t *testing.T) {
 }
 
 func TestTransaction_BadID(t *testing.T) {
-	dbName := "db_" + t.Name()
-	collName := "test_collection"
-	createTestCollection(t, dbName, collName, testCreateSchema)
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
 
 	e := expect(t)
-	r := e.POST(fmt.Sprintf("/api/v1/databases/%s/transactions/begin", dbName)).
+	r := e.POST(fmt.Sprintf("/api/v1/databases/%s/transactions/begin", db)).
 		Expect().Status(http.StatusOK).
 		Body().Raw()
 
@@ -1490,7 +1544,7 @@ func TestTransaction_BadID(t *testing.T) {
 	err := json.Unmarshal([]byte(r), &res)
 	require.NoError(t, err)
 
-	resp := e.POST(getDocumentURL(dbName, collName, "insert")).
+	resp := e.POST(getDocumentURL(db, coll, "insert")).
 		WithJSON(Map{"documents": []Doc{{}}}).
 		WithHeader("Tigris-Tx-Id", "some id").
 		WithHeader("Tigris-Tx-Origin", res.TxCtx.Origin).Expect()

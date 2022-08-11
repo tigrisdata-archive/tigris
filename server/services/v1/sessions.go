@@ -37,27 +37,29 @@ import (
 type SessionManager struct {
 	sync.RWMutex
 
-	txMgr       *transaction.Manager
-	tenantMgr   *metadata.TenantManager
-	versionH    *metadata.VersionHandler
-	tracker     *sessionTracker
-	txListeners []TxListener
+	txMgr         *transaction.Manager
+	tenantMgr     *metadata.TenantManager
+	versionH      *metadata.VersionHandler
+	tracker       *sessionTracker
+	tenantTracker *metadata.CacheTracker
+	txListeners   []TxListener
 }
 
-func NewSessionManager(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, versionH *metadata.VersionHandler, listeners []TxListener) *SessionManager {
+func NewSessionManager(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, versionH *metadata.VersionHandler, listeners []TxListener, tenantTracker *metadata.CacheTracker) *SessionManager {
 	return &SessionManager{
-		txMgr:       txMgr,
-		tenantMgr:   tenantMgr,
-		versionH:    versionH,
-		tracker:     newSessionTracker(),
-		txListeners: listeners,
+		txMgr:         txMgr,
+		tenantMgr:     tenantMgr,
+		versionH:      versionH,
+		tracker:       newSessionTracker(),
+		txListeners:   listeners,
+		tenantTracker: tenantTracker,
 	}
 }
 
 // Create returns the QuerySession after creating all the necessary elements that a query execution needs.
 // It first creates or get a tenant, read the metadata version and based on that reload the tenant cache and then finally
 // create a transaction which will be used to execute all the query in this session.
-func (sessMgr *SessionManager) Create(ctx context.Context, reloadVerOutside bool, track bool) (*QuerySession, error) {
+func (sessMgr *SessionManager) Create(ctx context.Context, trackVerInOwnTxn bool, instantVerTracking bool, track bool) (*QuerySession, error) {
 	namespaceForThisSession, err := request.GetNamespace(ctx)
 	if err != nil {
 		return nil, err
@@ -68,42 +70,37 @@ func (sessMgr *SessionManager) Create(ctx context.Context, reloadVerOutside bool
 		return nil, api.Errorf(api.Code_NOT_FOUND, "Tenant %s not found", namespaceForThisSession)
 	}
 
-	var version metadata.Version
-	if reloadVerOutside {
-		version, err = sessMgr.versionH.ReadInOwnTxn(ctx, sessMgr.txMgr)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	tx, err := sessMgr.txMgr.StartTx(ctx)
 	if err != nil {
 		return nil, err
 	}
-	txCtx := tx.GetTxCtx()
 
-	if reloadVerOutside {
-		// use version calculated outside
-		if err = tenant.ReloadUsingOutsideVersion(ctx, tx, version, txCtx.Id); ulog.E(err) {
-			return nil, err
+	var versionTracker *metadata.Tracker
+	if instantVerTracking {
+		// InstantTracking will automatically reload if needed
+		if trackVerInOwnTxn {
+			versionTracker, err = sessMgr.tenantTracker.InstantTracking(ctx, nil, tenant)
+		} else {
+			versionTracker, err = sessMgr.tenantTracker.InstantTracking(ctx, tx, tenant)
 		}
 	} else {
-		// safe to read version in a transaction
-		if err = tenant.ReloadUsingTxVersion(ctx, tx, txCtx.Id); ulog.E(err) {
-			return nil, err
-		}
+		versionTracker, err = sessMgr.tenantTracker.DeferredTracking(ctx, tx, tenant)
 	}
-
+	if err != nil {
+		return nil, err
+	}
+	txCtx := tx.GetTxCtx()
 	sessCtx, cancel := context.WithCancel(ctx)
 	sessCtx = kv.WrapEventListenerCtx(sessCtx)
+
 	q := &QuerySession{
-		tx:          tx,
-		ctx:         sessCtx,
-		cancel:      cancel,
-		txCtx:       txCtx,
-		tenant:      tenant,
-		version:     version,
-		txListeners: sessMgr.txListeners,
+		tx:             tx,
+		ctx:            sessCtx,
+		cancel:         cancel,
+		txCtx:          txCtx,
+		tenant:         tenant,
+		versionTracker: versionTracker,
+		txListeners:    sessMgr.txListeners,
 	}
 	if track {
 		sessMgr.tracker.add(txCtx.Id, q)
@@ -147,17 +144,19 @@ func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, req *ReqOpt
 	for {
 		var session *QuerySession
 		// implicit sessions doesn't need tracking
-		if session, err = sessMgr.Create(ctx, req.metadataChange, false); err != nil {
+		if session, err = sessMgr.Create(ctx, req.metadataChange, req.instantVerTracking, false); err != nil {
 			return nil, err
 		}
 
 		// use the same ctx assigned in the session
-		if resp, session.ctx, err = session.Run(req.queryRunner); err != nil {
-			_ = session.Rollback()
-		} else {
-			err = session.Commit(sessMgr.versionH, req.metadataChange, err)
+		resp, session.ctx, err = session.Run(req.queryRunner)
+		if changed, err1 := session.versionTracker.Stop(session.ctx); err1 != nil || changed {
+			// other than for write request, stop will be no-op.
+			_ = session.tx.Rollback(session.ctx)
+			continue
 		}
 
+		err = session.Commit(sessMgr.versionH, req.metadataChange, err)
 		if err != kv.ErrConflictingTransaction {
 			return
 		}
@@ -184,13 +183,13 @@ func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, req *ReqOpt
 }
 
 type QuerySession struct {
-	tx          transaction.Tx
-	ctx         context.Context
-	cancel      context.CancelFunc
-	txCtx       *api.TransactionCtx
-	tenant      *metadata.Tenant
-	version     metadata.Version
-	txListeners []TxListener
+	tx             transaction.Tx
+	ctx            context.Context
+	cancel         context.CancelFunc
+	txCtx          *api.TransactionCtx
+	tenant         *metadata.Tenant
+	versionTracker *metadata.Tracker
+	txListeners    []TxListener
 }
 
 func (s *QuerySession) Run(runner QueryRunner) (*Response, context.Context, error) {

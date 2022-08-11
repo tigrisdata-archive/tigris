@@ -16,8 +16,6 @@ package kv
 
 import (
 	"context"
-	"errors"
-	"strconv"
 	"unsafe"
 
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
@@ -33,6 +31,8 @@ type KeyValue struct {
 	Data   *internal.TableData
 }
 
+type Future fdb.FutureByteSlice
+
 type KV interface {
 	Insert(ctx context.Context, table []byte, key Key, data *internal.TableData) error
 	Replace(ctx context.Context, table []byte, key Key, data *internal.TableData) error
@@ -44,7 +44,7 @@ type KV interface {
 	UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error)
 	SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error
 	SetVersionstampedKey(ctx context.Context, key []byte, value []byte) error
-	Get(ctx context.Context, key []byte) ([]byte, error)
+	Get(ctx context.Context, key []byte, isSnapshot bool) (Future, error)
 }
 
 type Tx interface {
@@ -100,32 +100,18 @@ func measureLow(ctx context.Context, name string, f func() error) {
 	// Low level measurement wrapper that is called by the measure functions on the appropriate receiver
 	tags := metrics.GetFdbTags(ctx, name)
 	spanMeta := metrics.NewSpanMeta(metrics.KvTracingServiceName, name, "fdb_kv", tags)
-	var finishTracing func()
-	ctx, finishTracing = spanMeta.StartTracing(ctx, true)
-	defer finishTracing()
-	if config.DefaultConfig.Metrics.Fdb.ResponseTime {
-		metrics.FdbRequests.Tagged(tags).Histogram("histogram", tally.DefaultBuckets)
-		defer metrics.FdbRequests.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
-	}
+	defer metrics.FdbRespTime.Tagged(spanMeta.GetTags()).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
+	ctx = spanMeta.StartTracing(ctx, true)
 	err := f()
 	if err == nil {
 		// Request was ok
-		metrics.FdbRequests.Tagged(tags).Counter("ok").Inc(1)
+		spanMeta.CountOkForScope(metrics.FdbRequests)
+		_ = spanMeta.FinishTracing(ctx)
 		return
 	}
-	var fdberr fdb.Error
-	if config.DefaultConfig.Metrics.Fdb.Counters {
-		errTags := metrics.GetFdbSpecificErrorTags(ctx, name, strconv.Itoa(fdberr.Code))
-		// An error is either known or unknown, tagging is different, known errors have more rich metadata
-		if errors.As(err, &fdberr) {
-			// Error with a specific FDB error code
-			metrics.FdbErrorRequests.Tagged(errTags).Counter("specific").Inc(1)
-		} else {
-			// Unknown error
-			metrics.FdbErrorRequests.Tagged(tags).Counter("unknown").Inc(1)
-		}
-	}
-	spanMeta.FinishWithError(err)
+	// Request had an error
+	spanMeta.CountErrorForScope(metrics.FdbRequests, err)
+	spanMeta.FinishWithError(ctx, err)
 }
 
 func (m *KeyValueStoreImplWithMetrics) measure(ctx context.Context, name string, f func() error) {
@@ -188,9 +174,9 @@ func (m *KeyValueStoreImplWithMetrics) SetVersionstampedKey(ctx context.Context,
 	return
 }
 
-func (m *KeyValueStoreImplWithMetrics) Get(ctx context.Context, key []byte) (val []byte, err error) {
+func (m *KeyValueStoreImplWithMetrics) Get(ctx context.Context, key []byte, isSnapshot bool) (val Future, err error) {
 	m.measure(ctx, "Get", func() error {
-		val, err = m.kv.Get(ctx, key)
+		val, err = m.kv.Get(ctx, key, isSnapshot)
 		return err
 	})
 	return
@@ -403,9 +389,9 @@ func (m *TxImplWithMetrics) SetVersionstampedKey(ctx context.Context, key []byte
 	return
 }
 
-func (m *TxImplWithMetrics) Get(ctx context.Context, key []byte) (val []byte, err error) {
+func (m *TxImplWithMetrics) Get(ctx context.Context, key []byte, isSnapshot bool) (val Future, err error) {
 	m.measure(ctx, "Get", func() error {
-		val, err = m.tx.Get(ctx, key)
+		val, err = m.tx.Get(ctx, key, isSnapshot)
 		return err
 	})
 	return

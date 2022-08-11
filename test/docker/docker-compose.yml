@@ -22,8 +22,18 @@ services:
       - type: volume
         source: dbdata
         target: /var/lib/foundationdb/
+
+  # FDB container with FDB server bound to localhost
+  # This is needed to be able to connect to FDB from the host
+  # Used in local_run make file target
+  tigris_db2:
+    container_name: tigris_db2
+    image: tigrisdata/foundationdb:7.1.7
+    environment:
+      - FDB_NETWORKING_MODE=host
     ports:
       - "4500:4500"
+
 
   tigris_search:
     container_name: tigris_search
@@ -81,6 +91,7 @@ services:
       bash -c '/server/service'
     depends_on:
       - tigris_server
+      - tigris_db2
 
   tigris_test:
     container_name: tigris_test

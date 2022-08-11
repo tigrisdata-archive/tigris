@@ -29,9 +29,9 @@ import (
 var (
 	root     tally.Scope
 	Reporter promreporter.Reporter
-	server   tally.Scope
 	// GRPC and HTTP related metric scopes
 	Requests         tally.Scope
+	OkRequests       tally.Scope
 	ErrorRequests    tally.Scope
 	RequestsRespTime tally.Scope
 	// Fdb related metric scopes
@@ -41,11 +41,14 @@ var (
 )
 
 func GetGlobalTags() map[string]string {
-	return map[string]string{
+	res := map[string]string{
 		"service": util.Service,
 		"env":     config.GetEnvironment(),
-		"version": util.Version,
 	}
+	if res["version"] = util.Version; res["version"] == "" {
+		res["version"] = "dev"
+	}
+	return res
 }
 
 func InitializeMetrics() io.Closer {
@@ -59,18 +62,14 @@ func InitializeMetrics() io.Closer {
 		// Panics with .
 		Separator: promreporter.DefaultSeparator,
 	}, 1*time.Second)
-	// Request level metrics (HTTP and GRPC)
-	// metric names: tigris_server
-	if config.DefaultConfig.Metrics.Grpc.Enabled {
+	if config.DefaultConfig.Tracing.Enabled {
+		// Request level metrics (HTTP and GRPC)
+		Requests = root.SubScope("requests")
 		InitializeRequestScopes()
-	}
-	// FDB level metrics
-	if config.DefaultConfig.Metrics.Fdb.Enabled {
+		// FDB level metrics
 		FdbMetrics = root.SubScope("fdb")
 		InitializeFdbScopes()
-	}
-	// Search level metrics
-	if config.DefaultConfig.Metrics.Search.Enabled {
+		// Search level metrics
 		SearchMetrics = root.SubScope("search")
 		InitializeSearchScopes()
 	}
