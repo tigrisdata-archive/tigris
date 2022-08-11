@@ -6,14 +6,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/query/search"
 )
 
 func TestSearchQueryRunner_getFacetFields(t *testing.T) {
 	collFields := []*schema.QueryableField{
-		{FieldName: "field_1", Faceted: true, DataType: schema.StringType},
-		{FieldName: "parent.field_2", Faceted: true, DataType: schema.StringType},
-		{FieldName: "field_3", Faceted: false, DataType: schema.StringType},
-		{FieldName: "field_4", Faceted: true, DataType: schema.Int32Type},
+		{FieldName: "field_1", Faceted: true},
+		{FieldName: "parent.field_2", Faceted: true},
+		{FieldName: "field_3", Faceted: false},
+		{FieldName: "field_4", Faceted: true},
 	}
 	runner := &SearchQueryRunner{req: &api.SearchRequest{}}
 
@@ -133,5 +134,56 @@ func TestSearchQueryRunner_getFieldSelection(t *testing.T) {
 		assert.Nil(t, factory)
 		assert.NotNil(t, err)
 		assert.ErrorContains(t, err, "`field_3` is not a schema field")
+	})
+}
+
+func TestSearchQueryRunner_getSortOrdering(t *testing.T) {
+	collFields := []*schema.QueryableField{
+		{FieldName: "field_1", Sortable: true},
+		{FieldName: "parent.field_2", Sortable: true},
+		{FieldName: "field_3", Faceted: false},
+	}
+
+	runner := &SearchQueryRunner{req: &api.SearchRequest{}}
+
+	t.Run("no sort param in input", func(t *testing.T) {
+		runner.req.Sort = nil
+		ordering, err := runner.getSortOrdering(collFields)
+		assert.NoError(t, err)
+		assert.Nil(t, ordering)
+	})
+
+	t.Run("no queryable field in collection", func(t *testing.T) {
+		var collFields []*schema.QueryableField
+		runner.req.Sort = []byte(`[{"field_1":"$asc"}]`)
+		sort, err := runner.getSortOrdering(collFields)
+		assert.ErrorContains(t, err, "`field_1` is not a schema field")
+		assert.Nil(t, sort)
+	})
+
+	t.Run("requested sort field is not sortable in collection", func(t *testing.T) {
+		runner.req.Sort = []byte(`[{"field_1":"$desc"},{"field_3":"$asc"}]`)
+		sort, err := runner.getSortOrdering(collFields)
+		assert.ErrorContains(t, err, "Cannot sort on `field_3` field")
+		assert.Nil(t, sort)
+	})
+
+	t.Run("valid sort fields requested", func(t *testing.T) {
+		runner.req.Sort = []byte(`[{"field_1":"$desc"},{"parent.field_2":"$asc"}]`)
+		sort, err := runner.getSortOrdering(collFields)
+		assert.NoError(t, err)
+		assert.NotNil(t, sort)
+		expected := &search.Ordering{
+			{Name: "field_1", Ascending: false, MissingValuesFirst: false},
+			{Name: "parent.field_2", Ascending: true, MissingValuesFirst: false},
+		}
+		assert.Exactly(t, expected, sort)
+	})
+
+	t.Run("Invalid sort input", func(t *testing.T) {
+		runner.req.Sort = []byte(`[{"field_1":"descending"}]`)
+		sort, err := runner.getSortOrdering(collFields)
+		assert.ErrorContains(t, err, "Sort order can only be `$asc` or `$desc`")
+		assert.Nil(t, sort)
 	})
 }

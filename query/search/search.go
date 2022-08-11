@@ -30,6 +30,7 @@ type Query struct {
 	PageSize     int
 	WrappedF     *filter.WrappedFilter
 	ReadFields   *read.FieldFactory
+	SortOrder    *Ordering
 }
 
 func (q *Query) ToSearchFacetSize() int {
@@ -112,6 +113,11 @@ func (b *Builder) SearchFields(f []string) *Builder {
 
 func (b *Builder) ReadFields(f *read.FieldFactory) *Builder {
 	b.query.ReadFields = f
+	return b
+}
+
+func (b *Builder) SortOrder(o *Ordering) *Builder {
+	b.query.SortOrder = o
 	return b
 }
 

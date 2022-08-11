@@ -560,6 +560,11 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, ctx, err
 	}
 
+	sortOrder, err := runner.getSortOrdering(collection.GetQueryableFields())
+	if err != nil {
+		return nil, ctx, err
+	}
+
 	pageSize := int(runner.req.PageSize)
 	if pageSize == 0 {
 		pageSize = defaultPerPage
@@ -573,6 +578,7 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		PageSize(pageSize).
 		Filter(wrappedF).
 		ReadFields(fieldSelection).
+		SortOrder(sortOrder).
 		Build()
 
 	var rowReader *SearchRowReader
@@ -734,6 +740,31 @@ func (runner *SearchQueryRunner) getFieldSelection(collFields []*schema.Queryabl
 	}
 
 	return factory, nil
+}
+
+func (runner *SearchQueryRunner) getSortOrdering(collFields []*schema.QueryableField) (*qsearch.Ordering, error) {
+	ordering, err := qsearch.UnmarshalSort(runner.req.GetSort())
+	if err != nil || ordering == nil {
+		return nil, err
+	}
+
+	for _, sf := range *ordering {
+		found := false
+		for _, cf := range collFields {
+			if sf.Name != cf.FieldName {
+				continue
+			}
+			if !cf.Sortable {
+				return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "Cannot sort on `%s` field", sf.Name)
+			}
+			found = true
+			break
+		}
+		if !found {
+			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "`%s` is not a schema field", sf.Name)
+		}
+	}
+	return ordering, nil
 }
 
 type SubscribeQueryRunner struct {
