@@ -17,6 +17,7 @@ package search
 import (
 	"github.com/tigrisdata/tigris/query/filter"
 	"github.com/tigrisdata/tigris/query/read"
+	"fmt"
 )
 
 const (
@@ -77,6 +78,30 @@ func (q *Query) ToSearchFields() string {
 
 func (q *Query) ToSearchFilter() []string {
 	return q.WrappedF.Filter.ToSearchFilter()
+}
+
+func (q *Query) ToSortFields() string {
+	var sortBy string
+	if q.SortOrder == nil {
+		return sortBy
+	}
+
+	for i, f := range *q.SortOrder {
+		if i != 0 {
+			sortBy += ","
+		}
+		missingValue := "last"
+		if f.MissingValuesFirst {
+			missingValue = "first"
+		}
+		order := "desc"
+		if f.Ascending {
+			order = "asc"
+		}
+
+		sortBy += fmt.Sprintf("%s(missing_values: %s):%s", f.Name, missingValue, order)
+	}
+	return sortBy
 }
 
 type Builder struct {

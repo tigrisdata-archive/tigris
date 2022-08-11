@@ -173,6 +173,7 @@ func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.Co
 			Type:     s.SearchType,
 			Facet:    &s.Faceted,
 			Index:    &s.Indexed,
+			Sort:     &s.Sortable,
 			Optional: &ptrTrue,
 		})
 	}

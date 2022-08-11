@@ -189,7 +189,7 @@ func FacetableField(fieldType FieldType) bool {
 
 func SortableField(fieldType FieldType) bool {
 	switch fieldType {
-	case Int32Type, Int64Type, DoubleType, DateTimeType:
+	case Int32Type, Int64Type, DoubleType, DateTimeType, BoolType:
 		return true
 	default:
 		return false
