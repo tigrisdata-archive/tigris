@@ -343,6 +343,15 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			return nil, ctx, err
 		}
 
+		if vMap, ok := v.(map[string]interface{}); ok {
+			for k, v := range vMap {
+				// remove fields that are set as null as we don't need them for the validation
+				if v == nil {
+					delete(vMap, k)
+				}
+			}
+		}
+
 		if err = collection.Validate(v); err != nil {
 			// schema validation failed
 			return nil, ctx, err

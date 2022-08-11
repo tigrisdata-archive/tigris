@@ -870,6 +870,78 @@ func TestUpdate_SingleRow(t *testing.T) {
 		})
 }
 
+func TestUpdate_NullField(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	inputDocument := []Doc{
+		{
+			"pkey_int":     100,
+			"int_value":    100,
+			"string_value": "simple_insert1_update",
+			"bool_value":   true,
+			"double_value": 100.00001,
+			"bytes_value":  []byte(`"simple_insert1_update"`),
+		},
+	}
+
+	insertDocuments(t, db, coll, inputDocument, false).
+		Status(http.StatusOK)
+
+	readAndValidate(t,
+		db,
+		coll,
+		Map{
+			"pkey_int": 100,
+		},
+		nil,
+		inputDocument)
+
+	tstart := time.Now().UTC()
+	updateByFilter(t,
+		db,
+		coll,
+		Map{
+			"filter": Map{
+				"pkey_int": 100,
+			},
+		},
+		Map{
+			"fields": Map{
+				"$set": Map{
+					"int_value":    nil,
+					"string_value": "simple_insert1_update_modified",
+					"bool_value":   false,
+					"double_value": 200.00001,
+					"bytes_value":  []byte(`"simple_insert1_update_modified"`),
+				},
+			},
+		}).Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("modified_count", 1).
+		Path("$.metadata").Object().
+		Value("updated_at").String().DateTime(time.RFC3339Nano).InRange(tstart, time.Now().UTC().Add(1*time.Second))
+
+	readAndValidate(t,
+		db,
+		coll,
+		Map{
+			"pkey_int": 100,
+		},
+		nil,
+		[]Doc{
+			{
+				"pkey_int":     100,
+				"int_value":    nil,
+				"string_value": "simple_insert1_update_modified",
+				"bool_value":   false,
+				"double_value": 200.00001,
+				"bytes_value":  []byte(`"simple_insert1_update_modified"`),
+			},
+		})
+}
+
 func TestUpdate_SchemaValidationError(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)
