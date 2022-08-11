@@ -23,17 +23,28 @@ import (
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/middleware"
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	ulog "github.com/tigrisdata/tigris/util/log"
+	"github.com/uber-go/tally"
 )
 
 // SessionManager is used to manage all the explicit query sessions. The execute method is executing the query.
 // The method uses the txCtx to understand whether the query is already started(explicit transaction) if not then it
 // will create a QuerySession and then will execute the query. For explicit transaction, Begin/Commit/Rollback is
 // creating/storing/removing the QuerySession.
+
+type Session interface {
+	Create(ctx context.Context, trackVerInOwnTxn bool, instantVerTracking bool, track bool) (*QuerySession, error)
+	Get(ctx context.Context) (*QuerySession, error)
+	Remove(ctx context.Context) error
+	Execute(ctx context.Context, req *ReqOptions) (*Response, error)
+	executeWithRetry(ctx context.Context, req *ReqOptions) (resp *Response, err error)
+}
+
 type SessionManager struct {
 	sync.RWMutex
 
@@ -45,6 +56,58 @@ type SessionManager struct {
 	txListeners   []TxListener
 }
 
+type SessionManagerWithMetrics struct {
+	s *SessionManager
+}
+
+func (m *SessionManagerWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
+	tags := metrics.GetSessionTags(ctx, name)
+	spanMeta := metrics.NewSpanMeta(metrics.SessionManagerServiceName, name, "session", tags)
+	defer metrics.SessionRespTime.Tagged(spanMeta.GetTags()).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
+	ctx = spanMeta.StartTracing(ctx, true)
+	if err := f(ctx); err != nil {
+		spanMeta.CountErrorForScope(metrics.SessionErrorRequests, err)
+		spanMeta.FinishWithError(ctx, err)
+		return
+	}
+	spanMeta.CountOkForScope(metrics.SessionOkRequests)
+	_ = spanMeta.FinishTracing(ctx)
+}
+
+func (m SessionManagerWithMetrics) Create(ctx context.Context, trackVerInOwnTxn bool, instantVerTracking bool, track bool) (qs *QuerySession, err error) {
+	m.measure(ctx, "Create", func(ctx context.Context) error {
+		qs, err = m.s.Create(ctx, trackVerInOwnTxn, instantVerTracking, track)
+		return err
+	})
+	return
+}
+
+func (m SessionManagerWithMetrics) Get(ctx context.Context) (qs *QuerySession, err error) {
+	// Very cheap in-memory operation, not measuring it to avoid overhead
+	return m.s.Get(ctx)
+}
+
+func (m SessionManagerWithMetrics) Remove(ctx context.Context) (err error) {
+	// Very cheap in-memory operation, not measuring it to avoid overhead
+	return m.s.Remove(ctx)
+}
+
+func (m SessionManagerWithMetrics) Execute(ctx context.Context, req *ReqOptions) (resp *Response, err error) {
+	m.measure(ctx, "Execute", func(ctx context.Context) error {
+		resp, err = m.s.Execute(ctx, req)
+		return err
+	})
+	return
+}
+
+func (m SessionManagerWithMetrics) executeWithRetry(ctx context.Context, req *ReqOptions) (resp *Response, err error) {
+	m.measure(ctx, "executeWithRetry", func(ctx context.Context) error {
+		resp, err = m.s.executeWithRetry(ctx, req)
+		return err
+	})
+	return
+}
+
 func NewSessionManager(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, versionH *metadata.VersionHandler, listeners []TxListener, tenantTracker *metadata.CacheTracker) *SessionManager {
 	return &SessionManager{
 		txMgr:         txMgr,
@@ -53,6 +116,19 @@ func NewSessionManager(txMgr *transaction.Manager, tenantMgr *metadata.TenantMan
 		tracker:       newSessionTracker(),
 		txListeners:   listeners,
 		tenantTracker: tenantTracker,
+	}
+}
+
+func NewSessionManagerWithMetrics(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, versionH *metadata.VersionHandler, listeners []TxListener, tenantTracker *metadata.CacheTracker) *SessionManagerWithMetrics {
+	return &SessionManagerWithMetrics{
+		&SessionManager{
+			txMgr:         txMgr,
+			tenantMgr:     tenantMgr,
+			versionH:      versionH,
+			tracker:       newSessionTracker(),
+			txListeners:   listeners,
+			tenantTracker: tenantTracker,
+		},
 	}
 }
 
@@ -109,12 +185,15 @@ func (sessMgr *SessionManager) Create(ctx context.Context, trackVerInOwnTxn bool
 	return q, nil
 }
 
-func (sessMgr *SessionManager) Get(id string) *QuerySession {
-	return sessMgr.tracker.get(id)
+func (sessMgr *SessionManager) Get(ctx context.Context) (*QuerySession, error) {
+	txCtx := api.GetTransaction(ctx)
+	return sessMgr.tracker.get(txCtx.GetId()), nil
 }
 
-func (sessMgr *SessionManager) Remove(id string) {
-	sessMgr.tracker.remove(id)
+func (sessMgr *SessionManager) Remove(ctx context.Context) error {
+	txCtx := api.GetTransaction(ctx)
+	sessMgr.tracker.remove(txCtx.GetId())
+	return nil
 }
 
 // Execute is responsible to execute a query. In a way this method is managing the lifecycle of a query. For implicit

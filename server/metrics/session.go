@@ -16,29 +16,28 @@ package metrics
 
 import (
 	"context"
-
 	"github.com/uber-go/tally"
 )
 
 var (
-	SearchOkRequests    tally.Scope
-	SearchErrorRequests tally.Scope
-	SearchRespTime      tally.Scope
+	SessionOkRequests    tally.Scope
+	SessionErrorRequests tally.Scope
+	SessionRespTime      tally.Scope
 )
 
-func InitializeSearchScopes() {
-	SearchOkRequests = SearchMetrics.SubScope("count")
-	SearchErrorRequests = SearchMetrics.SubScope("count")
-	SearchRespTime = SearchMetrics.SubScope("resptime")
-}
-
-func GetSearchTags(ctx context.Context, reqMethodName string) map[string]string {
-	return addTigrisTenantToTags(ctx, getSearchReqTags(reqMethodName))
-}
-
-func getSearchReqTags(reqMethodName string) map[string]string {
+func getSessionTags(sessionMethodName string) map[string]string {
 	return map[string]string{
-		"method":        reqMethodName,
+		"method":        sessionMethodName,
 		"tigris_tenant": UnknownValue,
 	}
+}
+
+func GetSessionTags(ctx context.Context, sessionMethodName string) map[string]string {
+	return addTigrisTenantToTags(ctx, getSessionTags(sessionMethodName))
+}
+
+func InitializeSessionScopes() {
+	SessionOkRequests = SessionMetrics.SubScope("count")
+	SessionErrorRequests = SessionMetrics.SubScope("count")
+	SessionRespTime = SessionMetrics.SubScope("resptime")
 }

@@ -23,8 +23,6 @@ import (
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/lib/uuid"
 	"github.com/tigrisdata/tigris/schema"
-	"github.com/tigrisdata/tigris/server/config"
-	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/types"
 	"github.com/tigrisdata/tigris/store/kv"
 )
@@ -90,13 +88,7 @@ func NewManager(kvStore kv.KeyValueStore) *Manager {
 
 // StartTx always starts a new session and tracks the session based on the input parameter.
 func (m *Manager) StartTx(ctx context.Context) (Tx, error) {
-	var session Tx
-	var err error
-	if config.DefaultConfig.Tracing.Enabled {
-		session, err = newTxSessionWithMetrics(m.kvStore)
-	} else {
-		session, err = newTxSession(m.kvStore)
-	}
+	session, err := newTxSession(m.kvStore)
 	if err != nil {
 		return nil, api.Errorf(api.Code_INTERNAL, "issue creating a session %v", err)
 	}
@@ -129,10 +121,6 @@ type TxSession struct {
 	txCtx   *api.TransactionCtx
 }
 
-type TxSessionWithMetrics struct {
-	t *TxSession
-}
-
 func newTxSession(kv kv.KeyValueStore) (*TxSession, error) {
 	if kv == nil {
 		return nil, api.Errorf(api.Code_INTERNAL, "session needs non-nil kv object")
@@ -145,36 +133,8 @@ func newTxSession(kv kv.KeyValueStore) (*TxSession, error) {
 	}, nil
 }
 
-func newTxSessionWithMetrics(kv kv.KeyValueStore) (*TxSessionWithMetrics, error) {
-	if kv == nil {
-		return nil, api.Errorf(api.Code_INTERNAL, "session needs non-nil kv object")
-	}
-	return &TxSessionWithMetrics{&TxSession{
-		context: &SessionCtx{},
-		kvStore: kv,
-		state:   sessionCreated,
-		txCtx:   generateTransactionCtx(),
-	}}, nil
-}
-
-func (m *TxSessionWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
-	// No counters here, just tracing, will be removed in the future
-	tags := metrics.GetFdbTags(ctx, name)
-	spanMeta := metrics.NewSpanMeta(metrics.TxManagerTracingServiceName, name, "tx_manager", tags)
-	ctx = spanMeta.StartTracing(ctx, true)
-	if err := f(ctx); err != nil {
-		spanMeta.FinishWithError(ctx, err)
-		return
-	}
-	_ = spanMeta.FinishTracing(ctx)
-}
-
 func (s *TxSession) GetTxCtx() *api.TransactionCtx {
 	return s.txCtx
-}
-
-func (m *TxSessionWithMetrics) GetTxCtx() *api.TransactionCtx {
-	return m.t.txCtx
 }
 
 func (s *TxSession) start(ctx context.Context) error {
@@ -192,14 +152,6 @@ func (s *TxSession) start(ctx context.Context) error {
 	s.state = sessionActive
 
 	return nil
-}
-
-func (m *TxSessionWithMetrics) start(ctx context.Context) (err error) {
-	m.measure(ctx, "start", func(ctx context.Context) error {
-		err = m.t.start(ctx)
-		return err
-	})
-	return
 }
 
 func (s *TxSession) validateSession() error {
@@ -224,14 +176,6 @@ func (s *TxSession) Insert(ctx context.Context, key keys.Key, data *internal.Tab
 	return s.kTx.Insert(ctx, key.Table(), kv.BuildKey(key.IndexParts()...), data)
 }
 
-func (m *TxSessionWithMetrics) Insert(ctx context.Context, key keys.Key, data *internal.TableData) (err error) {
-	m.measure(ctx, "Insert", func(ctx context.Context) error {
-		err = m.t.Insert(ctx, key, data)
-		return err
-	})
-	return
-}
-
 func (s *TxSession) Replace(ctx context.Context, key keys.Key, data *internal.TableData) error {
 	s.Lock()
 	defer s.Unlock()
@@ -241,14 +185,6 @@ func (s *TxSession) Replace(ctx context.Context, key keys.Key, data *internal.Ta
 	}
 
 	return s.kTx.Replace(ctx, key.Table(), kv.BuildKey(key.IndexParts()...), data)
-}
-
-func (m *TxSessionWithMetrics) Replace(ctx context.Context, key keys.Key, data *internal.TableData) (err error) {
-	m.measure(ctx, "Replace", func(ctx context.Context) error {
-		err = m.t.Replace(ctx, key, data)
-		return err
-	})
-	return
 }
 
 func (s *TxSession) Update(ctx context.Context, key keys.Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error) {
@@ -262,14 +198,6 @@ func (s *TxSession) Update(ctx context.Context, key keys.Key, apply func(*intern
 	return s.kTx.Update(ctx, key.Table(), kv.BuildKey(key.IndexParts()...), apply)
 }
 
-func (m *TxSessionWithMetrics) Update(ctx context.Context, key keys.Key, apply func(*internal.TableData) (*internal.TableData, error)) (encoded int32, err error) {
-	m.measure(ctx, "Update", func(ctx context.Context) error {
-		encoded, err = m.t.Update(ctx, key, apply)
-		return err
-	})
-	return
-}
-
 func (s *TxSession) Delete(ctx context.Context, key keys.Key) error {
 	s.Lock()
 	defer s.Unlock()
@@ -279,14 +207,6 @@ func (s *TxSession) Delete(ctx context.Context, key keys.Key) error {
 	}
 
 	return s.kTx.Delete(ctx, key.Table(), kv.BuildKey(key.IndexParts()...))
-}
-
-func (m *TxSessionWithMetrics) Delete(ctx context.Context, key keys.Key) (err error) {
-	m.measure(ctx, "Delete", func(ctx context.Context) error {
-		err = m.t.Delete(ctx, key)
-		return err
-	})
-	return
 }
 
 func (s *TxSession) Read(ctx context.Context, key keys.Key) (kv.Iterator, error) {
@@ -311,22 +231,6 @@ func (s *TxSession) ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key)
 	return s.kTx.ReadRange(ctx, lKey.Table(), kv.BuildKey(lKey.IndexParts()...), kv.BuildKey(rKey.IndexParts()...))
 }
 
-func (m *TxSessionWithMetrics) Read(ctx context.Context, key keys.Key) (it kv.Iterator, err error) {
-	m.measure(ctx, "Read", func(ctx context.Context) error {
-		it, err = m.t.Read(ctx, key)
-		return err
-	})
-	return
-}
-
-func (m *TxSessionWithMetrics) ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key) (it kv.Iterator, err error) {
-	m.measure(ctx, "ReadRange", func(ctx context.Context) error {
-		it, err = m.t.ReadRange(ctx, lKey, rKey)
-		return err
-	})
-	return
-}
-
 func (s *TxSession) SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error {
 	s.Lock()
 	defer s.Unlock()
@@ -336,14 +240,6 @@ func (s *TxSession) SetVersionstampedValue(ctx context.Context, key []byte, valu
 	}
 
 	return s.kTx.SetVersionstampedValue(ctx, key, value)
-}
-
-func (m *TxSessionWithMetrics) SetVersionstampedValue(ctx context.Context, key []byte, value []byte) (err error) {
-	m.measure(ctx, "SetVersionstampedValue", func(ctx context.Context) error {
-		err = m.t.SetVersionstampedValue(ctx, key, value)
-		return err
-	})
-	return
 }
 
 func (s *TxSession) SetVersionstampedKey(ctx context.Context, key []byte, value []byte) error {
@@ -357,14 +253,6 @@ func (s *TxSession) SetVersionstampedKey(ctx context.Context, key []byte, value 
 	return s.kTx.SetVersionstampedKey(ctx, key, value)
 }
 
-func (m *TxSessionWithMetrics) SetVersionstampedKey(ctx context.Context, key []byte, value []byte) (err error) {
-	m.measure(ctx, "SetVersionstampedKey", func(ctx context.Context) error {
-		err = m.t.SetVersionstampedKey(ctx, key, value)
-		return err
-	})
-	return
-}
-
 func (s *TxSession) Get(ctx context.Context, key []byte, isSnapshot bool) (kv.Future, error) {
 	s.Lock()
 	defer s.Unlock()
@@ -374,14 +262,6 @@ func (s *TxSession) Get(ctx context.Context, key []byte, isSnapshot bool) (kv.Fu
 	}
 
 	return s.kTx.Get(ctx, key, isSnapshot)
-}
-
-func (m *TxSessionWithMetrics) Get(ctx context.Context, key []byte, isSnapshot bool) (val kv.Future, err error) {
-	m.measure(ctx, "Get", func(ctx context.Context) error {
-		val, err = m.t.Get(ctx, key, isSnapshot)
-		return err
-	})
-	return
 }
 
 func (s *TxSession) Commit(ctx context.Context) error {
@@ -396,14 +276,6 @@ func (s *TxSession) Commit(ctx context.Context) error {
 	return err
 }
 
-func (m *TxSessionWithMetrics) Commit(ctx context.Context) (err error) {
-	m.measure(ctx, "Commit", func(ctx context.Context) error {
-		err = m.t.Commit(ctx)
-		return err
-	})
-	return
-}
-
 func (s *TxSession) Rollback(ctx context.Context) error {
 	s.Lock()
 	defer s.Unlock()
@@ -416,20 +288,8 @@ func (s *TxSession) Rollback(ctx context.Context) error {
 	return err
 }
 
-func (m *TxSessionWithMetrics) Rollback(ctx context.Context) (err error) {
-	m.measure(ctx, "Rollback", func(ctx context.Context) error {
-		err = m.t.Rollback(ctx)
-		return err
-	})
-	return
-}
-
 func (s *TxSession) Context() *SessionCtx {
 	return s.context
-}
-
-func (m *TxSessionWithMetrics) Context() *SessionCtx {
-	return m.t.context
 }
 
 func generateTransactionCtx() *api.TransactionCtx {

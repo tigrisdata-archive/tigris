@@ -21,35 +21,19 @@ import (
 )
 
 var (
-	FdbRequests         tally.Scope
-	FdbErrorRequests    tally.Scope
-	FdbRespTime         tally.Scope
-	MeasuredFdbRequests = []string{
-		"Delete",
-		"DeleteRange",
-		"CreateTable",
-		"DropTable",
-		"SetVersionstampedValue",
-		"SetVersionstampedKey",
-		"Get",
-		"Insert",
-		"Replace",
-		"Read",
-		"ReadRange",
-		"Update",
-		"UpdateRange",
-		"BeginTx",
-	}
+	FdbOkRequests    tally.Scope
+	FdbErrorRequests tally.Scope
+	FdbRespTime      tally.Scope
 )
 
-func getFdbReqTags(reqMethodName string) map[string]string {
+func getFdbReqOkTags(reqMethodName string) map[string]string {
 	return map[string]string{
 		"method":        reqMethodName,
 		"tigris_tenant": UnknownValue,
 	}
 }
 
-func getFdbReqSpecificErrorTags(reqMethodName string, code string) map[string]string {
+func getFdbReqErrorTags(reqMethodName string, code string) map[string]string {
 	return map[string]string{
 		"method":        reqMethodName,
 		"error_code":    code,
@@ -57,16 +41,16 @@ func getFdbReqSpecificErrorTags(reqMethodName string, code string) map[string]st
 	}
 }
 
-func GetFdbTags(ctx context.Context, reqMethodName string) map[string]string {
-	return addTigrisTenantToTags(ctx, getFdbReqTags(reqMethodName))
+func GetFdbOkTags(ctx context.Context, reqMethodName string) map[string]string {
+	return addTigrisTenantToTags(ctx, getFdbReqOkTags(reqMethodName))
 }
 
-func GetFdbSpecificErrorTags(ctx context.Context, reqMethodName string, code string) map[string]string {
-	return addTigrisTenantToTags(ctx, getFdbReqSpecificErrorTags(reqMethodName, code))
+func GetFdbErrorTags(ctx context.Context, reqMethodName string, code string) map[string]string {
+	return addTigrisTenantToTags(ctx, getFdbReqErrorTags(reqMethodName, code))
 }
 
 func InitializeFdbScopes() {
-	FdbRequests = FdbMetrics.SubScope("requests")
-	FdbErrorRequests = FdbRequests.SubScope("error")
-	FdbRespTime = FdbRequests.SubScope("resptime")
+	FdbOkRequests = FdbMetrics.SubScope("count")
+	FdbErrorRequests = FdbMetrics.SubScope("count")
+	FdbRespTime = FdbMetrics.SubScope("resptime")
 }

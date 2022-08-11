@@ -38,6 +38,8 @@ var (
 	FdbMetrics tally.Scope
 	// Search related metrics scopes
 	SearchMetrics tally.Scope
+	// Session related metris scopes
+	SessionMetrics tally.Scope
 )
 
 func GetGlobalTags() map[string]string {
@@ -72,6 +74,9 @@ func InitializeMetrics() io.Closer {
 		// Search level metrics
 		SearchMetrics = root.SubScope("search")
 		InitializeSearchScopes()
+		// Session level metrics
+		SessionMetrics = root.SubScope("session")
+		InitializeSessionScopes()
 	}
 	return closer
 }
