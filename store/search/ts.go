@@ -185,6 +185,9 @@ func (s *storeImpl) getBaseSearchParam(query *qsearch.Query, pageNo int) tsApi.M
 			baseParam.MaxFacetValues = &size
 		}
 	}
+	if sortBy := query.ToSortFields(); len(sortBy) > 0 {
+		baseParam.SortBy = &sortBy
+	}
 
 	return baseParam
 }
