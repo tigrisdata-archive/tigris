@@ -27,6 +27,7 @@ import (
 	"github.com/tigrisdata/tigris/lib/set"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/request"
+	"google.golang.org/grpc"
 )
 
 type TokenCtxkey struct{}
@@ -34,7 +35,7 @@ type TokenCtxkey struct{}
 var (
 	headerAuthorize           = "authorization"
 	UnknownNamespace          = "unknown"
-	BypassAuthForTheseMethods = set.New("/.HealthAPI/Health", "/tigrisdata.auth.v1.Auth/GetAccessToken")
+	BypassAuthForTheseMethods = set.New("/HealthAPI/Health", "/tigrisdata.auth.v1.Auth/getAccessToken")
 )
 
 type Namespace struct {
@@ -108,7 +109,7 @@ func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config
 		}
 	}()
 	// disable health check authn/z
-	fullMethodName, fullMethodNameFound := request.GetFullMethodName(ctx)
+	fullMethodName, fullMethodNameFound := grpc.Method(ctx)
 	if fullMethodNameFound && BypassAuthForTheseMethods.Contains(fullMethodName) {
 		return ctx, nil
 	}
