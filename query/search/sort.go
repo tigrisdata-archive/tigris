@@ -38,7 +38,7 @@ func newSortField(order jsoniter.RawMessage) (SortField, error) {
 			return api.Errorf(api.Code_INVALID_ARGUMENT, "Sort order can only be `%s` or `%s`", ASC, DESC)
 		}
 		s.Name = string(k)
-		s.MissingValuesFirst = false
+		s.MissingValuesFirst = false // Forcing empty/null/missing values to the end
 		return nil
 	})
 	if err != nil {
@@ -47,6 +47,9 @@ func newSortField(order jsoniter.RawMessage) (SortField, error) {
 	return s, nil
 }
 
+// UnmarshalSort expects a json array input. Examples:
+//	[{"field_1": "$asc"}, {"field_2": "$desc"}]
+//	[]
 func UnmarshalSort(input jsoniter.RawMessage) (*Ordering, error) {
 	if len(input) == 0 {
 		return nil, nil

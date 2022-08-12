@@ -545,22 +545,22 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, ctx, err
 	}
 
-	searchFields, err := runner.getSearchFields(collection.GetQueryableFields())
+	searchFields, err := runner.getSearchFields(collection)
 	if err != nil {
 		return nil, ctx, err
 	}
 
-	facets, err := runner.getFacetFields(collection.GetQueryableFields())
+	facets, err := runner.getFacetFields(collection)
 	if err != nil {
 		return nil, ctx, err
 	}
 
-	fieldSelection, err := runner.getFieldSelection(collection.GetQueryableFields())
+	fieldSelection, err := runner.getFieldSelection(collection)
 	if err != nil {
 		return nil, ctx, err
 	}
 
-	sortOrder, err := runner.getSortOrdering(collection.GetQueryableFields())
+	sortOrder, err := runner.getSortOrdering(collection)
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -649,63 +649,49 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	return &Response{}, ctx, nil
 }
 
-func (runner *SearchQueryRunner) getSearchFields(collFields []*schema.QueryableField) ([]string, error) {
+func (runner *SearchQueryRunner) getSearchFields(coll *schema.DefaultCollection) ([]string, error) {
 	var searchFields = runner.req.SearchFields
 	if len(searchFields) == 0 {
 		// this is to include all searchable fields if not present in the query
-		for _, cf := range collFields {
+		for _, cf := range coll.GetQueryableFields() {
 			if cf.DataType == schema.StringType {
 				searchFields = append(searchFields, cf.FieldName)
 			}
 		}
 	} else {
 		for _, sf := range searchFields {
-			found := false
-			for _, cf := range collFields {
-				if sf != cf.FieldName {
-					continue
-				}
-				if cf.DataType != schema.StringType {
-					return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "`%s` is not a searchable field. Only string fields can be queried", sf)
-				}
-				found = true
-				break
+			cf, err := coll.GetQueryableField(sf)
+			if err != nil {
+				return nil, err
 			}
-			if !found {
-				return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "Field `%s` is not present in collection", sf)
+			if cf.DataType != schema.StringType {
+				return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "`%s` is not a searchable field. Only string fields can be queried", sf)
 			}
 		}
 	}
 	return searchFields, nil
 }
 
-func (runner *SearchQueryRunner) getFacetFields(collFields []*schema.QueryableField) (qsearch.Facets, error) {
+func (runner *SearchQueryRunner) getFacetFields(coll *schema.DefaultCollection) (qsearch.Facets, error) {
 	facets, err := qsearch.UnmarshalFacet(runner.req.Facet)
 	if err != nil {
 		return qsearch.Facets{}, err
 	}
 
 	for _, ff := range facets.Fields {
-		found := false
-		for _, cf := range collFields {
-			if ff.Name != cf.FieldName {
-				continue
-			}
-			if !cf.Faceted {
-				return qsearch.Facets{}, api.Errorf(api.Code_INVALID_ARGUMENT, "Cannot generate facets for `%s`. Faceting is only supported for numeric and text fields", ff.Name)
-			}
-			found = true
-			break
+		cf, err := coll.GetQueryableField(ff.Name)
+		if err != nil {
+			return qsearch.Facets{}, err
 		}
-		if !found {
-			return qsearch.Facets{}, api.Errorf(api.Code_INVALID_ARGUMENT, "`%s` is not a schema field", ff.Name)
+		if !cf.Faceted {
+			return qsearch.Facets{}, api.Errorf(api.Code_INVALID_ARGUMENT, "Cannot generate facets for `%s`. Faceting is only supported for numeric and text fields", ff.Name)
 		}
 	}
 
 	return facets, nil
 }
 
-func (runner *SearchQueryRunner) getFieldSelection(collFields []*schema.QueryableField) (*read.FieldFactory, error) {
+func (runner *SearchQueryRunner) getFieldSelection(coll *schema.DefaultCollection) (*read.FieldFactory, error) {
 	var selectionFields []string
 
 	// Only one of include/exclude. Honor inclusion over exclusion
@@ -723,18 +709,13 @@ func (runner *SearchQueryRunner) getFieldSelection(collFields []*schema.Queryabl
 	}
 
 	for _, sf := range selectionFields {
-		found := false
-		for _, cf := range collFields {
-			if sf == cf.FieldName {
-				found = true
-			}
-		}
-		if !found {
-			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "`%s` is not a schema field", sf)
+		cf, err := coll.GetQueryableField(sf)
+		if err != nil {
+			return nil, err
 		}
 
 		factory.AddField(&read.SimpleField{
-			Name: sf,
+			Name: cf.Name(),
 			Incl: len(runner.req.IncludeFields) > 0,
 		})
 	}
@@ -742,26 +723,20 @@ func (runner *SearchQueryRunner) getFieldSelection(collFields []*schema.Queryabl
 	return factory, nil
 }
 
-func (runner *SearchQueryRunner) getSortOrdering(collFields []*schema.QueryableField) (*qsearch.Ordering, error) {
+func (runner *SearchQueryRunner) getSortOrdering(coll *schema.DefaultCollection) (*qsearch.Ordering, error) {
 	ordering, err := qsearch.UnmarshalSort(runner.req.GetSort())
 	if err != nil || ordering == nil {
 		return nil, err
 	}
 
 	for _, sf := range *ordering {
-		found := false
-		for _, cf := range collFields {
-			if sf.Name != cf.FieldName {
-				continue
-			}
-			if !cf.Sortable {
-				return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "Cannot sort on `%s` field", sf.Name)
-			}
-			found = true
-			break
+		cf, err := coll.GetQueryableField(sf.Name)
+		if err != nil {
+			return nil, err
 		}
-		if !found {
-			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "`%s` is not a schema field", sf.Name)
+
+		if !cf.Sortable {
+			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "Cannot sort on `%s` field", sf.Name)
 		}
 	}
 	return ordering, nil
