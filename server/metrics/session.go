@@ -36,7 +36,7 @@ func GetSessionTags(ctx context.Context, sessionMethodName string) map[string]st
 	return addTigrisTenantToTags(ctx, getSessionTags(sessionMethodName))
 }
 
-func InitializeSessionScopes() {
+func initializeSessionScopes() {
 	SessionOkRequests = SessionMetrics.SubScope("count")
 	SessionErrorRequests = SessionMetrics.SubScope("count")
 	SessionRespTime = SessionMetrics.SubScope("resptime")

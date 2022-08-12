@@ -17,6 +17,7 @@ package v1
 import (
 	"bytes"
 	"context"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"math"
 	"time"
 
@@ -934,6 +935,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		if err != nil {
 			return nil, ctx, err
 		}
+		namespace := metrics.GetNamespace(ctx)
 
 		coll, err := runner.GetCollections(db, runner.describeReq.GetCollection())
 		if err != nil {
@@ -944,6 +946,8 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		if err != nil {
 			return nil, ctx, err
 		}
+
+		metrics.UpdateCollectionSizeMetrics(namespace, db.Name(), coll.GetName(), size)
 
 		return &Response{
 			Response: &api.DescribeCollectionResponse{
@@ -1027,6 +1031,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		if err != nil {
 			return nil, ctx, err
 		}
+		namespace := metrics.GetNamespace(ctx)
 
 		collectionList := db.ListCollection()
 
@@ -1036,6 +1041,9 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			if err != nil {
 				return nil, ctx, err
 			}
+
+			metrics.UpdateCollectionSizeMetrics(namespace, db.Name(), c.GetName(), size)
+
 			collections[i] = &api.CollectionDescription{
 				Collection: c.GetName(),
 				Metadata:   &api.CollectionMetadata{},
@@ -1048,6 +1056,8 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		if err != nil {
 			return nil, ctx, err
 		}
+
+		metrics.UpdateDbSizeMetrics(namespace, db.Name(), size)
 
 		return &Response{
 			Response: &api.DescribeDatabaseResponse{

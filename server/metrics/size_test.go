@@ -15,36 +15,29 @@
 package metrics
 
 import (
-	"context"
 	"testing"
 
 	"github.com/tigrisdata/tigris/server/config"
-	"github.com/uber-go/tally"
 )
 
-func TestSessionMetrics(t *testing.T) {
+func TestSizeMetrics(t *testing.T) {
+	var testSize int64 = 1000
+	var testNamespace = "test_namespace"
+	var testDb = "test_db"
+	var testCollection = "test_collection"
+
 	config.DefaultConfig.Tracing.Enabled = true
 	InitializeMetrics()
 
-	ctx := context.Background()
-
-	testTags := []map[string]string{
-		GetSessionTags(ctx, "Create"),
-		GetSessionTags(ctx, "Get"),
-		GetSessionTags(ctx, "Remove"),
-		GetSessionTags(ctx, "Execute"),
-		GetSessionTags(ctx, "executeWithRetry"),
-	}
-
-	t.Run("Test Session counters", func(t *testing.T) {
-		for _, tags := range testTags {
-			SessionOkRequests.Tagged(tags).Counter("ok").Inc(1)
-			SessionErrorRequests.Tagged(tags).Counter("error").Inc(1)
-		}
+	t.Run("Update namespace size metrics", func(t *testing.T) {
+		UpdateNameSpaceSizeMetrics(testNamespace, testSize)
 	})
 
-	t.Run("Test Session histograms", func(t *testing.T) {
-		tags := GetSessionTags(ctx, "Create")
-		defer SessionRespTime.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
+	t.Run("Update database size metrics", func(t *testing.T) {
+		UpdateDbSizeMetrics(testNamespace, testDb, testSize)
+	})
+
+	t.Run("Update collection size metrics", func(t *testing.T) {
+		UpdateCollectionSizeMetrics(testNamespace, testDb, testCollection, testSize)
 	})
 }

@@ -8,6 +8,7 @@ import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"go.uber.org/atomic"
 	"golang.org/x/time/rate"
@@ -94,6 +95,7 @@ func (m *Manager) checkStorageSize(ctx context.Context, namespace string, s *Sta
 	sz := s.Size.Load()
 
 	if time.Now().Unix() < s.SizeUpdateAt.Load()+sizeLimitUpdateInterval {
+		metrics.UpdateNameSpaceSizeMetrics(namespace, sz)
 		if sz+int64(size) >= m.cfg.DataSizeLimit {
 			return ErrStorageSizeExceeded
 		}

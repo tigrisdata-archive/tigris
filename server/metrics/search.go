@@ -26,7 +26,7 @@ var (
 	SearchRespTime      tally.Scope
 )
 
-func InitializeSearchScopes() {
+func initializeSearchScopes() {
 	SearchOkRequests = SearchMetrics.SubScope("count")
 	SearchErrorRequests = SearchMetrics.SubScope("count")
 	SearchRespTime = SearchMetrics.SubScope("resptime")

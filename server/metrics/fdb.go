@@ -49,7 +49,7 @@ func GetFdbErrorTags(ctx context.Context, reqMethodName string, code string) map
 	return addTigrisTenantToTags(ctx, getFdbReqErrorTags(reqMethodName, code))
 }
 
-func InitializeFdbScopes() {
+func initializeFdbScopes() {
 	FdbOkRequests = FdbMetrics.SubScope("count")
 	FdbErrorRequests = FdbMetrics.SubScope("count")
 	FdbRespTime = FdbMetrics.SubScope("resptime")
