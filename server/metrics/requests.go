@@ -21,12 +21,19 @@ import (
 
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/request"
+	"github.com/uber-go/tally"
 	"google.golang.org/grpc"
 )
 
 const (
 	SystemTigrisTenantName = "system"
 	UnknownValue           = "unknown"
+)
+
+var (
+	OkRequests       tally.Scope
+	ErrorRequests    tally.Scope
+	RequestsRespTime tally.Scope
 )
 
 type RequestEndpointMetadata struct {
@@ -108,7 +115,7 @@ func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod strin
 	return newRequestEndpointMetadata(ctx, svcName, methodInfo)
 }
 
-func InitializeRequestScopes() {
+func initializeRequestScopes() {
 	OkRequests = Requests.SubScope("count")
 	ErrorRequests = Requests.SubScope("count")
 	RequestsRespTime = Requests.SubScope("resptime")

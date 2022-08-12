@@ -30,3 +30,11 @@ func addTigrisTenantToTags(ctx context.Context, tags map[string]string) map[stri
 	}
 	return tags
 }
+
+func GetNamespace(ctx context.Context) string {
+	namespace, err := request.GetNamespace(ctx)
+	if err != nil {
+		namespace = "unknown"
+	}
+	return namespace
+}
