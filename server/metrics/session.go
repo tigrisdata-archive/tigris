@@ -16,6 +16,7 @@ package metrics
 
 import (
 	"context"
+
 	"github.com/uber-go/tally"
 )
 

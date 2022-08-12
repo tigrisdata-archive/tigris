@@ -17,7 +17,6 @@ package v1
 import (
 	"bytes"
 	"context"
-	"github.com/tigrisdata/tigris/server/metrics"
 	"math"
 	"time"
 
@@ -33,6 +32,7 @@ import (
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/cdc"
 	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
