@@ -1,4 +1,4 @@
-package search
+package sort
 
 import (
 	"github.com/buger/jsonparser"

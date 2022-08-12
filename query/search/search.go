@@ -19,6 +19,7 @@ import (
 
 	"github.com/tigrisdata/tigris/query/filter"
 	"github.com/tigrisdata/tigris/query/read"
+	"github.com/tigrisdata/tigris/query/sort"
 )
 
 const (
@@ -32,7 +33,7 @@ type Query struct {
 	PageSize     int
 	WrappedF     *filter.WrappedFilter
 	ReadFields   *read.FieldFactory
-	SortOrder    *Ordering
+	SortOrder    *sort.Ordering
 }
 
 func (q *Query) ToSearchFacetSize() int {
@@ -142,7 +143,7 @@ func (b *Builder) ReadFields(f *read.FieldFactory) *Builder {
 	return b
 }
 
-func (b *Builder) SortOrder(o *Ordering) *Builder {
+func (b *Builder) SortOrder(o *sort.Ordering) *Builder {
 	b.query.SortOrder = o
 	return b
 }

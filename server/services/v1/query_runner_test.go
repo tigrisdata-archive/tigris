@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-	"github.com/tigrisdata/tigris/query/search"
+	"github.com/tigrisdata/tigris/query/sort"
 	"github.com/tigrisdata/tigris/schema"
 )
 
@@ -161,28 +161,28 @@ func TestSearchQueryRunner_getSortOrdering(t *testing.T) {
 	t.Run("no queryable field in collection", func(t *testing.T) {
 		collection := &schema.DefaultCollection{}
 		runner.req.Sort = []byte(`[{"field_1":"$asc"}]`)
-		sort, err := runner.getSortOrdering(collection)
+		sortOrder, err := runner.getSortOrdering(collection)
 		assert.ErrorContains(t, err, "`field_1` is not present in collection")
-		assert.Nil(t, sort)
+		assert.Nil(t, sortOrder)
 	})
 
 	t.Run("requested sort field is not sortable in collection", func(t *testing.T) {
 		runner.req.Sort = []byte(`[{"field_1":"$desc"},{"field_3":"$asc"}]`)
-		sort, err := runner.getSortOrdering(collection)
+		sortOrder, err := runner.getSortOrdering(collection)
 		assert.ErrorContains(t, err, "Cannot sort on `field_3` field")
-		assert.Nil(t, sort)
+		assert.Nil(t, sortOrder)
 	})
 
 	t.Run("valid sort fields requested", func(t *testing.T) {
 		runner.req.Sort = []byte(`[{"field_1":"$desc"},{"parent.field_2":"$asc"}]`)
-		sort, err := runner.getSortOrdering(collection)
+		sortOrder, err := runner.getSortOrdering(collection)
 		assert.NoError(t, err)
-		assert.NotNil(t, sort)
-		expected := &search.Ordering{
+		assert.NotNil(t, sortOrder)
+		expected := &sort.Ordering{
 			{Name: "field_1", Ascending: false, MissingValuesFirst: false},
 			{Name: "parent.field_2", Ascending: true, MissingValuesFirst: false},
 		}
-		assert.Exactly(t, expected, sort)
+		assert.Exactly(t, expected, sortOrder)
 	})
 
 	t.Run("Invalid sort input", func(t *testing.T) {

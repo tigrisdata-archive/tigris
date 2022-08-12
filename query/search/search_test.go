@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/query/filter"
+	"github.com/tigrisdata/tigris/query/sort"
 	"github.com/tigrisdata/tigris/schema"
 )
 
@@ -48,14 +49,14 @@ func TestQuery_ToSortFields(t *testing.T) {
 	})
 
 	t.Run("with empty sort order", func(t *testing.T) {
-		q := NewBuilder().SortOrder(&Ordering{}).Build()
+		q := NewBuilder().SortOrder(&sort.Ordering{}).Build()
 		sortBy := q.ToSortFields()
 		assert.NotNil(t, sortBy)
 		assert.Empty(t, sortBy)
 	})
 
 	t.Run("with 1 sort order", func(t *testing.T) {
-		ordering := &Ordering{
+		ordering := &sort.Ordering{
 			{Name: "field_1", Ascending: true, MissingValuesFirst: false},
 		}
 		q := NewBuilder().SortOrder(ordering).Build()
@@ -64,7 +65,7 @@ func TestQuery_ToSortFields(t *testing.T) {
 	})
 
 	t.Run("with 3 sort orders", func(t *testing.T) {
-		ordering := &Ordering{
+		ordering := &sort.Ordering{
 			{Name: "field_1", Ascending: true},
 			{Name: "parent.field_2"},
 			{Name: "first.second.field_3", Ascending: true, MissingValuesFirst: true},

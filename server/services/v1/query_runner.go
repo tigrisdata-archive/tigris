@@ -27,6 +27,7 @@ import (
 	"github.com/tigrisdata/tigris/query/filter"
 	"github.com/tigrisdata/tigris/query/read"
 	qsearch "github.com/tigrisdata/tigris/query/search"
+	"github.com/tigrisdata/tigris/query/sort"
 	"github.com/tigrisdata/tigris/query/update"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/cdc"
@@ -723,8 +724,8 @@ func (runner *SearchQueryRunner) getFieldSelection(coll *schema.DefaultCollectio
 	return factory, nil
 }
 
-func (runner *SearchQueryRunner) getSortOrdering(coll *schema.DefaultCollection) (*qsearch.Ordering, error) {
-	ordering, err := qsearch.UnmarshalSort(runner.req.GetSort())
+func (runner *SearchQueryRunner) getSortOrdering(coll *schema.DefaultCollection) (*sort.Ordering, error) {
+	ordering, err := sort.UnmarshalSort(runner.req.GetSort())
 	if err != nil || ordering == nil {
 		return nil, err
 	}
