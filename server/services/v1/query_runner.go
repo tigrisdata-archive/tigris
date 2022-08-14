@@ -795,7 +795,7 @@ func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 			return nil, ctx, err
 		}
 
-		kvIterator, err := tickerTx.ReadRange(ctx, startKey, endKey)
+		kvIterator, err := tickerTx.ReadRange(ctx, startKey, endKey, true)
 		if ulog.E(err) {
 			return nil, ctx, err
 		}

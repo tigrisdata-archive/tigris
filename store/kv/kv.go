@@ -39,7 +39,7 @@ type KV interface {
 	Delete(ctx context.Context, table []byte, key Key) error
 	DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key) error
 	Read(ctx context.Context, table []byte, key Key) (Iterator, error)
-	ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key) (Iterator, error)
+	ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (Iterator, error)
 	Update(ctx context.Context, table []byte, key Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error)
 	UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error)
 	SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error
@@ -235,8 +235,8 @@ func (m *KeyValueStoreImplWithMetrics) Read(ctx context.Context, table []byte, k
 	return
 }
 
-func (k *KeyValueStoreImpl) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key) (Iterator, error) {
-	iter, err := k.fdbkv.ReadRange(ctx, table, lkey, rkey)
+func (k *KeyValueStoreImpl) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (Iterator, error) {
+	iter, err := k.fdbkv.ReadRange(ctx, table, lkey, rkey, isSnapshot)
 	if err != nil {
 		return nil, err
 	}
@@ -245,9 +245,9 @@ func (k *KeyValueStoreImpl) ReadRange(ctx context.Context, table []byte, lkey Ke
 	}, nil
 }
 
-func (m *KeyValueStoreImplWithMetrics) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key) (it Iterator, err error) {
+func (m *KeyValueStoreImplWithMetrics) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (it Iterator, err error) {
 	m.measure(ctx, "ReadRange", func() error {
-		it, err = m.kv.ReadRange(ctx, table, lkey, rkey)
+		it, err = m.kv.ReadRange(ctx, table, lkey, rkey, isSnapshot)
 		return err
 	})
 	return
@@ -469,8 +469,8 @@ func (m *TxImplWithMetrics) Read(ctx context.Context, table []byte, key Key) (it
 	return
 }
 
-func (tx *TxImpl) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key) (Iterator, error) {
-	iter, err := tx.ftx.ReadRange(ctx, table, lkey, rkey)
+func (tx *TxImpl) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (Iterator, error) {
+	iter, err := tx.ftx.ReadRange(ctx, table, lkey, rkey, isSnapshot)
 	if err != nil {
 		return nil, err
 	}
@@ -479,9 +479,9 @@ func (tx *TxImpl) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Ke
 	}, nil
 }
 
-func (m *TxImplWithMetrics) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key) (it Iterator, err error) {
+func (m *TxImplWithMetrics) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (it Iterator, err error) {
 	m.measure(ctx, "ReadRange", func() error {
-		it, err = m.tx.ReadRange(ctx, table, lkey, rkey)
+		it, err = m.tx.ReadRange(ctx, table, lkey, rkey, isSnapshot)
 		return err
 	})
 	return

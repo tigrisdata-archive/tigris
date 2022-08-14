@@ -45,7 +45,7 @@ type Tx interface {
 	Update(ctx context.Context, key keys.Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error)
 	Delete(ctx context.Context, key keys.Key) error
 	Read(ctx context.Context, key keys.Key) (kv.Iterator, error)
-	ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key) (kv.Iterator, error)
+	ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key, isSnapshot bool) (kv.Iterator, error)
 	Get(ctx context.Context, key []byte, isSnapshot bool) (kv.Future, error)
 	Commit(ctx context.Context) error
 	Rollback(ctx context.Context) error
@@ -220,7 +220,7 @@ func (s *TxSession) Read(ctx context.Context, key keys.Key) (kv.Iterator, error)
 	return s.kTx.Read(ctx, key.Table(), kv.BuildKey(key.IndexParts()...))
 }
 
-func (s *TxSession) ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key) (kv.Iterator, error) {
+func (s *TxSession) ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key, isSnapshot bool) (kv.Iterator, error) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -228,7 +228,7 @@ func (s *TxSession) ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key)
 		return nil, err
 	}
 
-	return s.kTx.ReadRange(ctx, lKey.Table(), kv.BuildKey(lKey.IndexParts()...), kv.BuildKey(rKey.IndexParts()...))
+	return s.kTx.ReadRange(ctx, lKey.Table(), kv.BuildKey(lKey.IndexParts()...), kv.BuildKey(rKey.IndexParts()...), isSnapshot)
 }
 
 func (s *TxSession) SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error {

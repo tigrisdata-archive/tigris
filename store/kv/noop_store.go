@@ -58,7 +58,7 @@ func (n *NoopKV) DeleteRange(ctx context.Context, table []byte, lKey Key, rKey K
 func (n *NoopKV) Read(ctx context.Context, table []byte, key Key) (Iterator, error) {
 	return &NoopIterator{}, nil
 }
-func (n *NoopKV) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key) (Iterator, error) {
+func (n *NoopKV) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (Iterator, error) {
 	return &NoopIterator{}, nil
 }
 func (n *NoopKV) Update(ctx context.Context, table []byte, key Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error) {

@@ -108,7 +108,7 @@ func testKeyValueStoreBasic(t *testing.T, kv KeyValueStore) {
 	require.Equal(t, []KeyValue{{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2))), Data: replacedValue2}}, v)
 
 	// read range
-	it, err = kv.ReadRange(ctx, table, BuildKey("p1", 2), BuildKey("p1", 4))
+	it, err = kv.ReadRange(ctx, table, BuildKey("p1", 2), BuildKey("p1", 4), false)
 	require.NoError(t, err)
 
 	v = readAllUsingIterator(t, it)
@@ -131,7 +131,7 @@ func testKeyValueStoreBasic(t *testing.T, kv KeyValueStore) {
 	require.NoError(t, err)
 	require.Equal(t, int32(3), modifiedCount)
 
-	it, err = kv.ReadRange(ctx, table, BuildKey("p1", 3), BuildKey("p1", 6))
+	it, err = kv.ReadRange(ctx, table, BuildKey("p1", 3), BuildKey("p1", 6), false)
 	require.NoError(t, err)
 
 	v = readAllUsingIterator(t, it)
@@ -161,7 +161,7 @@ func testKeyValueStoreBasic(t *testing.T, kv KeyValueStore) {
 	err = kv.DeleteRange(ctx, table, BuildKey("p1", 3), BuildKey("p2", 6))
 	require.NoError(t, err)
 
-	it, err = kv.ReadRange(ctx, table, BuildKey("p1", 1), BuildKey("p1", 6))
+	it, err = kv.ReadRange(ctx, table, BuildKey("p1", 1), BuildKey("p1", 6), false)
 	require.NoError(t, err)
 
 	v = readAllUsingIterator(t, it)
@@ -332,7 +332,7 @@ func testKVBasic(t *testing.T, kv baseKVStore) {
 	require.Equal(t, []baseKeyValue{{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2))), Value: []byte("value2+2")}}, v)
 
 	// read range
-	it, err = kv.ReadRange(ctx, table, BuildKey("p1", 2), BuildKey("p1", 4))
+	it, err = kv.ReadRange(ctx, table, BuildKey("p1", 2), BuildKey("p1", 4), false)
 	require.NoError(t, err)
 
 	v = readAll(t, it)
@@ -353,7 +353,7 @@ func testKVBasic(t *testing.T, kv baseKVStore) {
 	require.NoError(t, err)
 	require.Equal(t, int32(3), modifiedCount)
 
-	it, err = kv.ReadRange(ctx, table, BuildKey("p1", 3), BuildKey("p1", 6))
+	it, err = kv.ReadRange(ctx, table, BuildKey("p1", 3), BuildKey("p1", 6), false)
 	require.NoError(t, err)
 
 	v = readAll(t, it)
@@ -383,7 +383,7 @@ func testKVBasic(t *testing.T, kv baseKVStore) {
 	err = kv.DeleteRange(ctx, table, BuildKey("p1", 3), BuildKey("p2", 6))
 	require.NoError(t, err)
 
-	it, err = kv.ReadRange(ctx, table, BuildKey("p1", 1), BuildKey("p1", 6))
+	it, err = kv.ReadRange(ctx, table, BuildKey("p1", 1), BuildKey("p1", 6), false)
 	require.NoError(t, err)
 
 	v = readAll(t, it)
