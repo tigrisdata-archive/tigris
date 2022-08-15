@@ -27,6 +27,7 @@ const (
 	ErrCodeInvalid                StoreErrCode = 0x00
 	ErrCodeDuplicateKey           StoreErrCode = 0x01
 	ErrCodeConflictingTransaction StoreErrCode = 0x02
+	ErrCodeTransactionMaxDuration StoreErrCode = 0x03
 )
 
 var (
@@ -34,6 +35,8 @@ var (
 	ErrDuplicateKey = NewStoreError(ErrCodeDuplicateKey, "duplicate key value, violates key constraint")
 	// ErrConflictingTransaction is returned when there are conflicting transactions.
 	ErrConflictingTransaction = NewStoreError(ErrCodeConflictingTransaction, "transaction not committed due to conflict with another transaction")
+	// ErrTransactionMaxDurationReached is returned when transaction running beyond 5seconds.
+	ErrTransactionMaxDurationReached = NewStoreError(ErrCodeTransactionMaxDuration, "transaction is old to perform reads or be committed")
 )
 
 type StoreError struct {

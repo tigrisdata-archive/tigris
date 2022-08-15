@@ -17,7 +17,9 @@ package filter
 import (
 	"fmt"
 
+	"github.com/buger/jsonparser"
 	"github.com/tigrisdata/tigris/schema"
+	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/tigrisdata/tigris/value"
 	"github.com/tigrisdata/tigris/lib/date"
 )
@@ -57,6 +59,8 @@ func (s *Selector) MatchesDoc(doc map[string]interface{}) bool {
 	case schema.DoubleType:
 		val = value.NewDoubleUsingFloat(v.(float64))
 	default:
+		// as this method is only intended for indexing store, so we only apply filter for string and double type
+		// otherwise we rely on indexing store to only return valid results.
 		return true
 	}
 
@@ -65,8 +69,20 @@ func (s *Selector) MatchesDoc(doc map[string]interface{}) bool {
 
 // Matches returns true if the input doc matches this filter.
 func (s *Selector) Matches(doc []byte) bool {
-	//ToDo: not implemented
-	return false
+	docValue, dtp, _, err := jsonparser.Get(doc, s.Field.Name())
+	if ulog.E(err) {
+		return false
+	}
+	if dtp == jsonparser.NotExist {
+		return false
+	}
+
+	val, err := value.NewValue(s.Field.DataType, docValue)
+	if ulog.E(err) {
+		return false
+	}
+
+	return s.Matcher.Matches(val)
 }
 
 func (s *Selector) ToSearchFilter() []string {

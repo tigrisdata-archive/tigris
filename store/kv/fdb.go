@@ -516,7 +516,17 @@ func (t *ftx) Read(_ context.Context, table []byte, key Key) (baseIterator, erro
 
 func (t *ftx) ReadRange(_ context.Context, table []byte, lKey Key, rKey Key, isSnapshot bool) (baseIterator, error) {
 	lk := getFDBKey(table, lKey)
-	rk := getFDBKey(table, rKey)
+	var rk fdb.Key
+	if rKey == nil {
+		// add a table boundary
+		rk1 := make([]byte, len(table)+1)
+		copy(rk1, table)
+		rk1[len(rk1)-1] = byte(0xFF)
+		rk = rk1
+	} else {
+		rk = getFDBKey(table, rKey)
+	}
+
 	kr := fdb.KeyRange{Begin: lk, End: rk}
 	ro := fdb.RangeOptions{}
 
@@ -616,6 +626,13 @@ func (i *fdbIterator) Next(kv *baseKeyValue) bool {
 	tkv, err := i.it.Get()
 	if ulog.E(err) {
 		i.err = err
+
+		var ep fdb.Error
+		if errors.As(err, &ep) {
+			if ep.Code == 1007 {
+				i.err = ErrTransactionMaxDurationReached
+			}
+		}
 		return false
 	}
 

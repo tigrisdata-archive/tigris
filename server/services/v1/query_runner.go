@@ -31,6 +31,7 @@ import (
 	"github.com/tigrisdata/tigris/query/update"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/cdc"
+	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/transaction"
@@ -42,6 +43,13 @@ import (
 // QueryRunner is responsible for executing the current query and return the response
 type QueryRunner interface {
 	Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error)
+}
+
+// ReadOnlyQueryRunner is the QueryRunner which decides inside the ReadOnly method if the query needs to be run inside
+// a transaction or can opt to just execute the query. This interface allows caller to control the state of the transaction
+// or can choose to execute without starting any transaction.
+type ReadOnlyQueryRunner interface {
+	ReadOnly(ctx context.Context, tenant *metadata.Tenant) (*Response, context.Context, error)
 }
 
 // QueryRunnerFactory is responsible for creating query runners for different queries
@@ -145,7 +153,24 @@ func NewBaseQueryRunner(encoder metadata.Encoder, cdcMgr *cdc.Manager, txMgr *tr
 	}
 }
 
-func (runner *BaseQueryRunner) GetDatabase(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, dbName string) (*metadata.Database, error) {
+// getDatabaseFromTenant is a helper method to get database from the tenant object. Returns a user facing error if
+// the database is not present.
+func (runner *BaseQueryRunner) getDatabaseFromTenant(ctx context.Context, tenant *metadata.Tenant, dbName string) (*metadata.Database, error) {
+	db, err := tenant.GetDatabase(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
+	if db == nil {
+		// database not found
+		return nil, api.Errorf(api.Code_NOT_FOUND, "database doesn't exist '%s'", dbName)
+	}
+
+	return db, nil
+}
+
+// getDatabase is a helper method to return database either from the transactional context for explicit transactions or
+// from the tenant object. Returns a user facing error if the database is not present.
+func (runner *BaseQueryRunner) getDatabase(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, dbName string) (*metadata.Database, error) {
 	if tx.Context().GetStagedDatabase() != nil {
 		// this means that some DDL operation has modified the database object, then we need to perform all the operations
 		// on this staged database.
@@ -165,7 +190,9 @@ func (runner *BaseQueryRunner) GetDatabase(ctx context.Context, tx transaction.T
 	return db, nil
 }
 
-func (runner *BaseQueryRunner) GetCollections(db *metadata.Database, collName string) (*schema.DefaultCollection, error) {
+// getCollection is a wrapper around getCollection method on the database object to return a user facing error if the
+// collection is not present.
+func (runner *BaseQueryRunner) getCollection(db *metadata.Database, collName string) (*schema.DefaultCollection, error) {
 	collection := db.GetCollection(collName)
 	if collection == nil {
 		return nil, api.Errorf(api.Code_NOT_FOUND, "collection doesn't exist '%s'", collName)
@@ -174,7 +201,8 @@ func (runner *BaseQueryRunner) GetCollections(db *metadata.Database, collName st
 	return collection, nil
 }
 
-func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection, documents [][]byte, insert bool) (*internal.Timestamp, [][]byte, error) {
+func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, db *metadata.Database,
+	coll *schema.DefaultCollection, documents [][]byte, insert bool) (*internal.Timestamp, [][]byte, error) {
 	var err error
 	var ts = internal.NewTimestamp()
 	var allKeys [][]byte
@@ -224,7 +252,8 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 	return ts, allKeys, err
 }
 
-func (runner *BaseQueryRunner) buildKeysUsingFilter(tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection, reqFilter []byte) ([]keys.Key, error) {
+func (runner *BaseQueryRunner) buildKeysUsingFilter(tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection,
+	reqFilter []byte) ([]keys.Key, error) {
 	filterFactory := filter.NewFactory(coll.QueryableFields)
 	filters, err := filterFactory.Factorize(reqFilter)
 	if err != nil {
@@ -251,14 +280,14 @@ type InsertQueryRunner struct {
 }
 
 func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.GetDatabase(ctx, tx, tenant, runner.req.GetDb())
+	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetDb())
 	if err != nil {
 		return nil, ctx, err
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
-	coll, err := runner.GetCollections(db, runner.req.GetCollection())
+	coll, err := runner.getCollection(db, runner.req.GetCollection())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -285,14 +314,14 @@ type ReplaceQueryRunner struct {
 }
 
 func (runner *ReplaceQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.GetDatabase(ctx, tx, tenant, runner.req.GetDb())
+	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetDb())
 	if err != nil {
 		return nil, ctx, err
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
-	coll, err := runner.GetCollections(db, runner.req.GetCollection())
+	coll, err := runner.getCollection(db, runner.req.GetCollection())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -316,14 +345,14 @@ type UpdateQueryRunner struct {
 
 func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	var ts = internal.NewTimestamp()
-	db, err := runner.GetDatabase(ctx, tx, tenant, runner.req.GetDb())
+	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetDb())
 	if err != nil {
 		return nil, ctx, err
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
-	collection, err := runner.GetCollections(db, runner.req.GetCollection())
+	collection, err := runner.getCollection(db, runner.req.GetCollection())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -393,14 +422,14 @@ type DeleteQueryRunner struct {
 
 func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	var ts = internal.NewTimestamp()
-	db, err := runner.GetDatabase(ctx, tx, tenant, runner.req.GetDb())
+	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetDb())
 	if err != nil {
 		return nil, ctx, err
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
-	collection, err := runner.GetCollections(db, runner.req.GetCollection())
+	collection, err := runner.getCollection(db, runner.req.GetCollection())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -430,78 +459,188 @@ type StreamingQueryRunner struct {
 	streaming Streaming
 }
 
-// Run is responsible for running/executing the query
-func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.GetDatabase(ctx, tx, tenant, runner.req.GetDb())
+type readerOptions struct {
+	from          keys.Key
+	ikeys         []keys.Key
+	table         []byte
+	noFilter      bool
+	inmemoryStore bool
+	filter        *filter.WrappedFilter
+	fieldFactory  *read.FieldFactory
+}
+
+func (runner *StreamingQueryRunner) buildReaderOptions(tenant *metadata.Tenant, db *metadata.Database, collection *schema.DefaultCollection) (readerOptions, error) {
+	var err error
+	var options = readerOptions{}
+	if options.filter, err = filter.NewFactory(collection.QueryableFields).WrappedFilter(runner.req.Filter); err != nil {
+		return options, err
+	}
+	if options.table, err = runner.encoder.EncodeTableName(tenant.GetNamespace(), db, collection); err != nil {
+		return options, err
+	}
+	if options.fieldFactory, err = read.BuildFields(runner.req.GetFields()); err != nil {
+		return options, err
+	}
+	if runner.req.Options != nil && len(runner.req.Options.Offset) > 0 {
+		if options.from, err = keys.FromBinary(options.table, runner.req.Options.Offset); err != nil {
+			return options, err
+		}
+	}
+
+	if filter.None(runner.req.Filter) {
+		options.noFilter = true
+	} else if options.ikeys, err = runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter); err != nil {
+		if !config.IsIndexingStoreReadEnabled() {
+			if options.from == nil {
+				// in this case, scan will happen from the beginning of the table.
+				options.from = keys.NewKey(options.table)
+			}
+		} else {
+			options.inmemoryStore = true
+		}
+	}
+
+	return options, nil
+}
+
+// ReadOnly is used by the read query runner to handle long-running reads. This method operates by starting a new
+// transaction when needed which means a single user request may end up creating multiple read only transactions.
+func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.Tenant) (*Response, context.Context, error) {
+	db, err := runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetDb())
 	if err != nil {
 		return nil, ctx, err
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
-	collection, err := runner.GetCollections(db, runner.req.GetCollection())
+	collection, err := runner.getCollection(db, runner.req.GetCollection())
 	if err != nil {
 		return nil, ctx, err
 	}
 
-	fieldFactory, err := read.BuildFields(runner.req.GetFields())
-	if ulog.E(err) {
+	options, err := runner.buildReaderOptions(tenant, db, collection)
+	if err != nil {
 		return nil, ctx, err
 	}
 
-	var rowReader RowReader
-	if filter.All(runner.req.GetFilter()) {
-		table, err := runner.encoder.EncodeTableName(tenant.GetNamespace(), db, collection)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if rowReader, err = MakeDatabaseRowReader(ctx, tx, []keys.Key{keys.NewKey(table)}); ulog.E(err) {
-			return nil, ctx, err
-		}
-	} else {
-		wrappedFilter, err := filter.NewFactory(collection.QueryableFields).WrappedFilter(runner.req.Filter)
-		if err != nil {
-			return nil, ctx, err
-		}
-
-		// or this is a read request that needs to be streamed after filtering the keys.
-		var iKeys []keys.Key
-		if iKeys, err = runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter); err == nil {
-			rowReader, err = MakeDatabaseRowReader(ctx, tx, iKeys)
-		} else {
-			rowReader, err = NewSearchReader(ctx, runner.searchStore, collection, qsearch.NewBuilder().
-				Filter(wrappedFilter).
-				PageSize(defaultPerPage).
-				Build())
-		}
-		if err != nil {
+	if options.inmemoryStore {
+		if err = runner.iterateOnIndexingStore(ctx, collection, options); err != nil {
 			return nil, ctx, err
 		}
 	}
 
-	if err = runner.iterate(ctx, rowReader, fieldFactory); err != nil {
-		return nil, ctx, err
-	}
+	for {
+		// A for loop is needed to recreate the transaction after exhausting the duration of the previous transaction.
+		// This is mainly needed for long-running transactions, otherwise reads should be small.
+		tx, err := runner.txMgr.StartTx(ctx)
+		if err != nil {
+			return nil, ctx, err
+		}
 
-	return &Response{}, ctx, nil
+		var last []byte
+		if last, err = runner.iterateOnKvStore(ctx, tx, options); err == nil {
+			_ = tx.Commit(ctx)
+			return &Response{}, ctx, nil
+		}
+		_ = tx.Rollback(ctx)
+
+		if err != kv.ErrTransactionMaxDurationReached {
+			return nil, ctx, nil
+		}
+
+		// We have received ErrTransactionMaxDurationReached i.e. 5 second transaction limit, so we need to retry the
+		// transaction.
+		options.from, _ = keys.FromBinary(options.table, last)
+	}
 }
 
-func (runner *StreamingQueryRunner) iterate(ctx context.Context, reader RowReader, fieldFactory *read.FieldFactory) error {
+// Run is responsible for running the read in the transaction started by the session manager. This doesn't do any retry
+// if we see ErrTransactionMaxDurationReached which is expected because we do not expect caller to do long reads in an
+// explicit transaction.
+func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
+	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetDb())
+	if err != nil {
+		return nil, ctx, err
+	}
+
+	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
+
+	collection, err := runner.getCollection(db, runner.req.GetCollection())
+	if err != nil {
+		return nil, ctx, err
+	}
+
+	options, err := runner.buildReaderOptions(tenant, db, collection)
+	if err != nil {
+		return nil, ctx, err
+	}
+
+	if options.inmemoryStore {
+		if err = runner.iterateOnIndexingStore(ctx, collection, options); err != nil {
+			return nil, ctx, err
+		}
+		return &Response{}, ctx, nil
+	} else {
+		if _, err = runner.iterateOnKvStore(ctx, tx, options); err != nil {
+			return nil, ctx, err
+		}
+		return &Response{}, ctx, nil
+	}
+}
+
+func (runner *StreamingQueryRunner) iterateOnKvStore(ctx context.Context, tx transaction.Tx, options readerOptions) ([]byte, error) {
+	var err error
+	var iter Iterator
+	reader := NewDatabaseReader(ctx, tx)
+	if len(options.ikeys) > 0 {
+		iter, err = reader.KeyIterator(options.ikeys)
+	} else if options.from != nil {
+		if iter, err = reader.ScanIterator(options.from); err == nil {
+			// pass it to filterable
+			iter, err = reader.FilteredRead(iter, options.filter)
+		}
+	} else {
+		if iter, err = reader.ScanTable(options.table); err == nil {
+			// pass it to filterable
+			iter, err = reader.FilteredRead(iter, options.filter)
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return runner.iterate(iter, options.fieldFactory)
+}
+
+func (runner *StreamingQueryRunner) iterateOnIndexingStore(ctx context.Context, collection *schema.DefaultCollection, options readerOptions) error {
+	rowReader := NewSearchReader(ctx, runner.searchStore, collection, qsearch.NewBuilder().
+		Filter(options.filter).
+		PageSize(defaultPerPage).
+		Build())
+
+	if _, err := runner.iterate(rowReader.Iterator(collection, options.filter), options.fieldFactory); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (runner *StreamingQueryRunner) iterate(iterator Iterator, fieldFactory *read.FieldFactory) ([]byte, error) {
 	limit, totalResults := int64(0), int64(0)
 	if runner.req.GetOptions() != nil {
 		limit = runner.req.GetOptions().Limit
 	}
 
+	var lastRowKey []byte
 	var row Row
-	for reader.Next(ctx, &row) {
+	for iterator.Next(&row) {
 		if limit > 0 && limit <= totalResults {
-			return nil
+			return lastRowKey, nil
 		}
 
 		newValue, err := fieldFactory.Apply(row.Data.RawData)
 		if ulog.E(err) {
-			return err
+			return lastRowKey, err
 		}
 
 		if err := runner.streaming.Send(&api.ReadResponse{
@@ -512,13 +651,13 @@ func (runner *StreamingQueryRunner) iterate(ctx context.Context, reader RowReade
 			},
 			ResumeToken: row.Key,
 		}); ulog.E(err) {
-			return err
+			return lastRowKey, err
 		}
-
+		lastRowKey = row.Key
 		totalResults++
 	}
 
-	return reader.Err()
+	return lastRowKey, iterator.Interrupted()
 }
 
 // SearchQueryRunner is a runner used for Queries that are reads and needs to return result in streaming fashion
@@ -529,15 +668,17 @@ type SearchQueryRunner struct {
 	streaming SearchStreaming
 }
 
-func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.GetDatabase(ctx, tx, tenant, runner.req.GetDb())
+// ReadOnly on search query runner is implemented as search queries do not need to be inside a transaction; in fact,
+// there is no need to start any transaction for search queries as they are simply forwarded to the indexing store.
+func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.Tenant) (*Response, context.Context, error) {
+	db, err := runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetDb())
 	if err != nil {
 		return nil, ctx, err
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
-	collection, err := runner.GetCollections(db, runner.req.GetCollection())
+	collection, err := runner.getCollection(db, runner.req.GetCollection())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -583,11 +724,12 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		SortOrder(sortOrder).
 		Build()
 
-	var rowReader *SearchRowReader
+	searchReader := NewSearchReader(ctx, runner.searchStore, collection, searchQ)
+	var iterator *FilterableSearchIterator
 	if runner.req.Page != 0 {
-		rowReader, err = SinglePageSearchReader(ctx, runner.searchStore, collection, searchQ, runner.req.Page)
+		iterator = searchReader.SinglePageIterator(collection, wrappedF, runner.req.Page)
 	} else {
-		rowReader, err = NewSearchReader(ctx, runner.searchStore, collection, searchQ)
+		iterator = searchReader.Iterator(collection, wrappedF)
 	}
 	if err != nil {
 		return nil, ctx, err
@@ -600,7 +742,16 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	for {
 		var resp = &api.SearchResponse{}
 		var row Row
-		for rowReader.Next(ctx, &row) {
+		for iterator.Next(&row) {
+			if searchQ.ReadFields != nil {
+				// apply field selection
+				newValue, err := searchQ.ReadFields.Apply(row.Data.RawData)
+				if ulog.E(err) {
+					return nil, ctx, err
+				}
+				row.Data.RawData = newValue
+			}
+
 			resp.Hits = append(resp.Hits, &api.SearchHit{
 				Data: row.Data.RawData,
 				Metadata: &api.SearchHitMeta{
@@ -614,14 +765,14 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			}
 		}
 
-		resp.Facets = rowReader.getFacets()
+		resp.Facets = iterator.getFacets()
 		if totalPages == nil {
-			tp := int32(math.Ceil(float64(rowReader.getTotalFound()) / float64(pageSize)))
+			tp := int32(math.Ceil(float64(iterator.getTotalFound()) / float64(pageSize)))
 			totalPages = &tp
 		}
 
 		resp.Meta = &api.SearchMetadata{
-			Found:      rowReader.getTotalFound(),
+			Found:      iterator.getTotalFound(),
 			TotalPages: *totalPages,
 			Page: &api.Page{
 				Current: pageNo,
@@ -633,8 +784,8 @@ func (runner *SearchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		// if some hits, got an error, send current hits and then error (will be zero hits next time)
 		// if some hits, no error, continue to send response
 		if len(resp.Hits) == 0 {
-			if rowReader.err != nil {
-				return nil, ctx, rowReader.err
+			if iterator.Interrupted() != nil {
+				return nil, ctx, iterator.Interrupted()
 			}
 			if pageNo > defaultPageNo && pageNo > runner.req.Page {
 				break
@@ -667,7 +818,8 @@ func (runner *SearchQueryRunner) getSearchFields(coll *schema.DefaultCollection)
 				return nil, err
 			}
 			if cf.DataType != schema.StringType {
-				return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "`%s` is not a searchable field. Only string fields can be queried", sf)
+				return nil, api.Errorf(api.Code_INVALID_ARGUMENT,
+					"`%s` is not a searchable field. Only string fields can be queried", sf)
 			}
 		}
 	}
@@ -686,7 +838,8 @@ func (runner *SearchQueryRunner) getFacetFields(coll *schema.DefaultCollection) 
 			return qsearch.Facets{}, err
 		}
 		if !cf.Faceted {
-			return qsearch.Facets{}, api.Errorf(api.Code_INVALID_ARGUMENT, "Cannot generate facets for `%s`. Faceting is only supported for numeric and text fields", ff.Name)
+			return qsearch.Facets{}, api.Errorf(api.Code_INVALID_ARGUMENT,
+				"Cannot generate facets for `%s`. Faceting is only supported for numeric and text fields", ff.Name)
 		}
 	}
 
@@ -752,12 +905,12 @@ type SubscribeQueryRunner struct {
 }
 
 func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.GetDatabase(ctx, tx, tenant, runner.req.GetDb())
+	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetDb())
 	if ulog.E(err) {
 		return nil, ctx, err
 	}
 
-	collection, err := runner.GetCollections(db, runner.req.GetCollection())
+	collection, err := runner.getCollection(db, runner.req.GetCollection())
 	if ulog.E(err) {
 		return nil, ctx, err
 	}
@@ -865,7 +1018,7 @@ func (runner *CollectionQueryRunner) SetDescribeCollectionReq(describe *api.Desc
 
 func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	if runner.dropReq != nil {
-		db, err := runner.GetDatabase(ctx, tx, tenant, runner.dropReq.GetDb())
+		db, err := runner.getDatabase(ctx, tx, tenant, runner.dropReq.GetDb())
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -884,7 +1037,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			status: DroppedStatus,
 		}, ctx, nil
 	} else if runner.createOrUpdateReq != nil {
-		db, err := runner.GetDatabase(ctx, tx, tenant, runner.createOrUpdateReq.GetDb())
+		db, err := runner.getDatabase(ctx, tx, tenant, runner.createOrUpdateReq.GetDb())
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -917,7 +1070,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			status: CreatedStatus,
 		}, ctx, nil
 	} else if runner.listReq != nil {
-		db, err := runner.GetDatabase(ctx, tx, tenant, runner.listReq.GetDb())
+		db, err := runner.getDatabase(ctx, tx, tenant, runner.listReq.GetDb())
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -935,13 +1088,13 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			},
 		}, ctx, nil
 	} else if runner.describeReq != nil {
-		db, err := runner.GetDatabase(ctx, tx, tenant, runner.describeReq.GetDb())
+		db, err := runner.getDatabase(ctx, tx, tenant, runner.describeReq.GetDb())
 		if err != nil {
 			return nil, ctx, err
 		}
 		namespace := metrics.GetNamespace(ctx)
 
-		coll, err := runner.GetCollections(db, runner.describeReq.GetCollection())
+		coll, err := runner.getCollection(db, runner.describeReq.GetCollection())
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -1031,7 +1184,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			},
 		}, ctx, nil
 	} else if runner.describe != nil {
-		db, err := runner.GetDatabase(ctx, tx, tenant, runner.describe.GetDb())
+		db, err := runner.getDatabase(ctx, tx, tenant, runner.describe.GetDb())
 		if err != nil {
 			return nil, ctx, err
 		}
