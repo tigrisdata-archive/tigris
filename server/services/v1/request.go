@@ -44,7 +44,6 @@ type SubscribeStreaming interface {
 // ReqOptions are options used by queryLifecycle to execute a query
 type ReqOptions struct {
 	txCtx              *api.TransactionCtx
-	queryRunner        QueryRunner
 	metadataChange     bool
 	instantVerTracking bool
 }
