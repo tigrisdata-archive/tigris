@@ -98,7 +98,7 @@ func testKeyValueStoreBasic(t *testing.T, kv KeyValueStore) {
 
 	// replace individual record
 	replacedValue2 := internal.NewTableData([]byte("value2+2"))
-	err = kv.Replace(ctx, table, BuildKey("p1", 2), replacedValue2)
+	err = kv.Replace(ctx, table, BuildKey("p1", 2), replacedValue2, false)
 	require.NoError(t, err)
 
 	it, err = kv.Read(ctx, table, BuildKey("p1", 2))
@@ -276,7 +276,7 @@ func benchKV(t *testing.T, kv baseKVStore) {
 					require.NoError(t, err)
 
 					key, doc := createDocument(t)
-					err = tx.Replace(ctx, table, BuildKey(key), doc)
+					err = tx.Replace(ctx, table, BuildKey(key), doc, false)
 					require.NoError(t, err)
 					require.NoError(t, tx.Commit(ctx))
 					atomic.AddInt64(&ops, 1)
@@ -322,7 +322,7 @@ func testKVBasic(t *testing.T, kv baseKVStore) {
 	require.Equal(t, []baseKeyValue{{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2))), Value: []byte("value2")}}, v)
 
 	// replace individual record
-	err = kv.Replace(ctx, table, BuildKey("p1", 2), []byte("value2+2"))
+	err = kv.Replace(ctx, table, BuildKey("p1", 2), []byte("value2+2"), false)
 	require.NoError(t, err)
 
 	it, err = kv.Read(ctx, table, BuildKey("p1", 2))

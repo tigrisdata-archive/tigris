@@ -15,6 +15,7 @@
 package value
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"math"
@@ -217,14 +218,14 @@ func (s *StringValue) String() string {
 	return string(*s)
 }
 
-type BytesValue string
+type BytesValue []byte
 
 func NewBytesValue(v []byte) *BytesValue {
 	i := BytesValue(v)
 	return &i
 }
 
-func (s *BytesValue) CompareTo(v Value) (int, error) {
+func (b *BytesValue) CompareTo(v Value) (int, error) {
 	if v == nil {
 		return 1, nil
 	}
@@ -234,25 +235,19 @@ func (s *BytesValue) CompareTo(v Value) (int, error) {
 		return -2, fmt.Errorf("wrong type compared ")
 	}
 
-	if *s == *converted {
-		return 0, nil
-	} else if *s < *converted {
-		return -1, nil
-	} else {
-		return 1, nil
-	}
+	return bytes.Compare(*b, *converted), nil
 }
 
-func (s *BytesValue) AsInterface() interface{} {
-	return []byte(*s)
+func (b *BytesValue) AsInterface() interface{} {
+	return []byte(*b)
 }
 
-func (s *BytesValue) String() string {
-	if s == nil {
+func (b *BytesValue) String() string {
+	if b == nil {
 		return ""
 	}
 
-	return string(*s)
+	return string(*b)
 }
 
 type BoolValue bool

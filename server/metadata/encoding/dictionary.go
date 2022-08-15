@@ -187,7 +187,7 @@ func (r *reservedSubspace) allocateToken(ctx context.Context, tx transaction.Tx,
 		return 0, err
 	}
 
-	if err := tx.Replace(ctx, key, internal.NewTableData(UInt32ToByte(newReservedValue))); err != nil {
+	if err := tx.Replace(ctx, key, internal.NewTableData(UInt32ToByte(newReservedValue)), false); err != nil {
 		log.Debug().Str("key", key.String()).Uint32("value", newReservedValue).Msg("allocating token failed")
 		return 0, err
 	}
@@ -331,7 +331,7 @@ func (k *MetadataDictionary) delete(ctx context.Context, tx transaction.Tx, toDe
 	log.Debug().Str("key", toDeleteKey.String()).Str("type", encName).Msg("existing entry deletion succeed")
 
 	// now do insert because we need to fail if token is already assigned
-	if err := tx.Replace(ctx, newKey, internal.NewTableData(UInt32ToByte(newValue))); err != nil {
+	if err := tx.Replace(ctx, newKey, internal.NewTableData(UInt32ToByte(newValue)), false); err != nil {
 		log.Debug().Str("key", newKey.String()).Uint32("value", newValue).Err(err).Str("type", encName).Msg("encoding failed")
 		return err
 	}

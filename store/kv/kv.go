@@ -34,7 +34,7 @@ type Future fdb.FutureByteSlice
 
 type KV interface {
 	Insert(ctx context.Context, table []byte, key Key, data *internal.TableData) error
-	Replace(ctx context.Context, table []byte, key Key, data *internal.TableData) error
+	Replace(ctx context.Context, table []byte, key Key, data *internal.TableData, isUpdate bool) error
 	Delete(ctx context.Context, table []byte, key Key) error
 	DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key) error
 	Read(ctx context.Context, table []byte, key Key) (Iterator, error)
@@ -199,18 +199,18 @@ func (m *KeyValueStoreImplWithMetrics) Insert(ctx context.Context, table []byte,
 	return
 }
 
-func (k *KeyValueStoreImpl) Replace(ctx context.Context, table []byte, key Key, data *internal.TableData) error {
+func (k *KeyValueStoreImpl) Replace(ctx context.Context, table []byte, key Key, data *internal.TableData, isUpdate bool) error {
 	enc, err := internal.Encode(data)
 	if err != nil {
 		return err
 	}
 
-	return k.fdbkv.Replace(ctx, table, key, enc)
+	return k.fdbkv.Replace(ctx, table, key, enc, isUpdate)
 }
 
-func (m *KeyValueStoreImplWithMetrics) Replace(ctx context.Context, table []byte, key Key, data *internal.TableData) (err error) {
+func (m *KeyValueStoreImplWithMetrics) Replace(ctx context.Context, table []byte, key Key, data *internal.TableData, isUpdate bool) (err error) {
 	m.measure(ctx, "Replace", func() error {
-		err = m.kv.Replace(ctx, table, key, data)
+		err = m.kv.Replace(ctx, table, key, data, isUpdate)
 		return err
 	})
 	return
@@ -433,18 +433,18 @@ func (m *TxImplWithMetrics) Insert(ctx context.Context, table []byte, key Key, d
 	return
 }
 
-func (tx *TxImpl) Replace(ctx context.Context, table []byte, key Key, data *internal.TableData) error {
+func (tx *TxImpl) Replace(ctx context.Context, table []byte, key Key, data *internal.TableData, isUpdate bool) error {
 	enc, err := internal.Encode(data)
 	if err != nil {
 		return err
 	}
 
-	return tx.ftx.Replace(ctx, table, key, enc)
+	return tx.ftx.Replace(ctx, table, key, enc, isUpdate)
 }
 
-func (m *TxImplWithMetrics) Replace(ctx context.Context, table []byte, key Key, data *internal.TableData) (err error) {
+func (m *TxImplWithMetrics) Replace(ctx context.Context, table []byte, key Key, data *internal.TableData, isUpdate bool) (err error) {
 	m.measure(ctx, "Replace", func() error {
-		err = m.tx.Replace(ctx, table, key, data)
+		err = m.tx.Replace(ctx, table, key, data, isUpdate)
 		return err
 	})
 	return

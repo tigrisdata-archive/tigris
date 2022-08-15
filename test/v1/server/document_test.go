@@ -1147,6 +1147,151 @@ func TestUpdate_MultipleRows(t *testing.T) {
 		outDocument)
 }
 
+func TestUpdate_OnAnyField(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	inputDocument := []Doc{
+		{
+			"pkey_int":           110,
+			"int_value":          1000,
+			"string_value":       "simple_insert110",
+			"bool_value":         true,
+			"double_value":       1000.000001,
+			"bytes_value":        []byte(`"simple_insert110"`),
+			"added_string_value": "before",
+		},
+		{
+			"pkey_int":           120,
+			"int_value":          2000,
+			"string_value":       "simple_insert120_130",
+			"bool_value":         false,
+			"double_value":       2000.222,
+			"bytes_value":        []byte(`"simple_insert120"`),
+			"added_string_value": "before",
+		},
+		{
+			"pkey_int":           130,
+			"int_value":          3000,
+			"string_value":       "simple_insert120_130",
+			"bool_value":         true,
+			"double_value":       3000.999999,
+			"bytes_value":        []byte(`"simple_insert130"`),
+			"added_string_value": "before",
+		},
+	}
+
+	cases := []struct {
+		filter   Map
+		modified int
+		changed  []int
+	}{
+		{
+			Map{
+				"filter": Map{
+					"int_value": 1000,
+				},
+			},
+			1,
+			[]int{0},
+		}, {
+			Map{
+				"filter": Map{
+					"string_value": "simple_insert110",
+				},
+			},
+			1,
+			[]int{0},
+		}, {
+			Map{
+				"filter": Map{
+					"double_value": 2000.222,
+				},
+			},
+			1,
+			[]int{1},
+		}, {
+			Map{
+				"filter": Map{
+					"string_value": "simple_insert120_130",
+				},
+			},
+			2,
+			[]int{1, 2},
+		},
+	}
+	for _, c := range cases {
+		// should always succeed with mustNotExists as false
+		insertDocuments(t, db, coll, inputDocument, false).
+			Status(http.StatusOK)
+
+		readFilter := Map{
+			"$or": []Doc{
+				{"string_value": "simple_insert110"},
+				{"int_value": 2000},
+				{"double_value": 3000.999999},
+			},
+		}
+		readAndValidate(t,
+			db,
+			coll,
+			readFilter,
+			nil,
+			inputDocument)
+
+		updateByFilter(t,
+			db,
+			coll,
+			c.filter,
+			Map{
+				"fields": Map{
+					"$set": Map{
+						"added_string_value": "after",
+					},
+				},
+			}).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status", "updated").
+			ValueEqual("modified_count", c.modified)
+
+		// read all documents back
+		testUpdateOnAnyField(t, db, coll, readFilter, inputDocument, c.changed)
+	}
+}
+
+func testUpdateOnAnyField(t *testing.T, db string, collection string, filter Map, input []Doc, changed []int) {
+	out := readByFilter(t, db, collection, filter, nil)
+
+	var notChanged []int
+	for i := range input {
+		found := false
+		for _, c := range changed {
+			if i == c {
+				found = true
+			}
+		}
+		if found {
+			continue
+		}
+		notChanged = append(notChanged, i)
+	}
+
+	for _, i := range changed {
+		var data map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(out[i]["result"], &data))
+
+		var doc map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(data["data"], &doc))
+
+		require.Equal(t, "\"after\"", string(doc["added_string_value"]))
+	}
+
+	for _, i := range notChanged {
+		validateInputDocToRes(t, out[i], input[i])
+	}
+}
+
 func TestDelete_BadRequest(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)
@@ -1382,6 +1527,78 @@ func TestRead_BadRequest(t *testing.T) {
 		}
 		testError(resp, c.status, code, c.expMessage)
 	}
+}
+
+func TestDelete_OnAnyField(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	inputDocument := []Doc{
+		{
+			"pkey_int":     50,
+			"int_value":    50,
+			"string_value": "simple_insert50",
+			"bytes_value":  []byte(`"simple_insert50"`),
+		},
+		{
+			"pkey_int":     60,
+			"int_value":    60,
+			"string_value": "simple_insert60",
+			"bytes_value":  []byte(`"simple_insert60"`),
+		},
+		{
+			"pkey_int":     70,
+			"int_value":    70,
+			"string_value": "simple_insert70",
+			"double_value": 1.234,
+		},
+	}
+
+	// should always succeed with mustNotExists as false
+	insertDocuments(t, db, coll, inputDocument, false).
+		Status(http.StatusOK)
+
+	readFilter := Map{
+		"$or": []Doc{
+			{"int_value": 50},
+			{"string_value": "simple_insert60"},
+			{"double_value": 1.234},
+		},
+	}
+
+	readAndValidate(t,
+		db,
+		coll,
+		readFilter,
+		nil,
+		inputDocument)
+
+	deleteByFilter(t, db, coll, Map{
+		"filter": Map{
+			"$or": []Doc{
+				{"int_value": 50},
+				{"double_value": 1.234},
+			},
+		},
+	}).Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("status", "deleted")
+
+	readAndValidate(t,
+		db,
+		coll,
+		readFilter,
+		nil,
+		[]Doc{
+			{
+				"pkey_int":     60,
+				"int_value":    60,
+				"string_value": "simple_insert60",
+				"bytes_value":  []byte(`"simple_insert60"`),
+			},
+		},
+	)
 }
 
 func TestRead_MultipleRows(t *testing.T) {
@@ -1678,12 +1895,16 @@ func readAndValidate(t *testing.T, db string, collection string, filter Map, fie
 	readResp := readByFilter(t, db, collection, filter, fields)
 	require.Equal(t, len(inputDocument), len(readResp))
 	for i := 0; i < len(inputDocument); i++ {
-		var doc map[string]json.RawMessage
-		require.NoError(t, json.Unmarshal(readResp[i]["result"], &doc))
-
-		var actualDoc = []byte(doc["data"])
-		expDoc, err := json.Marshal(inputDocument[i])
-		require.NoError(t, err)
-		require.JSONEqf(t, string(expDoc), string(actualDoc), "exp '%s' actual '%s'", string(expDoc), string(actualDoc))
+		validateInputDocToRes(t, readResp[i], inputDocument[i])
 	}
+}
+
+func validateInputDocToRes(t *testing.T, readResp map[string]json.RawMessage, input Doc) {
+	var doc map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(readResp["result"], &doc))
+
+	var actualDoc = []byte(doc["data"])
+	expDoc, err := json.Marshal(input)
+	require.NoError(t, err)
+	require.JSONEqf(t, string(expDoc), string(actualDoc), "exp '%s' actual '%s'", string(expDoc), string(actualDoc))
 }

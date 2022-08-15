@@ -26,7 +26,7 @@ type baseKeyValue struct {
 
 type baseKV interface {
 	Insert(ctx context.Context, table []byte, key Key, data []byte) error
-	Replace(ctx context.Context, table []byte, key Key, data []byte) error
+	Replace(ctx context.Context, table []byte, key Key, data []byte, isUpdate bool) error
 	Delete(ctx context.Context, table []byte, key Key) error
 	DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key) error
 	Read(ctx context.Context, table []byte, key Key) (baseIterator, error)

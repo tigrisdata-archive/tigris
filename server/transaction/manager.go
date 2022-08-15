@@ -40,7 +40,7 @@ type BaseTx interface {
 	Context() *SessionCtx
 	GetTxCtx() *api.TransactionCtx
 	Insert(ctx context.Context, key keys.Key, data *internal.TableData) error
-	Replace(ctx context.Context, key keys.Key, data *internal.TableData) error
+	Replace(ctx context.Context, key keys.Key, data *internal.TableData, isUpdate bool) error
 	Update(ctx context.Context, key keys.Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error)
 	Delete(ctx context.Context, key keys.Key) error
 	Read(ctx context.Context, key keys.Key) (kv.Iterator, error)
@@ -179,7 +179,7 @@ func (s *TxSession) Insert(ctx context.Context, key keys.Key, data *internal.Tab
 	return s.kTx.Insert(ctx, key.Table(), kv.BuildKey(key.IndexParts()...), data)
 }
 
-func (s *TxSession) Replace(ctx context.Context, key keys.Key, data *internal.TableData) error {
+func (s *TxSession) Replace(ctx context.Context, key keys.Key, data *internal.TableData, isUpdate bool) error {
 	s.Lock()
 	defer s.Unlock()
 
@@ -187,7 +187,7 @@ func (s *TxSession) Replace(ctx context.Context, key keys.Key, data *internal.Ta
 		return err
 	}
 
-	return s.kTx.Replace(ctx, key.Table(), kv.BuildKey(key.IndexParts()...), data)
+	return s.kTx.Replace(ctx, key.Table(), kv.BuildKey(key.IndexParts()...), data, isUpdate)
 }
 
 func (s *TxSession) Update(ctx context.Context, key keys.Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error) {
