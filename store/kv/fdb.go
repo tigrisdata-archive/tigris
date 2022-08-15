@@ -155,9 +155,9 @@ func (d *fdbkv) Insert(ctx context.Context, table []byte, key Key, data []byte) 
 	return err
 }
 
-func (d *fdbkv) Replace(ctx context.Context, table []byte, key Key, data []byte) error {
+func (d *fdbkv) Replace(ctx context.Context, table []byte, key Key, data []byte, isUpdate bool) error {
 	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return nil, (&ftx{d: d, tx: &tr}).Replace(ctx, table, key, data)
+		return nil, (&ftx{d: d, tx: &tr}).Replace(ctx, table, key, data, isUpdate)
 	})
 	return err
 }
@@ -292,11 +292,11 @@ func (b *fbatch) Insert(ctx context.Context, table []byte, key Key, data []byte)
 	return b.tx.Insert(ctx, table, key, data)
 }
 
-func (b *fbatch) Replace(ctx context.Context, table []byte, key Key, data []byte) error {
+func (b *fbatch) Replace(ctx context.Context, table []byte, key Key, data []byte, isUpdate bool) error {
 	if err := b.flushBatch(ctx, key, nil, data); err != nil {
 		return err
 	}
-	return b.tx.Replace(ctx, table, key, data)
+	return b.tx.Replace(ctx, table, key, data, isUpdate)
 }
 
 func (b *fbatch) Delete(ctx context.Context, table []byte, key Key) error {
@@ -401,12 +401,16 @@ func (t *ftx) Insert(ctx context.Context, table []byte, key Key, data []byte) er
 	return err
 }
 
-func (t *ftx) Replace(ctx context.Context, table []byte, key Key, data []byte) error {
+func (t *ftx) Replace(ctx context.Context, table []byte, key Key, data []byte, isUpdate bool) error {
 	listener := GetEventListener(ctx)
 	k := getFDBKey(table, key)
 
 	t.tx.Set(k, data)
-	listener.OnSet(ReplaceEvent, table, k, data)
+	if isUpdate {
+		listener.OnSet(UpdateEvent, table, k, data)
+	} else {
+		listener.OnSet(ReplaceEvent, table, k, data)
+	}
 
 	log.Debug().Str("table", string(table)).Interface("key", key).Msg("tx Replace")
 

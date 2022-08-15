@@ -81,7 +81,7 @@ func (g *TableKeyGenerator) generateCounter(ctx context.Context, tx transaction.
 		return 0, err
 	}
 
-	if err := tx.Replace(ctx, key, internal.NewTableData(encoding.UInt32ToByte(id))); err != nil {
+	if err := tx.Replace(ctx, key, internal.NewTableData(encoding.UInt32ToByte(id)), false); err != nil {
 		return 0, err
 	}
 

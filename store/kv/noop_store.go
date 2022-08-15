@@ -50,7 +50,7 @@ type NoopKV struct{}
 func (n *NoopKV) Insert(ctx context.Context, table []byte, key Key, data *internal.TableData) error {
 	return nil
 }
-func (n *NoopKV) Replace(ctx context.Context, table []byte, key Key, data *internal.TableData) error {
+func (n *NoopKV) Replace(ctx context.Context, table []byte, key Key, data *internal.TableData, isUpdate bool) error {
 	return nil
 }
 func (n *NoopKV) Delete(ctx context.Context, table []byte, key Key) error                 { return nil }

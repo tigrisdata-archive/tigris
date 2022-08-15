@@ -178,9 +178,6 @@ func TestClientCollectionTx(t *testing.T) {
 		require.NoError(t, err)
 		it.Close()
 
-		_, err = c.DeleteAll(ctx)
-		require.NoError(t, err)
-
 		pd, err := c.ReadOne(ctx, filter.Eq("Key1", "aaa"))
 		require.NoError(t, err)
 		require.Equal(t, d1, pd)
@@ -192,7 +189,6 @@ func TestClientCollectionTx(t *testing.T) {
 
 		_, err = c.Insert(ctx, &Coll1{Key1: "aaa", Field1: 567})
 		require.NoError(t, err)
-
 		return nil
 	})
 	if err != nil && err.Error() == "transaction not committed due to conflict with another transaction" {

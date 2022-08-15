@@ -18,10 +18,10 @@ import (
 	"fmt"
 
 	"github.com/buger/jsonparser"
+	"github.com/tigrisdata/tigris/lib/date"
 	"github.com/tigrisdata/tigris/schema"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/tigrisdata/tigris/value"
-	"github.com/tigrisdata/tigris/lib/date"
 )
 
 // Selector is a condition defined inside a filter. It has a field which corresponding the field on which condition
@@ -110,7 +110,6 @@ func (s *Selector) ToSearchFilter() []string {
 		if nsec, err := date.ToUnixNano(schema.DateTimeFormat, v.String()); err == nil {
 			return []string{fmt.Sprintf(op, s.Field.Name(), nsec)}
 		}
-
 	}
 	return []string{fmt.Sprintf(op, s.Field.Name(), v.AsInterface())}
 }
