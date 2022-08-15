@@ -834,6 +834,11 @@ func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 		if ep.Code != 1004 && ep.Code != 1031 && ulog.E(err) {
 			return nil, ctx, err
 		}
+
+		// check for client disconnect
+		if runner.streaming.Context().Err() != nil {
+			break
+		}
 	}
 
 	return &Response{}, ctx, nil
