@@ -51,19 +51,36 @@ func mergeTags(tagSets ...map[string]string) map[string]string {
 	return res
 }
 
-func getErrorTags(err error) map[string]string {
-	var tigrisErr *api.TigrisError
+func getFdbError(err error) (string, bool) {
 	var fdbErr fdb.Error
 	if errors.As(err, &fdbErr) {
+		return strconv.Itoa(fdbErr.Code), true
+	}
+	return "", false
+}
+
+func getTigrisError(err error) (string, bool) {
+	var tigrisErr *api.TigrisError
+	if errors.As(err, &tigrisErr) {
+		return tigrisErr.Code.String(), true
+	}
+	return "", false
+}
+
+func getErrorTags(err error) map[string]string {
+	value, isFdbError := getFdbError(err)
+	if isFdbError {
 		return map[string]string{
 			"error_source": "fdb",
-			"error_value":  strconv.Itoa(fdbErr.Code),
+			"error_value":  value,
 		}
 	}
-	if errors.As(err, &tigrisErr) {
+
+	value, isTigrisError := getTigrisError(err)
+	if isTigrisError {
 		return map[string]string{
 			"error_source": "tigris_server",
-			"error_value":  tigrisErr.Code.String(),
+			"error_value":  value,
 		}
 	}
 	// TODO: handle search errors
