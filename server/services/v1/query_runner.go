@@ -17,11 +17,9 @@ package v1
 import (
 	"bytes"
 	"context"
-	"errors"
 	"math"
 	"time"
 
-	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/internal"
@@ -827,11 +825,7 @@ func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 		}
 
 		err = tickerTx.Commit(ctx)
-		var ep fdb.Error
-		errors.As(err, &ep)
-
-		// ignore timed_out (1004) and transaction_timed_out (1031) error codes
-		if ep.Code != 1004 && ep.Code != 1031 && ulog.E(err) {
+		if !kv.IsTimedOut(err) && ulog.E(err) {
 			return nil, ctx, err
 		}
 

@@ -14,7 +14,12 @@
 
 package kv
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+
+	"github.com/apple/foundationdb/bindings/go/src/fdb"
+)
 
 type StoreErrCode byte
 
@@ -42,4 +47,16 @@ func NewStoreError(code StoreErrCode, msg string, args ...interface{}) error {
 
 func (se StoreError) Error() string {
 	return se.msg
+}
+
+func IsTimedOut(err error) bool {
+	var ep fdb.Error
+	if !errors.As(err, &ep) {
+		return false
+	}
+
+	// from https://apple.github.io/foundationdb/api-error-codes.html
+	// 1004 timed_out
+	// 1031 transaction_timed_out
+	return ep.Code == 1004 || ep.Code == 1031
 }
