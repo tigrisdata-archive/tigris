@@ -27,15 +27,16 @@ type ServerConfig struct {
 }
 
 type Config struct {
-	Log          log.LogConfig
-	Server       ServerConfig    `yaml:"server" json:"server"`
-	Auth         AuthConfig      `yaml:"auth" json:"auth"`
-	Cdc          CdcConfig       `yaml:"cdc" json:"cdc"`
-	Search       SearchConfig    `yaml:"search" json:"search"`
-	Tracing      TracingConfig   `yaml:"tracing" json:"tracing"`
-	Profiling    ProfilingConfig `yaml:"profiling" json:"profiling"`
-	FoundationDB FoundationDBConfig
-	Quota        QuotaConfig
+	Log           log.LogConfig
+	Server        ServerConfig    `yaml:"server" json:"server"`
+	Auth          AuthConfig      `yaml:"auth" json:"auth"`
+	Cdc           CdcConfig       `yaml:"cdc" json:"cdc"`
+	Search        SearchConfig    `yaml:"search" json:"search"`
+	Tracing       TracingConfig   `yaml:"tracing" json:"tracing"`
+	Profiling     ProfilingConfig `yaml:"profiling" json:"profiling"`
+	FoundationDB  FoundationDBConfig
+	Quota         QuotaConfig
+	Observability ObservabilityConfig `yaml:"observability" json:"observability"`
 }
 
 type AuthConfig struct {
@@ -95,6 +96,14 @@ type SearchMetricsConfig struct {
 	ResponseTime bool `mapstructure:"response_time" yaml:"response_time" json:"response_time"`
 }
 
+type ObservabilityConfig struct {
+	Provider                   string `yaml:"provider" json:"provider"`
+	EnableObservabilityService bool   `yaml:"enable_observability_service" json:"enable_observability_service"`
+	ApiKey                     string `yaml:"api_key" json:"api_key"`
+	AppKey                     string `yaml:"app_key" json:"app_key"`
+	ProviderUrl                string `yaml:"provider_url" json:"provider_url"`
+}
+
 var DefaultConfig = Config{
 	Log: log.LogConfig{
 		Level:      "info",
@@ -141,6 +150,9 @@ var DefaultConfig = Config{
 		WriteThroughputLimit: 10000000,    // bytes per second
 		ReadThroughputLimit:  10000000,    // bytes per second
 		DataSizeLimit:        10000000000, // bytes
+	},
+	Observability: ObservabilityConfig{
+		EnableObservabilityService: false,
 	},
 }
 
