@@ -21,13 +21,15 @@ const (
 	UpdatedAt
 	Metadata
 	IdToSearchKey
+	DateSearchKeyPrefix
 )
 
 var ReservedFields = [...]string{
-	CreatedAt:     "created_at",
-	UpdatedAt:     "updated_at",
-	Metadata:      "metadata",
-	IdToSearchKey: "_tigris_id",
+	CreatedAt:           "created_at",
+	UpdatedAt:           "updated_at",
+	Metadata:            "metadata",
+	IdToSearchKey:       "_tigris_id",
+	DateSearchKeyPrefix: "_tigris_date_",
 }
 
 func IsReservedField(name string) bool {
@@ -38,4 +40,8 @@ func IsReservedField(name string) bool {
 	}
 
 	return false
+}
+
+func GetShadowedDateKey(key string) string {
+	return ReservedFields[DateSearchKeyPrefix] + key
 }

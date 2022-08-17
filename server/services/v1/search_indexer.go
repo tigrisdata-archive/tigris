@@ -24,7 +24,9 @@ import (
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	"github.com/apple/foundationdb/bindings/go/src/fdb/subspace"
 	jsoniter "github.com/json-iterator/go"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/internal"
+	"github.com/tigrisdata/tigris/lib/date"
 	"github.com/tigrisdata/tigris/lib/json"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/metadata"
@@ -179,12 +181,29 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 
 	decData = FlattenObjects(decData)
 
-	// now if there is any array we need to pack it
-	for key, value := range decData {
-		if _, ok := value.([]any); ok {
-			// pack any array field
-			if decData[key], err = jsoniter.MarshalToString(value); err != nil {
-				return nil, err
+	// pack any date time or array fields here
+	for _, f := range collection.QueryableFields {
+		key, value := f.Name(), decData[f.Name()]
+		if value == nil {
+			continue
+		}
+		if f.ShouldPack() {
+			switch f.DataType {
+			case schema.ArrayType:
+				if decData[key], err = jsoniter.MarshalToString(value); err != nil {
+					return nil, err
+				}
+			case schema.DateTimeType:
+				dateStr := fmt.Sprint(value)
+				t, err := date.ToUnixNano(dateStr)
+				if err != nil {
+					return nil, err
+				}
+				decData[key] = t
+				// pack original date as string to a shadowed key
+				decData[schema.GetShadowedDateKey(key)] = dateStr
+			default:
+				return nil, api.Errorf(api.Code_UNIMPLEMENTED, "Internal error!")
 			}
 		}
 	}
@@ -207,11 +226,21 @@ func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCo
 	for _, f := range collection.QueryableFields {
 		if f.ShouldPack() {
 			if v, ok := doc[f.Name()]; ok {
-				var value interface{}
-				if err := jsoniter.UnmarshalFromString(v.(string), &value); err != nil {
-					return "", nil, nil, err
+				switch f.DataType {
+				case schema.ArrayType:
+					var value interface{}
+					if err := jsoniter.UnmarshalFromString(v.(string), &value); err != nil {
+						return "", nil, nil, err
+					}
+					doc[f.Name()] = value
+				case schema.DateTimeType:
+					// unpack original date from shadowed key
+					shadowedKey := schema.GetShadowedDateKey(f.Name())
+					doc[f.Name()] = doc[shadowedKey]
+					delete(doc, shadowedKey)
+				default:
+					return "", nil, nil, api.Errorf(api.Code_UNIMPLEMENTED, "Internal error!")
 				}
-				doc[f.Name()] = value
 			}
 		}
 	}

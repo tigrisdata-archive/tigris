@@ -19,6 +19,7 @@ import (
 
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/value"
+	"github.com/tigrisdata/tigris/lib/date"
 )
 
 // Selector is a condition defined inside a filter. It has a field which corresponding the field on which condition
@@ -88,6 +89,12 @@ func (s *Selector) ToSearchFilter() []string {
 	case schema.DoubleType:
 		// for double, we pass string in the filter to search backend
 		return []string{fmt.Sprintf(op, s.Field.Name(), v.String())}
+	case schema.DateTimeType:
+		// encode into int64
+		if nsec, err := date.ToUnixNano(v.String()); err == nil {
+			return []string{fmt.Sprintf(op, s.Field.Name(), nsec)}
+		}
+
 	}
 	return []string{fmt.Sprintf(op, s.Field.Name(), v.AsInterface())}
 }
