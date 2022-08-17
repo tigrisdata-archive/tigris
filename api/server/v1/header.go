@@ -19,16 +19,17 @@ const (
 
 	HeaderPrefix = "Tigris-"
 
-	HeaderTxID     = "Tigris-Tx-Id"
-	HeaderTxOrigin = "Tigris-Tx-Origin"
-
+	HeaderTxID        = "Tigris-Tx-Id"
+	HeaderTxOrigin    = "Tigris-Tx-Origin"
+	SetCookie         = "Set-Cookie"
+	Cookie            = "Cookie"
 	grpcGatewayPrefix = "Grpc-Gateway-"
 )
 
 func CustomMatcher(key string) (string, bool) {
 	key = textproto.CanonicalMIMEHeaderKey(key)
 	switch key {
-	case HeaderRequestTimeout, HeaderAccessControlAllowOrigin:
+	case HeaderRequestTimeout, HeaderAccessControlAllowOrigin, SetCookie, Cookie:
 		return key, true
 	default:
 		if strings.HasPrefix(key, HeaderPrefix) {

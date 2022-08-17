@@ -12,29 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM ubuntu:20.04 AS build
+FROM tigrisdata/tigris-build-base AS build
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    apt-transport-https \
-    ca-certificates \
-    wget \
-    curl \
-    gcc \
-    git \
-    unzip \
-    libc6-dev \
-    make \
-    sudo
-
-RUN mkdir /build
-
-COPY scripts/install_go.sh /build
-RUN sh /build/install_go.sh
-#Download deps once, during docker build. Rebuild only on go.mod change
-ENV PATH="${PATH}:/root/go/bin:/usr/local/go/bin"
-COPY scripts/install_build_deps.sh /build
-RUN sh /build/install_build_deps.sh
 COPY go.mod /build
 WORKDIR /build
 RUN go mod download
@@ -43,12 +22,10 @@ RUN --mount=type=cache,target=/root/.cache/go-build rm -f server/service && make
 
 
 FROM ubuntu:20.04 AS server
+
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    ca-certificates
-
-# Remove apt configuration
-RUN rm -rf /etc/apt/*
+    ca-certificates && rm -rf /etc/apt/* /var/lib/dpkg/* /var/lib/apt/* 
 
 # Setup an unprivileged user
 RUN groupadd -r tigris && useradd -r -s /bin/false -g tigris tigris

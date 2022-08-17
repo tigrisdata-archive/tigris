@@ -7,42 +7,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v1
-
-      - name: Get changed files
-        id: changed-files
-        uses: tj-actions/changed-files@v16
-
-      # TODO: Fix docker caching
-      - name: Pull docker images
-        run: docker-compose -f test/docker/docker-compose.yml pull
-
-      - name: Check need rebuild Docker images
-        run: |
-          echo "need_rebuild=true" >> $GITHUB_ENV
-
-      - name: Create cache directory
-        run: mkdir -p /home/runner/.cache/go-build
-
-      - name: Pull build docker images
-        if: env.need_rebuild
-        run: |
-          docker pull ubuntu:jammy-20220531
-
-      - name: Pull submodules
-        run: git submodule update --init --recursive
-
-      - name: Build docker images
-        if: env.need_rebuild
-        run: |
-          make docker_compose_build
-          docker image rm ubuntu:jammy-20220531
-          docker image prune -f
+        uses: actions/checkout@v2
+        with:
+          submodules: true
 
       - name: Run tests
-        run: make docker_test_no_build || ( docker-compose -f test/docker/docker-compose.yml logs && false )
+        run: make test || ( docker-compose -f test/docker/docker-compose.yml logs && false )
         env:
-          PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/root/go/bin
           TEST_PARAM: "-coverprofile=coverage.out -covermode=atomic"
 
       - name: Upload coverage to Codecov
