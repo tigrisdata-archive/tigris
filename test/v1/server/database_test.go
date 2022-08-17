@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"gopkg.in/gavv/httpexpect.v1"
 )
@@ -29,12 +30,22 @@ func getDatabaseURL(databaseName string, methodName string) string {
 	return fmt.Sprintf("/api/v1/databases/%s/%s", databaseName, methodName)
 }
 
+func beginTransactionURL(databaseName string) string {
+	return fmt.Sprintf("/api/v1/databases/%s/transactions/begin", databaseName)
+}
+
 func TestCreateDatabase(t *testing.T) {
 	resp := createDatabase(t, "test_db")
 	resp.Status(http.StatusOK).
 		JSON().
 		Object().
 		ValueEqual("message", "database created successfully")
+}
+
+func TestBeginTransaction(t *testing.T) {
+	resp := beginTransaction(t, "test_db")
+	cookieVal := resp.Cookie("Tigris-Tx-Id").Value()
+	require.NotNil(t, t, cookieVal)
 }
 
 func TestDescribeDatabase(t *testing.T) {
@@ -63,6 +74,12 @@ func TestDropDatabase(t *testing.T) {
 func createDatabase(t *testing.T, databaseName string) *httpexpect.Response {
 	e := expect(t)
 	return e.POST(getDatabaseURL(databaseName, "create")).
+		Expect()
+}
+
+func beginTransaction(t *testing.T, databaseName string) *httpexpect.Response {
+	e := expect(t)
+	return e.POST(beginTransactionURL(databaseName)).
 		Expect()
 }
 
