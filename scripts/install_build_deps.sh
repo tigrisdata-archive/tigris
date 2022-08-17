@@ -87,12 +87,13 @@ case "${OS}" in
 esac
 
 if [ -n "$PROTO_PKG" ]; then
-  DOWNLOAD_URL=$PROTO_RELEASES/download/v$PROTO_VERSION/$PROTO_PKG
+  DOWNLOAD_URL="$PROTO_RELEASES/download/v$PROTO_VERSION/$PROTO_PKG"
   echo "Fetching protobuf release ${DOWNLOAD_URL}"
-  curl -LO $DOWNLOAD_URL
-  sudo unzip $PROTO_PKG -d "/usr/local/"
+  curl -LO "$DOWNLOAD_URL"
+  sudo unzip "$PROTO_PKG" -d "/usr/local/"
   sudo chmod +x "/usr/local/bin/protoc"
   sudo chmod -R 755 "/usr/local/include/"
+  rm -f "$PROTO_PKG"
 fi
 
 # Install protobuf
@@ -112,6 +113,7 @@ case "${OS}" in
   curl --create-dirs -Lo "$FDB_PACKAGE_PATH" "https://tigrisdata-pub.s3.us-west-2.amazonaws.com/${FDB_PACKAGE_NAME}"
   echo "$FDB_SHA  $FDB_PACKAGE_PATH" | shasum -a 512 -c
   sudo installer -pkg "$FDB_PACKAGE_PATH" -target /
+  rm -f "$FDB_PACKAGE_PATH"
   ;;
 "Linux")
   FDB_PACKAGE_NAME="foundationdb-clients_${FDB_VERSION}-1_${ARCH}.deb"
@@ -119,5 +121,6 @@ case "${OS}" in
   curl --create-dirs -Lo "$FDB_PACKAGE_PATH" "https://tigrisdata-pub.s3.us-west-2.amazonaws.com/ubuntu/focal/${FDB_PACKAGE_NAME}"
   echo "$FDB_SHA $FDB_PACKAGE_PATH" | sha256sum -c
   sudo dpkg -i "$FDB_PACKAGE_PATH" # provides /lib/libfdb_c.so shared library in the docker for CGO
+  rm -f "$FDB_PACKAGE_PATH"
   ;;
 esac

@@ -38,30 +38,24 @@ server/service: $(GO_SRC) generate
 	CGO_ENABLED=$(CGO_ENABLED) go build $(BUILD_PARAM) -o server/service ./server
 
 lint: generate
-	yq --exit-status 'tag == "!!map" or tag== "!!seq"' .github/workflows/*.yaml config/*.yaml
+	yq --exit-status 'tag == "!!map" or tag== "!!seq"' .github/workflows/*.yaml config/*.yaml >/dev/null
 	shellcheck scripts/*
 	shellcheck test/docker/grafana/*
 	golangci-lint --timeout=$(LINT_TIMEOUT) run
 
-docker_compose_build:
-	$(DOCKER_COMPOSE) build
-
 # dependency on generate needed to create generated file outside of docker with
 # current user owner instead of root
-docker_test: generate
+docker_test:
 	$(DOCKER_COMPOSE) up --build tigris_test tigris_test
 	@[ $$(docker inspect tigris_test --format='{{.State.ExitCode}}') = "0" ]
-
-docker_test_no_build:
-	$(DOCKER_COMPOSE) up --exit-code-from tigris_test --no-build tigris_test tigris_test
 
 test: docker_test
 
 # Use this target to run the test from inside docker container
-local_test: generate
+local_test: generate lint
 	go test $(TEST_PARAM) ./...
 
-run: generate
+run:
 	$(DOCKER_COMPOSE) up --build --detach tigris_server2
 
 local_run: server
@@ -71,7 +65,7 @@ local_run: server
 
 # Runs tigris server and foundationdb, plus additional tools for it like:
 # - prometheus and grafana for monitoring
-run_full: generate
+run_full:
 	${DOCKER_COMPOSE} up --build --detach tigris_grafana
 	./${DOCKER_DIR}/grafana/set_admin_password.sh
 	./${DOCKER_DIR}/grafana/add_prometheus_datasource.sh
@@ -85,3 +79,6 @@ clean:
 
 upgrade_api:
 	git submodule update --remote --recursive --rebase
+
+build_and_push_base_docker:
+	docker buildx build -t tigrisdata/tigris-build-base:latest --platform linux/amd64,linux/arm64 --push -f docker/Dockerfile.base .

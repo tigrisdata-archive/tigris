@@ -101,6 +101,7 @@ services:
       # instead of test/config/fdb.cluster file when running on the host
       - TIGRIS_ENVIRONMENT=test
       - TEST_PARAM
+      - GOFLAGS=-buildvcs=false #FIXME: Added for golangci-lint to work in Github actions
     build:
       context: ../../
       dockerfile: test/docker/Dockerfile

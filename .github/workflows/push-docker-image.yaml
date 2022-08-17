@@ -28,6 +28,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
+        with:
+          submodules: true
 
       - name: Fetch tags
         run: |
@@ -55,9 +57,6 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/alpha' }}
-
-      - name: Pull submodules
-        run: git submodule update --init --recursive
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
