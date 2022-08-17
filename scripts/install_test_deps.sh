@@ -18,7 +18,7 @@ set -ex
 export GO111MODULE=on
 
 go install github.com/golang/mock/mockgen@v1
-curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v1.46.2
+curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" latest
 
 if [ "$(uname -s)" = "Darwin" ]; then
   if command -v brew > /dev/null 2>&1; then

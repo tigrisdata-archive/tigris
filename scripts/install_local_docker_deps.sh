@@ -21,7 +21,7 @@ FDB_PACKAGE_PATH="$(mktemp -p /tmp/ -u)/${FDB_PACKAGE_NAME}"
 curl --create-dirs -Lo "$FDB_PACKAGE_PATH" "https://tigrisdata-pub.s3.us-west-2.amazonaws.com/ubuntu/focal/${FDB_PACKAGE_NAME}"
 echo "$FDB_SHA $FDB_PACKAGE_PATH" | sha256sum -c
 dpkg -i "$FDB_PACKAGE_PATH"
-rm -f "$FDB_PACKAGE_NAME"
+rm -f "$FDB_PACKAGE_PATH"
 
 case "${ARCH}" in
 	"arm64")
@@ -45,7 +45,7 @@ chmod u+x /etc/init.d/foundationdb
 mkdir -p /etc/foundationdb
 echo "docker:docker@127.0.0.1:4500" >/etc/foundationdb/fdb.cluster
 dpkg --force-confold --configure foundationdb-server
-rm -f "$FDB_PACKAGE_NAME"
+rm -f "$FDB_PACKAGE_PATH"
 
 TS_PACKAGE_NAME="typesense-server-0.23.0-${ARCH}.deb"
 TS_PACKAGE_PATH="$(mktemp -p /tmp/ -u)/${TS_PACKAGE_NAME}"
