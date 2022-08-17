@@ -34,6 +34,7 @@ var (
 	SearchMetrics  tally.Scope
 	SessionMetrics tally.Scope
 	SizeMetrics    tally.Scope
+	NetworkMetrics tally.Scope
 )
 
 func GetGlobalTags() map[string]string {
@@ -74,6 +75,9 @@ func InitializeMetrics() io.Closer {
 		// Size metrics
 		SizeMetrics = root.SubScope("size")
 		initializeSizeScopes()
+		// Network netrics
+		NetworkMetrics = root.SubScope("net")
+		initializeNetorkScopes()
 	}
 	return closer
 }
