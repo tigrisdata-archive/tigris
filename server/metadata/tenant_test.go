@@ -194,12 +194,12 @@ func TestTenantManager_CreateDatabases(t *testing.T) {
 		require.NoError(t, err)
 
 		require.NoError(t, tenant.reload(ctx, tx, nil))
-		db1, err := tenant.GetDatabase(ctx, tx, "tenant_db1")
+		db1, err := tenant.GetDatabase(ctx, "tenant_db1")
 		require.NoError(t, err)
 		require.Equal(t, "tenant_db1", db1.name)
 		require.Equal(t, "tenant_db1", tenant.idToDatabaseMap[db1.id])
 
-		db2, err := tenant.GetDatabase(ctx, tx, "tenant_db2")
+		db2, err := tenant.GetDatabase(ctx, "tenant_db2")
 		require.NoError(t, err)
 		require.Equal(t, "tenant_db2", db2.name)
 		require.NoError(t, tx.Commit(ctx))
@@ -229,12 +229,12 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 
 		require.NoError(t, tenant.reload(ctx, tx, nil))
 
-		db1, err := tenant.GetDatabase(ctx, tx, "tenant_db1")
+		db1, err := tenant.GetDatabase(ctx, "tenant_db1")
 		require.NoError(t, err)
 		require.Equal(t, "tenant_db1", db1.name)
 		require.Equal(t, "tenant_db1", tenant.idToDatabaseMap[db1.id])
 
-		db2, err := tenant.GetDatabase(ctx, tx, "tenant_db2")
+		db2, err := tenant.GetDatabase(ctx, "tenant_db2")
 		require.NoError(t, err)
 		require.Equal(t, "tenant_db2", db2.name)
 		require.Equal(t, "tenant_db2", tenant.idToDatabaseMap[db2.id])
@@ -264,7 +264,7 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 
 		require.NoError(t, tenant.reload(ctx, tx, nil))
 
-		db2, err = tenant.GetDatabase(ctx, tx, "tenant_db2")
+		db2, err = tenant.GetDatabase(ctx, "tenant_db2")
 		require.NoError(t, err)
 		collection := db2.GetCollection("test_collection")
 		require.Equal(t, "test_collection", collection.Name)
@@ -299,11 +299,11 @@ func TestTenantManager_DropCollection(t *testing.T) {
 
 		require.NoError(t, tenant.reload(ctx, tx, nil))
 
-		db1, err := tenant.GetDatabase(ctx, tx, "tenant_db1")
+		db1, err := tenant.GetDatabase(ctx, "tenant_db1")
 		require.NoError(t, err)
 		require.Equal(t, "tenant_db1", db1.name)
 
-		db2, err := tenant.GetDatabase(ctx, tx, "tenant_db2")
+		db2, err := tenant.GetDatabase(ctx, "tenant_db2")
 		require.NoError(t, err)
 		require.Equal(t, "tenant_db2", db2.name)
 
@@ -399,9 +399,9 @@ func TestTenantManager_DataSize(t *testing.T) {
 	factory, err := schema.Build("test_collection", jsSchema)
 	require.NoError(t, err)
 
-	db1, err := tenant.GetDatabase(ctx, tx, "tenant_db1")
+	db1, err := tenant.GetDatabase(ctx, "tenant_db1")
 	require.NoError(t, err)
-	db2, err := tenant.GetDatabase(ctx, tx, "tenant_db2")
+	db2, err := tenant.GetDatabase(ctx, "tenant_db2")
 	require.NoError(t, err)
 
 	require.NoError(t, tenant.CreateCollection(ctx, tx, db1, factory))
@@ -410,9 +410,9 @@ func TestTenantManager_DataSize(t *testing.T) {
 	require.NoError(t, err)
 
 	// create tenant2 dbs and collections
-	db21, err := tenant2.GetDatabase(ctx, tx, "tenant_db1")
+	db21, err := tenant2.GetDatabase(ctx, "tenant_db1")
 	require.NoError(t, err)
-	db22, err := tenant2.GetDatabase(ctx, tx, "tenant_db2")
+	db22, err := tenant2.GetDatabase(ctx, "tenant_db2")
 	require.NoError(t, err)
 
 	require.NoError(t, tenant2.CreateCollection(ctx, tx, db21, factory))

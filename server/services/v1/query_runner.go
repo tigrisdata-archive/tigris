@@ -153,7 +153,7 @@ func (runner *BaseQueryRunner) GetDatabase(ctx context.Context, tx transaction.T
 	}
 
 	// otherwise, simply read from the in-memory cache/disk.
-	db, err := tenant.GetDatabase(ctx, tx, dbName)
+	db, err := tenant.GetDatabase(ctx, dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -1017,7 +1017,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			status: CreatedStatus,
 		}, ctx, nil
 	} else if runner.list != nil {
-		databaseList := tenant.ListDatabases(ctx, tx)
+		databaseList := tenant.ListDatabases(ctx)
 
 		var databases = make([]*api.DatabaseInfo, len(databaseList))
 		for i, l := range databaseList {
