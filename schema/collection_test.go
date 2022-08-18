@@ -292,3 +292,60 @@ func TestCollection_SearchSchema(t *testing.T) {
 		require.Equal(t, expFlattenedFields[i], f.Name)
 	}
 }
+
+func TestCollection_AdditionalProperties(t *testing.T) {
+	reqSchema := []byte(`{
+		"title": "t1",
+		"properties": {
+			"id": {
+				"type": "integer"
+			},
+			"simple_object": {
+				"type": "object",
+				"properties": {
+					"name": { "type": "string" }
+				}
+			},
+			"complex_object": {
+				"type": "object",
+				"properties": {
+					"name": { "type": "string" },
+					"obj": {
+						"type": "object",
+						"properties": {
+							"name": { "type": "string" }
+						}
+					}
+				}
+			}
+		},
+		"primary_key": ["id"]
+	}`)
+
+	cases := []struct {
+		document []byte
+		expError string
+	}{
+		{
+			document: []byte(`{"id": 1, "simple_object": {"name": "hello", "price": 1.01}}`),
+			expError: "json schema validation failed for field 'simple_object' reason 'additionalProperties 'price' not allowed'",
+		}, {
+			document: []byte(`{"id": 1, "complex_object": {"name": "hello", "price": 1.01}}`),
+			expError: "json schema validation failed for field 'complex_object' reason 'additionalProperties 'price' not allowed'",
+		}, {
+			document: []byte(`{"id": 1, "complex_object": {"name": "hello", "obj": {"name": "hello", "price": 1.01}}}`),
+			expError: "json schema validation failed for field 'complex_object/obj' reason 'additionalProperties 'price' not allowed'",
+		},
+	}
+	for _, c := range cases {
+		schFactory, err := Build("t1", reqSchema)
+		require.NoError(t, err)
+		coll := NewDefaultCollection("t1", 1, 1, schFactory.Fields, schFactory.Indexes, schFactory.Schema, "t1")
+
+		dec := jsoniter.NewDecoder(bytes.NewReader(c.document))
+		dec.UseNumber()
+		var v interface{}
+		require.NoError(t, dec.Decode(&v))
+		require.Equal(t, c.expError, coll.Validate(v).Error())
+	}
+}

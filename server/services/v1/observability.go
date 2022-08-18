@@ -84,7 +84,6 @@ func (dd Datadog) QueryTimeSeriesMetrics(ctx context.Context, req *api.QueryTime
 	if err != nil {
 		return nil, api.Errorf(api.Code_INTERNAL, "Failed to query metrics: reason = "+err.Error())
 	}
-	fmt.Println(ddQuery)
 	q.Add("query", ddQuery)
 	ddReq.URL.RawQuery = q.Encode()
 	ddReq.Header.Add(AcceptHeader, ApplicationJsonHeaderVal)
