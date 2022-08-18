@@ -60,6 +60,15 @@ type DefaultCollection struct {
 	QueryableFields []*QueryableField
 }
 
+func disableAdditionalProperties(properties map[string]*jsonschema.Schema) {
+	for _, p := range properties {
+		p.AdditionalProperties = false
+		if len(p.Properties) > 0 {
+			disableAdditionalProperties(p.Properties)
+		}
+	}
+}
+
 func NewDefaultCollection(name string, id uint32, schVer int, fields []*Field, indexes *Indexes, schema jsoniter.RawMessage, searchCollectionName string) *DefaultCollection {
 	url := name + ".json"
 	compiler := jsonschema.NewCompiler()
@@ -76,6 +85,7 @@ func NewDefaultCollection(name string, id uint32, schVer int, fields []*Field, i
 	// Tigris doesn't allow additional fields as part of the write requests. Setting it to false ensures strict
 	// schema validation.
 	validator.AdditionalProperties = false
+	disableAdditionalProperties(validator.Properties)
 
 	queryableFields := buildQueryableFields(fields)
 
