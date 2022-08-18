@@ -14,27 +14,24 @@
 
 package metrics
 
-import (
-	"context"
+import "github.com/uber-go/tally"
 
-	"github.com/tigrisdata/tigris/server/request"
-	ulog "github.com/tigrisdata/tigris/util/log"
+var (
+	BytesReceived tally.Scope
+	BytesSent     tally.Scope
 )
 
-func addTigrisTenantToTags(ctx context.Context, tags map[string]string) map[string]string {
-	namespace, err := request.GetNamespace(ctx)
-	if ulog.E(err) {
-		tags["tigris_tenant"] = UnknownValue
-	} else {
-		tags["tigris_tenant"] = namespace
-	}
-	return tags
+func initializeNetorkScopes() {
+	BytesReceived = NetworkMetrics.SubScope("bytes")
+	BytesSent = NetworkMetrics.SubScope("bytes")
 }
 
-func GetNamespace(ctx context.Context) string {
-	namespace, err := request.GetNamespace(ctx)
-	if err != nil {
-		namespace = "unknown"
-	}
-	return namespace
+func (s *SpanMeta) CountSentBytes(scope tally.Scope, size int) {
+	// proto.Size has int, need to convert it here
+	scope.Tagged(s.GetTags()).Counter("sent").Inc(int64(size))
+}
+
+func (s *SpanMeta) CountReceivedBytes(scope tally.Scope, size int) {
+	// proto.Size has int, need to convert it here
+	scope.Tagged(s.GetTags()).Counter("received").Inc(int64(size))
 }

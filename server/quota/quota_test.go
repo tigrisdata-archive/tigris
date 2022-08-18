@@ -1,3 +1,17 @@
+// Copyright 2022 Tigris Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package quota
 
 import (
@@ -25,7 +39,8 @@ func TestQuotaManager(t *testing.T) {
 	tenantMgr, ctx, cancel := metadata.NewTestTenantMgr(kvStore)
 	defer cancel()
 
-	m := newManager(tenantMgr, txMgr, &config.QuotaConfig{Enabled: true,
+	m := newManager(tenantMgr, txMgr, &config.QuotaConfig{
+		Enabled:              true,
 		RateLimit:            6,
 		WriteThroughputLimit: 100,
 		DataSizeLimit:        10000,
@@ -97,6 +112,18 @@ func TestQuotaManager(t *testing.T) {
 	for err != ErrRateExceeded {
 		err = m.check(ctx, ns, 0)
 	}
+
+	Init(tenantMgr, txMgr, &config.QuotaConfig{
+		Enabled:              false,
+		RateLimit:            6,
+		WriteThroughputLimit: 100,
+		DataSizeLimit:        10000,
+	})
+	s := GetState(ns)
+	require.Nil(t, Allow(ctx, ns, 0))
+	mgr.cfg.Enabled = true
+	require.Nil(t, Allow(ctx, ns, 0))
+	require.NotNil(t, s)
 }
 
 func TestMain(m *testing.M) {

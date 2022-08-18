@@ -29,20 +29,20 @@ func TestFdbMetrics(t *testing.T) {
 	ctx := context.Background()
 
 	testNormalTags := []map[string]string{
-		GetFdbTags(ctx, "Commit"),
-		GetFdbTags(ctx, "Insert"),
-		GetFdbTags(ctx, "Insert"),
+		GetFdbOkTags(ctx, "Commit"),
+		GetFdbOkTags(ctx, "Insert"),
+		GetFdbOkTags(ctx, "Insert"),
 	}
 
 	testKnownErrorTags := []map[string]string{
-		GetFdbSpecificErrorTags(ctx, "Commit", "1"),
-		GetFdbSpecificErrorTags(ctx, "Insert", "2"),
-		GetFdbSpecificErrorTags(ctx, "Insert", "3"),
+		GetFdbErrorTags(ctx, "Commit", "1"),
+		GetFdbErrorTags(ctx, "Insert", "2"),
+		GetFdbErrorTags(ctx, "Insert", "3"),
 	}
 
 	t.Run("Test FDB counters", func(t *testing.T) {
 		for _, tags := range testNormalTags {
-			FdbRequests.Tagged(tags).Counter("ok").Inc(1)
+			FdbOkRequests.Tagged(tags).Counter("ok").Inc(1)
 			FdbErrorRequests.Tagged(tags).Counter("unknown").Inc(1)
 		}
 		for _, tags := range testKnownErrorTags {
@@ -51,7 +51,7 @@ func TestFdbMetrics(t *testing.T) {
 	})
 
 	t.Run("Test FDB histograms", func(t *testing.T) {
-		testHistogramTags := GetFdbTags(ctx, "Insert")
+		testHistogramTags := GetFdbOkTags(ctx, "Insert")
 		defer FdbMetrics.Tagged(testHistogramTags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
 	})
 }

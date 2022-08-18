@@ -93,12 +93,12 @@ func (d *fdbkv) Read(ctx context.Context, table []byte, key Key) (baseIterator, 
 	return &fdbIteratorTxCloser{it, tx}, nil
 }
 
-func (d *fdbkv) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key) (baseIterator, error) {
+func (d *fdbkv) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key, isSnapshot bool) (baseIterator, error) {
 	tx, err := d.BeginTx(ctx)
 	if err != nil {
 		return nil, err
 	}
-	it, err := tx.ReadRange(ctx, table, lKey, rKey)
+	it, err := tx.ReadRange(ctx, table, lKey, rKey, isSnapshot)
 	if err != nil {
 		return nil, err
 	}
@@ -334,11 +334,11 @@ func (b *fbatch) Read(ctx context.Context, table []byte, key Key) (baseIterator,
 	return b.tx.Read(ctx, table, key)
 }
 
-func (b *fbatch) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key) (baseIterator, error) {
+func (b *fbatch) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key, isSnapshot bool) (baseIterator, error) {
 	if err := b.flushBatch(ctx, lKey, rKey, nil); err != nil {
 		return nil, err
 	}
-	return b.tx.ReadRange(ctx, table, lKey, rKey)
+	return b.tx.ReadRange(ctx, table, lKey, rKey, isSnapshot)
 }
 
 func (b *fbatch) SetVersionstampedValue(_ context.Context, _ []byte, _ []byte) error {
@@ -514,11 +514,18 @@ func (t *ftx) Read(_ context.Context, table []byte, key Key) (baseIterator, erro
 	return &fdbIterator{it: r.Iterator(), subspace: subspace.FromBytes(table)}, nil
 }
 
-func (t *ftx) ReadRange(_ context.Context, table []byte, lKey Key, rKey Key) (baseIterator, error) {
+func (t *ftx) ReadRange(_ context.Context, table []byte, lKey Key, rKey Key, isSnapshot bool) (baseIterator, error) {
 	lk := getFDBKey(table, lKey)
 	rk := getFDBKey(table, rKey)
+	kr := fdb.KeyRange{Begin: lk, End: rk}
+	ro := fdb.RangeOptions{}
 
-	r := t.tx.GetRange(fdb.KeyRange{Begin: lk, End: rk}, fdb.RangeOptions{})
+	var r fdb.RangeResult
+	if isSnapshot {
+		r = t.tx.Snapshot().GetRange(kr, ro)
+	} else {
+		r = t.tx.GetRange(kr, ro)
+	}
 
 	log.Debug().Str("table", string(table)).Interface("lKey", lKey).Interface("rKey", rKey).Msg("tx read range")
 

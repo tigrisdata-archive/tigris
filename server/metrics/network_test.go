@@ -14,27 +14,17 @@
 
 package metrics
 
-import (
-	"context"
+import "testing"
 
-	"github.com/tigrisdata/tigris/server/request"
-	ulog "github.com/tigrisdata/tigris/util/log"
-)
+func TestNetworkMetrics(t *testing.T) {
+	InitializeMetrics()
+	testSpanMeta := NewSpanMeta("test.service.name", "TestResource", "rpc", GetGlobalTags())
 
-func addTigrisTenantToTags(ctx context.Context, tags map[string]string) map[string]string {
-	namespace, err := request.GetNamespace(ctx)
-	if ulog.E(err) {
-		tags["tigris_tenant"] = UnknownValue
-	} else {
-		tags["tigris_tenant"] = namespace
-	}
-	return tags
-}
+	t.Run("Test bytes send", func(t *testing.T) {
+		testSpanMeta.CountSentBytes(BytesSent, 100)
+	})
 
-func GetNamespace(ctx context.Context) string {
-	namespace, err := request.GetNamespace(ctx)
-	if err != nil {
-		namespace = "unknown"
-	}
-	return namespace
+	t.Run("Test bytes received", func(t *testing.T) {
+		testSpanMeta.CountReceivedBytes(BytesReceived, 100)
+	})
 }

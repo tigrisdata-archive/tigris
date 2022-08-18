@@ -1,3 +1,17 @@
+// Copyright 2022 Tigris Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package quota
 
 import (
@@ -8,6 +22,7 @@ import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"go.uber.org/atomic"
 	"golang.org/x/time/rate"
@@ -24,6 +39,7 @@ var (
 type State struct {
 	Rate            *rate.Limiter
 	WriteThroughput *rate.Limiter
+	ReadThroughput  *rate.Limiter
 	Size            atomic.Int64
 	SizeUpdateAt    atomic.Int64
 	SizeLock        sync.Mutex
@@ -42,6 +58,8 @@ func Init(t *metadata.TenantManager, tx *transaction.Manager, c *config.QuotaCon
 	mgr = *newManager(t, tx, c)
 }
 
+// Allow checks rate, write throughput and storage size limits for the namespace
+// and returns error if at least one of them is exceeded
 func Allow(ctx context.Context, namespace string, reqSize int) error {
 	if !mgr.cfg.Enabled {
 		return nil
@@ -53,18 +71,28 @@ func newManager(t *metadata.TenantManager, tx *transaction.Manager, c *config.Qu
 	return &Manager{cfg: c, tenantMgr: t, txMgr: tx}
 }
 
-func (m *Manager) check(ctx context.Context, namespace string, size int) error {
+// GetState returns quota state of the given namespace
+func GetState(namespace string) *State {
+	return mgr.getState(namespace)
+}
+
+func (m *Manager) getState(namespace string) *State {
 	is, ok := m.tenantQuota.Load(namespace)
 	if !ok {
 		// Create new state if didn't exist before
 		is = &State{
 			Rate:            rate.NewLimiter(rate.Limit(m.cfg.RateLimit), 10),
 			WriteThroughput: rate.NewLimiter(rate.Limit(m.cfg.WriteThroughputLimit), m.cfg.WriteThroughputLimit),
+			ReadThroughput:  rate.NewLimiter(rate.Limit(m.cfg.ReadThroughputLimit), m.cfg.ReadThroughputLimit),
 		}
 		m.tenantQuota.Store(namespace, is)
 	}
 
-	s := is.(*State)
+	return is.(*State)
+}
+
+func (m *Manager) check(ctx context.Context, namespace string, size int) error {
+	s := m.getState(namespace)
 
 	if !s.Rate.Allow() {
 		return ErrRateExceeded
@@ -81,6 +109,7 @@ func (m *Manager) checkStorageSize(ctx context.Context, namespace string, s *Sta
 	sz := s.Size.Load()
 
 	if time.Now().Unix() < s.SizeUpdateAt.Load()+sizeLimitUpdateInterval {
+		metrics.UpdateNameSpaceSizeMetrics(namespace, sz)
 		if sz+int64(size) >= m.cfg.DataSizeLimit {
 			return ErrStorageSizeExceeded
 		}

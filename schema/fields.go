@@ -187,6 +187,15 @@ func FacetableField(fieldType FieldType) bool {
 	}
 }
 
+func SortableField(fieldType FieldType) bool {
+	switch fieldType {
+	case Int32Type, Int64Type, DoubleType, DateTimeType, BoolType:
+		return true
+	default:
+		return false
+	}
+}
+
 func toSearchFieldType(fieldType FieldType) string {
 	switch fieldType {
 	case BoolType:
@@ -380,6 +389,7 @@ type QueryableField struct {
 	FieldName  string
 	Faceted    bool
 	Indexed    bool
+	Sortable   bool
 	DataType   FieldType
 	SearchType string
 }
@@ -389,6 +399,7 @@ func NewQueryableField(name string, tigrisType FieldType) *QueryableField {
 		FieldName:  name,
 		Indexed:    IndexableField(tigrisType),
 		Faceted:    FacetableField(tigrisType),
+		Sortable:   SortableField(tigrisType),
 		SearchType: toSearchFieldType(tigrisType),
 		DataType:   tigrisType,
 	}

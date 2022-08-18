@@ -47,8 +47,8 @@ func (m *storeImplWithMetrics) measure(ctx context.Context, name string, f func(
 	err := f(ctx)
 	if err == nil {
 		// Request was ok
-		spanMeta.CountOkForScope(metrics.SearchRequests)
-		metrics.SearchRequests.Tagged(tags).Counter("ok").Inc(1)
+		spanMeta.CountOkForScope(metrics.SearchOkRequests)
+		metrics.SessionOkRequests.Tagged(tags).Counter("ok").Inc(1)
 		_ = spanMeta.FinishTracing(ctx)
 		return
 	}
@@ -184,6 +184,9 @@ func (s *storeImpl) getBaseSearchParam(query *qsearch.Query, pageNo int) tsApi.M
 		if size := query.ToSearchFacetSize(); size > 0 {
 			baseParam.MaxFacetValues = &size
 		}
+	}
+	if sortBy := query.ToSortFields(); len(sortBy) > 0 {
+		baseParam.SortBy = &sortBy
 	}
 
 	return baseParam

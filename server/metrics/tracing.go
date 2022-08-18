@@ -26,9 +26,9 @@ import (
 )
 
 const (
-	KvTracingServiceName        string = "kv"
-	TxManagerTracingServiceName string = "txmanager"
-	TraceServiceName            string = "tigris.grpc.server"
+	KvTracingServiceName      string = "kv"
+	TraceServiceName          string = "tigris.grpc.server"
+	SessionManagerServiceName string = "session"
 )
 
 type SpanMeta struct {

@@ -22,30 +22,29 @@ import (
 	"github.com/uber-go/tally"
 )
 
-func TestSearchMetrics(t *testing.T) {
+func TestSessionMetrics(t *testing.T) {
 	config.DefaultConfig.Tracing.Enabled = true
 	InitializeMetrics()
 
 	ctx := context.Background()
 
-	testNormalTags := []map[string]string{
-		GetSearchTags(ctx, "CreateCollection"),
-		GetSearchTags(ctx, "UpdateCollection"),
-		GetSearchTags(ctx, "DropCollection"),
-		GetSearchTags(ctx, "IndexDocuments"),
-		GetSearchTags(ctx, "DeleteDocuments"),
-		GetSearchTags(ctx, "Search"),
+	testTags := []map[string]string{
+		GetSessionTags(ctx, "Create"),
+		GetSessionTags(ctx, "Get"),
+		GetSessionTags(ctx, "Remove"),
+		GetSessionTags(ctx, "Execute"),
+		GetSessionTags(ctx, "executeWithRetry"),
 	}
 
-	t.Run("Test Search counters", func(t *testing.T) {
-		for _, tags := range testNormalTags {
-			SearchOkRequests.Tagged(tags).Counter("ok").Inc(1)
-			SearchErrorRequests.Tagged(tags).Counter("unknown").Inc(1)
+	t.Run("Test Session counters", func(t *testing.T) {
+		for _, tags := range testTags {
+			SessionOkRequests.Tagged(tags).Counter("ok").Inc(1)
+			SessionErrorRequests.Tagged(tags).Counter("error").Inc(1)
 		}
 	})
 
-	t.Run("Test Search histograms", func(t *testing.T) {
-		testHistogramTags := GetSearchTags(ctx, "IndexDocuments")
-		defer SearchRespTime.Tagged(testHistogramTags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
+	t.Run("Test Session histograms", func(t *testing.T) {
+		tags := GetSessionTags(ctx, "Create")
+		defer SessionRespTime.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
 	})
 }

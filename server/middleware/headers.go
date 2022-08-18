@@ -16,18 +16,32 @@ package middleware
 
 import (
 	"context"
+	"fmt"
+	"time"
 
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
 
 var OutgoingHeaders = metadata.New(map[string]string{})
 
+const (
+	CookieMaxAgeKey = "Expires"
+)
+
 func headersUnaryServerInterceptor() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		resp, err := handler(ctx, req)
+		callHeaders := metadata.New(map[string]string{})
 
-		if err := grpc.SendHeader(ctx, OutgoingHeaders); err != nil {
+		// add cookie header for sticky routing for interactive transactional operations
+		switch ty := resp.(type) {
+		case *api.BeginTransactionResponse:
+			expirationTime := time.Now().Add(time.Second*MaximumTimeout + 2*time.Second)
+			callHeaders.Append(api.SetCookie, fmt.Sprintf("%s=%s;%s=%s", api.HeaderTxID, ty.GetTxCtx().GetId(), CookieMaxAgeKey, expirationTime.Format(time.RFC1123)))
+		}
+		if err := grpc.SendHeader(ctx, metadata.Join(OutgoingHeaders, callHeaders)); err != nil {
 			return nil, err
 		}
 

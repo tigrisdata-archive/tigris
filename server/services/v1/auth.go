@@ -17,7 +17,7 @@ package v1
 import (
 	"context"
 	"encoding/json"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 
@@ -61,7 +61,7 @@ func (a Auth0) GetAccessToken(req *api.GetAccessTokenRequest) (*api.GetAccessTok
 		return nil, api.Errorf(api.Code_INTERNAL, "Failed to get access token: reason = "+err.Error())
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, api.Errorf(api.Code_INTERNAL, "Failed to get access token: reason = "+err.Error())
 	}

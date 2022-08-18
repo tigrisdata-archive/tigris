@@ -17,7 +17,9 @@ package middleware
 import (
 	"context"
 
-	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	"google.golang.org/protobuf/proto"
+
+	middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
@@ -38,7 +40,7 @@ type wrappedStream struct {
 func traceUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		grpcMeta := metrics.GetGrpcEndPointMetadataFromFullMethod(ctx, info.FullMethod, "unary")
-		tags := grpcMeta.GetTags()
+		tags := grpcMeta.GetOkTags()
 		spanMeta := metrics.NewSpanMeta(util.Service, info.FullMethod, TraceSpanType, tags)
 		spanMeta.AddTags(metrics.GetDbCollTagsForReq(req))
 		defer metrics.RequestsRespTime.Tagged(spanMeta.GetTags()).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
@@ -53,6 +55,8 @@ func traceUnary() func(ctx context.Context, req interface{}, info *grpc.UnarySer
 		}
 		// Request was ok
 		spanMeta.CountOkForScope(metrics.OkRequests)
+		spanMeta.CountReceivedBytes(metrics.BytesReceived, proto.Size(req.(proto.Message)))
+		spanMeta.CountSentBytes(metrics.BytesSent, proto.Size(resp.(proto.Message)))
 		_ = spanMeta.FinishTracing(ctx)
 		return resp, err
 	}
@@ -63,13 +67,12 @@ func traceStream() grpc.StreamServerInterceptor {
 		wrapped := &wrappedStream{WrappedServerStream: middleware.WrapServerStream(stream)}
 		wrapped.WrappedContext = stream.Context()
 		grpcMeta := metrics.GetGrpcEndPointMetadataFromFullMethod(wrapped.WrappedContext, info.FullMethod, "stream")
-		tags := grpcMeta.GetTags()
+		tags := grpcMeta.GetOkTags()
 		spanMeta := metrics.NewSpanMeta(util.Service, info.FullMethod, TraceSpanType, tags)
 		defer metrics.RequestsRespTime.Tagged(spanMeta.GetTags()).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
 		wrapped.spanMeta = spanMeta
 		wrapped.WrappedContext = spanMeta.StartTracing(wrapped.WrappedContext, false)
-		wrapper := &recvWrapper{wrapped}
-		err := handler(srv, wrapper)
+		err := handler(srv, wrapped)
 		if err != nil {
 			spanMeta.CountErrorForScope(metrics.OkRequests, err)
 			spanMeta.FinishWithError(wrapped.WrappedContext, err)
@@ -89,6 +92,7 @@ func (w *wrappedStream) RecvMsg(m interface{}) error {
 	err := w.ServerStream.RecvMsg(m)
 	parentSpanMeta.AddTags(metrics.GetDbCollTagsForReq(m))
 	childSpanMeta.AddTags(metrics.GetDbCollTagsForReq(m))
+	parentSpanMeta.CountReceivedBytes(metrics.BytesReceived, proto.Size(m.(proto.Message)))
 	w.WrappedContext = childSpanMeta.FinishTracing(w.WrappedContext)
 	return err
 }
@@ -100,6 +104,7 @@ func (w *wrappedStream) SendMsg(m interface{}) error {
 	err := w.ServerStream.SendMsg(m)
 	parentSpanMeta.AddTags(metrics.GetDbCollTagsForReq(m))
 	childSpanMeta.AddTags(metrics.GetDbCollTagsForReq(m))
+	parentSpanMeta.CountSentBytes(metrics.BytesSent, proto.Size(m.(proto.Message)))
 	w.WrappedContext = childSpanMeta.FinishTracing(w.WrappedContext)
 	return err
 }

@@ -21,13 +21,19 @@ import (
 
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/request"
+	"github.com/uber-go/tally"
 	"google.golang.org/grpc"
 )
 
 const (
-	AdminServiceName       = "tigrisdata.admin.v1.Admin"
 	SystemTigrisTenantName = "system"
 	UnknownValue           = "unknown"
+)
+
+var (
+	OkRequests       tally.Scope
+	ErrorRequests    tally.Scope
+	RequestsRespTime tally.Scope
 )
 
 type RequestEndpointMetadata struct {
@@ -59,48 +65,28 @@ func (r *RequestEndpointMetadata) GetServiceType() string {
 	}
 }
 
-func (r *RequestEndpointMetadata) GetTags() map[string]string {
-	if r.serviceName == AdminServiceName {
-		return map[string]string{
-			"grpc_method":       r.methodInfo.Name,
-			"grpc_service":      r.serviceName,
-			"tigris_tenant":     r.namespaceName,
-			"grpc_service_type": r.GetServiceType(),
-			"db":                UnknownValue,
-			"collection":        UnknownValue,
-		}
-	} else {
-		return map[string]string{
-			"grpc_method":       r.methodInfo.Name,
-			"grpc_service":      r.serviceName,
-			"tigris_tenant":     r.namespaceName,
-			"grpc_service_type": r.GetServiceType(),
-			"db":                UnknownValue,
-			"collection":        UnknownValue,
-		}
+func (r *RequestEndpointMetadata) GetOkTags() map[string]string {
+	return map[string]string{
+		"grpc_method":       r.methodInfo.Name,
+		"grpc_service":      r.serviceName,
+		"tigris_tenant":     r.namespaceName,
+		"grpc_service_type": r.GetServiceType(),
+		"env":               config.GetEnvironment(),
+		"db":                UnknownValue,
+		"collection":        UnknownValue,
 	}
 }
 
-func (r *RequestEndpointMetadata) GetSpecificErrorTags(source string, code string) map[string]string {
-	if r.serviceName == AdminServiceName {
-		return map[string]string{
-			"grpc_method":   r.methodInfo.Name,
-			"grpc_service":  r.serviceName,
-			"error_source":  source,
-			"error_code":    code,
-			"tigris_tenant": SystemTigrisTenantName,
-			"db":            UnknownValue,
-			"collection":    UnknownValue,
-		}
-	} else {
-		return map[string]string{
-			"grpc_method":   r.methodInfo.Name,
-			"grpc_service":  r.serviceName,
-			"error_source":  source,
-			"error_code":    code,
-			"tigris_tenant": UnknownValue,
-			"db":            UnknownValue,
-		}
+func (r *RequestEndpointMetadata) GetErrorTags(source string, code string) map[string]string {
+	return map[string]string{
+		"grpc_method":   r.methodInfo.Name,
+		"grpc_service":  r.serviceName,
+		"error_source":  source,
+		"error_code":    code,
+		"env":           config.GetEnvironment(),
+		"tigris_tenant": SystemTigrisTenantName,
+		"db":            UnknownValue,
+		"collection":    UnknownValue,
 	}
 }
 
@@ -129,13 +115,8 @@ func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod strin
 	return newRequestEndpointMetadata(ctx, svcName, methodInfo)
 }
 
-func InitializeRequestScopes() {
-	// metric names: tigris_server_requests
-	if config.DefaultConfig.Tracing.Enabled {
-		OkRequests = Requests.SubScope("requests")
-		// metric names: tigris_server_requests_errors
-		ErrorRequests = Requests.SubScope("error")
-		// metric names: tigirs_server_requests_resptime
-		RequestsRespTime = Requests.SubScope("resptime")
-	}
+func initializeRequestScopes() {
+	OkRequests = Requests.SubScope("count")
+	ErrorRequests = Requests.SubScope("count")
+	RequestsRespTime = Requests.SubScope("resptime")
 }

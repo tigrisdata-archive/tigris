@@ -27,17 +27,14 @@ import (
 )
 
 var (
-	root     tally.Scope
-	Reporter promreporter.Reporter
-	// GRPC and HTTP related metric scopes
-	Requests         tally.Scope
-	OkRequests       tally.Scope
-	ErrorRequests    tally.Scope
-	RequestsRespTime tally.Scope
-	// Fdb related metric scopes
-	FdbMetrics tally.Scope
-	// Search related metrics scopes
-	SearchMetrics tally.Scope
+	root           tally.Scope
+	Reporter       promreporter.Reporter
+	Requests       tally.Scope
+	FdbMetrics     tally.Scope
+	SearchMetrics  tally.Scope
+	SessionMetrics tally.Scope
+	SizeMetrics    tally.Scope
+	NetworkMetrics tally.Scope
 )
 
 func GetGlobalTags() map[string]string {
@@ -65,13 +62,22 @@ func InitializeMetrics() io.Closer {
 	if config.DefaultConfig.Tracing.Enabled {
 		// Request level metrics (HTTP and GRPC)
 		Requests = root.SubScope("requests")
-		InitializeRequestScopes()
+		initializeRequestScopes()
 		// FDB level metrics
 		FdbMetrics = root.SubScope("fdb")
-		InitializeFdbScopes()
+		initializeFdbScopes()
 		// Search level metrics
 		SearchMetrics = root.SubScope("search")
-		InitializeSearchScopes()
+		initializeSearchScopes()
+		// Session level metrics
+		SessionMetrics = root.SubScope("session")
+		initializeSessionScopes()
+		// Size metrics
+		SizeMetrics = root.SubScope("size")
+		initializeSizeScopes()
+		// Network netrics
+		NetworkMetrics = root.SubScope("net")
+		initializeNetorkScopes()
 	}
 	return closer
 }
