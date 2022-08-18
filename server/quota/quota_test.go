@@ -98,14 +98,14 @@ func TestQuotaManager(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	sizeLimitUpdateInterval = 0
+	m.cfg.LimitUpdateInterval = 0
 	require.Equal(t, ErrStorageSizeExceeded, m.check(ctx, ns, 0))
-	sizeLimitUpdateInterval = 1
+	m.cfg.LimitUpdateInterval = 1
 	require.Equal(t, ErrStorageSizeExceeded, m.check(ctx, ns, 0))
 
 	require.NoError(t, kvStore.DropTable(ctx, table))
 
-	sizeLimitUpdateInterval = 0
+	m.cfg.LimitUpdateInterval = 0
 
 	require.NoError(t, m.check(ctx, ns, 0))
 
