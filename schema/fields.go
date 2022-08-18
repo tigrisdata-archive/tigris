@@ -185,8 +185,10 @@ func toSearchFieldType(fieldType FieldType) string {
 		return FieldNames[fieldType]
 	case Int32Type, Int64Type:
 		return FieldNames[fieldType]
-	case StringType, ByteType, UUIDType, DateTimeType:
+	case StringType, ByteType, UUIDType:
 		return FieldNames[StringType]
+	case DateTimeType:
+		return FieldNames[Int64Type]
 	case DoubleType:
 		return searchDoubleType
 	case ArrayType:
@@ -393,7 +395,7 @@ func (q *QueryableField) Name() string {
 }
 
 func (q *QueryableField) ShouldPack() bool {
-	return q.DataType == ArrayType
+	return q.DataType == ArrayType || q.DataType == DateTimeType
 }
 
 func buildQueryableFields(fields []*Field) []*QueryableField {

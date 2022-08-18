@@ -184,16 +184,27 @@ func GetSearchDeltaFields(existingFields []*QueryableField, incomingFields []*Fi
 }
 
 func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.CollectionSchema {
-	var ptrTrue = true
+	var ptrTrue, ptrFalse = true, false
 	var tsFields []tsApi.Field
 	for _, s := range queryableFields {
 		tsFields = append(tsFields, tsApi.Field{
-			Name:     s.FieldName,
+			Name:     s.Name(),
 			Type:     s.SearchType,
 			Facet:    &s.Faceted,
 			Index:    &s.Indexed,
 			Optional: &ptrTrue,
 		})
+		// Save original date as string to disk
+		if s.DataType == DateTimeType {
+			tsFields = append(tsFields, tsApi.Field{
+				Name:     ToSearchDateKey(s.Name()),
+				Type:     toSearchFieldType(StringType),
+				Facet:    &ptrFalse,
+				Index:    &ptrFalse,
+				Sort:     &ptrFalse,
+				Optional: &ptrTrue,
+			})
+		}
 	}
 
 	return &tsApi.CollectionSchema{
