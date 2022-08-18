@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"time"
 )
 
 func TestToUnixNano(t *testing.T) {
@@ -21,7 +22,7 @@ func TestToUnixNano(t *testing.T) {
 
 	for _, v := range validCases {
 		t.Run(v.name, func(t *testing.T) {
-			actual, err := ToUnixNano(v.date)
+			actual, err := ToUnixNano(time.RFC3339Nano, v.date)
 			assert.NoError(t, err)
 			assert.Equal(t, v.expected, actual)
 		})
@@ -37,7 +38,7 @@ func TestToUnixNano(t *testing.T) {
 
 	for _, v := range failureCases {
 		t.Run(v.name, func(t *testing.T) {
-			_, err := ToUnixNano(v.date)
+			_, err := ToUnixNano(time.RFC3339Nano, v.date)
 			assert.ErrorContains(t, err, v.errorLike)
 		})
 	}

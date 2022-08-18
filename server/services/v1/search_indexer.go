@@ -195,7 +195,7 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 				}
 			case schema.DateTimeType:
 				if dateStr, ok := value.(string); ok {
-					t, err := date.ToUnixNano(dateStr)
+					t, err := date.ToUnixNano(schema.DateTimeFormat, dateStr)
 					if err != nil {
 						return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "Validation failed, %s is not a valid date-time", dateStr)
 					}
