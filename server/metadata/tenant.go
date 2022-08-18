@@ -587,7 +587,7 @@ func (tenant *Tenant) DropDatabase(ctx context.Context, tx transaction.Tx, dbNam
 // GetDatabase returns the database object, or null if there is no database existing with the name passed in the param.
 // As reloading of tenant state is happening at the session manager layer so GetDatabase calls assume that the caller
 // just needs the state from the cache.
-func (tenant *Tenant) GetDatabase(_ context.Context, _ transaction.Tx, dbName string) (*Database, error) {
+func (tenant *Tenant) GetDatabase(_ context.Context, dbName string) (*Database, error) {
 	tenant.Lock()
 	defer tenant.Unlock()
 
@@ -595,7 +595,7 @@ func (tenant *Tenant) GetDatabase(_ context.Context, _ transaction.Tx, dbName st
 }
 
 // ListDatabases is used to list all database available for this tenant.
-func (tenant *Tenant) ListDatabases(_ context.Context, _ transaction.Tx) []string {
+func (tenant *Tenant) ListDatabases(_ context.Context) []string {
 	tenant.RLock()
 	defer tenant.RUnlock()
 

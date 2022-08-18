@@ -74,7 +74,7 @@ func TestQuotaManager(t *testing.T) {
 	err = tenant.Reload(ctx, tx, []byte("aaa"))
 	require.NoError(t, err)
 
-	db1, err := tenant.GetDatabase(ctx, tx, "tenant_db1")
+	db1, err := tenant.GetDatabase(ctx, "tenant_db1")
 	require.NoError(t, err)
 
 	require.NoError(t, tenant.CreateCollection(ctx, tx, db1, factory))

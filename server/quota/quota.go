@@ -109,11 +109,7 @@ func (m *Manager) check(ctx context.Context, namespace string, size int) error {
 	return m.checkStorage(ctx, namespace, s, size)
 }
 
-func getDbSize(ctx context.Context, tenant *metadata.Tenant, tx transaction.Tx, dbName string) int64 {
-	db, err := tenant.GetDatabase(ctx, tx, dbName)
-	if err != nil {
-		ulog.E(err)
-	}
+func getDbSize(ctx context.Context, tenant *metadata.Tenant, db *metadata.Database) int64 {
 	dbSize, err := tenant.DatabaseSize(ctx, db)
 	if err != nil {
 		ulog.E(err)
@@ -140,29 +136,15 @@ func (m *Manager) updateTenantSize(ctx context.Context, namespace string) {
 		return
 	}
 
-	tx, err := m.txMgr.StartTx(ctx)
-	if err != nil {
-		ulog.E(err)
-		return
-	}
-
-	for _, dbName := range tenant.ListDatabases(ctx, tx) {
-		metrics.UpdateDbSizeMetrics(namespace, dbName, getDbSize(ctx, tenant, tx, dbName))
-		db, err := tenant.GetDatabase(ctx, tx, dbName)
+	for _, dbName := range tenant.ListDatabases(ctx) {
+		db, err := tenant.GetDatabase(ctx, dbName)
 		if err != nil {
 			ulog.E(err)
 			return
 		}
+		metrics.UpdateDbSizeMetrics(namespace, dbName, getDbSize(ctx, tenant, db))
 		for _, coll := range db.ListCollection() {
 			metrics.UpdateCollectionSizeMetrics(namespace, dbName, coll.Name, getCollSize(ctx, tenant, db, coll))
-		}
-	}
-
-	err = tx.Commit(ctx)
-	if err != nil {
-		err := tx.Rollback(ctx)
-		if err != nil {
-			ulog.E(err)
 		}
 	}
 }
