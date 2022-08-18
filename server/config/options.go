@@ -97,11 +97,11 @@ type SearchMetricsConfig struct {
 }
 
 type ObservabilityConfig struct {
-	Provider                   string `yaml:"provider" json:"provider"`
-	EnableObservabilityService bool   `yaml:"enable_observability_service" json:"enable_observability_service"`
-	ApiKey                     string `yaml:"api_key" json:"api_key"`
-	AppKey                     string `yaml:"app_key" json:"app_key"`
-	ProviderUrl                string `yaml:"provider_url" json:"provider_url"`
+	Provider    string `mapstructure:"provider" yaml:"provider" json:"provider"`
+	Enabled     bool   `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	ApiKey      string `mapstructure:"api_key" yaml:"api_key" json:"api_key"`
+	AppKey      string `mapstructure:"app_key" yaml:"app_key" json:"app_key"`
+	ProviderUrl string `mapstructure:"provider_url" yaml:"provider_url" json:"provider_url"`
 }
 
 var DefaultConfig = Config{
@@ -152,7 +152,7 @@ var DefaultConfig = Config{
 		DataSizeLimit:        10000000000, // bytes
 	},
 	Observability: ObservabilityConfig{
-		EnableObservabilityService: false,
+		Enabled: false,
 	},
 }
 

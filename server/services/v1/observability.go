@@ -141,7 +141,7 @@ func newObservabilityService() *observabilityService {
 		}
 	}
 	log.Error().Str("observabilityProvider", config.DefaultConfig.Observability.Provider).Msg("Unable to configure external observability provider")
-	if config.DefaultConfig.Observability.EnableObservabilityService {
+	if config.DefaultConfig.Observability.Enabled {
 		panic("Unable to configure external observability provider")
 	}
 	return nil
