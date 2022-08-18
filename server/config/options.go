@@ -145,11 +145,13 @@ var DefaultConfig = Config{
 		EnableHeap: true,
 	},
 	Quota: QuotaConfig{
-		Enabled:              false,
-		RateLimit:            1000,        // requests per second both reads and writes
-		WriteThroughputLimit: 10000000,    // bytes per second
-		ReadThroughputLimit:  10000000,    // bytes per second
-		DataSizeLimit:        10000000000, // bytes
+		Enabled:                   false,
+		RateLimit:                 1000,        // requests per second both reads and writes
+		WriteThroughputLimit:      10000000,    // bytes per second
+		ReadThroughputLimit:       10000000,    // bytes per second
+		DataSizeLimit:             10000000000, // bytes
+		LimitUpdateInterval:       5,           // seconds
+		TenantSizeRefreshInterval: 60,          // seconds
 	},
 	Observability: ObservabilityConfig{
 		Enabled: false,
@@ -170,9 +172,11 @@ type SearchConfig struct {
 }
 
 type QuotaConfig struct {
-	Enabled              bool
-	RateLimit            int   `mapstructure:"rate_limit" yaml:"rate_limit" json:"rate_limit"`
-	WriteThroughputLimit int   `mapstructure:"write_throughput_limit" yaml:"write_throughput_limit" json:"write_throughput_limit"`
-	ReadThroughputLimit  int   `mapstructure:"read_throughput_limit" yaml:"read_throughput_limit" json:"read_throughput_limit"`
-	DataSizeLimit        int64 `mapstructure:"data_size_limit" yaml:"data_size_limit" json:"data_size_limit"`
+	Enabled                   bool
+	RateLimit                 int   `mapstructure:"rate_limit" yaml:"rate_limit" json:"rate_limit"`
+	WriteThroughputLimit      int   `mapstructure:"write_throughput_limit" yaml:"write_throughput_limit" json:"write_throughput_limit"`
+	ReadThroughputLimit       int   `mapstructure:"read_throughput_limit" yaml:"read_throughput_limit" json:"read_throughput_limit"`
+	DataSizeLimit             int64 `mapstructure:"data_size_limit" yaml:"data_size_limit" json:"data_size_limit"`
+	LimitUpdateInterval       int64 `mapstructure:"limit_update_interval" yaml:"limit_update_interval" json:"limit_update_interval"`
+	TenantSizeRefreshInterval int64 `mapstructure:"tenant_size_refresh_interval" yaml:"tenant_size_refresh_interval" json:"tenant_size_refresh_interval"`
 }

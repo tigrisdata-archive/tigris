@@ -19,6 +19,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/tigrisdata/tigris/schema"
+
+	ulog "github.com/tigrisdata/tigris/util/log"
+
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
@@ -29,20 +33,20 @@ import (
 )
 
 var (
-	sizeLimitUpdateInterval int64 = 5 // seconds
-
 	ErrRateExceeded        = api.Errorf(api.Code_RESOURCE_EXHAUSTED, "request rate limit exceeded")
 	ErrThroughputExceeded  = api.Errorf(api.Code_RESOURCE_EXHAUSTED, "request throughput limit exceeded")
 	ErrStorageSizeExceeded = api.Errorf(api.Code_RESOURCE_EXHAUSTED, "data size limit exceeded")
 )
 
 type State struct {
-	Rate            *rate.Limiter
-	WriteThroughput *rate.Limiter
-	ReadThroughput  *rate.Limiter
-	Size            atomic.Int64
-	SizeUpdateAt    atomic.Int64
-	SizeLock        sync.Mutex
+	Rate               *rate.Limiter
+	WriteThroughput    *rate.Limiter
+	ReadThroughput     *rate.Limiter
+	Size               atomic.Int64
+	SizeUpdateAt       atomic.Int64
+	TenantSizeUpdateAt atomic.Int64
+	SizeLock           sync.Mutex
+	TenantSizeLock     sync.Mutex
 }
 
 type Manager struct {
@@ -61,7 +65,7 @@ func Init(t *metadata.TenantManager, tx *transaction.Manager, c *config.QuotaCon
 // Allow checks rate, write throughput and storage size limits for the namespace
 // and returns error if at least one of them is exceeded
 func Allow(ctx context.Context, namespace string, reqSize int) error {
-	if !mgr.cfg.Enabled {
+	if !config.DefaultConfig.Quota.Enabled {
 		return nil
 	}
 	return mgr.check(ctx, namespace, reqSize)
@@ -102,14 +106,88 @@ func (m *Manager) check(ctx context.Context, namespace string, size int) error {
 		return ErrThroughputExceeded
 	}
 
-	return m.checkStorageSize(ctx, namespace, s, size)
+	return m.checkStorage(ctx, namespace, s, size)
 }
 
-func (m *Manager) checkStorageSize(ctx context.Context, namespace string, s *State, size int) error {
-	sz := s.Size.Load()
+func getDbSize(ctx context.Context, tenant *metadata.Tenant, tx transaction.Tx, dbName string) int64 {
+	db, err := tenant.GetDatabase(ctx, tx, dbName)
+	if err != nil {
+		ulog.E(err)
+	}
+	dbSize, err := tenant.DatabaseSize(ctx, db)
+	if err != nil {
+		ulog.E(err)
+	}
+	return dbSize
+}
 
-	if time.Now().Unix() < s.SizeUpdateAt.Load()+sizeLimitUpdateInterval {
+func getCollSize(ctx context.Context, tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection) int64 {
+	collSize, err := tenant.CollectionSize(ctx, db, coll)
+	if err != nil {
+		ulog.E(err)
+	}
+	return collSize
+}
+
+func (m *Manager) updateTenantSize(ctx context.Context, namespace string) {
+	if m.txMgr == nil {
+		return
+	}
+	tenant, err := m.tenantMgr.GetTenant(ctx, namespace, m.txMgr)
+	if err != nil {
+		ulog.E(err)
+		// Could not determine tenant, just exit
+		return
+	}
+
+	tx, err := m.txMgr.StartTx(ctx)
+	if err != nil {
+		ulog.E(err)
+		return
+	}
+
+	for _, dbName := range tenant.ListDatabases(ctx, tx) {
+		metrics.UpdateDbSizeMetrics(namespace, dbName, getDbSize(ctx, tenant, tx, dbName))
+		db, err := tenant.GetDatabase(ctx, tx, dbName)
+		if err != nil {
+			ulog.E(err)
+			return
+		}
+		for _, coll := range db.ListCollection() {
+			metrics.UpdateCollectionSizeMetrics(namespace, dbName, coll.Name, getCollSize(ctx, tenant, db, coll))
+		}
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		err := tx.Rollback(ctx)
+		if err != nil {
+			ulog.E(err)
+		}
+	}
+}
+
+func (m *Manager) updateTenantMetrics(ctx context.Context, namespace string, s *State) {
+	sz := s.Size.Load()
+	currentTimeStamp := time.Now().Unix()
+
+	if currentTimeStamp >= s.TenantSizeUpdateAt.Load()+m.cfg.TenantSizeRefreshInterval {
+		s.TenantSizeLock.Lock()
+		defer s.TenantSizeLock.Unlock()
+
+		s.TenantSizeUpdateAt.Store(currentTimeStamp)
 		metrics.UpdateNameSpaceSizeMetrics(namespace, sz)
+		m.updateTenantSize(ctx, namespace)
+	}
+}
+
+func (m *Manager) checkStorage(ctx context.Context, namespace string, s *State, size int) error {
+	sz := s.Size.Load()
+	currentTimeStamp := time.Now().Unix()
+
+	m.updateTenantMetrics(ctx, namespace, s)
+
+	if currentTimeStamp < s.SizeUpdateAt.Load()+m.cfg.LimitUpdateInterval {
 		if sz+int64(size) >= m.cfg.DataSizeLimit {
 			return ErrStorageSizeExceeded
 		}
@@ -119,8 +197,8 @@ func (m *Manager) checkStorageSize(ctx context.Context, namespace string, s *Sta
 	s.SizeLock.Lock()
 	defer s.SizeLock.Unlock()
 
-	if time.Now().Unix() >= s.SizeUpdateAt.Load()+sizeLimitUpdateInterval {
-		s.SizeUpdateAt.Store(time.Now().Unix())
+	if currentTimeStamp >= s.SizeUpdateAt.Load()+m.cfg.LimitUpdateInterval {
+		s.SizeUpdateAt.Store(currentTimeStamp)
 
 		t, err := m.tenantMgr.GetTenant(ctx, namespace, m.txMgr)
 		if err != nil {
