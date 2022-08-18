@@ -21,6 +21,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/lib/set"
+	"github.com/tigrisdata/tigris/util"
 )
 
 type FieldType int
@@ -65,25 +66,7 @@ var FieldNames = [...]string{
 var (
 	MsgFieldNameAsLanguageKeyword = "Invalid collection field name, It contains language keyword for fieldName = '%s'"
 	MsgFieldNameInvalidPattern    = "Invalid collection field name, field name can only contain [a-zA-Z0-9_$] and it can only start with [a-zA-Z_$] for fieldName = '%s'"
-	LanguageKeywords              = set.New("abstract", "add", "alias", "and", "any", "args", "arguments", "array",
-		"as", "as?", "ascending", "assert", "async", "await", "base", "bool", "boolean", "break", "by", "byte",
-		"callable", "case", "catch", "chan", "char", "checked", "class", "clone", "const", "constructor", "continue",
-		"debugger", "decimal", "declare", "def", "default", "defer", "del", "delegate", "delete", "descending", "die",
-		"do", "double", "dynamic", "echo", "elif", "else", "elseif", "empty", "enddeclare", "endfor", "endforeach",
-		"endif", "endswitch", "endwhile", "enum", "equals", "eval", "event", "except", "exception", "exit", "explicit",
-		"export", "extends", "extern", "fallthrough", "false", "final", "finally", "fixed", "float", "fn", "for",
-		"foreach", "from", "fun", "func", "function", "get", "global", "go", "goto", "group", "if", "implements",
-		"implicit", "import", "in", "include", "include_once", "init", "instanceof", "insteadof", "int", "integer",
-		"interface", "internal", "into", "is", "isset", "join", "lambda", "let", "list", "lock", "long", "managed",
-		"map", "match", "module", "nameof", "namespace", "native", "new", "nint", "none", "nonlocal", "not", "notnull",
-		"nuint", "null", "number", "object", "of", "on", "operator", "or", "orderby", "out", "override", "package",
-		"params", "partial", "pass", "print", "private", "protected", "public", "raise", "range", "readonly", "record",
-		"ref", "remove", "require", "require_once", "return", "sbyte", "sealed", "select", "set", "short", "sizeof",
-		"stackalloc", "static", "strictfp", "string", "struct", "super", "switch", "symbol", "synchronized", "this",
-		"throw", "throws", "trait", "transient", "true", "try", "type", "typealias", "typeof", "uint", "ulong",
-		"unchecked", "unmanaged", "unsafe", "unset", "use", "ushort", "using", "val", "value", "var", "virtual", "void",
-		"volatile", "when", "where", "while", "with", "xor", "yield")
-	ValidFieldNamePattern = regexp.MustCompile(`^[a-zA-Z_$][a-zA-Z0-9_$]*$`)
+	ValidFieldNamePattern         = regexp.MustCompile(`^[a-zA-Z_$][a-zA-Z0-9_$]*$`)
 )
 
 const (
@@ -202,8 +185,10 @@ func toSearchFieldType(fieldType FieldType) string {
 		return FieldNames[fieldType]
 	case Int32Type, Int64Type:
 		return FieldNames[fieldType]
-	case StringType, ByteType, UUIDType, DateTimeType:
+	case StringType, ByteType, UUIDType:
 		return FieldNames[StringType]
+	case DateTimeType:
+		return FieldNames[Int64Type]
 	case DoubleType:
 		return searchDoubleType
 	case ArrayType:
@@ -306,7 +291,7 @@ func (f *FieldBuilder) Build(isArrayElement bool) (*Field, error) {
 	}
 
 	// check for language keywords
-	if LanguageKeywords.Contains(strings.ToLower(f.FieldName)) {
+	if util.LanguageKeywords.Contains(strings.ToLower(f.FieldName)) {
 		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, MsgFieldNameAsLanguageKeyword, f.FieldName)
 	}
 
@@ -410,7 +395,7 @@ func (q *QueryableField) Name() string {
 }
 
 func (q *QueryableField) ShouldPack() bool {
-	return q.DataType == ArrayType
+	return q.DataType == ArrayType || q.DataType == DateTimeType
 }
 
 func buildQueryableFields(fields []*Field) []*QueryableField {

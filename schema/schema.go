@@ -15,6 +15,8 @@
 package schema
 
 import (
+	"time"
+
 	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
@@ -66,6 +68,8 @@ const (
 	PrimaryKeyIndexName = "pkey"
 	AutoPrimaryKeyF     = "id"
 	PrimaryKeySchemaK   = "primary_key"
+	// DateTimeFormat represents the supported date time format
+	DateTimeFormat = time.RFC3339Nano
 )
 
 var (

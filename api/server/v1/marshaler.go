@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/ajg/form"
@@ -380,6 +381,69 @@ func (x *CreateOrUpdateCollectionRequest) UnmarshalJSON(data []byte) error {
 				x.Type = CollectionType_DOCUMENTS
 			case "messages":
 				x.Type = CollectionType_MESSAGES
+			}
+		}
+	}
+	return nil
+}
+
+// UnmarshalJSON on QueryTimeSeriesMetricsRequest. Handles enum.
+func (x *QueryTimeSeriesMetricsRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+	for key, value := range mp {
+		switch key {
+		case "db":
+			if err := jsoniter.Unmarshal(value, &x.Db); err != nil {
+				return err
+			}
+		case "collection":
+			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
+				return err
+			}
+		case "from":
+			if err := jsoniter.Unmarshal(value, &x.From); err != nil {
+				return err
+			}
+		case "to":
+			if err := jsoniter.Unmarshal(value, &x.To); err != nil {
+				return err
+			}
+		case "metric_name":
+			if err := jsoniter.Unmarshal(value, &x.MetricName); err != nil {
+				return err
+			}
+		case "space_aggregation":
+			var t string
+			if err := jsoniter.Unmarshal(value, &t); err != nil {
+				return err
+			}
+			switch strings.ToUpper(t) {
+			case "AVG":
+				x.SpaceAggregation = MetricQuerySpaceAggregation_AVG
+			case "MIN":
+				x.SpaceAggregation = MetricQuerySpaceAggregation_MIN
+			case "MAX":
+				x.SpaceAggregation = MetricQuerySpaceAggregation_MAX
+			case "SUM":
+				x.SpaceAggregation = MetricQuerySpaceAggregation_SUM
+			}
+		case "space_aggregated_by":
+			if err := jsoniter.Unmarshal(value, &x.SpaceAggregatedBy); err != nil {
+				return err
+			}
+		case "function":
+			var t string
+			if err := jsoniter.Unmarshal(value, &t); err != nil {
+				return err
+			}
+			switch strings.ToUpper(t) {
+			case "RATE":
+				x.Function = MetricQueryFunction_RATE
+			case "COUNT":
+				x.Function = MetricQueryFunction_COUNT
 			}
 		}
 	}

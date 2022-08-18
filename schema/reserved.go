@@ -21,13 +21,15 @@ const (
 	UpdatedAt
 	Metadata
 	IdToSearchKey
+	DateSearchKeyPrefix
 )
 
 var ReservedFields = [...]string{
-	CreatedAt:     "created_at",
-	UpdatedAt:     "updated_at",
-	Metadata:      "metadata",
-	IdToSearchKey: "_tigris_id",
+	CreatedAt:           "created_at",
+	UpdatedAt:           "updated_at",
+	Metadata:            "metadata",
+	IdToSearchKey:       "_tigris_id",
+	DateSearchKeyPrefix: "_tigris_date_",
 }
 
 func IsReservedField(name string) bool {
@@ -38,4 +40,10 @@ func IsReservedField(name string) bool {
 	}
 
 	return false
+}
+
+// ToSearchDateKey can be used to generate storage field for search backend
+// Original date strings are persisted as it is under this field
+func ToSearchDateKey(key string) string {
+	return ReservedFields[DateSearchKeyPrefix] + key
 }

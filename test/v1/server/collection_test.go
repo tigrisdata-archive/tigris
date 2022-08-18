@@ -74,6 +74,18 @@ func TestCreateCollection(t *testing.T) {
 	})
 }
 
+func TestCreateCollectionInvalidName(t *testing.T) {
+	invalidCollectionName := []string{"", "test-coll", "1test-coll", "$testcoll", "testcoll$", "test$coll", "abstract", "yield"}
+	for _, name := range invalidCollectionName {
+		resp := createCollection(t, "valid_db_name", name, testCreateSchema)
+		resp.Status(http.StatusBadRequest).
+			JSON().
+			Path("$.error").
+			Object().
+			ValueEqual("message", "invalid collection name")
+	}
+}
+
 func TestDropCollection(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)

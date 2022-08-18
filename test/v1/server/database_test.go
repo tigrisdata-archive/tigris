@@ -42,6 +42,18 @@ func TestCreateDatabase(t *testing.T) {
 		ValueEqual("message", "database created successfully")
 }
 
+func TestCreateDatabaseInvalidName(t *testing.T) {
+	invalidDbNames := []string{"", "1test-db", "test-db", "$testdb", "testdb$", "test$db", "abstract", "yield"}
+	for _, name := range invalidDbNames {
+		resp := createDatabase(t, name)
+		resp.Status(http.StatusBadRequest).
+			JSON().
+			Path("$.error").
+			Object().
+			ValueEqual("message", "invalid database name")
+	}
+}
+
 func TestBeginTransaction(t *testing.T) {
 	resp := beginTransaction(t, "test_db")
 	cookieVal := resp.Cookie("Tigris-Tx-Id").Value()
