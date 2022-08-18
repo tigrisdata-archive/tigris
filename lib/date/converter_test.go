@@ -32,7 +32,7 @@ func TestToUnixNano(t *testing.T) {
 		date      string
 		errorLike string
 	}{
-		{"RFC 1123", "Mon, 02 Jan 2006 15:04:05 MST", "Validation failed"},
+		{"RFC 1123", "Mon, 02 Jan 2006 15:04:05 MST", "cannot parse"},
 	}
 
 	for _, v := range failureCases {

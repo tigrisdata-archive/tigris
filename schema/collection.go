@@ -197,7 +197,7 @@ func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.Co
 		// Save original date as string to disk
 		if s.DataType == DateTimeType {
 			tsFields = append(tsFields, tsApi.Field{
-				Name:     GetShadowedDateKey(s.Name()),
+				Name:     ToSearchDateKey(s.Name()),
 				Type:     toSearchFieldType(StringType),
 				Facet:    &ptrFalse,
 				Index:    &ptrFalse,

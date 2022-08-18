@@ -194,14 +194,15 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 					return nil, err
 				}
 			case schema.DateTimeType:
-				dateStr := fmt.Sprint(value)
-				t, err := date.ToUnixNano(dateStr)
-				if err != nil {
-					return nil, err
+				if dateStr, ok := value.(string); ok {
+					t, err := date.ToUnixNano(dateStr)
+					if err != nil {
+						return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "Validation failed, %s is not a valid date-time", dateStr)
+					}
+					decData[key] = t
+					// pack original date as string to a shadowed key
+					decData[schema.ToSearchDateKey(key)] = dateStr
 				}
-				decData[key] = t
-				// pack original date as string to a shadowed key
-				decData[schema.GetShadowedDateKey(key)] = dateStr
 			default:
 				return nil, api.Errorf(api.Code_UNIMPLEMENTED, "Internal error!")
 			}
@@ -235,7 +236,7 @@ func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCo
 					doc[f.Name()] = value
 				case schema.DateTimeType:
 					// unpack original date from shadowed key
-					shadowedKey := schema.GetShadowedDateKey(f.Name())
+					shadowedKey := schema.ToSearchDateKey(f.Name())
 					doc[f.Name()] = doc[shadowedKey]
 					delete(doc, shadowedKey)
 				default:
