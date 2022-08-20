@@ -115,7 +115,16 @@ func unmarshalInternal(data []byte, v interface{}) error {
 			if err != nil {
 				return err
 			}
-			v.RefreshToken = values.Get(refreshToken)
+			grantType := strings.ToUpper(values.Get("grant_type"))
+
+			if grantType == GrantType_REFRESH_TOKEN.String() {
+				v.GrantType = GrantType_REFRESH_TOKEN
+				v.RefreshToken = values.Get(refreshToken)
+			} else if grantType == GrantType_CLIENT_CREDENTIALS.String() {
+				v.GrantType = GrantType_CLIENT_CREDENTIALS
+				v.ClientId = values.Get("client_id")
+				v.ClientSecret = values.Get("client_secret")
+			}
 			return nil
 		}
 	}
@@ -473,6 +482,42 @@ func (x *QueryTimeSeriesMetricsRequest) UnmarshalJSON(data []byte) error {
 					return err
 				}
 				x.AdditionalFunctions = append(x.AdditionalFunctions, additionalFunc)
+			}
+		}
+	}
+	return nil
+}
+
+// UnmarshalJSON on GetAccessTokenRequest. Handles enum.
+func (x *GetAccessTokenRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+	for key, value := range mp {
+		switch key {
+		case "grant_type":
+			var grant string
+			if err := jsoniter.Unmarshal(value, &grant); err != nil {
+				return err
+			}
+			switch strings.ToUpper(grant) {
+			case "REFRESH_TOKEN":
+				x.GrantType = GrantType_REFRESH_TOKEN
+			case "CLIENT_CREDENTIALS":
+				x.GrantType = GrantType_CLIENT_CREDENTIALS
+			}
+		case "refresh_token":
+			if err := jsoniter.Unmarshal(value, &x.RefreshToken); err != nil {
+				return err
+			}
+		case "client_id":
+			if err := jsoniter.Unmarshal(value, &x.ClientId); err != nil {
+				return err
+			}
+		case "client_secret":
+			if err := jsoniter.Unmarshal(value, &x.ClientSecret); err != nil {
+				return err
 			}
 		}
 	}

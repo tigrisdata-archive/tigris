@@ -27,7 +27,7 @@ require (
 	github.com/soheilhy/cmux v0.1.5
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.12.0
-	github.com/stretchr/testify v1.7.2
+	github.com/stretchr/testify v1.8.0
 	github.com/tigrisdata/tigris-client-go v1.0.0-alpha.21
 	github.com/typesense/typesense-go v0.6.0
 	github.com/uber-go/tally v3.5.0+incompatible
@@ -50,8 +50,10 @@ require (
 	github.com/DataDog/gostackparse v0.5.0 // indirect
 	github.com/DataDog/sketches-go v1.4.1 // indirect
 	github.com/Microsoft/go-winio v0.5.2 // indirect
+	github.com/PuerkitoBio/rehttp v1.1.0 // indirect
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/andybalholm/brotli v1.0.4 // indirect
+	github.com/auth0/go-auth0 v0.9.3 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/deepmap/oapi-codegen v1.11.0 // indirect

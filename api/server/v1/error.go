@@ -150,6 +150,35 @@ func CodeToString(c Code) string {
 	return r
 }
 
+func FromHttpCode(httpCode int) Code {
+	switch httpCode {
+	case 200:
+		return Code_OK
+	case 499:
+		return Code_CANCELLED
+	case 400:
+		return Code_INVALID_ARGUMENT
+	case 504:
+		return Code_DEADLINE_EXCEEDED
+	case 404:
+		return Code_NOT_FOUND
+	case 409:
+		return Code_CONFLICT
+	case 403:
+		return Code_PERMISSION_DENIED
+	case 401:
+		return Code_UNAUTHENTICATED
+	case 429:
+		return Code_RESOURCE_EXHAUSTED
+	case 500:
+		return Code_INTERNAL
+	case 503:
+		return Code_UNAVAILABLE
+	default:
+		return Code_UNKNOWN
+	}
+}
+
 // ToHTTPCode converts Tigris' code to HTTP status code
 // Used to customize HTTP codes returned by GRPC-gateway
 func ToHTTPCode(code Code) int {

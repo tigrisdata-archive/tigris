@@ -35,7 +35,7 @@ type TokenCtxkey struct{}
 var (
 	headerAuthorize           = "authorization"
 	UnknownNamespace          = "unknown"
-	BypassAuthForTheseMethods = set.New("/HealthAPI/Health", "/tigrisdata.auth.v1.Auth/getAccessToken")
+	BypassAuthForTheseMethods = set.New("/HealthAPI/Health", "/tigrisdata.auth.v1.Auth/getAccessToken", "/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo")
 )
 
 type Namespace struct {

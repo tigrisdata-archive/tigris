@@ -50,6 +50,9 @@ type AuthConfig struct {
 	ClientId                 string        `mapstructure:"client_id" yaml:"client_id" json:"client_id"`
 	ExternalTokenURL         string        `mapstructure:"external_token_url" yaml:"external_token_url" json:"external_token_url"`
 	EnableOauth              bool          `mapstructure:"enable_oauth" yaml:"enable_oauth" json:"enable_oauth"`
+	Domain                   string        `mapstructure:"external_domain" yaml:"external_domain" json:"external_domain"`
+	ManagementClientId       string        `mapstructure:"management_client_id" yaml:"management_client_id" json:"management_client_id"`
+	ManagementClientSecret   string        `mapstructure:"management_client_secret" yaml:"management_client_secret" json:"management_client_secret"`
 }
 
 type CdcConfig struct {
