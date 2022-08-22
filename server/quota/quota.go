@@ -65,6 +65,9 @@ func Init(t *metadata.TenantManager, tx *transaction.Manager, c *config.QuotaCon
 // Allow checks rate, write throughput and storage size limits for the namespace
 // and returns error if at least one of them is exceeded
 func Allow(ctx context.Context, namespace string, reqSize int) error {
+	// Emit size metrics regardless of enabled quota
+	mgr.updateTenantMetrics(ctx, namespace)
+
 	if !config.DefaultConfig.Quota.Enabled {
 		return nil
 	}
@@ -147,9 +150,15 @@ func (m *Manager) updateTenantSize(ctx context.Context, namespace string) {
 			metrics.UpdateCollectionSizeMetrics(namespace, dbName, coll.Name, getCollSize(ctx, tenant, db, coll))
 		}
 	}
+	tenantSize, err := tenant.Size(ctx)
+	if err != nil {
+		ulog.E(err)
+	}
+	metrics.UpdateNameSpaceSizeMetrics(namespace, tenantSize)
 }
 
-func (m *Manager) updateTenantMetrics(ctx context.Context, namespace string, s *State) {
+func (m *Manager) updateTenantMetrics(ctx context.Context, namespace string) {
+	s := m.getState(namespace)
 	sz := s.Size.Load()
 	currentTimeStamp := time.Now().Unix()
 
@@ -166,8 +175,6 @@ func (m *Manager) updateTenantMetrics(ctx context.Context, namespace string, s *
 func (m *Manager) checkStorage(ctx context.Context, namespace string, s *State, size int) error {
 	sz := s.Size.Load()
 	currentTimeStamp := time.Now().Unix()
-
-	m.updateTenantMetrics(ctx, namespace, s)
 
 	if currentTimeStamp < s.SizeUpdateAt.Load()+m.cfg.LimitUpdateInterval {
 		if sz+int64(size) >= m.cfg.DataSizeLimit {
