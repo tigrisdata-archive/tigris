@@ -19,7 +19,6 @@ import (
 	"testing"
 
 	"github.com/tigrisdata/tigris/server/config"
-	"github.com/uber-go/tally"
 )
 
 func TestSessionMetrics(t *testing.T) {
@@ -43,8 +42,8 @@ func TestSessionMetrics(t *testing.T) {
 		}
 	})
 
-	t.Run("Test Session histograms", func(t *testing.T) {
+	t.Run("Test Session timers", func(t *testing.T) {
 		tags := GetSessionTags(ctx, "Create")
-		defer SessionRespTime.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
+		defer SessionRespTime.Tagged(tags).Timer("time").Start().Stop()
 	})
 }

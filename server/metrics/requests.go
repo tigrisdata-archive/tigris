@@ -118,5 +118,5 @@ func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod strin
 func initializeRequestScopes() {
 	OkRequests = Requests.SubScope("count")
 	ErrorRequests = Requests.SubScope("count")
-	RequestsRespTime = Requests.SubScope("resptime")
+	RequestsRespTime = Requests.SubScope("response")
 }

@@ -21,7 +21,7 @@ var (
 	BytesSent     tally.Scope
 )
 
-func initializeNetorkScopes() {
+func initializeNetworkScopes() {
 	BytesReceived = NetworkMetrics.SubScope("bytes")
 	BytesSent = NetworkMetrics.SubScope("bytes")
 }

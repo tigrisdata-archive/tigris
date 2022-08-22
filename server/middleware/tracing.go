@@ -23,7 +23,6 @@ import (
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
-	"github.com/uber-go/tally"
 	"google.golang.org/grpc"
 )
 
@@ -43,7 +42,7 @@ func traceUnary() func(ctx context.Context, req interface{}, info *grpc.UnarySer
 		tags := grpcMeta.GetOkTags()
 		spanMeta := metrics.NewSpanMeta(util.Service, info.FullMethod, TraceSpanType, tags)
 		spanMeta.AddTags(metrics.GetDbCollTagsForReq(req))
-		defer metrics.RequestsRespTime.Tagged(spanMeta.GetTags()).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
+		defer metrics.RequestsRespTime.Tagged(spanMeta.GetTags()).Timer("time").Start().Stop()
 		ctx = spanMeta.StartTracing(ctx, false)
 		resp, err := handler(ctx, req)
 		if err != nil {
@@ -69,7 +68,7 @@ func traceStream() grpc.StreamServerInterceptor {
 		grpcMeta := metrics.GetGrpcEndPointMetadataFromFullMethod(wrapped.WrappedContext, info.FullMethod, "stream")
 		tags := grpcMeta.GetOkTags()
 		spanMeta := metrics.NewSpanMeta(util.Service, info.FullMethod, TraceSpanType, tags)
-		defer metrics.RequestsRespTime.Tagged(spanMeta.GetTags()).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
+		defer metrics.RequestsRespTime.Tagged(spanMeta.GetTags()).Timer("time").Start().Stop()
 		wrapped.spanMeta = spanMeta
 		wrapped.WrappedContext = spanMeta.StartTracing(wrapped.WrappedContext, false)
 		err := handler(srv, wrapped)

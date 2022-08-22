@@ -27,7 +27,6 @@ import (
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/typesense/typesense-go/typesense"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
-	"github.com/uber-go/tally"
 )
 
 type storeImpl struct {
@@ -43,7 +42,7 @@ func (m *storeImplWithMetrics) measure(ctx context.Context, name string, f func(
 	tags := metrics.GetSearchTags(ctx, name)
 	spanMeta := metrics.NewSpanMeta("tigris.search", name, "search", tags)
 	ctx = spanMeta.StartTracing(ctx, true)
-	defer metrics.SearchRespTime.Tagged(spanMeta.GetTags()).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
+	defer metrics.SearchRespTime.Tagged(spanMeta.GetTags()).Timer("time").Start().Stop()
 	err := f(ctx)
 	if err == nil {
 		// Request was ok
