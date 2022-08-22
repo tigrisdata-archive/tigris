@@ -189,6 +189,10 @@ func formQuery(ctx context.Context, req *api.QueryTimeSeriesMetricsRequest) (str
 		tags = append(tags, "tigris_tenant:"+namespace+",")
 	}
 
+	if req.Quantile != 0 {
+		tags = append(tags, "quantile:"+strconv.FormatFloat(float64(req.Quantile), 'f', -1, 64)+",")
+	}
+
 	if len(tags) == 0 {
 		ddQuery = fmt.Sprintf("%s{*}", ddQuery)
 	} else {
@@ -211,7 +215,11 @@ func formQuery(ctx context.Context, req *api.QueryTimeSeriesMetricsRequest) (str
 		aggregationBy = fmt.Sprintf("%s}", aggregationBy)
 		ddQuery = fmt.Sprintf("%s %s", ddQuery, aggregationBy)
 	}
-	return fmt.Sprintf("%s.as_%s()", ddQuery, strings.ToLower(req.Function.String())), nil
+
+	if req.Function != api.MetricQueryFunction_NONE {
+		ddQuery = fmt.Sprintf("%s.as_%s()", ddQuery, strings.ToLower(req.Function.String()))
+	}
+	return ddQuery, nil
 }
 
 func isAllowedMetricQueryInput(tagValue string) bool {
@@ -227,6 +235,12 @@ func validateQueryTimeSeriesMetricsRequest(req *api.QueryTimeSeriesMetricsReques
 		if !isAllowedMetricQueryInput(aggregationField) {
 			return api.Errorf(api.Code_PERMISSION_DENIED, "Failed to query metrics: reason = invalid character detected in SpaceAggregatedBy")
 		}
+	}
+	if strings.Contains(req.MetricName, ":") {
+		return api.Errorf(api.Code_INVALID_ARGUMENT, "Failed to query metrics: reason = Metric name cannot contain :")
+	}
+	if !(req.Quantile == 0 || req.Quantile == 0.5 || req.Quantile == 0.75 || req.Quantile == 0.95 || req.Quantile == 0.99 || req.Quantile == 0.999) {
+		return api.Errorf(api.Code_INVALID_ARGUMENT, "Failed to query metrics: reason = allowed quantile values are [0.5, 0.75, 0.95, 0.99, 0.999]")
 	}
 	return nil
 }

@@ -89,6 +89,32 @@ func TestDatadogQueryFormation(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "sum:requests_count_ok.count{db:db1,collection:col1} by {db,collection}.as_rate()", formedQuery)
 
+	req = &api.QueryTimeSeriesMetricsRequest{
+		Db:               "db1",
+		Collection:       "col1",
+		From:             1,
+		To:               10,
+		MetricName:       "tigris.requests_response_time.quantile",
+		SpaceAggregation: api.MetricQuerySpaceAggregation_AVG,
+		Function:         api.MetricQueryFunction_NONE,
+		Quantile:         0.5,
+	}
+	formedQuery, err = formQuery(ctx, req)
+	require.NoError(t, err)
+	require.Equal(t, "avg:tigris.requests_response_time.quantile{db:db1,collection:col1,quantile:0.5}", formedQuery)
+
+	req = &api.QueryTimeSeriesMetricsRequest{
+		Db:               "db1",
+		From:             1,
+		To:               10,
+		MetricName:       "tigris.size_db_bytes",
+		SpaceAggregation: api.MetricQuerySpaceAggregation_MAX,
+		Function:         api.MetricQueryFunction_NONE,
+	}
+	formedQuery, err = formQuery(ctx, req)
+	require.NoError(t, err)
+	require.Equal(t, "max:tigris.size_db_bytes{db:db1}", formedQuery)
+
 	ctx = context.WithValue(ctx, request.RequestMetadataCtxKey{}, &request.RequestMetadata{})
 	ctx = request.SetNamespace(ctx, "test-namespace")
 	req = &api.QueryTimeSeriesMetricsRequest{

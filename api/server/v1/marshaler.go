@@ -444,6 +444,8 @@ func (x *QueryTimeSeriesMetricsRequest) UnmarshalJSON(data []byte) error {
 				x.Function = MetricQueryFunction_RATE
 			case "COUNT":
 				x.Function = MetricQueryFunction_COUNT
+			case "NONE":
+				x.Function = MetricQueryFunction_NONE
 			}
 		}
 	}
