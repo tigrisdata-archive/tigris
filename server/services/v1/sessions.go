@@ -29,7 +29,6 @@ import (
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	ulog "github.com/tigrisdata/tigris/util/log"
-	"github.com/uber-go/tally"
 )
 
 // SessionManager is used to manage all the explicit query sessions. The execute method is executing the query.
@@ -63,7 +62,7 @@ type SessionManagerWithMetrics struct {
 func (m *SessionManagerWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
 	tags := metrics.GetSessionTags(ctx, name)
 	spanMeta := metrics.NewSpanMeta(metrics.SessionManagerServiceName, name, "session", tags)
-	defer metrics.SessionRespTime.Tagged(spanMeta.GetTags()).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
+	defer metrics.SessionRespTime.Tagged(spanMeta.GetTags()).Timer("time").Start().Stop()
 	ctx = spanMeta.StartTracing(ctx, true)
 	if err := f(ctx); err != nil {
 		spanMeta.CountErrorForScope(metrics.SessionErrorRequests, err)

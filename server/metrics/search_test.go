@@ -19,7 +19,6 @@ import (
 	"testing"
 
 	"github.com/tigrisdata/tigris/server/config"
-	"github.com/uber-go/tally"
 )
 
 func TestSearchMetrics(t *testing.T) {
@@ -44,8 +43,8 @@ func TestSearchMetrics(t *testing.T) {
 		}
 	})
 
-	t.Run("Test Search histograms", func(t *testing.T) {
-		testHistogramTags := GetSearchTags(ctx, "IndexDocuments")
-		defer SearchRespTime.Tagged(testHistogramTags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
+	t.Run("Test Search timers", func(t *testing.T) {
+		testTimerTags := GetSearchTags(ctx, "IndexDocuments")
+		defer SearchRespTime.Tagged(testTimerTags).Timer("time").Start().Stop()
 	})
 }

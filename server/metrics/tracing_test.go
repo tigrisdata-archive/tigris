@@ -17,9 +17,9 @@ package metrics
 import (
 	"context"
 	"fmt"
-	"github.com/tigrisdata/tigris/server/config"
-	"github.com/uber-go/tally"
 	"testing"
+
+	"github.com/tigrisdata/tigris/server/config"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -77,7 +77,7 @@ func TestTracing(t *testing.T) {
 		config.DefaultConfig.Tracing.Enabled = true
 		InitializeMetrics()
 		spanMeta := NewSpanMeta("test.service.name", "TestResource", "rpc", GetGlobalTags())
-		defer RequestsRespTime.Tagged(spanMeta.GetTags()).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
+		defer RequestsRespTime.Tagged(spanMeta.GetTags()).Timer("time").Start().Stop()
 		spanMeta.CountOkForScope(OkRequests)
 		err := fmt.Errorf("hello error")
 		spanMeta.CountErrorForScope(ErrorRequests, err)

@@ -77,7 +77,7 @@ func InitializeMetrics() io.Closer {
 		initializeSizeScopes()
 		// Network netrics
 		NetworkMetrics = root.SubScope("net")
-		initializeNetorkScopes()
+		initializeNetworkScopes()
 	}
 	return closer
 }

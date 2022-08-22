@@ -22,7 +22,6 @@ import (
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metrics"
-	"github.com/uber-go/tally"
 )
 
 type KeyValue struct {
@@ -100,7 +99,7 @@ func measureLow(ctx context.Context, name string, f func() error) {
 	// Low level measurement wrapper that is called by the measure functions on the appropriate receiver
 	tags := metrics.GetFdbOkTags(ctx, name)
 	spanMeta := metrics.NewSpanMeta(metrics.KvTracingServiceName, name, "fdb_kv", tags)
-	defer metrics.FdbRespTime.Tagged(spanMeta.GetTags()).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
+	defer metrics.FdbRespTime.Tagged(spanMeta.GetTags()).Timer("time").Start().Stop()
 	ctx = spanMeta.StartTracing(ctx, true)
 	err := f()
 	if err == nil {
