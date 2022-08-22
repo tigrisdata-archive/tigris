@@ -395,10 +395,14 @@ func (q *QueryableField) Name() string {
 }
 
 func (q *QueryableField) ShouldPack() bool {
-	return q.DataType == ArrayType || q.DataType == DateTimeType
+	return !q.IsReserved() && (q.DataType == ArrayType || q.DataType == DateTimeType)
 }
 
-func buildQueryableFields(fields []*Field) []*QueryableField {
+func (q *QueryableField) IsReserved() bool {
+	return IsReservedField(q.Name())
+}
+
+func BuildQueryableFields(fields []*Field) []*QueryableField {
 	var queryableFields []*QueryableField
 
 	for _, f := range fields {
@@ -408,6 +412,10 @@ func buildQueryableFields(fields []*Field) []*QueryableField {
 			queryableFields = append(queryableFields, buildQueryableField("", f))
 		}
 	}
+
+	// Allowing metadata fields to be queryable. User provided reserved fields are rejected by FieldBuilder.
+	queryableFields = append(queryableFields, NewQueryableField(ReservedFields[CreatedAt], DateTimeType))
+	queryableFields = append(queryableFields, NewQueryableField(ReservedFields[UpdatedAt], DateTimeType))
 
 	return queryableFields
 }

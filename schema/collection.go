@@ -87,7 +87,7 @@ func NewDefaultCollection(name string, id uint32, schVer int, fields []*Field, i
 	validator.AdditionalProperties = false
 	disableAdditionalProperties(validator.Properties)
 
-	queryableFields := buildQueryableFields(fields)
+	queryableFields := BuildQueryableFields(fields)
 
 	return &DefaultCollection{
 		Id:              id,
@@ -156,7 +156,7 @@ func (d *DefaultCollection) SearchCollectionName() string {
 }
 
 func GetSearchDeltaFields(existingFields []*QueryableField, incomingFields []*Field) []tsApi.Field {
-	incomingQueryable := buildQueryableFields(incomingFields)
+	incomingQueryable := BuildQueryableFields(incomingFields)
 
 	var existingFieldSet = set.New()
 	for _, f := range existingFields {
@@ -195,7 +195,7 @@ func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.Co
 			Optional: &ptrTrue,
 		})
 		// Save original date as string to disk
-		if s.DataType == DateTimeType {
+		if !s.IsReserved() && s.DataType == DateTimeType {
 			tsFields = append(tsFields, tsApi.Field{
 				Name:     ToSearchDateKey(s.Name()),
 				Type:     toSearchFieldType(StringType),

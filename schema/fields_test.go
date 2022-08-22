@@ -132,3 +132,48 @@ func TestFieldBuilder_Build(t *testing.T) {
 		}
 	})
 }
+
+func TestQueryableField_ShouldPack(t *testing.T) {
+	// reserved fields should never be packed
+	for _, f := range ReservedFields {
+		t.Run(fmt.Sprintf("%s is reserved and should not be packed", f), func(t *testing.T) {
+			q := &QueryableField{FieldName: f}
+			require.False(t, q.ShouldPack())
+		})
+	}
+
+	for _, f := range [...]FieldType{ArrayType, DateTimeType} {
+		t.Run(fmt.Sprintf("%s should be packed", FieldNames[f]), func(t *testing.T) {
+			q := &QueryableField{FieldName: "myField", DataType: f}
+			require.True(t, q.ShouldPack())
+		})
+	}
+
+	shouldNotPack := [...]FieldType{
+		UnknownType,
+		NullType,
+		BoolType,
+		Int32Type,
+		Int64Type,
+		DoubleType,
+		StringType,
+		ByteType,
+		ObjectType,
+	}
+	for _, f := range shouldNotPack {
+		t.Run(fmt.Sprintf("%s should not be packed", FieldNames[f]), func(t *testing.T) {
+			q := &QueryableField{FieldName: "myField", DataType: f}
+			require.False(t, q.ShouldPack())
+		})
+	}
+}
+
+func TestQueryableField_IsReserved(t *testing.T) {
+	// this should reflect schema.Reserved fields array
+	for _, f := range ReservedFields {
+		t.Run(fmt.Sprintf("%s is reserved", f), func(t *testing.T) {
+			q := &QueryableField{FieldName: f}
+			require.True(t, q.IsReserved())
+		})
+	}
+}
