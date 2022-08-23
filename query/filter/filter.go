@@ -27,11 +27,11 @@ import (
 )
 
 var (
-	filterAll   = []byte(`{}`)
+	filterNone  = []byte(`{}`)
 	emptyFilter = &WrappedFilter{Filter: &EmptyFilter{}}
 )
 
-// A Filter represents a query filter that can have any multiple conditions, logical filtering, nested conditions, etc
+// A Filter represents a query filter that can have any multiple conditions, logical filtering, nested conditions, etc.
 // On a high level, a filter from a user query will map like this
 //    {Selector} --> Filter with a single condition
 //    {Selector, Selector, LogicalOperator} --> Filter with two condition and a logicalOperator
@@ -59,7 +59,7 @@ func (f *EmptyFilter) MatchesDoc(_ map[string]interface{}) bool { return true }
 func (f *EmptyFilter) ToSearchFilter() []string                 { return nil }
 
 type WrappedFilter struct {
-	Filter Filter
+	Filter
 }
 
 func NewWrappedFilter(filters []Filter) *WrappedFilter {
@@ -80,8 +80,8 @@ func NewWrappedFilter(filters []Filter) *WrappedFilter {
 	}
 }
 
-func All(reqFilter []byte) bool {
-	return len(reqFilter) == 0 || bytes.Equal(reqFilter, filterAll)
+func None(reqFilter []byte) bool {
+	return len(reqFilter) == 0 || bytes.Equal(reqFilter, filterNone)
 }
 
 type Factory struct {
@@ -146,7 +146,7 @@ func (factory *Factory) Factorize(reqFilter []byte) ([]Filter, error) {
 func (factory *Factory) UnmarshalFilter(input jsoniter.RawMessage) (expression.Expr, error) {
 	var err error
 	var filter Filter
-	err = jsonparser.ObjectEach(input, func(k []byte, v []byte, jsonDataType jsonparser.ValueType, offset int) error {
+	parsingError := jsonparser.ObjectEach(input, func(k []byte, v []byte, dt jsonparser.ValueType, offset int) error {
 		if err != nil {
 			return err
 		}
@@ -157,10 +157,14 @@ func (factory *Factory) UnmarshalFilter(input jsoniter.RawMessage) (expression.E
 		case string(OrOP):
 			filter, err = factory.UnmarshalOr(v)
 		default:
-			filter, err = factory.ParseSelector(k, v, jsonDataType)
+			filter, err = factory.ParseSelector(k, v, dt)
 		}
 		return nil
 	})
+
+	if parsingError != nil {
+		return filter, parsingError
+	}
 
 	return filter, err
 }

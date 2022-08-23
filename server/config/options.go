@@ -180,3 +180,7 @@ type QuotaConfig struct {
 	LimitUpdateInterval       int64 `mapstructure:"limit_update_interval" yaml:"limit_update_interval" json:"limit_update_interval"`
 	TenantSizeRefreshInterval int64 `mapstructure:"tenant_size_refresh_interval" yaml:"tenant_size_refresh_interval" json:"tenant_size_refresh_interval"`
 }
+
+func IsIndexingStoreReadEnabled() bool {
+	return DefaultConfig.Search.WriteEnabled && DefaultConfig.Search.ReadEnabled
+}

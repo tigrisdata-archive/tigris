@@ -51,7 +51,6 @@ type Tx interface {
 	Rollback(ctx context.Context) error
 	SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error
 	SetVersionstampedKey(ctx context.Context, key []byte, value []byte) error
-	start(ctx context.Context) error
 }
 
 type StagedDB interface {
@@ -227,8 +226,14 @@ func (s *TxSession) ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key,
 	if err := s.validateSession(); err != nil {
 		return nil, err
 	}
-
-	return s.kTx.ReadRange(ctx, lKey.Table(), kv.BuildKey(lKey.IndexParts()...), kv.BuildKey(rKey.IndexParts()...), isSnapshot)
+	
+	if rKey != nil && lKey != nil {
+		return s.kTx.ReadRange(ctx, lKey.Table(), kv.BuildKey(lKey.IndexParts()...), kv.BuildKey(rKey.IndexParts()...), isSnapshot)
+	} else if lKey != nil {
+		return s.kTx.ReadRange(ctx, lKey.Table(), kv.BuildKey(lKey.IndexParts()...), nil, isSnapshot)
+	} else {
+		return s.kTx.ReadRange(ctx, lKey.Table(), nil, kv.BuildKey(rKey.IndexParts()...), isSnapshot)
+	}
 }
 
 func (s *TxSession) SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error {

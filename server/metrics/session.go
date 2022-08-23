@@ -40,5 +40,5 @@ func GetSessionTags(ctx context.Context, sessionMethodName string) map[string]st
 func initializeSessionScopes() {
 	SessionOkRequests = SessionMetrics.SubScope("count")
 	SessionErrorRequests = SessionMetrics.SubScope("count")
-	SessionRespTime = SessionMetrics.SubScope("resptime")
+	SessionRespTime = SessionMetrics.SubScope("response")
 }

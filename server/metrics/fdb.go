@@ -52,5 +52,5 @@ func GetFdbErrorTags(ctx context.Context, reqMethodName string, code string) map
 func initializeFdbScopes() {
 	FdbOkRequests = FdbMetrics.SubScope("count")
 	FdbErrorRequests = FdbMetrics.SubScope("count")
-	FdbRespTime = FdbMetrics.SubScope("resptime")
+	FdbRespTime = FdbMetrics.SubScope("response")
 }

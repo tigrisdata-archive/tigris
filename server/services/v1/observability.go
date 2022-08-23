@@ -58,12 +58,19 @@ type Datadog struct {
 }
 
 type MetricsQueryResp struct {
-	FromDate int64 `json:"from_date"`
-	ToDate   int64 `json:"to_date"`
-	Query    string
-	Series   [1]struct {
-		PointList [][2]float64 `json:"pointlist"`
-	}
+	FromDate int64                    `json:"from_date"`
+	ToDate   int64                    `json:"to_date"`
+	Query    string                   `json:"query"`
+	Series   []MetricsQueryRespSeries `json:"series"`
+}
+
+type MetricsQueryRespSeries struct {
+	Metric   string `json:"metric"`
+	FromDate int64  `json:"start"`
+	ToDate   int64  `json:"end"`
+	Scope    string `json:"scope"`
+
+	PointList [][2]float64 `json:"pointlist"`
 }
 
 func (dd Datadog) QueryTimeSeriesMetrics(ctx context.Context, req *api.QueryTimeSeriesMetricsRequest) (*api.QueryTimeSeriesMetricsResponse, error) {
@@ -104,24 +111,32 @@ func (dd Datadog) QueryTimeSeriesMetrics(ctx context.Context, req *api.QueryTime
 	if resp.StatusCode == 200 {
 		var ddResp MetricsQueryResp
 		err = json.Unmarshal(body, &ddResp)
+		result := api.QueryTimeSeriesMetricsResponse{
+			From:  ddResp.FromDate,
+			To:    ddResp.ToDate,
+			Query: ddResp.Query,
+		}
+		result.Series = []*api.MetricSeries{}
 		if err != nil {
 			return nil, api.Errorf(api.Code_INTERNAL, "Failed to unmarshal remote response: reason = "+err.Error())
 		}
 		if len(ddResp.Series) > 0 {
-			var dataPoints = make([]*api.DataPoint, len(ddResp.Series[0].PointList))
-			for i := range ddResp.Series[0].PointList {
-				dataPoints[i] = &api.DataPoint{}
-				dataPoints[i].Timestamp = int64(ddResp.Series[0].PointList[i][0])
-				dataPoints[i].Value = ddResp.Series[0].PointList[i][1]
+			for _, series := range ddResp.Series {
+				thisSeries := &api.MetricSeries{
+					From:   series.FromDate,
+					To:     series.ToDate,
+					Metric: series.Metric,
+					Scope:  series.Scope,
+				}
+				thisSeries.DataPoints = make([]*api.DataPoint, len(series.PointList))
+				for i := range series.PointList {
+					thisSeries.DataPoints[i] = &api.DataPoint{}
+					thisSeries.DataPoints[i].Timestamp = int64(series.PointList[i][0])
+					thisSeries.DataPoints[i].Value = series.PointList[i][1]
+				}
+				result.Series = append(result.Series, thisSeries)
 			}
-			queryTimeSeriesMetricsResponse := api.QueryTimeSeriesMetricsResponse{
-				From:       ddResp.FromDate,
-				To:         ddResp.ToDate,
-				Query:      ddResp.Query,
-				DataPoints: dataPoints,
-			}
-
-			return &queryTimeSeriesMetricsResponse, nil
+			return &result, nil
 		} else {
 			return nil, api.Errorf(api.Code_INTERNAL, "Unexpected remote response: reason = 0 series returned")
 		}
@@ -178,6 +193,14 @@ func formQuery(ctx context.Context, req *api.QueryTimeSeriesMetricsRequest) (str
 	ddQuery := fmt.Sprintf("%s:%s", strings.ToLower(req.SpaceAggregation.String()), req.MetricName)
 	var tags []string
 
+	if req.TigrisOperation != api.TigrisOperation_ALL {
+		if req.TigrisOperation == api.TigrisOperation_WRITE {
+			tags = append(tags, "grpc_method IN (insert,update) AND ")
+		} else {
+			tags = append(tags, "grpc_method:read,")
+		}
+	}
+
 	if req.Db != "" {
 		tags = append(tags, "db:"+req.Db+",")
 	}
@@ -189,6 +212,10 @@ func formQuery(ctx context.Context, req *api.QueryTimeSeriesMetricsRequest) (str
 		tags = append(tags, "tigris_tenant:"+namespace+",")
 	}
 
+	if req.Quantile != 0 {
+		tags = append(tags, "quantile:"+strconv.FormatFloat(float64(req.Quantile), 'f', -1, 64)+",")
+	}
+
 	if len(tags) == 0 {
 		ddQuery = fmt.Sprintf("%s{*}", ddQuery)
 	} else {
@@ -196,8 +223,9 @@ func formQuery(ctx context.Context, req *api.QueryTimeSeriesMetricsRequest) (str
 		for i := range tags {
 			tagsQuery += tags[i]
 		}
-		// remove trailing ,
-		tagsQuery = tagsQuery[0 : len(tagsQuery)-1]
+		tagsQuery = strings.TrimSuffix(tagsQuery, ",")
+		tagsQuery = strings.TrimSuffix(tagsQuery, " AND ")
+
 		ddQuery = fmt.Sprintf("%s{%s}", ddQuery, tagsQuery)
 	}
 
@@ -211,7 +239,32 @@ func formQuery(ctx context.Context, req *api.QueryTimeSeriesMetricsRequest) (str
 		aggregationBy = fmt.Sprintf("%s}", aggregationBy)
 		ddQuery = fmt.Sprintf("%s %s", ddQuery, aggregationBy)
 	}
-	return fmt.Sprintf("%s.as_%s()", ddQuery, strings.ToLower(req.Function.String())), nil
+
+	if req.Function != api.MetricQueryFunction_NONE {
+		ddQuery = fmt.Sprintf("%s.as_%s()", ddQuery, strings.ToLower(req.Function.String()))
+	}
+	for _, additionalFunction := range req.AdditionalFunctions {
+		if additionalFunction.Rollup != nil {
+			ddQuery = fmt.Sprintf("%s.rollup(%s, %d)", ddQuery, convertToDDAggregatorFunc(additionalFunction.Rollup.Aggregator), additionalFunction.Rollup.Interval)
+		}
+	}
+	return ddQuery, nil
+}
+
+func convertToDDAggregatorFunc(aggregator api.RollupAggregator) string {
+	switch aggregator {
+	case api.RollupAggregator_ROLLUP_AGGREGATOR_AVG:
+		return "avg"
+	case api.RollupAggregator_ROLLUP_AGGREGATOR_SUM:
+		return "sum"
+	case api.RollupAggregator_ROLLUP_AGGREGATOR_COUNT:
+		return "count"
+	case api.RollupAggregator_ROLLUP_AGGREGATOR_MIN:
+		return "min"
+	case api.RollupAggregator_ROLLUP_AGGREGATOR_MAX:
+		return "max"
+	}
+	return ""
 }
 
 func isAllowedMetricQueryInput(tagValue string) bool {
@@ -227,6 +280,12 @@ func validateQueryTimeSeriesMetricsRequest(req *api.QueryTimeSeriesMetricsReques
 		if !isAllowedMetricQueryInput(aggregationField) {
 			return api.Errorf(api.Code_PERMISSION_DENIED, "Failed to query metrics: reason = invalid character detected in SpaceAggregatedBy")
 		}
+	}
+	if strings.Contains(req.MetricName, ":") {
+		return api.Errorf(api.Code_INVALID_ARGUMENT, "Failed to query metrics: reason = Metric name cannot contain :")
+	}
+	if !(req.Quantile == 0 || req.Quantile == 0.5 || req.Quantile == 0.75 || req.Quantile == 0.95 || req.Quantile == 0.99 || req.Quantile == 0.999) {
+		return api.Errorf(api.Code_INVALID_ARGUMENT, "Failed to query metrics: reason = allowed quantile values are [0.5, 0.75, 0.95, 0.99, 0.999]")
 	}
 	return nil
 }

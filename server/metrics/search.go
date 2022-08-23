@@ -29,7 +29,7 @@ var (
 func initializeSearchScopes() {
 	SearchOkRequests = SearchMetrics.SubScope("count")
 	SearchErrorRequests = SearchMetrics.SubScope("count")
-	SearchRespTime = SearchMetrics.SubScope("resptime")
+	SearchRespTime = SearchMetrics.SubScope("response")
 }
 
 func GetSearchTags(ctx context.Context, reqMethodName string) map[string]string {

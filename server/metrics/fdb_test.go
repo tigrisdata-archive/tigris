@@ -19,7 +19,6 @@ import (
 	"testing"
 
 	"github.com/tigrisdata/tigris/server/config"
-	"github.com/uber-go/tally"
 )
 
 func TestFdbMetrics(t *testing.T) {
@@ -50,8 +49,8 @@ func TestFdbMetrics(t *testing.T) {
 		}
 	})
 
-	t.Run("Test FDB histograms", func(t *testing.T) {
-		testHistogramTags := GetFdbOkTags(ctx, "Insert")
-		defer FdbMetrics.Tagged(testHistogramTags).Histogram("histogram", tally.DefaultBuckets).Start().Stop()
+	t.Run("Test FDB timers", func(t *testing.T) {
+		testTimerTags := GetFdbOkTags(ctx, "Insert")
+		defer FdbMetrics.Tagged(testTimerTags).Timer("time").Start().Stop()
 	})
 }

@@ -20,11 +20,9 @@ import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/lib/json"
 	"github.com/tigrisdata/tigris/query/filter"
-	"github.com/tigrisdata/tigris/query/read"
 	qsearch "github.com/tigrisdata/tigris/query/search"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/store/search"
-	ulog "github.com/tigrisdata/tigris/util/log"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
@@ -34,23 +32,16 @@ const (
 )
 
 type page struct {
-	idx        int
-	cap        int
-	err        error
-	hits       *HitsResponse
-	wrappedF   *filter.WrappedFilter
-	collection *schema.DefaultCollection
-	readFields *read.FieldFactory
+	idx  int
+	cap  int
+	hits *HitsResponse
 }
 
-func newPage(collection *schema.DefaultCollection, query *qsearch.Query) *page {
+func newPage(cap int) *page {
 	return &page{
-		idx:        0,
-		hits:       NewHits(),
-		cap:        query.PageSize,
-		wrappedF:   query.WrappedF,
-		collection: collection,
-		readFields: query.ReadFields,
+		idx:  0,
+		cap:  cap,
+		hits: NewHits(),
 	}
 }
 
@@ -69,55 +60,21 @@ func (p *page) hasCapacity() bool {
 
 // readRow should be used to read search data because this is the single point where we unpack search fields, apply
 // filter and then pack the document into bytes.
-func (p *page) readRow(row *Row) bool {
-	if p.err != nil {
-		return false
-	}
-
+func (p *page) readRow() map[string]interface{} {
 	for p.hits.HasMoreHits(p.idx) {
 		document, _ := p.hits.GetDocument(p.idx)
 		p.idx++
-		if document == nil {
-			continue
+		if document != nil {
+			return *document
 		}
-		doc := *document
-
-		var searchKey string
-		if searchKey, row.Data, doc, p.err = UnpackSearchFields(doc, p.collection); p.err != nil {
-			return false
-		}
-		row.Key = []byte(searchKey)
-
-		// now apply the filter
-		if !p.wrappedF.Filter.MatchesDoc(doc) {
-			continue
-		}
-
-		var rawData []byte
-		// marshal the doc as bytes
-		if rawData, p.err = json.Encode(doc); p.err != nil {
-			return false
-		}
-
-		// apply field selection
-		if p.readFields != nil {
-			newValue, err := p.readFields.Apply(rawData)
-			if ulog.E(err) {
-				return false
-			}
-			row.Data.RawData = newValue
-		} else {
-			row.Data.RawData = rawData
-		}
-
-		return true
 	}
 
-	return false
+	return nil
 }
 
 type pageReader struct {
-	reqPage      int
+	ctx          context.Context
+	pageNo       int
 	found        int64
 	pages        []*page
 	query        *qsearch.Query
@@ -126,25 +83,26 @@ type pageReader struct {
 	cachedFacets map[string]*api.SearchFacet
 }
 
-func newPageReader(store search.Store, coll *schema.DefaultCollection, query *qsearch.Query, firstPage int32) *pageReader {
+func newPageReader(ctx context.Context, store search.Store, coll *schema.DefaultCollection, query *qsearch.Query, firstPage int32) *pageReader {
 	return &pageReader{
+		ctx:          ctx,
+		found:        -1,
 		query:        query,
 		store:        store,
 		collection:   coll,
-		reqPage:      int(firstPage),
+		pageNo:       int(firstPage),
 		cachedFacets: make(map[string]*api.SearchFacet),
-		found:        -1,
 	}
 }
 
-func (p *pageReader) read(ctx context.Context) error {
-	result, err := p.store.Search(ctx, p.collection.SearchCollectionName(), p.query, p.reqPage)
+func (p *pageReader) read() error {
+	result, err := p.store.Search(p.ctx, p.collection.SearchCollectionName(), p.query, p.pageNo)
 	if err != nil {
 		return err
 	}
-	p.reqPage++
+	p.pageNo++
 
-	var pg = newPage(p.collection, p.query)
+	var pg = newPage(p.query.PageSize)
 	for _, r := range result {
 		if r.Hits == nil {
 			continue
@@ -153,7 +111,7 @@ func (p *pageReader) read(ctx context.Context) error {
 		for _, h := range *r.Hits {
 			if !pg.append(h) {
 				p.pages = append(p.pages, pg)
-				pg = newPage(p.collection, p.query)
+				pg = newPage(p.query.PageSize)
 			}
 		}
 	}
@@ -179,9 +137,9 @@ func (p *pageReader) read(ctx context.Context) error {
 	return nil
 }
 
-func (p *pageReader) next(ctx context.Context) (bool, *page, error) {
+func (p *pageReader) next() (bool, *page, error) {
 	if len(p.pages) == 0 {
-		if err := p.read(ctx); err != nil {
+		if err := p.read(); err != nil {
 			return false, nil, err
 		}
 	}
@@ -254,78 +212,104 @@ func (p *pageReader) buildStats(stats tsApi.FacetCounts) *api.FacetStats {
 	return stat
 }
 
-// SearchRowReader is responsible for iterating on the search results. It uses pageReader internally to read page
-// and then iterate on documents inside hits.
-type SearchRowReader struct {
-	last       bool
-	single     bool
+type FilterableSearchIterator struct {
 	err        error
+	single     bool
+	last       bool
 	page       *page
-	query      *qsearch.Query
-	store      search.Store
+	filter     *filter.WrappedFilter
 	pageReader *pageReader
 	collection *schema.DefaultCollection
 }
 
-func SinglePageSearchReader(_ context.Context, store search.Store, coll *schema.DefaultCollection, query *qsearch.Query, pageNo int32) (*SearchRowReader, error) {
-	return &SearchRowReader{
-		single:     true,
-		query:      query,
-		store:      store,
-		collection: coll,
-		pageReader: newPageReader(store, coll, query, pageNo),
-	}, nil
-}
-
-func NewSearchReader(ctx context.Context, store search.Store, coll *schema.DefaultCollection, query *qsearch.Query) (*SearchRowReader, error) {
-	s, err := SinglePageSearchReader(ctx, store, coll, query, defaultPageNo)
-	if err != nil {
-		return nil, err
+func NewFilterableSearchIterator(collection *schema.DefaultCollection, reader *pageReader, filter *filter.WrappedFilter, singlePage bool) *FilterableSearchIterator {
+	return &FilterableSearchIterator{
+		single:     singlePage,
+		pageReader: reader,
+		filter:     filter,
+		collection: collection,
 	}
-
-	s.single = false
-	return s, nil
 }
 
-func (s *SearchRowReader) Next(ctx context.Context, row *Row) bool {
-	if s.err != nil {
+func (it *FilterableSearchIterator) Next(row *Row) bool {
+	if it.err != nil {
 		return false
 	}
 
 	for {
-		if s.page == nil {
-			if s.last, s.page, s.err = s.pageReader.next(ctx); s.err != nil {
+		if it.page == nil {
+			if it.last, it.page, it.err = it.pageReader.next(); it.err != nil || it.page == nil {
 				return false
 			}
 		}
 
-		if s.page == nil {
-			return false
-		}
+		if doc := it.page.readRow(); doc != nil {
+			var searchKey string
+			if searchKey, row.Data, doc, it.err = UnpackSearchFields(doc, it.collection); it.err != nil {
+				return false
+			}
+			row.Key = []byte(searchKey)
 
-		if s.page.readRow(row) {
+			// now apply the filter
+			if !it.filter.MatchesDoc(doc) {
+				continue
+			}
+
+			var rawData []byte
+			// marshal the doc as bytes
+			if rawData, it.err = json.Encode(doc); it.err != nil {
+				return false
+			}
+			row.Data.RawData = rawData
 			return true
 		}
 
-		if s.last {
-			return false
-		}
-		if s.single {
+		if it.last || it.single {
 			return false
 		}
 
-		s.page = nil
+		it.page = nil
 	}
 }
 
-func (s *SearchRowReader) Err() error {
-	return s.err
+func (it *FilterableSearchIterator) getFacets() map[string]*api.SearchFacet {
+	return it.pageReader.cachedFacets
 }
 
-func (s *SearchRowReader) getFacets() map[string]*api.SearchFacet {
-	return s.pageReader.cachedFacets
+func (it *FilterableSearchIterator) Interrupted() error {
+	return it.err
 }
 
-func (s *SearchRowReader) getTotalFound() int64 {
-	return s.pageReader.found
+func (it *FilterableSearchIterator) getTotalFound() int64 {
+	return it.pageReader.found
+}
+
+// SearchReader is responsible for iterating on the search results. It uses pageReader internally to read page
+// and then iterate on documents inside hits.
+type SearchReader struct {
+	ctx        context.Context
+	query      *qsearch.Query
+	store      search.Store
+	collection *schema.DefaultCollection
+}
+
+func NewSearchReader(ctx context.Context, store search.Store, coll *schema.DefaultCollection, query *qsearch.Query) *SearchReader {
+	return &SearchReader{
+		ctx:        ctx,
+		store:      store,
+		query:      query,
+		collection: coll,
+	}
+}
+
+func (reader *SearchReader) SinglePageIterator(collection *schema.DefaultCollection, filter *filter.WrappedFilter, pageNo int32) *FilterableSearchIterator {
+	pageReader := newPageReader(reader.ctx, reader.store, reader.collection, reader.query, pageNo)
+
+	return NewFilterableSearchIterator(collection, pageReader, filter, true)
+}
+
+func (reader *SearchReader) Iterator(collection *schema.DefaultCollection, filter *filter.WrappedFilter) *FilterableSearchIterator {
+	pageReader := newPageReader(reader.ctx, reader.store, reader.collection, reader.query, defaultPageNo)
+
+	return NewFilterableSearchIterator(collection, pageReader, filter, false)
 }

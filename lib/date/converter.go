@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-// ToUnixNano converts a time to Unix nano seconds
+// ToUnixNano converts a string formatted time to Unix nanoseconds
 func ToUnixNano(format string, dateStr string) (int64, error) {
 	t, err := time.Parse(format, dateStr)
 	if err != nil {
