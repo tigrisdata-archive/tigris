@@ -273,15 +273,6 @@ func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCo
 	return searchKey, tableData, doc, nil
 }
 
-func UnpackAndSetMD(doc map[string]interface{}, tableData *internal.TableData) {
-	if v, ok := doc[schema.ReservedFields[schema.CreatedAt]]; ok {
-		tableData.CreatedAt = internal.CreateNewTimestamp(int64(v.(float64)))
-	}
-	if v, ok := doc[schema.ReservedFields[schema.UpdatedAt]]; ok {
-		tableData.UpdatedAt = internal.CreateNewTimestamp(int64(v.(float64)))
-	}
-}
-
 func FlattenObjects(data map[string]any) map[string]any {
 	resp := make(map[string]any)
 	flattenObjects("", data, resp)

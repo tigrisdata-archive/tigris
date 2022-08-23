@@ -285,6 +285,7 @@ func TestCollection_SearchSchema(t *testing.T) {
 	expFlattenedFields := []string{"id", "id_32", "product", "id_uuid", "ts", ToSearchDateKey("ts"), "price", "simple_items", "simple_object.name",
 		"simple_object.phone", "simple_object.address.street", "simple_object.details.nested_id", "simple_object.details.nested_obj.id",
 		"simple_object.details.nested_obj.name", "simple_object.details.nested_array", "simple_object.details.nested_string",
+		"created_at", "updated_at",
 	}
 
 	coll := NewDefaultCollection("t1", 1, 1, schFactory.Fields, schFactory.Indexes, schFactory.Schema, "t1")

@@ -146,7 +146,7 @@ func (factory *Factory) Factorize(reqFilter []byte) ([]Filter, error) {
 func (factory *Factory) UnmarshalFilter(input jsoniter.RawMessage) (expression.Expr, error) {
 	var err error
 	var filter Filter
-	err = jsonparser.ObjectEach(input, func(k []byte, v []byte, jsonDataType jsonparser.ValueType, offset int) error {
+	parsingError := jsonparser.ObjectEach(input, func(k []byte, v []byte, dt jsonparser.ValueType, offset int) error {
 		if err != nil {
 			return err
 		}
@@ -157,10 +157,14 @@ func (factory *Factory) UnmarshalFilter(input jsoniter.RawMessage) (expression.E
 		case string(OrOP):
 			filter, err = factory.UnmarshalOr(v)
 		default:
-			filter, err = factory.ParseSelector(k, v, jsonDataType)
+			filter, err = factory.ParseSelector(k, v, dt)
 		}
 		return nil
 	})
+
+	if parsingError != nil {
+		return filter, parsingError
+	}
 
 	return filter, err
 }
