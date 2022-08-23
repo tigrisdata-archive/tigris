@@ -152,6 +152,7 @@ var DefaultConfig = Config{
 		DataSizeLimit:             10000000000, // bytes
 		LimitUpdateInterval:       5,           // seconds
 		TenantSizeRefreshInterval: 60,          // seconds
+		AllTenantsRefreshInternal: 300,         // seconds
 	},
 	Observability: ObservabilityConfig{
 		Enabled: false,
@@ -179,6 +180,7 @@ type QuotaConfig struct {
 	DataSizeLimit             int64 `mapstructure:"data_size_limit" yaml:"data_size_limit" json:"data_size_limit"`
 	LimitUpdateInterval       int64 `mapstructure:"limit_update_interval" yaml:"limit_update_interval" json:"limit_update_interval"`
 	TenantSizeRefreshInterval int64 `mapstructure:"tenant_size_refresh_interval" yaml:"tenant_size_refresh_interval" json:"tenant_size_refresh_interval"`
+	AllTenantsRefreshInternal int64 `mapstructure:"all_tenants_refresh_interval" yaml:"all_tenants_refresh_interval" json:"all_tenants_refresh_interval"`
 }
 
 func IsIndexingStoreReadEnabled() bool {

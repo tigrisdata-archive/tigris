@@ -224,6 +224,14 @@ func (m *TenantManager) getTenantFromCache(namespaceName string) (tenant *Tenant
 	return nil
 }
 
+func (m *TenantManager) GetNamespaceNames() []string {
+	var res []string
+	for name := range m.tenants {
+		res = append(res, name)
+	}
+	return res
+}
+
 // GetTenant is responsible for returning the tenant from the cache. If the tenant is not available in the cache then
 // this method will attempt to load it from the database and will update the tenant manager cache accordingly.
 func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string, txMgr *transaction.Manager) (tenant *Tenant, err error) {
