@@ -77,6 +77,26 @@ func TestDatadogQueryFormation(t *testing.T) {
 	require.Equal(t, "sum:requests_count_ok.count{db:db1,collection:col1}.as_rate()", formedQuery)
 
 	req = &api.QueryTimeSeriesMetricsRequest{
+		Db:               "db1",
+		From:             1,
+		To:               10,
+		MetricName:       "tigris.requests_count_ok.count",
+		SpaceAggregation: api.MetricQuerySpaceAggregation_SUM,
+		Function:         api.MetricQueryFunction_COUNT,
+		AdditionalFunctions: []*api.AdditionalFunction{
+			{
+				Rollup: &api.RollupFunction{
+					Aggregator: api.RollupAggregator_ROLLUP_AGGREGATOR_SUM,
+					Interval:   604_800,
+				},
+			},
+		},
+	}
+	formedQuery, err = formQuery(ctx, req)
+	require.NoError(t, err)
+	require.Equal(t, "sum:tigris.requests_count_ok.count{db:db1}.as_count().rollup(sum, 604800)", formedQuery)
+
+	req = &api.QueryTimeSeriesMetricsRequest{
 		Db:                "db1",
 		Collection:        "col1",
 		From:              1,
@@ -88,6 +108,70 @@ func TestDatadogQueryFormation(t *testing.T) {
 	formedQuery, err = formQuery(ctx, req)
 	require.NoError(t, err)
 	require.Equal(t, "sum:requests_count_ok.count{db:db1,collection:col1} by {db,collection}.as_rate()", formedQuery)
+
+	req = &api.QueryTimeSeriesMetricsRequest{
+		Db:                "db1",
+		Collection:        "col1",
+		From:              1,
+		To:                10,
+		MetricName:        "requests_count_ok.count",
+		TigrisOperation:   api.TigrisOperation_ALL,
+		SpaceAggregatedBy: []string{"db,collection"},
+		SpaceAggregation:  api.MetricQuerySpaceAggregation_SUM,
+		Function:          api.MetricQueryFunction_RATE}
+	formedQuery, err = formQuery(ctx, req)
+	require.NoError(t, err)
+	require.Equal(t, "sum:requests_count_ok.count{db:db1,collection:col1} by {db,collection}.as_rate()", formedQuery)
+
+	req = &api.QueryTimeSeriesMetricsRequest{
+		Db:                "db1",
+		Collection:        "col1",
+		From:              1,
+		To:                10,
+		MetricName:        "requests_count_ok.count",
+		TigrisOperation:   api.TigrisOperation_READ,
+		SpaceAggregatedBy: []string{"db,collection"},
+		SpaceAggregation:  api.MetricQuerySpaceAggregation_SUM,
+		Function:          api.MetricQueryFunction_RATE}
+	formedQuery, err = formQuery(ctx, req)
+	require.NoError(t, err)
+	require.Equal(t, "sum:requests_count_ok.count{grpc_method:read,db:db1,collection:col1} by {db,collection}.as_rate()", formedQuery)
+
+	req = &api.QueryTimeSeriesMetricsRequest{
+		Db:                "db1",
+		Collection:        "col1",
+		From:              1,
+		To:                10,
+		MetricName:        "requests_count_ok.count",
+		TigrisOperation:   api.TigrisOperation_WRITE,
+		SpaceAggregatedBy: []string{"db,collection"},
+		SpaceAggregation:  api.MetricQuerySpaceAggregation_SUM,
+		Function:          api.MetricQueryFunction_RATE}
+	formedQuery, err = formQuery(ctx, req)
+	require.NoError(t, err)
+	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (insert,update) AND db:db1,collection:col1} by {db,collection}.as_rate()", formedQuery)
+
+	req = &api.QueryTimeSeriesMetricsRequest{
+		From:             1,
+		To:               10,
+		MetricName:       "requests_count_ok.count",
+		TigrisOperation:  api.TigrisOperation_WRITE,
+		SpaceAggregation: api.MetricQuerySpaceAggregation_SUM,
+		Function:         api.MetricQueryFunction_RATE}
+	formedQuery, err = formQuery(ctx, req)
+	require.NoError(t, err)
+	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (insert,update)}.as_rate()", formedQuery)
+
+	req = &api.QueryTimeSeriesMetricsRequest{
+		From:             1,
+		To:               10,
+		MetricName:       "requests_count_ok.count",
+		TigrisOperation:  api.TigrisOperation_READ,
+		SpaceAggregation: api.MetricQuerySpaceAggregation_SUM,
+		Function:         api.MetricQueryFunction_RATE}
+	formedQuery, err = formQuery(ctx, req)
+	require.NoError(t, err)
+	require.Equal(t, "sum:requests_count_ok.count{grpc_method:read}.as_rate()", formedQuery)
 
 	req = &api.QueryTimeSeriesMetricsRequest{
 		Db:               "db1",

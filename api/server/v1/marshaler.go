@@ -415,6 +415,19 @@ func (x *QueryTimeSeriesMetricsRequest) UnmarshalJSON(data []byte) error {
 			if err := jsoniter.Unmarshal(value, &x.MetricName); err != nil {
 				return err
 			}
+		case "tigris_operation":
+			var t string
+			if err := jsoniter.Unmarshal(value, &t); err != nil {
+				return err
+			}
+			switch strings.ToUpper(t) {
+			case "ALL":
+				x.TigrisOperation = TigrisOperation_ALL
+			case "READ":
+				x.TigrisOperation = TigrisOperation_READ
+			case "WRITE":
+				x.TigrisOperation = TigrisOperation_WRITE
+			}
 		case "space_aggregation":
 			var t string
 			if err := jsoniter.Unmarshal(value, &t); err != nil {
@@ -446,6 +459,20 @@ func (x *QueryTimeSeriesMetricsRequest) UnmarshalJSON(data []byte) error {
 				x.Function = MetricQueryFunction_COUNT
 			case "NONE":
 				x.Function = MetricQueryFunction_NONE
+			}
+		case "additional_functions":
+			var additionalFunctionRaw []jsoniter.RawMessage
+			if err := jsoniter.Unmarshal(value, &additionalFunctionRaw); err != nil {
+				return err
+			}
+
+			x.AdditionalFunctions = []*AdditionalFunction{}
+			for i := 0; i < len(additionalFunctionRaw); i++ {
+				additionalFunc, err := unmarshalAdditionalFunction(additionalFunctionRaw[i])
+				if err != nil {
+					return err
+				}
+				x.AdditionalFunctions = append(x.AdditionalFunctions, additionalFunc)
 			}
 		}
 	}
@@ -697,4 +724,63 @@ func CreateMDFromSearchMD(x *SearchHitMeta) SearchHitMetadata {
 	}
 
 	return md
+}
+
+func unmarshalAdditionalFunction(data []byte) (*AdditionalFunction, error) {
+	var mp map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return nil, err
+	}
+	result := &AdditionalFunction{}
+	for key, value := range mp {
+		switch key {
+		case "rollup":
+			rollup, err := unmarshalRollup(value)
+			if err != nil {
+				return nil, err
+			}
+			result.Rollup = rollup
+		}
+	}
+	return result, nil
+}
+
+func unmarshalRollup(data []byte) (*RollupFunction, error) {
+	var mp map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return nil, err
+	}
+
+	result := &RollupFunction{}
+	for key, value := range mp {
+		switch key {
+		case "aggregator":
+			{
+				var t string
+				if err := jsoniter.Unmarshal(value, &t); err != nil {
+					return nil, err
+				}
+				switch strings.ToUpper(t) {
+				case "SUM":
+					result.Aggregator = RollupAggregator_ROLLUP_AGGREGATOR_SUM
+				case "COUNT":
+					result.Aggregator = RollupAggregator_ROLLUP_AGGREGATOR_COUNT
+				case "MIN":
+					result.Aggregator = RollupAggregator_ROLLUP_AGGREGATOR_MIN
+				case "MAX":
+					result.Aggregator = RollupAggregator_ROLLUP_AGGREGATOR_MAX
+				case "AVG":
+					result.Aggregator = RollupAggregator_ROLLUP_AGGREGATOR_AVG
+
+				}
+			}
+		case "interval":
+			var t int64
+			if err := jsoniter.Unmarshal(value, &t); err != nil {
+				return nil, err
+			}
+			result.Interval = t
+		}
+	}
+	return result, nil
 }
