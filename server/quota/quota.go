@@ -57,6 +57,7 @@ type Manager struct {
 }
 
 var mgr Manager
+var lastGlobalRefresh int64
 
 func Init(t *metadata.TenantManager, tx *transaction.Manager, c *config.QuotaConfig) {
 	mgr = *newManager(t, tx, c)
@@ -68,10 +69,26 @@ func Allow(ctx context.Context, namespace string, reqSize int) error {
 	// Emit size metrics regardless of enabled quota
 	mgr.updateTenantMetrics(ctx, namespace)
 
+	// Update all tenant quota and size metrics periodically
+	mgr.updateAll(ctx)
+
 	if !config.DefaultConfig.Quota.Enabled {
 		return nil
 	}
+
 	return mgr.check(ctx, namespace, reqSize)
+}
+
+func (m *Manager) updateAll(ctx context.Context) {
+	currentTimeStamp := time.Now().Unix()
+
+	if currentTimeStamp > lastGlobalRefresh+m.cfg.AllTenantsRefreshInternal {
+		if m.cfg.Enabled {
+			m.updateAllTenantSizes(ctx)
+		}
+		m.updateAllMetrics(ctx)
+		lastGlobalRefresh = currentTimeStamp
+	}
 }
 
 func newManager(t *metadata.TenantManager, tx *transaction.Manager, c *config.QuotaConfig) *Manager {
@@ -128,14 +145,29 @@ func getCollSize(ctx context.Context, tenant *metadata.Tenant, db *metadata.Data
 	return collSize
 }
 
-func (m *Manager) updateTenantSize(ctx context.Context, namespace string) {
+func (m *Manager) getTenant(ctx context.Context, namespace string) *metadata.Tenant {
+	tenant, err := m.tenantMgr.GetTenant(ctx, namespace, m.txMgr)
+	ulog.E(err)
+	return tenant
+}
+
+func (m *Manager) getTenantSize(ctx context.Context, namespace string) int64 {
+	tenant := m.getTenant(ctx, namespace)
+	if tenant == nil {
+		return 0
+	}
+	size, err := tenant.Size(ctx)
+	ulog.E(err)
+	return size
+}
+
+func (m *Manager) updateMetricsForNamespace(ctx context.Context, namespace string) {
 	if m.txMgr == nil {
 		return
 	}
-	tenant, err := m.tenantMgr.GetTenant(ctx, namespace, m.txMgr)
-	if err != nil {
-		ulog.E(err)
-		// Could not determine tenant, just exit
+
+	tenant := m.getTenant(ctx, namespace)
+	if tenant == nil {
 		return
 	}
 
@@ -150,11 +182,27 @@ func (m *Manager) updateTenantSize(ctx context.Context, namespace string) {
 			metrics.UpdateCollectionSizeMetrics(namespace, dbName, coll.Name, getCollSize(ctx, tenant, db, coll))
 		}
 	}
-	tenantSize, err := tenant.Size(ctx)
-	if err != nil {
-		ulog.E(err)
+
+	metrics.UpdateNameSpaceSizeMetrics(namespace, m.getTenantSize(ctx, namespace))
+}
+
+func (m *Manager) updateAllMetrics(ctx context.Context) {
+	for _, namespace := range m.tenantMgr.GetNamespaceNames() {
+		m.updateMetricsForNamespace(ctx, namespace)
 	}
-	metrics.UpdateNameSpaceSizeMetrics(namespace, tenantSize)
+
+}
+
+func (m *Manager) updateTenantSize(ctx context.Context, namespace string) {
+	s := m.getState(namespace)
+	s.SizeLock.Lock()
+	defer s.SizeLock.Unlock()
+
+	currentTimeStamp := time.Now().Unix()
+	s.SizeUpdateAt.Store(currentTimeStamp)
+
+	dsz := m.getTenantSize(ctx, namespace)
+	s.Size.Store(dsz)
 }
 
 func (m *Manager) updateTenantMetrics(ctx context.Context, namespace string) {
@@ -172,34 +220,26 @@ func (m *Manager) updateTenantMetrics(ctx context.Context, namespace string) {
 	}
 }
 
+func (m *Manager) updateAllTenantSizes(ctx context.Context) {
+	for _, namespace := range m.tenantMgr.GetNamespaceNames() {
+		m.updateTenantSize(ctx, namespace)
+	}
+}
+
 func (m *Manager) checkStorage(ctx context.Context, namespace string, s *State, size int) error {
 	sz := s.Size.Load()
 	currentTimeStamp := time.Now().Unix()
 
 	if currentTimeStamp < s.SizeUpdateAt.Load()+m.cfg.LimitUpdateInterval {
+		// Use the cached value for size check
 		if sz+int64(size) >= m.cfg.DataSizeLimit {
 			return ErrStorageSizeExceeded
 		}
 		return nil
 	}
 
-	s.SizeLock.Lock()
-	defer s.SizeLock.Unlock()
-
 	if currentTimeStamp >= s.SizeUpdateAt.Load()+m.cfg.LimitUpdateInterval {
-		s.SizeUpdateAt.Store(currentTimeStamp)
-
-		t, err := m.tenantMgr.GetTenant(ctx, namespace, m.txMgr)
-		if err != nil {
-			return err
-		}
-
-		dsz, err := t.Size(ctx)
-		if err != nil {
-			return err
-		}
-
-		s.Size.Store(dsz)
+		m.updateTenantSize(ctx, namespace)
 	}
 
 	sz = s.Size.Load()
