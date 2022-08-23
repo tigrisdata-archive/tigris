@@ -527,6 +527,7 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 		if err = runner.iterateOnIndexingStore(ctx, collection, options); err != nil {
 			return nil, ctx, err
 		}
+		return &Response{}, ctx, nil
 	}
 
 	for {
