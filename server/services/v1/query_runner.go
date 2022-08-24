@@ -539,19 +539,19 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 		}
 
 		var last []byte
-		if last, err = runner.iterateOnKvStore(ctx, tx, options); err == nil {
-			_ = tx.Commit(ctx)
-			return &Response{}, ctx, nil
-		}
+		last, err = runner.iterateOnKvStore(ctx, tx, options)
 		_ = tx.Rollback(ctx)
 
-		if err != kv.ErrTransactionMaxDurationReached {
+		if err == kv.ErrTransactionMaxDurationReached {
+			// We have received ErrTransactionMaxDurationReached i.e. 5 second transaction limit, so we need to retry the
+			// transaction.
+			options.from, _ = keys.FromBinary(options.table, last)
+			continue
+		}
+		if err != nil {
 			return nil, ctx, nil
 		}
-
-		// We have received ErrTransactionMaxDurationReached i.e. 5 second transaction limit, so we need to retry the
-		// transaction.
-		options.from, _ = keys.FromBinary(options.table, last)
+		return &Response{}, ctx, nil
 	}
 }
 

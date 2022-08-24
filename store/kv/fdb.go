@@ -561,7 +561,7 @@ func (t *ftx) Get(_ context.Context, key []byte, isSnapshot bool) (Future, error
 	return t.tx.Get(fdb.Key(key)), nil
 }
 
-func (t *ftx) Commit(ctx context.Context) error {
+func (t *ftx) Commit(_ context.Context) error {
 	if t.err != nil {
 		return t.err
 	}
@@ -584,7 +584,7 @@ func (t *ftx) Commit(ctx context.Context) error {
 	return t.err
 }
 
-func (t *ftx) Rollback(ctx context.Context) error {
+func (t *ftx) Rollback(_ context.Context) error {
 	t.tx.Cancel()
 
 	log.Debug().Msg("tx Rollback")
