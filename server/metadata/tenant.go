@@ -755,18 +755,20 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 		return err
 	}
 
-	deltaFields := schema.GetSearchDeltaFields(c.collection.QueryableFields, schFactory.Fields)
-
 	// store the collection to the databaseObject, this is actually cloned database object passed by the query runner.
 	// So failure of the transaction won't impact the consistency of the cache
 	collection := schema.NewDefaultCollection(schFactory.Name, c.id, schRevision, schFactory.Fields, schFactory.Indexes, schFactory.Schema, tenant.getSearchCollName(database.name, schFactory.Name))
 
 	// recreating collection holder is fine because we are working on databaseClone and also has a lock on the tenant
 	database.collections[schFactory.Name] = NewCollectionHolder(c.id, schFactory.Name, collection, c.idxNameToId)
-	if err := searchStore.UpdateCollection(ctx, collection.Search.Name, &tsApi.CollectionUpdateSchema{
-		Fields: deltaFields,
-	}); err != nil {
-		return err
+
+	// update indexing store schema if there is a change
+	if deltaFields := schema.GetSearchDeltaFields(c.collection.QueryableFields, schFactory.Fields); len(deltaFields) > 0 {
+		if err := searchStore.UpdateCollection(ctx, collection.Search.Name, &tsApi.CollectionUpdateSchema{
+			Fields: deltaFields,
+		}); err != nil {
+			return err
+		}
 	}
 	return nil
 
