@@ -264,11 +264,7 @@ func (s *apiService) Read(r *api.ReadRequest, stream api.Tigris_ReadServer) erro
 	} else {
 		_, err = s.sessions.ReadOnlyExecute(stream.Context(), s.runnerFactory.GetStreamingQueryRunner(r, stream), &ReqOptions{})
 	}
-	if err == nil {
-		return nil
-	}
-
-	return nil
+	return err
 }
 
 func (s *apiService) Search(r *api.SearchRequest, stream api.Tigris_SearchServer) error {
