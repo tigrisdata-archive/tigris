@@ -35,9 +35,8 @@ var (
 	ErrSessionIsGone = api.Errorf(api.Code_INTERNAL, "session is gone")
 )
 
-// Tx interface exposes a method to execute and then other method to end the transaction. When Tx is returned at that
-// point transaction is already started so no need for explicit start.
-type Tx interface {
+// BaseTx interface exposes base methods that can be used on a transactional object.
+type BaseTx interface {
 	Context() *SessionCtx
 	GetTxCtx() *api.TransactionCtx
 	Insert(ctx context.Context, key keys.Key, data *internal.TableData) error
@@ -47,10 +46,15 @@ type Tx interface {
 	Read(ctx context.Context, key keys.Key) (kv.Iterator, error)
 	ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key, isSnapshot bool) (kv.Iterator, error)
 	Get(ctx context.Context, key []byte, isSnapshot bool) (kv.Future, error)
-	Commit(ctx context.Context) error
-	Rollback(ctx context.Context) error
 	SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error
 	SetVersionstampedKey(ctx context.Context, key []byte, value []byte) error
+}
+
+type Tx interface {
+	BaseTx
+
+	Commit(ctx context.Context) error
+	Rollback(ctx context.Context) error
 }
 
 type StagedDB interface {
@@ -85,7 +89,7 @@ func NewManager(kvStore kv.KeyValueStore) *Manager {
 	}
 }
 
-// StartTx always starts a new session and tracks the session based on the input parameter.
+// StartTx starts a new read-write tx session.
 func (m *Manager) StartTx(ctx context.Context) (Tx, error) {
 	session, err := newTxSession(m.kvStore)
 	if err != nil {
@@ -226,7 +230,7 @@ func (s *TxSession) ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key,
 	if err := s.validateSession(); err != nil {
 		return nil, err
 	}
-	
+
 	if rKey != nil && lKey != nil {
 		return s.kTx.ReadRange(ctx, lKey.Table(), kv.BuildKey(lKey.IndexParts()...), kv.BuildKey(rKey.IndexParts()...), isSnapshot)
 	} else if lKey != nil {
