@@ -26,8 +26,7 @@ import (
 )
 
 const (
-	SystemTigrisTenantName = "system"
-	UnknownValue           = "unknown"
+	UnknownValue = "unknown"
 )
 
 var (
@@ -35,6 +34,44 @@ var (
 	ErrorRequests    tally.Scope
 	RequestsRespTime tally.Scope
 )
+
+func getRequestOkTagKeys() []string {
+	return []string{
+		"grpc_method",
+		"grpc_service",
+		"tigris_tenant",
+		"grpc_service_type",
+		"env",
+		"db",
+		"collection",
+	}
+}
+
+func getRequestTimerTagKeys() []string {
+	return []string{
+		"grpc_method",
+		"grpc_service",
+		"tigris_tenant",
+		"grpc_service_type",
+		"env",
+		"db",
+		"collection",
+	}
+}
+
+func getRequestErrorTagKeys() []string {
+	return []string{
+		"grpc_method",
+		"grpc_service",
+		"tigris_tenant",
+		"grpc_service_type",
+		"env",
+		"db",
+		"collection",
+		"error_code",
+		"error_value",
+	}
+}
 
 type RequestEndpointMetadata struct {
 	serviceName   string
@@ -65,7 +102,7 @@ func (r *RequestEndpointMetadata) GetServiceType() string {
 	}
 }
 
-func (r *RequestEndpointMetadata) GetOkTags() map[string]string {
+func (r *RequestEndpointMetadata) GetInitialTags() map[string]string {
 	return map[string]string{
 		"grpc_method":       r.methodInfo.Name,
 		"grpc_service":      r.serviceName,
@@ -74,19 +111,6 @@ func (r *RequestEndpointMetadata) GetOkTags() map[string]string {
 		"env":               config.GetEnvironment(),
 		"db":                UnknownValue,
 		"collection":        UnknownValue,
-	}
-}
-
-func (r *RequestEndpointMetadata) GetErrorTags(source string, code string) map[string]string {
-	return map[string]string{
-		"grpc_method":   r.methodInfo.Name,
-		"grpc_service":  r.serviceName,
-		"error_source":  source,
-		"error_code":    code,
-		"env":           config.GetEnvironment(),
-		"tigris_tenant": SystemTigrisTenantName,
-		"db":            UnknownValue,
-		"collection":    UnknownValue,
 	}
 }
 

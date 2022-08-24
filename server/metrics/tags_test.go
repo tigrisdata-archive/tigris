@@ -23,11 +23,6 @@ import (
 )
 
 func TestTagsHelpers(t *testing.T) {
-	t.Run("Test getOkTagsKeys", func(t *testing.T) {
-		keys := getOkTagKeys()
-		assert.Greater(t, len(keys), 2)
-	})
-
 	t.Run("Test mergeTags", func(t *testing.T) {
 		tagSet1 := map[string]string{
 			"key1": "value1",
@@ -50,14 +45,17 @@ func TestTagsHelpers(t *testing.T) {
 		assert.Equal(t, "value5", mergedTagSet["key5"])
 	})
 
-	t.Run("Test getErrorTags", func(t *testing.T) {
-		assert.Equal(t, map[string]string{}, getErrorTags(nil))
+	t.Run("Test getTagsForError", func(t *testing.T) {
+		assert.Equal(t, map[string]string{
+			"error_source": "unknown",
+			"error_value":  "unknown",
+		}, getTagsForError(nil))
 
-		fdbErrTags := getErrorTags(fdb.Error{Code: 1})
+		fdbErrTags := getTagsForError(fdb.Error{Code: 1})
 		assert.Equal(t, "fdb", fdbErrTags["error_source"])
 		assert.Equal(t, "1", fdbErrTags["error_value"])
 
-		tigrisErrTags := getErrorTags(&api.TigrisError{Code: api.Code_NOT_FOUND})
+		tigrisErrTags := getTagsForError(&api.TigrisError{Code: api.Code_NOT_FOUND})
 		assert.Equal(t, "tigris_server", tigrisErrTags["error_source"])
 		assert.Equal(t, "NOT_FOUND", tigrisErrTags["error_value"])
 	})

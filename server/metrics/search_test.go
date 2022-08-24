@@ -18,6 +18,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/tigrisdata/tigris/server/config"
 )
 
@@ -35,6 +37,12 @@ func TestSearchMetrics(t *testing.T) {
 		GetSearchTags(ctx, "DeleteDocuments"),
 		GetSearchTags(ctx, "Search"),
 	}
+
+	t.Run("Test search tags", func(t *testing.T) {
+		assert.Greater(t, len(getSearchOkTagKeys()), 2)
+		assert.Greater(t, len(getSearchTimerTagKeys()), 2)
+		assert.Greater(t, len(getSearchErrorTagKeys()), 2)
+	})
 
 	t.Run("Test Search counters", func(t *testing.T) {
 		for _, tags := range testNormalTags {

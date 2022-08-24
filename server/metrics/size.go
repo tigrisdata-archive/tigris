@@ -31,6 +31,36 @@ func initializeSizeScopes() {
 	CollectionSize = SizeMetrics.SubScope("collection")
 }
 
+func getNameSpaceSizeTagKeys() []string {
+	return []string{
+		"env",
+		"service",
+		"tigris_tenant",
+		"version",
+	}
+}
+
+func getDbSizeTagKeys() []string {
+	return []string{
+		"env",
+		"service",
+		"tigris_tenant",
+		"version",
+		"db",
+	}
+}
+
+func getCollectionSizeTagKeys() []string {
+	return []string{
+		"env",
+		"service",
+		"tigris_tenant",
+		"version",
+		"db",
+		"collection",
+	}
+}
+
 func getNamespaceSizeTags(namespaceName string) map[string]string {
 	return map[string]string{
 		"tigris_tenant": namespaceName,
