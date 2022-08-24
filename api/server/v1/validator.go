@@ -103,6 +103,9 @@ func (x *ReadRequest) Validate() error {
 		return err
 	}
 
+	if len(x.GetFilter()) == 0 {
+		return Errorf(Code_INVALID_ARGUMENT, "filter is a required field")
+	}
 	return nil
 }
 
