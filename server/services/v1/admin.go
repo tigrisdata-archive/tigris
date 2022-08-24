@@ -58,6 +58,13 @@ func (a *adminService) CreateNamespace(ctx context.Context, req *api.CreateNames
 	if ReservedNamespaceNames.Contains(req.Name) {
 		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, req.Name+" is reserved name")
 	}
+	if req.Name == "" {
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "Empty namespace name is not allowed")
+	}
+	if req.GetId() <= 1 {
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "NamespaceId must be greater than 1")
+	}
+
 	namespace := metadata.NewTenantNamespace(req.Name, uint32(req.Id))
 	tx, err := a.txMgr.StartTx(ctx)
 	if err != nil {
