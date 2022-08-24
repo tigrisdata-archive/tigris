@@ -24,6 +24,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type FakeError struct{}
+
+func (f *FakeError) Error() string {
+	return "fake error for testing tags"
+}
+
 func TestTracing(t *testing.T) {
 	t.Run("Test NewSpanMeta", func(t *testing.T) {
 		tags := GetGlobalTags()
@@ -77,9 +83,155 @@ func TestTracing(t *testing.T) {
 		config.DefaultConfig.Tracing.Enabled = true
 		InitializeMetrics()
 		spanMeta := NewSpanMeta("test.service.name", "TestResource", "rpc", GetGlobalTags())
-		defer RequestsRespTime.Tagged(spanMeta.GetTags()).Timer("time").Start().Stop()
-		spanMeta.CountOkForScope(OkRequests)
+		defer RequestsRespTime.Tagged(spanMeta.GetRequestTimerTags()).Timer("time").Start().Stop()
+		spanMeta.CountOkForScope(OkRequests, spanMeta.GetRequestOkTags())
 		err := fmt.Errorf("hello error")
-		spanMeta.CountErrorForScope(ErrorRequests, err)
+		spanMeta.CountErrorForScope(ErrorRequests, spanMeta.GetRequestErrorTags(err))
+	})
+
+	t.Run("Test request tags", func(t *testing.T) {
+		config.DefaultConfig.Tracing.Enabled = true
+		InitializeMetrics()
+		spanMeta := NewSpanMeta("test.service.name", "TestResource", "rpc", GetGlobalTags())
+		spanMeta.AddTags(map[string]string{
+			"brokentag": "brokenvalue",
+		})
+		requestOkTags := spanMeta.GetRequestOkTags()
+		for _, key := range getRequestOkTagKeys() {
+			assert.NotNil(t, requestOkTags[key])
+		}
+		assert.Equal(t, len(getRequestOkTagKeys()), len(requestOkTags))
+
+		requestTimerTags := spanMeta.GetRequestTimerTags()
+		for _, key := range getRequestTimerTagKeys() {
+			assert.NotNil(t, requestTimerTags[key])
+		}
+		assert.Equal(t, len(getRequestTimerTagKeys()), len(requestOkTags))
+
+		requestErrorTags := spanMeta.GetRequestErrorTags(&FakeError{})
+		for _, key := range getRequestErrorTagKeys() {
+			assert.NotNil(t, requestErrorTags[key])
+		}
+		assert.Equal(t, len(getRequestErrorTagKeys()), len(requestErrorTags))
+	})
+
+	t.Run("Test fdb tags", func(t *testing.T) {
+		config.DefaultConfig.Tracing.Enabled = true
+		InitializeMetrics()
+		spanMeta := NewSpanMeta("test.service.name", "TestResource", "rpc", GetGlobalTags())
+		spanMeta.AddTags(map[string]string{
+			"brokentag": "brokenvalue",
+		})
+		fdbOkTags := spanMeta.GetFdbOkTags()
+		for _, key := range getFdbOkTagKeys() {
+			assert.NotNil(t, fdbOkTags[key])
+		}
+		assert.Equal(t, len(getFdbOkTagKeys()), len(fdbOkTags))
+
+		fdbTimerTags := spanMeta.GetFdbTimerTags()
+		for _, key := range getFdbTimerTagKeys() {
+			assert.NotNil(t, fdbTimerTags[key])
+		}
+		assert.Equal(t, len(getFdbTimerTagKeys()), len(fdbTimerTags))
+
+		fdbErrorTags := spanMeta.GetFdbErrorTags(&FakeError{})
+		for _, key := range getFdbErrorTagKeys() {
+			assert.NotNil(t, fdbErrorTags[key])
+		}
+		assert.Equal(t, len(getFdbErrorTagKeys()), len(fdbErrorTags))
+	})
+
+	t.Run("Test search tags", func(t *testing.T) {
+		config.DefaultConfig.Tracing.Enabled = true
+		InitializeMetrics()
+		spanMeta := NewSpanMeta("test.service.name", "TestResource", "rpc", GetGlobalTags())
+		spanMeta.AddTags(map[string]string{
+			"brokentag": "brokenvalue",
+		})
+		searchOkTags := spanMeta.GetSearchOkTags()
+		for _, key := range getSearchOkTagKeys() {
+			assert.NotNil(t, searchOkTags[key])
+		}
+		assert.Equal(t, len(getSearchOkTagKeys()), len(searchOkTags))
+
+		searchTimerTags := spanMeta.GetSearchTimerTags()
+		for _, key := range getSearchTimerTagKeys() {
+			assert.NotNil(t, searchTimerTags[key])
+		}
+		assert.Equal(t, len(getSearchTimerTagKeys()), len(searchTimerTags))
+
+		searchErrorTags := spanMeta.GetSearchErrorTags(&FakeError{})
+		for _, key := range getSearchErrorTagKeys() {
+			assert.NotNil(t, searchErrorTags[key])
+		}
+		assert.Equal(t, len(getSearchErrorTagKeys()), len(searchErrorTags))
+	})
+
+	t.Run("Test session tags", func(t *testing.T) {
+		config.DefaultConfig.Tracing.Enabled = true
+		InitializeMetrics()
+		spanMeta := NewSpanMeta("test.service.name", "TestResource", "rpc", GetGlobalTags())
+		spanMeta.AddTags(map[string]string{
+			"brokentag": "brokenvalue",
+		})
+		sessionOkTags := spanMeta.GetSessionOkTags()
+		for _, key := range getSessionOkTagKeys() {
+			assert.NotNil(t, sessionOkTags[key])
+		}
+		assert.Equal(t, len(getSessionOkTagKeys()), len(sessionOkTags))
+
+		sessionTimerTags := spanMeta.GetSessionTimerTags()
+		for _, key := range getSessionTimerTagKeys() {
+			assert.NotNil(t, sessionTimerTags[key])
+		}
+		assert.Equal(t, len(getSessionTimerTagKeys()), len(sessionTimerTags))
+
+		sessionErrorTags := spanMeta.GetSessionErrorTags(&FakeError{})
+		for _, key := range getSessionErrorTagKeys() {
+			assert.NotNil(t, sessionErrorTags[key])
+		}
+		assert.Equal(t, len(getSessionErrorTagKeys()), len(sessionErrorTags))
+	})
+
+	t.Run("Test size tags", func(t *testing.T) {
+		config.DefaultConfig.Tracing.Enabled = true
+		InitializeMetrics()
+		spanMeta := NewSpanMeta("test.service.name", "TestResource", "rpc", GetGlobalTags())
+		spanMeta.AddTags(map[string]string{
+			"brokentag": "brokenvalue",
+		})
+
+		namespaceSizeTags := spanMeta.GetNamespaceSizeTags()
+		for _, key := range getNameSpaceSizeTagKeys() {
+			assert.NotNil(t, namespaceSizeTags[key])
+		}
+		assert.Equal(t, len(getNameSpaceSizeTagKeys()), len(namespaceSizeTags))
+
+		dbSizeTags := spanMeta.GetDbSizeTags()
+		for _, key := range getDbSizeTagKeys() {
+			assert.NotNil(t, dbSizeTags[key])
+		}
+		assert.Equal(t, len(getDbSizeTagKeys()), len(dbSizeTags))
+
+		collSizeTags := spanMeta.GetCollectionSizeTags()
+		for _, key := range getCollectionSizeTagKeys() {
+			assert.NotNil(t, collSizeTags[key])
+		}
+		assert.Equal(t, len(getCollectionSizeTagKeys()), len(collSizeTags))
+	})
+
+	t.Run("Test network tags", func(t *testing.T) {
+		config.DefaultConfig.Tracing.Enabled = true
+		InitializeMetrics()
+		spanMeta := NewSpanMeta("test.service.name", "TestResource", "rpc", GetGlobalTags())
+		spanMeta.AddTags(map[string]string{
+			"brokentag": "brokenvalue",
+		})
+
+		networkTags := spanMeta.GetNetworkTags()
+		for _, key := range getNetworkTagKeys() {
+			assert.NotNil(t, networkTags[key])
+		}
+		assert.Equal(t, len(getNetworkTagKeys()), len(networkTags))
 	})
 }

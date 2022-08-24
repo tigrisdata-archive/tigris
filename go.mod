@@ -3,7 +3,9 @@ module github.com/tigrisdata/tigris
 go 1.18
 
 require (
+	github.com/ajg/form v1.5.1
 	github.com/apple/foundationdb/bindings/go v0.0.0-20220521054011-a88e049b28d8
+	github.com/auth0/go-auth0 v0.9.3
 	github.com/auth0/go-jwt-middleware/v2 v2.0.1
 	github.com/buger/jsonparser v1.1.1
 	github.com/davecgh/go-spew v1.1.1
@@ -27,7 +29,7 @@ require (
 	github.com/soheilhy/cmux v0.1.5
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.12.0
-	github.com/stretchr/testify v1.7.2
+	github.com/stretchr/testify v1.8.0
 	github.com/tigrisdata/tigris-client-go v1.0.0-alpha.21
 	github.com/typesense/typesense-go v0.6.0
 	github.com/uber-go/tally v3.5.0+incompatible
@@ -50,7 +52,7 @@ require (
 	github.com/DataDog/gostackparse v0.5.0 // indirect
 	github.com/DataDog/sketches-go v1.4.1 // indirect
 	github.com/Microsoft/go-winio v0.5.2 // indirect
-	github.com/ajg/form v1.5.1 // indirect
+	github.com/PuerkitoBio/rehttp v1.1.0 // indirect
 	github.com/andybalholm/brotli v1.0.4 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
@@ -86,7 +88,6 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/onsi/gomega v1.18.1 // indirect
-	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.2 // indirect
 	github.com/philhofer/fwd v1.1.1 // indirect

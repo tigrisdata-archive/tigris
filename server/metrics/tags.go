@@ -22,19 +22,6 @@ import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 )
 
-func getOkTagKeys() []string {
-	// Tag keys should be pre-defined to be able to emit the metrics in prometheus format, the values do not
-	return []string{
-		"db",
-		"collection",
-		"env",
-		"grpc_method",
-		"grpc_service",
-		"grpc_service_type",
-		"tigris_tenant",
-	}
-}
-
 func mergeTags(tagSets ...map[string]string) map[string]string {
 	res := make(map[string]string)
 	for _, tagSet := range tagSets {
@@ -67,7 +54,7 @@ func getTigrisError(err error) (string, bool) {
 	return "", false
 }
 
-func getErrorTags(err error) map[string]string {
+func getTagsForError(err error) map[string]string {
 	value, isFdbError := getFdbError(err)
 	if isFdbError {
 		return map[string]string{
@@ -84,7 +71,10 @@ func getErrorTags(err error) map[string]string {
 		}
 	}
 	// TODO: handle search errors
-	return map[string]string{}
+	return map[string]string{
+		"error_source": "unknown",
+		"error_value":  "unknown",
+	}
 }
 
 func getDbTags(dbName string) map[string]string {
@@ -108,4 +98,31 @@ func GetDbCollTagsForReq(req interface{}) map[string]string {
 		return getDbTags(r.GetDb())
 	}
 	return map[string]string{}
+}
+
+func standardizeTags(tags map[string]string, stdKeys []string) map[string]string {
+	res := tags
+	for _, tagKey := range stdKeys {
+		if _, ok := tags[tagKey]; !ok {
+			// tag is missing, need to add it
+			res[tagKey] = UnknownValue
+		} else {
+			if res[tagKey] == "" {
+				res[tagKey] = UnknownValue
+			}
+		}
+	}
+	for k := range res {
+		extraTag := true
+		// result has an extra tag that should not be there
+		for _, stdKey := range stdKeys {
+			if stdKey == k {
+				extraTag = false
+			}
+		}
+		if extraTag {
+			delete(res, k)
+		}
+	}
+	return res
 }

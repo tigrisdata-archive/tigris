@@ -21,17 +21,29 @@ var (
 	BytesSent     tally.Scope
 )
 
+func getNetworkTagKeys() []string {
+	return []string{
+		"grpc_method",
+		"grpc_service",
+		"tigris_tenant",
+		"grpc_service_type",
+		"env",
+		"db",
+		"collection",
+	}
+}
+
 func initializeNetworkScopes() {
 	BytesReceived = NetworkMetrics.SubScope("bytes")
 	BytesSent = NetworkMetrics.SubScope("bytes")
 }
 
-func (s *SpanMeta) CountSentBytes(scope tally.Scope, size int) {
+func (s *SpanMeta) CountSentBytes(scope tally.Scope, tags map[string]string, size int) {
 	// proto.Size has int, need to convert it here
-	scope.Tagged(s.GetTags()).Counter("sent").Inc(int64(size))
+	scope.Tagged(tags).Counter("sent").Inc(int64(size))
 }
 
-func (s *SpanMeta) CountReceivedBytes(scope tally.Scope, size int) {
+func (s *SpanMeta) CountReceivedBytes(scope tally.Scope, tags map[string]string, size int) {
 	// proto.Size has int, need to convert it here
-	scope.Tagged(s.GetTags()).Counter("received").Inc(int64(size))
+	scope.Tagged(tags).Counter("received").Inc(int64(size))
 }

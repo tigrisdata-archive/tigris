@@ -29,6 +29,10 @@ const (
 	KvTracingServiceName      string = "kv"
 	TraceServiceName          string = "tigris.grpc.server"
 	SessionManagerServiceName string = "session"
+	GrpcSpanType              string = "grpc"
+	FdbSpanType               string = "fdb"
+	SearchSpanType            string = "search"
+	SessionSpanType           string = "session"
 )
 
 type SpanMeta struct {
@@ -56,22 +60,80 @@ func ClearSpanMetaContext(ctx context.Context) context.Context {
 	return context.WithValue(ctx, SpanMetaCtxKey{}, nil)
 }
 
-func (s *SpanMeta) CountOkForScope(scope tally.Scope) {
-	scope.Tagged(s.GetTags()).Counter("ok").Inc(1)
+func (s *SpanMeta) CountOkForScope(scope tally.Scope, tags map[string]string) {
+	scope.Tagged(tags).Counter("ok").Inc(1)
 }
 
-func (s *SpanMeta) CountErrorForScope(scope tally.Scope, err error) {
-	scope.Tagged(mergeTags(s.GetTags(), getErrorTags(err))).Counter("error").Inc(1)
+func (s *SpanMeta) CountErrorForScope(scope tally.Scope, tags map[string]string) {
+	scope.Tagged(tags).Counter("error").Inc(1)
 }
 
 func (s *SpanMeta) GetTags() map[string]string {
-	res := s.tags
-	for _, tagKey := range getOkTagKeys() {
-		if _, ok := s.tags[tagKey]; !ok {
-			res[tagKey] = UnknownValue
-		}
-	}
-	return res
+	return s.tags
+}
+
+func (s *SpanMeta) GetRequestOkTags() map[string]string {
+	return standardizeTags(s.tags, getRequestOkTagKeys())
+}
+
+func (s *SpanMeta) GetRequestTimerTags() map[string]string {
+	return standardizeTags(s.tags, getRequestTimerTagKeys())
+}
+
+func (s *SpanMeta) GetRequestErrorTags(err error) map[string]string {
+	return standardizeTags(mergeTags(s.tags, getTagsForError(err)), getRequestErrorTagKeys())
+}
+
+func (s *SpanMeta) GetFdbOkTags() map[string]string {
+	return standardizeTags(s.tags, getFdbOkTagKeys())
+}
+
+func (s *SpanMeta) GetFdbTimerTags() map[string]string {
+	return standardizeTags(s.tags, getFdbTimerTagKeys())
+}
+
+func (s *SpanMeta) GetFdbErrorTags(err error) map[string]string {
+	return standardizeTags(mergeTags(s.tags, getTagsForError(err)), getFdbErrorTagKeys())
+}
+
+func (s *SpanMeta) GetSearchOkTags() map[string]string {
+	return standardizeTags(s.tags, getSearchOkTagKeys())
+}
+
+func (s *SpanMeta) GetSearchTimerTags() map[string]string {
+	return standardizeTags(s.tags, getSearchTimerTagKeys())
+}
+
+func (s *SpanMeta) GetSearchErrorTags(err error) map[string]string {
+	return standardizeTags(mergeTags(s.tags, getTagsForError(err)), getSearchErrorTagKeys())
+}
+
+func (s *SpanMeta) GetSessionOkTags() map[string]string {
+	return standardizeTags(s.tags, getSessionOkTagKeys())
+}
+
+func (s *SpanMeta) GetSessionTimerTags() map[string]string {
+	return standardizeTags(s.tags, getSessionTimerTagKeys())
+}
+
+func (s *SpanMeta) GetSessionErrorTags(err error) map[string]string {
+	return standardizeTags(mergeTags(s.tags, getTagsForError(err)), getSessionErrorTagKeys())
+}
+
+func (s *SpanMeta) GetNamespaceSizeTags() map[string]string {
+	return standardizeTags(s.tags, getNameSpaceSizeTagKeys())
+}
+
+func (s *SpanMeta) GetDbSizeTags() map[string]string {
+	return standardizeTags(s.tags, getDbSizeTagKeys())
+}
+
+func (s *SpanMeta) GetCollectionSizeTags() map[string]string {
+	return standardizeTags(s.tags, getCollectionSizeTagKeys())
+}
+
+func (s *SpanMeta) GetNetworkTags() map[string]string {
+	return standardizeTags(s.tags, getNetworkTagKeys())
 }
 
 func (s *SpanMeta) SaveSpanMetaToContext(ctx context.Context) (context.Context, error) {
@@ -109,9 +171,6 @@ func (s *SpanMeta) StartTracing(ctx context.Context, childOnly bool) context.Con
 		// This is a child span, parents need to be marked
 		spanOpts = append(spanOpts, tracer.ChildOf(parentSpanMeta.span.Context()))
 		s.parent = parentSpanMeta
-		for _, tag := range getOkTagKeys() {
-			s.tags[tag] = s.parent.tags[tag]
-		}
 	}
 	if childOnly && !parentExists {
 		// There is no parent span, no need to start tracing here
@@ -151,7 +210,7 @@ func (s *SpanMeta) FinishWithError(ctx context.Context, err error) {
 	}
 	errCode := status.Code(err)
 	s.span.SetTag("grpc.code", errCode.String())
-	errTags := getErrorTags(err)
+	errTags := getTagsForError(err)
 	for k, v := range errTags {
 		s.span.SetTag(k, v)
 	}

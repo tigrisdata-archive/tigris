@@ -21,10 +21,10 @@ func TestNetworkMetrics(t *testing.T) {
 	testSpanMeta := NewSpanMeta("test.service.name", "TestResource", "rpc", GetGlobalTags())
 
 	t.Run("Test bytes send", func(t *testing.T) {
-		testSpanMeta.CountSentBytes(BytesSent, 100)
+		testSpanMeta.CountSentBytes(BytesSent, testSpanMeta.GetNetworkTags(), 100)
 	})
 
 	t.Run("Test bytes received", func(t *testing.T) {
-		testSpanMeta.CountReceivedBytes(BytesReceived, 100)
+		testSpanMeta.CountReceivedBytes(BytesReceived, testSpanMeta.GetNetworkTags(), 100)
 	})
 }

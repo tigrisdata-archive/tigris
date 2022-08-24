@@ -155,8 +155,8 @@ func newObservabilityService() *observabilityService {
 			},
 		}
 	}
-	log.Error().Str("observabilityProvider", config.DefaultConfig.Observability.Provider).Msg("Unable to configure external observability provider")
 	if config.DefaultConfig.Observability.Enabled {
+		log.Error().Str("observabilityProvider", config.DefaultConfig.Observability.Provider).Msg("Unable to configure external observability provider")
 		panic("Unable to configure external observability provider")
 	}
 	return nil
@@ -199,6 +199,10 @@ func formQuery(ctx context.Context, req *api.QueryTimeSeriesMetricsRequest) (str
 		} else {
 			tags = append(tags, "grpc_method:read,")
 		}
+	}
+
+	if config.GetEnvironment() != "" {
+		tags = append(tags, "env:"+config.GetEnvironment()+",")
 	}
 
 	if req.Db != "" {

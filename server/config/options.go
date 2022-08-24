@@ -50,6 +50,9 @@ type AuthConfig struct {
 	ClientId                 string        `mapstructure:"client_id" yaml:"client_id" json:"client_id"`
 	ExternalTokenURL         string        `mapstructure:"external_token_url" yaml:"external_token_url" json:"external_token_url"`
 	EnableOauth              bool          `mapstructure:"enable_oauth" yaml:"enable_oauth" json:"enable_oauth"`
+	Domain                   string        `mapstructure:"external_domain" yaml:"external_domain" json:"external_domain"`
+	ManagementClientId       string        `mapstructure:"management_client_id" yaml:"management_client_id" json:"management_client_id"`
+	ManagementClientSecret   string        `mapstructure:"management_client_secret" yaml:"management_client_secret" json:"management_client_secret"`
 }
 
 type CdcConfig struct {
@@ -152,6 +155,7 @@ var DefaultConfig = Config{
 		DataSizeLimit:             10000000000, // bytes
 		LimitUpdateInterval:       5,           // seconds
 		TenantSizeRefreshInterval: 60,          // seconds
+		AllTenantsRefreshInternal: 300,         // seconds
 	},
 	Observability: ObservabilityConfig{
 		Enabled: false,
@@ -179,6 +183,7 @@ type QuotaConfig struct {
 	DataSizeLimit             int64 `mapstructure:"data_size_limit" yaml:"data_size_limit" json:"data_size_limit"`
 	LimitUpdateInterval       int64 `mapstructure:"limit_update_interval" yaml:"limit_update_interval" json:"limit_update_interval"`
 	TenantSizeRefreshInterval int64 `mapstructure:"tenant_size_refresh_interval" yaml:"tenant_size_refresh_interval" json:"tenant_size_refresh_interval"`
+	AllTenantsRefreshInternal int64 `mapstructure:"all_tenants_refresh_interval" yaml:"all_tenants_refresh_interval" json:"all_tenants_refresh_interval"`
 }
 
 func IsIndexingStoreReadEnabled() bool {
