@@ -40,19 +40,19 @@ type storeImplWithMetrics struct {
 func (m *storeImplWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
 	// Low level measurement wrapper that is called by the measure functions on the appropriate receiver
 	tags := metrics.GetSearchTags(ctx, name)
-	spanMeta := metrics.NewSpanMeta("tigris.search", name, "search", tags)
+	spanMeta := metrics.NewSpanMeta("tigris.search", name, metrics.SearchSpanType, tags)
 	ctx = spanMeta.StartTracing(ctx, true)
-	defer metrics.SearchRespTime.Tagged(spanMeta.GetTags()).Timer("time").Start().Stop()
+	defer metrics.SearchRespTime.Tagged(spanMeta.GetSearchTimerTags()).Timer("time").Start().Stop()
 	err := f(ctx)
 	if err == nil {
 		// Request was ok
-		spanMeta.CountOkForScope(metrics.SearchOkRequests)
+		spanMeta.CountOkForScope(metrics.SearchOkRequests, spanMeta.GetSearchOkTags())
 		metrics.SessionOkRequests.Tagged(tags).Counter("ok").Inc(1)
 		_ = spanMeta.FinishTracing(ctx)
 		return
 	}
 	// Request had error
-	spanMeta.CountErrorForScope(metrics.SearchMetrics, err)
+	spanMeta.CountErrorForScope(metrics.SearchMetrics, spanMeta.GetSearchErrorTags(err))
 	spanMeta.FinishWithError(ctx, err)
 }
 

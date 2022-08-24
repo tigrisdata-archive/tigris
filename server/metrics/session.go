@@ -26,10 +26,51 @@ var (
 	SessionRespTime      tally.Scope
 )
 
+func getSessionOkTagKeys() []string {
+	return []string{
+		"grpc_method",
+		"grpc_service",
+		"tigris_tenant",
+		"grpc_service_type",
+		"env",
+		"db",
+		"collection",
+		"session_method",
+	}
+}
+
+func getSessionTimerTagKeys() []string {
+	return []string{
+		"grpc_method",
+		"grpc_service",
+		"tigris_tenant",
+		"grpc_service_type",
+		"env",
+		"db",
+		"collection",
+		"session_method",
+	}
+}
+
+func getSessionErrorTagKeys() []string {
+	return []string{
+		"grpc_method",
+		"grpc_service",
+		"tigris_tenant",
+		"grpc_service_type",
+		"env",
+		"db",
+		"collection",
+		"error_code",
+		"error_value",
+		"session_method",
+	}
+}
+
 func getSessionTags(sessionMethodName string) map[string]string {
 	return map[string]string{
-		"method":        sessionMethodName,
-		"tigris_tenant": UnknownValue,
+		"session_method": sessionMethodName,
+		"tigris_tenant":  UnknownValue,
 	}
 }
 

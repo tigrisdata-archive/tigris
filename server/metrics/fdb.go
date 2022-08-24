@@ -26,17 +26,59 @@ var (
 	FdbRespTime      tally.Scope
 )
 
+func getFdbOkTagKeys() []string {
+	return []string{
+		"grpc_method",
+		"grpc_service",
+		"tigris_tenant",
+		"grpc_service_type",
+		"env",
+		"db",
+		"collection",
+		"fdb_method",
+	}
+}
+
+func getFdbTimerTagKeys() []string {
+	return []string{
+		"grpc_method",
+		"grpc_service",
+		"tigris_tenant",
+		"grpc_service_type",
+		"env",
+		"db",
+		"collection",
+		"fdb_method",
+	}
+}
+
+func getFdbErrorTagKeys() []string {
+	return []string{
+		"grpc_method",
+		"grpc_service",
+		"tigris_tenant",
+		"grpc_service_type",
+		"env",
+		"db",
+		"collection",
+		"fdb_method",
+		"error_source",
+		"error_value",
+	}
+}
+
 func getFdbReqOkTags(reqMethodName string) map[string]string {
 	return map[string]string{
-		"method":        reqMethodName,
+		"fdb_method":    reqMethodName,
 		"tigris_tenant": UnknownValue,
 	}
 }
 
 func getFdbReqErrorTags(reqMethodName string, code string) map[string]string {
 	return map[string]string{
-		"method":        reqMethodName,
-		"error_code":    code,
+		"fdb_method":    reqMethodName,
+		"error_source":  "fdb",
+		"error_value":   code,
 		"tigris_tenant": UnknownValue,
 	}
 }

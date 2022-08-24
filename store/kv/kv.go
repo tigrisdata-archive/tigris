@@ -98,18 +98,18 @@ func NewKeyValueStoreWithMetrics(cfg *config.FoundationDBConfig) (KeyValueStore,
 func measureLow(ctx context.Context, name string, f func() error) {
 	// Low level measurement wrapper that is called by the measure functions on the appropriate receiver
 	tags := metrics.GetFdbOkTags(ctx, name)
-	spanMeta := metrics.NewSpanMeta(metrics.KvTracingServiceName, name, "fdb_kv", tags)
-	defer metrics.FdbRespTime.Tagged(spanMeta.GetTags()).Timer("time").Start().Stop()
+	spanMeta := metrics.NewSpanMeta(metrics.KvTracingServiceName, name, metrics.FdbSpanType, tags)
+	defer metrics.FdbRespTime.Tagged(spanMeta.GetFdbTimerTags()).Timer("time").Start().Stop()
 	ctx = spanMeta.StartTracing(ctx, true)
 	err := f()
 	if err == nil {
 		// Request was ok
-		spanMeta.CountOkForScope(metrics.FdbOkRequests)
+		spanMeta.CountOkForScope(metrics.FdbOkRequests, spanMeta.GetFdbOkTags())
 		_ = spanMeta.FinishTracing(ctx)
 		return
 	}
 	// Request had an error
-	spanMeta.CountErrorForScope(metrics.FdbOkRequests, err)
+	spanMeta.CountErrorForScope(metrics.FdbOkRequests, spanMeta.GetFdbErrorTags(err))
 	spanMeta.FinishWithError(ctx, err)
 }
 

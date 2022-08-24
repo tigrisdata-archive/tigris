@@ -26,6 +26,47 @@ var (
 	SearchRespTime      tally.Scope
 )
 
+func getSearchOkTagKeys() []string {
+	return []string{
+		"grpc_method",
+		"grpc_service",
+		"tigris_tenant",
+		"grpc_service_type",
+		"env",
+		"db",
+		"collection",
+		"search_method",
+	}
+}
+
+func getSearchTimerTagKeys() []string {
+	return []string{
+		"grpc_method",
+		"grpc_service",
+		"tigris_tenant",
+		"grpc_service_type",
+		"env",
+		"db",
+		"collection",
+		"search_method",
+	}
+}
+
+func getSearchErrorTagKeys() []string {
+	return []string{
+		"grpc_method",
+		"grpc_service",
+		"tigris_tenant",
+		"grpc_service_type",
+		"env",
+		"db",
+		"collection",
+		"error_code",
+		"error_value",
+		"search_method",
+	}
+}
+
 func initializeSearchScopes() {
 	SearchOkRequests = SearchMetrics.SubScope("count")
 	SearchErrorRequests = SearchMetrics.SubScope("count")
@@ -38,7 +79,7 @@ func GetSearchTags(ctx context.Context, reqMethodName string) map[string]string 
 
 func getSearchReqTags(reqMethodName string) map[string]string {
 	return map[string]string{
-		"method":        reqMethodName,
+		"search_method": reqMethodName,
 		"tigris_tenant": UnknownValue,
 	}
 }

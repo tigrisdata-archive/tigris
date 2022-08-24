@@ -18,6 +18,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/tigrisdata/tigris/server/config"
 )
 
@@ -38,6 +40,12 @@ func TestFdbMetrics(t *testing.T) {
 		GetFdbErrorTags(ctx, "Insert", "2"),
 		GetFdbErrorTags(ctx, "Insert", "3"),
 	}
+
+	t.Run("Test fdb tags", func(t *testing.T) {
+		assert.Greater(t, len(getFdbOkTagKeys()), 2)
+		assert.Greater(t, len(getFdbTimerTagKeys()), 2)
+		assert.Greater(t, len(getFdbErrorTagKeys()), 2)
+	})
 
 	t.Run("Test FDB counters", func(t *testing.T) {
 		for _, tags := range testNormalTags {
