@@ -1326,6 +1326,64 @@ func TestDelete_MultipleRows(t *testing.T) {
 	)
 }
 
+func TestRead_BadRequest(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	cases := []struct {
+		databaseName   string
+		collectionName string
+		filter         Map
+		expMessage     string
+		status         int
+	}{
+		{
+			"random_database1",
+			coll,
+			Map{"pkey_int": 1},
+			"database doesn't exist 'random_database1'",
+			http.StatusNotFound,
+		}, {
+			db,
+			"random_collection",
+			Map{"pkey_int": 1},
+			"collection doesn't exist 'random_collection'",
+			http.StatusNotFound,
+		}, {
+			"",
+			coll,
+			Map{"pkey_int": 1},
+			"invalid database name",
+			http.StatusBadRequest,
+		}, {
+			db,
+			"",
+			Map{"pkey_int": 1},
+			"invalid collection name",
+			http.StatusBadRequest,
+		}, {
+			db,
+			coll,
+			nil,
+			"filter is a required field",
+			http.StatusBadRequest,
+		},
+	}
+	for _, c := range cases {
+		resp := expect(t).POST(getDocumentURL(c.databaseName, c.collectionName, "read")).
+			WithJSON(Map{
+				"filter": c.filter,
+			}).
+			Expect()
+
+		code := api.Code_INVALID_ARGUMENT
+		if c.status == http.StatusNotFound {
+			code = api.Code_NOT_FOUND
+		}
+		testError(resp, c.status, code, c.expMessage)
+	}
+}
+
 func TestRead_MultipleRows(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)

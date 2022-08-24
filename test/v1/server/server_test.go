@@ -104,6 +104,9 @@ func TestTxForwarder(t *testing.T) {
 		JSON().Object().ValueEqual("status", "updated")
 
 	str := e2.POST(getDocumentURL(dbName, collName, "read")).
+		WithJSON(Map{
+			"filter": Map{},
+		}).
 		WithHeader("Tigris-Tx-Id", res1.TxCtx.Id).
 		WithHeader("Tigris-Tx-Origin", res1.TxCtx.Origin).
 		Expect().Status(http.StatusOK).Body().Raw()
