@@ -201,6 +201,10 @@ func formQuery(ctx context.Context, req *api.QueryTimeSeriesMetricsRequest) (str
 		}
 	}
 
+	if config.GetEnvironment() != "" {
+		tags = append(tags, "env:"+config.GetEnvironment()+",")
+	}
+
 	if req.Db != "" {
 		tags = append(tags, "db:"+req.Db+",")
 	}
