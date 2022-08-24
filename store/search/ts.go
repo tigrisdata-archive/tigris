@@ -47,7 +47,6 @@ func (m *storeImplWithMetrics) measure(ctx context.Context, name string, f func(
 	if err == nil {
 		// Request was ok
 		spanMeta.CountOkForScope(metrics.SearchOkRequests, spanMeta.GetSearchOkTags())
-		metrics.SessionOkRequests.Tagged(tags).Counter("ok").Inc(1)
 		_ = spanMeta.FinishTracing(ctx)
 		return
 	}
