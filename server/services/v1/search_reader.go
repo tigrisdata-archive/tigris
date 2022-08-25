@@ -121,8 +121,14 @@ func (p *pageReader) read() error {
 
 	// check if we need to build facets
 	if len(p.cachedFacets) == 0 {
+		// count of values to include in response
+		facetSizeRequested := map[string]int{}
+		for _, f := range p.query.Facets.Fields {
+			facetSizeRequested[f.Name] = f.Size
+		}
+
 		for _, r := range result {
-			p.buildFacets(r.FacetCounts)
+			p.buildFacets(r.FacetCounts, facetSizeRequested)
 		}
 	}
 
@@ -153,19 +159,23 @@ func (p *pageReader) next() (bool, *page, error) {
 	return false, pg, nil
 }
 
-func (p *pageReader) buildFacets(facets *[]tsApi.FacetCounts) {
+func (p *pageReader) buildFacets(facets *[]tsApi.FacetCounts, facetSizeRequested map[string]int) {
 	if facets == nil {
 		return
 	}
-	// count of values to include in response
-	facetSizeRequested := map[string]int{}
-	for _, f := range p.query.Facets.Fields {
-		facetSizeRequested[f.Name] = f.Size
-	}
 
 	for _, f := range *facets {
+		// if facet for current field is built already, merge into existing Else create fresh
+		if builtFacets, ok := p.cachedFacets[*f.FieldName]; ok {
+			// Todo: merge facets, sort them and merge stats
+			// temp workaround: build again if pre built facets are empty to have something in response
+			if len(builtFacets.Counts) > 0 {
+				return
+			}
+		}
+
 		var facet = &api.SearchFacet{
-			Stats: p.buildStats(f),
+			Stats: p.newFacetStats(f),
 		}
 
 		if f.Counts != nil {
@@ -184,7 +194,7 @@ func (p *pageReader) buildFacets(facets *[]tsApi.FacetCounts) {
 	}
 }
 
-func (p *pageReader) buildStats(stats tsApi.FacetCounts) *api.FacetStats {
+func (p *pageReader) newFacetStats(stats tsApi.FacetCounts) *api.FacetStats {
 	if stats.Stats == nil {
 		return nil
 	}
