@@ -242,7 +242,7 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 			// as Int64 or timestamp to ensure uniqueness if multiple workers end up generating same timestamp.
 			err = tx.Insert(ctx, key, tableData)
 		} else {
-			err = tx.Replace(ctx, key, tableData)
+			err = tx.Replace(ctx, key, tableData, false)
 		}
 		if err != nil {
 			return nil, nil, err
@@ -357,11 +357,6 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, ctx, err
 	}
 
-	iKeys, err := runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter)
-	if err != nil {
-		return nil, ctx, err
-	}
-
 	var factory *update.FieldOperatorFactory
 	factory, err = update.BuildFieldOperators(runner.req.Fields)
 	if err != nil {
@@ -389,24 +384,56 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		}
 	}
 
-	modifiedCount := int32(0)
-	for _, key := range iKeys {
-		// decode the fields now
-		modified := int32(0)
-		if modified, err = tx.Update(ctx, key, func(existing *internal.TableData) (*internal.TableData, error) {
-			merged, er := factory.MergeAndGet(existing.RawData)
-			if er != nil {
-				return nil, er
-			}
-
-			// ToDo: may need to change the schema version
-			return internal.NewTableDataWithTS(existing.CreatedAt, ts, merged), nil
-		}); ulog.E(err) {
-			return nil, ctx, err
-		}
-		modifiedCount += modified
+	table, err := runner.encoder.EncodeTableName(tenant.GetNamespace(), db, collection)
+	if err != nil {
+		return nil, ctx, err
 	}
 
+	if filter.None(runner.req.Filter) {
+		return nil, ctx, api.Errorf(api.Code_INVALID_ARGUMENT, "updating all documents is not allowed")
+	}
+
+	var iterator Iterator
+	reader := NewDatabaseReader(ctx, tx)
+	iKeys, err := runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter)
+	if err == nil {
+		iterator, err = reader.KeyIterator(iKeys)
+	} else {
+		if iterator, err = reader.ScanTable(table); err != nil {
+			return nil, ctx, err
+		}
+		filterFactory := filter.NewFactory(collection.QueryableFields)
+		var filters []filter.Filter
+		if filters, err = filterFactory.Factorize(runner.req.Filter); err != nil {
+			return nil, ctx, err
+		}
+
+		iterator, err = reader.FilteredRead(iterator, filter.NewWrappedFilter(filters))
+	}
+	if err != nil {
+		return nil, ctx, err
+	}
+
+	modifiedCount := int32(0)
+	var row Row
+	for iterator.Next(&row) {
+		key, err := keys.FromBinary(table, row.Key)
+		if err != nil {
+			return nil, ctx, err
+		}
+
+		merged, er := factory.MergeAndGet(row.Data.RawData)
+		if er != nil {
+			return nil, ctx, err
+		}
+
+		newData := internal.NewTableDataWithTS(row.Data.CreatedAt, ts, merged)
+		// as we have merged the data, it is safe to call replace
+		if err = tx.Replace(ctx, key, newData, true); ulog.E(err) {
+			return nil, ctx, err
+		}
+		modifiedCount++
+	}
 	return &Response{
 		status:        UpdatedStatus,
 		updatedAt:     ts,
@@ -434,20 +461,57 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, ctx, err
 	}
 
-	iKeys, err := runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter)
+	table, err := runner.encoder.EncodeTableName(tenant.GetNamespace(), db, collection)
 	if err != nil {
 		return nil, ctx, err
 	}
 
-	for _, key := range iKeys {
+	var iterator Iterator
+	reader := NewDatabaseReader(ctx, tx)
+	if filter.None(runner.req.Filter) {
+		if iterator, err = reader.ScanTable(table); err != nil {
+			return nil, ctx, err
+		}
+	} else {
+		var iKeys []keys.Key
+		if iKeys, err = runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter); err == nil {
+			iterator, err = reader.KeyIterator(iKeys)
+		} else {
+			if iterator, err = reader.ScanTable(table); err != nil {
+				return nil, ctx, err
+			}
+			filterFactory := filter.NewFactory(collection.QueryableFields)
+			var filters []filter.Filter
+			if filters, err = filterFactory.Factorize(runner.req.Filter); err != nil {
+				return nil, ctx, err
+			}
+
+			iterator, err = reader.FilteredRead(iterator, filter.NewWrappedFilter(filters))
+		}
+	}
+	if err != nil {
+		return nil, ctx, err
+	}
+
+	modifiedCount := int32(0)
+	var row Row
+	for iterator.Next(&row) {
+		key, err := keys.FromBinary(table, row.Key)
+		if err != nil {
+			return nil, ctx, err
+		}
+
 		if err = tx.Delete(ctx, key); ulog.E(err) {
 			return nil, ctx, err
 		}
+
+		modifiedCount++
 	}
 
 	return &Response{
-		status:    DeletedStatus,
-		deletedAt: ts,
+		status:        DeletedStatus,
+		deletedAt:     ts,
+		modifiedCount: modifiedCount,
 	}, ctx, nil
 }
 

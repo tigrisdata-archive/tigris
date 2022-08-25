@@ -1,0 +1,25 @@
+name: cli-test
+on:
+  push:
+  workflow_call:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: Install CLI
+        run: |
+          curl -sSL https://tigris.dev/cli-linux | sudo tar -xz -C .
+          wget https://raw.githubusercontent.com/tigrisdata/tigris-cli/main/tests/db.sh
+
+      - name: Start Tigris server
+        run: |
+          make run
+          sleep 5
+
+      - name: Run CLI tests
+        run: noup=1 /bin/bash db.sh
