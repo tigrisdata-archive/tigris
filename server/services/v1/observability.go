@@ -42,6 +42,11 @@ const (
 	DDAppKey                 = "DD-APPLICATION-KEY"
 	Query                    = "query"
 	DDQueryEndpointPath      = "/api/v1/query"
+	RateLimitLimit           = "X-RateLimit-Period"
+	RateLimitPeriod          = "X-RateLimit-Period"
+	RateLimitRemaining       = "X-RateLimit-Remaining"
+	RateLimitReset           = "X-RateLimit-Reset"
+	RateLimitName            = "X-RateLimit-Name"
 )
 
 type observabilityService struct {
@@ -140,9 +145,12 @@ func (dd Datadog) QueryTimeSeriesMetrics(ctx context.Context, req *api.QueryTime
 		} else {
 			return nil, api.Errorf(api.Code_INTERNAL, "Unexpected remote response: reason = 0 series returned")
 		}
+	} else if resp.StatusCode == 429 {
+		log.Warn().Str(RateLimitLimit, resp.Header.Get(RateLimitLimit)).Str(RateLimitPeriod, resp.Header.Get(RateLimitPeriod)).Str(RateLimitRemaining, resp.Header.Get(RateLimitRemaining)).Str(RateLimitReset, resp.Header.Get(RateLimitReset)).Str(RateLimitName, resp.Header.Get(RateLimitName)).Msgf("Datadog rate-limit hit")
+		return nil, api.Errorf(api.Code_RESOURCE_EXHAUSTED, "Failed to get query metrics: reason = rate-limited, reason = %s", bodyStr)
 	}
 	log.Error().Msgf("Datadog response status code=%d", resp.StatusCode)
-	return nil, api.Errorf(api.Code_INTERNAL, "Failed to get query metrics: reason = "+bodyStr)
+	return nil, api.Errorf(api.FromHttpCode(resp.StatusCode), "Failed to get query metrics: reason = "+bodyStr)
 }
 
 func newObservabilityService() *observabilityService {
