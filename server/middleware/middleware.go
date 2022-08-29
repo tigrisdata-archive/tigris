@@ -37,8 +37,15 @@ import (
 func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor) {
 	jwtValidator := GetJWTValidator(config)
 	// inline closure to access the state of jwtValidator
-	authFunction := func(ctx context.Context) (context.Context, error) {
-		return AuthFunction(ctx, jwtValidator, config)
+	var authFunction func(ctx context.Context) (context.Context, error)
+	if config.Tracing.Enabled {
+		authFunction = func(ctx context.Context) (context.Context, error) {
+			return MeasuredAuthFunction(ctx, jwtValidator, config)
+		}
+	} else {
+		authFunction = func(ctx context.Context) (context.Context, error) {
+			return AuthFunction(ctx, jwtValidator, config)
+		}
 	}
 
 	excludedMethods := set.New()
