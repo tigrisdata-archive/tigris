@@ -40,19 +40,22 @@ type Config struct {
 }
 
 type AuthConfig struct {
-	IssuerURL                string        `mapstructure:"issuer_url" yaml:"issuer_url" json:"issuer_url"`
-	Audience                 string        `mapstructure:"audience" yaml:"audience" json:"audience"`
-	JWKSCacheTimeout         time.Duration `mapstructure:"jwks_cache_timeout" yaml:"jwks_cache_timeout" json:"jwks_cache_timeout"`
-	LogOnly                  bool          `mapstructure:"log_only" yaml:"log_only" json:"log_only"`
-	EnableNamespaceIsolation bool          `mapstructure:"enable_namespace_isolation" yaml:"enable_namespace_isolation" json:"enable_namespace_isolation"`
-	AdminNamespaces          []string      `mapstructure:"admin_namespaces" yaml:"admin_namespaces" json:"admin_namespaces"`
-	OAuthProvider            string        `mapstructure:"oauth_provider" yaml:"oauth_provider" json:"oauth_provider"`
-	ClientId                 string        `mapstructure:"client_id" yaml:"client_id" json:"client_id"`
-	ExternalTokenURL         string        `mapstructure:"external_token_url" yaml:"external_token_url" json:"external_token_url"`
-	EnableOauth              bool          `mapstructure:"enable_oauth" yaml:"enable_oauth" json:"enable_oauth"`
-	Domain                   string        `mapstructure:"external_domain" yaml:"external_domain" json:"external_domain"`
-	ManagementClientId       string        `mapstructure:"management_client_id" yaml:"management_client_id" json:"management_client_id"`
-	ManagementClientSecret   string        `mapstructure:"management_client_secret" yaml:"management_client_secret" json:"management_client_secret"`
+	Enabled                   bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	IssuerURL                 string        `mapstructure:"issuer_url" yaml:"issuer_url" json:"issuer_url"`
+	Audience                  string        `mapstructure:"audience" yaml:"audience" json:"audience"`
+	JWKSCacheTimeout          time.Duration `mapstructure:"jwks_cache_timeout" yaml:"jwks_cache_timeout" json:"jwks_cache_timeout"`
+	LogOnly                   bool          `mapstructure:"log_only" yaml:"log_only" json:"log_only"`
+	EnableNamespaceIsolation  bool          `mapstructure:"enable_namespace_isolation" yaml:"enable_namespace_isolation" json:"enable_namespace_isolation"`
+	AdminNamespaces           []string      `mapstructure:"admin_namespaces" yaml:"admin_namespaces" json:"admin_namespaces"`
+	OAuthProvider             string        `mapstructure:"oauth_provider" yaml:"oauth_provider" json:"oauth_provider"`
+	ClientId                  string        `mapstructure:"client_id" yaml:"client_id" json:"client_id"`
+	ExternalTokenURL          string        `mapstructure:"external_token_url" yaml:"external_token_url" json:"external_token_url"`
+	EnableOauth               bool          `mapstructure:"enable_oauth" yaml:"enable_oauth" json:"enable_oauth"`
+	TokenCacheSize            int           `mapstructure:"token_cache_size" yaml:"token_cache_size" json:"token_cache_size"`
+	ExternalDomain            string        `mapstructure:"external_domain" yaml:"external_domain" json:"external_domain"`
+	ManagementClientId        string        `mapstructure:"management_client_id" yaml:"management_client_id" json:"management_client_id"`
+	ManagementClientSecret    string        `mapstructure:"management_client_secret" yaml:"management_client_secret" json:"management_client_secret"`
+	TokenClockSkewDurationSec int           `mapstructure:"token_clock_skew_duration_sec" yaml:"token_clock_skew_duration_sec" json:"token_clock_skew_duration_sec"`
 }
 
 type CdcConfig struct {
@@ -118,6 +121,7 @@ var DefaultConfig = Config{
 		FDBHardDrop: false,
 	},
 	Auth: AuthConfig{
+		Enabled:          false,
 		IssuerURL:        "https://tigrisdata-dev.us.auth0.com/",
 		Audience:         "https://tigris-api",
 		JWKSCacheTimeout: 5 * time.Minute,

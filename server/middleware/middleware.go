@@ -22,6 +22,7 @@ import (
 	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/auth"
 	grpc_logging "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/lib/set"
@@ -35,16 +36,23 @@ import (
 )
 
 func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor) {
-	jwtValidator := GetJWTValidator(config)
-	// inline closure to access the state of jwtValidator
 	var authFunction func(ctx context.Context) (context.Context, error)
-	if config.Tracing.Enabled {
-		authFunction = func(ctx context.Context) (context.Context, error) {
-			return MeasuredAuthFunction(ctx, jwtValidator, config)
+
+	if config.Auth.Enabled {
+		jwtValidator := GetJWTValidator(config)
+		lruCache, err := lru.New(config.Auth.TokenCacheSize)
+		if err != nil {
+			panic("Failed to setup token cache")
 		}
-	} else {
-		authFunction = func(ctx context.Context) (context.Context, error) {
-			return AuthFunction(ctx, jwtValidator, config)
+		// inline closure to access the state of jwtValidator
+		if config.Tracing.Enabled {
+			authFunction = func(ctx context.Context) (context.Context, error) {
+				return MeasuredAuthFunction(ctx, jwtValidator, config, lruCache)
+			}
+		} else {
+			authFunction = func(ctx context.Context) (context.Context, error) {
+				return AuthFunction(ctx, jwtValidator, config, lruCache)
+			}
 		}
 	}
 
@@ -72,9 +80,13 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 	// The order of the interceptors matter with optional elements in them
 	streamInterceptors := []grpc.StreamServerInterceptor{
 		forwarderStreamServerInterceptor(),
-		grpc_auth.StreamServerInterceptor(authFunction),
-		namespaceInitializer.NamespaceSetterStreamServerInterceptor(),
 	}
+
+	if config.Auth.Enabled {
+		streamInterceptors = append(streamInterceptors, grpc_auth.StreamServerInterceptor(authFunction))
+	}
+
+	streamInterceptors = append(streamInterceptors, namespaceInitializer.NamespaceSetterStreamServerInterceptor())
 
 	if config.Tracing.Enabled {
 		streamInterceptors = append(streamInterceptors, traceStream())
@@ -97,9 +109,12 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 	// The order of the interceptors matter with optional elements in them
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
 		forwarderUnaryServerInterceptor(),
-		grpc_auth.UnaryServerInterceptor(authFunction),
-		namespaceInitializer.NamespaceSetterUnaryServerInterceptor(),
 	}
+	if config.Auth.Enabled {
+		unaryInterceptors = append(unaryInterceptors, grpc_auth.UnaryServerInterceptor(authFunction))
+	}
+
+	unaryInterceptors = append(unaryInterceptors, namespaceInitializer.NamespaceSetterUnaryServerInterceptor())
 
 	if config.Tracing.Enabled {
 		unaryInterceptors = append(unaryInterceptors, traceUnary())
