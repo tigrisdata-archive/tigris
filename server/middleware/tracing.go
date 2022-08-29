@@ -47,7 +47,7 @@ func traceUnary() func(ctx context.Context, req interface{}, info *grpc.UnarySer
 		if err != nil {
 			// Request had an error
 			spanMeta.CountErrorForScope(metrics.OkRequests, spanMeta.GetRequestErrorTags(err))
-			spanMeta.FinishWithError(ctx, err)
+			_ = spanMeta.FinishWithError(ctx, "request", err)
 			ulog.E(err)
 			return nil, err
 		}
@@ -73,7 +73,7 @@ func traceStream() grpc.StreamServerInterceptor {
 		err := handler(srv, wrapped)
 		if err != nil {
 			spanMeta.CountErrorForScope(metrics.OkRequests, spanMeta.GetRequestErrorTags(err))
-			spanMeta.FinishWithError(wrapped.WrappedContext, err)
+			wrapped.WrappedContext = spanMeta.FinishWithError(wrapped.WrappedContext, "request", err)
 			ulog.E(err)
 			return err
 		}

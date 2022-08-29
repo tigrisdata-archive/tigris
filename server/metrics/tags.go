@@ -15,8 +15,15 @@
 package metrics
 
 import (
+	"context"
 	"errors"
 	"strconv"
+	"strings"
+
+	"google.golang.org/grpc"
+
+	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/util"
 
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	api "github.com/tigrisdata/tigris/api/server/v1"
@@ -54,7 +61,8 @@ func getTigrisError(err error) (string, bool) {
 	return "", false
 }
 
-func getTagsForError(err error) map[string]string {
+func getTagsForError(err error, source string) map[string]string {
+	// The source parameter is only considered when the source cannot be determined from the error itself
 	value, isFdbError := getFdbError(err)
 	if isFdbError {
 		return map[string]string{
@@ -70,10 +78,17 @@ func getTagsForError(err error) map[string]string {
 			"error_value":  value,
 		}
 	}
-	// TODO: handle search errors
+	// Generic errors
+	if err == nil {
+		// Should only happen in test cases, if this is seen in production non-errors are counted as errors
+		return map[string]string{
+			"error_source": source,
+			"error_value":  "none",
+		}
+	}
 	return map[string]string{
-		"error_source": "unknown",
-		"error_value":  "unknown",
+		"error_source": source,
+		"error_value":  err.Error(),
 	}
 }
 
@@ -100,15 +115,28 @@ func GetDbCollTagsForReq(req interface{}) map[string]string {
 	return map[string]string{}
 }
 
+func getDefaultValue(tagKey string) string {
+	switch tagKey {
+	case "env":
+		return config.GetEnvironment()
+	case "service":
+		return util.Service
+	case "version":
+		return getVersion()
+	default:
+		return UnknownValue
+	}
+}
+
 func standardizeTags(tags map[string]string, stdKeys []string) map[string]string {
 	res := tags
 	for _, tagKey := range stdKeys {
 		if _, ok := tags[tagKey]; !ok {
 			// tag is missing, need to add it
-			res[tagKey] = UnknownValue
+			res[tagKey] = getDefaultValue(tagKey)
 		} else {
 			if res[tagKey] == "" {
-				res[tagKey] = UnknownValue
+				res[tagKey] = getDefaultValue(tagKey)
 			}
 		}
 	}
@@ -125,4 +153,17 @@ func standardizeTags(tags map[string]string, stdKeys []string) map[string]string
 		}
 	}
 	return res
+}
+
+func getGrpcTagsFromContext(ctx context.Context) map[string]string {
+	fullMethodName, fullMethodNameFound := grpc.Method(ctx)
+	if fullMethodNameFound {
+		return map[string]string{
+			"grpc_method": strings.Split(fullMethodName, "/")[2],
+		}
+	} else {
+		return map[string]string{
+			"grpc_method": UnknownValue,
+		}
+	}
 }

@@ -20,10 +20,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tigrisdata/tigris/server/metrics"
+
 	"github.com/auth0/go-jwt-middleware/v2/jwks"
 	"github.com/auth0/go-jwt-middleware/v2/validator"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+
 	"github.com/tigrisdata/tigris/lib/set"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/request"
@@ -98,6 +101,23 @@ func GetJWTValidator(config *config.Config) *validator.Validator {
 	}
 	return jwtValidator
 }
+
+func MeasuredAuthFunction(ctx context.Context, jwtValidator *validator.Validator, config *config.Config) (ctxResult context.Context, err error) {
+	spanMeta := metrics.NewSpanMeta("auth", "auth", metrics.AuthSpanType, metrics.GetAuthBaseTags(ctx))
+	ctxResult = spanMeta.StartTracing(ctx, false)
+	timer := metrics.AuthRespTime.Tagged(spanMeta.GetAuthTimerTags()).Timer("time").Start()
+	ctxResult, err = AuthFunction(ctxResult, jwtValidator, config)
+	timer.Stop()
+	if err != nil {
+		metrics.AuthErrorRequests.Tagged(spanMeta.GetAuthErrorTags(err)).Counter("error").Inc(1)
+		ctxResult = spanMeta.FinishWithError(ctxResult, "auth", err)
+		return
+	}
+	metrics.AuthOkRequests.Tagged(spanMeta.GetAuthOkTags()).Counter("ok").Inc(1)
+	ctxResult = spanMeta.FinishTracing(ctxResult)
+	return
+}
+
 func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config *config.Config) (ctxResult context.Context, err error) {
 	defer func() {
 		if err != nil {

@@ -83,6 +83,10 @@ func getFdbReqErrorTags(reqMethodName string, code string) map[string]string {
 	}
 }
 
+func GetFdbBaseTags(reqMthodName string) map[string]string {
+	return getFdbReqOkTags(reqMthodName)
+}
+
 func GetFdbOkTags(ctx context.Context, reqMethodName string) map[string]string {
 	return addTigrisTenantToTags(ctx, getFdbReqOkTags(reqMethodName))
 }
