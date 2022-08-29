@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/tigrisdata/tigris/server/metrics"
 
 	"github.com/auth0/go-jwt-middleware/v2/jwks"
@@ -88,7 +89,7 @@ func GetJWTValidator(config *config.Config) *validator.Validator {
 		validator.RS256,
 		issuerURL.String(),
 		[]string{config.Auth.Audience},
-		validator.WithAllowedClockSkew(time.Minute),
+		validator.WithAllowedClockSkew(time.Duration(config.Auth.TokenClockSkewDurationSec)*time.Second),
 		validator.WithCustomClaims(
 			func() validator.CustomClaims {
 				return &CustomClaim{}
@@ -102,11 +103,11 @@ func GetJWTValidator(config *config.Config) *validator.Validator {
 	return jwtValidator
 }
 
-func MeasuredAuthFunction(ctx context.Context, jwtValidator *validator.Validator, config *config.Config) (ctxResult context.Context, err error) {
+func MeasuredAuthFunction(ctx context.Context, jwtValidator *validator.Validator, config *config.Config, cache *lru.Cache) (ctxResult context.Context, err error) {
 	spanMeta := metrics.NewSpanMeta("auth", "auth", metrics.AuthSpanType, metrics.GetAuthBaseTags(ctx))
 	ctxResult = spanMeta.StartTracing(ctx, false)
 	timer := metrics.AuthRespTime.Tagged(spanMeta.GetAuthTimerTags()).Timer("time").Start()
-	ctxResult, err = AuthFunction(ctxResult, jwtValidator, config)
+	ctxResult, err = AuthFunction(ctxResult, jwtValidator, config, cache)
 	timer.Stop()
 	if err != nil {
 		metrics.AuthErrorRequests.Tagged(spanMeta.GetAuthErrorTags(err)).Counter("error").Inc(1)
@@ -118,7 +119,7 @@ func MeasuredAuthFunction(ctx context.Context, jwtValidator *validator.Validator
 	return
 }
 
-func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config *config.Config) (ctxResult context.Context, err error) {
+func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config *config.Config, cache *lru.Cache) (ctxResult context.Context, err error) {
 	defer func() {
 		if err != nil {
 			if config.Auth.LogOnly {
@@ -138,13 +139,23 @@ func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config
 		return ctx, err
 	}
 
-	validatedToken, err := jwtValidator.ValidateToken(ctx, tkn)
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to validate access token")
-		return ctx, api.Errorf(api.Code_UNAUTHENTICATED, "Failed to validate access token")
+	validatedToken, found := cache.Get(tkn)
+	if !found {
+		validatedToken, err = jwtValidator.ValidateToken(ctx, tkn)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to validate access token")
+			return ctx, api.Errorf(api.Code_UNAUTHENTICATED, "Failed to validate access token")
+		}
+		cache.Add(tkn, validatedToken)
 	}
 
+	// validate custom claims
 	if validatedClaims, ok := validatedToken.(*validator.ValidatedClaims); ok {
+		// validate expiration
+		if validatedClaims.RegisteredClaims.Expiry+int64(config.Auth.TokenClockSkewDurationSec) < time.Now().Unix() {
+			return nil, api.Errorf(api.Code_UNAUTHENTICATED, "Failed to validate access token")
+		}
+
 		if customClaims, ok := validatedClaims.CustomClaims.(*CustomClaim); ok {
 			// if incoming namespace is empty, set it to unknown for observables and reject request
 			if customClaims.Namespace.Code == "" {

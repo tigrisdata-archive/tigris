@@ -233,7 +233,7 @@ func (a Auth0) ListApplications(ctx context.Context, _ *api.ListApplicationsRequ
 
 func newAuthService() *authService {
 	if config.DefaultConfig.Auth.OAuthProvider == auth0 {
-		m, err := management.New(config.DefaultConfig.Auth.Domain, management.WithClientCredentials(config.DefaultConfig.Auth.ManagementClientId, config.DefaultConfig.Auth.ManagementClientSecret))
+		m, err := management.New(config.DefaultConfig.Auth.ExternalDomain, management.WithClientCredentials(config.DefaultConfig.Auth.ManagementClientId, config.DefaultConfig.Auth.ManagementClientSecret))
 		if err != nil {
 			if config.DefaultConfig.Auth.EnableOauth {
 				panic("Unable to configure external oauth provider")
