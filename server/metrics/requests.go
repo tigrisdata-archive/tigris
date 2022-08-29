@@ -17,9 +17,9 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"github.com/tigrisdata/tigris/server/config"
 	"strings"
 
-	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/uber-go/tally"
 	"google.golang.org/grpc"

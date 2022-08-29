@@ -33,6 +33,7 @@ const (
 	FdbSpanType               string = "fdb"
 	SearchSpanType            string = "search"
 	SessionSpanType           string = "session"
+	AuthSpanType              string = "auth"
 )
 
 type SpanMeta struct {
@@ -81,7 +82,7 @@ func (s *SpanMeta) GetRequestTimerTags() map[string]string {
 }
 
 func (s *SpanMeta) GetRequestErrorTags(err error) map[string]string {
-	return standardizeTags(mergeTags(s.tags, getTagsForError(err)), getRequestErrorTagKeys())
+	return standardizeTags(mergeTags(s.tags, getTagsForError(err, "request")), getRequestErrorTagKeys())
 }
 
 func (s *SpanMeta) GetFdbOkTags() map[string]string {
@@ -93,7 +94,7 @@ func (s *SpanMeta) GetFdbTimerTags() map[string]string {
 }
 
 func (s *SpanMeta) GetFdbErrorTags(err error) map[string]string {
-	return standardizeTags(mergeTags(s.tags, getTagsForError(err)), getFdbErrorTagKeys())
+	return standardizeTags(mergeTags(s.tags, getTagsForError(err, "fdb")), getFdbErrorTagKeys())
 }
 
 func (s *SpanMeta) GetSearchOkTags() map[string]string {
@@ -105,7 +106,7 @@ func (s *SpanMeta) GetSearchTimerTags() map[string]string {
 }
 
 func (s *SpanMeta) GetSearchErrorTags(err error) map[string]string {
-	return standardizeTags(mergeTags(s.tags, getTagsForError(err)), getSearchErrorTagKeys())
+	return standardizeTags(mergeTags(s.tags, getTagsForError(err, "search")), getSearchErrorTagKeys())
 }
 
 func (s *SpanMeta) GetSessionOkTags() map[string]string {
@@ -117,7 +118,7 @@ func (s *SpanMeta) GetSessionTimerTags() map[string]string {
 }
 
 func (s *SpanMeta) GetSessionErrorTags(err error) map[string]string {
-	return standardizeTags(mergeTags(s.tags, getTagsForError(err)), getSessionErrorTagKeys())
+	return standardizeTags(mergeTags(s.tags, getTagsForError(err, "session")), getSessionErrorTagKeys())
 }
 
 func (s *SpanMeta) GetNamespaceSizeTags() map[string]string {
@@ -136,9 +137,21 @@ func (s *SpanMeta) GetNetworkTags() map[string]string {
 	return standardizeTags(s.tags, getNetworkTagKeys())
 }
 
+func (s *SpanMeta) GetAuthOkTags() map[string]string {
+	return standardizeTags(s.tags, getAuthOkTagKeys())
+}
+
+func (s *SpanMeta) GetAuthTimerTags() map[string]string {
+	return standardizeTags(s.tags, getAuthTimerTagKeys())
+}
+
+func (s *SpanMeta) GetAuthErrorTags(err error) map[string]string {
+	return standardizeTags(mergeTags(s.tags, getTagsForError(err, "auth")), getAuthErrorTagKeys())
+}
+
 func (s *SpanMeta) SaveSpanMetaToContext(ctx context.Context) (context.Context, error) {
 	if s.span == nil {
-		return nil, fmt.Errorf("Parent span was not created")
+		return nil, fmt.Errorf("parent span was not created")
 	}
 	ctx = context.WithValue(ctx, SpanMetaCtxKey{}, s)
 	return ctx, nil
@@ -171,6 +184,8 @@ func (s *SpanMeta) StartTracing(ctx context.Context, childOnly bool) context.Con
 		// This is a child span, parents need to be marked
 		spanOpts = append(spanOpts, tracer.ChildOf(parentSpanMeta.span.Context()))
 		s.parent = parentSpanMeta
+		// Copy the tags from the parent span
+		s.AddTags(parentSpanMeta.GetTags())
 	}
 	if childOnly && !parentExists {
 		// There is no parent span, no need to start tracing here
@@ -204,13 +219,13 @@ func (s *SpanMeta) FinishTracing(ctx context.Context) context.Context {
 	return ctx
 }
 
-func (s *SpanMeta) FinishWithError(ctx context.Context, err error) {
+func (s *SpanMeta) FinishWithError(ctx context.Context, source string, err error) context.Context {
 	if s.span == nil {
-		return
+		return nil
 	}
 	errCode := status.Code(err)
 	s.span.SetTag("grpc.code", errCode.String())
-	errTags := getTagsForError(err)
+	errTags := getTagsForError(err, source)
 	for k, v := range errTags {
 		s.span.SetTag(k, v)
 	}
@@ -218,4 +233,5 @@ func (s *SpanMeta) FinishWithError(ctx context.Context, err error) {
 	s.span.Finish(finishOptions...)
 	s.span = nil
 	ClearSpanMetaContext(ctx)
+	return ctx
 }

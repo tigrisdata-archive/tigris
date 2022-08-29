@@ -35,17 +35,23 @@ var (
 	SessionMetrics tally.Scope
 	SizeMetrics    tally.Scope
 	NetworkMetrics tally.Scope
+	AuthMetrics    tally.Scope
 )
 
+func getVersion() string {
+	if util.Version != "" {
+		return util.Version
+	} else {
+		return "dev"
+	}
+}
+
 func GetGlobalTags() map[string]string {
-	res := map[string]string{
+	return map[string]string{
 		"service": util.Service,
 		"env":     config.GetEnvironment(),
+		"version": getVersion(),
 	}
-	if res["version"] = util.Version; res["version"] == "" {
-		res["version"] = "dev"
-	}
-	return res
 }
 
 func InitializeMetrics() io.Closer {
@@ -78,6 +84,8 @@ func InitializeMetrics() io.Closer {
 		// Network netrics
 		NetworkMetrics = root.SubScope("net")
 		initializeNetworkScopes()
+		AuthMetrics = root.SubScope("auth")
+		initializeAuthScopes()
 	}
 	return closer
 }

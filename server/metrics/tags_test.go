@@ -47,15 +47,17 @@ func TestTagsHelpers(t *testing.T) {
 
 	t.Run("Test getTagsForError", func(t *testing.T) {
 		assert.Equal(t, map[string]string{
-			"error_source": "unknown",
-			"error_value":  "unknown",
-		}, getTagsForError(nil))
+			"error_source": "test_source",
+			"error_value":  "none",
+		}, getTagsForError(nil, "test_source"))
 
-		fdbErrTags := getTagsForError(fdb.Error{Code: 1})
+		// For specific errors, the source is ignored
+		fdbErrTags := getTagsForError(fdb.Error{Code: 1}, "ignored_source")
 		assert.Equal(t, "fdb", fdbErrTags["error_source"])
 		assert.Equal(t, "1", fdbErrTags["error_value"])
 
-		tigrisErrTags := getTagsForError(&api.TigrisError{Code: api.Code_NOT_FOUND})
+		// For specific errors, the source is ignored
+		tigrisErrTags := getTagsForError(&api.TigrisError{Code: api.Code_NOT_FOUND}, "ignored_source")
 		assert.Equal(t, "tigris_server", tigrisErrTags["error_source"])
 		assert.Equal(t, "NOT_FOUND", tigrisErrTags["error_value"])
 	})
