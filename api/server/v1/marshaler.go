@@ -593,6 +593,40 @@ func (x *EventsResponse) MarshalJSON() ([]byte, error) {
 	return json.Marshal(resp)
 }
 
+func (x *PublishRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+	for key, value := range mp {
+		switch key {
+		case "db":
+			if err := jsoniter.Unmarshal(value, &x.Db); err != nil {
+				return err
+			}
+		case "collection":
+			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
+				return err
+			}
+		case "messages":
+			var docs []jsoniter.RawMessage
+			if err := jsoniter.Unmarshal(value, &docs); err != nil {
+				return err
+			}
+
+			x.Messages = make([][]byte, len(docs))
+			for i := 0; i < len(docs); i++ {
+				x.Messages[i] = docs[i]
+			}
+		case "options":
+			if err := jsoniter.Unmarshal(value, &x.Options); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // Proper marshal timestamp in metadata
 type dmlResponse struct {
 	Metadata      Metadata          `json:"metadata,omitempty"`

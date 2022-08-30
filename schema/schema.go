@@ -104,11 +104,7 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 
 func BuildWithType(collection string, reqSchema jsoniter.RawMessage, cType api.CollectionType) (*Factory, error) {
 	var err error
-	if cType == api.CollectionType_MESSAGES {
-		if reqSchema, err = setPrimaryKey(reqSchema, jsonSpecFormatDateTime, false); err != nil {
-			return nil, err
-		}
-	} else {
+	if cType != api.CollectionType_MESSAGES {
 		if reqSchema, err = setPrimaryKey(reqSchema, jsonSpecFormatUUID, true); err != nil {
 			return nil, err
 		}
@@ -125,7 +121,7 @@ func BuildWithType(collection string, reqSchema jsoniter.RawMessage, cType api.C
 		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "missing properties field in schema")
 	}
 
-	if len(schema.PrimaryKeys) == 0 {
+	if len(schema.PrimaryKeys) == 0 && cType != api.CollectionType_MESSAGES {
 		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "missing primary key field in schema")
 	}
 

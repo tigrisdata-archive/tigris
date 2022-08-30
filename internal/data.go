@@ -26,6 +26,7 @@ import (
 
 var (
 	UserTableKeyPrefix = []byte("data")
+	PartitionKeyPrefix = []byte("part")
 )
 
 var (

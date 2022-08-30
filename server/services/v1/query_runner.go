@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"math"
+	"math/rand"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
@@ -116,6 +117,13 @@ func (f *QueryRunnerFactory) GetSearchQueryRunner(r *api.SearchRequest, streamin
 	}
 }
 
+func (f *QueryRunnerFactory) GetPublishQueryRunner(r *api.PublishRequest) *PublishQueryRunner {
+	return &PublishQueryRunner{
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		req:             r,
+	}
+}
+
 // GetSubscribeQueryRunner returns SubscribeQueryRunner
 func (f *QueryRunnerFactory) GetSubscribeQueryRunner(r *api.SubscribeRequest, streaming SubscribeStreaming) *SubscribeQueryRunner {
 	return &SubscribeQueryRunner{
@@ -207,20 +215,8 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 	var ts = internal.NewTimestamp()
 	var allKeys [][]byte
 	for _, doc := range documents {
-		var deserializedDoc map[string]interface{}
-		dec := jsoniter.NewDecoder(bytes.NewReader(doc))
-		dec.UseNumber()
-		if err = dec.Decode(&deserializedDoc); ulog.E(err) {
-			return nil, nil, err
-		}
-		for k, v := range deserializedDoc {
-			// for schema validation, if the field is set to null, remove it.
-			if v == nil {
-				delete(deserializedDoc, k)
-			}
-		}
-		if err = coll.Validate(deserializedDoc); err != nil {
-			// schema validation failed
+		err = runner.validate(coll, doc)
+		if err != nil {
 			return nil, nil, err
 		}
 
@@ -250,6 +246,26 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 		allKeys = append(allKeys, keyGen.getKeysForResp())
 	}
 	return ts, allKeys, err
+}
+
+func (runner *BaseQueryRunner) validate(coll *schema.DefaultCollection, doc []byte) error {
+	var deserializedDoc map[string]interface{}
+	dec := jsoniter.NewDecoder(bytes.NewReader(doc))
+	dec.UseNumber()
+	if err := dec.Decode(&deserializedDoc); ulog.E(err) {
+		return err
+	}
+	for k, v := range deserializedDoc {
+		// for schema validation, if the field is set to null, remove it.
+		if v == nil {
+			delete(deserializedDoc, k)
+		}
+	}
+	if err := coll.Validate(deserializedDoc); err != nil {
+		// schema validation failed
+		return err
+	}
+	return nil
 }
 
 func (runner *BaseQueryRunner) buildKeysUsingFilter(tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection,
@@ -962,12 +978,82 @@ func (runner *SearchQueryRunner) getSortOrdering(coll *schema.DefaultCollection)
 	return ordering, nil
 }
 
+type PublishQueryRunner struct {
+	*BaseQueryRunner
+
+	req *api.PublishRequest
+}
+
+func (runner *PublishQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
+	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetDb())
+	if err != nil {
+		return nil, ctx, err
+	}
+
+	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
+
+	coll, err := runner.getCollection(db, runner.req.GetCollection())
+	if err != nil {
+		return nil, ctx, err
+	}
+
+	ts, allKeys, err := runner.publish(ctx, tx, tenant, db, coll, runner.req.GetMessages())
+	if err != nil {
+		return nil, ctx, err
+	}
+	return &Response{
+		createdAt: ts,
+		allKeys:   allKeys,
+		status:    PublishedStatus,
+	}, ctx, nil
+}
+
+func (runner *PublishQueryRunner) publish(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, db *metadata.Database,
+	coll *schema.DefaultCollection, messages [][]byte) (*internal.Timestamp, [][]byte, error) {
+	var err error
+	var ts = internal.NewTimestamp()
+	var allKeys [][]byte
+	for _, doc := range messages {
+		err = runner.validate(coll, doc)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		table, err := runner.encoder.EncodePartitionTableName(tenant.GetNamespace(), db, coll)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		partition := rand.Intn(partitions)
+		key, err := runner.encoder.EncodePartitionKey(
+			table,
+			coll.Indexes.PrimaryKey,
+			[]interface{}{ts.UnixNano()},
+			uint16(partition),
+		)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		tableData := internal.NewTableDataWithTS(ts, nil, doc)
+
+		err = tx.Replace(ctx, key, tableData, false)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	return ts, allKeys, err
+}
+
 type SubscribeQueryRunner struct {
 	*BaseQueryRunner
 
 	req       *api.SubscribeRequest
 	streaming SubscribeStreaming
 }
+
+// TODO: number of partitions needs to be defined by schema, with defaults and maximum specified by configuration
+const partitions = 64
 
 func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetDb())
@@ -980,14 +1066,24 @@ func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 		return nil, ctx, err
 	}
 
-	table, err := runner.encoder.EncodeTableName(tenant.GetNamespace(), db, collection)
+	table, err := runner.encoder.EncodePartitionTableName(tenant.GetNamespace(), db, collection)
 	if ulog.E(err) {
 		return nil, ctx, err
 	}
 
-	skipFirst := false
-	startTime := time.Now().UTC().Format(time.RFC3339Nano)
+	type Part struct {
+		skipFirst bool
+		startTime time.Time
+	}
 
+	var parts [partitions]Part
+
+	for i := 0; i < len(parts); i++ {
+		parts[i].skipFirst = false
+		parts[i].startTime = time.Now()
+	}
+
+	// TODO: refresh rate needs to be configurable
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -997,49 +1093,65 @@ func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 			return nil, ctx, err
 		}
 
-		startKey, err := runner.encoder.EncodeKey(table, collection.Indexes.PrimaryKey, []interface{}{startTime})
-		if ulog.E(err) {
-			return nil, ctx, err
-		}
-
-		end, err := time.Parse(time.RFC3339, startTime)
-		if ulog.E(err) {
-			return nil, ctx, err
-		}
-
-		endTime := end.Add(34 * time.Second).Format(time.RFC3339)
-		endKey, err := runner.encoder.EncodeKey(table, collection.Indexes.PrimaryKey, []interface{}{endTime})
-		if ulog.E(err) {
-			return nil, ctx, err
-		}
-
-		kvIterator, err := tickerTx.ReadRange(ctx, startKey, endKey, true)
-		if ulog.E(err) {
-			return nil, ctx, err
-		}
-
-		first := true
-		var keyValue kv.KeyValue
-		for kvIterator.Next(&keyValue) {
-			if ulog.E(kvIterator.Err()) {
-				return nil, ctx, kvIterator.Err()
-			}
-
-			if skipFirst && first {
-				first = false
-				continue
-			}
-
-			err = runner.streaming.Send(&api.SubscribeResponse{
-				Message: keyValue.Data.RawData,
-			})
+		for i := 0; i < len(parts); i++ {
+			startKey, err := runner.encoder.EncodePartitionKey(
+				table,
+				collection.Indexes.PrimaryKey,
+				[]interface{}{parts[i].startTime.UnixNano()},
+				uint16(i),
+			)
 			if ulog.E(err) {
 				return nil, ctx, err
 			}
 
-			first = false
-			skipFirst = true
-			startTime = keyValue.Key[1].(string)
+			endTime := parts[i].startTime.Add(34 * time.Second)
+			endKey, err := runner.encoder.EncodePartitionKey(
+				table,
+				collection.Indexes.PrimaryKey,
+				[]interface{}{endTime.UnixNano()},
+				uint16(i),
+			)
+			if ulog.E(err) {
+				return nil, ctx, err
+			}
+
+			kvIterator, err := tickerTx.ReadRange(ctx, startKey, endKey, true)
+			if ulog.E(err) {
+				return nil, ctx, err
+			}
+
+			first := true
+			var keyValue kv.KeyValue
+			for kvIterator.Next(&keyValue) {
+				if ulog.E(kvIterator.Err()) {
+					return nil, ctx, kvIterator.Err()
+				}
+
+				if parts[i].skipFirst && first {
+					first = false
+					continue
+				}
+
+				err = runner.streaming.Send(&api.SubscribeResponse{
+					Message: keyValue.Data.RawData,
+				})
+				if ulog.E(err) {
+					return nil, ctx, err
+				}
+
+				first = false
+				parts[i].skipFirst = true
+
+				key, err := keys.FromBinary(table, keyValue.FDBKey)
+				if ulog.E(err) {
+					return nil, ctx, err
+				}
+				keyTime, _, err := runner.encoder.DecodePartitionKey(key)
+				if ulog.E(err) {
+					return nil, ctx, err
+				}
+				parts[i].startTime = time.Unix(0, keyTime[0].(int64))
+			}
 		}
 
 		err = tickerTx.Commit(ctx)
