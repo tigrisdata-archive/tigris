@@ -205,27 +205,27 @@ func formQuery(ctx context.Context, req *api.QueryTimeSeriesMetricsRequest) (str
 		if req.TigrisOperation == api.TigrisOperation_WRITE {
 			tags = append(tags, "grpc_method IN (insert,update) AND ")
 		} else {
-			tags = append(tags, "grpc_method:read,")
+			tags = append(tags, "grpc_method:read AND ")
 		}
 	}
 
 	if config.GetEnvironment() != "" {
-		tags = append(tags, "env:"+config.GetEnvironment()+",")
+		tags = append(tags, "env:"+config.GetEnvironment()+" AND ")
 	}
 
 	if req.Db != "" {
-		tags = append(tags, "db:"+req.Db+",")
+		tags = append(tags, "db:"+req.Db+" AND ")
 	}
 	if req.Collection != "" {
-		tags = append(tags, "collection:"+req.Collection+",")
+		tags = append(tags, "collection:"+req.Collection+" AND ")
 	}
 	namespace, err := request.GetNamespace(ctx)
 	if err == nil && namespace != "" {
-		tags = append(tags, "tigris_tenant:"+namespace+",")
+		tags = append(tags, "tigris_tenant:"+namespace+" AND ")
 	}
 
 	if req.Quantile != 0 {
-		tags = append(tags, "quantile:"+strconv.FormatFloat(float64(req.Quantile), 'f', -1, 64)+",")
+		tags = append(tags, "quantile:"+strconv.FormatFloat(float64(req.Quantile), 'f', -1, 64)+" AND ")
 	}
 
 	if len(tags) == 0 {
@@ -235,7 +235,6 @@ func formQuery(ctx context.Context, req *api.QueryTimeSeriesMetricsRequest) (str
 		for i := range tags {
 			tagsQuery += tags[i]
 		}
-		tagsQuery = strings.TrimSuffix(tagsQuery, ",")
 		tagsQuery = strings.TrimSuffix(tagsQuery, " AND ")
 
 		ddQuery = fmt.Sprintf("%s{%s}", ddQuery, tagsQuery)

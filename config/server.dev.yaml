@@ -25,7 +25,7 @@ search:
   auth_key: ts_test_key
 
 log:
-  level: trace
+  level: debug
   format: console
 
 foundationdb:

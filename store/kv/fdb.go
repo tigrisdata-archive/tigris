@@ -375,7 +375,7 @@ func (d *fdbkv) BeginTx(ctx context.Context) (baseTx, error) {
 		return nil, err
 	}
 
-	log.Debug().Msg("create transaction")
+	log.Trace().Msg("create transaction")
 	return &ftx{d: d, tx: &tx}, nil
 }
 
@@ -541,7 +541,7 @@ func (t *ftx) ReadRange(_ context.Context, table []byte, lKey Key, rKey Key, isS
 		r = t.tx.GetRange(kr, ro)
 	}
 
-	log.Debug().Str("table", string(table)).Interface("lKey", lKey).Interface("rKey", rKey).Msg("tx read range")
+	log.Trace().Str("table", string(table)).Interface("lKey", lKey).Interface("rKey", rKey).Msg("tx read range")
 
 	return &fdbIterator{it: r.Iterator(), subspace: subspace.FromBytes(table)}, nil
 }

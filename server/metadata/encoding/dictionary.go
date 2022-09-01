@@ -583,6 +583,17 @@ func (k *MetadataDictionary) decode(_ context.Context, fdbKey kv.Key) (map[strin
 	return decoded, nil
 }
 
+func ByteToUInt16(b []byte) uint16 {
+	return binary.BigEndian.Uint16(b)
+}
+
+func UInt16ToByte(v uint16) []byte {
+	b := make([]byte, 2)
+
+	binary.BigEndian.PutUint16(b, v)
+	return b
+}
+
 func ByteToUInt32(b []byte) uint32 {
 	return binary.BigEndian.Uint32(b)
 }

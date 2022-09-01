@@ -478,20 +478,19 @@ func (s *apiService) Events(r *api.EventsRequest, stream api.Tigris_EventsServer
 }
 
 func (s *apiService) Publish(ctx context.Context, r *api.PublishRequest) (*api.PublishResponse, error) {
-	resp, err := s.Replace(ctx, &api.ReplaceRequest{
-		Db:         r.Db,
-		Collection: r.Collection,
-		Documents:  r.Messages,
+	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetPublishQueryRunner(r), &ReqOptions{
+		txCtx: api.GetTransaction(ctx),
 	})
-
 	if err != nil {
 		return nil, err
 	}
 
 	return &api.PublishResponse{
-		Metadata: resp.Metadata,
-		Status:   resp.Status,
-		Keys:     resp.Keys,
+		Status: resp.status,
+		Metadata: &api.ResponseMetadata{
+			CreatedAt: resp.createdAt.GetProtoTS(),
+		},
+		Keys: resp.allKeys,
 	}, nil
 }
 
