@@ -24,18 +24,18 @@ import (
 func TestLogicalToSearch(t *testing.T) {
 	var factory = Factory{
 		fields: []*schema.QueryableField{
-			{FieldName: "f1", DataType: schema.Int64Type},
-			{FieldName: "f2", DataType: schema.Int64Type},
-			{FieldName: "f3", DataType: schema.Int64Type},
-			{FieldName: "f4", DataType: schema.Int64Type},
-			{FieldName: "f5", DataType: schema.Int64Type},
-			{FieldName: "f6", DataType: schema.Int64Type},
-			{FieldName: "a", DataType: schema.Int64Type},
-			{FieldName: "b", DataType: schema.Int64Type},
-			{FieldName: "c", DataType: schema.Int64Type},
-			{FieldName: "d", DataType: schema.Int64Type},
-			{FieldName: "e", DataType: schema.Int64Type},
-			{FieldName: "f", DataType: schema.Int64Type},
+			schema.NewQueryableField("f1", schema.Int64Type),
+			schema.NewQueryableField("f2", schema.Int64Type),
+			schema.NewQueryableField("f3", schema.Int64Type),
+			schema.NewQueryableField("f4", schema.Int64Type),
+			schema.NewQueryableField("f5", schema.Int64Type),
+			schema.NewQueryableField("f6", schema.Int64Type),
+			schema.NewQueryableField("a", schema.Int64Type),
+			schema.NewQueryableField("b", schema.Int64Type),
+			schema.NewQueryableField("c", schema.Int64Type),
+			schema.NewQueryableField("d", schema.Int64Type),
+			schema.NewQueryableField("e", schema.Int64Type),
+			schema.NewQueryableField("f", schema.Int64Type),
 		},
 	}
 

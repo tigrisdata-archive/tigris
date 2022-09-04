@@ -194,6 +194,16 @@ func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.Co
 			Index:    &s.Indexed,
 			Optional: &ptrTrue,
 		})
+		if s.InMemoryName() != s.Name() {
+			// we are storing this field differently in in-memory store
+			tsFields = append(tsFields, tsApi.Field{
+				Name:     s.InMemoryName(),
+				Type:     s.SearchType,
+				Facet:    &s.Faceted,
+				Index:    &s.Indexed,
+				Optional: &ptrTrue,
+			})
+		}
 		// Save original date as string to disk
 		if !s.IsReserved() && s.DataType == DateTimeType {
 			tsFields = append(tsFields, tsApi.Field{

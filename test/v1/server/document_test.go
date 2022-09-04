@@ -1715,6 +1715,115 @@ func TestRead_MultipleRows(t *testing.T) {
 	}
 }
 
+func TestRead_RangePKey(t *testing.T) {
+	db, _ := setupTests(t)
+	defer cleanupTests(t, db)
+
+	collection := "test_rangepkey_collection"
+	schema := Map{
+		"schema": Map{
+			"title": collection,
+			"properties": Map{
+				"Id": Map{
+					"type": "integer",
+				},
+				"name": Map{
+					"type": "string",
+				},
+			},
+			"primary_key": []interface{}{"Id"},
+		},
+	}
+	createCollection(t, db, collection, schema).Status(200)
+
+	inputDocument := []Doc{
+		{
+			"Id":   1,
+			"name": "A",
+		},
+		{
+			"Id":   2,
+			"name": "B",
+		},
+		{
+			"Id":   3,
+			"name": "C",
+		},
+	}
+
+	// should always succeed with mustNotExists as false
+	insertDocuments(t, db, collection, inputDocument, false).
+		Status(http.StatusOK)
+
+	readFilter := Map{
+		"$and": []Doc{
+			{"Id": Map{"$gt": 1}},
+			{"Id": Map{"$lt": 3}},
+		},
+	}
+
+	readAndValidate(t,
+		db,
+		collection,
+		readFilter,
+		nil,
+		inputDocument[1:2])
+}
+
+func TestRead_RangePKeyInternalIdField(t *testing.T) {
+	db, _ := setupTests(t)
+	defer cleanupTests(t, db)
+
+	collection := "test_rangepkey_collection"
+	schema := Map{
+		"schema": Map{
+			"title": collection,
+			"properties": Map{
+				"id": Map{
+					"type": "integer",
+				},
+				"name": Map{
+					"type": "string",
+				},
+			},
+		},
+	}
+	createCollection(t, db, collection, schema).Status(200)
+
+	inputDocument := []Doc{
+		{
+			"id":   1,
+			"name": "A",
+		},
+		{
+			"id":   2,
+			"name": "B",
+		},
+		{
+			"id":   3,
+			"name": "C",
+		},
+	}
+
+	// should always succeed with mustNotExists as false
+	insertDocuments(t, db, collection, inputDocument, false).
+		Status(http.StatusOK)
+
+	readFilter := Map{
+		"$and": []Doc{
+			{"id": Map{"$gt": 1}},
+			{"id": Map{"$lt": 3}},
+		},
+	}
+
+	readAndValidate(t,
+		db,
+		collection,
+		readFilter,
+		nil,
+		inputDocument[1:2])
+}
+
 func TestRead_EntireCollection(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)
