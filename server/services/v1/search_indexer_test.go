@@ -18,9 +18,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
-	"strconv"
 
 	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
@@ -331,7 +331,7 @@ func BenchmarkEncDec(b *testing.B) {
 			require.NoError(b, err)
 		}
 
-		data[searchID] = id
+		data[schema.SearchId] = id
 		data["created_at"] = time.Now().UTC().Format(time.RFC3339Nano)
 		data["updated_at"] = time.Now().UTC().Format(time.RFC3339Nano)
 		_, err := jsoniter.Marshal(data)
@@ -354,7 +354,7 @@ func BenchmarkJSONSet(b *testing.B) {
 	var err error
 	var id = "1"
 	for i := 0; i < b.N; i++ {
-		js, err = jsonparser.Set(js, []byte(fmt.Sprintf(`"%s"`, id)), searchID)
+		js, err = jsonparser.Set(js, []byte(fmt.Sprintf(`"%s"`, id)), schema.SearchId)
 		require.NoError(b, err)
 
 		js, err = jsonparser.Set(js, []byte(fmt.Sprintf(`"%s"`, "created_at")), time.Now().UTC().Format(time.RFC3339Nano))

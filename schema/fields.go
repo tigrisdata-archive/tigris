@@ -371,16 +371,17 @@ func (f *Field) IsCompatible(f1 *Field) error {
 }
 
 type QueryableField struct {
-	FieldName  string
-	Faceted    bool
-	Indexed    bool
-	Sortable   bool
-	DataType   FieldType
-	SearchType string
+	FieldName     string
+	InMemoryAlias string
+	Faceted       bool
+	Indexed       bool
+	Sortable      bool
+	DataType      FieldType
+	SearchType    string
 }
 
 func NewQueryableField(name string, tigrisType FieldType) *QueryableField {
-	return &QueryableField{
+	q := &QueryableField{
 		FieldName:  name,
 		Indexed:    IndexableField(tigrisType),
 		Faceted:    FacetableField(tigrisType),
@@ -388,16 +389,32 @@ func NewQueryableField(name string, tigrisType FieldType) *QueryableField {
 		SearchType: toSearchFieldType(tigrisType),
 		DataType:   tigrisType,
 	}
+
+	if IsSearchID(name) {
+		q.InMemoryAlias = ReservedFields[IdToSearchKey]
+	} else {
+		q.InMemoryAlias = name
+	}
+	return q
 }
 
+// InMemoryName returns key name that is used to index this field in the indexing store. For example, an "id" key is indexed with
+// "_tigris_id" name.
+func (q *QueryableField) InMemoryName() string {
+	return q.InMemoryAlias
+}
+
+// Name returns the name of this field as defined in the schema.
 func (q *QueryableField) Name() string {
 	return q.FieldName
 }
 
+// ShouldPack returns true if we need to pack this field before sending to indexing store.
 func (q *QueryableField) ShouldPack() bool {
 	return !q.IsReserved() && (q.DataType == ArrayType || q.DataType == DateTimeType)
 }
 
+// IsReserved returns true if the queryable field is internal field.
 func (q *QueryableField) IsReserved() bool {
 	return IsReservedField(q.Name())
 }

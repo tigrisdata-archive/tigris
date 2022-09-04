@@ -14,6 +14,10 @@
 
 package schema
 
+const (
+	SearchId = "id"
+)
+
 type ReservedField uint8
 
 const (
@@ -40,6 +44,10 @@ func IsReservedField(name string) bool {
 	}
 
 	return false
+}
+
+func IsSearchID(name string) bool {
+	return name == SearchId
 }
 
 // ToSearchDateKey can be used to generate storage field for search backend
