@@ -119,6 +119,11 @@ func NewBuilder() *Builder {
 }
 
 func (b *Builder) Query(q string) *Builder {
+	if len(q) == 0 {
+		// don't override the default "*"
+		return b
+	}
+
 	b.query.Q = q
 	return b
 }

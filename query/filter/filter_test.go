@@ -124,7 +124,7 @@ func TestFilterDuplicateKey(t *testing.T) {
 			{FieldName: "b", DataType: schema.Int64Type},
 		},
 	}
-	filters, err := factory.Factorize([]byte(`{"a": 10, "b": {"$eq": 10}, "b": 15}`))
-	require.Nil(t, filters)
-	require.Contains(t, err.Error(), "duplicate filter 'b'")
+	filters, err := factory.Factorize([]byte(`{"a": 10, "b": {"$gt": 10}, "b": {"$lt": 15}}`))
+	require.NoError(t, err)
+	require.NotNil(t, filters)
 }
