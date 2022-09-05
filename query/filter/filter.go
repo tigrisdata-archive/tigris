@@ -108,7 +108,6 @@ func (factory *Factory) Factorize(reqFilter []byte) ([]Filter, error) {
 		return nil, nil
 	}
 
-	var seen = make(map[string]struct{})
 	var filters []Filter
 	var err error
 	err = jsonparser.ObjectEach(reqFilter, func(k []byte, v []byte, jsonDataType jsonparser.ValueType, offset int) error {
@@ -128,10 +127,6 @@ func (factory *Factory) Factorize(reqFilter []byte) ([]Filter, error) {
 		if err != nil {
 			return err
 		}
-		if _, ok := seen[string(k)]; ok {
-			return api.Errorf(api.Code_INVALID_ARGUMENT, "duplicate filter '%s'", string(k))
-		}
-		seen[string(k)] = struct{}{}
 		filters = append(filters, filter)
 
 		return nil
