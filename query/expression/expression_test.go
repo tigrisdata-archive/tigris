@@ -15,9 +15,10 @@
 package expression
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/value"
-	"testing"
 )
 
 func TestExpression(t *testing.T) {
@@ -26,9 +27,9 @@ func TestExpression(t *testing.T) {
 	listExpr, ok := expr.([]Expr)
 	require.True(t, ok)
 	require.Equal(t, 5, len(listExpr))
-	require.Equal(t, "$foo", string(*listExpr[0].(value.Value).(*value.StringValue)))
-	require.Equal(t, "bar", string(*listExpr[1].(value.Value).(*value.StringValue)))
+	require.Equal(t, "$foo", listExpr[0].(value.Value).(*value.StringValue).Value)
+	require.Equal(t, "bar", listExpr[1].(value.Value).(*value.StringValue).Value)
 	require.Equal(t, int64(1), int64(*listExpr[2].(value.Value).(*value.IntValue)))
-	require.Equal(t, float64(1.01), listExpr[3].(value.Value).(*value.DoubleValue).Double)
+	require.Equal(t, 1.01, listExpr[3].(value.Value).(*value.DoubleValue).Double)
 	require.Equal(t, false, bool(*listExpr[4].(value.Value).(*value.BoolValue)))
 }

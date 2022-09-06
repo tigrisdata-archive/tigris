@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"testing"
 	"time"
 
@@ -1601,6 +1602,95 @@ func TestDelete_OnAnyField(t *testing.T) {
 	)
 }
 
+func TestRead_Collation(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	inputDocument := []Doc{
+		{
+			"pkey_int":     210,
+			"string_value": "lower",
+		},
+		{
+			"pkey_int":     220,
+			"string_value": "loweR",
+		},
+		{
+			"pkey_int":     230,
+			"string_value": "upper",
+		},
+		{
+			"pkey_int":     230,
+			"string_value": "UPPER",
+		},
+	}
+
+	// should always succeed with mustNotExists as false
+	insertDocuments(t, db, coll, inputDocument, false).
+		Status(http.StatusOK)
+
+	cases := []struct {
+		filter       Map
+		expDocuments []Doc
+	}{
+		{
+			Map{
+				"string_value": Map{
+					"$eq": "lower",
+				},
+			},
+			[]Doc{
+				{
+					"pkey_int":     210,
+					"string_value": "lower",
+				},
+			},
+		}, {
+			Map{
+				"string_value": Map{
+					"$eq": "lower",
+					"collation": Map{
+						"case": "ci",
+					},
+				},
+			},
+			[]Doc{
+				{
+					"pkey_int":     210,
+					"string_value": "lower",
+				},
+				{
+					"pkey_int":     220,
+					"string_value": "loweR",
+				},
+			},
+		}, {
+			Map{
+				"string_value": Map{
+					"$eq": "UPPER",
+					"collation": Map{
+						"case": "cs",
+					},
+				},
+			},
+			[]Doc{
+				{
+					"pkey_int":     230,
+					"string_value": "UPPER",
+				},
+			},
+		},
+	}
+	for _, c := range cases {
+		readAndValidatePkeyOrder(t,
+			db,
+			coll,
+			c.filter,
+			nil,
+			c.expDocuments)
+	}
+}
+
 func TestRead_MultipleRows(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)
@@ -2000,9 +2090,41 @@ func readByFilter(t *testing.T, db string, collection string, filter Map, fields
 	return resp
 }
 
+func readAndValidatePkeyOrder(t *testing.T, db string, collection string, filter Map, fields Map, inputDocument []Doc) {
+	readResp := readByFilter(t, db, collection, filter, fields)
+	require.Equal(t, len(inputDocument), len(readResp))
+
+	var primaryKeys []int
+	var inputKeyToValue = make(map[int]Doc)
+	for i := 0; i < len(inputDocument); i++ {
+		pk := inputDocument[i]["pkey_int"].(int)
+		inputKeyToValue[pk] = inputDocument[i]
+		primaryKeys = append(primaryKeys, pk)
+	}
+
+	var outputKeyToValue = make(map[int]Doc)
+	for i := 0; i < len(inputDocument); i++ {
+		var data Doc
+		require.NoError(t, json.Unmarshal(readResp[i]["result"], &data))
+		doc := data["data"].(map[string]any)
+		outputKeyToValue[int(doc["pkey_int"].(float64))] = doc
+	}
+	sort.Ints(primaryKeys)
+
+	for _, p := range primaryKeys {
+		expDoc, err := json.Marshal(inputKeyToValue[p])
+		require.NoError(t, err)
+
+		actualDoc, err := json.Marshal(outputKeyToValue[p])
+		require.NoError(t, err)
+		require.JSONEqf(t, string(expDoc), string(actualDoc), "exp '%s' actual '%s'", string(expDoc), string(actualDoc))
+	}
+}
+
 func readAndValidate(t *testing.T, db string, collection string, filter Map, fields Map, inputDocument []Doc) {
 	readResp := readByFilter(t, db, collection, filter, fields)
 	require.Equal(t, len(inputDocument), len(readResp))
+
 	for i := 0; i < len(inputDocument); i++ {
 		validateInputDocToRes(t, readResp[i], inputDocument[i])
 	}
