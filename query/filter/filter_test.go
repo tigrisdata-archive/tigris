@@ -128,3 +128,20 @@ func TestFilterDuplicateKey(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, filters)
 }
+
+func TestFiltersWithCollation(t *testing.T) {
+	var factory = Factory{
+		fields: []*schema.QueryableField{
+			{FieldName: "a", DataType: schema.Int64Type},
+			{FieldName: "b", DataType: schema.Int64Type},
+			{FieldName: "c", DataType: schema.StringType},
+		},
+	}
+	filters, err := factory.Factorize([]byte(`{"a": 10, "b": {"$gt": 10}, "c": {"$eq": "hello"}}`))
+	require.NoError(t, err)
+	require.NotNil(t, filters)
+
+	filters, err = factory.Factorize([]byte(`{"a": 10, "b": {"$gt": 10}, "c": {"$eq": "hello", "collation": {"case": "ci"}}}`))
+	require.NoError(t, err)
+	require.NotNil(t, filters)
+}

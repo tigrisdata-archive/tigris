@@ -103,12 +103,6 @@ type GreaterThanMatcher struct {
 	Value value.Value
 }
 
-func NewGreaterThanMatcher(v value.Value) *GreaterThanMatcher {
-	return &GreaterThanMatcher{
-		Value: v,
-	}
-}
-
 func (g *GreaterThanMatcher) GetValue() value.Value {
 	return g.Value
 }

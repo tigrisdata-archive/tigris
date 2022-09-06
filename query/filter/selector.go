@@ -34,8 +34,18 @@ import (
 //    {f:20} (default is "$eq" so we automatically append EqualityMatcher for this case in parser)
 //    {f:<Expr>}
 type Selector struct {
-	Field   *schema.QueryableField
-	Matcher ValueMatcher
+	Field     *schema.QueryableField
+	Matcher   ValueMatcher
+	Collation *schema.Collation
+}
+
+// NewSelectorWithCollation returns Selector object
+func NewSelectorWithCollation(field *schema.QueryableField, matcher ValueMatcher, collation *schema.Collation) *Selector {
+	return &Selector{
+		Field:     field,
+		Matcher:   matcher,
+		Collation: collation,
+	}
 }
 
 // NewSelector returns Selector object
@@ -55,7 +65,12 @@ func (s *Selector) MatchesDoc(doc map[string]interface{}) bool {
 	var val value.Value
 	switch s.Field.DataType {
 	case schema.StringType:
-		val = value.NewStringValue(v.(string))
+		if s.Collation == nil || s.Collation.IsCaseSensitive() {
+			val = value.NewStringValue(v.(string), s.Collation)
+		} else {
+			// if it is 'ci' then no need to apply filter as indexing store returns case-sensitive results.
+			return true
+		}
 	case schema.DoubleType:
 		val = value.NewDoubleUsingFloat(v.(float64))
 	default:
@@ -77,7 +92,12 @@ func (s *Selector) Matches(doc []byte) bool {
 		return false
 	}
 
-	val, err := value.NewValue(s.Field.DataType, docValue)
+	var val value.Value
+	if s.Collation != nil {
+		val, err = value.NewValueUsingCollation(s.Field.DataType, docValue, s.Collation)
+	} else {
+		val, err = value.NewValue(s.Field.DataType, docValue)
+	}
 	if ulog.E(err) {
 		return false
 	}

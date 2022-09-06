@@ -225,24 +225,35 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 
 		return NewSelector(field, NewEqualityMatcher(val)), nil
 	case jsonparser.Object:
-		valueMatcher, err := buildComparisonOperator(v, field)
+		valueMatcher, collation, err := buildValueMatcher(v, field)
 		if err != nil {
 			return nil, err
 		}
 
+		if collation != nil {
+			return NewSelectorWithCollation(field, valueMatcher, collation), nil
+		}
 		return NewSelector(field, valueMatcher), nil
 	default:
 		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "unable to parse the comparison operator")
 	}
 }
 
-func buildComparisonOperator(input jsoniter.RawMessage, field *schema.QueryableField) (ValueMatcher, error) {
+func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField) (ValueMatcher, *schema.Collation, error) {
 	if len(input) == 0 {
-		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "empty object")
+		return nil, nil, api.Errorf(api.Code_INVALID_ARGUMENT, "empty object")
 	}
 
-	var valueMatcher ValueMatcher
+	var collation *schema.Collation
+	c, dt, _, e := jsonparser.Get(input, schema.CollationKey)
+	if e == nil && dt != jsonparser.NotExist {
+		if e = jsoniter.Unmarshal(c, &collation); e != nil {
+			return nil, nil, e
+		}
+	}
+
 	var err error
+	var valueMatcher ValueMatcher
 	err = jsonparser.ObjectEach(input, func(key []byte, v []byte, dataType jsonparser.ValueType, offset int) error {
 		if err != nil {
 			return err
@@ -253,7 +264,11 @@ func buildComparisonOperator(input jsoniter.RawMessage, field *schema.QueryableF
 			switch dataType {
 			case jsonparser.Boolean, jsonparser.Number, jsonparser.String, jsonparser.Null:
 				var val value.Value
-				val, err = value.NewValue(field.DataType, v)
+				if collation != nil {
+					val, err = value.NewValueUsingCollation(field.DataType, v, collation)
+				} else {
+					val, err = value.NewValue(field.DataType, v)
+				}
 				if err != nil {
 					return err
 				}
@@ -261,11 +276,12 @@ func buildComparisonOperator(input jsoniter.RawMessage, field *schema.QueryableF
 				valueMatcher, err = NewMatcher(string(key), val)
 				return err
 			}
+		case schema.CollationKey:
 		default:
 			return api.Errorf(api.Code_INVALID_ARGUMENT, "expression is not supported inside comparison operator %s", string(key))
 		}
 		return nil
 	})
 
-	return valueMatcher, err
+	return valueMatcher, collation, err
 }
