@@ -643,6 +643,15 @@ func (x *PublishRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func (x *SubscribeResponse) MarshalJSON() ([]byte, error) {
+	resp := struct {
+		Message json.RawMessage `json:"message"`
+	}{
+		Message: x.Message,
+	}
+	return json.Marshal(resp)
+}
+
 // Proper marshal timestamp in metadata
 type dmlResponse struct {
 	Metadata      Metadata          `json:"metadata,omitempty"`
