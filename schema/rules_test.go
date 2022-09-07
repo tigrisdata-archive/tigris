@@ -70,7 +70,7 @@ func TestApplySchemaRules(t *testing.T) {
 		f2, err := Build("t1", c.incoming)
 		require.NoError(t, err)
 
-		existingC := NewDefaultCollection(f1.Name, 1, 1, f1.Fields, f1.Indexes, f1.Schema, "f")
+		existingC := NewDefaultCollection(f1.Name, 1, 1, f1.CollectionType, f1.Fields, f1.Indexes, f1.Schema, "f")
 		err = ApplySchemaRules(existingC, f2)
 		require.Equal(t, c.expErr, err)
 	}
