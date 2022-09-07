@@ -39,7 +39,8 @@ var (
 )
 
 // keyGenerator is used to extract the keys from document and return keys.Key which will be used by Insert/Replace API.
-// keyGenerator may mutate the document in case autoGenerate is set for primary key fields.
+// keyGenerator may need to modify the document in case autoGenerate is set for primary key fields. The keyGenerator
+// makes the copy of the original document in case it needs to modify the document.
 type keyGenerator struct {
 	generator   *metadata.TableKeyGenerator
 	document    []byte
@@ -97,6 +98,11 @@ func (k *keyGenerator) generate(ctx context.Context, txMgr *transaction.Manager,
 
 func (k *keyGenerator) setKeyInDoc(field *schema.Field, jsonVal []byte) error {
 	jsonVal = k.getJsonQuotedValue(field.Type(), jsonVal)
+
+	// as we are mutating the document, do not change original document.
+	tmp := make([]byte, len(k.document))
+	copy(tmp, k.document)
+	k.document = tmp
 
 	var err error
 	k.document, err = jsonparser.Set(k.document, jsonVal, field.FieldName)
