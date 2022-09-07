@@ -30,7 +30,6 @@ import (
 )
 
 const (
-	UserDefinedSchema   = "user_defined_schema"
 	ObjFlattenDelimiter = "."
 )
 
@@ -58,6 +57,8 @@ type DefaultCollection struct {
 	// will be one to one mapped to queryable field but complex fields like object type field there may be more than
 	// one queryableFields. As queryableFields represent a flattened state these can be used as-is to index in memory.
 	QueryableFields []*QueryableField
+	// CollectionType is the type of the collection. Only two types of collections are supported "messages" and "documents"
+	CollectionType api.CollectionType
 }
 
 func disableAdditionalProperties(properties map[string]*jsonschema.Schema) {
@@ -69,7 +70,7 @@ func disableAdditionalProperties(properties map[string]*jsonschema.Schema) {
 	}
 }
 
-func NewDefaultCollection(name string, id uint32, schVer int, fields []*Field, indexes *Indexes, schema jsoniter.RawMessage, searchCollectionName string) *DefaultCollection {
+func NewDefaultCollection(name string, id uint32, schVer int, ctype api.CollectionType, fields []*Field, indexes *Indexes, schema jsoniter.RawMessage, searchCollectionName string) *DefaultCollection {
 	url := name + ".json"
 	compiler := jsonschema.NewCompiler()
 	compiler.Draft = jsonschema.Draft7 // Format is only working for draft7
@@ -99,6 +100,7 @@ func NewDefaultCollection(name string, id uint32, schVer int, fields []*Field, i
 		Schema:          schema,
 		Search:          buildSearchSchema(searchCollectionName, queryableFields),
 		QueryableFields: queryableFields,
+		CollectionType:  ctype,
 	}
 }
 
@@ -106,8 +108,8 @@ func (d *DefaultCollection) GetName() string {
 	return d.Name
 }
 
-func (d *DefaultCollection) Type() string {
-	return UserDefinedSchema
+func (d *DefaultCollection) Type() api.CollectionType {
+	return d.CollectionType
 }
 
 func (d *DefaultCollection) GetFields() []*Field {

@@ -70,6 +70,7 @@ const (
 	PrimaryKeySchemaK   = "primary_key"
 	// DateTimeFormat represents the supported date time format
 	DateTimeFormat = time.RFC3339Nano
+	CollectionType = "collection_type"
 )
 
 var (
@@ -77,10 +78,11 @@ var (
 )
 
 type JSONSchema struct {
-	Name        string              `json:"title,omitempty"`
-	Description string              `json:"description,omitempty"`
-	Properties  jsoniter.RawMessage `json:"properties,omitempty"`
-	PrimaryKeys []string            `json:"primary_key,omitempty"`
+	Name           string              `json:"title,omitempty"`
+	Description    string              `json:"description,omitempty"`
+	Properties     jsoniter.RawMessage `json:"properties,omitempty"`
+	PrimaryKeys    []string            `json:"primary_key,omitempty"`
+	CollectionType string              `json:"collection_type,omitempty"`
 }
 
 // Factory is used as an intermediate step so that collection can be initialized with properly encoded values.
@@ -95,15 +97,35 @@ type Factory struct {
 	// Schema is the raw JSON schema received as part of CreateOrUpdateCollection request. This is stored as-is in the
 	// schema subspace.
 	Schema jsoniter.RawMessage
+	// CollectionType is the type of the collection. Only two types of collections are supported "messages" and "documents"
+	CollectionType api.CollectionType
+}
+
+func GetCollectionType(reqSchema jsoniter.RawMessage) (string, error) {
+	val, dt, _, err := jsonparser.Get(reqSchema, CollectionType)
+	if err == nil && dt != jsonparser.NotExist {
+		return string(val), nil
+	}
+	if dt == jsonparser.NotExist {
+		return "", nil
+	}
+
+	return "", err
 }
 
 // Build is used to deserialize the user json schema into a schema factory.
 func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
-	return BuildWithType(collection, reqSchema, api.CollectionType_DOCUMENTS)
-}
+	collectionType, err := GetCollectionType(reqSchema)
+	if err != nil {
+		return nil, err
+	}
 
-func BuildWithType(collection string, reqSchema jsoniter.RawMessage, cType api.CollectionType) (*Factory, error) {
-	var err error
+	// To support existing collections setting it to documents
+	var cType = api.CollectionType_DOCUMENTS
+	if len(collectionType) > 0 {
+		cType = api.ToCollectionType(collectionType)
+	}
+
 	if cType != api.CollectionType_MESSAGES {
 		if reqSchema, err = setPrimaryKey(reqSchema, jsonSpecFormatUUID, true); err != nil {
 			return nil, err
@@ -121,8 +143,10 @@ func BuildWithType(collection string, reqSchema jsoniter.RawMessage, cType api.C
 		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "missing properties field in schema")
 	}
 
-	if len(schema.PrimaryKeys) == 0 && cType != api.CollectionType_MESSAGES {
+	if len(schema.PrimaryKeys) == 0 && cType == api.CollectionType_DOCUMENTS {
 		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "missing primary key field in schema")
+	} else if len(schema.PrimaryKeys) > 0 && cType == api.CollectionType_MESSAGES {
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "setting primary key is not supported for messages collection")
 	}
 
 	var primaryKeysSet = set.New(schema.PrimaryKeys...)
@@ -154,8 +178,9 @@ func BuildWithType(collection string, reqSchema jsoniter.RawMessage, cType api.C
 				Fields: primaryKeyFields,
 			},
 		},
-		Name:   collection,
-		Schema: reqSchema,
+		Name:           collection,
+		Schema:         reqSchema,
+		CollectionType: cType,
 	}, nil
 }
 
