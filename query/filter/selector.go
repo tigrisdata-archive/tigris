@@ -104,14 +104,14 @@ func (s *Selector) ToSearchFilter() []string {
 	switch s.Field.DataType {
 	case schema.DoubleType:
 		// for double, we pass string in the filter to search backend
-		return []string{fmt.Sprintf(op, s.Field.Name(), v.String())}
+		return []string{fmt.Sprintf(op, s.Field.InMemoryName(), v.String())}
 	case schema.DateTimeType:
 		// encode into int64
 		if nsec, err := date.ToUnixNano(schema.DateTimeFormat, v.String()); err == nil {
-			return []string{fmt.Sprintf(op, s.Field.Name(), nsec)}
+			return []string{fmt.Sprintf(op, s.Field.InMemoryName(), nsec)}
 		}
 	}
-	return []string{fmt.Sprintf(op, s.Field.Name(), v.AsInterface())}
+	return []string{fmt.Sprintf(op, s.Field.InMemoryName(), v.AsInterface())}
 }
 
 // String a helpful method for logging.

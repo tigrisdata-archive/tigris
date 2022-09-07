@@ -997,7 +997,17 @@ func (runner *PublishQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 		return nil, ctx, err
 	}
 
-	ts, allKeys, err := runner.publish(ctx, tx, tenant, db, coll, runner.req.GetMessages())
+	var part int
+	if runner.req.Options != nil && runner.req.Options.Partition != -1 {
+		part = int(runner.req.Options.Partition)
+		if part < 0 || part >= partitions {
+			return nil, ctx, api.Errorf(api.Code_INVALID_ARGUMENT, "Invalid partition number `%d`", part)
+		}
+	} else {
+		part = rand.Intn(partitions)
+	}
+
+	ts, allKeys, err := runner.publish(ctx, tx, tenant, db, coll, runner.req.GetMessages(), uint16(part))
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -1009,7 +1019,7 @@ func (runner *PublishQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 }
 
 func (runner *PublishQueryRunner) publish(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, db *metadata.Database,
-	coll *schema.DefaultCollection, messages [][]byte) (*internal.Timestamp, [][]byte, error) {
+	coll *schema.DefaultCollection, messages [][]byte, part uint16) (*internal.Timestamp, [][]byte, error) {
 	var err error
 	var ts = internal.NewTimestamp()
 	var allKeys [][]byte
@@ -1024,12 +1034,11 @@ func (runner *PublishQueryRunner) publish(ctx context.Context, tx transaction.Tx
 			return nil, nil, err
 		}
 
-		partition := rand.Intn(partitions)
 		key, err := runner.encoder.EncodePartitionKey(
 			table,
 			coll.Indexes.PrimaryKey,
 			[]interface{}{ts.UnixNano()},
-			uint16(partition),
+			part,
 		)
 		if err != nil {
 			return nil, nil, err
@@ -1071,14 +1080,31 @@ func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 		return nil, ctx, err
 	}
 
+	var partNums []int32
+	if runner.req.Options != nil && len(runner.req.Options.Partitions) > 0 {
+		partNums = runner.req.Options.Partitions
+		for i := 0; i < len(partNums); i++ {
+			if partNums[i] < 0 || partNums[i] >= partitions {
+				return nil, ctx, api.Errorf(api.Code_INVALID_ARGUMENT, "Invalid partition number `%d`", partNums[i])
+			}
+		}
+	} else {
+		partNums = make([]int32, partitions)
+		for i := range partNums {
+			partNums[i] = int32(i)
+		}
+	}
+
 	type Part struct {
+		num       uint16
 		skipFirst bool
 		startTime time.Time
 	}
 
-	var parts [partitions]Part
+	parts := make([]Part, len(partNums))
 
-	for i := 0; i < len(parts); i++ {
+	for i := 0; i < len(partNums); i++ {
+		parts[i].num = uint16(partNums[i])
 		parts[i].skipFirst = false
 		parts[i].startTime = time.Now()
 	}
@@ -1098,7 +1124,7 @@ func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 				table,
 				collection.Indexes.PrimaryKey,
 				[]interface{}{parts[i].startTime.UnixNano()},
-				uint16(i),
+				parts[i].num,
 			)
 			if ulog.E(err) {
 				return nil, ctx, err
@@ -1109,7 +1135,7 @@ func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 				table,
 				collection.Indexes.PrimaryKey,
 				[]interface{}{endTime.UnixNano()},
-				uint16(i),
+				parts[i].num,
 			)
 			if ulog.E(err) {
 				return nil, ctx, err

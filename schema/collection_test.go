@@ -282,7 +282,7 @@ func TestCollection_SearchSchema(t *testing.T) {
 	schFactory, err := Build("t1", reqSchema)
 	require.NoError(t, err)
 
-	expFlattenedFields := []string{"id", "id_32", "product", "id_uuid", "ts", ToSearchDateKey("ts"), "price", "simple_items", "simple_object.name",
+	expFlattenedFields := []string{"id", "_tigris_id", "id_32", "product", "id_uuid", "ts", ToSearchDateKey("ts"), "price", "simple_items", "simple_object.name",
 		"simple_object.phone", "simple_object.address.street", "simple_object.details.nested_id", "simple_object.details.nested_obj.id",
 		"simple_object.details.nested_obj.name", "simple_object.details.nested_array", "simple_object.details.nested_string",
 		"created_at", "updated_at",

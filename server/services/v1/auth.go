@@ -41,6 +41,8 @@ const (
 	scope             = "offline_access openid"
 	createdBy         = "created_by"
 	createdAt         = "created_at"
+	updatedBy         = "updated_by"
+	updatedAt         = "updated_at"
 	tigrisNamespace   = "tigris_namespace"
 	clientCredentials = "client_credentials"
 	auth0             = "auth0"
@@ -54,6 +56,7 @@ type authService struct {
 type OAuthProvider interface {
 	GetAccessToken(req *api.GetAccessTokenRequest) (*api.GetAccessTokenResponse, error)
 	CreateApplication(ctx context.Context, req *api.CreateApplicationRequest) (*api.CreateApplicationResponse, error)
+	UpdateApplication(ctx context.Context, req *api.UpdateApplicationRequest) (*api.UpdateApplicationResponse, error)
 	RotateApplicationSecret(ctx context.Context, req *api.RotateApplicationSecretRequest) (*api.RotateApplicationSecretResponse, error)
 	DeleteApplication(ctx context.Context, req *api.DeleteApplicationsRequest) (*api.DeleteApplicationResponse, error)
 	ListApplications(ctx context.Context, req *api.ListApplicationsRequest) (*api.ListApplicationsResponse, error)
@@ -107,7 +110,7 @@ func (a *Auth0) CreateApplication(ctx context.Context, req *api.CreateApplicatio
 
 	err = a.management.Client.Create(c)
 	if err != nil {
-		return nil, api.Errorf(api.Code_INTERNAL, "Failed to create application: reason = %s", err.Error())
+		return nil, api.Errorf(a.managementToTigrisErrorCode(err), "Failed to create application: reason = %s", err.Error())
 	}
 
 	// grant this client to access current service as audience
@@ -134,7 +137,7 @@ func (a *Auth0) CreateApplication(ctx context.Context, req *api.CreateApplicatio
 		Id:          c.GetClientID(),
 		Secret:      c.GetClientSecret(),
 		CreatedBy:   c.GetClientMetadata()[createdBy],
-		CreatedAt:   readCreatedAt(c),
+		CreatedAt:   readDate(c.GetClientMetadata()[createdAt]),
 	}
 	return &api.CreateApplicationResponse{
 		CreatedApplication: createdApp,
@@ -160,10 +163,59 @@ func (a *Auth0) DeleteApplication(ctx context.Context, req *api.DeleteApplicatio
 	err = a.management.Client.Delete(req.GetId())
 	if err != nil {
 		log.Warn().Msgf("Failed to cleanup half-created app with clientId=%s, reason=%s", req.GetId(), err.Error())
-		return nil, err
+		return nil, api.Errorf(a.managementToTigrisErrorCode(err), "Failed to delete application: reason = %s", err.Error())
 	}
 	return &api.DeleteApplicationResponse{
 		Deleted: true,
+	}, nil
+}
+
+func (a *Auth0) UpdateApplication(ctx context.Context, req *api.UpdateApplicationRequest) (*api.UpdateApplicationResponse, error) {
+	// validate
+	client, err := a.management.Client.Read(req.GetId())
+	if err != nil {
+		return nil, api.Errorf(a.managementToTigrisErrorCode(err), "Failed to update application: reason = %s", err.Error())
+	}
+
+	// check ownership before updating
+	currentSub, err := getCurrentSub(ctx)
+	if err != nil {
+		return nil, api.Errorf(api.Code_INTERNAL, "Failed to update application: reason = %s", err.Error())
+	}
+	if client.GetClientMetadata()[createdBy] != currentSub {
+		return nil, api.Errorf(api.Code_PERMISSION_DENIED, "Failed to update application: reason = You cannot update application that is not created by you.")
+	}
+
+	metadata := client.GetClientMetadata()
+	metadata[updatedBy] = currentSub
+	metadata[updatedAt] = time.Now().Format(time.RFC3339)
+	appToUpdate := &management.Client{
+		Name:           &req.Name,
+		Description:    &req.Description,
+		ClientMetadata: metadata,
+	}
+
+	err = a.management.Client.Update(req.GetId(), appToUpdate)
+	if err != nil {
+		log.Warn().Msgf("Failed to update app clientId=%s, reason=%s", req.GetId(), err.Error())
+		return nil, api.Errorf(a.managementToTigrisErrorCode(err), "Failed to update application: reason = %s", err.Error())
+	}
+
+	client, err = a.management.Client.Read(req.GetId())
+	if err != nil {
+		return nil, api.Errorf(a.managementToTigrisErrorCode(err), "Failed to update application: reason = %s", err.Error())
+	}
+	return &api.UpdateApplicationResponse{
+		UpdatedApplication: &api.Application{
+			Id:          client.GetClientID(),
+			Name:        client.GetName(),
+			Description: client.GetDescription(),
+			Secret:      client.GetClientSecret(),
+			CreatedAt:   readDate(client.GetClientMetadata()[createdAt]),
+			CreatedBy:   client.GetClientMetadata()[createdBy],
+			UpdatedAt:   readDate(client.GetClientMetadata()[updatedAt]),
+			UpdatedBy:   client.GetClientMetadata()[updatedBy],
+		},
 	}, nil
 }
 
@@ -193,7 +245,7 @@ func (a *Auth0) RotateApplicationSecret(ctx context.Context, req *api.RotateAppl
 			Name:        updatedApp.GetName(),
 			Description: updatedApp.GetDescription(),
 			Secret:      updatedApp.GetClientSecret(),
-			CreatedAt:   readCreatedAt(updatedApp),
+			CreatedAt:   readDate(updatedApp.GetClientMetadata()[createdAt]),
 			CreatedBy:   updatedApp.GetClientMetadata()[createdBy],
 		},
 	}, nil
@@ -220,8 +272,10 @@ func (a Auth0) ListApplications(ctx context.Context, _ *api.ListApplicationsRequ
 				Description: client.GetDescription(),
 				Id:          client.GetClientID(),
 				Secret:      client.GetClientSecret(),
-				CreatedAt:   readCreatedAt(client),
+				CreatedAt:   readDate(client.GetClientMetadata()[createdAt]),
 				CreatedBy:   client.GetClientMetadata()[createdBy],
+				UpdatedAt:   readDate(client.GetClientMetadata()[updatedAt]),
+				UpdatedBy:   client.GetClientMetadata()[updatedBy],
 			}
 			apps = append(apps, app)
 		}
@@ -259,6 +313,10 @@ func (a *authService) GetAccessToken(_ context.Context, req *api.GetAccessTokenR
 
 func (a *authService) CreateApplication(ctx context.Context, req *api.CreateApplicationRequest) (*api.CreateApplicationResponse, error) {
 	return a.OAuthProvider.CreateApplication(ctx, req)
+}
+
+func (a *authService) UpdateApplication(ctx context.Context, req *api.UpdateApplicationRequest) (*api.UpdateApplicationResponse, error) {
+	return a.OAuthProvider.UpdateApplication(ctx, req)
 }
 
 func (a *authService) DeleteApplication(ctx context.Context, req *api.DeleteApplicationsRequest) (*api.DeleteApplicationResponse, error) {
@@ -365,11 +423,10 @@ func getAccessTokenUsingClientCredentials(req *api.GetAccessTokenRequest, a *Aut
 	return nil, api.Errorf(api.Code_INTERNAL, "Failed to get access token: reason = %s", bodyStr)
 }
 
-// helper to read created_at metadata from client application
-func readCreatedAt(c *management.Client) int64 {
-	result, err := date.ToUnixMilli(time.RFC3339, c.GetClientMetadata()[createdAt])
+func readDate(dateStr string) int64 {
+	result, err := date.ToUnixMilli(time.RFC3339, dateStr)
 	if err != nil {
-		log.Warn().Msgf("%s field was not parsed to int64", c.GetClientMetadata()[createdAt])
+		log.Warn().Msgf("%s field was not parsed to int64", dateStr)
 		result = -1
 	}
 	return result

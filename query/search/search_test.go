@@ -27,9 +27,9 @@ import (
 func TestSearchBuilder(t *testing.T) {
 	js := []byte(`{"a": 4, "$and": [{"int_value":1}, {"string_value1": "shoe"}]}`)
 	f := filter.NewFactory([]*schema.QueryableField{
-		{FieldName: "a", DataType: schema.Int64Type},
-		{FieldName: "int_value", DataType: schema.Int64Type},
-		{FieldName: "string_value1", DataType: schema.StringType},
+		schema.NewQueryableField("a", schema.Int64Type),
+		schema.NewQueryableField("int_value", schema.Int64Type),
+		schema.NewQueryableField("string_value1", schema.StringType),
 	})
 	wrappedF, err := f.WrappedFilter(js)
 	require.NoError(t, err)

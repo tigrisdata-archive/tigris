@@ -622,6 +622,22 @@ func (x *PublishRequest) UnmarshalJSON(data []byte) error {
 			if err := jsoniter.Unmarshal(value, &x.Options); err != nil {
 				return err
 			}
+
+			var options map[string]jsoniter.RawMessage
+			if err := jsoniter.Unmarshal(value, &options); err != nil {
+				return err
+			}
+
+			part := false
+			for oKey := range options {
+				if oKey == "partition" {
+					part = true
+				}
+			}
+			if !part {
+				// use -1 to indicate that no partition option was set
+				x.Options.Partition = -1
+			}
 		}
 	}
 	return nil

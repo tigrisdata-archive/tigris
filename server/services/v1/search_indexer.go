@@ -40,10 +40,6 @@ var (
 )
 
 const (
-	searchID = "id"
-)
-
-const (
 	searchCreate string = "create"
 	searchUpsert string = "upsert"
 	searchUpdate string = "update"
@@ -174,7 +170,7 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 		return nil, err
 	}
 
-	if value, ok := decData[searchID]; ok {
+	if value, ok := decData[schema.SearchId]; ok {
 		// if user schema collection has id field already set then change it
 		decData[schema.ReservedFields[schema.IdToSearchKey]] = value
 	}
@@ -209,7 +205,7 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 		}
 	}
 
-	decData[searchID] = id
+	decData[schema.SearchId] = id
 	decData[schema.ReservedFields[schema.CreatedAt]] = data.CreatedAt.UnixNano()
 	if data.UpdatedAt != nil {
 		decData[schema.ReservedFields[schema.UpdatedAt]] = data.UpdatedAt.UnixNano()
@@ -249,14 +245,14 @@ func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCo
 	// unFlatten the map now
 	doc = UnFlattenObjects(doc)
 
-	var searchKey = doc[searchID].(string)
+	var searchKey = doc[schema.SearchId].(string)
 	if value, ok := doc[schema.ReservedFields[schema.IdToSearchKey]]; ok {
 		// if user has an id field then check it and set it back
-		doc["id"] = value
+		doc[schema.SearchId] = value
 		delete(doc, schema.ReservedFields[schema.IdToSearchKey])
 	} else {
 		// otherwise, remove the search id from the result
-		delete(doc, searchID)
+		delete(doc, schema.SearchId)
 	}
 
 	// set tableData with metadata
