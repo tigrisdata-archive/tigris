@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/request"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/uber-go/tally"
 	"google.golang.org/grpc/status"
@@ -43,6 +44,7 @@ type SpanMeta struct {
 	tags         map[string]string
 	span         tracer.Span
 	parent       *SpanMeta
+	stopwatch    *tally.Stopwatch
 }
 
 type SpanMetaCtxKey struct {
@@ -67,6 +69,33 @@ func (s *SpanMeta) CountOkForScope(scope tally.Scope, tags map[string]string) {
 
 func (s *SpanMeta) CountErrorForScope(scope tally.Scope, tags map[string]string) {
 	scope.Tagged(tags).Counter("error").Inc(1)
+}
+
+func (s *SpanMeta) StartTimer(scope tally.Scope) error {
+	if s.stopwatch != nil {
+		return fmt.Errorf("programming error: timer already started")
+	}
+	timer := scope.Tagged(s.tags).Timer("time")
+	stopwatch := timer.Start()
+	s.stopwatch = &stopwatch
+	return nil
+}
+
+func (s *SpanMeta) StopTimer() error {
+	if s.stopwatch == nil {
+		return fmt.Errorf("programming error: no timer running")
+	}
+	s.stopwatch.Stop()
+	s.stopwatch = nil
+	return nil
+}
+
+func (s *SpanMeta) GetServiceName() string {
+	return s.serviceName
+}
+
+func (s *SpanMeta) GetResourceName() string {
+	return s.resourceName
 }
 
 func (s *SpanMeta) GetTags() map[string]string {
@@ -168,7 +197,7 @@ func (s *SpanMeta) GetSpanOptions() []tracer.StartSpanOption {
 
 func (s *SpanMeta) AddTags(tags map[string]string) {
 	for k, v := range tags {
-		if _, exists := s.tags[k]; !exists || s.tags[k] == UnknownValue {
+		if _, exists := s.tags[k]; !exists || s.tags[k] == request.UnknownValue {
 			s.tags[k] = v
 		}
 	}

@@ -289,6 +289,22 @@ func (runner *BaseQueryRunner) buildKeysUsingFilter(tenant *metadata.Tenant, db 
 	return kb.Build(filters, coll.Indexes.PrimaryKey.Fields)
 }
 
+func (runner *BaseQueryRunner) mustBeDocumentsCollection(collection *schema.DefaultCollection, method string) error {
+	if collection.Type() != api.CollectionType_DOCUMENTS {
+		return api.Errorf(api.Code_INVALID_ARGUMENT, "%s is only supported on collection type of 'documents'", method)
+	}
+
+	return nil
+}
+
+func (runner *BaseQueryRunner) mustBeMessagesCollection(collection *schema.DefaultCollection, method string) error {
+	if collection.Type() != api.CollectionType_MESSAGES {
+		return api.Errorf(api.Code_INVALID_ARGUMENT, "%s is only supported on collection type of 'messages'", method)
+	}
+
+	return nil
+}
+
 type InsertQueryRunner struct {
 	*BaseQueryRunner
 
@@ -305,6 +321,9 @@ func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	coll, err := runner.getCollection(db, runner.req.GetCollection())
 	if err != nil {
+		return nil, ctx, err
+	}
+	if err = runner.mustBeDocumentsCollection(coll, "insert"); err != nil {
 		return nil, ctx, err
 	}
 
@@ -341,6 +360,9 @@ func (runner *ReplaceQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 	if err != nil {
 		return nil, ctx, err
 	}
+	if err = runner.mustBeDocumentsCollection(coll, "replace"); err != nil {
+		return nil, ctx, err
+	}
 
 	ts, allKeys, err := runner.insertOrReplace(ctx, tx, tenant, db, coll, runner.req.GetDocuments(), false)
 	if err != nil {
@@ -370,6 +392,9 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	collection, err := runner.getCollection(db, runner.req.GetCollection())
 	if err != nil {
+		return nil, ctx, err
+	}
+	if err = runner.mustBeDocumentsCollection(collection, "update"); err != nil {
 		return nil, ctx, err
 	}
 
@@ -474,6 +499,9 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	collection, err := runner.getCollection(db, runner.req.GetCollection())
 	if err != nil {
+		return nil, ctx, err
+	}
+	if err = runner.mustBeDocumentsCollection(collection, "delete"); err != nil {
 		return nil, ctx, err
 	}
 
@@ -996,6 +1024,9 @@ func (runner *PublishQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 	if err != nil {
 		return nil, ctx, err
 	}
+	if err = runner.mustBeMessagesCollection(coll, "publish"); err != nil {
+		return nil, ctx, err
+	}
 
 	var part int
 	if runner.req.Options != nil && runner.req.Options.Partition != -1 {
@@ -1074,6 +1105,9 @@ func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 	if ulog.E(err) {
 		return nil, ctx, err
 	}
+	if err = runner.mustBeMessagesCollection(collection, "subscriber"); err != nil {
+		return nil, ctx, err
+	}
 
 	table, err := runner.encoder.EncodePartitionTableName(tenant.GetNamespace(), db, collection)
 	if ulog.E(err) {
@@ -1123,7 +1157,7 @@ func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 			startKey, err := runner.encoder.EncodePartitionKey(
 				table,
 				collection.Indexes.PrimaryKey,
-				[]interface{}{parts[i].startTime.UnixNano()},
+				[]interface{}{parts[i].startTime.Add(-10 * time.Second).UnixNano()},
 				parts[i].num,
 			)
 			if ulog.E(err) {
@@ -1250,7 +1284,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			return nil, ctx, api.Errorf(api.Code_ALREADY_EXISTS, "collection already exist")
 		}
 
-		schFactory, err := schema.BuildWithType(runner.createOrUpdateReq.GetCollection(), runner.createOrUpdateReq.GetSchema(), runner.createOrUpdateReq.GetType())
+		schFactory, err := schema.Build(runner.createOrUpdateReq.GetCollection(), runner.createOrUpdateReq.GetSchema())
 		if err != nil {
 			return nil, ctx, err
 		}

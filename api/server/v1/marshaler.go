@@ -393,7 +393,30 @@ func (x *CreateOrUpdateCollectionRequest) UnmarshalJSON(data []byte) error {
 			}
 		}
 	}
+
 	return nil
+}
+
+func FromCollectionType(collectionType CollectionType) string {
+	switch collectionType {
+	case CollectionType_DOCUMENTS:
+		return "documents"
+	case CollectionType_MESSAGES:
+		return "messages"
+	}
+
+	return ""
+}
+
+func ToCollectionType(collectionType string) CollectionType {
+	switch strings.ToUpper(collectionType) {
+	case "DOCUMENTS":
+		return CollectionType_DOCUMENTS
+	case "MESSAGES":
+		return CollectionType_MESSAGES
+	}
+
+	return -1
 }
 
 // UnmarshalJSON on QueryTimeSeriesMetricsRequest. Handles enum.
@@ -641,6 +664,15 @@ func (x *PublishRequest) UnmarshalJSON(data []byte) error {
 		}
 	}
 	return nil
+}
+
+func (x *SubscribeResponse) MarshalJSON() ([]byte, error) {
+	resp := struct {
+		Message json.RawMessage `json:"message"`
+	}{
+		Message: x.Message,
+	}
+	return json.Marshal(resp)
 }
 
 // Proper marshal timestamp in metadata

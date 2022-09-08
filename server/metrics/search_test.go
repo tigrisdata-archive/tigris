@@ -15,7 +15,6 @@
 package metrics
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,15 +26,13 @@ func TestSearchMetrics(t *testing.T) {
 	config.DefaultConfig.Tracing.Enabled = true
 	InitializeMetrics()
 
-	ctx := context.Background()
-
 	testNormalTags := []map[string]string{
-		GetSearchTags(ctx, "CreateCollection"),
-		GetSearchTags(ctx, "UpdateCollection"),
-		GetSearchTags(ctx, "DropCollection"),
-		GetSearchTags(ctx, "IndexDocuments"),
-		GetSearchTags(ctx, "DeleteDocuments"),
-		GetSearchTags(ctx, "Search"),
+		GetSearchTags("CreateCollection"),
+		GetSearchTags("UpdateCollection"),
+		GetSearchTags("DropCollection"),
+		GetSearchTags("IndexDocuments"),
+		GetSearchTags("DeleteDocuments"),
+		GetSearchTags("Search"),
 	}
 
 	t.Run("Test search tags", func(t *testing.T) {
@@ -52,7 +49,7 @@ func TestSearchMetrics(t *testing.T) {
 	})
 
 	t.Run("Test Search timers", func(t *testing.T) {
-		testTimerTags := GetSearchTags(ctx, "IndexDocuments")
+		testTimerTags := GetSearchTags("IndexDocuments")
 		defer SearchRespTime.Tagged(testTimerTags).Timer("time").Start().Stop()
 	})
 }

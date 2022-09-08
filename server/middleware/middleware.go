@@ -78,21 +78,20 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 		Logger()
 
 	// The order of the interceptors matter with optional elements in them
-	streamInterceptors := []grpc.StreamServerInterceptor{
-		forwarderStreamServerInterceptor(),
-	}
-
-	if config.Auth.Enabled {
-		streamInterceptors = append(streamInterceptors, grpc_auth.StreamServerInterceptor(authFunction))
-	}
-
-	streamInterceptors = append(streamInterceptors, namespaceInitializer.NamespaceSetterStreamServerInterceptor())
+	var streamInterceptors []grpc.StreamServerInterceptor
 
 	if config.Tracing.Enabled {
 		streamInterceptors = append(streamInterceptors, traceStream())
 	}
 
+	streamInterceptors = append(streamInterceptors, forwarderStreamServerInterceptor())
+
+	if config.Auth.Enabled {
+		streamInterceptors = append(streamInterceptors, grpc_auth.StreamServerInterceptor(authFunction))
+	}
+
 	streamInterceptors = append(streamInterceptors, []grpc.StreamServerInterceptor{
+		namespaceInitializer.NamespaceSetterStreamServerInterceptor(),
 		quotaStreamServerInterceptor(),
 		grpc_logging.StreamServerInterceptor(grpc_zerolog.InterceptorLogger(sampledTaggedLogger), []grpc_logging.Option{}...),
 		validatorStreamServerInterceptor(),
@@ -107,20 +106,20 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 	// error which is not convertible to the internal rest error code.
 
 	// The order of the interceptors matter with optional elements in them
-	unaryInterceptors := []grpc.UnaryServerInterceptor{
-		forwarderUnaryServerInterceptor(),
-	}
-	if config.Auth.Enabled {
-		unaryInterceptors = append(unaryInterceptors, grpc_auth.UnaryServerInterceptor(authFunction))
-	}
-
-	unaryInterceptors = append(unaryInterceptors, namespaceInitializer.NamespaceSetterUnaryServerInterceptor())
+	var unaryInterceptors []grpc.UnaryServerInterceptor
 
 	if config.Tracing.Enabled {
 		unaryInterceptors = append(unaryInterceptors, traceUnary())
 	}
 
+	unaryInterceptors = append(unaryInterceptors, forwarderUnaryServerInterceptor())
+
+	if config.Auth.Enabled {
+		unaryInterceptors = append(unaryInterceptors, grpc_auth.UnaryServerInterceptor(authFunction))
+	}
+
 	unaryInterceptors = append(unaryInterceptors, []grpc.UnaryServerInterceptor{
+		namespaceInitializer.NamespaceSetterUnaryServerInterceptor(),
 		pprofUnaryServerInterceptor(),
 		quotaUnaryServerInterceptor(),
 		grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(sampledTaggedLogger)),

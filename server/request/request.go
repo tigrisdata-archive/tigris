@@ -16,9 +16,25 @@ package request
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
+	"github.com/buger/jsonparser"
+	"github.com/tigrisdata/tigris/server/config"
+
 	api "github.com/tigrisdata/tigris/api/server/v1"
+)
+
+const (
+	// DefaultNamespaceName is for "default" namespace in the cluster which means all the databases created are under a single
+	// namespace.
+	// It is totally fine for a deployment to choose this and just have one namespace. The default assigned value for
+	// this namespace is 1.
+	DefaultNamespaceName string = "default_namespace"
+
+	DefaultNamespaceId = uint32(1)
+
+	UnknownValue = "unknown"
 )
 
 type RequestMetadataCtxKey struct {
@@ -118,4 +134,33 @@ func (tokenNamespaceExtractor *AccessTokenNamespaceExtractor) Extract(ctx contex
 
 func IsAdminApi(fullMethodName string) bool {
 	return strings.HasPrefix(fullMethodName, "/tigrisdata.admin.v1.Admin/")
+}
+
+func getTokenFromHeader(header string) ([]byte, error) {
+	splits := strings.SplitN(header, " ", 2)
+	if len(splits) < 2 {
+		return nil, fmt.Errorf("could not find token in header")
+	}
+	return []byte(splits[1]), nil
+}
+
+func getNameSpaceFromToken(token []byte) string {
+	namespace, err := jsonparser.GetString(token, "https://tigris/n", "code")
+	if err != nil {
+		return UnknownValue
+	}
+	return namespace
+}
+
+func GetNameSpaceFromHeader(ctx context.Context) string {
+	if !config.DefaultConfig.Auth.EnableNamespaceIsolation {
+		return DefaultNamespaceName
+	}
+	header := api.GetHeader(ctx, "authorization")
+	token, err := getTokenFromHeader(header)
+	if err != nil {
+		return UnknownValue
+	}
+	return getNameSpaceFromToken(token)
+
 }

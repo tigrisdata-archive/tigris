@@ -18,7 +18,6 @@ import (
 	"io"
 	"time"
 
-	prom "github.com/m3db/prometheus_client_golang/prometheus"
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/util"
@@ -57,8 +56,7 @@ func GetGlobalTags() map[string]string {
 func InitializeMetrics() io.Closer {
 	var closer io.Closer
 	log.Debug().Msg("Initializing metrics")
-	registry := prom.NewRegistry()
-	Reporter = promreporter.NewReporter(promreporter.Options{Registerer: registry})
+	Reporter = promreporter.NewReporter(promreporter.Options{})
 	root, closer = tally.NewRootScope(tally.ScopeOptions{
 		Tags:           GetGlobalTags(),
 		CachedReporter: Reporter,

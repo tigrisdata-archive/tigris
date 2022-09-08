@@ -46,7 +46,7 @@ func TestCreateCollection(t *testing.T) {
 		resp.Status(http.StatusOK).
 			JSON().
 			Object().
-			ValueEqual("message", "collection created successfully")
+			ValueEqual("message", "collection of type 'documents' created successfully")
 	})
 	t.Run("status_conflict", func(t *testing.T) {
 		dropCollection(t, db, coll)
@@ -65,7 +65,7 @@ func TestCreateCollection(t *testing.T) {
 			Status(http.StatusOK).
 			JSON().
 			Object().
-			ValueEqual("message", "collection created successfully")
+			ValueEqual("message", "collection of type 'documents' created successfully")
 
 		resp := e.POST(getCollectionURL(db, coll, "createOrUpdate")).
 			WithJSON(createOrUpdateOptions).

@@ -20,6 +20,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tigrisdata/tigris/server/request"
+
 	"google.golang.org/grpc"
 
 	"github.com/tigrisdata/tigris/server/config"
@@ -124,7 +126,7 @@ func getDefaultValue(tagKey string) string {
 	case "version":
 		return getVersion()
 	default:
-		return UnknownValue
+		return request.UnknownValue
 	}
 }
 
@@ -163,7 +165,7 @@ func getGrpcTagsFromContext(ctx context.Context) map[string]string {
 		}
 	} else {
 		return map[string]string{
-			"grpc_method": UnknownValue,
+			"grpc_method": request.UnknownValue,
 		}
 	}
 }

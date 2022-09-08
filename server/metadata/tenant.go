@@ -29,6 +29,7 @@ import (
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata/encoding"
+	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
@@ -37,16 +38,6 @@ import (
 )
 
 type NamespaceType string
-
-const (
-	// DefaultNamespaceName is for "default" namespace in the cluster which means all the databases created are under a single
-	// namespace.
-	// It is totally fine for a deployment to choose this and just have one namespace. The default assigned value for
-	// this namespace is 1.
-	DefaultNamespaceName string = "default_namespace"
-
-	DefaultNamespaceId = uint32(1)
-)
 
 const (
 	baseSchemaVersion = 1
@@ -66,12 +57,12 @@ type Namespace interface {
 type DefaultNamespace struct{}
 
 func (n *DefaultNamespace) Name() string {
-	return DefaultNamespaceName
+	return request.DefaultNamespaceName
 }
 
 // Id returns id assigned to the namespace
 func (n *DefaultNamespace) Id() uint32 {
-	return DefaultNamespaceId
+	return request.DefaultNamespaceId
 }
 
 func NewDefaultNamespace() *DefaultNamespace {
@@ -376,7 +367,7 @@ func (m *TenantManager) GetDatabaseAndCollectionId(db string, c string) (uint32,
 	m.RLock()
 	defer m.RUnlock()
 
-	tenant, ok := m.tenants[DefaultNamespaceName]
+	tenant, ok := m.tenants[request.DefaultNamespaceName]
 	if !ok {
 		return 0, 0
 	}
@@ -706,7 +697,7 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 
 	// store the collection to the databaseObject, this is actually cloned database object passed by the query runner.
 	// So failure of the transaction won't impact the consistency of the cache
-	collection := schema.NewDefaultCollection(schFactory.Name, collectionId, baseSchemaVersion, schFactory.Fields, schFactory.Indexes, schFactory.Schema, tenant.getSearchCollName(database.name, schFactory.Name))
+	collection := schema.NewDefaultCollection(schFactory.Name, collectionId, baseSchemaVersion, schFactory.CollectionType, schFactory.Fields, schFactory.Indexes, schFactory.Schema, tenant.getSearchCollName(database.name, schFactory.Name))
 	database.collections[schFactory.Name] = NewCollectionHolder(collectionId, schFactory.Name, collection, idxNameToId)
 
 	if config.DefaultConfig.Search.WriteEnabled {
@@ -757,7 +748,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 
 	// store the collection to the databaseObject, this is actually cloned database object passed by the query runner.
 	// So failure of the transaction won't impact the consistency of the cache
-	collection := schema.NewDefaultCollection(schFactory.Name, c.id, schRevision, schFactory.Fields, schFactory.Indexes, schFactory.Schema, tenant.getSearchCollName(database.name, schFactory.Name))
+	collection := schema.NewDefaultCollection(schFactory.Name, c.id, schRevision, schFactory.CollectionType, schFactory.Fields, schFactory.Indexes, schFactory.Schema, tenant.getSearchCollName(database.name, schFactory.Name))
 
 	// recreating collection holder is fine because we are working on databaseClone and also has a lock on the tenant
 	database.collections[schFactory.Name] = NewCollectionHolder(c.id, schFactory.Name, collection, c.idxNameToId)
@@ -1035,7 +1026,7 @@ func createCollection(id uint32, schVer int, name string, revision []byte, idxNa
 		index.Id = id
 	}
 
-	return schema.NewDefaultCollection(name, id, schVer, schFactory.Fields, schFactory.Indexes, revision, searchCollectionName), nil
+	return schema.NewDefaultCollection(name, id, schVer, schFactory.CollectionType, schFactory.Fields, schFactory.Indexes, revision, searchCollectionName), nil
 }
 
 func isSchemaEq(s1, s2 []byte) (bool, error) {

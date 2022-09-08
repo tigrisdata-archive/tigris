@@ -17,23 +17,8 @@ package metrics
 import (
 	"context"
 
-	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/request"
-	"github.com/tigrisdata/tigris/util/log"
 )
-
-func addTigrisTenantToTags(ctx context.Context, tags map[string]string) map[string]string {
-	namespace, err := request.GetNamespace(ctx)
-	if err != nil {
-		if config.DefaultConfig.Auth.EnableNamespaceIsolation {
-			log.E(err)
-		}
-		tags["tigris_tenant"] = UnknownValue
-	} else {
-		tags["tigris_tenant"] = namespace
-	}
-	return tags
-}
 
 func GetNamespace(ctx context.Context) string {
 	namespace, err := request.GetNamespace(ctx)
