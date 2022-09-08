@@ -15,8 +15,6 @@
 package metrics
 
 import (
-	"context"
-
 	"github.com/uber-go/tally"
 )
 
@@ -73,13 +71,8 @@ func initializeSearchScopes() {
 	SearchRespTime = SearchMetrics.SubScope("response")
 }
 
-func GetSearchTags(ctx context.Context, reqMethodName string) map[string]string {
-	return addTigrisTenantToTags(ctx, getSearchReqTags(reqMethodName))
-}
-
-func getSearchReqTags(reqMethodName string) map[string]string {
+func GetSearchTags(reqMethodName string) map[string]string {
 	return map[string]string{
 		"search_method": reqMethodName,
-		"tigris_tenant": UnknownValue,
 	}
 }

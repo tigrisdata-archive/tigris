@@ -15,8 +15,6 @@
 package metrics
 
 import (
-	"context"
-
 	"github.com/uber-go/tally"
 )
 
@@ -67,15 +65,10 @@ func getSessionErrorTagKeys() []string {
 	}
 }
 
-func getSessionTags(sessionMethodName string) map[string]string {
+func GetSessionTags(sessionMethodName string) map[string]string {
 	return map[string]string{
 		"session_method": sessionMethodName,
-		"tigris_tenant":  UnknownValue,
 	}
-}
-
-func GetSessionTags(ctx context.Context, sessionMethodName string) map[string]string {
-	return addTigrisTenantToTags(ctx, getSessionTags(sessionMethodName))
 }
 
 func initializeSessionScopes() {

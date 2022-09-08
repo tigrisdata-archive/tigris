@@ -61,7 +61,7 @@ type SessionManagerWithMetrics struct {
 }
 
 func (m *SessionManagerWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
-	spanMeta := metrics.NewSpanMeta(metrics.SessionManagerServiceName, name, metrics.SessionSpanType, metrics.GetSessionTags(ctx, name))
+	spanMeta := metrics.NewSpanMeta(metrics.SessionManagerServiceName, name, metrics.SessionSpanType, metrics.GetSessionTags(name))
 	ctx = spanMeta.StartTracing(ctx, true)
 	defer metrics.SessionRespTime.Tagged(spanMeta.GetSessionTimerTags()).Timer("time").Start().Stop()
 	if err := f(ctx); err != nil {

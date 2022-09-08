@@ -36,7 +36,7 @@ type NamespaceSetter struct {
 func (r *NamespaceSetter) NamespaceSetterUnaryServerInterceptor() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		if !r.config.Auth.EnableNamespaceIsolation || r.excludedMethods.Contains(info.FullMethod) {
-			return handler(request.SetNamespace(ctx, metadata.DefaultNamespaceName), req)
+			return handler(request.SetNamespace(ctx, request.DefaultNamespaceName), req)
 		} else {
 			namespace, err := r.namespaceExtractor.Extract(ctx)
 			if err != nil {
@@ -54,7 +54,7 @@ func (r *NamespaceSetter) NamespaceSetterStreamServerInterceptor() grpc.StreamSe
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		if !r.config.Auth.EnableNamespaceIsolation {
 			wrapped := middleware.WrapServerStream(stream)
-			wrapped.WrappedContext = request.SetNamespace(stream.Context(), metadata.DefaultNamespaceName)
+			wrapped.WrappedContext = request.SetNamespace(stream.Context(), request.DefaultNamespaceName)
 			return handler(srv, wrapped)
 		} else {
 			namespace, err := r.namespaceExtractor.Extract(stream.Context())

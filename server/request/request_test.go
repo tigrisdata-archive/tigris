@@ -18,6 +18,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/bmizerany/assert"
 	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 )
@@ -74,4 +75,23 @@ func TestRequestMetadata(t *testing.T) {
 		require.False(t, IsAdminApi("some-random"))
 	})
 
+	t.Run("Test get namespace from token", func(t *testing.T) {
+		testToken := "{\n" +
+			"  \"https://tigris/u\": {\n" +
+			"    \"email\": \"testemail@domain.com\"\n" +
+			"  },\n  \"https://tigris/n\": {\n" +
+			"    \"code\": \"test-tenant\"\n  },\n" +
+			"  \"iss\": \"https://fake.url.com/\",\n" +
+			"  \"sub\": \"google-oauth2|12345678\",\n" +
+			"  \"aud\": [\n" +
+			"    \"https://some-fake-url\",\n" +
+			"    \"https://some-fake-url.com/userinfo\"\n" +
+			"  ],\n  \"iat\": 1662396960,\n" +
+			"  \"exp\": 1662483360,\n" +
+			"  \"azp\": \"foobar\",\n" +
+			"  \"scope\": \"openid profile email\",\n" +
+			"  \"org_id\": \"org_fake\"\n" +
+			"}"
+		assert.Equal(t, "test-tenant", getNameSpaceFromToken([]byte(testToken)))
+	})
 }
