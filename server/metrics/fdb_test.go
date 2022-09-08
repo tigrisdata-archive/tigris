@@ -15,7 +15,6 @@
 package metrics
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,18 +26,16 @@ func TestFdbMetrics(t *testing.T) {
 	config.DefaultConfig.Tracing.Enabled = true
 	InitializeMetrics()
 
-	ctx := context.Background()
-
 	testNormalTags := []map[string]string{
-		GetFdbOkTags(ctx, "Commit"),
-		GetFdbOkTags(ctx, "Insert"),
-		GetFdbOkTags(ctx, "Insert"),
+		GetFdbOkTags("Commit"),
+		GetFdbOkTags("Insert"),
+		GetFdbOkTags("Insert"),
 	}
 
 	testKnownErrorTags := []map[string]string{
-		GetFdbErrorTags(ctx, "Commit", "1"),
-		GetFdbErrorTags(ctx, "Insert", "2"),
-		GetFdbErrorTags(ctx, "Insert", "3"),
+		GetFdbErrorTags("Commit", "1"),
+		GetFdbErrorTags("Insert", "2"),
+		GetFdbErrorTags("Insert", "3"),
 	}
 
 	t.Run("Test fdb tags", func(t *testing.T) {
@@ -58,7 +55,7 @@ func TestFdbMetrics(t *testing.T) {
 	})
 
 	t.Run("Test FDB timers", func(t *testing.T) {
-		testTimerTags := GetFdbOkTags(ctx, "Insert")
+		testTimerTags := GetFdbOkTags("Insert")
 		defer FdbMetrics.Tagged(testTimerTags).Timer("time").Start().Stop()
 	})
 }

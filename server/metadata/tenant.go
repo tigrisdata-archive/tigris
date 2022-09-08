@@ -29,6 +29,7 @@ import (
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata/encoding"
+	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
@@ -37,16 +38,6 @@ import (
 )
 
 type NamespaceType string
-
-const (
-	// DefaultNamespaceName is for "default" namespace in the cluster which means all the databases created are under a single
-	// namespace.
-	// It is totally fine for a deployment to choose this and just have one namespace. The default assigned value for
-	// this namespace is 1.
-	DefaultNamespaceName string = "default_namespace"
-
-	DefaultNamespaceId = uint32(1)
-)
 
 const (
 	baseSchemaVersion = 1
@@ -66,12 +57,12 @@ type Namespace interface {
 type DefaultNamespace struct{}
 
 func (n *DefaultNamespace) Name() string {
-	return DefaultNamespaceName
+	return request.DefaultNamespaceName
 }
 
 // Id returns id assigned to the namespace
 func (n *DefaultNamespace) Id() uint32 {
-	return DefaultNamespaceId
+	return request.DefaultNamespaceId
 }
 
 func NewDefaultNamespace() *DefaultNamespace {
@@ -376,7 +367,7 @@ func (m *TenantManager) GetDatabaseAndCollectionId(db string, c string) (uint32,
 	m.RLock()
 	defer m.RUnlock()
 
-	tenant, ok := m.tenants[DefaultNamespaceName]
+	tenant, ok := m.tenants[request.DefaultNamespaceName]
 	if !ok {
 		return 0, 0
 	}

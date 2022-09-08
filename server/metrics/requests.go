@@ -17,16 +17,13 @@ package metrics
 import (
 	"context"
 	"fmt"
-	"github.com/tigrisdata/tigris/server/config"
 	"strings"
 
 	"github.com/tigrisdata/tigris/server/request"
+
+	"github.com/tigrisdata/tigris/server/config"
 	"github.com/uber-go/tally"
 	"google.golang.org/grpc"
-)
-
-const (
-	UnknownValue = "unknown"
 )
 
 var (
@@ -79,15 +76,8 @@ type RequestEndpointMetadata struct {
 	namespaceName string
 }
 
-func getNamespaceName(ctx context.Context) string {
-	if namespace, _ := request.GetNamespace(ctx); namespace != "" {
-		return namespace
-	}
-	return UnknownValue
-}
-
 func newRequestEndpointMetadata(ctx context.Context, serviceName string, methodInfo grpc.MethodInfo) RequestEndpointMetadata {
-	return RequestEndpointMetadata{serviceName: serviceName, methodInfo: methodInfo, namespaceName: getNamespaceName(ctx)}
+	return RequestEndpointMetadata{serviceName: serviceName, methodInfo: methodInfo, namespaceName: request.GetNameSpaceFromHeader(ctx)}
 }
 
 func (r *RequestEndpointMetadata) GetMethodName() string {
@@ -109,8 +99,8 @@ func (r *RequestEndpointMetadata) GetInitialTags() map[string]string {
 		"tigris_tenant":     r.namespaceName,
 		"grpc_service_type": r.GetServiceType(),
 		"env":               config.GetEnvironment(),
-		"db":                UnknownValue,
-		"collection":        UnknownValue,
+		"db":                request.UnknownValue,
+		"collection":        request.UnknownValue,
 	}
 }
 

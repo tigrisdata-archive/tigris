@@ -15,8 +15,6 @@
 package metrics
 
 import (
-	"context"
-
 	"github.com/uber-go/tally"
 )
 
@@ -67,32 +65,22 @@ func getFdbErrorTagKeys() []string {
 	}
 }
 
-func getFdbReqOkTags(reqMethodName string) map[string]string {
+func GetFdbOkTags(reqMethodName string) map[string]string {
 	return map[string]string{
-		"fdb_method":    reqMethodName,
-		"tigris_tenant": UnknownValue,
+		"fdb_method": reqMethodName,
 	}
 }
 
-func getFdbReqErrorTags(reqMethodName string, code string) map[string]string {
+func GetFdbErrorTags(reqMethodName string, code string) map[string]string {
 	return map[string]string{
-		"fdb_method":    reqMethodName,
-		"error_source":  "fdb",
-		"error_value":   code,
-		"tigris_tenant": UnknownValue,
+		"fdb_method":   reqMethodName,
+		"error_source": "fdb",
+		"error_value":  code,
 	}
 }
 
 func GetFdbBaseTags(reqMthodName string) map[string]string {
-	return getFdbReqOkTags(reqMthodName)
-}
-
-func GetFdbOkTags(ctx context.Context, reqMethodName string) map[string]string {
-	return addTigrisTenantToTags(ctx, getFdbReqOkTags(reqMethodName))
-}
-
-func GetFdbErrorTags(ctx context.Context, reqMethodName string, code string) map[string]string {
-	return addTigrisTenantToTags(ctx, getFdbReqErrorTags(reqMethodName, code))
+	return GetFdbOkTags(reqMthodName)
 }
 
 func initializeFdbScopes() {

@@ -39,7 +39,7 @@ type storeImplWithMetrics struct {
 
 func (m *storeImplWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
 	// Low level measurement wrapper that is called by the measure functions on the appropriate receiver
-	spanMeta := metrics.NewSpanMeta("tigris.search", name, metrics.SearchSpanType, metrics.GetSearchTags(ctx, name))
+	spanMeta := metrics.NewSpanMeta("tigris.search", name, metrics.SearchSpanType, metrics.GetSearchTags(name))
 	ctx = spanMeta.StartTracing(ctx, true)
 	defer metrics.SearchRespTime.Tagged(spanMeta.GetSearchTimerTags()).Timer("time").Start().Stop()
 	err := f(ctx)

@@ -17,11 +17,12 @@ package middleware
 import (
 	"context"
 
+	"github.com/tigrisdata/tigris/util"
+
 	"google.golang.org/protobuf/proto"
 
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2"
 	"github.com/tigrisdata/tigris/server/metrics"
-	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc"
 )
@@ -35,8 +36,27 @@ type wrappedStream struct {
 	spanMeta *metrics.SpanMeta
 }
 
+func getNoTracingMethods() []string {
+	return []string{
+		"/HealthAPI/Health",
+	}
+}
+
+func traceMethod(fullMethod string) bool {
+	for _, method := range getNoTracingMethods() {
+		if method == fullMethod {
+			return false
+		}
+	}
+	return true
+}
+
 func traceUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		if !traceMethod(info.FullMethod) {
+			resp, err := handler(ctx, req)
+			return resp, err
+		}
 		grpcMeta := metrics.GetGrpcEndPointMetadataFromFullMethod(ctx, info.FullMethod, "unary")
 		tags := grpcMeta.GetInitialTags()
 		spanMeta := metrics.NewSpanMeta(util.Service, info.FullMethod, metrics.GrpcSpanType, tags)
@@ -64,12 +84,16 @@ func traceStream() grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		wrapped := &wrappedStream{WrappedServerStream: middleware.WrapServerStream(stream)}
 		wrapped.WrappedContext = stream.Context()
+		if !traceMethod(info.FullMethod) {
+			err := handler(srv, wrapped)
+			return err
+		}
 		grpcMeta := metrics.GetGrpcEndPointMetadataFromFullMethod(wrapped.WrappedContext, info.FullMethod, "stream")
 		tags := grpcMeta.GetInitialTags()
 		spanMeta := metrics.NewSpanMeta(util.Service, info.FullMethod, metrics.GrpcSpanType, tags)
 		defer metrics.RequestsRespTime.Tagged(spanMeta.GetRequestTimerTags()).Timer("time").Start().Stop()
 		wrapped.spanMeta = spanMeta
-		wrapped.WrappedContext = spanMeta.StartTracing(wrapped.WrappedContext, false)
+		wrapped.WrappedContext = spanMeta.StartTracing(wrapped.WrappedContext, true)
 		err := handler(srv, wrapped)
 		if err != nil {
 			spanMeta.CountErrorForScope(metrics.OkRequests, spanMeta.GetRequestErrorTags(err))

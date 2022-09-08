@@ -15,7 +15,6 @@
 package metrics
 
 import (
-	"context"
 	"testing"
 
 	"github.com/tigrisdata/tigris/server/config"
@@ -25,14 +24,12 @@ func TestSessionMetrics(t *testing.T) {
 	config.DefaultConfig.Tracing.Enabled = true
 	InitializeMetrics()
 
-	ctx := context.Background()
-
 	testTags := []map[string]string{
-		GetSessionTags(ctx, "Create"),
-		GetSessionTags(ctx, "Get"),
-		GetSessionTags(ctx, "Remove"),
-		GetSessionTags(ctx, "Execute"),
-		GetSessionTags(ctx, "executeWithRetry"),
+		GetSessionTags("Create"),
+		GetSessionTags("Get"),
+		GetSessionTags("Remove"),
+		GetSessionTags("Execute"),
+		GetSessionTags("executeWithRetry"),
 	}
 
 	t.Run("Test Session counters", func(t *testing.T) {
@@ -43,7 +40,7 @@ func TestSessionMetrics(t *testing.T) {
 	})
 
 	t.Run("Test Session timers", func(t *testing.T) {
-		tags := GetSessionTags(ctx, "Create")
+		tags := GetSessionTags("Create")
 		defer SessionRespTime.Tagged(tags).Timer("time").Start().Stop()
 	})
 }

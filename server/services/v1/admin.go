@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/tigrisdata/tigris/server/request"
+
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -30,7 +32,7 @@ import (
 )
 
 var (
-	ReservedNamespaceNames = set.New(metadata.DefaultNamespaceName, "unknown")
+	ReservedNamespaceNames = set.New(request.DefaultNamespaceName, "unknown")
 )
 
 const (
