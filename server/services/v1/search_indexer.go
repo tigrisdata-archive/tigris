@@ -130,15 +130,14 @@ func CreateSearchKey(table []byte, fdbKey []byte) (string, error) {
 		return "", err
 	}
 
-	// TODO: add a pkey check here
-	/*
-		if tp[0] != schema.PrimaryKeyIndexName {
-			// this won't work as tp[0] is dictionary encoded value of PrimaryKeyIndexName
-		}
-	*/
-
-	// the zeroth entry represents index key name
-	tp = tp[1:]
+	if bytes.Equal(table[0:4], internal.UserTableKeyPrefix) {
+		// TODO: add a pkey check here
+		// the zeroth entry represents index key name
+		tp = tp[1:]
+	} else {
+		// the zeroth entry represents index key name, the first entry represent partition key
+		tp = tp[2:]
+	}
 
 	if len(tp) == 1 {
 		// simply marshal it if it is single primary key

@@ -595,9 +595,8 @@ func (runner *StreamingQueryRunner) buildReaderOptions(tenant *metadata.Tenant, 
 		}
 	}
 
-	if filter.None(runner.req.Filter) {
-		options.noFilter = true
-	} else if options.ikeys, err = runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter); err != nil {
+	if collection.Type() == api.CollectionType_MESSAGES {
+		// if it is event streaming then fallback to indexing store for all reads
 		if !config.IsIndexingStoreReadEnabled() {
 			if options.from == nil {
 				// in this case, scan will happen from the beginning of the table.
@@ -605,6 +604,19 @@ func (runner *StreamingQueryRunner) buildReaderOptions(tenant *metadata.Tenant, 
 			}
 		} else {
 			options.inmemoryStore = true
+		}
+	} else {
+		if filter.None(runner.req.Filter) {
+			options.noFilter = true
+		} else if options.ikeys, err = runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter); err != nil {
+			if !config.IsIndexingStoreReadEnabled() {
+				if options.from == nil {
+					// in this case, scan will happen from the beginning of the table.
+					options.from = keys.NewKey(options.table)
+				}
+			} else {
+				options.inmemoryStore = true
+			}
 		}
 	}
 
