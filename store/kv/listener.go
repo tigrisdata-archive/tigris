@@ -62,7 +62,8 @@ type DefaultListener struct {
 }
 
 func (l *DefaultListener) skip(table []byte) bool {
-	return !bytes.Equal(table[0:4], internal.UserTableKeyPrefix)
+	return !bytes.Equal(table[0:4], internal.UserTableKeyPrefix) &&
+		!bytes.Equal(table[0:4], internal.PartitionKeyPrefix)
 }
 
 func (l *DefaultListener) OnSet(op string, table []byte, key []byte, data []byte) {
