@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package encoding
+package metadata
 
 const (
 	reservedSubspaceName = "reserved"
@@ -43,6 +43,8 @@ type MDNameRegistry interface {
 	//    - "created" is keyword.
 	//
 	SchemaSubspaceName() []byte
+
+	UserSubspaceName() []byte
 }
 
 // DefaultMDNameRegistry provides the names of the subspaces used by the metadata package for managing dictionary
@@ -61,11 +63,16 @@ func (d *DefaultMDNameRegistry) SchemaSubspaceName() []byte {
 	return []byte(schemaSubspaceName)
 }
 
+func (d *DefaultMDNameRegistry) UserSubspaceName() []byte {
+	return []byte(UserSubspaceName)
+}
+
 // TestMDNameRegistry is used by tests to inject table names that can be used by tests
 type TestMDNameRegistry struct {
 	ReserveSB  string
 	EncodingSB string
 	SchemaSB   string
+	UserSB     string
 }
 
 func (d *TestMDNameRegistry) ReservedSubspaceName() []byte {
@@ -77,5 +84,9 @@ func (d *TestMDNameRegistry) EncodingSubspaceName() []byte {
 }
 
 func (d *TestMDNameRegistry) SchemaSubspaceName() []byte {
+	return []byte(d.SchemaSB)
+}
+
+func (d *TestMDNameRegistry) UserSubspaceName() []byte {
 	return []byte(d.SchemaSB)
 }

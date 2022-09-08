@@ -21,7 +21,6 @@ import (
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/schema"
-	"github.com/tigrisdata/tigris/server/metadata/encoding"
 )
 
 // Encoder is used to encode/decode values of the Key.
@@ -76,7 +75,7 @@ func (d *DictKeyEncoder) EncodePartitionKey(encodedTable []byte, idx *schema.Ind
 	}
 
 	var allParts []interface{}
-	allParts = append(allParts, encoding.UInt16ToByte(partition))
+	allParts = append(allParts, UInt16ToByte(partition))
 	allParts = append(allParts, idxParts...)
 	return d.EncodeKey(encodedTable, idx, allParts)
 }
@@ -88,7 +87,7 @@ func (d *DictKeyEncoder) DecodePartitionKey(key keys.Key) ([]interface{}, uint16
 	}
 
 	idxParts := key.IndexParts()
-	return idxParts[2:], encoding.ByteToUInt16(idxParts[1].([]byte)), nil
+	return idxParts[2:], ByteToUInt16(idxParts[1].([]byte)), nil
 }
 
 func (d *DictKeyEncoder) EncodeKey(encodedTable []byte, idx *schema.Index, idxParts []interface{}) (keys.Key, error) {
@@ -108,18 +107,18 @@ func (d *DictKeyEncoder) EncodeKey(encodedTable []byte, idx *schema.Index, idxPa
 func (d *DictKeyEncoder) encodedTableName(ns Namespace, db *Database, coll *schema.DefaultCollection, prefix []byte) []byte {
 	var appendTo []byte
 	appendTo = append(appendTo, prefix...)
-	appendTo = append(appendTo, encoding.UInt32ToByte(ns.Id())...)
+	appendTo = append(appendTo, UInt32ToByte(ns.Id())...)
 	if db != nil {
-		appendTo = append(appendTo, encoding.UInt32ToByte(db.id)...)
+		appendTo = append(appendTo, UInt32ToByte(db.id)...)
 	}
 	if coll != nil {
-		appendTo = append(appendTo, encoding.UInt32ToByte(coll.Id)...)
+		appendTo = append(appendTo, UInt32ToByte(coll.Id)...)
 	}
 	return appendTo
 }
 
 func (d *DictKeyEncoder) encodedIdxName(idx *schema.Index) []byte {
-	return encoding.UInt32ToByte(idx.Id)
+	return UInt32ToByte(idx.Id)
 }
 
 func (d *DictKeyEncoder) DecodeTableName(tableName []byte) (uint32, uint32, uint32, bool) {
@@ -127,9 +126,9 @@ func (d *DictKeyEncoder) DecodeTableName(tableName []byte) (uint32, uint32, uint
 		return 0, 0, 0, false
 	}
 
-	nsId := encoding.ByteToUInt32(tableName[4:8])
-	dbId := encoding.ByteToUInt32(tableName[8:12])
-	collId := encoding.ByteToUInt32(tableName[12:16])
+	nsId := ByteToUInt32(tableName[4:8])
+	dbId := ByteToUInt32(tableName[8:12])
+	collId := ByteToUInt32(tableName[12:16])
 
 	return nsId, dbId, collId, true
 }
@@ -139,5 +138,5 @@ func (d *DictKeyEncoder) validPrefix(tableName []byte) bool {
 }
 
 func (d *DictKeyEncoder) DecodeIndexName(indexName []byte) uint32 {
-	return encoding.ByteToUInt32(indexName)
+	return ByteToUInt32(indexName)
 }

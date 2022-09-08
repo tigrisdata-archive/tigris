@@ -20,7 +20,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/schema"
-	"github.com/tigrisdata/tigris/server/metadata/encoding"
 )
 
 func TestEncodeDecodeKey(t *testing.T) {
@@ -59,12 +58,12 @@ func TestEncodeDecodeKey(t *testing.T) {
 	encodedTable, err := k.EncodeTableName(ns, db, coll)
 	require.NoError(t, err)
 	require.Equal(t, internal.UserTableKeyPrefix, encodedTable[0:4])
-	require.Equal(t, uint32(1), encoding.ByteToUInt32(encodedTable[4:8]))
-	require.Equal(t, uint32(3), encoding.ByteToUInt32(encodedTable[8:12]))
-	require.Equal(t, uint32(5), encoding.ByteToUInt32(encodedTable[12:16]))
+	require.Equal(t, uint32(1), ByteToUInt32(encodedTable[4:8]))
+	require.Equal(t, uint32(3), ByteToUInt32(encodedTable[8:12]))
+	require.Equal(t, uint32(5), ByteToUInt32(encodedTable[12:16]))
 
 	encodedIdx := k.EncodeIndexName(idx)
-	require.Equal(t, uint32(10), encoding.ByteToUInt32(encodedIdx))
+	require.Equal(t, uint32(10), ByteToUInt32(encodedIdx))
 
 	tenantID, dbID, collID, ok := k.DecodeTableName(encodedTable)
 	require.True(t, ok)
