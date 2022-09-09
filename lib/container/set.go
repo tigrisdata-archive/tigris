@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package set
+package container
 
 type HashSet struct {
 	stringMap map[string]struct{}
 }
 
-func New(s ...string) HashSet {
+func NewHashSet(s ...string) HashSet {
 	set := HashSet{
 		stringMap: make(map[string]struct{}, len(s)*2),
 	}

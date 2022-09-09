@@ -25,14 +25,14 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-	"github.com/tigrisdata/tigris/lib/set"
+	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"google.golang.org/grpc"
 )
 
 var (
-	ReservedNamespaceNames = set.New(request.DefaultNamespaceName, "unknown")
+	ReservedNamespaceNames = container.NewHashSet(request.DefaultNamespaceName, "unknown")
 )
 
 const (

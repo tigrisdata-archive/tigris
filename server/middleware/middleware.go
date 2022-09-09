@@ -25,7 +25,7 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"github.com/tigrisdata/tigris/lib/set"
+	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/server/config"
 	tigrisconfig "github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
@@ -56,7 +56,7 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 		}
 	}
 
-	excludedMethods := set.New()
+	excludedMethods := container.NewHashSet()
 	excludedMethods.Insert("/HealthAPI/Health")
 	excludedMethods.Insert("/tigrisdata.admin.v1.Admin/createNamespace")
 	excludedMethods.Insert("/tigrisdata.admin.v1.Admin/listNamespaces")
