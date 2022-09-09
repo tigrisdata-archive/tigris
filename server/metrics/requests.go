@@ -15,15 +15,7 @@
 package metrics
 
 import (
-	"context"
-	"fmt"
-	"strings"
-
-	"github.com/tigrisdata/tigris/server/request"
-
-	"github.com/tigrisdata/tigris/server/config"
 	"github.com/uber-go/tally"
-	"google.golang.org/grpc"
 )
 
 var (
@@ -68,65 +60,6 @@ func getRequestErrorTagKeys() []string {
 		"error_code",
 		"error_value",
 	}
-}
-
-type RequestEndpointMetadata struct {
-	serviceName   string
-	methodInfo    grpc.MethodInfo
-	namespaceName string
-}
-
-func newRequestEndpointMetadata(ctx context.Context, serviceName string, methodInfo grpc.MethodInfo) RequestEndpointMetadata {
-	return RequestEndpointMetadata{serviceName: serviceName, methodInfo: methodInfo, namespaceName: request.GetNameSpaceFromHeader(ctx)}
-}
-
-func (r *RequestEndpointMetadata) GetMethodName() string {
-	return strings.Split(r.methodInfo.Name, "/")[2]
-}
-
-func (r *RequestEndpointMetadata) GetServiceType() string {
-	if r.methodInfo.IsServerStream {
-		return "stream"
-	} else {
-		return "unary"
-	}
-}
-
-func (r *RequestEndpointMetadata) GetInitialTags() map[string]string {
-	return map[string]string{
-		"grpc_method":       r.methodInfo.Name,
-		"grpc_service":      r.serviceName,
-		"tigris_tenant":     r.namespaceName,
-		"grpc_service_type": r.GetServiceType(),
-		"env":               config.GetEnvironment(),
-		"db":                request.UnknownValue,
-		"collection":        request.UnknownValue,
-	}
-}
-
-func (r *RequestEndpointMetadata) getFullMethod() string {
-	return fmt.Sprintf("/%s/%s", r.serviceName, r.methodInfo.Name)
-}
-
-func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod string, methodType string) RequestEndpointMetadata {
-	var methodInfo grpc.MethodInfo
-	methodList := strings.Split(fullMethod, "/")
-	svcName := methodList[1]
-	methodName := methodList[2]
-	if methodType == "unary" {
-		methodInfo = grpc.MethodInfo{
-			Name:           methodName,
-			IsClientStream: false,
-			IsServerStream: false,
-		}
-	} else if methodType == "stream" {
-		methodInfo = grpc.MethodInfo{
-			Name:           methodName,
-			IsClientStream: false,
-			IsServerStream: true,
-		}
-	}
-	return newRequestEndpointMetadata(ctx, svcName, methodInfo)
 }
 
 func initializeRequestScopes() {

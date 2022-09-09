@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/request"
 	"google.golang.org/grpc"
 )
 
@@ -45,32 +46,32 @@ func TestGRPCMetrics(t *testing.T) {
 
 	ctx := context.Background()
 
-	unaryEndPointMetadata := newRequestEndpointMetadata(ctx, svcName, unaryMethodInfo)
-	streamingEndpointMetadata := newRequestEndpointMetadata(ctx, svcName, streamingMethodInfo)
+	unaryEndPointMetadata := request.NewRequestEndpointMetadata(ctx, svcName, unaryMethodInfo)
+	streamingEndpointMetadata := request.NewRequestEndpointMetadata(ctx, svcName, streamingMethodInfo)
 
 	t.Run("Test GetGrpcEndPointMetadataFromFullMethod", func(t *testing.T) {
-		unaryMetadata := GetGrpcEndPointMetadataFromFullMethod(ctx, unaryEndPointMetadata.getFullMethod(), "unary")
+		unaryMetadata := request.GetGrpcEndPointMetadataFromFullMethod(ctx, unaryEndPointMetadata.GetFullMethod(), "unary")
 		assert.Equal(t, unaryMetadata, unaryEndPointMetadata)
 
-		streamMetadata := GetGrpcEndPointMetadataFromFullMethod(ctx, streamingEndpointMetadata.getFullMethod(), "stream")
+		streamMetadata := request.GetGrpcEndPointMetadataFromFullMethod(ctx, streamingEndpointMetadata.GetFullMethod(), "stream")
 		assert.Equal(t, streamMetadata, streamingEndpointMetadata)
 	})
 
 	t.Run("Test full method names", func(t *testing.T) {
-		assert.Equal(t, unaryEndPointMetadata.getFullMethod(), fmt.Sprintf("/%s/%s", svcName, unaryMethodName))
-		assert.Equal(t, streamingEndpointMetadata.getFullMethod(), fmt.Sprintf("/%s/%s", svcName, streamingMethodName))
+		assert.Equal(t, unaryEndPointMetadata.GetFullMethod(), fmt.Sprintf("/%s/%s", svcName, unaryMethodName))
+		assert.Equal(t, streamingEndpointMetadata.GetFullMethod(), fmt.Sprintf("/%s/%s", svcName, streamingMethodName))
 	})
 
 	t.Run("Test unary endpoint metadata", func(t *testing.T) {
-		assert.Equal(t, unaryEndPointMetadata.serviceName, svcName)
-		assert.Equal(t, unaryEndPointMetadata.methodInfo.Name, unaryMethodName)
-		assert.False(t, unaryEndPointMetadata.methodInfo.IsServerStream)
+		assert.Equal(t, unaryEndPointMetadata.GetServiceName(), svcName)
+		assert.Equal(t, unaryEndPointMetadata.GetMethodInfo().Name, unaryMethodName)
+		assert.False(t, unaryEndPointMetadata.GetMethodInfo().IsServerStream)
 	})
 
 	t.Run("Test streaming endpoint metadata", func(t *testing.T) {
-		assert.Equal(t, streamingEndpointMetadata.serviceName, svcName)
-		assert.Equal(t, streamingEndpointMetadata.methodInfo.Name, streamingMethodName)
-		assert.True(t, streamingEndpointMetadata.methodInfo.IsServerStream)
+		assert.Equal(t, streamingEndpointMetadata.GetServiceName(), svcName)
+		assert.Equal(t, streamingEndpointMetadata.GetMethodInfo().Name, streamingMethodName)
+		assert.True(t, streamingEndpointMetadata.GetMethodInfo().IsServerStream)
 	})
 
 	t.Run("Test unary method preinitialized tags", func(t *testing.T) {

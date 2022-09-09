@@ -76,22 +76,8 @@ func TestRequestMetadata(t *testing.T) {
 	})
 
 	t.Run("Test get namespace from token", func(t *testing.T) {
-		testToken := "{\n" +
-			"  \"https://tigris/u\": {\n" +
-			"    \"email\": \"testemail@domain.com\"\n" +
-			"  },\n  \"https://tigris/n\": {\n" +
-			"    \"code\": \"test-tenant\"\n  },\n" +
-			"  \"iss\": \"https://fake.url.com/\",\n" +
-			"  \"sub\": \"google-oauth2|12345678\",\n" +
-			"  \"aud\": [\n" +
-			"    \"https://some-fake-url\",\n" +
-			"    \"https://some-fake-url.com/userinfo\"\n" +
-			"  ],\n  \"iat\": 1662396960,\n" +
-			"  \"exp\": 1662483360,\n" +
-			"  \"azp\": \"foobar\",\n" +
-			"  \"scope\": \"openid profile email\",\n" +
-			"  \"org_id\": \"org_fake\"\n" +
-			"}"
-		assert.Equal(t, "test-tenant", getNameSpaceFromToken([]byte(testToken)))
+		// base64 encoding of {"https://tigris/u":{"email":"test@tigrisdata.com"},"https://tigris/n":{"code":"test-namespace"},"iss":"https://test-issuer.com/","sub":"google-oauth2|1","aud":["https://tigris-api-test"],"iat":1662745495,"exp":1662831895,"azp":"test","scope":"openid profile email","org_id":"test"}
+		testToken := "header.eyJodHRwczovL3RpZ3Jpcy91Ijp7ImVtYWlsIjoidGVzdEB0aWdyaXNkYXRhLmNvbSJ9LCJodHRwczovL3RpZ3Jpcy9uIjp7ImNvZGUiOiJ0ZXN0LW5hbWVzcGFjZSJ9LCJpc3MiOiJodHRwczovL3Rlc3QtaXNzdWVyLmNvbS8iLCJzdWIiOiJnb29nbGUtb2F1dGgyfDEiLCJhdWQiOlsiaHR0cHM6Ly90aWdyaXMtYXBpLXRlc3QiXSwiaWF0IjoxNjYyNzQ1NDk1LCJleHAiOjE2NjI4MzE4OTUsImF6cCI6InRlc3QiLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIiwib3JnX2lkIjoidGVzdCJ9.signature"
+		assert.Equal(t, "test-namespace", getNameSpaceFromToken(testToken))
 	})
 }

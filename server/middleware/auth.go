@@ -120,12 +120,20 @@ func MeasuredAuthFunction(ctx context.Context, jwtValidator *validator.Validator
 }
 
 func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config *config.Config, cache *lru.Cache) (ctxResult context.Context, err error) {
+	reqMetadata, err := request.GetRequestMetadata(ctx)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to load request metadata")
+	}
 	defer func() {
 		if err != nil {
 			if config.Auth.LogOnly {
 				err = nil
 			} else {
-				log.Warn().Str("error", err.Error()).Err(err).Msg("could not validate token")
+				if reqMetadata != nil {
+					log.Debug().Str("error", err.Error()).Str("unauthenticated_namespace", reqMetadata.GetUnAuthenticatedNamespaceName()).Err(err).Msg("could not validate token")
+				} else {
+					log.Debug().Str("error", err.Error()).Err(err).Msg("could not validate token")
+				}
 			}
 		}
 	}()
@@ -143,7 +151,11 @@ func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config
 	if !found {
 		validatedToken, err = jwtValidator.ValidateToken(ctx, tkn)
 		if err != nil {
-			log.Warn().Err(err).Msg("Failed to validate access token")
+			if reqMetadata != nil {
+				log.Debug().Str("error", err.Error()).Str("unauthenticated_namespace", reqMetadata.GetUnAuthenticatedNamespaceName()).Err(err).Msg("Failed to validate access token")
+			} else {
+				log.Debug().Str("error", err.Error()).Err(err).Msg("Failed to validate access token")
+			}
 			return ctx, api.Errorf(api.Code_UNAUTHENTICATED, "Failed to validate access token")
 		}
 		cache.Add(tkn, validatedToken)

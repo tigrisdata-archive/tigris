@@ -17,6 +17,7 @@ package middleware
 import (
 	"context"
 
+	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/util"
 
 	"google.golang.org/protobuf/proto"
@@ -57,8 +58,9 @@ func traceUnary() func(ctx context.Context, req interface{}, info *grpc.UnarySer
 			resp, err := handler(ctx, req)
 			return resp, err
 		}
-		grpcMeta := metrics.GetGrpcEndPointMetadataFromFullMethod(ctx, info.FullMethod, "unary")
-		tags := grpcMeta.GetInitialTags()
+		reqMetadata := request.GetGrpcEndPointMetadataFromFullMethod(ctx, info.FullMethod, "unary")
+		ctx = request.SetRequestMetadata(ctx, reqMetadata)
+		tags := reqMetadata.GetInitialTags()
 		spanMeta := metrics.NewSpanMeta(util.Service, info.FullMethod, metrics.GrpcSpanType, tags)
 		spanMeta.AddTags(metrics.GetDbCollTagsForReq(req))
 		defer metrics.RequestsRespTime.Tagged(spanMeta.GetRequestTimerTags()).Timer("time").Start().Stop()
@@ -66,7 +68,7 @@ func traceUnary() func(ctx context.Context, req interface{}, info *grpc.UnarySer
 		resp, err := handler(ctx, req)
 		if err != nil {
 			// Request had an error
-			spanMeta.CountErrorForScope(metrics.OkRequests, spanMeta.GetRequestErrorTags(err))
+			spanMeta.CountErrorForScope(metrics.ErrorRequests, spanMeta.GetRequestErrorTags(err))
 			_ = spanMeta.FinishWithError(ctx, "request", err)
 			ulog.E(err)
 			return nil, err
@@ -88,15 +90,16 @@ func traceStream() grpc.StreamServerInterceptor {
 			err := handler(srv, wrapped)
 			return err
 		}
-		grpcMeta := metrics.GetGrpcEndPointMetadataFromFullMethod(wrapped.WrappedContext, info.FullMethod, "stream")
-		tags := grpcMeta.GetInitialTags()
+		reqMetadata := request.GetGrpcEndPointMetadataFromFullMethod(wrapped.WrappedContext, info.FullMethod, "stream")
+		wrapped.WrappedContext = request.SetRequestMetadata(wrapped.WrappedContext, reqMetadata)
+		tags := reqMetadata.GetInitialTags()
 		spanMeta := metrics.NewSpanMeta(util.Service, info.FullMethod, metrics.GrpcSpanType, tags)
 		defer metrics.RequestsRespTime.Tagged(spanMeta.GetRequestTimerTags()).Timer("time").Start().Stop()
 		wrapped.spanMeta = spanMeta
 		wrapped.WrappedContext = spanMeta.StartTracing(wrapped.WrappedContext, true)
 		err := handler(srv, wrapped)
 		if err != nil {
-			spanMeta.CountErrorForScope(metrics.OkRequests, spanMeta.GetRequestErrorTags(err))
+			spanMeta.CountErrorForScope(metrics.ErrorRequests, spanMeta.GetRequestErrorTags(err))
 			wrapped.WrappedContext = spanMeta.FinishWithError(wrapped.WrappedContext, "request", err)
 			ulog.E(err)
 			return err
