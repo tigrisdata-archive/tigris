@@ -14,7 +14,7 @@
 
 package util
 
-import "github.com/tigrisdata/tigris/lib/set"
+import "github.com/tigrisdata/tigris/lib/container"
 
 // Version of this build
 var Version string
@@ -22,7 +22,7 @@ var Version string
 // Service program name used in logging and monitoring
 var Service string = "tigris-server"
 
-var LanguageKeywords = set.New("abstract", "add", "alias", "and", "any", "args", "arguments", "array",
+var LanguageKeywords = container.NewHashSet("abstract", "add", "alias", "and", "any", "args", "arguments", "array",
 	"as", "as?", "ascending", "assert", "async", "await", "base", "bool", "boolean", "break", "by", "byte",
 	"callable", "case", "catch", "chan", "char", "checked", "class", "clone", "const", "constructor", "continue",
 	"debugger", "decimal", "declare", "def", "default", "defer", "del", "delegate", "delete", "descending", "die",

@@ -25,7 +25,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-	"github.com/tigrisdata/tigris/lib/set"
+	"github.com/tigrisdata/tigris/lib/container"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
@@ -167,7 +167,7 @@ func (d *DefaultCollection) SearchCollectionName() string {
 func GetSearchDeltaFields(existingFields []*QueryableField, incomingFields []*Field) []tsApi.Field {
 	incomingQueryable := BuildQueryableFields(incomingFields)
 
-	var existingFieldSet = set.New()
+	var existingFieldSet = container.NewHashSet()
 	for _, f := range existingFields {
 		existingFieldSet.Insert(f.FieldName)
 	}

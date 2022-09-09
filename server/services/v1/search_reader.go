@@ -24,6 +24,7 @@ import (
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/store/search"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
+	tsearch "github.com/tigrisdata/tigris/server/search"
 )
 
 const (
@@ -34,14 +35,14 @@ const (
 type page struct {
 	idx  int
 	cap  int
-	hits *HitsResponse
+	hits *tsearch.HitsResponse
 }
 
 func newPage(cap int) *page {
 	return &page{
 		idx:  0,
 		cap:  cap,
-		hits: NewHits(),
+		hits: tsearch.NewHits(),
 	}
 }
 
