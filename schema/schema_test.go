@@ -347,7 +347,7 @@ func TestGetCollectionType(t *testing.T) {
 }`)
 
 	ty, err := GetCollectionType(schema)
-	require.Equal(t, 0, len(ty))
+	require.Equal(t, DocumentsType, ty)
 	require.NoError(t, err)
 
 	schema = []byte(`{
@@ -364,6 +364,6 @@ func TestGetCollectionType(t *testing.T) {
 }`)
 
 	ty, err = GetCollectionType(schema)
-	require.Equal(t, "messages", ty)
+	require.Equal(t, MessagesType, ty)
 	require.NoError(t, err)
 }
