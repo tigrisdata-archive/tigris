@@ -22,9 +22,10 @@ import (
 	"github.com/tigrisdata/tigris/query/filter"
 	qsearch "github.com/tigrisdata/tigris/query/search"
 	"github.com/tigrisdata/tigris/schema"
-	"github.com/tigrisdata/tigris/store/search"
-	tsApi "github.com/typesense/typesense-go/typesense/api"
 	tsearch "github.com/tigrisdata/tigris/server/search"
+	"github.com/tigrisdata/tigris/store/search"
+	ulog "github.com/tigrisdata/tigris/util/log"
+	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
 const (
@@ -35,38 +36,38 @@ const (
 type page struct {
 	idx  int
 	cap  int
-	hits *tsearch.HitsResponse
+	hits []*tsearch.Hit
 }
 
 func newPage(cap int) *page {
 	return &page{
 		idx:  0,
 		cap:  cap,
-		hits: tsearch.NewHits(),
+		hits: []*tsearch.Hit{},
 	}
 }
 
-func (p *page) append(h tsApi.SearchResultHit) bool {
+func (p *page) append(h *tsearch.Hit) bool {
 	if !p.hasCapacity() {
 		return false
 	}
 
-	p.hits.Append(h)
+	p.hits = append(p.hits, h)
 	return p.hasCapacity()
 }
 
 func (p *page) hasCapacity() bool {
-	return p.hits.Count() < p.cap
+	return len(p.hits) < p.cap
 }
 
 // readRow should be used to read search data because this is the single point where we unpack search fields, apply
 // filter and then pack the document into bytes.
 func (p *page) readRow() map[string]interface{} {
-	for p.hits.HasMoreHits(p.idx) {
-		document, _ := p.hits.GetDocument(p.idx)
+	for p.idx < len(p.hits) {
+		document := p.hits[p.idx].Document
 		p.idx++
 		if document != nil {
-			return *document
+			return document
 		}
 	}
 
@@ -101,28 +102,43 @@ func (p *pageReader) read() error {
 	if err != nil {
 		return err
 	}
-	p.pageNo++
 
-	var pg = newPage(p.query.PageSize)
+	sortedHits := tsearch.NewSortedHits(p.query.SortOrder)
 	for _, r := range result {
-		if r.Hits == nil {
-			continue
-		}
-
-		for _, h := range *r.Hits {
-			if !pg.append(h) {
-				p.pages = append(p.pages, pg)
-				pg = newPage(p.query.PageSize)
+		if r.Hits != nil {
+			for _, h := range *r.Hits {
+				hit := tsearch.NewSearchHit(&h)
+				err := sortedHits.Add(hit)
+				// log and skip hits that cannot be added
+				if ulog.E(err) {
+					continue
+				}
 			}
 		}
 	}
-	if pg.hits.Count() > 0 {
+
+	p.pageNo++
+	var pg = newPage(p.query.PageSize)
+
+	for sortedHits.HasMoreHits() {
+		hit, err := sortedHits.Get()
+		// log and skip to next hit
+		if ulog.E(err) {
+			continue
+		}
+		if !pg.append(hit) {
+			p.pages = append(p.pages, pg)
+			pg = newPage(p.query.PageSize)
+		}
+	}
+
+	// include the last page in results if it has hits
+	if len(pg.hits) > 0 {
 		p.pages = append(p.pages, pg)
 	}
 
 	// check if we need to build facets
 	if len(p.cachedFacets) == 0 {
-		// count of values to include in response
 		facetSizeRequested := map[string]int{}
 		for _, f := range p.query.Facets.Fields {
 			facetSizeRequested[f.Name] = f.Size

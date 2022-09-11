@@ -15,9 +15,9 @@
 package search
 
 import (
+	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/query/sort"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
-	"github.com/tigrisdata/tigris/lib/container"
 )
 
 type Hit struct {
@@ -65,6 +65,9 @@ func NewSortedHits(sortingOrder *sort.Ordering) SortedHits {
 }
 
 func (s *SortedHits) Add(hit *Hit) error {
+	if hit == nil || hit.Document == nil {
+		return nil
+	}
 	return s.hits.Push(hit)
 }
 

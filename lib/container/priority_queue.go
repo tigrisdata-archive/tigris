@@ -15,8 +15,9 @@
 package container
 
 import (
-	"github.com/pkg/errors"
 	"container/heap"
+
+	"github.com/pkg/errors"
 )
 
 // ErrEmpty is returned for queues with no items
@@ -26,6 +27,9 @@ type PriorityQueue[T any] struct {
 	queue queue[T]
 }
 
+// NewPriorityQueue initializes internal data structure and returns new
+// PriorityQueue accepting a comparator function
+// comp function decides ordering in queue, Sort `this` before `that` if True.
 func NewPriorityQueue[T any](comp func(this, that *T) bool) *PriorityQueue[T] {
 	return &PriorityQueue[T]{queue: queue[T]{
 		data:       make([]*T, 0),
@@ -33,10 +37,13 @@ func NewPriorityQueue[T any](comp func(this, that *T) bool) *PriorityQueue[T] {
 	}}
 }
 
+// Len returns items in queue
 func (pq *PriorityQueue[T]) Len() int {
 	return pq.queue.Len()
 }
 
+// Pop pops the highest priority item from queue
+// The complexity is O(log n) where n = h.Len().
 func (pq *PriorityQueue[T]) Pop() (*T, error) {
 	if pq.Len() < 1 {
 		return nil, ErrEmpty
@@ -45,42 +52,46 @@ func (pq *PriorityQueue[T]) Pop() (*T, error) {
 	return item, nil
 }
 
-func (pq *PriorityQueue[T]) Push(i *T) error {
+// Push pushes the element x onto the heap.
+// The complexity is O(log n) where n = h.Len().
+func (pq *PriorityQueue[T]) Push(x *T) error {
 	// Copy the item value(s) so that modifications to the source item does not
 	// affect the item on the queue
-	clone := *i
+	clone := *x
 
 	heap.Push(&pq.queue, &clone)
 	return nil
 }
 
+// queue is the internal data structure used to satisfy heap.Interface and not
+// supposed to be used directly. Use PriorityQueue instead.
 type queue[T any] struct {
 	data       []*T
 	comparator func(this, that *T) bool
 }
 
-func (pq queue[T]) Len() int {
-	return len(pq.data)
+func (q queue[T]) Len() int {
+	return len(q.data)
 }
 
-func (pq queue[T]) Less(i, j int) bool {
-	return pq.comparator(pq.data[i], pq.data[j])
+func (q queue[T]) Less(i, j int) bool {
+	return q.comparator(q.data[i], q.data[j])
 }
 
-func (pq queue[T]) Swap(i, j int) {
-	pq.data[i], pq.data[j] = pq.data[j], pq.data[i]
+func (q queue[T]) Swap(i, j int) {
+	q.data[i], q.data[j] = q.data[j], q.data[i]
 }
 
-func (pq *queue[T]) Push(x any) {
+func (q *queue[T]) Push(x any) {
 	item := x.(*T)
-	(*pq).data = append((*pq).data, item)
+	q.data = append(q.data, item)
 }
 
-func (pq *queue[T]) Pop() any {
-	old := (*pq).data
+func (q *queue[T]) Pop() any {
+	old := q.data
 	n := len(old)
 	item := old[n-1]
 	old[n-1] = nil // avoid memory leak
-	(*pq).data = old[0 : n-1]
+	q.data = old[0 : n-1]
 	return item
 }
