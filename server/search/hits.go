@@ -65,6 +65,9 @@ func NewSortedHits(sortingOrder *sort.Ordering) SortedHits {
 }
 
 func (s *SortedHits) Add(hit *Hit) error {
+	if hit == nil || hit.Document == nil {
+		return nil
+	}
 	return s.hits.Push(hit)
 }
 

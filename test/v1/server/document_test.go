@@ -1163,21 +1163,21 @@ func TestUpdate_OnAnyField(t *testing.T) {
 			"added_string_value": "before",
 		},
 		{
-			"pkey_int":           120,
-			"int_value":          2000,
-			"string_value":       "simple_insert120_130",
-			"bool_value":         false,
-			"double_value":       2000.222,
-			"bytes_value":        []byte(`"simple_insert120"`),
-			"added_string_value": "before",
-		},
-		{
 			"pkey_int":           130,
 			"int_value":          3000,
 			"string_value":       "simple_insert120_130",
 			"bool_value":         true,
 			"double_value":       3000.999999,
 			"bytes_value":        []byte(`"simple_insert130"`),
+			"added_string_value": "before",
+		},
+		{
+			"pkey_int":           120,
+			"int_value":          2000,
+			"string_value":       "simple_insert120_130",
+			"bool_value":         false,
+			"double_value":       2000.222,
+			"bytes_value":        []byte(`"simple_insert120"`),
 			"added_string_value": "before",
 		},
 	}
@@ -1210,7 +1210,7 @@ func TestUpdate_OnAnyField(t *testing.T) {
 				},
 			},
 			1,
-			[]int{1},
+			[]int{2},
 		}, {
 			Map{
 				"filter": Map{
@@ -1542,16 +1542,16 @@ func TestDelete_OnAnyField(t *testing.T) {
 			"bytes_value":  []byte(`"simple_insert50"`),
 		},
 		{
-			"pkey_int":     60,
-			"int_value":    60,
-			"string_value": "simple_insert60",
-			"bytes_value":  []byte(`"simple_insert60"`),
-		},
-		{
 			"pkey_int":     70,
 			"int_value":    70,
 			"string_value": "simple_insert70",
 			"double_value": 1.234,
+		},
+		{
+			"pkey_int":     60,
+			"int_value":    60,
+			"string_value": "simple_insert60",
+			"bytes_value":  []byte(`"simple_insert60"`),
 		},
 	}
 
