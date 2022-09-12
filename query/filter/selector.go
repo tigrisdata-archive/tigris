@@ -16,6 +16,7 @@ package filter
 
 import (
 	"fmt"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 
 	"github.com/buger/jsonparser"
 	"github.com/tigrisdata/tigris/lib/date"
@@ -36,23 +37,15 @@ import (
 type Selector struct {
 	Field     *schema.QueryableField
 	Matcher   ValueMatcher
-	Collation *schema.Collation
+	Collation *api.Collation
 }
 
-// NewSelectorWithCollation returns Selector object
-func NewSelectorWithCollation(field *schema.QueryableField, matcher ValueMatcher, collation *schema.Collation) *Selector {
+// NewSelector returns Selector object
+func NewSelector(field *schema.QueryableField, matcher ValueMatcher, collation *api.Collation) *Selector {
 	return &Selector{
 		Field:     field,
 		Matcher:   matcher,
 		Collation: collation,
-	}
-}
-
-// NewSelector returns Selector object
-func NewSelector(field *schema.QueryableField, matcher ValueMatcher) *Selector {
-	return &Selector{
-		Field:   field,
-		Matcher: matcher,
 	}
 }
 

@@ -84,6 +84,11 @@ func (x *UpdateRequest) Validate() error {
 	if len(x.GetFilter()) == 0 {
 		return Errorf(Code_INVALID_ARGUMENT, "filter is a required field")
 	}
+	if x.Options != nil && x.Options.Collation != nil {
+		if err := x.Options.Collation.IsValid(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -95,6 +100,11 @@ func (x *DeleteRequest) Validate() error {
 	if len(x.GetFilter()) == 0 {
 		return Errorf(Code_INVALID_ARGUMENT, "filter is a required field")
 	}
+	if x.Options != nil && x.Options.Collation != nil {
+		if err := x.Options.Collation.IsValid(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -105,6 +115,11 @@ func (x *ReadRequest) Validate() error {
 
 	if len(x.GetFilter()) == 0 {
 		return Errorf(Code_INVALID_ARGUMENT, "filter is a required field")
+	}
+	if x.Options != nil && x.Options.Collation != nil {
+		if err := x.Options.Collation.IsValid(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -125,7 +140,11 @@ func (x *SearchRequest) Validate() error {
 	if err := isValidPaginationParam("page_size", int(x.PageSize)); err != nil {
 		return err
 	}
-
+	if x.Collation != nil {
+		if err := x.Collation.IsValid(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

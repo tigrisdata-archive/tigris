@@ -30,7 +30,7 @@ func TestSearchBuilder(t *testing.T) {
 		schema.NewQueryableField("a", schema.Int64Type),
 		schema.NewQueryableField("int_value", schema.Int64Type),
 		schema.NewQueryableField("string_value1", schema.StringType),
-	})
+	}, nil)
 	wrappedF, err := f.WrappedFilter(js)
 	require.NoError(t, err)
 
