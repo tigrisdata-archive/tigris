@@ -21,7 +21,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ajg/form"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	jsoniter "github.com/json-iterator/go"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
@@ -33,7 +32,6 @@ const (
 )
 
 type CustomDecoder struct {
-	formDecoder *form.Decoder
 	jsonDecoder *json.Decoder
 	reader      io.Reader
 }
@@ -60,7 +58,6 @@ type CustomMarshaler struct {
 
 func (c *CustomMarshaler) NewDecoder(r io.Reader) runtime.Decoder {
 	return CustomDecoder{
-		formDecoder: form.NewDecoder(r),
 		jsonDecoder: json.NewDecoder(r),
 		reader:      r,
 	}
