@@ -235,9 +235,6 @@ func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet contai
 		if builder.Type == jsonSpecArray && builder.Items == nil {
 			return api.Errorf(api.Code_INVALID_ARGUMENT, "missing items for array field")
 		}
-		if builder.Type == jsonSpecObject && len(builder.Properties) == 0 {
-			return api.Errorf(api.Code_INVALID_ARGUMENT, "missing properties for object field")
-		}
 
 		if builder.Items != nil {
 			// for arrays, items must be set, and it is possible that item type is object in that case deserialize those
