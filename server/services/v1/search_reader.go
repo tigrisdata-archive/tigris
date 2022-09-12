@@ -38,10 +38,10 @@ type page struct {
 	hits []*tsearch.Hit
 }
 
-func newPage(cap int) *page {
+func newPage(c int) *page {
 	return &page{
 		idx:  0,
-		cap:  cap,
+		cap:  c,
 		hits: []*tsearch.Hit{},
 	}
 }

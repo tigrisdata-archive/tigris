@@ -21,18 +21,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/errors"
-	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/transaction"
-	"github.com/tigrisdata/tigris/store/kv"
 )
 
 func TestUserSubspace(t *testing.T) {
-	fdbCfg, err := config.GetTestFDBConfig("../../..")
-	require.NoError(t, err)
-
-	kvStore, err := kv.NewKeyValueStore(fdbCfg)
-	require.NoError(t, err)
-
 	t.Run("put_error", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()

@@ -1,61 +1,15 @@
 linters:
-  enable:
-    - asasalint
-    - asciicheck
-    - bidichk
-    - deadcode
-    - decorder
-    - depguard
-    - dogsled
-    - errcheck
-    - errname
-    - execinquery
-    - exportloopref
-    - forbidigo
-    - gci
-    - godot
-    - gofmt
-    - goheader
-    - goimports
-    - gomoddirectives
-    - gomodguard
-    - goprintffuncname
-    - gosimple
-    - govet
-    - grouper
-    - importas
-    - ineffassign
-    - misspell
-    - nolintlint
-    - promlinter
-    - staticcheck
-    - tenv
-    - tparallel
-    - typecheck
-    - unconvert
-    - unused
-    - usestdlibvars
-    - varcheck
-    - whitespace
-    - gofumpt
-    - gosec
-    - prealloc
-    - errchkjson
-    - gocritic
+  enable-all: true
   disable:
     # Work on fixing this
+    #- reassign
     - maintidx
-    - unparam
     - nakedret
-    - makezero
     - gocyclo
-    - durationcheck
-    - bodyclose
     - gocognit
     - funlen
     - goconst
     - nestif
-    - noctx
     - dupl
     - containedctx
     - cyclop
@@ -66,7 +20,6 @@ linters:
     - exhaustive
     - thelper
     - nonamedreturns
-    - predeclared
     - nilnil
     - godox
     - goerr113
@@ -76,6 +29,7 @@ linters:
     - revive
     - stylecheck
     - wsl
+    #- interfacebloat
 
     # Not working with generics
     # enable in the future
@@ -86,6 +40,8 @@ linters:
     - wastedassign
 
     # These are two strict or deprecated
+    - deadcode
+    - varcheck
     - testpackage
     - paralleltest
     - interfacer

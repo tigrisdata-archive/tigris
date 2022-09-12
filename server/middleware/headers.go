@@ -24,7 +24,10 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-var OutgoingHeaders = metadata.New(map[string]string{})
+var (
+	OutgoingHeaders       = metadata.New(map[string]string{})
+	OutgoingStreamHeaders = metadata.New(map[string]string{})
+)
 
 const (
 	CookieMaxAgeKey = "Expires"
@@ -37,7 +40,7 @@ func headersUnaryServerInterceptor() func(ctx context.Context, req interface{}, 
 
 		// add cookie header for sticky routing for interactive transactional operations
 		if ty, ok := resp.(*api.BeginTransactionResponse); ok {
-			expirationTime := time.Now().Add(time.Second*MaximumTimeout + 2*time.Second)
+			expirationTime := time.Now().Add(MaximumTimeout + 2*time.Second)
 			callHeaders.Append(api.SetCookie, fmt.Sprintf("%s=%s;%s=%s", api.HeaderTxID, ty.GetTxCtx().GetId(), CookieMaxAgeKey, expirationTime.Format(time.RFC1123)))
 		}
 		if err := grpc.SendHeader(ctx, metadata.Join(OutgoingHeaders, callHeaders)); err != nil {
@@ -50,7 +53,7 @@ func headersUnaryServerInterceptor() func(ctx context.Context, req interface{}, 
 
 func headersStreamServerInterceptor() grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		if err := grpc.SendHeader(stream.Context(), OutgoingHeaders); err != nil {
+		if err := grpc.SendHeader(stream.Context(), OutgoingStreamHeaders); err != nil {
 			return err
 		}
 		return handler(srv, stream)

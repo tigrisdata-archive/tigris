@@ -657,7 +657,7 @@ func (runner *StreamingQueryRunner) buildReaderOptions(tenant *metadata.Tenant, 
 
 	if collection.Type() == schema.TopicType {
 		// if it is event streaming then fallback to indexing store for all reads
-		if !config.IsIndexingStoreReadEnabled() {
+		if !config.DefaultConfig.Search.IsReadEnabled() {
 			if options.from == nil {
 				// in this case, scan will happen from the beginning of the table.
 				options.from = keys.NewKey(options.table)
@@ -674,7 +674,7 @@ func (runner *StreamingQueryRunner) buildReaderOptions(tenant *metadata.Tenant, 
 		if filter.None(runner.req.Filter) {
 			options.noFilter = true
 		} else if options.ikeys, err = runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter, collation); err != nil {
-			if !config.IsIndexingStoreReadEnabled() {
+			if !config.DefaultConfig.Search.IsReadEnabled() {
 				if options.from == nil {
 					// in this case, scan will happen from the beginning of the table.
 					options.from = keys.NewKey(options.table)

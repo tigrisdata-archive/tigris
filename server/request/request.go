@@ -250,3 +250,30 @@ func GetNameSpaceFromHeader(ctx context.Context) string {
 	}
 	return getNameSpaceFromToken(token)
 }
+
+func isRead(name string) bool {
+	switch name {
+	case api.ReadMethodName, api.EventsMethodName, api.SearchMethodName, api.SubscribeMethodName:
+		return true
+	case api.ListCollectionsMethodName, api.ListDatabasesMethodName:
+		return true
+	case api.DescribeCollectionMethodName, api.DescribeDatabaseMethodName:
+		return true
+	default:
+		return false
+	}
+}
+
+func isWrite(name string) bool {
+	return !isRead(name)
+}
+
+func IsRead(ctx context.Context) bool {
+	m, _ := grpc.Method(ctx)
+	return isRead(m)
+}
+
+func IsWrite(ctx context.Context) bool {
+	m, _ := grpc.Method(ctx)
+	return isWrite(m)
+}

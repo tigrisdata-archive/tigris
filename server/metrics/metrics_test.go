@@ -15,7 +15,10 @@
 package metrics
 
 import (
+	"os"
 	"testing"
+
+	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 func TestInitializeMetrics(t *testing.T) {
@@ -33,4 +36,10 @@ func TestInitializeMetrics(t *testing.T) {
 		// Will panic if the high level structure cannot be created
 		InitializeMetrics()
 	})
+}
+
+func TestMain(m *testing.M) {
+	ulog.Configure(ulog.LogConfig{Level: "disabled", Format: "console"})
+
+	os.Exit(m.Run())
 }

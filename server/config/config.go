@@ -16,9 +16,12 @@ package config
 
 import (
 	"bytes"
+	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/fsnotify/fsnotify"
@@ -148,13 +151,17 @@ func GetTestFDBConfig(path string) (*FoundationDBConfig, error) {
 		fn = path + "/test/config/fdb.cluster"
 	}
 
-	cmd := exec.Command("fdbcli", "-C", fn, "--exec", "configure new single memory")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "fdbcli", "-C", fn, "--exec", "configure new single memory")
 	_, err := cmd.Output()
 	if err != nil {
-		cmd := exec.Command("fdbcli", "-C", fn, "--exec", "configure single memory")
+		cmd := exec.CommandContext(ctx, "fdbcli", "-C", fn, "--exec", "configure single memory")
 		_, err = cmd.Output()
 	}
 	if err != nil {
+		fmt.Printf("\nRun `make local_run` in the terminal to start FDB instance for tests\n") //nolint:golint,forbidigo
 		return nil, err
 	}
 

@@ -146,7 +146,7 @@ func (sessMgr *SessionManager) CreateReadOnlySession(ctx context.Context) (*Read
 	if err != nil {
 		return nil, err
 	}
-	tenant, err := sessMgr.tenantMgr.GetTenant(ctx, namespaceForThisSession, sessMgr.txMgr)
+	tenant, err := sessMgr.tenantMgr.GetTenant(ctx, namespaceForThisSession)
 	if err != nil {
 		log.Warn().Err(err).Msgf("Could not find tenant, this must not happen with right authn/authz configured")
 		return nil, errors.NotFound("Tenant %s not found", namespaceForThisSession)
@@ -177,7 +177,7 @@ func (sessMgr *SessionManager) Create(ctx context.Context, trackVerInOwnTxn bool
 	if err != nil {
 		return nil, err
 	}
-	tenant, err := sessMgr.tenantMgr.GetTenant(ctx, namespaceForThisSession, sessMgr.txMgr)
+	tenant, err := sessMgr.tenantMgr.GetTenant(ctx, namespaceForThisSession)
 	if err != nil {
 		log.Warn().Err(err).Msgf("Could not find tenant, this must not happen with right authn/authz configured")
 		return nil, errors.NotFound("Tenant %s not found", namespaceForThisSession)

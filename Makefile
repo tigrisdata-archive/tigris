@@ -41,7 +41,7 @@ lint: generate
 	yq --exit-status 'tag == "!!map" or tag== "!!seq"' .github/workflows/*.yaml config/*.yaml >/dev/null
 	shellcheck scripts/*
 	shellcheck test/docker/grafana/*
-	golangci-lint --timeout=$(LINT_TIMEOUT) run
+	golangci-lint --timeout=$(LINT_TIMEOUT) run --fix
 
 # dependency on generate needed to create generated file outside of docker with
 # current user owner instead of root

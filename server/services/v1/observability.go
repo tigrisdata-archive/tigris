@@ -16,12 +16,8 @@ package v1
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/fullstorydev/grpchan/inprocgrpc"
@@ -31,137 +27,119 @@ import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/tigrisdata/tigris/server/quota"
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/util"
 	"google.golang.org/grpc"
 )
 
 const (
-	observabilityPattern     = "/" + version + "/observability/*"
-	AcceptHeader             = "Accept"
-	ApplicationJsonHeaderVal = "application/json"
-	DDApiKey                 = "DD-API-KEY" //nolint:golint,gosec
-	DDAppKey                 = "DD-APPLICATION-KEY"
-	Query                    = "query"
-	DDQueryEndpointPath      = "/api/v1/query"
-	RateLimitLimit           = "X-RateLimit-Period"
-	RateLimitPeriod          = "X-RateLimit-Period"
-	RateLimitRemaining       = "X-RateLimit-Remaining"
-	RateLimitReset           = "X-RateLimit-Reset"
-	RateLimitName            = "X-RateLimit-Name"
+	observabilityPattern = "/" + version + "/observability/*"
 )
 
 type observabilityService struct {
 	api.UnimplementedObservabilityServer
-	ObservableProvider
+	Provider observableProvider
 }
 
-type ObservableProvider interface {
+type observableProvider interface {
 	QueryTimeSeriesMetrics(ctx context.Context, request *api.QueryTimeSeriesMetricsRequest) (*api.QueryTimeSeriesMetricsResponse, error)
+	QueryQuotaUsage(ctx context.Context, request *api.QuotaUsageRequest) (*api.QuotaUsageResponse, error)
 }
 
 type Datadog struct {
-	config.ObservabilityConfig
+	Tenants *metadata.TenantManager
+	Datadog *metrics.Datadog
 }
 
-type MetricsQueryResp struct {
-	FromDate int64                    `json:"from_date"`
-	ToDate   int64                    `json:"to_date"`
-	Query    string                   `json:"query"`
-	Series   []MetricsQueryRespSeries `json:"series"`
-}
-
-type MetricsQueryRespSeries struct {
-	Metric   string `json:"metric"`
-	FromDate int64  `json:"start"`
-	ToDate   int64  `json:"end"`
-	Scope    string `json:"scope"`
-
-	PointList [][2]float64 `json:"pointlist"`
-}
-
-func (dd Datadog) QueryTimeSeriesMetrics(ctx context.Context, req *api.QueryTimeSeriesMetricsRequest) (*api.QueryTimeSeriesMetricsResponse, error) {
-	err := validateQueryTimeSeriesMetricsRequest(req)
-	if err != nil {
+func (dd *Datadog) QueryTimeSeriesMetrics(ctx context.Context, req *api.QueryTimeSeriesMetricsRequest) (*api.QueryTimeSeriesMetricsResponse, error) {
+	if err := validateQueryTimeSeriesMetricsRequest(req); err != nil {
 		return nil, err
 	}
 
-	ddReq, err := http.NewRequest(http.MethodGet, dd.ObservabilityConfig.ProviderUrl+DDQueryEndpointPath, nil)
+	namespace, _ := request.GetNamespace(ctx)
+	ddQuery, err := metrics.FormDatadogQuery(namespace, req)
 	if err != nil {
 		return nil, errors.Internal("Failed to query metrics: reason = " + err.Error())
 	}
 
-	q := ddReq.URL.Query()
-	q.Add("from", strconv.FormatInt(req.From, 10))
-	q.Add("to", strconv.FormatInt(req.To, 10))
-	ddQuery, err := formQuery(ctx, req)
-	if err != nil {
-		return nil, errors.Internal("Failed to query metrics: reason = " + err.Error())
-	}
-	q.Add("query", ddQuery)
-	ddReq.URL.RawQuery = q.Encode()
-	ddReq.Header.Add(AcceptHeader, ApplicationJsonHeaderVal)
-	ddReq.Header.Add(DDApiKey, config.DefaultConfig.Observability.ApiKey)
-	ddReq.Header.Add(DDAppKey, config.DefaultConfig.Observability.AppKey)
-	httpClient := &http.Client{}
-
-	resp, err := httpClient.Do(ddReq)
-	if err != nil {
-		return nil, errors.Internal("Failed to query metrics: reason = " + err.Error())
-	}
-	body, err := io.ReadAll(resp.Body)
+	ddResp, err := dd.Datadog.Query(ctx, req.From, req.To, ddQuery)
 	if err != nil {
 		return nil, errors.Internal("Failed to query metrics: reason = " + err.Error())
 	}
 
-	bodyStr := string(body)
-	if resp.StatusCode == 200 {
-		var ddResp MetricsQueryResp
-		err = json.Unmarshal(body, &ddResp)
-		result := api.QueryTimeSeriesMetricsResponse{
-			From:  ddResp.FromDate,
-			To:    ddResp.ToDate,
-			Query: ddResp.Query,
-		}
-		result.Series = []*api.MetricSeries{}
-		if err != nil {
-			return nil, errors.Internal("Failed to unmarshal remote response: reason = " + err.Error())
-		}
-		if len(ddResp.Series) > 0 {
-			for _, series := range ddResp.Series {
-				thisSeries := &api.MetricSeries{
-					From:   series.FromDate,
-					To:     series.ToDate,
-					Metric: series.Metric,
-					Scope:  series.Scope,
-				}
-				thisSeries.DataPoints = make([]*api.DataPoint, len(series.PointList))
-				for i := range series.PointList {
-					thisSeries.DataPoints[i] = &api.DataPoint{}
-					thisSeries.DataPoints[i].Timestamp = int64(series.PointList[i][0])
-					thisSeries.DataPoints[i].Value = series.PointList[i][1]
-				}
-				result.Series = append(result.Series, thisSeries)
+	result := api.QueryTimeSeriesMetricsResponse{
+		From:  ddResp.GetFromDate(),
+		To:    ddResp.GetToDate(),
+		Query: ddResp.GetQuery(),
+	}
+	result.Series = []*api.MetricSeries{}
+	if err != nil {
+		return nil, errors.Internal("Failed to unmarshal remote response: reason = " + err.Error())
+	}
+
+	if len(ddResp.Series) > 0 {
+		for _, series := range ddResp.Series {
+			thisSeries := &api.MetricSeries{
+				From:   series.GetStart(),
+				To:     series.GetEnd(),
+				Metric: series.GetMetric(),
+				Scope:  series.GetScope(),
 			}
-			return &result, nil
-		} else {
-			log.Debug().Msg("Unexpected remote response: reason = 0 series returned")
-			return &result, nil
+			thisSeries.DataPoints = make([]*api.DataPoint, len(series.GetPointlist()))
+			for i, v := range series.GetPointlist() {
+				thisSeries.DataPoints[i] = &api.DataPoint{}
+				if len(v) < 2 || v[0] == nil || v[1] == nil {
+					log.Debug().Msg("Malformed data point returned")
+				} else {
+					thisSeries.DataPoints[i].Timestamp = int64(*v[0])
+					thisSeries.DataPoints[i].Value = *v[1]
+				}
+			}
+			result.Series = append(result.Series, thisSeries)
 		}
-	} else if resp.StatusCode == 429 {
-		log.Warn().Str(RateLimitLimit, resp.Header.Get(RateLimitLimit)).Str(RateLimitPeriod, resp.Header.Get(RateLimitPeriod)).Str(RateLimitRemaining, resp.Header.Get(RateLimitRemaining)).Str(RateLimitReset, resp.Header.Get(RateLimitReset)).Str(RateLimitName, resp.Header.Get(RateLimitName)).Msgf("Datadog rate-limit hit")
-		return nil, errors.ResourceExhausted("Failed to get query metrics: reason = rate-limited, reason = %s", bodyStr)
+		return &result, nil
 	}
-	log.Error().Msgf("Datadog response status code=%d", resp.StatusCode)
-	return nil, api.Errorf(api.FromHttpCode(resp.StatusCode), "Failed to get query metrics: reason = "+bodyStr)
+
+	log.Debug().Msg("Unexpected remote response: reason = 0 series returned")
+	return &result, nil
 }
 
-func newObservabilityService() *observabilityService {
+func (dd *Datadog) QueryQuotaUsage(ctx context.Context, _ *api.QuotaUsageRequest) (*api.QuotaUsageResponse, error) {
+	ns, _ := request.GetNamespace(ctx)
+
+	q := quota.Datadog{Datadog: dd.Datadog}
+	ru, wu, err := q.CurRates(ctx, ns)
+	if err != nil {
+		return nil, errors.Internal("error reading quota usage")
+	}
+
+	tenant, err := dd.Tenants.GetTenant(ctx, ns)
+	if err != nil {
+		return nil, errors.Internal("error reading storage quota usage")
+	}
+
+	size, err := tenant.Size(ctx)
+	if err != nil {
+		return nil, errors.Internal("error reading storage quota usage")
+	}
+
+	return &api.QuotaUsageResponse{
+		ReadUnits:   ru,
+		WriteUnits:  wu,
+		StorageSize: size,
+	}, nil
+}
+
+func newObservabilityService(tenants *metadata.TenantManager) *observabilityService {
 	if config.DefaultConfig.Observability.Provider == "datadog" {
 		return &observabilityService{
 			UnimplementedObservabilityServer: api.UnimplementedObservabilityServer{},
-			ObservableProvider: &Datadog{
-				ObservabilityConfig: config.DefaultConfig.Observability,
+			Provider: &Datadog{
+				Tenants: tenants,
+				Datadog: metrics.InitDatadog(&config.DefaultConfig),
 			},
 		}
 	}
@@ -173,7 +151,24 @@ func newObservabilityService() *observabilityService {
 }
 
 func (o *observabilityService) QueryTimeSeriesMetrics(ctx context.Context, req *api.QueryTimeSeriesMetricsRequest) (*api.QueryTimeSeriesMetricsResponse, error) {
-	return o.ObservableProvider.QueryTimeSeriesMetrics(ctx, req)
+	return o.Provider.QueryTimeSeriesMetrics(ctx, req)
+}
+
+func (o *observabilityService) QuotaLimits(ctx context.Context, _ *api.QuotaLimitsRequest) (*api.QuotaLimitsResponse, error) {
+	ns, err := request.GetNamespace(ctx)
+	if err != nil {
+		return nil, err
+	}
+	cfg := config.DefaultConfig.Quota.Namespace.NamespaceLimits(ns)
+	return &api.QuotaLimitsResponse{
+		ReadUnits:   int64(cfg.ReadUnits),
+		WriteUnits:  int64(cfg.WriteUnits),
+		StorageSize: config.DefaultConfig.Quota.Storage.DataSizeLimit,
+	}, nil
+}
+
+func (o *observabilityService) QuotaUsage(ctx context.Context, request *api.QuotaUsageRequest) (*api.QuotaUsageResponse, error) {
+	return o.Provider.QueryQuotaUsage(ctx, request)
 }
 
 func (o *observabilityService) GetInfo(_ context.Context, _ *api.GetInfoRequest) (*api.GetInfoResponse, error) {
@@ -200,91 +195,6 @@ func (o *observabilityService) RegisterHTTP(router chi.Router, inproc *inprocgrp
 func (o *observabilityService) RegisterGRPC(grpc *grpc.Server) error {
 	api.RegisterObservabilityServer(grpc, o)
 	return nil
-}
-
-func formQuery(ctx context.Context, req *api.QueryTimeSeriesMetricsRequest) (string, error) {
-	// final version examples:
-	// sum:tigris.requests_count_ok.count{db:ycsb_tigris,collection:user_tables}.as_rate()
-	// sum:tigris.requests_count_ok.count{db:ycsb_tigris,tigris_tenant:default_namespace} by {db,collection}.as_rate()
-	ddQuery := fmt.Sprintf("%s:%s", strings.ToLower(req.SpaceAggregation.String()), req.MetricName)
-	var tags []string
-
-	switch req.TigrisOperation {
-	case api.TigrisOperation_WRITE:
-		tags = append(tags, "grpc_method IN (insert,update,delete,replace,publish) AND ")
-	case api.TigrisOperation_READ:
-		tags = append(tags, "grpc_method IN (read,search,subscribe) AND ")
-	case api.TigrisOperation_METADATA:
-		tags = append(tags, "grpc_method IN (createorupdatecollection,dropcollection,listdatabases,listcollections,createdatabase,dropdatabase,describedatabase,describecollection) AND ")
-	}
-
-	if config.GetEnvironment() != "" {
-		tags = append(tags, "env:"+config.GetEnvironment()+" AND ")
-	}
-
-	if req.Db != "" {
-		tags = append(tags, "db:"+req.Db+" AND ")
-	}
-	if req.Collection != "" {
-		tags = append(tags, "collection:"+req.Collection+" AND ")
-	}
-	namespace, err := request.GetNamespace(ctx)
-	if err == nil && namespace != "" {
-		tags = append(tags, "tigris_tenant:"+namespace+" AND ")
-	}
-
-	if req.Quantile != 0 {
-		tags = append(tags, "quantile:"+fmt.Sprintf("%.3g", req.Quantile)+" AND ")
-	}
-
-	if len(tags) == 0 {
-		ddQuery = fmt.Sprintf("%s{*}", ddQuery)
-	} else {
-		tagsQuery := ""
-		for i := range tags {
-			tagsQuery += tags[i]
-		}
-		tagsQuery = strings.TrimSuffix(tagsQuery, " AND ")
-
-		ddQuery = fmt.Sprintf("%s{%s}", ddQuery, tagsQuery)
-	}
-
-	if len(req.SpaceAggregatedBy) > 0 {
-		aggregationBy := "by {"
-		for _, field := range req.SpaceAggregatedBy {
-			aggregationBy = fmt.Sprintf("%s%s,", aggregationBy, field)
-		}
-		// remove trailing ,
-		aggregationBy = aggregationBy[0 : len(aggregationBy)-1]
-		aggregationBy = fmt.Sprintf("%s}", aggregationBy)
-		ddQuery = fmt.Sprintf("%s %s", ddQuery, aggregationBy)
-	}
-
-	if req.Function != api.MetricQueryFunction_NONE {
-		ddQuery = fmt.Sprintf("%s.as_%s()", ddQuery, strings.ToLower(req.Function.String()))
-	}
-	for _, additionalFunction := range req.AdditionalFunctions {
-		if additionalFunction.Rollup != nil {
-			ddQuery = fmt.Sprintf("%s.rollup(%s, %d)", ddQuery, convertToDDAggregatorFunc(additionalFunction.Rollup.Aggregator), additionalFunction.Rollup.Interval)
-		}
-	}
-	return ddQuery, nil
-}
-
-func convertToDDAggregatorFunc(aggregator api.RollupAggregator) string {
-	switch aggregator {
-	case api.RollupAggregator_ROLLUP_AGGREGATOR_AVG:
-		return "avg"
-	case api.RollupAggregator_ROLLUP_AGGREGATOR_SUM:
-		return "sum"
-	case api.RollupAggregator_ROLLUP_AGGREGATOR_COUNT:
-		return "count"
-	case api.RollupAggregator_ROLLUP_AGGREGATOR_MIN:
-		return "min"
-	case api.RollupAggregator_ROLLUP_AGGREGATOR_MAX:
-		return "max"
-	}
-	return ""
 }
 
 func isAllowedMetricQueryInput(tagValue string) bool {

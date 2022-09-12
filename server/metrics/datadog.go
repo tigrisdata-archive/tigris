@@ -1,0 +1,221 @@
+// Copyright 2022 Tigris Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package metrics
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/DataDog/datadog-api-client-go/api/v1/datadog"
+	"github.com/rs/zerolog/log"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/server/config"
+	ulog "github.com/tigrisdata/tigris/util/log"
+)
+
+var (
+	dDApiKey           = "DD-API-KEY" //nolint:golint,gosec
+	dDAppKey           = "DD-APPLICATION-KEY"
+	rateLimitLimit     = "X-RateLimit-Period"
+	rateLimitPeriod    = "X-RateLimit-Period"
+	rateLimitRemaining = "X-RateLimit-Remaining"
+	rateLimitReset     = "X-RateLimit-Reset"
+	rateLimitName      = "X-RateLimit-Name"
+)
+
+type Datadog struct {
+	apiClient *datadog.APIClient
+}
+
+func InitDatadog(cfg *config.Config) *Datadog {
+	d := Datadog{}
+	c := datadog.NewConfiguration()
+	c.AddDefaultHeader(dDApiKey, cfg.Observability.ApiKey)
+	c.AddDefaultHeader(dDAppKey, cfg.Observability.AppKey)
+
+	d.apiClient = datadog.NewAPIClient(c)
+
+	return &d
+}
+
+func (d *Datadog) Query(ctx context.Context, from int64, to int64, query string) (*datadog.MetricsQueryResponse, error) {
+	resp, hResp, err := d.apiClient.MetricsApi.QueryMetrics(ctx, from, to, query)
+	if ulog.E(err) {
+		return nil, errors.Internal("Failed to query metrics: reason = " + err.Error())
+	}
+	defer func() { _ = hResp.Body.Close() }()
+
+	if hResp.StatusCode == http.StatusTooManyRequests {
+		log.Warn().Str(rateLimitLimit, hResp.Header.Get(rateLimitLimit)).
+			Str(rateLimitPeriod, hResp.Header.Get(rateLimitPeriod)).
+			Str(rateLimitRemaining, hResp.Header.Get(rateLimitRemaining)).
+			Str(rateLimitReset, hResp.Header.Get(rateLimitReset)).
+			Str(rateLimitName, hResp.Header.Get(rateLimitName)).
+			Msgf("Datadog rate-limit hit")
+		return nil, errors.ResourceExhausted("Failed to get query metrics: reason = rate-limited, reason = %s", resp.GetError())
+	}
+
+	if resp.HasError() {
+		log.Error().Msgf("Datadog response status code=%d", hResp.StatusCode)
+		return nil, api.Errorf(api.FromHttpCode(hResp.StatusCode), "Failed to get query metrics: reason = "+resp.GetError())
+	}
+
+	return &resp, nil
+}
+
+func FormDatadogQuery(namespace string, req *api.QueryTimeSeriesMetricsRequest) (string, error) {
+	return FormDatadogQueryNoMeta(namespace, false, req)
+}
+
+func FormDatadogQueryNoMeta(namespace string, noMeta bool, req *api.QueryTimeSeriesMetricsRequest) (string, error) {
+	// final version examples:
+	// sum:tigris.requests_count_ok.count{db:ycsb_tigris,collection:user_tables}.as_rate()
+	// sum:tigris.requests_count_ok.count{db:ycsb_tigris,tigris_tenant:default_namespace} by {db,collection}.as_rate()
+	ddQuery := fmt.Sprintf("%s:%s", strings.ToLower(req.SpaceAggregation.String()), req.MetricName)
+	var tags []string
+
+	switch {
+	case req.TigrisOperation == api.TigrisOperation_WRITE:
+		if noMeta {
+			tags = append(tags, "grpc_method IN (createdatabase,dropdatabase,createorupdatecollection,dropcollection,insert,update,delete,replace,publish)")
+		} else {
+			tags = append(tags, "grpc_method IN (insert,update,delete,replace,publish)")
+		}
+	case req.TigrisOperation == api.TigrisOperation_READ:
+		if noMeta {
+			tags = append(tags, "grpc_method IN (listdatabases,listcollections,describedatabase,describecollection, read,search,subscribe)")
+		} else {
+			tags = append(tags, "grpc_method IN (read,search,subscribe)")
+		}
+	case req.TigrisOperation == api.TigrisOperation_METADATA:
+		tags = append(tags, "grpc_method IN (createorupdatecollection,dropcollection,listdatabases,listcollections,createdatabase,dropdatabase,describedatabase,describecollection)")
+	}
+
+	if config.GetEnvironment() != "" {
+		tags = append(tags, "env:"+config.GetEnvironment())
+	}
+
+	if req.Db != "" {
+		tags = append(tags, "db:"+req.Db)
+	}
+
+	if req.Collection != "" {
+		tags = append(tags, "collection:"+req.Collection)
+	}
+
+	if namespace != "" {
+		tags = append(tags, "tigris_tenant:"+namespace)
+	}
+
+	if req.Quantile != 0 {
+		tags = append(tags, "quantile:"+fmt.Sprintf("%.3g", req.Quantile))
+	}
+
+	if len(tags) == 0 {
+		ddQuery = fmt.Sprintf("%s{*}", ddQuery)
+	} else {
+		tagsQuery := ""
+		for i := range tags {
+			if tagsQuery != "" {
+				tagsQuery += " AND "
+			}
+			tagsQuery += tags[i]
+		}
+
+		ddQuery = fmt.Sprintf("%s{%s}", ddQuery, tagsQuery)
+	}
+
+	if len(req.SpaceAggregatedBy) > 0 {
+		aggregationBy := "by {"
+		for _, field := range req.SpaceAggregatedBy {
+			aggregationBy = fmt.Sprintf("%s%s,", aggregationBy, field)
+		}
+		// remove trailing ,
+		aggregationBy = aggregationBy[0 : len(aggregationBy)-1]
+		aggregationBy = fmt.Sprintf("%s}", aggregationBy)
+		ddQuery = fmt.Sprintf("%s %s", ddQuery, aggregationBy)
+	}
+
+	if req.Function != api.MetricQueryFunction_NONE {
+		ddQuery = fmt.Sprintf("%s.as_%s()", ddQuery, strings.ToLower(req.Function.String()))
+	}
+
+	for _, additionalFunction := range req.AdditionalFunctions {
+		if additionalFunction.Rollup != nil {
+			ddQuery = fmt.Sprintf("%s.rollup(%s, %d)", ddQuery, convertToDDAggregatorFunc(additionalFunction.Rollup.Aggregator), additionalFunction.Rollup.Interval)
+		}
+	}
+
+	return ddQuery, nil
+}
+
+func convertToDDAggregatorFunc(aggregator api.RollupAggregator) string {
+	switch aggregator {
+	case api.RollupAggregator_ROLLUP_AGGREGATOR_AVG:
+		return "avg"
+	case api.RollupAggregator_ROLLUP_AGGREGATOR_SUM:
+		return "sum"
+	case api.RollupAggregator_ROLLUP_AGGREGATOR_COUNT:
+		return "count"
+	case api.RollupAggregator_ROLLUP_AGGREGATOR_MIN:
+		return "min"
+	case api.RollupAggregator_ROLLUP_AGGREGATOR_MAX:
+		return "max"
+	}
+	return ""
+}
+
+func (d *Datadog) GetCurrentMetricValue(ctx context.Context, namespace string, metric string, tp api.TigrisOperation, avgLength time.Duration) (int64, error) {
+	from := time.Now()
+	to := time.Now().Add(-avgLength)
+
+	rateQuery := &api.QueryTimeSeriesMetricsRequest{
+		TigrisOperation:  tp,
+		SpaceAggregation: api.MetricQuerySpaceAggregation_SUM,
+		MetricName:       metric,
+		Function:         api.MetricQueryFunction_RATE,
+		AdditionalFunctions: []*api.AdditionalFunction{
+			{
+				Rollup: &api.RollupFunction{
+					Aggregator: api.RollupAggregator_ROLLUP_AGGREGATOR_AVG,
+					Interval:   int64(avgLength / time.Second),
+				},
+			},
+		},
+	}
+
+	q, err := FormDatadogQueryNoMeta(namespace, true, rateQuery)
+	if err != nil {
+		return 0, err
+	}
+
+	resp, err := d.Query(ctx, from.Unix(), to.Unix(), q)
+	if err != nil {
+		return 0, err
+	}
+
+	if len(resp.GetSeries()) == 1 && len(resp.GetSeries()[0].Pointlist[0]) == 2 &&
+		resp.GetSeries()[0].Pointlist[0][1] != nil {
+		return int64(*resp.GetSeries()[0].Pointlist[0][1]), nil
+	}
+
+	log.Debug().Interface("series", resp.GetSeries()).Msg("Unexpected series len")
+
+	return 0, errors.Internal("Broken remote metric response")
+}

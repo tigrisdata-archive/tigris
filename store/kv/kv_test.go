@@ -438,18 +438,10 @@ func testFullScan(t *testing.T, kv baseKVStore) {
 	require.NoError(t, err)
 }
 
-/*
-type keyRange struct {
-	left  Key
-	right Key
-}
-*/
-
 type kvTestCase struct {
 	name   string
 	insert []baseKeyValue
 	test   []baseKeyValue
-	//	keyRange keyRange
 	result []baseKeyValue
 	err    error
 }

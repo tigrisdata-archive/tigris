@@ -33,6 +33,7 @@ var (
 	SearchMetrics  tally.Scope
 	SessionMetrics tally.Scope
 	SizeMetrics    tally.Scope
+	QuotaMetrics   tally.Scope
 	NetworkMetrics tally.Scope
 	AuthMetrics    tally.Scope
 )
@@ -87,42 +88,48 @@ func InitializeMetrics() io.Closer {
 		// Panics with .
 		Separator: promreporter.DefaultSeparator,
 	}, 1*time.Second)
-	if config.DefaultConfig.Metrics.Enabled {
-		if config.DefaultConfig.Metrics.Requests.Enabled {
+
+	if cfg := config.DefaultConfig.Metrics; cfg.Enabled {
+		if cfg.Requests.Enabled {
 			// Request level metrics (HTTP and GRPC)
 			Requests = root.SubScope("requests")
 			initializeRequestScopes()
 		}
-		if config.DefaultConfig.Metrics.Fdb.Enabled {
+		if cfg.Fdb.Enabled {
 			// FDB level metrics
 			FdbMetrics = root.SubScope("fdb")
 			initializeFdbScopes()
 		}
-		if config.DefaultConfig.Metrics.Search.Enabled {
+		if cfg.Search.Enabled {
 			// Search level metrics
 			SearchMetrics = root.SubScope("search")
 			initializeSearchScopes()
 		}
-		if config.DefaultConfig.Metrics.Session.Enabled {
+		if cfg.Session.Enabled {
 			// Session level metrics
 			SessionMetrics = root.SubScope("session")
 			initializeSessionScopes()
 		}
-		if config.DefaultConfig.Metrics.Size.Enabled {
+		if cfg.Size.Enabled {
 			// Size metrics
 			SizeMetrics = root.SubScope("size")
 			initializeSizeScopes()
 		}
-		if config.DefaultConfig.Metrics.Network.Enabled {
+		if cfg.Network.Enabled {
 			// Network metrics
 			NetworkMetrics = root.SubScope("net")
 			initializeNetworkScopes()
 		}
-		if config.DefaultConfig.Metrics.Auth.Enabled {
+		if cfg.Auth.Enabled {
 			// Auth metrics
 			AuthMetrics = root.SubScope("auth")
 			initializeAuthScopes()
 		}
+
+		if config.DefaultConfig.Quota.Namespace.Enabled {
+			initializeQuotaScopes()
+		}
 	}
+
 	return closer
 }

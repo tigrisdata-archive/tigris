@@ -18,25 +18,19 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
-	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
-	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
-var kvStore kv.KeyValueStore
-
-func TestQuota(t *testing.T) {
+func TestStorageQuota(t *testing.T) {
 	tenants, ctx, cancel := metadata.NewTestTenantMgr(kvStore)
 	defer cancel()
 
@@ -81,39 +75,18 @@ func TestQuota(t *testing.T) {
 	table, err := metadata.NewEncoder().EncodeTableName(tenant.GetNamespace(), db1, coll1)
 	require.NoError(t, err)
 
-	err = Init(tenants, &config.Config{
-		Quota: config.QuotaConfig{
-			Namespace: config.NamespaceLimitsConfig{
-				Enabled: true,
-				Default: config.LimitsConfig{
-					ReadUnits:  100,
-					WriteUnits: 50,
-				},
-				Node: config.LimitsConfig{
-					ReadUnits:  10,
-					WriteUnits: 5,
-				},
-				RefreshInterval: 1 * time.Second,
-			},
-			Node: config.LimitsConfig{
-				Enabled:    true,
-				ReadUnits:  10,
-				WriteUnits: 10,
-			},
-			Storage: config.StorageLimitsConfig{
-				Enabled:         true,
-				RefreshInterval: 50 * time.Millisecond,
-				DataSizeLimit:   100,
-			},
+	m := initStorage(tenants, &config.QuotaConfig{
+		Storage: config.StorageLimitsConfig{
+			Enabled:         true,
+			RefreshInterval: 50 * time.Millisecond,
+			DataSizeLimit:   100,
 		},
 	})
-	require.NoError(t, err)
-	defer Cleanup()
 
-	require.NoError(t, Allow(ctx, ns, 10, true))
-	require.NoError(t, Allow(ctx, ns, 20, true))
-	require.NoError(t, Allow(ctx, ns, 10, false))
-	require.NoError(t, Allow(ctx, ns, 20, false))
+	require.NoError(t, m.Allow(ctx, ns, 10, true))
+	require.NoError(t, m.Allow(ctx, ns, 20, true))
+	require.NoError(t, m.Allow(ctx, ns, 10, false))
+	require.NoError(t, m.Allow(ctx, ns, 20, false))
 
 	docSize := 10 * 1024
 	for i := 0; i < 10; i++ {
@@ -123,41 +96,11 @@ func TestQuota(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	require.Equal(t, ErrStorageSizeExceeded, Allow(ctx, ns, 1, true))
-	require.NoError(t, Allow(ctx, ns, 0, false))
-	require.Equal(t, ErrStorageSizeExceeded, Wait(ctx, ns, 1, true))
-	require.NoError(t, Wait(ctx, ns, 0, false))
+	require.Equal(t, ErrStorageSizeExceeded, m.Allow(ctx, ns, 0, true))
+	require.NoError(t, m.Allow(ctx, ns, 0, false))
+	require.Equal(t, ErrStorageSizeExceeded, m.Wait(ctx, ns, 0, true))
+	require.NoError(t, m.Wait(ctx, ns, 0, false))
 
-	i := 0
-	for ; err != ErrReadUnitsExceeded && i < 15; i++ {
-		err = Allow(ctx, ns, 2048, false)
-	}
-	assert.Equal(t, 10, i)
-
-	i = 0
-	for ; err != ErrWriteUnitsExceeded && err != ErrStorageSizeExceeded && i < 10; i++ {
-		err = Allow(ctx, ns, 512, true) // < 1024 = 1 unit
-	}
-	assert.Equal(t, 1, i)
-
+	m.Cleanup()
 	require.NoError(t, kvStore.DropTable(ctx, table))
-}
-
-func TestMain(m *testing.M) {
-	ulog.Configure(ulog.LogConfig{Level: "disabled", Format: "console"})
-
-	metrics.InitializeMetrics()
-	rand.Seed(time.Now().Unix())
-
-	fdbCfg, err := config.GetTestFDBConfig("../..")
-	if err != nil {
-		panic(fmt.Sprintf("failed to init FDB config: %v", err))
-	}
-
-	kvStore, err = kv.NewKeyValueStore(fdbCfg)
-	if err != nil {
-		panic(fmt.Sprintf("failed to init FDB KV %v", err))
-	}
-
-	os.Exit(m.Run())
 }

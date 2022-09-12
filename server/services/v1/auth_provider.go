@@ -34,6 +34,7 @@ import (
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
+	"golang.org/x/net/context/ctxhttp"
 )
 
 const (
@@ -76,7 +77,7 @@ func (a *Auth0) managementToTigrisErrorCode(err error) api.Code {
 func (a *Auth0) GetAccessToken(ctx context.Context, req *api.GetAccessTokenRequest) (*api.GetAccessTokenResponse, error) {
 	switch req.GrantType {
 	case api.GrantType_REFRESH_TOKEN:
-		return getAccessTokenUsingRefreshToken(req, a)
+		return getAccessTokenUsingRefreshToken(ctx, req, a)
 	case api.GrantType_CLIENT_CREDENTIALS:
 		return getAccessTokenUsingClientCredentials(ctx, req, a)
 	}
@@ -297,14 +298,14 @@ func getCurrentSub(ctx context.Context) (string, error) {
 	return token.Sub, nil
 }
 
-func getAccessTokenUsingRefreshToken(req *api.GetAccessTokenRequest, a *Auth0) (*api.GetAccessTokenResponse, error) {
+func getAccessTokenUsingRefreshToken(ctx context.Context, req *api.GetAccessTokenRequest, a *Auth0) (*api.GetAccessTokenResponse, error) {
 	data := url.Values{
 		"refresh_token": {req.RefreshToken},
 		"client_id":     {a.AuthConfig.ClientId},
 		"grant_type":    {refreshToken},
 		"scope":         {scope},
 	}
-	resp, err := http.PostForm(a.AuthConfig.ExternalTokenURL, data)
+	resp, err := ctxhttp.PostForm(ctx, &http.Client{}, a.AuthConfig.ExternalTokenURL, data)
 	if err != nil {
 		return nil, errors.Internal("Failed to get access token: reason = %s", err.Error())
 	}
@@ -380,7 +381,7 @@ func getAccessTokenUsingClientCredentials(ctx context.Context, req *api.GetAcces
 		return nil, tokenError("Failed to get access token: reason = failed to create external request payload", err)
 	}
 
-	resp, err := http.Post(a.AuthConfig.ExternalTokenURL, "application/json", bytes.NewBuffer(jsonPayload))
+	resp, err := ctxhttp.Post(ctx, &http.Client{}, a.AuthConfig.ExternalTokenURL, "application/json", bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return nil, tokenError("Failed to get access token: reason = failed to make external request", err)
 	}

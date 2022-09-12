@@ -107,14 +107,15 @@ type TenantManager struct {
 	mdNameRegistry    MDNameRegistry
 	encoder           Encoder
 	tableKeyGenerator *TableKeyGenerator
+	txMgr             *transaction.Manager
 }
 
-func NewTenantManager(kvStore kv.KeyValueStore, searchStore search.Store) *TenantManager {
+func NewTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, txMgr *transaction.Manager) *TenantManager {
 	mdNameRegistry := &DefaultMDNameRegistry{}
-	return newTenantManager(kvStore, searchStore, mdNameRegistry)
+	return newTenantManager(kvStore, searchStore, mdNameRegistry, txMgr)
 }
 
-func newTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, mdNameRegistry MDNameRegistry) *TenantManager {
+func newTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, mdNameRegistry MDNameRegistry, txMgr *transaction.Manager) *TenantManager {
 	return &TenantManager{
 		kvStore:           kvStore,
 		searchStore:       searchStore,
@@ -126,20 +127,21 @@ func newTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, mdName
 		versionH:          &VersionHandler{},
 		mdNameRegistry:    mdNameRegistry,
 		tableKeyGenerator: NewTableKeyGenerator(),
+		txMgr:             txMgr,
 	}
 }
 
-func (m *TenantManager) EnsureDefaultNamespace(txMgr *transaction.Manager) error {
+func (m *TenantManager) EnsureDefaultNamespace() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, err := m.CreateOrGetTenant(ctx, txMgr, NewDefaultNamespace())
+	_, err := m.CreateOrGetTenant(ctx, NewDefaultNamespace())
 	return err
 }
 
 // CreateOrGetTenant is a thread safe implementation of creating a new tenant. It returns the tenant if it already exists.
 // This is mainly returning the tenant to avoid calling "Get" again after creating the tenant. This method is expensive
 // as it reloads the existing tenants from the disk if it sees the tenant is not present in the cache.
-func (m *TenantManager) CreateOrGetTenant(ctx context.Context, txMgr *transaction.Manager, namespace Namespace) (tenant *Tenant, err error) {
+func (m *TenantManager) CreateOrGetTenant(ctx context.Context, namespace Namespace) (tenant *Tenant, err error) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -154,7 +156,7 @@ func (m *TenantManager) CreateOrGetTenant(ctx context.Context, txMgr *transactio
 		}
 	}
 
-	tx, e := txMgr.StartTx(ctx)
+	tx, e := m.txMgr.StartTx(ctx)
 	if ulog.E(e) {
 		return nil, e
 	}
@@ -232,7 +234,7 @@ func (m *TenantManager) GetNamespaceId(namespaceName string) (uint32, error) {
 
 // GetTenant is responsible for returning the tenant from the cache. If the tenant is not available in the cache then
 // this method will attempt to load it from the database and will update the tenant manager cache accordingly.
-func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string, txMgr *transaction.Manager) (tenant *Tenant, err error) {
+func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string) (tenant *Tenant, err error) {
 	if tenant = m.getTenantFromCache(namespaceName); tenant != nil {
 		return
 	}
@@ -245,7 +247,7 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string, txM
 	// this will never create new namespace
 	// when the authn/authz is setup correctly
 	// this is for reading namespaces from storage into cache
-	tx, err := txMgr.StartTx(ctx)
+	tx, err := m.txMgr.StartTx(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1054,8 +1056,9 @@ func NewTestTenantMgr(kvStore kv.KeyValueStore) (*TenantManager, context.Context
 		ReserveSB:  fmt.Sprintf("test_tenant_reserve_%x", rand.Uint64()),  //nolint:golint,gosec
 		EncodingSB: fmt.Sprintf("test_tenant_encoding_%x", rand.Uint64()), //nolint:golint,gosec
 		SchemaSB:   fmt.Sprintf("test_tenant_schema_%x", rand.Uint64()),   //nolint:golint,gosec
-
-	})
+	},
+		transaction.NewManager(kvStore),
+	)
 
 	_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	_ = kvStore.DropTable(ctx, m.mdNameRegistry.EncodingSubspaceName())

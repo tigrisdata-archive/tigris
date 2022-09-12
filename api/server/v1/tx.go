@@ -20,25 +20,40 @@ import (
 	"google.golang.org/grpc"
 )
 
-var (
-	methodPrefix             = "/tigrisdata.v1.Tigris/"
-	insert                   = methodPrefix + "Insert"
-	replace                  = methodPrefix + "Replace"
-	update                   = methodPrefix + "Update"
-	delete                   = methodPrefix + "Delete"
-	read                     = methodPrefix + "Read"
-	commitTransaction        = methodPrefix + "CommitTransaction"
-	rollbackTransaction      = methodPrefix + "RollbackTransaction"
-	dropCollection           = methodPrefix + "DropCollection"
-	listCollection           = methodPrefix + "ListCollections"
-	createOrUpdateCollection = methodPrefix + "CreateOrUpdateCollection"
+const (
+	methodPrefix = "/tigrisdata.v1.Tigris/"
+
+	InsertMethodName  = methodPrefix + "Insert"
+	ReplaceMethodName = methodPrefix + "Replace"
+	UpdateMethodName  = methodPrefix + "Update"
+	DeleteMethodName  = methodPrefix + "Delete"
+	ReadMethodName    = methodPrefix + "Read"
+
+	SearchMethodName = methodPrefix + "Search"
+
+	SubscribeMethodName = methodPrefix + "Subscribe"
+
+	EventsMethodName = methodPrefix + "Events"
+
+	CommitTransactionMethodName   = methodPrefix + "CommitTransaction"
+	RollbackTransactionMethodName = methodPrefix + "RollbackTransaction"
+
+	CreateOrUpdateCollectionMethodName = methodPrefix + "CreateOrUpdateCollection"
+	DropCollectionMethodName           = methodPrefix + "DropCollection"
+
+	ListDatabasesMethodName   = methodPrefix + "ListDatabases"
+	ListCollectionsMethodName = methodPrefix + "ListCollections"
+
+	DescribeDatabaseMethodName   = methodPrefix + "DescribeDatabase"
+	DescribeCollectionMethodName = methodPrefix + "DescribeCollection"
 )
 
 func IsTxSupported(ctx context.Context) bool {
 	m, _ := grpc.Method(ctx)
 	switch m {
-	case insert, replace, update, delete, read, commitTransaction, rollbackTransaction,
-		dropCollection, listCollection, createOrUpdateCollection:
+	case InsertMethodName, ReplaceMethodName, UpdateMethodName, DeleteMethodName, ReadMethodName,
+		CommitTransactionMethodName, RollbackTransactionMethodName,
+		DropCollectionMethodName, ListCollectionsMethodName, CreateOrUpdateCollectionMethodName:
 		return true
 	default:
 		return false

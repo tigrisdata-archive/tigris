@@ -80,18 +80,19 @@ func mainWithCode() int {
 		return 1
 	}
 
-	tenantMgr := metadata.NewTenantManager(kvStore, searchStore)
-	log.Info().Msg("initialized tenant manager")
-
 	txMgr := transaction.NewManager(kvStore)
 	log.Info().Msg("initialized transaction manager")
 
-	if err = tenantMgr.EnsureDefaultNamespace(txMgr); err != nil {
+	tenantMgr := metadata.NewTenantManager(kvStore, searchStore, txMgr)
+	log.Info().Msg("initialized tenant manager")
+
+	if err = tenantMgr.EnsureDefaultNamespace(); err != nil {
 		log.Error().Err(err).Msg("error initializing default namespace")
 		return 1
 	}
 
-	quota.Init(tenantMgr, txMgr, &config.DefaultConfig.Quota)
+	_ = quota.Init(tenantMgr, &config.DefaultConfig)
+	defer quota.Cleanup()
 
 	mx := muxer.NewMuxer(&config.DefaultConfig)
 	mx.RegisterServices(kvStore, searchStore, tenantMgr, txMgr)

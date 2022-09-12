@@ -34,12 +34,11 @@ import (
 var kvStore kv.KeyValueStore
 
 func TestTenantManager_CreateOrGetTenant(t *testing.T) {
-	tm := transaction.NewManager(kvStore)
 	t.Run("create_tenant", func(t *testing.T) {
 		m, ctx, cancel := NewTestTenantMgr(kvStore)
 		defer cancel()
 
-		_, err := m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test1", 2})
+		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2})
 		require.NoError(t, err)
 
 		tenant := m.tenants["ns-test1"]
@@ -54,10 +53,10 @@ func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 		m, ctx, cancel := NewTestTenantMgr(kvStore)
 		defer cancel()
 
-		_, err := m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test1", 2})
+		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2})
 		require.NoError(t, err)
 
-		_, err = m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test2", 3})
+		_, err = m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test2", 3})
 		require.NoError(t, err)
 
 		tenant := m.tenants["ns-test1"]
@@ -80,11 +79,11 @@ func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 		m, ctx, cancel := NewTestTenantMgr(kvStore)
 		defer cancel()
 
-		_, err := m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test1", 2})
+		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2})
 		require.NoError(t, err)
 
 		// should fail now
-		_, err = m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test1", 3})
+		_, err = m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 3})
 		require.Equal(t, "id is already assigned to 'ns-test1'", err.(*api.TigrisError).Error())
 
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
@@ -93,12 +92,12 @@ func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 		m, ctx, cancel := NewTestTenantMgr(kvStore)
 		defer cancel()
 
-		_, err := m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test1", 2})
+		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2})
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m.idToTenantMap))
 
 		// should fail now
-		_, err = m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test2", 2})
+		_, err = m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test2", 2})
 		require.Equal(t, "id is already assigned to the namespace 'ns-test1'", err.(*api.TigrisError).Error())
 		require.Equal(t, "ns-test1", m.idToTenantMap[uint32(2)])
 		require.Equal(t, 1, len(m.idToTenantMap))
@@ -182,7 +181,7 @@ func TestTenantManager_CreateDatabases(t *testing.T) {
 		m, ctx, cancel := NewTestTenantMgr(kvStore)
 		defer cancel()
 
-		_, err := m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test1", 2})
+		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2})
 		require.NoError(t, err)
 		tenant := m.tenants["ns-test1"]
 
@@ -216,7 +215,7 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 		m, ctx, cancel := NewTestTenantMgr(kvStore)
 		defer cancel()
 
-		_, err := m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test1", 2})
+		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2})
 		require.NoError(t, err)
 
 		tenant := m.tenants["ns-test1"]
@@ -285,7 +284,7 @@ func TestTenantManager_DropCollection(t *testing.T) {
 		m, ctx, cancel := NewTestTenantMgr(kvStore)
 		defer cancel()
 
-		_, err := m.CreateOrGetTenant(ctx, tm, &TenantNamespace{"ns-test1", 2})
+		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2})
 		require.NoError(t, err)
 
 		tenant := m.tenants["ns-test1"]
@@ -354,10 +353,10 @@ func TestTenantManager_DataSize(t *testing.T) {
 	m, ctx, cancel := NewTestTenantMgr(kvStore)
 	defer cancel()
 
-	_, err := m.CreateOrGetTenant(context.TODO(), tm, &TenantNamespace{"ns-test1", 2})
+	_, err := m.CreateOrGetTenant(context.TODO(), &TenantNamespace{"ns-test1", 2})
 	require.NoError(t, err)
 
-	_, err = m.CreateOrGetTenant(context.TODO(), tm, &TenantNamespace{"ns-test2", 3})
+	_, err = m.CreateOrGetTenant(context.TODO(), &TenantNamespace{"ns-test2", 3})
 	require.NoError(t, err)
 
 	tenant := m.tenants["ns-test1"]

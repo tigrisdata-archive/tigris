@@ -17,31 +17,31 @@ package quota
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/errors"
-	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
-	"github.com/tigrisdata/tigris/server/request"
-	"github.com/tigrisdata/tigris/server/transaction"
-	ulog "github.com/tigrisdata/tigris/util/log"
 	"go.uber.org/atomic"
-	"golang.org/x/time/rate"
 )
 
 var (
-	ErrRateExceeded        = errors.ResourceExhausted("request rate limit exceeded")
-	ErrThroughputExceeded  = errors.ResourceExhausted("request throughput limit exceeded")
+	ErrReadUnitsExceeded   = errors.ResourceExhausted("request read rate exceeded")
+	ErrWriteUnitsExceeded  = errors.ResourceExhausted("request write rate exceeded")
 	ErrStorageSizeExceeded = errors.ResourceExhausted("data size limit exceeded")
 )
 
+type Quota interface {
+	Allow(ctx context.Context, namespace string, size int, isWrite bool) error
+	Wait(ctx context.Context, namespace string, size int, isWrite bool) error
+	Cleanup()
+}
+
 type State struct {
-	Rate               *rate.Limiter
-	WriteThroughput    *rate.Limiter
-	ReadThroughput     *rate.Limiter
+	Read  Limiter
+	Write Limiter
+
 	Size               atomic.Int64
 	SizeUpdateAt       atomic.Int64
 	TenantSizeUpdateAt atomic.Int64
@@ -50,215 +50,114 @@ type State struct {
 }
 
 type Manager struct {
-	tenantQuota sync.Map
-	cfg         *config.QuotaConfig
-	tenantMgr   *metadata.TenantManager
-	txMgr       *transaction.Manager
+	quota []Quota
 }
 
-var (
-	mgr               Manager
-	lastGlobalRefresh int64
-)
+var mgr Manager
 
-func Init(t *metadata.TenantManager, tx *transaction.Manager, c *config.QuotaConfig) {
-	mgr = *newManager(t, tx, c)
-}
+// this is extracted from Init for tests.
+func initManager(tm *metadata.TenantManager, cfg *config.Config) *Manager {
+	var q []Quota
 
-// Allow checks rate, write throughput and storage size limits for the namespace
-// and returns error if at least one of them is exceeded.
-func Allow(ctx context.Context, namespace string, reqSize int) error {
-	// Emit size metrics regardless of enabled quota
-	mgr.updateTenantMetrics(ctx, namespace)
-
-	// Update all tenant quota and size metrics periodically
-	mgr.updateAll(ctx)
-
-	if !config.DefaultConfig.Quota.Enabled {
-		return nil
+	if cfg.Quota.ReadUnitSize != 0 {
+		config.ReadUnitSize = cfg.Quota.ReadUnitSize
 	}
 
-	if namespace == request.UnknownValue {
-		method := request.UnknownValue
-		reqMetadata, err := request.GetRequestMetadata(ctx)
-		if err != nil {
-			ulog.E(err)
+	if cfg.Quota.WriteUnitSize != 0 {
+		config.WriteUnitSize = cfg.Quota.WriteUnitSize
+	}
+
+	log.Debug().Int("read_unit_size", config.ReadUnitSize).Int("write_unit_size", config.WriteUnitSize).Msg("Initializing quota manager")
+
+	// metrics calculation is piggybacked to storage quota, so initialize
+	// storage quota manager even when quota is disabled, but metrics are enabled
+	if cfg.Quota.Storage.Enabled || cfg.Metrics.Size.Enabled {
+		q = append(q, initStorage(tm, &cfg.Quota))
+	}
+
+	if cfg.Quota.Node.Enabled {
+		q = append(q, initNode(&cfg.Quota))
+	}
+
+	if cfg.Quota.Namespace.Enabled {
+		if cfg.Observability.Provider == "datadog" {
+			if cfg.Quota.Namespace.RefreshInterval <= 0 {
+				log.Fatal().Msg("refresh interval should be non-empty")
+			}
+
+			q = append(q, initNamespace(tm, &cfg.Quota, initDatadogMetrics(cfg)))
 		} else {
-			method = reqMetadata.GetFullMethod()
-		}
-		log.Info().Str("namespace", namespace).Str("fullMethod", method).Msg("Invalid request received")
-	}
-
-	return mgr.check(ctx, namespace, reqSize)
-}
-
-func (m *Manager) updateAll(ctx context.Context) {
-	currentTimeStamp := time.Now().Unix()
-
-	if currentTimeStamp > lastGlobalRefresh+m.cfg.AllTenantsRefreshInternal {
-		if m.cfg.Enabled {
-			m.updateAllTenantSizes(ctx)
-		}
-		m.updateAllMetrics(ctx)
-		lastGlobalRefresh = currentTimeStamp
-	}
-}
-
-func newManager(t *metadata.TenantManager, tx *transaction.Manager, c *config.QuotaConfig) *Manager {
-	return &Manager{cfg: c, tenantMgr: t, txMgr: tx}
-}
-
-// GetState returns quota state of the given namespace.
-func GetState(namespace string) *State {
-	return mgr.getState(namespace)
-}
-
-func (m *Manager) getState(namespace string) *State {
-	is, ok := m.tenantQuota.Load(namespace)
-	if !ok {
-		// Create new state if didn't exist before
-		is = &State{
-			Rate:            rate.NewLimiter(rate.Limit(m.cfg.RateLimit), 10),
-			WriteThroughput: rate.NewLimiter(rate.Limit(m.cfg.WriteThroughputLimit), m.cfg.WriteThroughputLimit),
-			ReadThroughput:  rate.NewLimiter(rate.Limit(m.cfg.ReadThroughputLimit), m.cfg.ReadThroughputLimit),
-		}
-		m.tenantQuota.Store(namespace, is)
-	}
-
-	return is.(*State)
-}
-
-func (m *Manager) check(ctx context.Context, namespace string, size int) error {
-	s := m.getState(namespace)
-
-	if !s.Rate.Allow() {
-		return ErrRateExceeded
-	}
-
-	if !s.WriteThroughput.AllowN(time.Now(), size) {
-		return ErrThroughputExceeded
-	}
-
-	return m.checkStorage(ctx, namespace, s, size)
-}
-
-func getDbSize(ctx context.Context, tenant *metadata.Tenant, db *metadata.Database) int64 {
-	dbSize, err := tenant.DatabaseSize(ctx, db)
-	if err != nil {
-		ulog.E(err)
-	}
-	return dbSize
-}
-
-func getCollSize(ctx context.Context, tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection) int64 {
-	collSize, err := tenant.CollectionSize(ctx, db, coll)
-	if err != nil {
-		ulog.E(err)
-	}
-	return collSize
-}
-
-func (m *Manager) getTenant(ctx context.Context, namespace string) *metadata.Tenant {
-	tenant, err := m.tenantMgr.GetTenant(ctx, namespace, m.txMgr)
-	ulog.E(err)
-	return tenant
-}
-
-func (m *Manager) getTenantSize(ctx context.Context, namespace string) int64 {
-	tenant := m.getTenant(ctx, namespace)
-	if tenant == nil {
-		return 0
-	}
-	size, err := tenant.Size(ctx)
-	ulog.E(err)
-	return size
-}
-
-func (m *Manager) updateMetricsForNamespace(ctx context.Context, namespace string) {
-	if m.txMgr == nil {
-		return
-	}
-
-	tenant := m.getTenant(ctx, namespace)
-	if tenant == nil {
-		return
-	}
-
-	for _, dbName := range tenant.ListDatabases(ctx) {
-		db, err := tenant.GetDatabase(ctx, dbName)
-		if err != nil {
-			ulog.E(err)
-			return
-		}
-		metrics.UpdateDbSizeMetrics(namespace, dbName, getDbSize(ctx, tenant, db))
-		for _, coll := range db.ListCollection() {
-			metrics.UpdateCollectionSizeMetrics(namespace, dbName, coll.Name, getCollSize(ctx, tenant, db, coll))
+			q = append(q, initNamespace(tm, &cfg.Quota, initNoopMetrics(cfg)))
 		}
 	}
 
-	metrics.UpdateNameSpaceSizeMetrics(namespace, m.getTenantSize(ctx, namespace))
+	return &Manager{quota: q}
 }
 
-func (m *Manager) updateAllMetrics(ctx context.Context) {
-	for _, namespace := range m.tenantMgr.GetNamespaceNames() {
-		m.updateMetricsForNamespace(ctx, namespace)
+func Init(tm *metadata.TenantManager, cfg *config.Config) error {
+	mgr = *initManager(tm, cfg)
+
+	return nil
+}
+
+func (m *Manager) cleanup() {
+	for _, q := range mgr.quota {
+		q.Cleanup()
 	}
+	log.Debug().Msg("Cleaned up quota manager")
 }
 
-func (m *Manager) updateTenantSize(ctx context.Context, namespace string) {
-	s := m.getState(namespace)
-	s.SizeLock.Lock()
-	defer s.SizeLock.Unlock()
-
-	currentTimeStamp := time.Now().Unix()
-	s.SizeUpdateAt.Store(currentTimeStamp)
-
-	dsz := m.getTenantSize(ctx, namespace)
-	s.Size.Store(dsz)
+func Cleanup() {
+	mgr.cleanup()
 }
 
-func (m *Manager) updateTenantMetrics(ctx context.Context, namespace string) {
-	s := m.getState(namespace)
-	sz := s.Size.Load()
-	currentTimeStamp := time.Now().Unix()
-
-	if currentTimeStamp >= s.TenantSizeUpdateAt.Load()+m.cfg.TenantSizeRefreshInterval {
-		s.TenantSizeLock.Lock()
-		defer s.TenantSizeLock.Unlock()
-
-		s.TenantSizeUpdateAt.Store(currentTimeStamp)
-		metrics.UpdateNameSpaceSizeMetrics(namespace, sz)
-		m.updateTenantSize(ctx, namespace)
+func unitSize(isWrite bool) int64 {
+	if isWrite {
+		return int64(config.WriteUnitSize)
 	}
+
+	return int64(config.ReadUnitSize)
 }
 
-func (m *Manager) updateAllTenantSizes(ctx context.Context) {
-	for _, namespace := range m.tenantMgr.GetNamespaceNames() {
-		m.updateTenantSize(ctx, namespace)
+func toUnits(size int, isWrite bool) int {
+	us := unitSize(isWrite)
+
+	// + (unitSize - 1) guarantees that fractional part is counted as one unit
+	return int((int64(size) + us - 1) / us)
+}
+
+func reportError(namespace string, size int, isWrite bool, err error) error {
+	if err == ErrReadUnitsExceeded || err == ErrWriteUnitsExceeded {
+		metrics.UpdateQuotaRateThrottled(namespace, toUnits(size, isWrite), isWrite)
+	} else if err == ErrStorageSizeExceeded {
+		metrics.UpdateQuotaStorageThrottled(namespace, size)
 	}
+
+	return err
 }
 
-func (m *Manager) checkStorage(ctx context.Context, namespace string, s *State, size int) error {
-	sz := s.Size.Load()
-	currentTimeStamp := time.Now().Unix()
-
-	if currentTimeStamp < s.SizeUpdateAt.Load()+m.cfg.LimitUpdateInterval {
-		// Use the cached value for size check
-		if sz+int64(size) >= m.cfg.DataSizeLimit {
-			return ErrStorageSizeExceeded
+// Allow checks read, write rates and storage size limits for the namespace
+// and returns error if at least one of them is exceeded.
+func Allow(ctx context.Context, namespace string, size int, isWrite bool) error {
+	for _, q := range mgr.quota {
+		if err := q.Allow(ctx, namespace, size, isWrite); err != nil {
+			return reportError(namespace, size, isWrite, err)
 		}
-		return nil
 	}
 
-	if currentTimeStamp >= s.SizeUpdateAt.Load()+m.cfg.LimitUpdateInterval {
-		m.updateTenantSize(ctx, namespace)
+	metrics.UpdateQuotaUsage(namespace, toUnits(size, isWrite), isWrite)
+
+	return nil
+}
+
+func Wait(ctx context.Context, namespace string, size int, isWrite bool) error {
+	for _, q := range mgr.quota {
+		if err := q.Wait(ctx, namespace, size, isWrite); err != nil {
+			return reportError(namespace, size, isWrite, err)
+		}
 	}
 
-	sz = s.Size.Load()
-
-	if sz+int64(size) >= m.cfg.DataSizeLimit {
-		return ErrStorageSizeExceeded
-	}
+	metrics.UpdateQuotaUsage(namespace, toUnits(size, isWrite), isWrite)
 
 	return nil
 }

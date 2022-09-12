@@ -3,6 +3,7 @@ module github.com/tigrisdata/tigris
 go 1.18
 
 require (
+	github.com/DataDog/datadog-api-client-go v1.16.0
 	github.com/apple/foundationdb/bindings/go v0.0.0-20220521054011-a88e049b28d8
 	github.com/auth0/go-auth0 v0.9.3
 	github.com/auth0/go-jwt-middleware/v2 v2.0.1
@@ -51,6 +52,7 @@ require (
 	github.com/DataDog/datadog-go/v5 v5.1.1 // indirect
 	github.com/DataDog/gostackparse v0.5.0 // indirect
 	github.com/DataDog/sketches-go v1.4.1 // indirect
+	github.com/DataDog/zstd v1.5.0 // indirect
 	github.com/Microsoft/go-winio v0.5.2 // indirect
 	github.com/PuerkitoBio/rehttp v1.1.0 // indirect
 	github.com/ajg/form v1.5.1 // indirect
