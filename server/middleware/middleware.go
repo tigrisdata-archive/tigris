@@ -78,7 +78,9 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 		Logger()
 
 	// The order of the interceptors matter with optional elements in them
-	var streamInterceptors []grpc.StreamServerInterceptor
+	streamInterceptors := []grpc.StreamServerInterceptor{
+		metadataExtractorStream(),
+	}
 
 	if config.Tracing.Enabled {
 		streamInterceptors = append(streamInterceptors, traceStream())
@@ -106,7 +108,9 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 	// error which is not convertible to the internal rest error code.
 
 	// The order of the interceptors matter with optional elements in them
-	var unaryInterceptors []grpc.UnaryServerInterceptor
+	unaryInterceptors := []grpc.UnaryServerInterceptor{
+		metadataExtractorUnary(),
+	}
 
 	if config.Tracing.Enabled {
 		unaryInterceptors = append(unaryInterceptors, traceUnary())
