@@ -70,8 +70,8 @@ const (
 
 func disableAdditionalProperties(properties map[string]*jsonschema.Schema) {
 	for _, p := range properties {
-		p.AdditionalProperties = false
 		if len(p.Properties) > 0 {
+			p.AdditionalProperties = false
 			disableAdditionalProperties(p.Properties)
 		}
 	}
