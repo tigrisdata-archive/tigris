@@ -85,12 +85,14 @@ func None(reqFilter []byte) bool {
 }
 
 type Factory struct {
-	fields []*schema.QueryableField
+	fields    []*schema.QueryableField
+	collation *api.Collation
 }
 
-func NewFactory(fields []*schema.QueryableField) *Factory {
+func NewFactory(fields []*schema.QueryableField, collation *api.Collation) *Factory {
 	return &Factory{
-		fields: fields,
+		fields:    fields,
+		collation: collation,
 	}
 }
 
@@ -218,12 +220,18 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 
 	switch dataType {
 	case jsonparser.Boolean, jsonparser.Number, jsonparser.String:
-		val, err := value.NewValue(field.DataType, v)
+		var val value.Value
+		var err error
+		if factory.collation != nil {
+			val, err = value.NewValueUsingCollation(field.DataType, v, factory.collation)
+		} else {
+			val, err = value.NewValue(field.DataType, v)
+		}
 		if err != nil {
 			return nil, err
 		}
 
-		return NewSelector(field, NewEqualityMatcher(val)), nil
+		return NewSelector(field, NewEqualityMatcher(val), factory.collation), nil
 	case jsonparser.Object:
 		valueMatcher, collation, err := buildValueMatcher(v, field)
 		if err != nil {
@@ -231,24 +239,32 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 		}
 
 		if collation != nil {
-			return NewSelectorWithCollation(field, valueMatcher, collation), nil
+			return NewSelector(field, valueMatcher, collation), nil
 		}
-		return NewSelector(field, valueMatcher), nil
+		return NewSelector(field, valueMatcher, factory.collation), nil
 	default:
 		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "unable to parse the comparison operator")
 	}
 }
 
-func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField) (ValueMatcher, *schema.Collation, error) {
+// buildValueMatcher is a helper method to create a value matcher object when the value of a Selector is an object
+// instead of a simple JSON value. Apart from comparison operators, this object can have its own collation, which
+// needs to be honored at the field level. Therefore, the caller needs to check if the collation returned by the
+// method is not nil and if yes, use this collation..
+func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField) (ValueMatcher, *api.Collation, error) {
 	if len(input) == 0 {
 		return nil, nil, api.Errorf(api.Code_INVALID_ARGUMENT, "empty object")
 	}
 
-	var collation *schema.Collation
-	c, dt, _, e := jsonparser.Get(input, schema.CollationKey)
+	var collation *api.Collation
+	c, dt, _, e := jsonparser.Get(input, api.CollationKey)
 	if e == nil && dt != jsonparser.NotExist {
+		// this will override the default collation
 		if e = jsoniter.Unmarshal(c, &collation); e != nil {
 			return nil, nil, e
+		}
+		if err := collation.IsValid(); err != nil {
+			return nil, nil, err
 		}
 	}
 
@@ -276,7 +292,7 @@ func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField) 
 				valueMatcher, err = NewMatcher(string(key), val)
 				return err
 			}
-		case schema.CollationKey:
+		case api.CollationKey:
 		default:
 			return api.Errorf(api.Code_INVALID_ARGUMENT, "expression is not supported inside comparison operator %s", string(key))
 		}

@@ -209,6 +209,10 @@ func (x *SearchRequest) UnmarshalJSON(data []byte) error {
 			if err := jsoniter.Unmarshal(value, &x.Page); err != nil {
 				return err
 			}
+		case "collation":
+			if err := jsoniter.Unmarshal(value, &x.Collation); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
