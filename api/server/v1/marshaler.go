@@ -21,7 +21,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ajg/form"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	jsoniter "github.com/json-iterator/go"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
@@ -33,7 +32,6 @@ const (
 )
 
 type CustomDecoder struct {
-	formDecoder *form.Decoder
 	jsonDecoder *json.Decoder
 	reader      io.Reader
 }
@@ -60,7 +58,6 @@ type CustomMarshaler struct {
 
 func (c *CustomMarshaler) NewDecoder(r io.Reader) runtime.Decoder {
 	return CustomDecoder{
-		formDecoder: form.NewDecoder(r),
 		jsonDecoder: json.NewDecoder(r),
 		reader:      r,
 	}
@@ -380,43 +377,10 @@ func (x *CreateOrUpdateCollectionRequest) UnmarshalJSON(data []byte) error {
 			if err := jsoniter.Unmarshal(value, &x.Options); err != nil {
 				return err
 			}
-		case "type":
-			var t string
-			if err := jsoniter.Unmarshal(value, &t); err != nil {
-				return err
-			}
-			switch t {
-			case "documents":
-				x.Type = CollectionType_DOCUMENTS
-			case "messages":
-				x.Type = CollectionType_MESSAGES
-			}
 		}
 	}
 
 	return nil
-}
-
-func FromCollectionType(collectionType CollectionType) string {
-	switch collectionType {
-	case CollectionType_DOCUMENTS:
-		return "documents"
-	case CollectionType_MESSAGES:
-		return "messages"
-	}
-
-	return ""
-}
-
-func ToCollectionType(collectionType string) CollectionType {
-	switch strings.ToUpper(collectionType) {
-	case "DOCUMENTS":
-		return CollectionType_DOCUMENTS
-	case "MESSAGES":
-		return CollectionType_MESSAGES
-	}
-
-	return -1
 }
 
 // UnmarshalJSON on QueryTimeSeriesMetricsRequest. Handles enum.

@@ -69,8 +69,8 @@ const (
 	AutoPrimaryKeyF     = "id"
 	PrimaryKeySchemaK   = "primary_key"
 	// DateTimeFormat represents the supported date time format
-	DateTimeFormat = time.RFC3339Nano
-	CollectionType = "collection_type"
+	DateTimeFormat  = time.RFC3339Nano
+	CollectionTypeF = "collection_type"
 )
 
 var (
@@ -98,16 +98,21 @@ type Factory struct {
 	// schema subspace.
 	Schema jsoniter.RawMessage
 	// CollectionType is the type of the collection. Only two types of collections are supported "messages" and "documents"
-	CollectionType api.CollectionType
+	CollectionType CollectionType
 }
 
-func GetCollectionType(reqSchema jsoniter.RawMessage) (string, error) {
-	val, dt, _, err := jsonparser.Get(reqSchema, CollectionType)
+func GetCollectionType(reqSchema jsoniter.RawMessage) (CollectionType, error) {
+	val, dt, _, err := jsonparser.Get(reqSchema, CollectionTypeF)
 	if err == nil && dt != jsonparser.NotExist {
-		return string(val), nil
+		switch string(val) {
+		case "documents":
+			return DocumentsType, nil
+		case "messages":
+			return MessagesType, nil
+		}
 	}
 	if dt == jsonparser.NotExist {
-		return "", nil
+		return DocumentsType, nil
 	}
 
 	return "", err
@@ -115,18 +120,12 @@ func GetCollectionType(reqSchema jsoniter.RawMessage) (string, error) {
 
 // Build is used to deserialize the user json schema into a schema factory.
 func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
-	collectionType, err := GetCollectionType(reqSchema)
+	cType, err := GetCollectionType(reqSchema)
 	if err != nil {
 		return nil, err
 	}
 
-	// To support existing collections setting it to documents
-	var cType = api.CollectionType_DOCUMENTS
-	if len(collectionType) > 0 {
-		cType = api.ToCollectionType(collectionType)
-	}
-
-	if cType != api.CollectionType_MESSAGES {
+	if cType != MessagesType {
 		if reqSchema, err = setPrimaryKey(reqSchema, jsonSpecFormatUUID, true); err != nil {
 			return nil, err
 		}
@@ -143,9 +142,9 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "missing properties field in schema")
 	}
 
-	if len(schema.PrimaryKeys) == 0 && cType == api.CollectionType_DOCUMENTS {
+	if len(schema.PrimaryKeys) == 0 && cType == DocumentsType {
 		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "missing primary key field in schema")
-	} else if len(schema.PrimaryKeys) > 0 && cType == api.CollectionType_MESSAGES {
+	} else if len(schema.PrimaryKeys) > 0 && cType == MessagesType {
 		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "setting primary key is not supported for messages collection")
 	}
 

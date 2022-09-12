@@ -58,8 +58,15 @@ type DefaultCollection struct {
 	// one queryableFields. As queryableFields represent a flattened state these can be used as-is to index in memory.
 	QueryableFields []*QueryableField
 	// CollectionType is the type of the collection. Only two types of collections are supported "messages" and "documents"
-	CollectionType api.CollectionType
+	CollectionType CollectionType
 }
+
+type CollectionType string
+
+const (
+	DocumentsType CollectionType = "documents"
+	MessagesType  CollectionType = "messages"
+)
 
 func disableAdditionalProperties(properties map[string]*jsonschema.Schema) {
 	for _, p := range properties {
@@ -70,7 +77,7 @@ func disableAdditionalProperties(properties map[string]*jsonschema.Schema) {
 	}
 }
 
-func NewDefaultCollection(name string, id uint32, schVer int, ctype api.CollectionType, fields []*Field, indexes *Indexes, schema jsoniter.RawMessage, searchCollectionName string) *DefaultCollection {
+func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionType, fields []*Field, indexes *Indexes, schema jsoniter.RawMessage, searchCollectionName string) *DefaultCollection {
 	url := name + ".json"
 	compiler := jsonschema.NewCompiler()
 	compiler.Draft = jsonschema.Draft7 // Format is only working for draft7
@@ -108,7 +115,7 @@ func (d *DefaultCollection) GetName() string {
 	return d.Name
 }
 
-func (d *DefaultCollection) Type() api.CollectionType {
+func (d *DefaultCollection) Type() CollectionType {
 	return d.CollectionType
 }
 

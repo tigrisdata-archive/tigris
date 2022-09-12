@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/pkg/errors"
 	api "github.com/tigrisdata/tigris/api/server/v1"
@@ -47,6 +48,15 @@ type Value interface {
 	AsInterface() interface{}
 }
 
+func NewValueUsingCollation(fieldType schema.FieldType, value []byte, collation *schema.Collation) (Value, error) {
+	switch fieldType {
+	case schema.StringType:
+		return NewStringValue(string(value), collation), nil
+	}
+
+	return NewValue(fieldType, value)
+}
+
 // NewValue returns the value of the field from the raw json value. It uses schema to get the type of the field.
 func NewValue(fieldType schema.FieldType, value []byte) (Value, error) {
 	switch fieldType {
@@ -66,7 +76,7 @@ func NewValue(fieldType schema.FieldType, value []byte) (Value, error) {
 
 		return NewIntValue(val), nil
 	case schema.StringType, schema.UUIDType, schema.DateTimeType:
-		return NewStringValue(string(value)), nil
+		return NewStringValue(string(value), nil), nil
 	case schema.ByteType:
 		if decoded, err := base64.StdEncoding.DecodeString(string(value)); err == nil {
 			// when we match the value or build the key we first decode the base64 data
@@ -180,11 +190,22 @@ func (d *DoubleValue) String() string {
 	return d.asString
 }
 
-type StringValue string
+type StringValue struct {
+	Value     string
+	Collation *schema.Collation
+}
 
-func NewStringValue(v string) *StringValue {
-	i := StringValue(v)
-	return &i
+func NewStringValue(v string, collation *schema.Collation) *StringValue {
+	s := &StringValue{
+		Value:     v,
+		Collation: collation,
+	}
+
+	if collation != nil && collation.IsCaseInsensitive() {
+		s.Value = strings.ToLower(s.Value)
+	}
+
+	return s
 }
 
 func (s *StringValue) CompareTo(v Value) (int, error) {
@@ -197,9 +218,13 @@ func (s *StringValue) CompareTo(v Value) (int, error) {
 		return -2, fmt.Errorf("wrong type compared ")
 	}
 
-	if *s == *converted {
+	if s.Collation != nil && s.Collation.IsCaseInsensitive() {
+		converted.Value = strings.ToLower(converted.Value)
+	}
+
+	if s.Value == converted.Value {
 		return 0, nil
-	} else if *s < *converted {
+	} else if s.Value < converted.Value {
 		return -1, nil
 	} else {
 		return 1, nil
@@ -207,7 +232,7 @@ func (s *StringValue) CompareTo(v Value) (int, error) {
 }
 
 func (s *StringValue) AsInterface() interface{} {
-	return string(*s)
+	return s.Value
 }
 
 func (s *StringValue) String() string {
@@ -215,7 +240,7 @@ func (s *StringValue) String() string {
 		return ""
 	}
 
-	return string(*s)
+	return s.Value
 }
 
 type BytesValue []byte

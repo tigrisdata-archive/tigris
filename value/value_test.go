@@ -50,7 +50,7 @@ func TestNewValue(t *testing.T) {
 		}, {
 			schema.StringType,
 			[]byte(`foo`),
-			NewStringValue("foo"),
+			NewStringValue("foo", nil),
 			nil,
 		}, {
 			// we decode byte type because it was encoded to base64 by JSON encoding.
@@ -107,7 +107,7 @@ func TestValue(t *testing.T) {
 		require.Equal(t, -2, r)
 	})
 	t.Run("string", func(t *testing.T) {
-		i := StringValue("abc")
+		i := NewStringValue("abc", nil)
 
 		v, err := NewValue(schema.StringType, []byte(`abc`))
 		require.NoError(t, err)

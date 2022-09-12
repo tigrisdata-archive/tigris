@@ -153,16 +153,16 @@ func isNull(tp schema.FieldType, val []byte) bool {
 func (k *keyGenerator) get(ctx context.Context, txMgr *transaction.Manager, table []byte, field *schema.Field) ([]byte, value.Value, error) {
 	switch field.Type() {
 	case schema.StringType, schema.UUIDType:
-		value := value.NewStringValue(uuid.NewUUIDAsString())
-		return []byte(*value), value, nil
+		value := value.NewStringValue(uuid.NewUUIDAsString(), nil)
+		return []byte(value.Value), value, nil
 	case schema.ByteType:
 		value := value.NewBytesValue([]byte(uuid.NewUUIDAsString()))
 		b64 := base64.StdEncoding.EncodeToString([]byte(*value))
 		return []byte(b64), value, nil
 	case schema.DateTimeType:
 		// use timestamp nano to reduce the contention if multiple workers end up generating same timestamp.
-		value := value.NewStringValue(time.Now().UTC().Format(time.RFC3339Nano))
-		return []byte(*value), value, nil
+		value := value.NewStringValue(time.Now().UTC().Format(time.RFC3339Nano), nil)
+		return []byte(value.Value), value, nil
 	case schema.Int64Type:
 		// use timestamp nano to reduce the contention if multiple workers end up generating same timestamp.
 		value := value.NewIntValue(time.Now().UTC().UnixNano())

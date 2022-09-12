@@ -35,7 +35,7 @@ func Unmarshal(input jsoniter.RawMessage, objCb func(jsoniter.RawMessage) (Expr,
 
 	switch next {
 	case jsoniter.StringValue:
-		return value.NewStringValue(iter.ReadString()), nil
+		return value.NewStringValue(iter.ReadString(), nil), nil
 	case jsoniter.NumberValue:
 		number := iter.ReadNumber()
 		if i, err := number.Int64(); err == nil {

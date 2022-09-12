@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/buger/jsonparser"
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -285,13 +284,6 @@ func (s *apiService) CreateOrUpdateCollection(ctx context.Context, r *api.Create
 	collectionType, err := schema.GetCollectionType(r.Schema)
 	if err != nil {
 		return nil, api.Errorf(api.Code_INTERNAL, "not able to extract collection type from the schema")
-	}
-	if len(collectionType) == 0 {
-		collectionType = api.FromCollectionType(r.GetType())
-		// set the collectionType from the options into the schema so that we can persist the collection type along with the schema
-		if r.Schema, err = jsonparser.Set(r.Schema, []byte(fmt.Sprintf(`"%s"`, collectionType)), schema.CollectionType); err != nil {
-			return nil, api.Errorf(api.Code_INTERNAL, "fail to set collection type %v", err)
-		}
 	}
 
 	runner := s.runnerFactory.GetCollectionQueryRunner()

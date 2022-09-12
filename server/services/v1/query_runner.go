@@ -290,7 +290,7 @@ func (runner *BaseQueryRunner) buildKeysUsingFilter(tenant *metadata.Tenant, db 
 }
 
 func (runner *BaseQueryRunner) mustBeDocumentsCollection(collection *schema.DefaultCollection, method string) error {
-	if collection.Type() != api.CollectionType_DOCUMENTS {
+	if collection.Type() != schema.DocumentsType {
 		return api.Errorf(api.Code_INVALID_ARGUMENT, "%s is only supported on collection type of 'documents'", method)
 	}
 
@@ -298,7 +298,7 @@ func (runner *BaseQueryRunner) mustBeDocumentsCollection(collection *schema.Defa
 }
 
 func (runner *BaseQueryRunner) mustBeMessagesCollection(collection *schema.DefaultCollection, method string) error {
-	if collection.Type() != api.CollectionType_MESSAGES {
+	if collection.Type() != schema.MessagesType {
 		return api.Errorf(api.Code_INVALID_ARGUMENT, "%s is only supported on collection type of 'messages'", method)
 	}
 
@@ -595,7 +595,7 @@ func (runner *StreamingQueryRunner) buildReaderOptions(tenant *metadata.Tenant, 
 		}
 	}
 
-	if collection.Type() == api.CollectionType_MESSAGES {
+	if collection.Type() == schema.MessagesType {
 		// if it is event streaming then fallback to indexing store for all reads
 		if !config.IsIndexingStoreReadEnabled() {
 			if options.from == nil {
