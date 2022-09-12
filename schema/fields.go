@@ -20,7 +20,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-	"github.com/tigrisdata/tigris/lib/set"
+	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/util"
 )
 
@@ -198,7 +198,7 @@ func toSearchFieldType(fieldType FieldType) string {
 	return ""
 }
 
-var SupportedFieldProperties = set.New(
+var SupportedFieldProperties = container.NewHashSet(
 	"type",
 	"format",
 	"items",

@@ -28,7 +28,7 @@ import (
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 
-	"github.com/tigrisdata/tigris/lib/set"
+	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/request"
 	"google.golang.org/grpc"
@@ -39,7 +39,7 @@ type TokenCtxkey struct{}
 var (
 	headerAuthorize           = "authorization"
 	UnknownNamespace          = "unknown"
-	BypassAuthForTheseMethods = set.New("/HealthAPI/Health", "/tigrisdata.auth.v1.Auth/getAccessToken", "/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo")
+	BypassAuthForTheseMethods = container.NewHashSet("/HealthAPI/Health", "/tigrisdata.auth.v1.Auth/getAccessToken", "/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo")
 )
 
 type Namespace struct {
