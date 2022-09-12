@@ -88,9 +88,16 @@ func getTagsForError(err error, source string) map[string]string {
 			"error_value":  "none",
 		}
 	}
+
+	genericErrorValue := err.Error()
+	// Don't capture the full stack trace as a tag for a panic, just the error message
+	if strings.HasPrefix(genericErrorValue, "panic") {
+		genericErrorValue = strings.Split(genericErrorValue, "\n")[0]
+	}
+
 	return map[string]string{
 		"error_source": source,
-		"error_value":  err.Error(),
+		"error_value":  genericErrorValue,
 	}
 }
 

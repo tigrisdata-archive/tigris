@@ -17,15 +17,13 @@ package middleware
 import (
 	"context"
 
-	"github.com/tigrisdata/tigris/server/request"
-	"github.com/tigrisdata/tigris/util"
-
-	"google.golang.org/protobuf/proto"
-
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2"
 	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/tigrisdata/tigris/server/request"
+	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -58,8 +56,10 @@ func traceUnary() func(ctx context.Context, req interface{}, info *grpc.UnarySer
 			resp, err := handler(ctx, req)
 			return resp, err
 		}
-		reqMetadata := request.GetGrpcEndPointMetadataFromFullMethod(ctx, info.FullMethod, "unary")
-		ctx = request.SetRequestMetadata(ctx, reqMetadata)
+		reqMetadata, err := request.GetRequestMetadata(ctx)
+		if err != nil {
+			ulog.E(err)
+		}
 		tags := reqMetadata.GetInitialTags()
 		spanMeta := metrics.NewSpanMeta(util.Service, info.FullMethod, metrics.GrpcSpanType, tags)
 		spanMeta.AddTags(metrics.GetDbCollTagsForReq(req))
@@ -90,14 +90,16 @@ func traceStream() grpc.StreamServerInterceptor {
 			err := handler(srv, wrapped)
 			return err
 		}
-		reqMetadata := request.GetGrpcEndPointMetadataFromFullMethod(wrapped.WrappedContext, info.FullMethod, "stream")
-		wrapped.WrappedContext = request.SetRequestMetadata(wrapped.WrappedContext, reqMetadata)
+		reqMetadata, err := request.GetRequestMetadata(wrapped.WrappedContext)
+		if err != nil {
+			ulog.E(err)
+		}
 		tags := reqMetadata.GetInitialTags()
 		spanMeta := metrics.NewSpanMeta(util.Service, info.FullMethod, metrics.GrpcSpanType, tags)
 		defer metrics.RequestsRespTime.Tagged(spanMeta.GetRequestTimerTags()).Timer("time").Start().Stop()
 		wrapped.spanMeta = spanMeta
-		wrapped.WrappedContext = spanMeta.StartTracing(wrapped.WrappedContext, true)
-		err := handler(srv, wrapped)
+		wrapped.WrappedContext = spanMeta.StartTracing(wrapped.WrappedContext, false)
+		err = handler(srv, wrapped)
 		if err != nil {
 			spanMeta.CountErrorForScope(metrics.ErrorRequests, spanMeta.GetRequestErrorTags(err))
 			wrapped.WrappedContext = spanMeta.FinishWithError(wrapped.WrappedContext, "request", err)
@@ -112,7 +114,11 @@ func traceStream() grpc.StreamServerInterceptor {
 
 func (w *wrappedStream) RecvMsg(m interface{}) error {
 	parentSpanMeta := w.spanMeta
-	childSpanMeta := metrics.NewSpanMeta(TigrisStreamSpan, "RecvMsg", metrics.GrpcSpanType, parentSpanMeta.GetTags())
+	if parentSpanMeta == nil {
+		err := w.ServerStream.RecvMsg(m)
+		return err
+	}
+	childSpanMeta := metrics.NewSpanMeta(TigrisStreamSpan, "RecvMsg", metrics.GrpcSpanType, parentSpanMeta.GetRequestOkTags())
 	w.WrappedContext = childSpanMeta.StartTracing(w.WrappedContext, true)
 	err := w.ServerStream.RecvMsg(m)
 	parentSpanMeta.AddTags(metrics.GetDbCollTagsForReq(m))
@@ -124,7 +130,11 @@ func (w *wrappedStream) RecvMsg(m interface{}) error {
 
 func (w *wrappedStream) SendMsg(m interface{}) error {
 	parentSpanMeta := w.spanMeta
-	childSpanMeta := metrics.NewSpanMeta(TigrisStreamSpan, "SendMsg", metrics.GrpcSpanType, parentSpanMeta.GetTags())
+	if parentSpanMeta == nil {
+		err := w.ServerStream.SendMsg(m)
+		return err
+	}
+	childSpanMeta := metrics.NewSpanMeta(TigrisStreamSpan, "SendMsg", metrics.GrpcSpanType, parentSpanMeta.GetRequestOkTags())
 	w.WrappedContext = childSpanMeta.StartTracing(w.WrappedContext, true)
 	err := w.ServerStream.SendMsg(m)
 	parentSpanMeta.AddTags(metrics.GetDbCollTagsForReq(m))

@@ -44,7 +44,6 @@ type SpanMeta struct {
 	tags         map[string]string
 	span         tracer.Span
 	parent       *SpanMeta
-	stopwatch    *tally.Stopwatch
 }
 
 type SpanMetaCtxKey struct {
@@ -69,25 +68,6 @@ func (s *SpanMeta) CountOkForScope(scope tally.Scope, tags map[string]string) {
 
 func (s *SpanMeta) CountErrorForScope(scope tally.Scope, tags map[string]string) {
 	scope.Tagged(tags).Counter("error").Inc(1)
-}
-
-func (s *SpanMeta) StartTimer(scope tally.Scope) error {
-	if s.stopwatch != nil {
-		return fmt.Errorf("programming error: timer already started")
-	}
-	timer := scope.Tagged(s.tags).Timer("time")
-	stopwatch := timer.Start()
-	s.stopwatch = &stopwatch
-	return nil
-}
-
-func (s *SpanMeta) StopTimer() error {
-	if s.stopwatch == nil {
-		return fmt.Errorf("programming error: no timer running")
-	}
-	s.stopwatch.Stop()
-	s.stopwatch = nil
-	return nil
 }
 
 func (s *SpanMeta) GetServiceName() string {

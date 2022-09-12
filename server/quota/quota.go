@@ -19,6 +19,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
+	"github.com/tigrisdata/tigris/server/request"
+
 	"github.com/tigrisdata/tigris/schema"
 
 	ulog "github.com/tigrisdata/tigris/util/log"
@@ -74,6 +78,17 @@ func Allow(ctx context.Context, namespace string, reqSize int) error {
 
 	if !config.DefaultConfig.Quota.Enabled {
 		return nil
+	}
+
+	if namespace == request.UnknownValue {
+		method := request.UnknownValue
+		reqMetadata, err := request.GetRequestMetadata(ctx)
+		if err != nil {
+			ulog.E(err)
+		} else {
+			method = reqMetadata.GetFullMethod()
+		}
+		log.Info().Str("namespace", namespace).Str("fullMethod", method).Msg("Invalid request received")
 	}
 
 	return mgr.check(ctx, namespace, reqSize)
