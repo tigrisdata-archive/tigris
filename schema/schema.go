@@ -21,7 +21,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/pkg/errors"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-	"github.com/tigrisdata/tigris/lib/set"
+	"github.com/tigrisdata/tigris/lib/container"
 )
 
 /**
@@ -148,7 +148,7 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "setting primary key is not supported for messages collection")
 	}
 
-	var primaryKeysSet = set.New(schema.PrimaryKeys...)
+	var primaryKeysSet = container.NewHashSet(schema.PrimaryKeys...)
 	fields, err := deserializeProperties(schema.Properties, primaryKeysSet)
 	if err != nil {
 		return nil, err
@@ -213,7 +213,7 @@ func setPrimaryKey(reqSchema jsoniter.RawMessage, format string, ifMissing bool)
 	return jsoniter.Marshal(schema)
 }
 
-func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet set.HashSet) ([]*Field, error) {
+func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet container.HashSet) ([]*Field, error) {
 	var fields []*Field
 	var err error
 	err = jsonparser.ObjectEach(properties, func(key []byte, v []byte, dataType jsonparser.ValueType, offset int) error {
@@ -234,9 +234,6 @@ func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet set.Ha
 		}
 		if builder.Type == jsonSpecArray && builder.Items == nil {
 			return api.Errorf(api.Code_INVALID_ARGUMENT, "missing items for array field")
-		}
-		if builder.Type == jsonSpecObject && len(builder.Properties) == 0 {
-			return api.Errorf(api.Code_INVALID_ARGUMENT, "missing properties for object field")
 		}
 
 		if builder.Items != nil {

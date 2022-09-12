@@ -350,3 +350,39 @@ func TestCollection_AdditionalProperties(t *testing.T) {
 		require.Equal(t, c.expError, coll.Validate(v).Error())
 	}
 }
+
+func TestCollection_Object(t *testing.T) {
+	reqSchema := []byte(`{
+		"title": "t1",
+		"properties": {
+			"id": {
+				"type": "integer"
+			},
+			"simple_object": {
+				"type": "object"
+			}
+		},
+		"primary_key": ["id"]
+	}`)
+
+	cases := []struct {
+		document []byte
+	}{
+		{
+			document: []byte(`{"id": 1, "simple_object": {"name": "hello", "price": 1.01}}`),
+		}, {
+			document: []byte(`{"id": 1, "simple_object": {"name": "hello", "obj": {"name": "hello", "price": 1.01}}}`),
+		},
+	}
+	for _, c := range cases {
+		schFactory, err := Build("t1", reqSchema)
+		require.NoError(t, err)
+		coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory.Fields, schFactory.Indexes, schFactory.Schema, "t1")
+
+		dec := jsoniter.NewDecoder(bytes.NewReader(c.document))
+		dec.UseNumber()
+		var v interface{}
+		require.NoError(t, dec.Decode(&v))
+		require.NoError(t, coll.Validate(v))
+	}
+}

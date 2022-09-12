@@ -234,8 +234,11 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 	},
 	"primary_key": ["id"]
 }`)
-		_, err := Build("t1", schema)
-		require.Equal(t, api.Errorf(api.Code_INVALID_ARGUMENT, "missing properties for object field"), err)
+		sch, err := Build("t1", schema)
+		require.NoError(t, err)
+		c := NewDefaultCollection("t1", 1, 1, sch.CollectionType, sch.Fields, sch.Indexes, sch.Schema, "t1")
+		fields := c.GetFields()
+		require.Equal(t, ObjectType, fields[1].DataType)
 	})
 	t.Run("test_auto-generated", func(t *testing.T) {
 		schema := []byte(`{

@@ -19,7 +19,7 @@ import (
 
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-	"github.com/tigrisdata/tigris/lib/set"
+	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/request"
@@ -29,7 +29,7 @@ import (
 type NamespaceSetter struct {
 	tenantManager      *metadata.TenantManager
 	namespaceExtractor request.NamespaceExtractor
-	excludedMethods    set.HashSet
+	excludedMethods    container.HashSet
 	config             *config.Config
 }
 
