@@ -269,8 +269,8 @@ func (runner *BaseQueryRunner) validate(coll *schema.DefaultCollection, doc []by
 }
 
 func (runner *BaseQueryRunner) buildKeysUsingFilter(tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection,
-	reqFilter []byte) ([]keys.Key, error) {
-	filterFactory := filter.NewFactory(coll.QueryableFields)
+	reqFilter []byte, collation *api.Collation) ([]keys.Key, error) {
+	filterFactory := filter.NewFactory(coll.QueryableFields, collation)
 	filters, err := filterFactory.Factorize(reqFilter)
 	if err != nil {
 		return nil, err
@@ -434,16 +434,21 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, ctx, api.Errorf(api.Code_INVALID_ARGUMENT, "updating all documents is not allowed")
 	}
 
+	var collation *api.Collation
+	if runner.req.Options != nil {
+		collation = runner.req.Options.Collation
+	}
+
 	var iterator Iterator
 	reader := NewDatabaseReader(ctx, tx)
-	iKeys, err := runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter)
+	iKeys, err := runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter, collation)
 	if err == nil {
 		iterator, err = reader.KeyIterator(iKeys)
 	} else {
 		if iterator, err = reader.ScanTable(table); err != nil {
 			return nil, ctx, err
 		}
-		filterFactory := filter.NewFactory(collection.QueryableFields)
+		filterFactory := filter.NewFactory(collection.QueryableFields, collation)
 		var filters []filter.Filter
 		if filters, err = filterFactory.Factorize(runner.req.Filter); err != nil {
 			return nil, ctx, err
@@ -517,14 +522,19 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			return nil, ctx, err
 		}
 	} else {
+		var collation *api.Collation
+		if runner.req.Options != nil {
+			collation = runner.req.Options.Collation
+		}
+
 		var iKeys []keys.Key
-		if iKeys, err = runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter); err == nil {
+		if iKeys, err = runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter, collation); err == nil {
 			iterator, err = reader.KeyIterator(iKeys)
 		} else {
 			if iterator, err = reader.ScanTable(table); err != nil {
 				return nil, ctx, err
 			}
-			filterFactory := filter.NewFactory(collection.QueryableFields)
+			filterFactory := filter.NewFactory(collection.QueryableFields, collation)
 			var filters []filter.Filter
 			if filters, err = filterFactory.Factorize(runner.req.Filter); err != nil {
 				return nil, ctx, err
@@ -580,7 +590,11 @@ type readerOptions struct {
 func (runner *StreamingQueryRunner) buildReaderOptions(tenant *metadata.Tenant, db *metadata.Database, collection *schema.DefaultCollection) (readerOptions, error) {
 	var err error
 	var options = readerOptions{}
-	if options.filter, err = filter.NewFactory(collection.QueryableFields).WrappedFilter(runner.req.Filter); err != nil {
+	var collation *api.Collation
+	if runner.req.Options != nil {
+		collation = runner.req.Options.Collation
+	}
+	if options.filter, err = filter.NewFactory(collection.QueryableFields, collation).WrappedFilter(runner.req.Filter); err != nil {
 		return options, err
 	}
 	if options.table, err = runner.encoder.EncodeTableName(tenant.GetNamespace(), db, collection); err != nil {
@@ -606,9 +620,14 @@ func (runner *StreamingQueryRunner) buildReaderOptions(tenant *metadata.Tenant, 
 			options.inmemoryStore = true
 		}
 	} else {
+		var collation *api.Collation
+		if runner.req.Options != nil {
+			collation = runner.req.Options.Collation
+		}
+
 		if filter.None(runner.req.Filter) {
 			options.noFilter = true
-		} else if options.ikeys, err = runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter); err != nil {
+		} else if options.ikeys, err = runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter, collation); err != nil {
 			if !config.IsIndexingStoreReadEnabled() {
 				if options.from == nil {
 					// in this case, scan will happen from the beginning of the table.
@@ -804,7 +823,7 @@ func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.
 		return nil, ctx, err
 	}
 
-	wrappedF, err := filter.NewFactory(collection.QueryableFields).WrappedFilter(runner.req.Filter)
+	wrappedF, err := filter.NewFactory(collection.QueryableFields, runner.req.Collation).WrappedFilter(runner.req.Filter)
 	if err != nil {
 		return nil, ctx, err
 	}

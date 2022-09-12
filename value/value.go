@@ -48,7 +48,7 @@ type Value interface {
 	AsInterface() interface{}
 }
 
-func NewValueUsingCollation(fieldType schema.FieldType, value []byte, collation *schema.Collation) (Value, error) {
+func NewValueUsingCollation(fieldType schema.FieldType, value []byte, collation *api.Collation) (Value, error) {
 	switch fieldType {
 	case schema.StringType:
 		return NewStringValue(string(value), collation), nil
@@ -192,10 +192,10 @@ func (d *DoubleValue) String() string {
 
 type StringValue struct {
 	Value     string
-	Collation *schema.Collation
+	Collation *api.Collation
 }
 
-func NewStringValue(v string, collation *schema.Collation) *StringValue {
+func NewStringValue(v string, collation *api.Collation) *StringValue {
 	s := &StringValue{
 		Value:     v,
 		Collation: collation,
