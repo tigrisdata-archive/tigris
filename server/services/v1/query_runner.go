@@ -1195,7 +1195,8 @@ func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 				return nil, ctx, err
 			}
 
-			endTime := parts[i].startTime.Add(34 * time.Second)
+			// TODO: either make this window really large (if it can perform) or account for no changes in the window
+			endTime := parts[i].startTime.Add(34 * time.Hour)
 			endKey, err := runner.encoder.EncodePartitionKey(
 				table,
 				collection.Indexes.PrimaryKey,
