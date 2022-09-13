@@ -1188,14 +1188,15 @@ func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 			startKey, err := runner.encoder.EncodePartitionKey(
 				table,
 				collection.Indexes.PrimaryKey,
-				[]interface{}{parts[i].startTime.Add(-10 * time.Second).UnixNano()},
+				[]interface{}{parts[i].startTime.UnixNano()},
 				parts[i].num,
 			)
 			if ulog.E(err) {
 				return nil, ctx, err
 			}
 
-			endTime := parts[i].startTime.Add(34 * time.Second)
+			// TODO: either make this window really large (if it can perform) or account for no changes in the window
+			endTime := parts[i].startTime.Add(34 * time.Hour)
 			endKey, err := runner.encoder.EncodePartitionKey(
 				table,
 				collection.Indexes.PrimaryKey,

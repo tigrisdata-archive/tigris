@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package encoding
+package metadata
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
@@ -25,7 +24,6 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
-	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 func TestDictionaryEncoding(t *testing.T) {
@@ -474,9 +472,4 @@ func TestDecode(t *testing.T) {
 	}).decode(context.TODO(), k)
 	require.NoError(t, err)
 	require.Equal(t, mp[dbKey], "db-1")
-}
-
-func TestMain(m *testing.M) {
-	ulog.Configure(ulog.LogConfig{Level: "disabled"})
-	os.Exit(m.Run())
 }

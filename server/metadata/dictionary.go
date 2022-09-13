@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package encoding
+package metadata
 
 import (
 	"context"
@@ -56,20 +56,24 @@ import (
 // Request: To Create a New Database
 // The value would be derived from the counter value stored in the reserved subspace. If the counter is not yet issued
 // then it will start from 0x01.
-//    ["encoding", 0x01, x "db", "db-1", "created"] = 0x01
-//    ["encoding", 0x01, x, "db", "db-2", "created"] = 0x02
+//
+//	["encoding", 0x01, x "db", "db-1", "created"] = 0x01
+//	["encoding", 0x01, x, "db", "db-2", "created"] = 0x02
 //
 // Request: To Create a New Collection
 // The value would be derived from the counter value stored in the reserved table. It can't be empty as there must be
 // a database already created so a value is already assigned to it.
-//    ["encoding", 0x01, x, 0x01, "coll", "coll-1", "created"] = 0x03
+//
+//	["encoding", 0x01, x, 0x01, "coll", "coll-1", "created"] = 0x03
 //
 // Request: To Add an Index
-//    ["encoding", 0x01, x, 0x01, 0x03, "index", "pkey", "created"] = 0x04
-//    ["encoding", 0x01, x, 0x01, 0x03, "index", "email_index", "created"] = 0x05
+//
+//	["encoding", 0x01, x, 0x01, 0x03, "index", "pkey", "created"] = 0x04
+//	["encoding", 0x01, x, 0x01, 0x03, "index", "email_index", "created"] = 0x05
 //
 // Request: To drop an Index
-//   ["encoding", 0x01, x, 0x01, 0x03, "index", "pkey", "dropped"] = 0x04
+//
+//	["encoding", 0x01, x, 0x01, 0x03, "index", "pkey", "dropped"] = 0x04
 const (
 	namespaceKey  = "namespace"
 	dbKey         = "db"

@@ -28,7 +28,6 @@ import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/config"
-	"github.com/tigrisdata/tigris/server/metadata/encoding"
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
@@ -97,31 +96,31 @@ func (n *TenantNamespace) Id() uint32 {
 type TenantManager struct {
 	sync.RWMutex
 
-	metaStore         *encoding.MetadataDictionary
-	schemaStore       *encoding.SchemaSubspace
+	metaStore         *MetadataDictionary
+	schemaStore       *SchemaSubspace
 	kvStore           kv.KeyValueStore
 	searchStore       search.Store
 	tenants           map[string]*Tenant
 	idToTenantMap     map[uint32]string
 	version           Version
 	versionH          *VersionHandler
-	mdNameRegistry    encoding.MDNameRegistry
+	mdNameRegistry    MDNameRegistry
 	encoder           Encoder
 	tableKeyGenerator *TableKeyGenerator
 }
 
 func NewTenantManager(kvStore kv.KeyValueStore, searchStore search.Store) *TenantManager {
-	mdNameRegistry := &encoding.DefaultMDNameRegistry{}
+	mdNameRegistry := &DefaultMDNameRegistry{}
 	return newTenantManager(kvStore, searchStore, mdNameRegistry)
 }
 
-func newTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, mdNameRegistry encoding.MDNameRegistry) *TenantManager {
+func newTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, mdNameRegistry MDNameRegistry) *TenantManager {
 	return &TenantManager{
 		kvStore:           kvStore,
 		searchStore:       searchStore,
 		encoder:           NewEncoder(),
-		metaStore:         encoding.NewMetadataDictionary(mdNameRegistry),
-		schemaStore:       encoding.NewSchemaStore(mdNameRegistry),
+		metaStore:         NewMetadataDictionary(mdNameRegistry),
+		schemaStore:       NewSchemaStore(mdNameRegistry),
 		tenants:           make(map[string]*Tenant),
 		idToTenantMap:     make(map[uint32]string),
 		versionH:          &VersionHandler{},
@@ -448,8 +447,8 @@ type Tenant struct {
 
 	kvStore           kv.KeyValueStore
 	searchStore       search.Store
-	schemaStore       *encoding.SchemaSubspace
-	metaStore         *encoding.MetadataDictionary
+	schemaStore       *SchemaSubspace
+	metaStore         *MetadataDictionary
 	Encoder           Encoder
 	databases         map[string]*Database
 	idToDatabaseMap   map[uint32]string
@@ -459,7 +458,7 @@ type Tenant struct {
 	TableKeyGenerator *TableKeyGenerator
 }
 
-func NewTenant(namespace Namespace, kvStore kv.KeyValueStore, searchStore search.Store, dict *encoding.MetadataDictionary, schemaStore *encoding.SchemaSubspace, encoder Encoder, versionH *VersionHandler, currentVersion Version, tableKeyGenerator *TableKeyGenerator) *Tenant {
+func NewTenant(namespace Namespace, kvStore kv.KeyValueStore, searchStore search.Store, dict *MetadataDictionary, schemaStore *SchemaSubspace, encoder Encoder, versionH *VersionHandler, currentVersion Version, tableKeyGenerator *TableKeyGenerator) *Tenant {
 	return &Tenant{
 		kvStore:         kvStore,
 		searchStore:     searchStore,
@@ -1044,7 +1043,7 @@ func isSchemaEq(s1, s2 []byte) (bool, error) {
 func NewTestTenantMgr(kvStore kv.KeyValueStore) (*TenantManager, context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
-	m := newTenantManager(kvStore, &search.NoopStore{}, &encoding.TestMDNameRegistry{
+	m := newTenantManager(kvStore, &search.NoopStore{}, &TestMDNameRegistry{
 		ReserveSB:  fmt.Sprintf("test_tenant_reserve_%x", rand.Uint64()),
 		EncodingSB: fmt.Sprintf("test_tenant_encoding_%x", rand.Uint64()),
 		SchemaSB:   fmt.Sprintf("test_tenant_schema_%x", rand.Uint64()),

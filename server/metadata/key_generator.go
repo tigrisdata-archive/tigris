@@ -19,7 +19,6 @@ import (
 
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
-	"github.com/tigrisdata/tigris/server/metadata/encoding"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 )
@@ -75,13 +74,13 @@ func (g *TableKeyGenerator) generateCounter(ctx context.Context, tx transaction.
 	id := uint32(1)
 	var row kv.KeyValue
 	if it.Next(&row) {
-		id = encoding.ByteToUInt32(row.Data.RawData) + uint32(1)
+		id = ByteToUInt32(row.Data.RawData) + uint32(1)
 	}
 	if err := it.Err(); err != nil {
 		return 0, err
 	}
 
-	if err := tx.Replace(ctx, key, internal.NewTableData(encoding.UInt32ToByte(id)), false); err != nil {
+	if err := tx.Replace(ctx, key, internal.NewTableData(UInt32ToByte(id)), false); err != nil {
 		return 0, err
 	}
 
