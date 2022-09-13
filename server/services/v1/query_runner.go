@@ -1188,7 +1188,7 @@ func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 			startKey, err := runner.encoder.EncodePartitionKey(
 				table,
 				collection.Indexes.PrimaryKey,
-				[]interface{}{parts[i].startTime.Add(-10 * time.Second).UnixNano()},
+				[]interface{}{parts[i].startTime.UnixNano()},
 				parts[i].num,
 			)
 			if ulog.E(err) {
