@@ -50,34 +50,34 @@ func TestAuth(t *testing.T) {
 		panic("Failed to setup cache")
 	}
 	t.Run("log_only mode: no token", func(t *testing.T) {
-		ctx, err := AuthFunction(context.TODO(), &validator.Validator{}, &config.DefaultConfig, cache)
+		ctx, err := authFunction(context.TODO(), &validator.Validator{}, &config.DefaultConfig, cache)
 		require.NotNil(t, ctx)
 		require.Nil(t, err)
 	})
 
 	t.Run("enforcing mode: no token", func(t *testing.T) {
-		_, err := AuthFunction(context.TODO(), &validator.Validator{}, &enforcedAuthConfig, cache)
+		_, err := authFunction(context.TODO(), &validator.Validator{}, &enforcedAuthConfig, cache)
 		require.NotNil(t, err)
 		require.Equal(t, err, api.Errorf(api.Code_UNAUTHENTICATED, "request unauthenticated with bearer"))
 	})
 
 	t.Run("enforcing mode: Bad authorization string1", func(t *testing.T) {
 		incomingCtx := metadata.NewIncomingContext(context.TODO(), metadata.Pairs("authorization", "bearer"))
-		_, err := AuthFunction(incomingCtx, &validator.Validator{}, &enforcedAuthConfig, cache)
+		_, err := authFunction(incomingCtx, &validator.Validator{}, &enforcedAuthConfig, cache)
 		require.NotNil(t, err)
 		require.Equal(t, err, api.Errorf(api.Code_UNAUTHENTICATED, "bad authorization string"))
 	})
 
 	t.Run("enforcing mode: Bad token", func(t *testing.T) {
 		incomingCtx := metadata.NewIncomingContext(context.TODO(), metadata.Pairs("authorization", "bearer somebadtoken"))
-		_, err := AuthFunction(incomingCtx, &validator.Validator{}, &enforcedAuthConfig, cache)
+		_, err := authFunction(incomingCtx, &validator.Validator{}, &enforcedAuthConfig, cache)
 		require.NotNil(t, err)
 		require.Equal(t, err, api.Errorf(api.Code_UNAUTHENTICATED, "Failed to validate access token"))
 	})
 
 	t.Run("enforcing mode: Bad token 2", func(t *testing.T) {
 		incomingCtx := metadata.NewIncomingContext(context.TODO(), metadata.Pairs("authorization", "bearer some.bad.token"))
-		_, err := AuthFunction(incomingCtx, &validator.Validator{}, &enforcedAuthConfig, cache)
+		_, err := authFunction(incomingCtx, &validator.Validator{}, &enforcedAuthConfig, cache)
 		require.NotNil(t, err)
 		require.Contains(t, err.Error(), "Failed to validate access token")
 	})

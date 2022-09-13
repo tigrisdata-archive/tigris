@@ -39,7 +39,11 @@ type TokenCtxkey struct{}
 var (
 	headerAuthorize           = "authorization"
 	UnknownNamespace          = "unknown"
-	BypassAuthForTheseMethods = container.NewHashSet("/HealthAPI/Health", "/tigrisdata.auth.v1.Auth/getAccessToken", "/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo")
+	BypassAuthForTheseMethods = container.NewHashSet(
+		"/HealthAPI/Health",
+		"/tigrisdata.auth.v1.Auth/getAccessToken",
+		"/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo",
+	)
 )
 
 type Namespace struct {
@@ -103,11 +107,11 @@ func GetJWTValidator(config *config.Config) *validator.Validator {
 	return jwtValidator
 }
 
-func MeasuredAuthFunction(ctx context.Context, jwtValidator *validator.Validator, config *config.Config, cache *lru.Cache) (ctxResult context.Context, err error) {
+func measuredAuthFunction(ctx context.Context, jwtValidator *validator.Validator, config *config.Config, cache *lru.Cache) (ctxResult context.Context, err error) {
 	spanMeta := metrics.NewSpanMeta("auth", "auth", metrics.AuthSpanType, metrics.GetAuthBaseTags(ctx))
 	spanMeta.StartTracing(ctx, true)
 	timer := metrics.AuthRespTime.Tagged(spanMeta.GetAuthTimerTags()).Timer("time").Start()
-	ctxResult, err = AuthFunction(ctx, jwtValidator, config, cache)
+	ctxResult, err = authFunction(ctx, jwtValidator, config, cache)
 	timer.Stop()
 	if err != nil {
 		metrics.AuthErrorRequests.Tagged(spanMeta.GetAuthErrorTags(err)).Counter("error").Inc(1)
@@ -119,7 +123,7 @@ func MeasuredAuthFunction(ctx context.Context, jwtValidator *validator.Validator
 	return
 }
 
-func AuthFunction(ctx context.Context, jwtValidator *validator.Validator, config *config.Config, cache *lru.Cache) (ctxResult context.Context, err error) {
+func authFunction(ctx context.Context, jwtValidator *validator.Validator, config *config.Config, cache *lru.Cache) (ctxResult context.Context, err error) {
 	reqMetadata, err := request.GetRequestMetadata(ctx)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to load request metadata")
@@ -206,4 +210,28 @@ func isAdminNamespace(incomingNamespace string, config *config.Config) bool {
 		}
 	}
 	return false
+}
+
+func getAuthFunction(config *config.Config) func(ctx context.Context) (context.Context, error) {
+	if config.Auth.Enabled {
+		jwtValidator := GetJWTValidator(config)
+
+		lruCache, err := lru.New(config.Auth.TokenCacheSize)
+		if err != nil {
+			panic("Failed to setup token cache")
+		}
+
+		// inline closure to access the state of jwtValidator
+		if config.Tracing.Enabled {
+			return func(ctx context.Context) (context.Context, error) {
+				return measuredAuthFunction(ctx, jwtValidator, config, lruCache)
+			}
+		} else {
+			return func(ctx context.Context) (context.Context, error) {
+				return authFunction(ctx, jwtValidator, config, lruCache)
+			}
+		}
+	}
+
+	return nil
 }

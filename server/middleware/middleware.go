@@ -15,57 +15,24 @@
 package middleware
 
 import (
-	"context"
-
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_zerolog "github.com/grpc-ecosystem/go-grpc-middleware/providers/zerolog/v2"
 	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/auth"
 	grpc_logging "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
-	lru "github.com/hashicorp/golang-lru"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/server/config"
 	tigrisconfig "github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
-	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/util"
 	"google.golang.org/grpc"
 )
 
 func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor) {
-	var authFunction func(ctx context.Context) (context.Context, error)
+	authFunc := getAuthFunction(config)
 
-	if config.Auth.Enabled {
-		jwtValidator := GetJWTValidator(config)
-		lruCache, err := lru.New(config.Auth.TokenCacheSize)
-		if err != nil {
-			panic("Failed to setup token cache")
-		}
-		// inline closure to access the state of jwtValidator
-		if config.Tracing.Enabled {
-			authFunction = func(ctx context.Context) (context.Context, error) {
-				return MeasuredAuthFunction(ctx, jwtValidator, config, lruCache)
-			}
-		} else {
-			authFunction = func(ctx context.Context) (context.Context, error) {
-				return AuthFunction(ctx, jwtValidator, config, lruCache)
-			}
-		}
-	}
-
-	excludedMethods := container.NewHashSet()
-	excludedMethods.Insert("/HealthAPI/Health")
-	excludedMethods.Insert("/tigrisdata.admin.v1.Admin/createNamespace")
-	excludedMethods.Insert("/tigrisdata.admin.v1.Admin/listNamespaces")
-	namespaceInitializer := NamespaceSetter{
-		tenantManager:      tenantMgr,
-		namespaceExtractor: &request.AccessTokenNamespaceExtractor{},
-		excludedMethods:    excludedMethods,
-		config:             config,
-	}
 	// adding all the middlewares for the server stream
 	//
 	// Note: we don't add validate here and rather call it in server code because the validator interceptor returns gRPC
@@ -88,12 +55,12 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 
 	streamInterceptors = append(streamInterceptors, forwarderStreamServerInterceptor())
 
-	if config.Auth.Enabled {
-		streamInterceptors = append(streamInterceptors, grpc_auth.StreamServerInterceptor(authFunction))
+	if authFunc != nil {
+		streamInterceptors = append(streamInterceptors, grpc_auth.StreamServerInterceptor(authFunc))
 	}
 
 	streamInterceptors = append(streamInterceptors, []grpc.StreamServerInterceptor{
-		namespaceInitializer.NamespaceSetterStreamServerInterceptor(),
+		namespaceSetterStreamServerInterceptor(config.Auth.EnableNamespaceIsolation),
 		quotaStreamServerInterceptor(),
 		grpc_logging.StreamServerInterceptor(grpc_zerolog.InterceptorLogger(sampledTaggedLogger), []grpc_logging.Option{}...),
 		validatorStreamServerInterceptor(),
@@ -118,12 +85,12 @@ func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transa
 
 	unaryInterceptors = append(unaryInterceptors, forwarderUnaryServerInterceptor())
 
-	if config.Auth.Enabled {
-		unaryInterceptors = append(unaryInterceptors, grpc_auth.UnaryServerInterceptor(authFunction))
+	if authFunc != nil {
+		unaryInterceptors = append(unaryInterceptors, grpc_auth.UnaryServerInterceptor(authFunc))
 	}
 
 	unaryInterceptors = append(unaryInterceptors, []grpc.UnaryServerInterceptor{
-		namespaceInitializer.NamespaceSetterUnaryServerInterceptor(),
+		namespaceSetterUnaryServerInterceptor(config.Auth.EnableNamespaceIsolation),
 		pprofUnaryServerInterceptor(),
 		quotaUnaryServerInterceptor(),
 		grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(sampledTaggedLogger)),
