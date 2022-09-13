@@ -25,7 +25,6 @@ import (
 	tsearch "github.com/tigrisdata/tigris/server/search"
 	"github.com/tigrisdata/tigris/store/search"
 	ulog "github.com/tigrisdata/tigris/util/log"
-	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
 const (
@@ -104,13 +103,20 @@ func (p *pageReader) read() error {
 	}
 
 	sortedHits := tsearch.NewSortedHits(p.query.SortOrder)
+	sortedFacets := tsearch.NewSortedFacets()
 	for _, r := range result {
 		if r.Hits != nil {
 			for _, h := range *r.Hits {
 				hit := tsearch.NewSearchHit(&h)
-				err := sortedHits.Add(hit)
-				// log and skip hits that cannot be added
-				if ulog.E(err) {
+				if ulog.E(sortedHits.Add(hit)) {
+					continue
+				}
+			}
+		}
+
+		if r.FacetCounts != nil {
+			for _, fc := range *r.FacetCounts {
+				if ulog.E(sortedFacets.Add(&fc)) {
 					continue
 				}
 			}
@@ -139,14 +145,7 @@ func (p *pageReader) read() error {
 
 	// check if we need to build facets
 	if len(p.cachedFacets) == 0 {
-		facetSizeRequested := map[string]int{}
-		for _, f := range p.query.Facets.Fields {
-			facetSizeRequested[f.Name] = f.Size
-		}
-
-		for _, r := range result {
-			p.buildFacets(r.FacetCounts, facetSizeRequested)
-		}
+		p.buildFacets(sortedFacets)
 	}
 
 	if p.found == -1 {
@@ -176,67 +175,27 @@ func (p *pageReader) next() (bool, *page, error) {
 	return false, pg, nil
 }
 
-func (p *pageReader) buildFacets(facets *[]tsApi.FacetCounts, facetSizeRequested map[string]int) {
-	if facets == nil {
-		return
-	}
+func (p *pageReader) buildFacets(sf *tsearch.SortedFacets) {
+	facetSizeRequested := map[string]int{}
+	for _, f := range p.query.Facets.Fields {
+		facetSizeRequested[f.Name] = f.Size
 
-	for _, f := range *facets {
-		// if facet for current field is built already, merge into existing Else create fresh
-		if builtFacets, ok := p.cachedFacets[*f.FieldName]; ok {
-			// Todo: merge facets, sort them and merge stats
-			// temp workaround: build again if pre built facets are empty to have something in response
-			if len(builtFacets.Counts) > 0 {
-				return
-			}
+		facet := &api.SearchFacet{
+			Stats:  sf.GetStats(f.Name),
+			Counts: []*api.FacetCount{},
 		}
 
-		var facet = &api.SearchFacet{
-			Stats: p.newFacetStats(f),
-		}
-
-		if f.Counts != nil {
-			for i, c := range *f.Counts {
-				if i >= facetSizeRequested[*f.FieldName] {
-					break
-				}
+		for i := 0; i < f.Size; i++ {
+			if fc, ok := sf.GetFacetCount(f.Name); ok {
 				facet.Counts = append(facet.Counts, &api.FacetCount{
-					Count: int64(*c.Count),
-					Value: *c.Value,
+					Count: fc.Count,
+					Value: fc.Value,
 				})
 			}
 		}
 
-		p.cachedFacets[*f.FieldName] = facet
+		p.cachedFacets[f.Name] = facet
 	}
-}
-
-func (p *pageReader) newFacetStats(stats tsApi.FacetCounts) *api.FacetStats {
-	if stats.Stats == nil {
-		return nil
-	}
-
-	var stat = &api.FacetStats{}
-	if stats.Stats.Avg != nil {
-		avg := float64(*stats.Stats.Avg)
-		stat.Avg = &avg
-	}
-	if stats.Stats.Min != nil {
-		min := float64(*stats.Stats.Min)
-		stat.Min = &min
-	}
-	if stats.Stats.Max != nil {
-		max := float64(*stats.Stats.Max)
-		stat.Max = &max
-	}
-	if stats.Stats.Sum != nil {
-		sum := float64(*stats.Stats.Sum)
-		stat.Sum = &sum
-	}
-	if stats.Stats.TotalValues != nil {
-		stat.Count = int64(*stats.Stats.TotalValues)
-	}
-	return stat
 }
 
 type FilterableSearchIterator struct {
