@@ -46,6 +46,7 @@ func (u *UserSubspace) InsertUserMetadata(ctx context.Context, tx transaction.Tx
 		log.Debug().Str("key", key.String()).Str("value", string(payload)).Err(err).Msg("storing user failed")
 		return err
 	}
+
 	log.Debug().Str("key", key.String()).Str("value", string(payload)).Msg("storing user succeed")
 
 	return nil
@@ -61,10 +62,10 @@ func (u *UserSubspace) GetUserMetadata(ctx context.Context, tx transaction.Tx, n
 		return nil, err
 	}
 	var row kv.KeyValue
-	for it.Next(&row) {
+	if it.Next(&row) {
 		return row.Data.RawData, nil
 	}
-	return nil, nil
+	return nil, it.Err()
 }
 
 func (u *UserSubspace) UpdateUserMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, userType UserType, userId string, metadataKey string, payload []byte) error {

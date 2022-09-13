@@ -15,8 +15,10 @@
 package v1
 
 import (
+	"github.com/auth0/go-auth0/management"
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
+	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
@@ -37,11 +39,36 @@ type Service interface {
 
 func GetRegisteredServices(kvStore kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) []Service {
 	var v1Services []Service
-
 	v1Services = append(v1Services, newApiService(kvStore, searchStore, tenantMgr, txMgr))
 	v1Services = append(v1Services, newHealthService())
 	v1Services = append(v1Services, newAdminService(tenantMgr, txMgr))
-	v1Services = append(v1Services, newAuthService())
+
+	authProvider := getAuthProvider()
+
+	if config.DefaultConfig.Auth.EnableOauth {
+		v1Services = append(v1Services, newAuthService(authProvider))
+	}
+	if config.DefaultConfig.Users.Enabled {
+		v1Services = append(v1Services, newUserService(authProvider, txMgr, tenantMgr))
+	}
+
 	v1Services = append(v1Services, newObservabilityService())
 	return v1Services
+}
+
+func getAuthProvider() AuthProvider {
+	var authProvider AuthProvider
+	if config.DefaultConfig.Auth.OAuthProvider == auth0 {
+		m, err := management.New(config.DefaultConfig.Auth.ExternalDomain, management.WithClientCredentials(config.DefaultConfig.Auth.ManagementClientId, config.DefaultConfig.Auth.ManagementClientSecret))
+		if err != nil {
+			if config.DefaultConfig.Auth.EnableOauth {
+				panic("Unable to configure external oauth provider")
+			}
+		}
+		authProvider = &Auth0{
+			AuthConfig: config.DefaultConfig.Auth,
+			Management: m,
+		}
+	}
+	return authProvider
 }
