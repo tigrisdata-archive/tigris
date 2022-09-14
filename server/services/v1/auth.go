@@ -47,8 +47,8 @@ func newAuthService(authProvider AuthProvider) *authService {
 	}
 }
 
-func (a *authService) GetAccessToken(_ context.Context, req *api.GetAccessTokenRequest) (*api.GetAccessTokenResponse, error) {
-	return a.AuthProvider.GetAccessToken(req)
+func (a *authService) GetAccessToken(ctx context.Context, req *api.GetAccessTokenRequest) (*api.GetAccessTokenResponse, error) {
+	return a.AuthProvider.GetAccessToken(ctx, req)
 }
 
 func (a *authService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {

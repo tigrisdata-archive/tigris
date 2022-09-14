@@ -43,11 +43,11 @@ func (u *UserSubspace) InsertUserMetadata(ctx context.Context, tx transaction.Tx
 	}
 	key := keys.NewKey(u.UserSubspaceName(), userVersion, UInt32ToByte(namespaceId), UInt32ToByte(uint32(userType)), []byte(userId), []byte(metadataKey))
 	if err := tx.Insert(ctx, key, internal.NewTableData(payload)); err != nil {
-		log.Debug().Str("key", key.String()).Str("value", string(payload)).Err(err).Msg("storing user failed")
+		log.Debug().Str("key", key.String()).Str("value", string(payload)).Err(err).Msg("storing user metadata failed")
 		return err
 	}
 
-	log.Debug().Str("key", key.String()).Str("value", string(payload)).Msg("storing user succeed")
+	log.Debug().Str("key", key.String()).Str("value", string(payload)).Msg("storing user metadata succeed")
 
 	return nil
 }
@@ -63,8 +63,10 @@ func (u *UserSubspace) GetUserMetadata(ctx context.Context, tx transaction.Tx, n
 	}
 	var row kv.KeyValue
 	if it.Next(&row) {
+		log.Debug().Str("key", key.String()).Str("value", string(row.Data.RawData)).Msg("reading user metadata succeed")
 		return row.Data.RawData, nil
 	}
+
 	return nil, it.Err()
 }
 
@@ -81,6 +83,7 @@ func (u *UserSubspace) UpdateUserMetadata(ctx context.Context, tx transaction.Tx
 	if err != nil {
 		return err
 	}
+	log.Debug().Str("key", key.String()).Str("value", string(payload)).Msg("update user metadata succeed")
 	return nil
 }
 
@@ -91,10 +94,10 @@ func (u *UserSubspace) DeleteUserMetadata(ctx context.Context, tx transaction.Tx
 	key := keys.NewKey(u.UserSubspaceName(), userVersion, UInt32ToByte(namespaceId), UInt32ToByte(uint32(userType)), []byte(userId), []byte(metadataKey))
 	err := tx.Delete(ctx, key)
 	if err != nil {
-		log.Debug().Str("key", key.String()).Err(err).Msg("Delete user failed")
+		log.Debug().Str("key", key.String()).Err(err).Msg("Delete user metadata failed")
 		return err
 	}
-	log.Debug().Str("key", key.String()).Msg("Delete user succeed")
+	log.Debug().Str("key", key.String()).Msg("Delete user metadata  succeed")
 	return nil
 }
 

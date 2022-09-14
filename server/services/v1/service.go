@@ -43,20 +43,21 @@ func GetRegisteredServices(kvStore kv.KeyValueStore, searchStore search.Store, t
 	v1Services = append(v1Services, newHealthService())
 	v1Services = append(v1Services, newAdminService(tenantMgr, txMgr))
 
-	authProvider := getAuthProvider()
+	userstore := metadata.NewUserStore(&metadata.DefaultMDNameRegistry{})
+	authProvider := getAuthProvider(userstore, txMgr)
 
 	if config.DefaultConfig.Auth.EnableOauth {
 		v1Services = append(v1Services, newAuthService(authProvider))
 	}
 	if config.DefaultConfig.Users.Enabled {
-		v1Services = append(v1Services, newUserService(authProvider, txMgr, tenantMgr))
+		v1Services = append(v1Services, newUserService(authProvider, txMgr, tenantMgr, userstore))
 	}
 
 	v1Services = append(v1Services, newObservabilityService())
 	return v1Services
 }
 
-func getAuthProvider() AuthProvider {
+func getAuthProvider(userstore *metadata.UserSubspace, txMgr *transaction.Manager) AuthProvider {
 	var authProvider AuthProvider
 	if config.DefaultConfig.Auth.OAuthProvider == auth0 {
 		m, err := management.New(config.DefaultConfig.Auth.ExternalDomain, management.WithClientCredentials(config.DefaultConfig.Auth.ManagementClientId, config.DefaultConfig.Auth.ManagementClientSecret))
@@ -68,6 +69,8 @@ func getAuthProvider() AuthProvider {
 		authProvider = &Auth0{
 			AuthConfig: config.DefaultConfig.Auth,
 			Management: m,
+			userStore:  userstore,
+			txMgr:      txMgr,
 		}
 	}
 	return authProvider

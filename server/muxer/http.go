@@ -24,9 +24,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
 	"github.com/tigrisdata/tigris/server/config"
-	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/middleware"
-	"github.com/tigrisdata/tigris/server/transaction"
 )
 
 type HTTPServer struct {
@@ -34,13 +32,13 @@ type HTTPServer struct {
 	Inproc *inprocgrpc.Channel
 }
 
-func NewHTTPServer(cfg *config.Config, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) *HTTPServer {
+func NewHTTPServer(cfg *config.Config) *HTTPServer {
 	r := chi.NewRouter()
 
 	r.Use(cors.AllowAll().Handler)
 	r.Mount("/debug", chi_middleware.Profiler())
 
-	unary, stream := middleware.Get(cfg, tenantMgr, txMgr)
+	unary, stream := middleware.Get(cfg)
 
 	inproc := &inprocgrpc.Channel{}
 	inproc.WithServerStreamInterceptor(stream)

@@ -17,6 +17,8 @@ package v1
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -28,22 +30,26 @@ import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/lib/date"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/request"
+	"github.com/tigrisdata/tigris/server/transaction"
 )
 
 const (
-	refreshToken      = "refresh_token"
-	scope             = "offline_access openid"
-	createdBy         = "created_by"
-	createdAt         = "created_at"
-	updatedBy         = "updated_by"
-	updatedAt         = "updated_at"
-	tigrisNamespace   = "tigris_namespace"
-	clientCredentials = "client_credentials"
+	refreshToken       = "refresh_token"
+	accessToken        = "access_token"
+	scope              = "offline_access openid"
+	createdBy          = "created_by"
+	createdAt          = "created_at"
+	updatedBy          = "updated_by"
+	updatedAt          = "updated_at"
+	tigrisNamespace    = "tigris_namespace"
+	clientCredentials  = "client_credentials"
+	defaultNamespaceId = 1
 )
 
 type AuthProvider interface {
-	GetAccessToken(req *api.GetAccessTokenRequest) (*api.GetAccessTokenResponse, error)
+	GetAccessToken(ctx context.Context, req *api.GetAccessTokenRequest) (*api.GetAccessTokenResponse, error)
 	CreateApplication(ctx context.Context, req *api.CreateApplicationRequest) (*api.CreateApplicationResponse, error)
 	UpdateApplication(ctx context.Context, req *api.UpdateApplicationRequest) (*api.UpdateApplicationResponse, error)
 	RotateApplicationSecret(ctx context.Context, req *api.RotateApplicationSecretRequest) (*api.RotateApplicationSecretResponse, error)
@@ -54,6 +60,8 @@ type AuthProvider interface {
 type Auth0 struct {
 	AuthConfig config.AuthConfig
 	Management *management.Management
+	userStore  *metadata.UserSubspace
+	txMgr      *transaction.Manager
 }
 
 func (a *Auth0) managementToTigrisErrorCode(err error) api.Code {
@@ -64,12 +72,12 @@ func (a *Auth0) managementToTigrisErrorCode(err error) api.Code {
 	return api.FromHttpCode(managementError.Status())
 }
 
-func (a *Auth0) GetAccessToken(req *api.GetAccessTokenRequest) (*api.GetAccessTokenResponse, error) {
+func (a *Auth0) GetAccessToken(ctx context.Context, req *api.GetAccessTokenRequest) (*api.GetAccessTokenResponse, error) {
 	switch req.GrantType {
 	case api.GrantType_REFRESH_TOKEN:
 		return getAccessTokenUsingRefreshToken(req, a)
 	case api.GrantType_CLIENT_CREDENTIALS:
-		return getAccessTokenUsingClientCredentials(req, a)
+		return getAccessTokenUsingClientCredentials(ctx, req, a)
 	}
 	return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "Failed to GetAccessToken: reason = unsupported grant_type, it has to be one of [refresh_token, client_credentials]")
 }
@@ -85,16 +93,16 @@ func (a *Auth0) CreateApplication(ctx context.Context, req *api.CreateApplicatio
 	}
 
 	nonInteractiveApp := "non_interactive"
-	metadata := map[string]string{}
-	metadata[createdAt] = time.Now().Format(time.RFC3339)
-	metadata[createdBy] = currentSub
-	metadata[tigrisNamespace] = currentNamespace
+	m := map[string]string{}
+	m[createdAt] = time.Now().Format(time.RFC3339)
+	m[createdBy] = currentSub
+	m[tigrisNamespace] = currentNamespace
 
 	c := &management.Client{
 		Name:           &req.Name,
 		Description:    &req.Description,
 		AppType:        &nonInteractiveApp,
-		ClientMetadata: metadata,
+		ClientMetadata: m,
 	}
 
 	err = a.Management.Client.Create(c)
@@ -115,7 +123,7 @@ func (a *Auth0) CreateApplication(ctx context.Context, req *api.CreateApplicatio
 		// delete this app and clean up
 		err := a.Management.Client.Delete(c.GetClientID())
 		if err != nil {
-			log.Warn().Msgf("Failed to cleanup half-created app with clientId=%s, reason=%s", c.GetClientID(), err.Error())
+			log.Warn().Err(err).Msgf("Failed to cleanup half-created app with clientId=%s", c.GetClientID())
 		}
 		return nil, api.Errorf(a.managementToTigrisErrorCode(err), "Failed to create application grant: reason = %s", err.Error())
 	}
@@ -139,11 +147,19 @@ func (a *Auth0) DeleteApplication(ctx context.Context, req *api.DeleteApplicatio
 		return nil, err
 	}
 
+	// remove it from metadata cache
+	err = deleteApplication(ctx, req.GetId(), a)
+	if err != nil {
+		return nil, err
+	}
+
+	// remove it from auth0
 	err = a.Management.Client.Delete(req.GetId())
 	if err != nil {
-		log.Warn().Msgf("Failed to cleanup half-created app with clientId=%s, reason=%s", req.GetId(), err.Error())
+		log.Warn().Err(err).Msgf("Failed to cleanup half-created app with clientId=%s", req.GetId())
 		return nil, api.Errorf(a.managementToTigrisErrorCode(err), "Failed to delete application: reason = %s", err.Error())
 	}
+
 	return &api.DeleteApplicationResponse{
 		Deleted: true,
 	}, nil
@@ -155,18 +171,18 @@ func (a *Auth0) UpdateApplication(ctx context.Context, req *api.UpdateApplicatio
 		return nil, err
 	}
 
-	metadata := client.GetClientMetadata()
-	metadata[updatedBy] = currentSub
-	metadata[updatedAt] = time.Now().Format(time.RFC3339)
+	m := client.GetClientMetadata()
+	m[updatedBy] = currentSub
+	m[updatedAt] = time.Now().Format(time.RFC3339)
 	appToUpdate := &management.Client{
 		Name:           &req.Name,
 		Description:    &req.Description,
-		ClientMetadata: metadata,
+		ClientMetadata: m,
 	}
 
 	err = a.Management.Client.Update(req.GetId(), appToUpdate)
 	if err != nil {
-		log.Warn().Msgf("Failed to update app clientId=%s, reason=%s", req.GetId(), err.Error())
+		log.Warn().Err(err).Msgf("Failed to update app clientId=%s", req.GetId())
 		return nil, api.Errorf(a.managementToTigrisErrorCode(err), "Failed to update application: reason = %s", err.Error())
 	}
 
@@ -194,10 +210,17 @@ func (a *Auth0) RotateApplicationSecret(ctx context.Context, req *api.RotateAppl
 		return nil, err
 	}
 
+	// remove it from metadata cache
+	err = deleteApplication(ctx, req.GetId(), a)
+	if err != nil {
+		return nil, err
+	}
+
 	updatedApp, err := a.Management.Client.RotateSecret(req.GetId())
 	if err != nil {
 		return nil, api.Errorf(a.managementToTigrisErrorCode(err), "Failed to rotate application secret: reason = %s", err.Error())
 	}
+
 	return &api.RotateApplicationSecretResponse{
 		Application: &api.Application{
 			Id:          updatedApp.GetClientID(),
@@ -260,6 +283,7 @@ func validateOwnership(ctx context.Context, operationName string, appId string, 
 	}
 	return client, currentSub, nil
 }
+
 func getCurrentSub(ctx context.Context) (string, error) {
 	// further filter for this particular user
 	token, err := request.GetAccessToken(ctx)
@@ -280,13 +304,14 @@ func getAccessTokenUsingRefreshToken(req *api.GetAccessTokenRequest, a *Auth0) (
 	if err != nil {
 		return nil, api.Errorf(api.Code_INTERNAL, "Failed to get access token: reason = %s", err.Error())
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, api.Errorf(api.Code_INTERNAL, "Failed to get access token: reason = %s", err.Error())
 	}
 	bodyStr := string(body)
-	if resp.StatusCode == 200 {
+	if resp.StatusCode == http.StatusOK {
 		getAccessTokenResponse := api.GetAccessTokenResponse{}
 
 		err = json.Unmarshal([]byte(bodyStr), &getAccessTokenResponse)
@@ -299,7 +324,48 @@ func getAccessTokenUsingRefreshToken(req *api.GetAccessTokenRequest, a *Auth0) (
 	return nil, api.Errorf(api.Code_INTERNAL, "Failed to get access token: reason = %s", bodyStr)
 }
 
-func getAccessTokenUsingClientCredentials(req *api.GetAccessTokenRequest, a *Auth0) (*api.GetAccessTokenResponse, error) {
+type tokenMetadataEntry struct {
+	AccessToken string
+	ExpireAt    int64 // unix second
+}
+
+func getAccessTokenUsingClientCredentials(ctx context.Context, req *api.GetAccessTokenRequest, a *Auth0) (*api.GetAccessTokenResponse, error) {
+	// lookup the internal namespace
+	tx, err := a.txMgr.StartTx(ctx)
+	if err != nil {
+		return nil, tokenError("Failed to get access token: reason = could not start tx for internal lookup", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	metadataKey := createAccessTokenMetadataKey(req.GetClientSecret())
+	cachedToken, err := a.userStore.GetUserMetadata(ctx, tx, defaultNamespaceId, metadata.Application, req.GetClientId(), metadataKey)
+	if err != nil {
+		return nil, tokenError("Failed to get access token: reason = could not process cache", err)
+	}
+
+	if cachedToken != nil {
+		tokenMetadataEntry := &tokenMetadataEntry{}
+		err := json.Unmarshal(cachedToken, tokenMetadataEntry)
+		if err != nil {
+			return nil, tokenError("Failed to get access token: reason = could not internally lookup", err)
+		}
+		// invalidate cache before 10min of expiry
+		if tokenMetadataEntry.ExpireAt > time.Now().Unix()+600 {
+			return &api.GetAccessTokenResponse{
+				AccessToken: tokenMetadataEntry.AccessToken,
+				ExpiresIn:   int32(tokenMetadataEntry.ExpireAt - time.Now().Unix()),
+			}, nil
+		} else {
+			// expired entry, delete it
+			err := deleteApplicationMetadata(ctx, defaultNamespaceId, req.GetClientId(), metadataKey, a)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	payload := map[string]string{}
 	payload["client_id"] = req.ClientId
 	payload["client_secret"] = req.ClientSecret
@@ -307,37 +373,130 @@ func getAccessTokenUsingClientCredentials(req *api.GetAccessTokenRequest, a *Aut
 	payload["grant_type"] = clientCredentials
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
-		return nil, api.Errorf(api.Code_INTERNAL, "Failed to get access token: reason = %s", err.Error())
+		return nil, tokenError("Failed to get access token: reason = failed to create external request payload", err)
 	}
 
 	resp, err := http.Post(a.AuthConfig.ExternalTokenURL, "application/json", bytes.NewBuffer(jsonPayload))
 	if err != nil {
-		return nil, api.Errorf(api.Code_INTERNAL, "Failed to get access token: reason = %s", err.Error())
+		return nil, tokenError("Failed to get access token: reason = failed to make external request", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, api.Errorf(api.Code_INTERNAL, "Failed to get access token: reason = %s", err.Error())
+		return nil, tokenError("Failed to get access token: reason = failed to read external response", err)
 	}
 	bodyStr := string(body)
-	if resp.StatusCode == 200 {
+	if resp.StatusCode == http.StatusOK {
 		getAccessTokenResponse := api.GetAccessTokenResponse{}
 
 		err = json.Unmarshal([]byte(bodyStr), &getAccessTokenResponse)
 		if err != nil {
-			return nil, api.Errorf(api.Code_INTERNAL, "Failed to parse external response: reason = %s", err.Error())
+			return nil, tokenError("Failed to parse external response: reason = failed to unmarshal JSON", err)
 		}
+
+		// cache it
+		err = insertApplicationMetadata(ctx, metadataKey, req, &getAccessTokenResponse, a)
+		if err != nil {
+			return nil, err
+		}
+
 		return &getAccessTokenResponse, nil
 	}
 	log.Error().Msgf("Auth0 response status code=%d", resp.StatusCode)
 	return nil, api.Errorf(api.Code_INTERNAL, "Failed to get access token: reason = %s", bodyStr)
 }
 
+func tokenError(userfacingErrorMsg string, err error) error {
+	log.Warn().Err(err).Msg(userfacingErrorMsg)
+	return api.Errorf(api.Code_INTERNAL, userfacingErrorMsg)
+}
+
 func readDate(dateStr string) int64 {
 	result, err := date.ToUnixMilli(time.RFC3339, dateStr)
 	if err != nil {
-		log.Warn().Msgf("%s field was not parsed to int64", dateStr)
+		log.Warn().Err(err).Msgf("%s field was not parsed to int64", dateStr)
 		result = -1
 	}
 	return result
+}
+
+func createAccessTokenMetadataKey(clientSecret string) string {
+	hash := sha256.Sum256([]byte(clientSecret))
+	encodedHash := base64.StdEncoding.EncodeToString(hash[:])
+	return accessToken + encodedHash
+}
+
+func deleteApplicationMetadata(ctx context.Context, namespaceId uint32, appId string, metadataKey string, a *Auth0) error {
+	// delete metadata related to this app from user metadata
+	tx, err := a.txMgr.StartTx(ctx)
+	if err != nil {
+		return tokenError("Failed to delete application metadata", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	err = a.userStore.DeleteUserMetadata(ctx, tx, namespaceId, metadata.Application, appId, metadataKey)
+	if err != nil {
+		return tokenError("Failed to delete metadata", err)
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return tokenError("Failed to delete metadata", err)
+	}
+	return nil
+}
+
+func deleteApplication(ctx context.Context, appId string, a *Auth0) error {
+	tx, err := a.txMgr.StartTx(ctx)
+	if err != nil {
+		return tokenError("Failed to delete application metadata", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	err = a.userStore.DeleteUser(ctx, tx, defaultNamespaceId, metadata.Application, appId)
+	if err != nil {
+		return tokenError("Failed to delete metadata", err)
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return tokenError("Failed to delete metadata", err)
+	}
+	return nil
+}
+
+func insertApplicationMetadata(ctx context.Context, metadataKey string, req *api.GetAccessTokenRequest, getAccessTokenResponse *api.GetAccessTokenResponse, a *Auth0) error {
+	// cache it
+	tx, err := a.txMgr.StartTx(ctx)
+	if err != nil {
+		return tokenError("Failed to get access token: reason = could not process cache", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	cacheEntry := &tokenMetadataEntry{
+		AccessToken: getAccessTokenResponse.GetAccessToken(),
+		ExpireAt:    time.Now().Add(time.Second * time.Duration(getAccessTokenResponse.GetExpiresIn())).Unix(),
+	}
+	cacheEntryBytes, err := json.Marshal(&cacheEntry)
+	if err != nil {
+		return tokenError("Failed to get access token: reason = could not process cache", err)
+	}
+
+	err = a.userStore.InsertUserMetadata(ctx, tx, defaultNamespaceId, metadata.Application, req.GetClientId(), metadataKey, cacheEntryBytes)
+	if err != nil {
+		return tokenError("Failed to get access token: reason = could not process cache", err)
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return tokenError("Failed to get access token: reason = could not process cache", err)
+	}
+	return nil
 }

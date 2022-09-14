@@ -37,8 +37,8 @@ type Muxer struct {
 	servers []Server
 }
 
-func NewMuxer(cfg *config.Config, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) *Muxer {
-	return &Muxer{servers: []Server{NewHTTPServer(cfg, tenantMgr, txMgr), NewGRPCServer(cfg, tenantMgr, txMgr)}}
+func NewMuxer(cfg *config.Config) *Muxer {
+	return &Muxer{servers: []Server{NewHTTPServer(cfg), NewGRPCServer(cfg)}}
 }
 
 func (m *Muxer) RegisterServices(kvStore kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) {
