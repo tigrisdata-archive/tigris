@@ -643,6 +643,87 @@ func (x *SubscribeResponse) MarshalJSON() ([]byte, error) {
 	return json.Marshal(resp)
 }
 
+func (x *InsertUserMetadataRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+	for key, value := range mp {
+		switch key {
+		case "metadataKey":
+			if err := jsoniter.Unmarshal(value, &x.MetadataKey); err != nil {
+				return err
+			}
+		case "value":
+			x.Value = value
+		}
+	}
+	return nil
+}
+
+func (x *UpdateUserMetadataRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+	for key, value := range mp {
+		switch key {
+		case "metadataKey":
+			if err := jsoniter.Unmarshal(value, &x.MetadataKey); err != nil {
+				return err
+			}
+		case "value":
+			x.Value = value
+		}
+	}
+	return nil
+}
+
+func (x *GetUserMetadataResponse) MarshalJSON() ([]byte, error) {
+	resp := struct {
+		MetadataKey string          `json:"metadataKey,omitempty"`
+		NamespaceId uint32          `json:"namespaceId,omitempty"`
+		UserId      string          `json:"userId,omitempty"`
+		Value       json.RawMessage `json:"value,omitempty"`
+	}{
+		MetadataKey: x.MetadataKey,
+		NamespaceId: x.NamespaceId,
+		UserId:      x.UserId,
+		Value:       x.Value,
+	}
+	return json.Marshal(resp)
+}
+
+func (x *InsertUserMetadataResponse) MarshalJSON() ([]byte, error) {
+	resp := struct {
+		MetadataKey string          `json:"metadataKey,omitempty"`
+		NamespaceId uint32          `json:"namespaceId,omitempty"`
+		UserId      string          `json:"userId,omitempty"`
+		Value       json.RawMessage `json:"value,omitempty"`
+	}{
+		MetadataKey: x.MetadataKey,
+		NamespaceId: x.NamespaceId,
+		UserId:      x.UserId,
+		Value:       x.Value,
+	}
+	return json.Marshal(resp)
+}
+
+func (x *UpdateUserMetadataResponse) MarshalJSON() ([]byte, error) {
+	resp := struct {
+		MetadataKey string          `json:"metadataKey,omitempty"`
+		NamespaceId uint32          `json:"namespaceId,omitempty"`
+		UserId      string          `json:"userId,omitempty"`
+		Value       json.RawMessage `json:"value,omitempty"`
+	}{
+		MetadataKey: x.MetadataKey,
+		NamespaceId: x.NamespaceId,
+		UserId:      x.UserId,
+		Value:       x.Value,
+	}
+	return json.Marshal(resp)
+}
+
 // Proper marshal timestamp in metadata
 type dmlResponse struct {
 	Metadata      Metadata          `json:"metadata,omitempty"`

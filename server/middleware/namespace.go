@@ -18,55 +18,54 @@ import (
 	"context"
 
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/lib/container"
-	"github.com/tigrisdata/tigris/server/config"
-	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/request"
 	"google.golang.org/grpc"
 )
 
-type NamespaceSetter struct {
-	tenantManager      *metadata.TenantManager
-	namespaceExtractor request.NamespaceExtractor
-	excludedMethods    container.HashSet
-	config             *config.Config
-}
+var (
+	excludedMethods = container.NewHashSet(
+		"/HealthAPI/Health",
+		"/tigrisdata.admin.v1.Admin/createNamespace",
+		"/tigrisdata.admin.v1.Admin/listNamespaces",
+	)
 
-func (r *NamespaceSetter) NamespaceSetterUnaryServerInterceptor() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	namespaceExtractor = &request.AccessTokenNamespaceExtractor{}
+)
+
+func namespaceSetterUnaryServerInterceptor(enabled bool) func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		if !r.config.Auth.EnableNamespaceIsolation || r.excludedMethods.Contains(info.FullMethod) {
-			return handler(request.SetNamespace(ctx, request.DefaultNamespaceName), req)
-		} else {
-			namespace, err := r.namespaceExtractor.Extract(ctx)
-			if err != nil {
-				return nil, err
+		namespace := request.DefaultNamespaceName
+		if enabled && !excludedMethods.Contains(info.FullMethod) {
+			var err error
+			if namespace, err = namespaceExtractor.Extract(ctx); err != nil {
+				// We know that getAccessToken with app_id/app_secret credentials doesn't have namespace set.
+				// Mark it as default_namespace instead of unknown.
+				if info.FullMethod != "/tigrisdata.auth.v1.Auth/getAccessToken" {
+					// We return and error when the token is set, but namespace is empty
+					return nil, err
+				}
+				namespace = request.DefaultNamespaceName
 			}
-			if namespace == "" {
-				return handler(request.SetNamespace(ctx, "unknown"), req)
-			}
-			return handler(request.SetNamespace(ctx, namespace), req)
 		}
+
+		return handler(request.SetNamespace(ctx, namespace), req)
 	}
 }
 
-func (r *NamespaceSetter) NamespaceSetterStreamServerInterceptor() grpc.StreamServerInterceptor {
+func namespaceSetterStreamServerInterceptor(enabled bool) grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		if !r.config.Auth.EnableNamespaceIsolation {
-			wrapped := middleware.WrapServerStream(stream)
-			wrapped.WrappedContext = request.SetNamespace(stream.Context(), request.DefaultNamespaceName)
-			return handler(srv, wrapped)
-		} else {
-			namespace, err := r.namespaceExtractor.Extract(stream.Context())
-			if err != nil {
+		namespace := request.DefaultNamespaceName
+		if enabled {
+			var err error
+			if namespace, err = namespaceExtractor.Extract(stream.Context()); err != nil {
 				return err
 			}
-			if namespace == "" {
-				return api.Errorf(api.Code_INVALID_ARGUMENT, "Could not find namespace")
-			}
-			wrapped := middleware.WrapServerStream(stream)
-			wrapped.WrappedContext = request.SetNamespace(stream.Context(), namespace)
-			return handler(srv, wrapped)
 		}
+
+		wrapped := middleware.WrapServerStream(stream)
+		wrapped.WrappedContext = request.SetNamespace(stream.Context(), namespace)
+
+		return handler(srv, wrapped)
 	}
 }

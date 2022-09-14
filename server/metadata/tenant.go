@@ -222,6 +222,14 @@ func (m *TenantManager) GetNamespaceNames() []string {
 	return res
 }
 
+func (m *TenantManager) GetNamespaceId(namespaceName string) (uint32, error) {
+	tenant := m.getTenantFromCache(namespaceName)
+	if tenant == nil {
+		return 0, api.Errorf(api.Code_NOT_FOUND, "Namespace not found")
+	}
+	return tenant.namespace.Id(), nil
+}
+
 // GetTenant is responsible for returning the tenant from the cache. If the tenant is not available in the cache then
 // this method will attempt to load it from the database and will update the tenant manager cache accordingly.
 func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string, txMgr *transaction.Manager) (tenant *Tenant, err error) {

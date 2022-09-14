@@ -108,6 +108,17 @@ func (x *DeleteRequest) Validate() error {
 	return nil
 }
 
+func (x *PublishRequest) Validate() error {
+	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
+		return err
+	}
+
+	if len(x.GetMessages()) == 0 {
+		return Errorf(Code_INVALID_ARGUMENT, "empty messages received")
+	}
+	return nil
+}
+
 func (x *ReadRequest) Validate() error {
 	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
 		return err

@@ -178,9 +178,8 @@ func SetNamespace(ctx context.Context, namespace string) context.Context {
 
 func GetAccessToken(ctx context.Context) (*AccessToken, error) {
 	// read token
-	value := ctx.Value(RequestMetadataCtxKey{})
-	if value != nil {
-		if requestMetadata, ok := value.(*RequestMetadata); ok {
+	if value := ctx.Value(RequestMetadataCtxKey{}); value != nil {
+		if requestMetadata, ok := value.(*RequestMetadata); ok && requestMetadata.accessToken != nil {
 			return requestMetadata.accessToken, nil
 		}
 	}
@@ -189,8 +188,7 @@ func GetAccessToken(ctx context.Context) (*AccessToken, error) {
 
 func GetNamespace(ctx context.Context) (string, error) {
 	// read token
-	value := ctx.Value(RequestMetadataCtxKey{})
-	if value != nil {
+	if value := ctx.Value(RequestMetadataCtxKey{}); value != nil {
 		if requestMetadata, ok := value.(*RequestMetadata); ok {
 			return requestMetadata.namespace, nil
 		}
@@ -205,13 +203,11 @@ func (tokenNamespaceExtractor *AccessTokenNamespaceExtractor) Extract(ctx contex
 		return "unknown", nil
 	}
 
-	if token != nil {
-		namespace := token.Namespace
-		if namespace != "" {
-			return namespace, nil
-		}
+	if namespace := token.Namespace; namespace != "" {
+		return namespace, nil
 	}
-	return "", api.Errorf(api.Code_INVALID_ARGUMENT, "Namespace does not exist")
+
+	return "", api.Errorf(api.Code_INVALID_ARGUMENT, "Namespace is empty in the token")
 }
 
 func IsAdminApi(fullMethodName string) bool {
