@@ -15,11 +15,11 @@
 package search
 
 import (
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/lib/container"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
-	"github.com/pkg/errors"
-	api "github.com/tigrisdata/tigris/api/server/v1"
 )
 
 // SortedFacets is a Temporary workaround to merge facet values when aggregating results from
@@ -28,14 +28,14 @@ import (
 type SortedFacets struct {
 	counts     map[string]*container.PriorityQueue[FacetCount]
 	facetAttrs map[string]*FacetAttrs
-	sorted     bool
+	closed     bool
 }
 
 func NewSortedFacets() *SortedFacets {
 	return &SortedFacets{
 		counts:     map[string]*container.PriorityQueue[FacetCount]{},
 		facetAttrs: map[string]*FacetAttrs{},
-		sorted:     false,
+		closed:     false,
 	}
 }
 
@@ -45,7 +45,7 @@ func (f *SortedFacets) Add(tsCounts *tsApi.FacetCounts) error {
 	if tsCounts == nil || tsCounts.FieldName == nil {
 		return nil
 	}
-	if f.sorted {
+	if f.closed {
 		return errors.New("Already initialized and sorted. No more inserts.")
 	}
 
@@ -68,7 +68,7 @@ func (f *SortedFacets) Add(tsCounts *tsApi.FacetCounts) error {
 // GetFacetCount removes from priority queue and returns the value with highest count for the field if present
 // else returns nil, False
 func (f *SortedFacets) GetFacetCount(field string) (*FacetCount, bool) {
-	if !f.sorted {
+	if !f.closed {
 		f.sort()
 	}
 	if f.hasMoreFacets(field) {
@@ -87,9 +87,9 @@ func (f *SortedFacets) GetFacetCount(field string) (*FacetCount, bool) {
 func (f *SortedFacets) GetStats(field string) *api.FacetStats {
 	if attrs, ok := f.facetAttrs[field]; ok {
 		return attrs.stats
-	} else {
-		return nil
 	}
+	return nil
+
 }
 
 func (f *SortedFacets) hasMoreFacets(field string) bool {
@@ -107,19 +107,18 @@ func (f *SortedFacets) initPriorityQueue(field string) {
 
 // sort will queue up the collected unique facet counts in priority queue
 func (f *SortedFacets) sort() {
-	if f.sorted {
+	if f.closed {
+		log.Err(errors.New("Facets should only be sorted once"))
 		return
 	}
 
 	for field, attrs := range f.facetAttrs {
 		f.initPriorityQueue(field)
 		for _, fc := range attrs.counts {
-			if err := f.counts[field].Push(fc); err != nil {
-				log.Err(err)
-			}
+			f.counts[field].Push(fc)
 		}
 	}
-	f.sorted = true
+	f.closed = true
 }
 
 type FacetAttrs struct {

@@ -27,8 +27,7 @@ func TestPriorityQueue(t *testing.T) {
 		})
 
 		for _, doc := range documents {
-			err := pq.Push(&doc)
-			assert.NoError(t, err)
+			pq.Push(&doc)
 		}
 
 		expectedOrder := []int{1, 2, 3, 4, 5}
@@ -45,8 +44,7 @@ func TestPriorityQueue(t *testing.T) {
 		})
 
 		for _, doc := range documents {
-			err := pq.Push(&doc)
-			assert.NoError(t, err)
+			pq.Push(&doc)
 		}
 
 		expectedOrder := []int{5, 4, 3, 2, 1}
@@ -71,7 +69,7 @@ func TestPriorityQueue(t *testing.T) {
 			return this.Priority > that.Priority
 		})
 		assert.Equal(t, pq.Len(), 0)
-		_ = pq.Push(&documents[0])
+		pq.Push(&documents[0])
 		assert.Equal(t, pq.Len(), 1)
 		_, _ = pq.Pop()
 		assert.Equal(t, pq.Len(), 0)

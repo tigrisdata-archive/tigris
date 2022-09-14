@@ -15,11 +15,12 @@
 package search
 
 import (
-	"testing"
-	"github.com/stretchr/testify/assert"
-	tsApi "github.com/typesense/typesense-go/typesense/api"
 	"encoding/json"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
 func TestFacetCountComparator(t *testing.T) {

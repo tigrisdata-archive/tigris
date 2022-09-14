@@ -244,8 +244,7 @@ func TestSortedHits(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			pq := NewSortedHits(tc.sortOrder)
 			for _, h := range tc.inputHits {
-				err := pq.Add(h)
-				assert.NoError(t, err)
+				pq.Add(h)
 			}
 
 			assert.Equal(t, len(tc.expectedOrder), pq.Len())
@@ -269,7 +268,7 @@ func TestSortedHits(t *testing.T) {
 		assert.Equal(t, 0, pq.Len())
 		assert.False(t, pq.HasMoreHits())
 
-		_ = pq.Add(searchHits[0])
+		pq.Add(searchHits[0])
 		assert.Equal(t, 1, pq.Len())
 		assert.True(t, pq.HasMoreHits())
 

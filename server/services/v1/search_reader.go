@@ -108,9 +108,7 @@ func (p *pageReader) read() error {
 		if r.Hits != nil {
 			for _, h := range *r.Hits {
 				hit := tsearch.NewSearchHit(&h)
-				if ulog.E(sortedHits.Add(hit)) {
-					continue
-				}
+				sortedHits.Add(hit)
 			}
 		}
 
