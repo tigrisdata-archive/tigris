@@ -19,25 +19,13 @@ import (
 )
 
 var (
-	SearchOkRequests    tally.Scope
-	SearchErrorRequests tally.Scope
+	SearchOkCount       tally.Scope
+	SearchErrorCount    tally.Scope
 	SearchRespTime      tally.Scope
+	SearchErrorRespTime tally.Scope
 )
 
 func getSearchOkTagKeys() []string {
-	return []string{
-		"grpc_method",
-		"grpc_service",
-		"tigris_tenant",
-		"grpc_service_type",
-		"env",
-		"db",
-		"collection",
-		"search_method",
-	}
-}
-
-func getSearchTimerTagKeys() []string {
 	return []string{
 		"grpc_method",
 		"grpc_service",
@@ -66,9 +54,10 @@ func getSearchErrorTagKeys() []string {
 }
 
 func initializeSearchScopes() {
-	SearchOkRequests = SearchMetrics.SubScope("count")
-	SearchErrorRequests = SearchMetrics.SubScope("count")
+	SearchOkCount = SearchMetrics.SubScope("count")
+	SearchErrorCount = SearchMetrics.SubScope("count")
 	SearchRespTime = SearchMetrics.SubScope("response")
+	SearchErrorRespTime = SearchMetrics.SubScope("error_response")
 }
 
 func GetSearchTags(reqMethodName string) map[string]string {

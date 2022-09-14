@@ -34,8 +34,8 @@ func TestSessionMetrics(t *testing.T) {
 
 	t.Run("Test Session counters", func(t *testing.T) {
 		for _, tags := range testTags {
-			SessionOkRequests.Tagged(tags).Counter("ok").Inc(1)
-			SessionErrorRequests.Tagged(tags).Counter("error").Inc(1)
+			SessionOkCount.Tagged(tags).Counter("ok").Inc(1)
+			SessionErrorCount.Tagged(tags).Counter("error").Inc(1)
 		}
 	})
 

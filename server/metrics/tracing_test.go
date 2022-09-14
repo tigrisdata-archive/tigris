@@ -82,11 +82,14 @@ func TestTracing(t *testing.T) {
 	t.Run("Test counters", func(t *testing.T) {
 		config.DefaultConfig.Tracing.Enabled = true
 		InitializeMetrics()
+		ctx := context.Background()
 		spanMeta := NewSpanMeta("test.service.name", "TestResource", "rpc", GetGlobalTags())
-		defer RequestsRespTime.Tagged(spanMeta.GetRequestTimerTags()).Timer("time").Start().Stop()
-		spanMeta.CountOkForScope(OkRequests, spanMeta.GetRequestOkTags())
+		spanMeta.StartTracing(ctx, false)
+		spanMeta.FinishTracing(ctx)
+		spanMeta.RecordDuration(RequestsRespTime, spanMeta.GetRequestOkTags())
+		spanMeta.CountOkForScope(RequestsOkCount, spanMeta.GetRequestOkTags())
 		err := fmt.Errorf("hello error")
-		spanMeta.CountErrorForScope(ErrorRequests, spanMeta.GetRequestErrorTags(err))
+		spanMeta.CountErrorForScope(RequestsErrorCount, spanMeta.GetRequestErrorTags(err))
 	})
 
 	t.Run("Test request tags", func(t *testing.T) {
@@ -101,12 +104,6 @@ func TestTracing(t *testing.T) {
 			assert.NotNil(t, requestOkTags[key])
 		}
 		assert.Equal(t, len(getRequestOkTagKeys()), len(requestOkTags))
-
-		requestTimerTags := spanMeta.GetRequestTimerTags()
-		for _, key := range getRequestTimerTagKeys() {
-			assert.NotNil(t, requestTimerTags[key])
-		}
-		assert.Equal(t, len(getRequestTimerTagKeys()), len(requestOkTags))
 
 		requestErrorTags := spanMeta.GetRequestErrorTags(&FakeError{})
 		for _, key := range getRequestErrorTagKeys() {
@@ -128,12 +125,6 @@ func TestTracing(t *testing.T) {
 		}
 		assert.Equal(t, len(getFdbOkTagKeys()), len(fdbOkTags))
 
-		fdbTimerTags := spanMeta.GetFdbTimerTags()
-		for _, key := range getFdbTimerTagKeys() {
-			assert.NotNil(t, fdbTimerTags[key])
-		}
-		assert.Equal(t, len(getFdbTimerTagKeys()), len(fdbTimerTags))
-
 		fdbErrorTags := spanMeta.GetFdbErrorTags(&FakeError{})
 		for _, key := range getFdbErrorTagKeys() {
 			assert.NotNil(t, fdbErrorTags[key])
@@ -154,12 +145,6 @@ func TestTracing(t *testing.T) {
 		}
 		assert.Equal(t, len(getSearchOkTagKeys()), len(searchOkTags))
 
-		searchTimerTags := spanMeta.GetSearchTimerTags()
-		for _, key := range getSearchTimerTagKeys() {
-			assert.NotNil(t, searchTimerTags[key])
-		}
-		assert.Equal(t, len(getSearchTimerTagKeys()), len(searchTimerTags))
-
 		searchErrorTags := spanMeta.GetSearchErrorTags(&FakeError{})
 		for _, key := range getSearchErrorTagKeys() {
 			assert.NotNil(t, searchErrorTags[key])
@@ -179,12 +164,6 @@ func TestTracing(t *testing.T) {
 			assert.NotNil(t, sessionOkTags[key])
 		}
 		assert.Equal(t, len(getSessionOkTagKeys()), len(sessionOkTags))
-
-		sessionTimerTags := spanMeta.GetSessionTimerTags()
-		for _, key := range getSessionTimerTagKeys() {
-			assert.NotNil(t, sessionTimerTags[key])
-		}
-		assert.Equal(t, len(getSessionTimerTagKeys()), len(sessionTimerTags))
 
 		sessionErrorTags := spanMeta.GetSessionErrorTags(&FakeError{})
 		for _, key := range getSessionErrorTagKeys() {
