@@ -54,13 +54,12 @@ func (pq *PriorityQueue[T]) Pop() (*T, error) {
 
 // Push pushes the element x onto the heap.
 // The complexity is O(log n) where n = h.Len().
-func (pq *PriorityQueue[T]) Push(x *T) error {
+func (pq *PriorityQueue[T]) Push(x *T) {
 	// Copy the item value(s) so that modifications to the source item does not
 	// affect the item on the queue
 	clone := *x
 
 	heap.Push(&pq.queue, &clone)
-	return nil
 }
 
 // queue is the internal data structure used to satisfy heap.Interface and not
