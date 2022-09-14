@@ -82,8 +82,11 @@ func TestTracing(t *testing.T) {
 	t.Run("Test counters", func(t *testing.T) {
 		config.DefaultConfig.Tracing.Enabled = true
 		InitializeMetrics()
+		ctx := context.Background()
 		spanMeta := NewSpanMeta("test.service.name", "TestResource", "rpc", GetGlobalTags())
-		defer RequestsRespTime.Tagged(spanMeta.GetRequestTimerTags()).Timer("time").Start().Stop()
+		spanMeta.StartTracing(ctx, false)
+		spanMeta.FinishTracing(ctx)
+		spanMeta.RecordDuration(RequestsRespTime, spanMeta.GetRequestOkTags())
 		spanMeta.CountOkForScope(OkRequests, spanMeta.GetRequestOkTags())
 		err := fmt.Errorf("hello error")
 		spanMeta.CountErrorForScope(ErrorRequests, spanMeta.GetRequestErrorTags(err))

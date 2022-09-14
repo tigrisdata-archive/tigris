@@ -99,17 +99,18 @@ func measureLow(ctx context.Context, name string, f func() error) {
 	// Low level measurement wrapper that is called by the measure functions on the appropriate receiver
 	spanMeta := metrics.NewSpanMeta(metrics.KvTracingServiceName, name, metrics.FdbSpanType, metrics.GetFdbBaseTags(name))
 	ctx = spanMeta.StartTracing(ctx, true)
-	defer metrics.FdbRespTime.Tagged(spanMeta.GetFdbTimerTags()).Timer("time").Start().Stop()
 	err := f()
 	if err == nil {
 		// Request was ok
 		spanMeta.CountOkForScope(metrics.FdbOkRequests, spanMeta.GetFdbOkTags())
 		_ = spanMeta.FinishTracing(ctx)
+		spanMeta.RecordDuration(metrics.FdbRespTime, spanMeta.GetFdbTimerTags())
 		return
 	}
 	// Request had an error
 	spanMeta.CountErrorForScope(metrics.FdbOkRequests, spanMeta.GetFdbErrorTags(err))
 	_ = spanMeta.FinishWithError(ctx, "fdb", err)
+	spanMeta.RecordDuration(metrics.FdbRespTime, spanMeta.GetFdbTimerTags())
 }
 
 func (m *KeyValueStoreImplWithMetrics) measure(ctx context.Context, name string, f func() error) {

@@ -19,7 +19,10 @@ import (
 	"context"
 	"math"
 	"math/rand"
+	"strconv"
 	"time"
+
+	"github.com/tigrisdata/tigris/util"
 
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
@@ -41,6 +44,18 @@ import (
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
+// Context keys for read_type, write_type, search_type and sort metrics
+
+type QueryTypeDesc struct {
+	ReadType   string
+	WriteType  string
+	SearchType string
+	Sort       bool
+}
+
+type QueryTypeCtxKey struct {
+}
+
 // QueryRunner is responsible for executing the current query and return the response
 type QueryRunner interface {
 	Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error)
@@ -59,6 +74,15 @@ type QueryRunnerFactory struct {
 	encoder     metadata.Encoder
 	cdcMgr      *cdc.Manager
 	searchStore search.Store
+}
+
+func (q *QueryTypeDesc) GetTags() map[string]string {
+	return map[string]string{
+		"read_type":   q.ReadType,
+		"write_type":  q.WriteType,
+		"search_type": q.SearchType,
+		"sort":        strconv.FormatBool(q.Sort),
+	}
 }
 
 // NewQueryRunnerFactory returns QueryRunnerFactory object
@@ -100,7 +124,16 @@ func (f *QueryRunnerFactory) GetDeleteQueryRunner(r *api.DeleteRequest) *DeleteQ
 }
 
 // GetStreamingQueryRunner returns StreamingQueryRunner
-func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streaming Streaming) *StreamingQueryRunner {
+func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streaming Streaming) StreamingQueryRunnerInterface {
+	if config.DefaultConfig.Tracing.Enabled {
+		return &StreamingQueryRunnerWithMetrics{
+			&StreamingQueryRunner{
+				BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+				req:             r,
+				streaming:       streaming,
+			},
+		}
+	}
 	return &StreamingQueryRunner{
 		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
 		req:             r,
@@ -569,12 +602,66 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}, ctx, nil
 }
 
+type StreamingQueryRunnerInterface interface {
+	buildReaderOptions(tenant *metadata.Tenant, db *metadata.Database, collection *schema.DefaultCollection) (readerOptions, error)
+	ReadOnly(ctx context.Context, tenant *metadata.Tenant) (*Response, context.Context, error)
+	Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error)
+	iterateOnKvStore(ctx context.Context, tx transaction.Tx, options readerOptions) ([]byte, error)
+	iterateOnIndexingStore(ctx context.Context, collection *schema.DefaultCollection, options readerOptions) error
+	iterate(iterator Iterator, fieldFactory *read.FieldFactory) ([]byte, error)
+}
+
 // StreamingQueryRunner is a runner used for Queries that are reads and needs to return result in streaming fashion
 type StreamingQueryRunner struct {
 	*BaseQueryRunner
 
 	req       *api.ReadRequest
 	streaming Streaming
+}
+
+type StreamingQueryRunnerWithMetrics struct {
+	r *StreamingQueryRunner
+}
+
+func (s StreamingQueryRunnerWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) (context.Context, error)) {
+	spanMeta := metrics.NewSpanMeta(util.Service, name, "read_only", metrics.GetGlobalTags())
+	spanMeta.StartTracing(ctx, true)
+	resCtx, err := f(ctx)
+	if err != nil {
+		spanMeta.FinishWithError(ctx, "query_runner", err)
+	} else {
+		spanMeta.FinishTracing(ctx)
+	}
+	queryType := resCtx.Value(QueryTypeCtxKey{}).(QueryTypeDesc)
+	spanMeta.RecursiveAddTags(queryType.GetTags())
+}
+
+func (s StreamingQueryRunnerWithMetrics) buildReaderOptions(tenant *metadata.Tenant, db *metadata.Database, collection *schema.DefaultCollection) (readerOptions, error) {
+	return s.r.buildReaderOptions(tenant, db, collection)
+}
+
+func (s StreamingQueryRunnerWithMetrics) ReadOnly(ctx context.Context, tenant *metadata.Tenant) (resp *Response, resCtx context.Context, err error) {
+	s.measure(ctx, "ReadOnly", func(ctx context.Context) (resCtx context.Context, err error) {
+		resp, resCtx, err = s.r.ReadOnly(ctx, tenant)
+		return resCtx, err
+	})
+	return
+}
+
+func (s StreamingQueryRunnerWithMetrics) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
+	return s.r.Run(ctx, tx, tenant)
+}
+
+func (s StreamingQueryRunnerWithMetrics) iterateOnKvStore(ctx context.Context, tx transaction.Tx, options readerOptions) ([]byte, error) {
+	return s.r.iterateOnKvStore(ctx, tx, options)
+}
+
+func (s StreamingQueryRunnerWithMetrics) iterateOnIndexingStore(ctx context.Context, collection *schema.DefaultCollection, options readerOptions) error {
+	return s.r.iterateOnIndexingStore(ctx, collection, options)
+}
+
+func (s StreamingQueryRunnerWithMetrics) iterate(iterator Iterator, fieldFactory *read.FieldFactory) ([]byte, error) {
+	return s.r.iterate(iterator, fieldFactory)
 }
 
 type readerOptions struct {
@@ -689,6 +776,12 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 		}
 		if err != nil {
 			return nil, ctx, nil
+		}
+
+		// Set read type
+		if options.noFilter {
+			queryType := QueryTypeDesc{ReadType: "full_scan"}
+			ctx = context.WithValue(ctx, QueryTypeCtxKey{}, queryType)
 		}
 		return &Response{}, ctx, nil
 	}

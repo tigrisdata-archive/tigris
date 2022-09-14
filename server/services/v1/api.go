@@ -276,7 +276,6 @@ func (s *apiService) Search(r *api.SearchRequest, stream api.Tigris_SearchServer
 	if err != nil {
 		return err
 	}
-
 	return nil
 }
 

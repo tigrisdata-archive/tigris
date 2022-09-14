@@ -67,10 +67,12 @@ func (m *SessionManagerWithMetrics) measure(ctx context.Context, name string, f 
 	if err := f(ctx); err != nil {
 		spanMeta.CountErrorForScope(metrics.SessionErrorRequests, spanMeta.GetSessionErrorTags(err))
 		_ = spanMeta.FinishWithError(ctx, "session", err)
+		spanMeta.RecordDuration(metrics.SessionRespTime, spanMeta.GetSessionTimerTags())
 		return
 	}
 	spanMeta.CountOkForScope(metrics.SessionOkRequests, spanMeta.GetSessionOkTags())
 	_ = spanMeta.FinishTracing(ctx)
+	spanMeta.RecordDuration(metrics.SessionRespTime, spanMeta.GetSessionTimerTags())
 }
 
 func (m SessionManagerWithMetrics) Create(ctx context.Context, trackVerInOwnTxn bool, instantVerTracking bool, track bool) (qs *QuerySession, err error) {

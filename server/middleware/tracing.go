@@ -63,13 +63,13 @@ func traceUnary() func(ctx context.Context, req interface{}, info *grpc.UnarySer
 		tags := reqMetadata.GetInitialTags()
 		spanMeta := metrics.NewSpanMeta(util.Service, info.FullMethod, metrics.GrpcSpanType, tags)
 		spanMeta.AddTags(metrics.GetDbCollTagsForReq(req))
-		defer metrics.RequestsRespTime.Tagged(spanMeta.GetRequestTimerTags()).Timer("time").Start().Stop()
 		ctx = spanMeta.StartTracing(ctx, false)
 		resp, err := handler(ctx, req)
 		if err != nil {
 			// Request had an error
 			spanMeta.CountErrorForScope(metrics.ErrorRequests, spanMeta.GetRequestErrorTags(err))
 			_ = spanMeta.FinishWithError(ctx, "request", err)
+			spanMeta.RecordDuration(metrics.RequestsRespTime, spanMeta.GetRequestTimerTags())
 			ulog.E(err)
 			return nil, err
 		}
@@ -78,6 +78,7 @@ func traceUnary() func(ctx context.Context, req interface{}, info *grpc.UnarySer
 		spanMeta.CountReceivedBytes(metrics.BytesReceived, spanMeta.GetNetworkTags(), proto.Size(req.(proto.Message)))
 		spanMeta.CountSentBytes(metrics.BytesSent, spanMeta.GetNetworkTags(), proto.Size(resp.(proto.Message)))
 		_ = spanMeta.FinishTracing(ctx)
+		spanMeta.RecordDuration(metrics.RequestsRespTime, spanMeta.GetRequestTimerTags())
 		return resp, err
 	}
 }
@@ -96,18 +97,19 @@ func traceStream() grpc.StreamServerInterceptor {
 		}
 		tags := reqMetadata.GetInitialTags()
 		spanMeta := metrics.NewSpanMeta(util.Service, info.FullMethod, metrics.GrpcSpanType, tags)
-		defer metrics.RequestsRespTime.Tagged(spanMeta.GetRequestTimerTags()).Timer("time").Start().Stop()
 		wrapped.spanMeta = spanMeta
 		wrapped.WrappedContext = spanMeta.StartTracing(wrapped.WrappedContext, false)
 		err = handler(srv, wrapped)
 		if err != nil {
 			spanMeta.CountErrorForScope(metrics.ErrorRequests, spanMeta.GetRequestErrorTags(err))
 			wrapped.WrappedContext = spanMeta.FinishWithError(wrapped.WrappedContext, "request", err)
+			spanMeta.RecordDuration(metrics.RequestsRespTime, spanMeta.GetRequestTimerTags())
 			ulog.E(err)
 			return err
 		}
 		spanMeta.CountOkForScope(metrics.OkRequests, spanMeta.GetRequestOkTags())
 		wrapped.WrappedContext = spanMeta.FinishTracing(wrapped.WrappedContext)
+		spanMeta.RecordDuration(metrics.RequestsRespTime, spanMeta.GetRequestTimerTags())
 		return err
 	}
 }

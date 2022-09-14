@@ -17,6 +17,9 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/request"
@@ -44,6 +47,10 @@ type SpanMeta struct {
 	tags         map[string]string
 	span         tracer.Span
 	parent       *SpanMeta
+	started      bool
+	stopped      bool
+	startedAt    time.Time
+	stoppedAt    time.Time
 }
 
 type SpanMetaCtxKey struct {
@@ -183,10 +190,19 @@ func (s *SpanMeta) AddTags(tags map[string]string) {
 	}
 }
 
+func (s *SpanMeta) RecursiveAddTags(tags map[string]string) {
+	s.AddTags(tags)
+	if s.parent != nil {
+		s.parent.RecursiveAddTags(tags)
+	}
+}
+
 func (s *SpanMeta) StartTracing(ctx context.Context, childOnly bool) context.Context {
 	if !config.DefaultConfig.Tracing.Enabled {
 		return ctx
 	}
+	s.startedAt = time.Now()
+	s.started = true
 	spanOpts := s.GetSpanOptions()
 	parentSpanMeta, parentExists := SpanMetaFromContext(ctx)
 	if parentExists {
@@ -212,6 +228,9 @@ func (s *SpanMeta) StartTracing(ctx context.Context, childOnly bool) context.Con
 }
 
 func (s *SpanMeta) FinishTracing(ctx context.Context) context.Context {
+	if !s.started {
+		log.Error().Str("service_name", s.serviceName).Str("resource_name", s.resourceName).Msg("Finish tracing called before starting the trace")
+	}
 	if s.span != nil {
 		s.span.Finish()
 	}
@@ -225,7 +244,17 @@ func (s *SpanMeta) FinishTracing(ctx context.Context) context.Context {
 		// This was the top level span meta
 		ctx = ClearSpanMetaContext(ctx)
 	}
+	s.stopped = true
+	s.stoppedAt = time.Now()
 	return ctx
+}
+
+func (s *SpanMeta) RecordDuration(scope tally.Scope, tags map[string]string) {
+	// Should be called after tracing is finished
+	if !s.started || !s.stopped {
+		log.Error().Str("service_name", s.serviceName).Str("resource_name", s.resourceName).Msg("RecordDuration was called on a span that was not started ot stopped")
+	}
+	scope.Tagged(tags).Timer("time").Record(s.stoppedAt.Sub(s.startedAt))
 }
 
 func (s *SpanMeta) FinishWithError(ctx context.Context, source string, err error) context.Context {
@@ -242,5 +271,7 @@ func (s *SpanMeta) FinishWithError(ctx context.Context, source string, err error
 	s.span.Finish(finishOptions...)
 	s.span = nil
 	ClearSpanMetaContext(ctx)
+	s.stopped = true
+	s.stoppedAt = time.Now()
 	return ctx
 }
