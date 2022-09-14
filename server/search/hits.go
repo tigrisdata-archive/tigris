@@ -64,11 +64,10 @@ func NewSortedHits(sortingOrder *sort.Ordering) SortedHits {
 	}
 }
 
-func (s *SortedHits) Add(hit *Hit) error {
-	if hit == nil || hit.Document == nil {
-		return nil
+func (s *SortedHits) Add(hit *Hit) {
+	if hit != nil || hit.Document != nil {
+		s.hits.Push(hit)
 	}
-	return s.hits.Push(hit)
 }
 
 func (s *SortedHits) Get() (*Hit, error) {
