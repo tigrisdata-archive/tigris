@@ -110,16 +110,16 @@ func GetJWTValidator(config *config.Config) *validator.Validator {
 func measuredAuthFunction(ctx context.Context, jwtValidator *validator.Validator, config *config.Config, cache *lru.Cache) (ctxResult context.Context, err error) {
 	spanMeta := metrics.NewSpanMeta("auth", "auth", metrics.AuthSpanType, metrics.GetAuthBaseTags(ctx))
 	spanMeta.StartTracing(ctx, true)
-	timer := metrics.AuthRespTime.Tagged(spanMeta.GetAuthTimerTags()).Timer("time").Start()
 	ctxResult, err = authFunction(ctx, jwtValidator, config, cache)
-	timer.Stop()
 	if err != nil {
-		metrics.AuthErrorRequests.Tagged(spanMeta.GetAuthErrorTags(err)).Counter("error").Inc(1)
+		metrics.AuthErrorCount.Tagged(spanMeta.GetAuthErrorTags(err)).Counter("error").Inc(1)
 		spanMeta.FinishWithError(ctxResult, "auth", err)
+		spanMeta.RecordDuration(metrics.AuthErrorRespTime, spanMeta.GetAuthErrorTags(err))
 		return
 	}
-	metrics.AuthOkRequests.Tagged(spanMeta.GetAuthOkTags()).Counter("ok").Inc(1)
+	metrics.AuthOkCount.Tagged(spanMeta.GetAuthOkTags()).Counter("ok").Inc(1)
 	spanMeta.FinishTracing(ctxResult)
+	spanMeta.RecordDuration(metrics.AuthRespTime, spanMeta.GetAuthOkTags())
 	return
 }
 

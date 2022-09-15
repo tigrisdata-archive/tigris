@@ -63,14 +63,15 @@ type SessionManagerWithMetrics struct {
 func (m *SessionManagerWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
 	spanMeta := metrics.NewSpanMeta(metrics.SessionManagerServiceName, name, metrics.SessionSpanType, metrics.GetSessionTags(name))
 	ctx = spanMeta.StartTracing(ctx, true)
-	defer metrics.SessionRespTime.Tagged(spanMeta.GetSessionTimerTags()).Timer("time").Start().Stop()
 	if err := f(ctx); err != nil {
-		spanMeta.CountErrorForScope(metrics.SessionErrorRequests, spanMeta.GetSessionErrorTags(err))
+		spanMeta.CountErrorForScope(metrics.SessionErrorCount, spanMeta.GetSessionErrorTags(err))
 		_ = spanMeta.FinishWithError(ctx, "session", err)
+		spanMeta.RecordDuration(metrics.SessionErrorRespTime, spanMeta.GetSessionErrorTags(err))
 		return
 	}
-	spanMeta.CountOkForScope(metrics.SessionOkRequests, spanMeta.GetSessionOkTags())
+	spanMeta.CountOkForScope(metrics.SessionOkCount, spanMeta.GetSessionOkTags())
 	_ = spanMeta.FinishTracing(ctx)
+	spanMeta.RecordDuration(metrics.SessionRespTime, spanMeta.GetSessionOkTags())
 }
 
 func (m SessionManagerWithMetrics) Create(ctx context.Context, trackVerInOwnTxn bool, instantVerTracking bool, track bool) (qs *QuerySession, err error) {

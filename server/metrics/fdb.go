@@ -19,25 +19,13 @@ import (
 )
 
 var (
-	FdbOkRequests    tally.Scope
-	FdbErrorRequests tally.Scope
+	FdbOkCount       tally.Scope
+	FdbErrorCount    tally.Scope
 	FdbRespTime      tally.Scope
+	FdbErrorRespTime tally.Scope
 )
 
 func getFdbOkTagKeys() []string {
-	return []string{
-		"grpc_method",
-		"grpc_service",
-		"tigris_tenant",
-		"grpc_service_type",
-		"env",
-		"db",
-		"collection",
-		"fdb_method",
-	}
-}
-
-func getFdbTimerTagKeys() []string {
 	return []string{
 		"grpc_method",
 		"grpc_service",
@@ -84,7 +72,8 @@ func GetFdbBaseTags(reqMthodName string) map[string]string {
 }
 
 func initializeFdbScopes() {
-	FdbOkRequests = FdbMetrics.SubScope("count")
-	FdbErrorRequests = FdbMetrics.SubScope("count")
+	FdbOkCount = FdbMetrics.SubScope("count")
+	FdbErrorCount = FdbMetrics.SubScope("count")
 	FdbRespTime = FdbMetrics.SubScope("response")
+	FdbErrorRespTime = FdbMetrics.SubScope("error_response")
 }

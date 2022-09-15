@@ -19,25 +19,13 @@ import (
 )
 
 var (
-	SessionOkRequests    tally.Scope
-	SessionErrorRequests tally.Scope
+	SessionOkCount       tally.Scope
+	SessionErrorCount    tally.Scope
 	SessionRespTime      tally.Scope
+	SessionErrorRespTime tally.Scope
 )
 
 func getSessionOkTagKeys() []string {
-	return []string{
-		"grpc_method",
-		"grpc_service",
-		"tigris_tenant",
-		"grpc_service_type",
-		"env",
-		"db",
-		"collection",
-		"session_method",
-	}
-}
-
-func getSessionTimerTagKeys() []string {
 	return []string{
 		"grpc_method",
 		"grpc_service",
@@ -72,7 +60,8 @@ func GetSessionTags(sessionMethodName string) map[string]string {
 }
 
 func initializeSessionScopes() {
-	SessionOkRequests = SessionMetrics.SubScope("count")
-	SessionErrorRequests = SessionMetrics.SubScope("count")
+	SessionOkCount = SessionMetrics.SubScope("count")
+	SessionErrorCount = SessionMetrics.SubScope("count")
 	SessionRespTime = SessionMetrics.SubScope("response")
+	SessionErrorRespTime = SessionMetrics.SubScope("error_response")
 }

@@ -21,21 +21,13 @@ import (
 )
 
 var (
-	AuthOkRequests    tally.Scope
-	AuthErrorRequests tally.Scope
+	AuthOkCount       tally.Scope
+	AuthErrorCount    tally.Scope
 	AuthRespTime      tally.Scope
+	AuthErrorRespTime tally.Scope
 )
 
 func getAuthOkTagKeys() []string {
-	return []string{
-		"grpc_method",
-		"env",
-		"service",
-		"version",
-	}
-}
-
-func getAuthTimerTagKeys() []string {
 	return []string{
 		"grpc_method",
 		"env",
@@ -60,7 +52,8 @@ func GetAuthBaseTags(ctx context.Context) map[string]string {
 }
 
 func initializeAuthScopes() {
-	AuthOkRequests = AuthMetrics.SubScope("count")
-	AuthErrorRequests = AuthMetrics.SubScope("count")
+	AuthOkCount = AuthMetrics.SubScope("count")
+	AuthErrorCount = AuthMetrics.SubScope("count")
 	AuthRespTime = AuthMetrics.SubScope("response")
+	AuthErrorRespTime = AuthMetrics.SubScope("error_response")
 }
