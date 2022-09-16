@@ -19,5 +19,5 @@ const (
 )
 
 const (
-	apiPathPrefix = "/api/" + version
+	apiPathPrefix = "/" + version
 )

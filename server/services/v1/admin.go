@@ -36,7 +36,7 @@ var (
 )
 
 const (
-	adminPath = "/admin/" + version
+	adminPath = "/" + version + "/admin"
 )
 const (
 	namespacePath        = "/namespaces"

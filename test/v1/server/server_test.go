@@ -41,7 +41,7 @@ func TestInfo(t *testing.T) {
 
 func info(t *testing.T) *httpexpect.Response {
 	e := httpexpect.New(t, config.GetBaseURL())
-	return e.GET(config.GetBaseURL() + "/api/v1/info").
+	return e.GET(config.GetBaseURL() + "/v1/info").
 		Expect()
 }
 
@@ -49,7 +49,7 @@ func TestTxForwarder(t *testing.T) {
 	e1 := expectLow(t, config.GetBaseURL())
 	e2 := expectLow(t, config.GetBaseURL2())
 
-	r, err := http.DefaultClient.Get(config.GetBaseURL2() + "/api/v1/health")
+	r, err := http.DefaultClient.Get(config.GetBaseURL2() + "/v1/health")
 	if err != nil || r.StatusCode != http.StatusOK {
 		t.Skipf("server at %s is not available", config.GetBaseURL2())
 	}
@@ -59,7 +59,7 @@ func TestTxForwarder(t *testing.T) {
 	collName := "test_collection"
 	createTestCollection(t, dbName, collName, testCreateSchema)
 
-	r1 := e1.POST(fmt.Sprintf("/api/v1/databases/%s/transactions/begin", dbName)).
+	r1 := e1.POST(fmt.Sprintf("/v1/databases/%s/transactions/begin", dbName)).
 		Expect().Status(http.StatusOK).
 		Body().Raw()
 
@@ -123,7 +123,7 @@ func TestTxForwarder(t *testing.T) {
 		}
 	}
 
-	e2.POST(fmt.Sprintf("/api/v1/databases/%s/transactions/commit", dbName)).
+	e2.POST(fmt.Sprintf("/v1/databases/%s/transactions/commit", dbName)).
 		WithHeader("Tigris-Tx-Id", res1.TxCtx.Id).
 		WithHeader("Tigris-Tx-Origin", res1.TxCtx.Origin).
 		Expect().

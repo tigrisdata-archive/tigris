@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	userPattern = "/users/v1/*"
+	userPattern = "/" + version + "/users/*"
 )
 
 type userService struct {

@@ -27,11 +27,11 @@ import (
 )
 
 func getDatabaseURL(databaseName string, methodName string) string {
-	return fmt.Sprintf("/api/v1/databases/%s/%s", databaseName, methodName)
+	return fmt.Sprintf("/v1/databases/%s/%s", databaseName, methodName)
 }
 
 func beginTransactionURL(databaseName string) string {
-	return fmt.Sprintf("/api/v1/databases/%s/transactions/begin", databaseName)
+	return fmt.Sprintf("/v1/databases/%s/transactions/begin", databaseName)
 }
 
 func TestCreateDatabase(t *testing.T) {
