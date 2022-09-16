@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	authPattern = "/auth/*"
+	authPattern = "/" + version + "/auth/*"
 	auth0       = "auth0"
 )
 

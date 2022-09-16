@@ -2203,7 +2203,7 @@ func TestTransaction_BadID(t *testing.T) {
 	defer cleanupTests(t, db)
 
 	e := expect(t)
-	r := e.POST(fmt.Sprintf("/api/v1/databases/%s/transactions/begin", db)).
+	r := e.POST(fmt.Sprintf("/v1/databases/%s/transactions/begin", db)).
 		Expect().Status(http.StatusOK).
 		Body().Raw()
 

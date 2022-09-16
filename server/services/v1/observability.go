@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	observabilityPattern     = "/observability/*"
+	observabilityPattern     = "/" + version + "/observability/*"
 	AcceptHeader             = "Accept"
 	ApplicationJsonHeaderVal = "application/json"
 	DDApiKey                 = "DD-API-KEY"

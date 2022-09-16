@@ -140,11 +140,11 @@ func expect(s httpexpect.LoggerReporter) *httpexpect.Expect {
 }
 
 func getDocumentURL(databaseName, collectionName string, methodName string) string {
-	return fmt.Sprintf("/api/v1/databases/%s/collections/%s/documents/%s", databaseName, collectionName, methodName)
+	return fmt.Sprintf("/v1/databases/%s/collections/%s/documents/%s", databaseName, collectionName, methodName)
 }
 
 func getCollectionURL(databaseName, collectionName string, methodName string) string {
-	return fmt.Sprintf("/api/v1/databases/%s/collections/%s/%s", databaseName, collectionName, methodName)
+	return fmt.Sprintf("/v1/databases/%s/collections/%s/%s", databaseName, collectionName, methodName)
 }
 
 func createCollection(t *testing.T, database string, collection string, schema map[string]interface{}) *httpexpect.Response {
