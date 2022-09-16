@@ -748,7 +748,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 		return err
 	}
 
-	schRevision := c.collection.SchVer + 1
+	schRevision := int(c.collection.GetVersion()) + 1
 	if err := tenant.schemaStore.Put(ctx, tx, tenant.namespace.Id(), database.id, c.id, schFactory.Schema, schRevision); err != nil {
 		return err
 	}
@@ -989,7 +989,7 @@ func (c *collectionHolder) clone() *collectionHolder {
 	copyC.name = c.name
 
 	var err error
-	copyC.collection, err = createCollection(c.id, c.collection.SchVer, c.name, c.collection.Schema, c.idxNameToId, c.collection.SearchCollectionName())
+	copyC.collection, err = createCollection(c.id, int(c.collection.SchVer), c.name, c.collection.Schema, c.idxNameToId, c.collection.SearchCollectionName())
 	if err != nil {
 		panic(err)
 	}
