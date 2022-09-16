@@ -165,6 +165,10 @@ func (s *SpanMeta) AddTags(tags map[string]string) {
 	for k, v := range tags {
 		if _, exists := s.tags[k]; !exists || s.tags[k] == request.UnknownValue {
 			s.tags[k] = v
+			if s.span != nil {
+				// The span already exists, set the tag there as well
+				s.span.SetTag(k, v)
+			}
 		}
 	}
 }

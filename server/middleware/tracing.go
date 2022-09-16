@@ -123,8 +123,8 @@ func (w *wrappedStream) RecvMsg(m interface{}) error {
 	childSpanMeta := metrics.NewSpanMeta(TigrisStreamSpan, "RecvMsg", metrics.GrpcSpanType, parentSpanMeta.GetRequestOkTags())
 	w.WrappedContext = childSpanMeta.StartTracing(w.WrappedContext, true)
 	err := w.ServerStream.RecvMsg(m)
-	parentSpanMeta.AddTags(metrics.GetDbCollTagsForReq(m))
-	childSpanMeta.AddTags(metrics.GetDbCollTagsForReq(m))
+	parentSpanMeta.RecursiveAddTags(metrics.GetDbCollTagsForReq(m))
+	childSpanMeta.RecursiveAddTags(metrics.GetDbCollTagsForReq(m))
 	parentSpanMeta.CountReceivedBytes(metrics.BytesReceived, parentSpanMeta.GetNetworkTags(), proto.Size(m.(proto.Message)))
 	w.WrappedContext = childSpanMeta.FinishTracing(w.WrappedContext)
 	return err
@@ -139,8 +139,8 @@ func (w *wrappedStream) SendMsg(m interface{}) error {
 	childSpanMeta := metrics.NewSpanMeta(TigrisStreamSpan, "SendMsg", metrics.GrpcSpanType, parentSpanMeta.GetRequestOkTags())
 	w.WrappedContext = childSpanMeta.StartTracing(w.WrappedContext, true)
 	err := w.ServerStream.SendMsg(m)
-	parentSpanMeta.AddTags(metrics.GetDbCollTagsForReq(m))
-	childSpanMeta.AddTags(metrics.GetDbCollTagsForReq(m))
+	parentSpanMeta.RecursiveAddTags(metrics.GetDbCollTagsForReq(m))
+	childSpanMeta.RecursiveAddTags(metrics.GetDbCollTagsForReq(m))
 	parentSpanMeta.CountSentBytes(metrics.BytesSent, parentSpanMeta.GetNetworkTags(), proto.Size(m.(proto.Message)))
 	w.WrappedContext = childSpanMeta.FinishTracing(w.WrappedContext)
 	return err
