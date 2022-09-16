@@ -24,7 +24,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/santhosh-tekuri/jsonschema/v5"
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/lib/container"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
@@ -141,7 +141,7 @@ func (d *DefaultCollection) GetQueryableField(name string) (*QueryableField, err
 			return qf, nil
 		}
 	}
-	return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "Field `%s` is not present in collection", name)
+	return nil, errors.InvalidArgument("Field `%s` is not present in collection", name)
 }
 
 // Validate expects an unmarshalled document which it will validate again the schema of this collection.
@@ -157,11 +157,11 @@ func (d *DefaultCollection) Validate(document interface{}) error {
 			if len(field) > 0 && field[0] == '/' {
 				field = field[1:]
 			}
-			return api.Errorf(api.Code_INVALID_ARGUMENT, "json schema validation failed for field '%s' reason '%s'", field, v.Causes[0].Message)
+			return errors.InvalidArgument("json schema validation failed for field '%s' reason '%s'", field, v.Causes[0].Message)
 		}
 	}
 
-	return api.Errorf(api.Code_INVALID_ARGUMENT, err.Error())
+	return errors.InvalidArgument(err.Error())
 }
 
 func (d *DefaultCollection) SearchCollectionName() string {
@@ -271,5 +271,5 @@ func parseInt(i interface{}) (int64, error) {
 		}
 		return n, nil
 	}
-	return 0, api.Errorf(api.Code_INVALID_ARGUMENT, "expected integer but found %T", i)
+	return 0, errors.InvalidArgument("expected integer but found %T", i)
 }

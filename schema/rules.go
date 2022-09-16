@@ -15,13 +15,13 @@
 package schema
 
 import (
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 )
 
 var (
-	ErrMissingField           = api.Errorf(api.Code_INVALID_ARGUMENT, "removing a field is a backward incompatible change")
-	ErrModifiedPrimaryKey     = api.Errorf(api.Code_INVALID_ARGUMENT, "changing primary key is a backward incompatible change")
-	ErrCollectionNameMismatch = api.Errorf(api.Code_INVALID_ARGUMENT, "mismatch in the collection name")
+	ErrMissingField           = errors.InvalidArgument("removing a field is a backward incompatible change")
+	ErrCollectionNameMismatch = errors.InvalidArgument("mismatch in the collection name")
+	// ErrModifiedPrimaryKey     = errors.InvalidArgument("changing primary key is a backward incompatible change")
 )
 
 var (
@@ -73,7 +73,7 @@ func (v *FieldSchemaValidator) Validate(existing *DefaultCollection, current *Fa
 //   - Primary Key Changed, or order of fields part of the primary key is changed
 //   - Collection name change
 //   - Type of existing field is changed
-//   - A validation on field property is also applied like for instance if existing field has some property but it is
+//   - A validation on field property is also applied like for instance if existing field has some property, but it is
 //     removed in the new schema
 //   - Removing a field
 //   - Any index exist on the collection will also have same checks like type, etc

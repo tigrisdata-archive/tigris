@@ -25,7 +25,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/request"
@@ -150,7 +150,7 @@ func (m *TenantManager) CreateOrGetTenant(ctx context.Context, txMgr *transactio
 			log.Debug().Str("ns", tenant.String()).Msg("tenant found")
 			return tenant, nil
 		} else {
-			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "id is already assigned to '%s'", tenant.namespace.Name())
+			return nil, errors.InvalidArgument("id is already assigned to '%s'", tenant.namespace.Name())
 		}
 	}
 
@@ -189,11 +189,11 @@ func (m *TenantManager) CreateTenant(ctx context.Context, tx transaction.Tx, nam
 	}
 
 	if id, found := namespaces[namespace.Name()]; found {
-		return nil, api.Errorf(api.Code_CONFLICT, "namespace with same name already exists with id '%s'", fmt.Sprint(id))
+		return nil, errors.AlreadyExists("namespace with same name already exists with id '%d'", id)
 	}
 	for name, id := range namespaces {
 		if id == namespace.Id() {
-			return nil, api.Errorf(api.Code_CONFLICT, "namespace with same id already exists with name '%s'", name)
+			return nil, errors.AlreadyExists("namespace with same id already exists with name '%s'", name)
 		}
 	}
 	if err := m.metaStore.ReserveNamespace(ctx, tx, namespace.Name(), namespace.Id()); ulog.E(err) {
@@ -225,7 +225,7 @@ func (m *TenantManager) GetNamespaceNames() []string {
 func (m *TenantManager) GetNamespaceId(namespaceName string) (uint32, error) {
 	tenant := m.getTenantFromCache(namespaceName)
 	if tenant == nil {
-		return 0, api.Errorf(api.Code_NOT_FOUND, "Namespace not found")
+		return 0, errors.NotFound("Namespace not found")
 	}
 	return tenant.namespace.Id(), nil
 }
@@ -466,7 +466,7 @@ type Tenant struct {
 	TableKeyGenerator *TableKeyGenerator
 }
 
-func NewTenant(namespace Namespace, kvStore kv.KeyValueStore, searchStore search.Store, dict *MetadataDictionary, schemaStore *SchemaSubspace, encoder Encoder, versionH *VersionHandler, currentVersion Version, tableKeyGenerator *TableKeyGenerator) *Tenant {
+func NewTenant(namespace Namespace, kvStore kv.KeyValueStore, searchStore search.Store, dict *MetadataDictionary, schemaStore *SchemaSubspace, encoder Encoder, versionH *VersionHandler, currentVersion Version, _ *TableKeyGenerator) *Tenant {
 	return &Tenant{
 		kvStore:         kvStore,
 		searchStore:     searchStore,
@@ -668,7 +668,7 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 	defer tenant.Unlock()
 
 	if database == nil {
-		return api.Errorf(api.Code_NOT_FOUND, "database missing")
+		return errors.NotFound("database missing")
 	}
 
 	// first check if we need to run update collection
@@ -792,12 +792,12 @@ func (tenant *Tenant) DropCollection(ctx context.Context, tx transaction.Tx, db 
 
 func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db *Database, collectionName string) error {
 	if db == nil {
-		return api.Errorf(api.Code_NOT_FOUND, "database missing")
+		return errors.NotFound("database missing")
 	}
 
 	cHolder, ok := db.collections[collectionName]
 	if !ok {
-		return api.Errorf(api.Code_NOT_FOUND, "collection doesn't exists '%s'", collectionName)
+		return errors.NotFound("collection doesn't exists '%s'", collectionName)
 	}
 
 	if err := tenant.metaStore.DropCollection(ctx, tx, cHolder.name, tenant.namespace.Id(), db.id, cHolder.id); err != nil {
@@ -1028,7 +1028,7 @@ func createCollection(id uint32, schVer int, name string, revision []byte, idxNa
 	for _, index := range indexes {
 		id, ok := idxNameToId[index.Name]
 		if !ok {
-			return nil, api.Errorf(api.Code_NOT_FOUND, "dictionary encoding is missing for index '%s'", index.Name)
+			return nil, errors.NotFound("dictionary encoding is missing for index '%s'", index.Name)
 		}
 		index.Id = id
 	}

@@ -22,6 +22,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/middleware"
@@ -74,7 +75,7 @@ func (m *SessionManagerWithMetrics) measure(ctx context.Context, name string, f 
 	spanMeta.RecordDuration(metrics.SessionRespTime, spanMeta.GetSessionOkTags())
 }
 
-func (m SessionManagerWithMetrics) Create(ctx context.Context, trackVerInOwnTxn bool, instantVerTracking bool, track bool) (qs *QuerySession, err error) {
+func (m *SessionManagerWithMetrics) Create(ctx context.Context, trackVerInOwnTxn bool, instantVerTracking bool, track bool) (qs *QuerySession, err error) {
 	m.measure(ctx, "Create", func(ctx context.Context) error {
 		qs, err = m.s.Create(ctx, trackVerInOwnTxn, instantVerTracking, track)
 		return err
@@ -82,17 +83,17 @@ func (m SessionManagerWithMetrics) Create(ctx context.Context, trackVerInOwnTxn 
 	return
 }
 
-func (m SessionManagerWithMetrics) Get(ctx context.Context) (qs *QuerySession, err error) {
+func (m *SessionManagerWithMetrics) Get(ctx context.Context) (qs *QuerySession, err error) {
 	// Very cheap in-memory operation, not measuring it to avoid overhead
 	return m.s.Get(ctx)
 }
 
-func (m SessionManagerWithMetrics) Remove(ctx context.Context) (err error) {
+func (m *SessionManagerWithMetrics) Remove(ctx context.Context) (err error) {
 	// Very cheap in-memory operation, not measuring it to avoid overhead
 	return m.s.Remove(ctx)
 }
 
-func (m SessionManagerWithMetrics) ReadOnlyExecute(ctx context.Context, runner ReadOnlyQueryRunner, req *ReqOptions) (resp *Response, err error) {
+func (m *SessionManagerWithMetrics) ReadOnlyExecute(ctx context.Context, runner ReadOnlyQueryRunner, req *ReqOptions) (resp *Response, err error) {
 	m.measure(ctx, "ReadOnlyExecute", func(ctx context.Context) error {
 		resp, err = m.s.ReadOnlyExecute(ctx, runner, req)
 		return err
@@ -100,7 +101,7 @@ func (m SessionManagerWithMetrics) ReadOnlyExecute(ctx context.Context, runner R
 	return
 }
 
-func (m SessionManagerWithMetrics) Execute(ctx context.Context, runner QueryRunner, req *ReqOptions) (resp *Response, err error) {
+func (m *SessionManagerWithMetrics) Execute(ctx context.Context, runner QueryRunner, req *ReqOptions) (resp *Response, err error) {
 	m.measure(ctx, "Execute", func(ctx context.Context) error {
 		resp, err = m.s.Execute(ctx, runner, req)
 		return err
@@ -108,7 +109,7 @@ func (m SessionManagerWithMetrics) Execute(ctx context.Context, runner QueryRunn
 	return
 }
 
-func (m SessionManagerWithMetrics) executeWithRetry(ctx context.Context, runner QueryRunner, req *ReqOptions) (resp *Response, err error) {
+func (m *SessionManagerWithMetrics) executeWithRetry(ctx context.Context, runner QueryRunner, req *ReqOptions) (resp *Response, err error) {
 	m.measure(ctx, "executeWithRetry", func(ctx context.Context) error {
 		resp, err = m.s.executeWithRetry(ctx, runner, req)
 		return err
@@ -148,7 +149,7 @@ func (sessMgr *SessionManager) CreateReadOnlySession(ctx context.Context) (*Read
 	tenant, err := sessMgr.tenantMgr.GetTenant(ctx, namespaceForThisSession, sessMgr.txMgr)
 	if err != nil {
 		log.Warn().Err(err).Msgf("Could not find tenant, this must not happen with right authn/authz configured")
-		return nil, api.Errorf(api.Code_NOT_FOUND, "Tenant %s not found", namespaceForThisSession)
+		return nil, errors.NotFound("Tenant %s not found", namespaceForThisSession)
 	}
 
 	tx, err := sessMgr.txMgr.StartTx(ctx)
@@ -179,7 +180,7 @@ func (sessMgr *SessionManager) Create(ctx context.Context, trackVerInOwnTxn bool
 	tenant, err := sessMgr.tenantMgr.GetTenant(ctx, namespaceForThisSession, sessMgr.txMgr)
 	if err != nil {
 		log.Warn().Err(err).Msgf("Could not find tenant, this must not happen with right authn/authz configured")
-		return nil, api.Errorf(api.Code_NOT_FOUND, "Tenant %s not found", namespaceForThisSession)
+		return nil, errors.NotFound("Tenant %s not found", namespaceForThisSession)
 	}
 
 	tx, err := sessMgr.txMgr.StartTx(ctx)
@@ -248,12 +249,12 @@ func (sessMgr *SessionManager) Execute(ctx context.Context, runner QueryRunner, 
 
 	resp, err := sessMgr.executeWithRetry(ctx, runner, req)
 	if err == kv.ErrConflictingTransaction {
-		return nil, api.Errorf(api.Code_ABORTED, err.Error())
+		return nil, errors.Aborted(err.Error())
 	}
 	return resp, err
 }
 
-func (sessMgr *SessionManager) ReadOnlyExecute(ctx context.Context, runner ReadOnlyQueryRunner, req *ReqOptions) (*Response, error) {
+func (sessMgr *SessionManager) ReadOnlyExecute(ctx context.Context, runner ReadOnlyQueryRunner, _ *ReqOptions) (*Response, error) {
 	session, err := sessMgr.CreateReadOnlySession(ctx)
 	if err != nil {
 		return nil, err
@@ -366,7 +367,7 @@ func (s *QuerySession) Commit(versionMgr *metadata.VersionHandler, incVersion bo
 		for _, listener := range s.txListeners {
 			if err = listener.OnPostCommit(s.ctx, s.tenant, kv.GetEventListener(s.ctx)); err != nil {
 				log.Err(err).Msg("post commit failure")
-				return api.Errorf(api.Code_DEADLINE_EXCEEDED, err.Error())
+				return errors.DeadlineExceeded(err.Error())
 			}
 		}
 	}

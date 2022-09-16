@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
@@ -44,8 +44,8 @@ func TestSchemaSubspace(t *testing.T) {
 		tm := transaction.NewManager(kvStore)
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		require.Equal(t, api.Errorf(api.Code_INVALID_ARGUMENT, "invalid schema version %d", 0), s.Put(ctx, tx, 1, 2, 3, nil, 0))
-		require.Equal(t, api.Errorf(api.Code_INVALID_ARGUMENT, "empty schema"), s.Put(ctx, tx, 1, 2, 3, nil, 1))
+		require.Equal(t, errors.InvalidArgument("invalid schema version %d", 0), s.Put(ctx, tx, 1, 2, 3, nil, 0))
+		require.Equal(t, errors.InvalidArgument("empty schema"), s.Put(ctx, tx, 1, 2, 3, nil, 1))
 		require.NoError(t, tx.Rollback(ctx))
 	})
 	t.Run("put_duplicate_error", func(t *testing.T) {

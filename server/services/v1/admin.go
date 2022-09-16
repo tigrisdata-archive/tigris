@@ -19,14 +19,14 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/tigrisdata/tigris/server/request"
-
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"google.golang.org/grpc"
 )
@@ -58,19 +58,19 @@ func newAdminService(tenantMgr *metadata.TenantManager, txMgr *transaction.Manag
 
 func (a *adminService) CreateNamespace(ctx context.Context, req *api.CreateNamespaceRequest) (*api.CreateNamespaceResponse, error) {
 	if ReservedNamespaceNames.Contains(req.Name) {
-		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, req.Name+" is reserved name")
+		return nil, errors.InvalidArgument(req.Name + " is reserved name")
 	}
 	if req.Name == "" {
-		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "Empty namespace name is not allowed")
+		return nil, errors.InvalidArgument("Empty namespace name is not allowed")
 	}
 	if req.GetId() <= 1 {
-		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "NamespaceId must be greater than 1")
+		return nil, errors.InvalidArgument("NamespaceId must be greater than 1")
 	}
 
 	namespace := metadata.NewTenantNamespace(req.Name, uint32(req.Id))
 	tx, err := a.txMgr.StartTx(ctx)
 	if err != nil {
-		return nil, api.Errorf(api.Code_INTERNAL, "Failed to create namespace")
+		return nil, errors.Internal("Failed to create namespace")
 	}
 	_, err = a.tenantMgr.CreateTenant(ctx, tx, namespace)
 	if err != nil {
@@ -91,7 +91,7 @@ func (a *adminService) CreateNamespace(ctx context.Context, req *api.CreateNames
 func (a *adminService) ListNamespaces(ctx context.Context, _ *api.ListNamespacesRequest) (*api.ListNamespacesResponse, error) {
 	tx, err := a.txMgr.StartTx(ctx)
 	if err != nil {
-		return nil, api.Errorf(api.Code_INTERNAL, "Failed to begin transaction")
+		return nil, errors.Internal("Failed to begin transaction")
 	}
 	namespaces, err := a.tenantMgr.ListNamespaces(ctx, tx)
 	if err != nil {
@@ -131,7 +131,7 @@ func (a *adminService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channe
 	return nil
 }
 
-func (h *adminService) RegisterGRPC(grpc *grpc.Server) error {
-	api.RegisterAdminServer(grpc, h)
+func (a *adminService) RegisterGRPC(grpc *grpc.Server) error {
+	api.RegisterAdminServer(grpc, a)
 	return nil
 }

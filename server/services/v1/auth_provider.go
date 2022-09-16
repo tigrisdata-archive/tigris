@@ -28,6 +28,7 @@ import (
 	"github.com/auth0/go-auth0/management"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/lib/date"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
@@ -79,17 +80,17 @@ func (a *Auth0) GetAccessToken(ctx context.Context, req *api.GetAccessTokenReque
 	case api.GrantType_CLIENT_CREDENTIALS:
 		return getAccessTokenUsingClientCredentials(ctx, req, a)
 	}
-	return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "Failed to GetAccessToken: reason = unsupported grant_type, it has to be one of [refresh_token, client_credentials]")
+	return nil, errors.InvalidArgument("Failed to GetAccessToken: reason = unsupported grant_type, it has to be one of [refresh_token, client_credentials]")
 }
 
 func (a *Auth0) CreateApplication(ctx context.Context, req *api.CreateApplicationRequest) (*api.CreateApplicationResponse, error) {
 	currentSub, err := getCurrentSub(ctx)
 	if err != nil {
-		return nil, api.Errorf(api.Code_INTERNAL, "Failed to list applications: reason = %s", err.Error())
+		return nil, errors.Internal("Failed to list applications: reason = %s", err.Error())
 	}
 	currentNamespace, err := request.GetNamespace(ctx)
 	if err != nil {
-		return nil, api.Errorf(api.Code_INTERNAL, "Failed to list applications: reason = %s", err.Error())
+		return nil, errors.Internal("Failed to list applications: reason = %s", err.Error())
 	}
 
 	nonInteractiveApp := "non_interactive"
@@ -233,7 +234,7 @@ func (a *Auth0) RotateApplicationSecret(ctx context.Context, req *api.RotateAppl
 	}, nil
 }
 
-func (a Auth0) ListApplications(ctx context.Context, _ *api.ListApplicationsRequest) (*api.ListApplicationsResponse, error) {
+func (a *Auth0) ListApplications(ctx context.Context, _ *api.ListApplicationsRequest) (*api.ListApplicationsResponse, error) {
 
 	appList, err := a.Management.Client.List(management.IncludeFields("client_id", "client_metadata", "client_secret", "description", "name"))
 	if err != nil {
@@ -242,7 +243,7 @@ func (a Auth0) ListApplications(ctx context.Context, _ *api.ListApplicationsRequ
 
 	currentSub, err := getCurrentSub(ctx)
 	if err != nil {
-		return nil, api.Errorf(api.Code_INTERNAL, "Failed to list applications: reason = %s", err.Error())
+		return nil, errors.Internal("Failed to list applications: reason = %s", err.Error())
 	}
 
 	var apps []*api.Application
@@ -276,10 +277,10 @@ func validateOwnership(ctx context.Context, operationName string, appId string, 
 	// check ownership before rotating
 	currentSub, err := getCurrentSub(ctx)
 	if err != nil {
-		return nil, "", api.Errorf(api.Code_INTERNAL, "Failed to %s: reason = %s", operationName, err.Error())
+		return nil, "", errors.Internal("Failed to %s: reason = %s", operationName, err.Error())
 	}
 	if client.GetClientMetadata()[createdBy] != currentSub {
-		return nil, "", api.Errorf(api.Code_PERMISSION_DENIED, "Failed to rotate application secret: reason = You cannot rotate secret for application that is not created by you.")
+		return nil, "", errors.PermissionDenied("Failed to rotate application secret: reason = You cannot rotate secret for application that is not created by you.")
 	}
 	return client, currentSub, nil
 }
@@ -288,7 +289,7 @@ func getCurrentSub(ctx context.Context) (string, error) {
 	// further filter for this particular user
 	token, err := request.GetAccessToken(ctx)
 	if err != nil {
-		return "", api.Errorf(api.Code_INTERNAL, "Failed to retrieve current sub: reason = %s", err.Error())
+		return "", errors.Internal("Failed to retrieve current sub: reason = %s", err.Error())
 	}
 	return token.Sub, nil
 }
@@ -302,13 +303,13 @@ func getAccessTokenUsingRefreshToken(req *api.GetAccessTokenRequest, a *Auth0) (
 	}
 	resp, err := http.PostForm(a.AuthConfig.ExternalTokenURL, data)
 	if err != nil {
-		return nil, api.Errorf(api.Code_INTERNAL, "Failed to get access token: reason = %s", err.Error())
+		return nil, errors.Internal("Failed to get access token: reason = %s", err.Error())
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, api.Errorf(api.Code_INTERNAL, "Failed to get access token: reason = %s", err.Error())
+		return nil, errors.Internal("Failed to get access token: reason = %s", err.Error())
 	}
 	bodyStr := string(body)
 	if resp.StatusCode == http.StatusOK {
@@ -316,12 +317,12 @@ func getAccessTokenUsingRefreshToken(req *api.GetAccessTokenRequest, a *Auth0) (
 
 		err = json.Unmarshal([]byte(bodyStr), &getAccessTokenResponse)
 		if err != nil {
-			return nil, api.Errorf(api.Code_INTERNAL, "Failed to parse external response: reason = %s", err.Error())
+			return nil, errors.Internal("Failed to parse external response: reason = %s", err.Error())
 		}
 		return &getAccessTokenResponse, nil
 	}
 	log.Error().Msgf("Auth0 response status code=%d", resp.StatusCode)
-	return nil, api.Errorf(api.Code_INTERNAL, "Failed to get access token: reason = %s", bodyStr)
+	return nil, errors.Internal("Failed to get access token: reason = %s", bodyStr)
 }
 
 type tokenMetadataEntry struct {
@@ -404,12 +405,12 @@ func getAccessTokenUsingClientCredentials(ctx context.Context, req *api.GetAcces
 		return &getAccessTokenResponse, nil
 	}
 	log.Error().Msgf("Auth0 response status code=%d", resp.StatusCode)
-	return nil, api.Errorf(api.Code_INTERNAL, "Failed to get access token: reason = %s", bodyStr)
+	return nil, errors.Internal("Failed to get access token: reason = %s", bodyStr)
 }
 
-func tokenError(userfacingErrorMsg string, err error) error {
-	log.Warn().Err(err).Msg(userfacingErrorMsg)
-	return api.Errorf(api.Code_INTERNAL, userfacingErrorMsg)
+func tokenError(userFacingErrorMsg string, err error) error {
+	log.Warn().Err(err).Msg(userFacingErrorMsg)
+	return errors.Internal(userFacingErrorMsg)
 }
 
 func readDate(dateStr string) int64 {

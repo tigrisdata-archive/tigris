@@ -18,7 +18,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 )
 
 func TestEncode_Decode(t *testing.T) {
@@ -34,7 +34,7 @@ func TestEncode_Decode(t *testing.T) {
 	})
 	t.Run("not_implemented", func(t *testing.T) {
 		data, err := Decode([]byte(`{"a": 1, "b": "foo"}`))
-		require.Equal(t, api.Errorf(api.Code_INTERNAL, "unable to decode '123'"), err)
+		require.Equal(t, errors.Internal("unable to decode '123'"), err)
 		require.Nil(t, data)
 	})
 

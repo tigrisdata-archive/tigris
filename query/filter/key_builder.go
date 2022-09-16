@@ -15,7 +15,7 @@
 package filter
 
 import (
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/schema"
 )
@@ -115,17 +115,17 @@ func (s *StrictEqKeyComposer) Compose(selectors []*Selector, userDefinedKeys []*
 				repeatedFields = append(repeatedFields, sel)
 			}
 			if sel.Matcher.Type() != EQ {
-				return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "filters only supporting $eq comparison, found '%s'", sel.Matcher.Type())
+				return nil, errors.InvalidArgument("filters only supporting $eq comparison, found '%s'", sel.Matcher.Type())
 			}
 		}
 
 		if len(repeatedFields) == 0 {
 			// nothing found or a gap
-			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "filters doesn't contains primary key fields")
+			return nil, errors.InvalidArgument("filters doesn't contains primary key fields")
 		}
 		if len(repeatedFields) > 1 && parent == AndOP {
 			// with AND there is no use of EQ on the same field
-			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "reusing same fields for conditions on equality")
+			return nil, errors.InvalidArgument("reusing same fields for conditions on equality")
 		}
 
 		compositeKeys[0] = append(compositeKeys[0], repeatedFields[0])
@@ -158,7 +158,7 @@ func (s *StrictEqKeyComposer) Compose(selectors []*Selector, userDefinedKeys []*
 			for _, sel := range k {
 				if len(userDefinedKeys) > 1 {
 					// this means OR can't build independently these keys
-					return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "OR is not supported with composite primary keys")
+					return nil, errors.InvalidArgument("OR is not supported with composite primary keys")
 				}
 
 				key, err := s.keyEncodingFunc(sel.Matcher.GetValue().AsInterface())

@@ -19,6 +19,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 )
 
 func TestCreateCollectionFromSchema(t *testing.T) {
@@ -219,7 +220,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 	"primary_key": ["id"]
 }`)
 		_, err := Build("t1", schema)
-		require.Equal(t, api.Errorf(api.Code_INVALID_ARGUMENT, "missing items for array field"), err)
+		require.Equal(t, errors.InvalidArgument("missing items for array field"), err)
 	})
 	t.Run("test_object_missing_properties_error", func(t *testing.T) {
 		schema := []byte(`{

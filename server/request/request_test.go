@@ -20,7 +20,7 @@ import (
 
 	"github.com/bmizerany/assert"
 	"github.com/stretchr/testify/require"
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 )
 
 func TestRequestMetadata(t *testing.T) {
@@ -65,7 +65,7 @@ func TestRequestMetadata(t *testing.T) {
 		ctx := context.TODO()
 		token, err := GetAccessToken(ctx)
 		require.Nil(t, token)
-		require.Equal(t, api.Errorf(api.Code_NOT_FOUND, "Access token not found"), err)
+		require.Equal(t, errors.NotFound("Access token not found"), err)
 	})
 
 	t.Run("isAdmin test", func(t *testing.T) {

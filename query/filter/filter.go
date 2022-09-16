@@ -20,6 +20,7 @@ import (
 	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/query/expression"
 	"github.com/tigrisdata/tigris/schema"
 	ulog "github.com/tigrisdata/tigris/util/log"
@@ -215,7 +216,7 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 		}
 	}
 	if field == nil {
-		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "querying on non schema field '%s'", string(k))
+		return nil, errors.InvalidArgument("querying on non schema field '%s'", string(k))
 	}
 
 	switch dataType {
@@ -243,7 +244,7 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 		}
 		return NewSelector(field, valueMatcher, factory.collation), nil
 	default:
-		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "unable to parse the comparison operator")
+		return nil, errors.InvalidArgument("unable to parse the comparison operator")
 	}
 }
 
@@ -253,7 +254,7 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 // method is not nil and if yes, use this collation..
 func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField) (ValueMatcher, *api.Collation, error) {
 	if len(input) == 0 {
-		return nil, nil, api.Errorf(api.Code_INVALID_ARGUMENT, "empty object")
+		return nil, nil, errors.InvalidArgument("empty object")
 	}
 
 	var collation *api.Collation
@@ -294,7 +295,7 @@ func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField) 
 			}
 		case api.CollationKey:
 		default:
-			return api.Errorf(api.Code_INVALID_ARGUMENT, "expression is not supported inside comparison operator %s", string(key))
+			return errors.InvalidArgument("expression is not supported inside comparison operator %s", string(key))
 		}
 		return nil
 	})

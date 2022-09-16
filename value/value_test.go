@@ -20,7 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/schema"
 )
 
@@ -41,7 +41,7 @@ func TestNewValue(t *testing.T) {
 			schema.Int32Type,
 			[]byte(`"1"`),
 			nil,
-			api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported value type : strconv.ParseInt: parsing \"\\\"1\\\"\": invalid syntax"),
+			errors.InvalidArgument("unsupported value type: strconv.ParseInt: parsing \"\\\"1\\\"\": invalid syntax"),
 		}, {
 			schema.DoubleType,
 			[]byte(`1.01`),
@@ -148,7 +148,7 @@ func TestValue(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, -1, r)
 
-		i = BoolValue(true)
+		i = true
 		v, err = NewValue(schema.BoolType, []byte(`false`))
 		require.NoError(t, err)
 		r, err = i.CompareTo(v)

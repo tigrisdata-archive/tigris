@@ -65,7 +65,7 @@ func (a *authService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel
 	return nil
 }
 
-func (h *authService) RegisterGRPC(grpc *grpc.Server) error {
-	api.RegisterAuthServer(grpc, h)
+func (a *authService) RegisterGRPC(grpc *grpc.Server) error {
+	api.RegisterAuthServer(grpc, a)
 	return nil
 }

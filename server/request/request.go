@@ -22,10 +22,10 @@ import (
 
 	"github.com/buger/jsonparser"
 	"github.com/rs/zerolog/log"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
 	"google.golang.org/grpc"
-
-	api "github.com/tigrisdata/tigris/api/server/v1"
 )
 
 const (
@@ -131,7 +131,7 @@ type NamespaceExtractor interface {
 type AccessTokenNamespaceExtractor struct {
 }
 
-var ErrNamespaceNotFound = api.Errorf(api.Code_NOT_FOUND, "namespace not found")
+var ErrNamespaceNotFound = errors.NotFound("namespace not found")
 
 func GetRequestMetadata(ctx context.Context) (*RequestMetadata, error) {
 	// read token
@@ -141,7 +141,7 @@ func GetRequestMetadata(ctx context.Context) (*RequestMetadata, error) {
 			return requestMetadata, nil
 		}
 	}
-	return nil, api.Errorf(api.Code_NOT_FOUND, "RequestMetadata not found")
+	return nil, errors.NotFound("RequestMetadata not found")
 }
 
 func SetRequestMetadata(ctx context.Context, metadata RequestMetadata) context.Context {
@@ -183,7 +183,7 @@ func GetAccessToken(ctx context.Context) (*AccessToken, error) {
 			return requestMetadata.accessToken, nil
 		}
 	}
-	return nil, api.Errorf(api.Code_NOT_FOUND, "Access token not found")
+	return nil, errors.NotFound("Access token not found")
 }
 
 func GetNamespace(ctx context.Context) (string, error) {
@@ -207,7 +207,7 @@ func (tokenNamespaceExtractor *AccessTokenNamespaceExtractor) Extract(ctx contex
 		return namespace, nil
 	}
 
-	return "", api.Errorf(api.Code_INVALID_ARGUMENT, "Namespace is empty in the token")
+	return "", errors.InvalidArgument("Namespace is empty in the token")
 }
 
 func IsAdminApi(fullMethodName string) bool {

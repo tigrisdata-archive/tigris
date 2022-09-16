@@ -19,7 +19,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/schema"
 )
@@ -48,7 +48,7 @@ func TestKeyBuilder(t *testing.T) {
 			[]*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
 			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
 			[]byte(`{"a": 10, "c": 10}`),
-			api.Errorf(api.Code_INVALID_ARGUMENT, "filters doesn't contains primary key fields"),
+			errors.InvalidArgument("filters doesn't contains primary key fields"),
 			nil,
 		},
 		{
@@ -56,7 +56,7 @@ func TestKeyBuilder(t *testing.T) {
 			[]*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
 			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
 			[]byte(`{"a": 10, "b": {"$eq": 10}, "c": {"$gt": 15}}`),
-			api.Errorf(api.Code_INVALID_ARGUMENT, "filters only supporting $eq comparison, found '$gt'"),
+			errors.InvalidArgument("filters only supporting $eq comparison, found '$gt'"),
 			nil,
 		},
 		{
@@ -64,7 +64,7 @@ func TestKeyBuilder(t *testing.T) {
 			[]*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
 			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
 			[]byte(`{"$and": [{"a": 10}, {"b": {"$eq": 10}}, {"b": 15}]}`),
-			api.Errorf(api.Code_INVALID_ARGUMENT, "reusing same fields for conditions on equality"),
+			errors.InvalidArgument("reusing same fields for conditions on equality"),
 			nil,
 		},
 		{

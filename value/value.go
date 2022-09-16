@@ -22,8 +22,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pkg/errors"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/schema"
 )
 
@@ -63,7 +63,7 @@ func NewValue(fieldType schema.FieldType, value []byte) (Value, error) {
 	case schema.BoolType:
 		b, err := strconv.ParseBool(string(value))
 		if err != nil {
-			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, errors.Wrap(err, "unsupported value type ").Error())
+			return nil, errors.InvalidArgument(fmt.Errorf("unsupported value type: %w", err).Error())
 		}
 		return NewBoolValue(b), nil
 	case schema.DoubleType:
@@ -71,7 +71,7 @@ func NewValue(fieldType schema.FieldType, value []byte) (Value, error) {
 	case schema.Int32Type, schema.Int64Type:
 		val, err := strconv.ParseInt(string(value), 10, 64)
 		if err != nil {
-			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, errors.Wrap(err, "unsupported value type ").Error())
+			return nil, errors.InvalidArgument(fmt.Errorf("unsupported value type: %w", err).Error())
 		}
 
 		return NewIntValue(val), nil
@@ -86,7 +86,7 @@ func NewValue(fieldType schema.FieldType, value []byte) (Value, error) {
 		}
 	}
 
-	return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported value type")
+	return nil, errors.InvalidArgument("unsupported value type")
 }
 
 func isIntegral(val float64) bool {
@@ -148,7 +148,7 @@ func NewDoubleUsingFloat(v float64) *DoubleValue {
 func NewDoubleValue(raw string) (*DoubleValue, error) {
 	val, err := strconv.ParseFloat(raw, 64)
 	if err != nil {
-		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, errors.Wrap(err, "unsupported value type ").Error())
+		return nil, errors.InvalidArgument(fmt.Errorf("unsupported value type: %w ", err).Error())
 	}
 
 	i := &DoubleValue{
