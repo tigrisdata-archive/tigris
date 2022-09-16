@@ -34,6 +34,10 @@ func getRequestOkTagKeys() []string {
 		"env",
 		"db",
 		"collection",
+		"read_type",
+		"search_type",
+		"write_type",
+		"sort",
 	}
 }
 
@@ -48,6 +52,10 @@ func getRequestErrorTagKeys() []string {
 		"collection",
 		"error_code",
 		"error_value",
+		"read_type",
+		"search_type",
+		"write_type",
+		"sort",
 	}
 }
 
