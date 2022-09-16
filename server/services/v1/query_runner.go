@@ -71,49 +71,55 @@ func NewQueryRunnerFactory(txMgr *transaction.Manager, cdcMgr *cdc.Manager, sear
 	}
 }
 
-func (f *QueryRunnerFactory) GetInsertQueryRunner(r *api.InsertRequest) *InsertQueryRunner {
+func (f *QueryRunnerFactory) GetInsertQueryRunner(r *api.InsertRequest, qm *metrics.WriteQueryMetrics) *InsertQueryRunner {
 	return &InsertQueryRunner{
 		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
 		req:             r,
+		queryMetrics:    qm,
 	}
 }
 
-func (f *QueryRunnerFactory) GetReplaceQueryRunner(r *api.ReplaceRequest) *ReplaceQueryRunner {
+func (f *QueryRunnerFactory) GetReplaceQueryRunner(r *api.ReplaceRequest, qm *metrics.WriteQueryMetrics) *ReplaceQueryRunner {
 	return &ReplaceQueryRunner{
 		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
 		req:             r,
+		queryMetrics:    qm,
 	}
 }
 
-func (f *QueryRunnerFactory) GetUpdateQueryRunner(r *api.UpdateRequest) *UpdateQueryRunner {
+func (f *QueryRunnerFactory) GetUpdateQueryRunner(r *api.UpdateRequest, qm *metrics.WriteQueryMetrics) *UpdateQueryRunner {
 	return &UpdateQueryRunner{
 		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
 		req:             r,
+		queryMetrics:    qm,
 	}
 }
 
-func (f *QueryRunnerFactory) GetDeleteQueryRunner(r *api.DeleteRequest) *DeleteQueryRunner {
+func (f *QueryRunnerFactory) GetDeleteQueryRunner(r *api.DeleteRequest, qm *metrics.WriteQueryMetrics) *DeleteQueryRunner {
 	return &DeleteQueryRunner{
 		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
 		req:             r,
+		queryMetrics:    qm,
 	}
 }
 
 // GetStreamingQueryRunner returns StreamingQueryRunner
-func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streaming Streaming) *StreamingQueryRunner {
+func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streaming Streaming, qm *metrics.StreamingQueryMetrics) *StreamingQueryRunner {
 	return &StreamingQueryRunner{
 		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
 		req:             r,
 		streaming:       streaming,
+		queryMetrics:    qm,
 	}
 }
 
 // GetSearchQueryRunner for executing Search
-func (f *QueryRunnerFactory) GetSearchQueryRunner(r *api.SearchRequest, streaming SearchStreaming) *SearchQueryRunner {
+func (f *QueryRunnerFactory) GetSearchQueryRunner(r *api.SearchRequest, streaming SearchStreaming, qm *metrics.SearchQueryMetrics) *SearchQueryRunner {
 	return &SearchQueryRunner{
 		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
 		req:             r,
 		streaming:       streaming,
+		queryMetrics:    qm,
 	}
 }
 
@@ -309,7 +315,8 @@ func (runner *BaseQueryRunner) mustBeMessagesCollection(collection *schema.Defau
 type InsertQueryRunner struct {
 	*BaseQueryRunner
 
-	req *api.InsertRequest
+	req          *api.InsertRequest
+	queryMetrics *metrics.WriteQueryMetrics
 }
 
 func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
@@ -336,6 +343,10 @@ func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 		return nil, ctx, err
 	}
+
+	runner.queryMetrics.SetWriteType("insert")
+	metrics.UpdateSpanTags(ctx, runner.queryMetrics)
+
 	return &Response{
 		createdAt: ts,
 		allKeys:   allKeys,
@@ -346,7 +357,8 @@ func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 type ReplaceQueryRunner struct {
 	*BaseQueryRunner
 
-	req *api.ReplaceRequest
+	req          *api.ReplaceRequest
+	queryMetrics *metrics.WriteQueryMetrics
 }
 
 func (runner *ReplaceQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
@@ -369,6 +381,10 @@ func (runner *ReplaceQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 	if err != nil {
 		return nil, ctx, err
 	}
+
+	runner.queryMetrics.SetWriteType("replace")
+	metrics.UpdateSpanTags(ctx, runner.queryMetrics)
+
 	return &Response{
 		createdAt: ts,
 		allKeys:   allKeys,
@@ -379,7 +395,8 @@ func (runner *ReplaceQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 type UpdateQueryRunner struct {
 	*BaseQueryRunner
 
-	req *api.UpdateRequest
+	req          *api.UpdateRequest
+	queryMetrics *metrics.WriteQueryMetrics
 }
 
 func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
@@ -460,6 +477,11 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	if err != nil {
 		return nil, ctx, err
 	}
+	if len(iKeys) == 0 {
+		runner.queryMetrics.SetWriteType("pkey")
+	} else {
+		runner.queryMetrics.SetWriteType("non-pkey")
+	}
 
 	modifiedCount := int32(0)
 	var row Row
@@ -482,6 +504,8 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		}
 		modifiedCount++
 	}
+
+	ctx = metrics.UpdateSpanTags(ctx, runner.queryMetrics)
 	return &Response{
 		status:        UpdatedStatus,
 		updatedAt:     ts,
@@ -492,7 +516,8 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 type DeleteQueryRunner struct {
 	*BaseQueryRunner
 
-	req *api.DeleteRequest
+	req          *api.DeleteRequest
+	queryMetrics *metrics.WriteQueryMetrics
 }
 
 func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
@@ -523,6 +548,7 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		if iterator, err = reader.ScanTable(table); err != nil {
 			return nil, ctx, err
 		}
+		runner.queryMetrics.SetWriteType("full_scan")
 	} else {
 		var collation *api.Collation
 		if runner.req.Options != nil {
@@ -544,6 +570,11 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 			iterator, err = reader.FilteredRead(iterator, filter.NewWrappedFilter(filters))
 		}
+		if len(iKeys) == 0 {
+			runner.queryMetrics.SetWriteType("pkey")
+		} else {
+			runner.queryMetrics.SetWriteType("non-pkey")
+		}
 	}
 	if err != nil {
 		return nil, ctx, err
@@ -564,6 +595,7 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		modifiedCount++
 	}
 
+	ctx = metrics.UpdateSpanTags(ctx, runner.queryMetrics)
 	return &Response{
 		status:        DeletedStatus,
 		deletedAt:     ts,
@@ -575,8 +607,9 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 type StreamingQueryRunner struct {
 	*BaseQueryRunner
 
-	req       *api.ReadRequest
-	streaming Streaming
+	req          *api.ReadRequest
+	streaming    Streaming
+	queryMetrics *metrics.StreamingQueryMetrics
 }
 
 type readerOptions struct {
@@ -644,6 +677,23 @@ func (runner *StreamingQueryRunner) buildReaderOptions(tenant *metadata.Tenant, 
 	return options, nil
 }
 
+func (runner *StreamingQueryRunner) instrumentRunner(ctx context.Context, options readerOptions) context.Context {
+	// Set read type
+	if len(options.ikeys) == 0 {
+		runner.queryMetrics.SetReadType("non-pkey")
+	} else {
+		runner.queryMetrics.SetReadType("pkey")
+	}
+
+	if options.noFilter {
+		runner.queryMetrics.SetReadType("full_scan")
+	}
+
+	// Sort is only supported for search
+	runner.queryMetrics.SetSort(false)
+	return metrics.UpdateSpanTags(ctx, runner.queryMetrics)
+}
+
 // ReadOnly is used by the read query runner to handle long-running reads. This method operates by starting a new
 // transaction when needed which means a single user request may end up creating multiple read only transactions.
 func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.Tenant) (*Response, context.Context, error) {
@@ -692,6 +742,9 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 		if err != nil {
 			return nil, ctx, nil
 		}
+
+		ctx = runner.instrumentRunner(ctx, options)
+
 		return &Response{}, ctx, nil
 	}
 }
@@ -716,6 +769,8 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 	if err != nil {
 		return nil, ctx, err
 	}
+
+	ctx = runner.instrumentRunner(ctx, options)
 
 	if options.inmemoryStore {
 		if err = runner.iterateOnIndexingStore(ctx, collection, options); err != nil {
@@ -806,8 +861,9 @@ func (runner *StreamingQueryRunner) iterate(iterator Iterator, fieldFactory *rea
 type SearchQueryRunner struct {
 	*BaseQueryRunner
 
-	req       *api.SearchRequest
-	streaming SearchStreaming
+	req          *api.SearchRequest
+	streaming    SearchStreaming
+	queryMetrics *metrics.SearchQueryMetrics
 }
 
 // ReadOnly on search query runner is implemented as search queries do not need to be inside a transaction; in fact,
@@ -840,6 +896,12 @@ func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.
 		return nil, ctx, err
 	}
 
+	if len(facets.Fields) == 0 {
+		runner.queryMetrics.SetSearchType("search_all")
+	} else {
+		runner.queryMetrics.SetSearchType("faceted")
+	}
+
 	fieldSelection, err := runner.getFieldSelection(collection)
 	if err != nil {
 		return nil, ctx, err
@@ -849,6 +911,14 @@ func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.
 	if err != nil {
 		return nil, ctx, err
 	}
+
+	if sortOrder != nil {
+		runner.queryMetrics.SetSort(true)
+	} else {
+		runner.queryMetrics.SetSort(false)
+	}
+
+	ctx = metrics.UpdateSpanTags(ctx, runner.queryMetrics)
 
 	pageSize := int(runner.req.PageSize)
 	if pageSize == 0 {

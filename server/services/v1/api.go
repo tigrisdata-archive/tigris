@@ -190,7 +190,8 @@ func (s *apiService) RollbackTransaction(ctx context.Context, _ *api.RollbackTra
 // Insert new object returns an error if object already exists
 // Operations done individually not in actual batch
 func (s *apiService) Insert(ctx context.Context, r *api.InsertRequest) (*api.InsertResponse, error) {
-	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetInsertQueryRunner(r), &ReqOptions{
+	qm := metrics.WriteQueryMetrics{}
+	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetInsertQueryRunner(r, &qm), &ReqOptions{
 		txCtx: api.GetTransaction(ctx),
 	})
 	if err != nil {
@@ -207,7 +208,8 @@ func (s *apiService) Insert(ctx context.Context, r *api.InsertRequest) (*api.Ins
 }
 
 func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.ReplaceResponse, error) {
-	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetReplaceQueryRunner(r), &ReqOptions{
+	qm := metrics.WriteQueryMetrics{}
+	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetReplaceQueryRunner(r, &qm), &ReqOptions{
 		txCtx: api.GetTransaction(ctx),
 	})
 	if err != nil {
@@ -224,7 +226,8 @@ func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.R
 }
 
 func (s *apiService) Update(ctx context.Context, r *api.UpdateRequest) (*api.UpdateResponse, error) {
-	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetUpdateQueryRunner(r), &ReqOptions{
+	queryMetrics := metrics.WriteQueryMetrics{}
+	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetUpdateQueryRunner(r, &queryMetrics), &ReqOptions{
 		txCtx: api.GetTransaction(ctx),
 	})
 	if err != nil {
@@ -241,7 +244,8 @@ func (s *apiService) Update(ctx context.Context, r *api.UpdateRequest) (*api.Upd
 }
 
 func (s *apiService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.DeleteResponse, error) {
-	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetDeleteQueryRunner(r), &ReqOptions{
+	queryMetrics := metrics.WriteQueryMetrics{}
+	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetDeleteQueryRunner(r, &queryMetrics), &ReqOptions{
 		txCtx: api.GetTransaction(ctx),
 	})
 	if err != nil {
@@ -258,19 +262,21 @@ func (s *apiService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.Del
 
 func (s *apiService) Read(r *api.ReadRequest, stream api.Tigris_ReadServer) error {
 	var err error
+	queryMetrics := metrics.StreamingQueryMetrics{}
 	if api.GetTransaction(stream.Context()) != nil {
-		_, err = s.sessions.Execute(stream.Context(), s.runnerFactory.GetStreamingQueryRunner(r, stream), &ReqOptions{
+		_, err = s.sessions.Execute(stream.Context(), s.runnerFactory.GetStreamingQueryRunner(r, stream, &queryMetrics), &ReqOptions{
 			txCtx:              api.GetTransaction(stream.Context()),
 			instantVerTracking: true,
 		})
 	} else {
-		_, err = s.sessions.ReadOnlyExecute(stream.Context(), s.runnerFactory.GetStreamingQueryRunner(r, stream), &ReqOptions{})
+		_, err = s.sessions.ReadOnlyExecute(stream.Context(), s.runnerFactory.GetStreamingQueryRunner(r, stream, &queryMetrics), &ReqOptions{})
 	}
 	return err
 }
 
 func (s *apiService) Search(r *api.SearchRequest, stream api.Tigris_SearchServer) error {
-	_, err := s.sessions.ReadOnlyExecute(stream.Context(), s.runnerFactory.GetSearchQueryRunner(r, stream), &ReqOptions{
+	queryMetrics := metrics.SearchQueryMetrics{}
+	_, err := s.sessions.ReadOnlyExecute(stream.Context(), s.runnerFactory.GetSearchQueryRunner(r, stream, &queryMetrics), &ReqOptions{
 		instantVerTracking: true,
 	})
 	if err != nil {
