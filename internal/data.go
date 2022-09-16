@@ -106,6 +106,10 @@ func NewTableDataWithEncoding(data []byte, encoding int32) *TableData {
 	}
 }
 
+func (x *TableData) SetVersion(ver int32) {
+	x.Ver = ver
+}
+
 func (x *TableData) CreateToProtoTS() *timestamppb.Timestamp {
 	if x.CreatedAt != nil {
 		return x.CreatedAt.GetProtoTS()

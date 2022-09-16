@@ -370,6 +370,12 @@ func (f *Field) IsCompatible(f1 *Field) error {
 		return api.Errorf(api.Code_INVALID_ARGUMENT, "primary key changes are not allowed %q", f.FieldName)
 	}
 
+	if f.MaxLength != nil && f1.MaxLength != nil {
+		if *f.MaxLength > *f1.MaxLength {
+			return api.Errorf(api.Code_INVALID_ARGUMENT, "reducing length of an existing field is not allowed %q", f.FieldName)
+		}
+	}
+
 	return nil
 }
 

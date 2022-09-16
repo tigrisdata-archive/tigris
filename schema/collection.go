@@ -39,7 +39,7 @@ type DefaultCollection struct {
 	// Id is the dictionary encoded value for this collection.
 	Id uint32
 	// SchVer returns the schema version
-	SchVer int
+	SchVer int32
 	// Name is the name of the collection.
 	Name string
 	// Fields are derived from the user schema.
@@ -99,7 +99,7 @@ func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionTy
 
 	return &DefaultCollection{
 		Id:              id,
-		SchVer:          schVer,
+		SchVer:          int32(schVer),
 		Name:            name,
 		Fields:          fields,
 		Indexes:         indexes,
@@ -113,6 +113,10 @@ func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionTy
 
 func (d *DefaultCollection) GetName() string {
 	return d.Name
+}
+
+func (d *DefaultCollection) GetVersion() int32 {
+	return d.SchVer
 }
 
 func (d *DefaultCollection) Type() CollectionType {
