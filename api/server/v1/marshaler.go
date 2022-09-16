@@ -634,6 +634,33 @@ func (x *PublishRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func (x *SubscribeRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+	for key, value := range mp {
+		switch key {
+		case "db":
+			if err := jsoniter.Unmarshal(value, &x.Db); err != nil {
+				return err
+			}
+		case "collection":
+			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
+				return err
+			}
+		case "filter":
+			// not decoding it here and let it decode during filter parsing
+			x.Filter = value
+		case "options":
+			if err := jsoniter.Unmarshal(value, &x.Options); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (x *SubscribeResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
 		Message json.RawMessage `json:"message"`

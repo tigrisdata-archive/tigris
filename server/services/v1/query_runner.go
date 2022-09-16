@@ -1128,7 +1128,7 @@ type SubscribeQueryRunner struct {
 }
 
 // TODO: number of partitions needs to be defined by schema, with defaults and maximum specified by configuration
-const partitions = 64
+const partitions = 1
 
 func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetDb())
@@ -1146,6 +1146,11 @@ func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 
 	table, err := runner.encoder.EncodePartitionTableName(tenant.GetNamespace(), db, collection)
 	if ulog.E(err) {
+		return nil, ctx, err
+	}
+
+	wrappedF, err := filter.NewFactory(collection.QueryableFields, nil).WrappedFilter(runner.req.Filter)
+	if err != nil {
 		return nil, ctx, err
 	}
 
@@ -1228,13 +1233,13 @@ func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 					continue
 				}
 
-				err = runner.streaming.Send(&api.SubscribeResponse{
-					Message: keyValue.Data.RawData,
-				})
-				if ulog.E(err) {
-					return nil, ctx, err
+				if wrappedF == nil || (wrappedF != nil && wrappedF.Matches(keyValue.Data.RawData)) {
+					if err = runner.streaming.Send(&api.SubscribeResponse{
+						Message: keyValue.Data.RawData,
+					}); ulog.E(err) {
+						return nil, ctx, err
+					}
 				}
-
 				first = false
 				parts[i].skipFirst = true
 
