@@ -41,17 +41,18 @@ func (m *storeImplWithMetrics) measure(ctx context.Context, name string, f func(
 	// Low level measurement wrapper that is called by the measure functions on the appropriate receiver
 	spanMeta := metrics.NewSpanMeta("tigris.search", name, metrics.SearchSpanType, metrics.GetSearchTags(name))
 	ctx = spanMeta.StartTracing(ctx, true)
-	defer metrics.SearchRespTime.Tagged(spanMeta.GetSearchTimerTags()).Timer("time").Start().Stop()
 	err := f(ctx)
 	if err == nil {
 		// Request was ok
-		spanMeta.CountOkForScope(metrics.SearchOkRequests, spanMeta.GetSearchOkTags())
+		spanMeta.CountOkForScope(metrics.SearchOkCount, spanMeta.GetSearchOkTags())
 		_ = spanMeta.FinishTracing(ctx)
+		spanMeta.RecordDuration(metrics.SearchRespTime, spanMeta.GetSearchOkTags())
 		return
 	}
 	// Request had error
-	spanMeta.CountErrorForScope(metrics.SearchMetrics, spanMeta.GetSearchErrorTags(err))
+	spanMeta.CountErrorForScope(metrics.SearchErrorCount, spanMeta.GetSearchErrorTags(err))
 	_ = spanMeta.FinishWithError(ctx, "search", err)
+	spanMeta.RecordDuration(metrics.SearchErrorRespTime, spanMeta.GetSearchErrorTags(err))
 }
 
 func (m *storeImplWithMetrics) CreateCollection(ctx context.Context, schema *tsApi.CollectionSchema) (err error) {

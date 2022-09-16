@@ -19,9 +19,10 @@ import (
 )
 
 var (
-	OkRequests       tally.Scope
-	ErrorRequests    tally.Scope
-	RequestsRespTime tally.Scope
+	RequestsOkCount       tally.Scope
+	RequestsErrorCount    tally.Scope
+	RequestsRespTime      tally.Scope
+	RequestsErrorRespTime tally.Scope
 )
 
 func getRequestOkTagKeys() []string {
@@ -33,18 +34,10 @@ func getRequestOkTagKeys() []string {
 		"env",
 		"db",
 		"collection",
-	}
-}
-
-func getRequestTimerTagKeys() []string {
-	return []string{
-		"grpc_method",
-		"grpc_service",
-		"tigris_tenant",
-		"grpc_service_type",
-		"env",
-		"db",
-		"collection",
+		"read_type",
+		"search_type",
+		"write_type",
+		"sort",
 	}
 }
 
@@ -59,11 +52,16 @@ func getRequestErrorTagKeys() []string {
 		"collection",
 		"error_code",
 		"error_value",
+		"read_type",
+		"search_type",
+		"write_type",
+		"sort",
 	}
 }
 
 func initializeRequestScopes() {
-	OkRequests = Requests.SubScope("count")
-	ErrorRequests = Requests.SubScope("count")
+	RequestsOkCount = Requests.SubScope("count")
+	RequestsErrorCount = Requests.SubScope("count")
 	RequestsRespTime = Requests.SubScope("response")
+	RequestsErrorRespTime = Requests.SubScope("error_response")
 }

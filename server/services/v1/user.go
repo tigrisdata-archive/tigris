@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	userPattern = "/users/v1/*"
+	userPattern = "/" + version + "/users/*"
 )
 
 type userService struct {
@@ -39,14 +39,14 @@ type userService struct {
 	UserMetadataProvider
 }
 
-func newUserService(authProvider AuthProvider, txMgr *transaction.Manager, tenantMgr *metadata.TenantManager) *userService {
+func newUserService(authProvider AuthProvider, txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, userstore *metadata.UserSubspace) *userService {
 	if authProvider == nil && config.DefaultConfig.Auth.EnableOauth {
 		log.Error().Str("AuthProvider", config.DefaultConfig.Auth.OAuthProvider).Msg("Unable to configure external auth provider")
 		panic("Unable to configure external auth provider")
 	}
 
 	userMetadataProvider := &DefaultUserMetadataProvider{
-		userStore: metadata.NewUserStore(&metadata.DefaultMDNameRegistry{}),
+		userStore: userstore,
 		txMgr:     txMgr,
 		tenantMgr: tenantMgr,
 	}

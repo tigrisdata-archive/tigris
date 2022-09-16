@@ -63,21 +63,22 @@ func traceUnary() func(ctx context.Context, req interface{}, info *grpc.UnarySer
 		tags := reqMetadata.GetInitialTags()
 		spanMeta := metrics.NewSpanMeta(util.Service, info.FullMethod, metrics.GrpcSpanType, tags)
 		spanMeta.AddTags(metrics.GetDbCollTagsForReq(req))
-		defer metrics.RequestsRespTime.Tagged(spanMeta.GetRequestTimerTags()).Timer("time").Start().Stop()
 		ctx = spanMeta.StartTracing(ctx, false)
 		resp, err := handler(ctx, req)
 		if err != nil {
 			// Request had an error
-			spanMeta.CountErrorForScope(metrics.ErrorRequests, spanMeta.GetRequestErrorTags(err))
+			spanMeta.CountErrorForScope(metrics.RequestsErrorCount, spanMeta.GetRequestErrorTags(err))
 			_ = spanMeta.FinishWithError(ctx, "request", err)
+			spanMeta.RecordDuration(metrics.RequestsErrorRespTime, spanMeta.GetRequestErrorTags(err))
 			ulog.E(err)
 			return nil, err
 		}
 		// Request was ok
-		spanMeta.CountOkForScope(metrics.OkRequests, spanMeta.GetRequestOkTags())
+		spanMeta.CountOkForScope(metrics.RequestsOkCount, spanMeta.GetRequestOkTags())
 		spanMeta.CountReceivedBytes(metrics.BytesReceived, spanMeta.GetNetworkTags(), proto.Size(req.(proto.Message)))
 		spanMeta.CountSentBytes(metrics.BytesSent, spanMeta.GetNetworkTags(), proto.Size(resp.(proto.Message)))
 		_ = spanMeta.FinishTracing(ctx)
+		spanMeta.RecordDuration(metrics.RequestsRespTime, spanMeta.GetRequestOkTags())
 		return resp, err
 	}
 }
@@ -96,18 +97,19 @@ func traceStream() grpc.StreamServerInterceptor {
 		}
 		tags := reqMetadata.GetInitialTags()
 		spanMeta := metrics.NewSpanMeta(util.Service, info.FullMethod, metrics.GrpcSpanType, tags)
-		defer metrics.RequestsRespTime.Tagged(spanMeta.GetRequestTimerTags()).Timer("time").Start().Stop()
 		wrapped.spanMeta = spanMeta
 		wrapped.WrappedContext = spanMeta.StartTracing(wrapped.WrappedContext, false)
 		err = handler(srv, wrapped)
 		if err != nil {
-			spanMeta.CountErrorForScope(metrics.ErrorRequests, spanMeta.GetRequestErrorTags(err))
+			spanMeta.CountErrorForScope(metrics.RequestsErrorCount, spanMeta.GetRequestErrorTags(err))
 			wrapped.WrappedContext = spanMeta.FinishWithError(wrapped.WrappedContext, "request", err)
+			spanMeta.RecordDuration(metrics.RequestsErrorRespTime, spanMeta.GetRequestErrorTags(err))
 			ulog.E(err)
 			return err
 		}
-		spanMeta.CountOkForScope(metrics.OkRequests, spanMeta.GetRequestOkTags())
+		spanMeta.CountOkForScope(metrics.RequestsOkCount, spanMeta.GetRequestOkTags())
 		wrapped.WrappedContext = spanMeta.FinishTracing(wrapped.WrappedContext)
+		spanMeta.RecordDuration(metrics.RequestsRespTime, spanMeta.GetRequestOkTags())
 		return err
 	}
 }
@@ -121,8 +123,8 @@ func (w *wrappedStream) RecvMsg(m interface{}) error {
 	childSpanMeta := metrics.NewSpanMeta(TigrisStreamSpan, "RecvMsg", metrics.GrpcSpanType, parentSpanMeta.GetRequestOkTags())
 	w.WrappedContext = childSpanMeta.StartTracing(w.WrappedContext, true)
 	err := w.ServerStream.RecvMsg(m)
-	parentSpanMeta.AddTags(metrics.GetDbCollTagsForReq(m))
-	childSpanMeta.AddTags(metrics.GetDbCollTagsForReq(m))
+	parentSpanMeta.RecursiveAddTags(metrics.GetDbCollTagsForReq(m))
+	childSpanMeta.RecursiveAddTags(metrics.GetDbCollTagsForReq(m))
 	parentSpanMeta.CountReceivedBytes(metrics.BytesReceived, parentSpanMeta.GetNetworkTags(), proto.Size(m.(proto.Message)))
 	w.WrappedContext = childSpanMeta.FinishTracing(w.WrappedContext)
 	return err
@@ -137,8 +139,8 @@ func (w *wrappedStream) SendMsg(m interface{}) error {
 	childSpanMeta := metrics.NewSpanMeta(TigrisStreamSpan, "SendMsg", metrics.GrpcSpanType, parentSpanMeta.GetRequestOkTags())
 	w.WrappedContext = childSpanMeta.StartTracing(w.WrappedContext, true)
 	err := w.ServerStream.SendMsg(m)
-	parentSpanMeta.AddTags(metrics.GetDbCollTagsForReq(m))
-	childSpanMeta.AddTags(metrics.GetDbCollTagsForReq(m))
+	parentSpanMeta.RecursiveAddTags(metrics.GetDbCollTagsForReq(m))
+	childSpanMeta.RecursiveAddTags(metrics.GetDbCollTagsForReq(m))
 	parentSpanMeta.CountSentBytes(metrics.BytesSent, parentSpanMeta.GetNetworkTags(), proto.Size(m.(proto.Message)))
 	w.WrappedContext = childSpanMeta.FinishTracing(w.WrappedContext)
 	return err

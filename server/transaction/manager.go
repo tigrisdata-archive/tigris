@@ -289,6 +289,10 @@ func (s *TxSession) Rollback(ctx context.Context) error {
 	s.Lock()
 	defer s.Unlock()
 
+	if s.kTx == nil {
+		// already committed, no-op
+		return nil
+	}
 	s.state = sessionEnded
 
 	err := s.kTx.Rollback(ctx)

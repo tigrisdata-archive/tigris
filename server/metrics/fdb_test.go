@@ -40,17 +40,16 @@ func TestFdbMetrics(t *testing.T) {
 
 	t.Run("Test fdb tags", func(t *testing.T) {
 		assert.Greater(t, len(getFdbOkTagKeys()), 2)
-		assert.Greater(t, len(getFdbTimerTagKeys()), 2)
 		assert.Greater(t, len(getFdbErrorTagKeys()), 2)
 	})
 
 	t.Run("Test FDB counters", func(t *testing.T) {
 		for _, tags := range testNormalTags {
-			FdbOkRequests.Tagged(tags).Counter("ok").Inc(1)
-			FdbErrorRequests.Tagged(tags).Counter("unknown").Inc(1)
+			FdbOkCount.Tagged(tags).Counter("ok").Inc(1)
+			FdbErrorCount.Tagged(tags).Counter("unknown").Inc(1)
 		}
 		for _, tags := range testKnownErrorTags {
-			FdbErrorRequests.Tagged(tags).Counter("specific").Inc(1)
+			FdbErrorCount.Tagged(tags).Counter("specific").Inc(1)
 		}
 	})
 

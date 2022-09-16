@@ -17,7 +17,9 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"time"
 
+	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/request"
 	ulog "github.com/tigrisdata/tigris/util/log"
@@ -44,6 +46,10 @@ type SpanMeta struct {
 	tags         map[string]string
 	span         tracer.Span
 	parent       *SpanMeta
+	started      bool
+	stopped      bool
+	startedAt    time.Time
+	stoppedAt    time.Time
 }
 
 type SpanMetaCtxKey struct {
@@ -86,20 +92,12 @@ func (s *SpanMeta) GetRequestOkTags() map[string]string {
 	return standardizeTags(s.tags, getRequestOkTagKeys())
 }
 
-func (s *SpanMeta) GetRequestTimerTags() map[string]string {
-	return standardizeTags(s.tags, getRequestTimerTagKeys())
-}
-
 func (s *SpanMeta) GetRequestErrorTags(err error) map[string]string {
 	return standardizeTags(mergeTags(s.tags, getTagsForError(err, "request")), getRequestErrorTagKeys())
 }
 
 func (s *SpanMeta) GetFdbOkTags() map[string]string {
 	return standardizeTags(s.tags, getFdbOkTagKeys())
-}
-
-func (s *SpanMeta) GetFdbTimerTags() map[string]string {
-	return standardizeTags(s.tags, getFdbTimerTagKeys())
 }
 
 func (s *SpanMeta) GetFdbErrorTags(err error) map[string]string {
@@ -110,20 +108,12 @@ func (s *SpanMeta) GetSearchOkTags() map[string]string {
 	return standardizeTags(s.tags, getSearchOkTagKeys())
 }
 
-func (s *SpanMeta) GetSearchTimerTags() map[string]string {
-	return standardizeTags(s.tags, getSearchTimerTagKeys())
-}
-
 func (s *SpanMeta) GetSearchErrorTags(err error) map[string]string {
 	return standardizeTags(mergeTags(s.tags, getTagsForError(err, "search")), getSearchErrorTagKeys())
 }
 
 func (s *SpanMeta) GetSessionOkTags() map[string]string {
 	return standardizeTags(s.tags, getSessionOkTagKeys())
-}
-
-func (s *SpanMeta) GetSessionTimerTags() map[string]string {
-	return standardizeTags(s.tags, getSessionTimerTagKeys())
 }
 
 func (s *SpanMeta) GetSessionErrorTags(err error) map[string]string {
@@ -148,10 +138,6 @@ func (s *SpanMeta) GetNetworkTags() map[string]string {
 
 func (s *SpanMeta) GetAuthOkTags() map[string]string {
 	return standardizeTags(s.tags, getAuthOkTagKeys())
-}
-
-func (s *SpanMeta) GetAuthTimerTags() map[string]string {
-	return standardizeTags(s.tags, getAuthTimerTagKeys())
 }
 
 func (s *SpanMeta) GetAuthErrorTags(err error) map[string]string {
@@ -179,7 +165,18 @@ func (s *SpanMeta) AddTags(tags map[string]string) {
 	for k, v := range tags {
 		if _, exists := s.tags[k]; !exists || s.tags[k] == request.UnknownValue {
 			s.tags[k] = v
+			if s.span != nil {
+				// The span already exists, set the tag there as well
+				s.span.SetTag(k, v)
+			}
 		}
+	}
+}
+
+func (s *SpanMeta) RecursiveAddTags(tags map[string]string) {
+	s.AddTags(tags)
+	if s.parent != nil {
+		s.parent.RecursiveAddTags(tags)
 	}
 }
 
@@ -187,6 +184,8 @@ func (s *SpanMeta) StartTracing(ctx context.Context, childOnly bool) context.Con
 	if !config.DefaultConfig.Tracing.Enabled {
 		return ctx
 	}
+	s.startedAt = time.Now()
+	s.started = true
 	spanOpts := s.GetSpanOptions()
 	parentSpanMeta, parentExists := SpanMetaFromContext(ctx)
 	if parentExists {
@@ -212,6 +211,10 @@ func (s *SpanMeta) StartTracing(ctx context.Context, childOnly bool) context.Con
 }
 
 func (s *SpanMeta) FinishTracing(ctx context.Context) context.Context {
+	if !s.started {
+		log.Error().Str("service_name", s.serviceName).Str("resource_name", s.resourceName).Msg("Finish tracing called before starting the trace")
+		return ctx
+	}
 	if s.span != nil {
 		s.span.Finish()
 	}
@@ -225,7 +228,18 @@ func (s *SpanMeta) FinishTracing(ctx context.Context) context.Context {
 		// This was the top level span meta
 		ctx = ClearSpanMetaContext(ctx)
 	}
+	s.stopped = true
+	s.stoppedAt = time.Now()
 	return ctx
+}
+
+func (s *SpanMeta) RecordDuration(scope tally.Scope, tags map[string]string) {
+	// Should be called after tracing is finished
+	if !s.started || !s.stopped {
+		log.Error().Str("service_name", s.serviceName).Str("resource_name", s.resourceName).Msg("RecordDuration was called on a span that was not started ot stopped")
+		return
+	}
+	scope.Tagged(tags).Timer("time").Record(s.stoppedAt.Sub(s.startedAt))
 }
 
 func (s *SpanMeta) FinishWithError(ctx context.Context, source string, err error) context.Context {
@@ -242,5 +256,7 @@ func (s *SpanMeta) FinishWithError(ctx context.Context, source string, err error
 	s.span.Finish(finishOptions...)
 	s.span = nil
 	ClearSpanMetaContext(ctx)
+	s.stopped = true
+	s.stoppedAt = time.Now()
 	return ctx
 }

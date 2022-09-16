@@ -85,7 +85,7 @@ func main() {
 
 	quota.Init(tenantMgr, txMgr, &config.DefaultConfig.Quota)
 
-	mx := muxer.NewMuxer(&config.DefaultConfig, tenantMgr, txMgr)
+	mx := muxer.NewMuxer(&config.DefaultConfig)
 	mx.RegisterServices(kvStore, searchStore, tenantMgr, txMgr)
 
 	if err := mx.Start(config.DefaultConfig.Server.Host, config.DefaultConfig.Server.Port); err != nil {

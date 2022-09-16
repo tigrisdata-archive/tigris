@@ -24,13 +24,11 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/server/config"
 	tigrisconfig "github.com/tigrisdata/tigris/server/config"
-	"github.com/tigrisdata/tigris/server/metadata"
-	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/util"
 	"google.golang.org/grpc"
 )
 
-func Get(config *config.Config, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor) {
+func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerInterceptor) {
 	authFunc := getAuthFunction(config)
 
 	// adding all the middlewares for the server stream
