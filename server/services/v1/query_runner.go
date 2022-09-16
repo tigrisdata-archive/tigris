@@ -1085,8 +1085,9 @@ func (runner *PublishQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 func (runner *PublishQueryRunner) publish(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, db *metadata.Database,
 	coll *schema.DefaultCollection, messages [][]byte, part uint16) (*internal.Timestamp, [][]byte, error) {
 	var err error
-	var ts = internal.NewTimestamp()
 	var allKeys [][]byte
+	var keyOffset int64
+	ts := internal.NewTimestamp()
 	for _, doc := range messages {
 		err = runner.validate(coll, doc)
 		if err != nil {
@@ -1098,10 +1099,11 @@ func (runner *PublishQueryRunner) publish(ctx context.Context, tx transaction.Tx
 			return nil, nil, err
 		}
 
+		keyTime := ts.UnixNano() + keyOffset
 		key, err := runner.encoder.EncodePartitionKey(
 			table,
 			coll.Indexes.PrimaryKey,
-			[]interface{}{ts.UnixNano()},
+			[]interface{}{keyTime},
 			part,
 		)
 		if err != nil {
@@ -1109,11 +1111,11 @@ func (runner *PublishQueryRunner) publish(ctx context.Context, tx transaction.Tx
 		}
 
 		tableData := internal.NewTableDataWithTS(ts, nil, doc)
-
 		err = tx.Replace(ctx, key, tableData, false)
 		if err != nil {
 			return nil, nil, err
 		}
+		keyOffset++
 	}
 	return ts, allKeys, err
 }
