@@ -34,7 +34,6 @@ import (
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
-	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc"
 )
@@ -412,12 +411,6 @@ func (s *apiService) DescribeDatabase(ctx context.Context, r *api.DescribeDataba
 	}
 
 	return resp.Response.(*api.DescribeDatabaseResponse), nil
-}
-
-func (s *apiService) GetInfo(_ context.Context, _ *api.GetInfoRequest) (*api.GetInfoResponse, error) {
-	return &api.GetInfoResponse{
-		ServerVersion: util.Version,
-	}, nil
 }
 
 func (s *apiService) Events(r *api.EventsRequest, stream api.Tigris_EventsServer) error {

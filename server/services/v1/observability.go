@@ -32,6 +32,7 @@ import (
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/request"
+	"github.com/tigrisdata/tigris/util"
 	"google.golang.org/grpc"
 )
 
@@ -173,6 +174,12 @@ func newObservabilityService() *observabilityService {
 
 func (o *observabilityService) QueryTimeSeriesMetrics(ctx context.Context, req *api.QueryTimeSeriesMetricsRequest) (*api.QueryTimeSeriesMetricsResponse, error) {
 	return o.ObservableProvider.QueryTimeSeriesMetrics(ctx, req)
+}
+
+func (o *observabilityService) GetInfo(_ context.Context, _ *api.GetInfoRequest) (*api.GetInfoResponse, error) {
+	return &api.GetInfoResponse{
+		ServerVersion: util.Version,
+	}, nil
 }
 
 func (o *observabilityService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {

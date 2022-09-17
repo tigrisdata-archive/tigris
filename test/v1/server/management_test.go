@@ -82,9 +82,9 @@ func listNamespaces(t *testing.T) *httpexpect.Response {
 }
 
 func getCreateNamespaceURL(namespaceName string) string {
-	return fmt.Sprintf("/v1/admin/namespaces/%s/create", namespaceName)
+	return fmt.Sprintf("/v1/management/namespaces/%s/create", namespaceName)
 }
 
 func listNamespaceUrl() string {
-	return "/v1/admin/namespaces/list"
+	return "/v1/management/namespaces/list"
 }

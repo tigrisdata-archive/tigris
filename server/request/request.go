@@ -24,6 +24,7 @@ import (
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/server/config"
 	"google.golang.org/grpc"
 )
@@ -38,6 +39,10 @@ const (
 	DefaultNamespaceId = uint32(1)
 
 	UnknownValue = "unknown"
+)
+
+var (
+	adminMethods = container.NewHashSet("/tigrisdata.management.v1.Management/createNamespace", "/tigrisdata.management.v1.Management/listNamespaces")
 )
 
 type RequestMetadataCtxKey struct {
@@ -211,7 +216,7 @@ func (tokenNamespaceExtractor *AccessTokenNamespaceExtractor) Extract(ctx contex
 }
 
 func IsAdminApi(fullMethodName string) bool {
-	return strings.HasPrefix(fullMethodName, "/tigrisdata.admin.v1.Admin/")
+	return adminMethods.Contains(fullMethodName)
 }
 
 func getTokenFromHeader(header string) (string, error) {

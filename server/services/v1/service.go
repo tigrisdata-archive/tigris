@@ -41,7 +41,6 @@ func GetRegisteredServices(kvStore kv.KeyValueStore, searchStore search.Store, t
 	var v1Services []Service
 	v1Services = append(v1Services, newApiService(kvStore, searchStore, tenantMgr, txMgr))
 	v1Services = append(v1Services, newHealthService())
-	v1Services = append(v1Services, newAdminService(tenantMgr, txMgr))
 
 	userstore := metadata.NewUserStore(&metadata.DefaultMDNameRegistry{})
 	authProvider := getAuthProvider(userstore, txMgr)
@@ -49,8 +48,8 @@ func GetRegisteredServices(kvStore kv.KeyValueStore, searchStore search.Store, t
 	if config.DefaultConfig.Auth.EnableOauth {
 		v1Services = append(v1Services, newAuthService(authProvider))
 	}
-	if config.DefaultConfig.Users.Enabled {
-		v1Services = append(v1Services, newUserService(authProvider, txMgr, tenantMgr, userstore))
+	if config.DefaultConfig.Management.Enabled {
+		v1Services = append(v1Services, newManagementService(authProvider, txMgr, tenantMgr, userstore))
 	}
 
 	v1Services = append(v1Services, newObservabilityService())

@@ -37,7 +37,7 @@ type Config struct {
 	FoundationDB  FoundationDBConfig
 	Quota         QuotaConfig
 	Observability ObservabilityConfig `yaml:"observability" json:"observability"`
-	Users         UsersConfig         `yaml:"users" json:"users"`
+	Management    ManagementConfig    `yaml:"management" json:"management"`
 }
 
 type AuthConfig struct {
@@ -103,7 +103,7 @@ type SearchMetricsConfig struct {
 	ResponseTime bool `mapstructure:"response_time" yaml:"response_time" json:"response_time"`
 }
 
-type UsersConfig struct {
+type ManagementConfig struct {
 	Enabled bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 }
 
@@ -169,7 +169,7 @@ var DefaultConfig = Config{
 	Observability: ObservabilityConfig{
 		Enabled: false,
 	},
-	Users: UsersConfig{
+	Management: ManagementConfig{
 		Enabled: true,
 	},
 }
