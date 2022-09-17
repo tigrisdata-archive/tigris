@@ -42,7 +42,7 @@ var (
 	UnknownNamespace          = "unknown"
 	BypassAuthForTheseMethods = container.NewHashSet(
 		"/HealthAPI/Health",
-		"/tigrisdata.auth.v1.Auth/getAccessToken",
+		"/tigrisdata.auth.v1.Auth/GetAccessToken",
 		"/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo",
 	)
 )
