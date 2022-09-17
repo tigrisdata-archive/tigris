@@ -415,6 +415,10 @@ func (x *QueryTimeSeriesMetricsRequest) UnmarshalJSON(data []byte) error {
 			if err := jsoniter.Unmarshal(value, &x.MetricName); err != nil {
 				return err
 			}
+		case "quantile":
+			if err := jsoniter.Unmarshal(value, &x.Quantile); err != nil {
+				return err
+			}
 		case "tigris_operation":
 			var t string
 			if err := jsoniter.Unmarshal(value, &t); err != nil {
@@ -427,6 +431,8 @@ func (x *QueryTimeSeriesMetricsRequest) UnmarshalJSON(data []byte) error {
 				x.TigrisOperation = TigrisOperation_READ
 			case "WRITE":
 				x.TigrisOperation = TigrisOperation_WRITE
+			case "METADATA":
+				x.TigrisOperation = TigrisOperation_METADATA
 			}
 		case "space_aggregation":
 			var t string
