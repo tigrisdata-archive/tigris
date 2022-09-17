@@ -24,7 +24,7 @@ import (
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	"github.com/apple/foundationdb/bindings/go/src/fdb/subspace"
 	jsoniter "github.com/json-iterator/go"
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/lib/date"
 	"github.com/tigrisdata/tigris/lib/json"
@@ -36,7 +36,7 @@ import (
 )
 
 var (
-	ErrSearchIndexingFailed = fmt.Errorf("failed to index documents")
+// ErrSearchIndexingFailed = fmt.Errorf("failed to index documents")
 )
 
 const (
@@ -192,14 +192,14 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 				if dateStr, ok := value.(string); ok {
 					t, err := date.ToUnixNano(schema.DateTimeFormat, dateStr)
 					if err != nil {
-						return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "Validation failed, %s is not a valid date-time", dateStr)
+						return nil, errors.InvalidArgument("Validation failed, %s is not a valid date-time", dateStr)
 					}
 					decData[key] = t
 					// pack original date as string to a shadowed key
 					decData[schema.ToSearchDateKey(key)] = dateStr
 				}
 			default:
-				return nil, api.Errorf(api.Code_UNIMPLEMENTED, "Internal error!")
+				return nil, errors.Unimplemented("Internal error!")
 			}
 		}
 	}
@@ -235,7 +235,7 @@ func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCo
 					doc[f.Name()] = doc[shadowedKey]
 					delete(doc, shadowedKey)
 				default:
-					return "", nil, nil, api.Errorf(api.Code_UNIMPLEMENTED, "Internal error!")
+					return "", nil, nil, errors.Unimplemented("Internal error!")
 				}
 			}
 		}

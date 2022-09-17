@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/rs/zerolog/log"
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/server/transaction"
@@ -120,7 +120,7 @@ func validateArgsFull(namespaceId uint32, userId string, metadataKey string, pay
 		return err
 	}
 	if payload == nil {
-		return api.Errorf(api.Code_INVALID_ARGUMENT, "invalid nil payload")
+		return errors.InvalidArgument("invalid nil payload")
 	}
 	return nil
 }
@@ -129,17 +129,17 @@ func validateArgsPartial1(namespaceId uint32, userId string, metadataKey string)
 		return err
 	}
 	if metadataKey == "" {
-		return api.Errorf(api.Code_INVALID_ARGUMENT, "invalid empty metadataKey")
+		return errors.InvalidArgument("invalid empty metadataKey")
 	}
 	return nil
 }
 
 func validateArgsPartial2(namespaceId uint32, userId string) error {
 	if namespaceId < 1 {
-		return api.Errorf(api.Code_INVALID_ARGUMENT, "invalid namespace, id must be greater than 0")
+		return errors.InvalidArgument("invalid namespace, id must be greater than 0")
 	}
 	if userId == "" {
-		return api.Errorf(api.Code_INVALID_ARGUMENT, "invalid empty userId")
+		return errors.InvalidArgument("invalid empty userId")
 	}
 
 	return nil

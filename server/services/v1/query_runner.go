@@ -23,6 +23,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/query/filter"
@@ -176,7 +177,7 @@ func (runner *BaseQueryRunner) getDatabaseFromTenant(ctx context.Context, tenant
 	}
 	if db == nil {
 		// database not found
-		return nil, api.Errorf(api.Code_NOT_FOUND, "database doesn't exist '%s'", dbName)
+		return nil, errors.NotFound("database doesn't exist '%s'", dbName)
 	}
 
 	return db, nil
@@ -198,7 +199,7 @@ func (runner *BaseQueryRunner) getDatabase(ctx context.Context, tx transaction.T
 	}
 	if db == nil {
 		// database not found
-		return nil, api.Errorf(api.Code_NOT_FOUND, "database doesn't exist '%s'", dbName)
+		return nil, errors.NotFound("database doesn't exist '%s'", dbName)
 	}
 
 	return db, nil
@@ -209,7 +210,7 @@ func (runner *BaseQueryRunner) getDatabase(ctx context.Context, tx transaction.T
 func (runner *BaseQueryRunner) getCollection(db *metadata.Database, collName string) (*schema.DefaultCollection, error) {
 	collection := db.GetCollection(collName)
 	if collection == nil {
-		return nil, api.Errorf(api.Code_NOT_FOUND, "collection doesn't exist '%s'", collName)
+		return nil, errors.NotFound("collection doesn't exist '%s'", collName)
 	}
 
 	return collection, nil
@@ -298,7 +299,7 @@ func (runner *BaseQueryRunner) buildKeysUsingFilter(tenant *metadata.Tenant, db 
 
 func (runner *BaseQueryRunner) mustBeDocumentsCollection(collection *schema.DefaultCollection, method string) error {
 	if collection.Type() != schema.DocumentsType {
-		return api.Errorf(api.Code_INVALID_ARGUMENT, "%s is only supported on collection type of 'documents'", method)
+		return errors.InvalidArgument("%s is only supported on collection type of 'documents'", method)
 	}
 
 	return nil
@@ -306,7 +307,7 @@ func (runner *BaseQueryRunner) mustBeDocumentsCollection(collection *schema.Defa
 
 func (runner *BaseQueryRunner) mustBeMessagesCollection(collection *schema.DefaultCollection, method string) error {
 	if collection.Type() != schema.MessagesType {
-		return api.Errorf(api.Code_INVALID_ARGUMENT, "%s is only supported on collection type of 'messages'", method)
+		return errors.InvalidArgument("%s is only supported on collection type of 'messages'", method)
 	}
 
 	return nil
@@ -338,7 +339,7 @@ func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	ts, allKeys, err := runner.insertOrReplace(ctx, tx, tenant, db, coll, runner.req.GetDocuments(), true)
 	if err != nil {
 		if err == kv.ErrDuplicateKey {
-			return nil, ctx, api.Errorf(api.Code_ALREADY_EXISTS, err.Error())
+			return nil, ctx, errors.AlreadyExists(err.Error())
 		}
 
 		return nil, ctx, err
@@ -449,7 +450,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}
 
 	if filter.None(runner.req.Filter) {
-		return nil, ctx, api.Errorf(api.Code_INVALID_ARGUMENT, "updating all documents is not allowed")
+		return nil, ctx, errors.InvalidArgument("updating all documents is not allowed")
 	}
 
 	var collation *api.Collation
@@ -617,7 +618,7 @@ type readerOptions struct {
 	ikeys         []keys.Key
 	table         []byte
 	noFilter      bool
-	inmemoryStore bool
+	inMemoryStore bool
 	filter        *filter.WrappedFilter
 	fieldFactory  *read.FieldFactory
 }
@@ -652,7 +653,7 @@ func (runner *StreamingQueryRunner) buildReaderOptions(tenant *metadata.Tenant, 
 				options.from = keys.NewKey(options.table)
 			}
 		} else {
-			options.inmemoryStore = true
+			options.inMemoryStore = true
 		}
 	} else {
 		var collation *api.Collation
@@ -669,7 +670,7 @@ func (runner *StreamingQueryRunner) buildReaderOptions(tenant *metadata.Tenant, 
 					options.from = keys.NewKey(options.table)
 				}
 			} else {
-				options.inmemoryStore = true
+				options.inMemoryStore = true
 			}
 		}
 	}
@@ -714,7 +715,7 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 		return nil, ctx, err
 	}
 
-	if options.inmemoryStore {
+	if options.inMemoryStore {
 		if err = runner.iterateOnIndexingStore(ctx, collection, options); err != nil {
 			return nil, ctx, err
 		}
@@ -772,7 +773,7 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 
 	ctx = runner.instrumentRunner(ctx, options)
 
-	if options.inmemoryStore {
+	if options.inMemoryStore {
 		if err = runner.iterateOnIndexingStore(ctx, collection, options); err != nil {
 			return nil, ctx, err
 		}
@@ -1030,8 +1031,7 @@ func (runner *SearchQueryRunner) getSearchFields(coll *schema.DefaultCollection)
 				return nil, err
 			}
 			if cf.DataType != schema.StringType {
-				return nil, api.Errorf(api.Code_INVALID_ARGUMENT,
-					"`%s` is not a searchable field. Only string fields can be queried", sf)
+				return nil, errors.InvalidArgument("`%s` is not a searchable field. Only string fields can be queried", sf)
 			}
 		}
 	}
@@ -1050,7 +1050,7 @@ func (runner *SearchQueryRunner) getFacetFields(coll *schema.DefaultCollection) 
 			return qsearch.Facets{}, err
 		}
 		if !cf.Faceted {
-			return qsearch.Facets{}, api.Errorf(api.Code_INVALID_ARGUMENT,
+			return qsearch.Facets{}, errors.InvalidArgument(
 				"Cannot generate facets for `%s`. Faceting is only supported for numeric and text fields", ff.Name)
 		}
 	}
@@ -1103,7 +1103,7 @@ func (runner *SearchQueryRunner) getSortOrdering(coll *schema.DefaultCollection)
 		}
 
 		if !cf.Sortable {
-			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "Cannot sort on `%s` field", sf.Name)
+			return nil, errors.InvalidArgument("Cannot sort on `%s` field", sf.Name)
 		}
 	}
 	return ordering, nil
@@ -1135,7 +1135,7 @@ func (runner *PublishQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 	if runner.req.Options != nil && runner.req.Options.Partition != -1 {
 		part = int(runner.req.Options.Partition)
 		if part < 0 || part >= partitions {
-			return nil, ctx, api.Errorf(api.Code_INVALID_ARGUMENT, "Invalid partition number `%d`", part)
+			return nil, ctx, errors.InvalidArgument("Invalid partition number `%d`", part)
 		}
 	} else {
 		part = rand.Intn(partitions)
@@ -1229,7 +1229,7 @@ func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 		partNums = runner.req.Options.Partitions
 		for i := 0; i < len(partNums); i++ {
 			if partNums[i] < 0 || partNums[i] >= partitions {
-				return nil, ctx, api.Errorf(api.Code_INVALID_ARGUMENT, "Invalid partition number `%d`", partNums[i])
+				return nil, ctx, errors.InvalidArgument("Invalid partition number `%d`", partNums[i])
 			}
 		}
 	} else {
@@ -1392,7 +1392,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 
 		if db.GetCollection(runner.createOrUpdateReq.GetCollection()) != nil && runner.createOrUpdateReq.OnlyCreate {
 			// check if onlyCreate is set and if set then return an error if collection already exist
-			return nil, ctx, api.Errorf(api.Code_ALREADY_EXISTS, "collection already exist")
+			return nil, ctx, errors.AlreadyExists("collection already exist")
 		}
 
 		schFactory, err := schema.Build(runner.createOrUpdateReq.GetCollection(), runner.createOrUpdateReq.GetSchema())
@@ -1409,7 +1409,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		if err = tenant.CreateCollection(ctx, tx, db, schFactory); err != nil {
 			if err == kv.ErrDuplicateKey {
 				// this simply means, concurrently CreateCollection is called,
-				return nil, ctx, api.Errorf(api.Code_ABORTED, "concurrent create collection request, aborting")
+				return nil, ctx, errors.Aborted("concurrent create collection request, aborting")
 			}
 			return nil, ctx, err
 		}
@@ -1464,7 +1464,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		}, ctx, nil
 	}
 
-	return &Response{}, ctx, api.Errorf(api.Code_UNKNOWN, "unknown request path")
+	return &Response{}, ctx, errors.Unknown("unknown request path")
 }
 
 type DatabaseQueryRunner struct {
@@ -1499,7 +1499,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			return nil, ctx, err
 		}
 		if !exist {
-			return nil, ctx, api.Errorf(api.Code_NOT_FOUND, "database doesn't exist '%s'", runner.drop.GetDb())
+			return nil, ctx, errors.NotFound("database doesn't exist '%s'", runner.drop.GetDb())
 		}
 
 		return &Response{
@@ -1511,7 +1511,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			return nil, ctx, err
 		}
 		if exist {
-			return nil, ctx, api.Errorf(api.Code_ALREADY_EXISTS, "database already exist")
+			return nil, ctx, errors.AlreadyExists("database already exist")
 		}
 
 		return &Response{
@@ -1574,5 +1574,5 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		}, ctx, nil
 	}
 
-	return &Response{}, ctx, api.Errorf(api.Code_UNKNOWN, "unknown request path")
+	return &Response{}, ctx, errors.Unknown("unknown request path")
 }

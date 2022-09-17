@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
@@ -326,15 +326,15 @@ func TestDictionaryEncoding_Error(t *testing.T) {
 	tx, err := tm.StartTx(ctx)
 	require.NoError(t, err)
 	dbId, err := k.CreateDatabase(ctx, tx, "db-1", 0)
-	require.Error(t, api.Errorf(api.Code_INVALID_ARGUMENT, "invalid namespace id"), err)
+	require.Error(t, errors.InvalidArgument("invalid namespace id"), err)
 	require.Equal(t, InvalidId, dbId)
 
 	collId, err := k.CreateCollection(ctx, tx, "coll-1", 1234, 0)
-	require.Error(t, api.Errorf(api.Code_INVALID_ARGUMENT, "invalid database id"), err)
+	require.Error(t, errors.InvalidArgument("invalid database id"), err)
 	require.Equal(t, InvalidId, collId)
 
 	indexId, err := k.CreateIndex(ctx, tx, "pkey", 1234, 1, 0)
-	require.Error(t, api.Errorf(api.Code_INVALID_ARGUMENT, "invalid collection id"), err)
+	require.Error(t, errors.InvalidArgument("invalid collection id"), err)
 	require.Equal(t, InvalidId, indexId)
 	require.NoError(t, tx.Rollback(context.TODO()))
 }
@@ -416,12 +416,12 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 		cid1, err := k.CreateCollection(ctx, tx, "coll-1", 1, dbId)
 		require.NoError(t, err)
 
-		pkid, err := k.CreateIndex(ctx, tx, "pkey", 1, dbId, cid1)
+		pkID, err := k.CreateIndex(ctx, tx, "pkey", 1, dbId, cid1)
 		require.NoError(t, err)
 		idxToId, err := k.GetIndexes(ctx, tx, 1, dbId, cid1)
 		require.NoError(t, err)
 		require.Len(t, idxToId, 1)
-		require.Equal(t, idxToId["pkey"], pkid)
+		require.Equal(t, idxToId["pkey"], pkID)
 		require.NoError(t, tx.Commit(ctx))
 	})
 }
@@ -460,7 +460,7 @@ func TestReservedNamespace(t *testing.T) {
 	// try assigning the same namespace id to some other namespace
 	tx, err = tm.StartTx(context.TODO())
 	require.NoError(t, err)
-	expError := api.Errorf(api.Code_ALREADY_EXISTS, "id is already assigned to the namespace 'p1-o1'")
+	expError := errors.AlreadyExists("id is already assigned to the namespace 'p1-o1'")
 	require.Equal(t, expError, r.reserveNamespace(context.TODO(), tx, "p2-o2", 123))
 }
 

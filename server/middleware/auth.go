@@ -21,6 +21,7 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/metrics"
 
 	"github.com/auth0/go-jwt-middleware/v2/jwks"
@@ -61,7 +62,7 @@ type CustomClaim struct {
 
 func (c CustomClaim) Validate(_ context.Context) error {
 	if len(c.Namespace.Code) == 0 {
-		return api.Errorf(api.Code_PERMISSION_DENIED, "empty namespace code in token")
+		return errors.PermissionDenied("empty namespace code in token")
 	}
 	return nil
 }
@@ -70,16 +71,16 @@ func AuthFromMD(ctx context.Context, expectedScheme string) (string, error) {
 	val := api.GetHeader(ctx, headerAuthorize)
 	if val == "" {
 		log.Debug().Msg("No authorization header present")
-		return "", api.Errorf(api.Code_UNAUTHENTICATED, "request unauthenticated with "+expectedScheme)
+		return "", errors.Unauthenticated("request unauthenticated with " + expectedScheme)
 	}
 	splits := strings.SplitN(val, " ", 2)
 	if len(splits) < 2 {
 		log.Debug().Msg("Invalid authorization header present")
-		return "", api.Errorf(api.Code_UNAUTHENTICATED, "bad authorization string")
+		return "", errors.Unauthenticated("bad authorization string")
 	}
 	if !strings.EqualFold(splits[0], expectedScheme) {
 		log.Debug().Msg("Unsupported authorization scheme")
-		return "", api.Errorf(api.Code_UNAUTHENTICATED, "request unauthenticated with bearer")
+		return "", errors.Unauthenticated("request unauthenticated with bearer")
 	}
 	return splits[1], nil
 }
@@ -160,7 +161,7 @@ func authFunction(ctx context.Context, jwtValidator *validator.Validator, config
 			} else {
 				log.Debug().Str("error", err.Error()).Err(err).Msg("Failed to validate access token")
 			}
-			return ctx, api.Errorf(api.Code_UNAUTHENTICATED, "Failed to validate access token")
+			return ctx, errors.Unauthenticated("Failed to validate access token")
 		}
 		cache.Add(tkn, validatedToken)
 	}
@@ -169,7 +170,7 @@ func authFunction(ctx context.Context, jwtValidator *validator.Validator, config
 	if validatedClaims, ok := validatedToken.(*validator.ValidatedClaims); ok {
 		// validate expiration
 		if validatedClaims.RegisteredClaims.Expiry+int64(config.Auth.TokenClockSkewDurationSec) < time.Now().Unix() {
-			return nil, api.Errorf(api.Code_UNAUTHENTICATED, "Failed to validate access token")
+			return nil, errors.Unauthenticated("Failed to validate access token")
 		}
 
 		if customClaims, ok := validatedClaims.CustomClaims.(*CustomClaim); ok {
@@ -177,7 +178,7 @@ func authFunction(ctx context.Context, jwtValidator *validator.Validator, config
 			if customClaims.Namespace.Code == "" {
 				log.Warn().Msg("Valid token with empty namespace received")
 				ctx = request.SetNamespace(ctx, UnknownNamespace)
-				return ctx, api.Errorf(api.Code_UNAUTHENTICATED, "You are not authorized to perform this admin action")
+				return ctx, errors.Unauthenticated("You are not authorized to perform this admin action")
 			}
 			isAdmin := fullMethodNameFound && request.IsAdminApi(fullMethodName)
 			if isAdmin {
@@ -187,7 +188,7 @@ func authFunction(ctx context.Context, jwtValidator *validator.Validator, config
 						Interface("AdminNamespaces", config.Auth.AdminNamespaces).
 						Str("IncomingNamespace", customClaims.Namespace.Code).
 						Msg("Valid token received for admin action - but not allowed to administer from this namespace")
-					return ctx, api.Errorf(api.Code_UNAUTHENTICATED, "You are not authorized to perform this admin action")
+					return ctx, errors.Unauthenticated("You are not authorized to perform this admin action")
 				}
 			}
 
@@ -200,7 +201,7 @@ func authFunction(ctx context.Context, jwtValidator *validator.Validator, config
 		}
 	}
 	// this should never happen.
-	return ctx, api.Errorf(api.Code_UNAUTHENTICATED, "You are not authorized to perform this action")
+	return ctx, errors.Unauthenticated("You are not authorized to perform this action")
 }
 
 func isAdminNamespace(incomingNamespace string, config *config.Config) bool {

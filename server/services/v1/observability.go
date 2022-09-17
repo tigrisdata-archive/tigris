@@ -29,8 +29,10 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/request"
+	"github.com/tigrisdata/tigris/util"
 	"google.golang.org/grpc"
 )
 
@@ -86,7 +88,7 @@ func (dd Datadog) QueryTimeSeriesMetrics(ctx context.Context, req *api.QueryTime
 
 	ddReq, err := http.NewRequest(http.MethodGet, dd.ObservabilityConfig.ProviderUrl+DDQueryEndpointPath, nil)
 	if err != nil {
-		return nil, api.Errorf(api.Code_INTERNAL, "Failed to query metrics: reason = "+err.Error())
+		return nil, errors.Internal("Failed to query metrics: reason = " + err.Error())
 	}
 
 	q := ddReq.URL.Query()
@@ -94,7 +96,7 @@ func (dd Datadog) QueryTimeSeriesMetrics(ctx context.Context, req *api.QueryTime
 	q.Add("to", strconv.FormatInt(req.To, 10))
 	ddQuery, err := formQuery(ctx, req)
 	if err != nil {
-		return nil, api.Errorf(api.Code_INTERNAL, "Failed to query metrics: reason = "+err.Error())
+		return nil, errors.Internal("Failed to query metrics: reason = " + err.Error())
 	}
 	q.Add("query", ddQuery)
 	ddReq.URL.RawQuery = q.Encode()
@@ -105,11 +107,11 @@ func (dd Datadog) QueryTimeSeriesMetrics(ctx context.Context, req *api.QueryTime
 
 	resp, err := httpClient.Do(ddReq)
 	if err != nil {
-		return nil, api.Errorf(api.Code_INTERNAL, "Failed to query metrics: reason = "+err.Error())
+		return nil, errors.Internal("Failed to query metrics: reason = " + err.Error())
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, api.Errorf(api.Code_INTERNAL, "Failed to query metrics: reason = "+err.Error())
+		return nil, errors.Internal("Failed to query metrics: reason = " + err.Error())
 	}
 
 	bodyStr := string(body)
@@ -123,7 +125,7 @@ func (dd Datadog) QueryTimeSeriesMetrics(ctx context.Context, req *api.QueryTime
 		}
 		result.Series = []*api.MetricSeries{}
 		if err != nil {
-			return nil, api.Errorf(api.Code_INTERNAL, "Failed to unmarshal remote response: reason = "+err.Error())
+			return nil, errors.Internal("Failed to unmarshal remote response: reason = " + err.Error())
 		}
 		if len(ddResp.Series) > 0 {
 			for _, series := range ddResp.Series {
@@ -143,11 +145,11 @@ func (dd Datadog) QueryTimeSeriesMetrics(ctx context.Context, req *api.QueryTime
 			}
 			return &result, nil
 		} else {
-			return nil, api.Errorf(api.Code_INTERNAL, "Unexpected remote response: reason = 0 series returned")
+			return nil, errors.Internal("Unexpected remote response: reason = 0 series returned")
 		}
 	} else if resp.StatusCode == 429 {
 		log.Warn().Str(RateLimitLimit, resp.Header.Get(RateLimitLimit)).Str(RateLimitPeriod, resp.Header.Get(RateLimitPeriod)).Str(RateLimitRemaining, resp.Header.Get(RateLimitRemaining)).Str(RateLimitReset, resp.Header.Get(RateLimitReset)).Str(RateLimitName, resp.Header.Get(RateLimitName)).Msgf("Datadog rate-limit hit")
-		return nil, api.Errorf(api.Code_RESOURCE_EXHAUSTED, "Failed to get query metrics: reason = rate-limited, reason = %s", bodyStr)
+		return nil, errors.ResourceExhausted("Failed to get query metrics: reason = rate-limited, reason = %s", bodyStr)
 	}
 	log.Error().Msgf("Datadog response status code=%d", resp.StatusCode)
 	return nil, api.Errorf(api.FromHttpCode(resp.StatusCode), "Failed to get query metrics: reason = "+bodyStr)
@@ -172,6 +174,12 @@ func newObservabilityService() *observabilityService {
 
 func (o *observabilityService) QueryTimeSeriesMetrics(ctx context.Context, req *api.QueryTimeSeriesMetricsRequest) (*api.QueryTimeSeriesMetricsResponse, error) {
 	return o.ObservableProvider.QueryTimeSeriesMetrics(ctx, req)
+}
+
+func (o *observabilityService) GetInfo(_ context.Context, _ *api.GetInfoRequest) (*api.GetInfoResponse, error) {
+	return &api.GetInfoResponse{
+		ServerVersion: util.Version,
+	}, nil
 }
 
 func (o *observabilityService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {
@@ -285,18 +293,18 @@ func isAllowedMetricQueryInput(tagValue string) bool {
 
 func validateQueryTimeSeriesMetricsRequest(req *api.QueryTimeSeriesMetricsRequest) error {
 	if !isAllowedMetricQueryInput(req.MetricName) || !isAllowedMetricQueryInput(req.Db) || !isAllowedMetricQueryInput(req.Collection) {
-		return api.Errorf(api.Code_PERMISSION_DENIED, "Failed to query metrics: reason = invalid character detected in the input")
+		return errors.PermissionDenied("Failed to query metrics: reason = invalid character detected in the input")
 	}
 	for _, aggregationField := range req.SpaceAggregatedBy {
 		if !isAllowedMetricQueryInput(aggregationField) {
-			return api.Errorf(api.Code_PERMISSION_DENIED, "Failed to query metrics: reason = invalid character detected in SpaceAggregatedBy")
+			return errors.PermissionDenied("Failed to query metrics: reason = invalid character detected in SpaceAggregatedBy")
 		}
 	}
 	if strings.Contains(req.MetricName, ":") {
-		return api.Errorf(api.Code_INVALID_ARGUMENT, "Failed to query metrics: reason = Metric name cannot contain :")
+		return errors.InvalidArgument("Failed to query metrics: reason = Metric name cannot contain :")
 	}
 	if !(req.Quantile == 0 || req.Quantile == 0.5 || req.Quantile == 0.75 || req.Quantile == 0.95 || req.Quantile == 0.99 || req.Quantile == 0.999) {
-		return api.Errorf(api.Code_INVALID_ARGUMENT, "Failed to query metrics: reason = allowed quantile values are [0.5, 0.75, 0.95, 0.99, 0.999]")
+		return errors.InvalidArgument("Failed to query metrics: reason = allowed quantile values are [0.5, 0.75, 0.95, 0.99, 0.999]")
 	}
 	return nil
 }

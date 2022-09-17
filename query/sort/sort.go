@@ -17,7 +17,7 @@ package sort
 import (
 	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 )
 
 // TODO: Update this to 3 once https://github.com/typesense/typesense/issues/690 is resolved
@@ -49,7 +49,7 @@ func newSortField(order jsoniter.RawMessage) (SortField, error) {
 		case DESC:
 			s.Ascending = false
 		default:
-			return api.Errorf(api.Code_INVALID_ARGUMENT, "Sort order can only be `%s` or `%s`", ASC, DESC)
+			return errors.InvalidArgument("Sort order can only be `%s` or `%s`", ASC, DESC)
 		}
 		s.Name = string(k)
 		s.MissingValuesFirst = false // Forcing empty/null/missing values to the end
@@ -79,12 +79,12 @@ func UnmarshalSort(input jsoniter.RawMessage) (*Ordering, error) {
 		}
 
 		if vt != jsonparser.Object {
-			err = api.Errorf(api.Code_INVALID_ARGUMENT, "Invalid value for `%s`", "sort")
+			err = errors.InvalidArgument("Invalid value for `%s`", "sort")
 			return
 		}
 
 		if len(orders) >= maxSortOrders {
-			err = api.Errorf(api.Code_INVALID_ARGUMENT, "Sorting can support up to `%d` fields only", maxSortOrders)
+			err = errors.InvalidArgument("Sorting can support up to `%d` fields only", maxSortOrders)
 			return
 		}
 

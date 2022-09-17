@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
@@ -36,9 +36,9 @@ func TestUserSubspace(t *testing.T) {
 		tm := transaction.NewManager(kvStore)
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		require.Equal(t, api.Errorf(api.Code_INVALID_ARGUMENT, "invalid empty userId"), u.InsertUserMetadata(ctx, tx, 1, User, "", "meta-key-1", userPayload))
-		require.Equal(t, api.Errorf(api.Code_INVALID_ARGUMENT, "invalid nil payload"), u.InsertUserMetadata(ctx, tx, 1, User, "some-valid-user-id", "meta-key-1", nil))
-		require.Equal(t, api.Errorf(api.Code_INVALID_ARGUMENT, "invalid namespace, id must be greater than 0"), u.InsertUserMetadata(ctx, tx, 0, User, "user-id-1", "meta-key-1", userPayload))
+		require.Equal(t, errors.InvalidArgument("invalid empty userId"), u.InsertUserMetadata(ctx, tx, 1, User, "", "meta-key-1", userPayload))
+		require.Equal(t, errors.InvalidArgument("invalid nil payload"), u.InsertUserMetadata(ctx, tx, 1, User, "some-valid-user-id", "meta-key-1", nil))
+		require.Equal(t, errors.InvalidArgument("invalid namespace, id must be greater than 0"), u.InsertUserMetadata(ctx, tx, 0, User, "user-id-1", "meta-key-1", userPayload))
 		_ = kvStore.DropTable(ctx, u.UserSubspaceName())
 	})
 

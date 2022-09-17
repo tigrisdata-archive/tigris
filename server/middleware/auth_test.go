@@ -22,7 +22,7 @@ import (
 	"github.com/auth0/go-jwt-middleware/v2/validator"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/stretchr/testify/require"
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc/metadata"
@@ -58,21 +58,21 @@ func TestAuth(t *testing.T) {
 	t.Run("enforcing mode: no token", func(t *testing.T) {
 		_, err := authFunction(context.TODO(), &validator.Validator{}, &enforcedAuthConfig, cache)
 		require.NotNil(t, err)
-		require.Equal(t, err, api.Errorf(api.Code_UNAUTHENTICATED, "request unauthenticated with bearer"))
+		require.Equal(t, err, errors.Unauthenticated("request unauthenticated with bearer"))
 	})
 
 	t.Run("enforcing mode: Bad authorization string1", func(t *testing.T) {
 		incomingCtx := metadata.NewIncomingContext(context.TODO(), metadata.Pairs("authorization", "bearer"))
 		_, err := authFunction(incomingCtx, &validator.Validator{}, &enforcedAuthConfig, cache)
 		require.NotNil(t, err)
-		require.Equal(t, err, api.Errorf(api.Code_UNAUTHENTICATED, "bad authorization string"))
+		require.Equal(t, err, errors.Unauthenticated("bad authorization string"))
 	})
 
 	t.Run("enforcing mode: Bad token", func(t *testing.T) {
 		incomingCtx := metadata.NewIncomingContext(context.TODO(), metadata.Pairs("authorization", "bearer somebadtoken"))
 		_, err := authFunction(incomingCtx, &validator.Validator{}, &enforcedAuthConfig, cache)
 		require.NotNil(t, err)
-		require.Equal(t, err, api.Errorf(api.Code_UNAUTHENTICATED, "Failed to validate access token"))
+		require.Equal(t, err, errors.Unauthenticated("Failed to validate access token"))
 	})
 
 	t.Run("enforcing mode: Bad token 2", func(t *testing.T) {

@@ -41,7 +41,7 @@ func TestInfo(t *testing.T) {
 
 func info(t *testing.T) *httpexpect.Response {
 	e := httpexpect.New(t, config.GetBaseURL())
-	return e.GET(config.GetBaseURL() + "/v1/info").
+	return e.GET(config.GetBaseURL() + "/v1/observability/info").
 		Expect()
 }
 

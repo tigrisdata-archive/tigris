@@ -18,7 +18,7 @@ import (
 	"bytes"
 	"time"
 
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/ugorji/go/codec"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -145,7 +145,7 @@ func Encode(data *TableData) ([]byte, error) {
 // calling Decode to convert these raw bytes back to TableData.
 func Decode(b []byte) (*TableData, error) {
 	if len(b) == 0 {
-		return nil, api.Errorf(api.Code_INTERNAL, "unable to decode table data is empty")
+		return nil, errors.Internal("unable to decode table data is empty")
 	}
 	dataType := DataType(b[0])
 	return decodeInternal(dataType, b[1:])
@@ -163,5 +163,5 @@ func decodeInternal(dataType DataType, encoded []byte) (*TableData, error) {
 		return v, nil
 	}
 
-	return nil, api.Errorf(api.Code_INTERNAL, "unable to decode '%v'", dataType)
+	return nil, errors.Internal("unable to decode '%v'", dataType)
 }

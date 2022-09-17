@@ -19,7 +19,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 )
 
 func TestFieldBuilder_Build(t *testing.T) {
@@ -42,7 +42,7 @@ func TestFieldBuilder_Build(t *testing.T) {
 			},
 			{
 				builder:  &FieldBuilder{FieldName: "test", Type: "bool"},
-				expError: api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported type detected 'bool'"),
+				expError: errors.InvalidArgument("unsupported type detected 'bool'"),
 			},
 			{
 				builder:  &FieldBuilder{FieldName: "test", Type: "string", Format: "uuid"},
@@ -54,7 +54,7 @@ func TestFieldBuilder_Build(t *testing.T) {
 			},
 			{
 				builder:  &FieldBuilder{FieldName: "test", Type: "number", Primary: &boolTrue},
-				expError: api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported primary key type detected 'number'"),
+				expError: errors.InvalidArgument("unsupported primary key type detected 'number'"),
 			},
 			{
 				builder:  &FieldBuilder{FieldName: "test", Type: "integer", Primary: &boolTrue},
@@ -77,11 +77,11 @@ func TestFieldBuilder_Build(t *testing.T) {
 			},
 			{
 				[]byte(`{"unique": true}`),
-				api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported property found 'unique'"),
+				errors.InvalidArgument("unsupported property found 'unique'"),
 			},
 			{
 				[]byte(`{"max_length": 100}`),
-				api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported property found 'max_length'"),
+				errors.InvalidArgument("unsupported property found 'max_length'"),
 			},
 			{
 				[]byte(`{"maxLength": 100}`),
@@ -107,7 +107,7 @@ func TestFieldBuilder_Build(t *testing.T) {
 		keywords := []string{"abstract", "integer", "yield"}
 		for _, keyword := range keywords {
 			_, err := (&FieldBuilder{FieldName: keyword, Type: "string"}).Build(false) // one time builder, thrown away after test concluded
-			require.Equal(t, err, api.Errorf(api.Code_INVALID_ARGUMENT,
+			require.Equal(t, err, errors.InvalidArgument(
 				fmt.Sprintf("Invalid collection field name, It contains language keyword for fieldName = '%s'", keyword)))
 		}
 	})
@@ -117,7 +117,7 @@ func TestFieldBuilder_Build(t *testing.T) {
 		for _, invalidFieldName := range invalidFieldNames {
 			_, err := (&FieldBuilder{FieldName: invalidFieldName, Type: "string"}).Build(false) // one time builder, thrown away after test concluded
 			require.Equal(t, err,
-				api.Errorf(api.Code_INVALID_ARGUMENT,
+				errors.InvalidArgument(
 					"Invalid collection field name, field name can only contain [a-zA-Z0-9_$] and it can only start"+
 						" with [a-zA-Z_$] for fieldName = '%s'",
 					invalidFieldName))

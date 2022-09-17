@@ -24,6 +24,7 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/cdc"
@@ -33,7 +34,6 @@ import (
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
-	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc"
 )
@@ -155,7 +155,7 @@ func (s *apiService) BeginTransaction(ctx context.Context, _ *api.BeginTransacti
 func (s *apiService) CommitTransaction(ctx context.Context, _ *api.CommitTransactionRequest) (*api.CommitTransactionResponse, error) {
 	session, _ := s.sessions.Get(ctx)
 	if session == nil {
-		return nil, api.Errorf(api.Code_NOT_FOUND, "session not found")
+		return nil, errors.NotFound("session not found")
 	}
 	defer func() {
 		if err := s.sessions.Remove(ctx); err != nil {
@@ -174,7 +174,7 @@ func (s *apiService) CommitTransaction(ctx context.Context, _ *api.CommitTransac
 func (s *apiService) RollbackTransaction(ctx context.Context, _ *api.RollbackTransactionRequest) (*api.RollbackTransactionResponse, error) {
 	session, _ := s.sessions.Get(ctx)
 	if session == nil {
-		return nil, api.Errorf(api.Code_NOT_FOUND, "session not found")
+		return nil, errors.NotFound("session not found")
 	}
 	defer func() {
 		if err := s.sessions.Remove(ctx); err != nil {
@@ -289,7 +289,7 @@ func (s *apiService) Search(r *api.SearchRequest, stream api.Tigris_SearchServer
 func (s *apiService) CreateOrUpdateCollection(ctx context.Context, r *api.CreateOrUpdateCollectionRequest) (*api.CreateOrUpdateCollectionResponse, error) {
 	collectionType, err := schema.GetCollectionType(r.Schema)
 	if err != nil {
-		return nil, api.Errorf(api.Code_INTERNAL, "not able to extract collection type from the schema")
+		return nil, errors.Internal("not able to extract collection type from the schema")
 	}
 
 	runner := s.runnerFactory.GetCollectionQueryRunner()
@@ -413,19 +413,13 @@ func (s *apiService) DescribeDatabase(ctx context.Context, r *api.DescribeDataba
 	return resp.Response.(*api.DescribeDatabaseResponse), nil
 }
 
-func (s *apiService) GetInfo(_ context.Context, _ *api.GetInfoRequest) (*api.GetInfoResponse, error) {
-	return &api.GetInfoResponse{
-		ServerVersion: util.Version,
-	}, nil
-}
-
 func (s *apiService) Events(r *api.EventsRequest, stream api.Tigris_EventsServer) error {
 	if !config.DefaultConfig.Cdc.Enabled {
-		return api.Errorf(api.Code_METHOD_NOT_ALLOWED, "change streams is disabled for this collection")
+		return errors.MethodNotAllowed("change streams is disabled for this collection")
 	}
 
 	if len(r.Collection) == 0 {
-		return api.Errorf(api.Code_INVALID_ARGUMENT, "collection name is missing")
+		return errors.InvalidArgument("collection name is missing")
 	}
 
 	publisher := s.cdcMgr.GetPublisher(r.GetDb())
@@ -448,7 +442,7 @@ func (s *apiService) Events(r *api.EventsRequest, stream api.Tigris_EventsServer
 			_, dbId, cId, ok := s.tenantMgr.GetEncoder().DecodeTableName(op.Table)
 			if !ok {
 				log.Err(err).Str("table", string(op.Table)).Msg("unexpected key in event streams")
-				return api.Errorf(api.Code_INTERNAL, "unexpected key in event streams")
+				return errors.Internal("unexpected key in event streams")
 			}
 
 			if dbId != reqDatabaseId || cId != reqCollectionId {
@@ -461,7 +455,7 @@ func (s *apiService) Events(r *api.EventsRequest, stream api.Tigris_EventsServer
 				td, err := internal.Decode(op.Data)
 				if err != nil {
 					log.Err(err).Str("data", string(op.Data)).Msg("failed to decode data")
-					return api.Errorf(api.Code_INTERNAL, "failed to decode data")
+					return errors.Internal("failed to decode data")
 				}
 				data = td.RawData
 			}

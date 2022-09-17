@@ -22,8 +22,7 @@ import (
 	"time"
 
 	"github.com/buger/jsonparser"
-	"github.com/pkg/errors"
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/lib/uuid"
 	"github.com/tigrisdata/tigris/schema"
@@ -70,7 +69,7 @@ func (k *keyGenerator) generate(ctx context.Context, txMgr *transaction.Manager,
 			err == nil && (isNull(field.Type(), jsonVal) || dtp == jsonparser.Null))
 
 		if !autoGenerate && err != nil {
-			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, errors.Wrapf(err, "missing index key column(s) '%s'", field.FieldName).Error())
+			return nil, errors.InvalidArgument(fmt.Errorf("missing index key column(s) '%s': %w", field.FieldName, err).Error())
 		}
 
 		var v value.Value
@@ -153,28 +152,28 @@ func isNull(tp schema.FieldType, val []byte) bool {
 func (k *keyGenerator) get(ctx context.Context, txMgr *transaction.Manager, table []byte, field *schema.Field) ([]byte, value.Value, error) {
 	switch field.Type() {
 	case schema.StringType, schema.UUIDType:
-		value := value.NewStringValue(uuid.NewUUIDAsString(), nil)
-		return []byte(value.Value), value, nil
+		val := value.NewStringValue(uuid.NewUUIDAsString(), nil)
+		return []byte(val.Value), val, nil
 	case schema.ByteType:
-		value := value.NewBytesValue([]byte(uuid.NewUUIDAsString()))
-		b64 := base64.StdEncoding.EncodeToString([]byte(*value))
-		return []byte(b64), value, nil
+		val := value.NewBytesValue([]byte(uuid.NewUUIDAsString()))
+		b64 := base64.StdEncoding.EncodeToString(*val)
+		return []byte(b64), val, nil
 	case schema.DateTimeType:
 		// use timestamp nano to reduce the contention if multiple workers end up generating same timestamp.
-		value := value.NewStringValue(time.Now().UTC().Format(time.RFC3339Nano), nil)
-		return []byte(value.Value), value, nil
+		val := value.NewStringValue(time.Now().UTC().Format(time.RFC3339Nano), nil)
+		return []byte(val.Value), val, nil
 	case schema.Int64Type:
 		// use timestamp nano to reduce the contention if multiple workers end up generating same timestamp.
-		value := value.NewIntValue(time.Now().UTC().UnixNano())
-		return []byte(fmt.Sprintf(`%d`, *value)), value, nil
+		val := value.NewIntValue(time.Now().UTC().UnixNano())
+		return []byte(fmt.Sprintf(`%d`, *val)), val, nil
 	case schema.Int32Type:
 		valueI32, err := k.generator.GenerateCounter(ctx, txMgr, table)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		value := value.NewIntValue(int64(valueI32))
-		return []byte(fmt.Sprintf(`%d`, *value)), value, nil
+		val := value.NewIntValue(int64(valueI32))
+		return []byte(fmt.Sprintf(`%d`, *val)), val, nil
 	}
-	return nil, nil, api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported type found in auto-generator")
+	return nil, nil, errors.InvalidArgument("unsupported type found in auto-generator")
 }

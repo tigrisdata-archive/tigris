@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"github.com/tigrisdata/tigris/errors"
 
 	"github.com/tigrisdata/tigris/server/request"
 
@@ -27,7 +28,6 @@ import (
 
 	ulog "github.com/tigrisdata/tigris/util/log"
 
-	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
@@ -37,9 +37,9 @@ import (
 )
 
 var (
-	ErrRateExceeded        = api.Errorf(api.Code_RESOURCE_EXHAUSTED, "request rate limit exceeded")
-	ErrThroughputExceeded  = api.Errorf(api.Code_RESOURCE_EXHAUSTED, "request throughput limit exceeded")
-	ErrStorageSizeExceeded = api.Errorf(api.Code_RESOURCE_EXHAUSTED, "data size limit exceeded")
+	ErrRateExceeded        = errors.ResourceExhausted("request rate limit exceeded")
+	ErrThroughputExceeded  = errors.ResourceExhausted("request throughput limit exceeded")
+	ErrStorageSizeExceeded = errors.ResourceExhausted("data size limit exceeded")
 )
 
 type State struct {

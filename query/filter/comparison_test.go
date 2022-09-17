@@ -18,7 +18,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/value"
 )
 
@@ -30,6 +30,6 @@ func TestNewMatcher(t *testing.T) {
 	require.True(t, ok)
 
 	matcher, err = NewMatcher("foo", value.NewIntValue(1))
-	require.Equal(t, api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported operand 'foo'"), err)
+	require.Equal(t, errors.InvalidArgument("unsupported operand 'foo'"), err)
 	require.Nil(t, matcher)
 }

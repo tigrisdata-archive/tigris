@@ -17,7 +17,7 @@ package filter
 import (
 	"fmt"
 
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/value"
 )
 
@@ -65,7 +65,7 @@ func NewMatcher(key string, v value.Value) (ValueMatcher, error) {
 			Value: v,
 		}, nil
 	default:
-		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "unsupported operand '%s'", key)
+		return nil, errors.InvalidArgument("unsupported operand '%s'", key)
 	}
 }
 

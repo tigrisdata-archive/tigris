@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/lib/uuid"
@@ -29,10 +30,10 @@ import (
 
 var (
 	// ErrSessionIsNotStarted is returned when the session is not started but is getting used
-	ErrSessionIsNotStarted = api.Errorf(api.Code_INTERNAL, "session not started")
+	ErrSessionIsNotStarted = errors.Internal("session not started")
 
 	// ErrSessionIsGone is returned when the session is gone but getting used
-	ErrSessionIsGone = api.Errorf(api.Code_INTERNAL, "session is gone")
+	ErrSessionIsGone = errors.Internal("session is gone")
 )
 
 // BaseTx interface exposes base methods that can be used on a transactional object.
@@ -93,7 +94,7 @@ func NewManager(kvStore kv.KeyValueStore) *Manager {
 func (m *Manager) StartTx(ctx context.Context) (Tx, error) {
 	session, err := newTxSession(m.kvStore)
 	if err != nil {
-		return nil, api.Errorf(api.Code_INTERNAL, "issue creating a session %v", err)
+		return nil, errors.Internal("issue creating a session %v", err)
 	}
 
 	if err = session.start(ctx); err != nil {
@@ -126,7 +127,7 @@ type TxSession struct {
 
 func newTxSession(kv kv.KeyValueStore) (*TxSession, error) {
 	if kv == nil {
-		return nil, api.Errorf(api.Code_INTERNAL, "session needs non-nil kv object")
+		return nil, errors.Internal("session needs non-nil kv object")
 	}
 	return &TxSession{
 		context: &SessionCtx{},
@@ -145,7 +146,7 @@ func (s *TxSession) start(ctx context.Context) error {
 	defer s.Unlock()
 
 	if s.state != sessionCreated {
-		return api.Errorf(api.Code_INTERNAL, "session state is misused")
+		return errors.Internal("session state is misused")
 	}
 
 	var err error

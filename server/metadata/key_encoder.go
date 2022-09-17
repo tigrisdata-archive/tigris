@@ -17,7 +17,7 @@ package metadata
 import (
 	"bytes"
 
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/schema"
@@ -55,7 +55,7 @@ type DictKeyEncoder struct {
 
 // EncodeTableName creates storage friendly table name from namespace, database and collection ids
 // Database and collection objects can be omitted to get table name prefix.
-// If the collection is ommitted then result name includes all the collections in the database
+// If the collection is omitted then result name includes all the collections in the database
 // If both database and collections are omitted then result name includes all databases in the namespace
 func (d *DictKeyEncoder) EncodeTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) ([]byte, error) {
 	return d.encodedTableName(ns, db, coll, internal.UserTableKeyPrefix), nil
@@ -71,7 +71,7 @@ func (d *DictKeyEncoder) EncodeIndexName(idx *schema.Index) []byte {
 
 func (d *DictKeyEncoder) EncodePartitionKey(encodedTable []byte, idx *schema.Index, idxParts []interface{}, partition uint16) (keys.Key, error) {
 	if !bytes.Equal(encodedTable[0:4], internal.PartitionKeyPrefix) {
-		return nil, api.Errorf(api.Code_INTERNAL, "invalid partition table prefix '%v'", encodedTable[0:4])
+		return nil, errors.Internal("invalid partition table prefix '%v'", encodedTable[0:4])
 	}
 
 	var allParts []interface{}
@@ -83,7 +83,7 @@ func (d *DictKeyEncoder) EncodePartitionKey(encodedTable []byte, idx *schema.Ind
 // DecodePartitionKey returns index parts and partition number
 func (d *DictKeyEncoder) DecodePartitionKey(key keys.Key) ([]interface{}, uint16, error) {
 	if !bytes.Equal(key.Table()[0:4], internal.PartitionKeyPrefix) {
-		return nil, 0, api.Errorf(api.Code_INTERNAL, "invalid partition table prefix '%v'", key.Table()[0:4])
+		return nil, 0, errors.Internal("invalid partition table prefix '%v'", key.Table()[0:4])
 	}
 
 	idxParts := key.IndexParts()
@@ -92,7 +92,7 @@ func (d *DictKeyEncoder) DecodePartitionKey(key keys.Key) ([]interface{}, uint16
 
 func (d *DictKeyEncoder) EncodeKey(encodedTable []byte, idx *schema.Index, idxParts []interface{}) (keys.Key, error) {
 	if idx == nil {
-		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "index is missing")
+		return nil, errors.InvalidArgument("index is missing")
 	}
 
 	encodedIdxName := d.encodedIdxName(idx)

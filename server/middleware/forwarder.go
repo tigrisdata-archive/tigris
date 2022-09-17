@@ -23,6 +23,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/types"
 	"github.com/tigrisdata/tigris/util"
@@ -146,7 +147,7 @@ func forwarderUnaryServerInterceptor() grpc.UnaryServerInterceptor {
 func proxyHandler(_ interface{}, serverStream grpc.ServerStream) error {
 	fullMethodName, ok := grpc.MethodFromServerStream(serverStream)
 	if !ok {
-		return api.Errorf(api.Code_INTERNAL, "failed to determine method name")
+		return errors.Internal("failed to determine method name")
 	}
 
 	outgoingCtx, backendConn, req, resp, err := proxyDirector(serverStream.Context(), fullMethodName)

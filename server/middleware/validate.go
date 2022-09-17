@@ -18,6 +18,7 @@ import (
 	"context"
 
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"google.golang.org/grpc"
 )
 
@@ -28,7 +29,7 @@ type reqValidator interface {
 func validate(req interface{}) error {
 	if v, ok := req.(reqValidator); ok {
 		if err := v.Validate(); err != nil {
-			return api.Errorf(api.Code_INVALID_ARGUMENT, err.Error())
+			return errors.InvalidArgument(err.Error())
 		}
 	}
 
@@ -39,7 +40,7 @@ func validate(req interface{}) error {
 func validatorUnaryServerInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		if tx := api.GetTransaction(ctx); !api.IsTxSupported(ctx) && tx != nil {
-			return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "interactive tx not supported but transaction token found")
+			return nil, errors.InvalidArgument("interactive tx not supported but transaction token found")
 		}
 
 		if err := validate(req); err != nil {
@@ -53,7 +54,7 @@ func validatorUnaryServerInterceptor() grpc.UnaryServerInterceptor {
 func validatorStreamServerInterceptor() grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		if tx := api.GetTransaction(stream.Context()); !api.IsTxSupported(stream.Context()) && tx != nil {
-			return api.Errorf(api.Code_INVALID_ARGUMENT, "interactive tx not supported but transaction token found")
+			return errors.InvalidArgument("interactive tx not supported but transaction token found")
 		}
 		wrapper := &recvWrapper{stream}
 		return handler(srv, wrapper)
