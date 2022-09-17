@@ -135,7 +135,7 @@ func TestDatadogQueryFormation(t *testing.T) {
 		Function:          api.MetricQueryFunction_RATE}
 	formedQuery, err = formQuery(ctx, req)
 	require.NoError(t, err)
-	require.Equal(t, "sum:requests_count_ok.count{grpc_method:read AND db:db1 AND collection:col1} by {db,collection}.as_rate()", formedQuery)
+	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (read,search,subscribe) AND db:db1 AND collection:col1} by {db,collection}.as_rate()", formedQuery)
 
 	req = &api.QueryTimeSeriesMetricsRequest{
 		Db:                "db1",
@@ -149,7 +149,7 @@ func TestDatadogQueryFormation(t *testing.T) {
 		Function:          api.MetricQueryFunction_RATE}
 	formedQuery, err = formQuery(ctx, req)
 	require.NoError(t, err)
-	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (insert,update) AND db:db1 AND collection:col1} by {db,collection}.as_rate()", formedQuery)
+	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (insert,update,delete,replace,publish) AND db:db1 AND collection:col1} by {db,collection}.as_rate()", formedQuery)
 
 	req = &api.QueryTimeSeriesMetricsRequest{
 		From:             1,
@@ -160,7 +160,7 @@ func TestDatadogQueryFormation(t *testing.T) {
 		Function:         api.MetricQueryFunction_RATE}
 	formedQuery, err = formQuery(ctx, req)
 	require.NoError(t, err)
-	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (insert,update)}.as_rate()", formedQuery)
+	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (insert,update,delete,replace,publish)}.as_rate()", formedQuery)
 
 	req = &api.QueryTimeSeriesMetricsRequest{
 		From:             1,
@@ -171,7 +171,18 @@ func TestDatadogQueryFormation(t *testing.T) {
 		Function:         api.MetricQueryFunction_RATE}
 	formedQuery, err = formQuery(ctx, req)
 	require.NoError(t, err)
-	require.Equal(t, "sum:requests_count_ok.count{grpc_method:read}.as_rate()", formedQuery)
+	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (read,search,subscribe)}.as_rate()", formedQuery)
+
+	req = &api.QueryTimeSeriesMetricsRequest{
+		From:             1,
+		To:               10,
+		MetricName:       "requests_count_ok.count",
+		TigrisOperation:  api.TigrisOperation_METADATA,
+		SpaceAggregation: api.MetricQuerySpaceAggregation_SUM,
+		Function:         api.MetricQueryFunction_RATE}
+	formedQuery, err = formQuery(ctx, req)
+	require.NoError(t, err)
+	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (createorupdatecollection,dropcollection,listdatabases,listcollections,createdatabase,dropdatabase,describedatabase,describecollection)}.as_rate()", formedQuery)
 
 	req = &api.QueryTimeSeriesMetricsRequest{
 		Db:               "db1",
@@ -186,6 +197,20 @@ func TestDatadogQueryFormation(t *testing.T) {
 	formedQuery, err = formQuery(ctx, req)
 	require.NoError(t, err)
 	require.Equal(t, "avg:tigris.requests_response_time.quantile{db:db1 AND collection:col1 AND quantile:0.5}", formedQuery)
+
+	req = &api.QueryTimeSeriesMetricsRequest{
+		Db:               "db1",
+		Collection:       "col1",
+		From:             1,
+		To:               10,
+		MetricName:       "tigris.requests_response_time.quantile",
+		SpaceAggregation: api.MetricQuerySpaceAggregation_AVG,
+		Function:         api.MetricQueryFunction_NONE,
+		Quantile:         0.999,
+	}
+	formedQuery, err = formQuery(ctx, req)
+	require.NoError(t, err)
+	require.Equal(t, "avg:tigris.requests_response_time.quantile{db:db1 AND collection:col1 AND quantile:0.999}", formedQuery)
 
 	req = &api.QueryTimeSeriesMetricsRequest{
 		Db:               "db1",

@@ -211,9 +211,11 @@ func formQuery(ctx context.Context, req *api.QueryTimeSeriesMetricsRequest) (str
 
 	if req.TigrisOperation != api.TigrisOperation_ALL {
 		if req.TigrisOperation == api.TigrisOperation_WRITE {
-			tags = append(tags, "grpc_method IN (insert,update) AND ")
-		} else {
-			tags = append(tags, "grpc_method:read AND ")
+			tags = append(tags, "grpc_method IN (insert,update,delete,replace,publish) AND ")
+		} else if req.TigrisOperation == api.TigrisOperation_READ {
+			tags = append(tags, "grpc_method IN (read,search,subscribe) AND ")
+		} else if req.TigrisOperation == api.TigrisOperation_METADATA {
+			tags = append(tags, "grpc_method IN (createorupdatecollection,dropcollection,listdatabases,listcollections,createdatabase,dropdatabase,describedatabase,describecollection) AND ")
 		}
 	}
 
@@ -233,7 +235,7 @@ func formQuery(ctx context.Context, req *api.QueryTimeSeriesMetricsRequest) (str
 	}
 
 	if req.Quantile != 0 {
-		tags = append(tags, "quantile:"+strconv.FormatFloat(float64(req.Quantile), 'f', -1, 64)+" AND ")
+		tags = append(tags, "quantile:"+fmt.Sprintf("%.3g", req.Quantile)+" AND ")
 	}
 
 	if len(tags) == 0 {
