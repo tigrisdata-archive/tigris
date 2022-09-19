@@ -1132,8 +1132,8 @@ func (runner *PublishQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 	}
 
 	var part int
-	if runner.req.Options != nil && runner.req.Options.Partition != -1 {
-		part = int(runner.req.Options.Partition)
+	if runner.req.Options != nil && runner.req.Options.Partition != nil {
+		part = int(*runner.req.Options.Partition)
 		if part < 0 || part >= partitions {
 			return nil, ctx, errors.InvalidArgument("Invalid partition number `%d`", part)
 		}

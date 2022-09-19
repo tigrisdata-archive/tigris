@@ -20,9 +20,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -73,46 +73,6 @@ func testRead(t *testing.T, db driver.Database, filter driver.Filter, expected [
 	assert.NoError(t, it.Err())
 }
 
-func testTxEventsStream(ctx context.Context, t *testing.T, rit *driver.EventIterator, db1 driver.Database, coll string, doc1, doc2, doc3 driver.Document) {
-	var ev driver.Event
-	var err error
-
-	*rit, err = db1.Events(ctx, coll)
-	require.NoError(t, err)
-	it := *rit
-	defer require.NoError(t, it.Err())
-
-	require.True(t, it.Next(&ev))
-	assert.Equal(t, "insert", ev.Op)
-	assert.JSONEq(t, string(doc1), string(ev.Data))
-	assert.Equal(t, coll, ev.Collection)
-
-	require.True(t, it.Next(&ev))
-	assert.Equal(t, "insert", ev.Op)
-	assert.JSONEq(t, string(doc2), string(ev.Data))
-	assert.Equal(t, coll, ev.Collection)
-
-	require.True(t, it.Next(&ev))
-	assert.Equal(t, "delete", ev.Op)
-	assert.Contains(t, string(ev.Key), "value2")
-	assert.Equal(t, coll, ev.Collection)
-
-	require.True(t, it.Next(&ev))
-	assert.Equal(t, "insert", ev.Op)
-	assert.JSONEq(t, string(doc2), string(ev.Data))
-	assert.Equal(t, coll, ev.Collection)
-
-	require.True(t, it.Next(&ev))
-	assert.Equal(t, "insert", ev.Op)
-	assert.JSONEq(t, string(doc3), string(ev.Data))
-	assert.Equal(t, coll, ev.Collection)
-
-	require.True(t, it.Next(&ev))
-	assert.Equal(t, "update", ev.Op)
-	assert.JSONEq(t, strings.Replace(string(doc2), "222", "555", -1), string(ev.Data))
-	assert.Equal(t, coll, ev.Collection)
-}
-
 func testTxReadWrite(t *testing.T, c driver.Driver) {
 	ctx := context.TODO()
 
@@ -146,14 +106,6 @@ func testTxReadWrite(t *testing.T, c driver.Driver) {
 	doc1 := driver.Document(`{"str_field": "value1", "int_field": 111, "bool_field": true}`)
 	doc2 := driver.Document(`{"str_field": "value2", "int_field": 222, "bool_field": false}`)
 	doc3 := driver.Document(`{"str_field": "value3", "int_field": 333, "bool_field": false}`)
-
-	var it driver.EventIterator
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		testTxEventsStream(ctx, t, &it, db1, "c1", doc1, doc2, doc3)
-	}()
 
 	resp, err := db1.Insert(ctx, "c1", []driver.Document{
 		doc1,
@@ -211,18 +163,6 @@ func testTxReadWrite(t *testing.T, c driver.Driver) {
 	// Check the unread events continues after drop and recreate with the same name
 	require.NoError(t, db1.DropCollection(ctx, "c1"))
 	require.NoError(t, db1.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema)))
-
-	var ev driver.Event
-
-	require.True(t, it.Next(&ev))
-	assert.Equal(t, "delete", ev.Op)
-	assert.Contains(t, string(ev.Key), "value3")
-	assert.Equal(t, "c1", ev.Collection)
-
-	require.True(t, it.Next(&ev))
-	assert.Equal(t, "insert", ev.Op)
-	assert.JSONEq(t, string(doc3), string(ev.Data))
-	assert.Equal(t, "c1", ev.Collection)
 
 	require.NoError(t, db1.DropCollection(ctx, "c1"))
 }
@@ -463,54 +403,137 @@ func testTxClient(t *testing.T, c driver.Driver) {
 	require.NoError(t, err)
 }
 
-func TestDriverGRPCC(t *testing.T) {
+func initDriver(t *testing.T, proto string) driver.Driver {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	h, p := getTestServerHostPort()
-	driver.DefaultProtocol = driver.GRPC
-	c, err := driver.NewDriver(context.Background(), &clientConfig.Driver{
-		URL: fmt.Sprintf("%s:%d", h, p),
+	driver.DefaultProtocol = proto
+	url := fmt.Sprintf("%s:%d", h, p)
+	if proto == driver.HTTP {
+		url = "http://" + url
+	}
+	c, err := driver.NewDriver(ctx, &clientConfig.Driver{
+		URL: url,
 	})
 	require.NoError(t, err)
-	defer func() { _ = c.Close() }()
+
+	return c
+}
+
+func TestDriverGRPCC(t *testing.T) {
+	c := initDriver(t, driver.GRPC)
+	defer func() { err := c.Close(); require.NoError(t, err) }()
 
 	testDriver(t, c)
 	testDriverBinary(t, c)
 }
 
 func TestDriverHTTP(t *testing.T) {
-	h, p := getTestServerHostPort()
-	driver.DefaultProtocol = driver.HTTP
-	c, err := driver.NewDriver(context.Background(), &clientConfig.Driver{
-		URL: fmt.Sprintf("http://%s:%d", h, p),
-	})
-	require.NoError(t, err)
-	defer func() { _ = c.Close() }()
+	c := initDriver(t, driver.HTTP)
+	defer func() { err := c.Close(); require.NoError(t, err) }()
 
 	testDriver(t, c)
 	testDriverBinary(t, c)
 }
 
 func TestDriverTxGRPC(t *testing.T) {
-	h, p := getTestServerHostPort()
-	driver.DefaultProtocol = driver.GRPC
-	c, err := driver.NewDriver(context.Background(), &clientConfig.Driver{
-		URL: fmt.Sprintf("%s:%d", h, p),
-	})
-	require.NoError(t, err)
-	defer func() { _ = c.Close() }()
+	c := initDriver(t, driver.GRPC)
+	defer func() { err := c.Close(); require.NoError(t, err) }()
 
 	testTxClient(t, c)
 	testTxReadWrite(t, c)
 }
 
-func TestDriverTxHTTPDriver(t *testing.T) {
-	h, p := getTestServerHostPort()
-	driver.DefaultProtocol = driver.HTTP
-	c, err := driver.NewDriver(context.Background(), &clientConfig.Driver{
-		URL: fmt.Sprintf("http://%s:%d", h, p),
-	})
-	require.NoError(t, err)
-	defer func() { _ = c.Close() }()
+func TestDriverTxHTTP(t *testing.T) {
+	c := initDriver(t, driver.HTTP)
+	defer func() { err := c.Close(); require.NoError(t, err) }()
 
 	testTxClient(t, c)
 	testTxReadWrite(t, c)
+}
+
+func testPubSubStream(ctx context.Context, t *testing.T, rit *driver.Iterator, db1 driver.Database, coll string, doc1, doc2, doc3 driver.Document) {
+	var ev driver.Document
+
+	it := *rit
+	defer require.NoError(t, it.Err())
+
+	assert.True(t, it.Next(&ev))
+	require.NoError(t, it.Err())
+	assert.JSONEq(t, string(doc1), string(ev))
+	require.True(t, it.Next(&ev))
+	assert.JSONEq(t, string(doc2), string(ev))
+	require.True(t, it.Next(&ev))
+	assert.JSONEq(t, string(doc3), string(ev))
+}
+
+func testPubSub(t *testing.T, c driver.Driver) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	dbName := "db_client_test"
+	_ = c.DropDatabase(ctx, dbName)
+
+	schema := `{
+		"title": "c1",
+		"properties": {
+			"str_field": {
+				"type": "string"
+			},
+			"int_field": {
+				"type": "integer"
+			},
+			"bool_field": {
+				"type": "boolean"
+			}
+		},
+        "collection_type": "messages"
+	}`
+
+	err := c.CreateDatabase(ctx, dbName)
+	require.NoError(t, err)
+	db1 := c.UseDatabase(dbName)
+	err = db1.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema))
+	require.NoError(t, err)
+
+	var wg sync.WaitGroup
+
+	doc1 := driver.Document(`{"str_field": "value1", "int_field": 111, "bool_field": true}`)
+	doc2 := driver.Document(`{"str_field": "value2", "int_field": 222, "bool_field": false}`)
+	doc3 := driver.Document(`{"str_field": "value3", "int_field": 333, "bool_field": false}`)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		it, err := db1.Subscribe(ctx, "c1", driver.Filter("{}"))
+		require.NoError(t, err)
+
+		testPubSubStream(ctx, t, &it, db1, "c1", doc1, doc2, doc3)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
+	pr, err := db1.Publish(ctx, "c1", []driver.Message{
+		driver.Message(doc1), driver.Message(doc2), driver.Message(doc3)})
+	require.NoError(t, err)
+	require.Equal(t, "published", pr.Status)
+
+	wg.Wait()
+
+	require.NoError(t, db1.DropCollection(ctx, "c1"))
+}
+
+func TestDriverGRPCPubSub(t *testing.T) {
+	c := initDriver(t, driver.GRPC)
+	defer func() { _ = c.Close() }()
+
+	testPubSub(t, c)
+}
+
+func TestDriverHTTPPubSub(t *testing.T) {
+	c := initDriver(t, driver.HTTP)
+	defer func() { _ = c.Close() }()
+
+	testPubSub(t, c)
 }
