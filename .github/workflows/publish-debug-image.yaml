@@ -48,7 +48,6 @@ jobs:
           images: |
             ${{ env.DOCKER_REPOSITORY }}
           # generate Docker tags based on the following events/attributes
-          # we generate the latest tag off the alpha branch
           tags: |
             type=ref,event=branch
             type=ref,event=pr

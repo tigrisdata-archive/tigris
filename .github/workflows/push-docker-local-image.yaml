@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - alpha
+      - beta
   release:
     types: [published]
   workflow_call:
@@ -50,13 +51,13 @@ jobs:
           images: |
             ${{ env.DOCKER_REPOSITORY }}
           # generate Docker tags based on the following events/attributes
-          # we generate the latest tag off the alpha branch
+          # we generate the latest tag off the beta branch
           tags: |
             type=ref,event=branch
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/alpha' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/beta' }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
