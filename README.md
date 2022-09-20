@@ -1,62 +1,89 @@
-# TigrisDB
+<p align="center">
+  <a href="https://www.tigrisdata.com/"><img src="docs/assets/tigris-logo-wordmark.svg" alt="Tigris" width="298" /></a> 
+</p>
 
-[![Build Status](https://github.com/tigrisdata/tigrisdb/workflows/Go/badge.svg)]()
+<p align="center">
+For developers who want to build scalable web and mobile apps fast!
+</p>
 
-# Configuration
+<p align="center">
+With a zero-ops scalable pub/sub messaging system and fault-tolerant 
+cloud-native database, <br/> Tigris provides everything you need to get up and 
+running quickly and efficiently.
+</p>
 
-The configuration is specified either through the configuration file
-`server.yaml` or through environment variables.
+<p align="center">
+<a href="https://goreportcard.com/report/github.com/tigrisdata/tigris"> 
+<img src="https://goreportcard.com/badge/github.com/tigrisdata/tigris" alt="Go Report">
+</a>
+<a href="">
+<img src="https://github.com/tigrisdata/tigris/workflows/Go/badge.svg" alt="Build Status">
+</a>
+<a href="CODE_OF_CONDUCT.md">
+<img src="https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg" alt="Contributor Covenant">
+</a>
+</p>
 
-Example configuration is shown below:
+<p align="center">
+  <a href="https://www.tigrisdata.com/">Website</a> |
+  <a href="https://docs.tigrisdata.com/quickstart">Quickstart</a> |
+  <a href="https://docs.tigrisdata.com/apidocs/">API Reference</a> |
+  <a href="https://join.slack.com/t/tigrisdatacommunity/shared_invite/zt-16fn5ogio-OjxJlgttJIV0ZDywcBItJQ">Slack Community</a> | 
+  <a href="https://twitter.com/TigrisData">Twitter</a>
+</p>
 
-```yaml
-api:
-  port: 8081
+# Helpful Links
 
-foundationdb:
-  cluster_file: "/etc/foundationdb/fdb.cluster"
-```
+- [Key Concepts](https://docs.tigrisdata.com/overview/concepts)
+- [Quickstart](https://docs.tigrisdata.com/quickstart)
+- [Data Modeling](https://docs.tigrisdata.com/overview/datamodel)
+- [Tutorials](https://docs.tigrisdata.com/category/tutorials)
+- [Client Library: Go](https://docs.tigrisdata.com/golang/getting-started)
+- [Client Library: Java](https://docs.tigrisdata.com/java/getting-started)
+- [Client Library: TypeScript](https://docs.tigrisdata.com/typescript/getting-started)
+- [Command Line Interface](https://docs.tigrisdata.com/cli)
 
-When the configuration options are specified through environment 
-variables they have a higher precedence. The environment variables
-have the following structure:
+# Community & Support
 
-- The variables are in uppercase
-- They are prefixed by `TIGRISDB_SERVER_`
-- Multi-level variables are specified by replacing `.` with `_`
+* [Slack Community](https://join.slack.com/t/tigrisdatacommunity/shared_invite/zt-16fn5ogio-OjxJlgttJIV0ZDywcBItJQ)
+* [GitHub Issues](https://github.com/tigrisdata/tigris/issues)
+* [GitHub Discussions](https://github.com/tigrisdata/tigris/discussions)
 
-Examples:
+# Developing
 
-- To specify the FoundationDB cluster file set the variable `TIGRISDB_SERVER_FOUNDATIONDB_CLUSTER_FILE`
-- To specify the API listen port set the variable `TIGRISDB_SERVER_SERVER_PORT`
+### Building with Docker Containers
 
-# Development
-
-## Prerequisite
-
-### Mac OSX
-It is recommended to have a package manager such as `brew` installed
-
-## Building and Testing in Docker Containers
-Running `make test` in the root of the repository installs build and test
-dependencies and runs all the tests in the docker containers.
-
-Running `make run` would bring dependencies and server up in the docker
-containers, after that tests can be run on the host by running `make local_test`
-or in the IDE.
-
-## Building and Testing on the Host
-
-To run the server and tests on the host, required dependencies need to be
-installed by running:
+Start local Tigris server listening on `http://localhost:8081` by running:
 
 ```sh
-sh scripts/install_build_deps.sh
-sh scripts/install_test_deps.sh
+make run
 ```
 
-Running `make osx_run` on OSX would bring the server up on the host. You can 
-then run `make osx_test` to test against FDB running on the host.
+This would bring dependencies and server up in the docker containers with all
+your changes.
+
+Alternatively, you can run `make run_full` to bring up monitoring tools as well.
+  * Graphana: http://localhost:3000
+  * Prometheus: http://localhost:9090
+
+### Running tests
+
+#### Run in the docker container
+
+Tests are executed using `make test`. This runs both unit and integration
+tests in the docker containers.
+
+#### Run in the IDE
+
+Run `make run` to bring the server up in the docker container.
+Now you can run individual tests in the IDE of your choice.
+Entire test suite can be run using `make local_test`.
+
+#### Debugging the server in the IDE
+
+Run `make local_run` to start Tigris server on the host.
+Now you can attach to the process and debug from the IDE.
 
 # License
+
 This software is licensed under the [Apache 2.0](LICENSE).

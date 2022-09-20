@@ -15,16 +15,16 @@
 package value
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
+	"math"
 	"strconv"
+	"strings"
 
-	"github.com/buger/jsonparser"
-
-	"github.com/tigrisdata/tigrisdb/schema"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/structpb"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/schema"
 )
 
 type Comparable interface {
@@ -35,106 +35,58 @@ type Comparable interface {
 	CompareTo(v Value) (int, error)
 }
 
-// Value is our value object that implements comparable so that two values can be compared.
+// Value is our value object that implements comparable so that two values can be compared. This is used to build the
+// keys(primary key or any other index key), or to build the selector filter.
+// Note: if the field data type is byte/binary then the value object returned is base64 decoded. The reason is that
+// JSON has encoded the byte array to base64 so to make sure we are using the user provided value in building the key
+// and the filter we must first decode this field. This allows us later to perform prefix scans.
 type Value interface {
+	fmt.Stringer
 	Comparable
 
 	// AsInterface to return the value as interface
 	AsInterface() interface{}
 }
 
-func NewValueFromByte(value []byte, dataType jsonparser.ValueType) (Value, error) {
-	switch dataType {
-	case jsonparser.Boolean:
+func NewValueUsingCollation(fieldType schema.FieldType, value []byte, collation *api.Collation) (Value, error) {
+	switch fieldType {
+	case schema.StringType:
+		return NewStringValue(string(value), collation), nil
+	}
+
+	return NewValue(fieldType, value)
+}
+
+// NewValue returns the value of the field from the raw json value. It uses schema to get the type of the field.
+func NewValue(fieldType schema.FieldType, value []byte) (Value, error) {
+	switch fieldType {
+	case schema.BoolType:
 		b, err := strconv.ParseBool(string(value))
 		if err != nil {
-			return nil, err
+			return nil, errors.InvalidArgument(fmt.Errorf("unsupported value type: %w", err).Error())
 		}
 		return NewBoolValue(b), nil
-	case jsonparser.Number:
-		val, err := strconv.ParseFloat(string(value), 64)
-		if err != nil {
-			return nil, err
-		}
-
-		if isIntegral(val) {
-			return NewIntValue(int64(val)), nil
-		}
-		return NewDoubleValue(val), nil
-	case jsonparser.String:
-		return NewStringValue(string(value)), nil
-	}
-
-	return nil, status.Errorf(codes.InvalidArgument, "unsupported value type")
-}
-
-// NewValue returns Value object if it is able to create otherwise nil at this point the caller ensures that
-// structpb.Value can be used to create internal value.
-func NewValue(input *structpb.Value) Value {
-	switch ty := input.Kind.(type) {
-	case *structpb.Value_NumberValue:
-		if isIntegral(ty.NumberValue) {
-			return NewIntValue(int64(ty.NumberValue))
-		} else {
-			return NewDoubleValue(ty.NumberValue)
-		}
-	case *structpb.Value_StringValue:
-		return NewStringValue(ty.StringValue)
-	case *structpb.Value_BoolValue:
-		return NewBoolValue(ty.BoolValue)
-	}
-
-	return nil
-}
-
-// NewValueUsingSchema returns Value object using Schema from the input struct Value
-func NewValueUsingSchema(field *schema.Field, input *structpb.Value) (Value, error) {
-	switch field.Type() {
-	case schema.BoolType:
-		if inpVal, ok := input.Kind.(*structpb.Value_BoolValue); ok {
-			i := BoolValue(inpVal.BoolValue)
-			return &i, nil
-		}
-		return nil, status.Errorf(codes.InvalidArgument, "permissible type for '%s' is bool only", field.FieldName)
-	case schema.IntType:
-		if inpVal, ok := input.Kind.(*structpb.Value_NumberValue); ok {
-			if isIntegral(inpVal.NumberValue) {
-				return NewIntValue(int64(inpVal.NumberValue)), nil
-			}
-		}
-		return nil, status.Errorf(codes.InvalidArgument, "permissible type for '%s' is int only", field.FieldName)
 	case schema.DoubleType:
-		if inpVal, ok := input.Kind.(*structpb.Value_NumberValue); ok {
-			return NewDoubleValue(inpVal.NumberValue), nil
+		return NewDoubleValue(string(value))
+	case schema.Int32Type, schema.Int64Type:
+		val, err := strconv.ParseInt(string(value), 10, 64)
+		if err != nil {
+			return nil, errors.InvalidArgument(fmt.Errorf("unsupported value type: %w", err).Error())
 		}
-		return nil, status.Errorf(codes.InvalidArgument, "permissible type for '%s' is double only", field.FieldName)
-	case schema.BytesType:
-		if inpVal, ok := input.Kind.(*structpb.Value_StringValue); ok {
-			if decoded, err := base64.StdEncoding.DecodeString(inpVal.StringValue); err == nil {
-				return NewBytesValue(decoded), nil
-			} else {
-				return NewBytesValue([]byte(inpVal.StringValue)), nil
-			}
+
+		return NewIntValue(val), nil
+	case schema.StringType, schema.UUIDType, schema.DateTimeType:
+		return NewStringValue(string(value), nil), nil
+	case schema.ByteType:
+		if decoded, err := base64.StdEncoding.DecodeString(string(value)); err == nil {
+			// when we match the value or build the key we first decode the base64 data
+			return NewBytesValue(decoded), nil
+		} else {
+			return NewBytesValue(value), nil
 		}
-		return nil, status.Errorf(codes.InvalidArgument, "permissible type for '%s' is bytes only", field.FieldName)
-	case schema.StringType:
-		if inpVal, ok := input.Kind.(*structpb.Value_StringValue); ok {
-			return NewStringValue(inpVal.StringValue), nil
-		}
-		return nil, status.Errorf(codes.InvalidArgument, "permissible type for '%s' is string only", field.FieldName)
 	}
 
-	return nil, status.Errorf(codes.InvalidArgument, "unsupported type '%T'", input.Kind)
-}
-
-// NewValueFromStruct returns Value object based on the schema using input Struct
-func NewValueFromStruct(field *schema.Field, inputS *structpb.Struct) (Value, error) {
-	input, ok := inputS.GetFields()[field.FieldName]
-	if !ok {
-		return nil, status.Errorf(codes.InvalidArgument, "field is missing in the input")
-	}
-
-	return NewValueUsingSchema(field, input)
+	return nil, errors.InvalidArgument("unsupported value type")
 }
 
 func isIntegral(val float64) bool {
@@ -179,11 +131,32 @@ func (i *IntValue) String() string {
 	return fmt.Sprintf("%d", *i)
 }
 
-type DoubleValue float64
+type DoubleValue struct {
+	Double   float64
+	asString string
+	bin64Enc uint64
+}
 
-func NewDoubleValue(v float64) *DoubleValue {
-	i := DoubleValue(v)
-	return &i
+func NewDoubleUsingFloat(v float64) *DoubleValue {
+	return &DoubleValue{
+		Double:   v,
+		bin64Enc: math.Float64bits(v),
+		asString: strconv.FormatFloat(v, 'f', -1, 64),
+	}
+}
+
+func NewDoubleValue(raw string) (*DoubleValue, error) {
+	val, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return nil, errors.InvalidArgument(fmt.Errorf("unsupported value type: %w ", err).Error())
+	}
+
+	i := &DoubleValue{
+		Double:   val,
+		asString: raw,
+		bin64Enc: math.Float64bits(val),
+	}
+	return i, nil
 }
 
 func (d *DoubleValue) CompareTo(v Value) (int, error) {
@@ -196,9 +169,9 @@ func (d *DoubleValue) CompareTo(v Value) (int, error) {
 		return -2, fmt.Errorf("wrong type compared ")
 	}
 
-	if *d == *converted {
+	if d.bin64Enc == converted.bin64Enc {
 		return 0, nil
-	} else if *d < *converted {
+	} else if d.bin64Enc < converted.bin64Enc {
 		return -1, nil
 	} else {
 		return 1, nil
@@ -206,7 +179,7 @@ func (d *DoubleValue) CompareTo(v Value) (int, error) {
 }
 
 func (d *DoubleValue) AsInterface() interface{} {
-	return float64(*d)
+	return d.Double
 }
 
 func (d *DoubleValue) String() string {
@@ -214,14 +187,25 @@ func (d *DoubleValue) String() string {
 		return ""
 	}
 
-	return fmt.Sprintf("%f", *d)
+	return d.asString
 }
 
-type StringValue string
+type StringValue struct {
+	Value     string
+	Collation *api.Collation
+}
 
-func NewStringValue(v string) *StringValue {
-	i := StringValue(v)
-	return &i
+func NewStringValue(v string, collation *api.Collation) *StringValue {
+	s := &StringValue{
+		Value:     v,
+		Collation: collation,
+	}
+
+	if collation != nil && collation.IsCaseInsensitive() {
+		s.Value = strings.ToLower(s.Value)
+	}
+
+	return s
 }
 
 func (s *StringValue) CompareTo(v Value) (int, error) {
@@ -234,9 +218,13 @@ func (s *StringValue) CompareTo(v Value) (int, error) {
 		return -2, fmt.Errorf("wrong type compared ")
 	}
 
-	if *s == *converted {
+	if s.Collation != nil && s.Collation.IsCaseInsensitive() {
+		converted.Value = strings.ToLower(converted.Value)
+	}
+
+	if s.Value == converted.Value {
 		return 0, nil
-	} else if *s < *converted {
+	} else if s.Value < converted.Value {
 		return -1, nil
 	} else {
 		return 1, nil
@@ -244,7 +232,7 @@ func (s *StringValue) CompareTo(v Value) (int, error) {
 }
 
 func (s *StringValue) AsInterface() interface{} {
-	return string(*s)
+	return s.Value
 }
 
 func (s *StringValue) String() string {
@@ -252,17 +240,17 @@ func (s *StringValue) String() string {
 		return ""
 	}
 
-	return string(*s)
+	return s.Value
 }
 
-type BytesValue string
+type BytesValue []byte
 
 func NewBytesValue(v []byte) *BytesValue {
 	i := BytesValue(v)
 	return &i
 }
 
-func (s *BytesValue) CompareTo(v Value) (int, error) {
+func (b *BytesValue) CompareTo(v Value) (int, error) {
 	if v == nil {
 		return 1, nil
 	}
@@ -272,25 +260,19 @@ func (s *BytesValue) CompareTo(v Value) (int, error) {
 		return -2, fmt.Errorf("wrong type compared ")
 	}
 
-	if *s == *converted {
-		return 0, nil
-	} else if *s < *converted {
-		return -1, nil
-	} else {
-		return 1, nil
-	}
+	return bytes.Compare(*b, *converted), nil
 }
 
-func (s *BytesValue) AsInterface() interface{} {
-	return []byte(*s)
+func (b *BytesValue) AsInterface() interface{} {
+	return []byte(*b)
 }
 
-func (s *BytesValue) String() string {
-	if s == nil {
+func (b *BytesValue) String() string {
+	if b == nil {
 		return ""
 	}
 
-	return string(*s)
+	return string(*b)
 }
 
 type BoolValue bool

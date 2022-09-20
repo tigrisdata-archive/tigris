@@ -15,10 +15,9 @@
 package filter
 
 import (
-	"github.com/tigrisdata/tigrisdb/keys"
-	"github.com/tigrisdata/tigrisdb/schema"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/keys"
+	"github.com/tigrisdata/tigris/schema"
 )
 
 // KeyBuilder is responsible for building internal Keys. A composer is caller by the builder to build the internal keys
@@ -70,11 +69,14 @@ func (k *KeyBuilder) Build(filters []Filter, userDefinedKeys []*schema.Field) ([
 				}
 			}
 
-			iKeys, err := k.composer.Compose(singleLevel, userDefinedKeys, e.Type())
-			if err != nil {
-				return nil, err
+			if len(singleLevel) > 0 {
+				// try building keys with there is selector available
+				iKeys, err := k.composer.Compose(singleLevel, userDefinedKeys, e.Type())
+				if err != nil {
+					return nil, err
+				}
+				allKeys = append(allKeys, iKeys...)
 			}
-			allKeys = append(allKeys, iKeys...)
 		}
 		queue = queue[1:]
 	}
@@ -93,12 +95,13 @@ type KeyComposer interface {
 //  - For AND filters it is possible to build internal keys for composite indexes, for OR it is not possible.
 // So for OR filter an error is returned if it is used for indexes that are composite.
 type StrictEqKeyComposer struct {
-	Prefix string
+	// keyEncodingFunc returns encoded key from index parts
+	keyEncodingFunc func(indexParts ...interface{}) (keys.Key, error)
 }
 
-func NewStrictEqKeyComposer(prefix string) *StrictEqKeyComposer {
+func NewStrictEqKeyComposer(keyEncodingFunc func(indexParts ...interface{}) (keys.Key, error)) *StrictEqKeyComposer {
 	return &StrictEqKeyComposer{
-		Prefix: prefix,
+		keyEncodingFunc: keyEncodingFunc,
 	}
 }
 
@@ -108,21 +111,21 @@ func (s *StrictEqKeyComposer) Compose(selectors []*Selector, userDefinedKeys []*
 	for _, k := range userDefinedKeys {
 		var repeatedFields []*Selector
 		for _, sel := range selectors {
-			if k.FieldName == sel.Field {
+			if k.FieldName == sel.Field.Name() {
 				repeatedFields = append(repeatedFields, sel)
 			}
 			if sel.Matcher.Type() != EQ {
-				return nil, status.Errorf(codes.InvalidArgument, "filters only supporting $eq comparison, found '%s'", sel.Matcher.Type())
+				return nil, errors.InvalidArgument("filters only supporting $eq comparison, found '%s'", sel.Matcher.Type())
 			}
 		}
 
 		if len(repeatedFields) == 0 {
 			// nothing found or a gap
-			return nil, status.Errorf(codes.InvalidArgument, "filters doesn't contains primary key fields")
+			return nil, errors.InvalidArgument("filters doesn't contains primary key fields")
 		}
 		if len(repeatedFields) > 1 && parent == AndOP {
 			// with AND there is no use of EQ on the same field
-			return nil, status.Errorf(codes.InvalidArgument, "reusing same fields for conditions on equality")
+			return nil, errors.InvalidArgument("reusing same fields for conditions on equality")
 		}
 
 		compositeKeys[0] = append(compositeKeys[0], repeatedFields[0])
@@ -146,15 +149,24 @@ func (s *StrictEqKeyComposer) Compose(selectors []*Selector, userDefinedKeys []*
 				primaryKeyParts = append(primaryKeyParts, s.Matcher.GetValue().AsInterface())
 			}
 
-			allKeys = append(allKeys, keys.NewKey(s.Prefix, primaryKeyParts...))
+			key, err := s.keyEncodingFunc(primaryKeyParts...)
+			if err != nil {
+				return nil, err
+			}
+			allKeys = append(allKeys, key)
 		case OrOP:
 			for _, sel := range k {
 				if len(userDefinedKeys) > 1 {
 					// this means OR can't build independently these keys
-					return nil, status.Errorf(codes.InvalidArgument, "OR is not supported with composite primary keys")
+					return nil, errors.InvalidArgument("OR is not supported with composite primary keys")
 				}
 
-				allKeys = append(allKeys, keys.NewKey(s.Prefix, sel.Matcher.GetValue().AsInterface()))
+				key, err := s.keyEncodingFunc(sel.Matcher.GetValue().AsInterface())
+				if err != nil {
+					return nil, err
+				}
+
+				allKeys = append(allKeys, key)
 			}
 		}
 	}

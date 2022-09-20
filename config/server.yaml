@@ -16,7 +16,7 @@ server:
   port: 8081
 
 log:
-  level: trace
+  level: debug
 
 foundationdb:
   cluster_file: "/etc/foundationdb/fdb.cluster"

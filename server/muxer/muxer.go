@@ -20,17 +20,17 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
-	"github.com/tigrisdata/tigrisdb/server/config"
-	tgrpc "github.com/tigrisdata/tigrisdb/server/grpc"
-	tHTTP "github.com/tigrisdata/tigrisdb/server/http"
-	v1 "github.com/tigrisdata/tigrisdb/server/services/v1"
-	"github.com/tigrisdata/tigrisdb/server/types"
-	"github.com/tigrisdata/tigrisdb/store/kv"
+	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/metadata"
+	v1 "github.com/tigrisdata/tigris/server/services/v1"
+	"github.com/tigrisdata/tigris/server/transaction"
+	"github.com/tigrisdata/tigris/store/kv"
+	"github.com/tigrisdata/tigris/store/search"
+	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 type Server interface {
 	Start(mux cmux.CMux) error
-	GetType() string
 }
 
 type Muxer struct {
@@ -38,24 +38,21 @@ type Muxer struct {
 }
 
 func NewMuxer(cfg *config.Config) *Muxer {
-	var s []Server
-	s = append(s, tHTTP.NewServer(cfg))
-	s = append(s, tgrpc.NewServer(cfg))
-	m := &Muxer{
-		servers: s,
-	}
-
-	return m
+	return &Muxer{servers: []Server{NewHTTPServer(cfg), NewGRPCServer(cfg)}}
 }
 
-func (m *Muxer) RegisterServices(kv kv.KV) {
-	services := v1.GetRegisteredServices(kv)
+func (m *Muxer) RegisterServices(kvStore kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) {
+	services := v1.GetRegisteredServices(kvStore, searchStore, tenantMgr, txMgr)
 	for _, r := range services {
-		for _, s := range m.servers {
-			if s.GetType() == types.GRPCServer {
-				_ = r.RegisterGRPC(s.(*tgrpc.Server).Server)
-			} else if s.GetType() == types.HTTPServer {
-				_ = r.RegisterHTTP(s.(*tHTTP.Server).Router, s.(*tHTTP.Server).Inproc)
+		for _, v := range m.servers {
+			if s, ok := v.(*GRPCServer); ok {
+				if err := r.RegisterGRPC(s.Server); err != nil {
+					ulog.E(err)
+				}
+			} else if s, ok := v.(*HTTPServer); ok {
+				if err := r.RegisterHTTP(s.Router, s.Inproc); err != nil {
+					ulog.E(err)
+				}
 			}
 		}
 	}
@@ -73,6 +70,6 @@ func (m *Muxer) Start(host string, port int16) error {
 	for _, s := range m.servers {
 		_ = s.Start(cm)
 	}
-
+	log.Info().Msg("server started, servicing requests")
 	return cm.Serve()
 }

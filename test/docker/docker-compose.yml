@@ -15,45 +15,93 @@
 version: '3.3'
 
 services:
-  tigris_fdb:
-    container_name: tigris_fdb
-    image: foundationdb/foundationdb:6.3.23
+  tigris_db:
+    container_name: tigris_db
+    image: tigrisdata/foundationdb:7.1.7
     volumes:
       - type: volume
-        source: fdbdata
-        target: /var/fdb/
+        source: dbdata
+        target: /var/lib/foundationdb/
+
+  # FDB container with FDB server bound to localhost
+  # This is needed to be able to connect to FDB from the host
+  # Used in local_run make file target
+  tigris_db2:
+    container_name: tigris_db2
+    image: tigrisdata/foundationdb:7.1.7
+    environment:
+      - FDB_NETWORKING_MODE=host
     ports:
       - "4500:4500"
+
+
+  tigris_search:
+    container_name: tigris_search
+    image: typesense/typesense:0.23.0
+    environment:
+      - TYPESENSE_DATA_DIR=/tmp
+      - TYPESENSE_API_KEY=ts_test_key
+    ports:
+      - "8108:8108"
 
   tigris_server:
     container_name: tigris_server
     image: tigris_server
     environment:
-      #- TIGRISDB_SERVER_API_PORT=7777
-      #- TIGRISDB_ENVIRONMENT=test
-      - AWS_ACCESS_KEY_ID=accessKey1
-      - AWS_SECRET_ACCESS_KEY=verySecretKey1
-      #- AWS_SESSION_TOKEN=session1
-      #- GRPC_GO_LOG_VERBOSITY_LEVEL=99
-      #- GRPC_GO_LOG_SEVERITY_LEVEL=info
+      - TIGRIS_ENVIRONMENT=test
+      - TIGRIS_SERVER_SEARCH_AUTH_KEY=ts_test_key
+      - TIGRIS_SERVER_SEARCH_HOST=tigris_search
+      - TIGRIS_SERVER_LOG_FORMAT=console
+      - TIGRIS_SERVER_CDC_ENABLED=true
     build:
       context: ../../
       dockerfile: docker/Dockerfile
     volumes:
       - type: volume
-        source: fdbdata
+        source: dbdata
         target: /etc/foundationdb/
     ports:
       - "8081:8081"
+    command: >
+      bash -c '[ ! -f /etc/foundationdb/initialized ] && fdbcli --exec "configure new single memory" && touch /etc/foundationdb/initialized;
+        /server/service'
     depends_on:
-      - tigris_fdb
+      - tigris_db
+      - tigris_search
+
+  tigris_server2:
+    container_name: tigris_server2
+    image: tigris_server
+    environment:
+      - TIGRIS_ENVIRONMENT=test
+      - TIGRIS_SERVER_SEARCH_AUTH_KEY=ts_test_key
+      - TIGRIS_SERVER_SEARCH_HOST=tigris_search
+      - TIGRIS_SERVER_LOG_FORMAT=console
+      - TIGRIS_SERVER_CDC_ENABLED=true
+    build:
+      context: ../../
+      dockerfile: docker/Dockerfile
+    volumes:
+      - type: volume
+        source: dbdata
+        target: /etc/foundationdb/
+    ports:
+      - "8082:8081"
+    command: >
+      bash -c '/server/service'
+    depends_on:
+      - tigris_server
+      - tigris_db2
 
   tigris_test:
+    container_name: tigris_test
     image: tigris_test
     environment:
-      - TIGRISDB_ENVIRONMENT=test
+      # Instruct test to use default location in the docker
+      # instead of test/config/fdb.cluster file when running on the host
+      - TIGRIS_ENVIRONMENT=test
       - TEST_PARAM
-    container_name: tigris_test
+      - GOFLAGS=-buildvcs=false #FIXME: Added for golangci-lint to work in Github actions
     build:
       context: ../../
       dockerfile: test/docker/Dockerfile
@@ -62,10 +110,33 @@ services:
         source: ../../
         target: /go/src/tigris
       - type: volume
-        source: fdbdata
+        source: dbdata
         target: /etc/foundationdb/
+      - type: volume
+        source: go_test_cache
+        target: /root/.cache/go-build
+    depends_on:
+      - tigris_server2
+
+  tigris_prometheus:
+    container_name: tigris_prometheus
+    image: prom/prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
     depends_on:
       - tigris_server
 
+  tigris_grafana:
+    container_name: tigris_grafana
+    image: grafana/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - tigris_prometheus
+      - tigris_server
+
 volumes:
-  fdbdata:
+  dbdata:
+  go_test_cache:

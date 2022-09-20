@@ -16,9 +16,13 @@ package filter
 
 import (
 	"fmt"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 
-	"github.com/tigrisdata/tigrisdb/value"
-	"google.golang.org/protobuf/types/known/structpb"
+	"github.com/buger/jsonparser"
+	"github.com/tigrisdata/tigris/lib/date"
+	"github.com/tigrisdata/tigris/schema"
+	ulog "github.com/tigrisdata/tigris/util/log"
+	"github.com/tigrisdata/tigris/value"
 )
 
 // Selector is a condition defined inside a filter. It has a field which corresponding the field on which condition
@@ -31,33 +35,99 @@ import (
 //    {f:20} (default is "$eq" so we automatically append EqualityMatcher for this case in parser)
 //    {f:<Expr>}
 type Selector struct {
-	Field   string
-	Matcher ValueMatcher
+	Field     *schema.QueryableField
+	Matcher   ValueMatcher
+	Collation *api.Collation
 }
 
 // NewSelector returns Selector object
-func NewSelector(field string, matcher ValueMatcher) *Selector {
+func NewSelector(field *schema.QueryableField, matcher ValueMatcher, collation *api.Collation) *Selector {
 	return &Selector{
-		Field:   field,
-		Matcher: matcher,
+		Field:     field,
+		Matcher:   matcher,
+		Collation: collation,
 	}
 }
 
-// Matches returns true if the input doc matches this filter.
-func (s *Selector) Matches(doc *structpb.Struct) bool {
-	if v, ok := doc.Fields[s.Field]; ok {
-		val := value.NewValue(v)
-		if val == nil {
-			return false
-		}
-
-		return s.Matcher.Matches(val)
+func (s *Selector) MatchesDoc(doc map[string]interface{}) bool {
+	v, ok := doc[s.Field.Name()]
+	if !ok {
+		return true
 	}
 
-	return false
+	var val value.Value
+	switch s.Field.DataType {
+	case schema.StringType:
+		if s.Collation == nil || s.Collation.IsCaseSensitive() {
+			val = value.NewStringValue(v.(string), s.Collation)
+		} else {
+			// if it is 'ci' then no need to apply filter as indexing store returns case-sensitive results.
+			return true
+		}
+	case schema.DoubleType:
+		val = value.NewDoubleUsingFloat(v.(float64))
+	default:
+		// as this method is only intended for indexing store, so we only apply filter for string and double type
+		// otherwise we rely on indexing store to only return valid results.
+		return true
+	}
+
+	return s.Matcher.Matches(val)
+}
+
+// Matches returns true if the input doc matches this filter.
+func (s *Selector) Matches(doc []byte) bool {
+	docValue, dtp, _, err := jsonparser.Get(doc, s.Field.Name())
+	if ulog.E(err) {
+		return false
+	}
+	if dtp == jsonparser.NotExist {
+		return false
+	}
+
+	var val value.Value
+	if s.Collation != nil {
+		val, err = value.NewValueUsingCollation(s.Field.DataType, docValue, s.Collation)
+	} else {
+		val, err = value.NewValue(s.Field.DataType, docValue)
+	}
+	if ulog.E(err) {
+		return false
+	}
+
+	return s.Matcher.Matches(val)
+}
+
+func (s *Selector) ToSearchFilter() []string {
+	var op string
+	switch s.Matcher.Type() {
+	case EQ:
+		op = "%s:=%v"
+	case GT:
+		op = "%s:>%v"
+	case GTE:
+		op = "%s:>=%v"
+	case LT:
+		op = "%s:<%v"
+	case LTE:
+		op = "%s:<=%v"
+	}
+
+	v := s.Matcher.GetValue()
+	switch s.Field.DataType {
+	case schema.DoubleType:
+		// for double, we pass string in the filter to search backend
+		return []string{fmt.Sprintf(op, s.Field.InMemoryName(), v.String())}
+	case schema.DateTimeType:
+		// encode into int64
+		if nsec, err := date.ToUnixNano(schema.DateTimeFormat, v.String()); err == nil {
+			return []string{fmt.Sprintf(op, s.Field.InMemoryName(), nsec)}
+		}
+	}
+	return []string{fmt.Sprintf(op, s.Field.InMemoryName(), v.AsInterface())}
 }
 
 // String a helpful method for logging.
 func (s *Selector) String() string {
-	return fmt.Sprintf("{%v:%v}", s.Field, s.Matcher)
+	return fmt.Sprintf("{%v:%v}", s.Field.Name(), s.Matcher)
 }

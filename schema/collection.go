@@ -14,69 +14,262 @@
 
 package schema
 
-import "fmt"
+import (
+	"bytes"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"math"
+	"strconv"
 
-const (
-	UserDefinedSchema = "user_defined_schema"
+	jsoniter "github.com/json-iterator/go"
+	"github.com/santhosh-tekuri/jsonschema/v5"
+	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/lib/container"
+	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
 const (
-	PrimaryKeySchemaName = "primary_key"
+	ObjFlattenDelimiter = "."
 )
 
-type Collection interface {
-	Name() string
-	Type() string
-	Database() string
-	GetFields() []*Field
-	PrimaryKeys() []*Field
-	StorageName() string // ToDo: this is a placeholder, will be replaced by encoding package
+// DefaultCollection is used to represent a collection. The tenant in the metadata package is responsible for creating
+// the collection.
+type DefaultCollection struct {
+	// Id is the dictionary encoded value for this collection.
+	Id uint32
+	// SchVer returns the schema version
+	SchVer int32
+	// Name is the name of the collection.
+	Name string
+	// Fields are derived from the user schema.
+	Fields []*Field
+	// Indexes is a wrapper on the indexes part of this collection.
+	Indexes *Indexes
+	// Validator is used to validate the JSON document. As it is expensive to create this, it is only created once
+	// during constructor of the collection.
+	Validator *jsonschema.Schema
+	// JSON schema
+	Schema jsoniter.RawMessage
+	// search schema
+	Search *tsApi.CollectionSchema
+	// QueryableFields are similar to Fields but these are flattened forms of fields. For instance, a simple field
+	// will be one to one mapped to queryable field but complex fields like object type field there may be more than
+	// one queryableFields. As queryableFields represent a flattened state these can be used as-is to index in memory.
+	QueryableFields []*QueryableField
+	// CollectionType is the type of the collection. Only two types of collections are supported "messages" and "documents"
+	CollectionType CollectionType
 }
 
-type SimpleCollection struct {
-	CollectionName string
-	DatabaseName   string
-	Keys           []*Field
-	Fields         []*Field
-}
+type CollectionType string
 
-func NewCollection(database string, collection string, fields []*Field, keys []*Field) Collection {
-	return &SimpleCollection{
-		DatabaseName:   database,
-		CollectionName: collection,
-		Keys:           keys,
-		Fields:         fields,
+const (
+	DocumentsType CollectionType = "documents"
+	MessagesType  CollectionType = "messages"
+)
+
+func disableAdditionalProperties(properties map[string]*jsonschema.Schema) {
+	for _, p := range properties {
+		if len(p.Properties) > 0 {
+			p.AdditionalProperties = false
+			disableAdditionalProperties(p.Properties)
+		}
 	}
 }
 
-func (s *SimpleCollection) Name() string {
-	return s.CollectionName
+func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionType, fields []*Field, indexes *Indexes, schema jsoniter.RawMessage, searchCollectionName string) *DefaultCollection {
+	url := name + ".json"
+	compiler := jsonschema.NewCompiler()
+	compiler.Draft = jsonschema.Draft7 // Format is only working for draft7
+	if err := compiler.AddResource(url, bytes.NewReader(schema)); err != nil {
+		panic(err)
+	}
+
+	validator, err := compiler.Compile(url)
+	if err != nil {
+		panic(err)
+	}
+
+	// Tigris doesn't allow additional fields as part of the write requests. Setting it to false ensures strict
+	// schema validation.
+	validator.AdditionalProperties = false
+	disableAdditionalProperties(validator.Properties)
+
+	queryableFields := BuildQueryableFields(fields)
+
+	return &DefaultCollection{
+		Id:              id,
+		SchVer:          int32(schVer),
+		Name:            name,
+		Fields:          fields,
+		Indexes:         indexes,
+		Validator:       validator,
+		Schema:          schema,
+		Search:          buildSearchSchema(searchCollectionName, queryableFields),
+		QueryableFields: queryableFields,
+		CollectionType:  ctype,
+	}
 }
 
-func (s *SimpleCollection) Type() string {
-	return UserDefinedSchema
+func (d *DefaultCollection) GetName() string {
+	return d.Name
 }
 
-func (s *SimpleCollection) Database() string {
-	return s.DatabaseName
+func (d *DefaultCollection) GetVersion() int32 {
+	return d.SchVer
 }
 
-func (s *SimpleCollection) GetFields() []*Field {
-	return s.Fields
+func (d *DefaultCollection) Type() CollectionType {
+	return d.CollectionType
 }
 
-func (s *SimpleCollection) PrimaryKeys() []*Field {
-	return s.Keys
+func (d *DefaultCollection) GetFields() []*Field {
+	return d.Fields
 }
 
-func (s *SimpleCollection) StorageName() string {
-	return fmt.Sprintf("%s.%s", s.DatabaseName, s.CollectionName)
+func (d *DefaultCollection) GetIndexes() *Indexes {
+	return d.Indexes
 }
 
-func GetIndexName(database, collection, index string) string {
-	return fmt.Sprintf("%s.%s.%s", database, collection, index)
+func (d *DefaultCollection) GetQueryableFields() []*QueryableField {
+	return d.QueryableFields
 }
 
-func GetCollectionName(database, collection string) string {
-	return fmt.Sprintf("%s.%s", database, collection)
+func (d *DefaultCollection) GetQueryableField(name string) (*QueryableField, error) {
+	for _, qf := range d.QueryableFields {
+		if qf.Name() == name {
+			return qf, nil
+		}
+	}
+	return nil, errors.InvalidArgument("Field `%s` is not present in collection", name)
+}
+
+// Validate expects an unmarshalled document which it will validate again the schema of this collection.
+func (d *DefaultCollection) Validate(document interface{}) error {
+	err := d.Validator.Validate(document)
+	if err == nil {
+		return nil
+	}
+
+	if v, ok := err.(*jsonschema.ValidationError); ok {
+		if len(v.Causes) == 1 {
+			field := v.Causes[0].InstanceLocation
+			if len(field) > 0 && field[0] == '/' {
+				field = field[1:]
+			}
+			return errors.InvalidArgument("json schema validation failed for field '%s' reason '%s'", field, v.Causes[0].Message)
+		}
+	}
+
+	return errors.InvalidArgument(err.Error())
+}
+
+func (d *DefaultCollection) SearchCollectionName() string {
+	return d.Search.Name
+}
+
+func GetSearchDeltaFields(existingFields []*QueryableField, incomingFields []*Field) []tsApi.Field {
+	incomingQueryable := BuildQueryableFields(incomingFields)
+
+	var existingFieldSet = container.NewHashSet()
+	for _, f := range existingFields {
+		existingFieldSet.Insert(f.FieldName)
+	}
+
+	var ptrTrue = true
+	var tsFields []tsApi.Field
+	for _, f := range incomingQueryable {
+		if existingFieldSet.Contains(f.FieldName) {
+			continue
+		}
+
+		tsFields = append(tsFields, tsApi.Field{
+			Name:     f.FieldName,
+			Type:     f.SearchType,
+			Facet:    &f.Faceted,
+			Index:    &f.Indexed,
+			Optional: &ptrTrue,
+		})
+
+	}
+
+	return tsFields
+}
+
+func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.CollectionSchema {
+	var ptrTrue, ptrFalse = true, false
+	var tsFields []tsApi.Field
+	for _, s := range queryableFields {
+		tsFields = append(tsFields, tsApi.Field{
+			Name:     s.Name(),
+			Type:     s.SearchType,
+			Facet:    &s.Faceted,
+			Index:    &s.Indexed,
+			Optional: &ptrTrue,
+		})
+		if s.InMemoryName() != s.Name() {
+			// we are storing this field differently in in-memory store
+			tsFields = append(tsFields, tsApi.Field{
+				Name:     s.InMemoryName(),
+				Type:     s.SearchType,
+				Facet:    &s.Faceted,
+				Index:    &s.Indexed,
+				Optional: &ptrTrue,
+			})
+		}
+		// Save original date as string to disk
+		if !s.IsReserved() && s.DataType == DateTimeType {
+			tsFields = append(tsFields, tsApi.Field{
+				Name:     ToSearchDateKey(s.Name()),
+				Type:     toSearchFieldType(StringType),
+				Facet:    &ptrFalse,
+				Index:    &ptrFalse,
+				Sort:     &ptrFalse,
+				Optional: &ptrTrue,
+			})
+		}
+	}
+
+	return &tsApi.CollectionSchema{
+		Name:   name,
+		Fields: tsFields,
+	}
+}
+
+func init() {
+	jsonschema.Formats[FieldNames[ByteType]] = func(i interface{}) bool {
+		switch v := i.(type) {
+		case string:
+			_, err := base64.StdEncoding.DecodeString(v)
+			return err == nil
+		}
+		return false
+	}
+	jsonschema.Formats[FieldNames[Int32Type]] = func(i interface{}) bool {
+		val, err := parseInt(i)
+		if err != nil {
+			return false
+		}
+
+		if val < math.MinInt32 || val > math.MaxInt32 {
+			return false
+		}
+		return true
+	}
+	jsonschema.Formats[FieldNames[Int64Type]] = func(i interface{}) bool {
+		_, err := parseInt(i)
+		return err == nil
+	}
+}
+
+func parseInt(i interface{}) (int64, error) {
+	switch i.(type) {
+	case json.Number, float64, int, int32, int64:
+		n, err := strconv.ParseInt(fmt.Sprint(i), 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		return n, nil
+	}
+	return 0, errors.InvalidArgument("expected integer but found %T", i)
 }

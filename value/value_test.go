@@ -15,118 +15,58 @@
 package value
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/tigrisdata/tigrisdb/schema"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/types/known/structpb"
+	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/schema"
 )
 
 func TestNewValue(t *testing.T) {
-	type testStruct struct {
-		A int
-		B float64
-		C string
-		D []byte
-	}
-
-	ts := &testStruct{
-		A: 1,
-		B: 1.01,
-		C: "foo",
-		D: []byte(`"foo"`),
-	}
-
-	b, err := json.Marshal(ts)
-	require.NoError(t, err)
-
-	s := &structpb.Struct{}
-	require.NoError(t, protojson.Unmarshal(b, s))
-
-	require.Equal(t, int64(1), NewValue(s.Fields["A"]).AsInterface())
-	require.Equal(t, float64(1.01), NewValue(s.Fields["B"]).AsInterface())
-	require.Equal(t, "foo", NewValue(s.Fields["C"]).AsInterface())
-}
-
-func TestNewValueFromSchema(t *testing.T) {
-	type testStruct struct {
-		A int
-		B float64
-		C string
-		D []byte
-		E bool
-	}
-
-	ts := &testStruct{
-		A: 1,
-		B: 1.01,
-		C: "foo",
-		D: []byte(`"foo"`),
-		E: true,
-	}
-
-	b, err := json.Marshal(ts)
-	require.NoError(t, err)
-
-	s := &structpb.Struct{}
-	require.NoError(t, protojson.Unmarshal(b, s))
+	double, _ := NewDoubleValue("1.01")
 	cases := []struct {
-		field    *schema.Field
-		value    Value
-		expError error
+		field     schema.FieldType
+		jsonValue []byte
+		value     Value
+		expError  error
 	}{
 		{
-			&schema.Field{
-				FieldName: "A",
-				DataType:  schema.IntType,
-			},
-			NewIntValue(1),
+			schema.Int64Type,
+			[]byte(`12345678`),
+			NewIntValue(12345678),
 			nil,
 		}, {
-			&schema.Field{
-				FieldName: "B",
-				DataType:  schema.IntType,
-			},
+			schema.Int32Type,
+			[]byte(`"1"`),
 			nil,
-			status.Errorf(codes.InvalidArgument, "permissible type for '%s' is int only", "B"),
+			errors.InvalidArgument("unsupported value type: strconv.ParseInt: parsing \"\\\"1\\\"\": invalid syntax"),
 		}, {
-			&schema.Field{
-				FieldName: "B",
-				DataType:  schema.DoubleType,
-			},
-			NewDoubleValue(1.01),
+			schema.DoubleType,
+			[]byte(`1.01`),
+			double,
 			nil,
 		}, {
-			&schema.Field{
-				FieldName: "C",
-				DataType:  schema.StringType,
-			},
-			NewStringValue("foo"),
+			schema.StringType,
+			[]byte(`foo`),
+			NewStringValue("foo", nil),
 			nil,
 		}, {
-			&schema.Field{
-				FieldName: "D",
-				DataType:  schema.BytesType,
-			},
+			// we decode byte type because it was encoded to base64 by JSON encoding.
+			schema.ByteType,
+			[]byte(`ImZvbyI=`),
 			NewBytesValue([]byte(`"foo"`)),
 			nil,
 		}, {
-			&schema.Field{
-				FieldName: "E",
-				DataType:  schema.BoolType,
-			},
+			schema.BoolType,
+			[]byte(`true`),
 			NewBoolValue(true),
 			nil,
 		},
 	}
 	for _, c := range cases {
-		v, err := NewValueFromStruct(c.field, s)
+		v, err := NewValue(c.field, c.jsonValue)
 		require.Equal(t, c.expError, err)
 		require.Equal(t, c.value, v)
 	}
@@ -141,53 +81,101 @@ func TestIsIntegral(t *testing.T) {
 func TestValue(t *testing.T) {
 	t.Run("int", func(t *testing.T) {
 		i := IntValue(5)
-		r, err := i.CompareTo(NewValue(structpb.NewNumberValue(5)))
+
+		v, err := NewValue(schema.Int64Type, []byte(`5`))
+		require.NoError(t, err)
+		r, err := i.CompareTo(v)
 		require.NoError(t, err)
 		require.Equal(t, 0, r)
 
-		r, err = i.CompareTo(NewValue(structpb.NewNumberValue(7)))
+		v, err = NewValue(schema.Int64Type, []byte(`7`))
+		require.NoError(t, err)
+		r, err = i.CompareTo(v)
 		require.NoError(t, err)
 		require.Equal(t, -1, r)
 
-		r, err = i.CompareTo(NewValue(structpb.NewNumberValue(0)))
+		v, err = NewValue(schema.Int64Type, []byte(`0`))
+		require.NoError(t, err)
+		r, err = i.CompareTo(v)
 		require.NoError(t, err)
 		require.Equal(t, 1, r)
 
-		r, err = i.CompareTo(NewValue(structpb.NewStringValue("5")))
+		v, err = NewValue(schema.StringType, []byte(`"5"`))
+		require.NoError(t, err)
+		r, err = i.CompareTo(v)
 		require.Equal(t, fmt.Errorf("wrong type compared "), err)
 		require.Equal(t, -2, r)
 	})
 	t.Run("string", func(t *testing.T) {
-		i := StringValue("abc")
-		r, err := i.CompareTo(NewValue(structpb.NewStringValue("abc")))
+		i := NewStringValue("abc", nil)
+
+		v, err := NewValue(schema.StringType, []byte(`abc`))
+		require.NoError(t, err)
+		r, err := i.CompareTo(v)
 		require.NoError(t, err)
 		require.Equal(t, 0, r)
 
-		r, err = i.CompareTo(NewValue(structpb.NewStringValue("ac")))
+		v, err = NewValue(schema.StringType, []byte(`acc`))
+		require.NoError(t, err)
+		r, err = i.CompareTo(v)
 		require.NoError(t, err)
 		require.Equal(t, -1, r)
 
-		r, err = i.CompareTo(NewValue(structpb.NewStringValue("abb")))
+		v, err = NewValue(schema.StringType, []byte(`abb`))
+		require.NoError(t, err)
+		r, err = i.CompareTo(v)
 		require.NoError(t, err)
 		require.Equal(t, 1, r)
 
-		r, err = i.CompareTo(NewValue(structpb.NewNumberValue(5)))
+		v, err = NewValue(schema.Int64Type, []byte(`5`))
+		require.NoError(t, err)
+		r, err = i.CompareTo(v)
 		require.Equal(t, fmt.Errorf("wrong type compared "), err)
 		require.Equal(t, -2, r)
 	})
 	t.Run("bool", func(t *testing.T) {
 		i := BoolValue(false)
-		r, err := i.CompareTo(NewValue(structpb.NewBoolValue(false)))
+
+		v, err := NewValue(schema.BoolType, []byte(`false`))
+		require.NoError(t, err)
+		r, err := i.CompareTo(v)
 		require.NoError(t, err)
 		require.Equal(t, 0, r)
 
-		r, err = i.CompareTo(NewValue(structpb.NewBoolValue(true)))
+		v, err = NewValue(schema.BoolType, []byte(`true`))
+		require.NoError(t, err)
+		r, err = i.CompareTo(v)
 		require.NoError(t, err)
 		require.Equal(t, -1, r)
 
-		i = BoolValue(true)
-		r, err = i.CompareTo(NewValue(structpb.NewBoolValue(false)))
+		i = true
+		v, err = NewValue(schema.BoolType, []byte(`false`))
+		require.NoError(t, err)
+		r, err = i.CompareTo(v)
 		require.NoError(t, err)
 		require.Equal(t, 1, r)
 	})
+}
+
+func TestFloatingPoint(t *testing.T) {
+	v1, err := NewDoubleValue(`9999999.1234567`)
+	require.NoError(t, err)
+
+	v2, err := NewDoubleValue(`9999999.1234567`)
+	require.NoError(t, err)
+
+	r, _ := v1.CompareTo(v2)
+	require.Equal(t, 0, r)
+
+	v2, err = NewDoubleValue(`9999999.1234568`)
+	require.NoError(t, err)
+
+	r, _ = v1.CompareTo(v2)
+	require.Equal(t, -1, r)
+
+	v2, err = NewDoubleValue(`9999999.1234566`)
+	require.NoError(t, err)
+
+	r, _ = v1.CompareTo(v2)
+	require.Equal(t, 1, r)
 }

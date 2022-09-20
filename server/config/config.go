@@ -17,7 +17,10 @@ package config
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"strings"
+
+	ulog "github.com/tigrisdata/tigris/util/log"
 
 	"github.com/spf13/pflag"
 
@@ -25,27 +28,31 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
-	"gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v2"
 )
 
 var configPath = []string{
-	"/etc/tigrisdata/tigrisdb/",
-	"$HOME/.tigrisdata/tigrisdb/",
+	"/etc/tigrisdata/tigris/",
+	"$HOME/.tigrisdata/tigris/",
 	"./config/",
 	"./",
 }
 
+var configFile string
+
 // envPrefix is used by viper to detect environment variables that should be used.
 // viper will automatically uppercase this and append _ to it
-var envPrefix = "tigrisdb_server"
+var envPrefix = "tigris_server"
 
-var envEnv = "tigrisdb_environment"
+var envEnv = "tigris_environment"
 var environment string
 
 const (
+	EnvDevelopment = "dev"
+	EnvProduction  = "prod"
+	EnvSandbox     = "sbx"
 	EnvTest        = "test"
-	EnvDevelopment = "development"
-	EnvProduction  = "production"
+	EnvLocal       = "local"
 )
 
 func GetEnvironment() string {
@@ -53,26 +60,37 @@ func GetEnvironment() string {
 }
 
 func LoadEnvironment() {
-	env := os.Getenv(envEnv)
-	if env == "" {
-		env = os.Getenv(strings.ToUpper(envEnv))
+	resolutionOrder := []string{
+		os.Getenv(envEnv),
+		os.Getenv(strings.ToUpper(envEnv)),
+		EnvLocal,
 	}
 
-	environment = env
+	for _, resolvedEnv := range resolutionOrder {
+		if resolvedEnv != "" {
+			environment = resolvedEnv
+			break
+		}
+	}
 }
 
-func LoadConfig(name string, config interface{}) {
+func LoadConfig(config interface{}) {
 	LoadEnvironment()
 
-	if GetEnvironment() != "" {
-		name += "." + GetEnvironment()
-	}
+	pflag.StringVarP(&configFile, "config", "c", "", "server configuration file")
+	ulog.E(viper.BindPFlags(pflag.CommandLine))
+	pflag.Parse()
 
-	viper.SetConfigName(name)
-	viper.SetConfigType("yaml")
-
-	for _, v := range configPath {
-		viper.AddConfigPath(v)
+	// Deactivates lookup process for default server.yaml if
+	// configuration file is specified via the command line
+	if configFile != "" {
+		viper.SetConfigFile(configFile)
+	} else {
+		viper.SetConfigName("server")
+		viper.SetConfigType("yaml")
+		for _, v := range configPath {
+			viper.AddConfigPath(v)
+		}
 	}
 
 	// This is needed to automatically bind environment variables to config struct
@@ -94,11 +112,7 @@ func LoadConfig(name string, config interface{}) {
 	viper.SetEnvPrefix(envPrefix)
 	viper.AutomaticEnv()
 
-	pflag.Parse()
-	err = viper.BindPFlags(pflag.CommandLine)
-	log.Err(err).Msg("bind flags")
-
-	err = viper.ReadInConfig()
+	err = viper.MergeInConfig()
 	if err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			log.Warn().Err(err).Msgf("config file not found")
@@ -120,4 +134,29 @@ func LoadConfig(name string, config interface{}) {
 	})
 
 	viper.WatchConfig()
+}
+
+func GetTestFDBConfig(path string) (*FoundationDBConfig, error) {
+	LoadEnvironment()
+
+	// Environment can be set on OS X
+	fn, exists := os.LookupEnv("TIGRIS_SERVER_FOUNDATIONDB_CLUSTER_FILE")
+
+	// Use default location when run test in the docker
+	// where cluster file is shared between containers
+	if !exists && GetEnvironment() != EnvTest {
+		fn = path + "/test/config/fdb.cluster"
+	}
+
+	cmd := exec.Command("fdbcli", "-C", fn, "--exec", "configure new single memory")
+	_, err := cmd.Output()
+	if err != nil {
+		cmd := exec.Command("fdbcli", "-C", fn, "--exec", "configure single memory")
+		_, err = cmd.Output()
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &FoundationDBConfig{ClusterFile: fn}, nil
 }

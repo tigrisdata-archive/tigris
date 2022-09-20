@@ -20,12 +20,11 @@ import (
 
 	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"github.com/tigrisdata/tigrisdb/query/aggregation"
-	"github.com/tigrisdata/tigrisdb/query/expression"
-	ulog "github.com/tigrisdata/tigrisdb/util/log"
+	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/query/aggregation"
+	"github.com/tigrisdata/tigris/query/expression"
+	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/valyala/bytebufferpool"
-	"google.golang.org/grpc/codes"
 )
 
 func BuildFields(reqFields jsoniter.RawMessage) (*FieldFactory, error) {
@@ -53,7 +52,7 @@ func BuildFields(reqFields jsoniter.RawMessage) (*FieldFactory, error) {
 				return err
 			}
 
-			factory.addField(&SimpleField{
+			factory.AddField(&SimpleField{
 				Name: string(key),
 				Incl: include,
 			})
@@ -65,7 +64,7 @@ func BuildFields(reqFields jsoniter.RawMessage) (*FieldFactory, error) {
 				return err
 			}
 
-			factory.addField(&SimpleField{
+			factory.AddField(&SimpleField{
 				Name: string(key),
 				Incl: include == 1,
 			})
@@ -75,9 +74,9 @@ func BuildFields(reqFields jsoniter.RawMessage) (*FieldFactory, error) {
 			if err != nil {
 				return err
 			}
-			factory.addField(NewExprField(string(key), expr))
+			factory.AddField(NewExprField(string(key), expr))
 		default:
-			return api.Errorf(codes.InvalidArgument, "only boolean/integer is supported as value")
+			return errors.InvalidArgument("only boolean/integer is supported as value")
 		}
 		return nil
 	})
@@ -94,7 +93,7 @@ type FieldFactory struct {
 	FetchedValues map[string]*JSONObject
 }
 
-func (factory *FieldFactory) addField(f Field) {
+func (factory *FieldFactory) AddField(f Field) {
 	if !f.Include() {
 		factory.Exclude[f.Alias()] = f
 		return
@@ -146,7 +145,7 @@ func (factory *FieldFactory) applyIncludeOnly() ([]byte, error) {
 	bb := bytebufferpool.Get()
 	_, err = bb.WriteString("{")
 	if ulog.E(err) {
-		return nil, api.Errorf(codes.Internal, err.Error())
+		return nil, errors.Internal(err.Error())
 	}
 
 	index := 0
@@ -163,29 +162,29 @@ func (factory *FieldFactory) applyIncludeOnly() ([]byte, error) {
 		if index != 0 {
 			_, err = bb.WriteString(",")
 			if ulog.E(err) {
-				return nil, api.Errorf(codes.Internal, err.Error())
+				return nil, errors.Internal(err.Error())
 			}
 		}
 
 		_, err = bb.Write(f.GetJSONAlias())
 		if ulog.E(err) {
-			return nil, api.Errorf(codes.Internal, err.Error())
+			return nil, errors.Internal(err.Error())
 		}
 
 		_, err = bb.WriteString(":")
 		if ulog.E(err) {
-			return nil, api.Errorf(codes.Internal, err.Error())
+			return nil, errors.Internal(err.Error())
 		}
 
 		_, err = bb.Write(newValue)
 		if ulog.E(err) {
-			return nil, api.Errorf(codes.Internal, err.Error())
+			return nil, errors.Internal(err.Error())
 		}
 		index++
 	}
 	_, err = bb.WriteString("}")
 	if ulog.E(err) {
-		return nil, api.Errorf(codes.Internal, err.Error())
+		return nil, errors.Internal(err.Error())
 	}
 
 	return bb.Bytes(), nil
@@ -196,7 +195,7 @@ func (factory *FieldFactory) applyExcludeOnly() ([]byte, error) {
 	bb := bytebufferpool.Get()
 	_, err = bb.WriteString("{")
 	if ulog.E(err) {
-		return nil, api.Errorf(codes.Internal, err.Error())
+		return nil, errors.Internal(err.Error())
 	}
 
 	index := 0
@@ -208,28 +207,28 @@ func (factory *FieldFactory) applyExcludeOnly() ([]byte, error) {
 		if index != 0 {
 			_, err = bb.WriteString(",")
 			if ulog.E(err) {
-				return nil, api.Errorf(codes.Internal, err.Error())
+				return nil, errors.Internal(err.Error())
 			}
 		}
 		_, err = bb.Write(js.GetKey())
 		if ulog.E(err) {
-			return nil, api.Errorf(codes.Internal, err.Error())
+			return nil, errors.Internal(err.Error())
 		}
 
 		_, err = bb.WriteString(":")
 		if ulog.E(err) {
-			return nil, api.Errorf(codes.Internal, err.Error())
+			return nil, errors.Internal(err.Error())
 		}
 
 		_, err = bb.Write(js.GetValue())
 		if ulog.E(err) {
-			return nil, api.Errorf(codes.Internal, err.Error())
+			return nil, errors.Internal(err.Error())
 		}
 		index++
 	}
 	_, err = bb.WriteString("}")
 	if ulog.E(err) {
-		return nil, api.Errorf(codes.Internal, err.Error())
+		return nil, errors.Internal(err.Error())
 	}
 
 	return bb.Bytes(), nil
@@ -291,7 +290,7 @@ func (e *ExprField) Alias() string {
 	return e.FieldAlias
 }
 
-func (e *ExprField) Apply(data map[string]*JSONObject) ([]byte, error) {
+func (e *ExprField) Apply(_ map[string]*JSONObject) ([]byte, error) {
 	return nil, nil
 }
 

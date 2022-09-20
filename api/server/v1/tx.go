@@ -14,36 +14,45 @@
 
 package api
 
-func IsTxSupported(req Request) bool {
-	switch RequestType(req) {
-	case Insert, Replace, Update, Delete, Read:
+import (
+	"context"
+
+	"google.golang.org/grpc"
+)
+
+var (
+	methodPrefix             = "/tigrisdata.v1.Tigris/"
+	insert                   = methodPrefix + "Insert"
+	replace                  = methodPrefix + "Replace"
+	update                   = methodPrefix + "Update"
+	delete                   = methodPrefix + "Delete"
+	read                     = methodPrefix + "Read"
+	commitTransaction        = methodPrefix + "CommitTransaction"
+	rollbackTransaction      = methodPrefix + "RollbackTransaction"
+	dropCollection           = methodPrefix + "DropCollection"
+	listCollection           = methodPrefix + "ListCollections"
+	createOrUpdateCollection = methodPrefix + "CreateOrUpdateCollection"
+)
+
+func IsTxSupported(ctx context.Context) bool {
+	m, _ := grpc.Method(ctx)
+	switch m {
+	case insert, replace, update, delete, read, commitTransaction, rollbackTransaction,
+		dropCollection, listCollection, createOrUpdateCollection:
 		return true
-	}
-
-	return false
-}
-
-func GetTransaction(req Request) *TransactionCtx {
-	switch r := req.(type) {
-	case *InsertRequest:
-		if r.GetOptions() == nil || r.GetOptions().GetWriteOptions() == nil {
-			return nil
-		}
-		return r.GetOptions().GetWriteOptions().GetTxCtx()
 	default:
-		return nil
+		return false
 	}
 }
 
-func GetFilter(req Request) []byte {
-	switch r := req.(type) {
-	case *ReadRequest:
-		return r.GetFilter()
-	case *UpdateRequest:
-		return r.GetFilter()
-	case *DeleteRequest:
-		return r.GetFilter()
-	default:
+func GetTransaction(ctx context.Context) *TransactionCtx {
+	origin := GetHeader(ctx, HeaderTxOrigin)
+	if len(origin) == 0 {
 		return nil
+	}
+
+	return &TransactionCtx{
+		Id:     GetHeader(ctx, HeaderTxID),
+		Origin: origin,
 	}
 }

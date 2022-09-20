@@ -1,18 +1,34 @@
+// Copyright 2022 Tigris Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package update
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/tigrisdata/tigrisdb/util/log"
+	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/util/log"
 )
 
 // FieldOPType is the field operator passed in the Update API
 type FieldOPType string
 
 const (
-	set    FieldOPType = "$set"
+	set FieldOPType = "$set"
 )
 
 // BuildFieldOperators un-marshals request "fields" present in the Update API and returns a FieldOperatorFactory
@@ -46,6 +62,9 @@ type FieldOperatorFactory struct {
 // MergeAndGet method to converts the input to the output after applying all the operators.
 func (factory *FieldOperatorFactory) MergeAndGet(existingDoc jsoniter.RawMessage) (jsoniter.RawMessage, error) {
 	setFieldOp := factory.FieldOperators[string(set)]
+	if setFieldOp == nil {
+		return nil, errors.InvalidArgument("set operator not present in the fields parameter")
+	}
 	out, err := factory.apply(existingDoc, setFieldOp.Document)
 	if err != nil {
 		return nil, err
@@ -93,4 +112,12 @@ func NewFieldOperator(op FieldOPType, val jsoniter.RawMessage) *FieldOperator {
 		Op:       op,
 		Document: val,
 	}
+}
+
+func (f *FieldOperator) DeserializeDoc() (interface{}, error) {
+	var v interface{}
+	dec := jsoniter.NewDecoder(bytes.NewReader(f.Document))
+	dec.UseNumber()
+	err := dec.Decode(&v)
+	return v, err
 }

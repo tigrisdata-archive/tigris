@@ -18,7 +18,7 @@ import (
 	"fmt"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/tigrisdata/tigrisdb/query/expression"
+	"github.com/tigrisdata/tigris/query/expression"
 )
 
 // Aggregation operators either can pass a single expression or an array of expression. The below is an example of
@@ -49,7 +49,7 @@ func Unmarshal(input jsoniter.RawMessage) (expression.Expr, error) {
 	return expression.Unmarshal(input, UnmarshalAggObject)
 }
 
-// UnmarshalObject unmarshals the input to the aggregation. Note the return after the first check, this is mainly
+// UnmarshalAggObject unmarshal the input to the aggregation. Note the return after the first check, this is mainly
 // because an aggregation object can have nested objects but top level it will be one expression.
 func UnmarshalAggObject(input jsoniter.RawMessage) (expression.Expr, error) {
 	var err error

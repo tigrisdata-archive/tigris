@@ -1,0 +1,4 @@
+[submodule "api/proto"]
+	path = api/proto
+	url = https://github.com/tigrisdata/tigris-api.git
+	branch = main

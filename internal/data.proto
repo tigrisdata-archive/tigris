@@ -1,0 +1,37 @@
+// Copyright 2022 Tigris Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+option go_package = "github.com/tigrisdata/tigris/internal";
+
+message Timestamp {
+  // Represents seconds of UTC time since Unix epoch
+  int64 seconds = 2;
+  // Non-negative fractions of a second at nanosecond resolution.
+  int64 nanoseconds = 3;
+}
+
+// TableData is a wrapper around underlying storage raw bytes. This is used to store user collection data, internal
+// metadata, schemas etc. Caller can use raw_data to store any raw bytes.
+message TableData {
+  // ver is the version for the raw bytes, this may be schema version in case of user data.
+  int32 ver = 1;
+  // encoding represents encoding of the data field.
+  int32 encoding = 2;
+  Timestamp created_at = 3;
+  Timestamp updated_at = 4;
+  // raw_data is the raw bytes stored, caller controls how they want to store these raw bytes in database.
+  bytes raw_data = 5;
+}

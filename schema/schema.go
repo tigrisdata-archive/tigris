@@ -16,57 +16,271 @@ package schema
 
 import (
 	"fmt"
+	"time"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/structpb"
+	"github.com/buger/jsonparser"
+	jsoniter "github.com/json-iterator/go"
+	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/lib/container"
 )
 
-func CreateCollectionFromSchema(database string, collection string, userSchema map[string]*structpb.Value) (Collection, error) {
-	var fields []*Field
-	var nameToFieldMapping = make(map[string]*Field)
-	for key, value := range userSchema {
-		if key == PrimaryKeySchemaName {
-			continue
+/**
+A sample user JSON schema looks like below,
+{
+	"title": "Record of an order",
+	"description": "This document records the details of an order",
+	"properties": {
+		"order_id": {
+			"description": "A unique identifier for an order",
+			"type": "integer"
+		},
+		"cust_id": {
+			"description": "A unique identifier for a customer",
+			"type": "integer"
+		},
+		"product": {
+			"description": "name of the product",
+			"type": "string",
+			"max_length": 100,
+		},
+		"quantity": {
+			"description": "number of products ordered",
+			"type": "integer"
+		},
+		"price": {
+			"description": "price of the product",
+			"type": "number"
+		},
+		"date_ordered": {
+			"description": "The date order was made",
+			"type": "string",
+			"format": "date-time"
 		}
+	},
+	"primary_key": [
+		"cust_id",
+		"order_id"
+	]
+}
+*/
 
-		f := NewField(key, value.GetStringValue(), false)
-		fields = append(fields, f)
-		nameToFieldMapping[f.FieldName] = f
+const (
+	PrimaryKeyIndexName = "pkey"
+	AutoPrimaryKeyF     = "id"
+	PrimaryKeySchemaK   = "primary_key"
+	// DateTimeFormat represents the supported date time format
+	DateTimeFormat  = time.RFC3339Nano
+	CollectionTypeF = "collection_type"
+)
+
+var (
+	boolTrue = true
+)
+
+type JSONSchema struct {
+	Name           string              `json:"title,omitempty"`
+	Description    string              `json:"description,omitempty"`
+	Properties     jsoniter.RawMessage `json:"properties,omitempty"`
+	PrimaryKeys    []string            `json:"primary_key,omitempty"`
+	CollectionType string              `json:"collection_type,omitempty"`
+}
+
+// Factory is used as an intermediate step so that collection can be initialized with properly encoded values.
+type Factory struct {
+	// Name is the collection name of this schema.
+	Name string
+	// Fields are derived from the user schema.
+	Fields []*Field
+	// Indexes is a wrapper on the indexes part of this collection. At this point the dictionary encoded value is not
+	// set for these indexes which is set as part of collection creation.
+	Indexes *Indexes
+	// Schema is the raw JSON schema received as part of CreateOrUpdateCollection request. This is stored as-is in the
+	// schema subspace.
+	Schema jsoniter.RawMessage
+	// CollectionType is the type of the collection. Only two types of collections are supported "messages" and "documents"
+	CollectionType CollectionType
+}
+
+func GetCollectionType(reqSchema jsoniter.RawMessage) (CollectionType, error) {
+	val, dt, _, err := jsonparser.Get(reqSchema, CollectionTypeF)
+	if err == nil && dt != jsonparser.NotExist {
+		switch string(val) {
+		case "documents":
+			return DocumentsType, nil
+		case "messages":
+			return MessagesType, nil
+		}
+	}
+	if dt == jsonparser.NotExist {
+		return DocumentsType, nil
 	}
 
+	return "", err
+}
+
+// Build is used to deserialize the user json schema into a schema factory.
+func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
+	cType, err := GetCollectionType(reqSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	if cType != MessagesType {
+		if reqSchema, err = setPrimaryKey(reqSchema, jsonSpecFormatUUID, true); err != nil {
+			return nil, err
+		}
+	}
+
+	var schema = &JSONSchema{}
+	if err = jsoniter.Unmarshal(reqSchema, schema); err != nil {
+		return nil, errors.Internal(fmt.Errorf("unmarshalling failed %w", err).Error())
+	}
+	if collection != schema.Name {
+		return nil, errors.InvalidArgument("collection name is not same as schema name '%s' '%s'", collection, schema.Name)
+	}
+	if len(schema.Properties) == 0 {
+		return nil, errors.InvalidArgument("missing properties field in schema")
+	}
+
+	if len(schema.PrimaryKeys) == 0 && cType == DocumentsType {
+		return nil, errors.InvalidArgument("missing primary key field in schema")
+	} else if len(schema.PrimaryKeys) > 0 && cType == MessagesType {
+		return nil, errors.InvalidArgument("setting primary key is not supported for messages collection")
+	}
+
+	var primaryKeysSet = container.NewHashSet(schema.PrimaryKeys...)
+	fields, err := deserializeProperties(schema.Properties, primaryKeysSet)
+	if err != nil {
+		return nil, err
+	}
+
+	// ordering needs to same as in schema
 	var primaryKeyFields []*Field
-	v := userSchema[PrimaryKeySchemaName]
-	if list := v.GetListValue(); list != nil {
-		for _, l := range list.GetValues() {
-			f, ok := nameToFieldMapping[l.GetStringValue()]
-			if !ok {
-				return nil, status.Errorf(codes.InvalidArgument, "missing primary key '%s' field in schema", l.GetStringValue())
+	for _, pkeyField := range schema.PrimaryKeys {
+		found := false
+		for _, f := range fields {
+			if f.FieldName == pkeyField {
+				primaryKeyFields = append(primaryKeyFields, f)
+				found = true
 			}
-
-			ptrTrue := true
-			f.PrimaryKeyField = &ptrTrue
-
-			primaryKeyFields = append(primaryKeyFields, f)
+		}
+		if !found {
+			return nil, errors.InvalidArgument("missing primary key '%s' field in schema", pkeyField)
 		}
 	}
 
-	return NewCollection(database, collection, fields, primaryKeyFields), nil
+	return &Factory{
+		Fields: fields,
+		Indexes: &Indexes{
+			PrimaryKey: &Index{
+				Name:   PrimaryKeyIndexName,
+				Fields: primaryKeyFields,
+			},
+		},
+		Name:           collection,
+		Schema:         reqSchema,
+		CollectionType: cType,
+	}, nil
 }
 
-func ExtractKeysFromSchema(userSchema map[string]*structpb.Value) ([]*Field, error) {
-	var keys []*Field
-	v := userSchema[PrimaryKeySchemaName]
-	if list := v.GetListValue(); list != nil {
-		for _, l := range list.GetValues() {
-			keys = append(keys, NewField(l.GetStringValue(), stringDef, true))
-		}
-		return keys, nil
-	} else {
-		return nil, fmt.Errorf("not compatible keys")
+func setPrimaryKey(reqSchema jsoniter.RawMessage, format string, ifMissing bool) (jsoniter.RawMessage, error) {
+	var schema map[string]interface{}
+	if err := jsoniter.Unmarshal(reqSchema, &schema); err != nil {
+		return nil, err
 	}
+
+	if _, ok := schema[PrimaryKeySchemaK]; ifMissing && ok {
+		// primary key exists, no need to do anything.
+		return reqSchema, nil
+	}
+
+	schema[PrimaryKeySchemaK] = []string{AutoPrimaryKeyF}
+	if p, ok := schema["properties"]; ok {
+		propertiesMap, ok := p.(map[string]interface{})
+		if !ok {
+			return nil, errors.InvalidArgument("properties object is invalid")
+		}
+
+		if _, ok = propertiesMap[AutoPrimaryKeyF]; !ifMissing || !ok {
+			propertiesMap[AutoPrimaryKeyF] = map[string]interface{}{
+				"type":         jsonSpecString,
+				"format":       format,
+				"autoGenerate": true,
+			}
+		}
+	}
+
+	return jsoniter.Marshal(schema)
 }
 
-func StorageName(databaseName, collectionName string) string {
-	return fmt.Sprintf("%s.%s", databaseName, collectionName)
+func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet container.HashSet) ([]*Field, error) {
+	var fields []*Field
+	var err error
+	err = jsonparser.ObjectEach(properties, func(key []byte, v []byte, dataType jsonparser.ValueType, offset int) error {
+		if err != nil {
+			return errors.Internal(fmt.Errorf("failed to iterate on user schema: %w", err).Error())
+		}
+
+		var builder FieldBuilder
+		if err = builder.Validate(v); err != nil {
+			// builder validates against the supported schema attributes on properties
+			return err
+		}
+
+		// set field name and try to unmarshal the value into field builder
+		builder.FieldName = string(key)
+		if err = jsoniter.Unmarshal(v, &builder); err != nil {
+			return errors.Internal(err.Error())
+		}
+		if builder.Type == jsonSpecArray && builder.Items == nil {
+			return errors.InvalidArgument("missing items for array field")
+		}
+
+		if builder.Items != nil {
+			// for arrays, items must be set, and it is possible that item type is object in that case deserialize those
+			// fields
+			var nestedFields []*Field
+			if len(builder.Items.Properties) > 0 {
+				if nestedFields, err = deserializeProperties(builder.Items.Properties, primaryKeysSet); err != nil {
+					return err
+				}
+				builder.Fields = nestedFields
+			} else {
+				// if it is simple item type
+				var f *Field
+				if f, err = builder.Items.Build(true); err != nil {
+					return err
+				}
+				builder.Fields = append(nestedFields, f)
+			}
+		}
+
+		// for objects, properties are part of the field definitions in that case deserialize those
+		// nested fields
+		if len(builder.Properties) > 0 {
+			var nestedFields []*Field
+			if nestedFields, err = deserializeProperties(builder.Properties, primaryKeysSet); err != nil {
+				return err
+			}
+			builder.Fields = nestedFields
+		}
+		if primaryKeysSet.Contains(builder.FieldName) {
+			boolTrue := true
+			builder.Primary = &boolTrue
+		}
+
+		var f *Field
+		f, err = builder.Build(false)
+		if err != nil {
+			return err
+		}
+		fields = append(fields, f)
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return fields, nil
 }

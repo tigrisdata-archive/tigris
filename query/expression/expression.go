@@ -16,11 +16,10 @@ package expression
 
 import (
 	"fmt"
-	"github.com/tigrisdata/tigrisdb/value"
 
 	jsoniter "github.com/json-iterator/go"
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"google.golang.org/grpc/codes"
+	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/value"
 )
 
 // Expr can be any operator, filter, field literal, etc. It is useful for parsing complex grammar, it can be nested.
@@ -35,14 +34,14 @@ func Unmarshal(input jsoniter.RawMessage, objCb func(jsoniter.RawMessage) (Expr,
 
 	switch next {
 	case jsoniter.StringValue:
-		return value.NewStringValue(iter.ReadString()), nil
+		return value.NewStringValue(iter.ReadString(), nil), nil
 	case jsoniter.NumberValue:
 		number := iter.ReadNumber()
 		if i, err := number.Int64(); err == nil {
 			return value.NewIntValue(i), nil
 		}
 		if i, err := number.Float64(); err == nil {
-			return value.NewDoubleValue(i), nil
+			return value.NewDoubleUsingFloat(i), nil
 		}
 		return nil, fmt.Errorf("not able to decode number")
 	case jsoniter.BoolValue:
@@ -52,10 +51,10 @@ func Unmarshal(input jsoniter.RawMessage, objCb func(jsoniter.RawMessage) (Expr,
 	case jsoniter.ObjectValue:
 		return objCb(input)
 	case jsoniter.NilValue:
-		return nil, api.Errorf(codes.InvalidArgument, "null is not a valid expression")
+		return nil, errors.InvalidArgument("null is not a valid expression")
 	}
 
-	return nil, api.Errorf(codes.InvalidArgument, "not a valid expression")
+	return nil, errors.InvalidArgument("not a valid expression")
 }
 
 func UnmarshalArray(input jsoniter.RawMessage, objCb func(jsoniter.RawMessage) (Expr, error)) ([]Expr, error) {
@@ -73,7 +72,7 @@ func UnmarshalArray(input jsoniter.RawMessage, objCb func(jsoniter.RawMessage) (
 		}
 
 		if e == nil {
-			return nil, api.Errorf(codes.InvalidArgument, "empty object detected")
+			return nil, errors.InvalidArgument("empty object detected")
 		}
 
 		expr = append(expr, e)

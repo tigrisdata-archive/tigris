@@ -16,8 +16,6 @@ package filter
 
 import (
 	"fmt"
-
-	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type LogicalOP string
@@ -67,11 +65,20 @@ func (a *AndFilter) Type() LogicalOP {
 	return AndOP
 }
 
-
 // Matches returns true if the input doc matches this filter.
-func (a *AndFilter) Matches(doc *structpb.Struct) bool {
+func (a *AndFilter) Matches(doc []byte) bool {
 	for _, f := range a.filter {
 		if !f.Matches(doc) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (a *AndFilter) MatchesDoc(doc map[string]interface{}) bool {
+	for _, f := range a.filter {
+		if !f.MatchesDoc(doc) {
 			return false
 		}
 	}
@@ -91,6 +98,57 @@ func (a *AndFilter) String() string {
 		str += fmt.Sprintf("%s", f)
 	}
 	return str + "}"
+}
+
+func (a *AndFilter) ToSearchFilter() []string {
+	var selectors []*Selector
+	var logical []Filter
+	for _, f := range a.filter {
+		if s, ok := f.(*Selector); ok {
+			selectors = append(selectors, s)
+		} else {
+			logical = append(logical, f)
+		}
+	}
+
+	var str string
+	for i, s := range selectors {
+		// first "&&" all selectors
+		if i != 0 {
+			str += "&&"
+		}
+		str += s.ToSearchFilter()[0]
+	}
+
+	var flattened []string
+	if len(logical) > 0 {
+		flattened = a.flattenAnd(str, logical)
+	}
+	if len(flattened) == 0 {
+		flattened = append(flattened, str)
+	}
+	return flattened
+}
+
+func (a *AndFilter) flattenAnd(soFar string, filters []Filter) []string {
+	var combs []string
+
+	for _, e := range filters[0].ToSearchFilter() {
+		var temp = soFar
+		if len(temp) > 0 {
+			temp = temp + "&&" + e
+		} else {
+			temp = e
+		}
+
+		if len(filters) > 1 {
+			combs = append(combs, a.flattenAnd(temp, filters[1:])...)
+		} else {
+			combs = append(combs, temp)
+		}
+	}
+
+	return combs
 }
 
 // OrFilter performs a logical OR operation on an array of two or more expressions. The or filter looks like this,
@@ -125,9 +183,19 @@ func (o *OrFilter) Type() LogicalOP {
 }
 
 // Matches returns true if the input doc matches this filter.
-func (o *OrFilter) Matches(doc *structpb.Struct) bool {
+func (o *OrFilter) Matches(doc []byte) bool {
 	for _, f := range o.filter {
 		if f.Matches(doc) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (o *OrFilter) MatchesDoc(doc map[string]interface{}) bool {
+	for _, f := range o.filter {
+		if f.MatchesDoc(doc) {
 			return true
 		}
 	}
@@ -138,6 +206,14 @@ func (o *OrFilter) Matches(doc *structpb.Struct) bool {
 // GetFilters returns all the nested filters for OrFilter
 func (o *OrFilter) GetFilters() []Filter {
 	return o.filter
+}
+
+func (o *OrFilter) ToSearchFilter() []string {
+	var ORs []string
+	for _, f := range o.filter {
+		ORs = append(ORs, f.ToSearchFilter()...)
+	}
+	return ORs
 }
 
 // String a helpful method for logging.

@@ -15,7 +15,7 @@
 package config
 
 import (
-	"github.com/tigrisdata/tigrisdb/server/config"
+	"github.com/tigrisdata/tigris/server/config"
 )
 
 func GetBaseURL() string {
@@ -25,4 +25,13 @@ func GetBaseURL() string {
 		return "http://tigris_server:8081"
 	}
 	return "http://localhost:8081"
+}
+
+func GetBaseURL2() string {
+	config.LoadEnvironment()
+
+	if config.GetEnvironment() == config.EnvTest {
+		return "http://tigris_server2:8081"
+	}
+	return "http://localhost:8082"
 }

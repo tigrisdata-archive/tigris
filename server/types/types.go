@@ -14,6 +14,10 @@
 
 package types
 
+import (
+	"os"
+)
+
 type ContentType string
 
 const (
@@ -21,7 +25,6 @@ const (
 	STREAMING ContentType = "application/x-json-stream; charset=utf-8"
 )
 
-const (
-	GRPCServer = "GRPC"
-	HTTPServer = "http"
+var (
+	MyOrigin, _ = os.Hostname()
 )

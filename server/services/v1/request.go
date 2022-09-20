@@ -15,24 +15,47 @@
 package v1
 
 import (
-	api "github.com/tigrisdata/tigrisdb/api/server/v1"
-	"github.com/tigrisdata/tigrisdb/schema"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/internal"
+)
+
+const (
+	InsertedStatus  string = "inserted"
+	ReplacedStatus  string = "replaced"
+	UpdatedStatus   string = "updated"
+	DeletedStatus   string = "deleted"
+	CreatedStatus   string = "created"
+	DroppedStatus   string = "dropped"
+	PublishedStatus string = "published"
 )
 
 // Streaming is a wrapper interface for passing around for streaming reads
 type Streaming interface {
-	api.TigrisDB_ReadServer
+	api.Tigris_ReadServer
 }
 
-// Request is a wrapper on api.Request.
-type Request struct {
-	apiRequest  api.Request
-	collection  schema.Collection
-	documents   [][]byte
-	queryRunner QueryRunner
+type SearchStreaming interface {
+	api.Tigris_SearchServer
+}
+
+type SubscribeStreaming interface {
+	api.Tigris_SubscribeServer
+}
+
+// ReqOptions are options used by queryLifecycle to execute a query
+type ReqOptions struct {
+	txCtx              *api.TransactionCtx
+	metadataChange     bool
+	instantVerTracking bool
 }
 
 // Response is a wrapper on api.Response
 type Response struct {
 	api.Response
+	status        string
+	createdAt     *internal.Timestamp
+	updatedAt     *internal.Timestamp
+	deletedAt     *internal.Timestamp
+	modifiedCount int32
+	allKeys       [][]byte
 }

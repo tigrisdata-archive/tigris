@@ -18,46 +18,90 @@ package server
 
 import (
 	"fmt"
-	"github.com/tigrisdata/tigrisdb/test/config"
-	"gopkg.in/gavv/httpexpect.v1"
 	"net/http"
 	"testing"
 
-	"github.com/stretchr/testify/suite"
+	"github.com/stretchr/testify/require"
+	api "github.com/tigrisdata/tigris/api/server/v1"
+	"gopkg.in/gavv/httpexpect.v1"
 )
 
-type DatabaseSuite struct {
-	suite.Suite
-}
-
 func getDatabaseURL(databaseName string, methodName string) string {
-	return fmt.Sprintf("/api/v1/databases/%s/%s", databaseName, methodName)
+	return fmt.Sprintf("/v1/databases/%s/%s", databaseName, methodName)
 }
 
-func (s *DatabaseSuite) TestCreateDatabase() {
-	resp := createDatabase(s.T(), "test_db")
+func beginTransactionURL(databaseName string) string {
+	return fmt.Sprintf("/v1/databases/%s/transactions/begin", databaseName)
+}
+
+func TestCreateDatabase(t *testing.T) {
+	resp := createDatabase(t, "test_db")
 	resp.Status(http.StatusOK).
 		JSON().
 		Object().
-		ValueEqual("msg", "database created successfully")
+		ValueEqual("message", "database created successfully")
 }
 
-func (s *DatabaseSuite) TestDropDatabase() {
-	resp := dropDatabase(s.T(), "test_db")
+func TestCreateDatabaseInvalidName(t *testing.T) {
+	invalidDbNames := []string{"", "1test-db", "test-db", "$testdb", "testdb$", "test$db", "abstract", "yield"}
+	for _, name := range invalidDbNames {
+		resp := createDatabase(t, name)
+		resp.Status(http.StatusBadRequest).
+			JSON().
+			Path("$.error").
+			Object().
+			ValueEqual("message", "invalid database name")
+	}
+}
+
+func TestBeginTransaction(t *testing.T) {
+	resp := beginTransaction(t, "test_db")
+	cookieVal := resp.Cookie("Tigris-Tx-Id").Value()
+	require.NotNil(t, t, cookieVal)
+}
+
+func TestDescribeDatabase(t *testing.T) {
+	createCollection(t, "test_db", "test_collection", testCreateSchema).Status(http.StatusOK)
+	resp := describeDatabase(t, "test_db")
 	resp.Status(http.StatusOK).
 		JSON().
 		Object().
-		ValueEqual("msg", "database dropped successfully")
+		ValueEqual("db", "test_db").
+		ValueEqual("size", 0)
+}
+
+func TestDropDatabase_NotFound(t *testing.T) {
+	resp := dropDatabase(t, "test_drop_db_not_found")
+	testError(resp, http.StatusNotFound, api.Code_NOT_FOUND, "database doesn't exist 'test_drop_db_not_found'")
+}
+
+func TestDropDatabase(t *testing.T) {
+	resp := dropDatabase(t, "test_db")
+	resp.Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("message", "database dropped successfully")
 }
 
 func createDatabase(t *testing.T, databaseName string) *httpexpect.Response {
-	e := httpexpect.New(t, config.GetBaseURL())
+	e := expect(t)
 	return e.POST(getDatabaseURL(databaseName, "create")).
 		Expect()
 }
 
+func beginTransaction(t *testing.T, databaseName string) *httpexpect.Response {
+	e := expect(t)
+	return e.POST(beginTransactionURL(databaseName)).
+		Expect()
+}
+
 func dropDatabase(t *testing.T, databaseName string) *httpexpect.Response {
-	e := httpexpect.New(t, config.GetBaseURL())
+	e := expect(t)
 	return e.DELETE(getDatabaseURL(databaseName, "drop")).
 		Expect()
+}
+
+func describeDatabase(t *testing.T, databaseName string) *httpexpect.Response {
+	e := expect(t)
+	return e.POST(getDatabaseURL(databaseName, "describe")).Expect()
 }
