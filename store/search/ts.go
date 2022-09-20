@@ -21,6 +21,8 @@ import (
 	"io"
 	"net/http"
 
+	"bytes"
+
 	jsoniter "github.com/json-iterator/go"
 	qsearch "github.com/tigrisdata/tigris/query/search"
 	"github.com/tigrisdata/tigris/server/metrics"
@@ -36,6 +38,8 @@ type storeImpl struct {
 type storeImplWithMetrics struct {
 	s Store
 }
+
+const StreamContentType = "application/x-json-stream"
 
 func (m *storeImplWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
 	// Low level measurement wrapper that is called by the measure functions on the appropriate receiver
@@ -210,14 +214,23 @@ func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query
 		})
 	}
 
-	res, err := s.client.MultiSearch.Perform(&tsApi.MultiSearchParams{}, tsApi.MultiSearchSearchesParameter{
+	res, err := s.client.MultiSearch.PerformWithContentType(&tsApi.MultiSearchParams{}, tsApi.MultiSearchSearchesParameter{
 		Searches: params,
-	})
+	}, StreamContentType)
 	if err != nil {
 		return nil, s.convertToInternalError(err)
 	}
 
-	return res.Results, nil
+	reader := bytes.NewReader(res.Body)
+	decoder := jsoniter.NewDecoder(reader)
+	decoder.UseNumber()
+
+	var dest tsApi.MultiSearchResult
+	if err := decoder.Decode(&dest); err != nil {
+		return nil, s.convertToInternalError(err)
+	}
+
+	return dest.Results, nil
 }
 
 func (s *storeImpl) CreateCollection(_ context.Context, schema *tsApi.CollectionSchema) error {

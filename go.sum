@@ -887,8 +887,8 @@ github.com/tv42/httpunix v0.0.0-20150427012821-b75d8614f926/go.mod h1:9ESjWnEqri
 github.com/twitchtv/twirp v8.1.1+incompatible/go.mod h1:RRJoFSAmTEh2weEqWtpPE3vFK5YBhA6bqp2l1kfCC5A=
 github.com/twmb/murmur3 v1.1.6 h1:mqrRot1BRxm+Yct+vavLMou2/iJt0tNVTTC0QoIjaZg=
 github.com/twmb/murmur3 v1.1.6/go.mod h1:Qq/R7NUyOfr65zD+6Q5IHKsJLwP7exErjN6lyyq3OSQ=
-github.com/typesense/typesense-go v0.6.0 h1:QcQ+1WGqFDyBhjP7Cd8mj7cs00zFTs6uBrB2u6we78o=
-github.com/typesense/typesense-go v0.6.0/go.mod h1:F9T3neLDqRr9ufFNhv1y0Qxe1Zs1GT85JlgijSjtKFo=
+github.com/typesense/typesense-go v0.6.1 h1:LPzh+HG6O4eaLqcFCux9N61c4+OiJIbdeJOs6trPd5w=
+github.com/typesense/typesense-go v0.6.1/go.mod h1:F9T3neLDqRr9ufFNhv1y0Qxe1Zs1GT85JlgijSjtKFo=
 github.com/uber-go/tally v3.5.0+incompatible h1:2vIkqVrSaspifqcJh2yQjQqqpfavvmfj/ognDrBxuSg=
 github.com/uber-go/tally v3.5.0+incompatible/go.mod h1:YDTIBxdXyOU/sCWilKB4bgyufu1cEi0jdVnRdxvjnmU=
 github.com/ugorji/go v1.1.7/go.mod h1:kZn38zHttfInRq0xu/PH0az30d+z6vm202qpg1oXVMw=

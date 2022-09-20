@@ -19,6 +19,8 @@ import (
 	"testing"
 	"time"
 
+	"bytes"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/tigrisdata/tigris/lib/date"
 	"github.com/tigrisdata/tigris/query/sort"
@@ -251,7 +253,9 @@ func TestSortedHits(t *testing.T) {
 			for _, expectedId := range tc.expectedOrder {
 				hit, err := pq.Get()
 				assert.NoError(t, err)
-				assert.Equal(t, expectedId, hit.Document["id"])
+				docId, err := hit.Document["id"].(json.Number).Float64()
+				assert.NoError(t, err)
+				assert.Equal(t, expectedId, docId)
 			}
 		})
 	}
@@ -434,8 +438,12 @@ func generateTsHits(docs ...document) []tsApi.SearchResultHit {
 	var hits []tsApi.SearchResultHit
 	for _, doc := range docs {
 		encoded, _ := json.Marshal(doc)
+		reader := bytes.NewReader(encoded)
+		decoder := json.NewDecoder(reader)
+		decoder.UseNumber()
 		var decoded map[string]interface{}
-		_ = json.Unmarshal(encoded, &decoded)
+		_ = decoder.Decode(&decoded)
+		//_ = json.Unmarshal(encoded, &decoded)
 		score := doc["_text_match"].(int64)
 		hits = append(hits, tsApi.SearchResultHit{
 			Document:  &decoded,
