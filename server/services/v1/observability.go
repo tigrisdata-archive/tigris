@@ -145,7 +145,8 @@ func (dd Datadog) QueryTimeSeriesMetrics(ctx context.Context, req *api.QueryTime
 			}
 			return &result, nil
 		} else {
-			return nil, errors.Internal("Unexpected remote response: reason = 0 series returned")
+			log.Debug().Msg("Unexpected remote response: reason = 0 series returned")
+			return &result, nil
 		}
 	} else if resp.StatusCode == 429 {
 		log.Warn().Str(RateLimitLimit, resp.Header.Get(RateLimitLimit)).Str(RateLimitPeriod, resp.Header.Get(RateLimitPeriod)).Str(RateLimitRemaining, resp.Header.Get(RateLimitRemaining)).Str(RateLimitReset, resp.Header.Get(RateLimitReset)).Str(RateLimitName, resp.Header.Get(RateLimitName)).Msgf("Datadog rate-limit hit")
