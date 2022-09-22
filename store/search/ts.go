@@ -15,13 +15,12 @@
 package search
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-
-	"bytes"
 
 	jsoniter "github.com/json-iterator/go"
 	qsearch "github.com/tigrisdata/tigris/query/search"

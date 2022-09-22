@@ -15,11 +15,10 @@
 package filter
 
 import (
+	"encoding/json"
 	"fmt"
 
 	api "github.com/tigrisdata/tigris/api/server/v1"
-
-	"encoding/json"
 
 	"github.com/buger/jsonparser"
 	"github.com/tigrisdata/tigris/lib/date"
@@ -68,6 +67,7 @@ func (s *Selector) MatchesDoc(doc map[string]interface{}) bool {
 			return true
 		}
 	case schema.DoubleType:
+		// this method is only used with indexing store and it returns `json.Number` for all numeric types
 		var err error
 		val, err = value.NewDoubleValue(v.(json.Number).String())
 		if ulog.E(err) {
