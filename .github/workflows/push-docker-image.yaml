@@ -74,3 +74,15 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: report image
+        uses: codefresh-io/codefresh-report-image@latest
+        with:
+          CF_RUNTIME_NAME: "codefresh-dev"
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          CF_IMAGE: "tigrisdata/tigris:main"
+          CF_CONTAINER_REGISTRY_INTEGRATION: "tigrisdata-dockerhub"
+          CF_GIT_BRANCH: "main"
+          CF_GITHUB_TOKEN: ${{ secrets.CF_GITHUB_ACCESS_TOKEN }}
+          # CF_JIRA_PROJECT_PREFIX: '[jira-project-prefix]'
+          # CF_JIRA_MESSAGE: '[issue-id]'
