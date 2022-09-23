@@ -47,7 +47,7 @@ func getSessionErrorTagKeys() []string {
 		"env",
 		"db",
 		"collection",
-		"error_code",
+		"error_source",
 		"error_value",
 		"session_method",
 	}
