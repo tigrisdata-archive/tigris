@@ -45,7 +45,7 @@ func getAuthErrorTagKeys() []string {
 		"version",
 		"tigris_tenant",
 		"error_source",
-		"error_code",
+		"error_value",
 	}
 }
 
