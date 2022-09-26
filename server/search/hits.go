@@ -15,8 +15,11 @@
 package search
 
 import (
+	"encoding/json"
+
 	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/query/sort"
+	ulog "github.com/tigrisdata/tigris/util/log"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
@@ -130,8 +133,17 @@ func hitsComparator(this, that *Hit, sortingOrder *sort.Ordering) int {
 		var thisV, thatV float64
 
 		switch thisVal.(type) {
-		case float32, float64, int, int64:
-			thisV, thatV = thisVal.(float64), thatVal.(float64)
+		case json.Number:
+			var err error
+			thisV, err = thisVal.(json.Number).Float64()
+			// log the number conversion error and continue to next comparison
+			if ulog.E(err) {
+				continue
+			}
+			thatV, err = thatVal.(json.Number).Float64()
+			if ulog.E(err) {
+				continue
+			}
 		case bool:
 			if thisVal.(bool) {
 				thisV = 1

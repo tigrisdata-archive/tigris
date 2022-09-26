@@ -244,24 +244,26 @@ func TestUnpackSearchFields(t *testing.T) {
 	t.Run("created_at metadata gets populated", func(t *testing.T) {
 		doc := map[string]any{
 			"id":         "123",
-			"created_at": float64(1666054267528106000),
+			"created_at": json.Number("1666054267528106000"),
 		}
 		_, td, unpacked, err := UnpackSearchFields(doc, emptyColl)
 		require.NoError(t, err)
 		require.Empty(t, unpacked)
-		require.Equal(t, doc["created_at"], float64(td.CreatedAt.UnixNano()))
+		expected, _ := doc["created_at"].(json.Number).Int64()
+		require.Equal(t, expected, td.CreatedAt.UnixNano())
 		require.Nil(t, td.UpdatedAt)
 	})
 
 	t.Run("updated_at metadata gets populated", func(t *testing.T) {
 		doc := map[string]any{
 			"id":         "123",
-			"updated_at": float64(1666054267528106000),
+			"updated_at": json.Number("1666054267528106000"),
 		}
 		_, td, unpacked, err := UnpackSearchFields(doc, emptyColl)
 		require.NoError(t, err)
 		require.Empty(t, unpacked)
-		require.Equal(t, doc["updated_at"], float64(td.UpdatedAt.UnixNano()))
+		expected, _ := doc["updated_at"].(json.Number).Int64()
+		require.Equal(t, expected, td.UpdatedAt.UnixNano())
 		require.Nil(t, td.CreatedAt)
 	})
 

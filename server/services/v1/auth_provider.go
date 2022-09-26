@@ -246,10 +246,14 @@ func (a *Auth0) ListApplications(ctx context.Context, _ *api.ListApplicationsReq
 		return nil, errors.Internal("Failed to list applications: reason = %s", err.Error())
 	}
 
+	currentNamespace, err := request.GetNamespace(ctx)
+	if err != nil {
+		return nil, errors.Internal("Failed to list applications: reason = %s", err.Error())
+	}
 	var apps []*api.Application
 	for _, client := range appList.Clients {
-		// filter for this user's apps
-		if client.GetClientMetadata()[createdBy] == currentSub {
+		// filter for this user's apps for this tenant
+		if client.GetClientMetadata()[createdBy] == currentSub && client.GetClientMetadata()[tigrisNamespace] == currentNamespace {
 			app := &api.Application{
 				Name:        client.GetName(),
 				Description: client.GetDescription(),

@@ -42,7 +42,7 @@ const (
 )
 
 var (
-	adminMethods = container.NewHashSet("/tigrisdata.management.v1.Management/createNamespace", "/tigrisdata.management.v1.Management/listNamespaces")
+	adminMethods = container.NewHashSet("/tigrisdata.management.v1.Management/CreateNamespace", "/tigrisdata.management.v1.Management/ListNamespaces")
 )
 
 type RequestMetadataCtxKey struct {
