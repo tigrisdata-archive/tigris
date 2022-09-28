@@ -198,13 +198,15 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		require.Equal(t, "name", coll.Fields[5].Fields[0].FieldName)
 
 		require.Equal(t, "product_items", coll.Fields[6].FieldName)
-		require.Equal(t, 3, len(coll.Fields[6].Fields))
-		require.Equal(t, Int64Type, coll.Fields[6].Fields[0].DataType)
-		require.Equal(t, "id", coll.Fields[6].Fields[0].FieldName)
-		require.Equal(t, StringType, coll.Fields[6].Fields[1].DataType)
-		require.Equal(t, "item_name", coll.Fields[6].Fields[1].FieldName)
-		require.Equal(t, ArrayType, coll.Fields[6].Fields[2].DataType)
-		require.Equal(t, "nested_array", coll.Fields[6].Fields[2].FieldName)
+		require.Equal(t, ArrayType, coll.Fields[6].DataType)
+		require.Equal(t, 1, len(coll.Fields[6].Fields))
+		require.Equal(t, ObjectType, coll.Fields[6].Fields[0].DataType)
+		require.Equal(t, Int64Type, coll.Fields[6].Fields[0].Fields[0].DataType)
+		require.Equal(t, "id", coll.Fields[6].Fields[0].Fields[0].FieldName)
+		require.Equal(t, StringType, coll.Fields[6].Fields[0].Fields[1].DataType)
+		require.Equal(t, "item_name", coll.Fields[6].Fields[0].Fields[1].FieldName)
+		require.Equal(t, ArrayType, coll.Fields[6].Fields[0].Fields[2].DataType)
+		require.Equal(t, "nested_array", coll.Fields[6].Fields[0].Fields[2].FieldName)
 	})
 	t.Run("test_array_missing_items_error", func(t *testing.T) {
 		schema := []byte(`{

@@ -37,76 +37,79 @@ var (
 type Map map[string]interface{}
 type Doc Map
 
-var testCreateSchema = map[string]interface{}{
-	"schema": map[string]interface{}{
+var testCreateSchema = Map{
+	"schema": Map{
 		"title":       testCollection,
 		"description": "this schema is for integration tests",
-		"properties": map[string]interface{}{
-			"pkey_int": map[string]interface{}{
+		"properties": Map{
+			"pkey_int": Map{
 				"description": "primary key field",
 				"type":        "integer",
 			},
-			"int_value": map[string]interface{}{
+			"int_value": Map{
 				"description": "simple int field",
 				"type":        "integer",
 			},
-			"string_value": map[string]interface{}{
+			"string_value": Map{
 				"description": "simple string field",
 				"type":        "string",
 				"maxLength":   128,
 			},
-			"added_string_value": map[string]interface{}{
+			"added_string_value": Map{
 				"description": "simple string field",
 				"type":        "string",
 			},
-			"bool_value": map[string]interface{}{
+			"bool_value": Map{
 				"description": "simple boolean field",
 				"type":        "boolean",
 			},
-			"double_value": map[string]interface{}{
+			"double_value": Map{
 				"description": "simple double field",
 				"type":        "number",
 			},
-			"added_value_double": map[string]interface{}{
+			"added_value_double": Map{
 				"description": "simple double field",
 				"type":        "number",
 			},
-			"bytes_value": map[string]interface{}{
+			"bytes_value": Map{
 				"description": "simple bytes field",
 				"type":        "string",
 				"format":      "byte",
 			},
-			"uuid_value": map[string]interface{}{
+			"uuid_value": Map{
 				"description": "uuid field",
 				"type":        "string",
 				"format":      "uuid",
 			},
-			"date_time_value": map[string]interface{}{
+			"date_time_value": Map{
 				"description": "date time field",
 				"type":        "string",
 				"format":      "date-time",
 			},
-			"array_value": map[string]interface{}{
+			"array_value": Map{
 				"description": "array field",
 				"type":        "array",
-				"items": map[string]interface{}{
+				"items": Map{
 					"type": "object",
-					"properties": map[string]interface{}{
-						"id": map[string]interface{}{
+					"properties": Map{
+						"id": Map{
 							"type": "integer",
 						},
-						"product": map[string]interface{}{
+						"product": Map{
 							"type": "string",
 						},
 					},
 				},
 			},
-			"object_value": map[string]interface{}{
+			"object_value": Map{
 				"description": "object field",
 				"type":        "object",
-				"properties": map[string]interface{}{
-					"name": map[string]interface{}{
+				"properties": Map{
+					"name": Map{
 						"type": "string",
+					},
+					"bignumber": Map{
+						"type": "integer",
 					},
 				},
 			},
