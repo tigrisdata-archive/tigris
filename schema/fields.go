@@ -379,6 +379,16 @@ func (f *Field) IsCompatible(f1 *Field) error {
 	return nil
 }
 
+func (f *Field) GetNestedField(name string) *Field {
+	for _, r := range f.Fields {
+		if r.FieldName == name {
+			return r
+		}
+	}
+
+	return nil
+}
+
 type QueryableField struct {
 	FieldName     string
 	InMemoryAlias string

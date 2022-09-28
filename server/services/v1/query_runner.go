@@ -15,13 +15,13 @@
 package v1
 
 import (
-	"bytes"
 	"context"
 	"math"
 	"math/rand"
 	"time"
 
-	jsoniter "github.com/json-iterator/go"
+	"github.com/tigrisdata/tigris/lib/json"
+
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
@@ -222,7 +222,8 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 	var ts = internal.NewTimestamp()
 	var allKeys [][]byte
 	for _, doc := range documents {
-		err = runner.validate(coll, doc)
+		// reset it back to doc
+		doc, err = runner.mutateAndValidatePayload(coll, doc)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -256,24 +257,42 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 	return ts, allKeys, err
 }
 
-func (runner *BaseQueryRunner) validate(coll *schema.DefaultCollection, doc []byte) error {
-	var deserializedDoc map[string]interface{}
-	dec := jsoniter.NewDecoder(bytes.NewReader(doc))
-	dec.UseNumber()
-	if err := dec.Decode(&deserializedDoc); ulog.E(err) {
-		return err
+func (runner *BaseQueryRunner) mutateAndValidatePayload(coll *schema.DefaultCollection, doc []byte) ([]byte, error) {
+	deserializedDoc, err := json.Decode(doc)
+	if ulog.E(err) {
+		return doc, err
 	}
+
+	var nulls []string
 	for k, v := range deserializedDoc {
 		// for schema validation, if the field is set to null, remove it.
 		if v == nil {
+			// nulls will be added back if we need to serialize the payload again.
+			nulls = append(nulls, k)
 			delete(deserializedDoc, k)
 		}
 	}
+
+	p := newPayloadMutator(coll)
+	// this will mutate map, so we need to serialize this map again
+	if err := p.convertStringToInt64(deserializedDoc); err != nil {
+		return doc, err
+	}
+
 	if err := coll.Validate(deserializedDoc); err != nil {
 		// schema validation failed
-		return err
+		return doc, err
 	}
-	return nil
+
+	if p.isMutated() {
+		for _, n := range nulls {
+			deserializedDoc[n] = nil
+		}
+
+		return json.Encode(deserializedDoc)
+	}
+
+	return doc, nil
 }
 
 func (runner *BaseQueryRunner) buildKeysUsingFilter(tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection,
@@ -1159,7 +1178,7 @@ func (runner *PublishQueryRunner) publish(ctx context.Context, tx transaction.Tx
 	var keyOffset int64
 	ts := internal.NewTimestamp()
 	for _, doc := range messages {
-		err = runner.validate(coll, doc)
+		doc, err = runner.mutateAndValidatePayload(coll, doc)
 		if err != nil {
 			return nil, nil, err
 		}

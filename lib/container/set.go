@@ -28,6 +28,10 @@ func NewHashSet(s ...string) HashSet {
 	return set
 }
 
+func (set *HashSet) Length() int {
+	return len(set.stringMap)
+}
+
 func (set *HashSet) Insert(s ...string) {
 	for _, ss := range s {
 		set.stringMap[ss] = struct{}{}
