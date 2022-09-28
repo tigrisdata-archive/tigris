@@ -59,6 +59,9 @@ type DefaultCollection struct {
 	QueryableFields []*QueryableField
 	// CollectionType is the type of the collection. Only two types of collections are supported "messages" and "documents"
 	CollectionType CollectionType
+	// Track all the int64 paths in the collection. For example, if top level object has a int64 field then key would be
+	// obj.fieldName so that caller can easily navigate to this field.
+	Int64FieldsPath map[string]struct{}
 }
 
 type CollectionType string
@@ -97,7 +100,7 @@ func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionTy
 
 	queryableFields := BuildQueryableFields(fields)
 
-	return &DefaultCollection{
+	d := &DefaultCollection{
 		Id:              id,
 		SchVer:          int32(schVer),
 		Name:            name,
@@ -108,7 +111,13 @@ func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionTy
 		Search:          buildSearchSchema(searchCollectionName, queryableFields),
 		QueryableFields: queryableFields,
 		CollectionType:  ctype,
+		Int64FieldsPath: make(map[string]struct{}),
 	}
+
+	// set paths for int64 fields
+	d.setInt64Fields("", d.Fields)
+
+	return d
 }
 
 func (d *DefaultCollection) GetName() string {
@@ -144,6 +153,16 @@ func (d *DefaultCollection) GetQueryableField(name string) (*QueryableField, err
 	return nil, errors.InvalidArgument("Field `%s` is not present in collection", name)
 }
 
+func (d *DefaultCollection) GetField(name string) *Field {
+	for _, r := range d.Fields {
+		if r.FieldName == name {
+			return r
+		}
+	}
+
+	return nil
+}
+
 // Validate expects an unmarshalled document which it will validate again the schema of this collection.
 func (d *DefaultCollection) Validate(document interface{}) error {
 	err := d.Validator.Validate(document)
@@ -166,6 +185,32 @@ func (d *DefaultCollection) Validate(document interface{}) error {
 
 func (d *DefaultCollection) SearchCollectionName() string {
 	return d.Search.Name
+}
+
+func (d *DefaultCollection) GetInt64FieldsPath() map[string]struct{} {
+	return d.Int64FieldsPath
+}
+
+func (d *DefaultCollection) setInt64Fields(parent string, fields []*Field) {
+	for _, f := range fields {
+		if len(f.Fields) > 0 {
+			d.setInt64Fields(buildPath(parent, f.FieldName), f.Fields)
+		}
+
+		if f.DataType == Int64Type {
+			d.Int64FieldsPath[buildPath(parent, f.FieldName)] = struct{}{}
+		}
+	}
+}
+
+func buildPath(parent string, field string) string {
+	if len(parent) > 0 && len(field) > 0 {
+		return parent + "." + field
+	} else if len(parent) > 0 {
+		return parent
+	} else {
+		return field
+	}
 }
 
 func GetSearchDeltaFields(existingFields []*QueryableField, incomingFields []*Field) []tsApi.Field {

@@ -241,10 +241,15 @@ func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet contai
 			// fields
 			var nestedFields []*Field
 			if len(builder.Items.Properties) > 0 {
+				builder.Fields = []*Field{
+					{
+						DataType: ObjectType,
+					},
+				}
 				if nestedFields, err = deserializeProperties(builder.Items.Properties, primaryKeysSet); err != nil {
 					return err
 				}
-				builder.Fields = nestedFields
+				builder.Fields[0].Fields = nestedFields
 			} else {
 				// if it is simple item type
 				var f *Field

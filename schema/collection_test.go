@@ -386,3 +386,63 @@ func TestCollection_Object(t *testing.T) {
 		require.NoError(t, coll.Validate(v))
 	}
 }
+
+func TestCollection_Int64(t *testing.T) {
+	reqSchema := []byte(`{
+		"title": "t1",
+		"properties": {
+			"id": {
+				"type": "integer"
+			},
+			"simple_object": {
+				"type": "object"
+			},
+			"nested_object": {
+				"type": "object",
+				"properties": {
+					"name": { "type": "string" },
+					"obj": {
+						"type": "object",
+						"properties": {
+							"intField": { "type": "integer" }
+						}
+					}
+				}
+			},
+			"array_items": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"properties": {
+						"id": {
+							"type": "integer"
+						},
+						"item_name": {
+							"type": "string"
+						}
+					}
+				}
+			},
+			"array_simple_items": {
+				"type": "array",
+				"items": {
+					"type": "integer"
+				}
+			}
+		},
+		"primary_key": ["id"]
+	}`)
+
+	schFactory, err := Build("t1", reqSchema)
+	require.NoError(t, err)
+	coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory.Fields, schFactory.Indexes, schFactory.Schema, "t1")
+	require.Equal(t, 4, len(coll.Int64FieldsPath))
+	_, ok := coll.Int64FieldsPath["id"]
+	require.True(t, ok)
+	_, ok = coll.Int64FieldsPath["nested_object.obj.intField"]
+	require.True(t, ok)
+	_, ok = coll.Int64FieldsPath["array_items.id"]
+	require.True(t, ok)
+	_, ok = coll.Int64FieldsPath["array_simple_items"]
+	require.True(t, ok)
+}

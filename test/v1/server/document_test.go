@@ -381,6 +381,57 @@ func TestInsert_SingleRow(t *testing.T) {
 	require.Equal(t, expDoc, actualDoc)
 }
 
+func TestInsert_StringInt64(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	inputDocument := []Doc{
+		{
+			"pkey_int":     "9223372036854775799",
+			"int_value":    "9223372036854775800",
+			"string_value": "simple_insert",
+			"array_value": []Doc{
+				{
+					"id":      "9223372036854775801",
+					"product": "foo",
+				}, {
+					"id":      9223372036854775802,
+					"product": "foo",
+				},
+			},
+			"object_value": Map{
+				"bignumber": "9223372036854775751",
+			},
+		},
+	}
+
+	tstart := time.Now().UTC()
+	expect(t).POST(getDocumentURL(db, coll, "insert")).
+		WithJSON(Map{
+			"documents": inputDocument,
+		}).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("status", "inserted").
+		ValueEqual("keys", []map[string]interface{}{{"pkey_int": 9223372036854775799}}).
+		Path("$.metadata").Object().
+		Value("created_at").String().DateTime(time.RFC3339Nano).InRange(tstart, time.Now().UTC().Add(1*time.Second))
+
+	readResp := readByFilter(t, db, coll, Map{
+		"pkey_int": 9223372036854775799,
+	}, nil, nil)
+
+	var doc map[string]json.RawMessage
+	require.Equal(t, 1, len(readResp))
+	require.NoError(t, json.Unmarshal(readResp[0]["result"], &doc))
+
+	var actualDoc = []byte(doc["data"])
+	expDoc := []byte(`{"pkey_int":9223372036854776000,"int_value":9223372036854776000,"string_value":"simple_insert","array_value":[{"id":9223372036854776000,"product":"foo"},{"id":9223372036854776000,"product":"foo"}],"object_value":{"bignumber":9223372036854776000}}`)
+	require.JSONEq(t, string(expDoc), string(actualDoc))
+}
+
 func TestInsert_MultipleRows(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)
@@ -872,6 +923,67 @@ func TestUpdate_SingleRow(t *testing.T) {
 		})
 }
 
+func TestUpdate_Int64AsString(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	inputDocument := []Doc{
+		{
+			"pkey_int":  100,
+			"int_value": 100,
+		},
+	}
+
+	insertDocuments(t, db, coll, inputDocument, false).
+		Status(http.StatusOK)
+
+	readAndValidate(t,
+		db,
+		coll,
+		Map{
+			"pkey_int": 100,
+		},
+		nil,
+		inputDocument)
+
+	tstart := time.Now().UTC()
+	updateByFilter(t,
+		db,
+		coll,
+		Map{
+			"filter": Map{
+				"pkey_int": 100,
+			},
+		},
+		Map{
+			"fields": Map{
+				"$set": Map{
+					"int_value": "9223372036854775577",
+				},
+			},
+		},
+		nil).Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("modified_count", 1).
+		Path("$.metadata").Object().
+		Value("updated_at").String().DateTime(time.RFC3339Nano).InRange(tstart, time.Now().UTC().Add(1*time.Second))
+
+	readAndValidate(t,
+		db,
+		coll,
+		Map{
+			"pkey_int": 100,
+		},
+		nil,
+		[]Doc{
+			{
+				"pkey_int":  100,
+				"int_value": 9223372036854775577,
+			},
+		})
+}
+
 func TestUpdate_NullField(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)
@@ -988,10 +1100,10 @@ func TestUpdate_SchemaValidationError(t *testing.T) {
 		}, {
 			Map{
 				"$set": Map{
-					"int_value": "1",
+					"int_value": 1.1,
 				},
 			},
-			"json schema validation failed for field 'int_value' reason 'expected integer, but got string'",
+			"json schema validation failed for field 'int_value' reason 'expected integer, but got number'",
 			api.Code_INVALID_ARGUMENT,
 		},
 	}
