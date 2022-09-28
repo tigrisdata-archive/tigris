@@ -442,25 +442,13 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, ctx, err
 	}
 
-	for _, fieldOperators := range factory.FieldOperators {
-		v, err := fieldOperators.DeserializeDoc()
-		if err != nil {
-			return nil, ctx, err
-		}
-
-		if vMap, ok := v.(map[string]interface{}); ok {
-			for k, v := range vMap {
-				// remove fields that are set as null as we don't need them for the validation
-				if v == nil {
-					delete(vMap, k)
-				}
-			}
-		}
-
-		if err = collection.Validate(v); err != nil {
-			// schema validation failed
-			return nil, ctx, err
-		}
+	fieldOperator := factory.FieldOperators[string(update.Set)]
+	if fieldOperator == nil {
+		return nil, ctx, api.Errorf(api.Code_INVALID_ARGUMENT, "missing '$set operator")
+	}
+	fieldOperator.Document, err = runner.mutateAndValidatePayload(collection, fieldOperator.Document)
+	if err != nil {
+		return nil, ctx, err
 	}
 
 	table, err := runner.encoder.EncodeTableName(tenant.GetNamespace(), db, collection)
