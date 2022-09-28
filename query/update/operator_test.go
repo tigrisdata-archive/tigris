@@ -33,27 +33,27 @@ func TestMergeAndGet(t *testing.T) {
 			[]byte(`{"a": 10}`),
 			[]byte(`{"a": 1, "b": "foo", "c": 1.01, "d": {"f": 22, "g": 44}}`),
 			[]byte(`{"a": 10, "b": "foo", "c": 1.01, "d": {"f": 22, "g": 44}}`),
-			set,
+			Set,
 		}, {
 			[]byte(`{"b": "bar", "a": 10}`),
 			[]byte(`{"a": 1, "b": "foo", "c": 1.01, "d": {"f": 22, "g": 44}}`),
 			[]byte(`{"a": 10, "b": "bar", "c": 1.01, "d": {"f": 22, "g": 44}}`),
-			set,
+			Set,
 		}, {
 			[]byte(`{"b": "test", "c": 10.22}`),
 			[]byte(`{"a": 1, "b": "foo", "c": 1.01, "d": {"f": 22, "g": 44}}`),
 			[]byte(`{"a": 1, "b": "test", "c": 10.22, "d": {"f": 22, "g": 44}}`),
-			set,
+			Set,
 		}, {
 			[]byte(`{"c": 10.000022, "e": "new"}`),
 			[]byte(`{"a": 1, "b": "foo", "c": 1.01, "d": {"f": 22, "g": 44}}`),
 			[]byte(`{"a": 1, "b": "foo", "c": 10.000022, "d": {"f": 22, "g": 44},"e":"new"}`),
-			set,
+			Set,
 		}, {
 			[]byte(`{"e": "again", "a": 1.000000022, "c": 23}`),
 			[]byte(`{"a": 1, "b": "foo", "c": 1.01, "d": {"f": 22, "g": 44}}`),
 			[]byte(`{"a": 1.000000022, "b": "foo", "c": 23, "d": {"f": 22, "g": 44},"e":"again"}`),
-			set,
+			Set,
 		},
 	}
 	for _, c := range cases {
@@ -91,7 +91,7 @@ func TestMergeAndGet_MarshalInput(t *testing.T) {
 				"bytes_value":  []byte(`"simple_insert1_update"`),
 			},
 			[]byte(`{"pkey_int":100,"int_value":200,"string_value":"simple_insert1_update_modified","bool_value":false,"double_value":200.00001,"bytes_value":"InNpbXBsZV9pbnNlcnQxX3VwZGF0ZV9tb2RpZmllZCI="}`),
-			set,
+			Set,
 		},
 	}
 	for _, c := range cases {

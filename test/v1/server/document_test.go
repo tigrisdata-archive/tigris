@@ -923,6 +923,67 @@ func TestUpdate_SingleRow(t *testing.T) {
 		})
 }
 
+func TestUpdate_Int64AsString(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	inputDocument := []Doc{
+		{
+			"pkey_int":  100,
+			"int_value": 100,
+		},
+	}
+
+	insertDocuments(t, db, coll, inputDocument, false).
+		Status(http.StatusOK)
+
+	readAndValidate(t,
+		db,
+		coll,
+		Map{
+			"pkey_int": 100,
+		},
+		nil,
+		inputDocument)
+
+	tstart := time.Now().UTC()
+	updateByFilter(t,
+		db,
+		coll,
+		Map{
+			"filter": Map{
+				"pkey_int": 100,
+			},
+		},
+		Map{
+			"fields": Map{
+				"$set": Map{
+					"int_value": "9223372036854775577",
+				},
+			},
+		},
+		nil).Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("modified_count", 1).
+		Path("$.metadata").Object().
+		Value("updated_at").String().DateTime(time.RFC3339Nano).InRange(tstart, time.Now().UTC().Add(1*time.Second))
+
+	readAndValidate(t,
+		db,
+		coll,
+		Map{
+			"pkey_int": 100,
+		},
+		nil,
+		[]Doc{
+			{
+				"pkey_int":  100,
+				"int_value": 9223372036854775577,
+			},
+		})
+}
+
 func TestUpdate_NullField(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)
@@ -1039,10 +1100,10 @@ func TestUpdate_SchemaValidationError(t *testing.T) {
 		}, {
 			Map{
 				"$set": Map{
-					"int_value": "1",
+					"int_value": 1.1,
 				},
 			},
-			"json schema validation failed for field 'int_value' reason 'expected integer, but got string'",
+			"json schema validation failed for field 'int_value' reason 'expected integer, but got number'",
 			api.Code_INVALID_ARGUMENT,
 		},
 	}

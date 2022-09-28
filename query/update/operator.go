@@ -15,7 +15,6 @@
 package update
 
 import (
-	"bytes"
 	"fmt"
 
 	"github.com/buger/jsonparser"
@@ -28,7 +27,7 @@ import (
 type FieldOPType string
 
 const (
-	set FieldOPType = "$set"
+	Set FieldOPType = "$set"
 )
 
 // BuildFieldOperators un-marshals request "fields" present in the Update API and returns a FieldOperatorFactory
@@ -43,8 +42,8 @@ func BuildFieldOperators(reqFields []byte) (*FieldOperatorFactory, error) {
 	var operators = make(map[string]*FieldOperator)
 	for op, val := range decodedOperators {
 		switch op {
-		case string(set):
-			operators[string(set)] = NewFieldOperator(set, val)
+		case string(Set):
+			operators[string(Set)] = NewFieldOperator(Set, val)
 		}
 	}
 
@@ -61,7 +60,7 @@ type FieldOperatorFactory struct {
 
 // MergeAndGet method to converts the input to the output after applying all the operators.
 func (factory *FieldOperatorFactory) MergeAndGet(existingDoc jsoniter.RawMessage) (jsoniter.RawMessage, error) {
-	setFieldOp := factory.FieldOperators[string(set)]
+	setFieldOp := factory.FieldOperators[string(Set)]
 	if setFieldOp == nil {
 		return nil, errors.InvalidArgument("set operator not present in the fields parameter")
 	}
@@ -112,12 +111,4 @@ func NewFieldOperator(op FieldOPType, val jsoniter.RawMessage) *FieldOperator {
 		Op:       op,
 		Document: val,
 	}
-}
-
-func (f *FieldOperator) DeserializeDoc() (interface{}, error) {
-	var v interface{}
-	dec := jsoniter.NewDecoder(bytes.NewReader(f.Document))
-	dec.UseNumber()
-	err := dec.Decode(&v)
-	return v, err
 }
