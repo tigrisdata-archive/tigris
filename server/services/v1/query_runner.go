@@ -1028,17 +1028,20 @@ func (runner *SearchQueryRunner) getSearchFields(coll *schema.DefaultCollection)
 		// this is to include all searchable fields if not present in the query
 		for _, cf := range coll.GetQueryableFields() {
 			if cf.DataType == schema.StringType {
-				searchFields = append(searchFields, cf.FieldName)
+				searchFields = append(searchFields, cf.InMemoryName())
 			}
 		}
 	} else {
-		for _, sf := range searchFields {
+		for i, sf := range searchFields {
 			cf, err := coll.GetQueryableField(sf)
 			if err != nil {
 				return nil, err
 			}
 			if cf.DataType != schema.StringType {
 				return nil, errors.InvalidArgument("`%s` is not a searchable field. Only string fields can be queried", sf)
+			}
+			if cf.InMemoryName() != cf.Name() {
+				searchFields[i] = cf.InMemoryName()
 			}
 		}
 	}
