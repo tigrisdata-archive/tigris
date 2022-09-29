@@ -1054,7 +1054,7 @@ func (runner *SearchQueryRunner) getFacetFields(coll *schema.DefaultCollection) 
 		return qsearch.Facets{}, err
 	}
 
-	for _, ff := range facets.Fields {
+	for i, ff := range facets.Fields {
 		cf, err := coll.GetQueryableField(ff.Name)
 		if err != nil {
 			return qsearch.Facets{}, err
@@ -1062,6 +1062,9 @@ func (runner *SearchQueryRunner) getFacetFields(coll *schema.DefaultCollection) 
 		if !cf.Faceted {
 			return qsearch.Facets{}, errors.InvalidArgument(
 				"Cannot generate facets for `%s`. Faceting is only supported for numeric and text fields", ff.Name)
+		}
+		if cf.InMemoryName() != cf.Name() {
+			facets.Fields[i].Name = cf.InMemoryName()
 		}
 	}
 
