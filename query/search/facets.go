@@ -43,6 +43,9 @@ func NewFacetField(name string, value jsoniter.RawMessage) (FacetField, error) {
 	if err := jsoniter.Unmarshal(value, &v); err != nil {
 		return FacetField{}, err
 	}
+	if v.Size == 0 {
+		v.Size = defaultFacetSize
+	}
 
 	return FacetField{
 		Name: name,

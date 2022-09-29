@@ -26,10 +26,10 @@ import (
 func TestSearchQueryRunner_getFacetFields(t *testing.T) {
 	collection := &schema.DefaultCollection{
 		QueryableFields: []*schema.QueryableField{
-			{FieldName: "field_1", Faceted: true},
-			{FieldName: "parent.field_2", Faceted: true},
-			{FieldName: "field_3", Faceted: false},
-			{FieldName: "field_4", Faceted: true},
+			schema.NewQueryableField("field_1", schema.StringType),
+			schema.NewQueryableField("parent.field_2", schema.StringType),
+			schema.NewQueryableField("field_3", schema.ByteType),
+			schema.NewQueryableField("field_4", schema.StringType),
 		},
 	}
 	runner := &SearchQueryRunner{req: &api.SearchRequest{}}
@@ -83,8 +83,8 @@ func TestSearchQueryRunner_getFacetFields(t *testing.T) {
 func TestSearchQueryRunner_getFieldSelection(t *testing.T) {
 	collection := &schema.DefaultCollection{
 		QueryableFields: []*schema.QueryableField{
-			{FieldName: "field_1"},
-			{FieldName: "parent.field_2"},
+			schema.NewQueryableField("field_1", schema.StringType),
+			schema.NewQueryableField("parent.field_2", schema.StringType),
 		}}
 
 	t.Run("only include fields are provided", func(t *testing.T) {
@@ -158,11 +158,14 @@ func TestSearchQueryRunner_getFieldSelection(t *testing.T) {
 func TestSearchQueryRunner_getSortOrdering(t *testing.T) {
 	collection := &schema.DefaultCollection{
 		QueryableFields: []*schema.QueryableField{
-			{FieldName: "field_1", Sortable: true},
-			{FieldName: "parent.field_2", Sortable: true},
-			{FieldName: "field_3", Faceted: false},
+			schema.NewQueryableField("field_1", schema.StringType),
+			schema.NewQueryableField("parent.field_2", schema.StringType),
+			schema.NewQueryableField("field_3", schema.ByteType),
 		},
 	}
+	collection.QueryableFields[0].Sortable = true
+	collection.QueryableFields[1].Sortable = true
+
 	runner := &SearchQueryRunner{req: &api.SearchRequest{}}
 
 	t.Run("no sort param in input", func(t *testing.T) {
