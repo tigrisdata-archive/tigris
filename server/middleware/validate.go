@@ -65,7 +65,7 @@ type recvWrapper struct {
 	grpc.ServerStream
 }
 
-// RecvMsg wrapper to validate individual stream messages
+// RecvMsg wrapper to validate individual stream messages.
 func (s *recvWrapper) RecvMsg(m interface{}) error {
 	if err := s.ServerStream.RecvMsg(m); err != nil {
 		return err

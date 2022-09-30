@@ -172,7 +172,7 @@ func (s *storeImpl) IndexDocuments(_ context.Context, table string, reader io.Re
 }
 
 func (s *storeImpl) getBaseSearchParam(query *qsearch.Query, pageNo int) tsApi.MultiSearchParameters {
-	var baseParam = tsApi.MultiSearchParameters{
+	baseParam := tsApi.MultiSearchParameters{
 		Q:       &query.Q,
 		Page:    &pageNo,
 		PerPage: &query.PageSize,
@@ -198,7 +198,7 @@ func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query
 	searchFilter := query.ToSearchFilter()
 	if len(searchFilter) > 0 {
 		for i := 0; i < len(searchFilter); i++ {
-			//ToDo: check all places
+			// ToDo: check all places
 			param := s.getBaseSearchParam(query, pageNo)
 			param.FilterBy = &searchFilter[i]
 			params = append(params, tsApi.MultiSearchCollectionParameters{

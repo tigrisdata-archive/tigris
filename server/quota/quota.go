@@ -21,17 +21,13 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/errors"
-
-	"github.com/tigrisdata/tigris/server/request"
-
 	"github.com/tigrisdata/tigris/schema"
-
-	ulog "github.com/tigrisdata/tigris/util/log"
-
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
+	ulog "github.com/tigrisdata/tigris/util/log"
 	"go.uber.org/atomic"
 	"golang.org/x/time/rate"
 )
@@ -60,15 +56,17 @@ type Manager struct {
 	txMgr       *transaction.Manager
 }
 
-var mgr Manager
-var lastGlobalRefresh int64
+var (
+	mgr               Manager
+	lastGlobalRefresh int64
+)
 
 func Init(t *metadata.TenantManager, tx *transaction.Manager, c *config.QuotaConfig) {
 	mgr = *newManager(t, tx, c)
 }
 
 // Allow checks rate, write throughput and storage size limits for the namespace
-// and returns error if at least one of them is exceeded
+// and returns error if at least one of them is exceeded.
 func Allow(ctx context.Context, namespace string, reqSize int) error {
 	// Emit size metrics regardless of enabled quota
 	mgr.updateTenantMetrics(ctx, namespace)
@@ -110,7 +108,7 @@ func newManager(t *metadata.TenantManager, tx *transaction.Manager, c *config.Qu
 	return &Manager{cfg: c, tenantMgr: t, txMgr: tx}
 }
 
-// GetState returns quota state of the given namespace
+// GetState returns quota state of the given namespace.
 func GetState(namespace string) *State {
 	return mgr.getState(namespace)
 }
@@ -205,7 +203,6 @@ func (m *Manager) updateAllMetrics(ctx context.Context) {
 	for _, namespace := range m.tenantMgr.GetNamespaceNames() {
 		m.updateMetricsForNamespace(ctx, namespace)
 	}
-
 }
 
 func (m *Manager) updateTenantSize(ctx context.Context, namespace string) {

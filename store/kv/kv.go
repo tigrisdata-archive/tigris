@@ -332,7 +332,6 @@ func (m *KeyValueStoreImplWithMetrics) BeginTx(ctx context.Context) (Tx, error) 
 	return &TxImplWithMetrics{
 		btx,
 	}, err
-
 }
 
 func (k *KeyValueStoreImpl) GetInternalDatabase() (interface{}, error) {
@@ -572,8 +571,10 @@ func (i *IteratorImpl) Err() error {
 	return i.baseIterator.Err()
 }
 
-type KeyPart interface{}
-type Key []KeyPart
+type (
+	KeyPart interface{}
+	Key     []KeyPart
+)
 
 func BuildKey(parts ...interface{}) Key {
 	ptr := unsafe.Pointer(&parts)

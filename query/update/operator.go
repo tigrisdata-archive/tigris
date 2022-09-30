@@ -23,7 +23,7 @@ import (
 	"github.com/tigrisdata/tigris/util/log"
 )
 
-// FieldOPType is the field operator passed in the Update API
+// FieldOPType is the field operator passed in the Update API.
 type FieldOPType string
 
 const (
@@ -39,10 +39,9 @@ func BuildFieldOperators(reqFields []byte) (*FieldOperatorFactory, error) {
 		return nil, err
 	}
 
-	var operators = make(map[string]*FieldOperator)
+	operators := make(map[string]*FieldOperator)
 	for op, val := range decodedOperators {
-		switch op {
-		case string(Set):
+		if op == string(Set) {
 			operators[string(Set)] = NewFieldOperator(Set, val)
 		}
 	}
@@ -78,8 +77,7 @@ func (factory *FieldOperatorFactory) apply(input jsoniter.RawMessage, setDoc jso
 		err    error
 	)
 	err = jsonparser.ObjectEach(setDoc, func(key []byte, value []byte, dataType jsonparser.ValueType, offset int) error {
-		switch dataType {
-		case jsonparser.String:
+		if dataType == jsonparser.String {
 			value = []byte(fmt.Sprintf(`"%s"`, value))
 		}
 		output, err = jsonparser.Set(output, value, string(key))
@@ -99,13 +97,13 @@ func (factory *FieldOperatorFactory) apply(input jsoniter.RawMessage, setDoc jso
 // A FieldOperator can be of the following type:
 // { "$set": { <field1>: <value1>, ... } }
 // { "$incr": { <field1>: <value> } }
-// { "$remove": ["d"] }
+// { "$remove": ["d"] }.
 type FieldOperator struct {
 	Op       FieldOPType
 	Document jsoniter.RawMessage
 }
 
-// NewFieldOperator returns a FieldOperator
+// NewFieldOperator returns a FieldOperator.
 func NewFieldOperator(op FieldOPType, val jsoniter.RawMessage) *FieldOperator {
 	return &FieldOperator{
 		Op:       op,

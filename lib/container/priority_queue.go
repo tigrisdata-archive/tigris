@@ -20,7 +20,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-// ErrEmpty is returned for queues with no items
+// ErrEmpty is returned for queues with no items.
 var ErrEmpty = errors.New("queue is empty")
 
 type PriorityQueue[T any] struct {
@@ -37,7 +37,7 @@ func NewPriorityQueue[T any](comp func(this, that *T) bool) *PriorityQueue[T] {
 	}}
 }
 
-// Len returns items in queue
+// Len returns items in queue.
 func (pq *PriorityQueue[T]) Len() int {
 	return pq.queue.Len()
 }

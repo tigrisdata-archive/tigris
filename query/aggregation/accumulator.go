@@ -21,7 +21,7 @@ import (
 	"github.com/tigrisdata/tigris/query/expression"
 )
 
-// supported accumulators
+// supported accumulators.
 const (
 	avg = "$avg"
 	min = "$min"
@@ -29,7 +29,7 @@ const (
 	sum = "$sum"
 )
 
-// AccumulatorFactory to return the object of the accumulator type
+// AccumulatorFactory to return the object of the accumulator type.
 type AccumulatorFactory struct {
 	Avg *AccumulatorOp `json:"$avg,omitempty"`
 	Min *AccumulatorOp `json:"$min,omitempty"`

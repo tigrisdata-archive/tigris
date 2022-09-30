@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//	http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -41,12 +41,9 @@ const (
 	UnknownValue = "unknown"
 )
 
-var (
-	adminMethods = container.NewHashSet("/tigrisdata.management.v1.Management/CreateNamespace", "/tigrisdata.management.v1.Management/ListNamespaces")
-)
+var adminMethods = container.NewHashSet("/tigrisdata.management.v1.Management/CreateNamespace", "/tigrisdata.management.v1.Management/ListNamespaces")
 
-type RequestMetadataCtxKey struct {
-}
+type RequestMetadataCtxKey struct{}
 
 type AccessToken struct {
 	Namespace string
@@ -126,13 +123,12 @@ func (r *RequestMetadata) GetFullMethod() string {
 	return fmt.Sprintf("/%s/%s", r.serviceName, r.methodInfo.Name)
 }
 
-// NamespaceExtractor - extract the namespace from context
+// NamespaceExtractor - extract the namespace from context.
 type NamespaceExtractor interface {
 	Extract(ctx context.Context) (string, error)
 }
 
-type AccessTokenNamespaceExtractor struct {
-}
+type AccessTokenNamespaceExtractor struct{}
 
 var ErrNamespaceNotFound = errors.NotFound("namespace not found")
 
@@ -170,7 +166,7 @@ func SetAccessToken(ctx context.Context, token *AccessToken) context.Context {
 
 func SetNamespace(ctx context.Context, namespace string) context.Context {
 	requestMetadata, err := GetRequestMetadata(ctx)
-	var result = ctx
+	result := ctx
 	if err != nil && requestMetadata == nil {
 		requestMetadata = &RequestMetadata{}
 		result = context.WithValue(ctx, RequestMetadataCtxKey{}, requestMetadata)
@@ -253,5 +249,4 @@ func GetNameSpaceFromHeader(ctx context.Context) string {
 		return UnknownValue
 	}
 	return getNameSpaceFromToken(token)
-
 }

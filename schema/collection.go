@@ -204,9 +204,10 @@ func (d *DefaultCollection) setInt64Fields(parent string, fields []*Field) {
 }
 
 func buildPath(parent string, field string) string {
-	if len(parent) > 0 && len(field) > 0 {
-		return parent + "." + field
-	} else if len(parent) > 0 {
+	if len(parent) > 0 {
+		if len(field) > 0 {
+			parent = parent + "." + field
+		}
 		return parent
 	} else {
 		return field
@@ -216,13 +217,13 @@ func buildPath(parent string, field string) string {
 func GetSearchDeltaFields(existingFields []*QueryableField, incomingFields []*Field) []tsApi.Field {
 	incomingQueryable := BuildQueryableFields(incomingFields)
 
-	var existingFieldSet = container.NewHashSet()
+	existingFieldSet := container.NewHashSet()
 	for _, f := range existingFields {
 		existingFieldSet.Insert(f.FieldName)
 	}
 
-	var ptrTrue = true
-	var tsFields []tsApi.Field
+	ptrTrue := true
+	tsFields := make([]tsApi.Field, 0, len(incomingQueryable))
 	for _, f := range incomingQueryable {
 		if existingFieldSet.Contains(f.FieldName) {
 			continue
@@ -235,15 +236,14 @@ func GetSearchDeltaFields(existingFields []*QueryableField, incomingFields []*Fi
 			Index:    &f.Indexed,
 			Optional: &ptrTrue,
 		})
-
 	}
 
 	return tsFields
 }
 
 func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.CollectionSchema {
-	var ptrTrue, ptrFalse = true, false
-	var tsFields []tsApi.Field
+	ptrTrue, ptrFalse := true, false
+	tsFields := make([]tsApi.Field, 0, len(queryableFields))
 	for _, s := range queryableFields {
 		tsFields = append(tsFields, tsApi.Field{
 			Name:     s.Name(),
@@ -283,8 +283,7 @@ func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.Co
 
 func init() {
 	jsonschema.Formats[FieldNames[ByteType]] = func(i interface{}) bool {
-		switch v := i.(type) {
-		case string:
+		if v, ok := i.(string); ok {
 			_, err := base64.StdEncoding.DecodeString(v)
 			return err == nil
 		}
@@ -296,10 +295,7 @@ func init() {
 			return false
 		}
 
-		if val < math.MinInt32 || val > math.MaxInt32 {
-			return false
-		}
-		return true
+		return !(val < math.MinInt32 || val > math.MaxInt32)
 	}
 	jsonschema.Formats[FieldNames[Int64Type]] = func(i interface{}) bool {
 		_, err := parseInt(i)

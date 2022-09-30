@@ -292,7 +292,7 @@ var DefaultConfig = Config{
 	},
 }
 
-// FoundationDBConfig keeps FoundationDB configuration parameters
+// FoundationDBConfig keeps FoundationDB configuration parameters.
 type FoundationDBConfig struct {
 	ClusterFile string `mapstructure:"cluster_file" json:"cluster_file" yaml:"cluster_file"`
 }

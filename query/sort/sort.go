@@ -20,7 +20,7 @@ import (
 	"github.com/tigrisdata/tigris/errors"
 )
 
-// TODO: Update this to 3 once https://github.com/typesense/typesense/issues/690 is resolved
+// TODO: Update this to 3 once https://github.com/typesense/typesense/issues/690 is resolved.
 const maxSortOrders = 2
 
 const (
@@ -70,7 +70,7 @@ func UnmarshalSort(input jsoniter.RawMessage) (*Ordering, error) {
 		return nil, nil
 	}
 
-	var orders = Ordering{}
+	orders := Ordering{}
 	var err error
 	_, err2 := jsonparser.ArrayEach(input, func(item []byte, vt jsonparser.ValueType, offset int, err1 error) {
 		if err1 != nil {

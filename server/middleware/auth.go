@@ -20,17 +20,15 @@ import (
 	"strings"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
-	"github.com/tigrisdata/tigris/errors"
-	"github.com/tigrisdata/tigris/server/metrics"
-
 	"github.com/auth0/go-jwt-middleware/v2/jwks"
 	"github.com/auth0/go-jwt-middleware/v2/validator"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/request"
 	"google.golang.org/grpc"
 )
@@ -101,7 +99,6 @@ func GetJWTValidator(config *config.Config) *validator.Validator {
 			},
 		),
 	)
-
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to configure JWTValidator")
 	}

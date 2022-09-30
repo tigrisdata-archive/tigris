@@ -37,15 +37,12 @@ type CustomDecoder struct {
 }
 
 func (f CustomDecoder) Decode(dst interface{}) error {
-	switch dst.(type) {
-	case *GetAccessTokenRequest:
-		{
-			byteArr, err := io.ReadAll(f.reader)
-			if err != nil {
-				return err
-			}
-			return unmarshalInternal(byteArr, dst)
+	if _, ok := dst.(*GetAccessTokenRequest); ok {
+		byteArr, err := io.ReadAll(f.reader)
+		if err != nil {
+			return err
 		}
+		return unmarshalInternal(byteArr, dst)
 	}
 	return f.jsonDecoder.Decode(dst)
 }
@@ -95,35 +92,29 @@ func (c *CustomMarshaler) Marshal(v interface{}) ([]byte, error) {
 }
 
 func (c *CustomMarshaler) Unmarshal(data []byte, v interface{}) error {
-	switch v.(type) {
-	case *GetAccessTokenRequest:
-		{
-			return unmarshalInternal(data, v)
-		}
+	if _, ok := v.(*GetAccessTokenRequest); ok {
+		return unmarshalInternal(data, v)
 	}
 	return c.JSONBuiltin.Unmarshal(data, v)
 }
 
 func unmarshalInternal(data []byte, v interface{}) error {
-	switch v := v.(type) {
-	case *GetAccessTokenRequest:
-		{
-			values, err := url.ParseQuery(string(data))
-			if err != nil {
-				return err
-			}
-			grantType := strings.ToUpper(values.Get("grant_type"))
-
-			if grantType == GrantType_REFRESH_TOKEN.String() {
-				v.GrantType = GrantType_REFRESH_TOKEN
-				v.RefreshToken = values.Get(refreshToken)
-			} else if grantType == GrantType_CLIENT_CREDENTIALS.String() {
-				v.GrantType = GrantType_CLIENT_CREDENTIALS
-				v.ClientId = values.Get("client_id")
-				v.ClientSecret = values.Get("client_secret")
-			}
-			return nil
+	if v, ok := v.(*GetAccessTokenRequest); ok {
+		values, err := url.ParseQuery(string(data))
+		if err != nil {
+			return err
 		}
+		grantType := strings.ToUpper(values.Get("grant_type"))
+
+		if grantType == GrantType_REFRESH_TOKEN.String() {
+			v.GrantType = GrantType_REFRESH_TOKEN
+			v.RefreshToken = values.Get(refreshToken)
+		} else if grantType == GrantType_CLIENT_CREDENTIALS.String() {
+			v.GrantType = GrantType_CLIENT_CREDENTIALS
+			v.ClientId = values.Get("client_id")
+			v.ClientSecret = values.Get("client_secret")
+		}
+		return nil
 	}
 	return Errorf(Code_INTERNAL, "not supported")
 }
@@ -160,7 +151,7 @@ func (x *ReadRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// UnmarshalJSON for SearchRequest avoids unmarshalling filter, facets, sort and fields
+// UnmarshalJSON for SearchRequest avoids unmarshalling filter, facets, sort and fields.
 func (x *SearchRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
 	if err := jsoniter.Unmarshal(data, &mp); err != nil {
@@ -745,7 +736,7 @@ func (x *UpdateUserMetadataResponse) MarshalJSON() ([]byte, error) {
 	return json.Marshal(resp)
 }
 
-// Proper marshal timestamp in metadata
+// Proper marshal timestamp in metadata.
 type dmlResponse struct {
 	Metadata      Metadata          `json:"metadata,omitempty"`
 	Status        string            `json:"status,omitempty"`
@@ -754,7 +745,7 @@ type dmlResponse struct {
 }
 
 func (x *InsertResponse) MarshalJSON() ([]byte, error) {
-	var keys []json.RawMessage
+	keys := make([]json.RawMessage, 0, len(x.Keys))
 	for _, k := range x.Keys {
 		keys = append(keys, k)
 	}
@@ -762,7 +753,7 @@ func (x *InsertResponse) MarshalJSON() ([]byte, error) {
 }
 
 func (x *ReplaceResponse) MarshalJSON() ([]byte, error) {
-	var keys []json.RawMessage
+	keys := make([]json.RawMessage, 0, len(x.Keys))
 	for _, k := range x.Keys {
 		keys = append(keys, k)
 	}
@@ -930,8 +921,7 @@ func unmarshalAdditionalFunction(data []byte) (*AdditionalFunction, error) {
 	}
 	result := &AdditionalFunction{}
 	for key, value := range mp {
-		switch key {
-		case "rollup":
+		if key == "rollup" {
 			rollup, err := unmarshalRollup(value)
 			if err != nil {
 				return nil, err
@@ -968,7 +958,6 @@ func unmarshalRollup(data []byte) (*RollupFunction, error) {
 					result.Aggregator = RollupAggregator_ROLLUP_AGGREGATOR_MAX
 				case "AVG":
 					result.Aggregator = RollupAggregator_ROLLUP_AGGREGATOR_AVG
-
 				}
 			}
 		case "interval":

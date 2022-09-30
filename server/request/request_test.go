@@ -24,7 +24,6 @@ import (
 )
 
 func TestRequestMetadata(t *testing.T) {
-
 	t.Run("extraction of namespace name", func(t *testing.T) {
 		ctx := context.TODO()
 		ctx = context.WithValue(ctx, RequestMetadataCtxKey{}, &RequestMetadata{
@@ -77,7 +76,7 @@ func TestRequestMetadata(t *testing.T) {
 
 	t.Run("Test get namespace from token", func(t *testing.T) {
 		// base64 encoding of {"https://tigris/u":{"email":"test@tigrisdata.com"},"https://tigris/n":{"code":"test-namespace"},"iss":"https://test-issuer.com/","sub":"google-oauth2|1","aud":["https://tigris-api-test"],"iat":1662745495,"exp":1662831895,"azp":"test","scope":"openid profile email","org_id":"test"}
-		testToken := "header.eyJodHRwczovL3RpZ3Jpcy91Ijp7ImVtYWlsIjoidGVzdEB0aWdyaXNkYXRhLmNvbSJ9LCJodHRwczovL3RpZ3Jpcy9uIjp7ImNvZGUiOiJ0ZXN0LW5hbWVzcGFjZSJ9LCJpc3MiOiJodHRwczovL3Rlc3QtaXNzdWVyLmNvbS8iLCJzdWIiOiJnb29nbGUtb2F1dGgyfDEiLCJhdWQiOlsiaHR0cHM6Ly90aWdyaXMtYXBpLXRlc3QiXSwiaWF0IjoxNjYyNzQ1NDk1LCJleHAiOjE2NjI4MzE4OTUsImF6cCI6InRlc3QiLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIiwib3JnX2lkIjoidGVzdCJ9.signature"
+		testToken := "header.eyJodHRwczovL3RpZ3Jpcy91Ijp7ImVtYWlsIjoidGVzdEB0aWdyaXNkYXRhLmNvbSJ9LCJodHRwczovL3RpZ3Jpcy9uIjp7ImNvZGUiOiJ0ZXN0LW5hbWVzcGFjZSJ9LCJpc3MiOiJodHRwczovL3Rlc3QtaXNzdWVyLmNvbS8iLCJzdWIiOiJnb29nbGUtb2F1dGgyfDEiLCJhdWQiOlsiaHR0cHM6Ly90aWdyaXMtYXBpLXRlc3QiXSwiaWF0IjoxNjYyNzQ1NDk1LCJleHAiOjE2NjI4MzE4OTUsImF6cCI6InRlc3QiLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIiwib3JnX2lkIjoidGVzdCJ9.signature" //nolint:golint,gosec
 		assert.Equal(t, "test-namespace", getNameSpaceFromToken(testToken))
 	})
 }

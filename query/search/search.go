@@ -37,7 +37,7 @@ type Query struct {
 }
 
 func (q *Query) ToSearchFacetSize() int {
-	var maxSize = 0
+	maxSize := 0
 	for _, f := range q.Facets.Fields {
 		if maxSize < f.Size {
 			maxSize = f.Size

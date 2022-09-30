@@ -50,6 +50,7 @@ type NoopKV struct{}
 func (n *NoopKV) Insert(ctx context.Context, table []byte, key Key, data *internal.TableData) error {
 	return nil
 }
+
 func (n *NoopKV) Replace(ctx context.Context, table []byte, key Key, data *internal.TableData, isUpdate bool) error {
 	return nil
 }
@@ -58,21 +59,27 @@ func (n *NoopKV) DeleteRange(ctx context.Context, table []byte, lKey Key, rKey K
 func (n *NoopKV) Read(ctx context.Context, table []byte, key Key) (Iterator, error) {
 	return &NoopIterator{}, nil
 }
+
 func (n *NoopKV) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (Iterator, error) {
 	return &NoopIterator{}, nil
 }
+
 func (n *NoopKV) Update(ctx context.Context, table []byte, key Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error) {
 	return 0, nil
 }
+
 func (n *NoopKV) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error) {
 	return 0, nil
 }
+
 func (n *NoopKV) SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error {
 	return nil
 }
+
 func (n *NoopKV) SetVersionstampedKey(ctx context.Context, key []byte, value []byte) error {
 	return nil
 }
+
 func (n *NoopKV) Get(ctx context.Context, key []byte, isSnapshot bool) (Future, error) {
 	return nil, nil
 }

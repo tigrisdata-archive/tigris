@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//	http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,13 +22,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tigrisdata/tigris/server/metrics"
-
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	ulog "github.com/tigrisdata/tigris/util/log"
@@ -48,8 +47,8 @@ func TestQuotaManager(t *testing.T) {
 		DataSizeLimit:        10000,
 	})
 
-	ns := fmt.Sprintf("ns-test-tenantQuota-1-%x", rand.Uint64())
-	id := rand.Uint32()
+	ns := fmt.Sprintf("ns-test-tenantQuota-1-%x", rand.Uint64()) //nolint:golint,gosec
+	id := rand.Uint32()                                          //nolint:golint,gosec
 
 	tenant, err := tenantMgr.CreateOrGetTenant(ctx, txMgr, metadata.NewTenantNamespace(ns, id))
 	require.NoError(t, err)

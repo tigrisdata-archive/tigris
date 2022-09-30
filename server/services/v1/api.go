@@ -188,7 +188,7 @@ func (s *apiService) RollbackTransaction(ctx context.Context, _ *api.RollbackTra
 }
 
 // Insert new object returns an error if object already exists
-// Operations done individually not in actual batch
+// Operations done individually not in actual batch.
 func (s *apiService) Insert(ctx context.Context, r *api.InsertRequest) (*api.InsertResponse, error) {
 	qm := metrics.WriteQueryMetrics{}
 	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetInsertQueryRunner(r, &qm), &ReqOptions{

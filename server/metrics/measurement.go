@@ -52,8 +52,7 @@ type Measurement struct {
 	stoppedAt    time.Time
 }
 
-type MeasurementCtxKey struct {
-}
+type MeasurementCtxKey struct{}
 
 func NewMeasurement(serviceName string, resourceName string, spanType string, tags map[string]string) *Measurement {
 	return &Measurement{serviceName: serviceName, resourceName: resourceName, spanType: spanType, tags: tags}

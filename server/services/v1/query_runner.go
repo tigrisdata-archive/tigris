@@ -20,12 +20,11 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/tigrisdata/tigris/lib/json"
-
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
+	"github.com/tigrisdata/tigris/lib/json"
 	"github.com/tigrisdata/tigris/query/filter"
 	"github.com/tigrisdata/tigris/query/read"
 	qsearch "github.com/tigrisdata/tigris/query/search"
@@ -42,7 +41,7 @@ import (
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
-// QueryRunner is responsible for executing the current query and return the response
+// QueryRunner is responsible for executing the current query and return the response.
 type QueryRunner interface {
 	Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error)
 }
@@ -54,7 +53,7 @@ type ReadOnlyQueryRunner interface {
 	ReadOnly(ctx context.Context, tenant *metadata.Tenant) (*Response, context.Context, error)
 }
 
-// QueryRunnerFactory is responsible for creating query runners for different queries
+// QueryRunnerFactory is responsible for creating query runners for different queries.
 type QueryRunnerFactory struct {
 	txMgr       *transaction.Manager
 	encoder     metadata.Encoder
@@ -62,7 +61,7 @@ type QueryRunnerFactory struct {
 	searchStore search.Store
 }
 
-// NewQueryRunnerFactory returns QueryRunnerFactory object
+// NewQueryRunnerFactory returns QueryRunnerFactory object.
 func NewQueryRunnerFactory(txMgr *transaction.Manager, cdcMgr *cdc.Manager, searchStore search.Store) *QueryRunnerFactory {
 	return &QueryRunnerFactory{
 		txMgr:       txMgr,
@@ -104,7 +103,7 @@ func (f *QueryRunnerFactory) GetDeleteQueryRunner(r *api.DeleteRequest, qm *metr
 	}
 }
 
-// GetStreamingQueryRunner returns StreamingQueryRunner
+// GetStreamingQueryRunner returns StreamingQueryRunner.
 func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streaming Streaming, qm *metrics.StreamingQueryMetrics) *StreamingQueryRunner {
 	return &StreamingQueryRunner{
 		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
@@ -114,7 +113,7 @@ func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streami
 	}
 }
 
-// GetSearchQueryRunner for executing Search
+// GetSearchQueryRunner for executing Search.
 func (f *QueryRunnerFactory) GetSearchQueryRunner(r *api.SearchRequest, streaming SearchStreaming, qm *metrics.SearchQueryMetrics) *SearchQueryRunner {
 	return &SearchQueryRunner{
 		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
@@ -131,7 +130,7 @@ func (f *QueryRunnerFactory) GetPublishQueryRunner(r *api.PublishRequest) *Publi
 	}
 }
 
-// GetSubscribeQueryRunner returns SubscribeQueryRunner
+// GetSubscribeQueryRunner returns SubscribeQueryRunner.
 func (f *QueryRunnerFactory) GetSubscribeQueryRunner(r *api.SubscribeRequest, streaming SubscribeStreaming) *SubscribeQueryRunner {
 	return &SubscribeQueryRunner{
 		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
@@ -217,10 +216,11 @@ func (runner *BaseQueryRunner) getCollection(db *metadata.Database, collName str
 }
 
 func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, db *metadata.Database,
-	coll *schema.DefaultCollection, documents [][]byte, insert bool) (*internal.Timestamp, [][]byte, error) {
+	coll *schema.DefaultCollection, documents [][]byte, insert bool,
+) (*internal.Timestamp, [][]byte, error) {
 	var err error
-	var ts = internal.NewTimestamp()
-	var allKeys [][]byte
+	ts := internal.NewTimestamp()
+	allKeys := make([][]byte, 0, len(documents))
 	for _, doc := range documents {
 		// reset it back to doc
 		doc, err = runner.mutateAndValidatePayload(coll, doc)
@@ -296,7 +296,8 @@ func (runner *BaseQueryRunner) mutateAndValidatePayload(coll *schema.DefaultColl
 }
 
 func (runner *BaseQueryRunner) buildKeysUsingFilter(tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection,
-	reqFilter []byte, collation *api.Collation) ([]keys.Key, error) {
+	reqFilter []byte, collation *api.Collation,
+) ([]keys.Key, error) {
 	filterFactory := filter.NewFactory(coll.QueryableFields, collation)
 	filters, err := filterFactory.Factorize(reqFilter)
 	if err != nil {
@@ -420,7 +421,7 @@ type UpdateQueryRunner struct {
 }
 
 func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	var ts = internal.NewTimestamp()
+	ts := internal.NewTimestamp()
 	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetDb())
 	if err != nil {
 		return nil, ctx, err
@@ -529,7 +530,7 @@ type DeleteQueryRunner struct {
 }
 
 func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	var ts = internal.NewTimestamp()
+	ts := internal.NewTimestamp()
 	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetDb())
 	if err != nil {
 		return nil, ctx, err
@@ -611,7 +612,7 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}, ctx, nil
 }
 
-// StreamingQueryRunner is a runner used for Queries that are reads and needs to return result in streaming fashion
+// StreamingQueryRunner is a runner used for Queries that are reads and needs to return result in streaming fashion.
 type StreamingQueryRunner struct {
 	*BaseQueryRunner
 
@@ -632,7 +633,7 @@ type readerOptions struct {
 
 func (runner *StreamingQueryRunner) buildReaderOptions(tenant *metadata.Tenant, db *metadata.Database, collection *schema.DefaultCollection) (readerOptions, error) {
 	var err error
-	var options = readerOptions{}
+	options := readerOptions{}
 	var collation *api.Collation
 	if runner.req.Options != nil {
 		collation = runner.req.Options.Collation
@@ -804,11 +805,9 @@ func (runner *StreamingQueryRunner) iterateOnKvStore(ctx context.Context, tx tra
 			// pass it to filterable
 			iter, err = reader.FilteredRead(iter, options.filter)
 		}
-	} else {
-		if iter, err = reader.ScanTable(options.table); err == nil {
-			// pass it to filterable
-			iter, err = reader.FilteredRead(iter, options.filter)
-		}
+	} else if iter, err = reader.ScanTable(options.table); err == nil {
+		// pass it to filterable
+		iter, err = reader.FilteredRead(iter, options.filter)
 	}
 	if err != nil {
 		return nil, err
@@ -865,7 +864,7 @@ func (runner *StreamingQueryRunner) iterate(iterator Iterator, fieldFactory *rea
 	return lastRowKey, iterator.Interrupted()
 }
 
-// SearchQueryRunner is a runner used for Queries that are reads and needs to return result in streaming fashion
+// SearchQueryRunner is a runner used for Queries that are reads and needs to return result in streaming fashion.
 type SearchQueryRunner struct {
 	*BaseQueryRunner
 
@@ -955,12 +954,12 @@ func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.
 		return nil, ctx, err
 	}
 
-	var pageNo = int32(defaultPageNo)
+	pageNo := int32(defaultPageNo)
 	if runner.req.Page > 0 {
 		pageNo = runner.req.Page
 	}
 	for {
-		var resp = &api.SearchResponse{}
+		resp := &api.SearchResponse{}
 		var row Row
 		for iterator.Next(&row) {
 			if searchQ.ReadFields != nil {
@@ -1023,7 +1022,7 @@ func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.
 }
 
 func (runner *SearchQueryRunner) getSearchFields(coll *schema.DefaultCollection) ([]string, error) {
-	var searchFields = runner.req.SearchFields
+	searchFields := runner.req.SearchFields
 	if len(searchFields) == 0 {
 		// this is to include all searchable fields if not present in the query
 		for _, cf := range coll.GetQueryableFields() {
@@ -1075,6 +1074,7 @@ func (runner *SearchQueryRunner) getFieldSelection(coll *schema.DefaultCollectio
 	var selectionFields []string
 
 	// Only one of include/exclude. Honor inclusion over exclusion
+	//nolint:golint,gocritic
 	if len(runner.req.IncludeFields) > 0 {
 		selectionFields = runner.req.IncludeFields
 	} else if len(runner.req.ExcludeFields) > 0 {
@@ -1151,7 +1151,7 @@ func (runner *PublishQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 			return nil, ctx, errors.InvalidArgument("Invalid partition number `%d`", part)
 		}
 	} else {
-		part = rand.Intn(partitions)
+		part = rand.Intn(partitions) //nolint:golint,gosec
 	}
 
 	ts, allKeys, err := runner.publish(ctx, tx, tenant, db, coll, runner.req.GetMessages(), uint16(part))
@@ -1166,7 +1166,8 @@ func (runner *PublishQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 }
 
 func (runner *PublishQueryRunner) publish(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, db *metadata.Database,
-	coll *schema.DefaultCollection, messages [][]byte, part uint16) (*internal.Timestamp, [][]byte, error) {
+	coll *schema.DefaultCollection, messages [][]byte, part uint16,
+) (*internal.Timestamp, [][]byte, error) {
 	var err error
 	var allKeys [][]byte
 	var keyOffset int64
@@ -1210,7 +1211,7 @@ type SubscribeQueryRunner struct {
 	streaming SubscribeStreaming
 }
 
-// TODO: number of partitions needs to be defined by schema, with defaults and maximum specified by configuration
+// TODO: number of partitions needs to be defined by schema, with defaults and maximum specified by configuration.
 const partitions = 1
 
 func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
@@ -1378,7 +1379,8 @@ func (runner *CollectionQueryRunner) SetDescribeCollectionReq(describe *api.Desc
 }
 
 func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	if runner.dropReq != nil {
+	switch {
+	case runner.dropReq != nil:
 		db, err := runner.getDatabase(ctx, tx, tenant, runner.dropReq.GetDb())
 		if err != nil {
 			return nil, ctx, err
@@ -1397,7 +1399,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		return &Response{
 			status: DroppedStatus,
 		}, ctx, nil
-	} else if runner.createOrUpdateReq != nil {
+	case runner.createOrUpdateReq != nil:
 		db, err := runner.getDatabase(ctx, tx, tenant, runner.createOrUpdateReq.GetDb())
 		if err != nil {
 			return nil, ctx, err
@@ -1430,14 +1432,14 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		return &Response{
 			status: CreatedStatus,
 		}, ctx, nil
-	} else if runner.listReq != nil {
+	case runner.listReq != nil:
 		db, err := runner.getDatabase(ctx, tx, tenant, runner.listReq.GetDb())
 		if err != nil {
 			return nil, ctx, err
 		}
 
 		collectionList := db.ListCollection()
-		var collections = make([]*api.CollectionInfo, len(collectionList))
+		collections := make([]*api.CollectionInfo, len(collectionList))
 		for i, c := range collectionList {
 			collections[i] = &api.CollectionInfo{
 				Collection: c.GetName(),
@@ -1448,7 +1450,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 				Collections: collections,
 			},
 		}, ctx, nil
-	} else if runner.describeReq != nil {
+	case runner.describeReq != nil:
 		db, err := runner.getDatabase(ctx, tx, tenant, runner.describeReq.GetDb())
 		if err != nil {
 			return nil, ctx, err
@@ -1506,7 +1508,8 @@ func (runner *DatabaseQueryRunner) SetDescribeDatabaseReq(describe *api.Describe
 }
 
 func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	if runner.drop != nil {
+	switch {
+	case runner.drop != nil:
 		exist, err := tenant.DropDatabase(ctx, tx, runner.drop.GetDb())
 		if err != nil {
 			return nil, ctx, err
@@ -1518,7 +1521,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		return &Response{
 			status: DroppedStatus,
 		}, ctx, nil
-	} else if runner.create != nil {
+	case runner.create != nil:
 		exist, err := tenant.CreateDatabase(ctx, tx, runner.create.GetDb())
 		if err != nil {
 			return nil, ctx, err
@@ -1530,10 +1533,10 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		return &Response{
 			status: CreatedStatus,
 		}, ctx, nil
-	} else if runner.list != nil {
+	case runner.list != nil:
 		databaseList := tenant.ListDatabases(ctx)
 
-		var databases = make([]*api.DatabaseInfo, len(databaseList))
+		databases := make([]*api.DatabaseInfo, len(databaseList))
 		for i, l := range databaseList {
 			databases[i] = &api.DatabaseInfo{
 				Db: l,
@@ -1544,7 +1547,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 				Databases: databases,
 			},
 		}, ctx, nil
-	} else if runner.describe != nil {
+	case runner.describe != nil:
 		db, err := runner.getDatabase(ctx, tx, tenant, runner.describe.GetDb())
 		if err != nil {
 			return nil, ctx, err
@@ -1553,7 +1556,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 
 		collectionList := db.ListCollection()
 
-		var collections = make([]*api.CollectionDescription, len(collectionList))
+		collections := make([]*api.CollectionDescription, len(collectionList))
 		for i, c := range collectionList {
 			size, err := tenant.CollectionSize(ctx, db, c)
 			if err != nil {

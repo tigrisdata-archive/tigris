@@ -34,10 +34,8 @@ func mergeTags(tagSets ...map[string]string) map[string]string {
 		for k, v := range tagSet {
 			if _, ok := res[k]; !ok {
 				res[k] = v
-			} else {
-				if res[k] == "unknown" {
-					res[k] = v
-				}
+			} else if res[k] == "unknown" {
+				res[k] = v
 			}
 		}
 	}
@@ -159,10 +157,8 @@ func standardizeTags(tags map[string]string, stdKeys []string) map[string]string
 		if _, ok := tags[tagKey]; !ok {
 			// tag is missing, need to add it
 			res[tagKey] = getDefaultValue(tagKey)
-		} else {
-			if res[tagKey] == "" {
-				res[tagKey] = getDefaultValue(tagKey)
-			}
+		} else if res[tagKey] == "" {
+			res[tagKey] = getDefaultValue(tagKey)
 		}
 	}
 	for k := range res {

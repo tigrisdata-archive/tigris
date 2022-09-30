@@ -36,8 +36,7 @@ func headersUnaryServerInterceptor() func(ctx context.Context, req interface{}, 
 		callHeaders := metadata.New(map[string]string{})
 
 		// add cookie header for sticky routing for interactive transactional operations
-		switch ty := resp.(type) {
-		case *api.BeginTransactionResponse:
+		if ty, ok := resp.(*api.BeginTransactionResponse); ok {
 			expirationTime := time.Now().Add(time.Second*MaximumTimeout + 2*time.Second)
 			callHeaders.Append(api.SetCookie, fmt.Sprintf("%s=%s;%s=%s", api.HeaderTxID, ty.GetTxCtx().GetId(), CookieMaxAgeKey, expirationTime.Format(time.RFC1123)))
 		}
@@ -48,6 +47,7 @@ func headersUnaryServerInterceptor() func(ctx context.Context, req interface{}, 
 		return resp, err
 	}
 }
+
 func headersStreamServerInterceptor() grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		if err := grpc.SendHeader(stream.Context(), OutgoingHeaders); err != nil {

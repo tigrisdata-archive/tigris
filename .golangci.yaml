@@ -1,0 +1,122 @@
+linters:
+  enable:
+    - asasalint
+    - asciicheck
+    - bidichk
+    - deadcode
+    - decorder
+    - depguard
+    - dogsled
+    - errcheck
+    - errname
+    - execinquery
+    - exportloopref
+    - forbidigo
+    - gci
+    - godot
+    - gofmt
+    - goheader
+    - goimports
+    - gomoddirectives
+    - gomodguard
+    - goprintffuncname
+    - gosimple
+    - govet
+    - grouper
+    - importas
+    - ineffassign
+    - misspell
+    - nolintlint
+    - promlinter
+    - staticcheck
+    - tenv
+    - tparallel
+    - typecheck
+    - unconvert
+    - unused
+    - usestdlibvars
+    - varcheck
+    - whitespace
+    - gofumpt
+    - gosec
+    - prealloc
+    - errchkjson
+    - gocritic
+  disable:
+    # Work on fixing this
+    - maintidx
+    - unparam
+    - nakedret
+    - makezero
+    - gocyclo
+    - durationcheck
+    - bodyclose
+    - gocognit
+    - funlen
+    - goconst
+    - nestif
+    - noctx
+    - dupl
+    - containedctx
+    - cyclop
+    - errorlint
+    - forcetypeassert
+    - nilerr
+    - nosprintfhostport
+    - exhaustive
+    - thelper
+    - nonamedreturns
+    - predeclared
+    - nilnil
+    - godox
+    - goerr113
+    - lll
+    - nlreturn
+    - nosnakecase
+    - revive
+    - stylecheck
+    - wsl
+
+    # Not working with generics
+    # enable in the future
+    - contextcheck
+    - rowserrcheck
+    - sqlclosecheck
+    - structcheck
+    - wastedassign
+
+    # These are two strict or deprecated
+    - testpackage
+    - paralleltest
+    - interfacer
+    - ifshort
+    - ireturn
+    - wrapcheck
+    - varnamelen
+    - gomnd
+    - tagliatelle
+    - gochecknoglobals
+    - exhaustivestruct
+    - exhaustruct
+    - golint
+    - maligned
+    - gochecknoinits
+    - scopelint
+linters-settings:
+  goheader:
+    template: |-
+      Copyright {{ YEAR }} Tigris Data, Inc.
+
+      Licensed under the Apache License, Version 2.0 (the "License");
+      you may not use this file except in compliance with the License.
+      You may obtain a copy of the License at
+
+           http://www.apache.org/licenses/LICENSE-2.0
+
+      Unless required by applicable law or agreed to in writing, software
+      distributed under the License is distributed on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+      See the License for the specific language governing permissions and
+      limitations under the License.
+  lll:
+    line-length: 120

@@ -25,26 +25,31 @@ import (
 // how a caller can pass aggregation,
 //
 // { $aggregation: <expression> }
-//     OR
+//
+//	OR
+//
 // { $aggregation: [ <expression1>, <expression2> ... ] }
 //
 // As an example, for sum across two fields the grammar would be,
-// {
-//	"$sum": {
-//		"$multiply": ["$price", "$quantity"]
-//	}
-//}
-// More examples,
-// {
-//	"$sum": "$qty"
-// }
 //
-// { "$sum": [ "$final", "$midterm" ] }}
+//	{
+//		"$sum": {
+//			"$multiply": ["$price", "$quantity"]
+//		}
+//	}
+//
+// More examples,
+//
+//	{
+//		"$sum": "$qty"
+//	}
+//
+// { "$sum": [ "$final", "$midterm" ] }}.
 type Aggregation interface {
 	Apply(document jsoniter.RawMessage)
 }
 
-// Unmarshal to unmarshal an aggregation object
+// Unmarshal to unmarshal an aggregation object.
 func Unmarshal(input jsoniter.RawMessage) (expression.Expr, error) {
 	return expression.Unmarshal(input, UnmarshalAggObject)
 }

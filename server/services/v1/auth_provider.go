@@ -235,7 +235,6 @@ func (a *Auth0) RotateApplicationSecret(ctx context.Context, req *api.RotateAppl
 }
 
 func (a *Auth0) ListApplications(ctx context.Context, _ *api.ListApplicationsRequest) (*api.ListApplicationsResponse, error) {
-
 	appList, err := a.Management.Client.List(management.IncludeFields("client_id", "client_metadata", "client_secret", "description", "name"))
 	if err != nil {
 		return nil, api.Errorf(a.managementToTigrisErrorCode(err), "Failed to list applications: reason = %s", err.Error())

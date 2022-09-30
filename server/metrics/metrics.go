@@ -67,7 +67,7 @@ func getTimerSummaryObjectives() map[float64]float64 {
 	res := make(map[float64]float64)
 	for confQuantile, objective := range getTigrisDefaultSummaryObjectives() {
 		for _, wantedQuantile := range config.DefaultConfig.Metrics.TimerQuantiles {
-			if confQuantile == float64(wantedQuantile) {
+			if confQuantile == wantedQuantile {
 				res[confQuantile] = objective
 			}
 		}

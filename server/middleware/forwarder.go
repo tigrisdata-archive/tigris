@@ -33,9 +33,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-var (
-	UserAgent = "tigris-forwarder/" + util.Version
-)
+var UserAgent = "tigris-forwarder/" + util.Version
 
 type Forwarder struct {
 	clients sync.Map
@@ -71,7 +69,7 @@ func requestToResponse(method string) (proto.Message, proto.Message) {
 	return nil, nil
 }
 
-// TODO: Sweep unused connections periodically
+// TODO: Sweep unused connections periodically.
 func getClient(ctx context.Context, origin string) (*grpc.ClientConn, error) {
 	if c, ok := forwarder.clients.Load(origin); ok {
 		return c.(*grpc.ClientConn), nil

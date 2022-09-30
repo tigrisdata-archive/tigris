@@ -44,6 +44,7 @@ func (set *HashSet) Contains(s string) bool {
 	}
 	return false
 }
+
 func (set *HashSet) ToList() []string {
 	list := make([]string, 0, len(set.stringMap))
 	for k := range set.stringMap {

@@ -29,10 +29,10 @@ import (
 )
 
 var (
-	// ErrSessionIsNotStarted is returned when the session is not started but is getting used
+	// ErrSessionIsNotStarted is returned when the session is not started but is getting used.
 	ErrSessionIsNotStarted = errors.Internal("session not started")
 
-	// ErrSessionIsGone is returned when the session is gone but getting used
+	// ErrSessionIsGone is returned when the session is gone but getting used.
 	ErrSessionIsGone = errors.Internal("session is gone")
 )
 
@@ -236,9 +236,9 @@ func (s *TxSession) ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key,
 		return s.kTx.ReadRange(ctx, lKey.Table(), kv.BuildKey(lKey.IndexParts()...), kv.BuildKey(rKey.IndexParts()...), isSnapshot)
 	} else if lKey != nil {
 		return s.kTx.ReadRange(ctx, lKey.Table(), kv.BuildKey(lKey.IndexParts()...), nil, isSnapshot)
-	} else {
-		return s.kTx.ReadRange(ctx, lKey.Table(), nil, kv.BuildKey(rKey.IndexParts()...), isSnapshot)
 	}
+
+	return s.kTx.ReadRange(ctx, lKey.Table(), nil, kv.BuildKey(rKey.IndexParts()...), isSnapshot)
 }
 
 func (s *TxSession) SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error {

@@ -28,7 +28,7 @@ import (
 )
 
 func BuildFields(reqFields jsoniter.RawMessage) (*FieldFactory, error) {
-	var factory = &FieldFactory{}
+	factory := &FieldFactory{}
 
 	if len(reqFields) == 0 {
 		return factory, nil
@@ -305,8 +305,7 @@ func (j *JSONObject) GetKey() []byte {
 }
 
 func (j *JSONObject) GetValue() []byte {
-	switch j.DataType {
-	case jsonparser.String:
+	if j.DataType == jsonparser.String {
 		return []byte(fmt.Sprintf(`"%s"`, j.Value))
 	}
 

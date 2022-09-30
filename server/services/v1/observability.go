@@ -40,7 +40,7 @@ const (
 	observabilityPattern     = "/" + version + "/observability/*"
 	AcceptHeader             = "Accept"
 	ApplicationJsonHeaderVal = "application/json"
-	DDApiKey                 = "DD-API-KEY"
+	DDApiKey                 = "DD-API-KEY" //nolint:golint,gosec
 	DDAppKey                 = "DD-APPLICATION-KEY"
 	Query                    = "query"
 	DDQueryEndpointPath      = "/api/v1/query"
@@ -157,7 +157,6 @@ func (dd Datadog) QueryTimeSeriesMetrics(ctx context.Context, req *api.QueryTime
 }
 
 func newObservabilityService() *observabilityService {
-
 	if config.DefaultConfig.Observability.Provider == "datadog" {
 		return &observabilityService{
 			UnimplementedObservabilityServer: api.UnimplementedObservabilityServer{},
@@ -210,14 +209,13 @@ func formQuery(ctx context.Context, req *api.QueryTimeSeriesMetricsRequest) (str
 	ddQuery := fmt.Sprintf("%s:%s", strings.ToLower(req.SpaceAggregation.String()), req.MetricName)
 	var tags []string
 
-	if req.TigrisOperation != api.TigrisOperation_ALL {
-		if req.TigrisOperation == api.TigrisOperation_WRITE {
-			tags = append(tags, "grpc_method IN (insert,update,delete,replace,publish) AND ")
-		} else if req.TigrisOperation == api.TigrisOperation_READ {
-			tags = append(tags, "grpc_method IN (read,search,subscribe) AND ")
-		} else if req.TigrisOperation == api.TigrisOperation_METADATA {
-			tags = append(tags, "grpc_method IN (createorupdatecollection,dropcollection,listdatabases,listcollections,createdatabase,dropdatabase,describedatabase,describecollection) AND ")
-		}
+	switch req.TigrisOperation {
+	case api.TigrisOperation_WRITE:
+		tags = append(tags, "grpc_method IN (insert,update,delete,replace,publish) AND ")
+	case api.TigrisOperation_READ:
+		tags = append(tags, "grpc_method IN (read,search,subscribe) AND ")
+	case api.TigrisOperation_METADATA:
+		tags = append(tags, "grpc_method IN (createorupdatecollection,dropcollection,listdatabases,listcollections,createdatabase,dropdatabase,describedatabase,describecollection) AND ")
 	}
 
 	if config.GetEnvironment() != "" {

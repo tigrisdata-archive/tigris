@@ -71,7 +71,8 @@ func TestDatadogQueryFormation(t *testing.T) {
 		To:               10,
 		MetricName:       "requests_count_ok.count",
 		SpaceAggregation: api.MetricQuerySpaceAggregation_SUM,
-		Function:         api.MetricQueryFunction_RATE}
+		Function:         api.MetricQueryFunction_RATE,
+	}
 	formedQuery, err = formQuery(ctx, req)
 	require.NoError(t, err)
 	require.Equal(t, "sum:requests_count_ok.count{db:db1 AND collection:col1}.as_rate()", formedQuery)
@@ -104,7 +105,8 @@ func TestDatadogQueryFormation(t *testing.T) {
 		MetricName:        "requests_count_ok.count",
 		SpaceAggregatedBy: []string{"db,collection"},
 		SpaceAggregation:  api.MetricQuerySpaceAggregation_SUM,
-		Function:          api.MetricQueryFunction_RATE}
+		Function:          api.MetricQueryFunction_RATE,
+	}
 	formedQuery, err = formQuery(ctx, req)
 	require.NoError(t, err)
 	require.Equal(t, "sum:requests_count_ok.count{db:db1 AND collection:col1} by {db,collection}.as_rate()", formedQuery)
@@ -118,7 +120,8 @@ func TestDatadogQueryFormation(t *testing.T) {
 		TigrisOperation:   api.TigrisOperation_ALL,
 		SpaceAggregatedBy: []string{"db,collection"},
 		SpaceAggregation:  api.MetricQuerySpaceAggregation_SUM,
-		Function:          api.MetricQueryFunction_RATE}
+		Function:          api.MetricQueryFunction_RATE,
+	}
 	formedQuery, err = formQuery(ctx, req)
 	require.NoError(t, err)
 	require.Equal(t, "sum:requests_count_ok.count{db:db1 AND collection:col1} by {db,collection}.as_rate()", formedQuery)
@@ -132,7 +135,8 @@ func TestDatadogQueryFormation(t *testing.T) {
 		TigrisOperation:   api.TigrisOperation_READ,
 		SpaceAggregatedBy: []string{"db,collection"},
 		SpaceAggregation:  api.MetricQuerySpaceAggregation_SUM,
-		Function:          api.MetricQueryFunction_RATE}
+		Function:          api.MetricQueryFunction_RATE,
+	}
 	formedQuery, err = formQuery(ctx, req)
 	require.NoError(t, err)
 	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (read,search,subscribe) AND db:db1 AND collection:col1} by {db,collection}.as_rate()", formedQuery)
@@ -146,7 +150,8 @@ func TestDatadogQueryFormation(t *testing.T) {
 		TigrisOperation:   api.TigrisOperation_WRITE,
 		SpaceAggregatedBy: []string{"db,collection"},
 		SpaceAggregation:  api.MetricQuerySpaceAggregation_SUM,
-		Function:          api.MetricQueryFunction_RATE}
+		Function:          api.MetricQueryFunction_RATE,
+	}
 	formedQuery, err = formQuery(ctx, req)
 	require.NoError(t, err)
 	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (insert,update,delete,replace,publish) AND db:db1 AND collection:col1} by {db,collection}.as_rate()", formedQuery)
@@ -157,7 +162,8 @@ func TestDatadogQueryFormation(t *testing.T) {
 		MetricName:       "requests_count_ok.count",
 		TigrisOperation:  api.TigrisOperation_WRITE,
 		SpaceAggregation: api.MetricQuerySpaceAggregation_SUM,
-		Function:         api.MetricQueryFunction_RATE}
+		Function:         api.MetricQueryFunction_RATE,
+	}
 	formedQuery, err = formQuery(ctx, req)
 	require.NoError(t, err)
 	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (insert,update,delete,replace,publish)}.as_rate()", formedQuery)
@@ -168,7 +174,8 @@ func TestDatadogQueryFormation(t *testing.T) {
 		MetricName:       "requests_count_ok.count",
 		TigrisOperation:  api.TigrisOperation_READ,
 		SpaceAggregation: api.MetricQuerySpaceAggregation_SUM,
-		Function:         api.MetricQueryFunction_RATE}
+		Function:         api.MetricQueryFunction_RATE,
+	}
 	formedQuery, err = formQuery(ctx, req)
 	require.NoError(t, err)
 	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (read,search,subscribe)}.as_rate()", formedQuery)
@@ -179,7 +186,8 @@ func TestDatadogQueryFormation(t *testing.T) {
 		MetricName:       "requests_count_ok.count",
 		TigrisOperation:  api.TigrisOperation_METADATA,
 		SpaceAggregation: api.MetricQuerySpaceAggregation_SUM,
-		Function:         api.MetricQueryFunction_RATE}
+		Function:         api.MetricQueryFunction_RATE,
+	}
 	formedQuery, err = formQuery(ctx, req)
 	require.NoError(t, err)
 	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (createorupdatecollection,dropcollection,listdatabases,listcollections,createdatabase,dropdatabase,describedatabase,describecollection)}.as_rate()", formedQuery)
@@ -233,7 +241,8 @@ func TestDatadogQueryFormation(t *testing.T) {
 		To:               10,
 		MetricName:       "requests_count_ok.count",
 		SpaceAggregation: api.MetricQuerySpaceAggregation_SUM,
-		Function:         api.MetricQueryFunction_RATE}
+		Function:         api.MetricQueryFunction_RATE,
+	}
 	formedQuery, err = formQuery(ctx, req)
 	require.NoError(t, err)
 	require.Equal(t, "sum:requests_count_ok.count{db:db1 AND collection:col1 AND tigris_tenant:test-namespace}.as_rate()", formedQuery)

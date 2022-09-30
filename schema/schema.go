@@ -68,14 +68,12 @@ const (
 	PrimaryKeyIndexName = "pkey"
 	AutoPrimaryKeyF     = "id"
 	PrimaryKeySchemaK   = "primary_key"
-	// DateTimeFormat represents the supported date time format
+	// DateTimeFormat represents the supported date time format.
 	DateTimeFormat  = time.RFC3339Nano
 	CollectionTypeF = "collection_type"
 )
 
-var (
-	boolTrue = true
-)
+var boolTrue = true
 
 type JSONSchema struct {
 	Name           string              `json:"title,omitempty"`
@@ -131,7 +129,7 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 		}
 	}
 
-	var schema = &JSONSchema{}
+	schema := &JSONSchema{}
 	if err = jsoniter.Unmarshal(reqSchema, schema); err != nil {
 		return nil, errors.Internal(fmt.Errorf("unmarshalling failed %w", err).Error())
 	}
@@ -148,7 +146,7 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 		return nil, errors.InvalidArgument("setting primary key is not supported for messages collection")
 	}
 
-	var primaryKeysSet = container.NewHashSet(schema.PrimaryKeys...)
+	primaryKeysSet := container.NewHashSet(schema.PrimaryKeys...)
 	fields, err := deserializeProperties(schema.Properties, primaryKeysSet)
 	if err != nil {
 		return nil, err
@@ -256,7 +254,7 @@ func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet contai
 				if f, err = builder.Items.Build(true); err != nil {
 					return err
 				}
-				builder.Fields = append(nestedFields, f)
+				builder.Fields = append(nestedFields, f) //nolint:golint,gocritic
 			}
 		}
 

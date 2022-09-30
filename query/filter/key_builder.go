@@ -26,7 +26,7 @@ type KeyBuilder struct {
 	composer KeyComposer
 }
 
-// NewKeyBuilder returns a KeyBuilder
+// NewKeyBuilder returns a KeyBuilder.
 func NewKeyBuilder(composer KeyComposer) *KeyBuilder {
 	return &KeyBuilder{
 		composer: composer,
@@ -91,8 +91,9 @@ type KeyComposer interface {
 
 // StrictEqKeyComposer is to generate internal keys only if the condition is equality on the fields that are part of
 // the schema and all these fields are present in the filters. The following rules are applied for StrictEqKeyComposer
-//  - The userDefinedKeys(indexes defined in the schema) passed in parameter should be present in the filter
-//  - For AND filters it is possible to build internal keys for composite indexes, for OR it is not possible.
+//   - The userDefinedKeys(indexes defined in the schema) passed in parameter should be present in the filter
+//   - For AND filters it is possible to build internal keys for composite indexes, for OR it is not possible.
+//
 // So for OR filter an error is returned if it is used for indexes that are composite.
 type StrictEqKeyComposer struct {
 	// keyEncodingFunc returns encoded key from index parts
@@ -105,9 +106,9 @@ func NewStrictEqKeyComposer(keyEncodingFunc func(indexParts ...interface{}) (key
 	}
 }
 
-// Compose is implementing the logic of composing keys
+// Compose is implementing the logic of composing keys.
 func (s *StrictEqKeyComposer) Compose(selectors []*Selector, userDefinedKeys []*schema.Field, parent LogicalOP) ([]keys.Key, error) {
-	var compositeKeys = make([][]*Selector, 1) // allocate just for the first keyParts
+	compositeKeys := make([][]*Selector, 1) // allocate just for the first keyParts
 	for _, k := range userDefinedKeys {
 		var repeatedFields []*Selector
 		for _, sel := range selectors {

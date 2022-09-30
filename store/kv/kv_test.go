@@ -259,7 +259,7 @@ func benchKV(t *testing.T, kv baseKVStore) {
 	var ops int64
 	timer := time.NewTimer(1 * time.Second)
 	start := time.Now()
-	var sigClose = make(chan struct{})
+	sigClose := make(chan struct{})
 	var wg sync.WaitGroup
 	for i := 0; i < 256; i++ {
 		wg.Add(1)
@@ -653,7 +653,7 @@ func TestKVFDB(t *testing.T) {
 }
 
 func TestGetCtxTimeout(t *testing.T) {
-	//FIXME: time.Now dependent, may be flaky on slow machine
+	// FIXME: time.Now dependent, may be flaky on slow machine
 	// positive timeout set in the context
 	ctx, cancel1 := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel1()

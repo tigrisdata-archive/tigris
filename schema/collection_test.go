@@ -103,43 +103,56 @@ func TestCollection_SchemaValidate(t *testing.T) {
 		{
 			document: []byte(`{"id": 1, "product": "hello", "price": 1.01}`),
 			expError: "",
-		}, {
+		},
+		{
 			document: []byte(fmt.Sprintf(`{"id": 1, "product": "hello", "price": 1.01, "random": %s}`, string(base64Encoded))),
 			expError: "",
-		}, {
+		},
+		{
 			document: []byte(`{"id": 1, "price": 1}`),
 			expError: "",
-		}, {
+		},
+		{
 			document: []byte(`{"id": 1.01}`),
 			expError: "expected integer, but got number",
-		}, {
+		},
+		{
 			document: []byte(`{"id": 1, "product": 1.01}`),
 			expError: "expected string, but got number",
-		}, {
+		},
+		{
 			document: []byte(`{"id": 1, "random": 1}`),
 			expError: "expected string, but got number",
-		}, {
+		},
+		{
 			document: []byte(`{"id": 1, "simple_items": ["1"]}`),
 			expError: "expected integer, but got string",
-		}, {
+		},
+		{
 			document: []byte(`{"id": 1, "simple_items": [1, 1.2]}`),
 			expError: "expected integer, but got number",
-		}, {
+		},
+		{
 			document: []byte(`{"id": 1, "simple_items": [1, 2]}`),
 			expError: "",
-		}, {
+		},
+		{
 			document: []byte(`{"id": 1, "product_items": [1, 2]}`),
 			expError: "expected object, but got number",
-		}, {
+		},
+		{
 			document: []byte(`{"id": 1, "product_items": [{"id": 1, "item_name": 2}]}`),
 			expError: "expected string, but got number",
-		}, {
+		},
+		{
 			document: []byte(`{"id": 1, "product_items": [{"id": 1, "item_name": "foo"}]}`),
 			expError: "",
-		}, {
+		},
+		{
 			document: []byte(fmt.Sprintf(`{"id": 1, "id_uuid": "%s"}`, uuid.New().String())),
 			expError: "",
-		}, {
+		},
+		{
 			document: []byte(`{"id": 1, "id_uuid": "hello"}`),
 			expError: "field 'id_uuid' reason ''hello' is not valid 'uuid'",
 		},
@@ -154,26 +167,33 @@ func TestCollection_SchemaValidate(t *testing.T) {
 		{
 			document: []byte(`{"id": 1, "ts": "2016-02-15"}`),
 			expError: "field 'ts' reason ''2016-02-15' is not valid 'date-time'",
-		}, {
+		},
+		{
 			document: []byte(`{"id": 1, "random_binary": 1}`),
 			expError: "expected string, but got number",
-		}, {
+		},
+		{
 			document: []byte(fmt.Sprintf(`{"id": 1, "random_binary": "%s"}`, []byte(`1`))),
 			expError: "",
-		}, {
+		},
+		{
 			// if additional properties are set then reject the request
 			document: []byte(fmt.Sprintf(`{"id": 1, "random_binary": "%s", "extra_key": "hello"}`, []byte(`1`))),
 			expError: "reason 'additionalProperties 'extra_key' not allowed",
-		}, {
+		},
+		{
 			document: []byte(`{"id": 123456789, "id_32": 2147483647}`),
 			expError: "",
-		}, {
+		},
+		{
 			document: []byte(`{"id": 123456789, "id_32": 2147483648}`),
 			expError: "reason '2147483648 is not valid 'int32'",
-		}, {
+		},
+		{
 			document: []byte(`{"id": 123456789, "id_32": 2147483647, "id_64": 2147483648}`),
 			expError: "",
-		}, {
+		},
+		{
 			document: []byte(`{"id": 123456789, "id_32": 2147483647, "id_64": 9223372036854775808}`),
 			expError: "reason '9223372036854775808 is not valid 'int64'",
 		},
@@ -282,7 +302,8 @@ func TestCollection_SearchSchema(t *testing.T) {
 	schFactory, err := Build("t1", reqSchema)
 	require.NoError(t, err)
 
-	expFlattenedFields := []string{"id", "_tigris_id", "id_32", "product", "id_uuid", "ts", ToSearchDateKey("ts"), "price", "simple_items", "simple_object.name",
+	expFlattenedFields := []string{
+		"id", "_tigris_id", "id_32", "product", "id_uuid", "ts", ToSearchDateKey("ts"), "price", "simple_items", "simple_object.name",
 		"simple_object.phone", "simple_object.address.street", "simple_object.details.nested_id", "simple_object.details.nested_obj.id",
 		"simple_object.details.nested_obj.name", "simple_object.details.nested_array", "simple_object.details.nested_string",
 		"created_at", "updated_at",

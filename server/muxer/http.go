@@ -16,6 +16,7 @@ package muxer
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
@@ -26,6 +27,8 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/middleware"
 )
+
+const readHeaderTimeout = 5 * time.Second
 
 type HTTPServer struct {
 	Router chi.Router
@@ -50,7 +53,7 @@ func NewHTTPServer(cfg *config.Config) *HTTPServer {
 func (s *HTTPServer) Start(mux cmux.CMux) error {
 	match := mux.Match(cmux.HTTP1Fast())
 	go func() {
-		srv := &http.Server{Handler: s.Router}
+		srv := &http.Server{Handler: s.Router, ReadHeaderTimeout: readHeaderTimeout}
 		err := srv.Serve(match)
 		log.Fatal().Err(err).Msg("start http server")
 	}()

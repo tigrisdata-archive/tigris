@@ -51,7 +51,7 @@ func TestCreateCollection(t *testing.T) {
 	t.Run("status_conflict", func(t *testing.T) {
 		dropCollection(t, db, coll)
 
-		var createOrUpdateOptions = map[string]interface{}{
+		createOrUpdateOptions := map[string]interface{}{
 			"only_create": true,
 		}
 		for key, value := range testCreateSchema {
@@ -155,11 +155,13 @@ func TestCollection_Update(t *testing.T) {
 			"type change",
 			Map{"schema": Map{"title": coll, "properties": Map{"int_field": Map{"type": "string"}, "string_field": Map{"type": "string"}}, "primary_key": []any{"int_field"}}},
 			http.StatusBadRequest,
-		}, {
+		},
+		{
 			"field removed",
 			Map{"schema": Map{"title": coll, "properties": Map{"int_field": Map{"type": "integer"}}, "primary_key": []any{"int_field"}}},
 			http.StatusBadRequest,
-		}, {
+		},
+		{
 			"success adding a field",
 			Map{"schema": Map{"title": coll, "properties": Map{"int_field": Map{"type": "integer"}, "string_field": Map{"type": "string"}, "extra_field": Map{"type": "string"}}, "primary_key": []any{"int_field"}}},
 			http.StatusOK,

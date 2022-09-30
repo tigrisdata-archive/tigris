@@ -45,7 +45,6 @@ func TestFacetCountComparator(t *testing.T) {
 }
 
 func TestSortedFacets(t *testing.T) {
-
 	t.Run("Retrieves facet counts in a descending order", func(t *testing.T) {
 		var tsCounts tsApi.FacetCounts
 		facets := NewSortedFacets()

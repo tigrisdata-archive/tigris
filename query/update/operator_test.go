@@ -95,7 +95,7 @@ func TestMergeAndGet_MarshalInput(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		var reqInput = make(map[string]interface{})
+		reqInput := make(map[string]interface{})
 		reqInput[string(c.apply)] = c.inputDoc
 		input, err := jsoniter.Marshal(reqInput)
 		require.NoError(t, err)

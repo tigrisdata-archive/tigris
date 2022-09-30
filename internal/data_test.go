@@ -37,7 +37,6 @@ func TestEncode_Decode(t *testing.T) {
 		require.Equal(t, errors.Internal("unable to decode '123'"), err)
 		require.Nil(t, data)
 	})
-
 }
 
 func Benchmark_MsgPack(b *testing.B) {

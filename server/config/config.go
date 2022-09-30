@@ -20,14 +20,12 @@ import (
 	"os/exec"
 	"strings"
 
-	ulog "github.com/tigrisdata/tigris/util/log"
-
-	"github.com/spf13/pflag"
-
 	"github.com/davecgh/go-spew/spew"
 	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	ulog "github.com/tigrisdata/tigris/util/log"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -41,11 +39,13 @@ var configPath = []string{
 var configFile string
 
 // envPrefix is used by viper to detect environment variables that should be used.
-// viper will automatically uppercase this and append _ to it
+// viper will automatically uppercase this and append _ to it.
 var envPrefix = "tigris_server"
 
-var envEnv = "tigris_environment"
-var environment string
+var (
+	envEnv      = "tigris_environment"
+	environment string
+)
 
 const (
 	EnvDevelopment = "dev"
@@ -130,7 +130,7 @@ func LoadConfig(config interface{}) {
 
 	viper.OnConfigChange(func(e fsnotify.Event) {
 		log.Debug().Str("notify", e.Name).Msg("Config file changed")
-		//TODO: handle config change
+		// TODO: handle config change
 	})
 
 	viper.WatchConfig()

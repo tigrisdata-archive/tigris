@@ -77,8 +77,7 @@ func TestGRPCMetrics(t *testing.T) {
 	t.Run("Test unary method preinitialized tags", func(t *testing.T) {
 		tags := unaryEndPointMetadata.GetInitialTags()
 		for tagName, tagValue := range tags {
-			switch tagName {
-			case "grpc_method":
+			if tagName == "grpc_method" {
 				assert.Equal(t, tagValue, "TestUnaryMethod")
 			}
 		}
@@ -87,8 +86,7 @@ func TestGRPCMetrics(t *testing.T) {
 	t.Run("Test streaming method preinitialized tags", func(t *testing.T) {
 		tags := streamingEndpointMetadata.GetInitialTags()
 		for tagName, tagValue := range tags {
-			switch tagName {
-			case "grpc_method":
+			if tagName == "grpc_method" {
 				assert.Equal(t, tagValue, "TestStreamingMethod")
 			}
 		}

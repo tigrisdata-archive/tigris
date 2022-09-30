@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//	http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,7 +22,7 @@ import (
 )
 
 func TestLogicalToSearch(t *testing.T) {
-	var factory = Factory{
+	factory := Factory{
 		fields: []*schema.QueryableField{
 			schema.NewQueryableField("f1", schema.Int64Type),
 			schema.NewQueryableField("f2", schema.Int64Type),
@@ -68,10 +68,12 @@ func TestLogicalToSearch(t *testing.T) {
 
 	// Flattening will result in 4 OR combinations
 	js = []byte(`{"f1": 10, "f2": 10, "$or": [{"f3": 20}, {"$and": [{"f4":5}, {"f5": 6}]}], "$and": [{"a": 20}, {"$or": [{"b":5}, {"c": 6}]}, {"$and": [{"e":5}, {"f": 6}]}]}`)
-	testLogicalSearch(t, js, factory, []string{"f1:=10&&f2:=10&&f3:=20&&a:=20&&b:=5&&e:=5&&f:=6",
+	testLogicalSearch(t, js, factory, []string{
+		"f1:=10&&f2:=10&&f3:=20&&a:=20&&b:=5&&e:=5&&f:=6",
 		"f1:=10&&f2:=10&&f3:=20&&a:=20&&c:=6&&e:=5&&f:=6",
 		"f1:=10&&f2:=10&&f4:=5&&f5:=6&&a:=20&&b:=5&&e:=5&&f:=6",
-		"f1:=10&&f2:=10&&f4:=5&&f5:=6&&a:=20&&c:=6&&e:=5&&f:=6"})
+		"f1:=10&&f2:=10&&f4:=5&&f5:=6&&a:=20&&c:=6&&e:=5&&f:=6",
+	})
 }
 
 func testLogicalSearch(t *testing.T, js []byte, factory Factory, expConverted []string) {

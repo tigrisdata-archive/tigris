@@ -16,10 +16,10 @@ package util
 
 import "github.com/tigrisdata/tigris/lib/container"
 
-// Version of this build
+// Version of this build.
 var Version string
 
-// Service program name used in logging and monitoring
+// Service program name used in logging and monitoring.
 var Service string = "tigris-server"
 
 var LanguageKeywords = container.NewHashSet("abstract", "add", "alias", "and", "any", "args", "arguments", "array",

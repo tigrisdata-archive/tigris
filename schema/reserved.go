@@ -51,7 +51,7 @@ func IsSearchID(name string) bool {
 }
 
 // ToSearchDateKey can be used to generate storage field for search backend
-// Original date strings are persisted as it is under this field
+// Original date strings are persisted as it is under this field.
 func ToSearchDateKey(key string) string {
 	return ReservedFields[DateSearchKeyPrefix] + key
 }

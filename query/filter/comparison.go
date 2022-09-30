@@ -41,7 +41,7 @@ type ValueMatcher interface {
 	GetValue() value.Value
 }
 
-// NewMatcher returns ValueMatcher that is derived from the key
+// NewMatcher returns ValueMatcher that is derived from the key.
 func NewMatcher(key string, v value.Value) (ValueMatcher, error) {
 	switch key {
 	case EQ:
@@ -74,7 +74,7 @@ type EqualityMatcher struct {
 	Value value.Value
 }
 
-// NewEqualityMatcher returns EqualityMatcher object
+// NewEqualityMatcher returns EqualityMatcher object.
 func NewEqualityMatcher(v value.Value) *EqualityMatcher {
 	return &EqualityMatcher{
 		Value: v,

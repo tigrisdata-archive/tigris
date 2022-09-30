@@ -25,6 +25,4 @@ const (
 	STREAMING ContentType = "application/x-json-stream; charset=utf-8"
 )
 
-var (
-	MyOrigin, _ = os.Hostname()
-)
+var MyOrigin, _ = os.Hostname()

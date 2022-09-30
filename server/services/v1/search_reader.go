@@ -106,15 +106,15 @@ func (p *pageReader) read() error {
 	sortedFacets := tsearch.NewSortedFacets()
 	for _, r := range result {
 		if r.Hits != nil {
-			for _, h := range *r.Hits {
-				hit := tsearch.NewSearchHit(&h)
+			for i := range *r.Hits {
+				hit := tsearch.NewSearchHit(&(*r.Hits)[i])
 				sortedHits.Add(hit)
 			}
 		}
 
 		if r.FacetCounts != nil {
-			for _, fc := range *r.FacetCounts {
-				if ulog.E(sortedFacets.Add(&fc)) {
+			for i := range *r.FacetCounts {
+				if ulog.E(sortedFacets.Add(&(*r.FacetCounts)[i])) {
 					continue
 				}
 			}
@@ -122,7 +122,7 @@ func (p *pageReader) read() error {
 	}
 
 	p.pageNo++
-	var pg = newPage(p.query.PageSize)
+	pg := newPage(p.query.PageSize)
 
 	for sortedHits.HasMoreHits() {
 		hit, err := sortedHits.Get()

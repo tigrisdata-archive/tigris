@@ -31,7 +31,7 @@ type LogConfig struct {
 	SampleRate float64 `mapstructure:"sample_rate" yaml:"sample_rate" json:"sample_rate"`
 }
 
-// trim full path. output in the form directory/file.go
+// trim full path. output in the form directory/file.go.
 func consoleFormatCaller(i interface{}) string {
 	var c string
 	if cc, ok := i.(string); ok {
@@ -47,7 +47,7 @@ func consoleFormatCaller(i interface{}) string {
 	return c
 }
 
-// Configure default logger
+// Configure default logger.
 func Configure(config LogConfig) {
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
@@ -69,16 +69,16 @@ func Configure(config LogConfig) {
 // in the case of error
 // Used like this:
 //
-// if E(err) {
-//     return err
-// }
+//	if E(err) {
+//	    return err
+//	}
 //
 // to replace:
 //
-// if err != nil {
-//     log.Msgf(err.Error())
-//     return err
-// }
+//	if err != nil {
+//	    log.Msgf(err.Error())
+//	    return err
+//	}
 func E(err error) bool {
 	if err == nil {
 		return false
@@ -98,8 +98,7 @@ func E(err error) bool {
 //
 // err := fmt.Errorf("msg, value %v", value)
 // log.Msgf("msg, value %v", value)
-// return err
-//
+// return err.
 func CE(format string, args ...interface{}) error {
 	err := fmt.Errorf(format, args...)
 

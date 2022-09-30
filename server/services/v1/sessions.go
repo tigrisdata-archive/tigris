@@ -303,7 +303,7 @@ func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, runner Quer
 			}
 
 			log.Debug().Msgf("retrying transactions id: %s, since: %v", session.txCtx.Id, time.Since(start))
-			time.Sleep(time.Duration(rand.Intn(25)) * time.Millisecond)
+			time.Sleep(time.Duration(rand.Intn(25)) * time.Millisecond) //nolint:golint,gosec
 		}
 	}
 }
@@ -375,7 +375,7 @@ func (s *QuerySession) Commit(versionMgr *metadata.VersionHandler, incVersion bo
 	return err
 }
 
-// sessionTracker is used to track sessions
+// sessionTracker is used to track sessions.
 type sessionTracker struct {
 	sync.RWMutex
 

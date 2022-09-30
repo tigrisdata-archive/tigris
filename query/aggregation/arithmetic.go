@@ -21,13 +21,13 @@ import (
 	"github.com/tigrisdata/tigris/query/expression"
 )
 
-// supported arithmetic operators
+// supported arithmetic operators.
 const (
 	add      = "$add"
 	multiply = "$multiply"
 )
 
-// ArithmeticFactory to return the object of the arithmeticOp type
+// ArithmeticFactory to return the object of the arithmeticOp type.
 type ArithmeticFactory struct {
 	Add      *ArithmeticOp `json:"$add,omitempty"`
 	Multiply *ArithmeticOp `json:"$multiply,omitempty"`
