@@ -34,14 +34,18 @@ running quickly and efficiently.
 
 # Helpful Links
 
-- [Key Concepts](https://docs.tigrisdata.com/overview/concepts)
 - [Quickstart](https://docs.tigrisdata.com/quickstart)
-- [Data Modeling](https://docs.tigrisdata.com/overview/datamodel)
-- [Tutorials](https://docs.tigrisdata.com/category/tutorials)
-- [Client Library: Go](https://docs.tigrisdata.com/golang/getting-started)
-- [Client Library: Java](https://docs.tigrisdata.com/java/getting-started)
-- [Client Library: TypeScript](https://docs.tigrisdata.com/typescript/getting-started)
-- [Command Line Interface](https://docs.tigrisdata.com/cli)
+- [Architecture](https://docs.tigrisdata.com/overview/architecture)
+- [Databases and Collections](https://docs.tigrisdata.com/overview/databases)
+- [Documents](https://docs.tigrisdata.com/documents/)
+- [Event Streaming](https://docs.tigrisdata.com/events/)
+- [Search](https://docs.tigrisdata.com/searching/)
+- [Observability](https://docs.tigrisdata.com/observability/)
+- [TypeScript Reference](https://docs.tigrisdata.com/typescript/)
+- [Go Reference](https://docs.tigrisdata.com/golang/)
+- [Java Reference](https://docs.tigrisdata.com/java/)
+- [CLI](https://docs.tigrisdata.com/cli)
+- [Guides](https://docs.tigrisdata.com/guides/)
 
 # Community & Support
 
