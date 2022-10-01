@@ -488,7 +488,7 @@ func testPubSub(t *testing.T, c driver.Driver) {
 				"type": "boolean"
 			}
 		},
-        "collection_type": "messages"
+        "collection_type": "topic"
 	}`
 
 	err := c.CreateDatabase(ctx, dbName)

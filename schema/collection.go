@@ -68,7 +68,7 @@ type CollectionType string
 
 const (
 	DocumentsType CollectionType = "documents"
-	MessagesType  CollectionType = "messages"
+	TopicType     CollectionType = "topic"
 )
 
 func disableAdditionalProperties(properties map[string]*jsonschema.Schema) {

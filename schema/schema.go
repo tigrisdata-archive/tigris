@@ -107,8 +107,8 @@ func GetCollectionType(reqSchema jsoniter.RawMessage) (CollectionType, error) {
 		switch string(val) {
 		case "documents":
 			return DocumentsType, nil
-		case "messages":
-			return MessagesType, nil
+		case "messages", "topic":
+			return TopicType, nil
 		}
 	}
 	if dt == jsonparser.NotExist {
@@ -125,7 +125,7 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 		return nil, err
 	}
 
-	if cType != MessagesType {
+	if cType != TopicType {
 		if reqSchema, err = setPrimaryKey(reqSchema, jsonSpecFormatUUID, true); err != nil {
 			return nil, err
 		}
@@ -144,7 +144,7 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 
 	if len(schema.PrimaryKeys) == 0 && cType == DocumentsType {
 		return nil, errors.InvalidArgument("missing primary key field in schema")
-	} else if len(schema.PrimaryKeys) > 0 && cType == MessagesType {
+	} else if len(schema.PrimaryKeys) > 0 && cType == TopicType {
 		return nil, errors.InvalidArgument("setting primary key is not supported for messages collection")
 	}
 
