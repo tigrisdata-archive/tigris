@@ -325,7 +325,7 @@ func (runner *BaseQueryRunner) mustBeDocumentsCollection(collection *schema.Defa
 }
 
 func (runner *BaseQueryRunner) mustBeMessagesCollection(collection *schema.DefaultCollection, method string) error {
-	if collection.Type() != schema.MessagesType {
+	if collection.Type() != schema.TopicType {
 		return errors.InvalidArgument("%s is only supported on collection type of 'messages'", method)
 	}
 
@@ -652,7 +652,7 @@ func (runner *StreamingQueryRunner) buildReaderOptions(tenant *metadata.Tenant, 
 		}
 	}
 
-	if collection.Type() == schema.MessagesType {
+	if collection.Type() == schema.TopicType {
 		// if it is event streaming then fallback to indexing store for all reads
 		if !config.IsIndexingStoreReadEnabled() {
 			if options.from == nil {

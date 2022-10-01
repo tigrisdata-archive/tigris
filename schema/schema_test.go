@@ -366,10 +366,10 @@ func TestGetCollectionType(t *testing.T) {
 			"type": "integer"
 		}
 	},
-    "collection_type": "messages"
+    "collection_type": "topic"
 }`)
 
 	ty, err = GetCollectionType(schema)
-	require.Equal(t, MessagesType, ty)
+	require.Equal(t, TopicType, ty)
 	require.NoError(t, err)
 }
