@@ -1,15 +1,18 @@
 <p align="center">
-  <a href="https://www.tigrisdata.com/"><img src="docs/assets/tigris-logo-wordmark.svg" alt="Tigris" width="298" /></a> 
+  <a href="https://www.tigrisdata.com/"><img src="https://docs.tigrisdata.com/logo/dark.png" alt="Tigris" width="298" /></a> 
 </p>
 
 <p align="center">
-For developers who want to build scalable web and mobile apps fast!
+Tigris is the all-in-one open source developer data platform. 
 </p>
 
 <p align="center">
-With a zero-ops scalable pub/sub messaging system and fault-tolerant 
-cloud-native database, <br/> Tigris provides everything you need to get up and 
-running quickly and efficiently.
+Use it as a
+scalable transactional document store. Perform real-time search across your
+data stores automatically. Build event-driven apps with real-time event
+streaming. All provided to you through a unified serverless API enabling you
+to focus on building applications and stop worrying about the data
+infrastructure.
 </p>
 
 <p align="center">
