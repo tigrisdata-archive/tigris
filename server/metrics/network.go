@@ -14,7 +14,10 @@
 
 package metrics
 
-import "github.com/uber-go/tally"
+import (
+	"github.com/tigrisdata/tigris/server/config"
+	"github.com/uber-go/tally"
+)
 
 var (
 	BytesReceived tally.Scope
@@ -24,9 +27,7 @@ var (
 func getNetworkTagKeys() []string {
 	return []string{
 		"grpc_method",
-		"grpc_service",
 		"tigris_tenant",
-		"grpc_service_type",
 		"env",
 		"db",
 		"collection",
@@ -38,12 +39,16 @@ func initializeNetworkScopes() {
 	BytesSent = NetworkMetrics.SubScope("bytes")
 }
 
-func (s *SpanMeta) CountSentBytes(scope tally.Scope, tags map[string]string, size int) {
-	// proto.Size has int, need to convert it here
-	scope.Tagged(tags).Counter("sent").Inc(int64(size))
+func (m *Measurement) CountSentBytes(scope tally.Scope, tags map[string]string, size int) {
+	if config.DefaultConfig.Metrics.Network.Enabled {
+		// proto.Size has int, need to convert it here
+		scope.Tagged(tags).Counter("sent").Inc(int64(size))
+	}
 }
 
-func (s *SpanMeta) CountReceivedBytes(scope tally.Scope, tags map[string]string, size int) {
-	// proto.Size has int, need to convert it here
-	scope.Tagged(tags).Counter("received").Inc(int64(size))
+func (m *Measurement) CountReceivedBytes(scope tally.Scope, tags map[string]string, size int) {
+	if config.DefaultConfig.Metrics.Network.Enabled {
+		// proto.Size has int, need to convert it here
+		scope.Tagged(tags).Counter("received").Inc(int64(size))
+	}
 }

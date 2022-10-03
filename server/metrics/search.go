@@ -28,9 +28,7 @@ var (
 func getSearchOkTagKeys() []string {
 	return []string{
 		"grpc_method",
-		"grpc_service",
 		"tigris_tenant",
-		"grpc_service_type",
 		"env",
 		"db",
 		"collection",
@@ -41,9 +39,7 @@ func getSearchOkTagKeys() []string {
 func getSearchErrorTagKeys() []string {
 	return []string{
 		"grpc_method",
-		"grpc_service",
 		"tigris_tenant",
-		"grpc_service_type",
 		"env",
 		"db",
 		"collection",

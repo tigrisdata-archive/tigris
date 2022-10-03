@@ -33,6 +33,7 @@ type Config struct {
 	Cdc           CdcConfig       `yaml:"cdc" json:"cdc"`
 	Search        SearchConfig    `yaml:"search" json:"search"`
 	Tracing       TracingConfig   `yaml:"tracing" json:"tracing"`
+	Metrics       MetricsConfig   `yaml:"metrics" json:"metrics"`
 	Profiling     ProfilingConfig `yaml:"profiling" json:"profiling"`
 	FoundationDB  FoundationDBConfig
 	Quota         QuotaConfig
@@ -76,6 +77,74 @@ type TracingConfig struct {
 	WithDogStatsdAddr   string  `mapstructure:"dogstatsd_addr" yaml:"dogstatsd_addr" json:"dogstatsd_addr"`
 }
 
+type MetricsConfig struct {
+	Enabled        bool                      `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	TimerQuantiles []float64                 `mapstructure:"quantiles" yaml:"quantiles" json:"quantiles"`
+	Requests       RequestsMetricGroupConfig `mapstructure:"requests" yaml:"requests" json:"requests"`
+	Fdb            FdbMetricGroupConfig      `mapstructure:"fdb" yaml:"fdb" json:"fdb"`
+	Search         SearchMetricGroupConfig   `mapstructure:"search" yaml:"search" json:"search"`
+	Session        SessionMetricGroupConfig  `mapstructure:"session" yaml:"session" json:"session"`
+	Size           SizeMetricGroupConfig     `mapstructure:"size" yaml:"size" json:"size"`
+	Network        NetworkMetricGroupConfig  `mapstructure:"network" yaml:"network" json:"network"`
+	Auth           AuthMetricsConfig         `mapstructure:"auth" yaml:"auth" json:"auth"`
+}
+
+type TimerConfig struct {
+	TimerEnabled     bool `mapstructure:"timer_enabled" yaml:"timer_enabled" json:"timer_enabled"`
+	HistogramEnabled bool `mapstructure:"histogram_enabled" yaml:"histogram_enabled" json:"histogram_enabled"`
+}
+
+type CounterConfig struct {
+	OkEnabled    bool `mapstructure:"ok_enabled" yaml:"ok_enabled" json:"ok_enabled"`
+	ErrorEnabled bool `mapstructure:"error_enabled" yaml:"error_enabled" json:"error_enabled"`
+}
+
+type RequestsMetricGroupConfig struct {
+	Enabled      bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Counter      CounterConfig `mapstructure:"counter" yaml:"counter" json:"counter"`
+	Timer        TimerConfig   `mapstructure:"timer" yaml:"timer" json:"timer"`
+	FilteredTags []string      `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
+}
+
+type FdbMetricGroupConfig struct {
+	Enabled      bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Counter      CounterConfig `mapstructure:"counter" yaml:"counter" json:"counter"`
+	Timer        TimerConfig   `mapstructure:"timer" yaml:"timer" json:"timer"`
+	FilteredTags []string      `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
+}
+
+type SearchMetricGroupConfig struct {
+	Enabled      bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Counter      CounterConfig `mapstructure:"counter" yaml:"counter" json:"counter"`
+	Timer        TimerConfig   `mapstructure:"timer" yaml:"timer" json:"timer"`
+	FilteredTags []string      `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
+}
+
+type SessionMetricGroupConfig struct {
+	Enabled      bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Counter      CounterConfig `mapstructure:"counter" yaml:"counter" json:"counter"`
+	Timer        TimerConfig   `mapstructure:"timer" yaml:"timer" json:"timer"`
+	FilteredTags []string      `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
+}
+
+type SizeMetricGroupConfig struct {
+	Enabled      bool     `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Namespace    bool     `mapstructure:"namespace" yaml:"namespace" json:"namespace"`
+	Db           bool     `mapstructure:"db" yaml:"db" json:"db"`
+	Collection   bool     `mapstructure:"collection" yaml:"collection" json:"collection"`
+	FilteredTags []string `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
+}
+
+type NetworkMetricGroupConfig struct {
+	Enabled      bool     `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	FilteredTags []string `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
+}
+
+type AuthMetricsConfig struct {
+	Enabled      bool     `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	FilteredTags []string `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
+}
+
 type ProfilingConfig struct {
 	Enabled         bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 	EnableCPU       bool `mapstructure:"enable_cpu" yaml:"enable_cpu" json:"enable_cpu"`
@@ -83,24 +152,6 @@ type ProfilingConfig struct {
 	EnableBlock     bool `mapstructure:"enable_block" yaml:"enable_block" json:"enable_block"`
 	EnableMutex     bool `mapstructure:"enable_mutex" yaml:"enable_mutex" json:"enable_mutex"`
 	EnableGoroutine bool `mapstructure:"enable_goroutine" yaml:"enable_goroutine" json:"enable_goroutine"`
-}
-
-type GrpcMetricsConfig struct {
-	Enabled      bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	Counters     bool `mapstructure:"counters" yaml:"counters" json:"counters"`
-	ResponseTime bool `mapstructure:"response_time" yaml:"response_time" json:"response_time"`
-}
-
-type FdbMetricsConfig struct {
-	Enabled      bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	Counters     bool `mapstructure:"counters" yaml:"counters" json:"counters"`
-	ResponseTime bool `mapstructure:"response_time" yaml:"response_time" json:"response_time"`
-}
-
-type SearchMetricsConfig struct {
-	Enabled      bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	Counters     bool `mapstructure:"counters" yaml:"counters" json:"counters"`
-	ResponseTime bool `mapstructure:"response_time" yaml:"response_time" json:"response_time"`
 }
 
 type ManagementConfig struct {
@@ -150,6 +201,73 @@ var DefaultConfig = Config{
 		SampleRate:          0.01,
 		CodeHotspotsEnabled: true,
 		EndpointsEnabled:    true,
+	},
+	Metrics: MetricsConfig{
+		Enabled:        true,
+		TimerQuantiles: []float64{0.5, 0.95},
+		Requests: RequestsMetricGroupConfig{
+			Enabled: true,
+			Counter: CounterConfig{
+				OkEnabled:    true,
+				ErrorEnabled: true,
+			},
+			Timer: TimerConfig{
+				TimerEnabled:     true,
+				HistogramEnabled: false,
+			},
+			FilteredTags: nil,
+		},
+		Fdb: FdbMetricGroupConfig{
+			Enabled: true,
+			Counter: CounterConfig{
+				OkEnabled:    true,
+				ErrorEnabled: true,
+			},
+			Timer: TimerConfig{
+				TimerEnabled:     true,
+				HistogramEnabled: false,
+			},
+			FilteredTags: nil,
+		},
+		Search: SearchMetricGroupConfig{
+			Enabled: true,
+			Counter: CounterConfig{
+				OkEnabled:    true,
+				ErrorEnabled: true,
+			},
+			Timer: TimerConfig{
+				TimerEnabled:     true,
+				HistogramEnabled: false,
+			},
+			FilteredTags: nil,
+		},
+		Session: SessionMetricGroupConfig{
+			Enabled: true,
+			Counter: CounterConfig{
+				OkEnabled:    true,
+				ErrorEnabled: true,
+			},
+			Timer: TimerConfig{
+				TimerEnabled:     true,
+				HistogramEnabled: false,
+			},
+			FilteredTags: nil,
+		},
+		Size: SizeMetricGroupConfig{
+			Enabled:      true,
+			Namespace:    true,
+			Db:           true,
+			Collection:   true,
+			FilteredTags: nil,
+		},
+		Network: NetworkMetricGroupConfig{
+			Enabled:      true,
+			FilteredTags: nil,
+		},
+		Auth: AuthMetricsConfig{
+			Enabled:      true,
+			FilteredTags: nil,
+		},
 	},
 	Profiling: ProfilingConfig{
 		Enabled:    false,

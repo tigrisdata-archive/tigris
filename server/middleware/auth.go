@@ -109,18 +109,18 @@ func GetJWTValidator(config *config.Config) *validator.Validator {
 }
 
 func measuredAuthFunction(ctx context.Context, jwtValidator *validator.Validator, config *config.Config, cache *lru.Cache) (ctxResult context.Context, err error) {
-	spanMeta := metrics.NewSpanMeta("auth", "auth", metrics.AuthSpanType, metrics.GetAuthBaseTags(ctx))
-	spanMeta.StartTracing(ctx, true)
+	measurement := metrics.NewMeasurement("auth", "auth", metrics.AuthSpanType, metrics.GetAuthBaseTags(ctx))
+	measurement.StartTracing(ctx, true)
 	ctxResult, err = authFunction(ctx, jwtValidator, config, cache)
 	if err != nil {
-		metrics.AuthErrorCount.Tagged(spanMeta.GetAuthErrorTags(err)).Counter("error").Inc(1)
-		spanMeta.FinishWithError(ctxResult, "auth", err)
-		spanMeta.RecordDuration(metrics.AuthErrorRespTime, spanMeta.GetAuthErrorTags(err))
+		measurement.CountErrorForScope(metrics.AuthErrorCount, measurement.GetAuthErrorTags(err))
+		measurement.FinishWithError(ctxResult, "auth", err)
+		measurement.RecordDuration(metrics.AuthErrorRespTime, measurement.GetAuthErrorTags(err))
 		return
 	}
-	metrics.AuthOkCount.Tagged(spanMeta.GetAuthOkTags()).Counter("ok").Inc(1)
-	spanMeta.FinishTracing(ctxResult)
-	spanMeta.RecordDuration(metrics.AuthRespTime, spanMeta.GetAuthOkTags())
+	measurement.CountOkForScope(metrics.AuthOkCount, measurement.GetAuthOkTags())
+	measurement.FinishTracing(ctxResult)
+	measurement.RecordDuration(metrics.AuthRespTime, measurement.GetAuthOkTags())
 	return
 }
 

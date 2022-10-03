@@ -28,9 +28,7 @@ var (
 func getFdbOkTagKeys() []string {
 	return []string{
 		"grpc_method",
-		"grpc_service",
 		"tigris_tenant",
-		"grpc_service_type",
 		"env",
 		"db",
 		"collection",
@@ -41,9 +39,7 @@ func getFdbOkTagKeys() []string {
 func getFdbErrorTagKeys() []string {
 	return []string{
 		"grpc_method",
-		"grpc_service",
 		"tigris_tenant",
-		"grpc_service_type",
 		"env",
 		"db",
 		"collection",
@@ -67,8 +63,8 @@ func GetFdbErrorTags(reqMethodName string, code string) map[string]string {
 	}
 }
 
-func GetFdbBaseTags(reqMthodName string) map[string]string {
-	return GetFdbOkTags(reqMthodName)
+func GetFdbBaseTags(reqMethodName string) map[string]string {
+	return GetFdbOkTags(reqMethodName)
 }
 
 func initializeFdbScopes() {
