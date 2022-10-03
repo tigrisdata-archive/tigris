@@ -114,13 +114,11 @@ func (r *RequestMetadata) GetMethodInfo() grpc.MethodInfo {
 
 func (r *RequestMetadata) GetInitialTags() map[string]string {
 	return map[string]string{
-		"grpc_method":       r.methodInfo.Name,
-		"grpc_service":      r.serviceName,
-		"tigris_tenant":     r.unauthenticatedNamespaceName,
-		"grpc_service_type": r.GetServiceType(),
-		"env":               config.GetEnvironment(),
-		"db":                UnknownValue,
-		"collection":        UnknownValue,
+		"grpc_method":   r.methodInfo.Name,
+		"tigris_tenant": r.unauthenticatedNamespaceName,
+		"env":           config.GetEnvironment(),
+		"db":            UnknownValue,
+		"collection":    UnknownValue,
 	}
 }
 

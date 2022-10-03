@@ -55,6 +55,7 @@ func TestFdbMetrics(t *testing.T) {
 
 	t.Run("Test FDB timers", func(t *testing.T) {
 		testTimerTags := GetFdbOkTags("Insert")
-		defer FdbMetrics.Tagged(testTimerTags).Timer("time").Start().Stop()
+		defer FdbRespTime.Tagged(testTimerTags).Timer("time").Start().Stop()
+		defer FdbErrorRespTime.Tagged(testTimerTags).Timer("time").Start().Stop()
 	})
 }

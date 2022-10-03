@@ -19,9 +19,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/tigrisdata/tigris/server/config"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/tigrisdata/tigris/server/config"
 )
 
 type FakeError struct{}
@@ -31,50 +30,50 @@ func (f *FakeError) Error() string {
 }
 
 func TestTracing(t *testing.T) {
-	t.Run("Test NewSpanMeta", func(t *testing.T) {
+	t.Run("Test NewMeasurement", func(t *testing.T) {
 		tags := GetGlobalTags()
-		testSpanMeta := NewSpanMeta("test.service.name", "TestResource", "rpc", GetGlobalTags())
-		assert.Equal(t, "test.service.name", testSpanMeta.serviceName)
-		assert.Equal(t, "TestResource", testSpanMeta.resourceName)
-		assert.Equal(t, "rpc", testSpanMeta.spanType)
-		assert.Equal(t, tags, testSpanMeta.tags)
-		assert.Nil(t, testSpanMeta.span)
-		assert.Nil(t, testSpanMeta.parent)
+		testMeasurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
+		assert.Equal(t, "test.service.name", testMeasurement.serviceName)
+		assert.Equal(t, "TestResource", testMeasurement.resourceName)
+		assert.Equal(t, "rpc", testMeasurement.spanType)
+		assert.Equal(t, tags, testMeasurement.tags)
+		assert.Nil(t, testMeasurement.span)
+		assert.Nil(t, testMeasurement.parent)
 	})
 
 	t.Run("Test GetSpanOptions", func(t *testing.T) {
-		spanMeta := NewSpanMeta("test.service.name", "TestResource", "rpc", GetGlobalTags())
-		options := spanMeta.GetSpanOptions()
+		testMeasurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
+		options := testMeasurement.GetSpanOptions()
 		assert.Greater(t, len(options), 2)
 	})
 
 	t.Run("Test parent and child spans", func(t *testing.T) {
 		config.DefaultConfig.Tracing.Enabled = true
 		ctx := context.Background()
-		parentSpanMeta := NewSpanMeta("parent.service", "parent.resource", "rpc", GetGlobalTags())
-		ctx = parentSpanMeta.StartTracing(ctx, false)
-		childSpanMeta := NewSpanMeta("child.service", "child.resource", "rpc", GetGlobalTags())
-		ctx = childSpanMeta.StartTracing(ctx, true)
-		assert.NotNil(t, childSpanMeta.span)
-		assert.NotNil(t, childSpanMeta.parent)
-		assert.Equal(t, "parent.service", childSpanMeta.parent.serviceName)
-		grandChildSpanMeta := NewSpanMeta("grandchild.service", "grandchild.resource", "rpc", GetGlobalTags())
-		ctx = grandChildSpanMeta.StartTracing(ctx, true)
-		assert.NotNil(t, grandChildSpanMeta.span)
-		assert.NotNil(t, grandChildSpanMeta.parent)
-		assert.Equal(t, "child.service", grandChildSpanMeta.parent.serviceName)
-		ctx = grandChildSpanMeta.FinishTracing(ctx)
-		loadedChildSpanMeta, ok := SpanMetaFromContext(ctx)
-		assert.NotNil(t, loadedChildSpanMeta.span)
+		parentMeasurement := NewMeasurement("parent.service", "parent.resource", "rpc", GetGlobalTags())
+		ctx = parentMeasurement.StartTracing(ctx, false)
+		childMeasurement := NewMeasurement("child.service", "child.resource", "rpc", GetGlobalTags())
+		ctx = childMeasurement.StartTracing(ctx, true)
+		assert.NotNil(t, childMeasurement.span)
+		assert.NotNil(t, childMeasurement.parent)
+		assert.Equal(t, "parent.service", childMeasurement.parent.serviceName)
+		grandChildMeasurement := NewMeasurement("grandchild.service", "grandchild.resource", "rpc", GetGlobalTags())
+		ctx = grandChildMeasurement.StartTracing(ctx, true)
+		assert.NotNil(t, grandChildMeasurement.span)
+		assert.NotNil(t, grandChildMeasurement.parent)
+		assert.Equal(t, "child.service", grandChildMeasurement.parent.serviceName)
+		ctx = grandChildMeasurement.FinishTracing(ctx)
+		loadedChildMeasurement, ok := MeasurementFromContext(ctx)
+		assert.NotNil(t, loadedChildMeasurement.span)
 		assert.True(t, ok)
-		assert.Equal(t, "child.service", loadedChildSpanMeta.serviceName)
-		ctx = childSpanMeta.FinishTracing(ctx)
-		loadedParentSpanMeta, ok := SpanMetaFromContext(ctx)
-		assert.NotNil(t, loadedParentSpanMeta)
+		assert.Equal(t, "child.service", loadedChildMeasurement.serviceName)
+		ctx = childMeasurement.FinishTracing(ctx)
+		loadedParentMeasurement, ok := MeasurementFromContext(ctx)
+		assert.NotNil(t, loadedParentMeasurement)
 		assert.True(t, ok)
-		assert.Equal(t, "parent.service", loadedParentSpanMeta.serviceName)
-		ctx = parentSpanMeta.FinishTracing(ctx)
-		loadedNilMeta, ok := SpanMetaFromContext(ctx)
+		assert.Equal(t, "parent.service", loadedParentMeasurement.serviceName)
+		ctx = parentMeasurement.FinishTracing(ctx)
+		loadedNilMeta, ok := MeasurementFromContext(ctx)
 		assert.Nil(t, loadedNilMeta)
 		assert.False(t, ok)
 	})
@@ -83,29 +82,29 @@ func TestTracing(t *testing.T) {
 		config.DefaultConfig.Tracing.Enabled = true
 		InitializeMetrics()
 		ctx := context.Background()
-		spanMeta := NewSpanMeta("test.service.name", "TestResource", "rpc", GetGlobalTags())
-		spanMeta.StartTracing(ctx, false)
-		spanMeta.FinishTracing(ctx)
-		spanMeta.RecordDuration(RequestsRespTime, spanMeta.GetRequestOkTags())
-		spanMeta.CountOkForScope(RequestsOkCount, spanMeta.GetRequestOkTags())
+		measurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
+		measurement.StartTracing(ctx, false)
+		measurement.FinishTracing(ctx)
+		measurement.RecordDuration(RequestsRespTime, measurement.GetRequestOkTags())
+		measurement.CountOkForScope(RequestsOkCount, measurement.GetRequestOkTags())
 		err := fmt.Errorf("hello error")
-		spanMeta.CountErrorForScope(RequestsErrorCount, spanMeta.GetRequestErrorTags(err))
+		measurement.CountErrorForScope(RequestsErrorCount, measurement.GetRequestErrorTags(err))
 	})
 
 	t.Run("Test request tags", func(t *testing.T) {
 		config.DefaultConfig.Tracing.Enabled = true
 		InitializeMetrics()
-		spanMeta := NewSpanMeta("test.service.name", "TestResource", "rpc", GetGlobalTags())
-		spanMeta.AddTags(map[string]string{
+		measurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
+		measurement.AddTags(map[string]string{
 			"brokentag": "brokenvalue",
 		})
-		requestOkTags := spanMeta.GetRequestOkTags()
+		requestOkTags := measurement.GetRequestOkTags()
 		for _, key := range getRequestOkTagKeys() {
 			assert.NotNil(t, requestOkTags[key])
 		}
 		assert.Equal(t, len(getRequestOkTagKeys()), len(requestOkTags))
 
-		requestErrorTags := spanMeta.GetRequestErrorTags(&FakeError{})
+		requestErrorTags := measurement.GetRequestErrorTags(&FakeError{})
 		for _, key := range getRequestErrorTagKeys() {
 			assert.NotNil(t, requestErrorTags[key])
 		}
@@ -115,17 +114,17 @@ func TestTracing(t *testing.T) {
 	t.Run("Test fdb tags", func(t *testing.T) {
 		config.DefaultConfig.Tracing.Enabled = true
 		InitializeMetrics()
-		spanMeta := NewSpanMeta("test.service.name", "TestResource", "rpc", GetGlobalTags())
-		spanMeta.AddTags(map[string]string{
+		measurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
+		measurement.AddTags(map[string]string{
 			"brokentag": "brokenvalue",
 		})
-		fdbOkTags := spanMeta.GetFdbOkTags()
+		fdbOkTags := measurement.GetFdbOkTags()
 		for _, key := range getFdbOkTagKeys() {
 			assert.NotNil(t, fdbOkTags[key])
 		}
 		assert.Equal(t, len(getFdbOkTagKeys()), len(fdbOkTags))
 
-		fdbErrorTags := spanMeta.GetFdbErrorTags(&FakeError{})
+		fdbErrorTags := measurement.GetFdbErrorTags(&FakeError{})
 		for _, key := range getFdbErrorTagKeys() {
 			assert.NotNil(t, fdbErrorTags[key])
 		}
@@ -135,17 +134,17 @@ func TestTracing(t *testing.T) {
 	t.Run("Test search tags", func(t *testing.T) {
 		config.DefaultConfig.Tracing.Enabled = true
 		InitializeMetrics()
-		spanMeta := NewSpanMeta("test.service.name", "TestResource", "rpc", GetGlobalTags())
-		spanMeta.AddTags(map[string]string{
+		measurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
+		measurement.AddTags(map[string]string{
 			"brokentag": "brokenvalue",
 		})
-		searchOkTags := spanMeta.GetSearchOkTags()
+		searchOkTags := measurement.GetSearchOkTags()
 		for _, key := range getSearchOkTagKeys() {
 			assert.NotNil(t, searchOkTags[key])
 		}
 		assert.Equal(t, len(getSearchOkTagKeys()), len(searchOkTags))
 
-		searchErrorTags := spanMeta.GetSearchErrorTags(&FakeError{})
+		searchErrorTags := measurement.GetSearchErrorTags(&FakeError{})
 		for _, key := range getSearchErrorTagKeys() {
 			assert.NotNil(t, searchErrorTags[key])
 		}
@@ -155,17 +154,17 @@ func TestTracing(t *testing.T) {
 	t.Run("Test session tags", func(t *testing.T) {
 		config.DefaultConfig.Tracing.Enabled = true
 		InitializeMetrics()
-		spanMeta := NewSpanMeta("test.service.name", "TestResource", "rpc", GetGlobalTags())
-		spanMeta.AddTags(map[string]string{
+		measurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
+		measurement.AddTags(map[string]string{
 			"brokentag": "brokenvalue",
 		})
-		sessionOkTags := spanMeta.GetSessionOkTags()
+		sessionOkTags := measurement.GetSessionOkTags()
 		for _, key := range getSessionOkTagKeys() {
 			assert.NotNil(t, sessionOkTags[key])
 		}
 		assert.Equal(t, len(getSessionOkTagKeys()), len(sessionOkTags))
 
-		sessionErrorTags := spanMeta.GetSessionErrorTags(&FakeError{})
+		sessionErrorTags := measurement.GetSessionErrorTags(&FakeError{})
 		for _, key := range getSessionErrorTagKeys() {
 			assert.NotNil(t, sessionErrorTags[key])
 		}
@@ -175,24 +174,24 @@ func TestTracing(t *testing.T) {
 	t.Run("Test size tags", func(t *testing.T) {
 		config.DefaultConfig.Tracing.Enabled = true
 		InitializeMetrics()
-		spanMeta := NewSpanMeta("test.service.name", "TestResource", "rpc", GetGlobalTags())
-		spanMeta.AddTags(map[string]string{
+		measurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
+		measurement.AddTags(map[string]string{
 			"brokentag": "brokenvalue",
 		})
 
-		namespaceSizeTags := spanMeta.GetNamespaceSizeTags()
+		namespaceSizeTags := measurement.GetNamespaceSizeTags()
 		for _, key := range getNameSpaceSizeTagKeys() {
 			assert.NotNil(t, namespaceSizeTags[key])
 		}
 		assert.Equal(t, len(getNameSpaceSizeTagKeys()), len(namespaceSizeTags))
 
-		dbSizeTags := spanMeta.GetDbSizeTags()
+		dbSizeTags := measurement.GetDbSizeTags()
 		for _, key := range getDbSizeTagKeys() {
 			assert.NotNil(t, dbSizeTags[key])
 		}
 		assert.Equal(t, len(getDbSizeTagKeys()), len(dbSizeTags))
 
-		collSizeTags := spanMeta.GetCollectionSizeTags()
+		collSizeTags := measurement.GetCollectionSizeTags()
 		for _, key := range getCollectionSizeTagKeys() {
 			assert.NotNil(t, collSizeTags[key])
 		}
@@ -202,12 +201,12 @@ func TestTracing(t *testing.T) {
 	t.Run("Test network tags", func(t *testing.T) {
 		config.DefaultConfig.Tracing.Enabled = true
 		InitializeMetrics()
-		spanMeta := NewSpanMeta("test.service.name", "TestResource", "rpc", GetGlobalTags())
-		spanMeta.AddTags(map[string]string{
+		measurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
+		measurement.AddTags(map[string]string{
 			"brokentag": "brokenvalue",
 		})
 
-		networkTags := spanMeta.GetNetworkTags()
+		networkTags := measurement.GetNetworkTags()
 		for _, key := range getNetworkTagKeys() {
 			assert.NotNil(t, networkTags[key])
 		}

@@ -83,19 +83,19 @@ func getCollectionSizeTags(namespaceName string, dbName string, collectionName s
 }
 
 func UpdateNameSpaceSizeMetrics(namespaceName string, size int64) {
-	if config.DefaultConfig.Tracing.Enabled {
+	if config.DefaultConfig.Metrics.Size.Enabled && config.DefaultConfig.Metrics.Size.Namespace {
 		NamespaceSize.Tagged(getNamespaceSizeTags(namespaceName)).Gauge("bytes").Update(float64(size))
 	}
 }
 
 func UpdateDbSizeMetrics(namespaceName string, dbName string, size int64) {
-	if config.DefaultConfig.Tracing.Enabled {
+	if config.DefaultConfig.Metrics.Size.Enabled && config.DefaultConfig.Metrics.Size.Db {
 		DbSize.Tagged(getDbSizeTags(namespaceName, dbName)).Gauge("bytes").Update(float64(size))
 	}
 }
 
 func UpdateCollectionSizeMetrics(namespaceName string, dbName string, collectionName string, size int64) {
-	if config.DefaultConfig.Tracing.Enabled {
+	if config.DefaultConfig.Metrics.Size.Enabled && config.DefaultConfig.Metrics.Size.Collection {
 		CollectionSize.Tagged(getCollectionSizeTags(namespaceName, dbName, collectionName)).Gauge("bytes").Update(float64(size))
 	}
 }

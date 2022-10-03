@@ -80,8 +80,6 @@ func TestGRPCMetrics(t *testing.T) {
 			switch tagName {
 			case "grpc_method":
 				assert.Equal(t, tagValue, "TestUnaryMethod")
-			case "grpc_service":
-				assert.Equal(t, tagValue, "tigrisdata.v1.Tigris")
 			}
 		}
 	})
@@ -92,8 +90,6 @@ func TestGRPCMetrics(t *testing.T) {
 			switch tagName {
 			case "grpc_method":
 				assert.Equal(t, tagValue, "TestStreamingMethod")
-			case "grpc_service":
-				assert.Equal(t, tagValue, "tigrisdata.v1.Tigris")
 			}
 		}
 	})

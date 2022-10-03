@@ -53,37 +53,76 @@ func GetGlobalTags() map[string]string {
 	}
 }
 
+func getTigrisDefaultSummaryObjectives() map[float64]float64 {
+	return map[float64]float64{
+		0.5:   0.01,
+		0.75:  0.001,
+		0.95:  0.001,
+		0.99:  0.001,
+		0.999: 0.0001,
+	}
+}
+
+func getTimerSummaryObjectives() map[float64]float64 {
+	res := make(map[float64]float64)
+	for confQuantile, objective := range getTigrisDefaultSummaryObjectives() {
+		for _, wantedQuantile := range config.DefaultConfig.Metrics.TimerQuantiles {
+			if confQuantile == float64(wantedQuantile) {
+				res[confQuantile] = objective
+			}
+		}
+	}
+	return res
+}
+
 func InitializeMetrics() io.Closer {
 	var closer io.Closer
 	log.Debug().Msg("Initializing metrics")
-	Reporter = promreporter.NewReporter(promreporter.Options{})
+	Reporter = promreporter.NewReporter(promreporter.Options{
+		DefaultSummaryObjectives: getTimerSummaryObjectives(),
+	})
 	root, closer = tally.NewRootScope(tally.ScopeOptions{
 		Tags:           GetGlobalTags(),
 		CachedReporter: Reporter,
 		// Panics with .
 		Separator: promreporter.DefaultSeparator,
 	}, 1*time.Second)
-	if config.DefaultConfig.Tracing.Enabled {
-		// Request level metrics (HTTP and GRPC)
-		Requests = root.SubScope("requests")
-		initializeRequestScopes()
-		// FDB level metrics
-		FdbMetrics = root.SubScope("fdb")
-		initializeFdbScopes()
-		// Search level metrics
-		SearchMetrics = root.SubScope("search")
-		initializeSearchScopes()
-		// Session level metrics
-		SessionMetrics = root.SubScope("session")
-		initializeSessionScopes()
-		// Size metrics
-		SizeMetrics = root.SubScope("size")
-		initializeSizeScopes()
-		// Network netrics
-		NetworkMetrics = root.SubScope("net")
-		initializeNetworkScopes()
-		AuthMetrics = root.SubScope("auth")
-		initializeAuthScopes()
+	if config.DefaultConfig.Metrics.Enabled {
+		if config.DefaultConfig.Metrics.Requests.Enabled {
+			// Request level metrics (HTTP and GRPC)
+			Requests = root.SubScope("requests")
+			initializeRequestScopes()
+		}
+		if config.DefaultConfig.Metrics.Fdb.Enabled {
+			// FDB level metrics
+			FdbMetrics = root.SubScope("fdb")
+			initializeFdbScopes()
+		}
+		if config.DefaultConfig.Metrics.Search.Enabled {
+			// Search level metrics
+			SearchMetrics = root.SubScope("search")
+			initializeSearchScopes()
+		}
+		if config.DefaultConfig.Metrics.Session.Enabled {
+			// Session level metrics
+			SessionMetrics = root.SubScope("session")
+			initializeSessionScopes()
+		}
+		if config.DefaultConfig.Metrics.Size.Enabled {
+			// Size metrics
+			SizeMetrics = root.SubScope("size")
+			initializeSizeScopes()
+		}
+		if config.DefaultConfig.Metrics.Network.Enabled {
+			// Network metrics
+			NetworkMetrics = root.SubScope("net")
+			initializeNetworkScopes()
+		}
+		if config.DefaultConfig.Metrics.Auth.Enabled {
+			// Auth metrics
+			AuthMetrics = root.SubScope("auth")
+			initializeAuthScopes()
+		}
 	}
 	return closer
 }

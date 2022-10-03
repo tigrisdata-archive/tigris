@@ -18,13 +18,13 @@ import "testing"
 
 func TestNetworkMetrics(t *testing.T) {
 	InitializeMetrics()
-	testSpanMeta := NewSpanMeta("test.service.name", "TestResource", "rpc", GetGlobalTags())
+	testMeasurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
 
 	t.Run("Test bytes send", func(t *testing.T) {
-		testSpanMeta.CountSentBytes(BytesSent, testSpanMeta.GetNetworkTags(), 100)
+		testMeasurement.CountSentBytes(BytesSent, testMeasurement.GetNetworkTags(), 100)
 	})
 
 	t.Run("Test bytes received", func(t *testing.T) {
-		testSpanMeta.CountReceivedBytes(BytesReceived, testSpanMeta.GetNetworkTags(), 100)
+		testMeasurement.CountReceivedBytes(BytesReceived, testMeasurement.GetNetworkTags(), 100)
 	})
 }

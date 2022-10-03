@@ -55,13 +55,13 @@ func (s *StreamingQueryMetrics) SetSort(value bool) {
 }
 
 func UpdateSpanTags(ctx context.Context, qm QueryMetrics) context.Context {
-	spanMeta, exists := SpanMetaFromContext(ctx)
+	measurement, exists := MeasurementFromContext(ctx)
 	if !exists {
 		// No instrumentation on upper levels
 		return ctx
 	}
-	spanMeta.RecursiveAddTags(qm.GetTags())
-	resCtx, err := spanMeta.SaveSpanMetaToContext(ctx)
+	measurement.RecursiveAddTags(qm.GetTags())
+	resCtx, err := measurement.SaveMeasurementToContext(ctx)
 	if err != nil {
 		ulog.E(err)
 	}

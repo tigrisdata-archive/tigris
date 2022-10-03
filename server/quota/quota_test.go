@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tigrisdata/tigris/server/metrics"
+
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/schema"
@@ -127,6 +129,7 @@ func TestQuotaManager(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	metrics.InitializeMetrics()
 	rand.Seed(time.Now().Unix())
 
 	ulog.Configure(ulog.LogConfig{Level: "disabled", Format: "console"})
