@@ -68,7 +68,7 @@ local_run: server
 run_full:
 	${DOCKER_COMPOSE} up --build --detach tigris_grafana
 	./${DOCKER_DIR}/grafana/set_admin_password.sh
-	./${DOCKER_DIR}/grafana/add_prometheus_datasource.sh
+	./${DOCKER_DIR}/grafana/add_victoriametrics_datasource.sh
 
 bins: $(BINS)
 

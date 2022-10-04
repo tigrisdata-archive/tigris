@@ -118,15 +118,27 @@ services:
     depends_on:
       - tigris_server2
 
-  tigris_prometheus:
-    container_name: tigris_prometheus
-    image: prom/prometheus
-    volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+  tigris_victoriametrics:
+    container_name: tigris_victoriametrics
+    image: victoriametrics/victoria-metrics
     ports:
-      - "9090:9090"
+      - "8428:8428"
     depends_on:
       - tigris_server
+
+  tigris_vmagent:
+    container_name: tigris_vmagent
+    image: victoriametrics/vmagent
+    ports:
+      - "8429:8429"
+    volumes:
+      - ./victoriametrics/vmagent.yml:/etc/victoriametrics/vmagent.yml
+    command:
+      - "-promscrape.config=/etc/victoriametrics/vmagent.yml"
+      - "-promscrape.config.strictParse=false"
+      - "-remoteWrite.url=http://tigris_victoriametrics:8428/api/v1/write"
+    depends_on:
+      - tigris_victoriametrics
 
   tigris_grafana:
     container_name: tigris_grafana
@@ -134,7 +146,8 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - tigris_prometheus
+      - tigris_victoriametrics
+      - tigris_vmagent
       - tigris_server
 
 volumes:

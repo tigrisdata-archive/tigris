@@ -24,29 +24,32 @@ if [ -z "${GRAFANA_URL}" ]; then
 	GRAFANA_URL="http://localhost:3000"
 fi
 
-if [ -z "${PROMETHEUS_URL}" ]; then
-	PROMETHEUS_URL="http://tigris_prometheus:9090"
+if [ -z "${VICROTIAMETRICS_URL}" ]; then
+	VICROTIAMETRICS_URL="http://tigris_victoriametrics:8428"
 fi
 
-function add_prometheus {
+function add_victoriametrics {
 	curl -s \
 		-u admin:"${GRAFANA_PASSWORD}" \
 		"${GRAFANA_URL}/api/datasources" \
 		-X POST \
-		--data "{\"name\": \"tigris_prometheus\", \"type\": \"prometheus\", \"url\": \"${PROMETHEUS_URL}\", \"access\": \"proxy\"}" \
+		--data "{\"name\": \"tigris_victoriametrics\",
+						 \"type\": \"prometheus\",
+						 \"url\": \"${VICROTIAMETRICS_URL}\",
+						 \"access\": \"proxy\"}" \
 		--header 'content-type: application/json'
 }
 
 max_tries=20
 for i in $(seq 1 ${max_tries}); do
-	if add_prometheus; then
+	if add_victoriametrics; then
 		echo
-		echo "Successfully added prometheus data source"
+		echo "Successfully added victoriametrics data source"
 		echo "Grafana available at: $GRAFANA_URL"
-		echo "Prometheus available at: http://localhost:9090"
+		echo "Victoriametrics available at: http://localhost:8428"
 		break
 	else
-		echo "Adding prometheus was not successful, retrying soon. Iteration: $i"
+		echo "Adding victoriametrics was not successful, retrying soon. Iteration: $i"
 		sleep 0.5
 	fi
 done
