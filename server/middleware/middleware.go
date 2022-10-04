@@ -47,7 +47,7 @@ func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerI
 		metadataExtractorStream(),
 	}
 
-	if config.Tracing.Enabled {
+	if config.Metrics.Enabled || config.Tracing.Enabled {
 		streamInterceptors = append(streamInterceptors, measureStream())
 	}
 
@@ -77,7 +77,7 @@ func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerI
 		metadataExtractorUnary(),
 	}
 
-	if config.Tracing.Enabled {
+	if config.Metrics.Enabled || config.Tracing.Enabled {
 		unaryInterceptors = append(unaryInterceptors, measureUnary())
 	}
 
