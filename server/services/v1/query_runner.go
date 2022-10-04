@@ -16,10 +16,12 @@ package v1
 
 import (
 	"context"
+	"hash/fnv"
 	"math"
 	"math/rand"
 	"time"
 
+	"github.com/buger/jsonparser"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
@@ -1146,6 +1148,9 @@ func (runner *PublishQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 
 	var part int
 	if runner.req.Options != nil && runner.req.Options.Partition != nil {
+		if len(coll.PartitionFields) > 0 {
+			return nil, ctx, errors.InvalidArgument("Partition number cannot be specified for schema with partition key")
+		}
 		part = int(*runner.req.Options.Partition)
 		if part < 0 || part >= partitions {
 			return nil, ctx, errors.InvalidArgument("Invalid partition number `%d`", part)
@@ -1172,8 +1177,8 @@ func (runner *PublishQueryRunner) publish(ctx context.Context, tx transaction.Tx
 	var allKeys [][]byte
 	var keyOffset int64
 	ts := internal.NewTimestamp()
-	for _, doc := range messages {
-		doc, err = runner.mutateAndValidatePayload(coll, doc)
+	for _, message := range messages {
+		message, err = runner.mutateAndValidatePayload(coll, message)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1181,6 +1186,13 @@ func (runner *PublishQueryRunner) publish(ctx context.Context, tx transaction.Tx
 		table, err := runner.encoder.EncodePartitionTableName(tenant.GetNamespace(), db, coll)
 		if err != nil {
 			return nil, nil, err
+		}
+
+		if len(coll.PartitionFields) > 0 {
+			part, err = partFromFields(coll.PartitionFields, message, part)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 
 		keyTime := ts.UnixNano() + keyOffset
@@ -1194,7 +1206,7 @@ func (runner *PublishQueryRunner) publish(ctx context.Context, tx transaction.Tx
 			return nil, nil, err
 		}
 
-		tableData := internal.NewTableDataWithTS(ts, nil, doc)
+		tableData := internal.NewTableDataWithTS(ts, nil, message)
 		err = tx.Replace(ctx, key, tableData, false)
 		if err != nil {
 			return nil, nil, err
@@ -1202,6 +1214,28 @@ func (runner *PublishQueryRunner) publish(ctx context.Context, tx transaction.Tx
 		keyOffset++
 	}
 	return ts, allKeys, err
+}
+
+func partFromFields(partitionFields []*schema.Field, message []byte, part uint16) (uint16, error) {
+	hash := fnv.New32()
+	count := 0
+
+	for _, field := range partitionFields {
+		val, dt, _, err := jsonparser.Get(message, field.FieldName)
+		if dt != jsonparser.NotExist {
+			if err != nil {
+				return 0, err
+			}
+			_, _ = hash.Write(val)
+			count++
+		}
+	}
+
+	if count > 0 {
+		part = uint16(hash.Sum32() % partitions)
+	}
+
+	return part, nil
 }
 
 type SubscribeQueryRunner struct {
@@ -1212,7 +1246,7 @@ type SubscribeQueryRunner struct {
 }
 
 // TODO: number of partitions needs to be defined by schema, with defaults and maximum specified by configuration.
-const partitions = 1
+const partitions = 64
 
 func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetDb())
