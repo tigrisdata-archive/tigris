@@ -18,6 +18,7 @@ import (
 	"context"
 
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/quota"
 	"github.com/tigrisdata/tigris/server/request"
 	"google.golang.org/grpc"
@@ -32,22 +33,29 @@ type quotaStream struct {
 func quotaUnaryServerInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		ns, _ := request.GetNamespace(ctx)
-		if err := quota.Allow(ctx, ns, proto.Size(req.(proto.Message)), request.IsWrite(ctx)); err != nil {
-			return nil, err
+
+		if m := info.FullMethod; m != api.HealthMethodName && !request.IsAdminApi(m) {
+			if err := quota.Allow(ctx, ns, proto.Size(req.(proto.Message)), request.IsWrite(ctx)); err != nil {
+				return nil, err
+			}
 		}
+
 		return handler(ctx, req)
 	}
 }
 
 func quotaStreamServerInterceptor() grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		ns, _ := request.GetNamespace(stream.Context())
-		wrapped := &quotaStream{
-			WrappedServerStream: middleware.WrapServerStream(stream),
-			namespace:           ns,
+		if m := info.FullMethod; m != api.HealthMethodName && !request.IsAdminApi(m) {
+			ns, _ := request.GetNamespace(stream.Context())
+			wrapped := &quotaStream{
+				WrappedServerStream: middleware.WrapServerStream(stream),
+				namespace:           ns,
+			}
+			return handler(srv, wrapped)
 		}
 
-		return handler(srv, wrapped)
+		return handler(srv, stream)
 	}
 }
 

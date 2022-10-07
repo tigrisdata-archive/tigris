@@ -21,31 +21,38 @@ import (
 )
 
 const (
-	methodPrefix = "/tigrisdata.v1.Tigris/"
+	HealthMethodName = "/HealthAPI/Health"
 
-	InsertMethodName  = methodPrefix + "Insert"
-	ReplaceMethodName = methodPrefix + "Replace"
-	UpdateMethodName  = methodPrefix + "Update"
-	DeleteMethodName  = methodPrefix + "Delete"
-	ReadMethodName    = methodPrefix + "Read"
+	apiMethodPrefix = "/tigrisdata.v1.Tigris/"
 
-	SearchMethodName = methodPrefix + "Search"
+	InsertMethodName  = apiMethodPrefix + "Insert"
+	ReplaceMethodName = apiMethodPrefix + "Replace"
+	UpdateMethodName  = apiMethodPrefix + "Update"
+	DeleteMethodName  = apiMethodPrefix + "Delete"
+	ReadMethodName    = apiMethodPrefix + "Read"
 
-	SubscribeMethodName = methodPrefix + "Subscribe"
+	SearchMethodName = apiMethodPrefix + "Search"
 
-	EventsMethodName = methodPrefix + "Events"
+	SubscribeMethodName = apiMethodPrefix + "Subscribe"
 
-	CommitTransactionMethodName   = methodPrefix + "CommitTransaction"
-	RollbackTransactionMethodName = methodPrefix + "RollbackTransaction"
+	EventsMethodName = apiMethodPrefix + "Events"
 
-	CreateOrUpdateCollectionMethodName = methodPrefix + "CreateOrUpdateCollection"
-	DropCollectionMethodName           = methodPrefix + "DropCollection"
+	CommitTransactionMethodName   = apiMethodPrefix + "CommitTransaction"
+	RollbackTransactionMethodName = apiMethodPrefix + "RollbackTransaction"
 
-	ListDatabasesMethodName   = methodPrefix + "ListDatabases"
-	ListCollectionsMethodName = methodPrefix + "ListCollections"
+	CreateOrUpdateCollectionMethodName = apiMethodPrefix + "CreateOrUpdateCollection"
+	DropCollectionMethodName           = apiMethodPrefix + "DropCollection"
 
-	DescribeDatabaseMethodName   = methodPrefix + "DescribeDatabase"
-	DescribeCollectionMethodName = methodPrefix + "DescribeCollection"
+	DropDatabaseMethodName = apiMethodPrefix + "DropDatabase"
+
+	ListDatabasesMethodName   = apiMethodPrefix + "ListDatabases"
+	ListCollectionsMethodName = apiMethodPrefix + "ListCollections"
+
+	DescribeDatabaseMethodName   = apiMethodPrefix + "DescribeDatabase"
+	DescribeCollectionMethodName = apiMethodPrefix + "DescribeCollection"
+
+	ObservabilityMethodPrefix = "/tigrisdata.observability.v1.Observability/"
+	ManagementMethodPrefix    = "/tigrisdata.management.v1.Management/"
 )
 
 func IsTxSupported(ctx context.Context) bool {

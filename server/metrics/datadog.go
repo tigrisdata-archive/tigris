@@ -41,6 +41,7 @@ var (
 
 type Datadog struct {
 	apiClient *datadog.APIClient
+	host      map[string]string
 }
 
 func InitDatadog(cfg *config.Config) *Datadog {
@@ -50,11 +51,14 @@ func InitDatadog(cfg *config.Config) *Datadog {
 	c.AddDefaultHeader(dDAppKey, cfg.Observability.AppKey)
 
 	d.apiClient = datadog.NewAPIClient(c)
+	d.host = map[string]string{"site": cfg.Observability.ProviderUrl}
 
 	return &d
 }
 
 func (d *Datadog) Query(ctx context.Context, from int64, to int64, query string) (*datadog.MetricsQueryResponse, error) {
+	ctx = context.WithValue(ctx, datadog.ContextServerVariables, d.host)
+
 	resp, hResp, err := d.apiClient.MetricsApi.QueryMetrics(ctx, from, to, query)
 	if ulog.E(err) {
 		return nil, errors.Internal("Failed to query metrics: reason = " + err.Error())
@@ -73,7 +77,7 @@ func (d *Datadog) Query(ctx context.Context, from int64, to int64, query string)
 
 	if resp.HasError() {
 		log.Error().Msgf("Datadog response status code=%d", hResp.StatusCode)
-		return nil, api.Errorf(api.FromHttpCode(hResp.StatusCode), "Failed to get query metrics: reason = "+resp.GetError())
+		return nil, api.Errorf(api.Code_INTERNAL, "Failed to get query metrics: reason = "+resp.GetError())
 	}
 
 	return &resp, nil
@@ -182,8 +186,8 @@ func convertToDDAggregatorFunc(aggregator api.RollupAggregator) string {
 }
 
 func (d *Datadog) GetCurrentMetricValue(ctx context.Context, namespace string, metric string, tp api.TigrisOperation, avgLength time.Duration) (int64, error) {
-	from := time.Now()
-	to := time.Now().Add(-avgLength)
+	to := time.Now()
+	from := time.Now().Add(-avgLength)
 
 	rateQuery := &api.QueryTimeSeriesMetricsRequest{
 		TigrisOperation:  tp,
@@ -210,12 +214,13 @@ func (d *Datadog) GetCurrentMetricValue(ctx context.Context, namespace string, m
 		return 0, err
 	}
 
-	if len(resp.GetSeries()) == 1 && len(resp.GetSeries()[0].Pointlist[0]) == 2 &&
+	if len(resp.GetSeries()) > 0 && len(resp.GetSeries()[0].Pointlist) > 0 &&
+		len(resp.GetSeries()[0].Pointlist[0]) > 1 &&
 		resp.GetSeries()[0].Pointlist[0][1] != nil {
 		return int64(*resp.GetSeries()[0].Pointlist[0][1]), nil
 	}
 
 	log.Debug().Interface("series", resp.GetSeries()).Msg("Unexpected series len")
 
-	return 0, errors.Internal("Broken remote metric response")
+	return 0, nil
 }

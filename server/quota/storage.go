@@ -20,10 +20,12 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/tigrisdata/tigris/server/request"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"go.uber.org/atomic"
 )
@@ -42,10 +44,26 @@ type storageState struct {
 	Size atomic.Int64
 }
 
-func (s *storage) Allow(_ context.Context, namespace string, size int, isWrite bool) error {
+func skipStorageCheck(name string) bool {
+	switch name {
+	case api.DropCollectionMethodName, api.DropDatabaseMethodName:
+		return true
+	case api.DeleteMethodName:
+		return true
+	}
+
+	return false
+}
+
+func (s *storage) Allow(ctx context.Context, namespace string, size int, isWrite bool) error {
 	l := s.getState(namespace)
 
-	if !isWrite {
+	var method string
+	if md, _ := request.GetRequestMetadata(ctx); md != nil {
+		method = md.GetMethodName()
+	}
+
+	if !isWrite || skipStorageCheck(method) {
 		return nil
 	}
 
@@ -76,9 +94,10 @@ func (s *storage) getState(namespace string) *storageState {
 func (s *storage) checkStorage(namespace string, ss *storageState, size int) error {
 	sz := ss.Size.Load()
 
-	sizeLimit, ok := s.cfg.Storage.Namespaces[namespace]
-	if !ok {
-		sizeLimit = s.cfg.Storage.DataSizeLimit
+	sizeLimit := s.cfg.Storage.DataSizeLimit
+	nsLimit, ok := s.cfg.Storage.Namespaces[namespace]
+	if ok {
+		sizeLimit = nsLimit.Size
 	}
 
 	if sz+int64(size) >= sizeLimit {

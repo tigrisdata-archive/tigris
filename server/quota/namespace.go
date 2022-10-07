@@ -23,6 +23,7 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/tigrisdata/tigris/server/request"
 	"go.uber.org/atomic"
 	"golang.org/x/time/rate"
 )
@@ -44,8 +45,7 @@ type instanceState struct {
 	setReadLimit  atomic.Int64
 	setWriteLimit atomic.Int64
 
-	Read  Limiter
-	Write Limiter
+	State
 }
 
 type namespace struct {
@@ -61,28 +61,71 @@ type namespace struct {
 	backend Backend
 }
 
-func (i *namespace) Allow(_ context.Context, namespace string, size int, isWrite bool) error {
-	s := i.getState(namespace)
-
-	us := toUnits(size, isWrite)
-
-	if isWrite {
-		return s.Write.Allow(us)
+func unlimitedDefaultNamespace(namespace string, cfg *config.NamespaceLimitsConfig) bool {
+	if namespace != request.DefaultNamespaceName {
+		return false
 	}
 
-	return s.Read.Allow(us)
+	_, ok := cfg.Namespaces[namespace]
+
+	// No special configuration for default namespace
+	return !ok
+}
+
+func checkMaxSize(units int, namespace string, isWrite bool, cfg *config.NamespaceLimitsConfig) error {
+	// Maximum per node size
+	if units > cfg.Node.Limit(isWrite) {
+		return ErrMaxRequestSizeExceeded
+	}
+
+	// Maximum per instance size
+	if units > cfg.NamespaceLimits(namespace).Limit(isWrite) {
+		return ErrMaxRequestSizeExceeded
+	}
+
+	return nil
+}
+
+func isBlacklistedNamespace(namespace string, cfg *config.NamespaceLimitsConfig) bool {
+	l, ok := cfg.Namespaces[namespace]
+	if !ok {
+		return false
+	}
+
+	return l.ReadUnits <= 0 && l.WriteUnits <= 0
+}
+
+func (i *namespace) allowOrWait(ctx context.Context, namespace string, size int, isWrite bool, isWait bool) error {
+	if unlimitedDefaultNamespace(namespace, &i.cfg.Namespace) {
+		return nil
+	}
+
+	if isBlacklistedNamespace(namespace, &i.cfg.Namespace) {
+		if isWrite {
+			return ErrWriteUnitsExceeded
+		}
+		return ErrReadUnitsExceeded
+	}
+
+	units := toUnits(size, isWrite)
+
+	if err := checkMaxSize(units, namespace, isWrite, &i.cfg.Namespace); err != nil {
+		return err
+	}
+
+	if isWait {
+		return i.getState(namespace).Wait(ctx, units, isWrite)
+	}
+
+	return i.getState(namespace).Allow(units, isWrite)
+}
+
+func (i *namespace) Allow(ctx context.Context, namespace string, size int, isWrite bool) error {
+	return i.allowOrWait(ctx, namespace, size, isWrite, false)
 }
 
 func (i *namespace) Wait(ctx context.Context, namespace string, size int, isWrite bool) error {
-	s := i.getState(namespace)
-
-	us := toUnits(size, isWrite)
-
-	if isWrite {
-		return s.Write.Wait(ctx, us)
-	}
-
-	return s.Read.Wait(ctx, us)
+	return i.allowOrWait(ctx, namespace, size, isWrite, true)
 }
 
 func (i *namespace) getState(namespace string) *instanceState {
@@ -91,12 +134,14 @@ func (i *namespace) getState(namespace string) *instanceState {
 		cfg := i.cfg.Namespace.Default
 		// Create new state if didn't exist before
 		is = &instanceState{
-			Write: Limiter{
-				isWrite: true,
-				Rate:    rate.NewLimiter(rate.Limit(cfg.WriteUnits), cfg.WriteUnits),
-			},
-			Read: Limiter{
-				Rate: rate.NewLimiter(rate.Limit(cfg.ReadUnits), cfg.ReadUnits),
+			State: State{
+				Write: Limiter{
+					isWrite: true,
+					Rate:    rate.NewLimiter(rate.Limit(cfg.WriteUnits), cfg.WriteUnits),
+				},
+				Read: Limiter{
+					Rate: rate.NewLimiter(rate.Limit(cfg.ReadUnits), cfg.ReadUnits),
+				},
 			},
 		}
 		i.tenantQuota.Store(namespace, is)

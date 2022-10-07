@@ -32,27 +32,25 @@ type node struct {
 }
 
 func (c *node) Allow(_ context.Context, namespace string, size int, isWrite bool) error {
-	l := c.getState(namespace)
+	units := toUnits(size, isWrite)
 
-	us := toUnits(size, isWrite)
-
-	if isWrite {
-		return l.Write.Allow(us)
+	// Request size is bigger then entire node quota
+	if units > c.cfg.Node.Limit(isWrite) {
+		return ErrMaxRequestSizeExceeded
 	}
 
-	return l.Read.Allow(us)
+	return c.getState(namespace).Allow(units, isWrite)
 }
 
 func (c *node) Wait(ctx context.Context, namespace string, size int, isWrite bool) error {
-	l := c.getState(namespace)
+	units := toUnits(size, isWrite)
 
-	us := toUnits(size, isWrite)
-
-	if isWrite {
-		return l.Write.Wait(ctx, us)
+	// Request size is bigger then entire node quota
+	if units > c.cfg.Node.Limit(isWrite) {
+		return ErrMaxRequestSizeExceeded
 	}
 
-	return l.Read.Wait(ctx, us)
+	return c.getState(namespace).Wait(ctx, units, isWrite)
 }
 
 func (c *node) Cleanup() {}

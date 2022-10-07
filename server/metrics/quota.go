@@ -81,5 +81,5 @@ func UpdateQuotaCurrentNodeLimit(namespaceName string, value int, isWrite bool) 
 		counter = "write_limit"
 	}
 
-	QuotaSet.Tagged(getQuotaUsageTags(namespaceName)).Counter(counter).Inc(int64(value))
+	QuotaSet.Tagged(getQuotaUsageTags(namespaceName)).Gauge(counter).Update(float64(value))
 }

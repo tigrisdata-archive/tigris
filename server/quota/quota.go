@@ -16,20 +16,19 @@ package quota
 
 import (
 	"context"
-	"sync"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
-	"go.uber.org/atomic"
 )
 
 var (
-	ErrReadUnitsExceeded   = errors.ResourceExhausted("request read rate exceeded")
-	ErrWriteUnitsExceeded  = errors.ResourceExhausted("request write rate exceeded")
-	ErrStorageSizeExceeded = errors.ResourceExhausted("data size limit exceeded")
+	ErrReadUnitsExceeded      = errors.ResourceExhausted("request read rate exceeded")
+	ErrWriteUnitsExceeded     = errors.ResourceExhausted("request write rate exceeded")
+	ErrStorageSizeExceeded    = errors.ResourceExhausted("data size limit exceeded")
+	ErrMaxRequestSizeExceeded = errors.ResourceExhausted("maximum request size limit exceeded")
 )
 
 type Quota interface {
@@ -41,12 +40,22 @@ type Quota interface {
 type State struct {
 	Read  Limiter
 	Write Limiter
+}
 
-	Size               atomic.Int64
-	SizeUpdateAt       atomic.Int64
-	TenantSizeUpdateAt atomic.Int64
-	SizeLock           sync.Mutex
-	TenantSizeLock     sync.Mutex
+func (s *State) Allow(size int, isWrite bool) error {
+	if isWrite {
+		return s.Write.Allow(size)
+	}
+
+	return s.Read.Allow(size)
+}
+
+func (s *State) Wait(ctx context.Context, size int, isWrite bool) error {
+	if isWrite {
+		return s.Write.Wait(ctx, size)
+	}
+
+	return s.Read.Wait(ctx, size)
 }
 
 type Manager struct {
@@ -127,9 +136,9 @@ func toUnits(size int, isWrite bool) int {
 }
 
 func reportError(namespace string, size int, isWrite bool, err error) error {
-	if err == ErrReadUnitsExceeded || err == ErrWriteUnitsExceeded {
+	if errors.Is(err, ErrReadUnitsExceeded) || errors.Is(err, ErrWriteUnitsExceeded) {
 		metrics.UpdateQuotaRateThrottled(namespace, toUnits(size, isWrite), isWrite)
-	} else if err == ErrStorageSizeExceeded {
+	} else if errors.Is(err, ErrStorageSizeExceeded) {
 		metrics.UpdateQuotaStorageThrottled(namespace, size)
 	}
 

@@ -31,12 +31,12 @@ type Datadog struct {
 }
 
 func (d *Datadog) CurRates(ctx context.Context, namespace string) (int64, int64, error) {
-	r, err := d.Datadog.GetCurrentMetricValue(ctx, namespace, "tigris.quota.usage.read_units", api.TigrisOperation_ALL, RunningAverageLength)
+	r, err := d.Datadog.GetCurrentMetricValue(ctx, namespace, "tigris.quota_usage_read_units.count", api.TigrisOperation_ALL, RunningAverageLength)
 	if err != nil {
 		return 0, 0, err
 	}
 
-	w, err := d.Datadog.GetCurrentMetricValue(ctx, namespace, "tigris.quota.usage.write_units", api.TigrisOperation_ALL, RunningAverageLength)
+	w, err := d.Datadog.GetCurrentMetricValue(ctx, namespace, "tigris.quota_usage_write_units.count", api.TigrisOperation_ALL, RunningAverageLength)
 	if err != nil {
 		return 0, 0, err
 	}

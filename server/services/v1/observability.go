@@ -126,15 +126,37 @@ func (dd *Datadog) QueryQuotaUsage(ctx context.Context, _ *api.QuotaUsageRequest
 		return nil, errors.Internal("error reading storage quota usage")
 	}
 
+	rt, err := dd.Datadog.GetCurrentMetricValue(ctx, ns, "tigris.quota_throttled_read_units.count", api.TigrisOperation_ALL, quota.RunningAverageLength)
+	if err != nil {
+		return nil, errors.Internal("error reading quota usage")
+	}
+
+	wt, err := dd.Datadog.GetCurrentMetricValue(ctx, ns, "tigris.quota_throttled_write_units.count", api.TigrisOperation_ALL, quota.RunningAverageLength)
+	if err != nil {
+		return nil, errors.Internal("error reading quota usage")
+	}
+
+	st, err := dd.Datadog.GetCurrentMetricValue(ctx, ns, "tigris.quota_throttled_storage.count", api.TigrisOperation_ALL, quota.RunningAverageLength)
+	if err != nil {
+		return nil, errors.Internal("error reading quota usage")
+	}
+
 	return &api.QuotaUsageResponse{
-		ReadUnits:   ru,
-		WriteUnits:  wu,
-		StorageSize: size,
+		ReadUnits:            ru,
+		WriteUnits:           wu,
+		StorageSize:          size,
+		ReadUnitsThrottled:   rt,
+		WriteUnitsThrottled:  wt,
+		StorageSizeThrottled: st,
 	}, nil
 }
 
 func newObservabilityService(tenants *metadata.TenantManager) *observabilityService {
-	if config.DefaultConfig.Observability.Provider == "datadog" {
+	cfg := config.DefaultConfig.Observability
+
+	log.Debug().Str("provider", cfg.Provider).Bool("enabled", cfg.Enabled).Str("url", cfg.ProviderUrl).Msg("Initializing observability service")
+
+	if cfg.Provider == "datadog" {
 		return &observabilityService{
 			UnimplementedObservabilityServer: api.UnimplementedObservabilityServer{},
 			Provider: &Datadog{
@@ -143,8 +165,8 @@ func newObservabilityService(tenants *metadata.TenantManager) *observabilityServ
 			},
 		}
 	}
-	if config.DefaultConfig.Observability.Enabled {
-		log.Error().Str("observabilityProvider", config.DefaultConfig.Observability.Provider).Msg("Unable to configure external observability provider")
+	if cfg.Enabled {
+		log.Error().Str("observabilityProvider", cfg.Provider).Msg("Unable to configure external observability provider")
 		panic("Unable to configure external observability provider")
 	}
 	return nil
@@ -163,7 +185,7 @@ func (o *observabilityService) QuotaLimits(ctx context.Context, _ *api.QuotaLimi
 	return &api.QuotaLimitsResponse{
 		ReadUnits:   int64(cfg.ReadUnits),
 		WriteUnits:  int64(cfg.WriteUnits),
-		StorageSize: config.DefaultConfig.Quota.Storage.DataSizeLimit,
+		StorageSize: config.DefaultConfig.Quota.Storage.NamespaceLimits(ns),
 	}, nil
 }
 

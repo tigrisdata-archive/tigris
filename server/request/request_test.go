@@ -26,7 +26,7 @@ import (
 func TestRequestMetadata(t *testing.T) {
 	t.Run("extraction of namespace name", func(t *testing.T) {
 		ctx := context.TODO()
-		ctx = context.WithValue(ctx, RequestMetadataCtxKey{}, &RequestMetadata{
+		ctx = context.WithValue(ctx, MetadataCtxKey{}, &Metadata{
 			accessToken: &AccessToken{
 				Namespace: "test-namespace-1",
 				Sub:       "test@tigrisdata.com",
@@ -41,7 +41,7 @@ func TestRequestMetadata(t *testing.T) {
 
 	t.Run("extraction of token", func(t *testing.T) {
 		ctx := context.TODO()
-		ctx = context.WithValue(ctx, RequestMetadataCtxKey{}, &RequestMetadata{
+		ctx = context.WithValue(ctx, MetadataCtxKey{}, &Metadata{
 			accessToken: &AccessToken{
 				Namespace: "test-namespace-1",
 				Sub:       "test@tigrisdata.com",

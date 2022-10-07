@@ -64,9 +64,9 @@ func (l *Limiter) Allow(size int) (err error) {
 
 	if !rt.OK() || rt.Delay() > 0 {
 		if l.isWrite {
-			return ErrWriteUnitsExceeded
+			return ErrWriteUnitsExceeded.WithRetry(rt.Delay())
 		}
-		return ErrReadUnitsExceeded
+		return ErrReadUnitsExceeded.WithRetry(rt.Delay())
 	}
 
 	return nil
@@ -97,9 +97,9 @@ func (l *Limiter) Wait(ctx context.Context, size int) (err error) {
 
 	if !rt.OK() || dur < rt.DelayFrom(now) {
 		if l.isWrite {
-			return ErrWriteUnitsExceeded
+			return ErrWriteUnitsExceeded.WithRetry(rt.DelayFrom(now))
 		}
-		return ErrReadUnitsExceeded
+		return ErrReadUnitsExceeded.WithRetry(rt.DelayFrom(now))
 	}
 
 	delay := rt.DelayFrom(now)

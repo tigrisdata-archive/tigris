@@ -311,7 +311,7 @@ var DefaultConfig = Config{
 	Observability: ObservabilityConfig{
 		Enabled:     false,
 		Provider:    "datadog",
-		ProviderUrl: "https://us3.datadoghq.com",
+		ProviderUrl: "us3.datadoghq.com",
 	},
 	Management: ManagementConfig{
 		Enabled: true,
@@ -338,6 +338,14 @@ type LimitsConfig struct {
 	WriteUnits int `mapstructure:"write_units" yaml:"write_units" json:"write_units"`
 }
 
+func (l *LimitsConfig) Limit(isWrite bool) int {
+	if isWrite {
+		return l.WriteUnits
+	}
+
+	return l.ReadUnits
+}
+
 type NamespaceLimitsConfig struct {
 	Enabled    bool
 	Default    LimitsConfig            // default per namespace limit
@@ -355,13 +363,25 @@ func (n *NamespaceLimitsConfig) NamespaceLimits(ns string) *LimitsConfig {
 	return &n.Default
 }
 
+type NamespaceStorageLimitsConfig struct {
+	Size int64
+}
+
 type StorageLimitsConfig struct {
 	Enabled         bool
 	DataSizeLimit   int64         `mapstructure:"data_size_limit" yaml:"data_size_limit" json:"data_size_limit"`
 	RefreshInterval time.Duration `mapstructure:"refresh_interval" yaml:"refresh_interval" json:"refresh_interval"`
 
 	// Per namespace limits
-	Namespaces map[string]int64
+	Namespaces map[string]NamespaceStorageLimitsConfig
+}
+
+func (n *StorageLimitsConfig) NamespaceLimits(ns string) int64 {
+	cfg, ok := n.Namespaces[ns]
+	if ok {
+		return cfg.Size
+	}
+	return n.DataSizeLimit
 }
 
 type QuotaConfig struct {

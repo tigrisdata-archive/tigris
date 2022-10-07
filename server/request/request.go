@@ -43,14 +43,14 @@ const (
 
 var adminMethods = container.NewHashSet("/tigrisdata.management.v1.Management/CreateNamespace", "/tigrisdata.management.v1.Management/ListNamespaces")
 
-type RequestMetadataCtxKey struct{}
+type MetadataCtxKey struct{}
 
 type AccessToken struct {
 	Namespace string
 	Sub       string
 }
 
-type RequestMetadata struct {
+type Metadata struct {
 	accessToken *AccessToken
 	serviceName string
 	methodInfo  grpc.MethodInfo
@@ -60,11 +60,11 @@ type RequestMetadata struct {
 	unauthenticatedNamespaceName string
 }
 
-func NewRequestEndpointMetadata(ctx context.Context, serviceName string, methodInfo grpc.MethodInfo) RequestMetadata {
-	return RequestMetadata{serviceName: serviceName, methodInfo: methodInfo, unauthenticatedNamespaceName: GetNameSpaceFromHeader(ctx)}
+func NewRequestEndpointMetadata(ctx context.Context, serviceName string, methodInfo grpc.MethodInfo) Metadata {
+	return Metadata{serviceName: serviceName, methodInfo: methodInfo, unauthenticatedNamespaceName: GetNameSpaceFromHeader(ctx)}
 }
 
-func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod string, methodType string) RequestMetadata {
+func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod string, methodType string) Metadata {
 	var methodInfo grpc.MethodInfo
 	methodList := strings.Split(fullMethod, "/")
 	svcName := methodList[1]
@@ -85,11 +85,15 @@ func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod strin
 	return NewRequestEndpointMetadata(ctx, svcName, methodInfo)
 }
 
-func (r *RequestMetadata) GetMethodName() string {
-	return strings.Split(r.methodInfo.Name, "/")[2]
+func (r *Metadata) GetMethodName() string {
+	s := strings.Split(r.methodInfo.Name, "/")
+	if len(s) > 2 {
+		return s[2]
+	}
+	return r.methodInfo.Name
 }
 
-func (r *RequestMetadata) GetServiceType() string {
+func (r *Metadata) GetServiceType() string {
 	if r.methodInfo.IsServerStream {
 		return "stream"
 	} else {
@@ -97,19 +101,19 @@ func (r *RequestMetadata) GetServiceType() string {
 	}
 }
 
-func (r *RequestMetadata) GetServiceName() string {
+func (r *Metadata) GetServiceName() string {
 	return r.serviceName
 }
 
-func (r *RequestMetadata) GetUnAuthenticatedNamespaceName() string {
+func (r *Metadata) GetUnAuthenticatedNamespaceName() string {
 	return r.unauthenticatedNamespaceName
 }
 
-func (r *RequestMetadata) GetMethodInfo() grpc.MethodInfo {
+func (r *Metadata) GetMethodInfo() grpc.MethodInfo {
 	return r.methodInfo
 }
 
-func (r *RequestMetadata) GetInitialTags() map[string]string {
+func (r *Metadata) GetInitialTags() map[string]string {
 	return map[string]string{
 		"grpc_method":   r.methodInfo.Name,
 		"tigris_tenant": r.unauthenticatedNamespaceName,
@@ -119,7 +123,7 @@ func (r *RequestMetadata) GetInitialTags() map[string]string {
 	}
 }
 
-func (r *RequestMetadata) GetFullMethod() string {
+func (r *Metadata) GetFullMethod() string {
 	return fmt.Sprintf("/%s/%s", r.serviceName, r.methodInfo.Name)
 }
 
@@ -132,35 +136,35 @@ type AccessTokenNamespaceExtractor struct{}
 
 var ErrNamespaceNotFound = errors.NotFound("namespace not found")
 
-func GetRequestMetadata(ctx context.Context) (*RequestMetadata, error) {
+func GetRequestMetadata(ctx context.Context) (*Metadata, error) {
 	// read token
-	value := ctx.Value(RequestMetadataCtxKey{})
+	value := ctx.Value(MetadataCtxKey{})
 	if value != nil {
-		if requestMetadata, ok := value.(*RequestMetadata); ok {
+		if requestMetadata, ok := value.(*Metadata); ok {
 			return requestMetadata, nil
 		}
 	}
-	return nil, errors.NotFound("RequestMetadata not found")
+	return nil, errors.NotFound("Metadata not found")
 }
 
-func SetRequestMetadata(ctx context.Context, metadata RequestMetadata) context.Context {
+func SetRequestMetadata(ctx context.Context, metadata Metadata) context.Context {
 	requestMetadata, err := GetRequestMetadata(ctx)
 	if err == nil && requestMetadata != nil {
-		log.Debug().Msg("Overriding RequestMetadata in context")
+		log.Debug().Msg("Overriding Metadata in context")
 	}
 	requestMetadata = &metadata
-	return context.WithValue(ctx, RequestMetadataCtxKey{}, requestMetadata)
+	return context.WithValue(ctx, MetadataCtxKey{}, requestMetadata)
 }
 
 func SetAccessToken(ctx context.Context, token *AccessToken) context.Context {
 	requestMetadata, _ := GetRequestMetadata(ctx)
 	if requestMetadata == nil {
-		requestMetadata = &RequestMetadata{}
+		requestMetadata = &Metadata{}
 		requestMetadata.accessToken = token
-		return context.WithValue(ctx, RequestMetadataCtxKey{}, requestMetadata)
+		return context.WithValue(ctx, MetadataCtxKey{}, requestMetadata)
 	} else {
 		requestMetadata.accessToken = token
-		return context.WithValue(ctx, RequestMetadataCtxKey{}, requestMetadata)
+		return context.WithValue(ctx, MetadataCtxKey{}, requestMetadata)
 	}
 }
 
@@ -168,8 +172,8 @@ func SetNamespace(ctx context.Context, namespace string) context.Context {
 	requestMetadata, err := GetRequestMetadata(ctx)
 	result := ctx
 	if err != nil && requestMetadata == nil {
-		requestMetadata = &RequestMetadata{}
-		result = context.WithValue(ctx, RequestMetadataCtxKey{}, requestMetadata)
+		requestMetadata = &Metadata{}
+		result = context.WithValue(ctx, MetadataCtxKey{}, requestMetadata)
 	}
 	requestMetadata.namespace = namespace
 	return result
@@ -177,8 +181,8 @@ func SetNamespace(ctx context.Context, namespace string) context.Context {
 
 func GetAccessToken(ctx context.Context) (*AccessToken, error) {
 	// read token
-	if value := ctx.Value(RequestMetadataCtxKey{}); value != nil {
-		if requestMetadata, ok := value.(*RequestMetadata); ok && requestMetadata.accessToken != nil {
+	if value := ctx.Value(MetadataCtxKey{}); value != nil {
+		if requestMetadata, ok := value.(*Metadata); ok && requestMetadata.accessToken != nil {
 			return requestMetadata.accessToken, nil
 		}
 	}
@@ -187,8 +191,8 @@ func GetAccessToken(ctx context.Context) (*AccessToken, error) {
 
 func GetNamespace(ctx context.Context) (string, error) {
 	// read token
-	if value := ctx.Value(RequestMetadataCtxKey{}); value != nil {
-		if requestMetadata, ok := value.(*RequestMetadata); ok {
+	if value := ctx.Value(MetadataCtxKey{}); value != nil {
+		if requestMetadata, ok := value.(*Metadata); ok {
 			return requestMetadata.namespace, nil
 		}
 	}
@@ -252,6 +256,15 @@ func GetNameSpaceFromHeader(ctx context.Context) string {
 }
 
 func isRead(name string) bool {
+	if strings.HasPrefix(name, api.ObservabilityMethodPrefix) {
+		return true
+	}
+
+	// TODO: Probably cherry pick read and write methods
+	if strings.HasPrefix(name, api.ManagementMethodPrefix) {
+		return true
+	}
+
 	switch name {
 	case api.ReadMethodName, api.EventsMethodName, api.SearchMethodName, api.SubscribeMethodName:
 		return true

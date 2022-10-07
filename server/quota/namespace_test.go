@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/request"
 	"go.uber.org/atomic"
 )
 
@@ -89,15 +90,18 @@ func TestNamespaceQuota(t *testing.T) {
 	require.NoError(t, m.Allow(ctx, ns, 1500, true))  // 2 units: 1024 + something
 
 	i := 0
-	for ; err != ErrReadUnitsExceeded; i++ {
+	for ; err == nil && i < 15; i++ {
 		err = m.Allow(ctx, ns, 2048, false)
 	}
+	assert.Equal(t, ErrReadUnitsExceeded, err)
 	assert.Equal(t, 9, i)
 
 	i = 0
-	for ; err != ErrWriteUnitsExceeded; i++ {
+	err = nil
+	for ; err == nil && 1 < 15; i++ {
 		err = m.Allow(ctx, ns, 512, true) // < 1024 = 1 unit
 	}
+	assert.Equal(t, ErrWriteUnitsExceeded, err)
 	assert.Equal(t, 4, i)
 
 	log.Debug().Msg("simulate rate surge")
@@ -222,4 +226,65 @@ func TestNamespaceQuotaCalcLimits(t *testing.T) {
 			assert.Equal(t, c.exp, res)
 		})
 	}
+}
+
+func TestQuotaConfigLimits(t *testing.T) {
+	tenants, ctx, cancel := metadata.NewTestTenantMgr(kvStore)
+	defer cancel()
+
+	ns := fmt.Sprintf("ns-test-tenantQuota-1-%x", rand.Uint64()) //nolint:golint,gosec
+
+	tb := &testMetricsBackend{}
+
+	cfg := &config.QuotaConfig{
+		Namespace: config.NamespaceLimitsConfig{
+			Default: config.LimitsConfig{
+				ReadUnits:  100,
+				WriteUnits: 50,
+			},
+			Node: config.LimitsConfig{
+				ReadUnits:  10000,
+				WriteUnits: 5000,
+			},
+			RefreshInterval: 1 * time.Second,
+		},
+	}
+
+	m := initNamespace(tenants, cfg, tb)
+	defer m.Cleanup()
+
+	// Limited by default namespace limits
+	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, ns, 4096*101, false))
+	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, ns, 1024*51, true))
+
+	// "Default namespace" is unlimited by default
+	require.NoError(t, m.Allow(ctx, request.DefaultNamespaceName, 4096*101, false))
+	require.NoError(t, m.Allow(ctx, request.DefaultNamespaceName, 1024*51, true))
+
+	cfg.Namespace.Default = config.LimitsConfig{ReadUnits: 20000, WriteUnits: 10000}
+
+	// should be allowed so as we increased default namespace limits
+	require.NoError(t, m.Allow(ctx, ns, 4096*101, false))
+	require.NoError(t, m.Allow(ctx, ns, 1024*51, true))
+
+	// should be limited by node limits
+	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, ns, 4096*10001, false))
+	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, ns, 1024*5001, true))
+
+	cfg.Namespace.Namespaces = map[string]config.LimitsConfig{ns + "_other": {ReadUnits: 100, WriteUnits: 50}}
+
+	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, ns+"_other", 4096*101, false))
+	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, ns+"_other", 1024*51, true))
+
+	// Test that we optionally can limit "default namespace" too
+	cfg.Namespace.Namespaces = map[string]config.LimitsConfig{request.DefaultNamespaceName: {ReadUnits: 100, WriteUnits: 50}}
+
+	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, request.DefaultNamespaceName, 4096*101, false))
+	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, request.DefaultNamespaceName, 1024*51, true))
+
+	// Test blacklisting
+	cfg.Namespace.Namespaces = map[string]config.LimitsConfig{request.DefaultNamespaceName: {ReadUnits: -1, WriteUnits: -1}}
+
+	require.Equal(t, ErrReadUnitsExceeded, m.Allow(ctx, request.DefaultNamespaceName, 1, false))
+	require.Equal(t, ErrWriteUnitsExceeded, m.Allow(ctx, request.DefaultNamespaceName, 1, true))
 }

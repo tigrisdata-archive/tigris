@@ -74,6 +74,8 @@ github.com/DataDog/datadog-agent/pkg/obfuscate v0.38.0 h1:Mk1GqUitDrsZBvNIR4G/GF
 github.com/DataDog/datadog-agent/pkg/obfuscate v0.38.0/go.mod h1:MxVcCIC42tBIjPm93BHdh9/vw2LivRiptj3HygI+GGQ=
 github.com/DataDog/datadog-api-client-go v1.16.0 h1:5jOZv1m98criCvYTa3qpW8Hzv301nbZX3K9yJtwGyWY=
 github.com/DataDog/datadog-api-client-go v1.16.0/go.mod h1:PgrP2ABuJWL3Auw2iEkemAJ/r72ghG4DQQmb5sgnKW4=
+github.com/DataDog/datadog-api-client-go/v2 v2.3.1 h1:+0FHme5n4AuJEGmzaN8+n3OWKFLiJoBP+FNI60EqvuU=
+github.com/DataDog/datadog-api-client-go/v2 v2.3.1/go.mod h1:98b/MtTwSAr/yhTfhCR1oxAqQ/4tMkdrgKH7fYiDA0g=
 github.com/DataDog/datadog-go v3.2.0+incompatible/go.mod h1:LButxg5PwREeZtORoXG3tL4fMGNddJ+vMq1mwgfaqoQ=
 github.com/DataDog/datadog-go v4.8.2+incompatible/go.mod h1:LButxg5PwREeZtORoXG3tL4fMGNddJ+vMq1mwgfaqoQ=
 github.com/DataDog/datadog-go/v5 v5.0.2/go.mod h1:ZI9JFB4ewXbw1sBnF4sxsR2k1H3xjV+PUAOUsHvKpcU=

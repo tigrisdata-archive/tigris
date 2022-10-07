@@ -18,6 +18,7 @@ import (
 	"context"
 
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/util"
@@ -37,7 +38,7 @@ type wrappedStream struct {
 
 func getNoMeasurementMethods() []string {
 	return []string{
-		"/HealthAPI/Health",
+		api.HealthMethodName,
 	}
 }
 

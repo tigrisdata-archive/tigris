@@ -46,7 +46,7 @@ func Unauthenticated(format string, args ...any) error {
 }
 
 // ResourceExhausted constructs too many requests error (HTTP: 429).
-func ResourceExhausted(format string, args ...any) error {
+func ResourceExhausted(format string, args ...any) *api.TigrisError {
 	return api.Errorf(api.Code_RESOURCE_EXHAUSTED, format, args...)
 }
 
