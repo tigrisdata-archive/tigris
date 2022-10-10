@@ -445,13 +445,12 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, ctx, err
 	}
 
-	fieldOperator := factory.FieldOperators[string(update.Set)]
-	if fieldOperator == nil {
-		return nil, ctx, api.Errorf(api.Code_INVALID_ARGUMENT, "missing '$set operator")
-	}
-	fieldOperator.Document, err = runner.mutateAndValidatePayload(collection, fieldOperator.Document)
-	if err != nil {
-		return nil, ctx, err
+	if fieldOperator, ok := factory.FieldOperators[string(update.Set)]; ok {
+		// Set operation needs schema validation as well as mutation if we need to convert numeric fields from string to int64
+		fieldOperator.Input, err = runner.mutateAndValidatePayload(collection, fieldOperator.Input)
+		if err != nil {
+			return nil, ctx, err
+		}
 	}
 
 	table, err := runner.encoder.EncodeTableName(tenant.GetNamespace(), db, collection)
@@ -502,6 +501,8 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			return nil, ctx, err
 		}
 
+		// MergeAndGet merge the user input with existing doc and return the merged JSON document which we need to
+		// persist back.
 		merged, er := factory.MergeAndGet(row.Data.RawData)
 		if er != nil {
 			return nil, ctx, err
