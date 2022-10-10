@@ -493,6 +493,10 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		runner.queryMetrics.SetWriteType("non-pkey")
 	}
 
+	var limit = int32(0)
+	if runner.req.Options != nil {
+		limit = int32(runner.req.Options.Limit)
+	}
 	modifiedCount := int32(0)
 	var row Row
 	for iterator.Next(&row) {
@@ -515,6 +519,9 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			return nil, ctx, err
 		}
 		modifiedCount++
+		if limit > 0 && modifiedCount == limit {
+			break
+		}
 	}
 
 	ctx = metrics.UpdateSpanTags(ctx, runner.queryMetrics)
@@ -592,6 +599,10 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, ctx, err
 	}
 
+	var limit = int32(0)
+	if runner.req.Options != nil {
+		limit = int32(runner.req.Options.Limit)
+	}
 	modifiedCount := int32(0)
 	var row Row
 	for iterator.Next(&row) {
@@ -605,6 +616,9 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		}
 
 		modifiedCount++
+		if limit > 0 && modifiedCount == limit {
+			break
+		}
 	}
 
 	ctx = metrics.UpdateSpanTags(ctx, runner.queryMetrics)
