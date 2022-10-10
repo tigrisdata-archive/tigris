@@ -17,6 +17,7 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -230,7 +231,9 @@ func (m *Measurement) RecursiveAddTags(tags map[string]string) {
 }
 
 func (m *Measurement) StartTracing(ctx context.Context, childOnly bool) context.Context {
-	if !config.DefaultConfig.Tracing.Enabled {
+	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("stopped", strconv.FormatBool(m.stopped)).Str("childonly", strconv.FormatBool(childOnly)).Str("span_type", m.spanType).Msg("StartTracing start")
+	if !config.DefaultConfig.Tracing.Enabled && !config.DefaultConfig.Metrics.Enabled {
+		log.Debug().Str("span_type", m.spanType).Msg("StartTracing end: Neither tracing, not metrics are enabled, returning")
 		return ctx
 	}
 	m.startedAt = time.Now()
@@ -246,6 +249,7 @@ func (m *Measurement) StartTracing(ctx context.Context, childOnly bool) context.
 	}
 	if childOnly && !parentExists {
 		// There is no parent span, no need to start tracing here
+		log.Debug().Msg("No parent exists and childonly is set, not tracing")
 		return ctx
 	}
 	m.span = tracer.StartSpan(TraceServiceName, spanOpts...)
@@ -256,11 +260,14 @@ func (m *Measurement) StartTracing(ctx context.Context, childOnly bool) context.
 	if err != nil {
 		ulog.E(err)
 	}
+	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("stopped", strconv.FormatBool(m.stopped)).Str("span_type", m.spanType).Msg("StartTracing end")
 	return ctx
 }
 
 func (m *Measurement) FinishTracing(ctx context.Context) context.Context {
-	if !config.DefaultConfig.Tracing.Enabled {
+	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("stopped", strconv.FormatBool(m.stopped)).Str("span_type", m.spanType).Msg("FinishingTracing start")
+	if !config.DefaultConfig.Tracing.Enabled && !config.DefaultConfig.Metrics.Enabled {
+		log.Debug().Str("span_type", m.spanType).Msg("FinishTracing end: Neither tracing, not metrics are enabled, returning")
 		return ctx
 	}
 	if !m.started {
@@ -282,6 +289,7 @@ func (m *Measurement) FinishTracing(ctx context.Context) context.Context {
 	}
 	m.stopped = true
 	m.stoppedAt = time.Now()
+	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("span_type", m.spanType).Str("stopped", strconv.FormatBool(m.stopped)).Msg("FinishingTracing end")
 	return ctx
 }
 
@@ -324,26 +332,36 @@ func (m *Measurement) RecordDuration(scope tally.Scope, tags map[string]string) 
 
 func (m *Measurement) recordTimerDuration(scope tally.Scope, tags map[string]string) {
 	// Should be called after tracing is finished
-	if !m.started || !m.stopped {
-		log.Error().Str("service_name", m.serviceName).Str("resource_name", m.resourceName).Msg("recordTimerDuration was called on a span that was not started ot stopped")
+	if !m.started {
+		log.Error().Str("service_name", m.serviceName).Str("resource_name", m.resourceName).Str("span_type", m.spanType).Msg("recordTimerDuration was called on a span that was not started")
+		return
+	}
+	if !m.stopped {
+		log.Error().Str("service_name", m.serviceName).Str("resource_name", m.resourceName).Str("span_type", m.spanType).Msg("recordTimerDuration was called on a span that was not stopped")
 		return
 	}
 	scope.Tagged(tags).Timer("time").Record(m.stoppedAt.Sub(m.startedAt))
 }
 
 func (m *Measurement) recordHistogramDuration(scope tally.Scope, tags map[string]string) {
-	if !m.started || !m.stopped {
-		log.Error().Str("service_name", m.serviceName).Str("resource_name", m.resourceName).Msg("recordHistogramDuration was called on a span that was not started ot stopped")
+	if !m.started {
+		log.Error().Str("service_name", m.serviceName).Str("resource_name", m.resourceName).Str("span_type", m.spanType).Msg("recordHistogramDuration was called on a span that was not started")
+		return
+	}
+	if !m.stopped {
+		log.Error().Str("service_name", m.serviceName).Str("resource_name", m.resourceName).Str("span_type", m.spanType).Msg("recordHistogramDuration was called on a span that was not stopped")
 		return
 	}
 	scope.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).RecordDuration(m.stoppedAt.Sub(m.startedAt))
 }
 
 func (m *Measurement) FinishWithError(ctx context.Context, source string, err error) context.Context {
-	if !config.DefaultConfig.Tracing.Enabled {
+	if !config.DefaultConfig.Tracing.Enabled && !config.DefaultConfig.Metrics.Enabled {
+		log.Debug().Msg("FinishWithError end: Neither tracing, not metrics are enabled, returning")
 		return ctx
 	}
 	if m.span == nil {
+		log.Debug().Msg("FinishWithError end: no tracing span sound to finish, returning")
 		return nil
 	}
 	errCode := status.Code(err)
@@ -358,5 +376,6 @@ func (m *Measurement) FinishWithError(ctx context.Context, source string, err er
 	ClearMeasurementContext(ctx)
 	m.stopped = true
 	m.stoppedAt = time.Now()
+	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("span_type", m.spanType).Str("stopped", strconv.FormatBool(m.stopped)).Msg("FinishWithError end")
 	return ctx
 }
