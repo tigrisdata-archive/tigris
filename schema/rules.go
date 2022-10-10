@@ -21,15 +21,13 @@ import (
 var (
 	ErrMissingField           = errors.InvalidArgument("removing a field is a backward incompatible change")
 	ErrCollectionNameMismatch = errors.InvalidArgument("mismatch in the collection name")
-	// ErrModifiedPrimaryKey     = errors.InvalidArgument("changing primary key is a backward incompatible change")
+	// ErrModifiedPrimaryKey     = errors.InvalidArgument("changing primary key is a backward incompatible change").
 )
 
-var (
-	validators = []Validator{
-		&IndexSchemaValidator{},
-		&FieldSchemaValidator{},
-	}
-)
+var validators = []Validator{
+	&IndexSchemaValidator{},
+	&FieldSchemaValidator{},
+}
 
 type Validator interface {
 	Validate(existing *DefaultCollection, current *Factory) error
@@ -44,12 +42,12 @@ func (v *IndexSchemaValidator) Validate(existing *DefaultCollection, current *Fa
 type FieldSchemaValidator struct{}
 
 func (v *FieldSchemaValidator) Validate(existing *DefaultCollection, current *Factory) error {
-	var existingFields = make(map[string]*Field)
+	existingFields := make(map[string]*Field)
 	for _, e := range existing.Fields {
 		existingFields[e.FieldName] = e
 	}
 
-	var currentFields = make(map[string]*Field)
+	currentFields := make(map[string]*Field)
 	for _, e := range current.Fields {
 		currentFields[e.FieldName] = e
 	}

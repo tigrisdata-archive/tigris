@@ -35,7 +35,7 @@ const (
 	fdbAPIVersion = 710
 )
 
-// fdbkv is an implementation of kv on top of FoundationDB
+// fdbkv is an implementation of kv on top of FoundationDB.
 type fdbkv struct {
 	db fdb.Database
 }
@@ -63,7 +63,7 @@ type fdbIteratorTxCloser struct {
 	tx baseTx
 }
 
-// newFoundationDB initializes instance of FoundationDB KV interface implementation
+// newFoundationDB initializes instance of FoundationDB KV interface implementation.
 func newFoundationDB(cfg *config.FoundationDBConfig) (*fdbkv, error) {
 	d := &fdbkv{}
 	if err := d.init(cfg); err != nil {
@@ -80,7 +80,7 @@ func (d *fdbkv) init(cfg *config.FoundationDBConfig) (err error) {
 	return
 }
 
-// Read returns all the keys which has prefix equal to "key" parameter
+// Read returns all the keys which has prefix equal to "key" parameter.
 func (d *fdbkv) Read(ctx context.Context, table []byte, key Key) (baseIterator, error) {
 	tx, err := d.BeginTx(ctx)
 	if err != nil {
@@ -231,7 +231,7 @@ func (d *fdbkv) DropTable(ctx context.Context, name []byte) error {
 
 // TableSize calculates approximate table size in bytes
 // It also works with the prefix of the table name,
-// allowing to calculate sizes of multiple table with the same prefix
+// allowing to calculate sizes of multiple table with the same prefix.
 func (d *fdbkv) TableSize(ctx context.Context, name []byte) (int64, error) {
 	s := subspace.FromBytes(name)
 
@@ -241,7 +241,6 @@ func (d *fdbkv) TableSize(ctx context.Context, name []byte) (int64, error) {
 		sz, err = tr.GetEstimatedRangeSizeBytes(s).Get()
 		return nil, err
 	})
-
 	if err != nil {
 		log.Err(err).Str("name", string(name)).Int64("size", sz).Msg("table size")
 	}
@@ -266,7 +265,7 @@ func (b *fbatch) flushBatch(ctx context.Context, _ Key, _ Key, data []byte) erro
 		return err
 	}
 
-	//FIXME: Include lkey and rKey in size calculation
+	// FIXME: Include lkey and rKey in size calculation
 
 	if sz+int64(len(data)) > maxTxSizeBytes {
 		log.Debug().Int64("size", sz).Msg("flush batch")
@@ -596,7 +595,7 @@ func (t *ftx) Rollback(_ context.Context) error {
 	return nil
 }
 
-// IsRetriable returns true if transaction can be retried after error
+// IsRetriable returns true if transaction can be retried after error.
 func (t *ftx) IsRetriable() bool {
 	if t.err == nil {
 		return false
@@ -652,8 +651,6 @@ func (i *fdbIterator) Next(kv *baseKeyValue) bool {
 		kv.Value = tkv.Value
 	}
 
-	//log.Debug().Interface("key", tupleToKey(&t)).Str("table", i.subspace.FDBKey().String()).Msg("fdbIterator.Next")
-
 	return true
 }
 
@@ -691,7 +688,7 @@ func getFDBKey(table []byte, key Key) fdb.Key {
 
 // getCtxTimeout returns timeout in ms if it's set in the context
 // returns 0 if timeout is not set
-// returns negative number if timeout has expired
+// returns negative number if timeout has expired.
 func getCtxTimeout(ctx context.Context) int64 {
 	tm, ok := ctx.Deadline()
 	if !ok {
@@ -701,7 +698,7 @@ func getCtxTimeout(ctx context.Context) int64 {
 }
 
 // setTxTimeout sets transaction timeout
-// Zero input sets unlimited timeout
+// Zero input sets unlimited timeout.
 func setTxTimeout(tx *fdb.Transaction, ms int64) error {
 	if ms < 0 {
 		return context.DeadlineExceeded

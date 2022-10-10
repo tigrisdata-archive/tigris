@@ -1,3 +1,17 @@
+// Copyright 2022 Tigris Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package metadata
 
 import (
@@ -7,18 +21,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/errors"
-	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/transaction"
-	"github.com/tigrisdata/tigris/store/kv"
 )
 
 func TestUserSubspace(t *testing.T) {
-	fdbCfg, err := config.GetTestFDBConfig("../../..")
-	require.NoError(t, err)
-
-	kvStore, err := kv.NewKeyValueStore(fdbCfg)
-	require.NoError(t, err)
-
 	t.Run("put_error", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -201,5 +207,4 @@ func TestUserSubspace(t *testing.T) {
 
 		_ = kvStore.DropTable(ctx, u.UserSubspaceName())
 	})
-
 }

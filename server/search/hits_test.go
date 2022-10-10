@@ -15,11 +15,10 @@
 package search
 
 import (
+	"bytes"
 	"encoding/json"
 	"testing"
 	"time"
-
-	"bytes"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/tigrisdata/tigris/lib/date"
@@ -283,7 +282,7 @@ func TestSortedHits(t *testing.T) {
 }
 
 func TestNewSearchHit(t *testing.T) {
-	var allDocs []document
+	allDocs := make([]document, 0, len(documents))
 	for _, d := range documents {
 		allDocs = append(allDocs, d)
 	}
@@ -291,8 +290,8 @@ func TestNewSearchHit(t *testing.T) {
 
 	t.Run("with valid input", func(t *testing.T) {
 		searchHits := make([]*Hit, len(tsHits))
-		for i, h := range tsHits {
-			searchHits[i] = NewSearchHit(&h)
+		for i := range tsHits {
+			searchHits[i] = NewSearchHit(&tsHits[i])
 		}
 
 		assert.Len(t, searchHits, len(tsHits))
@@ -433,17 +432,20 @@ var documents = map[string]document{
 	},
 }
 
-// helper to generate hits
+// helper to generate hits.
 func generateTsHits(docs ...document) []tsApi.SearchResultHit {
-	var hits []tsApi.SearchResultHit
+	hits := make([]tsApi.SearchResultHit, 0, len(docs))
 	for _, doc := range docs {
-		encoded, _ := json.Marshal(doc)
+		encoded, err := json.Marshal(doc)
+		if err != nil {
+			panic(err)
+		}
 		reader := bytes.NewReader(encoded)
 		decoder := json.NewDecoder(reader)
 		decoder.UseNumber()
 		var decoded map[string]interface{}
 		_ = decoder.Decode(&decoded)
-		//_ = json.Unmarshal(encoded, &decoded)
+		// _ = json.Unmarshal(encoded, &decoded)
 		score := doc["_text_match"].(int64)
 		hits = append(hits, tsApi.SearchResultHit{
 			Document:  &decoded,

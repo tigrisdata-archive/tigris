@@ -1,15 +1,18 @@
 <p align="center">
-  <a href="https://www.tigrisdata.com/"><img src="docs/assets/tigris-logo-wordmark.svg" alt="Tigris" width="298" /></a> 
+  <a href="https://www.tigrisdata.com/"><img src="https://docs.tigrisdata.com/logo/dark.png" alt="Tigris" width="298" /></a> 
 </p>
 
 <p align="center">
-For developers who want to build scalable web and mobile apps fast!
+Tigris is the all-in-one open source developer data platform. 
 </p>
 
 <p align="center">
-With a zero-ops scalable pub/sub messaging system and fault-tolerant 
-cloud-native database, <br/> Tigris provides everything you need to get up and 
-running quickly and efficiently.
+Use it as a
+scalable transactional document store. Perform real-time search across your
+data stores automatically. Build event-driven apps with real-time event
+streaming. All provided to you through a unified serverless API enabling you
+to focus on building applications and stop worrying about the data
+infrastructure.
 </p>
 
 <p align="center">
@@ -34,14 +37,18 @@ running quickly and efficiently.
 
 # Helpful Links
 
-- [Key Concepts](https://docs.tigrisdata.com/overview/concepts)
 - [Quickstart](https://docs.tigrisdata.com/quickstart)
-- [Data Modeling](https://docs.tigrisdata.com/overview/datamodel)
-- [Tutorials](https://docs.tigrisdata.com/category/tutorials)
-- [Client Library: Go](https://docs.tigrisdata.com/golang/getting-started)
-- [Client Library: Java](https://docs.tigrisdata.com/java/getting-started)
-- [Client Library: TypeScript](https://docs.tigrisdata.com/typescript/getting-started)
-- [Command Line Interface](https://docs.tigrisdata.com/cli)
+- [Architecture](https://docs.tigrisdata.com/overview/architecture)
+- [Databases and Collections](https://docs.tigrisdata.com/overview/databases)
+- [Documents](https://docs.tigrisdata.com/documents/)
+- [Event Streaming](https://docs.tigrisdata.com/events/)
+- [Search](https://docs.tigrisdata.com/searching/)
+- [Observability](https://docs.tigrisdata.com/observability/)
+- [TypeScript Reference](https://docs.tigrisdata.com/typescript/)
+- [Go Reference](https://docs.tigrisdata.com/golang/)
+- [Java Reference](https://docs.tigrisdata.com/java/)
+- [CLI](https://docs.tigrisdata.com/cli)
+- [Guides](https://docs.tigrisdata.com/guides/)
 
 # Community & Support
 

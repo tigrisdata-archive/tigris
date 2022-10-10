@@ -18,6 +18,7 @@ import (
 	"context"
 
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/server/request"
 	"google.golang.org/grpc"
@@ -25,7 +26,7 @@ import (
 
 var (
 	excludedMethods = container.NewHashSet(
-		"/HealthAPI/Health",
+		api.HealthMethodName,
 		"/tigrisdata.admin.v1.Admin/createNamespace",
 		"/tigrisdata.admin.v1.Admin/listNamespaces",
 	)

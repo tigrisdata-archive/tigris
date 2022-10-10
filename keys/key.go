@@ -72,7 +72,7 @@ func (p *tableKey) String() string {
 }
 
 // SerializeToBytes follows the ordering of how the Key is persisted in database so to compare a Key call this method
-// get bytes and compare it with raw bytes stored in database
+// get bytes and compare it with raw bytes stored in database.
 func (p *tableKey) SerializeToBytes() []byte {
 	if len(p.indexParts) == 0 {
 		return p.table

@@ -20,25 +20,47 @@ import (
 	"google.golang.org/grpc"
 )
 
-var (
-	methodPrefix             = "/tigrisdata.v1.Tigris/"
-	insert                   = methodPrefix + "Insert"
-	replace                  = methodPrefix + "Replace"
-	update                   = methodPrefix + "Update"
-	delete                   = methodPrefix + "Delete"
-	read                     = methodPrefix + "Read"
-	commitTransaction        = methodPrefix + "CommitTransaction"
-	rollbackTransaction      = methodPrefix + "RollbackTransaction"
-	dropCollection           = methodPrefix + "DropCollection"
-	listCollection           = methodPrefix + "ListCollections"
-	createOrUpdateCollection = methodPrefix + "CreateOrUpdateCollection"
+const (
+	HealthMethodName = "/HealthAPI/Health"
+
+	apiMethodPrefix = "/tigrisdata.v1.Tigris/"
+
+	InsertMethodName  = apiMethodPrefix + "Insert"
+	ReplaceMethodName = apiMethodPrefix + "Replace"
+	UpdateMethodName  = apiMethodPrefix + "Update"
+	DeleteMethodName  = apiMethodPrefix + "Delete"
+	ReadMethodName    = apiMethodPrefix + "Read"
+
+	SearchMethodName = apiMethodPrefix + "Search"
+
+	SubscribeMethodName = apiMethodPrefix + "Subscribe"
+
+	EventsMethodName = apiMethodPrefix + "Events"
+
+	CommitTransactionMethodName   = apiMethodPrefix + "CommitTransaction"
+	RollbackTransactionMethodName = apiMethodPrefix + "RollbackTransaction"
+
+	CreateOrUpdateCollectionMethodName = apiMethodPrefix + "CreateOrUpdateCollection"
+	DropCollectionMethodName           = apiMethodPrefix + "DropCollection"
+
+	DropDatabaseMethodName = apiMethodPrefix + "DropDatabase"
+
+	ListDatabasesMethodName   = apiMethodPrefix + "ListDatabases"
+	ListCollectionsMethodName = apiMethodPrefix + "ListCollections"
+
+	DescribeDatabaseMethodName   = apiMethodPrefix + "DescribeDatabase"
+	DescribeCollectionMethodName = apiMethodPrefix + "DescribeCollection"
+
+	ObservabilityMethodPrefix = "/tigrisdata.observability.v1.Observability/"
+	ManagementMethodPrefix    = "/tigrisdata.management.v1.Management/"
 )
 
 func IsTxSupported(ctx context.Context) bool {
 	m, _ := grpc.Method(ctx)
 	switch m {
-	case insert, replace, update, delete, read, commitTransaction, rollbackTransaction,
-		dropCollection, listCollection, createOrUpdateCollection:
+	case InsertMethodName, ReplaceMethodName, UpdateMethodName, DeleteMethodName, ReadMethodName,
+		CommitTransactionMethodName, RollbackTransactionMethodName,
+		DropCollectionMethodName, ListCollectionsMethodName, CreateOrUpdateCollectionMethodName:
 		return true
 	default:
 		return false

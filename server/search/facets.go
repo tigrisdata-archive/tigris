@@ -24,7 +24,7 @@ import (
 
 // SortedFacets is a Temporary workaround to merge facet values when aggregating results from
 // multi-search queries resulting from OR filters
-// this is not very efficient as of now
+// this is not very efficient as of now.
 type SortedFacets struct {
 	counts     map[string]*container.PriorityQueue[FacetCount]
 	facetAttrs map[string]*FacetAttrs
@@ -40,7 +40,7 @@ func NewSortedFacets() *SortedFacets {
 }
 
 // Add creates or merges the facet counts with existing for each field
-// new values cannot be added to this data structure once it has been sorted
+// new values cannot be added to this data structure once it has been sorted.
 func (f *SortedFacets) Add(tsCounts *tsApi.FacetCounts) error {
 	if tsCounts == nil || tsCounts.FieldName == nil {
 		return nil
@@ -66,7 +66,7 @@ func (f *SortedFacets) Add(tsCounts *tsApi.FacetCounts) error {
 }
 
 // GetFacetCount removes from priority queue and returns the value with highest count for the field if present
-// else returns nil, False
+// else returns nil, False.
 func (f *SortedFacets) GetFacetCount(field string) (*FacetCount, bool) {
 	if !f.closed {
 		f.sort()
@@ -83,13 +83,12 @@ func (f *SortedFacets) GetFacetCount(field string) (*FacetCount, bool) {
 	return nil, false
 }
 
-// GetStats returns the computed stats for the faceted field
+// GetStats returns the computed stats for the faceted field.
 func (f *SortedFacets) GetStats(field string) *api.FacetStats {
 	if attrs, ok := f.facetAttrs[field]; ok {
 		return attrs.stats
 	}
 	return nil
-
 }
 
 func (f *SortedFacets) hasMoreFacets(field string) bool {
@@ -105,7 +104,7 @@ func (f *SortedFacets) initPriorityQueue(field string) {
 	}
 }
 
-// sort will queue up the collected unique facet counts in priority queue
+// sort will queue up the collected unique facet counts in priority queue.
 func (f *SortedFacets) sort() {
 	if f.closed {
 		log.Err(errors.New("Facets should only be sorted once"))
@@ -138,7 +137,7 @@ func (fa *FacetAttrs) addCount(value string, count *int) {
 	}
 }
 
-// adds stats to existing FacetAttrs
+// adds stats to existing FacetAttrs.
 func (fa *FacetAttrs) addStats(counts *tsApi.FacetCounts) {
 	if counts == nil || counts.Stats == nil {
 		return
@@ -189,7 +188,7 @@ type FacetCount struct {
 	Count int64
 }
 
-// facetCountComparator returns True if `this` needs to be sorted before `that`
+// facetCountComparator returns True if `this` needs to be sorted before `that`.
 func facetCountComparator(this, that *FacetCount) bool {
 	if this == nil {
 		return that == nil

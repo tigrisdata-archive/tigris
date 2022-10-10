@@ -49,8 +49,7 @@ type Value interface {
 }
 
 func NewValueUsingCollation(fieldType schema.FieldType, value []byte, collation *api.Collation) (Value, error) {
-	switch fieldType {
-	case schema.StringType:
+	if fieldType == schema.StringType {
 		return NewStringValue(string(value), collation), nil
 	}
 
@@ -114,9 +113,9 @@ func (i *IntValue) CompareTo(v Value) (int, error) {
 		return 0, nil
 	} else if *i < *converted {
 		return -1, nil
-	} else {
-		return 1, nil
 	}
+
+	return 1, nil
 }
 
 func (i *IntValue) AsInterface() interface{} {
@@ -173,9 +172,9 @@ func (d *DoubleValue) CompareTo(v Value) (int, error) {
 		return 0, nil
 	} else if d.bin64Enc < converted.bin64Enc {
 		return -1, nil
-	} else {
-		return 1, nil
 	}
+
+	return 1, nil
 }
 
 func (d *DoubleValue) AsInterface() interface{} {
@@ -226,9 +225,9 @@ func (s *StringValue) CompareTo(v Value) (int, error) {
 		return 0, nil
 	} else if s.Value < converted.Value {
 		return -1, nil
-	} else {
-		return 1, nil
 	}
+
+	return 1, nil
 }
 
 func (s *StringValue) AsInterface() interface{} {

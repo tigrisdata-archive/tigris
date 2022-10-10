@@ -26,9 +26,7 @@ import (
 	"github.com/tigrisdata/tigris/store/kv"
 )
 
-var (
-	schVersion = []byte{0x01}
-)
+var schVersion = []byte{0x01}
 
 // SchemaSubspace is used to manage schemas in schema subspace.
 type SchemaSubspace struct {
@@ -81,7 +79,7 @@ func (s *SchemaSubspace) Get(ctx context.Context, tx transaction.Tx, namespaceId
 		return nil, nil, err
 	}
 
-	var revisionToSchemaMapping = make(map[uint32][]byte)
+	revisionToSchemaMapping := make(map[uint32][]byte)
 	var revisions []int
 	var row kv.KeyValue
 	for it.Next(&row) {
@@ -98,7 +96,7 @@ func (s *SchemaSubspace) Get(ctx context.Context, tx transaction.Tx, namespaceId
 
 	// sort revisions now
 	sort.Ints(revisions)
-	var schemas [][]byte
+	schemas := make([][]byte, 0, len(revisions))
 	for _, r := range revisions {
 		schema := revisionToSchemaMapping[uint32(r)]
 		schemas = append(schemas, schema)

@@ -20,17 +20,15 @@ import (
 	"strings"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
-	"github.com/tigrisdata/tigris/errors"
-	"github.com/tigrisdata/tigris/server/metrics"
-
 	"github.com/auth0/go-jwt-middleware/v2/jwks"
 	"github.com/auth0/go-jwt-middleware/v2/validator"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/request"
 	"google.golang.org/grpc"
 )
@@ -41,7 +39,7 @@ var (
 	headerAuthorize           = "authorization"
 	UnknownNamespace          = "unknown"
 	BypassAuthForTheseMethods = container.NewHashSet(
-		"/HealthAPI/Health",
+		api.HealthMethodName,
 		"/tigrisdata.auth.v1.Auth/GetAccessToken",
 		"/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo",
 	)
@@ -101,7 +99,6 @@ func GetJWTValidator(config *config.Config) *validator.Validator {
 			},
 		),
 	)
-
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to configure JWTValidator")
 	}
@@ -109,18 +106,18 @@ func GetJWTValidator(config *config.Config) *validator.Validator {
 }
 
 func measuredAuthFunction(ctx context.Context, jwtValidator *validator.Validator, config *config.Config, cache *lru.Cache) (ctxResult context.Context, err error) {
-	spanMeta := metrics.NewSpanMeta("auth", "auth", metrics.AuthSpanType, metrics.GetAuthBaseTags(ctx))
-	spanMeta.StartTracing(ctx, true)
+	measurement := metrics.NewMeasurement("auth", "auth", metrics.AuthSpanType, metrics.GetAuthBaseTags(ctx))
+	measurement.StartTracing(ctx, true)
 	ctxResult, err = authFunction(ctx, jwtValidator, config, cache)
 	if err != nil {
-		metrics.AuthErrorCount.Tagged(spanMeta.GetAuthErrorTags(err)).Counter("error").Inc(1)
-		spanMeta.FinishWithError(ctxResult, "auth", err)
-		spanMeta.RecordDuration(metrics.AuthErrorRespTime, spanMeta.GetAuthErrorTags(err))
+		measurement.CountErrorForScope(metrics.AuthErrorCount, measurement.GetAuthErrorTags(err))
+		measurement.FinishWithError(ctxResult, "auth", err)
+		measurement.RecordDuration(metrics.AuthErrorRespTime, measurement.GetAuthErrorTags(err))
 		return
 	}
-	metrics.AuthOkCount.Tagged(spanMeta.GetAuthOkTags()).Counter("ok").Inc(1)
-	spanMeta.FinishTracing(ctxResult)
-	spanMeta.RecordDuration(metrics.AuthRespTime, spanMeta.GetAuthOkTags())
+	measurement.CountOkForScope(metrics.AuthOkCount, measurement.GetAuthOkTags())
+	measurement.FinishTracing(ctxResult)
+	measurement.RecordDuration(metrics.AuthRespTime, measurement.GetAuthOkTags())
 	return
 }
 

@@ -20,15 +20,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tigrisdata/tigris/server/request"
-
-	"google.golang.org/grpc"
-
-	"github.com/tigrisdata/tigris/server/config"
-	"github.com/tigrisdata/tigris/util"
-
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/request"
+	"github.com/tigrisdata/tigris/util"
+	"google.golang.org/grpc"
 )
 
 func mergeTags(tagSets ...map[string]string) map[string]string {
@@ -37,10 +34,8 @@ func mergeTags(tagSets ...map[string]string) map[string]string {
 		for k, v := range tagSet {
 			if _, ok := res[k]; !ok {
 				res[k] = v
-			} else {
-				if res[k] == "unknown" {
-					res[k] = v
-				}
+			} else if res[k] == "unknown" {
+				res[k] = v
 			}
 		}
 	}
@@ -137,16 +132,33 @@ func getDefaultValue(tagKey string) string {
 	}
 }
 
+func filterTags(tags map[string]string, filterList []string) map[string]string {
+	if len(filterList) == 0 {
+		return tags
+	}
+	res := make(map[string]string)
+	for tagKey, tagValue := range tags {
+		filtered := false
+		for _, filteredTag := range filterList {
+			if tagKey == filteredTag {
+				filtered = true
+			}
+		}
+		if !filtered {
+			res[tagKey] = tagValue
+		}
+	}
+	return res
+}
+
 func standardizeTags(tags map[string]string, stdKeys []string) map[string]string {
 	res := tags
 	for _, tagKey := range stdKeys {
 		if _, ok := tags[tagKey]; !ok {
 			// tag is missing, need to add it
 			res[tagKey] = getDefaultValue(tagKey)
-		} else {
-			if res[tagKey] == "" {
-				res[tagKey] = getDefaultValue(tagKey)
-			}
+		} else if res[tagKey] == "" {
+			res[tagKey] = getDefaultValue(tagKey)
 		}
 	}
 	for k := range res {

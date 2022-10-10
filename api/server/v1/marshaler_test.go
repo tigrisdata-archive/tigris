@@ -72,7 +72,8 @@ func TestJSONEncoding(t *testing.T) {
 					Current: 2,
 					Size:    10,
 				},
-			}}
+			},
+		}
 		r, err := json.Marshal(resp)
 		require.NoError(t, err)
 		require.JSONEq(t, `{"hits":[{"metadata":{}}],"facets":{"myField":{"counts":[{"count":32,"value":"adidas"}],"stats":{"avg":40,"count":50}}},"meta":{"found":1234,"total_pages":0,"page":{"current":2,"size":10}}}`, string(r))

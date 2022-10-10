@@ -68,20 +68,19 @@ const (
 	PrimaryKeyIndexName = "pkey"
 	AutoPrimaryKeyF     = "id"
 	PrimaryKeySchemaK   = "primary_key"
-	// DateTimeFormat represents the supported date time format
+	// DateTimeFormat represents the supported date time format.
 	DateTimeFormat  = time.RFC3339Nano
 	CollectionTypeF = "collection_type"
 )
 
-var (
-	boolTrue = true
-)
+var boolTrue = true
 
 type JSONSchema struct {
 	Name           string              `json:"title,omitempty"`
 	Description    string              `json:"description,omitempty"`
 	Properties     jsoniter.RawMessage `json:"properties,omitempty"`
 	PrimaryKeys    []string            `json:"primary_key,omitempty"`
+	PartitionKeys  []string            `json:"key,omitempty"`
 	CollectionType string              `json:"collection_type,omitempty"`
 }
 
@@ -107,8 +106,8 @@ func GetCollectionType(reqSchema jsoniter.RawMessage) (CollectionType, error) {
 		switch string(val) {
 		case "documents":
 			return DocumentsType, nil
-		case "messages":
-			return MessagesType, nil
+		case "messages", "topic":
+			return TopicType, nil
 		}
 	}
 	if dt == jsonparser.NotExist {
@@ -125,13 +124,13 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 		return nil, err
 	}
 
-	if cType != MessagesType {
+	if cType != TopicType {
 		if reqSchema, err = setPrimaryKey(reqSchema, jsonSpecFormatUUID, true); err != nil {
 			return nil, err
 		}
 	}
 
-	var schema = &JSONSchema{}
+	schema := &JSONSchema{}
 	if err = jsoniter.Unmarshal(reqSchema, schema); err != nil {
 		return nil, errors.Internal(fmt.Errorf("unmarshalling failed %w", err).Error())
 	}
@@ -144,12 +143,13 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 
 	if len(schema.PrimaryKeys) == 0 && cType == DocumentsType {
 		return nil, errors.InvalidArgument("missing primary key field in schema")
-	} else if len(schema.PrimaryKeys) > 0 && cType == MessagesType {
+	} else if len(schema.PrimaryKeys) > 0 && cType == TopicType {
 		return nil, errors.InvalidArgument("setting primary key is not supported for messages collection")
 	}
 
-	var primaryKeysSet = container.NewHashSet(schema.PrimaryKeys...)
-	fields, err := deserializeProperties(schema.Properties, primaryKeysSet)
+	primaryKeysSet := container.NewHashSet(schema.PrimaryKeys...)
+	partitionKeysSet := container.NewHashSet(schema.PartitionKeys...)
+	fields, err := deserializeProperties(schema.Properties, primaryKeysSet, partitionKeysSet)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +213,7 @@ func setPrimaryKey(reqSchema jsoniter.RawMessage, format string, ifMissing bool)
 	return jsoniter.Marshal(schema)
 }
 
-func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet container.HashSet) ([]*Field, error) {
+func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet container.HashSet, partitionKeysSet container.HashSet) ([]*Field, error) {
 	var fields []*Field
 	var err error
 	err = jsonparser.ObjectEach(properties, func(key []byte, v []byte, dataType jsonparser.ValueType, offset int) error {
@@ -246,7 +246,7 @@ func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet contai
 						DataType: ObjectType,
 					},
 				}
-				if nestedFields, err = deserializeProperties(builder.Items.Properties, primaryKeysSet); err != nil {
+				if nestedFields, err = deserializeProperties(builder.Items.Properties, primaryKeysSet, partitionKeysSet); err != nil {
 					return err
 				}
 				builder.Fields[0].Fields = nestedFields
@@ -256,7 +256,7 @@ func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet contai
 				if f, err = builder.Items.Build(true); err != nil {
 					return err
 				}
-				builder.Fields = append(nestedFields, f)
+				builder.Fields = append(nestedFields, f) //nolint:golint,gocritic
 			}
 		}
 
@@ -264,7 +264,7 @@ func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet contai
 		// nested fields
 		if len(builder.Properties) > 0 {
 			var nestedFields []*Field
-			if nestedFields, err = deserializeProperties(builder.Properties, primaryKeysSet); err != nil {
+			if nestedFields, err = deserializeProperties(builder.Properties, primaryKeysSet, partitionKeysSet); err != nil {
 				return err
 			}
 			builder.Fields = nestedFields
@@ -272,6 +272,10 @@ func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet contai
 		if primaryKeysSet.Contains(builder.FieldName) {
 			boolTrue := true
 			builder.Primary = &boolTrue
+		}
+		if partitionKeysSet.Contains(builder.FieldName) {
+			boolTrue := true
+			builder.Partition = &boolTrue
 		}
 
 		var f *Field

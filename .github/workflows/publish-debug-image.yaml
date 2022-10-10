@@ -4,13 +4,6 @@ on:
   pull_request:
     types:
       - labeled
-  push:
-  workflow_call:
-    secrets:
-      GH_DOCKER_ACCESS_USER:
-        required: true
-      GH_DOCKER_ACCESS_TOKEN:
-        required: true
 
 env:
   DOCKER_REPOSITORY: "tigrisdata/tigris-debug"

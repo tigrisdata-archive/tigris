@@ -50,13 +50,12 @@ func NewEncoder() Encoder {
 	return &DictKeyEncoder{}
 }
 
-type DictKeyEncoder struct {
-}
+type DictKeyEncoder struct{}
 
 // EncodeTableName creates storage friendly table name from namespace, database and collection ids
 // Database and collection objects can be omitted to get table name prefix.
 // If the collection is omitted then result name includes all the collections in the database
-// If both database and collections are omitted then result name includes all databases in the namespace
+// If both database and collections are omitted then result name includes all databases in the namespace.
 func (d *DictKeyEncoder) EncodeTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) ([]byte, error) {
 	return d.encodedTableName(ns, db, coll, internal.UserTableKeyPrefix), nil
 }
@@ -80,7 +79,7 @@ func (d *DictKeyEncoder) EncodePartitionKey(encodedTable []byte, idx *schema.Ind
 	return d.EncodeKey(encodedTable, idx, allParts)
 }
 
-// DecodePartitionKey returns index parts and partition number
+// DecodePartitionKey returns index parts and partition number.
 func (d *DictKeyEncoder) DecodePartitionKey(key keys.Key) ([]interface{}, uint16, error) {
 	if !bytes.Equal(key.Table()[0:4], internal.PartitionKeyPrefix) {
 		return nil, 0, errors.Internal("invalid partition table prefix '%v'", key.Table()[0:4])

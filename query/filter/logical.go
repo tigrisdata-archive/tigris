@@ -27,8 +27,9 @@ const (
 
 // LogicalFilter (or boolean) are the filters that evaluates to True or False. A logical operator can have the following
 // form inside the JSON
-//    {"$and": [{"f1":1}, {"f2": 3}]}
-//    {"$or": [{"f1":1}, {"f2": 3}]}
+//
+//	{"$and": [{"f1":1}, {"f2": 3}]}
+//	{"$or": [{"f1":1}, {"f2": 3}]}
 type LogicalFilter interface {
 	GetFilters() []Filter
 	Type() LogicalOP
@@ -36,7 +37,7 @@ type LogicalFilter interface {
 
 // AndFilter performs a logical AND operation on an array of two or more expressions. The and filter looks like this,
 // {"$and": [{"f1":1}, {"f2": 3}....]}
-// It can be nested i.e. a top level $and can have multiple nested $and/$or
+// It can be nested i.e. a top level $and can have multiple nested $and/$or.
 type AndFilter struct {
 	filter []Filter
 }
@@ -86,14 +87,14 @@ func (a *AndFilter) MatchesDoc(doc map[string]interface{}) bool {
 	return true
 }
 
-// GetFilters returns all the nested filters for AndFilter
+// GetFilters returns all the nested filters for AndFilter.
 func (a *AndFilter) GetFilters() []Filter {
 	return a.filter
 }
 
 // String a helpful method for logging.
 func (a *AndFilter) String() string {
-	var str = "{$and"
+	str := "{$and"
 	for _, f := range a.filter {
 		str += fmt.Sprintf("%s", f)
 	}
@@ -134,7 +135,7 @@ func (a *AndFilter) flattenAnd(soFar string, filters []Filter) []string {
 	var combs []string
 
 	for _, e := range filters[0].ToSearchFilter() {
-		var temp = soFar
+		temp := soFar
 		if len(temp) > 0 {
 			temp = temp + "&&" + e
 		} else {
@@ -153,7 +154,7 @@ func (a *AndFilter) flattenAnd(soFar string, filters []Filter) []string {
 
 // OrFilter performs a logical OR operation on an array of two or more expressions. The or filter looks like this,
 // {"$or": [{"f1":1}, {"f2": 3}....]}
-// It can be nested i.e. a top level "$or" can have multiple nested $and/$or
+// It can be nested i.e. a top level "$or" can have multiple nested $and/$or.
 type OrFilter struct {
 	filter []Filter
 }
@@ -203,7 +204,7 @@ func (o *OrFilter) MatchesDoc(doc map[string]interface{}) bool {
 	return false
 }
 
-// GetFilters returns all the nested filters for OrFilter
+// GetFilters returns all the nested filters for OrFilter.
 func (o *OrFilter) GetFilters() []Filter {
 	return o.filter
 }
@@ -218,7 +219,7 @@ func (o *OrFilter) ToSearchFilter() []string {
 
 // String a helpful method for logging.
 func (o *OrFilter) String() string {
-	var str = "{$or:"
+	str := "{$or:"
 	for _, f := range o.filter {
 		str += fmt.Sprintf("%s", f)
 	}

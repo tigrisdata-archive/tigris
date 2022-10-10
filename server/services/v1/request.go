@@ -29,7 +29,7 @@ const (
 	PublishedStatus string = "published"
 )
 
-// Streaming is a wrapper interface for passing around for streaming reads
+// Streaming is a wrapper interface for passing around for streaming reads.
 type Streaming interface {
 	api.Tigris_ReadServer
 }
@@ -42,14 +42,14 @@ type SubscribeStreaming interface {
 	api.Tigris_SubscribeServer
 }
 
-// ReqOptions are options used by queryLifecycle to execute a query
+// ReqOptions are options used by queryLifecycle to execute a query.
 type ReqOptions struct {
 	txCtx              *api.TransactionCtx
 	metadataChange     bool
 	instantVerTracking bool
 }
 
-// Response is a wrapper on api.Response
+// Response is a wrapper on api.Response.
 type Response struct {
 	api.Response
 	status        string

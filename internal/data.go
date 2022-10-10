@@ -29,9 +29,7 @@ var (
 	PartitionKeyPrefix = []byte("part")
 )
 
-var (
-	bh codec.BincHandle
-)
+var bh codec.BincHandle
 
 // DataType is to define the different data types for the data stored in the storage engine.
 type DataType byte
@@ -77,7 +75,7 @@ func (x *Timestamp) GetProtoTS() *timestamppb.Timestamp {
 	}
 }
 
-// UnixNano returns t as a Unix time, the number of nanoseconds elapsed since January 1, 1970 UTC
+// UnixNano returns t as a Unix time, the number of nanoseconds elapsed since January 1, 1970 UTC.
 func (x *Timestamp) UnixNano() int64 {
 	return x.Seconds*int64(time.Second) + x.Nanoseconds
 }
@@ -154,8 +152,7 @@ func Decode(b []byte) (*TableData, error) {
 func decodeInternal(dataType DataType, encoded []byte) (*TableData, error) {
 	dec := codec.NewDecoderBytes(encoded, &bh)
 
-	switch dataType {
-	case TableDataType:
+	if dataType == TableDataType {
 		var v *TableData
 		if err := dec.Decode(&v); err != nil {
 			return nil, err

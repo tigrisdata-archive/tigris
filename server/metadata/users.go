@@ -1,3 +1,17 @@
+// Copyright 2022 Tigris Data, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package metadata
 
 import (
@@ -20,9 +34,7 @@ type UserSubspace struct {
 	MDNameRegistry
 }
 
-var (
-	userVersion = []byte{0x01}
-)
+var userVersion = []byte{0x01}
 
 type UserType uint32
 
@@ -79,7 +91,6 @@ func (u *UserSubspace) UpdateUserMetadata(ctx context.Context, tx transaction.Tx
 	_, err := tx.Update(ctx, key, func(data *internal.TableData) (*internal.TableData, error) {
 		return internal.NewTableData(payload), nil
 	})
-
 	if err != nil {
 		return err
 	}
@@ -124,6 +135,7 @@ func validateArgsFull(namespaceId uint32, userId string, metadataKey string, pay
 	}
 	return nil
 }
+
 func validateArgsPartial1(namespaceId uint32, userId string, metadataKey string) error {
 	if err := validateArgsPartial2(namespaceId, userId); err != nil {
 		return err

@@ -61,7 +61,7 @@ func UnmarshalArray(input jsoniter.RawMessage, objCb func(jsoniter.RawMessage) (
 	var array []jsoniter.RawMessage
 
 	var err error
-	var expr []Expr
+	expr := make([]Expr, 0, len(array))
 	err = jsoniter.Unmarshal(input, &array)
 
 	for _, a := range array {

@@ -15,6 +15,7 @@
 package main
 
 import (
+	"os"
 	"runtime"
 
 	"github.com/rs/zerolog/log"
@@ -32,6 +33,10 @@ import (
 )
 
 func main() {
+	os.Exit(mainWithCode())
+}
+
+func mainWithCode() int {
 	config.LoadConfig(&config.DefaultConfig)
 	ulog.Configure(config.DefaultConfig.Log)
 
@@ -60,7 +65,8 @@ func main() {
 	}
 
 	if err != nil {
-		log.Fatal().Err(err).Msg("error initializing kv store")
+		log.Error().Err(err).Msg("error initializing kv store")
+		return 1
 	}
 
 	var searchStore search.Store
@@ -70,27 +76,32 @@ func main() {
 		searchStore, err = search.NewStore(&config.DefaultConfig.Search)
 	}
 	if err != nil {
-		log.Fatal().Err(err).Msg("error initializing search store")
+		log.Error().Err(err).Msg("error initializing search store")
+		return 1
 	}
-
-	tenantMgr := metadata.NewTenantManager(kvStore, searchStore)
-	log.Info().Msg("initialized tenant manager")
 
 	txMgr := transaction.NewManager(kvStore)
 	log.Info().Msg("initialized transaction manager")
 
-	if err = tenantMgr.EnsureDefaultNamespace(txMgr); err != nil {
-		log.Fatal().Err(err).Msg("error initializing default namespace")
+	tenantMgr := metadata.NewTenantManager(kvStore, searchStore, txMgr)
+	log.Info().Msg("initialized tenant manager")
+
+	if err = tenantMgr.EnsureDefaultNamespace(); err != nil {
+		log.Error().Err(err).Msg("error initializing default namespace")
+		return 1
 	}
 
-	quota.Init(tenantMgr, txMgr, &config.DefaultConfig.Quota)
+	_ = quota.Init(tenantMgr, &config.DefaultConfig)
+	defer quota.Cleanup()
 
 	mx := muxer.NewMuxer(&config.DefaultConfig)
 	mx.RegisterServices(kvStore, searchStore, tenantMgr, txMgr)
 
 	if err := mx.Start(config.DefaultConfig.Server.Host, config.DefaultConfig.Server.Port); err != nil {
-		log.Fatal().Err(err).Msgf("error starting server")
+		log.Error().Err(err).Msgf("error starting server")
+		return 1
 	}
 
 	log.Info().Msg("Shutdown")
+	return 0
 }

@@ -246,7 +246,7 @@ func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCo
 	// unFlatten the map now
 	doc = UnFlattenObjects(doc)
 
-	var searchKey = doc[schema.SearchId].(string)
+	searchKey := doc[schema.SearchId].(string)
 	if value, ok := doc[schema.ReservedFields[schema.IdToSearchKey]]; ok {
 		// if user has an id field then check it and set it back
 		doc[schema.SearchId] = value
@@ -257,7 +257,7 @@ func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCo
 	}
 
 	// set tableData with metadata
-	var tableData = &internal.TableData{}
+	tableData := &internal.TableData{}
 	if value, ok := doc[schema.ReservedFields[schema.CreatedAt]]; ok {
 		nano, err := value.(json.Number).Int64()
 		if !log.E(err) {

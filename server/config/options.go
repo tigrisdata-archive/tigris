@@ -33,6 +33,7 @@ type Config struct {
 	Cdc           CdcConfig       `yaml:"cdc" json:"cdc"`
 	Search        SearchConfig    `yaml:"search" json:"search"`
 	Tracing       TracingConfig   `yaml:"tracing" json:"tracing"`
+	Metrics       MetricsConfig   `yaml:"metrics" json:"metrics"`
 	Profiling     ProfilingConfig `yaml:"profiling" json:"profiling"`
 	FoundationDB  FoundationDBConfig
 	Quota         QuotaConfig
@@ -76,6 +77,74 @@ type TracingConfig struct {
 	WithDogStatsdAddr   string  `mapstructure:"dogstatsd_addr" yaml:"dogstatsd_addr" json:"dogstatsd_addr"`
 }
 
+type MetricsConfig struct {
+	Enabled        bool                      `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	TimerQuantiles []float64                 `mapstructure:"quantiles" yaml:"quantiles" json:"quantiles"`
+	Requests       RequestsMetricGroupConfig `mapstructure:"requests" yaml:"requests" json:"requests"`
+	Fdb            FdbMetricGroupConfig      `mapstructure:"fdb" yaml:"fdb" json:"fdb"`
+	Search         SearchMetricGroupConfig   `mapstructure:"search" yaml:"search" json:"search"`
+	Session        SessionMetricGroupConfig  `mapstructure:"session" yaml:"session" json:"session"`
+	Size           SizeMetricGroupConfig     `mapstructure:"size" yaml:"size" json:"size"`
+	Network        NetworkMetricGroupConfig  `mapstructure:"network" yaml:"network" json:"network"`
+	Auth           AuthMetricsConfig         `mapstructure:"auth" yaml:"auth" json:"auth"`
+}
+
+type TimerConfig struct {
+	TimerEnabled     bool `mapstructure:"timer_enabled" yaml:"timer_enabled" json:"timer_enabled"`
+	HistogramEnabled bool `mapstructure:"histogram_enabled" yaml:"histogram_enabled" json:"histogram_enabled"`
+}
+
+type CounterConfig struct {
+	OkEnabled    bool `mapstructure:"ok_enabled" yaml:"ok_enabled" json:"ok_enabled"`
+	ErrorEnabled bool `mapstructure:"error_enabled" yaml:"error_enabled" json:"error_enabled"`
+}
+
+type RequestsMetricGroupConfig struct {
+	Enabled      bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Counter      CounterConfig `mapstructure:"counter" yaml:"counter" json:"counter"`
+	Timer        TimerConfig   `mapstructure:"timer" yaml:"timer" json:"timer"`
+	FilteredTags []string      `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
+}
+
+type FdbMetricGroupConfig struct {
+	Enabled      bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Counter      CounterConfig `mapstructure:"counter" yaml:"counter" json:"counter"`
+	Timer        TimerConfig   `mapstructure:"timer" yaml:"timer" json:"timer"`
+	FilteredTags []string      `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
+}
+
+type SearchMetricGroupConfig struct {
+	Enabled      bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Counter      CounterConfig `mapstructure:"counter" yaml:"counter" json:"counter"`
+	Timer        TimerConfig   `mapstructure:"timer" yaml:"timer" json:"timer"`
+	FilteredTags []string      `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
+}
+
+type SessionMetricGroupConfig struct {
+	Enabled      bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Counter      CounterConfig `mapstructure:"counter" yaml:"counter" json:"counter"`
+	Timer        TimerConfig   `mapstructure:"timer" yaml:"timer" json:"timer"`
+	FilteredTags []string      `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
+}
+
+type SizeMetricGroupConfig struct {
+	Enabled      bool     `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Namespace    bool     `mapstructure:"namespace" yaml:"namespace" json:"namespace"`
+	Db           bool     `mapstructure:"db" yaml:"db" json:"db"`
+	Collection   bool     `mapstructure:"collection" yaml:"collection" json:"collection"`
+	FilteredTags []string `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
+}
+
+type NetworkMetricGroupConfig struct {
+	Enabled      bool     `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	FilteredTags []string `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
+}
+
+type AuthMetricsConfig struct {
+	Enabled      bool     `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	FilteredTags []string `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
+}
+
 type ProfilingConfig struct {
 	Enabled         bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 	EnableCPU       bool `mapstructure:"enable_cpu" yaml:"enable_cpu" json:"enable_cpu"`
@@ -83,24 +152,6 @@ type ProfilingConfig struct {
 	EnableBlock     bool `mapstructure:"enable_block" yaml:"enable_block" json:"enable_block"`
 	EnableMutex     bool `mapstructure:"enable_mutex" yaml:"enable_mutex" json:"enable_mutex"`
 	EnableGoroutine bool `mapstructure:"enable_goroutine" yaml:"enable_goroutine" json:"enable_goroutine"`
-}
-
-type GrpcMetricsConfig struct {
-	Enabled      bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	Counters     bool `mapstructure:"counters" yaml:"counters" json:"counters"`
-	ResponseTime bool `mapstructure:"response_time" yaml:"response_time" json:"response_time"`
-}
-
-type FdbMetricsConfig struct {
-	Enabled      bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	Counters     bool `mapstructure:"counters" yaml:"counters" json:"counters"`
-	ResponseTime bool `mapstructure:"response_time" yaml:"response_time" json:"response_time"`
-}
-
-type SearchMetricsConfig struct {
-	Enabled      bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	Counters     bool `mapstructure:"counters" yaml:"counters" json:"counters"`
-	ResponseTime bool `mapstructure:"response_time" yaml:"response_time" json:"response_time"`
 }
 
 type ManagementConfig struct {
@@ -114,6 +165,11 @@ type ObservabilityConfig struct {
 	AppKey      string `mapstructure:"app_key" yaml:"app_key" json:"app_key"`
 	ProviderUrl string `mapstructure:"provider_url" yaml:"provider_url" json:"provider_url"`
 }
+
+var (
+	WriteUnitSize = 1024
+	ReadUnitSize  = 4096
+)
 
 var DefaultConfig = Config{
 	Log: log.LogConfig{
@@ -151,30 +207,118 @@ var DefaultConfig = Config{
 		CodeHotspotsEnabled: true,
 		EndpointsEnabled:    true,
 	},
+	Metrics: MetricsConfig{
+		Enabled:        true,
+		TimerQuantiles: []float64{0.5, 0.95},
+		Requests: RequestsMetricGroupConfig{
+			Enabled: true,
+			Counter: CounterConfig{
+				OkEnabled:    true,
+				ErrorEnabled: true,
+			},
+			Timer: TimerConfig{
+				TimerEnabled:     true,
+				HistogramEnabled: false,
+			},
+			FilteredTags: nil,
+		},
+		Fdb: FdbMetricGroupConfig{
+			Enabled: true,
+			Counter: CounterConfig{
+				OkEnabled:    true,
+				ErrorEnabled: true,
+			},
+			Timer: TimerConfig{
+				TimerEnabled:     true,
+				HistogramEnabled: false,
+			},
+			FilteredTags: nil,
+		},
+		Search: SearchMetricGroupConfig{
+			Enabled: true,
+			Counter: CounterConfig{
+				OkEnabled:    true,
+				ErrorEnabled: true,
+			},
+			Timer: TimerConfig{
+				TimerEnabled:     true,
+				HistogramEnabled: false,
+			},
+			FilteredTags: nil,
+		},
+		Session: SessionMetricGroupConfig{
+			Enabled: true,
+			Counter: CounterConfig{
+				OkEnabled:    true,
+				ErrorEnabled: true,
+			},
+			Timer: TimerConfig{
+				TimerEnabled:     true,
+				HistogramEnabled: false,
+			},
+			FilteredTags: nil,
+		},
+		Size: SizeMetricGroupConfig{
+			Enabled:      true,
+			Namespace:    true,
+			Db:           true,
+			Collection:   true,
+			FilteredTags: nil,
+		},
+		Network: NetworkMetricGroupConfig{
+			Enabled:      true,
+			FilteredTags: nil,
+		},
+		Auth: AuthMetricsConfig{
+			Enabled:      true,
+			FilteredTags: nil,
+		},
+	},
 	Profiling: ProfilingConfig{
 		Enabled:    false,
 		EnableCPU:  true,
 		EnableHeap: true,
 	},
 	Quota: QuotaConfig{
-		Enabled:                   false,
-		RateLimit:                 1000,        // requests per second both reads and writes
-		WriteThroughputLimit:      10000000,    // bytes per second
-		ReadThroughputLimit:       10000000,    // bytes per second
-		DataSizeLimit:             10000000000, // bytes
-		LimitUpdateInterval:       5,           // seconds
-		TenantSizeRefreshInterval: 60,          // seconds
-		AllTenantsRefreshInternal: 300,         // seconds
+		// Maximum limits single node can handle. Across namespaces.
+		Node: LimitsConfig{
+			Enabled: false,
+
+			ReadUnits:  4000, // read requests per second per namespace
+			WriteUnits: 1000, // write requests per second
+		},
+		Namespace: NamespaceLimitsConfig{
+			// Per cluster limits for single namespace
+			Default: LimitsConfig{
+				Enabled: false,
+
+				ReadUnits:  100, // read requests per second per namespace
+				WriteUnits: 25,  // write requests per second
+			},
+			// Maximum per node quota for single namespace
+			Node: LimitsConfig{
+				ReadUnits:  100, // read requests per second per namespace
+				WriteUnits: 25,  // write requests per second
+			},
+			RefreshInterval: 60 * time.Second,
+		},
+		Storage: StorageLimitsConfig{
+			Enabled:         false,
+			DataSizeLimit:   100 * 1024 * 1024,
+			RefreshInterval: 60 * time.Second,
+		},
 	},
 	Observability: ObservabilityConfig{
-		Enabled: false,
+		Enabled:     false,
+		Provider:    "datadog",
+		ProviderUrl: "us3.datadoghq.com",
 	},
 	Management: ManagementConfig{
 		Enabled: true,
 	},
 }
 
-// FoundationDBConfig keeps FoundationDB configuration parameters
+// FoundationDBConfig keeps FoundationDB configuration parameters.
 type FoundationDBConfig struct {
 	ClusterFile string `mapstructure:"cluster_file" json:"cluster_file" yaml:"cluster_file"`
 }
@@ -187,17 +331,68 @@ type SearchConfig struct {
 	WriteEnabled bool   `mapstructure:"write_enabled" yaml:"write_enabled" json:"write_enabled"`
 }
 
-type QuotaConfig struct {
-	Enabled                   bool
-	RateLimit                 int   `mapstructure:"rate_limit" yaml:"rate_limit" json:"rate_limit"`
-	WriteThroughputLimit      int   `mapstructure:"write_throughput_limit" yaml:"write_throughput_limit" json:"write_throughput_limit"`
-	ReadThroughputLimit       int   `mapstructure:"read_throughput_limit" yaml:"read_throughput_limit" json:"read_throughput_limit"`
-	DataSizeLimit             int64 `mapstructure:"data_size_limit" yaml:"data_size_limit" json:"data_size_limit"`
-	LimitUpdateInterval       int64 `mapstructure:"limit_update_interval" yaml:"limit_update_interval" json:"limit_update_interval"`
-	TenantSizeRefreshInterval int64 `mapstructure:"tenant_size_refresh_interval" yaml:"tenant_size_refresh_interval" json:"tenant_size_refresh_interval"`
-	AllTenantsRefreshInternal int64 `mapstructure:"all_tenants_refresh_interval" yaml:"all_tenants_refresh_interval" json:"all_tenants_refresh_interval"`
+type LimitsConfig struct {
+	Enabled bool
+
+	ReadUnits  int `mapstructure:"read_units" yaml:"read_units" json:"read_units"`
+	WriteUnits int `mapstructure:"write_units" yaml:"write_units" json:"write_units"`
 }
 
-func IsIndexingStoreReadEnabled() bool {
-	return DefaultConfig.Search.WriteEnabled && DefaultConfig.Search.ReadEnabled
+func (l *LimitsConfig) Limit(isWrite bool) int {
+	if isWrite {
+		return l.WriteUnits
+	}
+
+	return l.ReadUnits
+}
+
+type NamespaceLimitsConfig struct {
+	Enabled    bool
+	Default    LimitsConfig            // default per namespace limit
+	Node       LimitsConfig            // max per node per namespace limit
+	Namespaces map[string]LimitsConfig // individual namespaces configuration
+
+	RefreshInterval time.Duration `mapstructure:"refresh_interval" yaml:"refresh_interval" json:"refresh_interval"`
+}
+
+func (n *NamespaceLimitsConfig) NamespaceLimits(ns string) *LimitsConfig {
+	cfg, ok := n.Namespaces[ns]
+	if ok {
+		return &cfg
+	}
+	return &n.Default
+}
+
+type NamespaceStorageLimitsConfig struct {
+	Size int64
+}
+
+type StorageLimitsConfig struct {
+	Enabled         bool
+	DataSizeLimit   int64         `mapstructure:"data_size_limit" yaml:"data_size_limit" json:"data_size_limit"`
+	RefreshInterval time.Duration `mapstructure:"refresh_interval" yaml:"refresh_interval" json:"refresh_interval"`
+
+	// Per namespace limits
+	Namespaces map[string]NamespaceStorageLimitsConfig
+}
+
+func (n *StorageLimitsConfig) NamespaceLimits(ns string) int64 {
+	cfg, ok := n.Namespaces[ns]
+	if ok {
+		return cfg.Size
+	}
+	return n.DataSizeLimit
+}
+
+type QuotaConfig struct {
+	Node      LimitsConfig          // maximum rates per node. protects the node from overloading
+	Namespace NamespaceLimitsConfig // user quota across all the nodes
+	Storage   StorageLimitsConfig
+
+	WriteUnitSize int
+	ReadUnitSize  int
+}
+
+func (s *SearchConfig) IsReadEnabled() bool {
+	return s.WriteEnabled && s.ReadEnabled
 }

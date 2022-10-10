@@ -81,18 +81,18 @@ type TigrisError struct {
 	Details []proto.Message `json:"details,omitempty"`
 }
 
-// Error to return the underlying error message
+// Error to return the underlying error message.
 func (e *TigrisError) Error() string {
 	return e.Message
 }
 
-// WithDetails a helper method for adding details to the TigrisError
+// WithDetails a helper method for adding details to the TigrisError.
 func (e *TigrisError) WithDetails(details ...proto.Message) *TigrisError {
 	e.Details = append(e.Details, details...)
 	return e
 }
 
-// WithRetry attached retry information to the error
+// WithRetry attached retry information to the error.
 func (e *TigrisError) WithRetry(d time.Duration) *TigrisError {
 	if d != 0 {
 		e.Details = append(e.Details, &errdetails.RetryInfo{RetryDelay: durationpb.New(d)})
@@ -100,13 +100,12 @@ func (e *TigrisError) WithRetry(d time.Duration) *TigrisError {
 	return e
 }
 
-// RetryDelay retrieves retry delay if it's attached to the error
+// RetryDelay retrieves retry delay if it's attached to the error.
 func (e *TigrisError) RetryDelay() time.Duration {
 	var dur time.Duration
 
 	for _, d := range e.Details {
-		switch t := d.(type) {
-		case *errdetails.RetryInfo:
+		if t, ok := d.(*errdetails.RetryInfo); ok {
 			dur = t.RetryDelay.AsDuration()
 		}
 	}
@@ -115,7 +114,7 @@ func (e *TigrisError) RetryDelay() time.Duration {
 }
 
 // ToGRPCCode converts Tigris error code to GRPC code
-// Extended codes converted to 'Unknown' GRPC code
+// Extended codes converted to 'Unknown' GRPC code.
 func ToGRPCCode(code Code) codes.Code {
 	if code <= Code_UNAUTHENTICATED {
 		return codes.Code(code)
@@ -125,12 +124,12 @@ func ToGRPCCode(code Code) codes.Code {
 	return codes.Unknown
 }
 
-// ToTigrisCode converts GRPC code to Tigris code
+// ToTigrisCode converts GRPC code to Tigris code.
 func ToTigrisCode(code codes.Code) Code {
 	return Code(code)
 }
 
-// CodeFromString parses Tigris error code from its string representation
+// CodeFromString parses Tigris error code from its string representation.
 func CodeFromString(c string) Code {
 	code, ok := Code_value[c]
 	if !ok {
@@ -140,7 +139,7 @@ func CodeFromString(c string) Code {
 	return Code(code)
 }
 
-// CodeToString convert Tigris error code into string representation
+// CodeToString convert Tigris error code into string representation.
 func CodeToString(c Code) string {
 	r, ok := Code_name[int32(c)]
 	if !ok {
@@ -180,7 +179,7 @@ func FromHttpCode(httpCode int) Code {
 }
 
 // ToHTTPCode converts Tigris' code to HTTP status code
-// Used to customize HTTP codes returned by GRPC-gateway
+// Used to customize HTTP codes returned by GRPC-gateway.
 func ToHTTPCode(code Code) int {
 	switch code {
 	case Code_OK:
@@ -228,17 +227,16 @@ func ToHTTPCode(code Code) int {
 	return 500
 }
 
-// As is used by runtime.DefaultHTTPErrorHandler to override HTTP status code
+// As is used by runtime.DefaultHTTPErrorHandler to override HTTP status code.
 func (e *TigrisError) As(i any) bool {
-	switch t := i.(type) {
-	case **runtime.HTTPStatusError:
+	if t, ok := i.(**runtime.HTTPStatusError); ok {
 		*t = &runtime.HTTPStatusError{HTTPStatus: ToHTTPCode(e.Code), Err: e}
 		return true
 	}
 	return false
 }
 
-// GRPCStatus converts the TigrisError and return status.Status. This is used to return grpc status to the grpc clients
+// GRPCStatus converts the TigrisError and return status.Status. This is used to return grpc status to the grpc clients.
 func (e *TigrisError) GRPCStatus() *status.Status {
 	st, _ := status.New(ToGRPCCode(e.Code), e.Message).
 		WithDetails(&errdetails.ErrorInfo{Reason: CodeToString(e.Code)})
@@ -250,7 +248,7 @@ func (e *TigrisError) GRPCStatus() *status.Status {
 	return st
 }
 
-// MarshalStatus marshal status object
+// MarshalStatus marshal status object.
 func MarshalStatus(status *spb.Status) ([]byte, error) {
 	resp := struct {
 		Error ErrorDetails `json:"error"`
@@ -305,7 +303,7 @@ func FromErrorDetails(e *ErrorDetails) *TigrisError {
 	return te.WithRetry(time.Duration(e.Retry.Delay) * time.Millisecond)
 }
 
-// UnmarshalStatus reconstruct TigrisError from HTTP error JSON body
+// UnmarshalStatus reconstruct TigrisError from HTTP error JSON body.
 func UnmarshalStatus(b []byte) *TigrisError {
 	resp := struct {
 		Error ErrorDetails `json:"error"`
@@ -318,7 +316,7 @@ func UnmarshalStatus(b []byte) *TigrisError {
 	return FromErrorDetails(&resp.Error)
 }
 
-// FromStatusError parses GRPC status from error into TigrisError
+// FromStatusError parses GRPC status from error into TigrisError.
 func FromStatusError(err error) *TigrisError {
 	st := status.Convert(err)
 	code := ToTigrisCode(st.Code())
@@ -336,7 +334,7 @@ func FromStatusError(err error) *TigrisError {
 	return &TigrisError{Code: code, Message: st.Message(), Details: details}
 }
 
-// Errorf constructs TigrisError
+// Errorf constructs TigrisError.
 func Errorf(c Code, format string, a ...interface{}) *TigrisError {
 	if c == Code_OK {
 		return nil

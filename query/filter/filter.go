@@ -34,10 +34,11 @@ var (
 
 // A Filter represents a query filter that can have any multiple conditions, logical filtering, nested conditions, etc.
 // On a high level, a filter from a user query will map like this
-//    {Selector} --> Filter with a single condition
-//    {Selector, Selector, LogicalOperator} --> Filter with two condition and a logicalOperator
-//    {Selector, LogicalOperator} --> Filter with single condition and a logicalOperator
-//    and so on...
+//
+//	{Selector} --> Filter with a single condition
+//	{Selector, Selector, LogicalOperator} --> Filter with two condition and a logicalOperator
+//	{Selector, LogicalOperator} --> Filter with single condition and a logicalOperator
+//	and so on...
 //
 // The JSON representation for these filters will look like below,
 // "filter: {"f1": 10}
@@ -194,7 +195,7 @@ func (factory *Factory) UnmarshalOr(input jsoniter.RawMessage) (Filter, error) {
 }
 
 func convertExprListToFilters(expr []expression.Expr) ([]Filter, error) {
-	var filters []Filter
+	filters := make([]Filter, 0, len(expr))
 	for _, e := range expr {
 		f, ok := e.(Filter)
 		if !ok {

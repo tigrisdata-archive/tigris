@@ -25,7 +25,7 @@ import (
 )
 
 func testFilters(t testing.TB, fields []*schema.QueryableField, input []byte) []Filter {
-	var factory = Factory{
+	factory := Factory{
 		fields: fields,
 	}
 	filters, err := factory.Factorize(input)
@@ -98,13 +98,15 @@ func TestKeyBuilder(t *testing.T) {
 			[]byte(`{"$and":[{"a":1},{"b":"aaa"},{"$and":[{"a":2},{"c":5},{"b":"bbb"}]}]}`),
 			nil,
 			[]keys.Key{keys.NewKey(nil, int64(1), "aaa"), keys.NewKey(nil, int64(2), "bbb")},
-		}, {
+		},
+		{
 			[]*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.StringType}, {FieldName: "f1", DataType: schema.Int64Type}},
 			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}},
 			[]byte(`{"b":10,"a":1,"c":"ccc","$or":[{"f1":10},{"a":2}]}`),
 			nil,
 			[]keys.Key{keys.NewKey(nil, int64(1)), keys.NewKey(nil, int64(2))},
-		}, {
+		},
+		{
 			// composite with OR parent filter
 			[]*schema.QueryableField{{FieldName: "K1", DataType: schema.StringType}, {FieldName: "K2", DataType: schema.Int64Type}},
 			[]*schema.Field{{FieldName: "K1", DataType: schema.StringType}, {FieldName: "K2", DataType: schema.Int64Type}},

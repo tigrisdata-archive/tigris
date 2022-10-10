@@ -22,9 +22,9 @@ import (
 
 func TestSizeMetrics(t *testing.T) {
 	var testSize int64 = 1000
-	var testNamespace = "test_namespace"
-	var testDb = "test_db"
-	var testCollection = "test_collection"
+	testNamespace := "test_namespace"
+	testDb := "test_db"
+	testCollection := "test_collection"
 
 	config.DefaultConfig.Tracing.Enabled = true
 	InitializeMetrics()

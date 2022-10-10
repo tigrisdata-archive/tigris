@@ -84,7 +84,7 @@ const (
 )
 
 var (
-	// versions
+	// versions.
 	encVersion = []byte{0x01}
 
 	InvalidId         = uint32(0)
@@ -427,7 +427,7 @@ func (k *MetadataDictionary) GetDatabases(ctx context.Context, tx transaction.Tx
 }
 
 func (k *MetadataDictionary) GetCollections(ctx context.Context, tx transaction.Tx, namespaceId uint32, databaseId uint32) (map[string]uint32, error) {
-	var collections = make(map[string]uint32)
+	collections := make(map[string]uint32)
 	it, err := tx.Read(ctx, keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(databaseId)))
 	if err != nil {
 		return nil, err
@@ -474,7 +474,7 @@ func (k *MetadataDictionary) GetCollections(ctx context.Context, tx transaction.
 }
 
 func (k *MetadataDictionary) GetIndexes(ctx context.Context, tx transaction.Tx, namespaceId uint32, databaseId uint32, collId uint32) (map[string]uint32, error) {
-	var indexes = make(map[string]uint32)
+	indexes := make(map[string]uint32)
 	it, err := tx.Read(ctx, keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(databaseId), UInt32ToByte(collId)))
 	if err != nil {
 		return nil, err
@@ -555,9 +555,9 @@ func (k *MetadataDictionary) getId(ctx context.Context, tx transaction.Tx, key k
 }
 
 // decode is currently only use for debugging purpose, once we have a layer on top of this encoding then we leverage this
-// method
+// method.
 func (k *MetadataDictionary) decode(_ context.Context, fdbKey kv.Key) (map[string]interface{}, error) {
-	var decoded = make(map[string]interface{})
+	decoded := make(map[string]interface{})
 	if len(fdbKey) > 0 {
 		decoded["version"] = fdbKey[0]
 	}

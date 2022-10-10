@@ -337,6 +337,38 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		require.True(t, primaryKeyPresent)
 		require.Equal(t, Int64Type, c.Indexes.PrimaryKey.Fields[0].DataType)
 	})
+	t.Run("test_partition-key", func(t *testing.T) {
+		schema := []byte(`{
+	"title": "t1",
+    "key": [ "k1", "k3" ],
+	"properties": {
+		"k1": {
+			"type": "string"
+		},
+		"k2": {
+			"type": "string"
+		},
+		"k3": {
+			"type": "integer"
+		},
+		"k4": {
+			"type": "integer"
+		}
+	}
+}`)
+		sch, err := Build("t1", schema)
+		require.NoError(t, err)
+		c := NewDefaultCollection("t1", 1, 1, sch.CollectionType, sch.Fields, sch.Indexes, sch.Schema, "t1")
+		fields := c.GetFields()
+		require.Equal(t, 5, len(fields))
+		for _, f := range fields {
+			if f.FieldName == "k1" || f.FieldName == "k3" {
+				require.True(t, f.IsPartitionKey())
+			} else {
+				require.False(t, f.IsPartitionKey())
+			}
+		}
+	})
 }
 
 func TestGetCollectionType(t *testing.T) {
@@ -366,10 +398,10 @@ func TestGetCollectionType(t *testing.T) {
 			"type": "integer"
 		}
 	},
-    "collection_type": "messages"
+    "collection_type": "topic"
 }`)
 
 	ty, err = GetCollectionType(schema)
-	require.Equal(t, MessagesType, ty)
+	require.Equal(t, TopicType, ty)
 	require.NoError(t, err)
 }

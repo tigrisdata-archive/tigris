@@ -37,9 +37,7 @@ const (
 	userPattern = "/" + version + "/management/*"
 )
 
-var (
-	ReservedNamespaceNames = container.NewHashSet(request.DefaultNamespaceName, "unknown")
-)
+var ReservedNamespaceNames = container.NewHashSet(request.DefaultNamespaceName, "unknown")
 
 type managementService struct {
 	api.UnimplementedManagementServer
@@ -117,7 +115,7 @@ func (m *managementService) ListNamespaces(ctx context.Context, _ *api.ListNames
 		}, nil
 	}
 
-	var namespacesInfo []*api.NamespaceInfo
+	namespacesInfo := make([]*api.NamespaceInfo, 0, len(namespaces))
 	for _, namespace := range namespaces {
 		namespacesInfo = append(namespacesInfo, &api.NamespaceInfo{
 			Id:   int32(namespace.Id()),
@@ -128,6 +126,7 @@ func (m *managementService) ListNamespaces(ctx context.Context, _ *api.ListNames
 		Namespaces: namespacesInfo,
 	}, nil
 }
+
 func (m *managementService) CreateApplication(ctx context.Context, req *api.CreateApplicationRequest) (*api.CreateApplicationResponse, error) {
 	return m.AuthProvider.CreateApplication(ctx, req)
 }

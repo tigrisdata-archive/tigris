@@ -89,7 +89,7 @@ func (w *InsertOnlyWorkload) Start(client driver.Driver) (int64, error) {
 					}
 
 					w.WorkloadData.Add(w.Collections[k], doc)
-					//log.Debug().Msgf("inserted document '%s' '%s' '%v'\n", w.Database, w.Collections[k], doc)
+					// log.Debug().Msgf("inserted document '%s' '%s' '%v'\n", w.Database, w.Collections[k], doc)
 				}
 				id++
 			}
@@ -115,7 +115,7 @@ func (w *InsertOnlyWorkload) Check(client driver.Driver) (bool, error) {
 			if err != nil {
 				return false, errors.Wrapf(err, "deserialzing document failed")
 			}
-			//log.Debug().Msgf("read document '%s' '%s' '%v'", w.Database, collection, document)
+			// log.Debug().Msgf("read document '%s' '%s' '%v'", w.Database, collection, document)
 			queueDoc.Add(document)
 		}
 

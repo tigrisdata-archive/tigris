@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//	http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -59,7 +59,7 @@ func TestPackSearchFields(t *testing.T) {
 		rawData []byte
 	}{
 		{"metadata fields packed from table data", []byte(`{}`)},
-		{"metadata fields in raw data are overriden", []byte(`{"created_at":123,"updated_at":542}`)},
+		{"metadata fields in raw data are overridden", []byte(`{"created_at":123,"updated_at":542}`)},
 	}
 
 	for _, v := range mdTestCases {
@@ -326,7 +326,7 @@ func BenchmarkEncDec(b *testing.B) {
 	"random": "abc defg hij klm nopqr stuv wxyz 1234 56 78 90 abcd efghijkl mnopqrstuvwxyzA BCD EFGHIJKL MNOPQRS TUVW XYZ"
 }`)
 
-	var id = "1"
+	id := "1"
 	for i := 0; i < b.N; i++ {
 		var data map[string]interface{}
 		if err := jsoniter.Unmarshal(js, &data); err != nil {
@@ -354,7 +354,7 @@ func BenchmarkJSONSet(b *testing.B) {
 }`)
 
 	var err error
-	var id = "1"
+	id := "1"
 	for i := 0; i < b.N; i++ {
 		js, err = jsonparser.Set(js, []byte(fmt.Sprintf(`"%s"`, id)), schema.SearchId)
 		require.NoError(b, err)

@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//	http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -28,8 +28,8 @@ import (
 type AdminTestMap map[string]interface{}
 
 func TestCreateNamespace(t *testing.T) {
-	name := fmt.Sprintf("namespace-a-%x", rand.Int63())
-	id := rand.Int31()
+	name := fmt.Sprintf("namespace-a-%x", rand.Int63()) //nolint:golint,gosec
+	id := rand.Int31()                                  //nolint:golint,gosec
 	resp := createNamespace(t, name, id)
 	resp.Status(http.StatusOK).
 		JSON().
@@ -45,8 +45,8 @@ func adminExpect(s httpexpect.LoggerReporter) *httpexpect.Expect {
 }
 
 func TestListNamespaces(t *testing.T) {
-	name := fmt.Sprintf("namespace-b-%x", rand.Int63())
-	id := rand.Int31()
+	name := fmt.Sprintf("namespace-b-%x", rand.Int63()) //nolint:golint,gosec
+	id := rand.Int31()                                  //nolint:golint,gosec
 	_ = createNamespace(t, name, id)
 	resp := listNamespaces(t)
 	namespaces := resp.Status(http.StatusOK).
@@ -55,7 +55,7 @@ func TestListNamespaces(t *testing.T) {
 		Value("namespaces").
 		Array().
 		Raw()
-	var found = false
+	found := false
 	for _, namespace := range namespaces {
 		if converted, ok := namespace.(map[string]interface{}); ok {
 			if converted["name"] == name {

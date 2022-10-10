@@ -97,20 +97,20 @@ func NewKeyValueStoreWithMetrics(cfg *config.FoundationDBConfig) (KeyValueStore,
 
 func measureLow(ctx context.Context, name string, f func() error) {
 	// Low level measurement wrapper that is called by the measure functions on the appropriate receiver
-	spanMeta := metrics.NewSpanMeta(metrics.KvTracingServiceName, name, metrics.FdbSpanType, metrics.GetFdbBaseTags(name))
-	ctx = spanMeta.StartTracing(ctx, true)
+	measurement := metrics.NewMeasurement(metrics.KvTracingServiceName, name, metrics.FdbSpanType, metrics.GetFdbBaseTags(name))
+	ctx = measurement.StartTracing(ctx, true)
 	err := f()
 	if err == nil {
 		// Request was ok
-		spanMeta.CountOkForScope(metrics.FdbOkCount, spanMeta.GetFdbOkTags())
-		_ = spanMeta.FinishTracing(ctx)
-		spanMeta.RecordDuration(metrics.FdbRespTime, spanMeta.GetFdbOkTags())
+		measurement.CountOkForScope(metrics.FdbOkCount, measurement.GetFdbOkTags())
+		_ = measurement.FinishTracing(ctx)
+		measurement.RecordDuration(metrics.FdbRespTime, measurement.GetFdbOkTags())
 		return
 	}
 	// Request had an error
-	spanMeta.CountErrorForScope(metrics.FdbOkCount, spanMeta.GetFdbErrorTags(err))
-	_ = spanMeta.FinishWithError(ctx, "fdb", err)
-	spanMeta.RecordDuration(metrics.FdbErrorRespTime, spanMeta.GetFdbErrorTags(err))
+	measurement.CountErrorForScope(metrics.FdbOkCount, measurement.GetFdbErrorTags(err))
+	_ = measurement.FinishWithError(ctx, "fdb", err)
+	measurement.RecordDuration(metrics.FdbErrorRespTime, measurement.GetFdbErrorTags(err))
 }
 
 func (m *KeyValueStoreImplWithMetrics) measure(ctx context.Context, name string, f func() error) {
@@ -332,7 +332,6 @@ func (m *KeyValueStoreImplWithMetrics) BeginTx(ctx context.Context) (Tx, error) 
 	return &TxImplWithMetrics{
 		btx,
 	}, err
-
 }
 
 func (k *KeyValueStoreImpl) GetInternalDatabase() (interface{}, error) {
@@ -572,8 +571,10 @@ func (i *IteratorImpl) Err() error {
 	return i.baseIterator.Err()
 }
 
-type KeyPart interface{}
-type Key []KeyPart
+type (
+	KeyPart interface{}
+	Key     []KeyPart
+)
 
 func BuildKey(parts ...interface{}) Key {
 	ptr := unsafe.Pointer(&parts)

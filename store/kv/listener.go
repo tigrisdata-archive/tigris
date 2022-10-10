@@ -78,6 +78,7 @@ func (l *DefaultListener) OnSet(op string, table []byte, key []byte, data []byte
 		Data:  data,
 	})
 }
+
 func (l *DefaultListener) OnClearRange(op string, table []byte, lKey []byte, rKey []byte) {
 	if l.skip(table) {
 		return
@@ -91,6 +92,7 @@ func (l *DefaultListener) OnClearRange(op string, table []byte, lKey []byte, rKe
 		RKey:  rKey,
 	})
 }
+
 func (l *DefaultListener) GetEvents() []*Event {
 	return l.Events
 }

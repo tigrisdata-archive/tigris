@@ -390,7 +390,7 @@ func testTxClient(t *testing.T, c driver.Driver) {
 	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1})
 	require.NoError(t, err)
 
-	//multiple documents
+	// multiple documents
 	_, err = tx.Insert(ctx, "c1", []driver.Document{doc2, doc3})
 	require.NoError(t, err)
 
@@ -488,7 +488,7 @@ func testPubSub(t *testing.T, c driver.Driver) {
 				"type": "boolean"
 			}
 		},
-        "collection_type": "messages"
+        "collection_type": "topic"
 	}`
 
 	err := c.CreateDatabase(ctx, dbName)
@@ -515,7 +515,8 @@ func testPubSub(t *testing.T, c driver.Driver) {
 	time.Sleep(100 * time.Millisecond)
 
 	pr, err := db1.Publish(ctx, "c1", []driver.Message{
-		driver.Message(doc1), driver.Message(doc2), driver.Message(doc3)})
+		driver.Message(doc1), driver.Message(doc2), driver.Message(doc3),
+	})
 	require.NoError(t, err)
 	require.Equal(t, "published", pr.Status)
 

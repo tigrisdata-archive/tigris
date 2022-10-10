@@ -26,8 +26,8 @@ func TestPriorityQueue(t *testing.T) {
 			return this.Priority < that.Priority
 		})
 
-		for _, doc := range documents {
-			pq.Push(&doc)
+		for i := range documents {
+			pq.Push(&documents[i])
 		}
 
 		expectedOrder := []int{1, 2, 3, 4, 5}
@@ -43,8 +43,8 @@ func TestPriorityQueue(t *testing.T) {
 			return this.Priority > that.Priority
 		})
 
-		for _, doc := range documents {
-			pq.Push(&doc)
+		for i := range documents {
+			pq.Push(&documents[i])
 		}
 
 		expectedOrder := []int{5, 4, 3, 2, 1}

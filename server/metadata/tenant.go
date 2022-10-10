@@ -59,7 +59,7 @@ func (n *DefaultNamespace) Name() string {
 	return request.DefaultNamespaceName
 }
 
-// Id returns id assigned to the namespace
+// Id returns id assigned to the namespace.
 func (n *DefaultNamespace) Id() uint32 {
 	return request.DefaultNamespaceId
 }
@@ -86,13 +86,13 @@ func (n *TenantNamespace) Name() string {
 	return n.lookupName
 }
 
-// Id returns assigned id for the namespace
+// Id returns assigned id for the namespace.
 func (n *TenantNamespace) Id() uint32 {
 	return n.lookupId
 }
 
 // TenantManager is to manage all the tenants
-// ToDo: start a background thread to reload the mapping
+// ToDo: start a background thread to reload the mapping.
 type TenantManager struct {
 	sync.RWMutex
 
@@ -107,14 +107,15 @@ type TenantManager struct {
 	mdNameRegistry    MDNameRegistry
 	encoder           Encoder
 	tableKeyGenerator *TableKeyGenerator
+	txMgr             *transaction.Manager
 }
 
-func NewTenantManager(kvStore kv.KeyValueStore, searchStore search.Store) *TenantManager {
+func NewTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, txMgr *transaction.Manager) *TenantManager {
 	mdNameRegistry := &DefaultMDNameRegistry{}
-	return newTenantManager(kvStore, searchStore, mdNameRegistry)
+	return newTenantManager(kvStore, searchStore, mdNameRegistry, txMgr)
 }
 
-func newTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, mdNameRegistry MDNameRegistry) *TenantManager {
+func newTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, mdNameRegistry MDNameRegistry, txMgr *transaction.Manager) *TenantManager {
 	return &TenantManager{
 		kvStore:           kvStore,
 		searchStore:       searchStore,
@@ -126,20 +127,21 @@ func newTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, mdName
 		versionH:          &VersionHandler{},
 		mdNameRegistry:    mdNameRegistry,
 		tableKeyGenerator: NewTableKeyGenerator(),
+		txMgr:             txMgr,
 	}
 }
 
-func (m *TenantManager) EnsureDefaultNamespace(txMgr *transaction.Manager) error {
+func (m *TenantManager) EnsureDefaultNamespace() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, err := m.CreateOrGetTenant(ctx, txMgr, NewDefaultNamespace())
+	_, err := m.CreateOrGetTenant(ctx, NewDefaultNamespace())
 	return err
 }
 
 // CreateOrGetTenant is a thread safe implementation of creating a new tenant. It returns the tenant if it already exists.
 // This is mainly returning the tenant to avoid calling "Get" again after creating the tenant. This method is expensive
 // as it reloads the existing tenants from the disk if it sees the tenant is not present in the cache.
-func (m *TenantManager) CreateOrGetTenant(ctx context.Context, txMgr *transaction.Manager, namespace Namespace) (tenant *Tenant, err error) {
+func (m *TenantManager) CreateOrGetTenant(ctx context.Context, namespace Namespace) (tenant *Tenant, err error) {
 	m.Lock()
 	defer m.Unlock()
 
@@ -154,7 +156,7 @@ func (m *TenantManager) CreateOrGetTenant(ctx context.Context, txMgr *transactio
 		}
 	}
 
-	tx, e := txMgr.StartTx(ctx)
+	tx, e := m.txMgr.StartTx(ctx)
 	if ulog.E(e) {
 		return nil, e
 	}
@@ -215,7 +217,7 @@ func (m *TenantManager) getTenantFromCache(namespaceName string) (tenant *Tenant
 }
 
 func (m *TenantManager) GetNamespaceNames() []string {
-	var res []string
+	res := make([]string, 0, len(m.tenants))
 	for name := range m.tenants {
 		res = append(res, name)
 	}
@@ -232,7 +234,7 @@ func (m *TenantManager) GetNamespaceId(namespaceName string) (uint32, error) {
 
 // GetTenant is responsible for returning the tenant from the cache. If the tenant is not available in the cache then
 // this method will attempt to load it from the database and will update the tenant manager cache accordingly.
-func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string, txMgr *transaction.Manager) (tenant *Tenant, err error) {
+func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string) (tenant *Tenant, err error) {
 	if tenant = m.getTenantFromCache(namespaceName); tenant != nil {
 		return
 	}
@@ -245,7 +247,7 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string, txM
 	// this will never create new namespace
 	// when the authn/authz is setup correctly
 	// this is for reading namespaces from storage into cache
-	tx, err := txMgr.StartTx(ctx)
+	tx, err := m.txMgr.StartTx(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -294,7 +296,7 @@ func (m *TenantManager) ListNamespaces(ctx context.Context, tx transaction.Tx) (
 		log.Warn().Err(err).Msg("Could not list namespaces")
 		return nil, err
 	}
-	var result []Namespace
+	result := make([]Namespace, 0, len(namespaces))
 	for k, v := range namespaces {
 		result = append(result, NewTenantNamespace(k, v))
 	}
@@ -546,7 +548,7 @@ func (tenant *Tenant) GetNamespace() Namespace {
 // entry to the tenant because the outer layer may still roll back the transaction. The session manager is bumping the
 // metadata version once the commit is successful so reloading happens at the next call when a transaction sees a stale
 // tenant version. This applies to the reloading mechanism on all the servers. It returns "true" If the database already
-// exists, else "false" and the error
+// exists, else "false" and the error.
 func (tenant *Tenant) CreateDatabase(ctx context.Context, tx transaction.Tx, dbName string) (bool, error) {
 	tenant.Lock()
 	defer tenant.Unlock()
@@ -605,7 +607,7 @@ func (tenant *Tenant) ListDatabases(_ context.Context) []string {
 	tenant.RLock()
 	defer tenant.RUnlock()
 
-	var databases []string
+	databases := make([]string, 0, len(tenant.databases))
 	for dbName := range tenant.databases {
 		databases = append(databases, dbName)
 	}
@@ -769,7 +771,6 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 		}
 	}
 	return nil
-
 }
 
 // DropCollection is to drop a collection and its associated indexes. It removes the "created" entry from the encoding
@@ -901,7 +902,7 @@ func NewDatabase(id uint32, name string) *Database {
 	}
 }
 
-// Clone is used to stage the database
+// Clone is used to stage the database.
 func (d *Database) Clone() *Database {
 	d.Lock()
 	defer d.Unlock()
@@ -936,7 +937,7 @@ func (d *Database) ListCollection() []*schema.DefaultCollection {
 	d.RLock()
 	defer d.RUnlock()
 
-	var collections []*schema.DefaultCollection
+	collections := make([]*schema.DefaultCollection, 0, len(d.collections))
 	for _, c := range d.collections {
 		collections = append(collections, c.collection)
 	}
@@ -979,7 +980,7 @@ func NewCollectionHolder(id uint32, name string, collection *schema.DefaultColle
 	}
 }
 
-// clone is used to stage the collectionHolder
+// clone is used to stage the collectionHolder.
 func (c *collectionHolder) clone() *collectionHolder {
 	c.Lock()
 	defer c.Unlock()
@@ -1047,15 +1048,17 @@ func isSchemaEq(s1, s2 []byte) (bool, error) {
 	return reflect.DeepEqual(j2, j), nil
 }
 
-// NewTestTenantMgr creates new TenantManager for tests
+// NewTestTenantMgr creates new TenantManager for tests.
 func NewTestTenantMgr(kvStore kv.KeyValueStore) (*TenantManager, context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
 	m := newTenantManager(kvStore, &search.NoopStore{}, &TestMDNameRegistry{
-		ReserveSB:  fmt.Sprintf("test_tenant_reserve_%x", rand.Uint64()),
-		EncodingSB: fmt.Sprintf("test_tenant_encoding_%x", rand.Uint64()),
-		SchemaSB:   fmt.Sprintf("test_tenant_schema_%x", rand.Uint64()),
-	})
+		ReserveSB:  fmt.Sprintf("test_tenant_reserve_%x", rand.Uint64()),  //nolint:golint,gosec
+		EncodingSB: fmt.Sprintf("test_tenant_encoding_%x", rand.Uint64()), //nolint:golint,gosec
+		SchemaSB:   fmt.Sprintf("test_tenant_schema_%x", rand.Uint64()),   //nolint:golint,gosec
+	},
+		transaction.NewManager(kvStore),
+	)
 
 	_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	_ = kvStore.DropTable(ctx, m.mdNameRegistry.EncodingSubspaceName())

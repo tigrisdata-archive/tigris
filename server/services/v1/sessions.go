@@ -62,17 +62,17 @@ type SessionManagerWithMetrics struct {
 }
 
 func (m *SessionManagerWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
-	spanMeta := metrics.NewSpanMeta(metrics.SessionManagerServiceName, name, metrics.SessionSpanType, metrics.GetSessionTags(name))
-	ctx = spanMeta.StartTracing(ctx, true)
+	measurement := metrics.NewMeasurement(metrics.SessionManagerServiceName, name, metrics.SessionSpanType, metrics.GetSessionTags(name))
+	ctx = measurement.StartTracing(ctx, true)
 	if err := f(ctx); err != nil {
-		spanMeta.CountErrorForScope(metrics.SessionErrorCount, spanMeta.GetSessionErrorTags(err))
-		_ = spanMeta.FinishWithError(ctx, "session", err)
-		spanMeta.RecordDuration(metrics.SessionErrorRespTime, spanMeta.GetSessionErrorTags(err))
+		measurement.CountErrorForScope(metrics.SessionErrorCount, measurement.GetSessionErrorTags(err))
+		_ = measurement.FinishWithError(ctx, "session", err)
+		measurement.RecordDuration(metrics.SessionErrorRespTime, measurement.GetSessionErrorTags(err))
 		return
 	}
-	spanMeta.CountOkForScope(metrics.SessionOkCount, spanMeta.GetSessionOkTags())
-	_ = spanMeta.FinishTracing(ctx)
-	spanMeta.RecordDuration(metrics.SessionRespTime, spanMeta.GetSessionOkTags())
+	measurement.CountOkForScope(metrics.SessionOkCount, measurement.GetSessionOkTags())
+	_ = measurement.FinishTracing(ctx)
+	measurement.RecordDuration(metrics.SessionRespTime, measurement.GetSessionOkTags())
 }
 
 func (m *SessionManagerWithMetrics) Create(ctx context.Context, trackVerInOwnTxn bool, instantVerTracking bool, track bool) (qs *QuerySession, err error) {
@@ -146,7 +146,7 @@ func (sessMgr *SessionManager) CreateReadOnlySession(ctx context.Context) (*Read
 	if err != nil {
 		return nil, err
 	}
-	tenant, err := sessMgr.tenantMgr.GetTenant(ctx, namespaceForThisSession, sessMgr.txMgr)
+	tenant, err := sessMgr.tenantMgr.GetTenant(ctx, namespaceForThisSession)
 	if err != nil {
 		log.Warn().Err(err).Msgf("Could not find tenant, this must not happen with right authn/authz configured")
 		return nil, errors.NotFound("Tenant %s not found", namespaceForThisSession)
@@ -177,7 +177,7 @@ func (sessMgr *SessionManager) Create(ctx context.Context, trackVerInOwnTxn bool
 	if err != nil {
 		return nil, err
 	}
-	tenant, err := sessMgr.tenantMgr.GetTenant(ctx, namespaceForThisSession, sessMgr.txMgr)
+	tenant, err := sessMgr.tenantMgr.GetTenant(ctx, namespaceForThisSession)
 	if err != nil {
 		log.Warn().Err(err).Msgf("Could not find tenant, this must not happen with right authn/authz configured")
 		return nil, errors.NotFound("Tenant %s not found", namespaceForThisSession)
@@ -303,7 +303,7 @@ func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, runner Quer
 			}
 
 			log.Debug().Msgf("retrying transactions id: %s, since: %v", session.txCtx.Id, time.Since(start))
-			time.Sleep(time.Duration(rand.Intn(25)) * time.Millisecond)
+			time.Sleep(time.Duration(rand.Intn(25)) * time.Millisecond) //nolint:golint,gosec
 		}
 	}
 }
@@ -375,7 +375,7 @@ func (s *QuerySession) Commit(versionMgr *metadata.VersionHandler, incVersion bo
 	return err
 }
 
-// sessionTracker is used to track sessions
+// sessionTracker is used to track sessions.
 type sessionTracker struct {
 	sync.RWMutex
 

@@ -42,20 +42,20 @@ const StreamContentType = "application/x-json-stream"
 
 func (m *storeImplWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
 	// Low level measurement wrapper that is called by the measure functions on the appropriate receiver
-	spanMeta := metrics.NewSpanMeta("tigris.search", name, metrics.SearchSpanType, metrics.GetSearchTags(name))
-	ctx = spanMeta.StartTracing(ctx, true)
+	measurement := metrics.NewMeasurement("tigris.search", name, metrics.SearchSpanType, metrics.GetSearchTags(name))
+	ctx = measurement.StartTracing(ctx, true)
 	err := f(ctx)
 	if err == nil {
 		// Request was ok
-		spanMeta.CountOkForScope(metrics.SearchOkCount, spanMeta.GetSearchOkTags())
-		_ = spanMeta.FinishTracing(ctx)
-		spanMeta.RecordDuration(metrics.SearchRespTime, spanMeta.GetSearchOkTags())
+		measurement.CountOkForScope(metrics.SearchOkCount, measurement.GetSearchOkTags())
+		_ = measurement.FinishTracing(ctx)
+		measurement.RecordDuration(metrics.SearchRespTime, measurement.GetSearchOkTags())
 		return
 	}
 	// Request had error
-	spanMeta.CountErrorForScope(metrics.SearchErrorCount, spanMeta.GetSearchErrorTags(err))
-	_ = spanMeta.FinishWithError(ctx, "search", err)
-	spanMeta.RecordDuration(metrics.SearchErrorRespTime, spanMeta.GetSearchErrorTags(err))
+	measurement.CountErrorForScope(metrics.SearchErrorCount, measurement.GetSearchErrorTags(err))
+	_ = measurement.FinishWithError(ctx, "search", err)
+	measurement.RecordDuration(metrics.SearchErrorRespTime, measurement.GetSearchErrorTags(err))
 }
 
 func (m *storeImplWithMetrics) CreateCollection(ctx context.Context, schema *tsApi.CollectionSchema) (err error) {
@@ -172,7 +172,7 @@ func (s *storeImpl) IndexDocuments(_ context.Context, table string, reader io.Re
 }
 
 func (s *storeImpl) getBaseSearchParam(query *qsearch.Query, pageNo int) tsApi.MultiSearchParameters {
-	var baseParam = tsApi.MultiSearchParameters{
+	baseParam := tsApi.MultiSearchParameters{
 		Q:       &query.Q,
 		Page:    &pageNo,
 		PerPage: &query.PageSize,
@@ -198,7 +198,7 @@ func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query
 	searchFilter := query.ToSearchFilter()
 	if len(searchFilter) > 0 {
 		for i := 0; i < len(searchFilter); i++ {
-			//ToDo: check all places
+			// ToDo: check all places
 			param := s.getBaseSearchParam(query, pageNo)
 			param.FilterBy = &searchFilter[i]
 			params = append(params, tsApi.MultiSearchCollectionParameters{

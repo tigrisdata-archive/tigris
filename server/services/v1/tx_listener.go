@@ -39,6 +39,7 @@ type NoopTxListener struct{}
 func (l *NoopTxListener) OnPreCommit(context.Context, *metadata.Tenant, transaction.Tx, kv.EventListener) error {
 	return nil
 }
+
 func (l *NoopTxListener) OnPostCommit(context.Context, *metadata.Tenant, kv.EventListener) error {
 	return nil
 }

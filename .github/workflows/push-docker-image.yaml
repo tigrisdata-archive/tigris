@@ -2,19 +2,15 @@ name: publish docker image
 
 on:
   pull_request:
+    paths:
+      - docker/Dockerfile*
+      - scripts/install_*.sh
+      - .github/workflows/push-docker-*.yaml
   push:
     branches:
       - main
-      - alpha
-      - beta
   release:
     types: [published]
-  workflow_call:
-    secrets:
-      GH_DOCKER_ACCESS_USER:
-        required: true
-      GH_DOCKER_ACCESS_TOKEN:
-        required: true
 
 env:
   DOCKER_REPOSITORY: "tigrisdata/tigris"
@@ -57,7 +53,7 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/beta' }}
+            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1

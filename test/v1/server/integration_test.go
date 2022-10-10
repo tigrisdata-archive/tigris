@@ -34,8 +34,10 @@ var (
 	testCollection = "test_collection"
 )
 
-type Map map[string]interface{}
-type Doc Map
+type (
+	Map map[string]interface{}
+	Doc Map
+)
 
 var testCreateSchema = Map{
 	"schema": Map{

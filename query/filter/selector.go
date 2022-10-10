@@ -18,9 +18,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	api "github.com/tigrisdata/tigris/api/server/v1"
-
 	"github.com/buger/jsonparser"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/lib/date"
 	"github.com/tigrisdata/tigris/schema"
 	ulog "github.com/tigrisdata/tigris/util/log"
@@ -33,16 +32,17 @@ import (
 // passes the condition.
 //
 // A Selector can have this form inside the input JSON
-//    {f:{$eq:1}}
-//    {f:20} (default is "$eq" so we automatically append EqualityMatcher for this case in parser)
-//    {f:<Expr>}
+//
+//	{f:{$eq:1}}
+//	{f:20} (default is "$eq" so we automatically append EqualityMatcher for this case in parser)
+//	{f:<Expr>}
 type Selector struct {
 	Field     *schema.QueryableField
 	Matcher   ValueMatcher
 	Collation *api.Collation
 }
 
-// NewSelector returns Selector object
+// NewSelector returns Selector object.
 func NewSelector(field *schema.QueryableField, matcher ValueMatcher, collation *api.Collation) *Selector {
 	return &Selector{
 		Field:     field,
