@@ -1267,6 +1267,93 @@ func TestUpdate_MultipleRows(t *testing.T) {
 		outDocument)
 }
 
+func TestUpdate_Limit(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	inputDocument := []Doc{
+		{
+			"pkey_int":     110,
+			"int_value":    1000,
+			"string_value": "simple_insert110",
+			"bool_value":   true,
+			"double_value": 1000.000001,
+			"bytes_value":  []byte(`"simple_insert110"`),
+		},
+		{
+			"pkey_int":     120,
+			"int_value":    2000,
+			"string_value": "simple_insert120",
+			"bool_value":   false,
+			"double_value": 2000.22221,
+			"bytes_value":  []byte(`"simple_insert120"`),
+		},
+		{
+			"pkey_int":     130,
+			"int_value":    3000,
+			"string_value": "simple_insert130",
+			"bool_value":   true,
+			"double_value": 3000.999999,
+			"bytes_value":  []byte(`"simple_insert130"`),
+		},
+	}
+
+	// should always succeed with mustNotExists as false
+	insertDocuments(t, db, coll, inputDocument, false).
+		Status(http.StatusOK)
+
+	readFilter := Map{
+		"$or": []Doc{
+			{"pkey_int": 110},
+			{"pkey_int": 120},
+			{"pkey_int": 130},
+		},
+	}
+	readAndValidate(t,
+		db,
+		coll,
+		readFilter,
+		nil,
+		inputDocument)
+
+	filter := Map{
+		"filter": Map{
+			"$or": []Doc{
+				{"pkey_int": 110},
+				{"pkey_int": 120},
+				{"pkey_int": 130},
+			},
+		},
+	}
+	fields := Map{
+		"fields": Map{
+			"$set": Map{
+				"int_value": 12345,
+			},
+		},
+	}
+
+	payload := make(Map)
+	for key, value := range filter {
+		payload[key] = value
+	}
+	for key, value := range fields {
+		payload[key] = value
+	}
+	payload["options"] = Map{
+		"limit": 1,
+	}
+
+	e := expect(t)
+	e.PUT(getDocumentURL(db, coll, "update")).
+		WithJSON(payload).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("modified_count", 1)
+}
+
 func TestUpdate_UsingCollation(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)
