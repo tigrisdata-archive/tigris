@@ -1507,6 +1507,119 @@ func testUpdateOnAnyField(t *testing.T, db string, collection string, filter Map
 	}
 }
 
+func TestUpdate_SetAndUnset(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	inputDocument := []Doc{
+		{
+			"pkey_int":     100,
+			"int_value":    100,
+			"string_value": "simple_insert1_update",
+			"bool_value":   true,
+			"double_value": 100.00001,
+			"bytes_value":  []byte(`"simple_insert1_update"`),
+		},
+	}
+
+	insertDocuments(t, db, coll, inputDocument, false).
+		Status(http.StatusOK)
+
+	readAndValidate(t,
+		db,
+		coll,
+		Map{
+			"pkey_int": 100,
+		},
+		nil,
+		inputDocument)
+
+	cases := []struct {
+		userInput Map
+		expOut    []Doc
+	}{
+		{
+			Map{
+				"fields": Map{
+					"$set": Map{
+						"int_value":    200,
+						"string_value": "simple_insert1_update_modified",
+						"bool_value":   false,
+						"double_value": 200.00001,
+						"bytes_value":  []byte(`"simple_insert1_update_modified"`),
+					},
+					"$unset": []string{"string_value", "bytes_value"},
+				},
+			},
+			[]Doc{{
+				"pkey_int":     100,
+				"int_value":    200,
+				"bool_value":   false,
+				"double_value": 200.00001,
+			}},
+		},
+		{
+			Map{
+				"fields": Map{
+					"$set": Map{
+						"string_value": "string2",
+					},
+					"$unset": []string{"int_value", "bytes_value"},
+				},
+			},
+			[]Doc{{
+				"pkey_int":     100,
+				"bool_value":   false,
+				"double_value": 200.00001,
+				"string_value": "string2",
+			}},
+		},
+		{
+			Map{
+				"fields": Map{
+					"$set": Map{
+						"int_value":   400,
+						"bytes_value": []byte(`"bytes3"`),
+					},
+					"$unset": []string{"string_value", "bool_value", "double_value"},
+				},
+			},
+			[]Doc{{
+				"pkey_int":    100,
+				"int_value":   400,
+				"bytes_value": []byte(`"bytes3"`),
+			}},
+		},
+	}
+	for _, c := range cases {
+		tstart := time.Now().UTC()
+		updateByFilter(t,
+			db,
+			coll,
+			Map{
+				"filter": Map{
+					"pkey_int": 100,
+				},
+			},
+			c.userInput,
+			nil).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("modified_count", 1).
+			Path("$.metadata").Object().
+			Value("updated_at").String().DateTime(time.RFC3339Nano).InRange(tstart, time.Now().UTC().Add(1*time.Second))
+
+		readAndValidate(t,
+			db,
+			coll,
+			Map{
+				"pkey_int": 100,
+			},
+			nil,
+			c.expOut)
+	}
+}
+
 func TestDelete_BadRequest(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)
