@@ -40,7 +40,7 @@ func TestDictionaryEncoding(t *testing.T) {
 
 	tx, err := tm.StartTx(ctx)
 	require.NoError(t, err)
-	require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", 1234))
+	require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", NewNamespaceMetadata(1234, "proj1-org-1", "proj1-org-1-display_name")))
 	require.NoError(t, tx.Commit(ctx))
 
 	tx, err = tm.StartTx(ctx)
@@ -79,7 +79,7 @@ func TestDictionaryEncoding(t *testing.T) {
 	// try assigning the same namespace id to some other namespace
 	tx, err = tm.StartTx(ctx)
 	require.NoError(t, err)
-	require.Error(t, k.ReserveNamespace(ctx, tx, "proj2-org-1", 1234))
+	require.Error(t, k.ReserveNamespace(ctx, tx, "proj2-org-1", NewNamespaceMetadata(1234, "proj2-org-1", "proj2-org-1-display_name")))
 	require.NoError(t, tx.Rollback(ctx))
 }
 
@@ -100,7 +100,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", 1234))
+		require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", NewNamespaceMetadata(1234, "proj1-org-1", "proj1-org-1-display_name")))
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTx(ctx)
@@ -141,7 +141,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 		tm := transaction.NewManager(kvStore)
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", 1234))
+		require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", NewNamespaceMetadata(1234, "proj1-org-1", "proj1-org-1-display_name")))
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTx(ctx)
@@ -188,7 +188,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 		tm := transaction.NewManager(kvStore)
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", 1234))
+		require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", NewNamespaceMetadata(1234, "proj1-org-1", "proj1-org-1-display_name")))
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTx(ctx)
@@ -241,7 +241,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 		tm := transaction.NewManager(kvStore)
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", 1234))
+		require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", NewNamespaceMetadata(1234, "proj1-org-1", "proj1-org-1-display_name")))
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTx(ctx)
@@ -417,20 +417,20 @@ func TestReservedNamespace(t *testing.T) {
 
 	tx, err := tm.StartTx(ctx)
 	require.NoError(t, err)
-	require.NoError(t, r.reserveNamespace(ctx, tx, "p1-o1", 123))
+	require.NoError(t, r.reserveNamespace(ctx, tx, "p1-o1", NewNamespaceMetadata(123, "p1-o1", "p1-o1-display_name")))
 	require.NoError(t, tx.Commit(ctx))
 
 	// check in the allocated id is assigned
 	tx, err = tm.StartTx(ctx)
 	require.NoError(t, err)
 	require.NoError(t, r.reload(ctx, tx))
-	require.Equal(t, "p1-o1", r.allocated[123])
+	require.Equal(t, "p1-o1", r.idToNamespaceStruct[123].Name)
 
 	// try assigning the same namespace id to some other namespace
 	tx, err = tm.StartTx(context.TODO())
 	require.NoError(t, err)
 	expError := errors.AlreadyExists("id is already assigned to the namespace 'p1-o1'")
-	require.Equal(t, expError, r.reserveNamespace(context.TODO(), tx, "p2-o2", 123))
+	require.Equal(t, expError, r.reserveNamespace(context.TODO(), tx, "p2-o2", NewNamespaceMetadata(123, "p2-o2", "p2-o2-display_name")))
 }
 
 func TestDecode(t *testing.T) {

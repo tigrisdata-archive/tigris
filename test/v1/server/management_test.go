@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -28,13 +29,13 @@ import (
 type AdminTestMap map[string]interface{}
 
 func TestCreateNamespace(t *testing.T) {
-	name := fmt.Sprintf("namespace-a-%x", rand.Int63()) //nolint:golint,gosec
-	id := rand.Int31()                                  //nolint:golint,gosec
-	resp := createNamespace(t, name, id)
-	resp.Status(http.StatusOK).
+	displayName := fmt.Sprintf("namespace-a-%x", rand.Int63()) //nolint:golint,gosec
+	resp := createNamespace(t, displayName)
+	respMsg := resp.Status(http.StatusOK).
 		JSON().
 		Object().
-		ValueEqual("message", fmt.Sprintf("Namespace created, with id=%d, and name=%s", id, name))
+		Value("message").String().Raw()
+	assert.True(t, strings.HasPrefix(respMsg, "Namespace created, with id=2, and name="))
 }
 
 func adminExpect(s httpexpect.LoggerReporter) *httpexpect.Expect {
@@ -45,9 +46,8 @@ func adminExpect(s httpexpect.LoggerReporter) *httpexpect.Expect {
 }
 
 func TestListNamespaces(t *testing.T) {
-	name := fmt.Sprintf("namespace-b-%x", rand.Int63()) //nolint:golint,gosec
-	id := rand.Int31()                                  //nolint:golint,gosec
-	_ = createNamespace(t, name, id)
+	displayName := fmt.Sprintf("namespace-b-%x", rand.Int63()) //nolint:golint,gosec
+	_ = createNamespace(t, displayName)
 	resp := listNamespaces(t)
 	namespaces := resp.Status(http.StatusOK).
 		JSON().
@@ -58,31 +58,30 @@ func TestListNamespaces(t *testing.T) {
 	found := false
 	for _, namespace := range namespaces {
 		if converted, ok := namespace.(map[string]interface{}); ok {
-			if converted["name"] == name {
+			if converted["display_name"] == displayName {
 				found = true
-				assert.Equal(t, float64(id), converted["id"])
 			}
 		}
 	}
 	assert.True(t, found)
 }
 
-func createNamespace(t *testing.T, namespaceName string, namespaceId int32) *httpexpect.Response {
+func createNamespace(t *testing.T, displayName string) *httpexpect.Response {
 	e := adminExpect(t)
-	return e.POST(getCreateNamespaceURL(namespaceName)).
-		WithJSON(AdminTestMap{"id": namespaceId}).
+	return e.POST(getCreateNamespaceURL(displayName)).
+		WithJSON(AdminTestMap{}).
 		Expect()
 }
 
 func listNamespaces(t *testing.T) *httpexpect.Response {
 	e := adminExpect(t)
 	return e.POST(listNamespaceUrl()).
-		WithJSON(AdminTestMap{"id": ""}).
+		WithJSON(AdminTestMap{}).
 		Expect()
 }
 
-func getCreateNamespaceURL(namespaceName string) string {
-	return fmt.Sprintf("/v1/management/namespaces/%s/create", namespaceName)
+func getCreateNamespaceURL(displayName string) string {
+	return fmt.Sprintf("/v1/management/namespaces/%s/create", displayName)
 }
 
 func listNamespaceUrl() string {

@@ -17,6 +17,7 @@ package metadata
 import (
 	"context"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -83,6 +84,11 @@ const (
 	keyDroppedEnd = "dropped"
 )
 
+const (
+	namespaceIntEncoding  = 0
+	namespaceJsonEncoding = 1
+)
+
 var (
 	// versions.
 	encVersion = []byte{0x01}
@@ -96,21 +102,26 @@ type reservedSubspace struct {
 	sync.RWMutex
 	MDNameRegistry
 
-	allocated     map[uint32]string
-	namespaceToId map[string]uint32
+	idToNamespaceStruct        map[uint32]NamespaceMetadata
+	namespaceToNamespaceStruct map[string]NamespaceMetadata
 }
 
 func newReservedSubspace(mdNameRegistry MDNameRegistry) *reservedSubspace {
 	return &reservedSubspace{
 		MDNameRegistry: mdNameRegistry,
 
-		allocated:     make(map[uint32]string),
-		namespaceToId: make(map[string]uint32),
+		idToNamespaceStruct:        make(map[uint32]NamespaceMetadata),
+		namespaceToNamespaceStruct: make(map[string]NamespaceMetadata),
 	}
 }
 
-func (r *reservedSubspace) getNamespaces() map[string]uint32 {
-	return r.namespaceToId
+func (r *reservedSubspace) getNamespaces() map[string]NamespaceMetadata {
+	result := make(map[string]NamespaceMetadata)
+
+	for name, metadata := range r.namespaceToNamespaceStruct {
+		result[name] = metadata
+	}
+	return result
 }
 
 func (r *reservedSubspace) reload(ctx context.Context, tx transaction.Tx) error {
@@ -133,18 +144,31 @@ func (r *reservedSubspace) reload(ctx context.Context, tx transaction.Tx) error 
 		if _, ok := allocatedTo.(string); !ok {
 			return errors.Internal("unable to deduce the encoded key from fdb key %T", allocatedTo)
 		}
-
-		allocatedValue := ByteToUInt32(row.Data.RawData)
-		r.allocated[allocatedValue] = allocatedTo.(string)
-		r.namespaceToId[allocatedTo.(string)] = allocatedValue
+		var namespaceMetadata NamespaceMetadata
+		if row.Data.Encoding == namespaceIntEncoding {
+			namespaceName := allocatedTo.(string)
+			namespaceId := ByteToUInt32(row.Data.RawData)
+			// for legacy use display name same as the namespace name
+			namespaceMetadata = NewNamespaceMetadata(namespaceId, namespaceName, namespaceName)
+		} else if row.Data.Encoding == namespaceJsonEncoding {
+			err = json.Unmarshal(row.Data.RawData, &namespaceMetadata)
+			if err != nil {
+				return errors.Internal("unable to read the namespace for the namespaceKey %s", allocatedTo)
+			}
+		}
+		r.idToNamespaceStruct[namespaceMetadata.Id] = namespaceMetadata
+		r.namespaceToNamespaceStruct[namespaceMetadata.Name] = namespaceMetadata
 	}
 
 	return it.Err()
 }
 
-func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.Tx, namespace string, id uint32) error {
+func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.Tx, namespace string, namespaceMetadata NamespaceMetadata) error {
 	if len(namespace) == 0 {
 		return errors.InvalidArgument("namespace is empty")
+	}
+	if namespaceMetadata.Id < 1 {
+		return errors.InvalidArgument("id should be greater than 0, received %d", namespaceMetadata.Id)
 	}
 
 	if err := r.reload(ctx, tx); ulog.E(err) {
@@ -153,23 +177,28 @@ func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.
 
 	r.RLock()
 	defer r.RUnlock()
-	if allocatedTo, ok := r.allocated[id]; ok {
-		log.Debug().Uint32("namespace_id", id).Str("namespace_name", r.allocated[id]).Msg("namespace reserved for")
-		if allocatedTo == namespace {
-			return nil
-		} else {
-			return errors.AlreadyExists("id is already assigned to the namespace '%s'", allocatedTo)
+
+	if _, ok := r.idToNamespaceStruct[namespaceMetadata.Id]; ok {
+		for name := range r.namespaceToNamespaceStruct {
+			if r.namespaceToNamespaceStruct[name].Id == namespaceMetadata.Id {
+				log.Debug().Uint32("namespace_id", namespaceMetadata.Id).Str("namespace_name", name).Msg("namespace reserved for")
+				return errors.AlreadyExists("id is already assigned to the namespace '%s'", name)
+			}
 		}
 	}
 
 	key := keys.NewKey(r.ReservedSubspaceName(), namespaceKey, namespace, keyEnd)
 	// now do an insert to fail if namespace already exists.
-	if err := tx.Insert(ctx, key, internal.NewTableData(UInt32ToByte(id))); err != nil {
-		log.Debug().Str("key", key.String()).Uint32("value", id).Err(err).Msg("reserving namespace failed")
+	namespaceMetadataBytes, err := json.Marshal(namespaceMetadata)
+	if err != nil {
+		return err
+	}
+	if err := tx.Insert(ctx, key, internal.NewTableDataWithEncoding(namespaceMetadataBytes, namespaceJsonEncoding)); err != nil {
+		log.Debug().Str("key", key.String()).Uint32("value", namespaceMetadata.Id).Err(err).Msg("reserving namespace failed")
 		return err
 	}
 
-	log.Debug().Str("key", key.String()).Uint32("value", id).Msg("reserving namespace succeed")
+	log.Debug().Str("key", key.String()).Uint32("value", namespaceMetadata.Id).Msg("reserving namespace succeed")
 	return nil
 }
 
@@ -217,11 +246,11 @@ func NewMetadataDictionary(mdNameRegistry MDNameRegistry) *MetadataDictionary {
 
 // ReserveNamespace is the first step in the encoding and the mapping is passed the caller. As this is the first encoded
 // integer the caller needs to make sure a unique value is assigned to this namespace.
-func (k *MetadataDictionary) ReserveNamespace(ctx context.Context, tx transaction.Tx, namespace string, id uint32) error {
-	return k.reservedSb.reserveNamespace(ctx, tx, namespace, id)
+func (k *MetadataDictionary) ReserveNamespace(ctx context.Context, tx transaction.Tx, namespace string, namespaceMetadata NamespaceMetadata) error {
+	return k.reservedSb.reserveNamespace(ctx, tx, namespace, namespaceMetadata)
 }
 
-func (k *MetadataDictionary) GetNamespaces(ctx context.Context, tx transaction.Tx) (map[string]uint32, error) {
+func (k *MetadataDictionary) GetNamespaces(ctx context.Context, tx transaction.Tx) (map[string]NamespaceMetadata, error) {
 	if err := k.reservedSb.reload(ctx, tx); err != nil {
 		return nil, err
 	}

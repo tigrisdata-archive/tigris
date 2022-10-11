@@ -25,10 +25,9 @@ import (
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
-	"github.com/tigrisdata/tigris/lib/container"
+	"github.com/tigrisdata/tigris/lib/uuid"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
-	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"google.golang.org/grpc"
 )
@@ -36,8 +35,6 @@ import (
 const (
 	userPattern = "/" + version + "/management/*"
 )
-
-var ReservedNamespaceNames = container.NewHashSet(request.DefaultNamespaceName, "unknown")
 
 type managementService struct {
 	api.UnimplementedManagementServer
@@ -67,21 +64,32 @@ func newManagementService(authProvider AuthProvider, txMgr *transaction.Manager,
 }
 
 func (m *managementService) CreateNamespace(ctx context.Context, req *api.CreateNamespaceRequest) (*api.CreateNamespaceResponse, error) {
-	if ReservedNamespaceNames.Contains(req.DisplayName) {
-		return nil, errors.InvalidArgument(req.DisplayName + " is reserved name")
-	}
-	if req.DisplayName == "" {
-		return nil, errors.InvalidArgument("Empty namespace name is not allowed")
-	}
-	if req.GetId() <= 1 {
-		return nil, errors.InvalidArgument("NamespaceId must be greater than 1")
+	if req.GetDisplayName() == "" {
+		return nil, errors.InvalidArgument("Empty namespace display name is not allowed")
 	}
 
-	namespace := metadata.NewTenantNamespace(req.DisplayName, uint32(req.Id))
+	id := uint32(req.GetId())
+	name := uuid.New().String()
+
 	tx, err := m.Manager.StartTx(ctx)
 	if err != nil {
 		return nil, errors.Internal("Failed to create namespace")
 	}
+
+	if id == 0 {
+		namespaces, err := m.TenantManager.ListNamespaces(ctx, tx)
+		if err != nil {
+			return nil, errors.Internal("Failed to generate ID")
+		}
+		var maxId uint32 = 0
+		for _, namespace := range namespaces {
+			if maxId < namespace.Id() {
+				maxId = namespace.Id()
+			}
+		}
+		id = maxId + 1
+	}
+	namespace := metadata.NewTenantNamespace(name, metadata.NewNamespaceMetadata(id, name, req.GetDisplayName()))
 	_, err = m.TenantManager.CreateTenant(ctx, tx, namespace)
 	if err != nil {
 		_ = tx.Rollback(ctx)
@@ -90,7 +98,7 @@ func (m *managementService) CreateNamespace(ctx context.Context, req *api.Create
 		if err = tx.Commit(ctx); err == nil {
 			return &api.CreateNamespaceResponse{
 				Status:  "CREATED",
-				Message: "Namespace created, with id=" + fmt.Sprint(req.Id) + ", and name=" + req.DisplayName,
+				Message: "Namespace created, with id=" + fmt.Sprint(id) + ", and name=" + name,
 			}, nil
 		} else {
 			return nil, err
@@ -118,8 +126,9 @@ func (m *managementService) ListNamespaces(ctx context.Context, _ *api.ListNames
 	namespacesInfo := make([]*api.NamespaceInfo, 0, len(namespaces))
 	for _, namespace := range namespaces {
 		namespacesInfo = append(namespacesInfo, &api.NamespaceInfo{
-			Id:   int32(namespace.Id()),
-			Name: namespace.Name(),
+			Id:          int32(namespace.Id()),
+			Name:        namespace.Name(),
+			DisplayName: namespace.Metadata().DisplayName,
 		})
 	}
 	return &api.ListNamespacesResponse{

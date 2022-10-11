@@ -38,7 +38,7 @@ func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 		m, ctx, cancel := NewTestTenantMgr(kvStore)
 		defer cancel()
 
-		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2})
+		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
 		require.NoError(t, err)
 
 		tenant := m.tenants["ns-test1"]
@@ -53,10 +53,10 @@ func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 		m, ctx, cancel := NewTestTenantMgr(kvStore)
 		defer cancel()
 
-		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2})
+		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
 		require.NoError(t, err)
 
-		_, err = m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test2", 3})
+		_, err = m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test2", 3, NewNamespaceMetadata(3, "ns-test2", "ns-test2-display_name")})
 		require.NoError(t, err)
 
 		tenant := m.tenants["ns-test1"]
@@ -79,11 +79,11 @@ func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 		m, ctx, cancel := NewTestTenantMgr(kvStore)
 		defer cancel()
 
-		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2})
+		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
 		require.NoError(t, err)
 
 		// should fail now
-		_, err = m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 3})
+		_, err = m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 3, NewNamespaceMetadata(3, "ns-test1", "ns-test1-display_name")})
 		require.Equal(t, "id is already assigned to 'ns-test1'", err.(*api.TigrisError).Error())
 
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
@@ -92,12 +92,12 @@ func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 		m, ctx, cancel := NewTestTenantMgr(kvStore)
 		defer cancel()
 
-		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2})
+		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m.idToTenantMap))
 
 		// should fail now
-		_, err = m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test2", 2})
+		_, err = m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test2", 2, NewNamespaceMetadata(2, "ns-test2", "ns-test2-display_name")})
 		require.Equal(t, "id is already assigned to the namespace 'ns-test1'", err.(*api.TigrisError).Error())
 		require.Equal(t, "ns-test1", m.idToTenantMap[uint32(2)])
 		require.Equal(t, 1, len(m.idToTenantMap))
@@ -114,12 +114,12 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 
 		tx, e := tm.StartTx(ctx)
 		require.NoError(t, e)
-		_, err := m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
+		_, err := m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
 		require.NoError(t, err)
 		namespaces, err := m.metaStore.GetNamespaces(ctx, tx)
 		require.NoError(t, err)
-		id := namespaces["ns-test1"]
-		require.Equal(t, uint32(2), id)
+		metadata := namespaces["ns-test1"]
+		require.Equal(t, uint32(2), metadata.Id)
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
 	t.Run("create_multiple_tenants", func(t *testing.T) {
@@ -129,19 +129,19 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		tx, e := tm.StartTx(ctx)
 		require.NoError(t, e)
 
-		_, err := m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
+		_, err := m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
 		require.NoError(t, err)
 
-		_, err = m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test2", 3})
+		_, err = m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test2", 3, NewNamespaceMetadata(3, "ns-test2", "ns-test2-display_name")})
 		require.NoError(t, err)
 		namespaces, err := m.metaStore.GetNamespaces(ctx, tx)
 		require.NoError(t, err)
 
-		id := namespaces["ns-test1"]
-		require.Equal(t, uint32(2), id)
+		metadata := namespaces["ns-test1"]
+		require.Equal(t, uint32(2), metadata.Id)
 
-		id = namespaces["ns-test2"]
-		require.Equal(t, uint32(3), id)
+		metadata = namespaces["ns-test2"]
+		require.Equal(t, uint32(3), metadata.Id)
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
 	t.Run("create_duplicate_tenant_error", func(t *testing.T) {
@@ -150,11 +150,11 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 
 		tx, e := tm.StartTx(ctx)
 		require.NoError(t, e)
-		_, err := m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
+		_, err := m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
 		require.NoError(t, err)
 
 		// should fail now
-		_, err = m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 3})
+		_, err = m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 3, NewNamespaceMetadata(3, "ns-test1", "ns-test1-display_name")})
 		require.Equal(t, "namespace with same name already exists with id '2'", err.(*api.TigrisError).Error())
 
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
@@ -165,11 +165,11 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 
 		tx, e := tm.StartTx(ctx)
 		require.NoError(t, e)
-		_, err := m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 2})
+		_, err := m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
 		require.NoError(t, err)
 
 		// should fail now
-		_, err = m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test2", 2})
+		_, err = m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test2", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
 		require.Equal(t, "namespace with same id already exists with name 'ns-test1'", err.(*api.TigrisError).Error())
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
@@ -181,7 +181,11 @@ func TestTenantManager_CreateDatabases(t *testing.T) {
 		m, ctx, cancel := NewTestTenantMgr(kvStore)
 		defer cancel()
 
-		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2})
+		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2, NamespaceMetadata{
+			Id:          2,
+			Name:        "ns-test1",
+			DisplayName: "ns-test1-displayName",
+		}})
 		require.NoError(t, err)
 		tenant := m.tenants["ns-test1"]
 
@@ -215,7 +219,7 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 		m, ctx, cancel := NewTestTenantMgr(kvStore)
 		defer cancel()
 
-		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2})
+		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
 		require.NoError(t, err)
 
 		tenant := m.tenants["ns-test1"]
@@ -284,7 +288,7 @@ func TestTenantManager_DropCollection(t *testing.T) {
 		m, ctx, cancel := NewTestTenantMgr(kvStore)
 		defer cancel()
 
-		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2})
+		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
 		require.NoError(t, err)
 
 		tenant := m.tenants["ns-test1"]
@@ -353,10 +357,10 @@ func TestTenantManager_DataSize(t *testing.T) {
 	m, ctx, cancel := NewTestTenantMgr(kvStore)
 	defer cancel()
 
-	_, err := m.CreateOrGetTenant(context.TODO(), &TenantNamespace{"ns-test1", 2})
+	_, err := m.CreateOrGetTenant(context.TODO(), &TenantNamespace{"ns-test1", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
 	require.NoError(t, err)
 
-	_, err = m.CreateOrGetTenant(context.TODO(), &TenantNamespace{"ns-test2", 3})
+	_, err = m.CreateOrGetTenant(context.TODO(), &TenantNamespace{"ns-test2", 3, NewNamespaceMetadata(3, "ns-test2", "ns-test2-display_name")})
 	require.NoError(t, err)
 
 	tenant := m.tenants["ns-test1"]
