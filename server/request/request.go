@@ -56,12 +56,14 @@ type Metadata struct {
 	methodInfo  grpc.MethodInfo
 	// this is authenticated namespace
 	namespace string
+	IsHuman   bool
 	// this is parsed and set early in request processing chain - before it is authenticated for observability.
 	unauthenticatedNamespaceName string
 }
 
 func NewRequestEndpointMetadata(ctx context.Context, serviceName string, methodInfo grpc.MethodInfo) Metadata {
-	return Metadata{serviceName: serviceName, methodInfo: methodInfo, unauthenticatedNamespaceName: GetNameSpaceFromHeader(ctx)}
+	ns, utype := GetMetadataFromHeader(ctx)
+	return Metadata{serviceName: serviceName, methodInfo: methodInfo, unauthenticatedNamespaceName: ns, IsHuman: utype}
 }
 
 func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod string, methodType string) Metadata {
@@ -199,6 +201,15 @@ func GetNamespace(ctx context.Context) (string, error) {
 	return "", ErrNamespaceNotFound
 }
 
+func IsHumanUser(ctx context.Context) bool {
+	if value := ctx.Value(MetadataCtxKey{}); value != nil {
+		if requestMetadata, ok := value.(*Metadata); ok {
+			return requestMetadata.IsHuman
+		}
+	}
+	return false
+}
+
 func (tokenNamespaceExtractor *AccessTokenNamespaceExtractor) Extract(ctx context.Context) (string, error) {
 	// read token
 	token, err := GetAccessToken(ctx)
@@ -225,34 +236,37 @@ func getTokenFromHeader(header string) (string, error) {
 	return splits[1], nil
 }
 
-func getNameSpaceFromToken(token string) string {
+// extracts namespace and type of the user from the token.
+func getMetadataFromToken(token string) (string, bool) {
 	tokenParts := strings.SplitN(token, ".", 3)
 	if len(tokenParts) < 3 {
 		log.Debug().Msg("Could not split the token into its parts")
-		return UnknownValue
+		return UnknownValue, false
 	}
 	decodedToken, err := base64.RawStdEncoding.DecodeString(tokenParts[1])
 	if err != nil {
 		log.Debug().Err(err).Msg("Could not base64 decode token")
-		return UnknownValue
+		return UnknownValue, false
 	}
 	namespace, err := jsonparser.GetString(decodedToken, "https://tigris/n", "code")
 	if err != nil {
-		return UnknownValue
+		return UnknownValue, false
 	}
-	return namespace
+	user, _ := jsonparser.GetString(decodedToken, "https://tigris/u", "email")
+	return namespace, len(user) > 0
 }
 
-func GetNameSpaceFromHeader(ctx context.Context) string {
+func GetMetadataFromHeader(ctx context.Context) (string, bool) {
 	if !config.DefaultConfig.Auth.EnableNamespaceIsolation {
-		return DefaultNamespaceName
+		return DefaultNamespaceName, false
 	}
 	header := api.GetHeader(ctx, "authorization")
 	token, err := getTokenFromHeader(header)
 	if err != nil {
-		return UnknownValue
+		return UnknownValue, false
 	}
-	return getNameSpaceFromToken(token)
+
+	return getMetadataFromToken(token)
 }
 
 func isRead(name string) bool {
