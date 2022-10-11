@@ -131,7 +131,11 @@ func (s *apiService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel)
 	router.HandleFunc(apiPathPrefix+infoPath, func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
 	})
-	router.Handle(metricsPath, metrics.Reporter.HTTPHandler())
+
+	if config.DefaultConfig.Metrics.Enabled {
+		router.Handle(metricsPath, metrics.Reporter.HTTPHandler())
+	}
+
 	return nil
 }
 

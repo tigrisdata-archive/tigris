@@ -14,9 +14,14 @@
 
 package metrics
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/tigrisdata/tigris/server/config"
+)
 
 func TestNetworkMetrics(t *testing.T) {
+	config.DefaultConfig.Metrics.Enabled = true
 	InitializeMetrics()
 	testMeasurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
 

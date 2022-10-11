@@ -78,18 +78,18 @@ func getTimerSummaryObjectives() map[float64]float64 {
 
 func InitializeMetrics() io.Closer {
 	var closer io.Closer
-	log.Debug().Msg("Initializing metrics")
-	Reporter = promreporter.NewReporter(promreporter.Options{
-		DefaultSummaryObjectives: getTimerSummaryObjectives(),
-	})
-	root, closer = tally.NewRootScope(tally.ScopeOptions{
-		Tags:           GetGlobalTags(),
-		CachedReporter: Reporter,
-		// Panics with .
-		Separator: promreporter.DefaultSeparator,
-	}, 1*time.Second)
-
 	if cfg := config.DefaultConfig.Metrics; cfg.Enabled {
+		log.Debug().Msg("Initializing metrics")
+		Reporter = promreporter.NewReporter(promreporter.Options{
+			DefaultSummaryObjectives: getTimerSummaryObjectives(),
+		})
+		root, closer = tally.NewRootScope(tally.ScopeOptions{
+			Tags:           GetGlobalTags(),
+			CachedReporter: Reporter,
+			// Panics with .
+			Separator: promreporter.DefaultSeparator,
+		}, 1*time.Second)
+
 		if cfg.Requests.Enabled {
 			// Request level metrics (HTTP and GRPC)
 			Requests = root.SubScope("requests")

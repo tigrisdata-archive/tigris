@@ -69,27 +69,8 @@ func ClearMeasurementContext(ctx context.Context) context.Context {
 }
 
 func (m *Measurement) CountOkForScope(scope tally.Scope, tags map[string]string) {
-	switch scope {
-	case AuthOkCount:
-		if config.DefaultConfig.Metrics.Auth.Enabled {
-			m.countOk(scope, tags)
-		}
-	case RequestsOkCount:
-		if config.DefaultConfig.Metrics.Requests.Enabled && config.DefaultConfig.Metrics.Requests.Counter.OkEnabled {
-			m.countOk(scope, tags)
-		}
-	case FdbOkCount:
-		if config.DefaultConfig.Metrics.Fdb.Enabled && config.DefaultConfig.Metrics.Fdb.Counter.OkEnabled {
-			m.countOk(scope, tags)
-		}
-	case SessionOkCount:
-		if config.DefaultConfig.Metrics.Session.Enabled && config.DefaultConfig.Metrics.Session.Counter.OkEnabled {
-			m.countOk(scope, tags)
-		}
-	case SearchOkCount:
-		if config.DefaultConfig.Metrics.Search.Enabled && config.DefaultConfig.Metrics.Session.Counter.OkEnabled {
-			m.countOk(scope, tags)
-		}
+	if scope != nil {
+		m.countOk(scope, tags)
 	}
 }
 
@@ -98,27 +79,8 @@ func (m *Measurement) countOk(scope tally.Scope, tags map[string]string) {
 }
 
 func (m *Measurement) CountErrorForScope(scope tally.Scope, tags map[string]string) {
-	switch scope {
-	case AuthErrorCount:
-		if config.DefaultConfig.Metrics.Auth.Enabled {
-			m.countError(scope, tags)
-		}
-	case RequestsErrorCount:
-		if config.DefaultConfig.Metrics.Requests.Enabled && config.DefaultConfig.Metrics.Requests.Counter.ErrorEnabled {
-			m.countError(scope, tags)
-		}
-	case FdbErrorCount:
-		if config.DefaultConfig.Metrics.Fdb.Enabled && config.DefaultConfig.Metrics.Fdb.Counter.ErrorEnabled {
-			m.countError(scope, tags)
-		}
-	case SessionErrorCount:
-		if config.DefaultConfig.Metrics.Session.Enabled && config.DefaultConfig.Metrics.Session.Counter.ErrorEnabled {
-			m.countError(scope, tags)
-		}
-	case SearchErrorCount:
-		if config.DefaultConfig.Metrics.Search.Enabled && config.DefaultConfig.Metrics.Search.Counter.ErrorEnabled {
-			m.countError(scope, tags)
-		}
+	if scope != nil {
+		m.countError(scope, tags)
 	}
 }
 
@@ -294,39 +256,29 @@ func (m *Measurement) FinishTracing(ctx context.Context) context.Context {
 }
 
 func (m *Measurement) RecordDuration(scope tally.Scope, tags map[string]string) {
+	var timerEnabled, histogramEnabled bool
+	cfg := config.DefaultConfig.Metrics
 	switch scope {
 	case AuthRespTime, AuthErrorRespTime:
-		if config.DefaultConfig.Metrics.Auth.Enabled {
-			m.recordTimerDuration(scope, tags)
-		}
+		timerEnabled = config.DefaultConfig.Metrics.Auth.Enabled
 	case RequestsRespTime, RequestsErrorRespTime:
-		if config.DefaultConfig.Metrics.Requests.Enabled && config.DefaultConfig.Metrics.Requests.Timer.TimerEnabled {
-			m.recordTimerDuration(scope, tags)
-		}
-		if config.DefaultConfig.Metrics.Requests.Enabled && config.DefaultConfig.Metrics.Requests.Timer.HistogramEnabled {
-			m.recordHistogramDuration(scope, tags)
-		}
+		timerEnabled = cfg.Requests.Timer.TimerEnabled
+		histogramEnabled = cfg.Requests.Timer.HistogramEnabled
 	case FdbRespTime, FdbErrorRespTime:
-		if config.DefaultConfig.Metrics.Fdb.Enabled && config.DefaultConfig.Metrics.Fdb.Timer.TimerEnabled {
-			m.recordTimerDuration(scope, tags)
-		}
-		if config.DefaultConfig.Metrics.Fdb.Enabled && config.DefaultConfig.Metrics.Fdb.Timer.HistogramEnabled {
-			m.recordHistogramDuration(scope, tags)
-		}
+		timerEnabled = cfg.Fdb.Timer.TimerEnabled
+		histogramEnabled = cfg.Fdb.Timer.HistogramEnabled
 	case SessionRespTime, SessionErrorRespTime:
-		if config.DefaultConfig.Metrics.Session.Enabled && config.DefaultConfig.Metrics.Session.Timer.TimerEnabled {
-			m.recordTimerDuration(scope, tags)
-		}
-		if config.DefaultConfig.Metrics.Session.Enabled && config.DefaultConfig.Metrics.Session.Timer.HistogramEnabled {
-			m.recordHistogramDuration(scope, tags)
-		}
+		timerEnabled = cfg.Session.Timer.TimerEnabled
+		histogramEnabled = cfg.Session.Timer.HistogramEnabled
 	case SearchRespTime, SearchErrorRespTime:
-		if config.DefaultConfig.Metrics.Search.Enabled && config.DefaultConfig.Metrics.Search.Timer.TimerEnabled {
-			m.recordTimerDuration(scope, tags)
-		}
-		if config.DefaultConfig.Metrics.Search.Enabled && config.DefaultConfig.Metrics.Search.Timer.HistogramEnabled {
-			m.recordHistogramDuration(scope, tags)
-		}
+		timerEnabled = cfg.Search.Timer.TimerEnabled
+		histogramEnabled = cfg.Search.Timer.HistogramEnabled
+	}
+	if scope != nil && timerEnabled {
+		m.recordTimerDuration(scope, tags)
+	}
+	if scope != nil && histogramEnabled {
+		m.recordHistogramDuration(scope, tags)
 	}
 }
 

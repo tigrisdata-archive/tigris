@@ -25,6 +25,7 @@ func TestQuotaMetrics(t *testing.T) {
 	testNamespace := "test_namespace"
 
 	config.DefaultConfig.Tracing.Enabled = true
+	config.DefaultConfig.Metrics.Enabled = true
 	InitializeMetrics()
 
 	t.Run("enabled", func(t *testing.T) {

@@ -49,6 +49,7 @@ func TestTracing(t *testing.T) {
 
 	t.Run("Test parent and child spans", func(t *testing.T) {
 		config.DefaultConfig.Tracing.Enabled = true
+		config.DefaultConfig.Metrics.Enabled = true
 		ctx := context.Background()
 		parentMeasurement := NewMeasurement("parent.service", "parent.resource", "rpc", GetGlobalTags())
 		ctx = parentMeasurement.StartTracing(ctx, false)
@@ -80,6 +81,7 @@ func TestTracing(t *testing.T) {
 
 	t.Run("Test counters", func(t *testing.T) {
 		config.DefaultConfig.Tracing.Enabled = true
+		config.DefaultConfig.Metrics.Enabled = true
 		InitializeMetrics()
 		ctx := context.Background()
 		measurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
@@ -93,6 +95,7 @@ func TestTracing(t *testing.T) {
 
 	t.Run("Test request tags", func(t *testing.T) {
 		config.DefaultConfig.Tracing.Enabled = true
+		config.DefaultConfig.Metrics.Enabled = true
 		InitializeMetrics()
 		measurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
 		measurement.AddTags(map[string]string{
@@ -113,6 +116,7 @@ func TestTracing(t *testing.T) {
 
 	t.Run("Test fdb tags", func(t *testing.T) {
 		config.DefaultConfig.Tracing.Enabled = true
+		config.DefaultConfig.Metrics.Enabled = true
 		InitializeMetrics()
 		measurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
 		measurement.AddTags(map[string]string{
@@ -133,6 +137,7 @@ func TestTracing(t *testing.T) {
 
 	t.Run("Test search tags", func(t *testing.T) {
 		config.DefaultConfig.Tracing.Enabled = true
+		config.DefaultConfig.Metrics.Enabled = true
 		InitializeMetrics()
 		measurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
 		measurement.AddTags(map[string]string{
@@ -153,6 +158,7 @@ func TestTracing(t *testing.T) {
 
 	t.Run("Test session tags", func(t *testing.T) {
 		config.DefaultConfig.Tracing.Enabled = true
+		config.DefaultConfig.Metrics.Enabled = true
 		InitializeMetrics()
 		measurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
 		measurement.AddTags(map[string]string{
@@ -173,6 +179,7 @@ func TestTracing(t *testing.T) {
 
 	t.Run("Test size tags", func(t *testing.T) {
 		config.DefaultConfig.Tracing.Enabled = true
+		config.DefaultConfig.Metrics.Enabled = true
 		InitializeMetrics()
 		measurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
 		measurement.AddTags(map[string]string{
@@ -200,6 +207,7 @@ func TestTracing(t *testing.T) {
 
 	t.Run("Test network tags", func(t *testing.T) {
 		config.DefaultConfig.Tracing.Enabled = true
+		config.DefaultConfig.Metrics.Enabled = true
 		InitializeMetrics()
 		measurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
 		measurement.AddTags(map[string]string{
