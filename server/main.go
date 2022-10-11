@@ -50,10 +50,8 @@ func mainWithCode() int {
 	defer closerFunc()
 
 	// Initialize metrics once
-	closer := metrics.InitializeMetrics()
-	defer func() {
-		ulog.E(closer.Close())
-	}()
+	cleanup := metrics.InitializeMetrics()
+	defer cleanup()
 
 	log.Info().Str("version", util.Version).Msgf("Starting server")
 
