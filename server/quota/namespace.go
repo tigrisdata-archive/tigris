@@ -16,10 +16,12 @@ package quota
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
@@ -35,6 +37,9 @@ const (
 	// (this is percentage of maximum per node per namespace limit)
 	// Set by config.DefaultConfig.Quota.Namespace.Node.(Read|Write)RateLimit.
 	rateIncrement = 10
+
+	// allow human user to go 5% beyond the quota.
+	overProvisionedPercent = 5
 )
 
 type Backend interface {
@@ -120,27 +125,65 @@ func (i *namespace) allowOrWait(ctx context.Context, namespace string, size int,
 	return i.getState(namespace).Allow(units, isWrite)
 }
 
+// allowOrWait taking overprovisioning of human user into account
+func (i *namespace) allowOrWaitWithOP(ctx context.Context, namespace string, size int, isWrite bool, isWait bool) error {
+	err := i.allowOrWait(ctx, namespace, size, isWrite, isWait)
+	if err == nil {
+		return nil
+	}
+
+	// Allow human user to go beyond the quota limit
+	if request.IsHumanUser(ctx) && (errors.Is(err, ErrReadUnitsExceeded) || errors.Is(err, ErrWriteUnitsExceeded)) {
+		return i.allowOrWait(ctx, getHumanUserNamespace(namespace), size, isWrite, isWait)
+	}
+
+	return err
+}
+
 func (i *namespace) Allow(ctx context.Context, namespace string, size int, isWrite bool) error {
-	return i.allowOrWait(ctx, namespace, size, isWrite, false)
+	return i.allowOrWaitWithOP(ctx, namespace, size, isWrite, false)
 }
 
 func (i *namespace) Wait(ctx context.Context, namespace string, size int, isWrite bool) error {
-	return i.allowOrWait(ctx, namespace, size, isWrite, true)
+	return i.allowOrWaitWithOP(ctx, namespace, size, isWrite, true)
+}
+
+func isHumanUserNamespace(namespace string) bool {
+	return strings.HasSuffix(namespace, "$op")
+}
+
+func getHumanUserNamespace(namespace string) string {
+	return namespace + "$op"
+}
+
+func (i *namespace) getLimits(namespace string) (int, int) {
+	cfg, ok := i.cfg.Namespace.Namespaces[namespace]
+	if !ok {
+		cfg = i.cfg.Namespace.Default
+	}
+
+	ru, wu := cfg.ReadUnits, cfg.WriteUnits
+	if isHumanUserNamespace(namespace) {
+		ru = ru * overProvisionedPercent / 100
+		wu = wu * overProvisionedPercent / 100
+	}
+
+	return ru, wu
 }
 
 func (i *namespace) getState(namespace string) *instanceState {
 	is, ok := i.tenantQuota.Load(namespace)
 	if !ok {
-		cfg := i.cfg.Namespace.Default
+		ru, wu := i.getLimits(namespace)
 		// Create new state if didn't exist before
 		is = &instanceState{
 			State: State{
 				Write: Limiter{
 					isWrite: true,
-					Rate:    rate.NewLimiter(rate.Limit(cfg.WriteUnits), cfg.WriteUnits),
+					Rate:    rate.NewLimiter(rate.Limit(wu), wu),
 				},
 				Read: Limiter{
-					Rate: rate.NewLimiter(rate.Limit(cfg.ReadUnits), cfg.ReadUnits),
+					Rate: rate.NewLimiter(rate.Limit(ru), ru),
 				},
 			},
 		}
@@ -193,14 +236,10 @@ func calcLimit(setNodeLimit int64, maxNodeLimit int64, curNamespace int64, maxNa
 }
 
 func (i *namespace) updateLimits(ns string, is *instanceState, curRead int64, curWrite int64) {
-	// get per namespace limit config if any
-	cfg, ok := i.cfg.Namespace.Namespaces[ns]
-	if !ok {
-		cfg = i.cfg.Namespace.Default
-	}
+	ru, wu := i.getLimits(ns)
 
 	// calculate read limits
-	readLimit := calcLimit(is.setReadLimit.Load(), int64(i.cfg.Namespace.Node.ReadUnits), curRead, int64(cfg.ReadUnits),
+	readLimit := calcLimit(is.setReadLimit.Load(), int64(i.cfg.Namespace.Node.ReadUnits), curRead, int64(ru),
 		rateHysteresis, rateIncrement)
 	// update read limiter config
 	if readLimit != is.setReadLimit.Load() {
@@ -212,7 +251,7 @@ func (i *namespace) updateLimits(ns string, is *instanceState, curRead int64, cu
 	}
 
 	// calculate write limits
-	writeLimit := calcLimit(is.setWriteLimit.Load(), int64(i.cfg.Namespace.Node.WriteUnits), curWrite, int64(cfg.WriteUnits),
+	writeLimit := calcLimit(is.setWriteLimit.Load(), int64(i.cfg.Namespace.Node.WriteUnits), curWrite, int64(wu),
 		rateHysteresis, rateIncrement)
 	// update write limiter config
 	if writeLimit != is.setWriteLimit.Load() {

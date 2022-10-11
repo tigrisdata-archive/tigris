@@ -493,7 +493,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		runner.queryMetrics.SetWriteType("non-pkey")
 	}
 
-	var limit = int32(0)
+	limit := int32(0)
 	if runner.req.Options != nil {
 		limit = int32(runner.req.Options.Limit)
 	}
@@ -599,7 +599,7 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, ctx, err
 	}
 
-	var limit = int32(0)
+	limit := int32(0)
 	if runner.req.Options != nil {
 		limit = int32(runner.req.Options.Limit)
 	}

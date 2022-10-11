@@ -96,6 +96,11 @@ func TestNamespaceQuota(t *testing.T) {
 	assert.Equal(t, ErrReadUnitsExceeded, err)
 	assert.Equal(t, 9, i)
 
+	// human user allowed to go 5% above the limit
+	ctxOp := request.SetRequestMetadata(ctx, request.Metadata{IsHuman: true})
+	err = m.Allow(ctxOp, ns, 2048, false)
+	assert.NoError(t, err)
+
 	i = 0
 	err = nil
 	for ; err == nil && 1 < 15; i++ {
@@ -103,6 +108,10 @@ func TestNamespaceQuota(t *testing.T) {
 	}
 	assert.Equal(t, ErrWriteUnitsExceeded, err)
 	assert.Equal(t, 4, i)
+
+	// human user allowed to go 5% above the limit
+	err = m.Allow(ctxOp, ns, 512, true)
+	assert.NoError(t, err)
 
 	log.Debug().Msg("simulate rate surge")
 
