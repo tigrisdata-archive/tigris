@@ -90,6 +90,15 @@ func collectionsForLoadTest() ([]string, [][]byte) {
 func CreateWorkloads() []Workload {
 	collections, schemas := collectionsForLoadTest()
 	var workload []Workload
+	workload = append(workload, &workload2.DropCreateWriteWorkload{
+		Threads:     96,
+		Records:     1024,
+		Database:    "test1",
+		Collections: collections,
+		// first is integer primary key, second is string primary key
+		Schemas: schemas,
+	})
+
 	workload = append(workload, &workload2.DDLWorkload{
 		Threads:     1,
 		Database:    "test1",
