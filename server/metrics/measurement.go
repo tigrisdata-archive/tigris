@@ -238,11 +238,6 @@ func (m *Measurement) FinishTracing(ctx context.Context) context.Context {
 
 	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("stopped", strconv.FormatBool(m.stopped)).Str("span_type", m.spanType).Msg("FinishingTracing start")
 
-	if !config.DefaultConfig.Tracing.Enabled {
-		log.Debug().Str("span_type", m.spanType).Msg("FinishTracing end: Neither tracing, not metrics are enabled, returning")
-		return ctx
-	}
-
 	if m.span != nil {
 		m.span.Finish()
 	}
@@ -321,11 +316,6 @@ func (m *Measurement) FinishWithError(ctx context.Context, source string, err er
 	m.stopped = true
 	m.stoppedAt = time.Now()
 
-	if !config.DefaultConfig.Tracing.Enabled {
-		log.Debug().Msg("FinishWithError end: Neither tracing, not metrics are enabled, returning")
-		return ctx
-	}
-
 	if m.span == nil {
 		log.Debug().Msg("FinishWithError end: no tracing span sound to finish, returning")
 		return ctx
@@ -337,9 +327,19 @@ func (m *Measurement) FinishWithError(ctx context.Context, source string, err er
 		m.span.SetTag(k, v)
 	}
 	finishOptions := []tracer.FinishOption{tracer.WithError(err)}
-	m.span.Finish(finishOptions...)
-	m.span = nil
-	ClearMeasurementContext(ctx)
+
+	if m.span != nil {
+		m.span.Finish(finishOptions...)
+	}
+
+	if m.parent != nil {
+		var err error
+		ctx, err = m.parent.SaveMeasurementToContext(ctx)
+		ulog.E(err)
+	} else {
+		// This was the top level span meta
+		ctx = ClearMeasurementContext(ctx)
+	}
 
 	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("span_type", m.spanType).Str("stopped", strconv.FormatBool(m.stopped)).Msg("FinishWithError end")
 	return ctx

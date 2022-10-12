@@ -163,6 +163,10 @@ func (s *storage) updateMetricsForNamespace(ctx context.Context, namespace strin
 		if ulog.E(err) {
 			return
 		}
+		if db == nil {
+			// as there is no coordination between listDatabase and getDatabase that means a database can be dropped in between
+			continue
+		}
 
 		metrics.UpdateDbSizeMetrics(namespace, dbName, getDbSize(ctx, tenant, db))
 

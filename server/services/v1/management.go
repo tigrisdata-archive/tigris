@@ -67,17 +67,17 @@ func newManagementService(authProvider AuthProvider, txMgr *transaction.Manager,
 }
 
 func (m *managementService) CreateNamespace(ctx context.Context, req *api.CreateNamespaceRequest) (*api.CreateNamespaceResponse, error) {
-	if ReservedNamespaceNames.Contains(req.Name) {
-		return nil, errors.InvalidArgument(req.Name + " is reserved name")
+	if ReservedNamespaceNames.Contains(req.DisplayName) {
+		return nil, errors.InvalidArgument(req.DisplayName + " is reserved name")
 	}
-	if req.Name == "" {
+	if req.DisplayName == "" {
 		return nil, errors.InvalidArgument("Empty namespace name is not allowed")
 	}
 	if req.GetId() <= 1 {
 		return nil, errors.InvalidArgument("NamespaceId must be greater than 1")
 	}
 
-	namespace := metadata.NewTenantNamespace(req.Name, uint32(req.Id))
+	namespace := metadata.NewTenantNamespace(req.DisplayName, uint32(req.Id))
 	tx, err := m.Manager.StartTx(ctx)
 	if err != nil {
 		return nil, errors.Internal("Failed to create namespace")
@@ -90,7 +90,7 @@ func (m *managementService) CreateNamespace(ctx context.Context, req *api.Create
 		if err = tx.Commit(ctx); err == nil {
 			return &api.CreateNamespaceResponse{
 				Status:  "CREATED",
-				Message: "Namespace created, with id=" + fmt.Sprint(req.Id) + ", and name=" + req.Name,
+				Message: "Namespace created, with id=" + fmt.Sprint(req.Id) + ", and name=" + req.DisplayName,
 			}, nil
 		} else {
 			return nil, err
