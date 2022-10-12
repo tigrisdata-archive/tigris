@@ -23,6 +23,7 @@ import (
 
 func TestSearchMetrics(t *testing.T) {
 	config.DefaultConfig.Tracing.Enabled = true
+	config.DefaultConfig.Metrics.Enabled = true
 	InitializeMetrics()
 
 	testNormalTags := []map[string]string{

@@ -26,8 +26,9 @@ import (
 )
 
 func TestGRPCMetrics(t *testing.T) {
-	InitializeMetrics()
 	config.DefaultConfig.Tracing.Enabled = true
+	config.DefaultConfig.Metrics.Enabled = true
+	InitializeMetrics()
 
 	svcName := "tigrisdata.v1.Tigris"
 	unaryMethodName := "TestUnaryMethod"

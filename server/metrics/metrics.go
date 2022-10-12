@@ -21,6 +21,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/util"
+	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/uber-go/tally"
 	promreporter "github.com/uber-go/tally/prometheus"
 )
@@ -76,20 +77,20 @@ func getTimerSummaryObjectives() map[float64]float64 {
 	return res
 }
 
-func InitializeMetrics() io.Closer {
+func InitializeMetrics() func() {
 	var closer io.Closer
-	log.Debug().Msg("Initializing metrics")
-	Reporter = promreporter.NewReporter(promreporter.Options{
-		DefaultSummaryObjectives: getTimerSummaryObjectives(),
-	})
-	root, closer = tally.NewRootScope(tally.ScopeOptions{
-		Tags:           GetGlobalTags(),
-		CachedReporter: Reporter,
-		// Panics with .
-		Separator: promreporter.DefaultSeparator,
-	}, 1*time.Second)
-
 	if cfg := config.DefaultConfig.Metrics; cfg.Enabled {
+		log.Debug().Msg("Initializing metrics")
+		Reporter = promreporter.NewReporter(promreporter.Options{
+			DefaultSummaryObjectives: getTimerSummaryObjectives(),
+		})
+		root, closer = tally.NewRootScope(tally.ScopeOptions{
+			Tags:           GetGlobalTags(),
+			CachedReporter: Reporter,
+			// Panics with .
+			Separator: promreporter.DefaultSeparator,
+		}, 1*time.Second)
+
 		if cfg.Requests.Enabled {
 			// Request level metrics (HTTP and GRPC)
 			Requests = root.SubScope("requests")
@@ -131,5 +132,9 @@ func InitializeMetrics() io.Closer {
 		}
 	}
 
-	return closer
+	return func() {
+		if closer != nil {
+			ulog.E(closer.Close())
+		}
+	}
 }

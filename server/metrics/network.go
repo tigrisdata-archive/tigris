@@ -15,7 +15,6 @@
 package metrics
 
 import (
-	"github.com/tigrisdata/tigris/server/config"
 	"github.com/uber-go/tally"
 )
 
@@ -40,14 +39,14 @@ func initializeNetworkScopes() {
 }
 
 func (m *Measurement) CountSentBytes(scope tally.Scope, tags map[string]string, size int) {
-	if config.DefaultConfig.Metrics.Network.Enabled {
+	if scope != nil {
 		// proto.Size has int, need to convert it here
 		scope.Tagged(tags).Counter("sent").Inc(int64(size))
 	}
 }
 
 func (m *Measurement) CountReceivedBytes(scope tally.Scope, tags map[string]string, size int) {
-	if config.DefaultConfig.Metrics.Network.Enabled {
+	if scope != nil {
 		// proto.Size has int, need to convert it here
 		scope.Tagged(tags).Counter("received").Inc(int64(size))
 	}

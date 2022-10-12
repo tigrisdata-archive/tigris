@@ -18,6 +18,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/tigrisdata/tigris/server/config"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
@@ -33,6 +34,7 @@ func TestInitializeMetrics(t *testing.T) {
 	})
 
 	t.Run("Initialize metrics", func(t *testing.T) {
+		config.DefaultConfig.Metrics.Enabled = true
 		// Will panic if the high level structure cannot be created
 		InitializeMetrics()
 	})

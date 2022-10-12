@@ -22,6 +22,7 @@ import (
 
 func TestSessionMetrics(t *testing.T) {
 	config.DefaultConfig.Tracing.Enabled = true
+	config.DefaultConfig.Metrics.Enabled = true
 	InitializeMetrics()
 
 	testTags := []map[string]string{

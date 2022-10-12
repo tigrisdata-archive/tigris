@@ -27,6 +27,7 @@ func TestSizeMetrics(t *testing.T) {
 	testCollection := "test_collection"
 
 	config.DefaultConfig.Tracing.Enabled = true
+	config.DefaultConfig.Metrics.Enabled = true
 	InitializeMetrics()
 
 	t.Run("Update namespace size metrics", func(t *testing.T) {

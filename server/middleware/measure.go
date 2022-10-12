@@ -58,9 +58,7 @@ func measureUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryS
 			return resp, err
 		}
 		reqMetadata, err := request.GetRequestMetadata(ctx)
-		if err != nil {
-			ulog.E(err)
-		}
+		ulog.E(err)
 		tags := reqMetadata.GetInitialTags()
 		measurement := metrics.NewMeasurement(util.Service, info.FullMethod, metrics.GrpcSpanType, tags)
 		measurement.AddTags(metrics.GetDbCollTagsForReq(req))
@@ -103,15 +101,15 @@ func measureStream() grpc.StreamServerInterceptor {
 		err = handler(srv, wrapped)
 		if err != nil {
 			measurement.CountErrorForScope(metrics.RequestsErrorCount, measurement.GetRequestErrorTags(err))
-			wrapped.WrappedContext = measurement.FinishWithError(wrapped.WrappedContext, "request", err)
+			_ = measurement.FinishWithError(wrapped.WrappedContext, "request", err)
 			measurement.RecordDuration(metrics.RequestsErrorRespTime, measurement.GetRequestErrorTags(err))
 			ulog.E(err)
 			return err
 		}
 		measurement.CountOkForScope(metrics.RequestsOkCount, measurement.GetRequestOkTags())
-		wrapped.WrappedContext = measurement.FinishTracing(wrapped.WrappedContext)
+		_ = measurement.FinishTracing(wrapped.WrappedContext)
 		measurement.RecordDuration(metrics.RequestsRespTime, measurement.GetRequestOkTags())
-		return err
+		return nil
 	}
 }
 

@@ -15,7 +15,6 @@
 package metrics
 
 import (
-	"github.com/tigrisdata/tigris/server/config"
 	"github.com/uber-go/tally"
 )
 
@@ -83,19 +82,19 @@ func getCollectionSizeTags(namespaceName string, dbName string, collectionName s
 }
 
 func UpdateNameSpaceSizeMetrics(namespaceName string, size int64) {
-	if config.DefaultConfig.Metrics.Size.Enabled && config.DefaultConfig.Metrics.Size.Namespace {
+	if NamespaceSize != nil {
 		NamespaceSize.Tagged(getNamespaceSizeTags(namespaceName)).Gauge("bytes").Update(float64(size))
 	}
 }
 
 func UpdateDbSizeMetrics(namespaceName string, dbName string, size int64) {
-	if config.DefaultConfig.Metrics.Size.Enabled && config.DefaultConfig.Metrics.Size.Db {
+	if NamespaceSize != nil {
 		DbSize.Tagged(getDbSizeTags(namespaceName, dbName)).Gauge("bytes").Update(float64(size))
 	}
 }
 
 func UpdateCollectionSizeMetrics(namespaceName string, dbName string, collectionName string, size int64) {
-	if config.DefaultConfig.Metrics.Size.Enabled && config.DefaultConfig.Metrics.Size.Collection {
+	if NamespaceSize != nil {
 		CollectionSize.Tagged(getCollectionSizeTags(namespaceName, dbName, collectionName)).Gauge("bytes").Update(float64(size))
 	}
 }

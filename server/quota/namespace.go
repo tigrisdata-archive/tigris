@@ -125,7 +125,7 @@ func (i *namespace) allowOrWait(ctx context.Context, namespace string, size int,
 	return i.getState(namespace).Allow(units, isWrite)
 }
 
-// allowOrWait taking overprovisioning of human user into account
+// allowOrWait taking overprovisioning of human user into account.
 func (i *namespace) allowOrWaitWithOP(ctx context.Context, namespace string, size int, isWrite bool, isWait bool) error {
 	err := i.allowOrWait(ctx, namespace, size, isWrite, isWait)
 	if err == nil {

@@ -69,27 +69,8 @@ func ClearMeasurementContext(ctx context.Context) context.Context {
 }
 
 func (m *Measurement) CountOkForScope(scope tally.Scope, tags map[string]string) {
-	switch scope {
-	case AuthOkCount:
-		if config.DefaultConfig.Metrics.Auth.Enabled {
-			m.countOk(scope, tags)
-		}
-	case RequestsOkCount:
-		if config.DefaultConfig.Metrics.Requests.Enabled && config.DefaultConfig.Metrics.Requests.Counter.OkEnabled {
-			m.countOk(scope, tags)
-		}
-	case FdbOkCount:
-		if config.DefaultConfig.Metrics.Fdb.Enabled && config.DefaultConfig.Metrics.Fdb.Counter.OkEnabled {
-			m.countOk(scope, tags)
-		}
-	case SessionOkCount:
-		if config.DefaultConfig.Metrics.Session.Enabled && config.DefaultConfig.Metrics.Session.Counter.OkEnabled {
-			m.countOk(scope, tags)
-		}
-	case SearchOkCount:
-		if config.DefaultConfig.Metrics.Search.Enabled && config.DefaultConfig.Metrics.Session.Counter.OkEnabled {
-			m.countOk(scope, tags)
-		}
+	if scope != nil {
+		m.countOk(scope, tags)
 	}
 }
 
@@ -98,27 +79,8 @@ func (m *Measurement) countOk(scope tally.Scope, tags map[string]string) {
 }
 
 func (m *Measurement) CountErrorForScope(scope tally.Scope, tags map[string]string) {
-	switch scope {
-	case AuthErrorCount:
-		if config.DefaultConfig.Metrics.Auth.Enabled {
-			m.countError(scope, tags)
-		}
-	case RequestsErrorCount:
-		if config.DefaultConfig.Metrics.Requests.Enabled && config.DefaultConfig.Metrics.Requests.Counter.ErrorEnabled {
-			m.countError(scope, tags)
-		}
-	case FdbErrorCount:
-		if config.DefaultConfig.Metrics.Fdb.Enabled && config.DefaultConfig.Metrics.Fdb.Counter.ErrorEnabled {
-			m.countError(scope, tags)
-		}
-	case SessionErrorCount:
-		if config.DefaultConfig.Metrics.Session.Enabled && config.DefaultConfig.Metrics.Session.Counter.ErrorEnabled {
-			m.countError(scope, tags)
-		}
-	case SearchErrorCount:
-		if config.DefaultConfig.Metrics.Search.Enabled && config.DefaultConfig.Metrics.Search.Counter.ErrorEnabled {
-			m.countError(scope, tags)
-		}
+	if scope != nil {
+		m.countError(scope, tags)
 	}
 }
 
@@ -231,102 +193,97 @@ func (m *Measurement) RecursiveAddTags(tags map[string]string) {
 }
 
 func (m *Measurement) StartTracing(ctx context.Context, childOnly bool) context.Context {
+	m.startedAt = time.Now()
+	m.started = true
+
 	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("stopped", strconv.FormatBool(m.stopped)).Str("childonly", strconv.FormatBool(childOnly)).Str("span_type", m.spanType).Msg("StartTracing start")
-	if !config.DefaultConfig.Tracing.Enabled && !config.DefaultConfig.Metrics.Enabled {
+	if !config.DefaultConfig.Tracing.Enabled {
 		log.Debug().Str("span_type", m.spanType).Msg("StartTracing end: Neither tracing, not metrics are enabled, returning")
 		return ctx
 	}
-	m.startedAt = time.Now()
-	m.started = true
+
 	spanOpts := m.GetSpanOptions()
-	parentMeasurement, parentExists := MeasurementFromContext(ctx)
-	if parentExists {
+	if parentMeasurement, parentExists := MeasurementFromContext(ctx); parentExists {
 		// This is a child span, parents need to be marked
 		spanOpts = append(spanOpts, tracer.ChildOf(parentMeasurement.span.Context()))
 		m.parent = parentMeasurement
 		// Copy the tags from the parent span
 		m.AddTags(parentMeasurement.GetTags())
-	}
-	if childOnly && !parentExists {
+	} else if childOnly {
 		// There is no parent span, no need to start tracing here
 		log.Debug().Msg("No parent exists and childonly is set, not tracing")
 		return ctx
 	}
+
 	m.span = tracer.StartSpan(TraceServiceName, spanOpts...)
 	for k, v := range m.tags {
 		m.span.SetTag(k, v)
 	}
+
 	ctx, err := m.SaveMeasurementToContext(ctx)
-	if err != nil {
-		ulog.E(err)
-	}
+	ulog.E(err)
+
 	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("stopped", strconv.FormatBool(m.stopped)).Str("span_type", m.spanType).Msg("StartTracing end")
 	return ctx
 }
 
 func (m *Measurement) FinishTracing(ctx context.Context) context.Context {
-	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("stopped", strconv.FormatBool(m.stopped)).Str("span_type", m.spanType).Msg("FinishingTracing start")
-	if !config.DefaultConfig.Tracing.Enabled && !config.DefaultConfig.Metrics.Enabled {
-		log.Debug().Str("span_type", m.spanType).Msg("FinishTracing end: Neither tracing, not metrics are enabled, returning")
-		return ctx
-	}
 	if !m.started {
 		log.Error().Str("service_name", m.serviceName).Str("resource_name", m.resourceName).Msg("Finish tracing called before starting the trace")
 		return ctx
 	}
+
+	m.stopped = true
+	m.stoppedAt = time.Now()
+
+	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("stopped", strconv.FormatBool(m.stopped)).Str("span_type", m.spanType).Msg("FinishingTracing start")
+
+	if !config.DefaultConfig.Tracing.Enabled {
+		log.Debug().Str("span_type", m.spanType).Msg("FinishTracing end: Neither tracing, not metrics are enabled, returning")
+		return ctx
+	}
+
 	if m.span != nil {
 		m.span.Finish()
 	}
-	var err error
+
 	if m.parent != nil {
+		var err error
 		ctx, err = m.parent.SaveMeasurementToContext(ctx)
-		if err != nil {
-			ulog.E(err)
-		}
+		ulog.E(err)
 	} else {
 		// This was the top level span meta
 		ctx = ClearMeasurementContext(ctx)
 	}
-	m.stopped = true
-	m.stoppedAt = time.Now()
+
 	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("span_type", m.spanType).Str("stopped", strconv.FormatBool(m.stopped)).Msg("FinishingTracing end")
 	return ctx
 }
 
 func (m *Measurement) RecordDuration(scope tally.Scope, tags map[string]string) {
+	var timerEnabled, histogramEnabled bool
+	cfg := config.DefaultConfig.Metrics
 	switch scope {
 	case AuthRespTime, AuthErrorRespTime:
-		if config.DefaultConfig.Metrics.Auth.Enabled {
-			m.recordTimerDuration(scope, tags)
-		}
+		timerEnabled = config.DefaultConfig.Metrics.Auth.Enabled
 	case RequestsRespTime, RequestsErrorRespTime:
-		if config.DefaultConfig.Metrics.Requests.Enabled && config.DefaultConfig.Metrics.Requests.Timer.TimerEnabled {
-			m.recordTimerDuration(scope, tags)
-		}
-		if config.DefaultConfig.Metrics.Requests.Enabled && config.DefaultConfig.Metrics.Requests.Timer.HistogramEnabled {
-			m.recordHistogramDuration(scope, tags)
-		}
+		timerEnabled = cfg.Requests.Timer.TimerEnabled
+		histogramEnabled = cfg.Requests.Timer.HistogramEnabled
 	case FdbRespTime, FdbErrorRespTime:
-		if config.DefaultConfig.Metrics.Fdb.Enabled && config.DefaultConfig.Metrics.Fdb.Timer.TimerEnabled {
-			m.recordTimerDuration(scope, tags)
-		}
-		if config.DefaultConfig.Metrics.Fdb.Enabled && config.DefaultConfig.Metrics.Fdb.Timer.HistogramEnabled {
-			m.recordHistogramDuration(scope, tags)
-		}
+		timerEnabled = cfg.Fdb.Timer.TimerEnabled
+		histogramEnabled = cfg.Fdb.Timer.HistogramEnabled
 	case SessionRespTime, SessionErrorRespTime:
-		if config.DefaultConfig.Metrics.Session.Enabled && config.DefaultConfig.Metrics.Session.Timer.TimerEnabled {
-			m.recordTimerDuration(scope, tags)
-		}
-		if config.DefaultConfig.Metrics.Session.Enabled && config.DefaultConfig.Metrics.Session.Timer.HistogramEnabled {
-			m.recordHistogramDuration(scope, tags)
-		}
+		timerEnabled = cfg.Session.Timer.TimerEnabled
+		histogramEnabled = cfg.Session.Timer.HistogramEnabled
 	case SearchRespTime, SearchErrorRespTime:
-		if config.DefaultConfig.Metrics.Search.Enabled && config.DefaultConfig.Metrics.Search.Timer.TimerEnabled {
-			m.recordTimerDuration(scope, tags)
-		}
-		if config.DefaultConfig.Metrics.Search.Enabled && config.DefaultConfig.Metrics.Search.Timer.HistogramEnabled {
-			m.recordHistogramDuration(scope, tags)
-		}
+		timerEnabled = cfg.Search.Timer.TimerEnabled
+		histogramEnabled = cfg.Search.Timer.HistogramEnabled
+	}
+	if scope != nil && timerEnabled {
+		m.recordTimerDuration(scope, tags)
+	}
+	if scope != nil && histogramEnabled {
+		m.recordHistogramDuration(scope, tags)
 	}
 }
 
@@ -356,13 +313,22 @@ func (m *Measurement) recordHistogramDuration(scope tally.Scope, tags map[string
 }
 
 func (m *Measurement) FinishWithError(ctx context.Context, source string, err error) context.Context {
-	if !config.DefaultConfig.Tracing.Enabled && !config.DefaultConfig.Metrics.Enabled {
+	if !m.started {
+		log.Error().Str("service_name", m.serviceName).Str("resource_name", m.resourceName).Msg("Finish tracing called before starting the trace")
+		return ctx
+	}
+
+	m.stopped = true
+	m.stoppedAt = time.Now()
+
+	if !config.DefaultConfig.Tracing.Enabled {
 		log.Debug().Msg("FinishWithError end: Neither tracing, not metrics are enabled, returning")
 		return ctx
 	}
+
 	if m.span == nil {
 		log.Debug().Msg("FinishWithError end: no tracing span sound to finish, returning")
-		return nil
+		return ctx
 	}
 	errCode := status.Code(err)
 	m.span.SetTag("grpc.code", errCode.String())
@@ -374,8 +340,7 @@ func (m *Measurement) FinishWithError(ctx context.Context, source string, err er
 	m.span.Finish(finishOptions...)
 	m.span = nil
 	ClearMeasurementContext(ctx)
-	m.stopped = true
-	m.stoppedAt = time.Now()
+
 	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("span_type", m.spanType).Str("stopped", strconv.FormatBool(m.stopped)).Msg("FinishWithError end")
 	return ctx
 }
