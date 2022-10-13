@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/test/config"
 	"gopkg.in/gavv/httpexpect.v1"
 )
@@ -58,6 +59,7 @@ func TestCreateNamespace(t *testing.T) {
 		JSON().
 		Object().
 		Value("namespace").Raw()
+	require.NotNil(t, createdNamespace)
 	createdNamespaceMap := createdNamespace.(map[string]interface{})
 	assert.Equal(t, displayName, createdNamespaceMap["name"])
 	assert.Equal(t, previousMaxId+1, createdNamespaceMap["code"])

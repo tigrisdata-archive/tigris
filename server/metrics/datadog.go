@@ -194,14 +194,6 @@ func (d *Datadog) GetCurrentMetricValue(ctx context.Context, namespace string, m
 		SpaceAggregation: api.MetricQuerySpaceAggregation_SUM,
 		MetricName:       metric,
 		Function:         api.MetricQueryFunction_RATE,
-		AdditionalFunctions: []*api.AdditionalFunction{
-			{
-				Rollup: &api.RollupFunction{
-					Aggregator: api.RollupAggregator_ROLLUP_AGGREGATOR_AVG,
-					Interval:   int64(avgLength / time.Second),
-				},
-			},
-		},
 	}
 
 	q, err := FormDatadogQueryNoMeta(namespace, true, rateQuery)
@@ -214,13 +206,23 @@ func (d *Datadog) GetCurrentMetricValue(ctx context.Context, namespace string, m
 		return 0, err
 	}
 
-	if len(resp.GetSeries()) > 0 && len(resp.GetSeries()[0].Pointlist) > 0 &&
-		len(resp.GetSeries()[0].Pointlist[0]) > 1 &&
-		resp.GetSeries()[0].Pointlist[0][1] != nil {
-		return int64(*resp.GetSeries()[0].Pointlist[0][1]), nil
+	var sum, count int64
+	if len(resp.GetSeries()) > 0 && len(resp.GetSeries()[0].Pointlist) > 0 {
+		for _, v := range resp.GetSeries()[0].Pointlist {
+			if len(v) > 1 && v[1] != nil {
+				sum += int64(*v[1])
+				count++
+			}
+		}
 	}
 
-	log.Debug().Interface("series", resp.GetSeries()).Msg("Unexpected series len")
+	// in the case of error we are not penalizing the user
+	// and eventually give maximum per node quota
+	if count == 0 {
+		return 0, nil
+	}
 
-	return 0, nil
+	log.Debug().Int64("sum", sum).Int64("count", count).Int64("avg", sum/count).Msg("metric value")
+
+	return sum / count, nil
 }
