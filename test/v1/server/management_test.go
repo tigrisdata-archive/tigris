@@ -29,13 +29,38 @@ import (
 type AdminTestMap map[string]interface{}
 
 func TestCreateNamespace(t *testing.T) {
+	listResp := listNamespaces(t)
+	namespaces := listResp.Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("namespaces").
+		Array().
+		Raw()
+	// JSON number maps to float64 in Go
+	var previousMaxId float64 = 0
+	for _, namespace := range namespaces {
+		if converted, ok := namespace.(map[string]interface{}); ok {
+			if converted["id"].(float64) > previousMaxId {
+				previousMaxId = converted["id"].(float64)
+			}
+		}
+	}
+
 	displayName := fmt.Sprintf("namespace-a-%x", rand.Int63()) //nolint:golint,gosec
-	resp := createNamespace(t, displayName)
-	respMsg := resp.Status(http.StatusOK).
+	createResp := createNamespace(t, displayName)
+	createRespMsg := createResp.Status(http.StatusOK).
 		JSON().
 		Object().
 		Value("message").String().Raw()
-	assert.True(t, strings.HasPrefix(respMsg, "Namespace created, with id=2, and name="))
+	assert.True(t, strings.HasPrefix(createRespMsg, fmt.Sprintf("Namespace created, with id=%d, and name=", (uint32)(previousMaxId+1))))
+
+	createdNamespace := createResp.Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("namespace").Raw()
+	createdNamespaceMap := createdNamespace.(map[string]interface{})
+	assert.Equal(t, displayName, createdNamespaceMap["display_name"])
+	assert.Equal(t, previousMaxId+1, createdNamespaceMap["id"])
 }
 
 func adminExpect(s httpexpect.LoggerReporter) *httpexpect.Expect {
