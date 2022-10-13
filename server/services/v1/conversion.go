@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/schema"
 )
 
@@ -63,7 +64,8 @@ func (p *payloadMutator) traverse(parentMap map[string]any, value any, keys []st
 	if parentField.Type() == schema.Int64Type {
 		if conv, ok := value.(string); ok {
 			if parentMap[parentField.FieldName], err = strconv.ParseInt(conv, 10, 64); err != nil {
-				return err
+				return errors.InvalidArgument("json schema validation failed for field '%s' reason 'expected integer, but got string'", parentField.FieldName)
+
 			}
 			p.mutated = true
 			return nil
@@ -92,7 +94,7 @@ func (p *payloadMutator) traverse(parentMap map[string]any, value any, keys []st
 			for idx := range converted {
 				if conv, ok := converted[idx].(string); ok {
 					if converted[idx], err = strconv.ParseInt(conv, 10, 64); err != nil {
-						return err
+						return errors.InvalidArgument("json schema validation failed for field '%s' reason 'expected integer, but got string'", field.FieldName)
 					}
 					p.mutated = true
 				}
