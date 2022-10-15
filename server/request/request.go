@@ -41,7 +41,7 @@ const (
 	UnknownValue = "unknown"
 )
 
-var adminMethods = container.NewHashSet("/tigrisdata.management.v1.Management/CreateNamespace", "/tigrisdata.management.v1.Management/ListNamespaces")
+var adminMethods = container.NewHashSet(api.CreateNamespaceMethodName, api.ListNamespaceMethodName)
 
 type MetadataCtxKey struct{}
 

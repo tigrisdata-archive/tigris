@@ -27,8 +27,6 @@ import (
 var (
 	excludedMethods = container.NewHashSet(
 		api.HealthMethodName,
-		"/tigrisdata.admin.v1.Admin/createNamespace",
-		"/tigrisdata.admin.v1.Admin/listNamespaces",
 	)
 
 	namespaceExtractor = &request.AccessTokenNamespaceExtractor{}
@@ -42,7 +40,7 @@ func namespaceSetterUnaryServerInterceptor(enabled bool) func(ctx context.Contex
 			if namespace, err = namespaceExtractor.Extract(ctx); err != nil {
 				// We know that getAccessToken with app_id/app_secret credentials doesn't have namespace set.
 				// Mark it as default_namespace instead of unknown.
-				if info.FullMethod != "/tigrisdata.auth.v1.Auth/getAccessToken" {
+				if info.FullMethod != api.GetAccessTokenMethodName {
 					// We return and error when the token is set, but namespace is empty
 					return nil, err
 				}

@@ -99,6 +99,11 @@ func (m *managementService) CreateNamespace(ctx context.Context, req *api.Create
 			return &api.CreateNamespaceResponse{
 				Status:  "CREATED",
 				Message: "Namespace created, with id=" + fmt.Sprint(id) + ", and name=" + name,
+				Namespace: &api.NamespaceInfo{
+					Id:          int32(id),
+					Name:        name,
+					DisplayName: req.GetDisplayName(),
+				},
 			}, nil
 		} else {
 			return nil, err

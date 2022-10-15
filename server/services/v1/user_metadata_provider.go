@@ -95,7 +95,7 @@ func metadataPrepareOperation(operationName string, ctx context.Context, txMgr *
 		return 0, "", nil, errors.Internal("Failed to %s user metadata. reason: failed to read user.", operationName)
 	}
 
-	namespaceId, err := tenantMgr.GetNamespaceId(namespace)
+	tenant, err := tenantMgr.GetTenant(ctx, namespace)
 	if err != nil {
 		return 0, "", nil, errors.Internal("Failed to %s user metadata. reason: failed to read namespace id.", operationName)
 	}
@@ -104,7 +104,7 @@ func metadataPrepareOperation(operationName string, ctx context.Context, txMgr *
 	if err != nil {
 		return 0, "", nil, errors.Internal("Failed to %s user metadata. reason: failed to create internal transaction.", operationName)
 	}
-	return namespaceId, currentSub, tx, nil
+	return tenant.GetNamespace().Id(), currentSub, tx, nil
 }
 
 func (a *DefaultUserMetadataProvider) UpdateUserMetadata(ctx context.Context, req *api.UpdateUserMetadataRequest) (*api.UpdateUserMetadataResponse, error) {
