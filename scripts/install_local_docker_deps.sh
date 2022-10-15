@@ -61,9 +61,10 @@ echo "docker:docker@127.0.0.1:4500" >/etc/foundationdb/fdb.cluster
 dpkg --force-confold --configure foundationdb-server
 rm -f "$FDB_PACKAGE_PATH"
 
-TS_PACKAGE_NAME="typesense-server-0.23.0-${ARCH}.deb"
+TS_RELEASE_VERSION="0.24.0.rcn17"
+TS_PACKAGE_NAME="typesense-server-${TS_RELEASE_VERSION}-${ARCH}.deb"
 TS_PACKAGE_PATH="$(mktemp -p /tmp/ -u)/${TS_PACKAGE_NAME}"
-curl --create-dirs -Lo "$TS_PACKAGE_PATH" "https://dl.typesense.org/releases/0.23.0/${TS_PACKAGE_NAME}"
+curl --create-dirs -Lo "$TS_PACKAGE_PATH" "https://dl.typesense.org/releases/${TS_RELEASE_VERSION}/${TS_PACKAGE_NAME}"
 
 dpkg --unpack "$TS_PACKAGE_PATH"
 rm -f /var/lib/dpkg/info/typesense-server.postinst
