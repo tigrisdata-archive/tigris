@@ -40,8 +40,8 @@ func TestCreateNamespace(t *testing.T) {
 	var previousMaxId float64 = 0
 	for _, namespace := range namespaces {
 		if converted, ok := namespace.(map[string]interface{}); ok {
-			if converted["id"].(float64) > previousMaxId {
-				previousMaxId = converted["id"].(float64)
+			if converted["code"].(float64) > previousMaxId {
+				previousMaxId = converted["code"].(float64)
 			}
 		}
 	}
@@ -52,15 +52,15 @@ func TestCreateNamespace(t *testing.T) {
 		JSON().
 		Object().
 		Value("message").String().Raw()
-	assert.True(t, strings.HasPrefix(createRespMsg, fmt.Sprintf("Namespace created, with id=%d, and name=", (uint32)(previousMaxId+1))))
+	assert.True(t, strings.HasPrefix(createRespMsg, fmt.Sprintf("Namespace created, with code=%d, and id=", (uint32)(previousMaxId+1))))
 
 	createdNamespace := createResp.Status(http.StatusOK).
 		JSON().
 		Object().
 		Value("namespace").Raw()
 	createdNamespaceMap := createdNamespace.(map[string]interface{})
-	assert.Equal(t, displayName, createdNamespaceMap["display_name"])
-	assert.Equal(t, previousMaxId+1, createdNamespaceMap["id"])
+	assert.Equal(t, displayName, createdNamespaceMap["name"])
+	assert.Equal(t, previousMaxId+1, createdNamespaceMap["code"])
 }
 
 func adminExpect(s httpexpect.LoggerReporter) *httpexpect.Expect {
@@ -71,8 +71,8 @@ func adminExpect(s httpexpect.LoggerReporter) *httpexpect.Expect {
 }
 
 func TestListNamespaces(t *testing.T) {
-	displayName := fmt.Sprintf("namespace-b-%x", rand.Int63()) //nolint:golint,gosec
-	_ = createNamespace(t, displayName)
+	name := fmt.Sprintf("namespace-b-%x", rand.Int63()) //nolint:golint,gosec
+	_ = createNamespace(t, name)
 	resp := listNamespaces(t)
 	namespaces := resp.Status(http.StatusOK).
 		JSON().
@@ -83,7 +83,7 @@ func TestListNamespaces(t *testing.T) {
 	found := false
 	for _, namespace := range namespaces {
 		if converted, ok := namespace.(map[string]interface{}); ok {
-			if converted["display_name"] == displayName {
+			if converted["name"] == name {
 				found = true
 			}
 		}
@@ -91,10 +91,10 @@ func TestListNamespaces(t *testing.T) {
 	assert.True(t, found)
 }
 
-func createNamespace(t *testing.T, displayName string) *httpexpect.Response {
+func createNamespace(t *testing.T, name string) *httpexpect.Response {
 	e := adminExpect(t)
-	return e.POST(getCreateNamespaceURL(displayName)).
-		WithJSON(AdminTestMap{}).
+	return e.POST(getCreateNamespaceURL()).
+		WithJSON(AdminTestMap{"name": name}).
 		Expect()
 }
 
@@ -105,8 +105,8 @@ func listNamespaces(t *testing.T) *httpexpect.Response {
 		Expect()
 }
 
-func getCreateNamespaceURL(displayName string) string {
-	return fmt.Sprintf("/v1/management/namespaces/%s/create", displayName)
+func getCreateNamespaceURL() string {
+	return "/v1/management/namespaces/create"
 }
 
 func listNamespaceUrl() string {

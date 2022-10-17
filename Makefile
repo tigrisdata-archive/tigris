@@ -66,7 +66,7 @@ local_run: server
 # Runs tigris server and foundationdb, plus additional tools for it like:
 # - prometheus and grafana for monitoring
 run_full:
-	${DOCKER_COMPOSE} up --build --detach tigris_grafana
+	${DOCKER_COMPOSE} up --build --detach tigris_grafana tigris_jaeger
 	./${DOCKER_DIR}/grafana/set_admin_password.sh
 	./${DOCKER_DIR}/grafana/add_victoriametrics_datasource.sh
 

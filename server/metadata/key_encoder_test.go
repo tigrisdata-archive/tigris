@@ -39,10 +39,10 @@ func TestEncodeDecodeKey(t *testing.T) {
 
 	mgr := &TenantManager{
 		idToTenantMap: map[uint32]string{
-			ns.Id(): ns.Name(),
+			ns.Id(): ns.StrId(),
 		},
 		tenants: map[string]*Tenant{
-			ns.Name(): {
+			ns.StrId(): {
 				namespace: ns,
 				databases: map[string]*Database{
 					db.name: db,
@@ -71,7 +71,7 @@ func TestEncodeDecodeKey(t *testing.T) {
 	tenantName, dbName, collName, ok := mgr.GetTableNameFromIds(tenantID, dbID, collID)
 	require.True(t, ok)
 
-	require.Equal(t, ns.Name(), tenantName)
+	require.Equal(t, ns.StrId(), tenantName)
 	require.Equal(t, db.name, dbName)
 	require.Equal(t, coll.Name, collName)
 	require.True(t, ok)
