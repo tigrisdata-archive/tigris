@@ -64,19 +64,22 @@ func newManagementService(authProvider AuthProvider, txMgr *transaction.Manager,
 }
 
 func (m *managementService) CreateNamespace(ctx context.Context, req *api.CreateNamespaceRequest) (*api.CreateNamespaceResponse, error) {
-	if req.GetDisplayName() == "" {
-		return nil, errors.InvalidArgument("Empty namespace display name is not allowed")
+	if req.GetName() == "" {
+		return nil, errors.InvalidArgument("Empty namespace name is not allowed")
 	}
-
-	id := uint32(req.GetId())
-	name := uuid.New().String()
+	id := req.GetId()
+	if req.GetId() == "" {
+		id = uuid.New().String()
+	}
 
 	tx, err := m.Manager.StartTx(ctx)
 	if err != nil {
+		log.Error().Err(err).Msg("Failed to create namespace - unable to create transaction")
 		return nil, errors.Internal("Failed to create namespace")
 	}
 
-	if id == 0 {
+	code := req.GetCode()
+	if req.GetCode() == 0 {
 		namespaces, err := m.TenantManager.ListNamespaces(ctx, tx)
 		if err != nil {
 			return nil, errors.Internal("Failed to generate ID")
@@ -87,9 +90,12 @@ func (m *managementService) CreateNamespace(ctx context.Context, req *api.Create
 				maxId = namespace.Id()
 			}
 		}
-		id = maxId + 1
+		code = maxId + 1
 	}
-	namespace := metadata.NewTenantNamespace(name, metadata.NewNamespaceMetadata(id, name, req.GetDisplayName()))
+	// API id maps to internal strId
+	// API code maps to internal Id
+	// API name maps to internal name
+	namespace := metadata.NewTenantNamespace(id, metadata.NewNamespaceMetadata(code, id, req.GetName()))
 	_, err = m.TenantManager.CreateTenant(ctx, tx, namespace)
 	if err != nil {
 		_ = tx.Rollback(ctx)
@@ -98,11 +104,11 @@ func (m *managementService) CreateNamespace(ctx context.Context, req *api.Create
 		if err = tx.Commit(ctx); err == nil {
 			return &api.CreateNamespaceResponse{
 				Status:  "CREATED",
-				Message: "Namespace created, with id=" + fmt.Sprint(id) + ", and name=" + name,
+				Message: "Namespace created, with code=" + fmt.Sprint(code) + ", and id=" + id,
 				Namespace: &api.NamespaceInfo{
-					Id:          int32(id),
-					Name:        name,
-					DisplayName: req.GetDisplayName(),
+					Code: int32(code),
+					Id:   id,
+					Name: req.GetName(),
 				},
 			}, nil
 		} else {
@@ -131,9 +137,9 @@ func (m *managementService) ListNamespaces(ctx context.Context, _ *api.ListNames
 	namespacesInfo := make([]*api.NamespaceInfo, 0, len(namespaces))
 	for _, namespace := range namespaces {
 		namespacesInfo = append(namespacesInfo, &api.NamespaceInfo{
-			Id:          int32(namespace.Id()),
-			Name:        namespace.Name(),
-			DisplayName: namespace.Metadata().DisplayName,
+			Id:   namespace.StrId(),
+			Name: namespace.Metadata().Name,
+			Code: int32(namespace.Id()),
 		})
 	}
 	return &api.ListNamespacesResponse{

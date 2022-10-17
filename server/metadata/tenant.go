@@ -46,20 +46,20 @@ const (
 type Namespace interface {
 	// Id for the namespace is used by the cluster to append as the first element in the key.
 	Id() uint32
-	// Name is the name used for the lookup.
-	Name() string
+	// StrId is the name used for the lookup.
+	StrId() string
 	// Metadata for the namespace
 	Metadata() NamespaceMetadata
 }
 
 // NamespaceMetadata - This structure is persisted as the namespace in DB.
 type NamespaceMetadata struct {
-	// namespace Id
+	// unique namespace Id
 	Id uint32
-	// namespace name unique
-	Name string
+	// unique namespace name StrId
+	StrId string
 	// displayName for the namespace
-	DisplayName string
+	Name string
 }
 
 // DefaultNamespace is for "default" namespace in the cluster. This is useful when there is no need to logically group
@@ -67,7 +67,8 @@ type NamespaceMetadata struct {
 // and just have one namespace. The default assigned value for this namespace is 1.
 type DefaultNamespace struct{}
 
-func (n *DefaultNamespace) Name() string {
+// StrId returns id assigned to the namespace.
+func (n *DefaultNamespace) StrId() string {
 	return request.DefaultNamespaceName
 }
 
@@ -86,35 +87,35 @@ func NewDefaultNamespace() *DefaultNamespace {
 }
 
 // TenantNamespace is used when there is a finer isolation of databases is needed. The caller provides a unique
-// name and unique id to this namespace which is used by the cluster to create a namespace.
+// id and strId to this namespace which is used by the cluster to create a namespace.
 type TenantNamespace struct {
-	lookupName string
-	lookupId   uint32
-	metadata   NamespaceMetadata
+	lookupStrId string
+	lookupId    uint32
+	metadata    NamespaceMetadata
 }
 
 func NewNamespaceMetadata(id uint32, name string, displayName string) NamespaceMetadata {
 	return NamespaceMetadata{
-		Id:          id,
-		Name:        name,
-		DisplayName: displayName,
+		Id:    id,
+		StrId: name,
+		Name:  displayName,
 	}
 }
 
 func NewTenantNamespace(name string, metadata NamespaceMetadata) *TenantNamespace {
 	return &TenantNamespace{
-		lookupName: name,
-		lookupId:   metadata.Id,
-		metadata:   metadata,
+		lookupStrId: name,
+		lookupId:    metadata.Id,
+		metadata:    metadata,
 	}
 }
 
-// Name returns assigned name for the namespace.
-func (n *TenantNamespace) Name() string {
-	return n.lookupName
+// StrId returns assigned id for the namespace.
+func (n *TenantNamespace) StrId() string {
+	return n.lookupStrId
 }
 
-// Id returns assigned id for the namespace.
+// Id returns assigned code for the namespace.
 func (n *TenantNamespace) Id() uint32 {
 	return n.lookupId
 }
@@ -179,13 +180,13 @@ func (m *TenantManager) CreateOrGetTenant(ctx context.Context, namespace Namespa
 	defer m.Unlock()
 
 	var ok bool
-	if tenant, ok = m.tenants[namespace.Name()]; ok {
+	if tenant, ok = m.tenants[namespace.StrId()]; ok {
 		if tenant.namespace.Id() == namespace.Id() {
 			// tenant was present
 			log.Debug().Str("ns", tenant.String()).Msg("tenant found")
 			return tenant, nil
 		} else {
-			return nil, errors.InvalidArgument("id is already assigned to '%s'", tenant.namespace.Name())
+			return nil, errors.InvalidArgument("id is already assigned to strId='%s'", tenant.namespace.StrId())
 		}
 	}
 
@@ -199,8 +200,8 @@ func (m *TenantManager) CreateOrGetTenant(ctx context.Context, namespace Namespa
 			if err = tx.Commit(ctx); err == nil {
 				// commit succeed, so we can safely cache it now, for other workers it may happen as part of the
 				// first call in query lifecycle
-				m.tenants[namespace.Name()] = tenant
-				m.idToTenantMap[namespace.Id()] = namespace.Name()
+				m.tenants[namespace.StrId()] = tenant
+				m.idToTenantMap[namespace.Id()] = namespace.StrId()
 			}
 		} else {
 			_ = tx.Rollback(ctx)
@@ -223,7 +224,7 @@ func (m *TenantManager) CreateTenant(ctx context.Context, tx transaction.Tx, nam
 		return nil, err
 	}
 
-	if metadata, found := namespaces[namespace.Name()]; found {
+	if metadata, found := namespaces[namespace.StrId()]; found {
 		return nil, errors.AlreadyExists("namespace with same name already exists with id '%d'", metadata.Id)
 	}
 	for name, metadata := range namespaces {
@@ -231,7 +232,7 @@ func (m *TenantManager) CreateTenant(ctx context.Context, tx transaction.Tx, nam
 			return nil, errors.AlreadyExists("namespace with same id already exists with name '%s'", name)
 		}
 	}
-	if err := m.metaStore.ReserveNamespace(ctx, tx, namespace.Name(), namespace.Metadata()); ulog.E(err) {
+	if err := m.metaStore.ReserveNamespace(ctx, tx, namespace.StrId(), namespace.Metadata()); ulog.E(err) {
 		return nil, err
 	}
 	if err := m.versionH.Increment(ctx, tx); ulog.E(err) {
@@ -288,8 +289,8 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string) (te
 	defer func() {
 		if err == nil {
 			if err = tx.Commit(ctx); err == nil && tenant != nil {
-				m.tenants[tenant.namespace.Name()] = tenant
-				m.idToTenantMap[tenant.namespace.Id()] = tenant.namespace.Name()
+				m.tenants[tenant.namespace.StrId()] = tenant
+				m.idToTenantMap[tenant.namespace.Id()] = tenant.namespace.StrId()
 			}
 		} else {
 			log.Err(err).Str("ns", namespaceName).Msg("Could not get namespace")
@@ -342,7 +343,7 @@ func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transa
 		return nil, err
 	}
 	log.Debug().Interface("ns", namespaces).Msg("existing namespaces")
-	if _, ok := namespaces[namespace.Name()]; ok {
+	if _, ok := namespaces[namespace.StrId()]; ok {
 		// only read the version if tenant already exists otherwise, we need to increment it.
 		currentVersion, err := m.versionH.Read(ctx, tx, false)
 		if ulog.E(err) {
@@ -356,14 +357,14 @@ func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transa
 		return tenant, err
 	}
 
-	log.Debug().Str("tenant", namespace.Name()).Msg("tenant not found, creating")
+	log.Debug().Str("tenant", namespace.StrId()).Msg("tenant not found, creating")
 
 	// bump the version first
 	if err := m.versionH.Increment(ctx, tx); ulog.E(err) {
 		return nil, err
 	}
 
-	if err := m.metaStore.ReserveNamespace(ctx, tx, namespace.Name(), namespace.Metadata()); ulog.E(err) {
+	if err := m.metaStore.ReserveNamespace(ctx, tx, namespace.StrId(), namespace.Metadata()); ulog.E(err) {
 		return nil, err
 	}
 
@@ -879,11 +880,11 @@ func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db 
 }
 
 func (tenant *Tenant) getSearchCollName(dbName string, collName string) string {
-	return fmt.Sprintf("%s-%s-%s", tenant.namespace.Name(), dbName, collName)
+	return fmt.Sprintf("%s-%s-%s", tenant.namespace.StrId(), dbName, collName)
 }
 
 func (tenant *Tenant) String() string {
-	return fmt.Sprintf("id: %d, name: %s", tenant.namespace.Id(), tenant.namespace.Name())
+	return fmt.Sprintf("id: %d, name: %s", tenant.namespace.Id(), tenant.namespace.StrId())
 }
 
 // Size returns approximate data size on disk for all the collections, databases for this tenant.

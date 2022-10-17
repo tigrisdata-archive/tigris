@@ -102,23 +102,23 @@ type reservedSubspace struct {
 	sync.RWMutex
 	MDNameRegistry
 
-	idToNamespaceStruct        map[uint32]NamespaceMetadata
-	namespaceToNamespaceStruct map[string]NamespaceMetadata
+	idToNamespaceStruct    map[uint32]NamespaceMetadata
+	strIdToNamespaceStruct map[string]NamespaceMetadata
 }
 
 func newReservedSubspace(mdNameRegistry MDNameRegistry) *reservedSubspace {
 	return &reservedSubspace{
 		MDNameRegistry: mdNameRegistry,
 
-		idToNamespaceStruct:        make(map[uint32]NamespaceMetadata),
-		namespaceToNamespaceStruct: make(map[string]NamespaceMetadata),
+		idToNamespaceStruct:    make(map[uint32]NamespaceMetadata),
+		strIdToNamespaceStruct: make(map[string]NamespaceMetadata),
 	}
 }
 
 func (r *reservedSubspace) getNamespaces() map[string]NamespaceMetadata {
 	result := make(map[string]NamespaceMetadata)
 
-	for name, metadata := range r.namespaceToNamespaceStruct {
+	for name, metadata := range r.strIdToNamespaceStruct {
 		result[name] = metadata
 	}
 	return result
@@ -157,15 +157,15 @@ func (r *reservedSubspace) reload(ctx context.Context, tx transaction.Tx) error 
 			}
 		}
 		r.idToNamespaceStruct[namespaceMetadata.Id] = namespaceMetadata
-		r.namespaceToNamespaceStruct[namespaceMetadata.Name] = namespaceMetadata
+		r.strIdToNamespaceStruct[namespaceMetadata.StrId] = namespaceMetadata
 	}
 
 	return it.Err()
 }
 
-func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.Tx, namespace string, namespaceMetadata NamespaceMetadata) error {
-	if len(namespace) == 0 {
-		return errors.InvalidArgument("namespace is empty")
+func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.Tx, namespaceId string, namespaceMetadata NamespaceMetadata) error {
+	if len(namespaceId) == 0 {
+		return errors.InvalidArgument("namespaceId is empty")
 	}
 	if namespaceMetadata.Id < 1 {
 		return errors.InvalidArgument("id should be greater than 0, received %d", namespaceMetadata.Id)
@@ -179,15 +179,15 @@ func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.
 	defer r.RUnlock()
 
 	if _, ok := r.idToNamespaceStruct[namespaceMetadata.Id]; ok {
-		for name := range r.namespaceToNamespaceStruct {
-			if r.namespaceToNamespaceStruct[name].Id == namespaceMetadata.Id {
-				log.Debug().Uint32("namespace_id", namespaceMetadata.Id).Str("namespace_name", name).Msg("namespace reserved for")
-				return errors.AlreadyExists("id is already assigned to the namespace '%s'", name)
+		for strId := range r.strIdToNamespaceStruct {
+			if r.strIdToNamespaceStruct[strId].Id == namespaceMetadata.Id {
+				log.Debug().Uint32("id", namespaceMetadata.Id).Str("strId", strId).Msg("namespace reserved for")
+				return errors.AlreadyExists("id is already assigned to the namespace '%s'", strId)
 			}
 		}
 	}
 
-	key := keys.NewKey(r.ReservedSubspaceName(), namespaceKey, namespace, keyEnd)
+	key := keys.NewKey(r.ReservedSubspaceName(), namespaceKey, namespaceId, keyEnd)
 	// now do an insert to fail if namespace already exists.
 	namespaceMetadataBytes, err := json.Marshal(namespaceMetadata)
 	if err != nil {
@@ -246,8 +246,8 @@ func NewMetadataDictionary(mdNameRegistry MDNameRegistry) *MetadataDictionary {
 
 // ReserveNamespace is the first step in the encoding and the mapping is passed the caller. As this is the first encoded
 // integer the caller needs to make sure a unique value is assigned to this namespace.
-func (k *MetadataDictionary) ReserveNamespace(ctx context.Context, tx transaction.Tx, namespace string, namespaceMetadata NamespaceMetadata) error {
-	return k.reservedSb.reserveNamespace(ctx, tx, namespace, namespaceMetadata)
+func (k *MetadataDictionary) ReserveNamespace(ctx context.Context, tx transaction.Tx, namespaceId string, namespaceMetadata NamespaceMetadata) error {
+	return k.reservedSb.reserveNamespace(ctx, tx, namespaceId, namespaceMetadata)
 }
 
 func (k *MetadataDictionary) GetNamespaces(ctx context.Context, tx transaction.Tx) (map[string]NamespaceMetadata, error) {

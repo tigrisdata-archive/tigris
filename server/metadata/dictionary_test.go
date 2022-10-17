@@ -424,7 +424,7 @@ func TestReservedNamespace(t *testing.T) {
 	tx, err = tm.StartTx(ctx)
 	require.NoError(t, err)
 	require.NoError(t, r.reload(ctx, tx))
-	require.Equal(t, "p1-o1", r.idToNamespaceStruct[123].Name)
+	require.Equal(t, "p1-o1", r.idToNamespaceStruct[123].StrId)
 
 	// try assigning the same namespace id to some other namespace
 	tx, err = tm.StartTx(context.TODO())

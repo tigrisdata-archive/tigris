@@ -74,8 +74,8 @@ func (cacheTracker *CacheTracker) addTenantIfNotTracked(tenant *Tenant) {
 	cacheTracker.Lock()
 	defer cacheTracker.Unlock()
 
-	if _, ok := cacheTracker.tenantVersions[tenant.namespace.Name()]; !ok {
-		cacheTracker.tenantVersions[tenant.namespace.Name()] = tenant.version
+	if _, ok := cacheTracker.tenantVersions[tenant.namespace.StrId()]; !ok {
+		cacheTracker.tenantVersions[tenant.namespace.StrId()] = tenant.version
 	}
 }
 
@@ -83,7 +83,7 @@ func (cacheTracker *CacheTracker) getTenantVersion(tenant *Tenant) (Version, boo
 	cacheTracker.RLock()
 	defer cacheTracker.RUnlock()
 
-	version, ok := cacheTracker.tenantVersions[tenant.namespace.Name()]
+	version, ok := cacheTracker.tenantVersions[tenant.namespace.StrId()]
 	return version, ok
 }
 
@@ -109,7 +109,7 @@ func (cacheTracker *CacheTracker) InstantTracking(ctx context.Context, tx transa
 
 	tracker := &Tracker{
 		endVersion:   version,
-		tenant:       tenant.namespace.Name(),
+		tenant:       tenant.namespace.StrId(),
 		startVersion: tenantVersion,
 	}
 	tracker.stopCB = func(ctx context.Context) (bool, error) {
@@ -139,7 +139,7 @@ func (cacheTracker *CacheTracker) DeferredTracking(ctx context.Context, tx trans
 
 	tracker := &Tracker{
 		future:       future,
-		tenant:       tenant.namespace.Name(),
+		tenant:       tenant.namespace.StrId(),
 		startVersion: tenantVersion,
 	}
 
@@ -178,7 +178,7 @@ func (cacheTracker *CacheTracker) stopTracking(ctx context.Context, tenant *Tena
 
 	cacheTracker.Lock()
 	defer cacheTracker.Unlock()
-	if bytes.Compare(cacheTracker.tenantVersions[tenant.namespace.Name()], tracker.endVersion) >= 0 {
+	if bytes.Compare(cacheTracker.tenantVersions[tenant.namespace.StrId()], tracker.endVersion) >= 0 {
 		// check again to avoid reloading multiple times
 		return nil
 	}
@@ -207,6 +207,6 @@ func (cacheTracker *CacheTracker) stopTracking(ctx context.Context, tenant *Tena
 		return err
 	}
 
-	cacheTracker.tenantVersions[tenant.namespace.Name()] = version
+	cacheTracker.tenantVersions[tenant.namespace.StrId()] = version
 	return nil
 }
