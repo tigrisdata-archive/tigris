@@ -28,7 +28,7 @@ func TestEncodeDecodeKey(t *testing.T) {
 		Name: "test_coll",
 	}
 	idx := &schema.Index{Id: 10}
-	ns := NewTenantNamespace("test_ns", 1)
+	ns := NewTenantNamespace("test_ns", NewNamespaceMetadata(1, "test_ns", "test_ns-display_name"))
 	db := &Database{
 		id:   3,
 		name: "test_db",

@@ -53,6 +53,11 @@ const (
 
 	ObservabilityMethodPrefix = "/tigrisdata.observability.v1.Observability/"
 	ManagementMethodPrefix    = "/tigrisdata.management.v1.Management/"
+	CreateNamespaceMethodName = ManagementMethodPrefix + "CreateNamespace"
+	ListNamespaceMethodName   = ManagementMethodPrefix + "ListNamespaces"
+
+	AuthMethodPrefix         = "/tigrisdata.auth.v1.Auth/"
+	GetAccessTokenMethodName = AuthMethodPrefix + "GetAccessToken"
 )
 
 func IsTxSupported(ctx context.Context) bool {
