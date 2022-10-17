@@ -42,7 +42,7 @@ func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 		require.NoError(t, err)
 
 		tenant := m.tenants["ns-test1"]
-		require.Equal(t, "ns-test1", tenant.namespace.Name())
+		require.Equal(t, "ns-test1", tenant.namespace.StrId())
 		require.Equal(t, uint32(2), tenant.namespace.Id())
 		require.Equal(t, "ns-test1", m.idToTenantMap[uint32(2)])
 		require.Empty(t, tenant.databases)
@@ -60,7 +60,7 @@ func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 		require.NoError(t, err)
 
 		tenant := m.tenants["ns-test1"]
-		require.Equal(t, "ns-test1", tenant.namespace.Name())
+		require.Equal(t, "ns-test1", tenant.namespace.StrId())
 		require.Equal(t, uint32(2), tenant.namespace.Id())
 		require.Equal(t, "ns-test1", m.idToTenantMap[uint32(2)])
 
@@ -68,7 +68,7 @@ func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 		require.Empty(t, tenant.idToDatabaseMap)
 
 		tenant = m.tenants["ns-test2"]
-		require.Equal(t, "ns-test2", tenant.namespace.Name())
+		require.Equal(t, "ns-test2", tenant.namespace.StrId())
 		require.Equal(t, uint32(3), tenant.namespace.Id())
 		require.Equal(t, "ns-test2", m.idToTenantMap[uint32(3)])
 		require.Empty(t, tenant.databases)
@@ -84,7 +84,7 @@ func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 
 		// should fail now
 		_, err = m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 3, NewNamespaceMetadata(3, "ns-test1", "ns-test1-display_name")})
-		require.Equal(t, "id is already assigned to 'ns-test1'", err.(*api.TigrisError).Error())
+		require.Equal(t, "id is already assigned to strId='ns-test1'", err.(*api.TigrisError).Error())
 
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
@@ -182,9 +182,9 @@ func TestTenantManager_CreateDatabases(t *testing.T) {
 		defer cancel()
 
 		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2, NamespaceMetadata{
-			Id:          2,
-			Name:        "ns-test1",
-			DisplayName: "ns-test1-displayName",
+			Id:    2,
+			StrId: "ns-test1",
+			Name:  "ns-test1-displayName",
 		}})
 		require.NoError(t, err)
 		tenant := m.tenants["ns-test1"]
