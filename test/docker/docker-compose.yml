@@ -150,6 +150,15 @@ services:
       - tigris_vmagent
       - tigris_server
 
+  tigris_jaeger:
+    container_name: tigris_jaeger
+    image: jaegertracing/all-in-one
+    ports:
+      - "14268:14268"
+      - "16686:16686"
+    depends_on:
+      - tigris_server
+
 volumes:
   dbdata:
   go_test_cache:
