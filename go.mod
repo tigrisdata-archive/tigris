@@ -16,7 +16,6 @@ require (
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/go-chi/cors v1.2.1
 	github.com/golang/protobuf v1.5.2
-	github.com/google/gnostic v0.6.9
 	github.com/google/uuid v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/zerolog/v2 v2.0.0-rc.3
@@ -38,6 +37,10 @@ require (
 	github.com/uber-go/tally v3.5.0+incompatible
 	github.com/ugorji/go/codec v1.2.7
 	github.com/valyala/bytebufferpool v1.0.0
+	go.opentelemetry.io/otel v1.11.0
+	go.opentelemetry.io/otel/exporters/jaeger v1.11.0
+	go.opentelemetry.io/otel/sdk v1.11.0
+	go.opentelemetry.io/otel/trace v1.11.0
 	go.uber.org/atomic v1.10.0
 	golang.org/x/net v0.1.0
 	golang.org/x/time v0.1.0
@@ -70,9 +73,12 @@ require (
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/gavv/monotime v0.0.0-20190418164738-30dba4353424 // indirect
 	github.com/getkin/kin-openapi v0.107.0 // indirect
+	github.com/go-logr/logr v1.2.3 // indirect
+	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/swag v0.22.3 // indirect
 	github.com/golang/glog v1.0.0 // indirect
+	github.com/google/gnostic v0.6.9 // indirect
 	github.com/google/go-querystring v1.0.0 // indirect
 	github.com/google/pprof v0.0.0-20221010195024-131d412537ea // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect

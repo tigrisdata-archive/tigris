@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/tracing"
 )
 
 type FakeError struct{}
@@ -37,7 +38,7 @@ func TestTracing(t *testing.T) {
 		assert.Equal(t, "TestResource", testMeasurement.resourceName)
 		assert.Equal(t, "rpc", testMeasurement.spanType)
 		assert.Equal(t, tags, testMeasurement.tags)
-		assert.Nil(t, testMeasurement.span)
+		assert.Nil(t, testMeasurement.datadogSpan)
 		assert.Nil(t, testMeasurement.parent)
 	})
 
@@ -47,25 +48,33 @@ func TestTracing(t *testing.T) {
 		assert.Greater(t, len(options), 2)
 	})
 
+	// TODO: Make this a test table
 	t.Run("Test parent and child spans", func(t *testing.T) {
 		config.DefaultConfig.Tracing.Enabled = true
 		config.DefaultConfig.Metrics.Enabled = true
+		config.DefaultConfig.Tracing.Jaeger.Enabled = true
+		config.DefaultConfig.Tracing.Datadog.Enabled = true
+		closer, err := tracing.InitTracer(&config.DefaultConfig)
+		if err != nil {
+			assert.True(t, false)
+		}
+		defer closer()
 		ctx := context.Background()
 		parentMeasurement := NewMeasurement("parent.service", "parent.resource", "rpc", GetGlobalTags())
 		ctx = parentMeasurement.StartTracing(ctx, false)
 		childMeasurement := NewMeasurement("child.service", "child.resource", "rpc", GetGlobalTags())
 		ctx = childMeasurement.StartTracing(ctx, true)
-		assert.NotNil(t, childMeasurement.span)
+		assert.NotNil(t, childMeasurement.datadogSpan)
 		assert.NotNil(t, childMeasurement.parent)
 		assert.Equal(t, "parent.service", childMeasurement.parent.serviceName)
 		grandChildMeasurement := NewMeasurement("grandchild.service", "grandchild.resource", "rpc", GetGlobalTags())
 		ctx = grandChildMeasurement.StartTracing(ctx, true)
-		assert.NotNil(t, grandChildMeasurement.span)
+		assert.NotNil(t, grandChildMeasurement.datadogSpan)
 		assert.NotNil(t, grandChildMeasurement.parent)
 		assert.Equal(t, "child.service", grandChildMeasurement.parent.serviceName)
 		ctx = grandChildMeasurement.FinishTracing(ctx)
 		loadedChildMeasurement, ok := MeasurementFromContext(ctx)
-		assert.NotNil(t, loadedChildMeasurement.span)
+		assert.NotNil(t, loadedChildMeasurement.datadogSpan)
 		assert.True(t, ok)
 		assert.Equal(t, "child.service", loadedChildMeasurement.serviceName)
 		ctx = childMeasurement.FinishTracing(ctx)
@@ -82,6 +91,13 @@ func TestTracing(t *testing.T) {
 	t.Run("Test counters", func(t *testing.T) {
 		config.DefaultConfig.Tracing.Enabled = true
 		config.DefaultConfig.Metrics.Enabled = true
+		config.DefaultConfig.Tracing.Datadog.Enabled = true
+		config.DefaultConfig.Tracing.Jaeger.Enabled = true
+		closer, err := tracing.InitTracer(&config.DefaultConfig)
+		if err != nil {
+			assert.True(t, false)
+		}
+		defer closer()
 		InitializeMetrics()
 		ctx := context.Background()
 		measurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
@@ -89,7 +105,7 @@ func TestTracing(t *testing.T) {
 		measurement.FinishTracing(ctx)
 		measurement.RecordDuration(RequestsRespTime, measurement.GetRequestOkTags())
 		measurement.CountOkForScope(RequestsOkCount, measurement.GetRequestOkTags())
-		err := fmt.Errorf("hello error")
+		err = fmt.Errorf("hello error")
 		measurement.CountErrorForScope(RequestsErrorCount, measurement.GetRequestErrorTags(err))
 	})
 
