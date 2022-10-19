@@ -37,10 +37,6 @@ import (
 	"github.com/tigrisdata/tigris/util/log"
 )
 
-var (
-// ErrSearchIndexingFailed = fmt.Errorf("failed to index documents")
-)
-
 const (
 	searchCreate string = "create"
 	searchUpsert string = "upsert"
@@ -164,6 +160,32 @@ func CreateSearchKey(table []byte, fdbKey []byte) (string, error) {
 	}
 }
 
+// ToPackKeys returns parent names that we need to pack before sending to indexing store. This
+// packing doesn't mean that we are not flattening this object.
+func ToPackKeys(collection *schema.DefaultCollection) map[string]struct{} {
+	toPackKeys := make(map[string]struct{})
+	for _, f := range collection.QueryableFields {
+		if f.FlattenedAsArray {
+			keys := strings.Split(f.Name(), ".")
+			toPackKeys[keys[0]] = struct{}{}
+		}
+	}
+
+	return toPackKeys
+}
+
+func removeUnsupportedIndexes(collection *schema.DefaultCollection, decData map[string]any) {
+	for _, qf := range collection.QueryableFields {
+		// if a field parent already is an array then it becomes Array of array which we do not support in indexes
+		// so remove all these fields.
+		//
+		// Note: Parent of these fields are already packed so this field is present as packed structure.
+		if qf.FlattenedAsArray && qf.DataType == schema.ArrayType {
+			delete(decData, qf.FieldName)
+		}
+	}
+}
+
 func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollection, id string) ([]byte, error) {
 	// better to decode it and then update the JSON
 	decData, err := tjson.Decode(data.RawData)
@@ -176,8 +198,6 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 		decData[schema.ReservedFields[schema.IdToSearchKey]] = value
 	}
 
-	decData = FlattenObjects(decData)
-
 	// pack any date time or array fields here
 	for _, f := range collection.QueryableFields {
 		key, value := f.Name(), decData[f.Name()]
@@ -186,10 +206,6 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 		}
 		if f.ShouldPack() {
 			switch f.DataType {
-			case schema.ArrayType:
-				if decData[key], err = jsoniter.MarshalToString(value); err != nil {
-					return nil, err
-				}
 			case schema.DateTimeType:
 				if dateStr, ok := value.(string); ok {
 					t, err := date.ToUnixNano(schema.DateTimeFormat, dateStr)
@@ -201,9 +217,36 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 					decData[schema.ToSearchDateKey(key)] = dateStr
 				}
 			default:
-				return nil, errors.Unimplemented("Internal error!")
+				if decData[key], err = jsoniter.MarshalToString(value); err != nil {
+					return nil, err
+				}
 			}
 		}
+	}
+
+	toPackKeys := ToPackKeys(collection)
+
+	// first we pack these keys and store it in a map so that we can copy it to original doc after flattening
+	packedObjData := make(map[string]string)
+	for toPackKey := range toPackKeys {
+		// The complex objects are marshalled as string, so that during un-flattening we can parse them as-is
+		if v, ok := decData[toPackKey]; ok {
+			if packedObjData[toPackKey], err = jsoniter.MarshalToString(v); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	decData = FlattenObjectsAndArray(decData, func(name string) bool {
+		qf, _ := collection.GetQueryableField(name)
+		return qf.FlattenedAsArray && qf.DataType != schema.ArrayType
+	})
+
+	removeUnsupportedIndexes(collection, decData)
+
+	// now we need to add packed objects that have arrays as flattened
+	for k, obj := range packedObjData {
+		decData[k] = obj
 	}
 
 	decData[schema.SearchId] = id
@@ -221,30 +264,48 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 }
 
 func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCollection) (string, *internal.TableData, map[string]interface{}, error) {
+	packedKeys := ToPackKeys(collection)
 	for _, f := range collection.QueryableFields {
 		if f.ShouldPack() {
 			if v, ok := doc[f.Name()]; ok {
 				switch f.DataType {
-				case schema.ArrayType:
-					var value interface{}
-					if err := jsoniter.UnmarshalFromString(v.(string), &value); err != nil {
-						return "", nil, nil, err
-					}
-					doc[f.Name()] = value
 				case schema.DateTimeType:
 					// unpack original date from shadowed key
 					shadowedKey := schema.ToSearchDateKey(f.Name())
 					doc[f.Name()] = doc[shadowedKey]
 					delete(doc, shadowedKey)
 				default:
-					return "", nil, nil, errors.Unimplemented("Internal error!")
+					var value interface{}
+					if err := jsoniter.UnmarshalFromString(v.(string), &value); err != nil {
+						return "", nil, nil, err
+					}
+					doc[f.Name()] = value
 				}
 			}
 		}
 	}
 
-	// unFlatten the map now
+	for k := range doc {
+		// remove any object that is packed as well as flattened
+		if keys := strings.Split(k, "."); len(keys) > 1 {
+			if _, ok := packedKeys[keys[0]]; ok {
+				delete(doc, k)
+			}
+		}
+	}
+
+	// unFlatten the remaining keys now
 	doc = UnFlattenObjects(doc)
+
+	for packedKey := range packedKeys {
+		if _, ok := doc[packedKey]; ok {
+			var value interface{}
+			if err := jsoniter.UnmarshalFromString(doc[packedKey].(string), &value); err != nil {
+				return "", nil, nil, err
+			}
+			doc[packedKey] = value
+		}
+	}
 
 	searchKey := doc[schema.SearchId].(string)
 	if value, ok := doc[schema.ReservedFields[schema.IdToSearchKey]]; ok {
@@ -276,27 +337,75 @@ func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCo
 	return searchKey, tableData, doc, nil
 }
 
-func FlattenObjects(data map[string]any) map[string]any {
+// FlattenObjectsAndArray flattens objects and array of objects. Primitive arrays or an array of arrays remain untouched. The format of flattening is as follows:
+//
+//	Object,
+//	  - {"a": {"b": "c}} will be flattened as {"a.b": "c}
+//	Array of Object,
+//	  - {"arr_obj": [{"a": 1, "b": "first"}, {"a": 2, "b": "second"}]" will be flattened as {"arr_obj.a":[1, 2], "arr_obj.b":["first","second"]}
+//	Primitive arrays inside an object or array of objects follow the same rule as above,
+//	  - {"arr_obj": [{"a": [1, 2, 3]}, {"a": [4, 5]}]} will be flattened as {"arr_obj.a": [[1, 2, 3], [4, 5]]}
+func FlattenObjectsAndArray(data map[string]any, mergeWithArray func(name string) bool) map[string]any {
 	resp := make(map[string]any)
-	flattenObjects("", data, resp)
+	flattenObjectsAndArray("", data, resp, false, mergeWithArray)
 	return resp
 }
 
-func flattenObjects(key string, obj map[string]any, resp map[string]any) {
+func flattenObjectsAndArray(key string, obj map[string]any, resp map[string]any, isArray bool, mergeWithArray func(name string) bool) {
 	if key != "" {
 		key += schema.ObjFlattenDelimiter
 	}
 
+	assign := func(result map[string]any, k string, v any, isArray bool) {
+		if existing, ok := result[k]; ok {
+			if existingArr, ok := existing.([]any); ok {
+				if vArr, ok := v.([]any); ok {
+					if mergeWithArray(k) {
+						// if it is an array, and it needs to be flattened as array, otherwise store as-is
+						result[k] = append(existingArr, vArr...)
+					} else {
+						result[k] = []any{existingArr, v}
+					}
+				} else {
+					result[k] = append(existingArr, v)
+				}
+			} else {
+				result[k] = []any{existing, v}
+			}
+		} else {
+			if isArray {
+				if _, ok := v.([]any); ok {
+					result[k] = v
+				} else {
+					result[k] = []any{v}
+				}
+			} else {
+				result[k] = v
+			}
+		}
+	}
+
 	for k, v := range obj {
-		switch vMap := v.(type) {
+		switch vTy := v.(type) {
 		case map[string]any:
-			flattenObjects(key+k, vMap, resp)
+			flattenObjectsAndArray(key+k, vTy, resp, isArray, mergeWithArray)
+		case []any:
+			if _, ok := vTy[0].(map[string]any); ok {
+				for _, va := range vTy {
+					flattenObjectsAndArray(key+k, va.(map[string]any), resp, true, mergeWithArray)
+				}
+			} else {
+				assign(resp, key+k, v, true)
+			}
 		default:
-			resp[key+k] = v
+			assign(resp, key+k, v, isArray)
 		}
 	}
 }
 
+// UnFlattenObjects is only responsible for unflattening objects which means that if an array of object is flattened to an
+// array by the FlattenObject then that will not be merged back to an Obj. This is handled by the caller as this
+// method doesn't expect an array of objects, or a top level object with a nested array of object.
 func UnFlattenObjects(flat map[string]any) map[string]any {
 	result := make(map[string]any)
 	for k, v := range flat {

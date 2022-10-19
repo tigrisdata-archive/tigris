@@ -296,6 +296,10 @@ func (s *apiService) CreateOrUpdateCollection(ctx context.Context, r *api.Create
 		return nil, errors.Internal("not able to extract collection type from the schema")
 	}
 
+	if r.Schema, err = schema.SetIndexingVersion(r.Schema); err != nil {
+		return nil, errors.Internal("not able to set indexing version")
+	}
+
 	runner := s.runnerFactory.GetCollectionQueryRunner()
 	runner.SetCreateOrUpdateCollectionReq(r)
 

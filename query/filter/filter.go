@@ -222,12 +222,16 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 
 	switch dataType {
 	case jsonparser.Boolean, jsonparser.Number, jsonparser.String:
+		tigrisType := field.DataType
+		if tigrisType == schema.ArrayType {
+			tigrisType = field.SubType
+		}
 		var val value.Value
 		var err error
 		if factory.collation != nil {
-			val, err = value.NewValueUsingCollation(field.DataType, v, factory.collation)
+			val, err = value.NewValueUsingCollation(tigrisType, v, factory.collation)
 		} else {
-			val, err = value.NewValue(field.DataType, v)
+			val, err = value.NewValue(tigrisType, v)
 		}
 		if err != nil {
 			return nil, err
@@ -281,11 +285,15 @@ func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField) 
 		case EQ, GT, GTE, LT, LTE:
 			switch dataType {
 			case jsonparser.Boolean, jsonparser.Number, jsonparser.String, jsonparser.Null:
+				tigrisType := field.DataType
+				if dataType == jsonparser.Array {
+					tigrisType = field.SubType
+				}
 				var val value.Value
 				if collation != nil {
-					val, err = value.NewValueUsingCollation(field.DataType, v, collation)
+					val, err = value.NewValueUsingCollation(tigrisType, v, collation)
 				} else {
-					val, err = value.NewValue(field.DataType, v)
+					val, err = value.NewValue(tigrisType, v)
 				}
 				if err != nil {
 					return err

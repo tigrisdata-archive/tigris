@@ -31,16 +31,75 @@ import (
 )
 
 func TestFlattenObj(t *testing.T) {
-	rawData := []byte(`{"a":1, "b": {"c": {"d": "foo", "c_nested": {"c_2": 10}}, "e": 3, "f": [1, 2, 3]}, "out": 10, "all_out": {"yes": 5}}`)
-	var UnFlattenMap map[string]any
-	require.NoError(t, jsoniter.Unmarshal(rawData, &UnFlattenMap))
+	t.Run("test objects flattening", func(t *testing.T) {
+		rawData := []byte(`{"a":1, "b": {"c": {"d": "foo", "c_nested": {"c_2": 10}}, "e": 3, "f": [1, 2, 3]}, "g": 10, "h": {"i": 5}}`)
+		var UnFlattenMap map[string]any
+		require.NoError(t, jsoniter.Unmarshal(rawData, &UnFlattenMap))
 
-	flattened := FlattenObjects(UnFlattenMap)
-	require.Equal(t, "foo", flattened["b.c.d"])
-	require.Equal(t, float64(3), flattened["b.e"])
-	require.Equal(t, []interface{}{float64(1), float64(2), float64(3)}, flattened["b.f"])
+		flattened := FlattenObjectsAndArray(UnFlattenMap, func(name string) bool {
+			return false
+		})
+		require.Equal(t, "foo", flattened["b.c.d"])
+		require.Equal(t, float64(3), flattened["b.e"])
+		require.Equal(t, []any{float64(1), float64(2), float64(3)}, flattened["b.f"])
+		require.True(t, reflect.DeepEqual(UnFlattenMap, UnFlattenObjects(flattened)))
+	})
+	t.Run("only array", func(t *testing.T) {
+		rawData := []byte(`{"a": [1, 2, 3], "b": [[1, 2, 3], [4, 5]]}`)
+		var decoded map[string]any
+		require.NoError(t, jsoniter.Unmarshal(rawData, &decoded))
+		flattened := FlattenObjectsAndArray(decoded, func(name string) bool {
+			return false
+		})
+		require.Equal(t, []any{float64(1), float64(2), float64(3)}, flattened["a"])
+		require.Equal(t, []any{[]any{float64(1), float64(2), float64(3)}, []any{float64(4), float64(5)}}, flattened["b"])
+	})
+	t.Run("only object", func(t *testing.T) {
+		rawData := []byte(`{"a": {"sim_arr": [1, 2, 3], "a_nes": "aa"}}`)
+		var decoded map[string]any
+		require.NoError(t, jsoniter.Unmarshal(rawData, &decoded))
+		flattened := FlattenObjectsAndArray(decoded, func(name string) bool {
+			return false
+		})
+		require.Equal(t, "aa", flattened["a.a_nes"])
+		require.Equal(t, []any{float64(1), float64(2), float64(3)}, flattened["a.sim_arr"])
+	})
+	t.Run("array of object", func(t *testing.T) {
+		rawData := []byte(`{"a": [{"b_fir": "first", "b_sec": 1}, {"b_fir": "second"}]}`)
+		var decoded map[string]any
+		require.NoError(t, jsoniter.Unmarshal(rawData, &decoded))
+		flattened := FlattenObjectsAndArray(decoded, func(name string) bool {
+			return name == "a.b_fir" || name == "a.b_sec"
+		})
+		require.Equal(t, []any{"first", "second"}, flattened["a.b_fir"])
+		require.Equal(t, []any{float64(1)}, flattened["a.b_sec"])
+	})
+	t.Run("complex array of object", func(t *testing.T) {
+		rawData := []byte(`{"a": [{"b_fir": "first", "b_sec": 1, "b_third": [1, 2, 3]}, {"b_fir": "second", "b_third": [4, 5]}]}`)
+		var decoded map[string]any
+		require.NoError(t, jsoniter.Unmarshal(rawData, &decoded))
+		flattened := FlattenObjectsAndArray(decoded, func(name string) bool {
+			return name == "a.b_fir" || name == "a.b_sec"
+		})
+		require.Equal(t, []any{"first", "second"}, flattened["a.b_fir"])
+		require.Equal(t, []any{float64(1)}, flattened["a.b_sec"])
+		require.Equal(t, []any{[]any{float64(1), float64(2), float64(3)}, []any{float64(4), float64(5)}}, flattened["a.b_third"])
+	})
+	t.Run("test complex objects flattening", func(t *testing.T) {
+		rawData := []byte(`{"a": {"sim_arr": [1, 2, 3], "arr_obj": [{"e": 1, "f": ["foo", "bar"]}], "a_nes": "aa"}, "g": [{"g_fir": "first", "g_sec": 1}, {"g_fir": "second"}]}`)
+		var decoded map[string]any
+		require.NoError(t, jsoniter.Unmarshal(rawData, &decoded))
+		flattened := FlattenObjectsAndArray(decoded, func(name string) bool {
+			return name == "a.arr_obj.e" || name == "g.g_fir" || name == "g.g_sec"
+		})
+		require.Equal(t, "aa", flattened["a.a_nes"])
+		require.Equal(t, []interface{}{float64(1), float64(2), float64(3)}, flattened["a.sim_arr"])
+		require.Equal(t, []interface{}{float64(1)}, flattened["a.arr_obj.e"])
+		require.Equal(t, []interface{}{"foo", "bar"}, flattened["a.arr_obj.f"])
 
-	require.True(t, reflect.DeepEqual(UnFlattenMap, UnFlattenObjects(flattened)))
+		require.Equal(t, []interface{}{"first", "second"}, flattened["g.g_fir"])
+		require.Equal(t, []interface{}{float64(1)}, flattened["g.g_sec"])
+	})
 }
 
 func TestPackSearchFields(t *testing.T) {
@@ -158,7 +217,7 @@ func TestPackSearchFields(t *testing.T) {
 			CreatedAt: nanoTs,
 			RawData:   []byte(`{"arrayField":[1,2,3,4,5]}`),
 		}
-		f := &schema.Field{DataType: schema.ArrayType, FieldName: "arrayField"}
+		f := &schema.Field{DataType: schema.ArrayType, FieldName: "arrayField", Fields: []*schema.Field{{DataType: schema.Int32Type}}}
 		coll := &schema.DefaultCollection{
 			QueryableFields: schema.BuildQueryableFields([]*schema.Field{f}),
 		}
@@ -166,9 +225,9 @@ func TestPackSearchFields(t *testing.T) {
 		res, err := PackSearchFields(td, coll, "123")
 		require.NoError(t, err)
 
-		decData, err := encoder.Decode(res)
-		require.NoError(t, err)
-		require.Equal(t, "[1,2,3,4,5]", decData["arrayField"])
+		var decData map[string]any
+		require.NoError(t, jsoniter.Unmarshal(res, &decData))
+		require.Equal(t, []interface{}{float64(1), float64(2), float64(3), float64(4), float64(5)}, decData["arrayField"])
 	})
 
 	t.Run("dateTime type of schema fields are unpacked", func(t *testing.T) {
@@ -283,16 +342,16 @@ func TestUnpackSearchFields(t *testing.T) {
 	t.Run("array type is unpacked from string", func(t *testing.T) {
 		doc := map[string]any{
 			"id":         "123",
-			"arrayField": "[1.1,2.1,3.0,4.3,5.5]",
+			"arrayField": "[[1.1,2.1,3.0],[4.3,5.5]]",
 		}
-		f := &schema.Field{DataType: schema.ArrayType, FieldName: "arrayField"}
+		f := &schema.Field{DataType: schema.ArrayType, FieldName: "arrayField", Fields: []*schema.Field{{DataType: schema.ArrayType}}}
 		coll := &schema.DefaultCollection{
 			QueryableFields: schema.BuildQueryableFields([]*schema.Field{f}),
 		}
 		_, _, unpacked, err := UnpackSearchFields(doc, coll)
 		require.NoError(t, err)
 		require.Len(t, unpacked, 1)
-		require.Equal(t, []interface{}{1.1, 2.1, 3.0, 4.3, 5.5}, unpacked["arrayField"])
+		require.Equal(t, []interface{}{[]interface{}{1.1, 2.1, 3.0}, []interface{}{4.3, 5.5}}, unpacked["arrayField"])
 	})
 
 	t.Run("dateTime fields are unpacked", func(t *testing.T) {

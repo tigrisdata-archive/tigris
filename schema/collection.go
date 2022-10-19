@@ -57,6 +57,8 @@ type DefaultCollection struct {
 	// will be one to one mapped to queryable field but complex fields like object type field there may be more than
 	// one queryableFields. As queryableFields represent a flattened state these can be used as-is to index in memory.
 	QueryableFields []*QueryableField
+	// a helper field to extract QueryableField by name
+	NameToQueryableField map[string]*QueryableField
 	// CollectionType is the type of the collection. Only two types of collections are supported "messages" and "documents"
 	CollectionType CollectionType
 	// Track all the int64 paths in the collection. For example, if top level object has a int64 field then key would be
@@ -103,19 +105,24 @@ func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionTy
 	queryableFields := BuildQueryableFields(fields)
 	partitionFields := BuildPartitionFields(fields)
 
+	nameToQueryableField := make(map[string]*QueryableField)
+	for _, q := range queryableFields {
+		nameToQueryableField[q.FieldName] = q
+	}
 	d := &DefaultCollection{
-		Id:              id,
-		SchVer:          int32(schVer),
-		Name:            name,
-		Fields:          fields,
-		Indexes:         indexes,
-		Validator:       validator,
-		Schema:          schema,
-		Search:          buildSearchSchema(searchCollectionName, queryableFields),
-		QueryableFields: queryableFields,
-		CollectionType:  ctype,
-		Int64FieldsPath: make(map[string]struct{}),
-		PartitionFields: partitionFields,
+		Id:                   id,
+		SchVer:               int32(schVer),
+		Name:                 name,
+		Fields:               fields,
+		Indexes:              indexes,
+		Validator:            validator,
+		Schema:               schema,
+		Search:               buildSearchSchema(searchCollectionName, queryableFields),
+		QueryableFields:      queryableFields,
+		NameToQueryableField: nameToQueryableField,
+		CollectionType:       ctype,
+		Int64FieldsPath:      make(map[string]struct{}),
+		PartitionFields:      partitionFields,
 	}
 
 	// set paths for int64 fields
@@ -149,10 +156,8 @@ func (d *DefaultCollection) GetQueryableFields() []*QueryableField {
 }
 
 func (d *DefaultCollection) GetQueryableField(name string) (*QueryableField, error) {
-	for _, qf := range d.QueryableFields {
-		if qf.Name() == name {
-			return qf, nil
-		}
+	if qf, ok := d.NameToQueryableField[name]; ok {
+		return qf, nil
 	}
 	return nil, errors.InvalidArgument("Field `%s` is not present in collection", name)
 }
@@ -270,7 +275,7 @@ func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.Co
 		if !s.IsReserved() && s.DataType == DateTimeType {
 			tsFields = append(tsFields, tsApi.Field{
 				Name:     ToSearchDateKey(s.Name()),
-				Type:     toSearchFieldType(StringType),
+				Type:     FieldNames[StringType],
 				Facet:    &ptrFalse,
 				Index:    &ptrFalse,
 				Sort:     &ptrFalse,

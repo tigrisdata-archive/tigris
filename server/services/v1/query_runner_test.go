@@ -26,11 +26,15 @@ import (
 func TestSearchQueryRunner_getFacetFields(t *testing.T) {
 	collection := &schema.DefaultCollection{
 		QueryableFields: []*schema.QueryableField{
-			schema.NewQueryableField("field_1", schema.StringType),
-			schema.NewQueryableField("parent.field_2", schema.StringType),
-			schema.NewQueryableField("field_3", schema.ByteType),
-			schema.NewQueryableField("field_4", schema.StringType),
+			schema.NewSimpleQueryableField("field_1", schema.StringType),
+			schema.NewQueryableField("parent.field_2", schema.ObjectType, schema.Int32Type, nil, false),
+			schema.NewSimpleQueryableField("field_3", schema.ByteType),
+			schema.NewSimpleQueryableField("field_4", schema.StringType),
 		},
+	}
+	collection.NameToQueryableField = make(map[string]*schema.QueryableField)
+	for _, q := range collection.QueryableFields {
+		collection.NameToQueryableField[q.FieldName] = q
 	}
 	runner := &SearchQueryRunner{req: &api.SearchRequest{}}
 
@@ -83,9 +87,13 @@ func TestSearchQueryRunner_getFacetFields(t *testing.T) {
 func TestSearchQueryRunner_getFieldSelection(t *testing.T) {
 	collection := &schema.DefaultCollection{
 		QueryableFields: []*schema.QueryableField{
-			schema.NewQueryableField("field_1", schema.StringType),
-			schema.NewQueryableField("parent.field_2", schema.StringType),
+			schema.NewSimpleQueryableField("field_1", schema.StringType),
+			schema.NewQueryableField("parent.field_2", schema.ObjectType, schema.StringType, nil, false),
 		},
+	}
+	collection.NameToQueryableField = make(map[string]*schema.QueryableField)
+	for _, q := range collection.QueryableFields {
+		collection.NameToQueryableField[q.FieldName] = q
 	}
 
 	t.Run("only include fields are provided", func(t *testing.T) {
@@ -159,13 +167,17 @@ func TestSearchQueryRunner_getFieldSelection(t *testing.T) {
 func TestSearchQueryRunner_getSortOrdering(t *testing.T) {
 	collection := &schema.DefaultCollection{
 		QueryableFields: []*schema.QueryableField{
-			schema.NewQueryableField("field_1", schema.StringType),
-			schema.NewQueryableField("parent.field_2", schema.StringType),
-			schema.NewQueryableField("field_3", schema.ByteType),
+			schema.NewSimpleQueryableField("field_1", schema.StringType),
+			schema.NewQueryableField("parent.field_2", schema.ObjectType, schema.StringType, nil, false),
+			schema.NewSimpleQueryableField("field_3", schema.ByteType),
 		},
 	}
 	collection.QueryableFields[0].Sortable = true
 	collection.QueryableFields[1].Sortable = true
+	collection.NameToQueryableField = make(map[string]*schema.QueryableField)
+	for _, q := range collection.QueryableFields {
+		collection.NameToQueryableField[q.FieldName] = q
+	}
 
 	runner := &SearchQueryRunner{req: &api.SearchRequest{}}
 

@@ -369,6 +369,35 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 			}
 		}
 	})
+	t.Run("test_setting_indexing_version", func(t *testing.T) {
+		schema := []byte(`{
+		"title": "t1",
+		"properties": {
+			"K1": {
+				"type": "integer"
+			},
+			"K2": {
+				"type": "int"
+			}
+		},
+		"primary_key": ["K1"]
+	}`)
+		outSchema, err := SetIndexingVersion(schema)
+		require.NoError(t, err)
+		require.JSONEq(t, `{
+			"title": "t1",
+				"properties": {
+				"K1": {
+					"type": "integer"
+				},
+				"K2": {
+					"type": "int"
+				}
+			},
+			"primary_key": ["K1"],
+			"indexing_version": "v1"
+	}`, string(outSchema))
+	})
 }
 
 func TestGetCollectionType(t *testing.T) {

@@ -2536,6 +2536,270 @@ func TestTransaction_BadID(t *testing.T) {
 	testError(resp, http.StatusInternalServerError, api.Code_INTERNAL, "session is gone")
 }
 
+func TestNestedObjectsArrays_WriteRead(t *testing.T) {
+	db, _ := setupTests(t)
+	defer cleanupTests(t, db)
+
+	collection := "test_nested_objects_arrays"
+	schema := []byte(`{
+  "schema": {
+    "properties": {
+      "desc": {
+        "type": "string"
+      },
+      "person_details": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "current_zipcode": {
+              "type": "integer"
+            },
+            "last_zipcodes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "visited_places": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "tags": {
+        "type": "array",
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "metadata_unknown": {
+        "type": "object"
+      },
+      "random_name": {
+        "type": "string"
+      },
+      "metadata_known_obj": {
+        "type": "object",
+        "properties": {
+          "metadata_known_array": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "university": {
+                  "type": "string"
+                },
+                "year": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "metadata_known_string": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "title": "test_nested_objects_arrays"
+  }
+}`)
+	var schemaObj map[string]any
+	require.NoError(t, json.Unmarshal(schema, &schemaObj))
+	createCollection(t, db, collection, schemaObj).Status(200)
+
+	jsonDocuments := []byte(`[
+    {
+      "id": "df552b5d-abf5-4aaf-9a8a-40f847b1bd10",
+      "tags": [
+        [
+          "shopping",
+          "clothes",
+          "shoes"
+        ],
+        [
+          "playing",
+          "soccerr",
+          "tennis"
+        ]
+      ],
+      "metadata_unknown": {
+        "interests": "something"
+      },
+      "random_name": "foo",
+      "metadata_known_obj": {
+        "metadata_known_array": [
+          {
+            "university": "abc@university",
+            "year": 2001
+          },
+          {
+            "university": "cal@university",
+            "year": 2005
+          }
+        ],
+        "metadata_known_string": "masters"
+      },
+      "person_details": [
+        {
+          "name": "classic",
+          "current_zipcode": 9999,
+          "last_zipcodes": [
+            "95008",
+            "94089"
+          ]
+        }
+      ],
+      "visited_places": [
+        "paris",
+        "italy"
+      ]
+    },
+    {
+      "id": "df552b5d-abf5-4aaf-9a8a-40f847b1bd11",
+      "tags": [
+        [
+          "marketing",
+          "branding",
+          "product"
+        ],
+        [
+          "reading",
+          "books"
+        ]
+      ],
+      "metadata_unknown": {
+        "interests": "not known"
+      },
+      "random_name": "bar",
+      "metadata_known_obj": {
+        "metadata_known_array": [
+          {
+            "university": "stan",
+            "year": 2004
+          },
+          {
+            "university": "mit",
+            "year": 2007
+          }
+        ],
+        "metadata_known_string": "bachelors"
+      },
+      "person_details": [
+        {
+          "name": "vintage",
+          "current_zipcode": 1234,
+          "last_zipcodes": [
+            "95123",
+            "95134"
+          ]
+        }
+      ],
+      "visited_places": [
+        "rome",
+        "london"
+      ]
+    },
+    {
+      "id": "df552b5d-abf5-4aaf-9a8a-40f847b1bd12",
+      "tags": [
+        [
+          "books",
+          "novels",
+          "product"
+        ],
+        [
+          "system",
+          "reading"
+        ]
+      ],
+      "random_name": "foo-bar",
+      "metadata_known_obj": {
+        "metadata_known_array": [
+          {
+            "university": "berk",
+            "year": 2004
+          }
+        ],
+        "metadata_known_string": "psychology"
+      },
+      "person_details": [
+        {
+          "name": "exemplary",
+          "current_zipcode": 1234,
+          "last_zipcodes": [
+            "95123"
+          ]
+        }
+      ],
+      "visited_places": [
+        "switzerland",
+        "london"
+      ]
+    }
+  ]`)
+
+	var inputRaw []json.RawMessage
+	require.NoError(t, json.Unmarshal(jsonDocuments, &inputRaw))
+	var inputDocument []Doc
+	for _, raw := range inputRaw {
+		var doc Doc
+		require.NoError(t, json.Unmarshal(raw, &doc))
+		inputDocument = append(inputDocument, doc)
+	}
+
+	// should always succeed with mustNotExists as false
+	insertDocuments(t, db, collection, inputDocument, false).
+		Status(http.StatusOK)
+
+	readAndValidate(t,
+		db,
+		collection,
+		Map{
+			"metadata_known_obj.metadata_known_array.university": "stan",
+		},
+		nil,
+		inputDocument[1:2])
+
+	// first document
+	readAndValidate(t,
+		db,
+		collection,
+		Map{
+			"person_details.current_zipcode": 9999,
+		},
+		nil,
+		inputDocument[0:1])
+
+	readAndValidate(t,
+		db,
+		collection,
+		Map{
+			"visited_places": "switzerland",
+		},
+		nil,
+		inputDocument[2:3])
+
+	readAndValidate(t,
+		db,
+		collection,
+		Map{
+			"metadata_known_obj.metadata_known_string": "psychology",
+		},
+		nil,
+		inputDocument[2:3])
+}
+
 func insertDocuments(t *testing.T, db string, collection string, documents []Doc, mustNotExist bool) *httpexpect.Response {
 	e := expect(t)
 

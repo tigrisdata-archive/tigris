@@ -142,12 +142,10 @@ func TestQueryableField_ShouldPack(t *testing.T) {
 		})
 	}
 
-	for _, f := range [...]FieldType{ArrayType, DateTimeType} {
-		t.Run(fmt.Sprintf("%s should be packed", FieldNames[f]), func(t *testing.T) {
-			q := &QueryableField{FieldName: "myField", DataType: f}
-			require.True(t, q.ShouldPack())
-		})
-	}
+	t.Run(fmt.Sprintf("%s should be packed", FieldNames[DateTimeType]), func(t *testing.T) {
+		q := &QueryableField{FieldName: "myField", DataType: DateTimeType}
+		require.True(t, q.ShouldPack())
+	})
 
 	shouldNotPack := [...]FieldType{
 		UnknownType,
@@ -159,6 +157,7 @@ func TestQueryableField_ShouldPack(t *testing.T) {
 		StringType,
 		ByteType,
 		ObjectType,
+		ArrayType,
 	}
 	for _, f := range shouldNotPack {
 		t.Run(fmt.Sprintf("%s should not be packed", FieldNames[f]), func(t *testing.T) {
@@ -166,6 +165,11 @@ func TestQueryableField_ShouldPack(t *testing.T) {
 			require.False(t, q.ShouldPack())
 		})
 	}
+
+	t.Run(fmt.Sprintf("%s should not be packed", FieldNames[ArrayType]), func(t *testing.T) {
+		q := &QueryableField{FieldName: "myField", DataType: ArrayType, PackThis: true}
+		require.True(t, q.ShouldPack())
+	})
 }
 
 func TestQueryableField_IsReserved(t *testing.T) {

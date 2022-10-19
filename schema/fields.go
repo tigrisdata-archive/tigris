@@ -27,7 +27,9 @@ import (
 type FieldType int
 
 const (
-	searchDoubleType = "float"
+	searchDoubleType      = "float"
+	searchObjectArrayType = "object[]"
+	searchArrayType       = "[]"
 )
 
 const (
@@ -143,7 +145,7 @@ func ToFieldType(jsonType string, encoding string, format string) FieldType {
 	}
 }
 
-func IsValidIndexType(t FieldType) bool {
+func IsValidKeyType(t FieldType) bool {
 	switch t {
 	case Int32Type, Int64Type, StringType, ByteType, DateTimeType, UUIDType:
 		return true
@@ -154,7 +156,7 @@ func IsValidIndexType(t FieldType) bool {
 
 func IndexableField(fieldType FieldType) bool {
 	switch fieldType {
-	case BoolType, Int32Type, Int64Type, UUIDType, StringType, DateTimeType, DoubleType:
+	case BoolType, Int32Type, Int64Type, UUIDType, StringType, DateTimeType, DoubleType, ArrayType:
 		return true
 	default:
 		return false
@@ -179,7 +181,7 @@ func SortableField(fieldType FieldType) bool {
 	}
 }
 
-func toSearchFieldType(fieldType FieldType) string {
+func toSearchFieldTypePrimitive(fieldType FieldType) string {
 	switch fieldType {
 	case BoolType:
 		return FieldNames[fieldType]
@@ -191,11 +193,26 @@ func toSearchFieldType(fieldType FieldType) string {
 		return FieldNames[Int64Type]
 	case DoubleType:
 		return searchDoubleType
-	case ArrayType:
-		return FieldNames[StringType]
+	}
+	return ""
+}
+
+func toSearchFieldType(fieldType FieldType, subType *FieldType, flattenedAsArray bool) (string, bool) {
+	if flattenedAsArray {
+		if fieldType == ArrayType {
+			return FieldNames[StringType], true
+		}
+		return toSearchFieldTypePrimitive(fieldType) + searchArrayType, false
 	}
 
-	return ""
+	if fieldType != ArrayType {
+		return toSearchFieldTypePrimitive(fieldType), false
+	}
+	if *subType == ArrayType || *subType == ObjectType {
+		// subType can't be an object as we flatten array of objects but if we are not able to flatten then pack it
+		return FieldNames[StringType], true
+	}
+	return toSearchFieldTypePrimitive(*subType) + searchArrayType, false
 }
 
 var SupportedFieldProperties = container.NewHashSet(
@@ -315,7 +332,7 @@ func (f *FieldBuilder) Build(isArrayElement bool) (*Field, error) {
 	}
 	if f.Primary != nil && *f.Primary {
 		// validate the primary key types
-		if !IsValidIndexType(fieldType) {
+		if !IsValidKeyType(fieldType) {
 			return nil, errors.InvalidArgument("unsupported primary key type detected '%s'", f.Type)
 		}
 	}
@@ -396,23 +413,44 @@ func (f *Field) GetNestedField(name string) *Field {
 }
 
 type QueryableField struct {
-	FieldName     string
-	InMemoryAlias string
-	Faceted       bool
-	Indexed       bool
-	Sortable      bool
-	DataType      FieldType
-	SearchType    string
+	FieldName        string
+	InMemoryAlias    string
+	Faceted          bool
+	Indexed          bool
+	Sortable         bool
+	DataType         FieldType
+	SubType          FieldType
+	ParentType       FieldType
+	FlattenedAsArray bool
+	SearchType       string
+	PackThis         bool
 }
 
-func NewQueryableField(name string, tigrisType FieldType) *QueryableField {
+func NewSimpleQueryableField(name string, tigrisType FieldType) *QueryableField {
+	return NewQueryableField(name, UnknownType, tigrisType, nil, false)
+}
+
+// NewQueryableField creates and returns QueryableField. The function expects the tigrisType of the field and an optional
+// subType. This subType is only honored in case of Arrays where the tigrisType would be an Array and subType is the type
+// of the array. The parentType may be useful to differentiate between an array of array vs an array of objects.
+func NewQueryableField(name string, parentType FieldType, tigrisType FieldType, subType *FieldType, flattenedAsArray bool) *QueryableField {
+	sType := UnknownType
+	if subType != nil {
+		sType = *subType
+	}
+
+	searchType, needPacking := toSearchFieldType(tigrisType, subType, flattenedAsArray)
 	q := &QueryableField{
-		FieldName:  name,
-		Indexed:    IndexableField(tigrisType),
-		Faceted:    FacetableField(tigrisType),
-		Sortable:   SortableField(tigrisType),
-		SearchType: toSearchFieldType(tigrisType),
-		DataType:   tigrisType,
+		FieldName:        name,
+		Indexed:          IndexableField(tigrisType),
+		Faceted:          FacetableField(tigrisType),
+		Sortable:         SortableField(tigrisType),
+		SearchType:       searchType,
+		ParentType:       parentType,
+		DataType:         tigrisType,
+		SubType:          sType,
+		FlattenedAsArray: flattenedAsArray,
+		PackThis:         needPacking,
 	}
 
 	if IsSearchID(name) {
@@ -436,7 +474,7 @@ func (q *QueryableField) Name() string {
 
 // ShouldPack returns true if we need to pack this field before sending to indexing store.
 func (q *QueryableField) ShouldPack() bool {
-	return !q.IsReserved() && (q.DataType == ArrayType || q.DataType == DateTimeType)
+	return (!q.IsReserved() && (q.DataType == DateTimeType)) || q.PackThis
 }
 
 // IsReserved returns true if the queryable field is internal field.
@@ -448,40 +486,67 @@ func BuildQueryableFields(fields []*Field) []*QueryableField {
 	var queryableFields []*QueryableField
 
 	for _, f := range fields {
-		if f.DataType == ObjectType {
-			queryableFields = append(queryableFields, buildQueryableForObject(f.FieldName, f.Fields)...)
+		flattenAsArray := f.DataType == ArrayType && f.Fields[0].DataType == ObjectType
+		if f.DataType == ObjectType || (f.DataType == ArrayType && (f.Fields[0].DataType == ObjectType || f.Fields[0].DataType == ArrayType)) {
+			queryableFields = append(queryableFields, buildQueryableForObject(f.FieldName, f.DataType, f.Fields, flattenAsArray)...)
 		} else {
-			queryableFields = append(queryableFields, buildQueryableField("", f))
+			queryableFields = append(queryableFields, buildQueryableField("", UnknownType, f, false))
 		}
 	}
 
 	// Allowing metadata fields to be queryable. User provided reserved fields are rejected by FieldBuilder.
-	queryableFields = append(queryableFields, NewQueryableField(ReservedFields[CreatedAt], DateTimeType))
-	queryableFields = append(queryableFields, NewQueryableField(ReservedFields[UpdatedAt], DateTimeType))
+	queryableFields = append(queryableFields, NewSimpleQueryableField(ReservedFields[CreatedAt], DateTimeType))
+	queryableFields = append(queryableFields, NewSimpleQueryableField(ReservedFields[UpdatedAt], DateTimeType))
 
 	return queryableFields
 }
 
-func buildQueryableForObject(parent string, fields []*Field) []*QueryableField {
+func buildQueryableForObject(parent string, parentType FieldType, fields []*Field, flattenAsArray bool) []*QueryableField {
 	var queryable []*QueryableField
 	for _, nested := range fields {
-		if nested.DataType != ObjectType {
-			queryable = append(queryable, buildQueryableField(parent, nested))
+		if parentType == ArrayType && nested.DataType == ArrayType {
+			// Arrays are only indexed till one level. For array of arrays we use Array of Object.
+			queryable = append(queryable, buildQueryableField(parent, parentType, nested, false))
+			continue
+		}
+
+		if nested.DataType == ObjectType || (nested.DataType == ArrayType && nested.Fields[0].DataType == ObjectType) {
+			nestedFlattening := flattenAsArray
+			if !nestedFlattening {
+				nestedFlattening = nested.DataType == ArrayType && nested.Fields[0].DataType == ObjectType
+			}
+			if len(nested.FieldName) > 0 {
+				queryable = append(queryable, buildQueryableForObject(parent+ObjFlattenDelimiter+nested.FieldName, nested.DataType, nested.Fields, nestedFlattening)...)
+			} else {
+				// in case of array of objects, the top level array will have a name but then the object field doesn't have any name
+				// in this case just pass parent as is.
+				queryable = append(queryable, buildQueryableForObject(parent, nested.DataType, nested.Fields, nestedFlattening)...)
+			}
 		} else {
-			queryable = append(queryable, buildQueryableForObject(parent+ObjFlattenDelimiter+nested.FieldName, nested.Fields)...)
+			queryable = append(queryable, buildQueryableField(parent, parentType, nested, flattenAsArray))
 		}
 	}
 
 	return queryable
 }
 
-func buildQueryableField(parent string, f *Field) *QueryableField {
+func buildQueryableField(parent string, parentType FieldType, f *Field, flattenedAsArray bool) *QueryableField {
 	name := f.FieldName
-	if len(parent) > 0 {
+	if len(parent) > 0 && len(name) > 0 {
 		name = parent + ObjFlattenDelimiter + f.FieldName
+	} else if len(parent) > 0 {
+		name = parent
 	}
 
-	return NewQueryableField(name, f.Type())
+	if parentType == ArrayType && f.Type() == ArrayType {
+		// the subType in this case is ArrayType
+		return NewQueryableField(name, parentType, f.Type(), &parentType, flattenedAsArray)
+	} else if f.Type() == ArrayType {
+		return NewQueryableField(name, parentType, f.Type(), &f.Fields[0].DataType, flattenedAsArray)
+	}
+
+	// for simple types or objects(as objects are flattened) there is no subType.
+	return NewQueryableField(name, parentType, f.Type(), nil, flattenedAsArray)
 }
 
 func BuildPartitionFields(fields []*Field) []*Field {

@@ -69,8 +69,10 @@ const (
 	AutoPrimaryKeyF     = "id"
 	PrimaryKeySchemaK   = "primary_key"
 	// DateTimeFormat represents the supported date time format.
-	DateTimeFormat  = time.RFC3339Nano
-	CollectionTypeF = "collection_type"
+	DateTimeFormat               = time.RFC3339Nano
+	CollectionTypeF              = "collection_type"
+	IndexingSchemaVersionKey     = "indexing_version"
+	DefaultIndexingSchemaVersion = "v1"
 )
 
 var boolTrue = true
@@ -98,6 +100,13 @@ type Factory struct {
 	Schema jsoniter.RawMessage
 	// CollectionType is the type of the collection. Only two types of collections are supported "messages" and "documents"
 	CollectionType CollectionType
+}
+
+func SetIndexingVersion(reqSchema jsoniter.RawMessage) (jsoniter.RawMessage, error) {
+	if _, dt, _, _ := jsonparser.Get(reqSchema, IndexingSchemaVersionKey); dt == jsonparser.NotExist {
+		return jsonparser.Set(reqSchema, []byte(fmt.Sprintf(`"%s"`, DefaultIndexingSchemaVersion)), IndexingSchemaVersionKey)
+	}
+	return reqSchema, nil
 }
 
 func GetCollectionType(reqSchema jsoniter.RawMessage) (CollectionType, error) {
@@ -252,11 +261,21 @@ func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet contai
 				builder.Fields[0].Fields = nestedFields
 			} else {
 				// if it is simple item type
-				var f *Field
-				if f, err = builder.Items.Build(true); err != nil {
-					return err
+				var current *Field
+				itemObj := builder.Items
+				var first *Field
+				for itemObj != nil {
+					if current, err = itemObj.Build(true); err != nil {
+						return err
+					}
+					if first == nil {
+						first = current
+					} else {
+						first.Fields = append(first.Fields, current)
+					}
+					itemObj = itemObj.Items
 				}
-				builder.Fields = append(nestedFields, f) //nolint:golint,gocritic
+				builder.Fields = append(nestedFields, first) //nolint:golint,gocritic
 			}
 		}
 
