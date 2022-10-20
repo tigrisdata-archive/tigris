@@ -295,6 +295,21 @@ func TestUnpackSearchFields(t *testing.T) {
 		require.Equal(t, []interface{}{1.1, 2.1, 3.0, 4.3, 5.5}, unpacked["arrayField"])
 	})
 
+	t.Run("array type not packed as string", func(t *testing.T) {
+		doc := map[string]any{
+			"id":         "123",
+			"arrayField": []interface{}{1.1, 2.1, 3.0, 4.3, 5.5},
+		}
+		f := &schema.Field{DataType: schema.ArrayType, FieldName: "arrayField"}
+		coll := &schema.DefaultCollection{
+			QueryableFields: schema.BuildQueryableFields([]*schema.Field{f}),
+		}
+		_, _, unpacked, err := UnpackSearchFields(doc, coll)
+		require.NoError(t, err)
+		require.Len(t, unpacked, 1)
+		require.Equal(t, []interface{}{1.1, 2.1, 3.0, 4.3, 5.5}, unpacked["arrayField"])
+	})
+
 	t.Run("dateTime fields are unpacked", func(t *testing.T) {
 		doc := map[string]any{
 			"id":                     "123",
