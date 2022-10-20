@@ -130,6 +130,17 @@ func (s *Selector) ToSearchFilter() []string {
 		if nsec, err := date.ToUnixNano(schema.DateTimeFormat, v.String()); err == nil {
 			return []string{fmt.Sprintf(op, s.Field.InMemoryName(), nsec)}
 		}
+	case schema.ArrayType:
+		if _, ok := v.(*value.ArrayValue); ok {
+			var filterString string
+			for i, item := range v.AsInterface().([]any) {
+				if i != 0 {
+					filterString += "&&"
+				}
+				filterString += fmt.Sprintf(op, s.Field.InMemoryName(), item)
+			}
+			return []string{filterString}
+		}
 	}
 	return []string{fmt.Sprintf(op, s.Field.InMemoryName(), v.AsInterface())}
 }

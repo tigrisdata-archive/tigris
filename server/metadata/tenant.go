@@ -524,13 +524,17 @@ func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVers
 	tenant.databases = make(map[string]*Database)
 	tenant.idToDatabaseMap = make(map[uint32]string)
 
+	searchAllCollections, err := tenant.searchStore.AllCollections(ctx)
+	if err != nil {
+		return err
+	}
 	dbNameToId, err := tenant.metaStore.GetDatabases(ctx, tx, tenant.namespace.Id())
 	if err != nil {
 		return err
 	}
 
 	for db, id := range dbNameToId {
-		database, err := tenant.reloadDatabase(ctx, tx, db, id)
+		database, err := tenant.reloadDatabase(ctx, tx, db, id, searchAllCollections)
 		if ulog.E(err) {
 			return err
 		}
@@ -650,7 +654,7 @@ func (tenant *Tenant) ListDatabases(_ context.Context) []string {
 }
 
 // reloadDatabase is called by tenant to reload the database state.
-func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbName string, dbId uint32) (*Database, error) {
+func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbName string, dbId uint32, searchCollections map[string]*tsApi.CollectionResponse) (*Database, error) {
 	database := NewDatabase(dbId, dbName)
 
 	collNameToId, err := tenant.metaStore.GetCollections(ctx, tx, tenant.namespace.Id(), database.id)
@@ -673,7 +677,16 @@ func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbN
 			continue
 		}
 
-		collection, err := createCollection(id, version, coll, userSchema, idxNameToId, tenant.getSearchCollName(dbName, coll))
+		var fieldsInSearch []tsApi.Field
+		searchCollectionName := tenant.getSearchCollName(dbName, coll)
+		if searchSchema, ok := searchCollections[searchCollectionName]; ok {
+			fieldsInSearch = searchSchema.Fields
+		}
+		if len(fieldsInSearch) == 0 {
+			log.Error().Str("search_collection", searchCollectionName).Msg("fields are not present in search")
+		}
+
+		collection, err := createCollection(id, version, coll, userSchema, idxNameToId, searchCollectionName, fieldsInSearch)
 		if err != nil {
 			database.needFixingCollections[coll] = struct{}{}
 			log.Debug().Err(err).Str("collection", coll).Msg("skipping loading collection")
@@ -713,8 +726,14 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 			// shortcut to just check if schema is eq then return early
 			return err
 		}
-		return tenant.updateCollection(ctx, tx, database, c, schFactory, tenant.searchStore)
+		return tenant.updateCollection(ctx, tx, database, c, schFactory)
 	}
+
+	// add indexing version here in the name, because this is a fresh create collection request
+	if err := schema.SetIndexingVersion(schFactory); err != nil {
+		return err
+	}
+	schFactory.IndexingVersion = schema.DefaultIndexingSchemaVersion
 
 	collectionId, err := tenant.metaStore.CreateCollection(ctx, tx, schFactory.Name, tenant.namespace.Id(), database.id)
 	if err != nil {
@@ -740,7 +759,7 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 
 	// store the collection to the databaseObject, this is actually cloned database object passed by the query runner.
 	// So failure of the transaction won't impact the consistency of the cache
-	collection := schema.NewDefaultCollection(schFactory.Name, collectionId, baseSchemaVersion, schFactory.CollectionType, schFactory.Fields, schFactory.Indexes, schFactory.Schema, tenant.getSearchCollName(database.name, schFactory.Name))
+	collection := schema.NewDefaultCollection(schFactory.Name, collectionId, baseSchemaVersion, schFactory.CollectionType, schFactory, tenant.getSearchCollName(database.name, schFactory.Name), nil)
 	database.collections[schFactory.Name] = NewCollectionHolder(collectionId, schFactory.Name, collection, idxNameToId)
 
 	if config.DefaultConfig.Search.WriteEnabled {
@@ -754,7 +773,7 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 	return nil
 }
 
-func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, database *Database, c *collectionHolder, schFactory *schema.Factory, searchStore search.Store) error {
+func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, database *Database, c *collectionHolder, schFactory *schema.Factory) error {
 	var newIndexes []*schema.Index
 	for _, idx := range schFactory.Indexes.GetIndexes() {
 		if _, ok := c.idxNameToId[idx.Name]; !ok {
@@ -789,16 +808,22 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 		return err
 	}
 
+	searchCollectionName := tenant.getSearchCollName(database.name, schFactory.Name)
+	existingSearch, err := tenant.searchStore.DescribeCollection(ctx, searchCollectionName)
+	if err != nil {
+		return err
+	}
+
 	// store the collection to the databaseObject, this is actually cloned database object passed by the query runner.
 	// So failure of the transaction won't impact the consistency of the cache
-	collection := schema.NewDefaultCollection(schFactory.Name, c.id, schRevision, schFactory.CollectionType, schFactory.Fields, schFactory.Indexes, schFactory.Schema, tenant.getSearchCollName(database.name, schFactory.Name))
+	collection := schema.NewDefaultCollection(schFactory.Name, c.id, schRevision, schFactory.CollectionType, schFactory, searchCollectionName, existingSearch.Fields)
 
 	// recreating collection holder is fine because we are working on databaseClone and also has a lock on the tenant
 	database.collections[schFactory.Name] = NewCollectionHolder(c.id, schFactory.Name, collection, c.idxNameToId)
 
 	// update indexing store schema if there is a change
-	if deltaFields := schema.GetSearchDeltaFields(c.collection.QueryableFields, schFactory.Fields); len(deltaFields) > 0 {
-		if err := searchStore.UpdateCollection(ctx, collection.Search.Name, &tsApi.CollectionUpdateSchema{
+	if deltaFields := schema.GetSearchDeltaFields(c.collection.QueryableFields, schFactory.Fields, existingSearch.Fields); len(deltaFields) > 0 {
+		if err := tenant.searchStore.UpdateCollection(ctx, collection.Search.Name, &tsApi.CollectionUpdateSchema{
 			Fields: deltaFields,
 		}); err != nil {
 			return err
@@ -1024,7 +1049,7 @@ func (c *collectionHolder) clone() *collectionHolder {
 	copyC.name = c.name
 
 	var err error
-	copyC.collection, err = createCollection(c.id, int(c.collection.SchVer), c.name, c.collection.Schema, c.idxNameToId, c.collection.SearchCollectionName())
+	copyC.collection, err = createCollection(c.id, int(c.collection.SchVer), c.name, c.collection.Schema, c.idxNameToId, c.collection.SearchCollectionName(), c.collection.FieldsInSearch)
 	if err != nil {
 		panic(err)
 	}
@@ -1053,7 +1078,7 @@ func (c *collectionHolder) get() *schema.DefaultCollection {
 	return c.collection
 }
 
-func createCollection(id uint32, schVer int, name string, revision []byte, idxNameToId map[string]uint32, searchCollectionName string) (*schema.DefaultCollection, error) {
+func createCollection(id uint32, schVer int, name string, revision []byte, idxNameToId map[string]uint32, searchCollectionName string, fieldsInSearch []tsApi.Field) (*schema.DefaultCollection, error) {
 	schFactory, err := schema.Build(name, revision)
 	if err != nil {
 		return nil, err
@@ -1068,7 +1093,9 @@ func createCollection(id uint32, schVer int, name string, revision []byte, idxNa
 		index.Id = id
 	}
 
-	return schema.NewDefaultCollection(name, id, schVer, schFactory.CollectionType, schFactory.Fields, schFactory.Indexes, revision, searchCollectionName), nil
+	schFactory.Schema = revision
+
+	return schema.NewDefaultCollection(name, id, schVer, schFactory.CollectionType, schFactory, searchCollectionName, fieldsInSearch), nil
 }
 
 func isSchemaEq(s1, s2 []byte) (bool, error) {

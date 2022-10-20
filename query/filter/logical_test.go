@@ -24,18 +24,18 @@ import (
 func TestLogicalToSearch(t *testing.T) {
 	factory := Factory{
 		fields: []*schema.QueryableField{
-			schema.NewQueryableField("f1", schema.Int64Type),
-			schema.NewQueryableField("f2", schema.Int64Type),
-			schema.NewQueryableField("f3", schema.Int64Type),
-			schema.NewQueryableField("f4", schema.Int64Type),
-			schema.NewQueryableField("f5", schema.Int64Type),
-			schema.NewQueryableField("f6", schema.Int64Type),
-			schema.NewQueryableField("a", schema.Int64Type),
-			schema.NewQueryableField("b", schema.Int64Type),
-			schema.NewQueryableField("c", schema.Int64Type),
-			schema.NewQueryableField("d", schema.Int64Type),
-			schema.NewQueryableField("e", schema.Int64Type),
-			schema.NewQueryableField("f", schema.Int64Type),
+			schema.NewQueryableField("f1", schema.Int64Type, schema.UnknownType, nil),
+			schema.NewQueryableField("f2", schema.Int64Type, schema.UnknownType, nil),
+			schema.NewQueryableField("f3", schema.Int64Type, schema.UnknownType, nil),
+			schema.NewQueryableField("f4", schema.Int64Type, schema.UnknownType, nil),
+			schema.NewQueryableField("f5", schema.Int64Type, schema.UnknownType, nil),
+			schema.NewQueryableField("f6", schema.Int64Type, schema.UnknownType, nil),
+			schema.NewQueryableField("a", schema.Int64Type, schema.UnknownType, nil),
+			schema.NewQueryableField("b", schema.Int64Type, schema.UnknownType, nil),
+			schema.NewQueryableField("c", schema.Int64Type, schema.UnknownType, nil),
+			schema.NewQueryableField("d", schema.Int64Type, schema.UnknownType, nil),
+			schema.NewQueryableField("e", schema.Int64Type, schema.UnknownType, nil),
+			schema.NewQueryableField("f", schema.Int64Type, schema.UnknownType, nil),
 		},
 	}
 
