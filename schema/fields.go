@@ -22,6 +22,7 @@ import (
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/util"
+	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
 type FieldType int
@@ -143,7 +144,7 @@ func ToFieldType(jsonType string, encoding string, format string) FieldType {
 	}
 }
 
-func IsValidIndexType(t FieldType) bool {
+func IsValidKeyType(t FieldType) bool {
 	switch t {
 	case Int32Type, Int64Type, StringType, ByteType, DateTimeType, UUIDType:
 		return true
@@ -152,10 +153,20 @@ func IsValidIndexType(t FieldType) bool {
 	}
 }
 
-func IndexableField(fieldType FieldType) bool {
+func IsPrimitiveType(fieldType FieldType) bool {
 	switch fieldType {
 	case BoolType, Int32Type, Int64Type, UUIDType, StringType, DateTimeType, DoubleType:
 		return true
+	}
+	return false
+}
+
+func IndexableField(fieldType FieldType, subType FieldType) bool {
+	switch fieldType {
+	case BoolType, Int32Type, Int64Type, UUIDType, StringType, DateTimeType, DoubleType:
+		return true
+	case ArrayType:
+		return IsPrimitiveType(subType)
 	default:
 		return false
 	}
@@ -179,7 +190,7 @@ func SortableField(fieldType FieldType) bool {
 	}
 }
 
-func toSearchFieldType(fieldType FieldType) string {
+func toSearchFieldType(fieldType FieldType, subType FieldType) string {
 	switch fieldType {
 	case BoolType:
 		return FieldNames[fieldType]
@@ -192,7 +203,21 @@ func toSearchFieldType(fieldType FieldType) string {
 	case DoubleType:
 		return searchDoubleType
 	case ArrayType:
-		return FieldNames[StringType]
+		switch subType {
+		case BoolType:
+			return FieldNames[subType] + "[]"
+		case Int32Type, Int64Type:
+			return FieldNames[subType] + "[]"
+		case StringType, ByteType, UUIDType:
+			return FieldNames[StringType] + "[]"
+		case DateTimeType:
+			return FieldNames[Int64Type] + "[]"
+		case DoubleType:
+			return searchDoubleType + "[]"
+		default:
+			// pack it
+			return FieldNames[StringType]
+		}
 	}
 
 	return ""
@@ -315,7 +340,7 @@ func (f *FieldBuilder) Build(isArrayElement bool) (*Field, error) {
 	}
 	if f.Primary != nil && *f.Primary {
 		// validate the primary key types
-		if !IsValidIndexType(fieldType) {
+		if !IsValidKeyType(fieldType) {
 			return nil, errors.InvalidArgument("unsupported primary key type detected '%s'", f.Type)
 		}
 	}
@@ -402,17 +427,60 @@ type QueryableField struct {
 	Indexed       bool
 	Sortable      bool
 	DataType      FieldType
+	SubType       FieldType
 	SearchType    string
+	packThis      bool
 }
 
-func NewQueryableField(name string, tigrisType FieldType) *QueryableField {
+func NewQueryableField(name string, tigrisType FieldType, subType FieldType, fieldsInSearch []tsApi.Field) *QueryableField {
+	var (
+		searchType string
+		indexed    *bool
+		faceted    *bool
+		sortable   *bool
+	)
+
+	packThis := false
+	if tigrisType == ArrayType {
+		for _, fieldInSearch := range fieldsInSearch {
+			if fieldInSearch.Name == name {
+				searchType = fieldInSearch.Type
+				if searchType == FieldNames[StringType] {
+					packThis = true
+				}
+
+				indexed = fieldInSearch.Index
+				faceted = fieldInSearch.Facet
+				sortable = fieldInSearch.Sort
+			}
+		}
+	}
+
+	if len(searchType) == 0 {
+		searchType = toSearchFieldType(tigrisType, subType)
+	}
+	if indexed == nil {
+		shouldIndex := IndexableField(tigrisType, subType)
+		indexed = &shouldIndex
+	}
+	if faceted == nil {
+		shouldFacet := FacetableField(tigrisType)
+		faceted = &shouldFacet
+	}
+	if sortable == nil {
+		shouldSort := SortableField(tigrisType)
+		sortable = &shouldSort
+	}
+
 	q := &QueryableField{
 		FieldName:  name,
-		Indexed:    IndexableField(tigrisType),
-		Faceted:    FacetableField(tigrisType),
-		Sortable:   SortableField(tigrisType),
-		SearchType: toSearchFieldType(tigrisType),
+		Indexed:    *indexed,
+		Faceted:    *faceted,
+		Sortable:   *sortable,
+		SearchType: searchType,
 		DataType:   tigrisType,
+		SubType:    subType,
+		packThis:   packThis,
 	}
 
 	if IsSearchID(name) {
@@ -436,7 +504,14 @@ func (q *QueryableField) Name() string {
 
 // ShouldPack returns true if we need to pack this field before sending to indexing store.
 func (q *QueryableField) ShouldPack() bool {
-	return !q.IsReserved() && (q.DataType == ArrayType || q.DataType == DateTimeType)
+	if q.packThis {
+		return true
+	}
+
+	if q.DataType == ArrayType && (q.SubType == ArrayType || q.SubType == ObjectType || q.SubType == UnknownType) {
+		return true
+	}
+	return !q.IsReserved() && q.DataType == DateTimeType
 }
 
 // IsReserved returns true if the queryable field is internal field.
@@ -444,44 +519,49 @@ func (q *QueryableField) IsReserved() bool {
 	return IsReservedField(q.Name())
 }
 
-func BuildQueryableFields(fields []*Field) []*QueryableField {
+func BuildQueryableFields(fields []*Field, fieldsInSearch []tsApi.Field) []*QueryableField {
 	var queryableFields []*QueryableField
 
 	for _, f := range fields {
 		if f.DataType == ObjectType {
-			queryableFields = append(queryableFields, buildQueryableForObject(f.FieldName, f.Fields)...)
+			queryableFields = append(queryableFields, buildQueryableForObject(f.FieldName, f.Fields, fieldsInSearch)...)
 		} else {
-			queryableFields = append(queryableFields, buildQueryableField("", f))
+			queryableFields = append(queryableFields, buildQueryableField("", f, fieldsInSearch))
 		}
 	}
 
 	// Allowing metadata fields to be queryable. User provided reserved fields are rejected by FieldBuilder.
-	queryableFields = append(queryableFields, NewQueryableField(ReservedFields[CreatedAt], DateTimeType))
-	queryableFields = append(queryableFields, NewQueryableField(ReservedFields[UpdatedAt], DateTimeType))
+	queryableFields = append(queryableFields, NewQueryableField(ReservedFields[CreatedAt], DateTimeType, UnknownType, fieldsInSearch))
+	queryableFields = append(queryableFields, NewQueryableField(ReservedFields[UpdatedAt], DateTimeType, UnknownType, fieldsInSearch))
 
 	return queryableFields
 }
 
-func buildQueryableForObject(parent string, fields []*Field) []*QueryableField {
+func buildQueryableForObject(parent string, fields []*Field, fieldsInSearch []tsApi.Field) []*QueryableField {
 	var queryable []*QueryableField
 	for _, nested := range fields {
 		if nested.DataType != ObjectType {
-			queryable = append(queryable, buildQueryableField(parent, nested))
+			queryable = append(queryable, buildQueryableField(parent, nested, fieldsInSearch))
 		} else {
-			queryable = append(queryable, buildQueryableForObject(parent+ObjFlattenDelimiter+nested.FieldName, nested.Fields)...)
+			queryable = append(queryable, buildQueryableForObject(parent+ObjFlattenDelimiter+nested.FieldName, nested.Fields, fieldsInSearch)...)
 		}
 	}
 
 	return queryable
 }
 
-func buildQueryableField(parent string, f *Field) *QueryableField {
+func buildQueryableField(parent string, f *Field, fieldsInSearch []tsApi.Field) *QueryableField {
 	name := f.FieldName
 	if len(parent) > 0 {
 		name = parent + ObjFlattenDelimiter + f.FieldName
 	}
 
-	return NewQueryableField(name, f.Type())
+	subType := UnknownType
+	if f.DataType == ArrayType && len(f.Fields) > 0 {
+		subType = f.Fields[0].DataType
+	}
+
+	return NewQueryableField(name, f.Type(), subType, fieldsInSearch)
 }
 
 func BuildPartitionFields(fields []*Field) []*Field {

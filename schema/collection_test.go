@@ -202,7 +202,7 @@ func TestCollection_SchemaValidate(t *testing.T) {
 		schFactory, err := Build("t1", reqSchema)
 		require.NoError(t, err)
 
-		coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory.Fields, schFactory.Indexes, schFactory.Schema, "t1")
+		coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil)
 
 		dec := jsoniter.NewDecoder(bytes.NewReader(c.document))
 		dec.UseNumber()
@@ -309,7 +309,7 @@ func TestCollection_SearchSchema(t *testing.T) {
 		"created_at", "updated_at",
 	}
 
-	coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory.Fields, schFactory.Indexes, schFactory.Schema, "t1")
+	coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil)
 	for i, f := range coll.Search.Fields {
 		require.Equal(t, expFlattenedFields[i], f.Name)
 	}
@@ -362,7 +362,7 @@ func TestCollection_AdditionalProperties(t *testing.T) {
 	for _, c := range cases {
 		schFactory, err := Build("t1", reqSchema)
 		require.NoError(t, err)
-		coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory.Fields, schFactory.Indexes, schFactory.Schema, "t1")
+		coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil)
 
 		dec := jsoniter.NewDecoder(bytes.NewReader(c.document))
 		dec.UseNumber()
@@ -398,7 +398,7 @@ func TestCollection_Object(t *testing.T) {
 	for _, c := range cases {
 		schFactory, err := Build("t1", reqSchema)
 		require.NoError(t, err)
-		coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory.Fields, schFactory.Indexes, schFactory.Schema, "t1")
+		coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil)
 
 		dec := jsoniter.NewDecoder(bytes.NewReader(c.document))
 		dec.UseNumber()
@@ -456,7 +456,7 @@ func TestCollection_Int64(t *testing.T) {
 
 	schFactory, err := Build("t1", reqSchema)
 	require.NoError(t, err)
-	coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory.Fields, schFactory.Indexes, schFactory.Schema, "t1")
+	coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil)
 	require.Equal(t, 4, len(coll.Int64FieldsPath))
 	_, ok := coll.Int64FieldsPath["id"]
 	require.True(t, ok)

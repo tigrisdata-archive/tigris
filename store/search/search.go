@@ -27,6 +27,8 @@ import (
 )
 
 type Store interface {
+	AllCollections(ctx context.Context) (map[string]*tsApi.CollectionResponse, error)
+	DescribeCollection(ctx context.Context, name string) (*tsApi.CollectionResponse, error)
 	CreateCollection(ctx context.Context, schema *tsApi.CollectionSchema) error
 	UpdateCollection(ctx context.Context, name string, schema *tsApi.CollectionUpdateSchema) error
 	DropCollection(ctx context.Context, table string) error
@@ -59,6 +61,13 @@ func NewStoreWithMetrics(config *config.SearchConfig) (Store, error) {
 
 type NoopStore struct{}
 
+func (n *NoopStore) AllCollections(context.Context) (map[string]*tsApi.CollectionResponse, error) {
+	return nil, nil
+}
+
+func (n *NoopStore) DescribeCollection(context.Context, string) (*tsApi.CollectionResponse, error) {
+	return nil, nil
+}
 func (n *NoopStore) CreateCollection(context.Context, *tsApi.CollectionSchema) error { return nil }
 func (n *NoopStore) UpdateCollection(context.Context, string, *tsApi.CollectionUpdateSchema) error {
 	return nil

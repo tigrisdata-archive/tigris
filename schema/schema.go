@@ -69,19 +69,22 @@ const (
 	AutoPrimaryKeyF     = "id"
 	PrimaryKeySchemaK   = "primary_key"
 	// DateTimeFormat represents the supported date time format.
-	DateTimeFormat  = time.RFC3339Nano
-	CollectionTypeF = "collection_type"
+	DateTimeFormat               = time.RFC3339Nano
+	CollectionTypeF              = "collection_type"
+	IndexingSchemaVersionKey     = "indexing_version"
+	DefaultIndexingSchemaVersion = "v1"
 )
 
 var boolTrue = true
 
 type JSONSchema struct {
-	Name           string              `json:"title,omitempty"`
-	Description    string              `json:"description,omitempty"`
-	Properties     jsoniter.RawMessage `json:"properties,omitempty"`
-	PrimaryKeys    []string            `json:"primary_key,omitempty"`
-	PartitionKeys  []string            `json:"key,omitempty"`
-	CollectionType string              `json:"collection_type,omitempty"`
+	Name            string              `json:"title,omitempty"`
+	Description     string              `json:"description,omitempty"`
+	Properties      jsoniter.RawMessage `json:"properties,omitempty"`
+	PrimaryKeys     []string            `json:"primary_key,omitempty"`
+	PartitionKeys   []string            `json:"key,omitempty"`
+	CollectionType  string              `json:"collection_type,omitempty"`
+	IndexingVersion string              `json:"indexing_version,omitempty"`
 }
 
 // Factory is used as an intermediate step so that collection can be initialized with properly encoded values.
@@ -97,7 +100,29 @@ type Factory struct {
 	// schema subspace.
 	Schema jsoniter.RawMessage
 	// CollectionType is the type of the collection. Only two types of collections are supported "messages" and "documents"
-	CollectionType CollectionType
+	CollectionType  CollectionType
+	IndexingVersion string
+}
+
+func RemoveIndexingVersion(schema jsoniter.RawMessage) jsoniter.RawMessage {
+	if v, _, _, _ := jsonparser.Get(schema, IndexingSchemaVersionKey); len(v) > 0 {
+		return jsonparser.Delete(schema, IndexingSchemaVersionKey)
+	}
+	return schema
+}
+
+func SetIndexingVersion(factory *Factory) error {
+	if _, dt, _, _ := jsonparser.Get(factory.Schema, IndexingSchemaVersionKey); dt == jsonparser.NotExist {
+		var err error
+		var schema jsoniter.RawMessage
+		if schema, err = jsonparser.Set(factory.Schema, []byte(fmt.Sprintf(`"%s"`, DefaultIndexingSchemaVersion)), IndexingSchemaVersionKey); err != nil {
+			return err
+		}
+
+		factory.Schema = schema
+		factory.IndexingVersion = DefaultIndexingSchemaVersion
+	}
+	return nil
 }
 
 func GetCollectionType(reqSchema jsoniter.RawMessage) (CollectionType, error) {
@@ -177,9 +202,10 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 				Fields: primaryKeyFields,
 			},
 		},
-		Name:           collection,
-		Schema:         reqSchema,
-		CollectionType: cType,
+		Name:            collection,
+		Schema:          reqSchema,
+		CollectionType:  cType,
+		IndexingVersion: schema.IndexingVersion,
 	}, nil
 }
 
@@ -251,12 +277,21 @@ func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet contai
 				}
 				builder.Fields[0].Fields = nestedFields
 			} else {
-				// if it is simple item type
-				var f *Field
-				if f, err = builder.Items.Build(true); err != nil {
-					return err
+				var current *Field
+				itemObj := builder.Items
+				var first *Field
+				for itemObj != nil {
+					if current, err = itemObj.Build(true); err != nil {
+						return err
+					}
+					if first == nil {
+						first = current
+					} else {
+						first.Fields = append(first.Fields, current)
+					}
+					itemObj = itemObj.Items
 				}
-				builder.Fields = append(nestedFields, f) //nolint:golint,gocritic
+				builder.Fields = append(nestedFields, first) //nolint:golint,gocritic
 			}
 		}
 

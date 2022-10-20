@@ -1517,12 +1517,14 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		}
 
 		metrics.UpdateCollectionSizeMetrics(namespace, db.Name(), coll.GetName(), size)
+		// remove indexing version from the schema before returning the response
+		schema := schema.RemoveIndexingVersion(coll.Schema)
 
 		return &Response{
 			Response: &api.DescribeCollectionResponse{
 				Collection: coll.Name,
 				Metadata:   &api.CollectionMetadata{},
-				Schema:     coll.Schema,
+				Schema:     schema,
 				Size:       size,
 			},
 		}, ctx, nil
@@ -1614,10 +1616,12 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 
 			metrics.UpdateCollectionSizeMetrics(namespace, db.Name(), c.GetName(), size)
 
+			// remove indexing version from the schema before returning the response
+			schema := schema.RemoveIndexingVersion(c.Schema)
 			collections[i] = &api.CollectionDescription{
 				Collection: c.GetName(),
 				Metadata:   &api.CollectionMetadata{},
-				Schema:     c.Schema,
+				Schema:     schema,
 				Size:       size,
 			}
 		}
