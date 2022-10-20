@@ -51,10 +51,11 @@ const (
 	DescribeDatabaseMethodName   = apiMethodPrefix + "DescribeDatabase"
 	DescribeCollectionMethodName = apiMethodPrefix + "DescribeCollection"
 
-	ObservabilityMethodPrefix = "/tigrisdata.observability.v1.Observability/"
-	ManagementMethodPrefix    = "/tigrisdata.management.v1.Management/"
-	CreateNamespaceMethodName = ManagementMethodPrefix + "CreateNamespace"
-	ListNamespaceMethodName   = ManagementMethodPrefix + "ListNamespaces"
+	ObservabilityMethodPrefix    = "/tigrisdata.observability.v1.Observability/"
+	ManagementMethodPrefix       = "/tigrisdata.management.v1.Management/"
+	CreateNamespaceMethodName    = ManagementMethodPrefix + "CreateNamespace"
+	ListNamespaceMethodName      = ManagementMethodPrefix + "ListNamespaces"
+	DescribeNamespacesMethodName = ManagementMethodPrefix + "DescribeNamespaces"
 
 	AuthMethodPrefix         = "/tigrisdata.auth.v1.Auth/"
 	GetAccessTokenMethodName = AuthMethodPrefix + "GetAccessToken"

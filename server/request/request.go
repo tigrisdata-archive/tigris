@@ -41,7 +41,7 @@ const (
 	UnknownValue = "unknown"
 )
 
-var adminMethods = container.NewHashSet(api.CreateNamespaceMethodName, api.ListNamespaceMethodName)
+var adminMethods = container.NewHashSet(api.CreateNamespaceMethodName, api.ListNamespaceMethodName, api.DescribeNamespacesMethodName)
 
 type MetadataCtxKey struct{}
 
