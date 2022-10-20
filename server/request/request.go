@@ -252,7 +252,11 @@ func getMetadataFromToken(token string) (string, bool) {
 	if err != nil {
 		return UnknownValue, false
 	}
-	user, _ := jsonparser.GetString(decodedToken, "https://tigris/u", "email")
+	user, _, _, err := jsonparser.Get(decodedToken, "https://tigris/u")
+	if err != nil {
+		// no-op
+		log.Trace().Err(err).Msg("Failed to read https://tigris/u from access token")
+	}
 	return namespace, len(user) > 0
 }
 
