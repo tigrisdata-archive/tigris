@@ -226,11 +226,13 @@ func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCo
 			if v, ok := doc[f.Name()]; ok {
 				switch f.DataType {
 				case schema.ArrayType:
-					var value interface{}
-					if err := jsoniter.UnmarshalFromString(v.(string), &value); err != nil {
-						return "", nil, nil, err
+					if _, ok := v.(string); ok {
+						var value interface{}
+						if err := jsoniter.UnmarshalFromString(v.(string), &value); err != nil {
+							return "", nil, nil, err
+						}
+						doc[f.Name()] = value
 					}
-					doc[f.Name()] = value
 				case schema.DateTimeType:
 					// unpack original date from shadowed key
 					shadowedKey := schema.ToSearchDateKey(f.Name())
