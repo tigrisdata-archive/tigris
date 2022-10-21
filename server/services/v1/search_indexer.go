@@ -186,10 +186,6 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 		}
 		if f.ShouldPack() {
 			switch f.DataType {
-			case schema.ArrayType:
-				if decData[key], err = jsoniter.MarshalToString(value); err != nil {
-					return nil, err
-				}
 			case schema.DateTimeType:
 				if dateStr, ok := value.(string); ok {
 					t, err := date.ToUnixNano(schema.DateTimeFormat, dateStr)
@@ -201,7 +197,9 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 					decData[schema.ToSearchDateKey(key)] = dateStr
 				}
 			default:
-				return nil, errors.Unimplemented("Internal error!")
+				if decData[key], err = jsoniter.MarshalToString(value); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -239,7 +237,13 @@ func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCo
 					doc[f.Name()] = doc[shadowedKey]
 					delete(doc, shadowedKey)
 				default:
-					return "", nil, nil, errors.Unimplemented("Internal error!")
+					if _, ok := v.(string); ok {
+						var value interface{}
+						if err := jsoniter.UnmarshalFromString(v.(string), &value); err != nil {
+							return "", nil, nil, err
+						}
+						doc[f.Name()] = value
+					}
 				}
 			}
 		}

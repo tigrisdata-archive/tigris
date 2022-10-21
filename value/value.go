@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/schema"
@@ -83,6 +84,12 @@ func NewValue(fieldType schema.FieldType, value []byte) (Value, error) {
 		} else {
 			return NewBytesValue(value), nil
 		}
+	case schema.ArrayType:
+		var arr []any
+		if err := jsoniter.Unmarshal(value, &arr); err != nil {
+			return nil, err
+		}
+		return NewArrayValue(value, arr), nil
 	}
 
 	return nil, errors.InvalidArgument("unsupported value type")
@@ -90,6 +97,42 @@ func NewValue(fieldType schema.FieldType, value []byte) (Value, error) {
 
 func isIntegral(val float64) bool {
 	return val == float64(int(val))
+}
+
+type ArrayValue struct {
+	raw     []byte
+	decoded []any
+}
+
+func NewArrayValue(v []byte, decoded []any) *ArrayValue {
+	return &ArrayValue{
+		raw:     v,
+		decoded: decoded,
+	}
+}
+
+func (a *ArrayValue) CompareTo(v Value) (int, error) {
+	if v == nil {
+		return 1, nil
+	}
+
+	converted, ok := v.(*ArrayValue)
+	if !ok {
+		return -2, fmt.Errorf("wrong type compared ")
+	}
+	return bytes.Compare(a.raw, converted.raw), nil
+}
+
+func (a *ArrayValue) AsInterface() interface{} {
+	return a.decoded
+}
+
+func (a *ArrayValue) String() string {
+	if a == nil {
+		return ""
+	}
+
+	return fmt.Sprintf("%v", *a)
 }
 
 type IntValue int64

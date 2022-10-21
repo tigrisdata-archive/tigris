@@ -64,6 +64,8 @@ type DefaultCollection struct {
 	Int64FieldsPath map[string]struct{}
 	// PartitionFields are the fields that make up the partition key, if applicable to the collection.
 	PartitionFields []*Field
+	// This is the existing fields in search
+	FieldsInSearch []tsApi.Field
 }
 
 type CollectionType string
@@ -82,11 +84,11 @@ func disableAdditionalProperties(properties map[string]*jsonschema.Schema) {
 	}
 }
 
-func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionType, fields []*Field, indexes *Indexes, schema jsoniter.RawMessage, searchCollectionName string) *DefaultCollection {
+func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionType, factory *Factory, searchCollectionName string, fieldsInSearch []tsApi.Field) *DefaultCollection {
 	url := name + ".json"
 	compiler := jsonschema.NewCompiler()
 	compiler.Draft = jsonschema.Draft7 // Format is only working for draft7
-	if err := compiler.AddResource(url, bytes.NewReader(schema)); err != nil {
+	if err := compiler.AddResource(url, bytes.NewReader(factory.Schema)); err != nil {
 		panic(err)
 	}
 
@@ -100,22 +102,23 @@ func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionTy
 	validator.AdditionalProperties = false
 	disableAdditionalProperties(validator.Properties)
 
-	queryableFields := BuildQueryableFields(fields)
-	partitionFields := BuildPartitionFields(fields)
+	queryableFields := BuildQueryableFields(factory.Fields, fieldsInSearch)
+	partitionFields := BuildPartitionFields(factory.Fields)
 
 	d := &DefaultCollection{
 		Id:              id,
 		SchVer:          int32(schVer),
 		Name:            name,
-		Fields:          fields,
-		Indexes:         indexes,
+		Fields:          factory.Fields,
+		Indexes:         factory.Indexes,
 		Validator:       validator,
-		Schema:          schema,
+		Schema:          factory.Schema,
 		Search:          buildSearchSchema(searchCollectionName, queryableFields),
 		QueryableFields: queryableFields,
 		CollectionType:  ctype,
 		Int64FieldsPath: make(map[string]struct{}),
 		PartitionFields: partitionFields,
+		FieldsInSearch:  fieldsInSearch,
 	}
 
 	// set paths for int64 fields
@@ -218,8 +221,8 @@ func buildPath(parent string, field string) string {
 	}
 }
 
-func GetSearchDeltaFields(existingFields []*QueryableField, incomingFields []*Field) []tsApi.Field {
-	incomingQueryable := BuildQueryableFields(incomingFields)
+func GetSearchDeltaFields(existingFields []*QueryableField, incomingFields []*Field, fieldsInSearch []tsApi.Field) []tsApi.Field {
+	incomingQueryable := BuildQueryableFields(incomingFields, fieldsInSearch)
 
 	existingFieldSet := container.NewHashSet()
 	for _, f := range existingFields {
@@ -270,7 +273,7 @@ func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.Co
 		if !s.IsReserved() && s.DataType == DateTimeType {
 			tsFields = append(tsFields, tsApi.Field{
 				Name:     ToSearchDateKey(s.Name()),
-				Type:     toSearchFieldType(StringType),
+				Type:     toSearchFieldType(StringType, UnknownType),
 				Facet:    &ptrFalse,
 				Index:    &ptrFalse,
 				Sort:     &ptrFalse,

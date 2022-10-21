@@ -58,6 +58,22 @@ func (m *storeImplWithMetrics) measure(ctx context.Context, name string, f func(
 	measurement.RecordDuration(metrics.SearchErrorRespTime, measurement.GetSearchErrorTags(err))
 }
 
+func (m *storeImplWithMetrics) AllCollections(ctx context.Context) (resp map[string]*tsApi.CollectionResponse, err error) {
+	m.measure(ctx, "AllCollections", func(ctx context.Context) error {
+		resp, err = m.s.AllCollections(ctx)
+		return err
+	})
+	return
+}
+
+func (m *storeImplWithMetrics) DescribeCollection(ctx context.Context, name string) (resp *tsApi.CollectionResponse, err error) {
+	m.measure(ctx, "DescribeCollection", func(ctx context.Context) error {
+		resp, err = m.s.DescribeCollection(ctx, name)
+		return err
+	})
+	return
+}
+
 func (m *storeImplWithMetrics) CreateCollection(ctx context.Context, schema *tsApi.CollectionSchema) (err error) {
 	m.measure(ctx, "CreateCollection", func(ctx context.Context) error {
 		err = m.s.CreateCollection(ctx, schema)
@@ -230,6 +246,27 @@ func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query
 	}
 
 	return dest.Results, nil
+}
+
+func (s *storeImpl) AllCollections(_ context.Context) (map[string]*tsApi.CollectionResponse, error) {
+	resp, err := s.client.Collections().Retrieve()
+	if err != nil {
+		return nil, s.convertToInternalError(err)
+	}
+
+	respMap := make(map[string]*tsApi.CollectionResponse)
+	for _, r := range resp {
+		respMap[r.Name] = r
+	}
+	return respMap, nil
+}
+
+func (s *storeImpl) DescribeCollection(_ context.Context, name string) (*tsApi.CollectionResponse, error) {
+	resp, err := s.client.Collection(name).Retrieve()
+	if err != nil {
+		return nil, s.convertToInternalError(err)
+	}
+	return resp, nil
 }
 
 func (s *storeImpl) CreateCollection(_ context.Context, schema *tsApi.CollectionSchema) error {

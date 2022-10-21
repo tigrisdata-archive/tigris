@@ -16,8 +16,12 @@ package v1
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+
+	ulog "github.com/tigrisdata/tigris/util/log"
 
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
@@ -43,6 +47,8 @@ type managementService struct {
 	*transaction.Manager
 	*metadata.TenantManager
 }
+
+type nsDetailsResp = map[string]map[string]map[string]map[string]string
 
 func newManagementService(authProvider AuthProvider, txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, userstore *metadata.UserSubspace) *managementService {
 	if authProvider == nil && config.DefaultConfig.Auth.EnableOauth {
@@ -144,6 +150,70 @@ func (m *managementService) ListNamespaces(ctx context.Context, _ *api.ListNames
 	}
 	return &api.ListNamespacesResponse{
 		Namespaces: namespacesInfo,
+	}, nil
+}
+
+func (m *managementService) getNameSpaceDetails(ctx context.Context) (nsDetailsResp, error) {
+	res := make(nsDetailsResp)
+	tx, err := m.Manager.StartTx(ctx)
+	if err != nil {
+		return nil, errors.Internal("Failed to begin transaction")
+	}
+	namespaces, err := m.TenantManager.ListNamespaces(ctx, tx)
+	if err != nil {
+		_ = tx.Rollback(ctx)
+		return nil, err
+	}
+	_ = tx.Commit(ctx)
+
+	for _, namespace := range namespaces {
+		nsName := namespace.Metadata().Name
+		tenant, err := m.TenantManager.GetTenant(ctx, nsName)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, dbName := range tenant.ListDatabases(ctx) {
+			db, err := tenant.GetDatabase(ctx, dbName)
+			if err != nil {
+				return nil, err
+			}
+
+			if db == nil {
+				// database was dropped in the meantime
+				continue
+			}
+
+			for _, coll := range db.ListCollection() {
+				size, err := tenant.CollectionSize(ctx, db, coll)
+				if err != nil {
+					return nil, err
+				}
+				res[nsName][dbName][coll.Name] = map[string]string{
+					"schema": string(coll.Schema),
+					"size":   strconv.FormatInt(size, 10),
+				}
+			}
+		}
+	}
+	return res, nil
+}
+
+func (m *managementService) DescribeNamespaces(ctx context.Context, _ *api.DescribeNamespacesRequest) (*api.DescribeNamespacesResponse, error) {
+	data, err := m.getNameSpaceDetails(ctx)
+	if ulog.E(err) {
+		return nil, err
+	}
+
+	jsonStr, err := json.Marshal(data)
+	if ulog.E(err) {
+		return nil, err
+	}
+
+	return &api.DescribeNamespacesResponse{
+		Data: &api.DescribeNamespacesData{
+			Details: string(jsonStr),
+		},
 	}, nil
 }
 

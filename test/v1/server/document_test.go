@@ -2536,6 +2536,327 @@ func TestTransaction_BadID(t *testing.T) {
 	testError(resp, http.StatusInternalServerError, api.Code_INTERNAL, "session is gone")
 }
 
+func TestFilteringOnArrays_Primitives(t *testing.T) {
+	db, _ := setupTests(t)
+	defer cleanupTests(t, db)
+
+	collection := "test_nested_objects_arrays"
+	schema := []byte(`{
+  "schema": {
+    "properties": {
+      "arr_obj": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "zipcodes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "string_arr": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "int_arr": {
+        "type": "array",
+        "items": {
+          "type": "integer"
+        }
+      },
+      "double_arr": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        }
+      },
+      "bool_arr": {
+        "type": "array",
+        "items": {
+          "type": "boolean"
+        }
+      },
+      "arr_of_arr": {
+        "type": "array",
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "obj": {
+        "type": "object",
+        "properties": {
+          "array_obj": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "university": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "str_field": {
+            "type": "string"
+          },
+		  "arr_primitive": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "pkey_int": {
+        "type": "integer"
+	  }
+    },
+    "primary_key": ["pkey_int"],
+    "title": "test_nested_objects_arrays"
+  }
+}`)
+	var schemaObj map[string]any
+	require.NoError(t, json.Unmarshal(schema, &schemaObj))
+	createCollection(t, db, collection, schemaObj).Status(200)
+
+	jsonDocuments := []byte(`[
+  {
+    "pkey_int": 1,
+    "arr_of_arr": [
+      [
+        "shopping",
+        "clothes",
+        "shoes"
+      ],
+      [
+        "playing",
+        "soccerr",
+        "tennis"
+      ]
+    ],
+    "obj": {
+      "array_obj": [
+        {
+          "university": "abc@university"
+        },
+        {
+          "university": "cal@university"
+        }
+      ],
+      "str_field": "masters",
+      "arr_primitive": [
+        "cars",
+        "bikes"
+      ]
+    },
+    "arr_obj": [
+      {
+        "name": "classic",
+        "zipcodes": [
+          "95008",
+          "94089"
+        ]
+      }
+    ],
+    "string_arr": [
+      "paris",
+      "italy"
+    ],
+    "int_arr": [
+      10,
+      20
+    ],
+    "double_arr": [
+      11.1,
+      12.2
+    ],
+    "bool_arr": [
+      true,
+      false
+    ]
+  },
+  {
+    "pkey_int": 2,
+    "arr_of_arr": [
+      [
+        "product",
+        "branding"
+      ],
+      [
+        "marketing"
+      ]
+    ],
+    "obj": {
+      "array_obj": [
+        {
+          "university": "stan@university"
+        },
+        {
+          "university": "mit@university"
+        }
+      ],
+      "str_field": "bachelors",
+      "arr_primitive": [
+        "tennis",
+        "soccer",
+        "football"
+      ]
+    },
+    "arr_obj": [
+      {
+        "name": "exemplary",
+        "zipcodes": [
+          "1234"
+        ]
+      }
+    ],
+    "string_arr": [
+      "switzerland",
+      "london"
+    ],
+    "int_arr": [
+      30,
+      40
+    ],
+    "double_arr": [
+      21.1,
+      22.2
+    ],
+    "bool_arr": [
+      true,
+      false
+    ]
+  },
+  {
+    "pkey_int": 3,
+    "arr_of_arr": [
+      [
+        "books",
+        "novels",
+        "product"
+      ],
+      [
+        "system",
+        "reading"
+      ]
+    ],
+    "obj": {
+      "array_obj": [
+        {
+          "university": "berk@university"
+        },
+        {
+          "university": "harvard@university"
+        }
+      ],
+      "str_field": "psychology",
+      "arr_primitive": [
+        "books",
+        "music"
+      ]
+    },
+    "arr_obj": [
+      {
+        "name": "demo",
+        "zipcodes": [
+          "95123"
+        ]
+      }
+    ],
+    "string_arr": [
+      "rome",
+      "italy"
+    ],
+    "int_arr": [
+      40,
+      50
+    ],
+    "double_arr": [
+      51.1,
+      52.2
+    ],
+    "bool_arr": [
+      true,
+      false
+    ]
+  }
+]`)
+
+	var inputRaw []json.RawMessage
+	require.NoError(t, json.Unmarshal(jsonDocuments, &inputRaw))
+	var inputDocument []Doc
+	for _, raw := range inputRaw {
+		var doc Doc
+		require.NoError(t, json.Unmarshal(raw, &doc))
+		inputDocument = append(inputDocument, doc)
+	}
+
+	// should always succeed with mustNotExists as false
+	insertDocuments(t, db, collection, inputDocument, false).
+		Status(http.StatusOK)
+
+	// second document
+	readAndValidate(t,
+		db,
+		collection,
+		Map{
+			"obj.arr_primitive": "tennis",
+		},
+		nil,
+		inputDocument[1:2])
+
+	// first document, string array
+	readAndValidate(t,
+		db,
+		collection,
+		Map{
+			"string_arr": "paris",
+		},
+		nil,
+		inputDocument[0:1])
+
+	// first document, double array type
+	readAndValidate(t,
+		db,
+		collection,
+		Map{
+			"double_arr": 11.1,
+		},
+		nil,
+		inputDocument[0:1])
+
+	// third document, complete array match
+	readAndValidate(t,
+		db,
+		collection,
+		Map{
+			"string_arr": []interface{}{"rome", "italy"},
+		},
+		nil,
+		inputDocument[2:3])
+
+	readExpError(t,
+		db,
+		collection,
+		Map{
+			"arr_obj.name": "classic",
+		},
+		http.StatusBadRequest,
+	)
+}
+
 func insertDocuments(t *testing.T, db string, collection string, documents []Doc, mustNotExist bool) *httpexpect.Response {
 	e := expect(t)
 
@@ -2575,6 +2896,23 @@ func deleteByFilter(t *testing.T, db string, collection string, filter Map) *htt
 	return e.DELETE(getDocumentURL(db, collection, "delete")).
 		WithJSON(filter).
 		Expect()
+}
+
+func readExpError(t *testing.T, db string, collection string, filter Map, expectedErrorCode int) {
+	payload := make(Map)
+	if filter == nil {
+		payload["filter"] = json.RawMessage(`{}`)
+	} else {
+		payload["filter"] = filter
+	}
+
+	e := expect(t)
+	e.POST(getDocumentURL(db, collection, "read")).
+		WithJSON(payload).
+		Expect().
+		Status(expectedErrorCode).
+		Body().
+		Raw()
 }
 
 func readByFilter(t *testing.T, db string, collection string, filter Map, fields Map, collation Map) []map[string]json.RawMessage {
