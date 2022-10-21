@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"io"
 	"net/http"
 
@@ -236,6 +237,7 @@ func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query
 		return nil, s.convertToInternalError(err)
 	}
 
+	log.Info().Str("res", string(res.Body)).Msg("search response")
 	reader := bytes.NewReader(res.Body)
 	decoder := jsoniter.NewDecoder(reader)
 	decoder.UseNumber()

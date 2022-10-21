@@ -16,6 +16,7 @@ package api
 
 import (
 	"encoding/json"
+	"github.com/rs/zerolog/log"
 	"io"
 	"net/url"
 	"strings"
@@ -784,6 +785,7 @@ func (x *ReadResponse) MarshalJSON() ([]byte, error) {
 		Metadata:    CreateMDFromResponseMD(x.Metadata),
 		ResumeToken: x.ResumeToken,
 	}
+	log.Info().Str("marshaler", string(x.Data)).Msg("read response marshaler")
 	return json.Marshal(resp)
 }
 
