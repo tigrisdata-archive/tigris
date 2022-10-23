@@ -22,6 +22,9 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/transaction"
 	"google.golang.org/grpc"
 )
 
@@ -31,13 +34,25 @@ const (
 
 type healthService struct {
 	api.UnimplementedHealthAPIServer
+
+	versionH *metadata.VersionHandler
+	txMgr    *transaction.Manager
 }
 
-func newHealthService() *healthService {
-	return &healthService{}
+func newHealthService(txMgr *transaction.Manager) *healthService {
+	return &healthService{
+		versionH: &metadata.VersionHandler{},
+		txMgr:    txMgr,
+	}
 }
 
-func (h *healthService) Health(_ context.Context, _ *api.HealthCheckInput) (*api.HealthCheckResponse, error) {
+func (h *healthService) Health(ctx context.Context, _ *api.HealthCheckInput) (*api.HealthCheckResponse, error) {
+	_, err := h.versionH.ReadInOwnTxn(ctx, h.txMgr, false)
+
+	if err != nil {
+		return nil, errors.Unavailable("Could not read metadata version")
+	}
+
 	return &api.HealthCheckResponse{
 		Response: "OK",
 	}, nil

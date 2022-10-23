@@ -80,6 +80,12 @@ func Aborted(format string, args ...any) error {
 		format, args...)
 }
 
+// Unavailable constructs service unavailable error (HTTP: 503)
+func Unavailable(format string, args ...any) error {
+	return api.Errorf(api.Code_UNAVAILABLE,
+		format, args...)
+}
+
 // Unknown constructs internal server error (HTTP: 500).
 func Unknown(format string, args ...any) error {
 	return api.Errorf(api.Code_UNKNOWN,
