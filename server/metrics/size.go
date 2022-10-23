@@ -35,6 +35,7 @@ func getNameSpaceSizeTagKeys() []string {
 		"env",
 		"service",
 		"tigris_tenant",
+		"tigris_tenant_name",
 		"version",
 	}
 }
@@ -44,6 +45,7 @@ func getDbSizeTagKeys() []string {
 		"env",
 		"service",
 		"tigris_tenant",
+		"tigris_tenant_name",
 		"version",
 		"db",
 	}
@@ -54,47 +56,51 @@ func getCollectionSizeTagKeys() []string {
 		"env",
 		"service",
 		"tigris_tenant",
+		"tigris_tenant_name",
 		"version",
 		"db",
 		"collection",
 	}
 }
 
-func getNamespaceSizeTags(namespaceName string) map[string]string {
+func getNamespaceSizeTags(namespace string, namespaceName string) map[string]string {
 	return map[string]string{
-		"tigris_tenant": namespaceName,
+		"tigris_tenant":      namespace,
+		"tigris_tenant_name": GetTenantNameTagValue(namespace, namespaceName),
 	}
 }
 
-func getDbSizeTags(namespaceName string, dbName string) map[string]string {
+func getDbSizeTags(namespace string, namespaceName string, dbName string) map[string]string {
 	return map[string]string{
-		"tigris_tenant": namespaceName,
-		"db":            dbName,
+		"tigris_tenant":      namespace,
+		"tigris_tenant_name": GetTenantNameTagValue(namespace, namespaceName),
+		"db":                 dbName,
 	}
 }
 
-func getCollectionSizeTags(namespaceName string, dbName string, collectionName string) map[string]string {
+func getCollectionSizeTags(namespace string, namespaceName string, dbName string, collectionName string) map[string]string {
 	return map[string]string{
-		"tigris_tenant": namespaceName,
-		"db":            dbName,
-		"collection":    collectionName,
+		"tigris_tenant":      namespace,
+		"tigris_tenant_name": GetTenantNameTagValue(namespace, namespaceName),
+		"db":                 dbName,
+		"collection":         collectionName,
 	}
 }
 
-func UpdateNameSpaceSizeMetrics(namespaceName string, size int64) {
+func UpdateNameSpaceSizeMetrics(namespace string, namespaceName string, size int64) {
 	if NamespaceSize != nil {
-		NamespaceSize.Tagged(getNamespaceSizeTags(namespaceName)).Gauge("bytes").Update(float64(size))
+		NamespaceSize.Tagged(getNamespaceSizeTags(namespace, namespaceName)).Gauge("bytes").Update(float64(size))
 	}
 }
 
-func UpdateDbSizeMetrics(namespaceName string, dbName string, size int64) {
+func UpdateDbSizeMetrics(namespace string, namespaceName string, dbName string, size int64) {
 	if NamespaceSize != nil {
-		DbSize.Tagged(getDbSizeTags(namespaceName, dbName)).Gauge("bytes").Update(float64(size))
+		DbSize.Tagged(getDbSizeTags(namespace, namespaceName, dbName)).Gauge("bytes").Update(float64(size))
 	}
 }
 
-func UpdateCollectionSizeMetrics(namespaceName string, dbName string, collectionName string, size int64) {
+func UpdateCollectionSizeMetrics(namespace string, namespaceName string, dbName string, collectionName string, size int64) {
 	if NamespaceSize != nil {
-		CollectionSize.Tagged(getCollectionSizeTags(namespaceName, dbName, collectionName)).Gauge("bytes").Update(float64(size))
+		CollectionSize.Tagged(getCollectionSizeTags(namespace, namespaceName, dbName, collectionName)).Gauge("bytes").Update(float64(size))
 	}
 }

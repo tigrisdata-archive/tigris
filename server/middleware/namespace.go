@@ -20,6 +20,7 @@ import (
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/lib/container"
+	"github.com/tigrisdata/tigris/server/defaults"
 	"github.com/tigrisdata/tigris/server/request"
 	"google.golang.org/grpc"
 )
@@ -34,7 +35,7 @@ var (
 
 func namespaceSetterUnaryServerInterceptor(enabled bool) func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		namespace := request.DefaultNamespaceName
+		namespace := defaults.DefaultNamespaceName
 		if enabled && !excludedMethods.Contains(info.FullMethod) {
 			var err error
 			if namespace, err = namespaceExtractor.Extract(ctx); err != nil {
@@ -44,7 +45,7 @@ func namespaceSetterUnaryServerInterceptor(enabled bool) func(ctx context.Contex
 					// We return and error when the token is set, but namespace is empty
 					return nil, err
 				}
-				namespace = request.DefaultNamespaceName
+				namespace = defaults.DefaultNamespaceName
 			}
 		}
 
@@ -54,7 +55,7 @@ func namespaceSetterUnaryServerInterceptor(enabled bool) func(ctx context.Contex
 
 func namespaceSetterStreamServerInterceptor(enabled bool) grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		namespace := request.DefaultNamespaceName
+		namespace := defaults.DefaultNamespaceName
 		if enabled {
 			var err error
 			if namespace, err = namespaceExtractor.Extract(stream.Context()); err != nil {

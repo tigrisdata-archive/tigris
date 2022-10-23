@@ -34,6 +34,7 @@ func getAuthOkTagKeys() []string {
 		"service",
 		"version",
 		"tigris_tenant",
+		"tigris_tenant_name",
 	}
 }
 
@@ -44,6 +45,7 @@ func getAuthErrorTagKeys() []string {
 		"service",
 		"version",
 		"tigris_tenant",
+		"tigris_tenant_name",
 		"error_source",
 		"error_value",
 	}

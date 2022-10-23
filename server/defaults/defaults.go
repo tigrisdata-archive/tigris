@@ -12,18 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package metrics
+package defaults
 
-import (
-	"context"
-
-	"github.com/tigrisdata/tigris/server/request"
+const (
+	// DefaultNamespaceName is for "default" namespace in the cluster which means all the databases created are under a single
+	// namespace.
+	// It is totally fine for a deployment to choose this and just have one namespace. The default assigned value for
+	// this namespace is 1.
+	DefaultNamespaceName string = "default_namespace"
+	DefaultNamespaceId          = uint32(1)
+	UnknownValue                = "unknown"
 )
-
-func GetNamespace(ctx context.Context) string {
-	namespace, err := request.GetNamespace(ctx)
-	if err != nil {
-		namespace = "unknown"
-	}
-	return namespace
-}

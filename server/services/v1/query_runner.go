@@ -37,6 +37,7 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
@@ -1504,7 +1505,10 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		if err != nil {
 			return nil, ctx, err
 		}
-		namespace := metrics.GetNamespace(ctx)
+		namespace, err := request.GetNamespace(ctx)
+		if err != nil {
+			namespace = "unknown"
+		}
 
 		coll, err := runner.getCollection(db, runner.describeReq.GetCollection())
 		if err != nil {
@@ -1516,7 +1520,9 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			return nil, ctx, err
 		}
 
-		metrics.UpdateCollectionSizeMetrics(namespace, db.Name(), coll.GetName(), size)
+		tenantName := tenant.GetNamespace().Metadata().Name
+
+		metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.Name(), coll.GetName(), size)
 		// remove indexing version from the schema before returning the response
 		schema := schema.RemoveIndexingVersion(coll.Schema)
 
@@ -1603,7 +1609,12 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		if err != nil {
 			return nil, ctx, err
 		}
-		namespace := metrics.GetNamespace(ctx)
+
+		namespace, err := request.GetNamespace(ctx)
+		if err != nil {
+			namespace = "unknown"
+		}
+		tenantName := tenant.GetNamespace().Metadata().Name
 
 		collectionList := db.ListCollection()
 
@@ -1614,7 +1625,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 				return nil, ctx, err
 			}
 
-			metrics.UpdateCollectionSizeMetrics(namespace, db.Name(), c.GetName(), size)
+			metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.Name(), c.GetName(), size)
 
 			// remove indexing version from the schema before returning the response
 			schema := schema.RemoveIndexingVersion(c.Schema)
@@ -1631,7 +1642,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			return nil, ctx, err
 		}
 
-		metrics.UpdateDbSizeMetrics(namespace, db.Name(), size)
+		metrics.UpdateDbSizeMetrics(namespace, tenantName, db.Name(), size)
 
 		return &Response{
 			Response: &api.DescribeDatabaseResponse{
