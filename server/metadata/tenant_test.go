@@ -196,7 +196,7 @@ func TestTenantManager_CreateDatabases(t *testing.T) {
 		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db2")
 		require.NoError(t, err)
 
-		require.NoError(t, tenant.reload(ctx, tx, nil))
+		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
 		db1, err := tenant.GetDatabase(ctx, "tenant_db1")
 		require.NoError(t, err)
 		require.Equal(t, "tenant_db1", db1.name)
@@ -230,7 +230,7 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db2")
 		require.NoError(t, err)
 
-		require.NoError(t, tenant.reload(ctx, tx, nil))
+		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
 
 		db1, err := tenant.GetDatabase(ctx, "tenant_db1")
 		require.NoError(t, err)
@@ -265,7 +265,7 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, tenant.CreateCollection(ctx, tx, db2, factory))
 
-		require.NoError(t, tenant.reload(ctx, tx, nil))
+		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
 
 		db2, err = tenant.GetDatabase(ctx, "tenant_db2")
 		require.NoError(t, err)
@@ -300,7 +300,7 @@ func TestTenantManager_DropCollection(t *testing.T) {
 		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db2")
 		require.NoError(t, err)
 
-		require.NoError(t, tenant.reload(ctx, tx, nil))
+		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
 
 		db1, err := tenant.GetDatabase(ctx, "tenant_db1")
 		require.NoError(t, err)
@@ -326,7 +326,7 @@ func TestTenantManager_DropCollection(t *testing.T) {
 		factory, err := schema.Build("test_collection", jsSchema)
 		require.NoError(t, err)
 		require.NoError(t, tenant.CreateCollection(ctx, tx, db2, factory))
-		require.NoError(t, tenant.reload(ctx, tx, nil))
+		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTx(ctx)
@@ -379,8 +379,8 @@ func TestTenantManager_DataSize(t *testing.T) {
 	_, err = tenant2.CreateDatabase(ctx, tx, "tenant_db2")
 	require.NoError(t, err)
 
-	require.NoError(t, tenant.reload(ctx, tx, nil))
-	require.NoError(t, tenant2.reload(ctx, tx, nil))
+	require.NoError(t, tenant.reload(ctx, tx, nil, nil))
+	require.NoError(t, tenant2.reload(ctx, tx, nil, nil))
 
 	jsSchema := []byte(`{
         "title": "test_collection",
@@ -423,8 +423,8 @@ func TestTenantManager_DataSize(t *testing.T) {
 	require.NoError(t, tenant2.CreateCollection(ctx, tx, db22, factory))
 	require.NoError(t, err)
 
-	require.NoError(t, tenant.reload(ctx, tx, nil))
-	require.NoError(t, tenant2.reload(ctx, tx, nil))
+	require.NoError(t, tenant.reload(ctx, tx, nil, nil))
+	require.NoError(t, tenant2.reload(ctx, tx, nil, nil))
 
 	require.NoError(t, tx.Commit(context.TODO()))
 

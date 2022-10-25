@@ -21,8 +21,6 @@ import (
 	"net/http"
 	"strconv"
 
-	ulog "github.com/tigrisdata/tigris/util/log"
-
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -33,6 +31,7 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/transaction"
+	ulog "github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc"
 )
 
