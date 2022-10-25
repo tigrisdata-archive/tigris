@@ -21,6 +21,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"math"
 	"net/http"
 	"net/url"
 	"time"
@@ -48,6 +49,8 @@ const (
 	tigrisNamespace    = "tigris_namespace"
 	clientCredentials  = "client_credentials"
 	defaultNamespaceId = 1
+	// pagination param for list clients auth0 call
+	perPage = 50
 )
 
 type AuthProvider interface {
@@ -236,35 +239,54 @@ func (a *Auth0) RotateApplicationSecret(ctx context.Context, req *api.RotateAppl
 }
 
 func (a *Auth0) ListApplications(ctx context.Context, _ *api.ListApplicationsRequest) (*api.ListApplicationsResponse, error) {
-	appList, err := a.Management.Client.List(management.IncludeFields("client_id", "client_metadata", "client_secret", "description", "name"))
+	appList, err := a.Management.Client.List(
+		management.IncludeFields("client_id", "client_metadata", "client_secret", "description", "name"),
+		management.Page(0),
+		management.PerPage(perPage),
+		management.IncludeTotals(true),
+	)
 	if err != nil {
 		return nil, api.Errorf(a.managementToTigrisErrorCode(err), "Failed to list applications: reason = %s", err.Error())
 	}
+	total := appList.Total
+	totalPages := int(math.Ceil(float64(total) / float64(perPage)))
 
 	currentSub, err := getCurrentSub(ctx)
 	if err != nil {
 		return nil, errors.Internal("Failed to list applications: reason = %s", err.Error())
 	}
-
 	currentNamespace, err := request.GetNamespace(ctx)
 	if err != nil {
 		return nil, errors.Internal("Failed to list applications: reason = %s", err.Error())
 	}
+
 	var apps []*api.Application
-	for _, client := range appList.Clients {
-		// filter for this user's apps for this tenant
-		if client.GetClientMetadata()[createdBy] == currentSub && client.GetClientMetadata()[tigrisNamespace] == currentNamespace {
-			app := &api.Application{
-				Name:        client.GetName(),
-				Description: client.GetDescription(),
-				Id:          client.GetClientID(),
-				Secret:      client.GetClientSecret(),
-				CreatedAt:   readDate(client.GetClientMetadata()[createdAt]),
-				CreatedBy:   client.GetClientMetadata()[createdBy],
-				UpdatedAt:   readDate(client.GetClientMetadata()[updatedAt]),
-				UpdatedBy:   client.GetClientMetadata()[updatedBy],
+	for pageCount := 1; pageCount <= totalPages; pageCount++ {
+		for _, client := range appList.Clients {
+			// filter for this user's apps for this tenant
+			if client.GetClientMetadata()[createdBy] == currentSub && client.GetClientMetadata()[tigrisNamespace] == currentNamespace {
+				app := &api.Application{
+					Name:        client.GetName(),
+					Description: client.GetDescription(),
+					Id:          client.GetClientID(),
+					Secret:      client.GetClientSecret(),
+					CreatedAt:   readDate(client.GetClientMetadata()[createdAt]),
+					CreatedBy:   client.GetClientMetadata()[createdBy],
+					UpdatedAt:   readDate(client.GetClientMetadata()[updatedAt]),
+					UpdatedBy:   client.GetClientMetadata()[updatedBy],
+				}
+				apps = append(apps, app)
 			}
-			apps = append(apps, app)
+		}
+
+		appList, err = a.Management.Client.List(
+			management.IncludeFields("client_id", "client_metadata", "client_secret", "description", "name"),
+			management.Page(pageCount),
+			management.PerPage(perPage),
+			management.IncludeTotals(true),
+		)
+		if err != nil {
+			return nil, api.Errorf(a.managementToTigrisErrorCode(err), "Failed to list applications: reason = %s", err.Error())
 		}
 	}
 	return &api.ListApplicationsResponse{
