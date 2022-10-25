@@ -2,11 +2,10 @@ name: cli-test
 on:
   push:
     branches:
-      - "main"
-      - "release"
-      - "alpha"
-      - "beta"
-      - "rc"
+      - "!release"
+      - "!alpha"
+      - "!beta"
+      - "!rc"
   workflow_call:
   pull_request:
 jobs:
