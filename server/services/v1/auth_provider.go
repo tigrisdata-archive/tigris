@@ -49,7 +49,7 @@ const (
 	tigrisNamespace    = "tigris_namespace"
 	clientCredentials  = "client_credentials"
 	defaultNamespaceId = 1
-	// pagination param for list clients auth0 call
+	// pagination param for list clients auth0 call.
 	perPage = 50
 )
 

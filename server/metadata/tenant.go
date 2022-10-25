@@ -278,6 +278,12 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string) (te
 	if tenant, found := m.tenants[namespaceName]; found {
 		return tenant, nil
 	}
+
+	collectionsInSearch, err := m.searchStore.AllCollections(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// this will never create new namespace
 	// when the authn/authz is setup correctly
 	// this is for reading namespaces from storage into cache
@@ -314,7 +320,7 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string) (te
 
 	namespace := NewTenantNamespace(namespaceName, metadata)
 	tenant = NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
-	if err = tenant.reload(ctx, tx, currentVersion); err != nil {
+	if err = tenant.reload(ctx, tx, currentVersion, collectionsInSearch); err != nil {
 		return nil, err
 	}
 	return
@@ -350,9 +356,13 @@ func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transa
 			return nil, err
 		}
 
+		collectionsInSearch, err := m.searchStore.AllCollections(ctx)
+		if err != nil {
+			return nil, err
+		}
 		tenant := NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
 		tenant.Lock()
-		err = tenant.reload(ctx, tx, currentVersion)
+		err = tenant.reload(ctx, tx, currentVersion, collectionsInSearch)
 		tenant.Unlock()
 		return tenant, err
 	}
@@ -440,7 +450,7 @@ func (m *TenantManager) DecodeTableName(tableName []byte) (string, string, strin
 // As this is an expensive call, the reloading happens only during the start of the server. It is possible that reloading
 // fails during start time then we rely on each transaction to detect it and trigger reload. The consistency shouldn’t
 // be impacted if we fail to load the in-memory view.
-func (m *TenantManager) Reload(ctx context.Context, tx transaction.Tx) error {
+func (m *TenantManager) Reload(ctx context.Context, tx transaction.Tx, collectionsInSearch map[string]*tsApi.CollectionResponse) error {
 	log.Debug().Msg("reloading tenants")
 	m.Lock()
 	defer m.Unlock()
@@ -450,7 +460,7 @@ func (m *TenantManager) Reload(ctx context.Context, tx transaction.Tx) error {
 		return err
 	}
 
-	if err = m.reload(ctx, tx, currentVersion); ulog.E(err) {
+	if err = m.reload(ctx, tx, currentVersion, collectionsInSearch); ulog.E(err) {
 		return err
 	}
 	m.version = currentVersion
@@ -458,7 +468,7 @@ func (m *TenantManager) Reload(ctx context.Context, tx transaction.Tx) error {
 	return err
 }
 
-func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVersion Version) error {
+func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVersion Version, collectionsInSearch map[string]*tsApi.CollectionResponse) error {
 	namespaces, err := m.metaStore.GetNamespaces(ctx, tx)
 	if err != nil {
 		return err
@@ -475,7 +485,7 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVe
 	for _, tenant := range m.tenants {
 		log.Debug().Interface("tenant", tenant.String()).Msg("reloading tenant")
 		tenant.Lock()
-		err := tenant.reload(ctx, tx, currentVersion)
+		err := tenant.reload(ctx, tx, currentVersion, collectionsInSearch)
 		tenant.Unlock()
 		if err != nil {
 			return err
@@ -519,22 +529,18 @@ func NewTenant(namespace Namespace, kvStore kv.KeyValueStore, searchStore search
 
 // reload will reload all the databases for this tenant. This is only reloading all the databases that exists in the
 // tenant.
-func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVersion Version) error {
+func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVersion Version, collectionsInSearch map[string]*tsApi.CollectionResponse) error {
 	// reset
 	tenant.databases = make(map[string]*Database)
 	tenant.idToDatabaseMap = make(map[uint32]string)
 
-	searchAllCollections, err := tenant.searchStore.AllCollections(ctx)
-	if err != nil {
-		return err
-	}
 	dbNameToId, err := tenant.metaStore.GetDatabases(ctx, tx, tenant.namespace.Id())
 	if err != nil {
 		return err
 	}
 
 	for db, id := range dbNameToId {
-		database, err := tenant.reloadDatabase(ctx, tx, db, id, searchAllCollections)
+		database, err := tenant.reloadDatabase(ctx, tx, db, id, collectionsInSearch)
 		if ulog.E(err) {
 			return err
 		}
@@ -564,7 +570,11 @@ func (tenant *Tenant) Reload(ctx context.Context, tx transaction.Tx, version Ver
 		return nil
 	}
 
-	return tenant.reload(ctx, tx, version)
+	collectionsInSearch, err := tenant.searchStore.AllCollections(ctx)
+	if err != nil {
+		return err
+	}
+	return tenant.reload(ctx, tx, version, collectionsInSearch)
 }
 
 func (tenant *Tenant) shouldReload(currentVersion Version) bool {

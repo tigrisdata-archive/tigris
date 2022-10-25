@@ -48,7 +48,6 @@ func newHealthService(txMgr *transaction.Manager) *healthService {
 
 func (h *healthService) Health(ctx context.Context, _ *api.HealthCheckInput) (*api.HealthCheckResponse, error) {
 	_, err := h.versionH.ReadInOwnTxn(ctx, h.txMgr, false)
-
 	if err != nil {
 		return nil, errors.Unavailable("Could not read metadata version")
 	}

@@ -75,13 +75,18 @@ func newApiService(kv kv.KeyValueStore, searchStore search.Store, tenantMgr *met
 		tenantMgr:   tenantMgr,
 	}
 
+	collectionsInSearch, err := u.searchStore.AllCollections(context.TODO())
+	if err != nil {
+		log.Fatal().Err(err).Msgf("error starting server: loading schemas from search failed")
+	}
+
 	ctx := context.TODO()
 	tx, err := u.txMgr.StartTx(ctx)
 	if ulog.E(err) {
 		log.Fatal().Err(err).Msgf("error starting server: starting transaction failed")
 	}
 
-	if err := tenantMgr.Reload(ctx, tx); ulog.E(err) {
+	if err := tenantMgr.Reload(ctx, tx, collectionsInSearch); ulog.E(err) {
 		// ToDo: no need to panic, probably handle through async thread.
 		log.Fatal().Err(err).Msgf("error starting server: reloading tenants failed")
 	}
