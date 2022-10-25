@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/defaults"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/request"
 	"go.uber.org/atomic"
@@ -267,8 +268,8 @@ func TestQuotaConfigLimits(t *testing.T) {
 	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, ns, 1024*51, true))
 
 	// "Default namespace" is unlimited by default
-	require.NoError(t, m.Allow(ctx, request.DefaultNamespaceName, 4096*101, false))
-	require.NoError(t, m.Allow(ctx, request.DefaultNamespaceName, 1024*51, true))
+	require.NoError(t, m.Allow(ctx, defaults.DefaultNamespaceName, 4096*101, false))
+	require.NoError(t, m.Allow(ctx, defaults.DefaultNamespaceName, 1024*51, true))
 
 	cfg.Namespace.Default = config.LimitsConfig{ReadUnits: 20000, WriteUnits: 10000}
 
@@ -286,14 +287,14 @@ func TestQuotaConfigLimits(t *testing.T) {
 	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, ns+"_other", 1024*51, true))
 
 	// Test that we optionally can limit "default namespace" too
-	cfg.Namespace.Namespaces = map[string]config.LimitsConfig{request.DefaultNamespaceName: {ReadUnits: 100, WriteUnits: 50}}
+	cfg.Namespace.Namespaces = map[string]config.LimitsConfig{defaults.DefaultNamespaceName: {ReadUnits: 100, WriteUnits: 50}}
 
-	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, request.DefaultNamespaceName, 4096*101, false))
-	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, request.DefaultNamespaceName, 1024*51, true))
+	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, defaults.DefaultNamespaceName, 4096*101, false))
+	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, defaults.DefaultNamespaceName, 1024*51, true))
 
 	// Test blacklisting
-	cfg.Namespace.Namespaces = map[string]config.LimitsConfig{request.DefaultNamespaceName: {ReadUnits: -1, WriteUnits: -1}}
+	cfg.Namespace.Namespaces = map[string]config.LimitsConfig{defaults.DefaultNamespaceName: {ReadUnits: -1, WriteUnits: -1}}
 
-	require.Equal(t, ErrReadUnitsExceeded, m.Allow(ctx, request.DefaultNamespaceName, 1, false))
-	require.Equal(t, ErrWriteUnitsExceeded, m.Allow(ctx, request.DefaultNamespaceName, 1, true))
+	require.Equal(t, ErrReadUnitsExceeded, m.Allow(ctx, defaults.DefaultNamespaceName, 1, false))
+	require.Equal(t, ErrWriteUnitsExceeded, m.Allow(ctx, defaults.DefaultNamespaceName, 1, true))
 }

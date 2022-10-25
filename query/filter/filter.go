@@ -62,24 +62,35 @@ func (f *EmptyFilter) ToSearchFilter() []string                 { return nil }
 
 type WrappedFilter struct {
 	Filter
+
+	searchFilter []string
 }
 
 func NewWrappedFilter(filters []Filter) *WrappedFilter {
 	if len(filters) == 0 {
-		return emptyFilter
-	}
-
-	if len(filters) <= 1 {
 		return &WrappedFilter{
-			Filter: filters[0],
+			Filter:       emptyFilter,
+			searchFilter: emptyFilter.ToSearchFilter(),
+		}
+	} else if len(filters) <= 1 {
+		return &WrappedFilter{
+			Filter:       filters[0],
+			searchFilter: filters[0].ToSearchFilter(),
 		}
 	}
 
-	return &WrappedFilter{
-		Filter: &AndFilter{
-			filter: filters,
-		},
+	andF := &AndFilter{
+		filter: filters,
 	}
+
+	return &WrappedFilter{
+		Filter:       andF,
+		searchFilter: andF.ToSearchFilter(),
+	}
+}
+
+func (w *WrappedFilter) SearchFilter() []string {
+	return w.searchFilter
 }
 
 func None(reqFilter []byte) bool {

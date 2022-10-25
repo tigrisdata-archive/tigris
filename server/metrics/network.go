@@ -27,6 +27,7 @@ func getNetworkTagKeys() []string {
 	return []string{
 		"grpc_method",
 		"tigris_tenant",
+		"tigris_tenant_name",
 		"env",
 		"db",
 		"collection",

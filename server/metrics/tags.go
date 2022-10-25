@@ -17,13 +17,14 @@ package metrics
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/config"
-	"github.com/tigrisdata/tigris/server/request"
+	"github.com/tigrisdata/tigris/server/defaults"
 	"github.com/tigrisdata/tigris/util"
 	"google.golang.org/grpc"
 )
@@ -128,7 +129,7 @@ func getDefaultValue(tagKey string) string {
 	case "version":
 		return getVersion()
 	default:
-		return request.UnknownValue
+		return defaults.UnknownValue
 	}
 }
 
@@ -184,7 +185,12 @@ func getGrpcTagsFromContext(ctx context.Context) map[string]string {
 		}
 	} else {
 		return map[string]string{
-			"grpc_method": request.UnknownValue,
+			"grpc_method": defaults.UnknownValue,
 		}
 	}
+}
+
+func GetTenantNameTagValue(namespace string, namespaceName string) string {
+	// The namespace is usually uuid format and the namespaceName is human readable, but not guanrateed to be unique
+	return fmt.Sprintf("%v_%v", namespaceName, namespace)
 }

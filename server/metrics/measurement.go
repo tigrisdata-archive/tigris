@@ -22,7 +22,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/server/config"
-	"github.com/tigrisdata/tigris/server/request"
+	"github.com/tigrisdata/tigris/server/defaults"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/uber-go/tally"
 	"google.golang.org/grpc/status"
@@ -175,7 +175,7 @@ func (m *Measurement) GetSpanOptions() []tracer.StartSpanOption {
 
 func (m *Measurement) AddTags(tags map[string]string) {
 	for k, v := range tags {
-		if _, exists := m.tags[k]; !exists || m.tags[k] == request.UnknownValue {
+		if _, exists := m.tags[k]; !exists || m.tags[k] == defaults.UnknownValue {
 			m.tags[k] = v
 			if m.span != nil {
 				// The span already exists, set the tag there as well

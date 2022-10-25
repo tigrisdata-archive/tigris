@@ -102,16 +102,9 @@ func (p *pageReader) read() error {
 		return err
 	}
 
-	sortedHits := tsearch.NewSortedHits(p.query.SortOrder)
+	hits := tsearch.NewResponseFactory(p.query).GetHitsIterator(result)
 	sortedFacets := tsearch.NewSortedFacets()
 	for _, r := range result {
-		if r.Hits != nil {
-			for i := range *r.Hits {
-				hit := tsearch.NewSearchHit(&(*r.Hits)[i])
-				sortedHits.Add(hit)
-			}
-		}
-
 		if r.FacetCounts != nil {
 			for i := range *r.FacetCounts {
 				if ulog.E(sortedFacets.Add(&(*r.FacetCounts)[i])) {
@@ -124,8 +117,8 @@ func (p *pageReader) read() error {
 	p.pageNo++
 	pg := newPage(p.query.PageSize)
 
-	for sortedHits.HasMoreHits() {
-		hit, err := sortedHits.Get()
+	for hits.HasMoreHits() {
+		hit, err := hits.Next()
 		// log and skip to next hit
 		if ulog.E(err) {
 			continue

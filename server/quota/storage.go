@@ -157,6 +157,7 @@ func (s *storage) updateMetricsForNamespace(ctx context.Context, namespace strin
 	if ulog.E(err) {
 		return
 	}
+	tenantName := tenant.GetNamespace().Metadata().Name
 
 	for _, dbName := range tenant.ListDatabases(ctx) {
 		db, err := tenant.GetDatabase(ctx, dbName)
@@ -168,16 +169,16 @@ func (s *storage) updateMetricsForNamespace(ctx context.Context, namespace strin
 			continue
 		}
 
-		metrics.UpdateDbSizeMetrics(namespace, dbName, getDbSize(ctx, tenant, db))
+		metrics.UpdateDbSizeMetrics(namespace, tenantName, dbName, getDbSize(ctx, tenant, db))
 
 		for _, coll := range db.ListCollection() {
-			metrics.UpdateCollectionSizeMetrics(namespace, dbName, coll.Name, getCollSize(ctx, tenant, db, coll))
+			metrics.UpdateCollectionSizeMetrics(namespace, tenantName, dbName, coll.Name, getCollSize(ctx, tenant, db, coll))
 		}
 	}
 
 	dsz := s.getTenantSize(ctx, namespace)
 
-	metrics.UpdateNameSpaceSizeMetrics(namespace, dsz)
+	metrics.UpdateNameSpaceSizeMetrics(namespace, tenantName, dsz)
 
 	if s.cfg.Storage.Enabled {
 		ss := s.getState(namespace)

@@ -23,6 +23,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/defaults"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/request"
@@ -67,7 +68,7 @@ type namespace struct {
 }
 
 func unlimitedDefaultNamespace(namespace string, cfg *config.NamespaceLimitsConfig) bool {
-	if namespace != request.DefaultNamespaceName {
+	if namespace != defaults.DefaultNamespaceName {
 		return false
 	}
 

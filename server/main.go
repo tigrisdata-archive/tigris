@@ -24,6 +24,7 @@ import (
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/muxer"
 	"github.com/tigrisdata/tigris/server/quota"
+	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/tracing"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
@@ -89,6 +90,7 @@ func mainWithCode() int {
 		return 1
 	}
 
+	request.Init(tenantMgr)
 	_ = quota.Init(tenantMgr, &config.DefaultConfig)
 	defer quota.Cleanup()
 
