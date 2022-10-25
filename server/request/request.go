@@ -26,22 +26,17 @@ import (
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/defaults"
+	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/metrics"
+	ulog "github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc"
 )
 
-const (
-	// DefaultNamespaceName is for "default" namespace in the cluster which means all the databases created are under a single
-	// namespace.
-	// It is totally fine for a deployment to choose this and just have one namespace. The default assigned value for
-	// this namespace is 1.
-	DefaultNamespaceName string = "default_namespace"
-
-	DefaultNamespaceId = uint32(1)
-
-	UnknownValue = "unknown"
+var (
+	adminMethods = container.NewHashSet(api.CreateNamespaceMethodName, api.ListNamespaceMethodName, api.DescribeNamespacesMethodName)
+	tenantGetter metadata.TenantGetter
 )
-
-var adminMethods = container.NewHashSet(api.CreateNamespaceMethodName, api.ListNamespaceMethodName, api.DescribeNamespacesMethodName)
 
 type MetadataCtxKey struct{}
 
@@ -56,9 +51,15 @@ type Metadata struct {
 	methodInfo  grpc.MethodInfo
 	// this is authenticated namespace
 	namespace string
-	IsHuman   bool
+	// human readable namespace name
+	namespaceName string
+	IsHuman       bool
 	// this is parsed and set early in request processing chain - before it is authenticated for observability.
 	unauthenticatedNamespaceName string
+}
+
+func Init(tg metadata.TenantGetter) {
+	tenantGetter = tg
 }
 
 func NewRequestEndpointMetadata(ctx context.Context, serviceName string, methodInfo grpc.MethodInfo) Metadata {
@@ -116,12 +117,27 @@ func (r *Metadata) GetMethodInfo() grpc.MethodInfo {
 }
 
 func (r *Metadata) GetInitialTags() map[string]string {
+	var tigrisTenantValue string
+	var tigrisTenantNameValue string
+
+	if r.namespace == "" {
+		tigrisTenantValue = r.unauthenticatedNamespaceName
+	} else {
+		tigrisTenantValue = r.namespace
+	}
+
+	if r.namespaceName == "" {
+		tigrisTenantNameValue = r.unauthenticatedNamespaceName
+	} else {
+		tigrisTenantNameValue = r.namespaceName
+	}
 	return map[string]string{
-		"grpc_method":   r.methodInfo.Name,
-		"tigris_tenant": r.unauthenticatedNamespaceName,
-		"env":           config.GetEnvironment(),
-		"db":            UnknownValue,
-		"collection":    UnknownValue,
+		"grpc_method":        r.methodInfo.Name,
+		"tigris_tenant":      tigrisTenantValue,
+		"tigris_tenant_name": tigrisTenantNameValue,
+		"env":                config.GetEnvironment(),
+		"db":                 defaults.UnknownValue,
+		"collection":         defaults.UnknownValue,
 	}
 }
 
@@ -171,6 +187,7 @@ func SetAccessToken(ctx context.Context, token *AccessToken) context.Context {
 }
 
 func SetNamespace(ctx context.Context, namespace string) context.Context {
+	var tenantName string
 	requestMetadata, err := GetRequestMetadata(ctx)
 	result := ctx
 	if err != nil && requestMetadata == nil {
@@ -178,6 +195,17 @@ func SetNamespace(ctx context.Context, namespace string) context.Context {
 		result = context.WithValue(ctx, MetadataCtxKey{}, requestMetadata)
 	}
 	requestMetadata.namespace = namespace
+
+	tenant, err := tenantGetter.GetTenant(ctx, namespace)
+	if err != nil {
+		ulog.E(err)
+	}
+	if tenant == nil {
+		tenantName = defaults.DefaultNamespaceName
+	} else {
+		tenantName = tenant.GetNamespace().Metadata().Name
+	}
+	requestMetadata.namespaceName = metrics.GetTenantNameTagValue(namespace, tenantName)
 	return result
 }
 
@@ -241,16 +269,16 @@ func getMetadataFromToken(token string) (string, bool) {
 	tokenParts := strings.SplitN(token, ".", 3)
 	if len(tokenParts) < 3 {
 		log.Debug().Msg("Could not split the token into its parts")
-		return UnknownValue, false
+		return defaults.UnknownValue, false
 	}
 	decodedToken, err := base64.RawStdEncoding.DecodeString(tokenParts[1])
 	if err != nil {
 		log.Debug().Err(err).Msg("Could not base64 decode token")
-		return UnknownValue, false
+		return defaults.UnknownValue, false
 	}
 	namespace, err := jsonparser.GetString(decodedToken, "https://tigris/n", "code")
 	if err != nil {
-		return UnknownValue, false
+		return defaults.UnknownValue, false
 	}
 	user, _, _, err := jsonparser.Get(decodedToken, "https://tigris/u")
 	if err != nil {
@@ -262,12 +290,12 @@ func getMetadataFromToken(token string) (string, bool) {
 
 func GetMetadataFromHeader(ctx context.Context) (string, bool) {
 	if !config.DefaultConfig.Auth.EnableNamespaceIsolation {
-		return DefaultNamespaceName, false
+		return defaults.DefaultNamespaceName, false
 	}
 	header := api.GetHeader(ctx, "authorization")
 	token, err := getTokenFromHeader(header)
 	if err != nil {
-		return UnknownValue, false
+		return defaults.DefaultNamespaceName, false
 	}
 
 	return getMetadataFromToken(token)

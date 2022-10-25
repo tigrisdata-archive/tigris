@@ -29,6 +29,7 @@ func getFdbOkTagKeys() []string {
 	return []string{
 		"grpc_method",
 		"tigris_tenant",
+		"tigris_tenant_name",
 		"env",
 		"db",
 		"collection",
@@ -40,6 +41,7 @@ func getFdbErrorTagKeys() []string {
 	return []string{
 		"grpc_method",
 		"tigris_tenant",
+		"tigris_tenant_name",
 		"env",
 		"db",
 		"collection",

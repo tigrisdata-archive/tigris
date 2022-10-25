@@ -28,7 +28,7 @@ import (
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/config"
-	"github.com/tigrisdata/tigris/server/request"
+	"github.com/tigrisdata/tigris/server/defaults"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
@@ -67,19 +67,23 @@ type NamespaceMetadata struct {
 // and just have one namespace. The default assigned value for this namespace is 1.
 type DefaultNamespace struct{}
 
+type TenantGetter interface {
+	GetTenant(ctx context.Context, id string) (*Tenant, error)
+}
+
 // StrId returns id assigned to the namespace.
 func (n *DefaultNamespace) StrId() string {
-	return request.DefaultNamespaceName
+	return defaults.DefaultNamespaceName
 }
 
 // Id returns id assigned to the namespace.
 func (n *DefaultNamespace) Id() uint32 {
-	return request.DefaultNamespaceId
+	return defaults.DefaultNamespaceId
 }
 
 // Metadata returns metadata assigned to the namespace.
 func (n *DefaultNamespace) Metadata() NamespaceMetadata {
-	return NewNamespaceMetadata(request.DefaultNamespaceId, request.DefaultNamespaceName, request.DefaultNamespaceName)
+	return NewNamespaceMetadata(defaults.DefaultNamespaceId, defaults.DefaultNamespaceName, defaults.DefaultNamespaceName)
 }
 
 func NewDefaultNamespace() *DefaultNamespace {
@@ -420,7 +424,7 @@ func (m *TenantManager) GetDatabaseAndCollectionId(db string, c string) (uint32,
 	m.RLock()
 	defer m.RUnlock()
 
-	tenant, ok := m.tenants[request.DefaultNamespaceName]
+	tenant, ok := m.tenants[defaults.DefaultNamespaceName]
 	if !ok {
 		return 0, 0
 	}

@@ -23,6 +23,7 @@ import (
 func TestSizeMetrics(t *testing.T) {
 	var testSize int64 = 1000
 	testNamespace := "test_namespace"
+	testNamespaceName := "test_namespace"
 	testDb := "test_db"
 	testCollection := "test_collection"
 
@@ -31,14 +32,14 @@ func TestSizeMetrics(t *testing.T) {
 	InitializeMetrics()
 
 	t.Run("Update namespace size metrics", func(t *testing.T) {
-		UpdateNameSpaceSizeMetrics(testNamespace, testSize)
+		UpdateNameSpaceSizeMetrics(testNamespace, testNamespaceName, testSize)
 	})
 
 	t.Run("Update database size metrics", func(t *testing.T) {
-		UpdateDbSizeMetrics(testNamespace, testDb, testSize)
+		UpdateDbSizeMetrics(testNamespace, testNamespaceName, testDb, testSize)
 	})
 
 	t.Run("Update collection size metrics", func(t *testing.T) {
-		UpdateCollectionSizeMetrics(testNamespace, testDb, testCollection, testSize)
+		UpdateCollectionSizeMetrics(testNamespace, testNamespaceName, testDb, testCollection, testSize)
 	})
 }
