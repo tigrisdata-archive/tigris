@@ -209,7 +209,7 @@ var DefaultConfig = Config{
 	},
 	Metrics: MetricsConfig{
 		Enabled:        true,
-		TimerQuantiles: []float64{0.5, 0.95},
+		TimerQuantiles: []float64{0.5, 0.95, 0.99},
 		Requests: RequestsMetricGroupConfig{
 			Enabled: true,
 			Counter: CounterConfig{

@@ -1,7 +1,14 @@
 name: go-test
 on:
   push:
+    branches:
+      - "main"
+      - "release"
+      - "alpha"
+      - "beta"
+      - "rc"
   workflow_call:
+  pull_request:
 jobs:
   test:
     runs-on: ubuntu-latest
