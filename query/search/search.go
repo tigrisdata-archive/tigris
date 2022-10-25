@@ -78,10 +78,6 @@ func (q *Query) ToSearchFields() string {
 	return fields
 }
 
-func (q *Query) ToSearchFilter() []string {
-	return q.WrappedF.Filter.ToSearchFilter()
-}
-
 func (q *Query) ToSortFields() string {
 	var sortBy string
 	if q.SortOrder == nil {

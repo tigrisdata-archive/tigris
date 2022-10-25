@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/buger/jsonparser"
+	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
@@ -336,6 +337,28 @@ func (runner *BaseQueryRunner) mustBeMessagesCollection(collection *schema.Defau
 	return nil
 }
 
+func (runner *BaseQueryRunner) getSortOrdering(coll *schema.DefaultCollection, sortReq jsoniter.RawMessage) (*sort.Ordering, error) {
+	ordering, err := sort.UnmarshalSort(sortReq)
+	if err != nil || ordering == nil {
+		return nil, err
+	}
+
+	for i, sf := range *ordering {
+		cf, err := coll.GetQueryableField(sf.Name)
+		if err != nil {
+			return nil, err
+		}
+		if cf.InMemoryName() != cf.Name() {
+			(*ordering)[i].Name = cf.InMemoryName()
+		}
+
+		if !cf.Sortable {
+			return nil, errors.InvalidArgument("Cannot sort on `%s` field", sf.Name)
+		}
+	}
+	return ordering, nil
+}
+
 type InsertQueryRunner struct {
 	*BaseQueryRunner
 
@@ -645,6 +668,7 @@ type readerOptions struct {
 	table         []byte
 	noFilter      bool
 	inMemoryStore bool
+	sorting       *sort.Ordering
 	filter        *filter.WrappedFilter
 	fieldFactory  *read.FieldFactory
 }
@@ -655,6 +679,9 @@ func (runner *StreamingQueryRunner) buildReaderOptions(tenant *metadata.Tenant, 
 	var collation *api.Collation
 	if runner.req.Options != nil {
 		collation = runner.req.Options.Collation
+	}
+	if options.sorting, err = runner.getSortOrdering(collection, runner.req.Sort); err != nil {
+		return options, err
 	}
 	if options.filter, err = filter.NewFactory(collection.QueryableFields, collation).WrappedFilter(runner.req.Filter); err != nil {
 		return options, err
@@ -688,7 +715,11 @@ func (runner *StreamingQueryRunner) buildReaderOptions(tenant *metadata.Tenant, 
 		}
 
 		if filter.None(runner.req.Filter) {
-			options.noFilter = true
+			if options.sorting != nil {
+				options.inMemoryStore = true
+			} else {
+				options.noFilter = true
+			}
 		} else if options.ikeys, err = runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter, collation); err != nil {
 			if !config.DefaultConfig.Search.IsReadEnabled() {
 				if options.from == nil {
@@ -837,6 +868,7 @@ func (runner *StreamingQueryRunner) iterateOnKvStore(ctx context.Context, tx tra
 func (runner *StreamingQueryRunner) iterateOnIndexingStore(ctx context.Context, collection *schema.DefaultCollection, options readerOptions) error {
 	rowReader := NewSearchReader(ctx, runner.searchStore, collection, qsearch.NewBuilder().
 		Filter(options.filter).
+		SortOrder(options.sorting).
 		PageSize(defaultPerPage).
 		Build())
 
@@ -932,7 +964,7 @@ func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.
 		return nil, ctx, err
 	}
 
-	sortOrder, err := runner.getSortOrdering(collection)
+	sortOrder, err := runner.getSortOrdering(collection, runner.req.Sort)
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -1119,25 +1151,6 @@ func (runner *SearchQueryRunner) getFieldSelection(coll *schema.DefaultCollectio
 	}
 
 	return factory, nil
-}
-
-func (runner *SearchQueryRunner) getSortOrdering(coll *schema.DefaultCollection) (*sort.Ordering, error) {
-	ordering, err := sort.UnmarshalSort(runner.req.GetSort())
-	if err != nil || ordering == nil {
-		return nil, err
-	}
-
-	for _, sf := range *ordering {
-		cf, err := coll.GetQueryableField(sf.Name)
-		if err != nil {
-			return nil, err
-		}
-
-		if !cf.Sortable {
-			return nil, errors.InvalidArgument("Cannot sort on `%s` field", sf.Name)
-		}
-	}
-	return ordering, nil
 }
 
 type PublishQueryRunner struct {
