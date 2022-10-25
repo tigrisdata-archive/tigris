@@ -27,16 +27,16 @@ import (
 func TestSearchBuilder(t *testing.T) {
 	js := []byte(`{"a": 4, "$and": [{"int_value":1}, {"string_value1": "shoe"}]}`)
 	f := filter.NewFactory([]*schema.QueryableField{
-		schema.NewQueryableField("a", schema.Int64Type, schema.UnknownType, nil),
-		schema.NewQueryableField("int_value", schema.Int64Type, schema.UnknownType, nil),
-		schema.NewQueryableField("string_value1", schema.StringType, schema.UnknownType, nil),
+		schema.NewQueryableField("a", schema.Int64Type, schema.UnknownType, nil, nil),
+		schema.NewQueryableField("int_value", schema.Int64Type, schema.UnknownType, nil, nil),
+		schema.NewQueryableField("string_value1", schema.StringType, schema.UnknownType, nil, nil),
 	}, nil)
 	wrappedF, err := f.WrappedFilter(js)
 	require.NoError(t, err)
 
 	b := NewBuilder()
 	q := b.Filter(wrappedF).Query("test").Build()
-	require.Equal(t, []string{"a:=4&&int_value:=1&&string_value1:=shoe"}, q.ToSearchFilter())
+	require.Equal(t, []string{"a:=4&&int_value:=1&&string_value1:=shoe"}, q.WrappedF.SearchFilter())
 	require.Equal(t, "test", q.Q)
 }
 

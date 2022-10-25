@@ -26,10 +26,10 @@ import (
 func TestSearchQueryRunner_getFacetFields(t *testing.T) {
 	collection := &schema.DefaultCollection{
 		QueryableFields: []*schema.QueryableField{
-			schema.NewQueryableField("field_1", schema.StringType, schema.UnknownType, nil),
-			schema.NewQueryableField("parent.field_2", schema.StringType, schema.UnknownType, nil),
-			schema.NewQueryableField("field_3", schema.ByteType, schema.UnknownType, nil),
-			schema.NewQueryableField("field_4", schema.StringType, schema.UnknownType, nil),
+			schema.NewQueryableField("field_1", schema.StringType, schema.UnknownType, nil, nil),
+			schema.NewQueryableField("parent.field_2", schema.StringType, schema.UnknownType, nil, nil),
+			schema.NewQueryableField("field_3", schema.ByteType, schema.UnknownType, nil, nil),
+			schema.NewQueryableField("field_4", schema.StringType, schema.UnknownType, nil, nil),
 		},
 	}
 	runner := &SearchQueryRunner{req: &api.SearchRequest{}}
@@ -83,8 +83,8 @@ func TestSearchQueryRunner_getFacetFields(t *testing.T) {
 func TestSearchQueryRunner_getFieldSelection(t *testing.T) {
 	collection := &schema.DefaultCollection{
 		QueryableFields: []*schema.QueryableField{
-			schema.NewQueryableField("field_1", schema.StringType, schema.UnknownType, nil),
-			schema.NewQueryableField("parent.field_2", schema.StringType, schema.UnknownType, nil),
+			schema.NewQueryableField("field_1", schema.StringType, schema.UnknownType, nil, nil),
+			schema.NewQueryableField("parent.field_2", schema.StringType, schema.UnknownType, nil, nil),
 		},
 	}
 
@@ -159,9 +159,9 @@ func TestSearchQueryRunner_getFieldSelection(t *testing.T) {
 func TestSearchQueryRunner_getSortOrdering(t *testing.T) {
 	collection := &schema.DefaultCollection{
 		QueryableFields: []*schema.QueryableField{
-			schema.NewQueryableField("field_1", schema.StringType, schema.UnknownType, nil),
-			schema.NewQueryableField("parent.field_2", schema.StringType, schema.UnknownType, nil),
-			schema.NewQueryableField("field_3", schema.ByteType, schema.UnknownType, nil),
+			schema.NewQueryableField("field_1", schema.StringType, schema.UnknownType, nil, nil),
+			schema.NewQueryableField("parent.field_2", schema.StringType, schema.UnknownType, nil, nil),
+			schema.NewQueryableField("field_3", schema.ByteType, schema.UnknownType, nil, nil),
 		},
 	}
 	collection.QueryableFields[0].Sortable = true
@@ -171,7 +171,7 @@ func TestSearchQueryRunner_getSortOrdering(t *testing.T) {
 
 	t.Run("no sort param in input", func(t *testing.T) {
 		runner.req.Sort = nil
-		ordering, err := runner.getSortOrdering(collection)
+		ordering, err := runner.getSortOrdering(collection, runner.req.Sort)
 		assert.NoError(t, err)
 		assert.Nil(t, ordering)
 	})
@@ -179,21 +179,21 @@ func TestSearchQueryRunner_getSortOrdering(t *testing.T) {
 	t.Run("no queryable field in collection", func(t *testing.T) {
 		collection := &schema.DefaultCollection{}
 		runner.req.Sort = []byte(`[{"field_1":"$asc"}]`)
-		sortOrder, err := runner.getSortOrdering(collection)
+		sortOrder, err := runner.getSortOrdering(collection, runner.req.Sort)
 		assert.ErrorContains(t, err, "`field_1` is not present in collection")
 		assert.Nil(t, sortOrder)
 	})
 
 	t.Run("requested sort field is not sortable in collection", func(t *testing.T) {
 		runner.req.Sort = []byte(`[{"field_1":"$desc"},{"field_3":"$asc"}]`)
-		sortOrder, err := runner.getSortOrdering(collection)
+		sortOrder, err := runner.getSortOrdering(collection, runner.req.Sort)
 		assert.ErrorContains(t, err, "Cannot sort on `field_3` field")
 		assert.Nil(t, sortOrder)
 	})
 
 	t.Run("valid sort fields requested", func(t *testing.T) {
 		runner.req.Sort = []byte(`[{"field_1":"$desc"},{"parent.field_2":"$asc"}]`)
-		sortOrder, err := runner.getSortOrdering(collection)
+		sortOrder, err := runner.getSortOrdering(collection, runner.req.Sort)
 		assert.NoError(t, err)
 		assert.NotNil(t, sortOrder)
 		expected := &sort.Ordering{
@@ -205,7 +205,7 @@ func TestSearchQueryRunner_getSortOrdering(t *testing.T) {
 
 	t.Run("Invalid sort input", func(t *testing.T) {
 		runner.req.Sort = []byte(`[{"field_1":"descending"}]`)
-		sort, err := runner.getSortOrdering(collection)
+		sort, err := runner.getSortOrdering(collection, runner.req.Sort)
 		assert.ErrorContains(t, err, "Sort order can only be `$asc` or `$desc`")
 		assert.Nil(t, sort)
 	})

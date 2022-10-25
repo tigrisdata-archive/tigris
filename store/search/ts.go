@@ -211,7 +211,7 @@ func (s *storeImpl) getBaseSearchParam(query *qsearch.Query, pageNo int) tsApi.M
 
 func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query, pageNo int) ([]tsApi.SearchResult, error) {
 	var params []tsApi.MultiSearchCollectionParameters
-	searchFilter := query.ToSearchFilter()
+	searchFilter := query.WrappedF.SearchFilter()
 	if len(searchFilter) > 0 {
 		for i := 0; i < len(searchFilter); i++ {
 			// ToDo: check all places

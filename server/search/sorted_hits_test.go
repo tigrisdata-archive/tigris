@@ -245,12 +245,12 @@ func TestSortedHits(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			pq := NewSortedHits(tc.sortOrder)
 			for _, h := range tc.inputHits {
-				pq.Add(h)
+				pq.add(h)
 			}
 
 			assert.Equal(t, len(tc.expectedOrder), pq.Len())
 			for _, expectedId := range tc.expectedOrder {
-				hit, err := pq.Get()
+				hit, err := pq.Next()
 				assert.NoError(t, err)
 				docId, err := hit.Document["id"].(json.Number).Float64()
 				assert.NoError(t, err)
@@ -261,7 +261,7 @@ func TestSortedHits(t *testing.T) {
 
 	t.Run("getting hit from empty sorted hits", func(t *testing.T) {
 		pq := NewSortedHits(nil)
-		hit, err := pq.Get()
+		hit, err := pq.Next()
 		assert.Error(t, err)
 		assert.Nil(t, hit)
 	})
@@ -271,11 +271,11 @@ func TestSortedHits(t *testing.T) {
 		assert.Equal(t, 0, pq.Len())
 		assert.False(t, pq.HasMoreHits())
 
-		pq.Add(searchHits[0])
+		pq.add(searchHits[0])
 		assert.Equal(t, 1, pq.Len())
 		assert.True(t, pq.HasMoreHits())
 
-		_, _ = pq.Get()
+		_, _ = pq.Next()
 		assert.Equal(t, 0, pq.Len())
 		assert.False(t, pq.HasMoreHits())
 	})

@@ -87,6 +87,10 @@ func TestFieldBuilder_Build(t *testing.T) {
 				[]byte(`{"maxLength": 100}`),
 				nil,
 			},
+			{
+				[]byte(`{"sorted": true}`),
+				nil,
+			},
 		}
 		for _, c := range cases {
 			var f FieldBuilder

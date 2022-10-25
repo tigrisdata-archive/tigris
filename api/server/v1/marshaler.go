@@ -142,6 +142,8 @@ func (x *ReadRequest) UnmarshalJSON(data []byte) error {
 		case "fields":
 			// not decoding it here and let it decode during fields parsing
 			x.Fields = value
+		case "sort":
+			x.Sort = value
 		case "options":
 			if err := jsoniter.Unmarshal(value, &x.Options); err != nil {
 				return err
