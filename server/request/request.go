@@ -121,16 +121,16 @@ func (r *Metadata) GetInitialTags() map[string]string {
 	var tigrisTenantNameValue string
 
 	if r.namespace == "" {
+		// Not authenticated yet, this is currently used in the measure interceptor where all requests should
+		// be authenticated
 		tigrisTenantValue = r.unauthenticatedNamespaceName
-	} else {
-		tigrisTenantValue = r.namespace
-	}
-
-	if r.namespaceName == "" {
 		tigrisTenantNameValue = r.unauthenticatedNamespaceName
 	} else {
+		// Authenticated, the SetNamespace is called from the auth middleware from authFunction
+		tigrisTenantValue = r.namespace
 		tigrisTenantNameValue = r.namespaceName
 	}
+
 	return map[string]string{
 		"grpc_method":        r.methodInfo.Name,
 		"tigris_tenant":      tigrisTenantValue,
