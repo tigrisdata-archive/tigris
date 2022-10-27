@@ -116,7 +116,7 @@ func (r *Metadata) GetMethodInfo() grpc.MethodInfo {
 	return r.methodInfo
 }
 
-func (r *Metadata) GetInitialTags() map[string]string {
+func (r *Metadata) GetInitialTags(ctx context.Context) map[string]string {
 	var tigrisTenantValue string
 	var tigrisTenantNameValue string
 
@@ -124,7 +124,14 @@ func (r *Metadata) GetInitialTags() map[string]string {
 		// Not authenticated yet, this is currently used in the measure interceptor where all requests should
 		// be authenticated
 		tigrisTenantValue = r.unauthenticatedNamespaceName
-		tigrisTenantNameValue = r.unauthenticatedNamespaceName
+		tenant, err := tenantGetter.GetTenant(ctx, r.unauthenticatedNamespaceName)
+		if err != nil {
+			// unable to extract the tenant for this unauthenticated namespace-id
+			// set it to NA - TODO: add a negative cache here to improve this path
+			tigrisTenantNameValue = "NA"
+		} else {
+			tigrisTenantNameValue = tenant.GetNamespace().Metadata().Name
+		}
 	} else {
 		// Authenticated, the SetNamespace is called from the auth middleware from authFunction
 		tigrisTenantValue = r.namespace
