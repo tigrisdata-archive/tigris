@@ -22,6 +22,7 @@ import (
 	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/server/defaults"
 	"github.com/tigrisdata/tigris/server/request"
+	ulog "github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc"
 )
 
@@ -36,6 +37,10 @@ var (
 func namespaceSetterUnaryServerInterceptor(enabled bool) func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		namespace := defaults.DefaultNamespaceName
+		reqMetadata, err := request.GetRequestMetadataFromContext(ctx)
+		if err != nil {
+			ulog.E(err)
+		}
 		if enabled && !excludedMethods.Contains(info.FullMethod) {
 			var err error
 			if namespace, err = namespaceExtractor.Extract(ctx); err != nil {
@@ -48,8 +53,8 @@ func namespaceSetterUnaryServerInterceptor(enabled bool) func(ctx context.Contex
 				namespace = defaults.DefaultNamespaceName
 			}
 		}
-
-		return handler(request.SetNamespace(ctx, namespace), req)
+		reqMetadata.SetNamespace(ctx, namespace)
+		return handler(ctx, req)
 	}
 }
 
@@ -64,8 +69,12 @@ func namespaceSetterStreamServerInterceptor(enabled bool) grpc.StreamServerInter
 		}
 
 		wrapped := middleware.WrapServerStream(stream)
-		wrapped.WrappedContext = request.SetNamespace(stream.Context(), namespace)
-
+		wrapped.WrappedContext = stream.Context()
+		reqMetadata, err := request.GetRequestMetadataFromContext(wrapped.WrappedContext)
+		if err != nil {
+			ulog.E(err)
+		}
+		reqMetadata.SetNamespace(wrapped.WrappedContext, namespace)
 		return handler(srv, wrapped)
 	}
 }
