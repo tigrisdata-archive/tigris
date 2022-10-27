@@ -98,7 +98,8 @@ func TestNamespaceQuota(t *testing.T) {
 	assert.Equal(t, 9, i)
 
 	// human user allowed to go 5% above the limit
-	ctxOp := request.SetRequestMetadata(ctx, request.Metadata{IsHuman: true})
+	reqMetadata := request.Metadata{IsHuman: true}
+	ctxOp := reqMetadata.SaveToContext(ctx)
 	err = m.Allow(ctxOp, ns, 2048, false)
 	assert.NoError(t, err)
 

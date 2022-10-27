@@ -59,7 +59,7 @@ func (s *storage) Allow(ctx context.Context, namespace string, size int, isWrite
 	l := s.getState(namespace)
 
 	var method string
-	if md, _ := request.GetRequestMetadata(ctx); md != nil {
+	if md, _ := request.GetRequestMetadataFromContext(ctx); md != nil {
 		method = md.GetMethodName()
 	}
 

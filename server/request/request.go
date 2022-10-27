@@ -49,13 +49,12 @@ type Metadata struct {
 	accessToken *AccessToken
 	serviceName string
 	methodInfo  grpc.MethodInfo
-	// this is authenticated namespace
+	// The namespace id (uuid) of the request. The metadata extractor sets it when the request is not yet
+	// authenticated, and auth interceptor updates it
 	namespace string
 	// human readable namespace name
 	namespaceName string
 	IsHuman       bool
-	// this is parsed and set early in request processing chain - before it is authenticated for observability.
-	unauthenticatedNamespaceName string
 }
 
 func Init(tg metadata.TenantGetter) {
@@ -64,7 +63,9 @@ func Init(tg metadata.TenantGetter) {
 
 func NewRequestEndpointMetadata(ctx context.Context, serviceName string, methodInfo grpc.MethodInfo) Metadata {
 	ns, utype := GetMetadataFromHeader(ctx)
-	return Metadata{serviceName: serviceName, methodInfo: methodInfo, unauthenticatedNamespaceName: ns, IsHuman: utype}
+	md := Metadata{serviceName: serviceName, methodInfo: methodInfo, IsHuman: utype}
+	md.SetNamespace(ctx, ns)
+	return md
 }
 
 func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod string, methodType string) Metadata {
@@ -88,68 +89,83 @@ func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod strin
 	return NewRequestEndpointMetadata(ctx, svcName, methodInfo)
 }
 
-func (r *Metadata) GetMethodName() string {
-	s := strings.Split(r.methodInfo.Name, "/")
+func (m *Metadata) SetAccessToken(token *AccessToken) {
+	m.accessToken = token
+}
+
+func (m *Metadata) GetNamespace() string {
+	return m.namespace
+}
+
+func (m *Metadata) GetNamespaceName() string {
+	return m.namespaceName
+}
+
+func (m *Metadata) GetMethodName() string {
+	s := strings.Split(m.methodInfo.Name, "/")
 	if len(s) > 2 {
 		return s[2]
 	}
-	return r.methodInfo.Name
+	return m.methodInfo.Name
 }
 
-func (r *Metadata) GetServiceType() string {
-	if r.methodInfo.IsServerStream {
+func (m *Metadata) GetServiceType() string {
+	if m.methodInfo.IsServerStream {
 		return "stream"
 	} else {
 		return "unary"
 	}
 }
 
-func (r *Metadata) GetServiceName() string {
-	return r.serviceName
+func (m *Metadata) GetServiceName() string {
+	return m.serviceName
 }
 
-func (r *Metadata) GetUnAuthenticatedNamespaceName() string {
-	return r.unauthenticatedNamespaceName
+func (m *Metadata) GetMethodInfo() grpc.MethodInfo {
+	return m.methodInfo
 }
 
-func (r *Metadata) GetMethodInfo() grpc.MethodInfo {
-	return r.methodInfo
-}
-
-func (r *Metadata) GetInitialTags(ctx context.Context) map[string]string {
-	var tigrisTenantValue string
-	var tigrisTenantNameValue string
-
-	if r.namespace == "" {
-		// Not authenticated yet, this is currently used in the measure interceptor where all requests should
-		// be authenticated
-		tigrisTenantValue = r.unauthenticatedNamespaceName
-		tenant, err := tenantGetter.GetTenant(ctx, r.unauthenticatedNamespaceName)
-		if err != nil {
-			// unable to extract the tenant for this unauthenticated namespace-id
-			// set it to NA - TODO: add a negative cache here to improve this path
-			tigrisTenantNameValue = "NA"
-		} else {
-			tigrisTenantNameValue = tenant.GetNamespace().Metadata().Name
-		}
-	} else {
-		// Authenticated, the SetNamespace is called from the auth middleware from authFunction
-		tigrisTenantValue = r.namespace
-		tigrisTenantNameValue = r.namespaceName
-	}
-
+func (m *Metadata) GetInitialTags() map[string]string {
 	return map[string]string{
-		"grpc_method":        r.methodInfo.Name,
-		"tigris_tenant":      tigrisTenantValue,
-		"tigris_tenant_name": tigrisTenantNameValue,
+		"grpc_method":        m.methodInfo.Name,
+		"tigris_tenant":      m.namespace,
+		"tigris_tenant_name": m.GetTigrisNamespaceNameTag(),
 		"env":                config.GetEnvironment(),
 		"db":                 defaults.UnknownValue,
 		"collection":         defaults.UnknownValue,
 	}
 }
 
-func (r *Metadata) GetFullMethod() string {
-	return fmt.Sprintf("/%s/%s", r.serviceName, r.methodInfo.Name)
+func (m *Metadata) GetFullMethod() string {
+	return fmt.Sprintf("/%s/%s", m.serviceName, m.methodInfo.Name)
+}
+
+func (m *Metadata) SaveToContext(ctx context.Context) context.Context {
+	return context.WithValue(ctx, MetadataCtxKey{}, m)
+}
+
+func (m *Metadata) SetNamespace(ctx context.Context, namespace string) {
+	m.namespace = namespace
+	if !config.DefaultConfig.Auth.EnableNamespaceIsolation {
+		m.namespaceName = defaults.DefaultNamespaceName
+		return
+	}
+	tenant, err := tenantGetter.GetTenant(ctx, namespace)
+	if err != nil {
+		m.namespaceName = defaults.DefaultNamespaceName
+		ulog.E(err)
+		return
+	}
+
+	if tenant == nil {
+		m.namespaceName = defaults.DefaultNamespaceName
+	} else {
+		m.namespaceName = tenant.GetNamespace().Metadata().Name
+	}
+}
+
+func (m *Metadata) GetTigrisNamespaceNameTag() string {
+	return metrics.GetTenantNameTagValue(m.namespace, m.namespaceName)
 }
 
 // NamespaceExtractor - extract the namespace from context.
@@ -161,7 +177,7 @@ type AccessTokenNamespaceExtractor struct{}
 
 var ErrNamespaceNotFound = errors.NotFound("namespace not found")
 
-func GetRequestMetadata(ctx context.Context) (*Metadata, error) {
+func GetRequestMetadataFromContext(ctx context.Context) (*Metadata, error) {
 	// read token
 	value := ctx.Value(MetadataCtxKey{})
 	if value != nil {
@@ -170,50 +186,6 @@ func GetRequestMetadata(ctx context.Context) (*Metadata, error) {
 		}
 	}
 	return nil, errors.NotFound("Metadata not found")
-}
-
-func SetRequestMetadata(ctx context.Context, metadata Metadata) context.Context {
-	requestMetadata, err := GetRequestMetadata(ctx)
-	if err == nil && requestMetadata != nil {
-		log.Debug().Msg("Overriding Metadata in context")
-	}
-	requestMetadata = &metadata
-	return context.WithValue(ctx, MetadataCtxKey{}, requestMetadata)
-}
-
-func SetAccessToken(ctx context.Context, token *AccessToken) context.Context {
-	requestMetadata, _ := GetRequestMetadata(ctx)
-	if requestMetadata == nil {
-		requestMetadata = &Metadata{}
-		requestMetadata.accessToken = token
-		return context.WithValue(ctx, MetadataCtxKey{}, requestMetadata)
-	} else {
-		requestMetadata.accessToken = token
-		return context.WithValue(ctx, MetadataCtxKey{}, requestMetadata)
-	}
-}
-
-func SetNamespace(ctx context.Context, namespace string) context.Context {
-	var tenantName string
-	requestMetadata, err := GetRequestMetadata(ctx)
-	result := ctx
-	if err != nil && requestMetadata == nil {
-		requestMetadata = &Metadata{}
-		result = context.WithValue(ctx, MetadataCtxKey{}, requestMetadata)
-	}
-	requestMetadata.namespace = namespace
-
-	tenant, err := tenantGetter.GetTenant(ctx, namespace)
-	if err != nil {
-		ulog.E(err)
-	}
-	if tenant == nil {
-		tenantName = defaults.DefaultNamespaceName
-	} else {
-		tenantName = tenant.GetNamespace().Metadata().Name
-	}
-	requestMetadata.namespaceName = metrics.GetTenantNameTagValue(namespace, tenantName)
-	return result
 }
 
 func GetAccessToken(ctx context.Context) (*AccessToken, error) {

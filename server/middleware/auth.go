@@ -28,6 +28,7 @@ import (
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/defaults"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/request"
 	"google.golang.org/grpc"
@@ -37,7 +38,6 @@ type TokenCtxkey struct{}
 
 var (
 	headerAuthorize           = "authorization"
-	UnknownNamespace          = "unknown"
 	BypassAuthForTheseMethods = container.NewHashSet(
 		api.HealthMethodName,
 		api.GetAccessTokenMethodName,
@@ -121,7 +121,7 @@ func measuredAuthFunction(ctx context.Context, jwtValidator *validator.Validator
 }
 
 func authFunction(ctx context.Context, jwtValidator *validator.Validator, config *config.Config, cache *lru.Cache) (ctxResult context.Context, err error) {
-	reqMetadata, err := request.GetRequestMetadata(ctx)
+	reqMetadata, err := request.GetRequestMetadataFromContext(ctx)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to load request metadata")
 	}
@@ -131,7 +131,7 @@ func authFunction(ctx context.Context, jwtValidator *validator.Validator, config
 				err = nil
 			} else {
 				if reqMetadata != nil {
-					log.Debug().Str("error", err.Error()).Str("unauthenticated_namespace", reqMetadata.GetUnAuthenticatedNamespaceName()).Err(err).Msg("could not validate token")
+					log.Debug().Str("error", err.Error()).Str("unauthenticated_namespace", reqMetadata.GetNamespace()).Str("unauthenticated_namespace_name", reqMetadata.GetNamespaceName()).Err(err).Msg("could not validate token")
 				} else {
 					log.Debug().Str("error", err.Error()).Err(err).Msg("could not validate token")
 				}
@@ -153,7 +153,7 @@ func authFunction(ctx context.Context, jwtValidator *validator.Validator, config
 		validatedToken, err = jwtValidator.ValidateToken(ctx, tkn)
 		if err != nil {
 			if reqMetadata != nil {
-				log.Debug().Str("error", err.Error()).Str("unauthenticated_namespace", reqMetadata.GetUnAuthenticatedNamespaceName()).Err(err).Msg("Failed to validate access token")
+				log.Debug().Str("error", err.Error()).Str("unauthenticated_namespace", reqMetadata.GetNamespace()).Str("unauthenticated_namespace_name", reqMetadata.GetNamespaceName()).Err(err).Msg("Failed to validate access token")
 			} else {
 				log.Debug().Str("error", err.Error()).Err(err).Msg("Failed to validate access token")
 			}
@@ -173,7 +173,7 @@ func authFunction(ctx context.Context, jwtValidator *validator.Validator, config
 			// if incoming namespace is empty, set it to unknown for observables and reject request
 			if customClaims.Namespace.Code == "" {
 				log.Warn().Msg("Valid token with empty namespace received")
-				ctx = request.SetNamespace(ctx, UnknownNamespace)
+				reqMetadata.SetNamespace(ctx, defaults.UnknownValue)
 				return ctx, errors.Unauthenticated("You are not authorized to perform this admin action")
 			}
 			isAdmin := fullMethodNameFound && request.IsAdminApi(fullMethodName)
@@ -193,7 +193,8 @@ func authFunction(ctx context.Context, jwtValidator *validator.Validator, config
 				Namespace: customClaims.Namespace.Code,
 				Sub:       validatedClaims.RegisteredClaims.Subject,
 			}
-			return request.SetAccessToken(ctx, token), nil
+			reqMetadata.SetAccessToken(token)
+			return ctx, nil
 		}
 	}
 	// this should never happen.
