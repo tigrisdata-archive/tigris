@@ -197,8 +197,8 @@ func (m *Measurement) StartTracing(ctx context.Context, childOnly bool) context.
 	m.started = true
 
 	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("stopped", strconv.FormatBool(m.stopped)).Str("childonly", strconv.FormatBool(childOnly)).Str("span_type", m.spanType).Msg("StartTracing start")
-	if !config.DefaultConfig.Tracing.Enabled {
-		log.Debug().Str("span_type", m.spanType).Msg("StartTracing end: Neither tracing, not metrics are enabled, returning")
+	if !config.DefaultConfig.Tracing.Enabled && !config.DefaultConfig.Metrics.Enabled {
+		log.Debug().Str("span_type", m.spanType).Msg("StartTracing end: Neither tracing, nor metrics are enabled, returning")
 		return ctx
 	}
 
@@ -317,7 +317,7 @@ func (m *Measurement) FinishWithError(ctx context.Context, source string, err er
 	m.stoppedAt = time.Now()
 
 	if m.span == nil {
-		log.Debug().Msg("FinishWithError end: no tracing span sound to finish, returning")
+		log.Debug().Msg("FinishWithError end: no tracing span found to finish, returning")
 		return ctx
 	}
 	errCode := status.Code(err)

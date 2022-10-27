@@ -57,9 +57,9 @@ func measureUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryS
 			resp, err := handler(ctx, req)
 			return resp, err
 		}
-		reqMetadata, err := request.GetRequestMetadata(ctx)
+		reqMetadata, err := request.GetRequestMetadataFromContext(ctx)
 		ulog.E(err)
-		tags := reqMetadata.GetInitialTags(ctx)
+		tags := reqMetadata.GetInitialTags()
 		measurement := metrics.NewMeasurement(util.Service, info.FullMethod, metrics.GrpcSpanType, tags)
 		measurement.AddTags(metrics.GetDbCollTagsForReq(req))
 		ctx = measurement.StartTracing(ctx, false)
@@ -90,11 +90,11 @@ func measureStream() grpc.StreamServerInterceptor {
 			err := handler(srv, wrapped)
 			return err
 		}
-		reqMetadata, err := request.GetRequestMetadata(wrapped.WrappedContext)
+		reqMetadata, err := request.GetRequestMetadataFromContext(wrapped.WrappedContext)
 		if err != nil {
 			ulog.E(err)
 		}
-		tags := reqMetadata.GetInitialTags(wrapped.WrappedContext)
+		tags := reqMetadata.GetInitialTags()
 		measurement := metrics.NewMeasurement(util.Service, info.FullMethod, metrics.GrpcSpanType, tags)
 		wrapped.measurement = measurement
 		wrapped.WrappedContext = measurement.StartTracing(wrapped.WrappedContext, false)
