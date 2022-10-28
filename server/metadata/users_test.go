@@ -30,7 +30,7 @@ func TestUserSubspace(t *testing.T) {
 		defer cancel()
 
 		u := NewUserStore(&TestMDNameRegistry{
-			SchemaSB: "test_schema",
+			UserSB: "test_user",
 		})
 		_ = kvStore.DropTable(ctx, u.UserSubspaceName())
 
@@ -53,7 +53,7 @@ func TestUserSubspace(t *testing.T) {
 		defer cancel()
 
 		u := NewUserStore(&TestMDNameRegistry{
-			SchemaSB: "test_schema",
+			UserSB: "test_user",
 		})
 		_ = kvStore.DropTable(ctx, u.UserSubspaceName())
 
@@ -78,7 +78,7 @@ func TestUserSubspace(t *testing.T) {
 		defer cancel()
 
 		u := NewUserStore(&TestMDNameRegistry{
-			SchemaSB: "test_schema",
+			UserSB: "test_user",
 		})
 		_ = kvStore.DropTable(ctx, u.UserSubspaceName())
 
@@ -103,7 +103,7 @@ func TestUserSubspace(t *testing.T) {
 		defer cancel()
 
 		u := NewUserStore(&TestMDNameRegistry{
-			SchemaSB: "test_schema",
+			UserSB: "test_user",
 		})
 		_ = kvStore.DropTable(ctx, u.UserSubspaceName())
 
@@ -137,7 +137,7 @@ func TestUserSubspace(t *testing.T) {
 		defer cancel()
 
 		u := NewUserStore(&TestMDNameRegistry{
-			SchemaSB: "test_schema",
+			UserSB: "test_user",
 		})
 		_ = kvStore.DropTable(ctx, u.UserSubspaceName())
 
@@ -183,7 +183,7 @@ func TestUserSubspace(t *testing.T) {
 		defer cancel()
 
 		u := NewUserStore(&TestMDNameRegistry{
-			SchemaSB: "test_schema",
+			SchemaSB: "test_user",
 		})
 		_ = kvStore.DropTable(ctx, u.UserSubspaceName())
 

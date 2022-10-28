@@ -45,6 +45,8 @@ type MDNameRegistry interface {
 	SchemaSubspaceName() []byte
 
 	UserSubspaceName() []byte
+
+	NamespaceSubspaceName() []byte
 }
 
 // DefaultMDNameRegistry provides the names of the subspaces used by the metadata package for managing dictionary
@@ -67,12 +69,17 @@ func (d *DefaultMDNameRegistry) UserSubspaceName() []byte {
 	return []byte(UserSubspaceName)
 }
 
+func (d *DefaultMDNameRegistry) NamespaceSubspaceName() []byte {
+	return []byte(NamespaceSubspaceName)
+}
+
 // TestMDNameRegistry is used by tests to inject table names that can be used by tests.
 type TestMDNameRegistry struct {
-	ReserveSB  string
-	EncodingSB string
-	SchemaSB   string
-	UserSB     string
+	ReserveSB   string
+	EncodingSB  string
+	SchemaSB    string
+	UserSB      string
+	NamespaceSB string
 }
 
 func (d *TestMDNameRegistry) ReservedSubspaceName() []byte {
@@ -88,5 +95,9 @@ func (d *TestMDNameRegistry) SchemaSubspaceName() []byte {
 }
 
 func (d *TestMDNameRegistry) UserSubspaceName() []byte {
-	return []byte(d.SchemaSB)
+	return []byte(d.UserSB)
+}
+
+func (d *TestMDNameRegistry) NamespaceSubspaceName() []byte {
+	return []byte(d.NamespaceSB)
 }
