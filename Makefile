@@ -58,6 +58,9 @@ local_test: generate lint
 run:
 	$(DOCKER_COMPOSE) up --build --detach tigris_server2
 
+logs:
+	$(DOCKER_COMPOSE) logs
+
 local_run: server
 	$(DOCKER_COMPOSE) up --no-build --detach tigris_search tigris_db2
 	fdbcli -C ./test/config/fdb.cluster --exec "configure new single memory" || true
@@ -82,3 +85,7 @@ upgrade_api:
 
 build_and_push_base_docker:
 	docker buildx build -t tigrisdata/tigris-build-base:latest --platform linux/amd64,linux/arm64 --push -f docker/Dockerfile.base .
+
+deps:
+	/bin/bash scripts/install_build_deps.sh
+	/bin/bash scripts/install_test_deps.sh

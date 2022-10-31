@@ -13,18 +13,52 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+set -ex
 
-# This intended to be run duing Docker build only
-
-set -e
-
-ARCH=$(dpkg --print-architecture)
-
-VERSION=1.19.2
+VERSION=1.19.3
 mkdir -p /usr/local
-wget "https://go.dev/dl/go${VERSION}.linux-${ARCH}.tar.gz"
-tar -C /usr/local -xzf "go${VERSION}.linux-${ARCH}.tar.gz"
-rm "go${VERSION}.linux-${ARCH}.tar.gz"
+
+ARCH=$(uname -m)
+OS=$(uname -s)
+
+case "${OS}-${ARCH}" in
+"Darwin-arm64")
+  V="darwin-arm64.tar.gz"
+  SHA="49e394ab92bc6fa3df3d27298ddf3e4491f99477bee9dd4934525a526f3a391c"
+  ;;
+"Darwin-x86_64")
+  V="darwin-amd4.tar.gz"
+  SHA="7fa09a9a34cb6f794e61e9ada1d6d18796f936a2b35f22724906cad71396e590"
+  ;;
+"Linux-arm64")
+  V="linux-arm64.tar.gz"
+  SHA="99de2fe112a52ab748fb175edea64b313a0c8d51d6157dba683a6be163fd5eab"
+  ;;
+"Linux-x86_64")
+  V="linux-amd64.tar.gz"
+  SHA="74b9640724fd4e6bb0ed2a1bc44ae813a03f1e72a4c76253e2d5c015494430ba"
+  ;;
+"MINGW"*)
+  V="windows-amd64.zip"
+  SHA="b51549a9f21ee053f8a3d8e38e45b1b8b282d976f3b60f1f89b37ac54e272d31"
+  ;;
+*)
+  echo "Unsupported architecture ${ARCH} or operating system ${OS}."
+  exit 1
+  ;;
+esac
+
+curl -LO "https://go.dev/dl/go${VERSION}.${V}"
+
+echo "$SHA go${VERSION}.${V}" | sha256sum -c
+
+if [[ "$OS" == "MINGW"* ]]; then
+    unzip "go${VERSION}.${V}" -d "/usr/local/"
+else
+	tar -C /usr/local -xzf "go${VERSION}.${V}"
+fi
+
+rm "go${VERSION}.${V}"
 
 export PATH=$PATH:/usr/local/go/bin
 
