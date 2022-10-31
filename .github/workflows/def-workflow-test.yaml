@@ -1,0 +1,180 @@
+name: dev-test
+on:
+  push:
+    branches:
+      - "!release"
+      - "!alpha"
+      - "!beta"
+      - "!rc"
+  workflow_call:
+  pull_request:
+    paths:
+      - scripts/install_*.sh
+      - Makefile
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - name: Prerequisites (make, go, docker)
+        run: |
+          sudo sh scripts/install_go.sh
+          echo "/usr/local/go/bin" >> $GITHUB_PATH # Go installation
+          echo "/home/runner/go/bin" >> $GITHUB_PATH # Default GOPATH
+
+      - name: Host only workflows
+        run: |
+          make clean
+          make deps
+          make clean
+          make generate
+          make clean
+          make lint
+
+      - name: Host only (requires FoundationDB clients)
+        run: |
+          make clean
+          make bins
+
+      - name: Containerized with test on the host, or IDE (requries FoundationDB clients)
+        run: |
+          make clean
+          make run
+          make local_test
+          make local_test #containers and test results should be cached
+          make clean
+          make run_full
+
+      - name: Fully containerized workflows
+        run: |
+          make clean
+          make test
+          make test #containers and test results should be cached
+          make clean
+          make logs >/dev/nul 2>&1
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      # This brings working docker, but everything is veeeeeery slow
+      - uses: docker-practice/actions-setup-docker@master
+
+      # Requires to enable Oracle VM in UI
+      #- run: |
+      #    brew install docker docker-machine
+      #    brew install --cask virtualbox
+      #    docker-machine create --driver virtualbox default
+      #    docker-machine env default
+      #    eval "$(docker-machine env default)"
+      #    docker run hello-world
+
+      - name: Prerequisites (make, go, docker)
+        run: |
+          sudo sh scripts/install_go.sh
+          echo "/usr/local/go/bin" >> $GITHUB_PATH # Go installation
+          echo "/home/runner/go/bin" >> $GITHUB_PATH # Default GOPATH
+
+      - name: Host only workflows
+        run: |
+          make clean
+          make deps
+          make clean
+          make generate
+          make clean
+          make lint
+
+      - name: Host only (requires FoundationDB clients)
+        if: false
+        run: |
+          make clean
+          make bins
+
+      - name: Containerized with test on the host, or IDE (requries FoundationDB clients)
+        if: false
+        run: |
+          make clean
+          make run
+          make local_test
+          make local_test #containers and test results should be cached
+          make clean
+          make run_full
+
+      - name: Fully containerized workflows
+        if: false
+        run: |
+          make clean
+          make test
+          make test #containers and test results should be cached
+          make clean
+          make logs >/dev/nul 2>&1
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      # Looks there is no way to enable linux containers in Docker on Github
+      #- run: |
+      #    DockerCli.exe -SwitchLinuxEngine
+
+      - name: Prerequisites (make, go, docker)
+        run: |
+          sh scripts/install_go.sh
+          echo "/usr/local/go/bin" >> $GITHUB_PATH # Go installation
+          echo "/home/runner/go/bin" >> $GITHUB_PATH # Default GOPATH
+          echo "/usr/local/bin/" >> $GITHUB_PATH
+
+      - name: Host only workflows
+        run: |
+          make clean
+          make deps
+          make clean
+          make generate
+          make clean
+          make lint
+
+      - name: Host only workflows
+        run: |
+          make clean
+          make deps
+          make clean
+          make generate
+          make clean
+          make lint
+
+      - name: Host only (requires FoundationDB clients)
+        if: false
+        run: |
+          make clean
+          make bins
+
+      - name: Containerized with test on the host, or IDE (requries FoundationDB clients)
+        if: false
+        run: |
+          make clean
+          make run
+          make local_test
+          make local_test #containers and test results should be cached
+          make clean
+          make run_full
+
+      - name: Fully containerized workflows
+        if: false
+        run: |
+          make clean
+          make test
+          make test #containers and test results should be cached
+          make clean
+          make logs >/dev/nul 2>&1
