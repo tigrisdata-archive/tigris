@@ -45,7 +45,7 @@ func TestClientCollectionBasic(t *testing.T) {
 	h, p := getTestServerHostPort()
 	var db *tigris.Database
 	var err error
-	cfg := &config.Database{Driver: config.Driver{URL: fmt.Sprintf("%v:%d", h, p)}}
+	cfg := &config.Client{Driver: config.Driver{URL: fmt.Sprintf("%v:%d", h, p)}}
 	for {
 		db, err = tigris.OpenDatabase(ctx, cfg, "db111222", &Coll1{}, &Coll2{})
 		if err != nil && err.Error() == "transaction not committed due to conflict with another transaction" {
@@ -124,7 +124,7 @@ func TestClientCollectionTx(t *testing.T) {
 	h, p := getTestServerHostPort()
 	var err error
 	var db *tigris.Database
-	cfg := &config.Database{Driver: config.Driver{URL: fmt.Sprintf("%v:%d", h, p)}}
+	cfg := &config.Client{Driver: config.Driver{URL: fmt.Sprintf("%v:%d", h, p)}}
 	for {
 		db, err = tigris.OpenDatabase(ctx, cfg, "db111333", &Coll1{})
 		if err != nil && err.Error() == "transaction not committed due to conflict with another transaction" {

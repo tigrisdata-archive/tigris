@@ -3,6 +3,8 @@ linters:
   disable:
     # Work on fixing this
     #- reassign
+    - reassign
+    - interfacebloat
     - maintidx
     - nakedret
     - gocyclo
