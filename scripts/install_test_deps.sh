@@ -24,6 +24,6 @@ if [ "$(uname -s)" = "Darwin" ]; then
   if command -v brew > /dev/null 2>&1; then
     brew install shellcheck
   fi
-else
+elif [ "$(uname -s)" = "Linux" ]; then
   sudo apt-get install -y shellcheck
 fi

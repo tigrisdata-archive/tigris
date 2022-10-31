@@ -46,6 +46,8 @@ case "${OS}-${ARCH}" in
   BINARIES="apt-get curl go"
   FDB_SHA=471f6bf4a7af40abc69027aa0d4f452ee83715a43a555008303ca255f6bd6db1
   ;;
+"MINGW"*)
+  ;;
 *)
   echo "Unsupported architecture ${ARCH} or operating system ${OS}."
   exit 1
@@ -80,6 +82,9 @@ case "${OS}" in
     ;;
   esac
   ;;
+"MINGW"*)
+  PROTO_PKG=protoc-$PROTO_VERSION-win64.zip
+  ;;
 *)
   echo "No supported proto compiler for ${ARCH} or operating system ${OS}."
   exit 1
@@ -90,9 +95,15 @@ if [ -n "$PROTO_PKG" ]; then
   DOWNLOAD_URL="$PROTO_RELEASES/download/v$PROTO_VERSION/$PROTO_PKG"
   echo "Fetching protobuf release ${DOWNLOAD_URL}"
   curl -LO "$DOWNLOAD_URL"
-  sudo unzip "$PROTO_PKG" -d "/usr/local/"
-  sudo chmod +x "/usr/local/bin/protoc"
-  sudo chmod -R 755 "/usr/local/include/"
+  if [[ "$OS" == "MINGW"* ]]; then
+    unzip "$PROTO_PKG" -d "/usr/local/"
+    chmod +x "/usr/local/bin/protoc"
+    chmod -R 755 "/usr/local/include/"
+  else
+    sudo unzip "$PROTO_PKG" -d "/usr/local/"
+    sudo chmod +x "/usr/local/bin/protoc"
+    sudo chmod -R 755 "/usr/local/include/"
+  fi
   rm -f "$PROTO_PKG"
 fi
 
@@ -122,5 +133,8 @@ case "${OS}" in
   echo "$FDB_SHA $FDB_PACKAGE_PATH" | sha256sum -c
   sudo dpkg -i "$FDB_PACKAGE_PATH" # provides /lib/libfdb_c.so shared library in the docker for CGO
   rm -f "$FDB_PACKAGE_PATH"
+  ;;
+"MINGW"*)
+  echo "TODO: Install FoundationDB for Windows packages"
   ;;
 esac
