@@ -14,7 +14,13 @@
 
 package util
 
-import "github.com/tigrisdata/tigris/lib/container"
+import (
+	"io"
+	"text/template"
+
+	"github.com/tigrisdata/tigris/lib/container"
+	ulog "github.com/tigrisdata/tigris/util/log"
+)
 
 // Version of this build.
 var Version string
@@ -40,3 +46,16 @@ var LanguageKeywords = container.NewHashSet("abstract", "add", "alias", "and", "
 	"throw", "throws", "trait", "transient", "true", "try", "type", "typealias", "typeof", "uint", "ulong",
 	"unchecked", "unmanaged", "unsafe", "unset", "use", "ushort", "using", "val", "value", "var", "virtual", "void",
 	"volatile", "when", "where", "while", "with", "xor", "yield")
+
+func ExecTemplate(w io.Writer, tmpl string, vars interface{}) error {
+	t, err := template.New("exec_template").Parse(tmpl)
+	if ulog.E(err) {
+		return err
+	}
+
+	if err = t.Execute(w, vars); ulog.E(err) {
+		return err
+	}
+
+	return nil
+}

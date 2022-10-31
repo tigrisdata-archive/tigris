@@ -1,0 +1,64 @@
+
+{{ if .Description -}}
+// {{ .Name }} {{ .Description }}
+{{ end -}}
+export interface {{.Name}} {{ if not .Nested }}extends TigrisCollectionType {{end}}{
+{{- range $k, $v := .Fields }}
+{{- $tsType := $v.Type }}
+{{- if eq $v.Type "INT64" }}
+{{- $tsType = "string" }}
+{{- else if eq $v.Type "INT32" }}
+{{- $tsType = "number" }}
+{{- else if eq $v.Type "STRING" }}
+{{- $tsType = "string" }}
+{{- else if eq $v.Type "BOOLEAN" }}
+{{- $tsType = "boolean" }}
+{{- else if eq $v.Type "UUID" }}
+{{- $tsType = "string" }}
+{{- else if eq $v.Type "DATE_TIME" }}
+{{- $tsType = "string" }}
+{{- else if eq $v.Type "BYTE_STRING" }}
+{{- $tsType = "string" }}
+{{- else if eq $v.Type "NUMBER" }}
+{{- $tsType = "number" }}
+{{- end}}
+  {{- if .Description}}
+  // {{.NameJSON}} {{.Description}}{{end}}
+  {{$v.NameJSON}}{{if $v.AutoGenerate}}?{{end}}: {{ $tsType }};
+{{- end}}
+}
+
+export const {{.NameDecap}}Schema: TigrisSchema<{{.Name}}> = {
+{{- range $k, $v := .Fields}}
+  {{$v.NameJSON}}: {
+    {{- if $v.IsArray}}
+    type: TigrisDataTypes.ARRAY,
+    {{- else}}
+      {{- if $v.IsObject }}
+    type: {{$v.TypeDecap}}Schema,
+      {{- else }}
+    type: TigrisDataTypes.{{$v.Type}},
+      {{- end}}
+    {{- end}}
+    {{- if or $v.PrimaryKeyIdx $v.AutoGenerate}}
+    primary_key: {
+      {{- if $v.PrimaryKeyIdx }}
+      order: {{$v.PrimaryKeyIdx}},
+      {{- end}}
+      {{- if $v.AutoGenerate}}
+      autoGenerate: true,
+      {{- end}}
+    },
+    {{- end}}
+    {{- if $v.IsArray}}
+    items: {
+    {{- if $v.IsObject }}
+      type: {{$v.TypeDecap}}Schema,
+    {{- else }}
+      type: TigrisDataTypes.{{$v.Type}},
+    {{- end }}
+    },
+    {{- end}}
+  },
+{{- end}}
+};

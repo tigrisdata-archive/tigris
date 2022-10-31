@@ -15,13 +15,17 @@
 package schema
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/lib/container"
+	langSchema "github.com/tigrisdata/tigris/schema/lang"
+	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 /**
@@ -327,4 +331,30 @@ func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet contai
 	}
 
 	return fields, nil
+}
+
+// Generate schema in the requested format.
+func Generate(jsonSchema []byte, format string) ([]byte, error) {
+	schemas := make(map[string]string)
+
+	for _, f := range strings.Split(format, ",") {
+		f = strings.Trim(f, " ")
+		if strings.ToLower(f) == "json" {
+			schemas[f] = string(jsonSchema)
+		} else {
+			sch, err := langSchema.GenCollectionSchema(jsonSchema, f)
+			if ulog.E(err) {
+				return nil, errors.Internal("error generating schema")
+			}
+
+			schemas[f] = string(sch)
+		}
+	}
+
+	b, err := json.Marshal(schemas)
+	if ulog.E(err) {
+		return nil, errors.Internal("error generating schema")
+	}
+
+	return b, nil
 }

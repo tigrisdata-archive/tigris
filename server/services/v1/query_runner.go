@@ -1537,13 +1537,21 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 
 		metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.Name(), coll.GetName(), size)
 		// remove indexing version from the schema before returning the response
-		schema := schema.RemoveIndexingVersion(coll.Schema)
+		sch := schema.RemoveIndexingVersion(coll.Schema)
+
+		// Generate schema in the requested language format
+		if runner.describeReq.SchemaFormat != "" {
+			sch, err = schema.Generate(sch, runner.describeReq.SchemaFormat)
+			if err != nil {
+				return nil, ctx, err
+			}
+		}
 
 		return &Response{
 			Response: &api.DescribeCollectionResponse{
 				Collection: coll.Name,
 				Metadata:   &api.CollectionMetadata{},
-				Schema:     schema,
+				Schema:     sch,
 				Size:       size,
 			},
 		}, ctx, nil
@@ -1641,11 +1649,20 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.Name(), c.GetName(), size)
 
 			// remove indexing version from the schema before returning the response
-			schema := schema.RemoveIndexingVersion(c.Schema)
+			sch := schema.RemoveIndexingVersion(c.Schema)
+
+			// Generate schema in the requested language format
+			if runner.describe.SchemaFormat != "" {
+				sch, err = schema.Generate(sch, runner.describe.SchemaFormat)
+				if err != nil {
+					return nil, ctx, err
+				}
+			}
+
 			collections[i] = &api.CollectionDescription{
 				Collection: c.GetName(),
 				Metadata:   &api.CollectionMetadata{},
-				Schema:     schema,
+				Schema:     sch,
 				Size:       size,
 			}
 		}
