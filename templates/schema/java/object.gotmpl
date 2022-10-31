@@ -1,0 +1,81 @@
+{{- $jsonName := ne .NameJSON .Name }}
+{{ if .Description -}}
+// {{ .Name }} {{ .Description }}
+{{ end -}}
+{{ if and $jsonName (not .Nested) -}}
+@TigrisCollection(value = "{{.NameJSON}}")
+{{ end -}}
+class {{.Name}} {{ if not .Nested }}implements TigrisDocumentCollectionType {{end}}{
+{{- range $k, $v := .Fields }}
+{{- $jsonName := ne $v.NameJSON $v.NameDecap -}}
+    {{- with $v.Description }}
+    @TigrisField(description = "{{.}}"){{ end }}
+    {{- if or $v.AutoGenerate $v.PrimaryKeyIdx}}
+    @TigrisPrimaryKey({{with $v.PrimaryKeyIdx }}order = {{.}}{{end}}{{if and $v.PrimaryKeyIdx $v.AutoGenerate}}, {{end}}{{if $v.AutoGenerate}}autoGenerate = true{{end}})
+    {{- end}}
+    private {{$v.Type}}{{if $v.IsArray}}[]{{end}} {{$v.NameJSON}};
+{{- end}}
+{{range $k, $v := .Fields}}
+    {{- if and (not $v.IsArray) (eq $v.Type "boolean")}}
+    public {{$v.Type}}{{if $v.IsArray}}[]{{end}} is{{$v.JSONCap}}() {
+        return {{$v.NameJSON}};
+    }
+    {{- else }}
+    public {{$v.Type}}{{if $v.IsArray}}[]{{end}} get{{$v.JSONCap}}() {
+        return {{$v.NameJSON}};
+    }
+    {{- end }}
+
+    public void set{{$v.JSONCap}}({{$v.Type}}{{if $v.IsArray}}[]{{end}} {{$v.NameDecap}}) {
+        this.{{$v.NameJSON}} = {{$v.NameDecap}};
+    }
+{{end}}
+    public {{.Name}}() {};
+
+    public {{.Name}}(
+{{- $first := true -}}
+{{- range $k, $v := .Fields }}
+        {{- if $first}}{{$first = false}}{{else}},{{end}}
+        {{$v.Type}}{{if $v.IsArray}}[]{{end}} {{$v.NameDecap}}
+{{- end}}
+    ) {
+{{- range $k, $v := .Fields }}
+        this.{{$v.NameJSON}} = {{$v.NameDecap}};
+{{- end}}
+    };
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+
+        {{.Name}} other = ({{.Name}}) o;
+        return
+{{- $first := true -}}
+{{- range $k, $v := .Fields }}
+        {{- if $first}}{{$first = false}}{{else}} &&{{end}}
+        {{- if $v.IsArray }}
+            Arrays.equals({{$v.NameJSON}}, other.{{$v.NameJSON}})
+        {{- else if $v.IsObject }}
+            Objects.equals({{$v.NameJSON}}, other.{{$v.NameJSON}})
+        {{- else }}
+            {{$v.NameJSON}} == other.{{$v.NameJSON}}
+        {{- end}}
+{{- end}};
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(
+{{- $first := true -}}
+{{- range $k, $v := .Fields }}
+        {{- if $first}}{{$first = false}}{{else}},{{end}}
+            {{$v.NameJSON}}
+{{- end}}
+        );
+    }
+}
