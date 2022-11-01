@@ -43,28 +43,35 @@ type managementService struct {
 	api.UnimplementedManagementServer
 	AuthProvider
 	UserMetadataProvider
+	NamespaceMetadataProvider
 	*transaction.Manager
 	*metadata.TenantManager
 }
 
 type nsDetailsResp = map[string]map[string]map[string]map[string]string
 
-func newManagementService(authProvider AuthProvider, txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, userstore *metadata.UserSubspace) *managementService {
+func newManagementService(authProvider AuthProvider, txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, userStore *metadata.UserSubspace, namespaceStore *metadata.NamespaceSubspace) *managementService {
 	if authProvider == nil && config.DefaultConfig.Auth.EnableOauth {
 		log.Error().Str("AuthProvider", config.DefaultConfig.Auth.OAuthProvider).Msg("Unable to configure external auth provider")
 		panic("Unable to configure external auth provider")
 	}
 
 	userMetadataProvider := &DefaultUserMetadataProvider{
-		userStore: userstore,
+		userStore: userStore,
 		txMgr:     txMgr,
 		tenantMgr: tenantMgr,
 	}
+	namespaceMetadataProvider := &DefaultNamespaceMetadataProvider{
+		namespaceStore: namespaceStore,
+		txMgr:          txMgr,
+		tenantMgr:      tenantMgr,
+	}
 	return &managementService{
-		AuthProvider:         authProvider,
-		UserMetadataProvider: userMetadataProvider,
-		Manager:              txMgr,
-		TenantManager:        tenantMgr,
+		AuthProvider:              authProvider,
+		UserMetadataProvider:      userMetadataProvider,
+		NamespaceMetadataProvider: namespaceMetadataProvider,
+		Manager:                   txMgr,
+		TenantManager:             tenantMgr,
 	}
 }
 
@@ -246,6 +253,18 @@ func (m *managementService) InsertUserMetadata(ctx context.Context, req *api.Ins
 
 func (m *managementService) UpdateUserMetadata(ctx context.Context, req *api.UpdateUserMetadataRequest) (*api.UpdateUserMetadataResponse, error) {
 	return m.UserMetadataProvider.UpdateUserMetadata(ctx, req)
+}
+
+func (m *managementService) GetNamespaceMetadata(ctx context.Context, req *api.GetNamespaceMetadataRequest) (*api.GetNamespaceMetadataResponse, error) {
+	return m.NamespaceMetadataProvider.GetNamespaceMetadata(ctx, req)
+}
+
+func (m *managementService) InsertNamespaceMetadata(ctx context.Context, req *api.InsertNamespaceMetadataRequest) (*api.InsertNamespaceMetadataResponse, error) {
+	return m.NamespaceMetadataProvider.InsertNamespaceMetadata(ctx, req)
+}
+
+func (m *managementService) UpdateNamespaceMetadata(ctx context.Context, req *api.UpdateNamespaceMetadataRequest) (*api.UpdateNamespaceMetadataResponse, error) {
+	return m.NamespaceMetadataProvider.UpdateNamespaceMetadata(ctx, req)
 }
 
 func (m *managementService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {
