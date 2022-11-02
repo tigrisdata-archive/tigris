@@ -3,7 +3,7 @@
 // {{ .Name }} {{ .Description }}
 {{ end -}}
 {{ if and $jsonName (not .Nested) -}}
-@TigrisCollection(value = "{{.NameJSON}}")
+@com.tigrisdata.db.annotation.TigrisCollection(value = "{{.NameJSON}}")
 {{ end -}}
 class {{.Name}} {{ if not .Nested }}implements TigrisDocumentCollectionType {{end}}{
 {{- range $k, $v := .Fields }}

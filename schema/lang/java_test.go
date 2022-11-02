@@ -196,7 +196,7 @@ class Product {
 		{
 			"tags", tagsTest, `
 // Product type description
-@TigrisCollection(value = "products")
+@com.tigrisdata.db.annotation.TigrisCollection(value = "products")
 class Product implements TigrisDocumentCollectionType {
     @TigrisPrimaryKey(autoGenerate = true)
     private int Gen;
@@ -515,7 +515,7 @@ class Subtype {
     }
 }
 
-@TigrisCollection(value = "products")
+@com.tigrisdata.db.annotation.TigrisCollection(value = "products")
 class Product implements TigrisDocumentCollectionType {
     private SubArray[] subArrays;
     @TigrisField(description = "sub type description")
