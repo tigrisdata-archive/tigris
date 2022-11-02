@@ -141,9 +141,13 @@ jobs:
         run: |
           make clean
           make deps
-          echo $PATH
-          which protoc.exe
+          echo "aaaa $PATH aaaa"
+          echo "bbbb $GOPATH bbbb"
+          which protoc
           which go
+          which protoc-gen-go
+          /usr/local/bin/protoc.exe --help || true
+          /usr/local/bin/protoc --help || true
           pwd
           tree
           make clean
