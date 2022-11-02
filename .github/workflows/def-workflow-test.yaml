@@ -132,14 +132,20 @@ jobs:
       - name: Prerequisites (make, go, docker)
         run: |
           sh scripts/install_go.sh
-          echo "/usr/local/go/bin" >> $GITHUB_PATH # Go installation
-          echo "/home/runner/go/bin" >> $GITHUB_PATH # Default GOPATH
-          echo "/usr/local/bin/" >> $GITHUB_PATH
+          Add-Content $env:GITHUB_PATH "/usr/local/go/bin"
+          Add-Content $env:GITHUB_PATH "/home/runner/go/bin"
+          Add-Content $env:GITHUB_PATH "/usr/local/bin"
+          Add-Content $env:GITHUB_PATH "C:\Users\runneradmin\go/bin"
 
       - name: Host only workflows
         run: |
           make clean
           make deps
+          echo $PATH
+          which protoc.exe
+          which go
+          pwd
+          tree
           make clean
           make generate
           make clean
