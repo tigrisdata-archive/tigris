@@ -97,7 +97,7 @@ if [ -n "$PROTO_PKG" ]; then
   curl -LO "$DOWNLOAD_URL"
   if [[ "$OS" == "MINGW"* ]]; then
     unzip "$PROTO_PKG" -d "/usr/local/"
-    chmod +x "/usr/local/bin/protoc"
+    chmod +x "/usr/local/bin/protoc.exe"
     chmod -R 755 "/usr/local/include/"
   else
     sudo unzip "$PROTO_PKG" -d "/usr/local/"
