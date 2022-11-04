@@ -50,7 +50,7 @@ func NewUserStore(mdNameRegistry MDNameRegistry) *UserSubspace {
 }
 
 func (u *UserSubspace) InsertUserMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, userType UserType, userId string, metadataKey string, payload []byte) error {
-	if err := validateArgsFull(namespaceId, userId, metadataKey, payload); err != nil {
+	if err := validateUserArgs(namespaceId, userId, metadataKey, payload); err != nil {
 		return err
 	}
 	key := keys.NewKey(u.UserSubspaceName(), userVersion, UInt32ToByte(namespaceId), UInt32ToByte(uint32(userType)), []byte(userId), []byte(metadataKey))
@@ -65,7 +65,7 @@ func (u *UserSubspace) InsertUserMetadata(ctx context.Context, tx transaction.Tx
 }
 
 func (u *UserSubspace) GetUserMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, userType UserType, userId string, metadataKey string) ([]byte, error) {
-	if err := validateArgsPartial1(namespaceId, userId, metadataKey); err != nil {
+	if err := validateUserArgsPartial1(namespaceId, userId, metadataKey); err != nil {
 		return nil, err
 	}
 	key := keys.NewKey(u.UserSubspaceName(), userVersion, UInt32ToByte(namespaceId), UInt32ToByte(uint32(userType)), []byte(userId), []byte(metadataKey))
@@ -83,7 +83,7 @@ func (u *UserSubspace) GetUserMetadata(ctx context.Context, tx transaction.Tx, n
 }
 
 func (u *UserSubspace) UpdateUserMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, userType UserType, userId string, metadataKey string, payload []byte) error {
-	if err := validateArgsFull(namespaceId, userId, metadataKey, payload); err != nil {
+	if err := validateUserArgs(namespaceId, userId, metadataKey, payload); err != nil {
 		return err
 	}
 	key := keys.NewKey(u.UserSubspaceName(), userVersion, UInt32ToByte(namespaceId), UInt32ToByte(uint32(userType)), []byte(userId), []byte(metadataKey))
@@ -99,7 +99,7 @@ func (u *UserSubspace) UpdateUserMetadata(ctx context.Context, tx transaction.Tx
 }
 
 func (u *UserSubspace) DeleteUserMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, userType UserType, userId string, metadataKey string) error {
-	if err := validateArgsPartial1(namespaceId, userId, metadataKey); err != nil {
+	if err := validateUserArgsPartial1(namespaceId, userId, metadataKey); err != nil {
 		return err
 	}
 	key := keys.NewKey(u.UserSubspaceName(), userVersion, UInt32ToByte(namespaceId), UInt32ToByte(uint32(userType)), []byte(userId), []byte(metadataKey))
@@ -113,7 +113,7 @@ func (u *UserSubspace) DeleteUserMetadata(ctx context.Context, tx transaction.Tx
 }
 
 func (u *UserSubspace) DeleteUser(ctx context.Context, tx transaction.Tx, namespaceId uint32, userType UserType, userId string) error {
-	if err := validateArgsPartial2(namespaceId, userId); err != nil {
+	if err := validateUserArgsPartial2(namespaceId, userId); err != nil {
 		return err
 	}
 	key := keys.NewKey(u.UserSubspaceName(), userVersion, UInt32ToByte(namespaceId), UInt32ToByte(uint32(userType)), []byte(userId))
@@ -126,8 +126,8 @@ func (u *UserSubspace) DeleteUser(ctx context.Context, tx transaction.Tx, namesp
 	return nil
 }
 
-func validateArgsFull(namespaceId uint32, userId string, metadataKey string, payload []byte) error {
-	if err := validateArgsPartial1(namespaceId, userId, metadataKey); err != nil {
+func validateUserArgs(namespaceId uint32, userId string, metadataKey string, payload []byte) error {
+	if err := validateUserArgsPartial1(namespaceId, userId, metadataKey); err != nil {
 		return err
 	}
 	if payload == nil {
@@ -136,8 +136,8 @@ func validateArgsFull(namespaceId uint32, userId string, metadataKey string, pay
 	return nil
 }
 
-func validateArgsPartial1(namespaceId uint32, userId string, metadataKey string) error {
-	if err := validateArgsPartial2(namespaceId, userId); err != nil {
+func validateUserArgsPartial1(namespaceId uint32, userId string, metadataKey string) error {
+	if err := validateUserArgsPartial2(namespaceId, userId); err != nil {
 		return err
 	}
 	if metadataKey == "" {
@@ -146,7 +146,7 @@ func validateArgsPartial1(namespaceId uint32, userId string, metadataKey string)
 	return nil
 }
 
-func validateArgsPartial2(namespaceId uint32, userId string) error {
+func validateUserArgsPartial2(namespaceId uint32, userId string) error {
 	if namespaceId < 1 {
 		return errors.InvalidArgument("invalid namespace, id must be greater than 0")
 	}

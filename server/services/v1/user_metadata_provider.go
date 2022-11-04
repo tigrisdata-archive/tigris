@@ -46,7 +46,7 @@ func (a *DefaultUserMetadataProvider) GetUserMetadata(ctx context.Context, req *
 	val, err := a.userStore.GetUserMetadata(ctx, tx, namespaceId, metadata.User, currentSub, req.GetMetadataKey())
 	if err != nil {
 		if err = tx.Rollback(ctx); err != nil {
-			log.Debug().Msg("Failed to rollback transaction.")
+			log.Error().Err(err).Msg("Failed to rollback transaction.")
 		}
 		return nil, errors.Internal("Failed to read user metadata.")
 	}
@@ -68,12 +68,12 @@ func (a *DefaultUserMetadataProvider) InsertUserMetadata(ctx context.Context, re
 	err = a.userStore.InsertUserMetadata(ctx, tx, namespaceId, metadata.User, currentSub, req.GetMetadataKey(), req.GetValue())
 	if err != nil {
 		if err = tx.Rollback(ctx); err != nil {
-			log.Debug().Msg("Failed to rollback transaction.")
+			log.Error().Err(err).Msg("Failed to rollback transaction.")
 		}
 		return nil, errors.Internal("Failed to insert user metadata.")
 	}
 	if err = tx.Commit(ctx); err != nil {
-		log.Debug().Msg("Failed to commit transaction.")
+		log.Error().Err(err).Msg("Failed to commit transaction.")
 		return nil, errors.Internal("Failed to insert user metadata. reason: transaction was not committed.")
 	}
 	return &api.InsertUserMetadataResponse{
@@ -116,13 +116,13 @@ func (a *DefaultUserMetadataProvider) UpdateUserMetadata(ctx context.Context, re
 	err = a.userStore.UpdateUserMetadata(ctx, tx, namespaceId, metadata.User, currentSub, req.GetMetadataKey(), req.GetValue())
 	if err != nil {
 		if err = tx.Rollback(ctx); err != nil {
-			log.Debug().Msg("Failed to rollback transaction.")
+			log.Error().Err(err).Msg("Failed to rollback transaction.")
 		}
 		return nil, errors.Internal("Failed to update user metadata.")
 	}
 
 	if err = tx.Commit(ctx); err != nil {
-		log.Debug().Msg("Failed to commit transaction.")
+		log.Error().Err(err).Msg("Failed to commit transaction.")
 		return nil, errors.Internal("Failed to insert user metadata. reason: transaction was not committed.")
 	}
 

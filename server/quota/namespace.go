@@ -32,13 +32,6 @@ import (
 )
 
 const (
-	rateHysteresis = 10 // ±10 rps per instance wouldn't cause rate regulation
-
-	// when rate adjustment is needed increment current rate by ± this value
-	// (this is percentage of maximum per node per namespace limit)
-	// Set by config.DefaultConfig.Quota.Namespace.Node.(Read|Write)RateLimit.
-	rateIncrement = 10
-
 	// allow human user to go 5% beyond the quota.
 	overProvisionedPercent = 5
 )
@@ -58,7 +51,7 @@ type namespace struct {
 	tenantQuota sync.Map
 	tenantMgr   *metadata.TenantManager
 
-	cfg *config.QuotaConfig
+	cfg *config.NamespaceLimitsConfig
 
 	wg     sync.WaitGroup
 	ctx    context.Context
@@ -78,6 +71,8 @@ func unlimitedDefaultNamespace(namespace string, cfg *config.NamespaceLimitsConf
 	return !ok
 }
 
+// check if it's impossible to satisfy request, due to size.
+// return persistent error in this case.
 func checkMaxSize(units int, namespace string, isWrite bool, cfg *config.NamespaceLimitsConfig) error {
 	// Maximum per node size
 	if units > cfg.Node.Limit(isWrite) {
@@ -102,11 +97,11 @@ func isBlacklistedNamespace(namespace string, cfg *config.NamespaceLimitsConfig)
 }
 
 func (i *namespace) allowOrWait(ctx context.Context, namespace string, size int, isWrite bool, isWait bool) error {
-	if unlimitedDefaultNamespace(namespace, &i.cfg.Namespace) {
+	if unlimitedDefaultNamespace(namespace, i.cfg) {
 		return nil
 	}
 
-	if isBlacklistedNamespace(namespace, &i.cfg.Namespace) {
+	if isBlacklistedNamespace(namespace, i.cfg) {
 		if isWrite {
 			return ErrWriteUnitsExceeded
 		}
@@ -115,7 +110,7 @@ func (i *namespace) allowOrWait(ctx context.Context, namespace string, size int,
 
 	units := toUnits(size, isWrite)
 
-	if err := checkMaxSize(units, namespace, isWrite, &i.cfg.Namespace); err != nil {
+	if err := checkMaxSize(units, namespace, isWrite, i.cfg); err != nil {
 		return err
 	}
 
@@ -126,7 +121,7 @@ func (i *namespace) allowOrWait(ctx context.Context, namespace string, size int,
 	return i.getState(namespace).Allow(units, isWrite)
 }
 
-// allowOrWait taking overprovisioning of human user into account.
+// allowOrWait taking over-provisioning of human user into account.
 func (i *namespace) allowOrWaitWithOP(ctx context.Context, namespace string, size int, isWrite bool, isWait bool) error {
 	err := i.allowOrWait(ctx, namespace, size, isWrite, isWait)
 	if err == nil {
@@ -158,12 +153,16 @@ func getHumanUserNamespace(namespace string) string {
 }
 
 func (i *namespace) getLimits(namespace string) (int, int) {
-	cfg, ok := i.cfg.Namespace.Namespaces[namespace]
+	cfg, ok := i.cfg.Namespaces[namespace]
 	if !ok {
-		cfg = i.cfg.Namespace.Default
+		cfg = i.cfg.Default
 	}
 
-	ru, wu := cfg.ReadUnits, cfg.WriteUnits
+	// guarantee that hysteresis band is above promised
+	// per namespace limit.
+	h := i.cfg.Regulator.Hysteresis
+	ru, wu := cfg.ReadUnits+2*h, cfg.WriteUnits+2*h
+
 	if isHumanUserNamespace(namespace) {
 		ru = ru * overProvisionedPercent / 100
 		wu = wu * overProvisionedPercent / 100
@@ -176,6 +175,13 @@ func (i *namespace) getState(namespace string) *instanceState {
 	is, ok := i.tenantQuota.Load(namespace)
 	if !ok {
 		ru, wu := i.getLimits(namespace)
+		// do allow more then maximum per node quota
+		if ru > i.cfg.Node.ReadUnits {
+			ru = i.cfg.Node.ReadUnits
+		}
+		if wu > i.cfg.Node.WriteUnits {
+			wu = i.cfg.Node.WriteUnits
+		}
 		// Create new state if didn't exist before
 		is = &instanceState{
 			State: State{
@@ -187,6 +193,8 @@ func (i *namespace) getState(namespace string) *instanceState {
 					Rate: rate.NewLimiter(rate.Limit(ru), ru),
 				},
 			},
+			setWriteLimit: *atomic.NewInt64(int64(wu)),
+			setReadLimit:  *atomic.NewInt64(int64(ru)),
 		}
 		i.tenantQuota.Store(namespace, is)
 	}
@@ -200,6 +208,8 @@ func (i *namespace) loadCurNamespaceState() {
 
 		is := i.getState(ns)
 		curRead, curWrite, err := i.backend.CurRates(ctx, ns)
+		metrics.UpdateQuotaCurrentRatesReceivedLimit(ns, int(curRead), false)
+		metrics.UpdateQuotaCurrentRatesReceivedLimit(ns, int(curWrite), true)
 		if err == nil {
 			i.updateLimits(ns, is, curRead, curWrite)
 		} else {
@@ -211,21 +221,12 @@ func (i *namespace) loadCurNamespaceState() {
 }
 
 // calcLimit calculates new limit for the metric, based on updated cluster wide current and maximum rate.
-func calcLimit(setNodeLimit int64, maxNodeLimit int64, curNamespace int64, maxNamespace int64, hysteresis int64, increment int64) int64 {
-	if setNodeLimit == 0 {
-		setNodeLimit = maxNodeLimit
+func calcLimit(setNodeLimit int64, maxNodeLimit int64, curNamespace int64, maxNamespace int64, _ int64, _ int64) int64 {
+	if curNamespace == 0 {
+		curNamespace = 1
 	}
 
-	inc := maxNodeLimit * increment / 100
-	if inc == 0 {
-		inc = 1
-	}
-
-	if curNamespace > maxNamespace+hysteresis {
-		setNodeLimit -= inc
-	} else if curNamespace < maxNamespace-hysteresis {
-		setNodeLimit += inc
-	}
+	setNodeLimit *= maxNamespace / curNamespace
 
 	if setNodeLimit < 1 {
 		setNodeLimit = 1
@@ -240,8 +241,8 @@ func (i *namespace) updateLimits(ns string, is *instanceState, curRead int64, cu
 	ru, wu := i.getLimits(ns)
 
 	// calculate read limits
-	readLimit := calcLimit(is.setReadLimit.Load(), int64(i.cfg.Namespace.Node.ReadUnits), curRead, int64(ru),
-		rateHysteresis, rateIncrement)
+	readLimit := calcLimit(is.setReadLimit.Load(), int64(i.cfg.Node.ReadUnits), curRead, int64(ru),
+		int64(i.cfg.Regulator.Hysteresis), int64(i.cfg.Regulator.Increment))
 	// update read limiter config
 	if readLimit != is.setReadLimit.Load() {
 		is.Read.SetLimit(int(readLimit))
@@ -252,8 +253,8 @@ func (i *namespace) updateLimits(ns string, is *instanceState, curRead int64, cu
 	}
 
 	// calculate write limits
-	writeLimit := calcLimit(is.setWriteLimit.Load(), int64(i.cfg.Namespace.Node.WriteUnits), curWrite, int64(wu),
-		rateHysteresis, rateIncrement)
+	writeLimit := calcLimit(is.setWriteLimit.Load(), int64(i.cfg.Node.WriteUnits), curWrite, int64(wu),
+		int64(i.cfg.Regulator.Hysteresis), int64(i.cfg.Regulator.Increment))
 	// update write limiter config
 	if writeLimit != is.setWriteLimit.Load() {
 		is.Write.SetLimit(int(writeLimit))
@@ -270,7 +271,7 @@ func initNamespace(tm *metadata.TenantManager, cfg *config.QuotaConfig, backend 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	i := &namespace{
-		cfg: cfg, tenantMgr: tm, ctx: ctx, cancel: cancel,
+		cfg: &cfg.Namespace, tenantMgr: tm, ctx: ctx, cancel: cancel,
 		backend: backend,
 	}
 
@@ -289,9 +290,9 @@ func (i *namespace) Cleanup() {
 func (i *namespace) refreshLoop() {
 	defer i.wg.Done()
 
-	log.Debug().Dur("refresh_interval", i.cfg.Namespace.RefreshInterval).Msg("Initializing storage refresh loop")
+	log.Debug().Dur("refresh_interval", i.cfg.RefreshInterval).Msg("Initializing storage refresh loop")
 
-	t := time.NewTicker(i.cfg.Namespace.RefreshInterval)
+	t := time.NewTicker(i.cfg.RefreshInterval)
 	defer t.Stop()
 
 	for {

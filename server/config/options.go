@@ -301,6 +301,10 @@ var DefaultConfig = Config{
 				WriteUnits: 25,  // write requests per second
 			},
 			RefreshInterval: 60 * time.Second,
+			Regulator: QuotaRegulator{
+				Increment:  5,
+				Hysteresis: 10,
+			},
 		},
 		Storage: StorageLimitsConfig{
 			Enabled:         false,
@@ -353,6 +357,7 @@ type NamespaceLimitsConfig struct {
 	Namespaces map[string]LimitsConfig // individual namespaces configuration
 
 	RefreshInterval time.Duration `mapstructure:"refresh_interval" yaml:"refresh_interval" json:"refresh_interval"`
+	Regulator       QuotaRegulator
 }
 
 func (n *NamespaceLimitsConfig) NamespaceLimits(ns string) *LimitsConfig {
@@ -382,6 +387,16 @@ func (n *StorageLimitsConfig) NamespaceLimits(ns string) int64 {
 		return cfg.Size
 	}
 	return n.DataSizeLimit
+}
+
+type QuotaRegulator struct {
+	// This is a hysteresis band, deviation from ideal value in which regulation is no happening
+	Hysteresis int `mapstructure:"hysteresis" yaml:"hysteresis" json:"hysteresis"`
+
+	// when rate adjustment is needed increment current rate by ± this value
+	// (this is percentage of maximum per node per namespace limit)
+	// Set by config.DefaultConfig.Quota.Namespace.Node.(Read|Write)RateLimit.
+	Increment int `mapstructure:"increment" yaml:"increment" json:"increment"`
 }
 
 type QuotaConfig struct {

@@ -15,12 +15,12 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/golang/protobuf/proto" //nolint:staticcheck
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	jsoniter "github.com/json-iterator/go"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
@@ -280,7 +280,7 @@ func MarshalStatus(status *spb.Status) ([]byte, error) {
 		}
 	}
 
-	return json.Marshal(&resp)
+	return jsoniter.Marshal(&resp)
 }
 
 // FromErrorDetails construct TigrisError from the ErrorDetails,
@@ -309,7 +309,7 @@ func UnmarshalStatus(b []byte) *TigrisError {
 		Error ErrorDetails `json:"error"`
 	}{}
 
-	if err := json.Unmarshal(b, &resp); err != nil {
+	if err := jsoniter.Unmarshal(b, &resp); err != nil {
 		return &TigrisError{Code: Code_UNKNOWN, Message: err.Error()}
 	}
 

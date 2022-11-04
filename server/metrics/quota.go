@@ -22,6 +22,7 @@ var (
 	QuotaUsage     tally.Scope
 	QuotaThrottled tally.Scope
 	QuotaSet       tally.Scope
+	QuotaCurRates  tally.Scope
 )
 
 func initializeQuotaScopes() {
@@ -29,6 +30,7 @@ func initializeQuotaScopes() {
 	QuotaUsage = QuotaMetrics.SubScope("usage")
 	QuotaThrottled = QuotaMetrics.SubScope("throttled")
 	QuotaSet = QuotaMetrics.SubScope("set_node")
+	QuotaCurRates = QuotaMetrics.SubScope("cur_rates")
 }
 
 func getQuotaUsageTags(namespaceName string) map[string]string {
@@ -82,4 +84,17 @@ func UpdateQuotaCurrentNodeLimit(namespaceName string, value int, isWrite bool) 
 	}
 
 	QuotaSet.Tagged(getQuotaUsageTags(namespaceName)).Gauge(counter).Update(float64(value))
+}
+
+func UpdateQuotaCurrentRatesReceivedLimit(namespaceName string, value int, isWrite bool) {
+	if QuotaCurRates == nil {
+		return
+	}
+
+	counter := "read_rate"
+	if isWrite {
+		counter = "write_rate"
+	}
+
+	QuotaCurRates.Tagged(getQuotaUsageTags(namespaceName)).Gauge(counter).Update(float64(value))
 }

@@ -69,7 +69,6 @@ func measureUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryS
 			measurement.CountErrorForScope(metrics.RequestsErrorCount, measurement.GetRequestErrorTags(err))
 			_ = measurement.FinishWithError(ctx, "request", err)
 			measurement.RecordDuration(metrics.RequestsErrorRespTime, measurement.GetRequestErrorTags(err))
-			ulog.E(err)
 			return nil, err
 		}
 		// Request was ok

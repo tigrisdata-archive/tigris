@@ -52,11 +52,26 @@ infrastructure.
 
 # Community & Support
 
-* [Slack Community](https://join.slack.com/t/tigrisdatacommunity/shared_invite/zt-16fn5ogio-OjxJlgttJIV0ZDywcBItJQ)
-* [GitHub Issues](https://github.com/tigrisdata/tigris/issues)
-* [GitHub Discussions](https://github.com/tigrisdata/tigris/discussions)
+- [Slack Community](https://join.slack.com/t/tigrisdatacommunity/shared_invite/zt-16fn5ogio-OjxJlgttJIV0ZDywcBItJQ)
+- [GitHub Issues](https://github.com/tigrisdata/tigris/issues)
+- [GitHub Discussions](https://github.com/tigrisdata/tigris/discussions)
 
 # Developing
+
+## Setup local development environment
+
+To setup your local development environment. Make sure you have Go installed or run:
+
+```sh
+sh scripts/install_go.sh
+```
+
+Add your `$GOPATH` to your `$PATHS` environment variable. And then to download and
+install the build dependencies and FoundationDB run:
+
+```sh
+sh scripts/install_build_deps.sh
+```
 
 ### Building with Docker Containers
 
@@ -70,8 +85,9 @@ This would bring dependencies and server up in the docker containers with all
 your changes.
 
 Alternatively, you can run `make run_full` to bring up monitoring tools as well.
-  * Graphana: http://localhost:3000
-  * Prometheus: http://localhost:9090
+
+- Graphana: http://localhost:3000
+- Prometheus: http://localhost:9090
 
 ### Running tests
 

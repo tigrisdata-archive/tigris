@@ -2,7 +2,7 @@
 {{ if .Description -}}
 // {{ .Name }} {{ .Description }}
 {{ end -}}
-export interface {{.Name}} {{ if not .Nested }}extends TigrisCollectionType {{end}}{
+{{ if not .Nested }}export {{end}}interface {{.Name}} {{ if not .Nested }}extends TigrisCollectionType {{end}}{
 {{- range $k, $v := .Fields }}
 {{- $tsType := $v.Type }}
 {{- if eq $v.Type "INT64" }}
@@ -28,7 +28,7 @@ export interface {{.Name}} {{ if not .Nested }}extends TigrisCollectionType {{en
 {{- end}}
 }
 
-export const {{.NameDecap}}Schema: TigrisSchema<{{.Name}}> = {
+{{ if not .Nested }}export {{end}}const {{.NameDecap}}Schema: TigrisSchema<{{.Name}}> = {
 {{- range $k, $v := .Fields}}
   {{$v.NameJSON}}: {
     {{- if $v.IsArray}}
