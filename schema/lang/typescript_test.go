@@ -33,7 +33,7 @@ func TestTypeScriptSchemaGenerator(t *testing.T) {
 	}{
 		{
 			"types", typesTest, `
-export interface Product {
+interface Product {
   arrInts: string;
   bool: boolean;
   byte1: string;
@@ -47,7 +47,7 @@ export interface Product {
   uUID1: string;
 }
 
-export const productSchema: TigrisSchema<Product> = {
+const productSchema: TigrisSchema<Product> = {
   arrInts: {
     type: TigrisDataTypes.ARRAY,
     items: {
@@ -144,33 +144,33 @@ export const productSchema: TigrisSchema<Product> = {
 		},
 		{
 			"object", objectTest, `
-export interface SubArrayNested {
+interface SubArrayNested {
   field_3: number;
 }
 
-export const subArrayNestedSchema: TigrisSchema<SubArrayNested> = {
+const subArrayNestedSchema: TigrisSchema<SubArrayNested> = {
   field_3: {
     type: TigrisDataTypes.INT32,
   },
 };
 
-export interface SubObjectNested {
+interface SubObjectNested {
   field_3: number;
 }
 
-export const subObjectNestedSchema: TigrisSchema<SubObjectNested> = {
+const subObjectNestedSchema: TigrisSchema<SubObjectNested> = {
   field_3: {
     type: TigrisDataTypes.INT32,
   },
 };
 
-export interface SubArray {
+interface SubArray {
   field_3: number;
   subArrayNesteds: SubArrayNested;
   subObjectNested: SubObjectNested;
 }
 
-export const subArraySchema: TigrisSchema<SubArray> = {
+const subArraySchema: TigrisSchema<SubArray> = {
   field_3: {
     type: TigrisDataTypes.INT32,
   },
@@ -186,11 +186,11 @@ export const subArraySchema: TigrisSchema<SubArray> = {
 };
 
 // Subtype sub type description
-export interface Subtype {
+interface Subtype {
   id2: number;
 }
 
-export const subtypeSchema: TigrisSchema<Subtype> = {
+const subtypeSchema: TigrisSchema<Subtype> = {
   id2: {
     type: TigrisDataTypes.INT32,
   },
