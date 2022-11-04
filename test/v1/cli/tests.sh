@@ -19,15 +19,25 @@ if [ -z "$cli" ]; then
 	cli="./tigris"
 fi
 
+# Just to check if any config is set
+env|grep TIGRIS || true
+
 $cli version
 $cli config show
 
 def_cfg=$($cli config show)
-if [ "$def_cfg" != 'url: localhost:8081' ]; then
+if [ "$def_cfg" != '' ]; then
 	set +x
-	echo "unexpected default config"
-	echo "it can be caused by tigris-cli.yaml in /etc/tigris/, $HOME/tigris/, ./config/, . directories"
-	echo "back it up and remove original one"
+	cat <<EOF
+
+Unexpected default config
+
+It can be caused by:
+  * tigris-cli.yaml in /etc/tigris/, $HOME/tigris/, ./config/, . directories
+    back it up and remove original one
+  * TIGRIS_* environment variables set
+
+EOF
 	exit 1
 fi
 
@@ -36,6 +46,7 @@ if [ -z "$noup" ]; then
 	$cli local logs >/dev/null 2>&1
 fi
 
+export TIGRIS_URL=localhost:8081
 $cli server info
 $cli server version
 
@@ -73,20 +84,20 @@ db_tests() {
 	#reading schemas from command line parameters
 	$cli create collection db1 "$coll1" "$coll111"
 
-	out=$($cli describe collection db1 coll1)
+	out=$($cli describe collection db1 coll1|tr -d '\n')
 	diff -w -u <(echo '{"collection":"coll1","schema":'"$coll1"'}') <(echo "$out")
 
-	out=$($cli describe database db1)
+	out=$($cli describe database db1|tr -d '\n')
 	# The output order is not-deterministic, try both combinations:
 	# BUG: Http doesn't fill database name
-	diff -u <(echo '{"db":"db1","collections":[{"collection":"coll1","schema":'"$coll1"'},{"collection":"coll111","schema":'"$coll111"'}]}') <(echo "$out") ||
-	diff -u <(echo '{"db":"db1","collections":[{"collection":"coll111","schema":'"$coll111"'},{"collection":"coll1","schema":'"$coll1"'}]}') <(echo "$out") ||
-	diff -u <(echo '{"collections":[{"collection":"coll111","schema":'"$coll111"'},{"collection":"coll1","schema":'"$coll1"'}]}') <(echo "$out") ||
-	diff -u <(echo '{"collections":[{"collection":"coll1","schema":'"$coll1"'},{"collection":"coll111","schema":'"$coll111"'}]}') <(echo "$out")
+	diff -w -u <(echo '{"db":"db1","collections":[{"collection":"coll1","schema":'"$coll1"'},{"collection":"coll111","schema":'"$coll111"'}]}') <(echo "$out") ||
+	diff -w -u <(echo '{"db":"db1","collections":[{"collection":"coll111","schema":'"$coll111"'},{"collection":"coll1","schema":'"$coll1"'}]}') <(echo "$out") ||
+	diff -w -u <(echo '{"collections":[{"collection":"coll111","schema":'"$coll111"'},{"collection":"coll1","schema":'"$coll1"'}]}') <(echo "$out") ||
+	diff -w -u <(echo '{"collections":[{"collection":"coll1","schema":'"$coll1"'},{"collection":"coll111","schema":'"$coll111"'}]}') <(echo "$out")
 
-	out=$($cli describe database db1 --schema-only)
-	diff -w -u <(echo -e "$coll1\n$coll111") <(echo "$out") ||
-	diff -w -u <(echo -e "$coll111\n$coll1") <(echo "$out")
+	out=$($cli describe database db1 --schema-only|tr -d '\n')
+	diff -w -u <(echo -e "$coll1$coll111") <(echo "$out") ||
+	diff -w -u <(echo -e "$coll111$coll1") <(echo "$out")
 
 	#reading schemas from stream
 	# \n at the end to test empty line skipping
@@ -266,6 +277,8 @@ error() {
 # BUG: Unify HTTP and GRPC responses
 # shellcheck disable=SC2086
 db_errors_tests() {
+	$cli list databases
+
 	error "database doesn't exist 'db2'" $cli drop database db2
 
 	error "database doesn't exist 'db2'" $cli drop collection db2 coll1
@@ -338,26 +351,94 @@ test_pubsub() {
 	$cli drop collection db1 coll_msg
 }
 
+test_scaffold() {
+	coll_msg='{"title":"names","properties":{"Key1":{"type":"string"},"Field1":{"type":"integer"}},"collection_type":"messages"}'
+
+	$cli drop database gen1 || true
+	$cli create database gen1
+	$cli create collection gen1 "$coll_msg"
+
+	exp_out='package main
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/tigrisdata/tigris-client-go/config"
+	"github.com/tigrisdata/tigris-client-go/tigris"
+)
+
+type Name struct {
+	Field1 int64
+	Key1 string
+}
+
+func main() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	client, err := tigris.NewClient(ctx, &config.Client{Driver: config.Driver{URL: "localhost:8081"}})
+
+	if err != nil {
+		panic(err)
+	}
+	defer client.Close()
+
+	db, err := client.OpenDatabase(ctx, "gen1",
+		&Name{},
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	collName := tigris.GetCollection[Name](db)
+
+	itName, err := collName.ReadAll(ctx)
+	if err != nil {
+		panic(err)
+	}
+
+	var docName Name
+	for i := 0; itName.Next(&docName) && i < 3; i++ {
+		fmt.Printf("%+v\n", docName)
+	}
+
+	itName.Close()
+
+	//collName.Insert(context.TODO(), &Name{/* Insert fields here */})
+}
+
+// Check full API reference here: https://docs.tigrisdata.com/golang/
+
+// Compile and run:
+// * Put this output to main.go
+// * go mod init
+// * go mod tidy
+// * go build -o gen1 .
+// * ./gen1'
+
+	out=$($cli scaffold go gen1)
+	diff -w -u <(echo "$exp_out") <(echo "$out") ||
+
+	$cli drop database gen1
+}
+
+
 main() { 
 	test_config
 
 	unset TIGRIS_PROTOCOL
-	unset TIGRIS_URL
+	export TIGRIS_URL=localhost:8081
 	db_tests
-
-	export TIGRIS_PROTOCOL=grpc
-	$cli config show | grep "protocol: grpc"
-	db_tests
-
-	export TIGRIS_PROTOCOL=http
-	$cli config show | grep "protocol: http"
-	db_tests
+	test_scaffold
 
 	export TIGRIS_URL=localhost:8081
 	export TIGRIS_PROTOCOL=grpc
 	$cli config show | grep "protocol: grpc"
 	$cli config show | grep "url: localhost:8081"
 	db_tests
+	test_scaffold
 
 	export TIGRIS_URL=localhost:8081
 	export TIGRIS_PROTOCOL=http
