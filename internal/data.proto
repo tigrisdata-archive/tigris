@@ -40,7 +40,21 @@ message TableData {
 // are used by channels to store channel metadata but these can be ignored for storing some regular stream data.
 message StreamData {
   // the id generated for this data, in most cases will be filled when returning this in response
-  int32 id = 1;
+  string id = 1;
+  // ver is the version for the raw bytes, this may be the version of the event
+  int32 ver = 2;
+  // encoding represents encoding of the event field.
+  int32 encoding = 3;
+  Timestamp created_at = 4;
+  // metadata is the metadata of this stream data.
+  bytes metadata=5;
+  // raw_data is the raw bytes stored, caller controls how they want to store these raw bytes in event store.
+  bytes raw_data = 6;
+}
+
+message CacheData {
+  // the user key for this data, in most cases will be filled when returning this in response
+  string key = 1;
   // ver is the version for the raw bytes, this may be the version of the event
   int32 ver = 2;
   // encoding represents encoding of the event field.
@@ -50,15 +64,3 @@ message StreamData {
   bytes raw_data = 5;
 }
 
-// CacheData is used to store a serialized data that has user data and some Tigris metadata in Cache
-message CacheData {
-  // the id generated for this data, in most cases will be filled when returning this in response
-  int32 id = 1;
-  // ver is the version for the raw bytes, this may be the version of the event
-  int32 ver = 2;
-  // encoding represents encoding of the event field.
-  int32 encoding = 3;
-  Timestamp created_at = 4;
-  // raw_data is the raw bytes stored, caller controls how they want to store these raw bytes in event store.
-  bytes raw_data = 5;
-}

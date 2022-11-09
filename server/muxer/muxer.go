@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
 	"github.com/tigrisdata/tigris/server/config"
@@ -34,15 +35,24 @@ type Server interface {
 }
 
 type Muxer struct {
-	servers []Server
+	servers   []Server
+	wsRuntime *runtime.ServeMux
 }
 
 func NewMuxer(cfg *config.Config) *Muxer {
-	return &Muxer{servers: []Server{NewHTTPServer(cfg), NewGRPCServer(cfg)}}
+	return &Muxer{
+		servers: []Server{NewHTTPServer(cfg), NewGRPCServer(cfg)},
+	}
 }
 
-func (m *Muxer) RegisterServices(kvStore kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) {
-	services := v1.GetRegisteredServices(kvStore, searchStore, tenantMgr, txMgr)
+func (m *Muxer) RegisterServices(cfg *config.Config, kvStore kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) {
+	var services []v1.Service
+	if cfg.Server.ServerType == config.RealtimeServerType {
+		services = v1.GetRegisteredServicesRealtime(kvStore, searchStore, tenantMgr, txMgr)
+	} else {
+		services = v1.GetRegisteredServices(kvStore, searchStore, tenantMgr, txMgr)
+	}
+
 	for _, r := range services {
 		for _, v := range m.servers {
 			if s, ok := v.(*GRPCServer); ok {
@@ -58,7 +68,7 @@ func (m *Muxer) RegisterServices(kvStore kv.KeyValueStore, searchStore search.St
 	}
 }
 
-func (m *Muxer) Start(host string, port int16) error {
+func (m *Muxer) StartServers(host string, port int16) error {
 	log.Info().Int16("port", port).Msg("initializing server")
 
 	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))

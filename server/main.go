@@ -90,15 +90,19 @@ func mainWithCode() int {
 		return 1
 	}
 
+	cfg := &config.DefaultConfig
 	request.Init(tenantMgr)
-	_ = quota.Init(tenantMgr, &config.DefaultConfig)
+	_ = quota.Init(tenantMgr, cfg)
 	defer quota.Cleanup()
 
-	mx := muxer.NewMuxer(&config.DefaultConfig)
-	mx.RegisterServices(kvStore, searchStore, tenantMgr, txMgr)
-
-	if err := mx.Start(config.DefaultConfig.Server.Host, config.DefaultConfig.Server.Port); err != nil {
-		log.Error().Err(err).Msgf("error starting server")
+	mx := muxer.NewMuxer(cfg)
+	mx.RegisterServices(cfg, kvStore, searchStore, tenantMgr, txMgr)
+	port := cfg.Server.Port
+	if cfg.Server.ServerType == config.RealtimeServerType {
+		port = cfg.Server.RealtimePort
+	}
+	if err := mx.StartServers(cfg.Server.Host, port); err != nil {
+		log.Error().Err(err).Msgf("error starting realtime server")
 		return 1
 	}
 

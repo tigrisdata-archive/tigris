@@ -12,24 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v1
+package api
 
-import (
-	"testing"
+func EventStrToEnumCode(eventType string) (int32, bool) {
+	if val, ok := EventType_value[eventType]; ok {
+		return val, ok
+	}
 
-	"github.com/stretchr/testify/require"
-)
-
-func TestSessionTracker(t *testing.T) {
-	s := newSessionTracker()
-	require.Equal(t, 0, len(s.sessions))
-	require.NotNil(t, s.sessions)
-
-	// get is empty
-	require.Nil(t, s.get("abc"))
-
-	// put and get
-	sess := &QuerySession{}
-	s.add("abc", sess)
-	require.Equal(t, sess, s.get("abc"))
+	return -1, false
 }

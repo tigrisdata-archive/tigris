@@ -32,6 +32,7 @@ import (
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/services/v1/auth"
+	"github.com/tigrisdata/tigris/server/services/v1/database"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
@@ -40,8 +41,10 @@ import (
 )
 
 const (
-	projectPath        = "/projects"
-	projectPathPattern = projectPath + "*"
+	projectPath            = "/projects"
+	fullProjectPath        = projectPath + "/{project}"
+	databasePathPattern    = fullProjectPath + "/database/*"
+	applicationPathPattern = fullProjectPath + "/applications/*"
 
 	infoPath    = "/info"
 	metricsPath = "/metrics"
@@ -54,8 +57,8 @@ type apiService struct {
 	txMgr         *transaction.Manager
 	tenantMgr     *metadata.TenantManager
 	cdcMgr        *cdc.Manager
-	sessions      Session
-	runnerFactory *QueryRunnerFactory
+	sessions      database.Session
+	runnerFactory *database.QueryRunnerFactory
 	versionH      *metadata.VersionHandler
 	searchStore   search.Store
 	authProvider  auth.Provider
@@ -89,21 +92,21 @@ func newApiService(kv kv.KeyValueStore, searchStore search.Store, tenantMgr *met
 	}
 	ulog.E(tx.Commit(ctx))
 
-	var txListeners []TxListener
+	var txListeners []database.TxListener
 	if config.DefaultConfig.Cdc.Enabled {
 		txListeners = append(txListeners, u.cdcMgr)
 	}
 	if config.DefaultConfig.Search.WriteEnabled {
 		// just for testing so that we can disable it if needed
-		txListeners = append(txListeners, NewSearchIndexer(searchStore, tenantMgr))
+		txListeners = append(txListeners, database.NewSearchIndexer(searchStore, tenantMgr))
 	}
 
 	if config.DefaultConfig.Tracing.Enabled {
-		u.sessions = NewSessionManagerWithMetrics(u.txMgr, u.tenantMgr, u.versionH, txListeners, metadata.NewCacheTracker(tenantMgr, txMgr))
+		u.sessions = database.NewSessionManagerWithMetrics(u.txMgr, u.tenantMgr, u.versionH, txListeners, metadata.NewCacheTracker(tenantMgr, txMgr))
 	} else {
-		u.sessions = NewSessionManager(u.txMgr, u.tenantMgr, u.versionH, txListeners, metadata.NewCacheTracker(tenantMgr, txMgr))
+		u.sessions = database.NewSessionManager(u.txMgr, u.tenantMgr, u.versionH, txListeners, metadata.NewCacheTracker(tenantMgr, txMgr))
 	}
-	u.runnerFactory = NewQueryRunnerFactory(u.txMgr, u.cdcMgr, u.searchStore)
+	u.runnerFactory = database.NewQueryRunnerFactory(u.txMgr, u.cdcMgr, u.searchStore)
 
 	return u
 }
@@ -114,14 +117,24 @@ func (s *apiService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel)
 		runtime.WithIncomingHeaderMatcher(api.CustomMatcher),
 		runtime.WithOutgoingHeaderMatcher(api.CustomMatcher),
 	)
-
 	if err := api.RegisterTigrisHandlerClient(context.TODO(), mux, api.NewTigrisClient(inproc)); err != nil {
 		return err
 	}
 
 	api.RegisterTigrisServer(inproc, s)
 
-	router.HandleFunc(apiPathPrefix+projectPathPattern, func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc(apiPathPrefix+projectPath+"/list", func(w http.ResponseWriter, r *http.Request) {
+		mux.ServeHTTP(w, r)
+	})
+	for _, projectPath := range []string{"/create", "/delete"} {
+		router.HandleFunc(apiPathPrefix+fullProjectPath+projectPath, func(w http.ResponseWriter, r *http.Request) {
+			mux.ServeHTTP(w, r)
+		})
+	}
+	router.HandleFunc(apiPathPrefix+databasePathPattern, func(w http.ResponseWriter, r *http.Request) {
+		mux.ServeHTTP(w, r)
+	})
+	router.HandleFunc(apiPathPrefix+applicationPathPattern, func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
 	})
 	router.HandleFunc(apiPathPrefix+infoPath, func(w http.ResponseWriter, r *http.Request) {
@@ -148,7 +161,7 @@ func (s *apiService) BeginTransaction(ctx context.Context, _ *api.BeginTransacti
 	}
 
 	return &api.BeginTransactionResponse{
-		TxCtx: session.txCtx,
+		TxCtx: session.GetTransactionCtx(),
 	}, nil
 }
 
@@ -163,7 +176,7 @@ func (s *apiService) CommitTransaction(ctx context.Context, _ *api.CommitTransac
 		}
 	}()
 
-	err := session.Commit(s.versionH, session.tx.Context().GetStagedDatabase() != nil, nil)
+	err := session.Commit(s.versionH, session.GetTx().Context().GetStagedDatabase() != nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -192,19 +205,19 @@ func (s *apiService) RollbackTransaction(ctx context.Context, _ *api.RollbackTra
 func (s *apiService) Insert(ctx context.Context, r *api.InsertRequest) (*api.InsertResponse, error) {
 	qm := metrics.WriteQueryMetrics{}
 	accessToken, _ := request.GetAccessToken(ctx)
-	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetInsertQueryRunner(r, &qm, accessToken), &ReqOptions{
-		txCtx: api.GetTransaction(ctx),
+	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetInsertQueryRunner(r, &qm, accessToken), &database.ReqOptions{
+		TxCtx: api.GetTransaction(ctx),
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return &api.InsertResponse{
-		Status: resp.status,
+		Status: resp.Status,
 		Metadata: &api.ResponseMetadata{
-			CreatedAt: resp.createdAt.GetProtoTS(),
+			CreatedAt: resp.CreatedAt.GetProtoTS(),
 		},
-		Keys: resp.allKeys,
+		Keys: resp.AllKeys,
 	}, nil
 }
 
@@ -212,56 +225,56 @@ func (s *apiService) Import(ctx context.Context, r *api.ImportRequest) (*api.Imp
 	qm := metrics.WriteQueryMetrics{}
 	accessToken, _ := request.GetAccessToken(ctx)
 
-	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetImportQueryRunner(r, &qm, accessToken), &ReqOptions{
-		txCtx: api.GetTransaction(ctx),
+	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetImportQueryRunner(r, &qm, accessToken), &database.ReqOptions{
+		TxCtx: api.GetTransaction(ctx),
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return &api.ImportResponse{
-		Status: resp.status,
+		Status: resp.Status,
 		Metadata: &api.ResponseMetadata{
-			CreatedAt: resp.createdAt.GetProtoTS(),
+			CreatedAt: resp.CreatedAt.GetProtoTS(),
 		},
-		Keys: resp.allKeys,
+		Keys: resp.AllKeys,
 	}, nil
 }
 
 func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.ReplaceResponse, error) {
 	qm := metrics.WriteQueryMetrics{}
 	accessToken, _ := request.GetAccessToken(ctx)
-	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetReplaceQueryRunner(r, &qm, accessToken), &ReqOptions{
-		txCtx: api.GetTransaction(ctx),
+	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetReplaceQueryRunner(r, &qm, accessToken), &database.ReqOptions{
+		TxCtx: api.GetTransaction(ctx),
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return &api.ReplaceResponse{
-		Status: resp.status,
+		Status: resp.Status,
 		Metadata: &api.ResponseMetadata{
-			CreatedAt: resp.createdAt.GetProtoTS(),
+			CreatedAt: resp.CreatedAt.GetProtoTS(),
 		},
-		Keys: resp.allKeys,
+		Keys: resp.AllKeys,
 	}, nil
 }
 
 func (s *apiService) Update(ctx context.Context, r *api.UpdateRequest) (*api.UpdateResponse, error) {
 	queryMetrics := metrics.WriteQueryMetrics{}
 	accessToken, _ := request.GetAccessToken(ctx)
-	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetUpdateQueryRunner(r, &queryMetrics, accessToken), &ReqOptions{
-		txCtx: api.GetTransaction(ctx),
+	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetUpdateQueryRunner(r, &queryMetrics, accessToken), &database.ReqOptions{
+		TxCtx: api.GetTransaction(ctx),
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return &api.UpdateResponse{
-		Status:        resp.status,
-		ModifiedCount: resp.modifiedCount,
+		Status:        resp.Status,
+		ModifiedCount: resp.ModifiedCount,
 		Metadata: &api.ResponseMetadata{
-			UpdatedAt: resp.updatedAt.GetProtoTS(),
+			UpdatedAt: resp.UpdatedAt.GetProtoTS(),
 		},
 	}, nil
 }
@@ -269,17 +282,17 @@ func (s *apiService) Update(ctx context.Context, r *api.UpdateRequest) (*api.Upd
 func (s *apiService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.DeleteResponse, error) {
 	queryMetrics := metrics.WriteQueryMetrics{}
 	accessToken, _ := request.GetAccessToken(ctx)
-	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetDeleteQueryRunner(r, &queryMetrics, accessToken), &ReqOptions{
-		txCtx: api.GetTransaction(ctx),
+	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetDeleteQueryRunner(r, &queryMetrics, accessToken), &database.ReqOptions{
+		TxCtx: api.GetTransaction(ctx),
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return &api.DeleteResponse{
-		Status: resp.status,
+		Status: resp.Status,
 		Metadata: &api.ResponseMetadata{
-			DeletedAt: resp.deletedAt.GetProtoTS(),
+			DeletedAt: resp.DeletedAt.GetProtoTS(),
 		},
 	}, nil
 }
@@ -290,12 +303,12 @@ func (s *apiService) Read(r *api.ReadRequest, stream api.Tigris_ReadServer) erro
 	accessToken, _ := request.GetAccessToken(stream.Context())
 
 	if api.GetTransaction(stream.Context()) != nil {
-		_, err = s.sessions.Execute(stream.Context(), s.runnerFactory.GetStreamingQueryRunner(r, stream, &queryMetrics, accessToken), &ReqOptions{
-			txCtx:              api.GetTransaction(stream.Context()),
-			instantVerTracking: true,
+		_, err = s.sessions.Execute(stream.Context(), s.runnerFactory.GetStreamingQueryRunner(r, stream, &queryMetrics, accessToken), &database.ReqOptions{
+			TxCtx:              api.GetTransaction(stream.Context()),
+			InstantVerTracking: true,
 		})
 	} else {
-		_, err = s.sessions.ReadOnlyExecute(stream.Context(), s.runnerFactory.GetStreamingQueryRunner(r, stream, &queryMetrics, accessToken), &ReqOptions{})
+		_, err = s.sessions.ReadOnlyExecute(stream.Context(), s.runnerFactory.GetStreamingQueryRunner(r, stream, &queryMetrics, accessToken), &database.ReqOptions{})
 	}
 	return err
 }
@@ -303,8 +316,8 @@ func (s *apiService) Read(r *api.ReadRequest, stream api.Tigris_ReadServer) erro
 func (s *apiService) Search(r *api.SearchRequest, stream api.Tigris_SearchServer) error {
 	queryMetrics := metrics.SearchQueryMetrics{}
 	accessToken, _ := request.GetAccessToken(stream.Context())
-	_, err := s.sessions.ReadOnlyExecute(stream.Context(), s.runnerFactory.GetSearchQueryRunner(r, stream, &queryMetrics, accessToken), &ReqOptions{
-		instantVerTracking: true,
+	_, err := s.sessions.ReadOnlyExecute(stream.Context(), s.runnerFactory.GetSearchQueryRunner(r, stream, &queryMetrics, accessToken), &database.ReqOptions{
+		InstantVerTracking: true,
 	})
 	if err != nil {
 		return err
@@ -322,17 +335,17 @@ func (s *apiService) CreateOrUpdateCollection(ctx context.Context, r *api.Create
 	runner := s.runnerFactory.GetCollectionQueryRunner(accessToken)
 	runner.SetCreateOrUpdateCollectionReq(r)
 
-	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{
-		txCtx:              api.GetTransaction(ctx),
-		metadataChange:     true,
-		instantVerTracking: true,
+	resp, err := s.sessions.Execute(ctx, runner, &database.ReqOptions{
+		TxCtx:              api.GetTransaction(ctx),
+		MetadataChange:     true,
+		InstantVerTracking: true,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return &api.CreateOrUpdateCollectionResponse{
-		Status:  resp.status,
+		Status:  resp.Status,
 		Message: fmt.Sprintf("collection of type '%s' created successfully", collectionType),
 	}, nil
 }
@@ -342,17 +355,17 @@ func (s *apiService) DropCollection(ctx context.Context, r *api.DropCollectionRe
 	runner := s.runnerFactory.GetCollectionQueryRunner(accessToken)
 	runner.SetDropCollectionReq(r)
 
-	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{
-		txCtx:              api.GetTransaction(ctx),
-		metadataChange:     true,
-		instantVerTracking: true,
+	resp, err := s.sessions.Execute(ctx, runner, &database.ReqOptions{
+		TxCtx:              api.GetTransaction(ctx),
+		MetadataChange:     true,
+		InstantVerTracking: true,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return &api.DropCollectionResponse{
-		Status:  resp.status,
+		Status:  resp.Status,
 		Message: "collection dropped successfully",
 	}, nil
 }
@@ -362,8 +375,8 @@ func (s *apiService) ListCollections(ctx context.Context, r *api.ListCollections
 	runner := s.runnerFactory.GetCollectionQueryRunner(accessToken)
 	runner.SetListCollectionReq(r)
 
-	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{
-		txCtx: api.GetTransaction(ctx),
+	resp, err := s.sessions.Execute(ctx, runner, &database.ReqOptions{
+		TxCtx: api.GetTransaction(ctx),
 	})
 	if err != nil {
 		return nil, err
@@ -377,7 +390,7 @@ func (s *apiService) ListProjects(ctx context.Context, r *api.ListProjectsReques
 	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
 	runner.SetListProjectsReq(r)
 
-	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{})
+	resp, err := s.sessions.Execute(ctx, runner, &database.ReqOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -389,16 +402,16 @@ func (s *apiService) CreateProject(ctx context.Context, r *api.CreateProjectRequ
 	accessToken, _ := request.GetAccessToken(ctx)
 	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
 	runner.SetCreateProjectReq(r)
-	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{
-		metadataChange:     true,
-		instantVerTracking: true,
+	resp, err := s.sessions.Execute(ctx, runner, &database.ReqOptions{
+		MetadataChange:     true,
+		InstantVerTracking: true,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return &api.CreateProjectResponse{
-		Status:  resp.status,
+		Status:  resp.Status,
 		Message: "project created successfully",
 	}, nil
 }
@@ -407,9 +420,9 @@ func (s *apiService) DeleteProject(ctx context.Context, r *api.DeleteProjectRequ
 	accessToken, _ := request.GetAccessToken(ctx)
 	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
 	runner.SetDeleteProjectReq(r)
-	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{
-		metadataChange:     true,
-		instantVerTracking: true,
+	resp, err := s.sessions.Execute(ctx, runner, &database.ReqOptions{
+		MetadataChange:     true,
+		InstantVerTracking: true,
 	})
 	if err != nil {
 		return nil, err
@@ -423,7 +436,7 @@ func (s *apiService) DeleteProject(ctx context.Context, r *api.DeleteProjectRequ
 		}
 	}
 	return &api.DeleteProjectResponse{
-		Status:  resp.status,
+		Status:  resp.Status,
 		Message: "project deleted successfully",
 	}, nil
 }
@@ -433,7 +446,7 @@ func (s *apiService) DescribeCollection(ctx context.Context, r *api.DescribeColl
 	runner := s.runnerFactory.GetCollectionQueryRunner(accessToken)
 	runner.SetDescribeCollectionReq(r)
 
-	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{})
+	resp, err := s.sessions.Execute(ctx, runner, &database.ReqOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -446,7 +459,7 @@ func (s *apiService) DescribeDatabase(ctx context.Context, r *api.DescribeDataba
 	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
 	runner.SetDescribeDatabaseReq(r)
 
-	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{})
+	resp, err := s.sessions.Execute(ctx, runner, &database.ReqOptions{})
 	if err != nil {
 		return nil, err
 	}

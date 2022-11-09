@@ -40,8 +40,8 @@ type DataType byte
 const (
 	Unknown DataType = iota
 	TableDataType
-	CacheDataType
 	StreamDataType
+	CacheDataType
 )
 
 const (

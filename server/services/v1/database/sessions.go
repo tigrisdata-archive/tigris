@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v1
+package database
 
 import (
 	"context"
@@ -237,8 +237,8 @@ func (sessMgr *SessionManager) Remove(ctx context.Context) error {
 // transaction everything is done in this method. For explicit transaction, a session may already exist, so it only
 // needs to run without calling Commit/Rollback.
 func (sessMgr *SessionManager) Execute(ctx context.Context, runner QueryRunner, req *ReqOptions) (*Response, error) {
-	if req.txCtx != nil {
-		session := sessMgr.tracker.get(req.txCtx.Id)
+	if req.TxCtx != nil {
+		session := sessMgr.tracker.get(req.TxCtx.Id)
 		if session == nil {
 			return nil, transaction.ErrSessionIsGone
 		}
@@ -270,7 +270,7 @@ func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, runner Quer
 	for {
 		var session *QuerySession
 		// implicit sessions doesn't need tracking
-		if session, err = sessMgr.Create(ctx, req.metadataChange, req.instantVerTracking, false); err != nil {
+		if session, err = sessMgr.Create(ctx, req.MetadataChange, req.InstantVerTracking, false); err != nil {
 			return nil, err
 		}
 
@@ -282,7 +282,7 @@ func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, runner Quer
 			continue
 		}
 
-		err = session.Commit(sessMgr.versionH, req.metadataChange, err)
+		err = session.Commit(sessMgr.versionH, req.MetadataChange, err)
 		if err != kv.ErrConflictingTransaction {
 			return
 		}
@@ -325,6 +325,14 @@ type QuerySession struct {
 	tenant         *metadata.Tenant
 	versionTracker *metadata.Tracker
 	txListeners    []TxListener
+}
+
+func (s *QuerySession) GetTx() transaction.Tx {
+	return s.tx
+}
+
+func (s *QuerySession) GetTransactionCtx() *api.TransactionCtx {
+	return s.txCtx
 }
 
 func (s *QuerySession) Run(runner QueryRunner) (*Response, context.Context, error) {

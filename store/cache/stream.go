@@ -32,6 +32,10 @@ const (
 	payloadKey = "_s"
 )
 
+var (
+	BlockReadGroupDuration = 180 * time.Second
+)
+
 type StreamMessages struct {
 	xredis.XStream
 }
@@ -98,7 +102,7 @@ func (s *stream) ReadGroup(ctx context.Context, group string, pos string) (*Stre
 		Group:    group,
 		Consumer: DefaultConsumer,
 		Streams:  []string{s.name, pos},
-		Block:    180 * time.Second,
+		Block:    BlockReadGroupDuration,
 	})
 
 	stream, err := resp.Result()
@@ -184,5 +188,11 @@ func decodeFromStreamValue(message xredis.XMessage) (*internal.StreamData, error
 		return nil, errors.New("encoding issue")
 	}
 
-	return internal.DecodeStreamData([]byte(enc.(string)))
+	streamData, err := internal.DecodeStreamData([]byte(enc.(string)))
+	if err != nil {
+		return nil, err
+	}
+
+	streamData.Id = message.ID
+	return streamData, nil
 }

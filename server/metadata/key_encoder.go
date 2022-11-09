@@ -53,6 +53,10 @@ type Encoder interface {
 	DecodeIndexName(indexName []byte) uint32
 }
 
+func NewCacheEncoder() CacheEncoder {
+	return &DictKeyEncoder{}
+}
+
 // NewEncoder creates Dictionary metaStore to encode keys.
 func NewEncoder() Encoder {
 	return &DictKeyEncoder{}
