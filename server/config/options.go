@@ -68,6 +68,12 @@ type CdcConfig struct {
 }
 
 type TracingConfig struct {
+	Enabled bool                 `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Datadog DatadogTracingConfig `mapstructure:"datadog" yaml:"datadog" json:"datadog"`
+	Jaeger  JaegerTracingConfig  `mapstructure:"jaeger" yaml:"jaeger" json:"jaeger"`
+}
+
+type DatadogTracingConfig struct {
 	Enabled             bool    `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 	SampleRate          float64 `mapstructure:"sample_rate" yaml:"sample_rate" json:"sample_rate"`
 	CodeHotspotsEnabled bool    `mapstructure:"codehotspots_enabled" yaml:"codehotspots_enabled" json:"codehotspots_enabled"`
@@ -75,6 +81,12 @@ type TracingConfig struct {
 	WithUDS             string  `mapstructure:"agent_socket" yaml:"agent_socket" json:"agent_socket"`
 	WithAgentAddr       string  `mapstructure:"agent_addr" yaml:"agent_addr" json:"agent_addr"`
 	WithDogStatsdAddr   string  `mapstructure:"dogstatsd_addr" yaml:"dogstatsd_addr" json:"dogstatsd_addr"`
+}
+
+type JaegerTracingConfig struct {
+	Enabled    bool    `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Url        string  `mapstructure:"url" yaml:"url" json:"url"`
+	SampleRate float64 `mapstructure:"sample_rate" yaml:"sample_rate" json:"sample_rate"`
 }
 
 type MetricsConfig struct {
@@ -202,10 +214,18 @@ var DefaultConfig = Config{
 		WriteEnabled: true,
 	},
 	Tracing: TracingConfig{
-		Enabled:             false,
-		SampleRate:          0.01,
-		CodeHotspotsEnabled: true,
-		EndpointsEnabled:    true,
+		Enabled: false,
+		Datadog: DatadogTracingConfig{
+			Enabled:             false,
+			SampleRate:          0.01,
+			CodeHotspotsEnabled: true,
+			EndpointsEnabled:    true,
+		},
+		Jaeger: JaegerTracingConfig{
+			Enabled:    true,
+			Url:        "http://tigris_jaeger:14268/api/traces",
+			SampleRate: 0.01,
+		},
 	},
 	Metrics: MetricsConfig{
 		Enabled:        true,
