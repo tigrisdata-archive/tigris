@@ -200,9 +200,9 @@ func (m *Measurement) StartTracing(ctx context.Context, childOnly bool) context.
 	m.startedAt = time.Now()
 	m.started = true
 
-	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("stopped", strconv.FormatBool(m.stopped)).Str("childonly", strconv.FormatBool(childOnly)).Str("span_type", m.spanType).Msg("StartTracing start")
+	log.Trace().Str("started", strconv.FormatBool(m.started)).Str("stopped", strconv.FormatBool(m.stopped)).Str("childonly", strconv.FormatBool(childOnly)).Str("span_type", m.spanType).Msg("StartTracing start")
 	if !tracing.IsTracingEnabled(&config.DefaultConfig) && !config.DefaultConfig.Metrics.Enabled {
-		log.Debug().Str("span_type", m.spanType).Msg("StartTracing end: Neither tracing, nor metrics are enabled, returning")
+		log.Trace().Str("span_type", m.spanType).Msg("StartTracing end: Neither tracing, nor metrics are enabled, returning")
 		return ctx
 	}
 
@@ -215,7 +215,7 @@ func (m *Measurement) StartTracing(ctx context.Context, childOnly bool) context.
 		m.AddTags(parentMeasurement.GetTags())
 	} else if childOnly {
 		// There is no parent span, no need to start tracing here
-		log.Debug().Msg("No parent exists and childonly is set, not tracing")
+		log.Trace().Msg("No parent exists and childonly is set, not tracing")
 		return ctx
 	}
 
@@ -236,7 +236,7 @@ func (m *Measurement) StartTracing(ctx context.Context, childOnly bool) context.
 	ctx, err := m.SaveMeasurementToContext(ctx)
 	ulog.E(err)
 
-	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("stopped", strconv.FormatBool(m.stopped)).Str("span_type", m.spanType).Msg("StartTracing end")
+	log.Trace().Str("started", strconv.FormatBool(m.started)).Str("stopped", strconv.FormatBool(m.stopped)).Str("span_type", m.spanType).Msg("StartTracing end")
 	return ctx
 }
 
@@ -249,7 +249,7 @@ func (m *Measurement) FinishTracing(ctx context.Context) context.Context {
 	m.stopped = true
 	m.stoppedAt = time.Now()
 
-	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("stopped", strconv.FormatBool(m.stopped)).Str("span_type", m.spanType).Msg("FinishingTracing start")
+	log.Trace().Str("started", strconv.FormatBool(m.started)).Str("stopped", strconv.FormatBool(m.stopped)).Str("span_type", m.spanType).Msg("FinishingTracing start")
 
 	if m.datadogSpan != nil {
 		m.datadogSpan.Finish()
@@ -268,7 +268,7 @@ func (m *Measurement) FinishTracing(ctx context.Context) context.Context {
 		ctx = ClearMeasurementContext(ctx)
 	}
 
-	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("span_type", m.spanType).Str("stopped", strconv.FormatBool(m.stopped)).Msg("FinishingTracing end")
+	log.Trace().Str("started", strconv.FormatBool(m.started)).Str("span_type", m.spanType).Str("stopped", strconv.FormatBool(m.stopped)).Msg("FinishingTracing end")
 	return ctx
 }
 
@@ -334,7 +334,7 @@ func (m *Measurement) FinishWithError(ctx context.Context, source string, err er
 	m.stoppedAt = time.Now()
 
 	if m.datadogSpan == nil && m.jaegerSpan == nil {
-		log.Debug().Msg("FinishWithError end: no tracing span sound to finish, returning")
+		log.Trace().Msg("FinishWithError end: no tracing span sound to finish, returning")
 		return ctx
 	}
 	errCode := status.Code(err)
@@ -358,6 +358,6 @@ func (m *Measurement) FinishWithError(ctx context.Context, source string, err er
 		ctx = ClearMeasurementContext(ctx)
 	}
 
-	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("span_type", m.spanType).Str("stopped", strconv.FormatBool(m.stopped)).Msg("FinishWithError end")
+	log.Trace().Str("started", strconv.FormatBool(m.started)).Str("span_type", m.spanType).Str("stopped", strconv.FormatBool(m.stopped)).Msg("FinishWithError end")
 	return ctx
 }
