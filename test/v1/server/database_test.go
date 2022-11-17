@@ -43,7 +43,7 @@ func TestCreateDatabase(t *testing.T) {
 }
 
 func TestCreateDatabaseInvalidName(t *testing.T) {
-	invalidDbNames := []string{"", "1test-db", "test-db", "$testdb", "testdb$", "test$db", "abstract", "yield"}
+	invalidDbNames := []string{"", "$testdb", "testdb$", "test$db", "abstract", "yield"}
 	for _, name := range invalidDbNames {
 		resp := createDatabase(t, name)
 		resp.Status(http.StatusBadRequest).
@@ -51,6 +51,14 @@ func TestCreateDatabaseInvalidName(t *testing.T) {
 			Path("$.error").
 			Object().
 			ValueEqual("message", "invalid database name")
+	}
+}
+
+func TestCreateDatabaseValidName(t *testing.T) {
+	validDbNames := []string{"test-coll", "test_coll"}
+	for _, name := range validDbNames {
+		resp := createDatabase(t, name)
+		resp.Status(http.StatusOK)
 	}
 }
 
