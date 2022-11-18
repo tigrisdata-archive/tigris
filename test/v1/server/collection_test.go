@@ -75,7 +75,7 @@ func TestCreateCollection(t *testing.T) {
 }
 
 func TestCreateCollectionInvalidName(t *testing.T) {
-	invalidCollectionName := []string{"", "test-coll", "1test-coll", "$testcoll", "testcoll$", "test$coll", "abstract", "yield"}
+	invalidCollectionName := []string{"", "$testcoll", "testcoll$", "test$coll", "abstract", "yield"}
 	for _, name := range invalidCollectionName {
 		resp := createCollection(t, "valid_db_name", name, testCreateSchema)
 		resp.Status(http.StatusBadRequest).

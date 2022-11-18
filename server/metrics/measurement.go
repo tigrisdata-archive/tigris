@@ -23,10 +23,13 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/defaults"
+	"github.com/tigrisdata/tigris/server/tracing"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/uber-go/tally"
+	"go.opentelemetry.io/otel/attribute"
+	opentrace "go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/status"
-	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
+	ddtracer "gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 )
 
 const (
@@ -45,7 +48,8 @@ type Measurement struct {
 	resourceName string
 	spanType     string
 	tags         map[string]string
-	span         tracer.Span
+	jaegerSpan   opentrace.Span
+	datadogSpan  ddtracer.Span
 	parent       *Measurement
 	started      bool
 	stopped      bool
@@ -157,19 +161,19 @@ func (m *Measurement) GetAuthErrorTags(err error) map[string]string {
 }
 
 func (m *Measurement) SaveMeasurementToContext(ctx context.Context) (context.Context, error) {
-	if m.span == nil {
+	if m.datadogSpan == nil && m.jaegerSpan == nil {
 		return nil, fmt.Errorf("parent span was not created")
 	}
 	ctx = context.WithValue(ctx, MeasurementCtxKey{}, m)
 	return ctx, nil
 }
 
-func (m *Measurement) GetSpanOptions() []tracer.StartSpanOption {
-	return []tracer.StartSpanOption{
-		tracer.ServiceName(m.serviceName),
-		tracer.ResourceName(m.resourceName),
-		tracer.SpanType(m.spanType),
-		tracer.Measured(),
+func (m *Measurement) GetSpanOptions() []ddtracer.StartSpanOption {
+	return []ddtracer.StartSpanOption{
+		ddtracer.ServiceName(m.serviceName),
+		ddtracer.ResourceName(m.resourceName),
+		ddtracer.SpanType(m.spanType),
+		ddtracer.Measured(),
 	}
 }
 
@@ -177,9 +181,9 @@ func (m *Measurement) AddTags(tags map[string]string) {
 	for k, v := range tags {
 		if _, exists := m.tags[k]; !exists || m.tags[k] == defaults.UnknownValue {
 			m.tags[k] = v
-			if m.span != nil {
+			if m.datadogSpan != nil {
 				// The span already exists, set the tag there as well
-				m.span.SetTag(k, v)
+				m.datadogSpan.SetTag(k, v)
 			}
 		}
 	}
@@ -196,34 +200,43 @@ func (m *Measurement) StartTracing(ctx context.Context, childOnly bool) context.
 	m.startedAt = time.Now()
 	m.started = true
 
-	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("stopped", strconv.FormatBool(m.stopped)).Str("childonly", strconv.FormatBool(childOnly)).Str("span_type", m.spanType).Msg("StartTracing start")
-	if !config.DefaultConfig.Tracing.Enabled && !config.DefaultConfig.Metrics.Enabled {
-		log.Debug().Str("span_type", m.spanType).Msg("StartTracing end: Neither tracing, nor metrics are enabled, returning")
+	log.Trace().Str("started", strconv.FormatBool(m.started)).Str("stopped", strconv.FormatBool(m.stopped)).Str("childonly", strconv.FormatBool(childOnly)).Str("span_type", m.spanType).Msg("StartTracing start")
+	if !tracing.IsTracingEnabled(&config.DefaultConfig) && !config.DefaultConfig.Metrics.Enabled {
+		log.Trace().Str("span_type", m.spanType).Msg("StartTracing end: Neither tracing, nor metrics are enabled, returning")
 		return ctx
 	}
 
 	spanOpts := m.GetSpanOptions()
 	if parentMeasurement, parentExists := MeasurementFromContext(ctx); parentExists {
 		// This is a child span, parents need to be marked
-		spanOpts = append(spanOpts, tracer.ChildOf(parentMeasurement.span.Context()))
+		spanOpts = append(spanOpts, ddtracer.ChildOf(parentMeasurement.datadogSpan.Context()))
 		m.parent = parentMeasurement
 		// Copy the tags from the parent span
 		m.AddTags(parentMeasurement.GetTags())
 	} else if childOnly {
 		// There is no parent span, no need to start tracing here
-		log.Debug().Msg("No parent exists and childonly is set, not tracing")
+		log.Trace().Msg("No parent exists and childonly is set, not tracing")
 		return ctx
 	}
 
-	m.span = tracer.StartSpan(TraceServiceName, spanOpts...)
+	m.datadogSpan = ddtracer.StartSpan(TraceServiceName, spanOpts...)
 	for k, v := range m.tags {
-		m.span.SetTag(k, v)
+		m.datadogSpan.SetTag(k, v)
+	}
+	//}
+
+	if tracing.IsJaegerTracingEnabled(&config.DefaultConfig) {
+		var tags []attribute.KeyValue
+		for k, v := range m.tags {
+			tags = append(tags, attribute.KeyValue{Key: attribute.Key(k), Value: attribute.StringValue(v)})
+		}
+		ctx, m.jaegerSpan = tracing.OpenTracer.Start(ctx, m.resourceName, opentrace.WithAttributes(tags...))
 	}
 
 	ctx, err := m.SaveMeasurementToContext(ctx)
 	ulog.E(err)
 
-	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("stopped", strconv.FormatBool(m.stopped)).Str("span_type", m.spanType).Msg("StartTracing end")
+	log.Trace().Str("started", strconv.FormatBool(m.started)).Str("stopped", strconv.FormatBool(m.stopped)).Str("span_type", m.spanType).Msg("StartTracing end")
 	return ctx
 }
 
@@ -236,10 +249,14 @@ func (m *Measurement) FinishTracing(ctx context.Context) context.Context {
 	m.stopped = true
 	m.stoppedAt = time.Now()
 
-	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("stopped", strconv.FormatBool(m.stopped)).Str("span_type", m.spanType).Msg("FinishingTracing start")
+	log.Trace().Str("started", strconv.FormatBool(m.started)).Str("stopped", strconv.FormatBool(m.stopped)).Str("span_type", m.spanType).Msg("FinishingTracing start")
 
-	if m.span != nil {
-		m.span.Finish()
+	if m.datadogSpan != nil {
+		m.datadogSpan.Finish()
+	}
+
+	if m.jaegerSpan != nil {
+		m.jaegerSpan.End()
 	}
 
 	if m.parent != nil {
@@ -251,7 +268,7 @@ func (m *Measurement) FinishTracing(ctx context.Context) context.Context {
 		ctx = ClearMeasurementContext(ctx)
 	}
 
-	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("span_type", m.spanType).Str("stopped", strconv.FormatBool(m.stopped)).Msg("FinishingTracing end")
+	log.Trace().Str("started", strconv.FormatBool(m.started)).Str("span_type", m.spanType).Str("stopped", strconv.FormatBool(m.stopped)).Msg("FinishingTracing end")
 	return ctx
 }
 
@@ -316,20 +333,20 @@ func (m *Measurement) FinishWithError(ctx context.Context, source string, err er
 	m.stopped = true
 	m.stoppedAt = time.Now()
 
-	if m.span == nil {
-		log.Debug().Msg("FinishWithError end: no tracing span found to finish, returning")
+	if m.datadogSpan == nil && m.jaegerSpan == nil {
+		log.Trace().Msg("FinishWithError end: no tracing span sound to finish, returning")
 		return ctx
 	}
 	errCode := status.Code(err)
-	m.span.SetTag("grpc.code", errCode.String())
+	m.datadogSpan.SetTag("grpc.code", errCode.String())
 	errTags := getTagsForError(err, source)
 	for k, v := range errTags {
-		m.span.SetTag(k, v)
+		m.datadogSpan.SetTag(k, v)
 	}
-	finishOptions := []tracer.FinishOption{tracer.WithError(err)}
+	finishOptions := []ddtracer.FinishOption{ddtracer.WithError(err)}
 
-	if m.span != nil {
-		m.span.Finish(finishOptions...)
+	if m.datadogSpan != nil {
+		m.datadogSpan.Finish(finishOptions...)
 	}
 
 	if m.parent != nil {
@@ -341,6 +358,6 @@ func (m *Measurement) FinishWithError(ctx context.Context, source string, err er
 		ctx = ClearMeasurementContext(ctx)
 	}
 
-	log.Debug().Str("started", strconv.FormatBool(m.started)).Str("span_type", m.spanType).Str("stopped", strconv.FormatBool(m.stopped)).Msg("FinishWithError end")
+	log.Trace().Str("started", strconv.FormatBool(m.started)).Str("span_type", m.spanType).Str("stopped", strconv.FormatBool(m.stopped)).Msg("FinishWithError end")
 	return ctx
 }

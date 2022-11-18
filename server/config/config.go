@@ -130,6 +130,7 @@ func LoadConfig(config interface{}) {
 
 	log.Debug().Interface("config", &config).Msg("final")
 	spew.Dump(viper.AllKeys())
+	spew.Dump(&config)
 
 	viper.OnConfigChange(func(e fsnotify.Event) {
 		log.Debug().Str("notify", e.Name).Msg("Config file changed")

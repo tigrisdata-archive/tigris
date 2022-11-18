@@ -22,6 +22,7 @@ import (
 
 	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/lib/container"
 	langSchema "github.com/tigrisdata/tigris/schema/lang"
@@ -116,6 +117,11 @@ func RemoveIndexingVersion(schema jsoniter.RawMessage) jsoniter.RawMessage {
 }
 
 func SetIndexingVersion(factory *Factory) error {
+	// take a copy, so modification is not touching the existing req payload schema
+	tmp := make([]byte, len(factory.Schema))
+	copy(tmp, factory.Schema)
+	factory.Schema = tmp
+
 	if _, dt, _, _ := jsonparser.Get(factory.Schema, IndexingSchemaVersionKey); dt == jsonparser.NotExist {
 		var err error
 		var schema jsoniter.RawMessage
@@ -150,18 +156,27 @@ func GetCollectionType(reqSchema jsoniter.RawMessage) (CollectionType, error) {
 func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 	cType, err := GetCollectionType(reqSchema)
 	if err != nil {
-		return nil, err
+		return nil, api.Errorf(api.Code_INTERNAL, err.Error()).WithDetails(&api.ErrorDetails{
+			Code:    api.Code_INTERNAL.String(),
+			Message: fmt.Sprintf("schema: '%s', failed getting collection typ", string(reqSchema)),
+		})
 	}
 
 	if cType != TopicType {
 		if reqSchema, err = setPrimaryKey(reqSchema, jsonSpecFormatUUID, true); err != nil {
-			return nil, err
+			return nil, api.Errorf(api.Code_INTERNAL, err.Error()).WithDetails(&api.ErrorDetails{
+				Code:    api.Code_INTERNAL.String(),
+				Message: fmt.Sprintf("schema: '%s', setting primary key failed", string(reqSchema)),
+			})
 		}
 	}
 
 	schema := &JSONSchema{}
 	if err = jsoniter.Unmarshal(reqSchema, schema); err != nil {
-		return nil, errors.Internal(fmt.Errorf("unmarshalling failed %w", err).Error())
+		return nil, api.Errorf(api.Code_INTERNAL, err.Error()).WithDetails(&api.ErrorDetails{
+			Code:    api.Code_INTERNAL.String(),
+			Message: fmt.Sprintf("schema: '%s', unmarshalling failed", string(reqSchema)),
+		})
 	}
 	if collection != schema.Name {
 		return nil, errors.InvalidArgument("collection name is not same as schema name '%s' '%s'", collection, schema.Name)

@@ -1601,11 +1601,11 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		}, ctx, nil
 	case runner.create != nil:
 		exist, err := tenant.CreateDatabase(ctx, tx, runner.create.GetDb())
+		if exist || err == kv.ErrDuplicateKey {
+			return nil, ctx, errors.AlreadyExists("database already exist")
+		}
 		if err != nil {
 			return nil, ctx, err
-		}
-		if exist {
-			return nil, ctx, errors.AlreadyExists("database already exist")
 		}
 
 		return &Response{

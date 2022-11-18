@@ -20,7 +20,7 @@ import (
 	"github.com/tigrisdata/tigris/util"
 )
 
-var validNamePattern = regexp.MustCompile("^[a-zA-Z]+[a-zA-Z0-9_]+$")
+var validNamePattern = regexp.MustCompile("^[a-zA-Z]+[a-zA-Z0-9_-]+$")
 
 type Validator interface {
 	Validate() error

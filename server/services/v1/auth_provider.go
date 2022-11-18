@@ -24,6 +24,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/auth0/go-auth0/management"
@@ -47,6 +48,7 @@ const (
 	updatedBy          = "updated_by"
 	updatedAt          = "updated_at"
 	tigrisNamespace    = "tigris_namespace"
+	tigrisProject      = "tigris_projects"
 	clientCredentials  = "client_credentials"
 	defaultNamespaceId = 1
 	// pagination param for list clients auth0 call.
@@ -102,7 +104,9 @@ func (a *Auth0) CreateApplication(ctx context.Context, req *api.CreateApplicatio
 	m[createdAt] = time.Now().Format(time.RFC3339)
 	m[createdBy] = currentSub
 	m[tigrisNamespace] = currentNamespace
-
+	if req.GetProject() != "" {
+		m[tigrisProject] = req.GetProject()
+	}
 	c := &management.Client{
 		Name:           &req.Name,
 		Description:    &req.Description,
@@ -140,6 +144,7 @@ func (a *Auth0) CreateApplication(ctx context.Context, req *api.CreateApplicatio
 		Secret:      c.GetClientSecret(),
 		CreatedBy:   c.GetClientMetadata()[createdBy],
 		CreatedAt:   readDate(c.GetClientMetadata()[createdAt]),
+		Projects:    []string{req.GetProject()},
 	}
 	return &api.CreateApplicationResponse{
 		CreatedApplication: createdApp,
@@ -238,7 +243,7 @@ func (a *Auth0) RotateApplicationSecret(ctx context.Context, req *api.RotateAppl
 	}, nil
 }
 
-func (a *Auth0) ListApplications(ctx context.Context, _ *api.ListApplicationsRequest) (*api.ListApplicationsResponse, error) {
+func (a *Auth0) ListApplications(ctx context.Context, req *api.ListApplicationsRequest) (*api.ListApplicationsResponse, error) {
 	appList, err := a.Management.Client.List(
 		management.IncludeFields("client_id", "client_metadata", "client_secret", "description", "name"),
 		management.Page(0),
@@ -265,17 +270,32 @@ func (a *Auth0) ListApplications(ctx context.Context, _ *api.ListApplicationsReq
 		for _, client := range appList.Clients {
 			// filter for this user's apps for this tenant
 			if client.GetClientMetadata()[createdBy] == currentSub && client.GetClientMetadata()[tigrisNamespace] == currentNamespace {
-				app := &api.Application{
-					Name:        client.GetName(),
-					Description: client.GetDescription(),
-					Id:          client.GetClientID(),
-					Secret:      client.GetClientSecret(),
-					CreatedAt:   readDate(client.GetClientMetadata()[createdAt]),
-					CreatedBy:   client.GetClientMetadata()[createdBy],
-					UpdatedAt:   readDate(client.GetClientMetadata()[updatedAt]),
-					UpdatedBy:   client.GetClientMetadata()[updatedBy],
+				// if project filter is supplied - filter for this project
+				// for backward compatibility there will be some apps with project metadata
+				// set to csv with multiple project names
+				supportedProjects := strings.Split(client.GetClientMetadata()[tigrisProject], ",")
+				var containsProject = false
+				for _, project := range supportedProjects {
+					if req.GetProject() == project {
+						containsProject = true
+					}
 				}
-				apps = append(apps, app)
+
+				// if project filter is not supplied OR if this application is associated for this project.
+				if req.GetProject() == "" || containsProject {
+					app := &api.Application{
+						Name:        client.GetName(),
+						Description: client.GetDescription(),
+						Id:          client.GetClientID(),
+						Secret:      client.GetClientSecret(),
+						CreatedAt:   readDate(client.GetClientMetadata()[createdAt]),
+						CreatedBy:   client.GetClientMetadata()[createdBy],
+						UpdatedAt:   readDate(client.GetClientMetadata()[updatedAt]),
+						UpdatedBy:   client.GetClientMetadata()[updatedBy],
+						Projects:    strings.Split(client.GetClientMetadata()[tigrisProject], ","),
+					}
+					apps = append(apps, app)
+				}
 			}
 		}
 
