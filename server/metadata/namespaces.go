@@ -16,6 +16,7 @@ package metadata
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/errors"
@@ -54,6 +55,76 @@ func (n *NamespaceSubspace) InsertNamespaceMetadata(ctx context.Context, tx tran
 
 	log.Debug().Str("key", key.String()).Str("value", string(payload)).Msg("storing namespace metadata succeed")
 
+	return nil
+}
+
+func (n *NamespaceSubspace) InsertDatabaseMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbName string, dbMetadata *DatabaseMetadata) error {
+	if namespaceId < 1 {
+		return errors.InvalidArgument("invalid namespace, id must be greater than 0")
+	}
+	if dbName == "" {
+		return errors.InvalidArgument("invalid dbName, dbName must not be blank")
+	}
+	if dbMetadata == nil {
+		return errors.InvalidArgument("invalid dbMetadata, dbMetadata must not be nil")
+	}
+
+	payload, err := json.Marshal(dbMetadata)
+	if err != nil {
+		log.Err(err).Msg("Failed to marshal db metadata")
+		return errors.Internal("Failed to update db metadata, failed to marshal db metadata")
+	}
+	key := keys.NewKey(n.NamespaceSubspaceName(), namespaceVersion, UInt32ToByte(namespaceId), dbKey, dbName)
+
+	if err := tx.Insert(ctx, key, internal.NewTableData(payload)); err != nil {
+		log.Debug().Str("key", key.String()).Str("value", string(payload)).Err(err).Msg("storing namespace metadata failed")
+		return err
+	}
+
+	log.Debug().Str("key", key.String()).Str("value", string(payload)).Msg("storing namespace metadata succeed")
+	return nil
+}
+
+func (n *NamespaceSubspace) GetDatabaseMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbName string) (*DatabaseMetadata, error) {
+	if namespaceId < 1 {
+		return nil, errors.InvalidArgument("invalid namespace, id must be greater than 0")
+	}
+	if dbName == "" {
+		return nil, errors.InvalidArgument("invalid dbName, dbName must not be blank")
+	}
+
+	key := keys.NewKey(n.NamespaceSubspaceName(), namespaceVersion, UInt32ToByte(namespaceId), dbKey, dbName)
+	it, err := tx.Read(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	var row kv.KeyValue
+	if it.Next(&row) {
+		log.Debug().Str("key", key.String()).Str("value", string(row.Data.RawData)).Msg("reading namespace metadata succeed")
+		var dbMetadata DatabaseMetadata
+		if err = json.Unmarshal(row.Data.RawData, &dbMetadata); err != nil {
+			log.Err(err).Msg("Failed to read db metadata")
+			return nil, errors.Internal("Failed to read database metadata")
+		}
+		return &dbMetadata, nil
+	}
+	return nil, it.Err()
+}
+
+func (n *NamespaceSubspace) DeleteDatabaseMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbName string) error {
+	if namespaceId < 1 {
+		return errors.InvalidArgument("invalid namespace, id must be greater than 0")
+	}
+	if dbName == "" {
+		return errors.InvalidArgument("invalid dbName, dbName must not be blank")
+	}
+	key := keys.NewKey(n.NamespaceSubspaceName(), namespaceVersion, UInt32ToByte(namespaceId), dbKey, dbName)
+	err := tx.Delete(ctx, key)
+	if err != nil {
+		log.Debug().Str("key", key.String()).Err(err).Msg("Delete database metadata failed")
+		return err
+	}
+	log.Debug().Str("key", key.String()).Msg("Delete database metadata succeed")
 	return nil
 }
 
@@ -136,6 +207,14 @@ func validateNamespaceArgsPartial1(namespaceId uint32, metadataKey string) error
 	}
 	if metadataKey == "" {
 		return errors.InvalidArgument("invalid empty metadataKey")
+	}
+
+	if metadataKey == dbKey {
+		return errors.InvalidArgument("invalid metadataKey. " + dbKey + " is reserved")
+	}
+
+	if metadataKey == namespaceKey {
+		return errors.InvalidArgument("invalid metadataKey. " + namespaceKey + " is reserved")
 	}
 
 	return nil

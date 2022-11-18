@@ -21,13 +21,14 @@ import (
 	"github.com/bmizerany/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/server/types"
 )
 
 func TestRequestMetadata(t *testing.T) {
 	t.Run("extraction of namespace name", func(t *testing.T) {
 		ctx := context.TODO()
 		ctx = context.WithValue(ctx, MetadataCtxKey{}, &Metadata{
-			accessToken: &AccessToken{
+			accessToken: &types.AccessToken{
 				Namespace: "test-namespace-1",
 				Sub:       "test@tigrisdata.com",
 			},
@@ -42,7 +43,7 @@ func TestRequestMetadata(t *testing.T) {
 	t.Run("extraction of token", func(t *testing.T) {
 		ctx := context.TODO()
 		ctx = context.WithValue(ctx, MetadataCtxKey{}, &Metadata{
-			accessToken: &AccessToken{
+			accessToken: &types.AccessToken{
 				Namespace: "test-namespace-1",
 				Sub:       "test@tigrisdata.com",
 			},

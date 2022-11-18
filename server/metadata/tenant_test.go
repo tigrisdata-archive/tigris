@@ -191,9 +191,9 @@ func TestTenantManager_CreateDatabases(t *testing.T) {
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db1")
+		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db1", nil)
 		require.NoError(t, err)
-		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db2")
+		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db2", nil)
 		require.NoError(t, err)
 
 		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
@@ -225,9 +225,9 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 		tenant := m.tenants["ns-test1"]
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db1")
+		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db1", nil)
 		require.NoError(t, err)
-		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db2")
+		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db2", nil)
 		require.NoError(t, err)
 
 		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
@@ -295,9 +295,9 @@ func TestTenantManager_DropCollection(t *testing.T) {
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db1")
+		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db1", nil)
 		require.NoError(t, err)
-		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db2")
+		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db2", nil)
 		require.NoError(t, err)
 
 		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
@@ -367,16 +367,16 @@ func TestTenantManager_DataSize(t *testing.T) {
 	tx, err := tm.StartTx(context.TODO())
 	require.NoError(t, err)
 
-	_, err = tenant.CreateDatabase(ctx, tx, "tenant_db1")
+	_, err = tenant.CreateDatabase(ctx, tx, "tenant_db1", nil)
 	require.NoError(t, err)
-	_, err = tenant.CreateDatabase(ctx, tx, "tenant_db2")
+	_, err = tenant.CreateDatabase(ctx, tx, "tenant_db2", nil)
 	require.NoError(t, err)
 
 	tenant2 := m.tenants["ns-test2"]
 
-	_, err = tenant2.CreateDatabase(ctx, tx, "tenant_db1")
+	_, err = tenant2.CreateDatabase(ctx, tx, "tenant_db1", nil)
 	require.NoError(t, err)
-	_, err = tenant2.CreateDatabase(ctx, tx, "tenant_db2")
+	_, err = tenant2.CreateDatabase(ctx, tx, "tenant_db2", nil)
 	require.NoError(t, err)
 
 	require.NoError(t, tenant.reload(ctx, tx, nil, nil))

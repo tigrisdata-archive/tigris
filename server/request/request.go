@@ -29,6 +29,7 @@ import (
 	"github.com/tigrisdata/tigris/server/defaults"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/tigrisdata/tigris/server/types"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc"
 )
@@ -40,13 +41,8 @@ var (
 
 type MetadataCtxKey struct{}
 
-type AccessToken struct {
-	Namespace string
-	Sub       string
-}
-
 type Metadata struct {
-	accessToken *AccessToken
+	accessToken *types.AccessToken
 	serviceName string
 	methodInfo  grpc.MethodInfo
 	// The namespace id (uuid) of the request. The metadata extractor sets it when the request is not yet
@@ -89,7 +85,7 @@ func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod strin
 	return NewRequestEndpointMetadata(ctx, svcName, methodInfo)
 }
 
-func (m *Metadata) SetAccessToken(token *AccessToken) {
+func (m *Metadata) SetAccessToken(token *types.AccessToken) {
 	m.accessToken = token
 }
 
@@ -188,7 +184,7 @@ func GetRequestMetadataFromContext(ctx context.Context) (*Metadata, error) {
 	return nil, errors.NotFound("Metadata not found")
 }
 
-func GetAccessToken(ctx context.Context) (*AccessToken, error) {
+func GetAccessToken(ctx context.Context) (*types.AccessToken, error) {
 	// read token
 	if value := ctx.Value(MetadataCtxKey{}); value != nil {
 		if requestMetadata, ok := value.(*Metadata); ok && requestMetadata.accessToken != nil {
