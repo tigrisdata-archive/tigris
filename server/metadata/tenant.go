@@ -136,6 +136,7 @@ type TenantManager struct {
 
 	metaStore         *MetadataDictionary
 	schemaStore       *SchemaSubspace
+	namespaceStore    *NamespaceSubspace
 	kvStore           kv.KeyValueStore
 	searchStore       search.Store
 	tenants           map[string]*Tenant
@@ -146,6 +147,10 @@ type TenantManager struct {
 	encoder           Encoder
 	tableKeyGenerator *TableKeyGenerator
 	txMgr             *transaction.Manager
+}
+
+func (m *TenantManager) GetNamespaceStore() *NamespaceSubspace {
+	return m.namespaceStore
 }
 
 func NewTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, txMgr *transaction.Manager) *TenantManager {
@@ -160,6 +165,7 @@ func newTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, mdName
 		encoder:           NewEncoder(),
 		metaStore:         NewMetadataDictionary(mdNameRegistry),
 		schemaStore:       NewSchemaStore(mdNameRegistry),
+		namespaceStore:    NewNamespaceStore(mdNameRegistry),
 		tenants:           make(map[string]*Tenant),
 		idToTenantMap:     make(map[uint32]string),
 		versionH:          &VersionHandler{},
@@ -323,7 +329,7 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string) (te
 	}
 
 	namespace := NewTenantNamespace(namespaceName, metadata)
-	tenant = NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
+	tenant = NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.namespaceStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
 	if err = tenant.reload(ctx, tx, currentVersion, collectionsInSearch); err != nil {
 		return nil, err
 	}
@@ -364,7 +370,7 @@ func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transa
 		if err != nil {
 			return nil, err
 		}
-		tenant := NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
+		tenant := NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.namespaceStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
 		tenant.Lock()
 		err = tenant.reload(ctx, tx, currentVersion, collectionsInSearch)
 		tenant.Unlock()
@@ -382,7 +388,7 @@ func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transa
 		return nil, err
 	}
 
-	return NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.encoder, m.versionH, nil, m.tableKeyGenerator), nil
+	return NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.namespaceStore, m.encoder, m.versionH, nil, m.tableKeyGenerator), nil
 }
 
 // GetTableNameFromIds returns tenant name, database name, collection name corresponding to their encoded ids.
@@ -481,7 +487,7 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVe
 
 	for namespace, metadata := range namespaces {
 		if _, ok := m.tenants[namespace]; !ok {
-			m.tenants[namespace] = NewTenant(NewTenantNamespace(namespace, metadata), m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
+			m.tenants[namespace] = NewTenant(NewTenantNamespace(namespace, metadata), m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.namespaceStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
 			m.idToTenantMap[metadata.Id] = namespace
 		}
 	}
@@ -506,6 +512,7 @@ type Tenant struct {
 	kvStore           kv.KeyValueStore
 	searchStore       search.Store
 	schemaStore       *SchemaSubspace
+	namespaceStore    *NamespaceSubspace
 	metaStore         *MetadataDictionary
 	Encoder           Encoder
 	databases         map[string]*Database
@@ -516,13 +523,14 @@ type Tenant struct {
 	TableKeyGenerator *TableKeyGenerator
 }
 
-func NewTenant(namespace Namespace, kvStore kv.KeyValueStore, searchStore search.Store, dict *MetadataDictionary, schemaStore *SchemaSubspace, encoder Encoder, versionH *VersionHandler, currentVersion Version, _ *TableKeyGenerator) *Tenant {
+func NewTenant(namespace Namespace, kvStore kv.KeyValueStore, searchStore search.Store, dict *MetadataDictionary, schemaStore *SchemaSubspace, namespaceStore *NamespaceSubspace, encoder Encoder, versionH *VersionHandler, currentVersion Version, _ *TableKeyGenerator) *Tenant {
 	return &Tenant{
 		kvStore:         kvStore,
 		searchStore:     searchStore,
 		namespace:       namespace,
 		metaStore:       dict,
 		schemaStore:     schemaStore,
+		namespaceStore:  namespaceStore,
 		databases:       make(map[string]*Database),
 		idToDatabaseMap: make(map[uint32]string),
 		versionH:        versionH,
@@ -601,7 +609,7 @@ func (tenant *Tenant) GetNamespace() Namespace {
 // metadata version once the commit is successful so reloading happens at the next call when a transaction sees a stale
 // tenant version. This applies to the reloading mechanism on all the servers. It returns "true" If the database already
 // exists, else "false" and the error.
-func (tenant *Tenant) CreateDatabase(ctx context.Context, tx transaction.Tx, dbName string) (bool, error) {
+func (tenant *Tenant) CreateDatabase(ctx context.Context, tx transaction.Tx, dbName string, dbMetadata *DatabaseMetadata) (bool, error) {
 	tenant.Lock()
 	defer tenant.Unlock()
 
@@ -611,7 +619,15 @@ func (tenant *Tenant) CreateDatabase(ctx context.Context, tx transaction.Tx, dbN
 
 	// otherwise, proceed to create the database if there are concurrent requests on different workers then one of
 	// them will fail with duplicate entry and only one will succeed.
-	_, err := tenant.metaStore.CreateDatabase(ctx, tx, dbName, tenant.namespace.Id())
+	dbId, err := tenant.metaStore.CreateDatabase(ctx, tx, dbName, tenant.namespace.Id())
+	if dbMetadata != nil {
+		dbMetadata.SetDatabaseId(dbId)
+		err = tenant.namespaceStore.InsertDatabaseMetadata(ctx, tx, tenant.namespace.Id(), dbName, dbMetadata)
+		if err != nil {
+			log.Err(err).Msg("Failed to insert database metadata")
+			return false, errors.Internal("Failed to setup db metadata")
+		}
+	}
 	return false, err
 }
 
@@ -641,6 +657,11 @@ func (tenant *Tenant) DropDatabase(ctx context.Context, tx transaction.Tx, dbNam
 		}
 	}
 
+	// drop metadata entry
+	if err := tenant.namespaceStore.DeleteDatabaseMetadata(ctx, tx, tenant.namespace.Id(), dbName); err != nil {
+		log.Err(err).Msg("Failed to delete database metadata")
+		return false, errors.Internal("Failed to delete database metadata")
+	}
 	return true, nil
 }
 

@@ -12,22 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package types
+package metadata
 
-import (
-	"os"
-)
+type DatabaseMetadata struct {
+	Id        uint32
+	Creator   string
+	CreatedAt int64
+}
 
-type ContentType string
-
-const (
-	JSON      ContentType = "application/json; charset=utf-8"
-	STREAMING ContentType = "application/x-json-stream; charset=utf-8"
-)
-
-var MyOrigin, _ = os.Hostname()
-
-type AccessToken struct {
-	Namespace string
-	Sub       string
+func (dm *DatabaseMetadata) SetDatabaseId(id uint32) {
+	dm.Id = id
 }

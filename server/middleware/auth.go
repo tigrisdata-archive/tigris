@@ -31,6 +31,7 @@ import (
 	"github.com/tigrisdata/tigris/server/defaults"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/request"
+	"github.com/tigrisdata/tigris/server/types"
 	"google.golang.org/grpc"
 )
 
@@ -189,7 +190,7 @@ func authFunction(ctx context.Context, jwtValidator *validator.Validator, config
 			}
 
 			log.Debug().Msg("Valid token received")
-			token := &request.AccessToken{
+			token := &types.AccessToken{
 				Namespace: customClaims.Namespace.Code,
 				Sub:       validatedClaims.RegisteredClaims.Subject,
 			}

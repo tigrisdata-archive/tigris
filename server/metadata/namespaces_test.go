@@ -45,6 +45,8 @@ func TestNamespacesSubspace(t *testing.T) {
 		require.Equal(t, errors.InvalidArgument("invalid empty metadataKey"), n.InsertNamespaceMetadata(ctx, tx, 1, "", namespacePayload))
 		require.Equal(t, errors.InvalidArgument("invalid nil payload"), n.InsertNamespaceMetadata(ctx, tx, 1, "some-valid-metadata-id", nil))
 		require.Equal(t, errors.InvalidArgument("invalid namespace, id must be greater than 0"), n.InsertNamespaceMetadata(ctx, tx, 0, "meta-key-1", namespacePayload))
+		require.Equal(t, errors.InvalidArgument("invalid metadataKey. "+dbKey+" is reserved"), n.InsertNamespaceMetadata(ctx, tx, 1, dbKey, namespacePayload))
+		require.Equal(t, errors.InvalidArgument("invalid metadataKey. "+namespaceKey+" is reserved"), n.InsertNamespaceMetadata(ctx, tx, 1, namespaceKey, namespacePayload))
 		_ = kvStore.DropTable(ctx, n.NamespaceSubspaceName())
 	})
 
@@ -204,6 +206,87 @@ func TestNamespacesSubspace(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, value)
 
+		_ = kvStore.DropTable(ctx, n.NamespaceSubspaceName())
+	})
+
+	t.Run("database_metadata_put_error", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		n := NewNamespaceStore(&TestMDNameRegistry{
+			NamespaceSB: "test_namespace",
+		})
+		_ = kvStore.DropTable(ctx, n.NamespaceSubspaceName())
+
+		dbMetadata := &DatabaseMetadata{
+			Id:        1,
+			Creator:   "google|123",
+			CreatedAt: 1668733841287,
+		}
+
+		tm := transaction.NewManager(kvStore)
+		tx, err := tm.StartTx(ctx)
+		require.NoError(t, err)
+		require.Equal(t, errors.InvalidArgument("invalid dbName, dbName must not be blank"), n.InsertDatabaseMetadata(ctx, tx, 1, "", dbMetadata))
+		require.Equal(t, errors.InvalidArgument("invalid dbMetadata, dbMetadata must not be nil"), n.InsertDatabaseMetadata(ctx, tx, 1, "valid-db-name", nil))
+		require.Equal(t, errors.InvalidArgument("invalid namespace, id must be greater than 0"), n.InsertDatabaseMetadata(ctx, tx, 0, "valid-db-name", dbMetadata))
+		_ = kvStore.DropTable(ctx, n.NamespaceSubspaceName())
+	})
+
+	t.Run("database_metadata_put_get_1", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		n := NewNamespaceStore(&TestMDNameRegistry{
+			NamespaceSB: "test_namespace",
+		})
+		_ = kvStore.DropTable(ctx, n.NamespaceSubspaceName())
+
+		dbMetadata := &DatabaseMetadata{
+			Id:        1,
+			Creator:   "google|123",
+			CreatedAt: 1668733841287,
+		}
+
+		tm := transaction.NewManager(kvStore)
+		tx, err := tm.StartTx(ctx)
+		require.NoError(t, err)
+		require.NoError(t, n.InsertDatabaseMetadata(ctx, tx, 1, "db-name", dbMetadata))
+		value, err := n.GetDatabaseMetadata(ctx, tx, 1, "db-name")
+		require.NoError(t, err)
+		require.Equal(t, dbMetadata, value)
+		_ = kvStore.DropTable(ctx, n.NamespaceSubspaceName())
+	})
+
+	t.Run("database_metadata_put_get_delete_get", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		n := NewNamespaceStore(&TestMDNameRegistry{
+			NamespaceSB: "test_namespace",
+		})
+		_ = kvStore.DropTable(ctx, n.NamespaceSubspaceName())
+
+		dbMetadata := &DatabaseMetadata{
+			Id:        1,
+			Creator:   "google|123",
+			CreatedAt: 1668733841287,
+		}
+
+		tm := transaction.NewManager(kvStore)
+		tx, err := tm.StartTx(ctx)
+		require.NoError(t, err)
+		require.NoError(t, n.InsertDatabaseMetadata(ctx, tx, 1, "db-name", dbMetadata))
+		value, err := n.GetDatabaseMetadata(ctx, tx, 1, "db-name")
+		require.NoError(t, err)
+		require.Equal(t, dbMetadata, value)
+
+		err = n.DeleteDatabaseMetadata(ctx, tx, 1, "db-name")
+		require.NoError(t, err)
+
+		value, err = n.GetDatabaseMetadata(ctx, tx, 1, "db-name")
+		require.NoError(t, err)
+		require.Nil(t, value)
 		_ = kvStore.DropTable(ctx, n.NamespaceSubspaceName())
 	})
 }

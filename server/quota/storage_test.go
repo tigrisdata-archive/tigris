@@ -45,7 +45,7 @@ func TestStorageQuota(t *testing.T) {
 	tx, err := txMgr.StartTx(context.TODO())
 	require.NoError(t, err)
 
-	_, err = tenant.CreateDatabase(ctx, tx, "tenant_db1")
+	_, err = tenant.CreateDatabase(ctx, tx, "tenant_db1", nil)
 	require.NoError(t, err)
 
 	jsSchema := []byte(`{

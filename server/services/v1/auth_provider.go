@@ -274,7 +274,7 @@ func (a *Auth0) ListApplications(ctx context.Context, req *api.ListApplicationsR
 				// for backward compatibility there will be some apps with project metadata
 				// set to csv with multiple project names
 				supportedProjects := strings.Split(client.GetClientMetadata()[tigrisProject], ",")
-				var containsProject = false
+				containsProject := false
 				for _, project := range supportedProjects {
 					if req.GetProject() == project {
 						containsProject = true

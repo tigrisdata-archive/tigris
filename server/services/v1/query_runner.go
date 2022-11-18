@@ -40,6 +40,7 @@ import (
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
+	"github.com/tigrisdata/tigris/server/types"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
 	ulog "github.com/tigrisdata/tigris/util/log"
@@ -75,42 +76,42 @@ func NewQueryRunnerFactory(txMgr *transaction.Manager, cdcMgr *cdc.Manager, sear
 	}
 }
 
-func (f *QueryRunnerFactory) GetInsertQueryRunner(r *api.InsertRequest, qm *metrics.WriteQueryMetrics) *InsertQueryRunner {
+func (f *QueryRunnerFactory) GetInsertQueryRunner(r *api.InsertRequest, qm *metrics.WriteQueryMetrics, accessToken *types.AccessToken) *InsertQueryRunner {
 	return &InsertQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
 		req:             r,
 		queryMetrics:    qm,
 	}
 }
 
-func (f *QueryRunnerFactory) GetReplaceQueryRunner(r *api.ReplaceRequest, qm *metrics.WriteQueryMetrics) *ReplaceQueryRunner {
+func (f *QueryRunnerFactory) GetReplaceQueryRunner(r *api.ReplaceRequest, qm *metrics.WriteQueryMetrics, accessToken *types.AccessToken) *ReplaceQueryRunner {
 	return &ReplaceQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
 		req:             r,
 		queryMetrics:    qm,
 	}
 }
 
-func (f *QueryRunnerFactory) GetUpdateQueryRunner(r *api.UpdateRequest, qm *metrics.WriteQueryMetrics) *UpdateQueryRunner {
+func (f *QueryRunnerFactory) GetUpdateQueryRunner(r *api.UpdateRequest, qm *metrics.WriteQueryMetrics, accessToken *types.AccessToken) *UpdateQueryRunner {
 	return &UpdateQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
 		req:             r,
 		queryMetrics:    qm,
 	}
 }
 
-func (f *QueryRunnerFactory) GetDeleteQueryRunner(r *api.DeleteRequest, qm *metrics.WriteQueryMetrics) *DeleteQueryRunner {
+func (f *QueryRunnerFactory) GetDeleteQueryRunner(r *api.DeleteRequest, qm *metrics.WriteQueryMetrics, accessToken *types.AccessToken) *DeleteQueryRunner {
 	return &DeleteQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
 		req:             r,
 		queryMetrics:    qm,
 	}
 }
 
 // GetStreamingQueryRunner returns StreamingQueryRunner.
-func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streaming Streaming, qm *metrics.StreamingQueryMetrics) *StreamingQueryRunner {
+func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streaming Streaming, qm *metrics.StreamingQueryMetrics, accessToken *types.AccessToken) *StreamingQueryRunner {
 	return &StreamingQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
 		req:             r,
 		streaming:       streaming,
 		queryMetrics:    qm,
@@ -118,40 +119,40 @@ func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streami
 }
 
 // GetSearchQueryRunner for executing Search.
-func (f *QueryRunnerFactory) GetSearchQueryRunner(r *api.SearchRequest, streaming SearchStreaming, qm *metrics.SearchQueryMetrics) *SearchQueryRunner {
+func (f *QueryRunnerFactory) GetSearchQueryRunner(r *api.SearchRequest, streaming SearchStreaming, qm *metrics.SearchQueryMetrics, accessToken *types.AccessToken) *SearchQueryRunner {
 	return &SearchQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
 		req:             r,
 		streaming:       streaming,
 		queryMetrics:    qm,
 	}
 }
 
-func (f *QueryRunnerFactory) GetPublishQueryRunner(r *api.PublishRequest) *PublishQueryRunner {
+func (f *QueryRunnerFactory) GetPublishQueryRunner(r *api.PublishRequest, accessToken *types.AccessToken) *PublishQueryRunner {
 	return &PublishQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
 		req:             r,
 	}
 }
 
 // GetSubscribeQueryRunner returns SubscribeQueryRunner.
-func (f *QueryRunnerFactory) GetSubscribeQueryRunner(r *api.SubscribeRequest, streaming SubscribeStreaming) *SubscribeQueryRunner {
+func (f *QueryRunnerFactory) GetSubscribeQueryRunner(r *api.SubscribeRequest, streaming SubscribeStreaming, accessToken *types.AccessToken) *SubscribeQueryRunner {
 	return &SubscribeQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
 		req:             r,
 		streaming:       streaming,
 	}
 }
 
-func (f *QueryRunnerFactory) GetCollectionQueryRunner() *CollectionQueryRunner {
+func (f *QueryRunnerFactory) GetCollectionQueryRunner(accessToken *types.AccessToken) *CollectionQueryRunner {
 	return &CollectionQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
 	}
 }
 
-func (f *QueryRunnerFactory) GetDatabaseQueryRunner() *DatabaseQueryRunner {
+func (f *QueryRunnerFactory) GetDatabaseQueryRunner(accessToken *types.AccessToken) *DatabaseQueryRunner {
 	return &DatabaseQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
 	}
 }
 
@@ -160,14 +161,16 @@ type BaseQueryRunner struct {
 	cdcMgr      *cdc.Manager
 	searchStore search.Store
 	txMgr       *transaction.Manager
+	accessToken *types.AccessToken
 }
 
-func NewBaseQueryRunner(encoder metadata.Encoder, cdcMgr *cdc.Manager, txMgr *transaction.Manager, searchStore search.Store) *BaseQueryRunner {
+func NewBaseQueryRunner(encoder metadata.Encoder, cdcMgr *cdc.Manager, txMgr *transaction.Manager, searchStore search.Store, accessToken *types.AccessToken) *BaseQueryRunner {
 	return &BaseQueryRunner{
 		encoder:     encoder,
 		cdcMgr:      cdcMgr,
 		searchStore: searchStore,
 		txMgr:       txMgr,
+		accessToken: accessToken,
 	}
 }
 
@@ -1600,7 +1603,11 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			status: DroppedStatus,
 		}, ctx, nil
 	case runner.create != nil:
-		exist, err := tenant.CreateDatabase(ctx, tx, runner.create.GetDb())
+		dbMetadata, err := createDatabaseMetadata(ctx)
+		if err != nil {
+			return nil, ctx, err
+		}
+		exist, err := tenant.CreateDatabase(ctx, tx, runner.create.GetDb(), dbMetadata)
 		if exist || err == kv.ErrDuplicateKey {
 			return nil, ctx, errors.AlreadyExists("database already exist")
 		}
@@ -1685,4 +1692,18 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 	}
 
 	return &Response{}, ctx, errors.Unknown("unknown request path")
+}
+
+func createDatabaseMetadata(ctx context.Context) (*metadata.DatabaseMetadata, error) {
+	currentSub, err := getCurrentSub(ctx)
+	if err != nil && !config.DefaultConfig.Auth.EnableNamespaceIsolation {
+		return nil, nil
+	} else if err != nil {
+		return nil, errors.Internal("Failed to create database metadata")
+	}
+	return &metadata.DatabaseMetadata{
+		Id:        0, // it will be set to right value later on
+		Creator:   currentSub,
+		CreatedAt: time.Now().Unix(),
+	}, nil
 }
