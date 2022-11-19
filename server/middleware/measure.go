@@ -19,6 +19,7 @@ import (
 
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/util"
@@ -61,7 +62,7 @@ func measureUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryS
 		ulog.E(err)
 		tags := reqMetadata.GetInitialTags()
 		measurement := metrics.NewMeasurement(util.Service, info.FullMethod, metrics.GrpcSpanType, tags)
-		measurement.AddTags(metrics.GetDbCollTagsForReq(req))
+		measurement.AddTags(metrics.GetDbCollTags(reqMetadata.GetDb(), reqMetadata.GetCollection()))
 		ctx = measurement.StartTracing(ctx, false)
 		resp, err := handler(ctx, req)
 		if err != nil {
@@ -118,11 +119,20 @@ func (w *wrappedStream) RecvMsg(m interface{}) error {
 		err := w.ServerStream.RecvMsg(m)
 		return err
 	}
+	db, coll := request.GetDbAndColl(m)
+	reqMetadata, err := request.GetRequestMetadataFromContext(w.WrappedContext)
+	if err != nil {
+		return err
+	}
+	reqMetadata.SetDb(db)
+	reqMetadata.SetCollection(coll)
+
 	childMeasurement := metrics.NewMeasurement(TigrisStreamSpan, "RecvMsg", metrics.GrpcSpanType, parentMeasurement.GetRequestOkTags())
 	w.WrappedContext = childMeasurement.StartTracing(w.WrappedContext, true)
-	err := w.ServerStream.RecvMsg(m)
-	parentMeasurement.RecursiveAddTags(metrics.GetDbCollTagsForReq(m))
-	childMeasurement.RecursiveAddTags(metrics.GetDbCollTagsForReq(m))
+	err = w.ServerStream.RecvMsg(m)
+	dbCollTags := metrics.GetDbCollTags(reqMetadata.GetDb(), reqMetadata.GetCollection())
+	parentMeasurement.RecursiveAddTags(dbCollTags)
+	childMeasurement.RecursiveAddTags(dbCollTags)
 	parentMeasurement.CountReceivedBytes(metrics.BytesReceived, parentMeasurement.GetNetworkTags(), proto.Size(m.(proto.Message)))
 	w.WrappedContext = childMeasurement.FinishTracing(w.WrappedContext)
 	return err
@@ -137,8 +147,13 @@ func (w *wrappedStream) SendMsg(m interface{}) error {
 	childMeasurement := metrics.NewMeasurement(TigrisStreamSpan, "SendMsg", metrics.GrpcSpanType, parentMeasurement.GetRequestOkTags())
 	w.WrappedContext = childMeasurement.StartTracing(w.WrappedContext, true)
 	err := w.ServerStream.SendMsg(m)
-	parentMeasurement.RecursiveAddTags(metrics.GetDbCollTagsForReq(m))
-	childMeasurement.RecursiveAddTags(metrics.GetDbCollTagsForReq(m))
+	reqMetadata, err1 := request.GetRequestMetadataFromContext(w.WrappedContext)
+	if err1 != nil {
+		return errors.Internal("Could not handle stream send message")
+	}
+	dbCollTags := metrics.GetDbCollTags(reqMetadata.GetDb(), reqMetadata.GetCollection())
+	parentMeasurement.RecursiveAddTags(dbCollTags)
+	childMeasurement.RecursiveAddTags(dbCollTags)
 	parentMeasurement.CountSentBytes(metrics.BytesSent, parentMeasurement.GetNetworkTags(), proto.Size(m.(proto.Message)))
 	w.WrappedContext = childMeasurement.FinishTracing(w.WrappedContext)
 	return err

@@ -51,20 +51,26 @@ type Metadata struct {
 	// human readable namespace name
 	namespaceName string
 	IsHuman       bool
+
+	// this will hold the information about the db and collection under target
+	// this will be set to empty string for requests which are not db/collection specific
+	db         string
+	collection string
 }
 
 func Init(tg metadata.TenantGetter) {
 	tenantGetter = tg
 }
 
-func NewRequestEndpointMetadata(ctx context.Context, serviceName string, methodInfo grpc.MethodInfo) Metadata {
+func NewRequestEndpointMetadata(ctx context.Context, serviceName string, methodInfo grpc.MethodInfo, db string, coll string) Metadata {
 	ns, utype := GetMetadataFromHeader(ctx)
-	md := Metadata{serviceName: serviceName, methodInfo: methodInfo, IsHuman: utype}
+	md := Metadata{serviceName: serviceName, methodInfo: methodInfo, IsHuman: utype, db: db, collection: coll}
 	md.SetNamespace(ctx, ns)
 	return md
 }
 
-func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod string, methodType string) Metadata {
+func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod string, methodType string, req interface{}) Metadata {
+	db, coll := GetDbAndColl(req)
 	var methodInfo grpc.MethodInfo
 	methodList := strings.Split(fullMethod, "/")
 	svcName := methodList[1]
@@ -82,7 +88,23 @@ func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod strin
 			IsServerStream: true,
 		}
 	}
-	return NewRequestEndpointMetadata(ctx, svcName, methodInfo)
+	return NewRequestEndpointMetadata(ctx, svcName, methodInfo, db, coll)
+}
+
+func (m *Metadata) SetDb(db string) {
+	m.db = db
+}
+
+func (m *Metadata) SetCollection(collection string) {
+	m.collection = collection
+}
+
+func (m *Metadata) GetDb() string {
+	return m.db
+}
+
+func (m *Metadata) GetCollection() string {
+	return m.collection
 }
 
 func (m *Metadata) SetAccessToken(token *types.AccessToken) {
@@ -130,6 +152,20 @@ func (m *Metadata) GetInitialTags() map[string]string {
 		"db":                 defaults.UnknownValue,
 		"collection":         defaults.UnknownValue,
 	}
+}
+
+func GetDbAndColl(req interface{}) (string, string) {
+	db := ""
+	coll := ""
+	if req != nil {
+		if rc, ok := req.(api.RequestWithDbAndCollection); ok {
+			db = rc.GetDb()
+			coll = rc.GetCollection()
+		} else if r, ok := req.(api.RequestWithDb); ok {
+			db = r.GetDb()
+		}
+	}
+	return db, coll
 }
 
 func (m *Metadata) GetFullMethod() string {
