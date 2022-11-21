@@ -37,6 +37,7 @@ func getRequestOkTagKeys() []string {
 		"search_type",
 		"write_type",
 		"sort",
+		"sub",
 	}
 }
 
@@ -54,6 +55,7 @@ func getRequestErrorTagKeys() []string {
 		"search_type",
 		"write_type",
 		"sort",
+		"sub",
 	}
 }
 
