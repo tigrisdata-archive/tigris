@@ -56,6 +56,9 @@ type Metadata struct {
 	// this will be set to empty string for requests which are not db/collection specific
 	db         string
 	collection string
+
+	// Current user/application
+	Sub string
 }
 
 func Init(tg metadata.TenantGetter) {
@@ -63,8 +66,8 @@ func Init(tg metadata.TenantGetter) {
 }
 
 func NewRequestEndpointMetadata(ctx context.Context, serviceName string, methodInfo grpc.MethodInfo, db string, coll string) Metadata {
-	ns, utype := GetMetadataFromHeader(ctx)
-	md := Metadata{serviceName: serviceName, methodInfo: methodInfo, IsHuman: utype, db: db, collection: coll}
+	ns, utype, sub := GetMetadataFromHeader(ctx)
+	md := Metadata{serviceName: serviceName, methodInfo: methodInfo, IsHuman: utype, Sub: sub}
 	md.SetNamespace(ctx, ns)
 	return md
 }
@@ -276,37 +279,42 @@ func getTokenFromHeader(header string) (string, error) {
 }
 
 // extracts namespace and type of the user from the token.
-func getMetadataFromToken(token string) (string, bool) {
+func getMetadataFromToken(token string) (string, bool, string) {
 	tokenParts := strings.SplitN(token, ".", 3)
 	if len(tokenParts) < 3 {
 		log.Debug().Msg("Could not split the token into its parts")
-		return defaults.UnknownValue, false
+		return defaults.UnknownValue, false, ""
 	}
 	decodedToken, err := base64.RawStdEncoding.DecodeString(tokenParts[1])
 	if err != nil {
 		log.Debug().Err(err).Msg("Could not base64 decode token")
-		return defaults.UnknownValue, false
+		return defaults.UnknownValue, false, ""
 	}
 	namespace, err := jsonparser.GetString(decodedToken, "https://tigris/n", "code")
 	if err != nil {
-		return defaults.UnknownValue, false
+		return defaults.UnknownValue, false, ""
 	}
 	user, _, _, err := jsonparser.Get(decodedToken, "https://tigris/u")
 	if err != nil {
 		// no-op
 		log.Trace().Err(err).Msg("Failed to read https://tigris/u from access token")
 	}
-	return namespace, len(user) > 0
+	sub, err := jsonparser.GetString(decodedToken, "sub")
+	if err != nil {
+		log.Trace().Err(err).Msg("Failed to read sub from access token")
+		return defaults.UnknownValue, false, ""
+	}
+	return namespace, len(user) > 0, sub
 }
 
-func GetMetadataFromHeader(ctx context.Context) (string, bool) {
+func GetMetadataFromHeader(ctx context.Context) (string, bool, string) {
 	if !config.DefaultConfig.Auth.EnableNamespaceIsolation {
-		return defaults.DefaultNamespaceName, false
+		return defaults.DefaultNamespaceName, false, ""
 	}
 	header := api.GetHeader(ctx, "authorization")
 	token, err := getTokenFromHeader(header)
 	if err != nil {
-		return defaults.DefaultNamespaceName, false
+		return defaults.DefaultNamespaceName, false, ""
 	}
 
 	return getMetadataFromToken(token)

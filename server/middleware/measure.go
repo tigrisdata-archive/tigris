@@ -63,6 +63,9 @@ func measureUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryS
 		tags := reqMetadata.GetInitialTags()
 		measurement := metrics.NewMeasurement(util.Service, info.FullMethod, metrics.GrpcSpanType, tags)
 		measurement.AddTags(metrics.GetDbCollTags(reqMetadata.GetDb(), reqMetadata.GetCollection()))
+		measurement.AddTags(map[string]string{
+			"sub": reqMetadata.Sub,
+		})
 		ctx = measurement.StartTracing(ctx, false)
 		resp, err := handler(ctx, req)
 		if err != nil {
@@ -128,6 +131,9 @@ func (w *wrappedStream) RecvMsg(m interface{}) error {
 	reqMetadata.SetCollection(coll)
 
 	childMeasurement := metrics.NewMeasurement(TigrisStreamSpan, "RecvMsg", metrics.GrpcSpanType, parentMeasurement.GetRequestOkTags())
+	childMeasurement.AddTags(map[string]string{
+		"sub": reqMetadata.Sub,
+	})
 	w.WrappedContext = childMeasurement.StartTracing(w.WrappedContext, true)
 	err = w.ServerStream.RecvMsg(m)
 	dbCollTags := metrics.GetDbCollTags(reqMetadata.GetDb(), reqMetadata.GetCollection())
@@ -151,6 +157,9 @@ func (w *wrappedStream) SendMsg(m interface{}) error {
 	if err1 != nil {
 		return errors.Internal("Could not handle stream send message")
 	}
+	childMeasurement.AddTags(map[string]string{
+		"sub": reqMetadata.Sub,
+	})
 	dbCollTags := metrics.GetDbCollTags(reqMetadata.GetDb(), reqMetadata.GetCollection())
 	parentMeasurement.RecursiveAddTags(dbCollTags)
 	childMeasurement.RecursiveAddTags(dbCollTags)
