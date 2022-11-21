@@ -24,7 +24,7 @@ import (
 
 func metadataExtractorUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		reqMetadata := request.GetGrpcEndPointMetadataFromFullMethod(ctx, info.FullMethod, "unary")
+		reqMetadata := request.GetGrpcEndPointMetadataFromFullMethod(ctx, info.FullMethod, "unary", req)
 		ctx = reqMetadata.SaveToContext(ctx)
 		resp, err := handler(ctx, req)
 		return resp, err
@@ -35,7 +35,7 @@ func metadataExtractorStream() grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		wrapped := &wrappedStream{WrappedServerStream: middleware.WrapServerStream(stream)}
 		wrapped.WrappedContext = stream.Context()
-		reqMetadata := request.GetGrpcEndPointMetadataFromFullMethod(wrapped.WrappedContext, info.FullMethod, "stream")
+		reqMetadata := request.GetGrpcEndPointMetadataFromFullMethod(wrapped.WrappedContext, info.FullMethod, "stream", nil)
 		wrapped.WrappedContext = reqMetadata.SaveToContext(wrapped.WrappedContext)
 		err := handler(srv, wrapped)
 		return err
