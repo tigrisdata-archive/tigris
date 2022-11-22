@@ -117,8 +117,7 @@ func measureStream() grpc.StreamServerInterceptor {
 }
 
 func (w *wrappedStream) RecvMsg(m interface{}) error {
-	parentMeasurement := w.measurement
-	if parentMeasurement == nil {
+	if w.measurement == nil {
 		err := w.ServerStream.RecvMsg(m)
 		return err
 	}
@@ -130,40 +129,25 @@ func (w *wrappedStream) RecvMsg(m interface{}) error {
 	reqMetadata.SetDb(db)
 	reqMetadata.SetCollection(coll)
 
-	childMeasurement := metrics.NewMeasurement(TigrisStreamSpan, "RecvMsg", metrics.GrpcSpanType, parentMeasurement.GetRequestOkTags())
-	childMeasurement.AddTags(map[string]string{
-		"sub": reqMetadata.Sub,
-	})
-	w.WrappedContext = childMeasurement.StartTracing(w.WrappedContext, true)
 	err = w.ServerStream.RecvMsg(m)
 	dbCollTags := metrics.GetDbCollTags(reqMetadata.GetDb(), reqMetadata.GetCollection())
-	parentMeasurement.RecursiveAddTags(dbCollTags)
-	childMeasurement.RecursiveAddTags(dbCollTags)
-	parentMeasurement.CountReceivedBytes(metrics.BytesReceived, parentMeasurement.GetNetworkTags(), proto.Size(m.(proto.Message)))
-	w.WrappedContext = childMeasurement.FinishTracing(w.WrappedContext)
+	w.measurement.RecursiveAddTags(dbCollTags)
+	w.measurement.CountReceivedBytes(metrics.BytesReceived, w.measurement.GetNetworkTags(), proto.Size(m.(proto.Message)))
 	return err
 }
 
 func (w *wrappedStream) SendMsg(m interface{}) error {
-	parentMeasurement := w.measurement
-	if parentMeasurement == nil {
+	if w.measurement == nil {
 		err := w.ServerStream.SendMsg(m)
 		return err
 	}
-	childMeasurement := metrics.NewMeasurement(TigrisStreamSpan, "SendMsg", metrics.GrpcSpanType, parentMeasurement.GetRequestOkTags())
-	w.WrappedContext = childMeasurement.StartTracing(w.WrappedContext, true)
 	err := w.ServerStream.SendMsg(m)
 	reqMetadata, err1 := request.GetRequestMetadataFromContext(w.WrappedContext)
 	if err1 != nil {
 		return errors.Internal("Could not handle stream send message")
 	}
-	childMeasurement.AddTags(map[string]string{
-		"sub": reqMetadata.Sub,
-	})
 	dbCollTags := metrics.GetDbCollTags(reqMetadata.GetDb(), reqMetadata.GetCollection())
-	parentMeasurement.RecursiveAddTags(dbCollTags)
-	childMeasurement.RecursiveAddTags(dbCollTags)
-	parentMeasurement.CountSentBytes(metrics.BytesSent, parentMeasurement.GetNetworkTags(), proto.Size(m.(proto.Message)))
-	w.WrappedContext = childMeasurement.FinishTracing(w.WrappedContext)
+	w.measurement.RecursiveAddTags(dbCollTags)
+	w.measurement.CountSentBytes(metrics.BytesSent, w.measurement.GetNetworkTags(), proto.Size(m.(proto.Message)))
 	return err
 }
