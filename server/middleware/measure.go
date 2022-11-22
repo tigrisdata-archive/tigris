@@ -113,33 +113,23 @@ func measureStream() grpc.StreamServerInterceptor {
 }
 
 func (w *wrappedStream) RecvMsg(m interface{}) error {
-	parentMeasurement := w.measurement
-	if parentMeasurement == nil {
+	if w.measurement == nil {
 		err := w.ServerStream.RecvMsg(m)
 		return err
 	}
-	childMeasurement := metrics.NewMeasurement(TigrisStreamSpan, "RecvMsg", metrics.GrpcSpanType, parentMeasurement.GetRequestOkTags())
-	w.WrappedContext = childMeasurement.StartTracing(w.WrappedContext, true)
 	err := w.ServerStream.RecvMsg(m)
-	parentMeasurement.RecursiveAddTags(metrics.GetDbCollTagsForReq(m))
-	childMeasurement.RecursiveAddTags(metrics.GetDbCollTagsForReq(m))
-	parentMeasurement.CountReceivedBytes(metrics.BytesReceived, parentMeasurement.GetNetworkTags(), proto.Size(m.(proto.Message)))
-	w.WrappedContext = childMeasurement.FinishTracing(w.WrappedContext)
+	w.measurement.RecursiveAddTags(metrics.GetDbCollTagsForReq(m))
+	w.measurement.CountReceivedBytes(metrics.BytesReceived, w.measurement.GetNetworkTags(), proto.Size(m.(proto.Message)))
 	return err
 }
 
 func (w *wrappedStream) SendMsg(m interface{}) error {
-	parentMeasurement := w.measurement
-	if parentMeasurement == nil {
+	if w.measurement == nil {
 		err := w.ServerStream.SendMsg(m)
 		return err
 	}
-	childMeasurement := metrics.NewMeasurement(TigrisStreamSpan, "SendMsg", metrics.GrpcSpanType, parentMeasurement.GetRequestOkTags())
-	w.WrappedContext = childMeasurement.StartTracing(w.WrappedContext, true)
 	err := w.ServerStream.SendMsg(m)
-	parentMeasurement.RecursiveAddTags(metrics.GetDbCollTagsForReq(m))
-	childMeasurement.RecursiveAddTags(metrics.GetDbCollTagsForReq(m))
-	parentMeasurement.CountSentBytes(metrics.BytesSent, parentMeasurement.GetNetworkTags(), proto.Size(m.(proto.Message)))
-	w.WrappedContext = childMeasurement.FinishTracing(w.WrappedContext)
+	w.measurement.RecursiveAddTags(metrics.GetDbCollTagsForReq(m))
+	w.measurement.CountSentBytes(metrics.BytesSent, w.measurement.GetNetworkTags(), proto.Size(m.(proto.Message)))
 	return err
 }
