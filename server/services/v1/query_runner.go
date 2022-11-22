@@ -39,6 +39,7 @@ import (
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/request"
+	"github.com/tigrisdata/tigris/server/services/v1/auth"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/server/types"
 	"github.com/tigrisdata/tigris/store/kv"
@@ -1695,7 +1696,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 }
 
 func createDatabaseMetadata(ctx context.Context) (*metadata.DatabaseMetadata, error) {
-	currentSub, err := getCurrentSub(ctx)
+	currentSub, err := auth.GetCurrentSub(ctx)
 	if err != nil && !config.DefaultConfig.Auth.EnableNamespaceIsolation {
 		return nil, nil
 	} else if err != nil {

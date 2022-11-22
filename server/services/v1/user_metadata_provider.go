@@ -22,6 +22,7 @@ import (
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/request"
+	"github.com/tigrisdata/tigris/server/services/v1/auth"
 	"github.com/tigrisdata/tigris/server/transaction"
 )
 
@@ -90,7 +91,7 @@ func metadataPrepareOperation(operationName string, ctx context.Context, txMgr *
 		return 0, "", nil, errors.Internal("Failed to %s user metadata. reason: failed to read user namespace.", operationName)
 	}
 
-	currentSub, err := getCurrentSub(ctx)
+	currentSub, err := auth.GetCurrentSub(ctx)
 	if err != nil {
 		return 0, "", nil, errors.Internal("Failed to %s user metadata. reason: failed to read user.", operationName)
 	}

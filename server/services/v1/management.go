@@ -30,6 +30,7 @@ import (
 	"github.com/tigrisdata/tigris/lib/uuid"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/services/v1/auth"
 	"github.com/tigrisdata/tigris/server/transaction"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc"
@@ -41,7 +42,7 @@ const (
 
 type managementService struct {
 	api.UnimplementedManagementServer
-	AuthProvider
+	auth.Provider
 	UserMetadataProvider
 	NamespaceMetadataProvider
 	*transaction.Manager
@@ -50,9 +51,9 @@ type managementService struct {
 
 type nsDetailsResp = map[string]map[string]map[string]map[string]string
 
-func newManagementService(authProvider AuthProvider, txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, userStore *metadata.UserSubspace, namespaceStore *metadata.NamespaceSubspace) *managementService {
+func newManagementService(authProvider auth.Provider, txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, userStore *metadata.UserSubspace, namespaceStore *metadata.NamespaceSubspace) *managementService {
 	if authProvider == nil && config.DefaultConfig.Auth.EnableOauth {
-		log.Error().Str("AuthProvider", config.DefaultConfig.Auth.OAuthProvider).Msg("Unable to configure external auth provider")
+		log.Error().Str("Provider", config.DefaultConfig.Auth.OAuthProvider).Msg("Unable to configure external auth provider")
 		panic("Unable to configure external auth provider")
 	}
 
@@ -67,7 +68,7 @@ func newManagementService(authProvider AuthProvider, txMgr *transaction.Manager,
 		tenantMgr:      tenantMgr,
 	}
 	return &managementService{
-		AuthProvider:              authProvider,
+		Provider:                  authProvider,
 		UserMetadataProvider:      userMetadataProvider,
 		NamespaceMetadataProvider: namespaceMetadataProvider,
 		Manager:                   txMgr,
@@ -224,23 +225,23 @@ func (m *managementService) DescribeNamespaces(ctx context.Context, _ *api.Descr
 }
 
 func (m *managementService) CreateApplication(ctx context.Context, req *api.CreateApplicationRequest) (*api.CreateApplicationResponse, error) {
-	return m.AuthProvider.CreateApplication(ctx, req)
+	return m.Provider.CreateApplication(ctx, req)
 }
 
 func (m *managementService) UpdateApplication(ctx context.Context, req *api.UpdateApplicationRequest) (*api.UpdateApplicationResponse, error) {
-	return m.AuthProvider.UpdateApplication(ctx, req)
+	return m.Provider.UpdateApplication(ctx, req)
 }
 
 func (m *managementService) DeleteApplication(ctx context.Context, req *api.DeleteApplicationsRequest) (*api.DeleteApplicationResponse, error) {
-	return m.AuthProvider.DeleteApplication(ctx, req)
+	return m.Provider.DeleteApplication(ctx, req)
 }
 
 func (m *managementService) ListApplications(ctx context.Context, req *api.ListApplicationsRequest) (*api.ListApplicationsResponse, error) {
-	return m.AuthProvider.ListApplications(ctx, req)
+	return m.Provider.ListApplications(ctx, req)
 }
 
 func (m *managementService) RotateApplicationSecret(ctx context.Context, req *api.RotateApplicationSecretRequest) (*api.RotateApplicationSecretResponse, error) {
-	return m.AuthProvider.RotateApplicationSecret(ctx, req)
+	return m.Provider.RotateApplicationSecret(ctx, req)
 }
 
 func (m *managementService) GetUserMetadata(ctx context.Context, req *api.GetUserMetadataRequest) (*api.GetUserMetadataResponse, error) {
