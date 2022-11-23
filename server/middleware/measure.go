@@ -121,18 +121,17 @@ func (w *wrappedStream) RecvMsg(m interface{}) error {
 		err := w.ServerStream.RecvMsg(m)
 		return err
 	}
-	err := w.ServerStream.RecvMsg(m)
-	if len(w.measurement.GetDBCollTags()) == 0 {
-		// The request is not tagged yet with db and collection, need to do it on the first message
-		db, coll := request.GetDbAndColl(m)
-		reqMetadata, err := request.GetRequestMetadataFromContext(w.WrappedContext)
-		if err != nil {
-			return err
-		}
-		reqMetadata.SetDb(db)
-		reqMetadata.SetCollection(coll)
-		w.measurement.AddDbCollTags(reqMetadata.GetDb(), reqMetadata.GetCollection())
+	db, coll := request.GetDbAndColl(m)
+	reqMetadata, err := request.GetRequestMetadataFromContext(w.WrappedContext)
+	if err != nil {
+		return err
 	}
+	reqMetadata.SetDb(db)
+	reqMetadata.SetCollection(coll)
+
+	err = w.ServerStream.RecvMsg(m)
+	dbCollTags := metrics.GetDbCollTags(reqMetadata.GetDb(), reqMetadata.GetCollection())
+	w.measurement.RecursiveAddTags(dbCollTags)
 	w.measurement.CountReceivedBytes(metrics.BytesReceived, w.measurement.GetNetworkTags(), proto.Size(m.(proto.Message)))
 	return err
 }
@@ -143,15 +142,12 @@ func (w *wrappedStream) SendMsg(m interface{}) error {
 		return err
 	}
 	err := w.ServerStream.SendMsg(m)
-	if len(w.measurement.GetDBCollTags()) == 0 {
-		// The request is not tagged yet with db and collection, need to do it on the first message
-		reqMetadata, err1 := request.GetRequestMetadataFromContext(w.WrappedContext)
-		if err1 != nil {
-			return errors.Internal("Could not handle stream send message")
-		}
-		w.measurement.AddDbCollTags(reqMetadata.GetDb(), reqMetadata.GetCollection())
+	reqMetadata, err1 := request.GetRequestMetadataFromContext(w.WrappedContext)
+	if err1 != nil {
+		return errors.Internal("Could not handle stream send message")
 	}
-	// The network tags are cached in a top level member of the Measurement type, it won't always re-calculate tags
+	dbCollTags := metrics.GetDbCollTags(reqMetadata.GetDb(), reqMetadata.GetCollection())
+	w.measurement.RecursiveAddTags(dbCollTags)
 	w.measurement.CountSentBytes(metrics.BytesSent, w.measurement.GetNetworkTags(), proto.Size(m.(proto.Message)))
 	return err
 }
