@@ -55,8 +55,6 @@ type Measurement struct {
 	stopped      bool
 	startedAt    time.Time
 	stoppedAt    time.Time
-	dbCollTags   map[string]string
-	networkTags  map[string]string
 }
 
 type MeasurementCtxKey struct{}
@@ -92,28 +90,6 @@ func (m *Measurement) CountErrorForScope(scope tally.Scope, tags map[string]stri
 
 func (m *Measurement) countError(scope tally.Scope, tags map[string]string) {
 	scope.Tagged(tags).Counter("error").Inc(1)
-}
-
-func (m *Measurement) AddDbCollTags(db string, coll string) {
-	// For stream requests we will add the tags once based on the flag rather than for every result document
-	m.dbCollTags = GetDbCollTags(db, coll)
-	m.RecursiveAddTags(m.dbCollTags)
-}
-
-func (m *Measurement) GetDBCollTags() map[string]string {
-	return m.dbCollTags
-}
-
-func (m *Measurement) AddNetworkTags() {
-	m.networkTags = m.getNetworkTags()
-	m.RecursiveAddTags(m.networkTags)
-}
-
-func (m *Measurement) GetNetworkTags() map[string]string {
-	if len(m.networkTags) == 0 {
-		m.AddNetworkTags()
-	}
-	return m.networkTags
 }
 
 func (m *Measurement) GetServiceName() string {
@@ -172,7 +148,7 @@ func (m *Measurement) GetCollectionSizeTags() map[string]string {
 	return filterTags(standardizeTags(m.tags, getCollectionSizeTagKeys()), config.DefaultConfig.Metrics.Size.FilteredTags)
 }
 
-func (m *Measurement) getNetworkTags() map[string]string {
+func (m *Measurement) GetNetworkTags() map[string]string {
 	return filterTags(standardizeTags(m.tags, getNetworkTagKeys()), config.DefaultConfig.Metrics.Network.FilteredTags)
 }
 
