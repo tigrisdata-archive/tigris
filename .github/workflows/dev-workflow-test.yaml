@@ -55,7 +55,7 @@ jobs:
           make test
           make test #containers and test results should be cached
           make clean
-          make logs >/dev/nul 2>&1
+          make logs >/dev/null 2>&1
 
   macos:
     runs-on: macos-latest
@@ -79,7 +79,8 @@ jobs:
 
       - name: Prerequisites (make, go, docker)
         run: |
-          brew install colima
+          brew install colima coreutils docker
+          colima start
           sudo sh scripts/install_go.sh
           echo "/usr/local/go/bin" >> $GITHUB_PATH # Go installation
           echo "/home/runner/go/bin" >> $GITHUB_PATH # Default GOPATH

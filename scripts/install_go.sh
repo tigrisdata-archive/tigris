@@ -53,7 +53,7 @@ case "${OS}-${ARCH}" in
   SHA="49e394ab92bc6fa3df3d27298ddf3e4491f99477bee9dd4934525a526f3a391c"
   ;;
 "Darwin-x86_64")
-  V="darwin-amd4.tar.gz"
+  V="darwin-amd64.tar.gz"
   SHA="7fa09a9a34cb6f794e61e9ada1d6d18796f936a2b35f22724906cad71396e590"
   ;;
 "Linux-arm64")
