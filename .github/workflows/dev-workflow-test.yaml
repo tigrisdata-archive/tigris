@@ -66,7 +66,7 @@ jobs:
           submodules: true
 
       # This brings working docker, but everything is veeeeeery slow
-      - uses: docker-practice/actions-setup-docker@master
+      #- uses: docker-practice/actions-setup-docker@master
 
       # Requires to enable Oracle VM in UI
       #- run: |
@@ -79,6 +79,7 @@ jobs:
 
       - name: Prerequisites (make, go, docker)
         run: |
+          brew install colima
           sudo sh scripts/install_go.sh
           echo "/usr/local/go/bin" >> $GITHUB_PATH # Go installation
           echo "/home/runner/go/bin" >> $GITHUB_PATH # Default GOPATH
