@@ -34,7 +34,7 @@ func TestTypeScriptSchemaGenerator(t *testing.T) {
 		{
 			"types", typesTest, `
 interface Product {
-  arrInts: string;
+  arrInts: Array<string>;
   bool: boolean;
   byte1: string;
   id: number;
@@ -166,7 +166,7 @@ const subObjectNestedSchema: TigrisSchema<SubObjectNested> = {
 
 interface SubArray {
   field_3: number;
-  subArrayNesteds: SubArrayNested;
+  subArrayNesteds: Array<SubArrayNested>;
   subObjectNested: SubObjectNested;
 }
 
@@ -197,7 +197,7 @@ const subtypeSchema: TigrisSchema<Subtype> = {
 };
 
 export interface Product extends TigrisCollectionType {
-  subArrays: SubArray;
+  subArrays: Array<SubArray>;
   // subtype sub type description
   subtype: Subtype;
 }
