@@ -85,6 +85,9 @@ jobs:
           sudo sh scripts/install_go.sh
           echo "/usr/local/go/bin" >> $GITHUB_PATH # Go installation
           echo "/home/runner/go/bin" >> $GITHUB_PATH # Default GOPATH
+          echo "$GOBIN" >> $GITHUB_PATH # Default GOPATH
+          echo $GOBIN
+          echo $GOPATH
 
       - name: Host only workflows
         run: |
