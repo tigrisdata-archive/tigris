@@ -79,16 +79,12 @@ jobs:
 
       - name: Prerequisites (make, go, docker)
         run: |
-          brew install colima coreutils docker docker-compose
+          brew uninstall go@1.17
+          brew install colima coreutils docker docker-compose go@1.19
           colima start
-          sed -i'' -e "s/docker compose/docker-compose/g" Makefile
-          sudo sh scripts/install_go.sh
-          echo "/usr/local/go/bin" >> $GITHUB_PATH # Go installation
-          echo "/home/runner/go/bin" >> $GITHUB_PATH # Default GOPATH
-          echo "$GOBIN" >> $GITHUB_PATH # Default GOPATH
-          echo $GOBIN
-          echo $GOPATH
-          go env
+          echo "/Users/runner/go/bin" >> $GITHUB_PATH # Default GOPATH
+          mkdir -p ~/.docker/cli-plugins
+          ln -sfn $(brew --prefix)/opt/docker-compose/bin/docker-compose ~/.docker/cli-plugins/docker-compose
 
       - name: Host only workflows
         run: |
@@ -100,13 +96,11 @@ jobs:
           make lint
 
       - name: Host only (requires FoundationDB clients)
-        if: false
         run: |
           make clean
           make bins
 
       - name: Containerized with test on the host, or IDE (requires FoundationDB clients)
-        if: false
         run: |
           make clean
           make run
@@ -116,7 +110,6 @@ jobs:
           make run_full
 
       - name: Fully containerized workflows
-        if: false
         run: |
           make clean
           make test
@@ -148,6 +141,7 @@ jobs:
           echo "/home/runner/go/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           echo "/usr/local/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           echo "C:\Users\runneradmin\go/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          choco install protoc
 
       - name: Host only workflows
         run: |
