@@ -79,8 +79,9 @@ jobs:
 
       - name: Prerequisites (make, go, docker)
         run: |
-          brew install colima coreutils docker
+          brew install colima coreutils docker docker-compose
           colima start
+          sed -i'' -e "s/docker compose/docker-compose/g" Makefile
           sudo sh scripts/install_go.sh
           echo "/usr/local/go/bin" >> $GITHUB_PATH # Go installation
           echo "/home/runner/go/bin" >> $GITHUB_PATH # Default GOPATH
