@@ -72,7 +72,7 @@ func TestEncodeDecodeKey(t *testing.T) {
 	require.True(t, ok)
 
 	require.Equal(t, ns.StrId(), tenantName)
-	require.Equal(t, db.name, dbName)
+	require.Equal(t, db.Name(), dbName)
 	require.Equal(t, coll.Name, collName)
 	require.True(t, ok)
 }

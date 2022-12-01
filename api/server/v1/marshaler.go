@@ -596,9 +596,11 @@ func (x *DescribeDatabaseResponse) MarshalJSON() ([]byte, error) {
 		Metadata    *DatabaseMetadata `json:"metadata"`
 		Collections []*collDesc       `json:"collections"`
 		Size        int64             `json:"size"`
+		Branches    []string          `json:"branches"`
 	}{
 		Metadata: x.Metadata,
 		Size:     x.Size,
+		Branches: x.Branches,
 	}
 
 	for _, v := range x.Collections {

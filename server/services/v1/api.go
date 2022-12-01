@@ -471,6 +471,32 @@ func (s *apiService) DescribeDatabase(ctx context.Context, r *api.DescribeDataba
 	return resp.Response.(*api.DescribeDatabaseResponse), nil
 }
 
+func (s *apiService) CreateBranch(ctx context.Context, r *api.CreateBranchRequest) (*api.CreateBranchResponse, error) {
+	accessToken, _ := request.GetAccessToken(ctx)
+	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
+	runner.SetCreateBranchReq(r)
+
+	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.CreateBranchResponse), nil
+}
+
+func (s *apiService) DeleteBranch(ctx context.Context, r *api.DeleteBranchRequest) (*api.DeleteBranchResponse, error) {
+	accessToken, _ := request.GetAccessToken(ctx)
+	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
+	runner.SetDeleteBranchReq(r)
+
+	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.DeleteBranchResponse), nil
+}
+
 func (s *apiService) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest) (*api.CreateAppKeyResponse, error) {
 	return s.authProvider.CreateAppKey(ctx, req)
 }

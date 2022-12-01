@@ -17,6 +17,7 @@ package database
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"time"
 
@@ -169,14 +170,19 @@ func NewBaseQueryRunner(encoder metadata.Encoder, cdcMgr *cdc.Manager, txMgr *tr
 
 // getDatabaseFromTenant is a helper method to get database from the tenant object. Returns a user facing error if
 // the database is not present.
-func (runner *BaseQueryRunner) getDatabaseFromTenant(ctx context.Context, tenant *metadata.Tenant, dbName string) (*metadata.Database, error) {
-	db, err := tenant.GetDatabase(ctx, dbName)
+func (runner *BaseQueryRunner) getDatabaseFromTenant(ctx context.Context, tenant *metadata.Tenant, dbName string, branch string) (*metadata.Database, error) {
+	dbBranch := metadata.NewDatabaseBranch(dbName, branch)
+	db, err := tenant.GetDatabase(ctx, dbBranch)
 	if err != nil {
 		return nil, err
 	}
+	// database not found
 	if db == nil {
-		// database not found
-		return nil, errors.NotFound("database doesn't exist '%s'", dbName)
+		errMsg := fmt.Sprintf("database doesn't exist '%s'", dbBranch.Db())
+		if !dbBranch.IsMain() {
+			errMsg = fmt.Sprintf("branch doesn't exist '%s'", dbBranch.Branch())
+		}
+		return nil, errors.NotFound(errMsg)
 	}
 
 	return db, nil
@@ -184,7 +190,7 @@ func (runner *BaseQueryRunner) getDatabaseFromTenant(ctx context.Context, tenant
 
 // getDatabase is a helper method to return database either from the transactional context for explicit transactions or
 // from the tenant object. Returns a user facing error if the database is not present.
-func (runner *BaseQueryRunner) getDatabase(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, dbName string) (*metadata.Database, error) {
+func (runner *BaseQueryRunner) getDatabase(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, dbName string, branch string) (*metadata.Database, error) {
 	if tx.Context().GetStagedDatabase() != nil {
 		// this means that some DDL operation has modified the database object, then we need to perform all the operations
 		// on this staged database.
@@ -192,13 +198,18 @@ func (runner *BaseQueryRunner) getDatabase(ctx context.Context, tx transaction.T
 	}
 
 	// otherwise, simply read from the in-memory cache/disk.
-	db, err := tenant.GetDatabase(ctx, dbName)
+	dbBranch := metadata.NewDatabaseBranch(dbName, branch)
+	db, err := tenant.GetDatabase(ctx, dbBranch)
 	if err != nil {
 		return nil, err
 	}
+	// database not found
 	if db == nil {
-		// database not found
-		return nil, errors.NotFound("database doesn't exist '%s'", dbName)
+		errMsg := fmt.Sprintf("database doesn't exist '%s'", dbBranch.Db())
+		if !dbBranch.IsMain() {
+			errMsg = fmt.Sprintf("branch doesn't exist '%s'", dbBranch.Branch())
+		}
+		return nil, errors.NotFound(errMsg)
 	}
 
 	return db, nil
@@ -390,7 +401,7 @@ func (runner *ImportQueryRunner) evolveSchema(ctx context.Context, tenant *metad
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	db, err := runner.getDatabase(ctx, tx, tenant, req.GetProject())
+	db, err := runner.getDatabase(ctx, tx, tenant, req.GetProject(), "")
 	if err != nil {
 		return err
 	}
@@ -409,7 +420,7 @@ func (runner *ImportQueryRunner) evolveSchema(ctx context.Context, tenant *metad
 }
 
 func (runner *ImportQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject())
+	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject(), "")
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -499,7 +510,7 @@ type InsertQueryRunner struct {
 }
 
 func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject())
+	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject(), runner.req.GetBranch())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -541,7 +552,7 @@ type ReplaceQueryRunner struct {
 }
 
 func (runner *ReplaceQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject())
+	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject(), runner.req.GetBranch())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -580,7 +591,7 @@ type UpdateQueryRunner struct {
 
 func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	ts := internal.NewTimestamp()
-	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject())
+	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject(), runner.req.GetBranch())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -718,7 +729,7 @@ type DeleteQueryRunner struct {
 
 func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	ts := internal.NewTimestamp()
-	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject())
+	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject(), runner.req.GetBranch())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -908,7 +919,7 @@ func (runner *StreamingQueryRunner) instrumentRunner(ctx context.Context, option
 // ReadOnly is used by the read query runner to handle long-running reads. This method operates by starting a new
 // transaction when needed which means a single user request may end up creating multiple read only transactions.
 func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetProject())
+	db, err := runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetProject(), runner.req.GetBranch())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -964,7 +975,7 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 // if we see ErrTransactionMaxDurationReached which is expected because we do not expect caller to do long reads in an
 // explicit transaction.
 func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject())
+	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject(), runner.req.GetBranch())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -1079,7 +1090,7 @@ type SearchQueryRunner struct {
 // ReadOnly on search query runner is implemented as search queries do not need to be inside a transaction; in fact,
 // there is no need to start any transaction for search queries as they are simply forwarded to the indexing store.
 func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetProject())
+	db, err := runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetProject(), runner.req.GetBranch())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -1334,7 +1345,7 @@ func (runner *CollectionQueryRunner) SetDescribeCollectionReq(describe *api.Desc
 func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	switch {
 	case runner.dropReq != nil:
-		db, err := runner.getDatabase(ctx, tx, tenant, runner.dropReq.GetProject())
+		db, err := runner.getDatabase(ctx, tx, tenant, runner.dropReq.GetProject(), runner.dropReq.GetBranch())
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -1353,7 +1364,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			Status: DroppedStatus,
 		}, ctx, nil
 	case runner.createOrUpdateReq != nil:
-		db, err := runner.getDatabase(ctx, tx, tenant, runner.createOrUpdateReq.GetProject())
+		db, err := runner.getDatabase(ctx, tx, tenant, runner.createOrUpdateReq.GetProject(), runner.createOrUpdateReq.GetBranch())
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -1386,7 +1397,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			Status: CreatedStatus,
 		}, ctx, nil
 	case runner.listReq != nil:
-		db, err := runner.getDatabase(ctx, tx, tenant, runner.listReq.GetProject())
+		db, err := runner.getDatabase(ctx, tx, tenant, runner.listReq.GetProject(), runner.listReq.GetBranch())
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -1404,7 +1415,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			},
 		}, ctx, nil
 	case runner.describeReq != nil:
-		db, err := runner.getDatabase(ctx, tx, tenant, runner.describeReq.GetProject())
+		db, err := runner.getDatabase(ctx, tx, tenant, runner.describeReq.GetProject(), runner.describeReq.GetBranch())
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -1453,10 +1464,12 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 type DatabaseQueryRunner struct {
 	*BaseQueryRunner
 
-	delete   *api.DeleteProjectRequest
-	create   *api.CreateProjectRequest
-	list     *api.ListProjectsRequest
-	describe *api.DescribeDatabaseRequest
+	delete       *api.DeleteProjectRequest
+	create       *api.CreateProjectRequest
+	list         *api.ListProjectsRequest
+	describe     *api.DescribeDatabaseRequest
+	createBranch *api.CreateBranchRequest
+	deleteBranch *api.DeleteBranchRequest
 }
 
 func (runner *DatabaseQueryRunner) SetCreateProjectReq(create *api.CreateProjectRequest) {
@@ -1473,6 +1486,14 @@ func (runner *DatabaseQueryRunner) SetListProjectsReq(list *api.ListProjectsRequ
 
 func (runner *DatabaseQueryRunner) SetDescribeDatabaseReq(describe *api.DescribeDatabaseRequest) {
 	runner.describe = describe
+}
+
+func (runner *DatabaseQueryRunner) SetCreateBranchReq(create *api.CreateBranchRequest) {
+	runner.createBranch = create
+}
+
+func (runner *DatabaseQueryRunner) SetDeleteBranchReq(delete *api.DeleteBranchRequest) {
+	runner.deleteBranch = delete
 }
 
 func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
@@ -1506,7 +1527,8 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			Status: CreatedStatus,
 		}, ctx, nil
 	case runner.list != nil:
-		databaseList := tenant.ListDatabases(ctx)
+		// list projects need not include any branches
+		databaseList := tenant.ListDatabasesOnly(ctx)
 		databases := make([]*api.ProjectInfo, len(databaseList))
 		for i, l := range databaseList {
 			databases[i] = &api.ProjectInfo{
@@ -1519,7 +1541,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			},
 		}, ctx, nil
 	case runner.describe != nil:
-		db, err := runner.getDatabase(ctx, tx, tenant, runner.describe.GetProject())
+		db, err := runner.getDatabase(ctx, tx, tenant, runner.describe.GetProject(), runner.describe.GetBranch())
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -1531,7 +1553,6 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		tenantName := tenant.GetNamespace().Metadata().Name
 
 		collectionList := db.ListCollection()
-
 		collections := make([]*api.CollectionDescription, len(collectionList))
 		for i, c := range collectionList {
 			size, err := tenant.CollectionSize(ctx, db, c)
@@ -1565,13 +1586,62 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			return nil, ctx, err
 		}
 
+		// TODO: If describe is on a branch should the size be tagged with `db:branch`?
 		metrics.UpdateDbSizeMetrics(namespace, tenantName, db.Name(), size)
+
+		// get all branches
+		var branches []string
+		for _, branch := range tenant.GetBranches(ctx, db) {
+			branches = append(branches, branch.BranchName())
+		}
 
 		return &Response{
 			Response: &api.DescribeDatabaseResponse{
 				Metadata:    &api.DatabaseMetadata{},
 				Collections: collections,
 				Size:        size,
+				Branches:    branches,
+			},
+		}, ctx, nil
+
+	case runner.createBranch != nil:
+		dbBranch := metadata.NewDatabaseBranch(runner.createBranch.GetProject(), runner.createBranch.GetBranch())
+		err := tenant.CreateBranch(ctx, tx, dbBranch)
+		if err != nil {
+			switch e := err.(type) {
+			case metadata.Error:
+				switch e.Code() {
+				case metadata.ErrCodeDatabaseNotFound:
+					return nil, ctx, errors.NotFound(e.Error())
+				case metadata.ErrCodeDatabaseBranchExists:
+					return nil, ctx, errors.AlreadyExists(e.Error())
+				}
+			}
+			return nil, ctx, err
+		}
+		return &Response{
+			Response: &api.CreateBranchResponse{
+				Status: CreatedStatus,
+			},
+		}, ctx, nil
+	case runner.deleteBranch != nil:
+		dbBranch := metadata.NewDatabaseBranch(runner.createBranch.GetProject(), runner.createBranch.GetBranch())
+		err := tenant.DeleteBranch(ctx, tx, dbBranch)
+		if err != nil {
+			switch e := err.(type) {
+			case metadata.Error:
+				switch e.Code() {
+				case metadata.ErrCodeMainBranchCannotBeDeleted:
+					return nil, ctx, errors.InvalidArgument(e.Error())
+				case metadata.ErrCodeBranchNotFound:
+					return nil, ctx, errors.NotFound(e.Error())
+				}
+			}
+			return nil, ctx, err
+		}
+		return &Response{
+			Response: &api.CreateBranchResponse{
+				Status: DeletedStatus,
 			},
 		}, ctx, nil
 	}

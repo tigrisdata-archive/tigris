@@ -32,6 +32,8 @@ import (
 )
 
 var kvStore kv.KeyValueStore
+var tenantDb1 = NewBranchFromDbName("tenant_db1")
+var tenantDb2 = NewBranchFromDbName("tenant_db2")
 
 func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 	t.Run("create_tenant", func(t *testing.T) {
@@ -191,22 +193,22 @@ func TestTenantManager_CreateDatabases(t *testing.T) {
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db1", nil)
+		err = tenant.CreateDatabase(ctx, tx, tenantDb1, nil)
 		require.NoError(t, err)
-		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db2", nil)
+		err = tenant.CreateDatabase(ctx, tx, tenantDb2, nil)
 		require.NoError(t, err)
 
 		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
-		db1, err := tenant.GetDatabase(ctx, "tenant_db1")
+		db1, err := tenant.GetDatabase(ctx, tenantDb1)
 		require.NoError(t, err)
-		require.Equal(t, "tenant_db1", db1.name)
-		require.Equal(t, "tenant_db1", tenant.idToDatabaseMap[db1.id])
+		require.Equal(t, tenantDb1.Name(), db1.Name())
+		require.Equal(t, tenantDb1.Name(), tenant.idToDatabaseMap[db1.id])
 
-		db2, err := tenant.GetDatabase(ctx, "tenant_db2")
+		db2, err := tenant.GetDatabase(ctx, tenantDb2)
 		require.NoError(t, err)
-		require.Equal(t, "tenant_db2", db2.name)
+		require.Equal(t, tenantDb2.Name(), db2.Name())
 		require.NoError(t, tx.Commit(ctx))
-		require.Equal(t, "tenant_db2", tenant.idToDatabaseMap[db2.id])
+		require.Equal(t, tenantDb2.Name(), tenant.idToDatabaseMap[db2.id])
 
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.EncodingSubspaceName())
@@ -225,22 +227,22 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 		tenant := m.tenants["ns-test1"]
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db1", nil)
+		err = tenant.CreateDatabase(ctx, tx, tenantDb1, nil)
 		require.NoError(t, err)
-		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db2", nil)
+		err = tenant.CreateDatabase(ctx, tx, tenantDb2, nil)
 		require.NoError(t, err)
 
 		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
 
-		db1, err := tenant.GetDatabase(ctx, "tenant_db1")
+		db1, err := tenant.GetDatabase(ctx, tenantDb1)
 		require.NoError(t, err)
-		require.Equal(t, "tenant_db1", db1.name)
-		require.Equal(t, "tenant_db1", tenant.idToDatabaseMap[db1.id])
+		require.Equal(t, tenantDb1.Name(), db1.Name())
+		require.Equal(t, tenantDb1.Name(), tenant.idToDatabaseMap[db1.id])
 
-		db2, err := tenant.GetDatabase(ctx, "tenant_db2")
+		db2, err := tenant.GetDatabase(ctx, tenantDb2)
 		require.NoError(t, err)
-		require.Equal(t, "tenant_db2", db2.name)
-		require.Equal(t, "tenant_db2", tenant.idToDatabaseMap[db2.id])
+		require.Equal(t, tenantDb2.Name(), db2.Name())
+		require.Equal(t, tenantDb2.Name(), tenant.idToDatabaseMap[db2.id])
 		require.Equal(t, 2, len(tenant.idToDatabaseMap))
 		require.Equal(t, 2, len(tenant.databases))
 
@@ -267,7 +269,7 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 
 		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
 
-		db2, err = tenant.GetDatabase(ctx, "tenant_db2")
+		db2, err = tenant.GetDatabase(ctx, tenantDb2)
 		require.NoError(t, err)
 		collection := db2.GetCollection("test_collection")
 		require.Equal(t, "test_collection", collection.Name)
@@ -295,20 +297,20 @@ func TestTenantManager_DropCollection(t *testing.T) {
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db1", nil)
+		err = tenant.CreateDatabase(ctx, tx, tenantDb1, nil)
 		require.NoError(t, err)
-		_, err = tenant.CreateDatabase(ctx, tx, "tenant_db2", nil)
+		err = tenant.CreateDatabase(ctx, tx, tenantDb2, nil)
 		require.NoError(t, err)
 
 		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
 
-		db1, err := tenant.GetDatabase(ctx, "tenant_db1")
+		db1, err := tenant.GetDatabase(ctx, tenantDb1)
 		require.NoError(t, err)
-		require.Equal(t, "tenant_db1", db1.name)
+		require.Equal(t, tenantDb1.Name(), db1.Name())
 
-		db2, err := tenant.GetDatabase(ctx, "tenant_db2")
+		db2, err := tenant.GetDatabase(ctx, tenantDb2)
 		require.NoError(t, err)
-		require.Equal(t, "tenant_db2", db2.name)
+		require.Equal(t, tenantDb2.Name(), db2.Name())
 
 		jsSchema := []byte(`{
 		"title": "test_collection",
@@ -367,16 +369,16 @@ func TestTenantManager_DataSize(t *testing.T) {
 	tx, err := tm.StartTx(context.TODO())
 	require.NoError(t, err)
 
-	_, err = tenant.CreateDatabase(ctx, tx, "tenant_db1", nil)
+	err = tenant.CreateDatabase(ctx, tx, tenantDb1, nil)
 	require.NoError(t, err)
-	_, err = tenant.CreateDatabase(ctx, tx, "tenant_db2", nil)
+	err = tenant.CreateDatabase(ctx, tx, tenantDb2, nil)
 	require.NoError(t, err)
 
 	tenant2 := m.tenants["ns-test2"]
 
-	_, err = tenant2.CreateDatabase(ctx, tx, "tenant_db1", nil)
+	err = tenant2.CreateDatabase(ctx, tx, tenantDb1, nil)
 	require.NoError(t, err)
-	_, err = tenant2.CreateDatabase(ctx, tx, "tenant_db2", nil)
+	err = tenant2.CreateDatabase(ctx, tx, tenantDb2, nil)
 	require.NoError(t, err)
 
 	require.NoError(t, tenant.reload(ctx, tx, nil, nil))
@@ -402,9 +404,9 @@ func TestTenantManager_DataSize(t *testing.T) {
 	factory, err := schema.Build("test_collection", jsSchema)
 	require.NoError(t, err)
 
-	db1, err := tenant.GetDatabase(ctx, "tenant_db1")
+	db1, err := tenant.GetDatabase(ctx, tenantDb1)
 	require.NoError(t, err)
-	db2, err := tenant.GetDatabase(ctx, "tenant_db2")
+	db2, err := tenant.GetDatabase(ctx, tenantDb2)
 	require.NoError(t, err)
 
 	require.NoError(t, tenant.CreateCollection(ctx, tx, db1, factory))
@@ -413,9 +415,9 @@ func TestTenantManager_DataSize(t *testing.T) {
 	require.NoError(t, err)
 
 	// create tenant2 dbs and collections
-	db21, err := tenant2.GetDatabase(ctx, "tenant_db1")
+	db21, err := tenant2.GetDatabase(ctx, tenantDb1)
 	require.NoError(t, err)
-	db22, err := tenant2.GetDatabase(ctx, "tenant_db2")
+	db22, err := tenant2.GetDatabase(ctx, tenantDb2)
 	require.NoError(t, err)
 
 	require.NoError(t, tenant2.CreateCollection(ctx, tx, db21, factory))

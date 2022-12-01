@@ -159,8 +159,9 @@ func (s *storage) updateMetricsForNamespace(ctx context.Context, namespace strin
 	}
 	tenantName := tenant.GetNamespace().Metadata().Name
 
-	for _, dbName := range tenant.ListDatabases(ctx) {
-		db, err := tenant.GetDatabase(ctx, dbName)
+	// TODO: Understand the computation here and make changes
+	for _, dbName := range tenant.ListDatabaseWithBranches(ctx) {
+		db, err := tenant.GetDatabase(ctx, metadata.NewBranchFromDbName(dbName))
 		if ulog.E(err) {
 			return
 		}
