@@ -17,7 +17,9 @@ package middleware
 import (
 	"context"
 
+
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2"
+	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/metrics"
@@ -117,37 +119,53 @@ func measureStream() grpc.StreamServerInterceptor {
 }
 
 func (w *wrappedStream) RecvMsg(m interface{}) error {
+	recvErr := w.ServerStream.RecvMsg(m)
+	if recvErr != nil {
+		ulog.E(recvErr)
+	}
 	if w.measurement == nil {
-		err := w.ServerStream.RecvMsg(m)
-		return err
+		return recvErr
 	}
-	db, coll := request.GetDbAndColl(m)
-	reqMetadata, err := request.GetRequestMetadataFromContext(w.WrappedContext)
-	if err != nil {
-		return err
-	}
-	reqMetadata.SetDb(db)
-	reqMetadata.SetCollection(coll)
 
-	err = w.ServerStream.RecvMsg(m)
-	dbCollTags := metrics.GetDbCollTags(reqMetadata.GetDb(), reqMetadata.GetCollection())
-	w.measurement.RecursiveAddTags(dbCollTags)
+	if len(w.measurement.GetDBCollTags()) == 0 {
+		// The request is not tagged yet with db and collection, need to do it on the first message
+		db, coll := request.GetDbAndColl(m)
+		reqMetadata, err := request.GetRequestMetadataFromContext(w.WrappedContext)
+		if err != nil {
+			log.Debug().Str("error", err.Error()).Msg("error while getting request metadata, not measuring")
+			return recvErr
+		}
+		reqMetadata.SetDb(db)
+		reqMetadata.SetCollection(coll)
+		w.measurement.AddDbCollTags(db, coll)
+	}
+
 	w.measurement.CountReceivedBytes(metrics.BytesReceived, w.measurement.GetNetworkTags(), proto.Size(m.(proto.Message)))
-	return err
+	return recvErr
 }
 
 func (w *wrappedStream) SendMsg(m interface{}) error {
-	if w.measurement == nil {
-		err := w.ServerStream.SendMsg(m)
-		return err
-	}
 	err := w.ServerStream.SendMsg(m)
-	reqMetadata, err1 := request.GetRequestMetadataFromContext(w.WrappedContext)
-	if err1 != nil {
+	if err != nil {
 		return errors.Internal("Could not handle stream send message")
 	}
-	dbCollTags := metrics.GetDbCollTags(reqMetadata.GetDb(), reqMetadata.GetCollection())
-	w.measurement.RecursiveAddTags(dbCollTags)
+	if w.measurement == nil {
+		return nil
+	}
+
+	if len(w.measurement.GetDBCollTags()) == 0 {
+		// The request is not tagged yet with db and collection, need to do it on the first message
+		db, coll := request.GetDbAndColl(m)
+		reqMetadata, err := request.GetRequestMetadataFromContext(w.WrappedContext)
+		if err != nil {
+			log.Debug().Str("error", err.Error()).Msg("error while getting request metadata, not measuring")
+			return nil
+		}
+		reqMetadata.SetDb(db)
+		reqMetadata.SetCollection(coll)
+		w.measurement.AddDbCollTags(db, coll)
+	}
+
 	w.measurement.CountSentBytes(metrics.BytesSent, w.measurement.GetNetworkTags(), proto.Size(m.(proto.Message)))
-	return err
+	return nil
 }
