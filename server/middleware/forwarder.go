@@ -53,8 +53,6 @@ func requestToResponse(method string) (proto.Message, proto.Message) {
 		return &api.DeleteRequest{}, &api.DeleteResponse{}
 	case "Read":
 		return &api.ReadRequest{}, &api.ReadResponse{}
-	case "Events":
-		return &api.EventsRequest{}, &api.EventsResponse{}
 	case "Search":
 		return &api.SearchRequest{}, &api.SearchResponse{}
 	case "CreateOrUpdateCollection":

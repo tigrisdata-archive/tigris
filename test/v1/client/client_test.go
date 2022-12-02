@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris-client-go/config"
+	"github.com/tigrisdata/tigris-client-go/driver"
 	"github.com/tigrisdata/tigris-client-go/fields"
 	"github.com/tigrisdata/tigris-client-go/filter"
 	"github.com/tigrisdata/tigris-client-go/tigris"
@@ -45,19 +46,20 @@ func TestClientCollectionBasic(t *testing.T) {
 	h, p := getTestServerHostPort()
 	var db *tigris.Database
 	var err error
-	cfg := &config.Client{Driver: config.Driver{URL: fmt.Sprintf("%v:%d", h, p)}}
+	var cfg *tigris.Config
 	for {
-		db, err = tigris.OpenDatabase(ctx, cfg, "db111222", &Coll1{}, &Coll2{})
+		cfg = &tigris.Config{URL: fmt.Sprintf("%v:%d", h, p), Project: "db111222"}
+
+		drv, _ := driver.NewDriver(ctx, &config.Driver{URL: cfg.URL})
+		_, _ = drv.CreateProject(ctx, "db111222")
+
+		db, err = tigris.OpenDatabase(ctx, cfg, &Coll1{}, &Coll2{})
 		if err != nil && err.Error() == "transaction not committed due to conflict with another transaction" {
 			continue
 		}
 		require.NoError(t, err)
 		break
 	}
-	defer func() {
-		require.NoError(t, tigris.DropDatabase(ctx, cfg, "db111222"))
-	}()
-
 	c := tigris.GetCollection[Coll1](db)
 
 	d1 := &Coll1{Key1: "aaa", Field1: 123}
@@ -124,19 +126,20 @@ func TestClientCollectionTx(t *testing.T) {
 	h, p := getTestServerHostPort()
 	var err error
 	var db *tigris.Database
-	cfg := &config.Client{Driver: config.Driver{URL: fmt.Sprintf("%v:%d", h, p)}}
+	cfg := &tigris.Config{URL: fmt.Sprintf("%v:%d", h, p), Project: "db111333"}
 	for {
-		db, err = tigris.OpenDatabase(ctx, cfg, "db111333", &Coll1{})
+		drv, _ := driver.NewDriver(ctx, &config.Driver{URL: cfg.URL})
+		_, _ = drv.CreateProject(ctx, "db111333")
+
+		c, _ := tigris.NewClient(ctx, cfg)
+		c.OpenDatabase(ctx, &Coll1{})
+		db, err = tigris.OpenDatabase(ctx, cfg, &Coll1{})
 		if err != nil && err.Error() == "transaction not committed due to conflict with another transaction" {
 			continue
 		}
 		require.NoError(t, err)
 		break
 	}
-
-	defer func() {
-		_ = tigris.DropDatabase(ctx, cfg, "db111333")
-	}()
 
 	err = db.Tx(ctx, func(ctx context.Context) error {
 		c := tigris.GetCollection[Coll1](db)

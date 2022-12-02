@@ -59,7 +59,7 @@ func TestTxForwarder(t *testing.T) {
 	collName := "test_collection"
 	createTestCollection(t, dbName, collName, testCreateSchema)
 
-	r1 := e1.POST(fmt.Sprintf("/v1/databases/%s/transactions/begin", dbName)).
+	r1 := e1.POST(fmt.Sprintf("/v1/projects/%s/database/transactions/begin", dbName)).
 		Expect().Status(http.StatusOK).
 		Body().Raw()
 
@@ -123,7 +123,7 @@ func TestTxForwarder(t *testing.T) {
 		}
 	}
 
-	e2.POST(fmt.Sprintf("/v1/databases/%s/transactions/commit", dbName)).
+	e2.POST(fmt.Sprintf("/v1/projects/%s/database/transactions/commit", dbName)).
 		WithHeader("Tigris-Tx-Id", res1.TxCtx.Id).
 		WithHeader("Tigris-Tx-Origin", res1.TxCtx.Origin).
 		Expect().

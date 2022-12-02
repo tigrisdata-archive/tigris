@@ -25,7 +25,6 @@ import (
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
-	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/cdc"
 	"github.com/tigrisdata/tigris/server/config"
@@ -40,14 +39,8 @@ import (
 )
 
 const (
-	databasePath        = "/databases"
-	databasePathPattern = databasePath + "/*"
-
-	collectionPath        = databasePath + "/collections"
-	collectionPathPattern = collectionPath + "/*"
-
-	documentPath        = collectionPath + "/documents"
-	documentPathPattern = documentPath + "/*"
+	projectPath        = "/projects"
+	projectPathPattern = projectPath + "/*"
 
 	infoPath    = "/info"
 	metricsPath = "/metrics"
@@ -125,13 +118,7 @@ func (s *apiService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel)
 
 	api.RegisterTigrisServer(inproc, s)
 
-	router.HandleFunc(apiPathPrefix+databasePathPattern, func(w http.ResponseWriter, r *http.Request) {
-		mux.ServeHTTP(w, r)
-	})
-	router.HandleFunc(apiPathPrefix+collectionPathPattern, func(w http.ResponseWriter, r *http.Request) {
-		mux.ServeHTTP(w, r)
-	})
-	router.HandleFunc(apiPathPrefix+documentPathPattern, func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc(apiPathPrefix+projectPathPattern, func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
 	})
 	router.HandleFunc(apiPathPrefix+infoPath, func(w http.ResponseWriter, r *http.Request) {
@@ -362,23 +349,23 @@ func (s *apiService) ListCollections(ctx context.Context, r *api.ListCollections
 	return resp.Response.(*api.ListCollectionsResponse), nil
 }
 
-func (s *apiService) ListDatabases(ctx context.Context, r *api.ListDatabasesRequest) (*api.ListDatabasesResponse, error) {
+func (s *apiService) ListProjects(ctx context.Context, r *api.ListProjectsRequest) (*api.ListProjectsResponse, error) {
 	accessToken, _ := request.GetAccessToken(ctx)
 	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
-	runner.SetListDatabaseReq(r)
+	runner.SetListProjectsReq(r)
 
 	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	return resp.Response.(*api.ListDatabasesResponse), nil
+	return resp.Response.(*api.ListProjectsResponse), nil
 }
 
-func (s *apiService) CreateDatabase(ctx context.Context, r *api.CreateDatabaseRequest) (*api.CreateDatabaseResponse, error) {
+func (s *apiService) CreateProject(ctx context.Context, r *api.CreateProjectRequest) (*api.CreateProjectResponse, error) {
 	accessToken, _ := request.GetAccessToken(ctx)
 	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
-	runner.SetCreateDatabaseReq(r)
+	runner.SetCreateProjectReq(r)
 	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{
 		metadataChange:     true,
 		instantVerTracking: true,
@@ -387,16 +374,16 @@ func (s *apiService) CreateDatabase(ctx context.Context, r *api.CreateDatabaseRe
 		return nil, err
 	}
 
-	return &api.CreateDatabaseResponse{
+	return &api.CreateProjectResponse{
 		Status:  resp.status,
-		Message: "database created successfully",
+		Message: "project created successfully",
 	}, nil
 }
 
-func (s *apiService) DropDatabase(ctx context.Context, r *api.DropDatabaseRequest) (*api.DropDatabaseResponse, error) {
+func (s *apiService) DeleteProject(ctx context.Context, r *api.DeleteProjectRequest) (*api.DeleteProjectResponse, error) {
 	accessToken, _ := request.GetAccessToken(ctx)
 	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
-	runner.SetDropDatabaseReq(r)
+	runner.SetDeleteProjectReq(r)
 	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{
 		metadataChange:     true,
 		instantVerTracking: true,
@@ -405,9 +392,9 @@ func (s *apiService) DropDatabase(ctx context.Context, r *api.DropDatabaseReques
 		return nil, err
 	}
 
-	return &api.DropDatabaseResponse{
+	return &api.DeleteProjectResponse{
 		Status:  resp.status,
-		Message: "database dropped successfully",
+		Message: "project deleted successfully",
 	}, nil
 }
 
@@ -435,104 +422,4 @@ func (s *apiService) DescribeDatabase(ctx context.Context, r *api.DescribeDataba
 	}
 
 	return resp.Response.(*api.DescribeDatabaseResponse), nil
-}
-
-func (s *apiService) Events(r *api.EventsRequest, stream api.Tigris_EventsServer) error {
-	if !config.DefaultConfig.Cdc.Enabled {
-		return errors.MethodNotAllowed("change streams is disabled for this collection")
-	}
-
-	if len(r.Collection) == 0 {
-		return errors.InvalidArgument("collection name is missing")
-	}
-
-	publisher := s.cdcMgr.GetPublisher(r.GetDb())
-	streamer, err := publisher.NewStreamer(s.kvStore)
-	if err != nil {
-		return err
-	}
-	defer streamer.Close()
-
-	reqDatabaseId, reqCollectionId := uint32(0), uint32(0)
-	for tx := range streamer.Txs {
-		for _, op := range tx.Ops {
-			if reqDatabaseId == 0 || reqCollectionId == 0 {
-				if reqDatabaseId, reqCollectionId = s.tenantMgr.GetDatabaseAndCollectionId(r.GetDb(), r.Collection); reqDatabaseId == 0 || reqCollectionId == 0 {
-					// neither is ready yet
-					continue
-				}
-			}
-
-			_, dbId, cId, ok := s.tenantMgr.GetEncoder().DecodeTableName(op.Table)
-			if !ok {
-				log.Err(err).Str("table", string(op.Table)).Msg("unexpected key in event streams")
-				return errors.Internal("unexpected key in event streams")
-			}
-
-			if dbId != reqDatabaseId || cId != reqCollectionId {
-				//  the event is no for the collection we are listening to
-				continue
-			}
-
-			var data []byte
-			if op.Op != kv.DeleteEvent && op.Op != kv.DeleteRangeEvent {
-				td, err := internal.Decode(op.Data)
-				if err != nil {
-					log.Err(err).Str("data", string(op.Data)).Msg("failed to decode data")
-					return errors.Internal("failed to decode data")
-				}
-				data = td.RawData
-			}
-
-			event := &api.StreamEvent{
-				TxId:       tx.Id,
-				Collection: r.Collection,
-				Op:         op.Op,
-				Key:        op.Key,
-				Lkey:       op.LKey,
-				Rkey:       op.RKey,
-				Data:       data,
-				Last:       op.Last,
-			}
-
-			response := &api.EventsResponse{
-				Event: event,
-			}
-
-			if err := stream.Send(response); ulog.E(err) {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func (s *apiService) Publish(ctx context.Context, r *api.PublishRequest) (*api.PublishResponse, error) {
-	accessToken, _ := request.GetAccessToken(ctx)
-	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetPublishQueryRunner(r, accessToken), &ReqOptions{
-		txCtx: api.GetTransaction(ctx),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &api.PublishResponse{
-		Status: resp.status,
-		Metadata: &api.ResponseMetadata{
-			CreatedAt: resp.createdAt.GetProtoTS(),
-		},
-		Keys: resp.allKeys,
-	}, nil
-}
-
-func (s *apiService) Subscribe(r *api.SubscribeRequest, stream api.Tigris_SubscribeServer) error {
-	_, err := s.sessions.Execute(stream.Context(), s.runnerFactory.GetSubscribeQueryRunner(r, stream, nil), &ReqOptions{
-		txCtx: api.GetTransaction(stream.Context()),
-	})
-	if err != nil {
-		return err
-	}
-
-	return nil
 }

@@ -76,9 +76,8 @@ func testRead(t *testing.T, db driver.Database, filter driver.Filter, expected [
 func testTxReadWrite(t *testing.T, c driver.Driver) {
 	ctx := context.TODO()
 
-	dbName := "db_client_test"
-	_ = c.DropDatabase(ctx, dbName)
-
+	projectName := "db_client_test"
+	_, _ = c.DeleteProject(ctx, projectName)
 	schema := `{
 		"title": "c1",
 		"properties": {
@@ -95,9 +94,9 @@ func testTxReadWrite(t *testing.T, c driver.Driver) {
 		"primary_key": ["str_field"]
 	}`
 
-	err := c.CreateDatabase(ctx, dbName)
+	_, err := c.CreateProject(ctx, projectName)
 	require.NoError(t, err)
-	db1 := c.UseDatabase(dbName)
+	db1 := c.UseDatabase(projectName)
 	err = db1.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema))
 	require.NoError(t, err)
 
@@ -125,7 +124,7 @@ func testTxReadWrite(t *testing.T, c driver.Driver) {
 	testRead(t, db1, fldoc2, nil)
 
 	for {
-		tx, err := c.BeginTx(ctx, dbName)
+		tx, err := c.UseDatabase(projectName).BeginTx(ctx)
 		require.NoError(t, err)
 
 		resp, err = tx.Insert(ctx, "c1", []driver.Document{
@@ -170,10 +169,10 @@ func testTxReadWrite(t *testing.T, c driver.Driver) {
 func testDriverBinary(t *testing.T, c driver.Driver) {
 	ctx := context.TODO()
 
-	dbName := "db_client_test"
-	_ = c.DropDatabase(ctx, dbName, &driver.DatabaseOptions{})
+	projectName := "db_client_test"
+	_, _ = c.DeleteProject(ctx, projectName)
 
-	db1 := c.UseDatabase(dbName)
+	db1 := c.UseDatabase(projectName)
 	_ = db1.DropCollection(ctx, "c1", &driver.CollectionOptions{})
 
 	schema := `{
@@ -191,10 +190,10 @@ func testDriverBinary(t *testing.T, c driver.Driver) {
 		"primary_key": ["K1"]
 	}`
 
-	err := c.CreateDatabase(ctx, dbName)
-	require.NoError(t, err, " dbName %s", dbName)
+	_, err := c.CreateProject(ctx, projectName)
+	require.NoError(t, err, " projectName %s", projectName)
 
-	db1 = c.UseDatabase(dbName)
+	db1 = c.UseDatabase(projectName)
 	err = db1.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema))
 	require.NoError(t, err)
 
@@ -254,8 +253,8 @@ func testDriverBinary(t *testing.T, c driver.Driver) {
 func testDriver(t *testing.T, c driver.Driver) {
 	ctx := context.TODO()
 
-	dbName := "db_client_test"
-	_ = c.DropDatabase(ctx, dbName)
+	projectName := "db_client_test"
+	_, _ = c.DeleteProject(ctx, projectName)
 
 	schema := `{
 		"title": "c1",
@@ -275,13 +274,13 @@ func testDriver(t *testing.T, c driver.Driver) {
 		"primary_key": ["K1", "K2"]
 	}`
 
-	err := c.CreateDatabase(ctx, dbName)
+	_, err := c.CreateProject(ctx, projectName)
 	require.NoError(t, err)
 	defer func() {
-		_ = c.DropDatabase(ctx, dbName)
+		_, _ = c.DeleteProject(ctx, projectName)
 	}()
 
-	db1 := c.UseDatabase(dbName)
+	db1 := c.UseDatabase(projectName)
 	err = db1.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema))
 	require.NoError(t, err)
 
@@ -322,8 +321,8 @@ func testDriver(t *testing.T, c driver.Driver) {
 func testTxClient(t *testing.T, c driver.Driver) {
 	ctx := context.TODO()
 
-	dbName := "db_client_test"
-	_ = c.DropDatabase(ctx, dbName)
+	projectName := "db_client_test"
+	_, _ = c.DeleteProject(ctx, projectName)
 
 	schema := `{
 		"title": "c1",
@@ -343,18 +342,18 @@ func testTxClient(t *testing.T, c driver.Driver) {
 		"primary_key": ["K1", "K2"]
 	}`
 
-	err := c.CreateDatabase(ctx, dbName)
+	_, err := c.CreateProject(ctx, projectName)
 	require.NoError(t, err)
 	defer func() {
 		//_ = c.DropDatabase(ctx, dbName)
 	}()
 
-	db1 := c.UseDatabase(dbName)
+	db1 := c.UseDatabase(projectName)
 
 	doc1 := driver.Document(`{"K1": "vK1", "K2": 1, "D1": "vD1"}`)
 	doc2, doc3 := driver.Document(`{"K1": "vK1", "K2": 2, "D1": "vD2"}`), driver.Document(`{"K1": "vK1", "K2": 3, "D1": "vD3"}`)
 	for {
-		tx, err := c.BeginTx(ctx, dbName)
+		tx, err := c.UseDatabase(projectName).BeginTx(ctx)
 		err = tx.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema))
 		require.NoError(t, err)
 
@@ -385,7 +384,7 @@ func testTxClient(t *testing.T, c driver.Driver) {
 
 	testRead(t, db1, driver.Filter("{}"), nil)
 
-	tx, err := c.BeginTx(ctx, dbName, &driver.TxOptions{})
+	tx, err := c.UseDatabase(projectName).BeginTx(ctx, &driver.TxOptions{})
 
 	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1})
 	require.NoError(t, err)
@@ -472,8 +471,8 @@ func testPubSub(t *testing.T, c driver.Driver) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	dbName := "db_client_test"
-	_ = c.DropDatabase(ctx, dbName)
+	projectName := "db_client_test"
+	_, _ = c.DeleteProject(ctx, projectName)
 
 	schema := `{
 		"title": "c1",
@@ -491,50 +490,9 @@ func testPubSub(t *testing.T, c driver.Driver) {
         "collection_type": "topic"
 	}`
 
-	err := c.CreateDatabase(ctx, dbName)
+	_, err := c.CreateProject(ctx, projectName)
 	require.NoError(t, err)
-	db1 := c.UseDatabase(dbName)
+	db1 := c.UseDatabase(projectName)
 	err = db1.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema))
 	require.NoError(t, err)
-
-	var wg sync.WaitGroup
-
-	doc1 := driver.Document(`{"str_field": "value1", "int_field": 111, "bool_field": true}`)
-	doc2 := driver.Document(`{"str_field": "value2", "int_field": 222, "bool_field": false}`)
-	doc3 := driver.Document(`{"str_field": "value3", "int_field": 333, "bool_field": false}`)
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		it, err := db1.Subscribe(ctx, "c1", driver.Filter("{}"))
-		require.NoError(t, err)
-
-		testPubSubStream(ctx, t, &it, db1, "c1", doc1, doc2, doc3)
-	}()
-
-	time.Sleep(100 * time.Millisecond)
-
-	pr, err := db1.Publish(ctx, "c1", []driver.Message{
-		driver.Message(doc1), driver.Message(doc2), driver.Message(doc3),
-	})
-	require.NoError(t, err)
-	require.Equal(t, "published", pr.Status)
-
-	wg.Wait()
-
-	require.NoError(t, db1.DropCollection(ctx, "c1"))
-}
-
-func TestDriverGRPCPubSub(t *testing.T) {
-	c := initDriver(t, driver.GRPC)
-	defer func() { _ = c.Close() }()
-
-	testPubSub(t, c)
-}
-
-func TestDriverHTTPPubSub(t *testing.T) {
-	c := initDriver(t, driver.HTTP)
-	defer func() { _ = c.Close() }()
-
-	testPubSub(t, c)
 }

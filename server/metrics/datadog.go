@@ -97,18 +97,18 @@ func FormDatadogQueryNoMeta(namespace string, noMeta bool, req *api.QueryTimeSer
 	switch {
 	case req.TigrisOperation == api.TigrisOperation_WRITE:
 		if noMeta {
-			tags = append(tags, "grpc_method IN (createdatabase,dropdatabase,createorupdatecollection,dropcollection,insert,update,delete,replace,publish)")
+			tags = append(tags, "grpc_method IN (createproject,deleteproject,createorupdatecollection,dropcollection,insert,update,delete,replace,publish)")
 		} else {
 			tags = append(tags, "grpc_method IN (insert,update,delete,replace,publish)")
 		}
 	case req.TigrisOperation == api.TigrisOperation_READ:
 		if noMeta {
-			tags = append(tags, "grpc_method IN (listdatabases,listcollections,describedatabase,describecollection, read,search,subscribe)")
+			tags = append(tags, "grpc_method IN (listprojects,listcollections,describeproject,describecollection, read,search,subscribe)")
 		} else {
 			tags = append(tags, "grpc_method IN (read,search,subscribe)")
 		}
 	case req.TigrisOperation == api.TigrisOperation_METADATA:
-		tags = append(tags, "grpc_method IN (createorupdatecollection,dropcollection,listdatabases,listcollections,createdatabase,dropdatabase,describedatabase,describecollection)")
+		tags = append(tags, "grpc_method IN (createorupdatecollection,dropcollection,listprojects,listcollections,createproject,deleteproject,describeproject,describecollection)")
 	}
 
 	if config.GetEnvironment() != "" {

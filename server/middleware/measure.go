@@ -16,8 +16,6 @@ package middleware
 
 import (
 	"context"
-
-
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"

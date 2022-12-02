@@ -27,7 +27,7 @@ type Validator interface {
 }
 
 func (x *BeginTransactionRequest) Validate() error {
-	if err := isValidDatabase(x.Db); err != nil {
+	if err := isValidDatabase(x.Project); err != nil {
 		return err
 	}
 
@@ -35,7 +35,7 @@ func (x *BeginTransactionRequest) Validate() error {
 }
 
 func (x *CommitTransactionRequest) Validate() error {
-	if err := isValidDatabase(x.Db); err != nil {
+	if err := isValidDatabase(x.Project); err != nil {
 		return err
 	}
 
@@ -43,7 +43,7 @@ func (x *CommitTransactionRequest) Validate() error {
 }
 
 func (x *RollbackTransactionRequest) Validate() error {
-	if err := isValidDatabase(x.Db); err != nil {
+	if err := isValidDatabase(x.Project); err != nil {
 		return err
 	}
 
@@ -51,7 +51,7 @@ func (x *RollbackTransactionRequest) Validate() error {
 }
 
 func (x *InsertRequest) Validate() error {
-	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
+	if err := isValidCollectionAndDatabase(x.Collection, x.Project); err != nil {
 		return err
 	}
 
@@ -62,7 +62,7 @@ func (x *InsertRequest) Validate() error {
 }
 
 func (x *ReplaceRequest) Validate() error {
-	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
+	if err := isValidCollectionAndDatabase(x.Collection, x.Project); err != nil {
 		return err
 	}
 
@@ -73,7 +73,7 @@ func (x *ReplaceRequest) Validate() error {
 }
 
 func (x *UpdateRequest) Validate() error {
-	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
+	if err := isValidCollectionAndDatabase(x.Collection, x.Project); err != nil {
 		return err
 	}
 
@@ -93,7 +93,7 @@ func (x *UpdateRequest) Validate() error {
 }
 
 func (x *DeleteRequest) Validate() error {
-	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
+	if err := isValidCollectionAndDatabase(x.Collection, x.Project); err != nil {
 		return err
 	}
 
@@ -108,19 +108,8 @@ func (x *DeleteRequest) Validate() error {
 	return nil
 }
 
-func (x *PublishRequest) Validate() error {
-	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
-		return err
-	}
-
-	if len(x.GetMessages()) == 0 {
-		return Errorf(Code_INVALID_ARGUMENT, "empty messages received")
-	}
-	return nil
-}
-
 func (x *ReadRequest) Validate() error {
-	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
+	if err := isValidCollectionAndDatabase(x.Collection, x.Project); err != nil {
 		return err
 	}
 
@@ -136,7 +125,7 @@ func (x *ReadRequest) Validate() error {
 }
 
 func (x *SearchRequest) Validate() error {
-	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
+	if err := isValidCollectionAndDatabase(x.Collection, x.Project); err != nil {
 		return err
 	}
 
@@ -160,7 +149,7 @@ func (x *SearchRequest) Validate() error {
 }
 
 func (x *CreateOrUpdateCollectionRequest) Validate() error {
-	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
+	if err := isValidCollectionAndDatabase(x.Collection, x.Project); err != nil {
 		return err
 	}
 
@@ -172,7 +161,7 @@ func (x *CreateOrUpdateCollectionRequest) Validate() error {
 }
 
 func (x *DropCollectionRequest) Validate() error {
-	if err := isValidCollectionAndDatabase(x.Collection, x.Db); err != nil {
+	if err := isValidCollectionAndDatabase(x.Collection, x.Project); err != nil {
 		return err
 	}
 
@@ -191,31 +180,23 @@ func (x *DescribeDatabaseRequest) Validate() error {
 	return nil
 }
 
-func (x *CreateDatabaseRequest) Validate() error {
-	if err := isValidDatabase(x.Db); err != nil {
+func (x *CreateProjectRequest) Validate() error {
+	if err := isValidDatabase(x.Project); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (x *DropDatabaseRequest) Validate() error {
-	if err := isValidDatabase(x.Db); err != nil {
+func (x *DeleteProjectRequest) Validate() error {
+	if err := isValidDatabase(x.Project); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (x *ListDatabasesRequest) Validate() error {
-	return nil
-}
-
-func (x *EventsRequest) Validate() error {
-	if err := isValidDatabase(x.Db); err != nil {
-		return err
-	}
-
+func (x *ListProjectsRequest) Validate() error {
 	return nil
 }
 
