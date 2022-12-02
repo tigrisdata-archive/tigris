@@ -82,9 +82,9 @@ func (c *CustomMarshaler) Marshal(v interface{}) ([]byte, error) {
 			return []byte(`{"collections":[]}`), nil
 		}
 		return c.JSONBuiltin.Marshal(v)
-	case *ListDatabasesResponse:
-		if len(ty.Databases) == 0 {
-			return []byte(`{"databases":[]}`), nil
+	case *ListProjectsResponse:
+		if len(ty.Projects) == 0 {
+			return []byte(`{"projects":[]}`), nil
 		}
 		return c.JSONBuiltin.Marshal(v)
 	}
@@ -128,8 +128,8 @@ func (x *ReadRequest) UnmarshalJSON(data []byte) error {
 	}
 	for key, value := range mp {
 		switch key {
-		case "db":
-			if err := jsoniter.Unmarshal(value, &x.Db); err != nil {
+		case "project":
+			if err := jsoniter.Unmarshal(value, &x.Project); err != nil {
 				return err
 			}
 		case "collection":
@@ -161,8 +161,8 @@ func (x *SearchRequest) UnmarshalJSON(data []byte) error {
 	}
 	for key, value := range mp {
 		switch key {
-		case "db":
-			if err := jsoniter.Unmarshal(value, &x.Db); err != nil {
+		case "project":
+			if err := jsoniter.Unmarshal(value, &x.Project); err != nil {
 				return err
 			}
 		case "collection":
@@ -222,8 +222,8 @@ func (x *InsertRequest) UnmarshalJSON(data []byte) error {
 	}
 	for key, value := range mp {
 		switch key {
-		case "db":
-			if err := jsoniter.Unmarshal(value, &x.Db); err != nil {
+		case "project":
+			if err := jsoniter.Unmarshal(value, &x.Project); err != nil {
 				return err
 			}
 		case "collection":
@@ -260,8 +260,8 @@ func (x *ReplaceRequest) UnmarshalJSON(data []byte) error {
 	}
 	for key, value := range mp {
 		switch key {
-		case "db":
-			if err := jsoniter.Unmarshal(value, &x.Db); err != nil {
+		case "project":
+			if err := jsoniter.Unmarshal(value, &x.Project); err != nil {
 				return err
 			}
 		case "collection":
@@ -296,8 +296,8 @@ func (x *UpdateRequest) UnmarshalJSON(data []byte) error {
 	}
 	for key, value := range mp {
 		switch key {
-		case "db":
-			if err := jsoniter.Unmarshal(value, &x.Db); err != nil {
+		case "project":
+			if err := jsoniter.Unmarshal(value, &x.Project); err != nil {
 				return err
 			}
 		case "collection":
@@ -328,8 +328,8 @@ func (x *DeleteRequest) UnmarshalJSON(data []byte) error {
 	}
 	for key, value := range mp {
 		switch key {
-		case "db":
-			if err := jsoniter.Unmarshal(value, &x.Db); err != nil {
+		case "project":
+			if err := jsoniter.Unmarshal(value, &x.Project); err != nil {
 				return err
 			}
 		case "collection":
@@ -356,8 +356,8 @@ func (x *CreateOrUpdateCollectionRequest) UnmarshalJSON(data []byte) error {
 	}
 	for key, value := range mp {
 		switch key {
-		case "db":
-			if err := jsoniter.Unmarshal(value, &x.Db); err != nil {
+		case "project":
+			if err := jsoniter.Unmarshal(value, &x.Project); err != nil {
 				return err
 			}
 		case "collection":
@@ -532,12 +532,11 @@ func (x *DescribeCollectionResponse) MarshalJSON() ([]byte, error) {
 
 func (x *DescribeDatabaseResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
-		Db          string            `json:"db"`
+		Project     string            `json:"project"`
 		Metadata    *DatabaseMetadata `json:"metadata"`
 		Collections []*collDesc       `json:"collections"`
 		Size        int64             `json:"size"`
 	}{
-		Db:       x.Db,
 		Metadata: x.Metadata,
 		Size:     x.Size,
 	}
@@ -552,109 +551,6 @@ func (x *DescribeDatabaseResponse) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(&resp)
-}
-
-func (x *EventsResponse) MarshalJSON() ([]byte, error) {
-	type event struct {
-		TxId       []byte          `json:"tx_id"`
-		Collection string          `json:"collection"`
-		Op         string          `json:"op"`
-		Key        []byte          `json:"key,omitempty"`
-		LKey       []byte          `json:"lkey,omitempty"`
-		RKey       []byte          `json:"rkey,omitempty"`
-		Data       json.RawMessage `json:"data,omitempty"`
-		Last       bool            `json:"last"`
-	}
-
-	resp := struct {
-		Event event `json:"event,omitempty"`
-	}{
-		Event: event{
-			TxId:       x.Event.TxId,
-			Collection: x.Event.Collection,
-			Op:         x.Event.Op,
-			Key:        x.Event.Key,
-			LKey:       x.Event.Lkey,
-			RKey:       x.Event.Rkey,
-			Data:       x.Event.Data,
-			Last:       x.Event.Last,
-		},
-	}
-	return json.Marshal(resp)
-}
-
-func (x *PublishRequest) UnmarshalJSON(data []byte) error {
-	var mp map[string]jsoniter.RawMessage
-	if err := jsoniter.Unmarshal(data, &mp); err != nil {
-		return err
-	}
-	for key, value := range mp {
-		switch key {
-		case "db":
-			if err := jsoniter.Unmarshal(value, &x.Db); err != nil {
-				return err
-			}
-		case "collection":
-			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
-				return err
-			}
-		case "messages":
-			var docs []jsoniter.RawMessage
-			if err := jsoniter.Unmarshal(value, &docs); err != nil {
-				return err
-			}
-
-			x.Messages = make([][]byte, len(docs))
-			for i := 0; i < len(docs); i++ {
-				x.Messages[i] = docs[i]
-			}
-		case "options":
-			if err := jsoniter.Unmarshal(value, &x.Options); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (x *PublishResponse) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status})
-}
-
-func (x *SubscribeRequest) UnmarshalJSON(data []byte) error {
-	var mp map[string]jsoniter.RawMessage
-	if err := jsoniter.Unmarshal(data, &mp); err != nil {
-		return err
-	}
-	for key, value := range mp {
-		switch key {
-		case "db":
-			if err := jsoniter.Unmarshal(value, &x.Db); err != nil {
-				return err
-			}
-		case "collection":
-			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
-				return err
-			}
-		case "filter":
-			// not decoding it here and let it decode during filter parsing
-			x.Filter = value
-		case "options":
-			if err := jsoniter.Unmarshal(value, &x.Options); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (x *SubscribeResponse) MarshalJSON() ([]byte, error) {
-	resp := struct {
-		Message json.RawMessage `json:"message"`
-	}{
-		Message: x.Message,
-	}
-	return json.Marshal(resp)
 }
 
 func (x *InsertUserMetadataRequest) UnmarshalJSON(data []byte) error {

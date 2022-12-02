@@ -119,7 +119,7 @@ func (a *auth0) CreateApplication(ctx context.Context, req *api.CreateApplicatio
 		Secret:      c.GetClientSecret(),
 		CreatedBy:   c.GetClientMetadata()[createdBy],
 		CreatedAt:   readDate(c.GetClientMetadata()[createdAt]),
-		Projects:    []string{req.GetProject()},
+		Project:     req.GetProject(),
 	}
 	return &api.CreateApplicationResponse{
 		CreatedApplication: createdApp,
@@ -267,7 +267,7 @@ func (a *auth0) ListApplications(ctx context.Context, req *api.ListApplicationsR
 						CreatedBy:   client.GetClientMetadata()[createdBy],
 						UpdatedAt:   readDate(client.GetClientMetadata()[updatedAt]),
 						UpdatedBy:   client.GetClientMetadata()[updatedBy],
-						Projects:    strings.Split(client.GetClientMetadata()[tigrisProject], ","),
+						Project:     client.GetClientMetadata()[tigrisProject],
 					}
 					apps = append(apps, app)
 				}

@@ -32,7 +32,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.13.0
 	github.com/stretchr/testify v1.8.1
-	github.com/tigrisdata/tigris-client-go v1.0.0-beta.8
+	github.com/tigrisdata/tigris-client-go v1.0.0-alpha.3.0.20221207000849-fa697f7245b2
 	github.com/typesense/typesense-go v0.6.1
 	github.com/uber-go/tally v3.5.0+incompatible
 	github.com/ugorji/go/codec v1.2.7

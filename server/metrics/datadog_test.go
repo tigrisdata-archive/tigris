@@ -187,7 +187,7 @@ func TestDatadogQueryFormation(t *testing.T) {
 	}
 	formedQuery, err = FormDatadogQuery("", req)
 	require.NoError(t, err)
-	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (createorupdatecollection,dropcollection,listdatabases,listcollections,createdatabase,dropdatabase,describedatabase,describecollection)}.as_rate()", formedQuery)
+	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (createorupdatecollection,dropcollection,listprojects,listcollections,createproject,deleteproject,describeproject,describecollection)}.as_rate()", formedQuery)
 
 	req = &api.QueryTimeSeriesMetricsRequest{
 		Db:               "db1",

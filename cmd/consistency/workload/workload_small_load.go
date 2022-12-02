@@ -81,11 +81,11 @@ func (w *SmallConciseWorkload) Start1(client driver.Driver) (int64, error) {
 			defer wg.Done()
 
 			randomDatabaseName := fmt.Sprintf("%s_%d", w.Database, id)
-			_ = client.DropDatabase(context.TODO(), randomDatabaseName)
+			_, _ = client.DeleteProject(context.TODO(), randomDatabaseName)
 
-			err := client.CreateDatabase(context.TODO(), randomDatabaseName)
+			_, err := client.CreateProject(context.TODO(), randomDatabaseName)
 			if err != nil {
-				log.Err(err).Msgf("created database failed ignoring error '%s'", randomDatabaseName)
+				log.Err(err).Msgf("create project failed ignoring error '%s'", randomDatabaseName)
 			}
 
 			db := client.UseDatabase(randomDatabaseName)
@@ -120,11 +120,11 @@ func (w *SmallConciseWorkload) Start1(client driver.Driver) (int64, error) {
 }
 
 func (w *SmallConciseWorkload) Start(client driver.Driver) (int64, error) {
-	_ = client.DropDatabase(context.TODO(), w.Database)
+	_, _ = client.DeleteProject(context.TODO(), w.Database)
 
-	err := client.CreateDatabase(context.TODO(), w.Database)
+	_, err := client.CreateProject(context.TODO(), w.Database)
 	if err != nil {
-		log.Err(err).Msgf("created database failed ignoring error '%s'", w.Database)
+		log.Err(err).Msgf("create project failed ignoring error '%s'", w.Database)
 	}
 
 	db := client.UseDatabase(w.Database)

@@ -27,26 +27,30 @@ import (
 )
 
 func getDatabaseURL(databaseName string, methodName string) string {
-	return fmt.Sprintf("/v1/databases/%s/%s", databaseName, methodName)
+	return fmt.Sprintf("/v1/projects/%s/database/%s", databaseName, methodName)
+}
+
+func getProjectURL(projectName string, methodName string) string {
+	return fmt.Sprintf("/v1/projects/%s/%s", projectName, methodName)
 }
 
 func beginTransactionURL(databaseName string) string {
-	return fmt.Sprintf("/v1/databases/%s/transactions/begin", databaseName)
+	return fmt.Sprintf("/v1/projects/%s/database/transactions/begin", databaseName)
 }
 
 func TestCreateDatabase(t *testing.T) {
-	dropDatabase(t, "test_db")
-	resp := createDatabase(t, "test_db")
+	deleteProject(t, "test_db")
+	resp := createProject(t, "test_db")
 	resp.Status(http.StatusOK).
 		JSON().
 		Object().
-		ValueEqual("message", "database created successfully")
+		ValueEqual("message", "project created successfully")
 }
 
 func TestCreateDatabaseInvalidName(t *testing.T) {
 	invalidDbNames := []string{"", "$testdb", "testdb$", "test$db", "abstract", "yield"}
 	for _, name := range invalidDbNames {
-		resp := createDatabase(t, name)
+		resp := createProject(t, name)
 		resp.Status(http.StatusBadRequest).
 			JSON().
 			Path("$.error").
@@ -58,8 +62,8 @@ func TestCreateDatabaseInvalidName(t *testing.T) {
 func TestCreateDatabaseValidName(t *testing.T) {
 	validDbNames := []string{"test-coll", "test_coll"}
 	for _, name := range validDbNames {
-		dropDatabase(t, name)
-		resp := createDatabase(t, name)
+		deleteProject(t, name)
+		resp := createProject(t, name)
 		resp.Status(http.StatusOK)
 	}
 }
@@ -76,7 +80,6 @@ func TestDescribeDatabase(t *testing.T) {
 	resp.Status(http.StatusOK).
 		JSON().
 		Object().
-		ValueEqual("db", "test_db").
 		ValueEqual("size", 0)
 }
 
@@ -86,7 +89,6 @@ func TestDescribeDatabaseSchemaFormat(t *testing.T) {
 	resp.Status(http.StatusOK).
 		JSON().
 		Object().
-		ValueEqual("db", "test_db").
 		ValueEqual("collections", []Map{
 			{
 				"size":       0,
@@ -102,21 +104,21 @@ func TestDescribeDatabaseSchemaFormat(t *testing.T) {
 }
 
 func TestDropDatabase_NotFound(t *testing.T) {
-	resp := dropDatabase(t, "test_drop_db_not_found")
+	resp := deleteProject(t, "test_drop_db_not_found")
 	testError(resp, http.StatusNotFound, api.Code_NOT_FOUND, "database doesn't exist 'test_drop_db_not_found'")
 }
 
 func TestDropDatabase(t *testing.T) {
-	resp := dropDatabase(t, "test_db")
+	resp := deleteProject(t, "test_db")
 	resp.Status(http.StatusOK).
 		JSON().
 		Object().
-		ValueEqual("message", "database dropped successfully")
+		ValueEqual("message", "project deleted successfully")
 }
 
-func createDatabase(t *testing.T, databaseName string) *httpexpect.Response {
+func createProject(t *testing.T, projectName string) *httpexpect.Response {
 	e := expect(t)
-	return e.POST(getDatabaseURL(databaseName, "create")).
+	return e.POST(getProjectURL(projectName, "create")).
 		Expect()
 }
 
@@ -126,9 +128,9 @@ func beginTransaction(t *testing.T, databaseName string) *httpexpect.Response {
 		Expect()
 }
 
-func dropDatabase(t *testing.T, databaseName string) *httpexpect.Response {
+func deleteProject(t *testing.T, projectName string) *httpexpect.Response {
 	e := expect(t)
-	return e.DELETE(getDatabaseURL(databaseName, "drop")).
+	return e.DELETE(getProjectURL(projectName, "delete")).
 		Expect()
 }
 

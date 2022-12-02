@@ -482,6 +482,12 @@ github.com/stretchr/testify v1.8.1 h1:w7B6lhMri9wdJUVmEZPGGhZzrYTPvgJArz7wNPgYKs
 github.com/stretchr/testify v1.8.1/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
 github.com/subosito/gotenv v1.4.1 h1:jyEFiXpy21Wm81FBN71l9VoMMV8H8jG+qIK3GCpY6Qs=
 github.com/subosito/gotenv v1.4.1/go.mod h1:ayKnFf/c6rvx/2iiLrJUk1e6plDbT3edrFNGqEflhK0=
+github.com/tigrisdata/tigris-client-go v1.0.0-alpha.3.0.20221129005002-716a69000a53 h1:r9ARFSUVXTo9flyT31sEywr+2POKabobG7x6W0eJX74=
+github.com/tigrisdata/tigris-client-go v1.0.0-alpha.3.0.20221129005002-716a69000a53/go.mod h1:E1wI4sV0uNvDLPyq0l5YZhVLWUod1Vi1FhKf5bRhDeI=
+github.com/tigrisdata/tigris-client-go v1.0.0-alpha.3.0.20221206200408-15d10c5cf180 h1:n4RjkZjwksD+XSZt+yj8peshy/MFM1z1g+skyaZYb2Q=
+github.com/tigrisdata/tigris-client-go v1.0.0-alpha.3.0.20221206200408-15d10c5cf180/go.mod h1:E1wI4sV0uNvDLPyq0l5YZhVLWUod1Vi1FhKf5bRhDeI=
+github.com/tigrisdata/tigris-client-go v1.0.0-alpha.3.0.20221207000849-fa697f7245b2 h1:bPxMv2wfxiKGKB1UnzxSXeh5+iDAUlfkeEqEFKhOh0s=
+github.com/tigrisdata/tigris-client-go v1.0.0-alpha.3.0.20221207000849-fa697f7245b2/go.mod h1:E1wI4sV0uNvDLPyq0l5YZhVLWUod1Vi1FhKf5bRhDeI=
 github.com/tigrisdata/tigris-client-go v1.0.0-beta.8 h1:Zk7lvRKrsve+dH2pay4XNC+oeNtydu99aowsyoatbBE=
 github.com/tigrisdata/tigris-client-go v1.0.0-beta.8/go.mod h1:E1wI4sV0uNvDLPyq0l5YZhVLWUod1Vi1FhKf5bRhDeI=
 github.com/tinylib/msgp v1.1.6 h1:i+SbKraHhnrf9M5MYmvQhFnbLhAXSDWF8WWsuyRdocw=
