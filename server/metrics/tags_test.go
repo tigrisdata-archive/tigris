@@ -63,11 +63,11 @@ func TestTagsHelpers(t *testing.T) {
 	})
 
 	t.Run("Test getDbTags", func(t *testing.T) {
-		assert.Equal(t, map[string]string{"db": "foobar"}, getDbTags("foobar"))
+		assert.Equal(t, map[string]string{"db": "foobar"}, GetDbCollTags("foobar", ""))
 	})
 
 	t.Run("Test getDbCollTags", func(t *testing.T) {
-		dbCollTags := getDbCollTags("foodb", "foocoll")
+		dbCollTags := GetDbCollTags("foodb", "foocoll")
 		assert.Equal(t, "foodb", dbCollTags["db"])
 		assert.Equal(t, "foocoll", dbCollTags["collection"])
 	})

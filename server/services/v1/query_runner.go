@@ -16,12 +16,9 @@ package v1
 
 import (
 	"context"
-	"hash/fnv"
 	"math"
-	"math/rand"
 	"time"
 
-	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
@@ -39,7 +36,9 @@ import (
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/request"
+	"github.com/tigrisdata/tigris/server/services/v1/auth"
 	"github.com/tigrisdata/tigris/server/transaction"
+	"github.com/tigrisdata/tigris/server/types"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
 	ulog "github.com/tigrisdata/tigris/util/log"
@@ -75,42 +74,42 @@ func NewQueryRunnerFactory(txMgr *transaction.Manager, cdcMgr *cdc.Manager, sear
 	}
 }
 
-func (f *QueryRunnerFactory) GetInsertQueryRunner(r *api.InsertRequest, qm *metrics.WriteQueryMetrics) *InsertQueryRunner {
+func (f *QueryRunnerFactory) GetInsertQueryRunner(r *api.InsertRequest, qm *metrics.WriteQueryMetrics, accessToken *types.AccessToken) *InsertQueryRunner {
 	return &InsertQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
 		req:             r,
 		queryMetrics:    qm,
 	}
 }
 
-func (f *QueryRunnerFactory) GetReplaceQueryRunner(r *api.ReplaceRequest, qm *metrics.WriteQueryMetrics) *ReplaceQueryRunner {
+func (f *QueryRunnerFactory) GetReplaceQueryRunner(r *api.ReplaceRequest, qm *metrics.WriteQueryMetrics, accessToken *types.AccessToken) *ReplaceQueryRunner {
 	return &ReplaceQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
 		req:             r,
 		queryMetrics:    qm,
 	}
 }
 
-func (f *QueryRunnerFactory) GetUpdateQueryRunner(r *api.UpdateRequest, qm *metrics.WriteQueryMetrics) *UpdateQueryRunner {
+func (f *QueryRunnerFactory) GetUpdateQueryRunner(r *api.UpdateRequest, qm *metrics.WriteQueryMetrics, accessToken *types.AccessToken) *UpdateQueryRunner {
 	return &UpdateQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
 		req:             r,
 		queryMetrics:    qm,
 	}
 }
 
-func (f *QueryRunnerFactory) GetDeleteQueryRunner(r *api.DeleteRequest, qm *metrics.WriteQueryMetrics) *DeleteQueryRunner {
+func (f *QueryRunnerFactory) GetDeleteQueryRunner(r *api.DeleteRequest, qm *metrics.WriteQueryMetrics, accessToken *types.AccessToken) *DeleteQueryRunner {
 	return &DeleteQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
 		req:             r,
 		queryMetrics:    qm,
 	}
 }
 
 // GetStreamingQueryRunner returns StreamingQueryRunner.
-func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streaming Streaming, qm *metrics.StreamingQueryMetrics) *StreamingQueryRunner {
+func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streaming Streaming, qm *metrics.StreamingQueryMetrics, accessToken *types.AccessToken) *StreamingQueryRunner {
 	return &StreamingQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
 		req:             r,
 		streaming:       streaming,
 		queryMetrics:    qm,
@@ -118,40 +117,24 @@ func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streami
 }
 
 // GetSearchQueryRunner for executing Search.
-func (f *QueryRunnerFactory) GetSearchQueryRunner(r *api.SearchRequest, streaming SearchStreaming, qm *metrics.SearchQueryMetrics) *SearchQueryRunner {
+func (f *QueryRunnerFactory) GetSearchQueryRunner(r *api.SearchRequest, streaming SearchStreaming, qm *metrics.SearchQueryMetrics, accessToken *types.AccessToken) *SearchQueryRunner {
 	return &SearchQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
 		req:             r,
 		streaming:       streaming,
 		queryMetrics:    qm,
 	}
 }
 
-func (f *QueryRunnerFactory) GetPublishQueryRunner(r *api.PublishRequest) *PublishQueryRunner {
-	return &PublishQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
-		req:             r,
-	}
-}
-
-// GetSubscribeQueryRunner returns SubscribeQueryRunner.
-func (f *QueryRunnerFactory) GetSubscribeQueryRunner(r *api.SubscribeRequest, streaming SubscribeStreaming) *SubscribeQueryRunner {
-	return &SubscribeQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
-		req:             r,
-		streaming:       streaming,
-	}
-}
-
-func (f *QueryRunnerFactory) GetCollectionQueryRunner() *CollectionQueryRunner {
+func (f *QueryRunnerFactory) GetCollectionQueryRunner(accessToken *types.AccessToken) *CollectionQueryRunner {
 	return &CollectionQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
 	}
 }
 
-func (f *QueryRunnerFactory) GetDatabaseQueryRunner() *DatabaseQueryRunner {
+func (f *QueryRunnerFactory) GetDatabaseQueryRunner(accessToken *types.AccessToken) *DatabaseQueryRunner {
 	return &DatabaseQueryRunner{
-		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore),
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
 	}
 }
 
@@ -160,14 +143,16 @@ type BaseQueryRunner struct {
 	cdcMgr      *cdc.Manager
 	searchStore search.Store
 	txMgr       *transaction.Manager
+	accessToken *types.AccessToken
 }
 
-func NewBaseQueryRunner(encoder metadata.Encoder, cdcMgr *cdc.Manager, txMgr *transaction.Manager, searchStore search.Store) *BaseQueryRunner {
+func NewBaseQueryRunner(encoder metadata.Encoder, cdcMgr *cdc.Manager, txMgr *transaction.Manager, searchStore search.Store, accessToken *types.AccessToken) *BaseQueryRunner {
 	return &BaseQueryRunner{
 		encoder:     encoder,
 		cdcMgr:      cdcMgr,
 		searchStore: searchStore,
 		txMgr:       txMgr,
+		accessToken: accessToken,
 	}
 }
 
@@ -329,14 +314,6 @@ func (runner *BaseQueryRunner) mustBeDocumentsCollection(collection *schema.Defa
 	return nil
 }
 
-func (runner *BaseQueryRunner) mustBeMessagesCollection(collection *schema.DefaultCollection, method string) error {
-	if collection.Type() != schema.TopicType {
-		return errors.InvalidArgument("%s is only supported on collection type of 'messages'", method)
-	}
-
-	return nil
-}
-
 func (runner *BaseQueryRunner) getSortOrdering(coll *schema.DefaultCollection, sortReq jsoniter.RawMessage) (*sort.Ordering, error) {
 	ordering, err := sort.UnmarshalSort(sortReq)
 	if err != nil || ordering == nil {
@@ -367,7 +344,7 @@ type InsertQueryRunner struct {
 }
 
 func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetDb())
+	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -409,7 +386,7 @@ type ReplaceQueryRunner struct {
 }
 
 func (runner *ReplaceQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetDb())
+	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -448,7 +425,7 @@ type UpdateQueryRunner struct {
 
 func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	ts := internal.NewTimestamp()
-	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetDb())
+	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -565,7 +542,7 @@ type DeleteQueryRunner struct {
 
 func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	ts := internal.NewTimestamp()
-	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetDb())
+	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -755,7 +732,7 @@ func (runner *StreamingQueryRunner) instrumentRunner(ctx context.Context, option
 // ReadOnly is used by the read query runner to handle long-running reads. This method operates by starting a new
 // transaction when needed which means a single user request may end up creating multiple read only transactions.
 func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetDb())
+	db, err := runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetProject())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -811,7 +788,7 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 // if we see ErrTransactionMaxDurationReached which is expected because we do not expect caller to do long reads in an
 // explicit transaction.
 func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetDb())
+	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -926,7 +903,7 @@ type SearchQueryRunner struct {
 // ReadOnly on search query runner is implemented as search queries do not need to be inside a transaction; in fact,
 // there is no need to start any transaction for search queries as they are simply forwarded to the indexing store.
 func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetDb())
+	db, err := runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetProject())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -1153,269 +1130,6 @@ func (runner *SearchQueryRunner) getFieldSelection(coll *schema.DefaultCollectio
 	return factory, nil
 }
 
-type PublishQueryRunner struct {
-	*BaseQueryRunner
-
-	req *api.PublishRequest
-}
-
-func (runner *PublishQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetDb())
-	if err != nil {
-		return nil, ctx, err
-	}
-
-	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
-
-	coll, err := runner.getCollection(db, runner.req.GetCollection())
-	if err != nil {
-		return nil, ctx, err
-	}
-	if err = runner.mustBeMessagesCollection(coll, "publish"); err != nil {
-		return nil, ctx, err
-	}
-
-	var part int
-	if runner.req.Options != nil && runner.req.Options.Partition != nil {
-		if len(coll.PartitionFields) > 0 {
-			return nil, ctx, errors.InvalidArgument("Partition number cannot be specified for schema with partition key")
-		}
-		part = int(*runner.req.Options.Partition)
-		if part < 0 || part >= partitions {
-			return nil, ctx, errors.InvalidArgument("Invalid partition number `%d`", part)
-		}
-	} else {
-		part = rand.Intn(partitions) //nolint:golint,gosec
-	}
-
-	ts, allKeys, err := runner.publish(ctx, tx, tenant, db, coll, runner.req.GetMessages(), uint16(part))
-	if err != nil {
-		return nil, ctx, err
-	}
-	return &Response{
-		createdAt: ts,
-		allKeys:   allKeys,
-		status:    PublishedStatus,
-	}, ctx, nil
-}
-
-func (runner *PublishQueryRunner) publish(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, db *metadata.Database,
-	coll *schema.DefaultCollection, messages [][]byte, part uint16,
-) (*internal.Timestamp, [][]byte, error) {
-	var err error
-	var allKeys [][]byte
-	var keyOffset int64
-	ts := internal.NewTimestamp()
-	for _, message := range messages {
-		message, err = runner.mutateAndValidatePayload(coll, message)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		table, err := runner.encoder.EncodePartitionTableName(tenant.GetNamespace(), db, coll)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if len(coll.PartitionFields) > 0 {
-			part, err = partFromFields(coll.PartitionFields, message, part)
-			if err != nil {
-				return nil, nil, err
-			}
-		}
-
-		keyTime := ts.UnixNano() + keyOffset
-		key, err := runner.encoder.EncodePartitionKey(
-			table,
-			coll.Indexes.PrimaryKey,
-			[]interface{}{keyTime},
-			part,
-		)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		tableData := internal.NewTableDataWithTS(ts, nil, message)
-		err = tx.Replace(ctx, key, tableData, false)
-		if err != nil {
-			return nil, nil, err
-		}
-		keyOffset++
-	}
-	return ts, allKeys, err
-}
-
-func partFromFields(partitionFields []*schema.Field, message []byte, part uint16) (uint16, error) {
-	hash := fnv.New32()
-	count := 0
-
-	for _, field := range partitionFields {
-		val, dt, _, err := jsonparser.Get(message, field.FieldName)
-		if dt != jsonparser.NotExist {
-			if err != nil {
-				return 0, err
-			}
-			_, _ = hash.Write(val)
-			count++
-		}
-	}
-
-	if count > 0 {
-		part = uint16(hash.Sum32() % partitions)
-	}
-
-	return part, nil
-}
-
-type SubscribeQueryRunner struct {
-	*BaseQueryRunner
-
-	req       *api.SubscribeRequest
-	streaming SubscribeStreaming
-}
-
-// TODO: number of partitions needs to be defined by schema, with defaults and maximum specified by configuration.
-const partitions = 64
-
-func (runner *SubscribeQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetDb())
-	if ulog.E(err) {
-		return nil, ctx, err
-	}
-
-	collection, err := runner.getCollection(db, runner.req.GetCollection())
-	if ulog.E(err) {
-		return nil, ctx, err
-	}
-	if err = runner.mustBeMessagesCollection(collection, "subscriber"); err != nil {
-		return nil, ctx, err
-	}
-
-	table, err := runner.encoder.EncodePartitionTableName(tenant.GetNamespace(), db, collection)
-	if ulog.E(err) {
-		return nil, ctx, err
-	}
-
-	wrappedF, err := filter.NewFactory(collection.QueryableFields, nil).WrappedFilter(runner.req.Filter)
-	if err != nil {
-		return nil, ctx, err
-	}
-
-	var partNums []int32
-	if runner.req.Options != nil && len(runner.req.Options.Partitions) > 0 {
-		partNums = runner.req.Options.Partitions
-		for i := 0; i < len(partNums); i++ {
-			if partNums[i] < 0 || partNums[i] >= partitions {
-				return nil, ctx, errors.InvalidArgument("Invalid partition number `%d`", partNums[i])
-			}
-		}
-	} else {
-		partNums = make([]int32, partitions)
-		for i := range partNums {
-			partNums[i] = int32(i)
-		}
-	}
-
-	type Part struct {
-		num       uint16
-		skipFirst bool
-		startTime time.Time
-	}
-
-	parts := make([]Part, len(partNums))
-
-	for i := 0; i < len(partNums); i++ {
-		parts[i].num = uint16(partNums[i])
-		parts[i].skipFirst = false
-		parts[i].startTime = time.Now()
-	}
-
-	// TODO: refresh rate needs to be configurable
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		tickerTx, err := runner.txMgr.StartTx(ctx)
-		if ulog.E(err) {
-			return nil, ctx, err
-		}
-
-		for i := 0; i < len(parts); i++ {
-			startKey, err := runner.encoder.EncodePartitionKey(
-				table,
-				collection.Indexes.PrimaryKey,
-				[]interface{}{parts[i].startTime.UnixNano()},
-				parts[i].num,
-			)
-			if ulog.E(err) {
-				return nil, ctx, err
-			}
-
-			// TODO: either make this window really large (if it can perform) or account for no changes in the window
-			endTime := parts[i].startTime.Add(34 * time.Hour)
-			endKey, err := runner.encoder.EncodePartitionKey(
-				table,
-				collection.Indexes.PrimaryKey,
-				[]interface{}{endTime.UnixNano()},
-				parts[i].num,
-			)
-			if ulog.E(err) {
-				return nil, ctx, err
-			}
-
-			kvIterator, err := tickerTx.ReadRange(ctx, startKey, endKey, true)
-			if ulog.E(err) {
-				return nil, ctx, err
-			}
-
-			first := true
-			var keyValue kv.KeyValue
-			for kvIterator.Next(&keyValue) {
-				if ulog.E(kvIterator.Err()) {
-					return nil, ctx, kvIterator.Err()
-				}
-
-				if parts[i].skipFirst && first {
-					first = false
-					continue
-				}
-
-				if wrappedF == nil || (wrappedF != nil && wrappedF.Matches(keyValue.Data.RawData)) {
-					if err = runner.streaming.Send(&api.SubscribeResponse{
-						Message: keyValue.Data.RawData,
-					}); ulog.E(err) {
-						return nil, ctx, err
-					}
-				}
-				first = false
-				parts[i].skipFirst = true
-
-				key, err := keys.FromBinary(table, keyValue.FDBKey)
-				if ulog.E(err) {
-					return nil, ctx, err
-				}
-				keyTime, _, err := runner.encoder.DecodePartitionKey(key)
-				if ulog.E(err) {
-					return nil, ctx, err
-				}
-				parts[i].startTime = time.Unix(0, keyTime[0].(int64))
-			}
-		}
-
-		err = tickerTx.Commit(ctx)
-		if !kv.IsTimedOut(err) && ulog.E(err) {
-			return nil, ctx, err
-		}
-
-		// check for client disconnect
-		if runner.streaming.Context().Err() != nil {
-			break
-		}
-	}
-
-	return &Response{}, ctx, nil
-}
-
 type CollectionQueryRunner struct {
 	*BaseQueryRunner
 
@@ -1444,7 +1158,7 @@ func (runner *CollectionQueryRunner) SetDescribeCollectionReq(describe *api.Desc
 func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	switch {
 	case runner.dropReq != nil:
-		db, err := runner.getDatabase(ctx, tx, tenant, runner.dropReq.GetDb())
+		db, err := runner.getDatabase(ctx, tx, tenant, runner.dropReq.GetProject())
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -1463,7 +1177,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			status: DroppedStatus,
 		}, ctx, nil
 	case runner.createOrUpdateReq != nil:
-		db, err := runner.getDatabase(ctx, tx, tenant, runner.createOrUpdateReq.GetDb())
+		db, err := runner.getDatabase(ctx, tx, tenant, runner.createOrUpdateReq.GetProject())
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -1496,7 +1210,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			status: CreatedStatus,
 		}, ctx, nil
 	case runner.listReq != nil:
-		db, err := runner.getDatabase(ctx, tx, tenant, runner.listReq.GetDb())
+		db, err := runner.getDatabase(ctx, tx, tenant, runner.listReq.GetProject())
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -1514,7 +1228,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			},
 		}, ctx, nil
 	case runner.describeReq != nil:
-		db, err := runner.getDatabase(ctx, tx, tenant, runner.describeReq.GetDb())
+		db, err := runner.getDatabase(ctx, tx, tenant, runner.describeReq.GetProject())
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -1563,21 +1277,21 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 type DatabaseQueryRunner struct {
 	*BaseQueryRunner
 
-	drop     *api.DropDatabaseRequest
-	create   *api.CreateDatabaseRequest
-	list     *api.ListDatabasesRequest
+	delete   *api.DeleteProjectRequest
+	create   *api.CreateProjectRequest
+	list     *api.ListProjectsRequest
 	describe *api.DescribeDatabaseRequest
 }
 
-func (runner *DatabaseQueryRunner) SetCreateDatabaseReq(create *api.CreateDatabaseRequest) {
+func (runner *DatabaseQueryRunner) SetCreateProjectReq(create *api.CreateProjectRequest) {
 	runner.create = create
 }
 
-func (runner *DatabaseQueryRunner) SetDropDatabaseReq(drop *api.DropDatabaseRequest) {
-	runner.drop = drop
+func (runner *DatabaseQueryRunner) SetDeleteProjectReq(d *api.DeleteProjectRequest) {
+	runner.delete = d
 }
 
-func (runner *DatabaseQueryRunner) SetListDatabaseReq(list *api.ListDatabasesRequest) {
+func (runner *DatabaseQueryRunner) SetListProjectsReq(list *api.ListProjectsRequest) {
 	runner.list = list
 }
 
@@ -1587,20 +1301,24 @@ func (runner *DatabaseQueryRunner) SetDescribeDatabaseReq(describe *api.Describe
 
 func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	switch {
-	case runner.drop != nil:
-		exist, err := tenant.DropDatabase(ctx, tx, runner.drop.GetDb())
+	case runner.delete != nil:
+		exist, err := tenant.DropDatabase(ctx, tx, runner.delete.GetProject())
 		if err != nil {
 			return nil, ctx, err
 		}
 		if !exist {
-			return nil, ctx, errors.NotFound("database doesn't exist '%s'", runner.drop.GetDb())
+			return nil, ctx, errors.NotFound("database doesn't exist '%s'", runner.delete.GetProject())
 		}
 
 		return &Response{
 			status: DroppedStatus,
 		}, ctx, nil
 	case runner.create != nil:
-		exist, err := tenant.CreateDatabase(ctx, tx, runner.create.GetDb())
+		dbMetadata, err := createDatabaseMetadata(ctx)
+		if err != nil {
+			return nil, ctx, err
+		}
+		exist, err := tenant.CreateDatabase(ctx, tx, runner.create.GetProject(), dbMetadata)
 		if exist || err == kv.ErrDuplicateKey {
 			return nil, ctx, errors.AlreadyExists("database already exist")
 		}
@@ -1614,19 +1332,19 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 	case runner.list != nil:
 		databaseList := tenant.ListDatabases(ctx)
 
-		databases := make([]*api.DatabaseInfo, len(databaseList))
+		databases := make([]*api.ProjectInfo, len(databaseList))
 		for i, l := range databaseList {
-			databases[i] = &api.DatabaseInfo{
-				Db: l,
+			databases[i] = &api.ProjectInfo{
+				Project: l,
 			}
 		}
 		return &Response{
-			Response: &api.ListDatabasesResponse{
-				Databases: databases,
+			Response: &api.ListProjectsResponse{
+				Projects: databases,
 			},
 		}, ctx, nil
 	case runner.describe != nil:
-		db, err := runner.getDatabase(ctx, tx, tenant, runner.describe.GetDb())
+		db, err := runner.getDatabase(ctx, tx, tenant, runner.describe.GetProject())
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -1676,7 +1394,6 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 
 		return &Response{
 			Response: &api.DescribeDatabaseResponse{
-				Db:          db.Name(),
 				Metadata:    &api.DatabaseMetadata{},
 				Collections: collections,
 				Size:        size,
@@ -1685,4 +1402,18 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 	}
 
 	return &Response{}, ctx, errors.Unknown("unknown request path")
+}
+
+func createDatabaseMetadata(ctx context.Context) (*metadata.DatabaseMetadata, error) {
+	currentSub, err := auth.GetCurrentSub(ctx)
+	if err != nil && !config.DefaultConfig.Auth.EnableNamespaceIsolation {
+		return nil, nil
+	} else if err != nil {
+		return nil, errors.Internal("Failed to create database metadata")
+	}
+	return &metadata.DatabaseMetadata{
+		Id:        0, // it will be set to right value later on
+		Creator:   currentSub,
+		CreatedAt: time.Now().Unix(),
+	}, nil
 }

@@ -16,9 +16,10 @@ package middleware
 
 import (
 	"context"
-
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2"
+	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/util"
@@ -61,7 +62,10 @@ func measureUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryS
 		ulog.E(err)
 		tags := reqMetadata.GetInitialTags()
 		measurement := metrics.NewMeasurement(util.Service, info.FullMethod, metrics.GrpcSpanType, tags)
-		measurement.AddTags(metrics.GetDbCollTagsForReq(req))
+		measurement.AddTags(metrics.GetDbCollTags(reqMetadata.GetDb(), reqMetadata.GetCollection()))
+		measurement.AddTags(map[string]string{
+			"sub": reqMetadata.Sub,
+		})
 		ctx = measurement.StartTracing(ctx, false)
 		resp, err := handler(ctx, req)
 		if err != nil {
@@ -113,33 +117,53 @@ func measureStream() grpc.StreamServerInterceptor {
 }
 
 func (w *wrappedStream) RecvMsg(m interface{}) error {
-	parentMeasurement := w.measurement
-	if parentMeasurement == nil {
-		err := w.ServerStream.RecvMsg(m)
-		return err
+	recvErr := w.ServerStream.RecvMsg(m)
+	if recvErr != nil {
+		ulog.E(recvErr)
 	}
-	childMeasurement := metrics.NewMeasurement(TigrisStreamSpan, "RecvMsg", metrics.GrpcSpanType, parentMeasurement.GetRequestOkTags())
-	w.WrappedContext = childMeasurement.StartTracing(w.WrappedContext, true)
-	err := w.ServerStream.RecvMsg(m)
-	parentMeasurement.RecursiveAddTags(metrics.GetDbCollTagsForReq(m))
-	childMeasurement.RecursiveAddTags(metrics.GetDbCollTagsForReq(m))
-	parentMeasurement.CountReceivedBytes(metrics.BytesReceived, parentMeasurement.GetNetworkTags(), proto.Size(m.(proto.Message)))
-	w.WrappedContext = childMeasurement.FinishTracing(w.WrappedContext)
-	return err
+	if w.measurement == nil {
+		return recvErr
+	}
+
+	if len(w.measurement.GetDBCollTags()) == 0 {
+		// The request is not tagged yet with db and collection, need to do it on the first message
+		db, coll := request.GetDbAndColl(m)
+		reqMetadata, err := request.GetRequestMetadataFromContext(w.WrappedContext)
+		if err != nil {
+			log.Debug().Str("error", err.Error()).Msg("error while getting request metadata, not measuring")
+			return recvErr
+		}
+		reqMetadata.SetDb(db)
+		reqMetadata.SetCollection(coll)
+		w.measurement.AddDbCollTags(db, coll)
+	}
+
+	w.measurement.CountReceivedBytes(metrics.BytesReceived, w.measurement.GetNetworkTags(), proto.Size(m.(proto.Message)))
+	return recvErr
 }
 
 func (w *wrappedStream) SendMsg(m interface{}) error {
-	parentMeasurement := w.measurement
-	if parentMeasurement == nil {
-		err := w.ServerStream.SendMsg(m)
-		return err
-	}
-	childMeasurement := metrics.NewMeasurement(TigrisStreamSpan, "SendMsg", metrics.GrpcSpanType, parentMeasurement.GetRequestOkTags())
-	w.WrappedContext = childMeasurement.StartTracing(w.WrappedContext, true)
 	err := w.ServerStream.SendMsg(m)
-	parentMeasurement.RecursiveAddTags(metrics.GetDbCollTagsForReq(m))
-	childMeasurement.RecursiveAddTags(metrics.GetDbCollTagsForReq(m))
-	parentMeasurement.CountSentBytes(metrics.BytesSent, parentMeasurement.GetNetworkTags(), proto.Size(m.(proto.Message)))
-	w.WrappedContext = childMeasurement.FinishTracing(w.WrappedContext)
-	return err
+	if err != nil {
+		return errors.Internal("Could not handle stream send message")
+	}
+	if w.measurement == nil {
+		return nil
+	}
+
+	if len(w.measurement.GetDBCollTags()) == 0 {
+		// The request is not tagged yet with db and collection, need to do it on the first message
+		db, coll := request.GetDbAndColl(m)
+		reqMetadata, err := request.GetRequestMetadataFromContext(w.WrappedContext)
+		if err != nil {
+			log.Debug().Str("error", err.Error()).Msg("error while getting request metadata, not measuring")
+			return nil
+		}
+		reqMetadata.SetDb(db)
+		reqMetadata.SetCollection(coll)
+		w.measurement.AddDbCollTags(db, coll)
+	}
+
+	w.measurement.CountSentBytes(metrics.BytesSent, w.measurement.GetNetworkTags(), proto.Size(m.(proto.Message)))
+	return nil
 }

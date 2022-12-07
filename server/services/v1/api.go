@@ -25,12 +25,12 @@ import (
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
-	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/cdc"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
@@ -39,14 +39,8 @@ import (
 )
 
 const (
-	databasePath        = "/databases"
-	databasePathPattern = databasePath + "/*"
-
-	collectionPath        = databasePath + "/collections"
-	collectionPathPattern = collectionPath + "/*"
-
-	documentPath        = collectionPath + "/documents"
-	documentPathPattern = documentPath + "/*"
+	projectPath        = "/projects"
+	projectPathPattern = projectPath + "/*"
 
 	infoPath    = "/info"
 	metricsPath = "/metrics"
@@ -124,13 +118,7 @@ func (s *apiService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel)
 
 	api.RegisterTigrisServer(inproc, s)
 
-	router.HandleFunc(apiPathPrefix+databasePathPattern, func(w http.ResponseWriter, r *http.Request) {
-		mux.ServeHTTP(w, r)
-	})
-	router.HandleFunc(apiPathPrefix+collectionPathPattern, func(w http.ResponseWriter, r *http.Request) {
-		mux.ServeHTTP(w, r)
-	})
-	router.HandleFunc(apiPathPrefix+documentPathPattern, func(w http.ResponseWriter, r *http.Request) {
+	router.HandleFunc(apiPathPrefix+projectPathPattern, func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
 	})
 	router.HandleFunc(apiPathPrefix+infoPath, func(w http.ResponseWriter, r *http.Request) {
@@ -200,7 +188,8 @@ func (s *apiService) RollbackTransaction(ctx context.Context, _ *api.RollbackTra
 // Operations done individually not in actual batch.
 func (s *apiService) Insert(ctx context.Context, r *api.InsertRequest) (*api.InsertResponse, error) {
 	qm := metrics.WriteQueryMetrics{}
-	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetInsertQueryRunner(r, &qm), &ReqOptions{
+	accessToken, _ := request.GetAccessToken(ctx)
+	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetInsertQueryRunner(r, &qm, accessToken), &ReqOptions{
 		txCtx: api.GetTransaction(ctx),
 	})
 	if err != nil {
@@ -218,7 +207,8 @@ func (s *apiService) Insert(ctx context.Context, r *api.InsertRequest) (*api.Ins
 
 func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.ReplaceResponse, error) {
 	qm := metrics.WriteQueryMetrics{}
-	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetReplaceQueryRunner(r, &qm), &ReqOptions{
+	accessToken, _ := request.GetAccessToken(ctx)
+	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetReplaceQueryRunner(r, &qm, accessToken), &ReqOptions{
 		txCtx: api.GetTransaction(ctx),
 	})
 	if err != nil {
@@ -236,7 +226,8 @@ func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.R
 
 func (s *apiService) Update(ctx context.Context, r *api.UpdateRequest) (*api.UpdateResponse, error) {
 	queryMetrics := metrics.WriteQueryMetrics{}
-	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetUpdateQueryRunner(r, &queryMetrics), &ReqOptions{
+	accessToken, _ := request.GetAccessToken(ctx)
+	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetUpdateQueryRunner(r, &queryMetrics, accessToken), &ReqOptions{
 		txCtx: api.GetTransaction(ctx),
 	})
 	if err != nil {
@@ -254,7 +245,8 @@ func (s *apiService) Update(ctx context.Context, r *api.UpdateRequest) (*api.Upd
 
 func (s *apiService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.DeleteResponse, error) {
 	queryMetrics := metrics.WriteQueryMetrics{}
-	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetDeleteQueryRunner(r, &queryMetrics), &ReqOptions{
+	accessToken, _ := request.GetAccessToken(ctx)
+	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetDeleteQueryRunner(r, &queryMetrics, accessToken), &ReqOptions{
 		txCtx: api.GetTransaction(ctx),
 	})
 	if err != nil {
@@ -272,20 +264,23 @@ func (s *apiService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.Del
 func (s *apiService) Read(r *api.ReadRequest, stream api.Tigris_ReadServer) error {
 	var err error
 	queryMetrics := metrics.StreamingQueryMetrics{}
+	accessToken, _ := request.GetAccessToken(stream.Context())
+
 	if api.GetTransaction(stream.Context()) != nil {
-		_, err = s.sessions.Execute(stream.Context(), s.runnerFactory.GetStreamingQueryRunner(r, stream, &queryMetrics), &ReqOptions{
+		_, err = s.sessions.Execute(stream.Context(), s.runnerFactory.GetStreamingQueryRunner(r, stream, &queryMetrics, accessToken), &ReqOptions{
 			txCtx:              api.GetTransaction(stream.Context()),
 			instantVerTracking: true,
 		})
 	} else {
-		_, err = s.sessions.ReadOnlyExecute(stream.Context(), s.runnerFactory.GetStreamingQueryRunner(r, stream, &queryMetrics), &ReqOptions{})
+		_, err = s.sessions.ReadOnlyExecute(stream.Context(), s.runnerFactory.GetStreamingQueryRunner(r, stream, &queryMetrics, accessToken), &ReqOptions{})
 	}
 	return err
 }
 
 func (s *apiService) Search(r *api.SearchRequest, stream api.Tigris_SearchServer) error {
 	queryMetrics := metrics.SearchQueryMetrics{}
-	_, err := s.sessions.ReadOnlyExecute(stream.Context(), s.runnerFactory.GetSearchQueryRunner(r, stream, &queryMetrics), &ReqOptions{
+	accessToken, _ := request.GetAccessToken(stream.Context())
+	_, err := s.sessions.ReadOnlyExecute(stream.Context(), s.runnerFactory.GetSearchQueryRunner(r, stream, &queryMetrics, accessToken), &ReqOptions{
 		instantVerTracking: true,
 	})
 	if err != nil {
@@ -300,8 +295,8 @@ func (s *apiService) CreateOrUpdateCollection(ctx context.Context, r *api.Create
 	if err != nil {
 		return nil, errors.Internal("not able to extract collection type from the schema")
 	}
-
-	runner := s.runnerFactory.GetCollectionQueryRunner()
+	accessToken, _ := request.GetAccessToken(ctx)
+	runner := s.runnerFactory.GetCollectionQueryRunner(accessToken)
 	runner.SetCreateOrUpdateCollectionReq(r)
 
 	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{
@@ -320,7 +315,8 @@ func (s *apiService) CreateOrUpdateCollection(ctx context.Context, r *api.Create
 }
 
 func (s *apiService) DropCollection(ctx context.Context, r *api.DropCollectionRequest) (*api.DropCollectionResponse, error) {
-	runner := s.runnerFactory.GetCollectionQueryRunner()
+	accessToken, _ := request.GetAccessToken(ctx)
+	runner := s.runnerFactory.GetCollectionQueryRunner(accessToken)
 	runner.SetDropCollectionReq(r)
 
 	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{
@@ -339,7 +335,8 @@ func (s *apiService) DropCollection(ctx context.Context, r *api.DropCollectionRe
 }
 
 func (s *apiService) ListCollections(ctx context.Context, r *api.ListCollectionsRequest) (*api.ListCollectionsResponse, error) {
-	runner := s.runnerFactory.GetCollectionQueryRunner()
+	accessToken, _ := request.GetAccessToken(ctx)
+	runner := s.runnerFactory.GetCollectionQueryRunner(accessToken)
 	runner.SetListCollectionReq(r)
 
 	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{
@@ -352,21 +349,23 @@ func (s *apiService) ListCollections(ctx context.Context, r *api.ListCollections
 	return resp.Response.(*api.ListCollectionsResponse), nil
 }
 
-func (s *apiService) ListDatabases(ctx context.Context, r *api.ListDatabasesRequest) (*api.ListDatabasesResponse, error) {
-	runner := s.runnerFactory.GetDatabaseQueryRunner()
-	runner.SetListDatabaseReq(r)
+func (s *apiService) ListProjects(ctx context.Context, r *api.ListProjectsRequest) (*api.ListProjectsResponse, error) {
+	accessToken, _ := request.GetAccessToken(ctx)
+	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
+	runner.SetListProjectsReq(r)
 
 	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	return resp.Response.(*api.ListDatabasesResponse), nil
+	return resp.Response.(*api.ListProjectsResponse), nil
 }
 
-func (s *apiService) CreateDatabase(ctx context.Context, r *api.CreateDatabaseRequest) (*api.CreateDatabaseResponse, error) {
-	runner := s.runnerFactory.GetDatabaseQueryRunner()
-	runner.SetCreateDatabaseReq(r)
+func (s *apiService) CreateProject(ctx context.Context, r *api.CreateProjectRequest) (*api.CreateProjectResponse, error) {
+	accessToken, _ := request.GetAccessToken(ctx)
+	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
+	runner.SetCreateProjectReq(r)
 	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{
 		metadataChange:     true,
 		instantVerTracking: true,
@@ -375,15 +374,16 @@ func (s *apiService) CreateDatabase(ctx context.Context, r *api.CreateDatabaseRe
 		return nil, err
 	}
 
-	return &api.CreateDatabaseResponse{
+	return &api.CreateProjectResponse{
 		Status:  resp.status,
-		Message: "database created successfully",
+		Message: "project created successfully",
 	}, nil
 }
 
-func (s *apiService) DropDatabase(ctx context.Context, r *api.DropDatabaseRequest) (*api.DropDatabaseResponse, error) {
-	runner := s.runnerFactory.GetDatabaseQueryRunner()
-	runner.SetDropDatabaseReq(r)
+func (s *apiService) DeleteProject(ctx context.Context, r *api.DeleteProjectRequest) (*api.DeleteProjectResponse, error) {
+	accessToken, _ := request.GetAccessToken(ctx)
+	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
+	runner.SetDeleteProjectReq(r)
 	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{
 		metadataChange:     true,
 		instantVerTracking: true,
@@ -392,14 +392,15 @@ func (s *apiService) DropDatabase(ctx context.Context, r *api.DropDatabaseReques
 		return nil, err
 	}
 
-	return &api.DropDatabaseResponse{
+	return &api.DeleteProjectResponse{
 		Status:  resp.status,
-		Message: "database dropped successfully",
+		Message: "project deleted successfully",
 	}, nil
 }
 
 func (s *apiService) DescribeCollection(ctx context.Context, r *api.DescribeCollectionRequest) (*api.DescribeCollectionResponse, error) {
-	runner := s.runnerFactory.GetCollectionQueryRunner()
+	accessToken, _ := request.GetAccessToken(ctx)
+	runner := s.runnerFactory.GetCollectionQueryRunner(accessToken)
 	runner.SetDescribeCollectionReq(r)
 
 	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{})
@@ -411,7 +412,8 @@ func (s *apiService) DescribeCollection(ctx context.Context, r *api.DescribeColl
 }
 
 func (s *apiService) DescribeDatabase(ctx context.Context, r *api.DescribeDatabaseRequest) (*api.DescribeDatabaseResponse, error) {
-	runner := s.runnerFactory.GetDatabaseQueryRunner()
+	accessToken, _ := request.GetAccessToken(ctx)
+	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
 	runner.SetDescribeDatabaseReq(r)
 
 	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{})
@@ -420,103 +422,4 @@ func (s *apiService) DescribeDatabase(ctx context.Context, r *api.DescribeDataba
 	}
 
 	return resp.Response.(*api.DescribeDatabaseResponse), nil
-}
-
-func (s *apiService) Events(r *api.EventsRequest, stream api.Tigris_EventsServer) error {
-	if !config.DefaultConfig.Cdc.Enabled {
-		return errors.MethodNotAllowed("change streams is disabled for this collection")
-	}
-
-	if len(r.Collection) == 0 {
-		return errors.InvalidArgument("collection name is missing")
-	}
-
-	publisher := s.cdcMgr.GetPublisher(r.GetDb())
-	streamer, err := publisher.NewStreamer(s.kvStore)
-	if err != nil {
-		return err
-	}
-	defer streamer.Close()
-
-	reqDatabaseId, reqCollectionId := uint32(0), uint32(0)
-	for tx := range streamer.Txs {
-		for _, op := range tx.Ops {
-			if reqDatabaseId == 0 || reqCollectionId == 0 {
-				if reqDatabaseId, reqCollectionId = s.tenantMgr.GetDatabaseAndCollectionId(r.GetDb(), r.Collection); reqDatabaseId == 0 || reqCollectionId == 0 {
-					// neither is ready yet
-					continue
-				}
-			}
-
-			_, dbId, cId, ok := s.tenantMgr.GetEncoder().DecodeTableName(op.Table)
-			if !ok {
-				log.Err(err).Str("table", string(op.Table)).Msg("unexpected key in event streams")
-				return errors.Internal("unexpected key in event streams")
-			}
-
-			if dbId != reqDatabaseId || cId != reqCollectionId {
-				//  the event is no for the collection we are listening to
-				continue
-			}
-
-			var data []byte
-			if op.Op != kv.DeleteEvent && op.Op != kv.DeleteRangeEvent {
-				td, err := internal.Decode(op.Data)
-				if err != nil {
-					log.Err(err).Str("data", string(op.Data)).Msg("failed to decode data")
-					return errors.Internal("failed to decode data")
-				}
-				data = td.RawData
-			}
-
-			event := &api.StreamEvent{
-				TxId:       tx.Id,
-				Collection: r.Collection,
-				Op:         op.Op,
-				Key:        op.Key,
-				Lkey:       op.LKey,
-				Rkey:       op.RKey,
-				Data:       data,
-				Last:       op.Last,
-			}
-
-			response := &api.EventsResponse{
-				Event: event,
-			}
-
-			if err := stream.Send(response); ulog.E(err) {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func (s *apiService) Publish(ctx context.Context, r *api.PublishRequest) (*api.PublishResponse, error) {
-	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetPublishQueryRunner(r), &ReqOptions{
-		txCtx: api.GetTransaction(ctx),
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return &api.PublishResponse{
-		Status: resp.status,
-		Metadata: &api.ResponseMetadata{
-			CreatedAt: resp.createdAt.GetProtoTS(),
-		},
-		Keys: resp.allKeys,
-	}, nil
-}
-
-func (s *apiService) Subscribe(r *api.SubscribeRequest, stream api.Tigris_SubscribeServer) error {
-	_, err := s.sessions.Execute(stream.Context(), s.runnerFactory.GetSubscribeQueryRunner(r, stream), &ReqOptions{
-		txCtx: api.GetTransaction(stream.Context()),
-	})
-	if err != nil {
-		return err
-	}
-
-	return nil
 }

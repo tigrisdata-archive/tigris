@@ -24,7 +24,7 @@
 {{- end}}
   {{- if .Description}}
   // {{.NameJSON}} {{.Description}}{{end}}
-  {{$v.NameJSON}}{{if $v.AutoGenerate}}?{{end}}: {{ $tsType }};
+  {{$v.NameJSON}}{{if $v.AutoGenerate}}?{{end}}: {{if $v.IsArray}}Array<{{end}}{{ $tsType }}{{if $v.IsArray}}>{{end}};
 {{- end}}
 }
 

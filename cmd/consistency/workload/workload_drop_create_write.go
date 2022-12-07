@@ -34,9 +34,9 @@ type DropCreateWriteWorkload struct {
 }
 
 func (w *DropCreateWriteWorkload) Setup(client driver.Driver) error {
-	err := client.DropDatabase(context.TODO(), w.Database)
+	_, err := client.DeleteProject(context.TODO(), w.Database)
 	if err != nil {
-		log.Err(err).Msgf("dropped database failed, ignoring error '%s'", w.Database)
+		log.Err(err).Msgf("delete project failed, ignoring error '%s'", w.Database)
 	}
 	return nil
 }
@@ -44,9 +44,9 @@ func (w *DropCreateWriteWorkload) Setup(client driver.Driver) error {
 func (w *DropCreateWriteWorkload) Start(client driver.Driver) (int64, error) {
 	go func() {
 		for i := 0; i < 32; i++ {
-			err := client.CreateDatabase(context.TODO(), w.Database)
+			_, err := client.CreateProject(context.TODO(), w.Database)
 			if err != nil {
-				log.Err(err).Msgf("created database failed ignoring error '%s'", w.Database)
+				log.Err(err).Msgf("create project failed ignoring error '%s'", w.Database)
 			}
 			db := client.UseDatabase(w.Database)
 			if err = db.CreateOrUpdateCollection(context.TODO(), w.Collections[0], w.Schemas[0]); err != nil {

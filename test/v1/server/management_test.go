@@ -93,6 +93,27 @@ func TestListNamespaces(t *testing.T) {
 	assert.True(t, found)
 }
 
+func TestApplications(t *testing.T) {
+	errMsg := "{\"error\":{\"code\":\"INTERNAL\",\"message\":\"authentication not enabled on this server\"}}"
+
+	e := adminExpect(t)
+	for _, api := range []string{
+		"/v1/management/applications/list",
+		"/v1/management/applications/create",
+		"/v1/management/applications/update",
+		"/v1/management/applications/delete",
+		"/v1/management/applications/rotate",
+	} {
+		if strings.Contains(api, "delete") {
+			e.DELETE(api).Expect().Status(http.StatusInternalServerError).
+				Body().Equal(errMsg)
+		} else {
+			e.POST(api).Expect().Status(http.StatusInternalServerError).
+				Body().Equal(errMsg)
+		}
+	}
+}
+
 func createNamespace(t *testing.T, name string) *httpexpect.Response {
 	e := adminExpect(t)
 	return e.POST(getCreateNamespaceURL()).

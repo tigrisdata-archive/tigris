@@ -122,15 +122,15 @@ var testCreateSchema = Map{
 
 func setupTests(t *testing.T) (string, string) {
 	db := fmt.Sprintf("integration_%s", t.Name())
-	dropDatabase(t, db)
-	createDatabase(t, db).Status(http.StatusOK)
+	deleteProject(t, db)
+	createProject(t, db).Status(http.StatusOK)
 	createCollection(t, db, testCollection, testCreateSchema).Status(http.StatusOK)
 
 	return db, testCollection
 }
 
 func cleanupTests(t *testing.T, db string) {
-	dropDatabase(t, db).Status(http.StatusOK)
+	deleteProject(t, db).Status(http.StatusOK)
 }
 
 func expectLow(s httpexpect.LoggerReporter, url string) *httpexpect.Expect {
@@ -145,11 +145,11 @@ func expect(s httpexpect.LoggerReporter) *httpexpect.Expect {
 }
 
 func getDocumentURL(databaseName, collectionName string, methodName string) string {
-	return fmt.Sprintf("/v1/databases/%s/collections/%s/documents/%s", databaseName, collectionName, methodName)
+	return fmt.Sprintf("/v1/projects/%s/database/collections/%s/documents/%s", databaseName, collectionName, methodName)
 }
 
 func getCollectionURL(databaseName, collectionName string, methodName string) string {
-	return fmt.Sprintf("/v1/databases/%s/collections/%s/%s", databaseName, collectionName, methodName)
+	return fmt.Sprintf("/v1/projects/%s/database/collections/%s/%s", databaseName, collectionName, methodName)
 }
 
 func createCollection(t *testing.T, database string, collection string, schema map[string]interface{}) *httpexpect.Response {
@@ -160,8 +160,8 @@ func createCollection(t *testing.T, database string, collection string, schema m
 }
 
 func createTestCollection(t *testing.T, database string, collection string, schema map[string]interface{}) {
-	dropDatabase(t, database)
-	createDatabase(t, database)
+	deleteProject(t, database)
+	createProject(t, database)
 	dropCollection(t, database, collection)
 	createCollection(t, database, collection, schema).Status(http.StatusOK)
 }

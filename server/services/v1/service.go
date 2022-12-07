@@ -15,11 +15,11 @@
 package v1
 
 import (
-	"github.com/auth0/go-auth0/management"
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/services/v1/auth"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
@@ -43,36 +43,16 @@ func GetRegisteredServices(kvStore kv.KeyValueStore, searchStore search.Store, t
 	v1Services = append(v1Services, newHealthService(txMgr))
 
 	userStore := metadata.NewUserStore(&metadata.DefaultMDNameRegistry{})
-	namespaceStore := metadata.NewNamespaceStore(&metadata.DefaultMDNameRegistry{})
 
-	authProvider := getAuthProvider(userStore, txMgr)
+	authProvider := auth.NewProvider(userStore, txMgr)
 
 	if config.DefaultConfig.Auth.EnableOauth {
 		v1Services = append(v1Services, newAuthService(authProvider))
 	}
 	if config.DefaultConfig.Management.Enabled {
-		v1Services = append(v1Services, newManagementService(authProvider, txMgr, tenantMgr, userStore, namespaceStore))
+		v1Services = append(v1Services, newManagementService(authProvider, txMgr, tenantMgr, userStore, tenantMgr.GetNamespaceStore()))
 	}
 
 	v1Services = append(v1Services, newObservabilityService(tenantMgr))
 	return v1Services
-}
-
-func getAuthProvider(userstore *metadata.UserSubspace, txMgr *transaction.Manager) AuthProvider {
-	var authProvider AuthProvider
-	if config.DefaultConfig.Auth.OAuthProvider == auth0 {
-		m, err := management.New(config.DefaultConfig.Auth.ExternalDomain, management.WithClientCredentials(config.DefaultConfig.Auth.ManagementClientId, config.DefaultConfig.Auth.ManagementClientSecret))
-		if err != nil {
-			if config.DefaultConfig.Auth.EnableOauth {
-				panic("Unable to configure external oauth provider")
-			}
-		}
-		authProvider = &Auth0{
-			AuthConfig: config.DefaultConfig.Auth,
-			Management: m,
-			userStore:  userstore,
-			txMgr:      txMgr,
-		}
-	}
-	return authProvider
 }

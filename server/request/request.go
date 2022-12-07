@@ -29,6 +29,7 @@ import (
 	"github.com/tigrisdata/tigris/server/defaults"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/tigrisdata/tigris/server/types"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc"
 )
@@ -40,13 +41,8 @@ var (
 
 type MetadataCtxKey struct{}
 
-type AccessToken struct {
-	Namespace string
-	Sub       string
-}
-
 type Metadata struct {
-	accessToken *AccessToken
+	accessToken *types.AccessToken
 	serviceName string
 	methodInfo  grpc.MethodInfo
 	// The namespace id (uuid) of the request. The metadata extractor sets it when the request is not yet
@@ -55,20 +51,29 @@ type Metadata struct {
 	// human readable namespace name
 	namespaceName string
 	IsHuman       bool
+
+	// this will hold the information about the db and collection under target
+	// this will be set to empty string for requests which are not db/collection specific
+	db         string
+	collection string
+
+	// Current user/application
+	Sub string
 }
 
 func Init(tg metadata.TenantGetter) {
 	tenantGetter = tg
 }
 
-func NewRequestEndpointMetadata(ctx context.Context, serviceName string, methodInfo grpc.MethodInfo) Metadata {
-	ns, utype := GetMetadataFromHeader(ctx)
-	md := Metadata{serviceName: serviceName, methodInfo: methodInfo, IsHuman: utype}
+func NewRequestEndpointMetadata(ctx context.Context, serviceName string, methodInfo grpc.MethodInfo, db string, coll string) Metadata {
+	ns, utype, sub := GetMetadataFromHeader(ctx)
+	md := Metadata{serviceName: serviceName, methodInfo: methodInfo, IsHuman: utype, Sub: sub}
 	md.SetNamespace(ctx, ns)
 	return md
 }
 
-func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod string, methodType string) Metadata {
+func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod string, methodType string, req interface{}) Metadata {
+	db, coll := GetDbAndColl(req)
 	var methodInfo grpc.MethodInfo
 	methodList := strings.Split(fullMethod, "/")
 	svcName := methodList[1]
@@ -86,10 +91,26 @@ func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod strin
 			IsServerStream: true,
 		}
 	}
-	return NewRequestEndpointMetadata(ctx, svcName, methodInfo)
+	return NewRequestEndpointMetadata(ctx, svcName, methodInfo, db, coll)
 }
 
-func (m *Metadata) SetAccessToken(token *AccessToken) {
+func (m *Metadata) SetDb(db string) {
+	m.db = db
+}
+
+func (m *Metadata) SetCollection(collection string) {
+	m.collection = collection
+}
+
+func (m *Metadata) GetDb() string {
+	return m.db
+}
+
+func (m *Metadata) GetCollection() string {
+	return m.collection
+}
+
+func (m *Metadata) SetAccessToken(token *types.AccessToken) {
 	m.accessToken = token
 }
 
@@ -134,6 +155,20 @@ func (m *Metadata) GetInitialTags() map[string]string {
 		"db":                 defaults.UnknownValue,
 		"collection":         defaults.UnknownValue,
 	}
+}
+
+func GetDbAndColl(req interface{}) (string, string) {
+	db := ""
+	coll := ""
+	if req != nil {
+		if rc, ok := req.(api.RequestWithDbAndCollection); ok {
+			db = rc.GetDb()
+			coll = rc.GetCollection()
+		} else if r, ok := req.(api.RequestWithDb); ok {
+			db = r.GetDb()
+		}
+	}
+	return db, coll
 }
 
 func (m *Metadata) GetFullMethod() string {
@@ -188,7 +223,7 @@ func GetRequestMetadataFromContext(ctx context.Context) (*Metadata, error) {
 	return nil, errors.NotFound("Metadata not found")
 }
 
-func GetAccessToken(ctx context.Context) (*AccessToken, error) {
+func GetAccessToken(ctx context.Context) (*types.AccessToken, error) {
 	// read token
 	if value := ctx.Value(MetadataCtxKey{}); value != nil {
 		if requestMetadata, ok := value.(*Metadata); ok && requestMetadata.accessToken != nil {
@@ -244,37 +279,42 @@ func getTokenFromHeader(header string) (string, error) {
 }
 
 // extracts namespace and type of the user from the token.
-func getMetadataFromToken(token string) (string, bool) {
+func getMetadataFromToken(token string) (string, bool, string) {
 	tokenParts := strings.SplitN(token, ".", 3)
 	if len(tokenParts) < 3 {
 		log.Debug().Msg("Could not split the token into its parts")
-		return defaults.UnknownValue, false
+		return defaults.UnknownValue, false, ""
 	}
 	decodedToken, err := base64.RawStdEncoding.DecodeString(tokenParts[1])
 	if err != nil {
 		log.Debug().Err(err).Msg("Could not base64 decode token")
-		return defaults.UnknownValue, false
+		return defaults.UnknownValue, false, ""
 	}
 	namespace, err := jsonparser.GetString(decodedToken, "https://tigris/n", "code")
 	if err != nil {
-		return defaults.UnknownValue, false
+		return defaults.UnknownValue, false, ""
 	}
 	user, _, _, err := jsonparser.Get(decodedToken, "https://tigris/u")
 	if err != nil {
 		// no-op
 		log.Trace().Err(err).Msg("Failed to read https://tigris/u from access token")
 	}
-	return namespace, len(user) > 0
+	sub, err := jsonparser.GetString(decodedToken, "sub")
+	if err != nil {
+		log.Trace().Err(err).Msg("Failed to read sub from access token")
+		return defaults.UnknownValue, false, ""
+	}
+	return namespace, len(user) > 0, sub
 }
 
-func GetMetadataFromHeader(ctx context.Context) (string, bool) {
+func GetMetadataFromHeader(ctx context.Context) (string, bool, string) {
 	if !config.DefaultConfig.Auth.EnableNamespaceIsolation {
-		return defaults.DefaultNamespaceName, false
+		return defaults.DefaultNamespaceName, false, ""
 	}
 	header := api.GetHeader(ctx, "authorization")
 	token, err := getTokenFromHeader(header)
 	if err != nil {
-		return defaults.DefaultNamespaceName, false
+		return defaults.DefaultNamespaceName, false, ""
 	}
 
 	return getMetadataFromToken(token)

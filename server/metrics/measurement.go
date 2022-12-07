@@ -55,6 +55,7 @@ type Measurement struct {
 	stopped      bool
 	startedAt    time.Time
 	stoppedAt    time.Time
+	dbCollTags   map[string]string
 }
 
 type MeasurementCtxKey struct{}
@@ -90,6 +91,16 @@ func (m *Measurement) CountErrorForScope(scope tally.Scope, tags map[string]stri
 
 func (m *Measurement) countError(scope tally.Scope, tags map[string]string) {
 	scope.Tagged(tags).Counter("error").Inc(1)
+}
+
+func (m *Measurement) AddDbCollTags(db string, coll string) {
+	// For stream requests we will add the tags once based on the flag rather than for every result document
+	m.dbCollTags = GetDbCollTags(db, coll)
+	m.RecursiveAddTags(m.dbCollTags)
+}
+
+func (m *Measurement) GetDBCollTags() map[string]string {
+	return m.dbCollTags
 }
 
 func (m *Measurement) GetServiceName() string {

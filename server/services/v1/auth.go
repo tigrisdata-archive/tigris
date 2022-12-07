@@ -24,31 +24,31 @@ import (
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/services/v1/auth"
 	"google.golang.org/grpc"
 )
 
 const (
 	authPattern = "/" + version + "/auth/*"
-	auth0       = "auth0"
 )
 
 type authService struct {
 	api.UnimplementedAuthServer
-	AuthProvider
+	auth.Provider
 }
 
-func newAuthService(authProvider AuthProvider) *authService {
+func newAuthService(authProvider auth.Provider) *authService {
 	if authProvider == nil {
-		log.Error().Str("AuthProvider", config.DefaultConfig.Auth.OAuthProvider).Msg("Unable to configure external oauth provider")
+		log.Error().Str("Provider", config.DefaultConfig.Auth.OAuthProvider).Msg("Unable to configure external oauth provider")
 		panic("Unable to configure external oauth provider")
 	}
 	return &authService{
-		AuthProvider: authProvider,
+		Provider: authProvider,
 	}
 }
 
 func (a *authService) GetAccessToken(ctx context.Context, req *api.GetAccessTokenRequest) (*api.GetAccessTokenResponse, error) {
-	return a.AuthProvider.GetAccessToken(ctx, req)
+	return a.Provider.GetAccessToken(ctx, req)
 }
 
 func (a *authService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {

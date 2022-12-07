@@ -97,25 +97,17 @@ func getTagsForError(err error, source string) map[string]string {
 	}
 }
 
-func getDbTags(dbName string) map[string]string {
-	return map[string]string{
-		"db": dbName,
+func GetDbCollTags(db string, collection string) map[string]string {
+	if db != "" && collection != "" {
+		return map[string]string{
+			"db":         db,
+			"collection": collection,
+		}
 	}
-}
-
-func getDbCollTags(dbName string, collName string) map[string]string {
-	return map[string]string{
-		"db":         dbName,
-		"collection": collName,
-	}
-}
-
-func GetDbCollTagsForReq(req interface{}) map[string]string {
-	if rc, ok := req.(api.RequestWithDbAndCollection); ok {
-		return getDbCollTags(rc.GetDb(), rc.GetCollection())
-	}
-	if r, ok := req.(api.RequestWithDb); ok {
-		return getDbTags(r.GetDb())
+	if db != "" {
+		return map[string]string{
+			"db": db,
+		}
 	}
 	return map[string]string{}
 }

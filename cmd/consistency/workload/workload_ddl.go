@@ -40,14 +40,14 @@ func (w *DDLWorkload) Type() string {
 
 func (w *DDLWorkload) Setup(client driver.Driver) error {
 	// cleanup first
-	err := client.DropDatabase(context.TODO(), w.Database)
+	_, err := client.DeleteProject(context.TODO(), w.Database)
 	if err != nil {
-		log.Err(err).Msgf("dropped database failed, ignoring error '%s'", w.Database)
+		log.Err(err).Msgf("delete project failed, ignoring error '%s'", w.Database)
 	}
 
-	err = client.CreateDatabase(context.TODO(), w.Database)
+	_, err = client.CreateProject(context.TODO(), w.Database)
 	if err != nil {
-		log.Err(err).Msgf("created database failed ignoring error '%s'", w.Database)
+		log.Err(err).Msgf("creation of project failed ignoring error '%s'", w.Database)
 	}
 
 	return nil
@@ -105,7 +105,7 @@ func (w *DDLWorkload) Check(client driver.Driver) (bool, error) {
 
 func (w *DDLWorkload) validate(iteration int16, client driver.Driver, isCommit bool) (bool, error) {
 	var err error
-	tx, err := client.BeginTx(context.TODO(), w.Database)
+	tx, err := client.UseDatabase(w.Database).BeginTx(context.TODO())
 	if err != nil {
 		return false, errors.Wrapf(err, "begin tx failed for db '%s'", w.Database)
 	}

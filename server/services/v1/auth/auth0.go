@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v1
+package auth
 
 import (
 	"bytes"
@@ -39,39 +39,14 @@ import (
 	"golang.org/x/net/context/ctxhttp"
 )
 
-const (
-	refreshToken       = "refresh_token"
-	accessToken        = "access_token"
-	scope              = "offline_access openid"
-	createdBy          = "created_by"
-	createdAt          = "created_at"
-	updatedBy          = "updated_by"
-	updatedAt          = "updated_at"
-	tigrisNamespace    = "tigris_namespace"
-	tigrisProject      = "tigris_projects"
-	clientCredentials  = "client_credentials"
-	defaultNamespaceId = 1
-	// pagination param for list clients auth0 call.
-	perPage = 50
-)
-
-type AuthProvider interface {
-	GetAccessToken(ctx context.Context, req *api.GetAccessTokenRequest) (*api.GetAccessTokenResponse, error)
-	CreateApplication(ctx context.Context, req *api.CreateApplicationRequest) (*api.CreateApplicationResponse, error)
-	UpdateApplication(ctx context.Context, req *api.UpdateApplicationRequest) (*api.UpdateApplicationResponse, error)
-	RotateApplicationSecret(ctx context.Context, req *api.RotateApplicationSecretRequest) (*api.RotateApplicationSecretResponse, error)
-	DeleteApplication(ctx context.Context, req *api.DeleteApplicationsRequest) (*api.DeleteApplicationResponse, error)
-	ListApplications(ctx context.Context, req *api.ListApplicationsRequest) (*api.ListApplicationsResponse, error)
-}
-
-type Auth0 struct {
+type auth0 struct {
 	AuthConfig config.AuthConfig
 	Management *management.Management
 	userStore  *metadata.UserSubspace
 	txMgr      *transaction.Manager
 }
 
-func (a *Auth0) managementToTigrisErrorCode(err error) api.Code {
+func (a *auth0) managementToTigrisErrorCode(err error) api.Code {
 	managementError, ok := err.(management.Error)
 	if !ok {
 		return api.Code_INTERNAL
@@ -79,7 +54,7 @@ func (a *Auth0) managementToTigrisErrorCode(err error) api.Code {
 	return api.FromHttpCode(managementError.Status())
 }
 
-func (a *Auth0) GetAccessToken(ctx context.Context, req *api.GetAccessTokenRequest) (*api.GetAccessTokenResponse, error) {
+func (a *auth0) GetAccessToken(ctx context.Context, req *api.GetAccessTokenRequest) (*api.GetAccessTokenResponse, error) {
 	switch req.GrantType {
 	case api.GrantType_REFRESH_TOKEN:
 		return getAccessTokenUsingRefreshToken(ctx, req, a)
@@ -89,8 +64,8 @@ func (a *Auth0) GetAccessToken(ctx context.Context, req *api.GetAccessTokenReque
 	return nil, errors.InvalidArgument("Failed to GetAccessToken: reason = unsupported grant_type, it has to be one of [refresh_token, client_credentials]")
 }
 
-func (a *Auth0) CreateApplication(ctx context.Context, req *api.CreateApplicationRequest) (*api.CreateApplicationResponse, error) {
-	currentSub, err := getCurrentSub(ctx)
+func (a *auth0) CreateApplication(ctx context.Context, req *api.CreateApplicationRequest) (*api.CreateApplicationResponse, error) {
+	currentSub, err := GetCurrentSub(ctx)
 	if err != nil {
 		return nil, errors.Internal("Failed to list applications: reason = %s", err.Error())
 	}
@@ -144,14 +119,14 @@ func (a *Auth0) CreateApplication(ctx context.Context, req *api.CreateApplicatio
 		Secret:      c.GetClientSecret(),
 		CreatedBy:   c.GetClientMetadata()[createdBy],
 		CreatedAt:   readDate(c.GetClientMetadata()[createdAt]),
-		Projects:    []string{req.GetProject()},
+		Project:     req.GetProject(),
 	}
 	return &api.CreateApplicationResponse{
 		CreatedApplication: createdApp,
 	}, nil
 }
 
-func (a *Auth0) DeleteApplication(ctx context.Context, req *api.DeleteApplicationsRequest) (*api.DeleteApplicationResponse, error) {
+func (a *auth0) DeleteApplication(ctx context.Context, req *api.DeleteApplicationsRequest) (*api.DeleteApplicationResponse, error) {
 	_, _, err := validateOwnership(ctx, "delete_application", req.GetId(), a)
 	if err != nil {
 		return nil, err
@@ -175,7 +150,7 @@ func (a *Auth0) DeleteApplication(ctx context.Context, req *api.DeleteApplicatio
 	}, nil
 }
 
-func (a *Auth0) UpdateApplication(ctx context.Context, req *api.UpdateApplicationRequest) (*api.UpdateApplicationResponse, error) {
+func (a *auth0) UpdateApplication(ctx context.Context, req *api.UpdateApplicationRequest) (*api.UpdateApplicationResponse, error) {
 	client, currentSub, err := validateOwnership(ctx, "rotate_app_secret", req.GetId(), a)
 	if err != nil {
 		return nil, err
@@ -214,7 +189,7 @@ func (a *Auth0) UpdateApplication(ctx context.Context, req *api.UpdateApplicatio
 	}, nil
 }
 
-func (a *Auth0) RotateApplicationSecret(ctx context.Context, req *api.RotateApplicationSecretRequest) (*api.RotateApplicationSecretResponse, error) {
+func (a *auth0) RotateApplicationSecret(ctx context.Context, req *api.RotateApplicationSecretRequest) (*api.RotateApplicationSecretResponse, error) {
 	_, _, err := validateOwnership(ctx, "rotate_app_secret", req.GetId(), a)
 	if err != nil {
 		return nil, err
@@ -243,7 +218,7 @@ func (a *Auth0) RotateApplicationSecret(ctx context.Context, req *api.RotateAppl
 	}, nil
 }
 
-func (a *Auth0) ListApplications(ctx context.Context, req *api.ListApplicationsRequest) (*api.ListApplicationsResponse, error) {
+func (a *auth0) ListApplications(ctx context.Context, req *api.ListApplicationsRequest) (*api.ListApplicationsResponse, error) {
 	appList, err := a.Management.Client.List(
 		management.IncludeFields("client_id", "client_metadata", "client_secret", "description", "name"),
 		management.Page(0),
@@ -256,7 +231,7 @@ func (a *Auth0) ListApplications(ctx context.Context, req *api.ListApplicationsR
 	total := appList.Total
 	totalPages := int(math.Ceil(float64(total) / float64(perPage)))
 
-	currentSub, err := getCurrentSub(ctx)
+	currentSub, err := GetCurrentSub(ctx)
 	if err != nil {
 		return nil, errors.Internal("Failed to list applications: reason = %s", err.Error())
 	}
@@ -274,7 +249,7 @@ func (a *Auth0) ListApplications(ctx context.Context, req *api.ListApplicationsR
 				// for backward compatibility there will be some apps with project metadata
 				// set to csv with multiple project names
 				supportedProjects := strings.Split(client.GetClientMetadata()[tigrisProject], ",")
-				var containsProject = false
+				containsProject := false
 				for _, project := range supportedProjects {
 					if req.GetProject() == project {
 						containsProject = true
@@ -292,7 +267,7 @@ func (a *Auth0) ListApplications(ctx context.Context, req *api.ListApplicationsR
 						CreatedBy:   client.GetClientMetadata()[createdBy],
 						UpdatedAt:   readDate(client.GetClientMetadata()[updatedAt]),
 						UpdatedBy:   client.GetClientMetadata()[updatedBy],
-						Projects:    strings.Split(client.GetClientMetadata()[tigrisProject], ","),
+						Project:     client.GetClientMetadata()[tigrisProject],
 					}
 					apps = append(apps, app)
 				}
@@ -314,14 +289,14 @@ func (a *Auth0) ListApplications(ctx context.Context, req *api.ListApplicationsR
 	}, nil
 }
 
-func validateOwnership(ctx context.Context, operationName string, appId string, a *Auth0) (*management.Client, string, error) {
+func validateOwnership(ctx context.Context, operationName string, appId string, a *auth0) (*management.Client, string, error) {
 	client, err := a.Management.Client.Read(appId)
 	if err != nil {
 		return nil, "", api.Errorf(a.managementToTigrisErrorCode(err), "Failed to %s: reason = %s", operationName, err.Error())
 	}
 
 	// check ownership before rotating
-	currentSub, err := getCurrentSub(ctx)
+	currentSub, err := GetCurrentSub(ctx)
 	if err != nil {
 		return nil, "", errors.Internal("Failed to %s: reason = %s", operationName, err.Error())
 	}
@@ -331,7 +306,7 @@ func validateOwnership(ctx context.Context, operationName string, appId string, 
 	return client, currentSub, nil
 }
 
-func getCurrentSub(ctx context.Context) (string, error) {
+func GetCurrentSub(ctx context.Context) (string, error) {
 	// further filter for this particular user
 	token, err := request.GetAccessToken(ctx)
 	if err != nil {
@@ -340,7 +315,7 @@ func getCurrentSub(ctx context.Context) (string, error) {
 	return token.Sub, nil
 }
 
-func getAccessTokenUsingRefreshToken(ctx context.Context, req *api.GetAccessTokenRequest, a *Auth0) (*api.GetAccessTokenResponse, error) {
+func getAccessTokenUsingRefreshToken(ctx context.Context, req *api.GetAccessTokenRequest, a *auth0) (*api.GetAccessTokenResponse, error) {
 	data := url.Values{
 		"refresh_token": {req.RefreshToken},
 		"client_id":     {a.AuthConfig.ClientId},
@@ -367,7 +342,7 @@ func getAccessTokenUsingRefreshToken(ctx context.Context, req *api.GetAccessToke
 		}
 		return &getAccessTokenResponse, nil
 	}
-	log.Error().Msgf("Auth0 response status code=%d", resp.StatusCode)
+	log.Error().Msgf("auth0 response status code=%d", resp.StatusCode)
 	return nil, errors.Internal("Failed to get access token: reason = %s", bodyStr)
 }
 
@@ -376,7 +351,7 @@ type tokenMetadataEntry struct {
 	ExpireAt    int64 // unix second
 }
 
-func getAccessTokenUsingClientCredentials(ctx context.Context, req *api.GetAccessTokenRequest, a *Auth0) (*api.GetAccessTokenResponse, error) {
+func getAccessTokenUsingClientCredentials(ctx context.Context, req *api.GetAccessTokenRequest, a *auth0) (*api.GetAccessTokenResponse, error) {
 	// lookup the internal namespace
 	tx, err := a.txMgr.StartTx(ctx)
 	if err != nil {
@@ -450,7 +425,7 @@ func getAccessTokenUsingClientCredentials(ctx context.Context, req *api.GetAcces
 
 		return &getAccessTokenResponse, nil
 	}
-	log.Error().Msgf("Auth0 response status code=%d", resp.StatusCode)
+	log.Error().Msgf("auth0 response status code=%d", resp.StatusCode)
 	return nil, errors.Internal("Failed to get access token: reason = %s", bodyStr)
 }
 
@@ -474,7 +449,7 @@ func createAccessTokenMetadataKey(clientSecret string) string {
 	return accessToken + encodedHash
 }
 
-func deleteApplicationMetadata(ctx context.Context, namespaceId uint32, appId string, metadataKey string, a *Auth0) error {
+func deleteApplicationMetadata(ctx context.Context, namespaceId uint32, appId string, metadataKey string, a *auth0) error {
 	// delete metadata related to this app from user metadata
 	tx, err := a.txMgr.StartTx(ctx)
 	if err != nil {
@@ -496,7 +471,7 @@ func deleteApplicationMetadata(ctx context.Context, namespaceId uint32, appId st
 	return nil
 }
 
-func deleteApplication(ctx context.Context, appId string, a *Auth0) error {
+func deleteApplication(ctx context.Context, appId string, a *auth0) error {
 	tx, err := a.txMgr.StartTx(ctx)
 	if err != nil {
 		return tokenError("Failed to delete application metadata", err)
@@ -517,7 +492,7 @@ func deleteApplication(ctx context.Context, appId string, a *Auth0) error {
 	return nil
 }
 
-func insertApplicationMetadata(ctx context.Context, metadataKey string, req *api.GetAccessTokenRequest, getAccessTokenResponse *api.GetAccessTokenResponse, a *Auth0) error {
+func insertApplicationMetadata(ctx context.Context, metadataKey string, req *api.GetAccessTokenRequest, getAccessTokenResponse *api.GetAccessTokenResponse, a *auth0) error {
 	// cache it
 	tx, err := a.txMgr.StartTx(ctx)
 	if err != nil {
