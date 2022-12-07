@@ -532,7 +532,6 @@ func (x *DescribeCollectionResponse) MarshalJSON() ([]byte, error) {
 
 func (x *DescribeDatabaseResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
-		Project     string            `json:"project"`
 		Metadata    *DatabaseMetadata `json:"metadata"`
 		Collections []*collDesc       `json:"collections"`
 		Size        int64             `json:"size"`
