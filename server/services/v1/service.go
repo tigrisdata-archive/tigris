@@ -39,12 +39,12 @@ type Service interface {
 
 func GetRegisteredServices(kvStore kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) []Service {
 	var v1Services []Service
-	v1Services = append(v1Services, newApiService(kvStore, searchStore, tenantMgr, txMgr))
 	v1Services = append(v1Services, newHealthService(txMgr))
 
 	userStore := metadata.NewUserStore(&metadata.DefaultMDNameRegistry{})
 
 	authProvider := auth.NewProvider(userStore, txMgr)
+	v1Services = append(v1Services, newApiService(kvStore, searchStore, tenantMgr, txMgr, authProvider))
 
 	if config.DefaultConfig.Auth.EnableOauth {
 		v1Services = append(v1Services, newAuthService(authProvider))
