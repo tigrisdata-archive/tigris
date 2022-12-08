@@ -48,6 +48,7 @@ func getDbSizeTagKeys() []string {
 		"tigris_tenant_name",
 		"version",
 		"db",
+		"project",
 	}
 }
 
@@ -59,6 +60,7 @@ func getCollectionSizeTagKeys() []string {
 		"tigris_tenant_name",
 		"version",
 		"db",
+		"project",
 		"collection",
 	}
 }
@@ -75,6 +77,7 @@ func getDbSizeTags(namespace string, namespaceName string, dbName string) map[st
 		"tigris_tenant":      namespace,
 		"tigris_tenant_name": GetTenantNameTagValue(namespace, namespaceName),
 		"db":                 dbName,
+		"project":            dbName,
 	}
 }
 
@@ -83,6 +86,7 @@ func getCollectionSizeTags(namespace string, namespaceName string, dbName string
 		"tigris_tenant":      namespace,
 		"tigris_tenant_name": GetTenantNameTagValue(namespace, namespaceName),
 		"db":                 dbName,
+		"project":            dbName,
 		"collection":         collectionName,
 	}
 }

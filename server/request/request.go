@@ -52,9 +52,9 @@ type Metadata struct {
 	namespaceName string
 	IsHuman       bool
 
-	// this will hold the information about the db and collection under target
-	// this will be set to empty string for requests which are not db/collection specific
-	db         string
+	// this will hold the information about the project and collection under target
+	// this will be set to empty string for requests which are not project/collection specific
+	project    string
 	collection string
 
 	// Current user/application
@@ -73,7 +73,7 @@ func NewRequestEndpointMetadata(ctx context.Context, serviceName string, methodI
 }
 
 func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod string, methodType string, req interface{}) Metadata {
-	db, coll := GetDbAndColl(req)
+	project, coll := GetProjectAndColl(req)
 	var methodInfo grpc.MethodInfo
 	methodList := strings.Split(fullMethod, "/")
 	svcName := methodList[1]
@@ -91,19 +91,19 @@ func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod strin
 			IsServerStream: true,
 		}
 	}
-	return NewRequestEndpointMetadata(ctx, svcName, methodInfo, db, coll)
+	return NewRequestEndpointMetadata(ctx, svcName, methodInfo, project, coll)
 }
 
-func (m *Metadata) SetDb(db string) {
-	m.db = db
+func (m *Metadata) SetProject(project string) {
+	m.project = project
 }
 
 func (m *Metadata) SetCollection(collection string) {
 	m.collection = collection
 }
 
-func (m *Metadata) GetDb() string {
-	return m.db
+func (m *Metadata) GetProject() string {
+	return m.project
 }
 
 func (m *Metadata) GetCollection() string {
@@ -152,23 +152,23 @@ func (m *Metadata) GetInitialTags() map[string]string {
 		"tigris_tenant":      m.namespace,
 		"tigris_tenant_name": m.GetTigrisNamespaceNameTag(),
 		"env":                config.GetEnvironment(),
-		"db":                 defaults.UnknownValue,
+		"project":            defaults.UnknownValue,
 		"collection":         defaults.UnknownValue,
 	}
 }
 
-func GetDbAndColl(req interface{}) (string, string) {
-	db := ""
+func GetProjectAndColl(req interface{}) (string, string) {
+	project := ""
 	coll := ""
 	if req != nil {
-		if rc, ok := req.(api.RequestWithDbAndCollection); ok {
-			db = rc.GetDb()
+		if rc, ok := req.(api.RequestWithProjectAndCollection); ok {
+			project = rc.GetProject()
 			coll = rc.GetCollection()
-		} else if r, ok := req.(api.RequestWithDb); ok {
-			db = r.GetDb()
+		} else if r, ok := req.(api.RequestWithProject); ok {
+			project = r.GetProject()
 		}
 	}
-	return db, coll
+	return project, coll
 }
 
 func (m *Metadata) GetFullMethod() string {

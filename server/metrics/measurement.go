@@ -44,18 +44,18 @@ const (
 )
 
 type Measurement struct {
-	serviceName  string
-	resourceName string
-	spanType     string
-	tags         map[string]string
-	jaegerSpan   opentrace.Span
-	datadogSpan  ddtracer.Span
-	parent       *Measurement
-	started      bool
-	stopped      bool
-	startedAt    time.Time
-	stoppedAt    time.Time
-	dbCollTags   map[string]string
+	serviceName     string
+	resourceName    string
+	spanType        string
+	tags            map[string]string
+	jaegerSpan      opentrace.Span
+	datadogSpan     ddtracer.Span
+	parent          *Measurement
+	started         bool
+	stopped         bool
+	startedAt       time.Time
+	stoppedAt       time.Time
+	projectCollTags map[string]string
 }
 
 type MeasurementCtxKey struct{}
@@ -93,14 +93,14 @@ func (m *Measurement) countError(scope tally.Scope, tags map[string]string) {
 	scope.Tagged(tags).Counter("error").Inc(1)
 }
 
-func (m *Measurement) AddDbCollTags(db string, coll string) {
+func (m *Measurement) AddProjectCollTags(project string, coll string) {
 	// For stream requests we will add the tags once based on the flag rather than for every result document
-	m.dbCollTags = GetDbCollTags(db, coll)
-	m.RecursiveAddTags(m.dbCollTags)
+	m.projectCollTags = GetProjectCollTags(project, coll)
+	m.RecursiveAddTags(m.projectCollTags)
 }
 
-func (m *Measurement) GetDBCollTags() map[string]string {
-	return m.dbCollTags
+func (m *Measurement) GetProjectCollTags() map[string]string {
+	return m.projectCollTags
 }
 
 func (m *Measurement) GetServiceName() string {
