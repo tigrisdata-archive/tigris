@@ -32,6 +32,7 @@ func getSessionOkTagKeys() []string {
 		"tigris_tenant_name",
 		"env",
 		"db",
+		"project",
 		"collection",
 		"session_method",
 	}
@@ -44,6 +45,7 @@ func getSessionErrorTagKeys() []string {
 		"tigris_tenant_name",
 		"env",
 		"db",
+		"project",
 		"collection",
 		"error_source",
 		"error_value",

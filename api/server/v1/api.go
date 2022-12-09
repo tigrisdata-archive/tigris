@@ -28,11 +28,11 @@ type Response interface {
 	proto.Message
 }
 
-type RequestWithDb interface {
-	GetDb() string
+type RequestWithProject interface {
+	GetProject() string
 }
 
-type RequestWithDbAndCollection interface {
-	GetDb() string
+type RequestWithProjectAndCollection interface {
+	GetProject() string
 	GetCollection() string
 }
