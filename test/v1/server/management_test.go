@@ -98,11 +98,11 @@ func TestApplications(t *testing.T) {
 
 	e := adminExpect(t)
 	for _, api := range []string{
-		"/v1/management/applications/list",
-		"/v1/management/applications/create",
-		"/v1/management/applications/update",
-		"/v1/management/applications/delete",
-		"/v1/management/applications/rotate",
+		"/v1/projects/p1/applications/list",
+		"/v1/projects/p1/applications/create",
+		"/v1/projects/p1/applications/update",
+		"/v1/projects/p1/applications/delete",
+		"/v1/projects/p1/applications/rotate",
 	} {
 		if strings.Contains(api, "delete") {
 			e.DELETE(api).Expect().Status(http.StatusInternalServerError).

@@ -97,16 +97,18 @@ func getTagsForError(err error, source string) map[string]string {
 	}
 }
 
-func GetDbCollTags(db string, collection string) map[string]string {
-	if db != "" && collection != "" {
+func GetProjectCollTags(project string, collection string) map[string]string {
+	if project != "" && collection != "" {
 		return map[string]string{
-			"db":         db,
+			"project":    project,
+			"db":         project,
 			"collection": collection,
 		}
 	}
-	if db != "" {
+	if project != "" {
 		return map[string]string{
-			"db": db,
+			"project": project,
+			"db":      project,
 		}
 	}
 	return map[string]string{}

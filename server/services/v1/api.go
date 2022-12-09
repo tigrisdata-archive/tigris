@@ -31,6 +31,7 @@ import (
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/request"
+	"github.com/tigrisdata/tigris/server/services/v1/auth"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
@@ -57,16 +58,18 @@ type apiService struct {
 	runnerFactory *QueryRunnerFactory
 	versionH      *metadata.VersionHandler
 	searchStore   search.Store
+	authProvider  auth.Provider
 }
 
-func newApiService(kv kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) *apiService {
+func newApiService(kv kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager, authProvider auth.Provider) *apiService {
 	u := &apiService{
-		kvStore:     kv,
-		txMgr:       txMgr,
-		versionH:    &metadata.VersionHandler{},
-		searchStore: searchStore,
-		cdcMgr:      cdc.NewManager(),
-		tenantMgr:   tenantMgr,
+		kvStore:      kv,
+		txMgr:        txMgr,
+		versionH:     &metadata.VersionHandler{},
+		searchStore:  searchStore,
+		cdcMgr:       cdc.NewManager(),
+		tenantMgr:    tenantMgr,
+		authProvider: authProvider,
 	}
 
 	collectionsInSearch, err := u.searchStore.AllCollections(context.TODO())
@@ -422,4 +425,24 @@ func (s *apiService) DescribeDatabase(ctx context.Context, r *api.DescribeDataba
 	}
 
 	return resp.Response.(*api.DescribeDatabaseResponse), nil
+}
+
+func (s *apiService) CreateApplication(ctx context.Context, req *api.CreateApplicationRequest) (*api.CreateApplicationResponse, error) {
+	return s.authProvider.CreateApplication(ctx, req)
+}
+
+func (s *apiService) UpdateApplication(ctx context.Context, req *api.UpdateApplicationRequest) (*api.UpdateApplicationResponse, error) {
+	return s.authProvider.UpdateApplication(ctx, req)
+}
+
+func (s *apiService) DeleteApplication(ctx context.Context, req *api.DeleteApplicationsRequest) (*api.DeleteApplicationResponse, error) {
+	return s.authProvider.DeleteApplication(ctx, req)
+}
+
+func (s *apiService) ListApplications(ctx context.Context, req *api.ListApplicationsRequest) (*api.ListApplicationsResponse, error) {
+	return s.authProvider.ListApplications(ctx, req)
+}
+
+func (s *apiService) RotateApplicationSecret(ctx context.Context, req *api.RotateApplicationSecretRequest) (*api.RotateApplicationSecretResponse, error) {
+	return s.authProvider.RotateApplicationSecret(ctx, req)
 }

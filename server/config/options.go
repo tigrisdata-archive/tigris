@@ -142,7 +142,7 @@ type SessionMetricGroupConfig struct {
 type SizeMetricGroupConfig struct {
 	Enabled      bool     `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 	Namespace    bool     `mapstructure:"namespace" yaml:"namespace" json:"namespace"`
-	Db           bool     `mapstructure:"db" yaml:"db" json:"db"`
+	Project      bool     `mapstructure:"project" yaml:"project" json:"project"`
 	Collection   bool     `mapstructure:"collection" yaml:"collection" json:"collection"`
 	FilteredTags []string `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
 }
@@ -281,7 +281,7 @@ var DefaultConfig = Config{
 		Size: SizeMetricGroupConfig{
 			Enabled:      true,
 			Namespace:    true,
-			Db:           true,
+			Project:      true,
 			Collection:   true,
 			FilteredTags: nil,
 		},

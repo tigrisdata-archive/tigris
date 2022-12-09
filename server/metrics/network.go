@@ -30,6 +30,7 @@ func getNetworkTagKeys() []string {
 		"tigris_tenant_name",
 		"env",
 		"db",
+		"project",
 		"collection",
 	}
 }
