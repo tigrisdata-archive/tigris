@@ -208,6 +208,26 @@ func (s *apiService) Insert(ctx context.Context, r *api.InsertRequest) (*api.Ins
 	}, nil
 }
 
+func (s *apiService) Import(ctx context.Context, r *api.ImportRequest) (*api.ImportResponse, error) {
+	qm := metrics.WriteQueryMetrics{}
+	accessToken, _ := request.GetAccessToken(ctx)
+
+	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetImportQueryRunner(r, &qm, accessToken), &ReqOptions{
+		txCtx: api.GetTransaction(ctx),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.ImportResponse{
+		Status: resp.status,
+		Metadata: &api.ResponseMetadata{
+			CreatedAt: resp.createdAt.GetProtoTS(),
+		},
+		Keys: resp.allKeys,
+	}, nil
+}
+
 func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.ReplaceResponse, error) {
 	qm := metrics.WriteQueryMetrics{}
 	accessToken, _ := request.GetAccessToken(ctx)
