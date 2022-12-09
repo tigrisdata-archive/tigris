@@ -15,13 +15,17 @@
 package middleware
 
 import (
+	"fmt"
+
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_zerolog "github.com/grpc-ecosystem/go-grpc-middleware/providers/zerolog/v2"
 	grpc_auth "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/auth"
 	grpc_logging "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
+	pkgErrors "github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
 	tigrisconfig "github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/util"
@@ -62,7 +66,7 @@ func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerI
 		quotaStreamServerInterceptor(),
 		grpc_logging.StreamServerInterceptor(grpc_zerolog.InterceptorLogger(sampledTaggedLogger), []grpc_logging.Option{}...),
 		validatorStreamServerInterceptor(),
-		grpc_recovery.StreamServerInterceptor(),
+		grpc_recovery.StreamServerInterceptor(grpc_recovery.WithRecoveryHandler(recoveryHandler)),
 		headersStreamServerInterceptor(),
 	}...)
 	stream := middleware.ChainStreamServer(streamInterceptors...)
@@ -94,10 +98,22 @@ func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerI
 		grpc_logging.UnaryServerInterceptor(grpc_zerolog.InterceptorLogger(sampledTaggedLogger)),
 		validatorUnaryServerInterceptor(),
 		timeoutUnaryServerInterceptor(DefaultTimeout),
-		grpc_recovery.UnaryServerInterceptor(),
+		grpc_recovery.UnaryServerInterceptor(grpc_recovery.WithRecoveryHandler(recoveryHandler)),
 		headersUnaryServerInterceptor(),
 	}...)
 	unary := middleware.ChainUnaryServer(unaryInterceptors...)
 
 	return unary, stream
+}
+
+func recoveryHandler(p interface{}) error {
+	err, ok := p.(error)
+	if !ok {
+		err = fmt.Errorf("internal server error")
+	}
+
+	err = pkgErrors.WithStack(err)
+	log.Error().Stack().Err(err).Msg("panic")
+
+	return errors.Internal("Internal server error")
 }
