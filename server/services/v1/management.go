@@ -224,26 +224,6 @@ func (m *managementService) DescribeNamespaces(ctx context.Context, _ *api.Descr
 	}, nil
 }
 
-func (m *managementService) CreateApplication(ctx context.Context, req *api.CreateApplicationRequest) (*api.CreateApplicationResponse, error) {
-	return m.Provider.CreateApplication(ctx, req)
-}
-
-func (m *managementService) UpdateApplication(ctx context.Context, req *api.UpdateApplicationRequest) (*api.UpdateApplicationResponse, error) {
-	return m.Provider.UpdateApplication(ctx, req)
-}
-
-func (m *managementService) DeleteApplication(ctx context.Context, req *api.DeleteApplicationsRequest) (*api.DeleteApplicationResponse, error) {
-	return m.Provider.DeleteApplication(ctx, req)
-}
-
-func (m *managementService) ListApplications(ctx context.Context, req *api.ListApplicationsRequest) (*api.ListApplicationsResponse, error) {
-	return m.Provider.ListApplications(ctx, req)
-}
-
-func (m *managementService) RotateApplicationSecret(ctx context.Context, req *api.RotateApplicationSecretRequest) (*api.RotateApplicationSecretResponse, error) {
-	return m.Provider.RotateApplicationSecret(ctx, req)
-}
-
 func (m *managementService) GetUserMetadata(ctx context.Context, req *api.GetUserMetadataRequest) (*api.GetUserMetadataResponse, error) {
 	return m.UserMetadataProvider.GetUserMetadata(ctx, req)
 }
