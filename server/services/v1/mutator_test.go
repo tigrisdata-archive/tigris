@@ -16,13 +16,190 @@ package v1
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
+	"time"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/lib/json"
 	"github.com/tigrisdata/tigris/schema"
 )
+
+func TestMutateSetDefaults(t *testing.T) {
+	reqSchema := []byte(`{
+		"title": "t1",
+		"properties": {
+			"id": {
+				"type": "integer"
+			},
+			"double_f": {
+				"type": "number",
+				"default": 1.5
+			},
+			"created": {
+				"type": "string",
+				"format": "date-time",
+				"createdAt": true
+			},
+			"updated": {
+				"type": "string",
+				"format": "date-time",
+				"updatedAt": true
+			},
+			"arr": {
+				"type": "array",
+				"items": {
+					"type": "integer"
+				},
+				"default": [10,20,30]
+			}
+		},
+		"primary_key": ["id"]
+	}`)
+
+	schFactory, err := schema.Build("t1", reqSchema)
+	require.NoError(t, err)
+	coll := schema.NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil)
+	p := newInsertPayloadMutator(coll, time.Now().UTC().String())
+
+	cases := []struct {
+		input   []byte
+		mutated bool
+		output  []byte
+	}{
+		{
+			// created will be populated
+			[]byte(`{"double_f":2,"arr":[1,2]}`),
+			true,
+			[]byte(fmt.Sprintf(`{"double_f":2,"arr":[1,2],"created":"%s"}`, p.(*insertPayloadMutator).createdAt)),
+		},
+		{
+			// double_f will be populated
+			[]byte(`{"arr":[1,2]}`),
+			true,
+			[]byte(fmt.Sprintf(`{"double_f":1.5,"arr":[1,2],"created":"%s"}`, p.(*insertPayloadMutator).createdAt)),
+		},
+		{
+			// arr will be populated
+			[]byte(`{"double_f":1.8}`),
+			true,
+			[]byte(fmt.Sprintf(`{"double_f":1.8,"arr":[10,20,30],"created":"%s"}`, p.(*insertPayloadMutator).createdAt)),
+		},
+	}
+	for _, c := range cases {
+		doc, err := json.Decode(c.input)
+		require.NoError(t, err)
+
+		require.NoError(t, p.setDefaultsInIncomingPayload(doc))
+		require.Equal(t, c.mutated, p.isMutated())
+		actualJS, err := json.Encode(doc)
+		require.NoError(t, err)
+		require.JSONEq(t, string(c.output), string(actualJS))
+	}
+}
+
+func TestMutateSetDefaultsComplexSchema(t *testing.T) {
+	reqSchema := []byte(`{
+		"title": "t1",
+		"properties": {
+			"id": {
+				"type": "integer"
+			},
+			"int32": {
+				"type": "integer",
+				"default": 1
+			},
+			"str": {
+				"type": "string",
+				"default": "a"
+			},
+			"obj_a": {
+				"type": "object"
+			},
+			"obj_n": {
+				"type": "object",
+				"properties": {
+					"uid": { "type": "string", "default": "abc" },
+					"obj": {
+						"type": "object",
+						"properties": {
+							"int64_any": { "type": "integer", "default": 2 },
+							"str_f": { "type": "string"}
+						}
+					}
+				}
+			},
+			"arr_o": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"properties": {
+						"id": {
+							"type": "integer",
+							 "default": 3
+						},
+						"str_f": {
+							"type": "string"
+						}
+					}
+				}
+			},
+			"arr_s": {
+				"type": "array",
+				"items": {
+					"type": "integer"
+				}
+			}
+		},
+		"primary_key": ["id"]
+	}`)
+
+	schFactory, err := schema.Build("t1", reqSchema)
+	require.NoError(t, err)
+	coll := schema.NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil)
+
+	cases := []struct {
+		input   []byte
+		mutated bool
+		output  []byte
+	}{
+		{
+			// no defaults, doc has all the value pre-populated
+			[]byte(`{"obj_n":{"obj":{"str_f":"test","int64_any":20},"uid":"a"},"arr_o":[{"str_f":"t0","id":1},{"str_f":"t1","id":2},{"str_f":"t2","id":3}],"int32":10,"str":"aaa"}`),
+			false,
+			[]byte(`{"obj_n":{"obj":{"str_f":"test","int64_any":20},"uid":"a"},"arr_o":[{"str_f":"t0","id":1},{"str_f":"t1","id":2},{"str_f":"t2","id":3}],"int32":10,"str":"aaa"}`),
+		},
+		{
+			// obj_n is missing
+			[]byte(`{"arr_o":[{"str_f":"t0","id":1},{"str_f":"t1","id":2},{"str_f":"t2","id":3}]}`),
+			true,
+			[]byte(`{"obj_n":{"obj":{"int64_any":2},"uid":"abc"},"int32":1,"str":"a","arr_o":[{"str_f":"t0","id":1},{"str_f":"t1","id":2},{"str_f":"t2","id":3}]}`),
+		},
+		{
+			// arr_o is missing
+			[]byte(`{"obj_n":{"obj":{"int64_any":20},"uid":"a"}}`),
+			true,
+			[]byte(`{"obj_n":{"obj":{"int64_any":20},"uid":"a"},"int32":1,"str":"a"}`),
+		},
+		{
+			[]byte(`{"id":1,"obj_a":{"s":"a"},"obj_n":{"obj":{"str_f":"test"}},"arr_o":[{"str_f":"t0","id":1},{"str_f":"t1","id":2},{"str_f":"t2","id":3}],"arr_s":[1,2,3]}`),
+			true,
+			[]byte(`{"id":1,"obj_a":{"s":"a"},"obj_n":{"obj":{"str_f":"test","int64_any":2},"uid":"abc"},"arr_o":[{"str_f":"t0","id":1},{"str_f":"t1","id":2},{"str_f":"t2","id":3}],"arr_s":[1,2,3],"int32":1,"str":"a"}`),
+		},
+	}
+	for _, c := range cases {
+		doc, err := json.Decode(c.input)
+		require.NoError(t, err)
+
+		p := newInsertPayloadMutator(coll, time.Now().UTC().String())
+		require.NoError(t, p.setDefaultsInIncomingPayload(doc))
+		require.Equal(t, c.mutated, p.isMutated())
+		actualJS, err := json.Encode(doc)
+		require.NoError(t, err)
+		require.JSONEq(t, string(c.output), string(actualJS))
+	}
+}
 
 func TestMutatePayload(t *testing.T) {
 	reqSchema := []byte(`{
@@ -73,7 +250,7 @@ func TestMutatePayload(t *testing.T) {
 	schFactory, err := schema.Build("t1", reqSchema)
 	require.NoError(t, err)
 	coll := schema.NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil)
-	require.Equal(t, 4, len(coll.Int64FieldsPath))
+	require.Equal(t, 4, len(coll.GetInt64FieldsPath()))
 
 	cases := []struct {
 		input   []byte
@@ -129,8 +306,8 @@ func TestMutatePayload(t *testing.T) {
 		doc, err := json.Decode(c.input)
 		require.NoError(t, err)
 
-		p := newPayloadMutator(coll)
-		require.NoError(t, p.convertStringToInt64(doc))
+		p := newInsertPayloadMutator(coll, time.Now().UTC().String())
+		require.NoError(t, p.stringToInt64(doc))
 		require.Equal(t, c.mutated, p.isMutated())
 
 		actualJS, err := json.Encode(doc)
@@ -188,7 +365,7 @@ func BenchmarkStringToInteger(b *testing.B) {
 	schFactory, err := schema.Build("t1", reqSchema)
 	require.NoError(b, err)
 	coll := schema.NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil)
-	require.Equal(b, 4, len(coll.Int64FieldsPath))
+	require.Equal(b, 4, len(coll.GetInt64FieldsPath()))
 
 	data := []byte(`{"name":"fiona handbag","id":9223372036854775800,"brand":"michael kors","nested_object":{"obj": {"intField": "9223372036854775800"}},"array_items":[{"name": "test0", "id": "9223372036854775800"}, {"name": "test1", "id": 9223372036854775801}, {"name": "test2", "id": "9223372036854775802"}],"array_simple_items":[9223372036854775800, "9223372036854775801", 9223372036854775802]}`)
 	var deserializedDoc map[string]interface{}
@@ -197,7 +374,7 @@ func BenchmarkStringToInteger(b *testing.B) {
 	require.NoError(b, err)
 
 	for i := 0; i < b.N; i++ {
-		p := newPayloadMutator(coll)
-		require.NoError(b, p.convertStringToInt64(deserializedDoc))
+		p := newInsertPayloadMutator(coll, time.Now().UTC().String())
+		require.NoError(b, p.stringToInt64(deserializedDoc))
 	}
 }

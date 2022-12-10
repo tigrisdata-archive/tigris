@@ -90,6 +90,7 @@ require (
 	github.com/klauspost/compress v1.15.1 // indirect
 	github.com/kr/pretty v0.3.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
+	github.com/lucsky/cuid v1.2.1 // indirect
 	github.com/m3db/prometheus_client_golang v1.12.8 // indirect
 	github.com/m3db/prometheus_client_model v0.2.1 // indirect
 	github.com/m3db/prometheus_common v0.34.7 // indirect

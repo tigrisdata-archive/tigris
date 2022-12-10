@@ -15,6 +15,7 @@
 package schema
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -274,7 +275,10 @@ func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet contai
 
 		// set field name and try to unmarshal the value into field builder
 		builder.FieldName = string(key)
-		if err = jsoniter.Unmarshal(v, &builder); err != nil {
+
+		dec := jsoniter.NewDecoder(bytes.NewReader(v))
+		dec.UseNumber()
+		if err = dec.Decode(&builder); err != nil {
 			return errors.Internal(err.Error())
 		}
 		if builder.Type == jsonSpecArray && builder.Items == nil {

@@ -65,7 +65,7 @@ func NewTimestamp() *Timestamp {
 
 func (x *Timestamp) ToRFC3339() string {
 	goTime := time.Unix(x.Seconds, x.Nanoseconds).UTC()
-	return goTime.Format(time.RFC3339)
+	return goTime.Format(time.RFC3339Nano)
 }
 
 func (x *Timestamp) GetProtoTS() *timestamppb.Timestamp {
