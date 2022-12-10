@@ -1727,6 +1727,175 @@ func TestUpdate_SetAndUnset(t *testing.T) {
 	}
 }
 
+func TestUpdate_AtomicOperations(t *testing.T) {
+	cases := []struct {
+		userInput Map
+		expOut    []Doc
+	}{
+		{
+			Map{
+				"fields": Map{
+					"$increment": Map{
+						"int_value":    1,
+						"double_value": 1.1,
+						"added_value_double":  1, // this should not present, should be ignored
+					},
+				},
+			},
+			[]Doc{{
+				"pkey_int":     100,
+				"int_value":    3,
+				"bool_value":   true,
+				"double_value": 3.2,
+				"string_value": "simple_insert1_update",
+			}},
+		},
+		{
+			Map{
+				"fields": Map{
+					"$decrement": Map{
+						"int_value":    1,
+						"double_value": 1.1,
+					},
+				},
+			},
+			[]Doc{{
+				"pkey_int":     100,
+				"int_value":    1,
+				"bool_value":   true,
+				"double_value": 1.0,
+				"string_value": "simple_insert1_update",
+			}},
+		},
+		{
+			Map{
+				"fields": Map{
+					"$multiply": Map{
+						"int_value":    5,
+						"double_value": 2.1,
+					},
+				},
+			},
+			[]Doc{{
+				"pkey_int":     100,
+				"int_value":    10,
+				"bool_value":   true,
+				"double_value": 4.41,
+				"string_value": "simple_insert1_update",
+			}},
+		},
+		{
+			Map{
+				"fields": Map{
+					"$divide": Map{
+						"int_value":    2,
+						"double_value": 2.1,
+					},
+				},
+			},
+			[]Doc{{
+				"pkey_int":     100,
+				"int_value":    1,
+				"bool_value":   true,
+				"double_value": 1,
+				"string_value": "simple_insert1_update",
+			}},
+		},
+	}
+	for _, c := range cases {
+		testUpdateAtomicOperations(t, c.userInput, c.expOut)
+	}
+
+	testUpdateAtomicOperationsFailure(t, Map{
+		"fields": Map{
+			"$increment": Map{
+				"int_value":    1.01,
+				"double_value": 1.1,
+			},
+		}}, 400, "{\"error\":{\"code\":\"INVALID_ARGUMENT\",\"message\":\"floating operations are not allowed on integer field\"}}")
+
+	testUpdateAtomicOperationsFailure(t, Map{
+		"fields": Map{
+			"$increment": Map{
+				"not_present_field": 1,
+			},
+		}}, 400, "{\"error\":{\"code\":\"INVALID_ARGUMENT\",\"message\":\"Field `not_present_field` is not present in collection\"}}")
+}
+
+func testUpdateAtomicOperations(t *testing.T, userInput Map, expOut []Doc) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	inputDocument := []Doc{
+		{
+			"pkey_int":     100,
+			"int_value":    2,
+			"bool_value":   true,
+			"double_value": 2.1,
+			"string_value": "simple_insert1_update",
+		},
+	}
+
+	insertDocuments(t, db, coll, inputDocument, false).
+		Status(http.StatusOK)
+
+	tstart := time.Now().UTC()
+	updateByFilter(t,
+		db,
+		coll,
+		Map{
+			"filter": Map{
+				"pkey_int": 100,
+			},
+		},
+		userInput,
+		nil).Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("modified_count", 1).
+		Path("$.metadata").Object().
+		Value("updated_at").String().DateTime(time.RFC3339Nano).InRange(tstart, time.Now().UTC().Add(1*time.Second))
+
+	readAndValidate(t,
+		db,
+		coll,
+		Map{
+			"pkey_int": 100,
+		},
+		nil,
+		expOut)
+}
+
+func testUpdateAtomicOperationsFailure(t *testing.T, userInput Map, expErrorCode int, expErrorMsg string) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	inputDocument := []Doc{
+		{
+			"pkey_int":     100,
+			"int_value":    2,
+			"bool_value":   true,
+			"double_value": 2.1,
+			"string_value": "simple_insert1_update",
+		},
+	}
+
+	insertDocuments(t, db, coll, inputDocument, false).
+		Status(http.StatusOK)
+
+	rawMessage := updateByFilter(t,
+		db,
+		coll,
+		Map{
+			"filter": Map{
+				"pkey_int": 100,
+			},
+		},
+		userInput,
+		nil).Status(expErrorCode).Body().Raw()
+	require.Equal(t, expErrorMsg, rawMessage)
+}
+
 func TestDelete_BadRequest(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)

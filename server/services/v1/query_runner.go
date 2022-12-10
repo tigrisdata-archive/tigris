@@ -508,8 +508,8 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 		// MergeAndGet merge the user input with existing doc and return the merged JSON document which we need to
 		// persist back.
-		merged, er := factory.MergeAndGet(row.Data.RawData)
-		if er != nil {
+		merged, err := factory.MergeAndGet(row.Data.RawData, collection)
+		if err != nil {
 			return nil, ctx, err
 		}
 
