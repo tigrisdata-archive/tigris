@@ -223,7 +223,7 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 	allKeys := make([][]byte, 0, len(documents))
 	for _, doc := range documents {
 		// reset it back to doc
-		doc, err = runner.mutateAndValidatePayload(coll, doc)
+		doc, err = runner.mutateAndValidatePayload(coll, newInsertPayloadMutator(coll, ts.ToRFC3339()), doc)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -257,7 +257,7 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 	return ts, allKeys, err
 }
 
-func (runner *BaseQueryRunner) mutateAndValidatePayload(coll *schema.DefaultCollection, doc []byte) ([]byte, error) {
+func (runner *BaseQueryRunner) mutateAndValidatePayload(coll *schema.DefaultCollection, mutator mutator, doc []byte) ([]byte, error) {
 	deserializedDoc, err := ljson.Decode(doc)
 	if ulog.E(err) {
 		return doc, err
@@ -273,18 +273,19 @@ func (runner *BaseQueryRunner) mutateAndValidatePayload(coll *schema.DefaultColl
 		}
 	}
 
-	p := newPayloadMutator(coll)
 	// this will mutate map, so we need to serialize this map again
-	if err := p.convertStringToInt64(deserializedDoc); err != nil {
+	if err := mutator.stringToInt64(deserializedDoc); err != nil {
 		return doc, err
 	}
-
+	if err := mutator.setDefaultsInIncomingPayload(deserializedDoc); err != nil {
+		return doc, err
+	}
 	if err := coll.Validate(deserializedDoc); err != nil {
 		// schema validation failed
 		return doc, err
 	}
 
-	if p.isMutated() {
+	if mutator.isMutated() {
 		for _, n := range nulls {
 			deserializedDoc[n] = nil
 		}
@@ -602,7 +603,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	if fieldOperator, ok := factory.FieldOperators[string(update.Set)]; ok {
 		// Set operation needs schema validation as well as mutation if we need to convert numeric fields from string to int64
-		fieldOperator.Input, err = runner.mutateAndValidatePayload(collection, fieldOperator.Input)
+		fieldOperator.Input, err = runner.mutateAndValidatePayload(collection, newUpdatePayloadMutator(collection, ts.ToRFC3339()), fieldOperator.Input)
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -665,6 +666,27 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		merged, err := factory.MergeAndGet(row.Data.RawData, collection)
 		if err != nil {
 			return nil, ctx, err
+		}
+
+		if len(collection.TaggedDefaultsForUpdate()) > 0 {
+			// ToDo: revisit this path. We are deserializing here the merged payload (existing + incoming) and then
+			// we are setting the updated value if any field is tagged with @updatedAt and then we are packing
+			// it again.
+			deserializedDoc, err := ljson.Decode(merged)
+			if ulog.E(err) {
+				return nil, ctx, err
+			}
+
+			mutator := newUpdatePayloadMutator(collection, ts.ToRFC3339())
+			if err := mutator.setDefaultsInExistingPayload(deserializedDoc); err != nil {
+				return nil, ctx, err
+			}
+
+			if mutator.isMutated() {
+				if merged, err = ljson.Encode(deserializedDoc); err != nil {
+					return nil, ctx, err
+				}
+			}
 		}
 
 		newData := internal.NewTableDataWithTS(row.Data.CreatedAt, ts, merged)

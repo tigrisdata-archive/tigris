@@ -61,11 +61,14 @@ type DefaultCollection struct {
 	CollectionType CollectionType
 	// Track all the int64 paths in the collection. For example, if top level object has a int64 field then key would be
 	// obj.fieldName so that caller can easily navigate to this field.
-	Int64FieldsPath map[string]struct{}
+	int64FieldsPath map[string]struct{}
 	// PartitionFields are the fields that make up the partition key, if applicable to the collection.
 	PartitionFields []*Field
 	// This is the existing fields in search
 	FieldsInSearch []tsApi.Field
+
+	fieldsWithInsertDefaults map[string]struct{}
+	fieldsWithUpdateDefaults map[string]struct{}
 }
 
 type CollectionType string
@@ -106,23 +109,27 @@ func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionTy
 	partitionFields := BuildPartitionFields(factory.Fields)
 
 	d := &DefaultCollection{
-		Id:              id,
-		SchVer:          int32(schVer),
-		Name:            name,
-		Fields:          factory.Fields,
-		Indexes:         factory.Indexes,
-		Validator:       validator,
-		Schema:          factory.Schema,
-		Search:          buildSearchSchema(searchCollectionName, queryableFields),
-		QueryableFields: queryableFields,
-		CollectionType:  ctype,
-		Int64FieldsPath: make(map[string]struct{}),
-		PartitionFields: partitionFields,
-		FieldsInSearch:  fieldsInSearch,
+		Id:                       id,
+		SchVer:                   int32(schVer),
+		Name:                     name,
+		Fields:                   factory.Fields,
+		Indexes:                  factory.Indexes,
+		Validator:                validator,
+		Schema:                   factory.Schema,
+		Search:                   buildSearchSchema(searchCollectionName, queryableFields),
+		QueryableFields:          queryableFields,
+		CollectionType:           ctype,
+		int64FieldsPath:          make(map[string]struct{}),
+		PartitionFields:          partitionFields,
+		FieldsInSearch:           fieldsInSearch,
+		fieldsWithInsertDefaults: make(map[string]struct{}),
+		fieldsWithUpdateDefaults: make(map[string]struct{}),
 	}
 
 	// set paths for int64 fields
 	d.setInt64Fields("", d.Fields)
+	// set fieldDefaulter for default fields
+	d.setFieldsForDefaults("", d.Fields)
 
 	return d
 }
@@ -195,7 +202,31 @@ func (d *DefaultCollection) SearchCollectionName() string {
 }
 
 func (d *DefaultCollection) GetInt64FieldsPath() map[string]struct{} {
-	return d.Int64FieldsPath
+	return d.int64FieldsPath
+}
+
+func (d *DefaultCollection) TaggedDefaultsForInsert() map[string]struct{} {
+	return d.fieldsWithInsertDefaults
+}
+
+func (d *DefaultCollection) TaggedDefaultsForUpdate() map[string]struct{} {
+	return d.fieldsWithUpdateDefaults
+}
+
+func (d *DefaultCollection) setFieldsForDefaults(parent string, fields []*Field) {
+	for _, f := range fields {
+		if len(f.Fields) > 0 {
+			d.setFieldsForDefaults(buildPath(parent, f.FieldName), f.Fields)
+		}
+
+		if f.Defaulter != nil {
+			if f.Defaulter.TaggedWithUpdatedAt() {
+				d.fieldsWithUpdateDefaults[buildPath(parent, f.FieldName)] = struct{}{}
+			} else {
+				d.fieldsWithInsertDefaults[buildPath(parent, f.FieldName)] = struct{}{}
+			}
+		}
+	}
 }
 
 func (d *DefaultCollection) setInt64Fields(parent string, fields []*Field) {
@@ -205,7 +236,7 @@ func (d *DefaultCollection) setInt64Fields(parent string, fields []*Field) {
 		}
 
 		if f.DataType == Int64Type {
-			d.Int64FieldsPath[buildPath(parent, f.FieldName)] = struct{}{}
+			d.int64FieldsPath[buildPath(parent, f.FieldName)] = struct{}{}
 		}
 	}
 }
