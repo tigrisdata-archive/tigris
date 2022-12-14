@@ -28,22 +28,7 @@ import (
 	schema "github.com/tigrisdata/tigris/schema/lang"
 )
 
-const (
-	typeInteger = "integer"
-	typeString  = "string"
-	typeBoolean = "boolean"
-	typeNumber  = "number"
-	typeArray   = "array"
-	typeObject  = "object"
-)
-
 // Supported subtypes.
-const (
-	formatByte     = "byte"
-	formatDateTime = "date-time"
-	formatUUID     = "uuid"
-)
-
 var (
 	ErrIncompatibleSchema = fmt.Errorf("error incompatible schema")
 	ErrExpectedString     = fmt.Errorf("expected string type")
@@ -76,10 +61,10 @@ func translateStringType(v interface{}) (string, string, error) {
 				return "", "", err
 			}
 
-			return typeNumber, "", nil
+			return jsonSpecDouble, "", nil
 		}
 
-		return typeInteger, "", nil
+		return jsonSpecInt, "", nil
 	}
 
 	s, ok := v.(string)
@@ -88,19 +73,19 @@ func translateStringType(v interface{}) (string, string, error) {
 	}
 
 	if parseDateTime(s) {
-		return typeString, formatDateTime, nil
+		return jsonSpecString, jsonSpecFormatDateTime, nil
 	}
 
 	if _, err := uuid.Parse(s); err == nil {
-		return typeString, formatUUID, nil
+		return jsonSpecString, jsonSpecFormatUUID, nil
 	}
 
 	b := make([]byte, base64.StdEncoding.DecodedLen(len(s)))
 	if _, err := base64.StdEncoding.Decode(b, []byte(s)); err == nil {
-		return typeString, formatByte, nil
+		return jsonSpecString, jsonSpecFormatByte, nil
 	}
 
-	return typeString, "", nil
+	return jsonSpecString, "", nil
 }
 
 func translateType(v interface{}) (string, string, error) {
@@ -109,15 +94,15 @@ func translateType(v interface{}) (string, string, error) {
 	//nolint:golint,exhaustive
 	switch t.Kind() {
 	case reflect.Bool:
-		return typeBoolean, "", nil
+		return jsonSpecBool, "", nil
 	case reflect.Float64:
-		return typeNumber, "", nil
+		return jsonSpecDouble, "", nil
 	case reflect.String:
 		return translateStringType(v)
 	case reflect.Slice, reflect.Array:
-		return typeArray, "", nil
+		return jsonSpecArray, "", nil
 	case reflect.Map:
-		return typeObject, "", nil
+		return jsonSpecObject, "", nil
 	default:
 		return "", "", errors.Wrapf(ErrUnsupportedType, "name='%s' kind='%s'", t.Name(), t.Kind())
 	}
@@ -126,14 +111,14 @@ func translateType(v interface{}) (string, string, error) {
 func extendedStringType(oldType string, oldFormat string, newType string, newFormat string) (string, string, error) {
 	if newFormat == "" {
 		switch {
-		case oldFormat == formatByte:
+		case oldFormat == jsonSpecFormatByte:
 			return newType, newFormat, nil
-		case oldFormat == formatUUID:
+		case oldFormat == jsonSpecFormatUUID:
 			return newType, newFormat, nil
-		case oldFormat == formatDateTime:
+		case oldFormat == jsonSpecFormatDateTime:
 			return newType, newFormat, nil
 		}
-	} else if newFormat == formatByte && oldFormat == "" {
+	} else if newFormat == jsonSpecFormatByte && oldFormat == "" {
 		return oldType, oldFormat, nil
 	}
 
@@ -148,11 +133,11 @@ func extendedStringType(oldType string, oldFormat string, newType string, newFor
 // time -> string
 // uuid => string.
 func extendedType(oldType string, oldFormat string, newType string, newFormat string) (string, string, error) {
-	if oldType == typeInteger && newType == typeNumber {
+	if oldType == jsonSpecInt && newType == jsonSpecDouble {
 		return newType, newFormat, nil
 	}
 
-	if oldType == typeString && newType == typeString {
+	if oldType == jsonSpecString && newType == jsonSpecString {
 		if t, f, err := extendedStringType(oldType, oldFormat, newType, newFormat); err == nil {
 			return t, f, nil
 		}
@@ -172,7 +157,7 @@ func traverseObject(existingField *schema.Field, newField *schema.Field, values 
 	switch {
 	case existingField == nil:
 		newField.Fields = make(map[string]*schema.Field)
-	case existingField.Type == typeObject:
+	case existingField.Type == jsonSpecObject:
 		if existingField.Fields == nil {
 			newField.Fields = make(map[string]*schema.Field)
 		} else {
@@ -196,7 +181,7 @@ func traverseArray(existingField *schema.Field, newField *schema.Field, v any) e
 			switch {
 			case existingField == nil:
 				newField.Items = &schema.Field{Type: t, Format: format}
-			case existingField.Type == typeArray:
+			case existingField.Type == jsonSpecArray:
 				newField.Items = existingField.Items
 			default:
 				return ErrIncompatibleSchema
@@ -211,7 +196,7 @@ func traverseArray(existingField *schema.Field, newField *schema.Field, v any) e
 		newField.Items.Type = nt
 		newField.Items.Format = nf
 
-		if t == typeObject {
+		if t == jsonSpecObject {
 			values, _ := reflect.ValueOf(v).Index(i).Interface().(map[string]any)
 			if err := traverseObject(newField.Items, newField.Items, values); err != nil {
 				return err
@@ -247,7 +232,7 @@ func traverseFields(sch map[string]*schema.Field, fields map[string]interface{},
 		f := &schema.Field{Type: t, Format: format}
 
 		switch {
-		case t == typeObject:
+		case t == jsonSpecObject:
 			vm, _ := v.(map[string]any)
 			if err := traverseObject(sch[k], f, vm); err != nil {
 				return err
@@ -256,7 +241,7 @@ func traverseFields(sch map[string]*schema.Field, fields map[string]interface{},
 			if len(f.Fields) == 0 {
 				continue
 			}
-		case t == typeArray:
+		case t == jsonSpecArray:
 			// FIXME: Support multidimensional arrays
 			if reflect.ValueOf(v).Len() == 0 {
 				continue // empty array does not reflect in the schema
@@ -312,7 +297,7 @@ func docToSchema(sch *schema.Schema, name string, data []byte, pk []string, auto
 
 	// Implicit "id" primary key
 	f := sch.Fields["id"]
-	if sch.PrimaryKey == nil && f != nil && f.Format == formatUUID {
+	if sch.PrimaryKey == nil && f != nil && f.Format == jsonSpecFormatUUID {
 		f.AutoGenerate = true
 		sch.PrimaryKey = []string{"id"}
 	}

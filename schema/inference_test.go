@@ -103,8 +103,8 @@ func TestSchemaInference(t *testing.T) {
 					"array_uuid": {
 						Type: "array",
 						Items: &schema.Field{
-							Type:   typeString,
-							Format: formatUUID,
+							Type:   jsonSpecString,
+							Format: jsonSpecFormatUUID,
 						},
 					},
 				},
@@ -253,10 +253,10 @@ func TestSchemaInference(t *testing.T) {
 			}, &schema.Schema{
 				Name: "adding_fields",
 				Fields: map[string]*schema.Field{
-					"uuid_field": {Type: "string", Format: formatUUID},
+					"uuid_field": {Type: "string", Format: jsonSpecFormatUUID},
 					"int_field":  {Type: "integer"},
 					"object": {Type: "object", Fields: map[string]*schema.Field{
-						"uuid_field": {Type: "string", Format: formatUUID},
+						"uuid_field": {Type: "string", Format: jsonSpecFormatUUID},
 						"int_field":  {Type: "integer"},
 					}},
 					"array": {
@@ -264,7 +264,7 @@ func TestSchemaInference(t *testing.T) {
 						Items: &schema.Field{
 							Type: "object",
 							Fields: map[string]*schema.Field{
-								"uuid_field": {Type: "string", Format: formatUUID},
+								"uuid_field": {Type: "string", Format: jsonSpecFormatUUID},
 								"int_field":  {Type: "integer"},
 							},
 						},

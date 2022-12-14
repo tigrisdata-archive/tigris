@@ -26,8 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
-
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -3737,8 +3735,6 @@ func TestImport(t *testing.T) {
 			var resp *httpexpect.Response
 
 			if len(c.docs) > 2 {
-				spew.Dump(c.docs[:2])
-
 				resp = expect(t).POST(getDocumentURL(db, c.coll, "import")).
 					WithJSON(Map{
 						"create_collection": c.create,
@@ -3751,8 +3747,6 @@ func TestImport(t *testing.T) {
 				// Test multi batch import.
 				// Run the rest of the documents in a separate batch.
 				resp.Status(http.StatusOK)
-
-				spew.Dump(c.docs[2:])
 
 				resp = expect(t).POST(getDocumentURL(db, c.coll, "import")).
 					WithJSON(Map{
