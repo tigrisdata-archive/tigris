@@ -64,7 +64,7 @@ func (a *auth0) GetAccessToken(ctx context.Context, req *api.GetAccessTokenReque
 	return nil, errors.InvalidArgument("Failed to GetAccessToken: reason = unsupported grant_type, it has to be one of [refresh_token, client_credentials]")
 }
 
-func (a *auth0) CreateApplication(ctx context.Context, req *api.CreateApplicationRequest) (*api.CreateApplicationResponse, error) {
+func (a *auth0) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest) (*api.CreateAppKeyResponse, error) {
 	currentSub, err := GetCurrentSub(ctx)
 	if err != nil {
 		return nil, errors.Internal("Failed to list applications: reason = %s", err.Error())
@@ -112,7 +112,7 @@ func (a *auth0) CreateApplication(ctx context.Context, req *api.CreateApplicatio
 		return nil, api.Errorf(a.managementToTigrisErrorCode(err), "Failed to create application grant: reason = %s", err.Error())
 	}
 
-	createdApp := &api.Application{
+	createdApp := &api.AppKey{
 		Name:        c.GetName(),
 		Description: c.GetDescription(),
 		Id:          c.GetClientID(),
@@ -121,12 +121,12 @@ func (a *auth0) CreateApplication(ctx context.Context, req *api.CreateApplicatio
 		CreatedAt:   readDate(c.GetClientMetadata()[createdAt]),
 		Project:     req.GetProject(),
 	}
-	return &api.CreateApplicationResponse{
-		CreatedApplication: createdApp,
+	return &api.CreateAppKeyResponse{
+		CreatedAppKey: createdApp,
 	}, nil
 }
 
-func (a *auth0) DeleteApplication(ctx context.Context, req *api.DeleteApplicationsRequest) (*api.DeleteApplicationResponse, error) {
+func (a *auth0) DeleteAppKey(ctx context.Context, req *api.DeleteAppKeyRequest) (*api.DeleteAppKeyResponse, error) {
 	_, _, err := validateOwnership(ctx, "delete_application", req.GetId(), a)
 	if err != nil {
 		return nil, err
@@ -145,12 +145,12 @@ func (a *auth0) DeleteApplication(ctx context.Context, req *api.DeleteApplicatio
 		return nil, api.Errorf(a.managementToTigrisErrorCode(err), "Failed to delete application: reason = %s", err.Error())
 	}
 
-	return &api.DeleteApplicationResponse{
+	return &api.DeleteAppKeyResponse{
 		Deleted: true,
 	}, nil
 }
 
-func (a *auth0) UpdateApplication(ctx context.Context, req *api.UpdateApplicationRequest) (*api.UpdateApplicationResponse, error) {
+func (a *auth0) UpdateAppKey(ctx context.Context, req *api.UpdateAppKeyRequest) (*api.UpdateAppKeyResponse, error) {
 	client, currentSub, err := validateOwnership(ctx, "rotate_app_secret", req.GetId(), a)
 	if err != nil {
 		return nil, err
@@ -175,8 +175,8 @@ func (a *auth0) UpdateApplication(ctx context.Context, req *api.UpdateApplicatio
 	if err != nil {
 		return nil, api.Errorf(a.managementToTigrisErrorCode(err), "Failed to update application: reason = %s", err.Error())
 	}
-	return &api.UpdateApplicationResponse{
-		UpdatedApplication: &api.Application{
+	return &api.UpdateAppKeyResponse{
+		UpdatedAppKey: &api.AppKey{
 			Id:          client.GetClientID(),
 			Name:        client.GetName(),
 			Description: client.GetDescription(),
@@ -189,7 +189,7 @@ func (a *auth0) UpdateApplication(ctx context.Context, req *api.UpdateApplicatio
 	}, nil
 }
 
-func (a *auth0) RotateApplicationSecret(ctx context.Context, req *api.RotateApplicationSecretRequest) (*api.RotateApplicationSecretResponse, error) {
+func (a *auth0) RotateAppKey(ctx context.Context, req *api.RotateAppKeyRequest) (*api.RotateAppKeyResponse, error) {
 	_, _, err := validateOwnership(ctx, "rotate_app_secret", req.GetId(), a)
 	if err != nil {
 		return nil, err
@@ -206,8 +206,8 @@ func (a *auth0) RotateApplicationSecret(ctx context.Context, req *api.RotateAppl
 		return nil, api.Errorf(a.managementToTigrisErrorCode(err), "Failed to rotate application secret: reason = %s", err.Error())
 	}
 
-	return &api.RotateApplicationSecretResponse{
-		Application: &api.Application{
+	return &api.RotateAppKeyResponse{
+		AppKey: &api.AppKey{
 			Id:          updatedApp.GetClientID(),
 			Name:        updatedApp.GetName(),
 			Description: updatedApp.GetDescription(),
@@ -218,7 +218,7 @@ func (a *auth0) RotateApplicationSecret(ctx context.Context, req *api.RotateAppl
 	}, nil
 }
 
-func (a *auth0) ListApplications(ctx context.Context, req *api.ListApplicationsRequest) (*api.ListApplicationsResponse, error) {
+func (a *auth0) ListAppKeys(ctx context.Context, req *api.ListAppKeysRequest) (*api.ListAppKeysResponse, error) {
 	appList, err := a.Management.Client.List(
 		management.IncludeFields("client_id", "client_metadata", "client_secret", "description", "name"),
 		management.Page(0),
@@ -240,7 +240,7 @@ func (a *auth0) ListApplications(ctx context.Context, req *api.ListApplicationsR
 		return nil, errors.Internal("Failed to list applications: reason = %s", err.Error())
 	}
 
-	var apps []*api.Application
+	var apps []*api.AppKey
 	for pageCount := 1; pageCount <= totalPages; pageCount++ {
 		for _, client := range appList.Clients {
 			// filter for this user's apps for this tenant
@@ -258,7 +258,7 @@ func (a *auth0) ListApplications(ctx context.Context, req *api.ListApplicationsR
 
 				// if project filter is not supplied OR if this application is associated for this project.
 				if req.GetProject() == "" || containsProject {
-					app := &api.Application{
+					app := &api.AppKey{
 						Name:        client.GetName(),
 						Description: client.GetDescription(),
 						Id:          client.GetClientID(),
@@ -284,8 +284,8 @@ func (a *auth0) ListApplications(ctx context.Context, req *api.ListApplicationsR
 			return nil, api.Errorf(a.managementToTigrisErrorCode(err), "Failed to list applications: reason = %s", err.Error())
 		}
 	}
-	return &api.ListApplicationsResponse{
-		Applications: apps,
+	return &api.ListAppKeysResponse{
+		AppKeys: apps,
 	}, nil
 }
 

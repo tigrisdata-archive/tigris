@@ -98,11 +98,10 @@ func TestApplications(t *testing.T) {
 
 	e := adminExpect(t)
 	for _, api := range []string{
-		"/v1/projects/p1/applications/list",
-		"/v1/projects/p1/applications/create",
-		"/v1/projects/p1/applications/update",
-		"/v1/projects/p1/applications/delete",
-		"/v1/projects/p1/applications/rotate",
+		"/v1/projects/p1/apps/keys/create",
+		"/v1/projects/p1/apps/keys/update",
+		"/v1/projects/p1/apps/keys/delete",
+		"/v1/projects/p1/apps/keys/rotate",
 	} {
 		if strings.Contains(api, "delete") {
 			e.DELETE(api).Expect().Status(http.StatusInternalServerError).
@@ -112,6 +111,9 @@ func TestApplications(t *testing.T) {
 				Body().Equal(errMsg)
 		}
 	}
+
+	e.GET("/v1/projects/p1/apps/keys").Expect().Status(http.StatusInternalServerError).
+		Body().Equal(errMsg)
 }
 
 func createNamespace(t *testing.T, name string) *httpexpect.Response {

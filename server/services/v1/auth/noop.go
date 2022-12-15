@@ -27,22 +27,22 @@ func (noop) GetAccessToken(_ context.Context, _ *api.GetAccessTokenRequest) (*ap
 	return &api.GetAccessTokenResponse{}, nil
 }
 
-func (noop) CreateApplication(_ context.Context, _ *api.CreateApplicationRequest) (*api.CreateApplicationResponse, error) {
+func (noop) CreateAppKey(_ context.Context, _ *api.CreateAppKeyRequest) (*api.CreateAppKeyResponse, error) {
 	return nil, errors.Internal("authentication not enabled on this server")
 }
 
-func (noop) UpdateApplication(_ context.Context, _ *api.UpdateApplicationRequest) (*api.UpdateApplicationResponse, error) {
+func (noop) UpdateAppKey(_ context.Context, _ *api.UpdateAppKeyRequest) (*api.UpdateAppKeyResponse, error) {
 	return nil, errors.Internal("authentication not enabled on this server")
 }
 
-func (noop) RotateApplicationSecret(_ context.Context, _ *api.RotateApplicationSecretRequest) (*api.RotateApplicationSecretResponse, error) {
+func (noop) RotateAppKey(_ context.Context, _ *api.RotateAppKeyRequest) (*api.RotateAppKeyResponse, error) {
 	return nil, errors.Internal("authentication not enabled on this server")
 }
 
-func (noop) DeleteApplication(_ context.Context, _ *api.DeleteApplicationsRequest) (*api.DeleteApplicationResponse, error) {
+func (noop) DeleteAppKey(_ context.Context, _ *api.DeleteAppKeyRequest) (*api.DeleteAppKeyResponse, error) {
 	return nil, errors.Internal("authentication not enabled on this server")
 }
 
-func (noop) ListApplications(_ context.Context, _ *api.ListApplicationsRequest) (*api.ListApplicationsResponse, error) {
+func (noop) ListAppKeys(_ context.Context, _ *api.ListAppKeysRequest) (*api.ListAppKeysResponse, error) {
 	return nil, errors.Internal("authentication not enabled on this server")
 }

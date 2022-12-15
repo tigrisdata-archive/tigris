@@ -41,7 +41,7 @@ import (
 
 const (
 	projectPath        = "/projects"
-	projectPathPattern = projectPath + "/*"
+	projectPathPattern = projectPath + "*"
 
 	infoPath    = "/info"
 	metricsPath = "/metrics"
@@ -447,22 +447,22 @@ func (s *apiService) DescribeDatabase(ctx context.Context, r *api.DescribeDataba
 	return resp.Response.(*api.DescribeDatabaseResponse), nil
 }
 
-func (s *apiService) CreateApplication(ctx context.Context, req *api.CreateApplicationRequest) (*api.CreateApplicationResponse, error) {
-	return s.authProvider.CreateApplication(ctx, req)
+func (s *apiService) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest) (*api.CreateAppKeyResponse, error) {
+	return s.authProvider.CreateAppKey(ctx, req)
 }
 
-func (s *apiService) UpdateApplication(ctx context.Context, req *api.UpdateApplicationRequest) (*api.UpdateApplicationResponse, error) {
-	return s.authProvider.UpdateApplication(ctx, req)
+func (s *apiService) UpdateAppKey(ctx context.Context, req *api.UpdateAppKeyRequest) (*api.UpdateAppKeyResponse, error) {
+	return s.authProvider.UpdateAppKey(ctx, req)
 }
 
-func (s *apiService) DeleteApplication(ctx context.Context, req *api.DeleteApplicationsRequest) (*api.DeleteApplicationResponse, error) {
-	return s.authProvider.DeleteApplication(ctx, req)
+func (s *apiService) DeleteAppKey(ctx context.Context, req *api.DeleteAppKeyRequest) (*api.DeleteAppKeyResponse, error) {
+	return s.authProvider.DeleteAppKey(ctx, req)
 }
 
-func (s *apiService) ListApplications(ctx context.Context, req *api.ListApplicationsRequest) (*api.ListApplicationsResponse, error) {
-	return s.authProvider.ListApplications(ctx, req)
+func (s *apiService) ListAppKeys(ctx context.Context, req *api.ListAppKeysRequest) (*api.ListAppKeysResponse, error) {
+	return s.authProvider.ListAppKeys(ctx, req)
 }
 
-func (s *apiService) RotateApplicationSecret(ctx context.Context, req *api.RotateApplicationSecretRequest) (*api.RotateApplicationSecretResponse, error) {
-	return s.authProvider.RotateApplicationSecret(ctx, req)
+func (s *apiService) RotateAppKeySecret(ctx context.Context, req *api.RotateAppKeyRequest) (*api.RotateAppKeyResponse, error) {
+	return s.authProvider.RotateAppKey(ctx, req)
 }
