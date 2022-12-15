@@ -32,6 +32,7 @@ type Config struct {
 	Auth          AuthConfig      `yaml:"auth" json:"auth"`
 	Cdc           CdcConfig       `yaml:"cdc" json:"cdc"`
 	Search        SearchConfig    `yaml:"search" json:"search"`
+	Cache         CacheConfig     `yaml:"cache" json:"cache"`
 	Tracing       TracingConfig   `yaml:"tracing" json:"tracing"`
 	Metrics       MetricsConfig   `yaml:"metrics" json:"metrics"`
 	Profiling     ProfilingConfig `yaml:"profiling" json:"profiling"`
@@ -213,6 +214,10 @@ var DefaultConfig = Config{
 		ReadEnabled:  true,
 		WriteEnabled: true,
 	},
+	Cache: CacheConfig{
+		Host: "0.0.0.0",
+		Port: 6379,
+	},
 	Tracing: TracingConfig{
 		Enabled: false,
 		Datadog: DatadogTracingConfig{
@@ -353,6 +358,11 @@ type SearchConfig struct {
 	AuthKey      string `mapstructure:"auth_key" json:"auth_key" yaml:"auth_key"`
 	ReadEnabled  bool   `mapstructure:"read_enabled" yaml:"read_enabled" json:"read_enabled"`
 	WriteEnabled bool   `mapstructure:"write_enabled" yaml:"write_enabled" json:"write_enabled"`
+}
+
+type CacheConfig struct {
+	Host string `mapstructure:"host" json:"host" yaml:"host"`
+	Port int16  `mapstructure:"port" json:"port" yaml:"port"`
 }
 
 type LimitsConfig struct {

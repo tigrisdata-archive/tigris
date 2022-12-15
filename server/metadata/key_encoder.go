@@ -16,12 +16,20 @@ package metadata
 
 import (
 	"bytes"
+	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/schema"
 )
+
+type CacheEncoder interface {
+	EncodeCacheTableName(tenantId uint32, projId uint32, name string) (string, error)
+	DecodeCacheTableName(stream string) (uint32, uint32, string, bool)
+}
 
 // Encoder is used to encode/decode values of the Key.
 type Encoder interface {
@@ -138,4 +146,19 @@ func (d *DictKeyEncoder) validPrefix(tableName []byte) bool {
 
 func (d *DictKeyEncoder) DecodeIndexName(indexName []byte) uint32 {
 	return ByteToUInt32(indexName)
+}
+
+func (d *DictKeyEncoder) EncodeCacheTableName(tenantId uint32, projId uint32, name string) (string, error) {
+	return fmt.Sprintf("%s:%d:%d:%s", internal.CacheKeyPrefix, tenantId, projId, name), nil
+}
+
+func (d *DictKeyEncoder) DecodeCacheTableName(name string) (uint32, uint32, string, bool) {
+	if !strings.HasPrefix(name, internal.CacheKeyPrefix) {
+		return 0, 0, "", false
+	}
+	allParts := strings.Split(name, ":")
+	nsId, _ := strconv.ParseInt(allParts[1], 10, 64)
+	pid, _ := strconv.ParseInt(allParts[2], 10, 64)
+
+	return uint32(nsId), uint32(pid), allParts[2], true
 }
