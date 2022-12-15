@@ -16,7 +16,7 @@ set -ex
 
 # Settings
 FDB_VERSION=7.1.7
-PROTO_VERSION=3.15.8
+PROTO_VERSION=21.9
 PROTO_RELEASES="https://github.com/protocolbuffers/protobuf/releases"
 
 ### Prereqs checks ###

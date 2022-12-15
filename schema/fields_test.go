@@ -22,6 +22,8 @@ import (
 	"github.com/tigrisdata/tigris/errors"
 )
 
+var boolTrue = true
+
 func TestFieldBuilder_Build(t *testing.T) {
 	t.Run("test convert json to internal types", func(t *testing.T) {
 		require.Equal(t, Int64Type, ToFieldType("integer", "", ""))

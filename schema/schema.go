@@ -81,8 +81,6 @@ const (
 	DefaultIndexingSchemaVersion = "v1"
 )
 
-var boolTrue = true
-
 type JSONSchema struct {
 	Name            string              `json:"title,omitempty"`
 	Description     string              `json:"description,omitempty"`
