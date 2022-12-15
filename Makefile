@@ -58,6 +58,9 @@ local_test: generate lint
 run:
 	$(DOCKER_COMPOSE) up --build --detach tigris_server2
 
+logs:
+	$(DOCKER_COMPOSE) logs
+
 local_run: server
 	$(DOCKER_COMPOSE) up --no-build --detach tigris_search tigris_db2
 	fdbcli -C ./test/config/fdb.cluster --exec "configure new single memory" || true

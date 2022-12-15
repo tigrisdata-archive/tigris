@@ -21,7 +21,9 @@ import (
 	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/lib/json"
+	"github.com/tigrisdata/tigris/schema"
 )
 
 func TestMergeAndGet(t *testing.T) {
@@ -68,7 +70,7 @@ func TestMergeAndGet(t *testing.T) {
 		f, err := BuildFieldOperators(reqInput)
 		require.NoError(t, err)
 
-		actualOut, err := f.MergeAndGet(c.existingDoc)
+		actualOut, err := f.MergeAndGet(c.existingDoc, testCollection(t))
 		require.NoError(t, err)
 		require.Equal(t, c.outputDoc, actualOut, fmt.Sprintf("exp '%s' actual '%s'", string(c.outputDoc), string(actualOut)))
 	}
@@ -118,9 +120,84 @@ func TestMergeAndGetWithUnset(t *testing.T) {
 		f, err := BuildFieldOperators(reqInput)
 		require.NoError(t, err)
 
-		actualOut, err := f.MergeAndGet(c.existingDoc)
+		actualOut, err := f.MergeAndGet(c.existingDoc, testCollection(t))
 		require.NoError(t, err)
 		require.Equal(t, c.outputDoc, actualOut, fmt.Sprintf("exp '%s' actual '%s'", string(c.outputDoc), string(actualOut)))
+	}
+}
+
+func TestMergeAndGetAtomic(t *testing.T) {
+	cases := []struct {
+		inputDoc    jsoniter.RawMessage
+		existingDoc jsoniter.RawMessage
+		outputDoc   jsoniter.RawMessage
+		apply       FieldOPType
+	}{
+		{
+			[]byte(`{"f_32": 10, "f_num": 2.12, "f_obj.f_64": -1}`),
+			[]byte(`{"f_32": 1, "f_str": "foo", "f_num": 1.01, "f_obj": {"f_64": 22}}`),
+			[]byte(`{"f_32": 11, "f_str": "foo", "f_num": 3.13, "f_obj": {"f_64": 21}}`),
+			Increment,
+		}, {
+			[]byte(`{"f_32": 1, "f_obj.f_64": -1}`),
+			[]byte(`{"f_obj": {"f_str": "hello"}}`),
+			[]byte(`{"f_obj": {"f_str": "hello"}}`),
+			Increment,
+		}, {
+			[]byte(`{"f_32": 1, "f_num": 1}`),
+			[]byte(`{"f_32": 1, "f_num": 2.1}`),
+			[]byte(`{"f_32": 0, "f_num": 1.1}`),
+			Decrement,
+		}, {
+			[]byte(`{"f_32": 4, "f_num": -2.01}`),
+			[]byte(`{"f_32": 2, "f_num": 1.01}`),
+			[]byte(`{"f_32": 8, "f_num": -2.0301}`),
+			Multiply,
+		}, {
+			[]byte(`{"f_32": 4, "f_num": 4}`),
+			[]byte(`{"f_32": 2, "f_num": 2}`),
+			[]byte(`{"f_32": 0, "f_num": 0.50}`),
+			Divide,
+		},
+	}
+	for _, c := range cases {
+		reqInput := []byte(fmt.Sprintf(`{"%s": %s}`, c.apply, c.inputDoc))
+		f, err := BuildFieldOperators(reqInput)
+		require.NoError(t, err)
+
+		actualOut, err := f.MergeAndGet(c.existingDoc, testCollection(t))
+		require.NoError(t, err)
+		require.JSONEq(t, string(c.outputDoc), string(actualOut), fmt.Sprintf("exp '%s' actual '%s'", string(c.outputDoc), string(actualOut)))
+	}
+}
+
+func TestMergeAndGetAtomicErrors(t *testing.T) {
+	cases := []struct {
+		inputDoc    jsoniter.RawMessage
+		existingDoc jsoniter.RawMessage
+		error       error
+		apply       FieldOPType
+	}{
+		{
+			[]byte(`{"f_32": 10.01}`),
+			[]byte(`{"f_32": 1, "f_str": "foo", "f_num": 1.01, "f_obj": {"f_64": 22}}`),
+			errors.InvalidArgument("floating operations are not allowed on integer field"),
+			Increment,
+		}, {
+			[]byte(`{"f_32": 0}`),
+			[]byte(`{"f_32": 1, "f_str": "foo", "f_num": 1.01, "f_obj": {"f_64": 22}}`),
+			errors.InvalidArgument("division by 0 is not allowed"),
+			Divide,
+		},
+	}
+	for _, c := range cases {
+		reqInput := []byte(fmt.Sprintf(`{"%s": %s}`, c.apply, c.inputDoc))
+		f, err := BuildFieldOperators(reqInput)
+		require.NoError(t, err)
+
+		actualOut, err := f.MergeAndGet(c.existingDoc, testCollection(t))
+		require.Equal(t, c.error, err)
+		require.Nil(t, actualOut)
 	}
 }
 
@@ -160,7 +237,7 @@ func TestMergeAndGet_MarshalInput(t *testing.T) {
 		require.NoError(t, err)
 		existingDoc, err := jsoniter.Marshal(c.existingDoc)
 		require.NoError(t, err)
-		actualOut, err := f.MergeAndGet(existingDoc)
+		actualOut, err := f.MergeAndGet(existingDoc, testCollection(t))
 		require.NoError(t, err)
 		require.JSONEqf(t, string(c.outputDoc), string(actualOut), fmt.Sprintf("exp '%s' actual '%s'", string(c.outputDoc), string(actualOut)))
 	}
@@ -244,4 +321,52 @@ func (factory *FieldOperatorFactory) testSetNoDeserialization(input jsoniter.Raw
 	}
 
 	return nil
+}
+
+func testCollection(t *testing.T) *schema.DefaultCollection {
+	reqSchema := []byte(`{
+	"title": "test_update",
+	"properties": {
+		"id": {
+			"type": "integer"
+		},
+		"f_32": {
+			"type": "integer",
+			"format": "int32"
+		},
+		"f_64": {
+			"type": "integer"
+		},
+		"f_str": {
+			"type": "string",
+			"maxLength": 100
+		},
+		"f_num": {
+			"type": "number"
+		},
+		"f_arr": {
+			"type": "array",
+			"items": {
+				"type": "integer"
+			}
+		},
+		"f_obj": {
+			"type": "object",
+			"properties": {
+				"f_str": {
+					"type": "string"
+				},
+				"f_64": {
+					"type": "integer"
+				}
+			}
+		}
+	},
+	"primary_key": ["id"]
+}`)
+
+	schFactory, err := schema.Build("test_update", reqSchema)
+	require.NoError(t, err)
+
+	return schema.NewDefaultCollection("test_update", 1, 1, schFactory.CollectionType, schFactory, "test_update", nil)
 }

@@ -457,13 +457,13 @@ func TestCollection_Int64(t *testing.T) {
 	schFactory, err := Build("t1", reqSchema)
 	require.NoError(t, err)
 	coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil)
-	require.Equal(t, 4, len(coll.Int64FieldsPath))
-	_, ok := coll.Int64FieldsPath["id"]
+	require.Equal(t, 4, len(coll.int64FieldsPath))
+	_, ok := coll.int64FieldsPath["id"]
 	require.True(t, ok)
-	_, ok = coll.Int64FieldsPath["nested_object.obj.intField"]
+	_, ok = coll.int64FieldsPath["nested_object.obj.intField"]
 	require.True(t, ok)
-	_, ok = coll.Int64FieldsPath["array_items.id"]
+	_, ok = coll.int64FieldsPath["array_items.id"]
 	require.True(t, ok)
-	_, ok = coll.Int64FieldsPath["array_simple_items"]
+	_, ok = coll.int64FieldsPath["array_simple_items"]
 	require.True(t, ok)
 }
