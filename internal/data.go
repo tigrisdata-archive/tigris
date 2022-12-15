@@ -27,6 +27,7 @@ import (
 var (
 	UserTableKeyPrefix = []byte("data")
 	PartitionKeyPrefix = []byte("part")
+	CacheKeyPrefix     = "cache"
 )
 
 var bh codec.BincHandle
@@ -39,6 +40,8 @@ type DataType byte
 const (
 	Unknown DataType = iota
 	TableDataType
+	CacheDataType
+	StreamDataType
 )
 
 const (
@@ -125,9 +128,13 @@ func (x *TableData) UpdatedToProtoTS() *timestamppb.Timestamp {
 // Encode is used to encode data to the raw bytes which is used to store in storage as value. The first byte is storing
 // the type corresponding to this Data. This is important and used by the decoder later to decode back.
 func Encode(data *TableData) ([]byte, error) {
+	return encodeInternal(data, TableDataType)
+}
+
+func encodeInternal(data interface{}, typ DataType) ([]byte, error) {
 	var buf bytes.Buffer
 	// this is added so that we can evolve the DataTypes and have more dataTypes in future
-	err := buf.WriteByte(byte(TableDataType))
+	err := buf.WriteByte(byte(typ))
 	if err != nil {
 		return nil, err
 	}
