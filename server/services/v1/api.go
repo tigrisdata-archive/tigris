@@ -415,6 +415,13 @@ func (s *apiService) DeleteProject(ctx context.Context, r *api.DeleteProjectRequ
 		return nil, err
 	}
 
+	// delete app-keys associated with project
+	if config.DefaultConfig.Auth.Enabled {
+		err := s.authProvider.DeleteAppKeys(ctx, r.GetProject())
+		if err != nil {
+			return nil, err
+		}
+	}
 	return &api.DeleteProjectResponse{
 		Status:  resp.status,
 		Message: "project deleted successfully",

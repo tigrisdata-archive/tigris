@@ -289,6 +289,29 @@ func (a *auth0) ListAppKeys(ctx context.Context, req *api.ListAppKeysRequest) (*
 	}, nil
 }
 
+func (a *auth0) DeleteAppKeys(ctx context.Context, project string) error {
+	listKeysResp, err := a.ListAppKeys(ctx, &api.ListAppKeysRequest{
+		Project: project,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	for _, key := range listKeysResp.GetAppKeys() {
+		// double check - don't delete historical keys which are global for all projects
+		if key.Project == project {
+			_, err := a.DeleteAppKey(ctx, &api.DeleteAppKeyRequest{Project: project, Id: key.Id})
+			if err != nil {
+				log.Warn().Str("keyId", key.Id).Str("project", project).Err(err).Msg("Failed to delete appkey associated with project: %s and key id:")
+				return errors.Internal("Failed to delete appKey associated with project.")
+			}
+		}
+	}
+
+	return nil
+}
+
 func validateOwnership(ctx context.Context, operationName string, appId string, a *auth0) (*management.Client, string, error) {
 	client, err := a.Management.Client.Read(appId)
 	if err != nil {

@@ -46,3 +46,7 @@ func (noop) DeleteAppKey(_ context.Context, _ *api.DeleteAppKeyRequest) (*api.De
 func (noop) ListAppKeys(_ context.Context, _ *api.ListAppKeysRequest) (*api.ListAppKeysResponse, error) {
 	return nil, errors.Internal("authentication not enabled on this server")
 }
+
+func (noop) DeleteAppKeys(_ context.Context, _ string) error {
+	return errors.Internal("authentication not enabled on this server")
+}
