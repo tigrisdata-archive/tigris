@@ -236,6 +236,8 @@ var SupportedFieldProperties = container.NewHashSet(
 	"default",
 	"createdAt",
 	"updatedAt",
+	"title",
+	"required",
 )
 
 // Indexes is to wrap different index that a collection can have.

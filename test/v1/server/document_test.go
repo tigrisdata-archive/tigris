@@ -122,6 +122,89 @@ func TestInsert_AlreadyExists(t *testing.T) {
 	testError(resp, http.StatusConflict, api.Code_ALREADY_EXISTS, "duplicate key value, violates key constraint")
 }
 
+func TestInsert_SchemaValidationRequired(t *testing.T) {
+	testCreateSchema["schema"].(Map)["required"] = []string{"string_value"}
+	testCreateSchema["schema"].(Map)["properties"].(Map)["object_value"].(Map)["required"] = []string{"name"}
+	testCreateSchema["schema"].(Map)["properties"].(Map)["array_value"].(Map)["items"].(Map)["required"] = []string{"id"}
+	defer func() {
+		delete(testCreateSchema["schema"].(Map), "required")
+		delete(testCreateSchema["schema"].(Map)["properties"].(Map)["object_value"].(Map), "required")
+		delete(testCreateSchema["schema"].(Map)["properties"].(Map)["array_value"].(Map)["items"].(Map), "required")
+	}()
+
+	b, err := json.MarshalIndent(testCreateSchema, "", "  ")
+	require.NoError(t, err)
+	fmt.Printf("%s\n", string(b))
+
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	cases := []struct {
+		documents  []Doc
+		expMessage string
+	}{
+		{
+			[]Doc{
+				{
+					"pkey_int": 1,
+					"object_value": Map{
+						"name": "bbb",
+					},
+				},
+			},
+			"json schema validation failed for field '' reason 'missing properties: 'string_value''",
+		},
+		{
+			[]Doc{
+				{
+					"pkey_int":     1,
+					"string_value": nil,
+					"object_value": Map{
+						"name": "bbb",
+					},
+				},
+			},
+			"json schema validation failed for field '' reason 'missing properties: 'string_value''",
+		},
+		{
+			[]Doc{
+				{
+					"pkey_int":     1,
+					"string_value": "aaa",
+					"object_value": Map{
+						"noname": "bbb",
+					},
+				},
+			},
+			"jsonschema: '/object_value' does not validate with file:///server/test_collection.json#/properties/object_value/required: missing properties: 'name'",
+		},
+		{
+			[]Doc{
+				{
+					"pkey_int":     1,
+					"string_value": "aaa",
+					"object_value": Map{
+						"name": "bbb",
+					},
+					"array_value": []Doc{
+						{
+							"product": "foo",
+						},
+					},
+				},
+			},
+
+			"json schema validation failed for field 'array_value/0' reason 'missing properties: 'id''",
+		},
+	}
+	for _, c := range cases {
+		resp := expect(t).POST(getDocumentURL(db, coll, "insert")).
+			WithJSON(Map{"documents": c.documents}).Expect()
+
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, c.expMessage)
+	}
+}
+
 func TestInsert_SchemaValidationError(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)
