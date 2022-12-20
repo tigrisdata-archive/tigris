@@ -14,31 +14,12 @@
 
 package realtime
 
-type WSEncodingType int8
+import api "github.com/tigrisdata/tigris/api/server/v1"
 
-const (
-	MsgpackEncoding WSEncodingType = 1
-	JsonEncoding    WSEncodingType = 2
-)
-
-const (
-	msgPackEncodingStr = "msgpack"
-	jsonEncodingStr    = "json"
-)
-
-// ConnectionParams do we need serial here as well?
-type ConnectionParams struct {
-	ProjectName string
-	SessionId   string
-	Position    string
-	Encoding    string
+type Streaming interface {
+	api.Realtime_ReadMessagesServer
 }
 
-func (params ConnectionParams) ToEncodingType() WSEncodingType {
-	if params.Encoding == jsonEncodingStr {
-		return JsonEncoding
-	}
-
-	// default is msgpack
-	return MsgpackEncoding
+type Response struct {
+	api.Response
 }
