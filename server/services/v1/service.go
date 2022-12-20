@@ -37,6 +37,14 @@ type Service interface {
 	RegisterGRPC(grpc *grpc.Server) error
 }
 
+func GetRegisteredServicesRealtime(kvStore kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) []Service {
+	var v1Services []Service
+	v1Services = append(v1Services, newRealtimeService(kvStore, searchStore, tenantMgr, txMgr))
+	v1Services = append(v1Services, newHealthService(txMgr))
+	v1Services = append(v1Services, newObservabilityService(tenantMgr))
+	return v1Services
+}
+
 func GetRegisteredServices(kvStore kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) []Service {
 	var v1Services []Service
 	v1Services = append(v1Services, newHealthService(txMgr))
