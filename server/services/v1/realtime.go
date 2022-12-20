@@ -23,7 +23,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
@@ -43,13 +42,19 @@ const (
 type realtimeService struct {
 	api.UnimplementedRealtimeServer
 
-	cache cache.Cache
+	cache   cache.Cache
+	devices *realtime.Sessions
 }
 
-func newRealtimeService(_ kv.KeyValueStore, _ search.Store, _ *metadata.TenantManager, _ *transaction.Manager) *realtimeService {
+func newRealtimeService(_ kv.KeyValueStore, _ search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) *realtimeService {
 	cacheS := cache.NewCache(&config.DefaultConfig.Cache)
+	encoder := metadata.NewCacheEncoder()
+	heartbeatF := realtime.NewHeartbeatFactory(cacheS, encoder)
+	channelFactory := realtime.NewChannelFactory(cacheS, encoder, heartbeatF)
+
 	return &realtimeService{
-		cache: cacheS,
+		cache:   cacheS,
+		devices: realtime.NewSessionMgr(cacheS, tenantMgr, txMgr, heartbeatF, channelFactory),
 	}
 }
 
@@ -103,13 +108,27 @@ func (s *realtimeService) DeviceConnectionHandler(w http.ResponseWriter, r *http
 	if err != nil {
 		// ToDo: Change to WS errors
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(fmt.Sprintf(`{"error": "%s"}`, err.Error())))
+		_, _ = w.Write([]byte(fmt.Sprintf(`{"event_type": 2, "event": {"code": 1011, "message": "%s"}}`, err.Error())))
 		return
 	}
 
-	log.Debug().Msgf("params '%v'", params)
-	_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error": "not implemented"}`))
-	_ = conn.Close()
+	ctx := r.Context()
+	session, err := s.devices.AddDevice(ctx, conn, params)
+	if err != nil {
+		realtime.SendReply(conn, params.ToEncodingType(), api.EventType_error, errors.InternalWS(err.Error()))
+		_ = conn.Close()
+		return
+	}
+	defer func() {
+		_ = session.Close()
+		s.devices.RemoveDevice(ctx, session)
+	}()
+	conn.SetPingHandler(session.OnPing)
+	conn.SetPongHandler(session.OnPong)
+	conn.SetCloseHandler(session.OnClose)
+
+	_ = session.SendConnSuccess()
+	_ = session.Start(ctx)
 }
 
 func (s *realtimeService) Ping(_ context.Context, _ *api.HeartbeatEvent) (*api.HeartbeatEvent, error) {

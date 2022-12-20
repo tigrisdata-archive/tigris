@@ -157,6 +157,11 @@ func (c *cache) GetStream(ctx context.Context, streamName string) (Stream, error
 	return NewStream(c, streamName), nil
 }
 
+func (c *cache) DeleteStream(ctx context.Context, streamName string) error {
+	_, err := c.Client.Del(ctx, streamName).Result()
+	return err
+}
+
 // CreateOrGetStream will create a stream in Redis. 'streamName' is full qualified name similar to tableName in other
 // Apis i.e. caller should be responsible for prepending it with tenant/project etc.
 func (c *cache) CreateOrGetStream(ctx context.Context, streamName string) (Stream, error) {

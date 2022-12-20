@@ -32,6 +32,22 @@ const (
 	payloadKey = "_s"
 )
 
+type ReadGroupPos string
+
+const (
+	// ReadGroupPosStart is to let steam know that reads needs to happen since beginning.
+	ReadGroupPosStart ReadGroupPos = "0-0"
+	// ReadGroupPosCurrent is to let stream know that reads needs to happen from current.
+	ReadGroupPosCurrent ReadGroupPos = ">"
+)
+
+const (
+	// ConsumerGroupDefaultCurrentPos is for creating a consumer group that sets the position as current.
+	ConsumerGroupDefaultCurrentPos = "$"
+)
+
+var BlockReadGroupDuration = 180 * time.Second
+
 type StreamMessages struct {
 	xredis.XStream
 }
@@ -93,12 +109,12 @@ func (s *stream) Read(ctx context.Context, pos string) (*StreamMessages, bool, e
 	}, true, nil
 }
 
-func (s *stream) ReadGroup(ctx context.Context, group string, pos string) (*StreamMessages, bool, error) {
+func (s *stream) ReadGroup(ctx context.Context, group string, pos ReadGroupPos) (*StreamMessages, bool, error) {
 	resp := s.cache.Client.XReadGroup(ctx, &xredis.XReadGroupArgs{
 		Group:    group,
 		Consumer: DefaultConsumer,
-		Streams:  []string{s.name, pos},
-		Block:    180 * time.Second,
+		Streams:  []string{s.name, string(pos)},
+		Block:    BlockReadGroupDuration,
 	})
 
 	stream, err := resp.Result()
@@ -157,6 +173,11 @@ func (s *stream) GetConsumerGroup(ctx context.Context, group string) (*xredis.XI
 	return nil, false, nil
 }
 
+func (s *stream) SetID(ctx context.Context, group string, pos string) error {
+	_, err := s.cache.Client.XGroupSetID(ctx, s.name, group, pos).Result()
+	return err
+}
+
 func (s *stream) Ack(ctx context.Context, group string, ids ...string) error {
 	_, err := s.cache.Client.XAck(ctx, s.name, group, ids...).Result()
 	return err
@@ -184,5 +205,11 @@ func decodeFromStreamValue(message xredis.XMessage) (*internal.StreamData, error
 		return nil, errors.New("encoding issue")
 	}
 
-	return internal.DecodeStreamData([]byte(enc.(string)))
+	streamData, err := internal.DecodeStreamData([]byte(enc.(string)))
+	if err != nil {
+		return nil, err
+	}
+
+	streamData.Id = message.ID
+	return streamData, nil
 }
