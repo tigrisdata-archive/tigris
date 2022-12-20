@@ -293,7 +293,6 @@ func (a *auth0) DeleteAppKeys(ctx context.Context, project string) error {
 	listKeysResp, err := a.ListAppKeys(ctx, &api.ListAppKeysRequest{
 		Project: project,
 	})
-
 	if err != nil {
 		return err
 	}

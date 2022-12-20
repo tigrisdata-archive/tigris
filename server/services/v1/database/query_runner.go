@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v1
+package database
 
 import (
 	"context"
@@ -485,9 +485,9 @@ func (runner *ImportQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	metrics.UpdateSpanTags(ctx, runner.queryMetrics)
 
 	return &Response{
-		createdAt: ts,
-		allKeys:   allKeys,
-		status:    InsertedStatus,
+		CreatedAt: ts,
+		AllKeys:   allKeys,
+		Status:    InsertedStatus,
 	}, ctx, nil
 }
 
@@ -527,9 +527,9 @@ func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	metrics.UpdateSpanTags(ctx, runner.queryMetrics)
 
 	return &Response{
-		createdAt: ts,
-		allKeys:   allKeys,
-		status:    InsertedStatus,
+		CreatedAt: ts,
+		AllKeys:   allKeys,
+		Status:    InsertedStatus,
 	}, ctx, nil
 }
 
@@ -565,9 +565,9 @@ func (runner *ReplaceQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 	metrics.UpdateSpanTags(ctx, runner.queryMetrics)
 
 	return &Response{
-		createdAt: ts,
-		allKeys:   allKeys,
-		status:    ReplacedStatus,
+		CreatedAt: ts,
+		AllKeys:   allKeys,
+		Status:    ReplacedStatus,
 	}, ctx, nil
 }
 
@@ -703,9 +703,9 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	ctx = metrics.UpdateSpanTags(ctx, runner.queryMetrics)
 	return &Response{
-		status:        UpdatedStatus,
-		updatedAt:     ts,
-		modifiedCount: modifiedCount,
+		Status:        UpdatedStatus,
+		UpdatedAt:     ts,
+		ModifiedCount: modifiedCount,
 	}, ctx, err
 }
 
@@ -800,9 +800,9 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	ctx = metrics.UpdateSpanTags(ctx, runner.queryMetrics)
 	return &Response{
-		status:        DeletedStatus,
-		deletedAt:     ts,
-		modifiedCount: modifiedCount,
+		Status:        DeletedStatus,
+		DeletedAt:     ts,
+		ModifiedCount: modifiedCount,
 	}, ctx, nil
 }
 
@@ -1350,7 +1350,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		}
 
 		return &Response{
-			status: DroppedStatus,
+			Status: DroppedStatus,
 		}, ctx, nil
 	case runner.createOrUpdateReq != nil:
 		db, err := runner.getDatabase(ctx, tx, tenant, runner.createOrUpdateReq.GetProject())
@@ -1383,7 +1383,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		}
 
 		return &Response{
-			status: CreatedStatus,
+			Status: CreatedStatus,
 		}, ctx, nil
 	case runner.listReq != nil:
 		db, err := runner.getDatabase(ctx, tx, tenant, runner.listReq.GetProject())
@@ -1487,7 +1487,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		}
 
 		return &Response{
-			status: DroppedStatus,
+			Status: DroppedStatus,
 		}, ctx, nil
 	case runner.create != nil:
 		dbMetadata, err := createDatabaseMetadata(ctx)
@@ -1503,11 +1503,10 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		}
 
 		return &Response{
-			status: CreatedStatus,
+			Status: CreatedStatus,
 		}, ctx, nil
 	case runner.list != nil:
 		databaseList := tenant.ListDatabases(ctx)
-
 		databases := make([]*api.ProjectInfo, len(databaseList))
 		for i, l := range databaseList {
 			databases[i] = &api.ProjectInfo{
