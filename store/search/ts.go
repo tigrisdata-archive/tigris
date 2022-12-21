@@ -54,7 +54,7 @@ func (m *storeImplWithMetrics) measure(ctx context.Context, name string, f func(
 	}
 	// Request had error
 	measurement.CountErrorForScope(metrics.SearchErrorCount, measurement.GetSearchErrorTags(err))
-	_ = measurement.FinishWithError(ctx, "search", err)
+	_ = measurement.FinishWithError(ctx, err)
 	measurement.RecordDuration(metrics.SearchErrorRespTime, measurement.GetSearchErrorTags(err))
 }
 

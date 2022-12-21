@@ -72,7 +72,7 @@ func measureUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryS
 		if err != nil {
 			// Request had an error
 			measurement.CountErrorForScope(metrics.RequestsErrorCount, measurement.GetRequestErrorTags(err))
-			_ = measurement.FinishWithError(ctx, "request", err)
+			_ = measurement.FinishWithError(ctx, err)
 			measurement.RecordDuration(metrics.RequestsErrorRespTime, measurement.GetRequestErrorTags(err))
 			return nil, err
 		}
@@ -105,7 +105,7 @@ func measureStream() grpc.StreamServerInterceptor {
 		err = handler(srv, wrapped)
 		if err != nil {
 			measurement.CountErrorForScope(metrics.RequestsErrorCount, measurement.GetRequestErrorTags(err))
-			_ = measurement.FinishWithError(wrapped.WrappedContext, "request", err)
+			_ = measurement.FinishWithError(wrapped.WrappedContext, err)
 			measurement.RecordDuration(metrics.RequestsErrorRespTime, measurement.GetRequestErrorTags(err))
 			ulog.E(err)
 			return err
