@@ -66,7 +66,7 @@ func (m *SessionManagerWithMetrics) measure(ctx context.Context, name string, f 
 	ctx = measurement.StartTracing(ctx, true)
 	if err := f(ctx); err != nil {
 		measurement.CountErrorForScope(metrics.SessionErrorCount, measurement.GetSessionErrorTags(err))
-		_ = measurement.FinishWithError(ctx, "session", err)
+		_ = measurement.FinishWithError(ctx, err)
 		measurement.RecordDuration(metrics.SessionErrorRespTime, measurement.GetSessionErrorTags(err))
 		return
 	}

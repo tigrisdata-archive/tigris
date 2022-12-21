@@ -120,7 +120,7 @@ func (m *Measurement) GetRequestOkTags() map[string]string {
 }
 
 func (m *Measurement) GetRequestErrorTags(err error) map[string]string {
-	return filterTags(standardizeTags(mergeTags(m.tags, getTagsForError(err, "request")), getRequestErrorTagKeys()), config.DefaultConfig.Metrics.Requests.FilteredTags)
+	return filterTags(standardizeTags(mergeTags(m.tags, getTagsForError(err)), getRequestErrorTagKeys()), config.DefaultConfig.Metrics.Requests.FilteredTags)
 }
 
 func (m *Measurement) GetFdbOkTags() map[string]string {
@@ -128,7 +128,7 @@ func (m *Measurement) GetFdbOkTags() map[string]string {
 }
 
 func (m *Measurement) GetFdbErrorTags(err error) map[string]string {
-	return filterTags(standardizeTags(mergeTags(m.tags, getTagsForError(err, "fdb")), getFdbErrorTagKeys()), config.DefaultConfig.Metrics.Fdb.FilteredTags)
+	return filterTags(standardizeTags(mergeTags(m.tags, getTagsForError(err)), getFdbErrorTagKeys()), config.DefaultConfig.Metrics.Fdb.FilteredTags)
 }
 
 func (m *Measurement) GetSearchOkTags() map[string]string {
@@ -136,7 +136,7 @@ func (m *Measurement) GetSearchOkTags() map[string]string {
 }
 
 func (m *Measurement) GetSearchErrorTags(err error) map[string]string {
-	return filterTags(standardizeTags(mergeTags(m.tags, getTagsForError(err, "search")), getSearchErrorTagKeys()), config.DefaultConfig.Metrics.Search.FilteredTags)
+	return filterTags(standardizeTags(mergeTags(m.tags, getTagsForError(err)), getSearchErrorTagKeys()), config.DefaultConfig.Metrics.Search.FilteredTags)
 }
 
 func (m *Measurement) GetSessionOkTags() map[string]string {
@@ -144,7 +144,7 @@ func (m *Measurement) GetSessionOkTags() map[string]string {
 }
 
 func (m *Measurement) GetSessionErrorTags(err error) map[string]string {
-	return filterTags(standardizeTags(mergeTags(m.tags, getTagsForError(err, "session")), getSessionErrorTagKeys()), config.DefaultConfig.Metrics.Session.FilteredTags)
+	return filterTags(standardizeTags(mergeTags(m.tags, getTagsForError(err)), getSessionErrorTagKeys()), config.DefaultConfig.Metrics.Session.FilteredTags)
 }
 
 func (m *Measurement) GetNamespaceSizeTags() map[string]string {
@@ -168,7 +168,7 @@ func (m *Measurement) GetAuthOkTags() map[string]string {
 }
 
 func (m *Measurement) GetAuthErrorTags(err error) map[string]string {
-	return filterTags(standardizeTags(mergeTags(m.tags, getTagsForError(err, "auth")), getAuthErrorTagKeys()), config.DefaultConfig.Metrics.Auth.FilteredTags)
+	return filterTags(standardizeTags(mergeTags(m.tags, getTagsForError(err)), getAuthErrorTagKeys()), config.DefaultConfig.Metrics.Auth.FilteredTags)
 }
 
 func (m *Measurement) SaveMeasurementToContext(ctx context.Context) (context.Context, error) {
@@ -335,7 +335,7 @@ func (m *Measurement) recordHistogramDuration(scope tally.Scope, tags map[string
 	scope.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).RecordDuration(m.stoppedAt.Sub(m.startedAt))
 }
 
-func (m *Measurement) FinishWithError(ctx context.Context, source string, err error) context.Context {
+func (m *Measurement) FinishWithError(ctx context.Context, err error) context.Context {
 	if !m.started {
 		log.Error().Str("service_name", m.serviceName).Str("resource_name", m.resourceName).Msg("Finish tracing called before starting the trace")
 		return ctx
@@ -350,7 +350,7 @@ func (m *Measurement) FinishWithError(ctx context.Context, source string, err er
 	}
 	errCode := status.Code(err)
 	m.datadogSpan.SetTag("grpc.code", errCode.String())
-	errTags := getTagsForError(err, source)
+	errTags := getTagsForError(err)
 	for k, v := range errTags {
 		m.datadogSpan.SetTag(k, v)
 	}
