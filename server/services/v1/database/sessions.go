@@ -366,15 +366,14 @@ func (s *QuerySession) Commit(versionMgr *metadata.VersionHandler, incVersion bo
 	}
 
 	for _, listener := range s.txListeners {
-		if err = listener.OnPreCommit(s.ctx, s.tenant, s.tx, kv.GetEventListener(s.ctx)); err != nil {
+		if err = listener.OnPreCommit(s.ctx, s.tenant, s.tx, kv.GetEventListener(s.ctx)); ulog.E(err) {
 			return err
 		}
 	}
 
 	if err = s.tx.Commit(s.ctx); err == nil {
 		for _, listener := range s.txListeners {
-			if err = listener.OnPostCommit(s.ctx, s.tenant, kv.GetEventListener(s.ctx)); err != nil {
-				log.Err(err).Msg("post commit failure")
+			if err = listener.OnPostCommit(s.ctx, s.tenant, kv.GetEventListener(s.ctx)); ulog.E(err) {
 				return errors.DeadlineExceeded(err.Error())
 			}
 		}
