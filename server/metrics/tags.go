@@ -35,7 +35,7 @@ func mergeTags(tagSets ...map[string]string) map[string]string {
 		for k, v := range tagSet {
 			if _, ok := res[k]; !ok {
 				res[k] = v
-			} else if res[k] == "unknown" {
+			} else if res[k] == defaults.UnknownValue {
 				res[k] = v
 			}
 		}
@@ -59,8 +59,7 @@ func getTigrisError(err error) (string, bool) {
 	return "", false
 }
 
-func getTagsForError(err error, source string) map[string]string {
-	// The source parameter is only considered when the source cannot be determined from the error itself
+func getTagsForError(err error) map[string]string {
 	value, isFdbError := getFdbError(err)
 	if isFdbError {
 		return map[string]string{
@@ -76,24 +75,11 @@ func getTagsForError(err error, source string) map[string]string {
 			"error_value":  value,
 		}
 	}
-	// Generic errors
-	if err == nil {
-		// Should only happen in test cases, if this is seen in production non-errors are counted as errors
-		return map[string]string{
-			"error_source": source,
-			"error_value":  "none",
-		}
-	}
 
-	genericErrorValue := err.Error()
-	// Don't capture the full stack trace as a tag for a panic, just the error message
-	if strings.HasPrefix(genericErrorValue, "panic") {
-		genericErrorValue = strings.Split(genericErrorValue, "\n")[0]
-	}
-
+	// Only log specific errors in case it's known that there will be only a few possible error values
 	return map[string]string{
-		"error_source": source,
-		"error_value":  genericErrorValue,
+		"error_source": defaults.UnknownValue,
+		"error_value":  defaults.UnknownValue,
 	}
 }
 

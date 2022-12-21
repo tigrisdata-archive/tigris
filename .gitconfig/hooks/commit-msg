@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+if [ -z "$1" ]; then
+	echo "Missing argument (commit message). Did you try to run this manually?"
+	exit 1
+fi
+
+commitTitle="$(cat $1 | head -n1)"
+
+# ignore merge requests
+if echo "$commitTitle" | grep -qE "^Merge branch \'"; then
+	echo "Commit hook: ignoring branch merge"
+	exit 0
+fi
+
+# check semantic versioning scheme
+if ! echo "$commitTitle" | grep -qE '^(?:style|feat|fix|docs|refactor|perf|test|chore)\(?(?:\w+|\s|\-|_)?\)?:\s\w+'; then
+	echo "Your commit title did not follow semantic versioning: $commitTitle"
+	echo "Please see https://www.conventionalcommits.org/en/v1.0.0/"
+	exit 1
+fi

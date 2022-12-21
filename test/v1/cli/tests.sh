@@ -13,7 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -ex
+set -exv
+PS4='${LINENO}: '
 
 if [ -z "$cli" ]; then
 	cli="./tigris"
@@ -41,6 +42,7 @@ EOF
 	exit 1
 fi
 
+#shellcheck disable=SC2154
 if [ -z "$noup" ]; then
 	TIGRIS_LOG_LEVEL=debug $cli local up 8081
 	$cli local logs >/dev/null 2>&1
@@ -56,25 +58,28 @@ test_config() {
   export TIGRIS_TIMEOUT=333s
   export TIGRIS_PROTOCOL=https
   export TIGRIS_URL=example.com:8888
+  export TIGRIS_PROJECT=test_proj1
   $cli config show | grep "client_id: test_id_1"
   $cli config show | grep "client_secret: test_secret_1"
   $cli config show | grep "timeout: 5m33s"
   $cli config show | grep "protocol: https"
   $cli config show | grep "url: example.com:8888"
+  $cli config show | grep 'project: test_proj1'
   unset TIGRIS_PROTOCOL
   unset TIGRIS_URL
   unset TIGRIS_TIMEOUT
   unset TIGRIS_CLIENT_ID
   unset TIGRIS_CLIENT_SECRET
+  unset TIGRIS_PROJECT
 }
 
 db_tests() {
 	echo "=== Test ==="
-	echo "Protocol: $TIGRIS_PROTOCOL, URL: $TIGRIS_URL"
+	echo "Proto: $TIGRIS_PROTOCOL, URL: $TIGRIS_URL"
 	echo "============"
 	$cli ping
 
-	$cli delete-project --force db1 || true
+	$cli delete-project -f db1 || true
 
 	$cli create project db1
 
@@ -82,17 +87,27 @@ db_tests() {
 	coll111='{"title":"coll111","properties":{"Key1":{"type":"string"},"Field1":{"type":"integer"}},"primary_key":["Key1"],"collection_type":"documents"}'
 
 	#reading schemas from command line parameters
-	$cli create collection --project=db1 "$coll1" "$coll111"
+	$cli create collection "$coll1" "$coll111" --project=db1
 
-	out=$($cli describe collection --project=db1 coll1|tr -d '\n')
+	out=$($cli describe collection coll1 --project=db1 |tr -d '\n')
 	diff -w -u <(echo '{"collection":"coll1","schema":'"$coll1"'}') <(echo "$out")
 
-	out=$($cli describe database --project=db1|tr -d '\n')
+	out=$($cli describe database --project=db1 |tr -d '\n')
 	# The output order is not-deterministic, try both combinations:
-	diff -w -u <(echo '{"metadata":{},"collections":[{"collection":"coll1","schema":'"$coll1"'},{"collection":"coll111","schema":'"$coll111"'}]}') <(echo "$out") ||
-	diff -w -u <(echo '{"metadata":{},"collections":[{"collection":"coll111","schema":'"$coll111"'},{"collection":"coll1","schema":'"$coll1"'}]}') <(echo "$out") ||
-	diff -w -u <(echo '{"collections":[{"collection":"coll111","schema":'"$coll111"'},{"collection":"coll1","schema":'"$coll1"'}]}') <(echo "$out") ||
-	diff -w -u <(echo '{"collections":[{"collection":"coll1","schema":'"$coll1"'},{"collection":"coll111","schema":'"$coll111"'}]}') <(echo "$out")
+	# BUG: Http doesn't fill metadata due to omitempty json tag on protobuf generated structs
+
+	if { [ "$TIGRIS_PROTOCOL" == "http" ]  || [[ "$TIGRIS_URL" == "http"* ]]; } && [[ "$TIGRIS_URL" != "grpc"* ]] ;
+	then
+			diff -w -u <(echo '{"db":"db1","collections":[{"collection":"coll1","schema":'"$coll1"'},{"collection":"coll111","schema":'"$coll111"'}]}') <(echo "$out") ||
+			diff -w -u <(echo '{"db":"db1","collections":[{"collection":"coll111","schema":'"$coll111"'},{"collection":"coll1","schema":'"$coll1"'}]}') <(echo "$out") ||
+			diff -w -u <(echo '{"collections":[{"collection":"coll111","schema":'"$coll111"'},{"collection":"coll1","schema":'"$coll1"'}]}') <(echo "$out") ||
+			diff -w -u <(echo '{"collections":[{"collection":"coll1","schema":'"$coll1"'},{"collection":"coll111","schema":'"$coll111"'}]}') <(echo "$out")
+	else
+		diff -w -u <(echo '{"metadata":{},"db":"db1","collections":[{"collection":"coll1","schema":'"$coll1"'},{"collection":"coll111","schema":'"$coll111"'}]}') <(echo "$out") ||
+		diff -w -u <(echo '{"metadata":{},"db":"db1","collections":[{"collection":"coll111","schema":'"$coll111"'},{"collection":"coll1","schema":'"$coll1"'}]}') <(echo "$out") ||
+		diff -w -u <(echo '{"metadata":{},"collections":[{"collection":"coll111","schema":'"$coll111"'},{"collection":"coll1","schema":'"$coll1"'}]}') <(echo "$out") ||
+		diff -w -u <(echo '{"metadata":{},"collections":[{"collection":"coll1","schema":'"$coll1"'},{"collection":"coll111","schema":'"$coll111"'}]}') <(echo "$out")
+	fi
 
 	out=$($cli describe database --project=db1 --schema-only|tr -d '\n')
 	diff -w -u <(echo -e "$coll1$coll111") <(echo "$out") ||
@@ -237,19 +252,18 @@ EOF
 	db_negative_tests
 	db_errors_tests
 	db_generate_schema_test
-	test_pubsub
 
 	$cli drop collection --project=db1 coll1 coll2 coll3 coll4 coll5 coll6 coll7 coll111
-	$cli drop database --project=db1
+	$cli delete-project -f db1
 }
 
 db_negative_tests() {
 	#broken json
 	echo '{"Key1": "vK10", "Fiel' | $cli insert --project=db1 coll1 - && exit 1
-	$cli insert --project=db1 coll1 '{"Key1": "vK10", "Fiel' && exit 1
+	$cli insert db1 coll1 '{"Key1": "vK10", "Fiel' && exit 1
 	#broken array
 	echo '[{"Key1": "vK10", "Field1": 10}' | $cli insert --project=db1 coll1 - && exit 1
-	$cli insert --project=db1 coll1 '[{"Key1": "vK10", "Field1": 10}' && exit 1
+	$cli insert db1 coll1 '[{"Key1": "vK10", "Field1": 10}' && exit 1
 
 	#not enough arguments
 	$cli read "--project=db1" && exit 1
@@ -261,8 +275,7 @@ db_negative_tests() {
 	$cli create project && exit 1
 	$cli drop collection --project=db1 && exit 1
 	$cli delete-project && exit 1
-	$cli list collections && exit 1
-
+	$cli list collections && exit 1 # project not set should error out
 	true
 }
 
@@ -273,12 +286,11 @@ error() {
 	diff -u <(echo "$exp_out") <(echo "$out")
 }
 
-# BUG: Unify HTTP and GRPC responses
 # shellcheck disable=SC2086
 db_errors_tests() {
 	$cli list projects
 
-	error "database doesn't exist 'db2'" $cli delete-project --force db2
+	error "database doesn't exist 'db2'" $cli delete-project -f db2
 
 	error "database doesn't exist 'db2'" $cli drop collection --project=db2 coll1
 
@@ -309,102 +321,42 @@ db_errors_tests() {
 	error "schema name is missing" $cli create collection --project=db1 \
 		'{ "properties": { "Key1": { "type": "string" }, "Field1": { "type": "integer" }, "Field2": { "type": "integer" } }, "primary_key": ["Key1"] }'
 
-	$cli delete-project --force db2
+	$cli delete-project -f db2
 }
 
 db_generate_schema_test() {
-  error "sampledb created with the collections" $cli generate sample-schema --create
-  $cli delete project sampledb
+  $cli generate sample-schema --create
+  $cli delete-project -f sampledb
 }
 
-test_scaffold() {
-	coll_msg='{"title":"names","properties":{"Key1":{"type":"string"},"Field1":{"type":"integer"}},"collection_type":"messages"}'
-
-	$cli delete-project --force gen1 || true
-	$cli create project gen1
-	$cli create collection --project=gen1 "$coll_msg"
-
-	exp_out='package main
-
-import (
-	"context"
-	"fmt"
-	"time"
-
-	"github.com/tigrisdata/tigris-client-go/config"
-	"github.com/tigrisdata/tigris-client-go/tigris"
-)
-
-type Name struct {
-	Field1 int64
-	Key1 string
-}
-
-func main() {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	client, err := tigris.NewClient(ctx, &config.Client{Driver: config.Driver{URL: "localhost:8081"}})
-
-	if err != nil {
-		panic(err)
-	}
-	defer client.Close()
-
-	db, err := client.OpenDatabase(ctx, "gen1",
-		&Name{},
-	)
-	if err != nil {
-		panic(err)
-	}
-
-	collName := tigris.GetCollection[Name](db)
-
-	itName, err := collName.ReadAll(ctx)
-	if err != nil {
-		panic(err)
-	}
-
-	var docName Name
-	for i := 0; itName.Next(&docName) && i < 3; i++ {
-		fmt.Printf("%+v\n", docName)
-	}
-
-	itName.Close()
-
-	//collName.Insert(context.TODO(), &Name{/* Insert fields here */})
-}
-
-// Check full API reference here: https://docs.tigrisdata.com/golang/
-
-// Compile and run:
-// * Put this output to main.go
-// * go mod init
-// * go mod tidy
-// * go build -o gen1 .
-// * ./gen1'
-
-	out=$($cli scaffold go --project=gen1)
-	diff -w -u <(echo "$exp_out") <(echo "$out") ||
-
-	$cli delete-project --force gen1
-}
-
+BASEDIR=$(dirname "$0")
+# shellcheck disable=SC1091,SC1090
+source "$BASEDIR/import.sh"
+# shellcheck disable=SC1091,SC1090
+source "$BASEDIR/backup.sh"
+# shellcheck disable=SC1091,SC1090
+source "$BASEDIR/scaffold.sh"
 
 main() { 
 	test_config
 
+	# Exercise tests via HTTP
 	unset TIGRIS_PROTOCOL
 	export TIGRIS_URL=localhost:8081
 	db_tests
 	test_scaffold
+	test_import
+	test_backup
 
+	# Exercise tests via GRPC
 	export TIGRIS_URL=localhost:8081
 	export TIGRIS_PROTOCOL=grpc
 	$cli config show | grep "protocol: grpc"
 	$cli config show | grep "url: localhost:8081"
 	db_tests
 	test_scaffold
+	test_import
+	test_backup
 
 	export TIGRIS_URL=localhost:8081
 	export TIGRIS_PROTOCOL=http

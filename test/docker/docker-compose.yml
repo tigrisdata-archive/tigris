@@ -44,6 +44,12 @@ services:
     ports:
       - "8108:8108"
 
+  tigris_cache:
+    container_name: tigris_cache
+    image: eqalpha/keydb:latest
+    ports:
+      - "6379:6379"
+
   tigris_server:
     container_name: tigris_server
     image: tigris_server
@@ -68,6 +74,7 @@ services:
     depends_on:
       - tigris_db
       - tigris_search
+      - tigris_cache
 
   tigris_server2:
     container_name: tigris_server2

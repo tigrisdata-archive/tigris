@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v1
+package database
 
 import (
 	"context"
@@ -66,7 +66,7 @@ func (m *SessionManagerWithMetrics) measure(ctx context.Context, name string, f 
 	ctx = measurement.StartTracing(ctx, true)
 	if err := f(ctx); err != nil {
 		measurement.CountErrorForScope(metrics.SessionErrorCount, measurement.GetSessionErrorTags(err))
-		_ = measurement.FinishWithError(ctx, "session", err)
+		_ = measurement.FinishWithError(ctx, err)
 		measurement.RecordDuration(metrics.SessionErrorRespTime, measurement.GetSessionErrorTags(err))
 		return
 	}
@@ -237,8 +237,8 @@ func (sessMgr *SessionManager) Remove(ctx context.Context) error {
 // transaction everything is done in this method. For explicit transaction, a session may already exist, so it only
 // needs to run without calling Commit/Rollback.
 func (sessMgr *SessionManager) Execute(ctx context.Context, runner QueryRunner, req *ReqOptions) (*Response, error) {
-	if req.txCtx != nil {
-		session := sessMgr.tracker.get(req.txCtx.Id)
+	if req.TxCtx != nil {
+		session := sessMgr.tracker.get(req.TxCtx.Id)
 		if session == nil {
 			return nil, transaction.ErrSessionIsGone
 		}
@@ -270,7 +270,7 @@ func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, runner Quer
 	for {
 		var session *QuerySession
 		// implicit sessions doesn't need tracking
-		if session, err = sessMgr.Create(ctx, req.metadataChange, req.instantVerTracking, false); err != nil {
+		if session, err = sessMgr.Create(ctx, req.MetadataChange, req.InstantVerTracking, false); err != nil {
 			return nil, err
 		}
 
@@ -282,7 +282,7 @@ func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, runner Quer
 			continue
 		}
 
-		err = session.Commit(sessMgr.versionH, req.metadataChange, err)
+		err = session.Commit(sessMgr.versionH, req.MetadataChange, err)
 		if err != kv.ErrConflictingTransaction {
 			return
 		}
@@ -327,6 +327,14 @@ type QuerySession struct {
 	txListeners    []TxListener
 }
 
+func (s *QuerySession) GetTx() transaction.Tx {
+	return s.tx
+}
+
+func (s *QuerySession) GetTransactionCtx() *api.TransactionCtx {
+	return s.txCtx
+}
+
 func (s *QuerySession) Run(runner QueryRunner) (*Response, context.Context, error) {
 	return runner.Run(s.ctx, s.tx, s.tenant)
 }
@@ -358,15 +366,14 @@ func (s *QuerySession) Commit(versionMgr *metadata.VersionHandler, incVersion bo
 	}
 
 	for _, listener := range s.txListeners {
-		if err = listener.OnPreCommit(s.ctx, s.tenant, s.tx, kv.GetEventListener(s.ctx)); err != nil {
+		if err = listener.OnPreCommit(s.ctx, s.tenant, s.tx, kv.GetEventListener(s.ctx)); ulog.E(err) {
 			return err
 		}
 	}
 
 	if err = s.tx.Commit(s.ctx); err == nil {
 		for _, listener := range s.txListeners {
-			if err = listener.OnPostCommit(s.ctx, s.tenant, kv.GetEventListener(s.ctx)); err != nil {
-				log.Err(err).Msg("post commit failure")
+			if err = listener.OnPostCommit(s.ctx, s.tenant, kv.GetEventListener(s.ctx)); ulog.E(err) {
 				return errors.DeadlineExceeded(err.Error())
 			}
 		}

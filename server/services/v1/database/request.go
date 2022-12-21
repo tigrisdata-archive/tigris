@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package v1
+package database
 
 import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
@@ -40,18 +40,18 @@ type SearchStreaming interface {
 
 // ReqOptions are options used by queryLifecycle to execute a query.
 type ReqOptions struct {
-	txCtx              *api.TransactionCtx
-	metadataChange     bool
-	instantVerTracking bool
+	TxCtx              *api.TransactionCtx
+	MetadataChange     bool
+	InstantVerTracking bool
 }
 
 // Response is a wrapper on api.Response.
 type Response struct {
 	api.Response
-	status        string
-	createdAt     *internal.Timestamp
-	updatedAt     *internal.Timestamp
-	deletedAt     *internal.Timestamp
-	modifiedCount int32
-	allKeys       [][]byte
+	Status        string
+	CreatedAt     *internal.Timestamp
+	UpdatedAt     *internal.Timestamp
+	DeletedAt     *internal.Timestamp
+	ModifiedCount int32
+	AllKeys       [][]byte
 }

@@ -49,6 +49,7 @@ type Provider interface {
 	RotateAppKey(ctx context.Context, req *api.RotateAppKeyRequest) (*api.RotateAppKeyResponse, error)
 	DeleteAppKey(ctx context.Context, req *api.DeleteAppKeyRequest) (*api.DeleteAppKeyResponse, error)
 	ListAppKeys(ctx context.Context, req *api.ListAppKeysRequest) (*api.ListAppKeysResponse, error)
+	DeleteAppKeys(ctx context.Context, project string) error
 }
 
 func NewProvider(userstore *metadata.UserSubspace, txMgr *transaction.Manager) Provider {

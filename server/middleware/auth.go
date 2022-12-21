@@ -111,7 +111,7 @@ func measuredAuthFunction(ctx context.Context, jwtValidator *validator.Validator
 	ctxResult, err = authFunction(ctx, jwtValidator, config, cache)
 	if err != nil {
 		measurement.CountErrorForScope(metrics.AuthErrorCount, measurement.GetAuthErrorTags(err))
-		measurement.FinishWithError(ctxResult, "auth", err)
+		measurement.FinishWithError(ctxResult, err)
 		measurement.RecordDuration(metrics.AuthErrorRespTime, measurement.GetAuthErrorTags(err))
 		return
 	}

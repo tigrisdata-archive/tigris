@@ -109,7 +109,7 @@ func measureLow(ctx context.Context, name string, f func() error) {
 	}
 	// Request had an error
 	measurement.CountErrorForScope(metrics.FdbOkCount, measurement.GetFdbErrorTags(err))
-	_ = measurement.FinishWithError(ctx, "fdb", err)
+	_ = measurement.FinishWithError(ctx, err)
 	measurement.RecordDuration(metrics.FdbErrorRespTime, measurement.GetFdbErrorTags(err))
 }
 

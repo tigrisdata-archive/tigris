@@ -168,3 +168,14 @@ func GetTestFDBConfig(path string) (*FoundationDBConfig, error) {
 
 	return &FoundationDBConfig{ClusterFile: fn}, nil
 }
+
+func GetTestCacheConfig() *CacheConfig {
+	LoadEnvironment()
+
+	if GetEnvironment() == EnvTest {
+		DefaultConfig.Cache.Host = "tigris_cache"
+		return &DefaultConfig.Cache
+	}
+
+	return &DefaultConfig.Cache
+}
