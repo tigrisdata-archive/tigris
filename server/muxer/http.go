@@ -36,22 +36,30 @@ type HTTPServer struct {
 }
 
 func NewHTTPServer(cfg *config.Config) *HTTPServer {
-	r := chi.NewRouter()
+	server := &HTTPServer{
+		Inproc: &inprocgrpc.Channel{},
+		Router: chi.NewRouter(),
+	}
 
-	r.Use(cors.AllowAll().Handler)
-	r.Mount("/debug", chi_middleware.Profiler())
+	server.SetupMiddlewares(cfg)
 
+	// mount debug handler after adding all middlewares
+	server.Router.Mount("/admin/debug", chi_middleware.Profiler())
+
+	return server
+}
+
+func (s *HTTPServer) SetupMiddlewares(cfg *config.Config) {
 	unary, stream := middleware.Get(cfg)
 
-	inproc := &inprocgrpc.Channel{}
-	inproc.WithServerStreamInterceptor(stream)
-	inproc.WithServerUnaryInterceptor(unary)
+	s.Inproc.WithServerStreamInterceptor(stream)
+	s.Inproc.WithServerUnaryInterceptor(unary)
 
-	return &HTTPServer{Inproc: inproc, Router: r}
+	s.Router.Use(cors.AllowAll().Handler)
 }
 
 func (s *HTTPServer) Start(mux cmux.CMux) error {
-	match := mux.Match(cmux.HTTP1Fast())
+	match := mux.Match(cmux.HTTP1Fast(), cmux.HTTP1HeaderField("Upgrade", "websocket"))
 	go func() {
 		srv := &http.Server{Handler: s.Router, ReadHeaderTimeout: readHeaderTimeout}
 		err := srv.Serve(match)

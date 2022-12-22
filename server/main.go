@@ -41,8 +41,9 @@ func mainWithCode() int {
 	config.LoadConfig(&config.DefaultConfig)
 	ulog.Configure(config.DefaultConfig.Log)
 
-	log.Info().Msgf("Environment: %v\n", config.GetEnvironment())
+	log.Info().Msgf("Environment: '%v'", config.GetEnvironment())
 	log.Info().Msgf("Number of CPUs: %v", runtime.NumCPU())
+	log.Info().Msgf("Server Type: '%v'", config.DefaultConfig.Server.Type)
 
 	closerFunc, err := tracing.InitTracer(&config.DefaultConfig)
 	if err != nil {
@@ -90,15 +91,19 @@ func mainWithCode() int {
 		return 1
 	}
 
+	cfg := &config.DefaultConfig
 	request.Init(tenantMgr)
-	_ = quota.Init(tenantMgr, &config.DefaultConfig)
+	_ = quota.Init(tenantMgr, cfg)
 	defer quota.Cleanup()
 
-	mx := muxer.NewMuxer(&config.DefaultConfig)
-	mx.RegisterServices(kvStore, searchStore, tenantMgr, txMgr)
-
-	if err := mx.Start(config.DefaultConfig.Server.Host, config.DefaultConfig.Server.Port); err != nil {
-		log.Error().Err(err).Msgf("error starting server")
+	mx := muxer.NewMuxer(cfg)
+	mx.RegisterServices(&cfg.Server, kvStore, searchStore, tenantMgr, txMgr)
+	port := cfg.Server.Port
+	if cfg.Server.Type == config.RealtimeServerType {
+		port = cfg.Server.RealtimePort
+	}
+	if err := mx.Start(cfg.Server.Host, port); err != nil {
+		log.Error().Err(err).Msgf("error starting realtime server")
 		return 1
 	}
 
