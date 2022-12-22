@@ -28,52 +28,58 @@ func (dm *DatabaseMetadata) SetDatabaseId(id uint32) {
 
 const (
 	MainBranch          = "main"
-	BranchNamePrefix    = "$branch$_"
-	BranchNameSeparator = "_"
+	BranchNameSeparator = "_$branch$_"
 )
 
-type DatabaseBranch struct {
+// DatabaseName represents a primary database and its branch name
+type DatabaseName struct {
 	db     string
 	branch string
 }
 
-func NewDatabaseBranch(db string, branch string) *DatabaseBranch {
+func NewDatabaseNameWithBranch(db string, branch string) *DatabaseName {
 	if branch == MainBranch {
 		branch = ""
 	}
-	return &DatabaseBranch{
+	return &DatabaseName{
 		db:     db,
 		branch: branch,
 	}
 }
 
-func NewBranchFromDbName(key string) *DatabaseBranch {
-	if !strings.HasPrefix(key, BranchNamePrefix) {
-		return NewDatabaseBranch(key, "")
+func NewDatabaseName(key string) *DatabaseName {
+	s := strings.Split(key, BranchNameSeparator)
+	if len(s) < 2 {
+		return NewDatabaseNameWithBranch(s[0], "")
 	}
-	s := strings.SplitN(key, BranchNameSeparator, 3)
-	return NewDatabaseBranch(s[1], s[2])
+	return NewDatabaseNameWithBranch(s[0], s[1])
 }
 
-func (b *DatabaseBranch) Name() string {
-	if b.IsMain() {
+// Name returns the internal name of the database
+// db with name "catalog" and branch "main" will have internal name as "catalog"
+// db with name "catalog" and branch "feature" will have internal name as "catalog_$branch$_feature"
+func (b *DatabaseName) Name() string {
+	if b.IsMainBranch() {
 		return b.Db()
 	}
-	return BranchNamePrefix + b.Db() + BranchNameSeparator + b.Branch()
+	return b.Db() + BranchNameSeparator + b.Branch()
 }
 
-func (b *DatabaseBranch) Db() string {
+// Db is the user facing name of the oprimary database
+func (b *DatabaseName) Db() string {
 	return b.db
 }
 
-func (b *DatabaseBranch) Branch() string {
-	if b.IsMain() {
+// Branch belonging to Db
+func (b *DatabaseName) Branch() string {
+	if b.IsMainBranch() {
 		return MainBranch
 	}
 	return b.branch
 }
 
-func (b *DatabaseBranch) IsMain() bool {
+// IsMainBranch returns "True" if this is primary Db or "False" if a branch
+func (b *DatabaseName) IsMainBranch() bool {
 	if len(b.branch) == 0 || b.branch == MainBranch {
 		return true
 	}

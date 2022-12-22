@@ -476,7 +476,10 @@ func (s *apiService) CreateBranch(ctx context.Context, r *api.CreateBranchReques
 	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
 	runner.SetCreateBranchReq(r)
 
-	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{})
+	resp, err := s.sessions.Execute(ctx, runner, &database.ReqOptions{
+		MetadataChange:     true,
+		InstantVerTracking: true,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -489,7 +492,10 @@ func (s *apiService) DeleteBranch(ctx context.Context, r *api.DeleteBranchReques
 	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
 	runner.SetDeleteBranchReq(r)
 
-	resp, err := s.sessions.Execute(ctx, runner, &ReqOptions{})
+	resp, err := s.sessions.Execute(ctx, runner, &database.ReqOptions{
+		MetadataChange:     true,
+		InstantVerTracking: true,
+	})
 	if err != nil {
 		return nil, err
 	}

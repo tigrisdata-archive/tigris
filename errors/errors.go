@@ -18,6 +18,7 @@ import (
 	"errors"
 
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/server/metadata"
 )
 
 // Internal constructs internal server error (HTTP: 500).
@@ -98,3 +99,19 @@ var (
 	As = errors.As
 	Is = errors.Is
 )
+
+// From helps construct API errors from internal errors
+func From(err error) error {
+	switch e := err.(type) {
+	case metadata.Error:
+		switch e.Code() {
+		case metadata.ErrCodeDatabaseNotFound, metadata.ErrCodeBranchNotFound:
+			return NotFound(e.Error())
+		case metadata.ErrCodeDatabaseBranchExists, metadata.ErrCodeDatabaseExists:
+			return AlreadyExists(e.Error())
+		case metadata.ErrCodeCannotDeleteBranch:
+			return InvalidArgument(e.Error())
+		}
+	}
+	return err
+}

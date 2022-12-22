@@ -32,7 +32,7 @@ import (
 
 func TestStorageQuota(t *testing.T) {
 	tenants, ctx, cancel := metadata.NewTestTenantMgr(kvStore)
-	dbName := metadata.NewBranchFromDbName("tenant_db1")
+	dbName := metadata.NewDatabaseName("tenant_db1")
 	defer cancel()
 
 	txMgr := transaction.NewManager(kvStore)
@@ -46,7 +46,7 @@ func TestStorageQuota(t *testing.T) {
 	tx, err := txMgr.StartTx(context.TODO())
 	require.NoError(t, err)
 
-	err = tenant.CreateDatabase(ctx, tx, dbName, nil)
+	_, err = tenant.CreateDatabase(ctx, tx, dbName.Name(), nil)
 	require.NoError(t, err)
 
 	jsSchema := []byte(`{

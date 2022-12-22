@@ -32,8 +32,8 @@ import (
 )
 
 var kvStore kv.KeyValueStore
-var tenantDb1 = NewBranchFromDbName("tenant_db1")
-var tenantDb2 = NewBranchFromDbName("tenant_db2")
+var tenantDb1 = NewDatabaseName("tenant_db1")
+var tenantDb2 = NewDatabaseName("tenant_db2")
 
 func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 	t.Run("create_tenant", func(t *testing.T) {
@@ -193,9 +193,9 @@ func TestTenantManager_CreateDatabases(t *testing.T) {
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		err = tenant.CreateDatabase(ctx, tx, tenantDb1, nil)
+		_, err = tenant.CreateDatabase(ctx, tx, tenantDb1.Name(), nil)
 		require.NoError(t, err)
-		err = tenant.CreateDatabase(ctx, tx, tenantDb2, nil)
+		_, err = tenant.CreateDatabase(ctx, tx, tenantDb2.Name(), nil)
 		require.NoError(t, err)
 
 		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
@@ -227,9 +227,9 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 		tenant := m.tenants["ns-test1"]
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		err = tenant.CreateDatabase(ctx, tx, tenantDb1, nil)
+		_, err = tenant.CreateDatabase(ctx, tx, tenantDb1.Name(), nil)
 		require.NoError(t, err)
-		err = tenant.CreateDatabase(ctx, tx, tenantDb2, nil)
+		_, err = tenant.CreateDatabase(ctx, tx, tenantDb2.Name(), nil)
 		require.NoError(t, err)
 
 		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
@@ -297,9 +297,9 @@ func TestTenantManager_DropCollection(t *testing.T) {
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		err = tenant.CreateDatabase(ctx, tx, tenantDb1, nil)
+		_, err = tenant.CreateDatabase(ctx, tx, tenantDb1.Name(), nil)
 		require.NoError(t, err)
-		err = tenant.CreateDatabase(ctx, tx, tenantDb2, nil)
+		_, err = tenant.CreateDatabase(ctx, tx, tenantDb2.Name(), nil)
 		require.NoError(t, err)
 
 		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
@@ -369,16 +369,16 @@ func TestTenantManager_DataSize(t *testing.T) {
 	tx, err := tm.StartTx(context.TODO())
 	require.NoError(t, err)
 
-	err = tenant.CreateDatabase(ctx, tx, tenantDb1, nil)
+	_, err = tenant.CreateDatabase(ctx, tx, tenantDb1.Name(), nil)
 	require.NoError(t, err)
-	err = tenant.CreateDatabase(ctx, tx, tenantDb2, nil)
+	_, err = tenant.CreateDatabase(ctx, tx, tenantDb2.Name(), nil)
 	require.NoError(t, err)
 
 	tenant2 := m.tenants["ns-test2"]
 
-	err = tenant2.CreateDatabase(ctx, tx, tenantDb1, nil)
+	_, err = tenant2.CreateDatabase(ctx, tx, tenantDb1.Name(), nil)
 	require.NoError(t, err)
-	err = tenant2.CreateDatabase(ctx, tx, tenantDb2, nil)
+	_, err = tenant2.CreateDatabase(ctx, tx, tenantDb2.Name(), nil)
 	require.NoError(t, err)
 
 	require.NoError(t, tenant.reload(ctx, tx, nil, nil))

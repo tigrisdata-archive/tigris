@@ -171,7 +171,7 @@ func NewBaseQueryRunner(encoder metadata.Encoder, cdcMgr *cdc.Manager, txMgr *tr
 // getDatabaseFromTenant is a helper method to get database from the tenant object. Returns a user facing error if
 // the database is not present.
 func (runner *BaseQueryRunner) getDatabaseFromTenant(ctx context.Context, tenant *metadata.Tenant, dbName string, branch string) (*metadata.Database, error) {
-	dbBranch := metadata.NewDatabaseBranch(dbName, branch)
+	dbBranch := metadata.NewDatabaseNameWithBranch(dbName, branch)
 	db, err := tenant.GetDatabase(ctx, dbBranch)
 	if err != nil {
 		return nil, err
@@ -179,7 +179,7 @@ func (runner *BaseQueryRunner) getDatabaseFromTenant(ctx context.Context, tenant
 	// database not found
 	if db == nil {
 		errMsg := fmt.Sprintf("database doesn't exist '%s'", dbBranch.Db())
-		if !dbBranch.IsMain() {
+		if !dbBranch.IsMainBranch() {
 			errMsg = fmt.Sprintf("branch doesn't exist '%s'", dbBranch.Branch())
 		}
 		return nil, errors.NotFound(errMsg)
@@ -198,7 +198,7 @@ func (runner *BaseQueryRunner) getDatabase(ctx context.Context, tx transaction.T
 	}
 
 	// otherwise, simply read from the in-memory cache/disk.
-	dbBranch := metadata.NewDatabaseBranch(dbName, branch)
+	dbBranch := metadata.NewDatabaseNameWithBranch(dbName, branch)
 	db, err := tenant.GetDatabase(ctx, dbBranch)
 	if err != nil {
 		return nil, err
@@ -206,7 +206,7 @@ func (runner *BaseQueryRunner) getDatabase(ctx context.Context, tx transaction.T
 	// database not found
 	if db == nil {
 		errMsg := fmt.Sprintf("database doesn't exist '%s'", dbBranch.Db())
-		if !dbBranch.IsMain() {
+		if !dbBranch.IsMainBranch() {
 			errMsg = fmt.Sprintf("branch doesn't exist '%s'", dbBranch.Branch())
 		}
 		return nil, errors.NotFound(errMsg)
@@ -1605,19 +1605,10 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		}, ctx, nil
 
 	case runner.createBranch != nil:
-		dbBranch := metadata.NewDatabaseBranch(runner.createBranch.GetProject(), runner.createBranch.GetBranch())
+		dbBranch := metadata.NewDatabaseNameWithBranch(runner.createBranch.GetProject(), runner.createBranch.GetBranch())
 		err := tenant.CreateBranch(ctx, tx, dbBranch)
 		if err != nil {
-			switch e := err.(type) {
-			case metadata.Error:
-				switch e.Code() {
-				case metadata.ErrCodeDatabaseNotFound:
-					return nil, ctx, errors.NotFound(e.Error())
-				case metadata.ErrCodeDatabaseBranchExists:
-					return nil, ctx, errors.AlreadyExists(e.Error())
-				}
-			}
-			return nil, ctx, err
+			return nil, ctx, errors.From(err)
 		}
 		return &Response{
 			Response: &api.CreateBranchResponse{
@@ -1625,22 +1616,13 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			},
 		}, ctx, nil
 	case runner.deleteBranch != nil:
-		dbBranch := metadata.NewDatabaseBranch(runner.createBranch.GetProject(), runner.createBranch.GetBranch())
+		dbBranch := metadata.NewDatabaseNameWithBranch(runner.deleteBranch.GetProject(), runner.deleteBranch.GetBranch())
 		err := tenant.DeleteBranch(ctx, tx, dbBranch)
 		if err != nil {
-			switch e := err.(type) {
-			case metadata.Error:
-				switch e.Code() {
-				case metadata.ErrCodeMainBranchCannotBeDeleted:
-					return nil, ctx, errors.InvalidArgument(e.Error())
-				case metadata.ErrCodeBranchNotFound:
-					return nil, ctx, errors.NotFound(e.Error())
-				}
-			}
-			return nil, ctx, err
+			return nil, ctx, errors.From(err)
 		}
 		return &Response{
-			Response: &api.CreateBranchResponse{
+			Response: &api.DeleteBranchResponse{
 				Status: DeletedStatus,
 			},
 		}, ctx, nil

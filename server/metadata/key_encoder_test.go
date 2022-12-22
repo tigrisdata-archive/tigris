@@ -31,7 +31,7 @@ func TestEncodeDecodeKey(t *testing.T) {
 	ns := NewTenantNamespace("test_ns", NewNamespaceMetadata(1, "test_ns", "test_ns-display_name"))
 	db := &Database{
 		id:   3,
-		name: "test_db",
+		name: NewDatabaseName("test_db"),
 		idToCollectionMap: map[uint32]string{
 			coll.Id: coll.Name,
 		},
@@ -45,7 +45,7 @@ func TestEncodeDecodeKey(t *testing.T) {
 			ns.StrId(): {
 				namespace: ns,
 				databases: map[string]*Database{
-					db.name: db,
+					db.Name(): db,
 				},
 				idToDatabaseMap: map[uint32]string{
 					db.id: db.Name(),

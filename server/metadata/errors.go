@@ -19,11 +19,11 @@ import "fmt"
 type ErrorCode byte
 
 const (
-	ErrCodeDatabaseNotFound          ErrorCode = 0x00
-	ErrCodeDatabaseExists            ErrorCode = 0x01
-	ErrCodeDatabaseBranchExists      ErrorCode = 0x02
-	ErrCodeMainBranchCannotBeDeleted ErrorCode = 0x03
-	ErrCodeBranchNotFound            ErrorCode = 0x04
+	ErrCodeDatabaseNotFound     ErrorCode = 0x00
+	ErrCodeDatabaseExists       ErrorCode = 0x01
+	ErrCodeDatabaseBranchExists ErrorCode = 0x02
+	ErrCodeBranchNotFound       ErrorCode = 0x03
+	ErrCodeCannotDeleteBranch   ErrorCode = 0x04
 )
 
 type Error struct {
@@ -37,10 +37,6 @@ func NewMetadataError(code ErrorCode, msg string, args ...interface{}) error {
 		msg:  fmt.Sprintf(msg, args...),
 	}
 }
-
-var (
-	MainBranchCannotBeDeletedErr = NewMetadataError(ErrCodeMainBranchCannotBeDeleted, "'main' branch cannot be deleted")
-)
 
 func (e Error) Error() string {
 	return e.msg

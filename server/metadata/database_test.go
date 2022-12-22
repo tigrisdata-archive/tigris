@@ -21,76 +21,76 @@ import (
 
 func TestDatabaseName(t *testing.T) {
 	t.Run("with empty branch", func(t *testing.T) {
-		databaseBranch := NewBranchFromDbName("myDb")
+		databaseBranch := NewDatabaseName("myDb")
 
 		assert.Equal(t, "myDb", databaseBranch.Name())
 		assert.Equal(t, "myDb", databaseBranch.Db())
 		assert.Equal(t, MainBranch, databaseBranch.Branch())
-		assert.True(t, databaseBranch.IsMain())
+		assert.True(t, databaseBranch.IsMainBranch())
 	})
 
 	t.Run("with main branch", func(t *testing.T) {
-		databaseBranch := NewDatabaseBranch("myDb", "main")
+		databaseBranch := NewDatabaseNameWithBranch("myDb", "main")
 
 		assert.Equal(t, "myDb", databaseBranch.Name())
 		assert.Equal(t, "myDb", databaseBranch.Db())
 		assert.Equal(t, MainBranch, databaseBranch.Branch())
-		assert.True(t, databaseBranch.IsMain())
+		assert.True(t, databaseBranch.IsMainBranch())
 	})
 
 	t.Run("with other branch", func(t *testing.T) {
-		databaseBranch := NewDatabaseBranch("myDb", "staging")
+		databaseBranch := NewDatabaseNameWithBranch("myDb", "staging")
 
-		assert.Equal(t, "$branch$_myDb_staging", databaseBranch.Name())
+		assert.Equal(t, "myDb_$branch$_staging", databaseBranch.Name())
 		assert.Equal(t, "myDb", databaseBranch.Db())
 		assert.Equal(t, "staging", databaseBranch.Branch())
-		assert.False(t, databaseBranch.IsMain())
+		assert.False(t, databaseBranch.IsMainBranch())
 	})
 }
 
 func TestBranchFromDbName(t *testing.T) {
 	t.Run("with db name only", func(t *testing.T) {
-		databaseBranch := NewBranchFromDbName("myDb")
+		databaseBranch := NewDatabaseName("myDb")
 
 		assert.Equal(t, "myDb", databaseBranch.Name())
 		assert.Equal(t, "myDb", databaseBranch.Db())
 		assert.Equal(t, MainBranch, databaseBranch.Branch())
-		assert.True(t, databaseBranch.IsMain())
+		assert.True(t, databaseBranch.IsMainBranch())
 	})
 
 	t.Run("with main branch name", func(t *testing.T) {
-		databaseBranch := NewBranchFromDbName("$branch$_myDb_main")
+		databaseBranch := NewDatabaseName("myDb_$branch$_main")
 
 		assert.Equal(t, "myDb", databaseBranch.Name())
 		assert.Equal(t, "myDb", databaseBranch.Db())
 		assert.Equal(t, MainBranch, databaseBranch.Branch())
-		assert.True(t, databaseBranch.IsMain())
+		assert.True(t, databaseBranch.IsMainBranch())
 	})
 
 	t.Run("with some other branch", func(t *testing.T) {
-		databaseBranch := NewBranchFromDbName("$branch$_myDb_staging")
+		databaseBranch := NewDatabaseName("myDb_$branch$_staging")
 
-		assert.Equal(t, "$branch$_myDb_staging", databaseBranch.Name())
+		assert.Equal(t, "myDb_$branch$_staging", databaseBranch.Name())
 		assert.Equal(t, "myDb", databaseBranch.Db())
 		assert.Equal(t, "staging", databaseBranch.Branch())
-		assert.False(t, databaseBranch.IsMain())
+		assert.False(t, databaseBranch.IsMainBranch())
 	})
 
 	t.Run("with empty string", func(t *testing.T) {
-		databaseBranch := NewBranchFromDbName("")
+		databaseBranch := NewDatabaseName("")
 
 		assert.Equal(t, "", databaseBranch.Name())
 		assert.Equal(t, "", databaseBranch.Db())
 		assert.Equal(t, MainBranch, databaseBranch.Branch())
-		assert.True(t, databaseBranch.IsMain())
+		assert.True(t, databaseBranch.IsMainBranch())
 	})
 
 	t.Run("with multiple separators", func(t *testing.T) {
-		databaseBranch := NewBranchFromDbName("$branch$_myDb_prod_staging_2")
+		databaseBranch := NewDatabaseName("myDb_$branch$__prod_staging_2")
 
-		assert.Equal(t, "$branch$_myDb_prod_staging_2", databaseBranch.Name())
+		assert.Equal(t, "myDb_$branch$__prod_staging_2", databaseBranch.Name())
 		assert.Equal(t, "myDb", databaseBranch.Db())
-		assert.Equal(t, "prod_staging_2", databaseBranch.Branch())
-		assert.False(t, databaseBranch.IsMain())
+		assert.Equal(t, "_prod_staging_2", databaseBranch.Branch())
+		assert.False(t, databaseBranch.IsMainBranch())
 	})
 }

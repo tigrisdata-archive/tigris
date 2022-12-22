@@ -613,8 +613,13 @@ func (tenant *Tenant) CreateDatabase(ctx context.Context, tx transaction.Tx, dbN
 	tenant.Lock()
 	defer tenant.Unlock()
 
-	if _, ok := tenant.databases[dbName]; ok {
-		return true, nil
+	_, exists, err := tenant.createDatabase(ctx, tx, dbName, dbMetadata)
+	return exists, err
+}
+
+func (tenant *Tenant) createDatabase(ctx context.Context, tx transaction.Tx, dbName string, dbMetadata *DatabaseMetadata) (uint32, bool, error) {
+	if db, ok := tenant.databases[dbName]; ok {
+		return db.Id(), true, nil
 	}
 
 	// otherwise, proceed to create the database if there are concurrent requests on different workers then one of
@@ -625,35 +630,35 @@ func (tenant *Tenant) CreateDatabase(ctx context.Context, tx transaction.Tx, dbN
 		err = tenant.namespaceStore.InsertDatabaseMetadata(ctx, tx, tenant.namespace.Id(), dbName, dbMetadata)
 		if err != nil {
 			log.Err(err).Msg("Failed to insert database metadata")
-			return false, errors.Internal("Failed to setup db metadata")
+			return dbId, false, errors.Internal("Failed to setup db metadata")
 		}
 	}
-	return false, err
+	return dbId, false, err
 }
 
-func (tenant *Tenant) CreateBranch(ctx context.Context, tx transaction.Tx, dbBranch *DatabaseBranch) error {
+// CreateBranch is used to create a database branch. A database branch is essentially a schema-only copy of a database.
+// A new database is created in the tenant namespace and all the collection schemas from primary database are created
+// in this branch. A branch may drift overtime from the primary database.
+func (tenant *Tenant) CreateBranch(ctx context.Context, tx transaction.Tx, dbName *DatabaseName) error {
 	tenant.Lock()
 	defer tenant.Unlock()
 
 	// Create a database branch only if parent database exists
-	mainDb, ok := tenant.databases[dbBranch.Db()]
+	mainDb, ok := tenant.databases[dbName.Db()]
 	if !ok {
-		return NewDatabaseNotFoundErr(dbBranch.Db())
-	}
-
-	// Check if a branch with same name exists
-	dbName := dbBranch.Name()
-	if _, ok := tenant.databases[dbName]; ok {
-		return NewDatabaseBranchExistsErr(dbBranch.Branch())
+		return NewDatabaseNotFoundErr(dbName.Db())
 	}
 
 	// Create a database
-	id, err := tenant.metaStore.CreateDatabase(ctx, tx, dbName, tenant.namespace.Id())
+	id, exists, err := tenant.createDatabase(ctx, tx, dbName.Name(), nil)
 	if err != nil {
 		return err
 	}
+	if exists {
+		return NewDatabaseBranchExistsErr(dbName.Branch())
+	}
 
-	branch := NewDatabase(id, dbName)
+	branch := NewDatabase(id, dbName.Name())
 
 	// Create collections inside the new database branch
 	for _, coll := range mainDb.ListCollection() {
@@ -673,7 +678,8 @@ func (tenant *Tenant) CreateBranch(ctx context.Context, tx transaction.Tx, dbBra
 // DropDatabase is responsible for first dropping a dictionary encoding of the database and then adding a corresponding
 // dropped encoding entry in the encoding table. Drop returns "false" if the database doesn't exist so that caller can
 // reason about it. DropDatabase is more involved than CreateDatabase as with Drop we also need to iterate over all the
-// collections present in this database and call drop collection on each one of them.
+// collections present in this database and call drop collection on each one of them. Returns "False" if database didn't
+// exist
 func (tenant *Tenant) DropDatabase(ctx context.Context, tx transaction.Tx, dbName string) (bool, error) {
 	tenant.Lock()
 	defer tenant.Unlock()
@@ -684,17 +690,17 @@ func (tenant *Tenant) DropDatabase(ctx context.Context, tx transaction.Tx, dbNam
 		return false, nil
 	}
 
-	// Only main branch can be deleted, use DeleteBranch instead, TODO: return an error here
+	// Only main branch can be deleted from this method, use DeleteBranch instead
 	if db.IsBranch() {
-		return false, nil
+		return true, NewMetadataError(ErrCodeCannotDeleteBranch, "Cannot delete branch '%s'. Use 'DeleteBranch' instead.", db.BranchName())
 	}
 
 	// Get all the branches for deletion
 	branches := tenant.getBranches(ctx, db, false)
 	// iterate over each branch to delete it
 	for _, branch := range branches {
-		if err := tenant.deleteBranch(ctx, tx, NewDatabaseBranch(branch.DbName(), branch.BranchName())); err != nil {
-			return false, err
+		if err := tenant.deleteBranch(ctx, tx, NewDatabaseNameWithBranch(branch.DbName(), branch.BranchName())); err != nil {
+			return true, err
 		}
 	}
 
@@ -719,16 +725,18 @@ func (tenant *Tenant) DropDatabase(ctx context.Context, tx transaction.Tx, dbNam
 	return true, nil
 }
 
-func (tenant *Tenant) DeleteBranch(ctx context.Context, tx transaction.Tx, dbBranch *DatabaseBranch) error {
+// DeleteBranch is responsible for deleting a database branch. Throws error if database/branch does not exist
+// or if 'main' branch is being deleted.
+func (tenant *Tenant) DeleteBranch(ctx context.Context, tx transaction.Tx, dbBranch *DatabaseName) error {
 	tenant.Lock()
 	defer tenant.Unlock()
-	if dbBranch.IsMain() {
-		return MainBranchCannotBeDeletedErr
+	if dbBranch.IsMainBranch() {
+		return NewMetadataError(ErrCodeCannotDeleteBranch, "'main' branch cannot be deleted. Use 'DropDatabase' instead.")
 	}
 	return tenant.deleteBranch(ctx, tx, dbBranch)
 }
 
-func (tenant *Tenant) deleteBranch(ctx context.Context, tx transaction.Tx, dbBranch *DatabaseBranch) error {
+func (tenant *Tenant) deleteBranch(ctx context.Context, tx transaction.Tx, dbBranch *DatabaseName) error {
 
 	dbName := dbBranch.Name()
 	// check first if it exists
@@ -754,14 +762,14 @@ func (tenant *Tenant) deleteBranch(ctx context.Context, tx transaction.Tx, dbBra
 // GetDatabase returns the database object, or null if there is no database existing with the name passed in the param.
 // As reloading of tenant state is happening at the session manager layer so GetDatabase calls assume that the caller
 // just needs the state from the cache.
-func (tenant *Tenant) GetDatabase(_ context.Context, dbBranch *DatabaseBranch) (*Database, error) {
+func (tenant *Tenant) GetDatabase(_ context.Context, dbName *DatabaseName) (*Database, error) {
 	tenant.Lock()
 	defer tenant.Unlock()
 
-	return tenant.databases[dbBranch.Name()], nil
+	return tenant.databases[dbName.Name()], nil
 }
 
-//TODO: Add docs
+// GetBranches returns an array of all the branches associated with this database including "main" branch (primary Db)
 func (tenant *Tenant) GetBranches(ctx context.Context, mainDb *Database) []*Database {
 	tenant.Lock()
 	defer tenant.Unlock()
@@ -769,7 +777,6 @@ func (tenant *Tenant) GetBranches(ctx context.Context, mainDb *Database) []*Data
 	return tenant.getBranches(ctx, mainDb, true)
 }
 
-// TODO: add docs with -- includes main branch
 func (tenant *Tenant) getBranches(_ context.Context, mainDb *Database, includeMain bool) []*Database {
 	var branches []*Database
 
@@ -781,7 +788,7 @@ func (tenant *Tenant) getBranches(_ context.Context, mainDb *Database, includeMa
 	return branches
 }
 
-// ListDatabasesOnly is used to list all databases (only the main branch) available for this tenant.
+// ListDatabasesOnly is used to list all databases (no branches) available for this tenant.
 func (tenant *Tenant) ListDatabasesOnly(_ context.Context) []string {
 	tenant.RLock()
 	defer tenant.RUnlock()
@@ -797,6 +804,7 @@ func (tenant *Tenant) ListDatabasesOnly(_ context.Context) []string {
 	return databases
 }
 
+// ListDatabaseWithBranches returns a list of all databases and their branches
 func (tenant *Tenant) ListDatabaseWithBranches(_ context.Context) []string {
 	tenant.RLock()
 	defer tenant.RUnlock()
@@ -1105,7 +1113,7 @@ type Database struct {
 	sync.RWMutex
 
 	id                    uint32
-	name                  *DatabaseBranch
+	name                  *DatabaseName
 	collections           map[string]*collectionHolder
 	needFixingCollections map[string]struct{}
 	idToCollectionMap     map[uint32]string
@@ -1114,7 +1122,7 @@ type Database struct {
 func NewDatabase(id uint32, name string) *Database {
 	return &Database{
 		id:                    id,
-		name:                  NewBranchFromDbName(name),
+		name:                  NewDatabaseName(name),
 		collections:           make(map[string]*collectionHolder),
 		idToCollectionMap:     make(map[uint32]string),
 		needFixingCollections: make(map[string]struct{}),
@@ -1185,7 +1193,7 @@ func (d *Database) BranchName() string {
 }
 
 func (d *Database) IsBranch() bool {
-	return !d.name.IsMain()
+	return !d.name.IsMainBranch()
 }
 
 // collectionHolder is to manage a single collection. Check the Clone method before changing this struct.

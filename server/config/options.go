@@ -220,6 +220,7 @@ var DefaultConfig = Config{
 	Search: SearchConfig{
 		Host:         "localhost",
 		Port:         8108,
+		AuthKey:      "ts_test_key",
 		ReadEnabled:  true,
 		WriteEnabled: true,
 	},
