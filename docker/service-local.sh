@@ -31,6 +31,7 @@ function wait_for_fdb() {
 	done
 }
 
+export TIGRIS_SERVER_TYPE=database
 export TIGRIS_SERVER_SEARCH_AUTH_KEY=ts_dev_key
 export TIGRIS_SERVER_SEARCH_HOST=localhost
 export TIGRIS_SERVER_CDC_ENABLED=true

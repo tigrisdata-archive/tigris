@@ -50,6 +50,10 @@ func NewMessageData(clientId string, socketId string, eventName string, msg *api
 	return newStreamData(MessageChannelData, clientId, socketId, eventName, msg.Data)
 }
 
+func NewEventDataFromMessage(clientId string, socketId string, eventName string, msg *api.Message) (*internal.StreamData, error) {
+	return newStreamData(MessageChannelData, clientId, socketId, eventName, msg.Data)
+}
+
 func newStreamData(dataType string, clientId string, socketId string, eventName string, rawData []byte) (*internal.StreamData, error) {
 	md := NewStreamMessageMD(dataType, clientId, socketId, eventName)
 	enc, err := EncodeStreamMD(md)

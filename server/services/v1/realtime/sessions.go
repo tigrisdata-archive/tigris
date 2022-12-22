@@ -20,7 +20,9 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/cache"
 )
@@ -110,4 +112,17 @@ func (s *Sessions) AddDevice(ctx context.Context, conn *websocket.Conn, params C
 	}
 	s.devices[sess.id] = sess
 	return sess, nil
+}
+
+func (s *Sessions) ExecuteRunner(ctx context.Context, runner RTMRunner) (*Response, error) {
+	namespaceForThisSession, err := request.GetNamespace(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tenant, err := s.tenantMgr.GetTenant(ctx, namespaceForThisSession)
+	if err != nil {
+		return nil, errors.NotFound("tenant '%s' not found", namespaceForThisSession)
+	}
+
+	return runner.Run(ctx, tenant)
 }
