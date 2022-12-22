@@ -43,16 +43,7 @@ COPY --from=build /usr/lib/libfdb_c.so /usr/lib/libfdb_c.so
 COPY --from=build /usr/bin/fdbcli /usr/bin/fdbcli
 
 RUN chown -R tigris:tigris /server /etc/tigrisdata/tigris
-
-#RUN echo "docker:docker@127.0.0.1:4500" >/etc/foundationdb/fdb.cluster
-RUN echo "#!/bin/bash\n \
-	/usr/bin/typesense-server --config=/etc/typesense/typesense-server.ini & \n \
-	fdbserver --listen-address 127.0.0.1:4500 --public-address 127.0.0.1:4500 --datadir /var/lib/foundationdb/data --logdir /var/lib/foundationdb/logs --locality-zoneid tigris --locality-machineid tigris & \n\
-	export TIGRIS_SERVER_SEARCH_AUTH_KEY=ts_dev_key \n \
-	export TIGRIS_SERVER_SEARCH_HOST=localhost \n \
-	export TIGRIS_SERVER_CDC_ENABLED=true \n \
-	fdbcli --exec 'configure new single memory' \n \
-	/server/service\n" >/server/service.sh
+COPY docker/service-local.sh /server/service.sh
 
 EXPOSE 8081
 
