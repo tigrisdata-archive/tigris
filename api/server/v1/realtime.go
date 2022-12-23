@@ -29,6 +29,21 @@ func (x *RealTimeMessage) MarshalJSON() ([]byte, error) {
 	return jsoniter.Marshal(resp)
 }
 
+func (x *Message) MarshalJSON() ([]byte, error) {
+	resp := struct {
+		Id       *string             `json:"id,omitempty"`
+		Name     string              `json:"name,omitempty"`
+		Sequence string              `json:"sequence,omitempty"`
+		Data     jsoniter.RawMessage `json:"data,omitempty"`
+	}{
+		Id:       x.Id,
+		Name:     x.Name,
+		Data:     x.Data,
+		Sequence: x.Sequence,
+	}
+	return jsoniter.Marshal(resp)
+}
+
 func (x *AuthEvent) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
 	if err := jsoniter.Unmarshal(data, &mp); err != nil {

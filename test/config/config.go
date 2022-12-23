@@ -27,6 +27,15 @@ func GetBaseURL() string {
 	return "http://localhost:8081"
 }
 
+func GetBaseRealtimeURL() string {
+	config.LoadEnvironment()
+
+	if config.GetEnvironment() == config.EnvTest {
+		return "http://tigris_realtime:8083"
+	}
+	return "http://localhost:8083"
+}
+
 func GetBaseURL2() string {
 	config.LoadEnvironment()
 

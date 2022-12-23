@@ -42,6 +42,7 @@ type Sessions struct {
 	channelFactory   *ChannelFactory
 	heartbeatFactory *HeartbeatFactory
 	versionH         *metadata.VersionHandler
+	tenantTracker    *metadata.CacheTracker
 }
 
 func NewSessionMgr(cache cache.Cache, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager, heartbeatF *HeartbeatFactory, factory *ChannelFactory) *Sessions {
@@ -52,6 +53,7 @@ func NewSessionMgr(cache cache.Cache, tenantMgr *metadata.TenantManager, txMgr *
 		heartbeatFactory: heartbeatF,
 		devices:          make(map[string]*Session),
 		channelFactory:   factory,
+		tenantTracker:    metadata.NewCacheTracker(tenantMgr, txMgr),
 	}
 }
 
@@ -122,6 +124,10 @@ func (s *Sessions) ExecuteRunner(ctx context.Context, runner RTMRunner) (*Respon
 	tenant, err := s.tenantMgr.GetTenant(ctx, namespaceForThisSession)
 	if err != nil {
 		return nil, errors.NotFound("tenant '%s' not found", namespaceForThisSession)
+	}
+
+	if _, err = s.tenantTracker.InstantTracking(ctx, nil, tenant); err != nil {
+		return nil, err
 	}
 
 	return runner.Run(ctx, tenant)

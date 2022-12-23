@@ -100,7 +100,20 @@ func (factory *ChannelFactory) ListChannels(ctx context.Context, tenantId uint32
 		return nil, err
 	}
 
-	return factory.cache.ListStreams(ctx, encProj)
+	streams, err := factory.cache.ListStreams(ctx, encProj)
+	if err != nil {
+		return nil, err
+	}
+
+	channelNames := make([]string, len(streams))
+	for i, s := range streams {
+		_, _, ch, cacheStream := factory.encoder.DecodeCacheTableName(s)
+		if cacheStream {
+			channelNames[i] = ch
+		}
+	}
+
+	return channelNames, nil
 }
 
 func (factory *ChannelFactory) GetChannel(ctx context.Context, tenantId uint32, projId uint32, channelName string) (*Channel, error) {
