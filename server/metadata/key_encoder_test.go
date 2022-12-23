@@ -76,3 +76,13 @@ func TestEncodeDecodeKey(t *testing.T) {
 	require.Equal(t, coll.Name, collName)
 	require.True(t, ok)
 }
+
+func TestCacheEncoderKeyConversion(t *testing.T) {
+	cacheEncoder := NewCacheEncoder()
+
+	externalKey1 := cacheEncoder.DecodeInternalCacheKeyNameToExternal("cache:1:1:c1:k1")
+	require.Equal(t, "k1", externalKey1)
+
+	externalKey2 := cacheEncoder.DecodeInternalCacheKeyNameToExternal("cache:1:1:c1:k1:x1")
+	require.Equal(t, "k1:x1", externalKey2)
+}

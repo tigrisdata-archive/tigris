@@ -47,12 +47,13 @@ func GetRegisteredServicesRealtime(kvStore kv.KeyValueStore, searchStore search.
 
 func GetRegisteredServices(kvStore kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) []Service {
 	var v1Services []Service
+	versionHandler := &metadata.VersionHandler{}
 	v1Services = append(v1Services, newHealthService(txMgr))
 
 	userStore := metadata.NewUserStore(&metadata.DefaultMDNameRegistry{})
 
 	authProvider := auth.NewProvider(userStore, txMgr)
-	v1Services = append(v1Services, newApiService(kvStore, searchStore, tenantMgr, txMgr, authProvider))
+	v1Services = append(v1Services, newApiService(kvStore, searchStore, tenantMgr, txMgr, authProvider, versionHandler))
 
 	if config.DefaultConfig.Auth.EnableOauth {
 		v1Services = append(v1Services, newAuthService(authProvider))
@@ -62,5 +63,6 @@ func GetRegisteredServices(kvStore kv.KeyValueStore, searchStore search.Store, t
 	}
 
 	v1Services = append(v1Services, newObservabilityService(tenantMgr))
+	v1Services = append(v1Services, newCacheService(tenantMgr, txMgr, versionHandler))
 	return v1Services
 }

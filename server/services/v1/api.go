@@ -64,11 +64,11 @@ type apiService struct {
 	authProvider  auth.Provider
 }
 
-func newApiService(kv kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager, authProvider auth.Provider) *apiService {
+func newApiService(kv kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager, authProvider auth.Provider, versionH *metadata.VersionHandler) *apiService {
 	u := &apiService{
 		kvStore:      kv,
 		txMgr:        txMgr,
-		versionH:     &metadata.VersionHandler{},
+		versionH:     versionH,
 		searchStore:  searchStore,
 		cdcMgr:       cdc.NewManager(),
 		tenantMgr:    tenantMgr,

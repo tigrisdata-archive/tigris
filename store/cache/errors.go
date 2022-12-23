@@ -23,6 +23,8 @@ type ErrCode byte
 const (
 	errStrNoSuchKey              = "ERR no such key"
 	errStrConsGroupAlreadyExists = "Consumer Group name already exists"
+	CacheAlreadyExist            = "Cache already exist"
+	CacheNotFound                = "Cache not found"
 )
 
 const (

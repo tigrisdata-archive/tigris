@@ -30,6 +30,7 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/defaults"
 	"github.com/tigrisdata/tigris/server/transaction"
+	cache2 "github.com/tigrisdata/tigris/store/cache"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
 	ulog "github.com/tigrisdata/tigris/util/log"
@@ -516,13 +517,15 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVe
 type Tenant struct {
 	sync.RWMutex
 
-	kvStore           kv.KeyValueStore
-	searchStore       search.Store
-	schemaStore       *SchemaSubspace
-	namespaceStore    *NamespaceSubspace
-	metaStore         *MetadataDictionary
-	Encoder           Encoder
-	databases         map[string]*Database
+	kvStore        kv.KeyValueStore
+	searchStore    search.Store
+	schemaStore    *SchemaSubspace
+	namespaceStore *NamespaceSubspace
+
+	metaStore *MetadataDictionary
+	Encoder   Encoder
+	databases map[string]*Database
+
 	idToDatabaseMap   map[uint32]string
 	namespace         Namespace
 	version           Version
@@ -609,6 +612,65 @@ func (tenant *Tenant) GetNamespace() Namespace {
 	defer tenant.RUnlock()
 
 	return tenant.namespace
+}
+
+func (tenant *Tenant) CreateCache(ctx context.Context, tx transaction.Tx, project string, cache string, currentSub string) (bool, error) {
+	tenant.Lock()
+	defer tenant.Unlock()
+	dbMetadata, err := tenant.namespaceStore.GetDatabaseMetadata(ctx, tx, tenant.namespace.Id(), project)
+	if err != nil {
+		return false, errors.Internal("Failed to get project metadata for project %s", project)
+	}
+	if dbMetadata.CachesMetadata == nil {
+		dbMetadata.CachesMetadata = []CachesMetadata{}
+	}
+	for _, cacheMetadata := range dbMetadata.CachesMetadata {
+		if cacheMetadata.Name == cache {
+			return false, errors.AlreadyExists(cache2.CacheAlreadyExist)
+		}
+	}
+	dbMetadata.CachesMetadata = append(dbMetadata.CachesMetadata, CachesMetadata{
+		Name:      cache,
+		Creator:   currentSub,
+		CreatedAt: time.Now().Unix(),
+	})
+	err = tenant.namespaceStore.UpdateDatabaseMetadata(ctx, tx, tenant.namespace.Id(), project, dbMetadata)
+	if err != nil {
+		return false, errors.Internal("Failed to update project metadata for cache creation")
+	}
+	return true, nil
+}
+
+func (tenant *Tenant) DeleteCache(ctx context.Context, tx transaction.Tx, project string, cache string) (bool, error) {
+	tenant.Lock()
+	defer tenant.Unlock()
+
+	dbMetadata, err := tenant.namespaceStore.GetDatabaseMetadata(ctx, tx, tenant.namespace.Id(), project)
+	if err != nil {
+		return false, errors.Internal("Failed to get project metadata for project %s", project)
+	}
+	if dbMetadata.CachesMetadata == nil {
+		dbMetadata.CachesMetadata = []CachesMetadata{}
+	}
+	var tempCachesMetadata []CachesMetadata
+	var found bool
+	for _, cacheMetadata := range dbMetadata.CachesMetadata {
+		if cacheMetadata.Name != cache {
+			tempCachesMetadata = append(tempCachesMetadata, cacheMetadata)
+		} else {
+			found = true
+		}
+	}
+	if !found {
+		return false, errors.NotFound(cache2.CacheNotFound)
+	}
+	dbMetadata.CachesMetadata = tempCachesMetadata
+
+	err = tenant.namespaceStore.UpdateDatabaseMetadata(ctx, tx, tenant.namespace.Id(), project, dbMetadata)
+	if err != nil {
+		return false, errors.Internal("Failed to update project metadata for cache deletion")
+	}
+	return true, nil
 }
 
 // CreateDatabase is responsible for creating a dictionary encoding of the database name. This method is not adding the
