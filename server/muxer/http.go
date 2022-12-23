@@ -56,6 +56,10 @@ func (s *HTTPServer) SetupMiddlewares(cfg *config.Config) {
 	s.Inproc.WithServerUnaryInterceptor(unary)
 
 	s.Router.Use(cors.AllowAll().Handler)
+	if cfg.Server.Type == config.RealtimeServerType {
+		s.Router.Use(middleware.HTTPMetadataExtractorMiddleware(cfg))
+		s.Router.Use(middleware.HTTPAuthMiddleware(cfg))
+	}
 }
 
 func (s *HTTPServer) Start(mux cmux.CMux) error {
