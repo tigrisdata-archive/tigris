@@ -1492,8 +1492,8 @@ func (runner *DatabaseQueryRunner) SetCreateBranchReq(create *api.CreateBranchRe
 	runner.createBranch = create
 }
 
-func (runner *DatabaseQueryRunner) SetDeleteBranchReq(delete *api.DeleteBranchRequest) {
-	runner.deleteBranch = delete
+func (runner *DatabaseQueryRunner) SetDeleteBranchReq(deleteBranch *api.DeleteBranchRequest) {
+	runner.deleteBranch = deleteBranch
 }
 
 func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
@@ -1586,21 +1586,14 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			return nil, ctx, err
 		}
 
-		// TODO: If describe is on a branch should the size be tagged with `db:branch`?
 		metrics.UpdateDbSizeMetrics(namespace, tenantName, db.Name(), size)
-
-		// get all branches
-		var branches []string
-		for _, branch := range tenant.GetBranches(ctx, db) {
-			branches = append(branches, branch.BranchName())
-		}
 
 		return &Response{
 			Response: &api.DescribeDatabaseResponse{
 				Metadata:    &api.DatabaseMetadata{},
 				Collections: collections,
 				Size:        size,
-				Branches:    branches,
+				Branches:    tenant.ListBranches(ctx, db),
 			},
 		}, ctx, nil
 
@@ -1608,7 +1601,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		dbBranch := metadata.NewDatabaseNameWithBranch(runner.createBranch.GetProject(), runner.createBranch.GetBranch())
 		err := tenant.CreateBranch(ctx, tx, dbBranch)
 		if err != nil {
-			return nil, ctx, errors.From(err)
+			return nil, ctx, createApiError(err)
 		}
 		return &Response{
 			Response: &api.CreateBranchResponse{
@@ -1619,7 +1612,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		dbBranch := metadata.NewDatabaseNameWithBranch(runner.deleteBranch.GetProject(), runner.deleteBranch.GetBranch())
 		err := tenant.DeleteBranch(ctx, tx, dbBranch)
 		if err != nil {
-			return nil, ctx, errors.From(err)
+			return nil, ctx, createApiError(err)
 		}
 		return &Response{
 			Response: &api.DeleteBranchResponse{

@@ -78,7 +78,7 @@ func newBaseRunner(cache cache.Cache, factory *ChannelFactory) *baseRunner {
 }
 
 func (runner *baseRunner) getProject(ctx context.Context, tenant *metadata.Tenant, project string) (*metadata.Database, error) {
-	proj, err := tenant.GetDatabase(ctx, project)
+	proj, err := tenant.GetDatabase(ctx, metadata.NewDatabaseName(project))
 	if err != nil {
 		return nil, err
 	}

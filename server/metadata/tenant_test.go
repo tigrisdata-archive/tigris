@@ -31,9 +31,11 @@ import (
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
-var kvStore kv.KeyValueStore
-var tenantDb1 = NewDatabaseName("tenant_db1")
-var tenantDb2 = NewDatabaseName("tenant_db2")
+var (
+	kvStore   kv.KeyValueStore
+	tenantDb1 = NewDatabaseName("tenant_db1")
+	tenantDb2 = NewDatabaseName("tenant_db2")
+)
 
 func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 	t.Run("create_tenant", func(t *testing.T) {

@@ -31,7 +31,7 @@ const (
 	BranchNameSeparator = "_$branch$_"
 )
 
-// DatabaseName represents a primary database and its branch name
+// DatabaseName represents a primary database and its branch name.
 type DatabaseName struct {
 	db     string
 	branch string
@@ -57,7 +57,7 @@ func NewDatabaseName(key string) *DatabaseName {
 
 // Name returns the internal name of the database
 // db with name "catalog" and branch "main" will have internal name as "catalog"
-// db with name "catalog" and branch "feature" will have internal name as "catalog_$branch$_feature"
+// db with name "catalog" and branch "feature" will have internal name as "catalog_$branch$_feature".
 func (b *DatabaseName) Name() string {
 	if b.IsMainBranch() {
 		return b.Db()
@@ -65,12 +65,12 @@ func (b *DatabaseName) Name() string {
 	return b.Db() + BranchNameSeparator + b.Branch()
 }
 
-// Db is the user facing name of the oprimary database
+// Db is the user facing name of the oprimary database.
 func (b *DatabaseName) Db() string {
 	return b.db
 }
 
-// Branch belonging to Db
+// Branch belonging to Db.
 func (b *DatabaseName) Branch() string {
 	if b.IsMainBranch() {
 		return MainBranch
@@ -78,7 +78,7 @@ func (b *DatabaseName) Branch() string {
 	return b.branch
 }
 
-// IsMainBranch returns "True" if this is primary Db or "False" if a branch
+// IsMainBranch returns "True" if this is primary Db or "False" if a branch.
 func (b *DatabaseName) IsMainBranch() bool {
 	if len(b.branch) == 0 || b.branch == MainBranch {
 		return true

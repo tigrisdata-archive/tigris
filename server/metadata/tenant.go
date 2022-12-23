@@ -679,7 +679,7 @@ func (tenant *Tenant) CreateBranch(ctx context.Context, tx transaction.Tx, dbNam
 // dropped encoding entry in the encoding table. Drop returns "false" if the database doesn't exist so that caller can
 // reason about it. DropDatabase is more involved than CreateDatabase as with Drop we also need to iterate over all the
 // collections present in this database and call drop collection on each one of them. Returns "False" if database didn't
-// exist
+// exist.
 func (tenant *Tenant) DropDatabase(ctx context.Context, tx transaction.Tx, dbName string) (bool, error) {
 	tenant.Lock()
 	defer tenant.Unlock()
@@ -737,7 +737,6 @@ func (tenant *Tenant) DeleteBranch(ctx context.Context, tx transaction.Tx, dbBra
 }
 
 func (tenant *Tenant) deleteBranch(ctx context.Context, tx transaction.Tx, dbBranch *DatabaseName) error {
-
 	dbName := dbBranch.Name()
 	// check first if it exists
 	db, found := tenant.databases[dbName]
@@ -769,12 +768,25 @@ func (tenant *Tenant) GetDatabase(_ context.Context, dbName *DatabaseName) (*Dat
 	return tenant.databases[dbName.Name()], nil
 }
 
-// GetBranches returns an array of all the branches associated with this database including "main" branch (primary Db)
-func (tenant *Tenant) GetBranches(ctx context.Context, mainDb *Database) []*Database {
+// GetBranches returns an array of all the branches associated with this database including "main" branch (primary Db).
+func (tenant *Tenant) GetBranches(ctx context.Context, db *Database) []*Database {
 	tenant.Lock()
 	defer tenant.Unlock()
 
-	return tenant.getBranches(ctx, mainDb, true)
+	return tenant.getBranches(ctx, db, true)
+}
+
+// ListBranches returns an array of branch names associated with this database including "main" branch.
+func (tenant *Tenant) ListBranches(ctx context.Context, db *Database) []string {
+	tenant.Lock()
+	defer tenant.Unlock()
+
+	dbBranches := tenant.getBranches(ctx, db, true)
+	branchNames := make([]string, len(dbBranches))
+	for i, branch := range dbBranches {
+		branchNames[i] = branch.BranchName()
+	}
+	return branchNames
 }
 
 func (tenant *Tenant) getBranches(_ context.Context, mainDb *Database, includeMain bool) []*Database {
@@ -804,14 +816,16 @@ func (tenant *Tenant) ListDatabasesOnly(_ context.Context) []string {
 	return databases
 }
 
-// ListDatabaseWithBranches returns a list of all databases and their branches
+// ListDatabaseWithBranches returns a list of all databases and their branches.
 func (tenant *Tenant) ListDatabaseWithBranches(_ context.Context) []string {
 	tenant.RLock()
 	defer tenant.RUnlock()
 
-	var branches []string
+	branches := make([]string, len(tenant.databases))
+	i := 0
 	for name := range tenant.databases {
-		branches = append(branches, name)
+		branches[i] = name
+		i++
 	}
 
 	return branches

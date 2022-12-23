@@ -27,10 +27,6 @@ test: docker_test
 run:
 	$(DOCKER_COMPOSE) up --build --detach tigris_server2
 
-debug:
-	$(DOCKER_COMPOSE) up --no-build --detach tigris_search tigris_db2
-
-
 # Dump logs of local Tigris instance started by `run`.
 logs:
 	$(DOCKER_COMPOSE) logs
