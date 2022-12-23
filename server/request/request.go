@@ -65,6 +65,13 @@ func Init(tg metadata.TenantGetter) {
 	tenantGetter = tg
 }
 
+func NewRequestMetadata(ctx context.Context) Metadata {
+	ns, utype, sub := GetMetadataFromHeader(ctx)
+	md := Metadata{IsHuman: utype, Sub: sub}
+	md.SetNamespace(ctx, ns)
+	return md
+}
+
 func NewRequestEndpointMetadata(ctx context.Context, serviceName string, methodInfo grpc.MethodInfo, db string, coll string) Metadata {
 	ns, utype, sub := GetMetadataFromHeader(ctx)
 	md := Metadata{serviceName: serviceName, methodInfo: methodInfo, IsHuman: utype, Sub: sub}
