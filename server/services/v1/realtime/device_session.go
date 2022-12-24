@@ -60,7 +60,7 @@ func (s *Sessions) CreateDeviceSession(ctx context.Context, conn *websocket.Conn
 		return nil, errors.NotFound("tenant '%s' not found", namespaceForThisSession)
 	}
 
-	proj, err := tenant.GetDatabase(ctx, params.ProjectName)
+	proj, err := tenant.GetDatabase(ctx, metadata.NewDatabaseName(params.ProjectName))
 	if err != nil {
 		return nil, errors.NotFound("project '%s' not found", params.ProjectName)
 	}
@@ -79,7 +79,7 @@ func (s *Sessions) CreateDeviceSession(ctx context.Context, conn *websocket.Conn
 			return nil, err
 		}
 
-		if proj, _ = tenant.GetDatabase(ctx, params.ProjectName); proj == nil {
+		if proj, _ = tenant.GetDatabase(ctx, metadata.NewDatabaseName(params.ProjectName)); proj == nil {
 			return nil, errors.NotFound("project '%s' not found", params.ProjectName)
 		}
 	}

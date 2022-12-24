@@ -180,8 +180,8 @@ func (m *managementService) getNameSpaceDetails(ctx context.Context) (nsDetailsR
 			return nil, err
 		}
 
-		for _, dbName := range tenant.ListDatabases(ctx) {
-			db, err := tenant.GetDatabase(ctx, dbName)
+		for _, dbName := range tenant.ListDatabaseWithBranches(ctx) {
+			db, err := tenant.GetDatabase(ctx, metadata.NewDatabaseName(dbName))
 			if err != nil {
 				return nil, err
 			}
