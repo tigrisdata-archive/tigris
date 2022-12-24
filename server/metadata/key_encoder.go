@@ -165,5 +165,5 @@ func (d *DictKeyEncoder) DecodeCacheTableName(name string) (uint32, uint32, stri
 	nsId, _ := strconv.ParseInt(allParts[1], 10, 64)
 	pid, _ := strconv.ParseInt(allParts[2], 10, 64)
 
-	return uint32(nsId), uint32(pid), allParts[2], true
+	return uint32(nsId), uint32(pid), allParts[3], true
 }

@@ -176,9 +176,16 @@ func newTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, mdName
 }
 
 func (m *TenantManager) EnsureDefaultNamespace() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_, err := m.CreateOrGetTenant(ctx, NewDefaultNamespace())
+	var err error
+	for i := 0; i < 3; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_, err = m.CreateOrGetTenant(ctx, NewDefaultNamespace())
+		cancel()
+		if err != kv.ErrConflictingTransaction {
+			return err
+		}
+		time.Sleep(1 * time.Second)
+	}
 	return err
 }
 

@@ -87,6 +87,7 @@ func mainWithCode() int {
 	log.Info().Msg("initialized tenant manager")
 
 	if err = tenantMgr.EnsureDefaultNamespace(); err != nil {
+		// ToDo: do not load collections for realtime deployment
 		log.Error().Err(err).Msg("error initializing default namespace")
 		return 1
 	}

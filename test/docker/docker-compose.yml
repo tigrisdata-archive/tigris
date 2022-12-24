@@ -108,6 +108,9 @@ services:
     environment:
       - TIGRIS_SERVER_SERVER_TYPE=realtime
       - TIGRIS_ENVIRONMENT=test
+      - TIGRIS_SERVER_SEARCH_AUTH_KEY=ts_test_key
+      - TIGRIS_SERVER_SEARCH_HOST=tigris_search
+      - TIGRIS_SERVER_CACHE_HOST=tigris_cache
       - TIGRIS_SERVER_LOG_FORMAT=console
     build:
       context: ../../

@@ -35,7 +35,7 @@ func TestFactory(t *testing.T) {
 
 		channels, err := factory.ListChannels(ctx, 1, 1, "*")
 		require.NoError(t, err)
-		require.Equal(t, []string{"cache:1:1:test"}, channels)
+		require.Equal(t, []string{"test"}, channels)
 	})
 	t.Run("strict_create_channel", func(t *testing.T) {
 		channel1, err := factory.GetOrCreateChannel(ctx, 1, 1, "test")
@@ -48,7 +48,7 @@ func TestFactory(t *testing.T) {
 
 		channels, err := factory.ListChannels(ctx, 1, 1, "*")
 		require.NoError(t, err)
-		require.Equal(t, []string{"cache:1:1:test"}, channels)
+		require.Equal(t, []string{"test"}, channels)
 
 		channel3, err := factory.GetChannel(ctx, 1, 1, "test")
 		require.NoError(t, err)

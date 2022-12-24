@@ -120,6 +120,14 @@ var testCreateSchema = Map{
 	},
 }
 
+func setupTestsOnlyProject(t *testing.T) string {
+	db := fmt.Sprintf("integration_%s", t.Name())
+	deleteProject(t, db)
+	createProject(t, db).Status(http.StatusOK)
+
+	return db
+}
+
 func setupTests(t *testing.T) (string, string) {
 	db := fmt.Sprintf("integration_%s", t.Name())
 	deleteProject(t, db)
@@ -142,6 +150,10 @@ func expectLow(s httpexpect.LoggerReporter, url string) *httpexpect.Expect {
 
 func expect(s httpexpect.LoggerReporter) *httpexpect.Expect {
 	return expectLow(s, config.GetBaseURL())
+}
+
+func expectRealtime(s httpexpect.LoggerReporter) *httpexpect.Expect {
+	return expectLow(s, config.GetBaseRealtimeURL())
 }
 
 func getDocumentURL(databaseName, collectionName string, methodName string) string {
