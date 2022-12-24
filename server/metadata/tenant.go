@@ -765,7 +765,16 @@ func (tenant *Tenant) GetDatabase(_ context.Context, dbName *DatabaseName) (*Dat
 	tenant.Lock()
 	defer tenant.Unlock()
 
-	return tenant.databases[dbName.Name()], nil
+	db, found := tenant.databases[dbName.Name()]
+	if !found {
+		if dbName.IsMainBranch() {
+			return nil, NewDatabaseNotFoundErr(dbName.Db())
+		} else {
+			return nil, NewBranchNotFoundErr(dbName.Branch())
+		}
+	}
+
+	return db, nil
 }
 
 // GetBranches returns an array of all the branches associated with this database including "main" branch (primary Db).

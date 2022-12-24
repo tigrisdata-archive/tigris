@@ -17,7 +17,6 @@ package database
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"math"
 	"time"
 
@@ -174,15 +173,7 @@ func (runner *BaseQueryRunner) getDatabaseFromTenant(ctx context.Context, tenant
 	dbBranch := metadata.NewDatabaseNameWithBranch(dbName, branch)
 	db, err := tenant.GetDatabase(ctx, dbBranch)
 	if err != nil {
-		return nil, err
-	}
-	// database not found
-	if db == nil {
-		errMsg := fmt.Sprintf("database doesn't exist '%s'", dbBranch.Db())
-		if !dbBranch.IsMainBranch() {
-			errMsg = fmt.Sprintf("branch doesn't exist '%s'", dbBranch.Branch())
-		}
-		return nil, errors.NotFound(errMsg)
+		return nil, createApiError(err)
 	}
 
 	return db, nil
@@ -201,15 +192,7 @@ func (runner *BaseQueryRunner) getDatabase(ctx context.Context, tx transaction.T
 	dbBranch := metadata.NewDatabaseNameWithBranch(dbName, branch)
 	db, err := tenant.GetDatabase(ctx, dbBranch)
 	if err != nil {
-		return nil, err
-	}
-	// database not found
-	if db == nil {
-		errMsg := fmt.Sprintf("database doesn't exist '%s'", dbBranch.Db())
-		if !dbBranch.IsMainBranch() {
-			errMsg = fmt.Sprintf("branch doesn't exist '%s'", dbBranch.Branch())
-		}
-		return nil, errors.NotFound(errMsg)
+		return nil, createApiError(err)
 	}
 
 	return db, nil
