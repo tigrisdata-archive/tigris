@@ -25,11 +25,13 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-var bh codec.BincHandle
+var msgpackHandle = codec.MsgpackHandle{
+	WriteExt: true, // Encodes Byte as binary. See http://ugorji.net/blog/go-codec-primer under Format specific Runtime Configuration
+}
 
 func EncodeStreamMD(md *StreamMessageMD) ([]byte, error) {
 	var buf bytes.Buffer
-	enc := codec.NewEncoder(&buf, &bh)
+	enc := codec.NewEncoder(&buf, &msgpackHandle)
 	if err := enc.Encode(md); ulog.E(err) {
 		return nil, err
 	}
@@ -38,7 +40,7 @@ func EncodeStreamMD(md *StreamMessageMD) ([]byte, error) {
 }
 
 func DecodeStreamMD(enc []byte) (*StreamMessageMD, error) {
-	dec := codec.NewDecoderBytes(enc, &bh)
+	dec := codec.NewDecoderBytes(enc, &msgpackHandle)
 
 	var v *StreamMessageMD
 	if err := dec.Decode(&v); err != nil {
@@ -51,7 +53,7 @@ func EncodeRealtime(encodingType WSEncodingType, msg *api.RealTimeMessage) ([]by
 	switch encodingType {
 	case MsgpackEncoding:
 		var buf bytes.Buffer
-		enc := codec.NewEncoder(&buf, &bh)
+		enc := codec.NewEncoder(&buf, &msgpackHandle)
 		if err := enc.Encode(msg); ulog.E(err) {
 			return nil, err
 		}
@@ -80,11 +82,7 @@ func EncodeAsJSON(_ api.EventType, event proto.Message) ([]byte, error) {
 
 func EncodeAsMsgPack(eventType api.EventType, event proto.Message) ([]byte, error) {
 	var buf bytes.Buffer
-	if err := buf.WriteByte(byte(eventType)); err != nil {
-		return nil, err
-	}
-
-	enc := codec.NewEncoder(&buf, &bh)
+	enc := codec.NewEncoder(&buf, &msgpackHandle)
 	if err := enc.Encode(event); ulog.E(err) {
 		return nil, err
 	}
@@ -92,60 +90,53 @@ func EncodeAsMsgPack(eventType api.EventType, event proto.Message) ([]byte, erro
 }
 
 func DecodeRealtime(encodingType WSEncodingType, message []byte) (*api.RealTimeMessage, error) {
+	var req *api.RealTimeMessage
 	switch encodingType {
 	case MsgpackEncoding:
+		err := codec.NewDecoderBytes(message, &msgpackHandle).Decode(&req)
+		return req, err
 	case JsonEncoding:
-		var req *api.RealTimeMessage
 		err := jsoniter.Unmarshal(message, &req)
 		return req, err
 	}
+
 	return nil, fmt.Errorf("unsupported event '%d'", encodingType)
 }
 
 func DecodeEvent(encodingType WSEncodingType, eventType api.EventType, message []byte) (proto.Message, error) {
+	var event proto.Message
+
+	switch eventType {
+	case api.EventType_auth:
+		event = &api.AuthEvent{}
+	case api.EventType_subscribe:
+		event = &api.SubscribeEvent{}
+	case api.EventType_presence:
+		event = &api.PresenceEvent{}
+	case api.EventType_attach:
+		event = &api.AttachEvent{}
+	case api.EventType_detach:
+		event = &api.DetachEvent{}
+	case api.EventType_subscribed:
+		event = &api.SubscribedEvent{}
+	case api.EventType_message:
+		event = &api.MessageEvent{}
+	case api.EventType_presence_member:
+		event = &api.PresenceMemberEvent{}
+	case api.EventType_disconnect:
+		event = &api.DisconnectEvent{}
+	default:
+		return nil, fmt.Errorf("unsupported eventtype '%d'", eventType)
+	}
+
 	switch encodingType {
 	case MsgpackEncoding:
+		err := codec.NewDecoderBytes(message, &msgpackHandle).Decode(&event)
+		return event, err
 	case JsonEncoding:
-		switch eventType {
-		case api.EventType_attach:
-			var event *api.AttachEvent
-			err := jsoniter.Unmarshal(message, &event)
-			return event, err
-		case api.EventType_detach:
-			var event *api.DetachEvent
-			err := jsoniter.Unmarshal(message, &event)
-			return event, err
-		case api.EventType_auth:
-			var event *api.AuthEvent
-			err := jsoniter.Unmarshal(message, &event)
-			return event, err
-		case api.EventType_subscribe:
-			var event *api.SubscribeEvent
-			err := jsoniter.Unmarshal(message, &event)
-			return event, err
-		case api.EventType_presence:
-			var event *api.PresenceEvent
-			err := jsoniter.Unmarshal(message, &event)
-			return event, err
-		case api.EventType_subscribed:
-			var event *api.SubscribedEvent
-			err := jsoniter.Unmarshal(message, &event)
-			return event, err
-		case api.EventType_message:
-			var event *api.MessageEvent
-			err := jsoniter.Unmarshal(message, &event)
-			return event, err
-		case api.EventType_presence_member:
-			var event *api.PresenceMemberEvent
-			err := jsoniter.Unmarshal(message, &event)
-			return event, err
-		case api.EventType_disconnect:
-			var event *api.DisconnectEvent
-			err := jsoniter.Unmarshal(message, &event)
-			return event, err
-		default:
-			return nil, fmt.Errorf("unsupported '%d'", eventType)
-		}
+		err := jsoniter.Unmarshal(message, &event)
+		return event, err
 	}
-	return nil, fmt.Errorf("unsupported event '%d'", encodingType)
+
+	return nil, fmt.Errorf("unsupported encoding '%d'", encodingType)
 }

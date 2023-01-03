@@ -98,6 +98,9 @@ func (s *realtimeService) extractConnParams(r *http.Request) realtime.Connection
 	// project name is part of path
 	params.ProjectName = chi.URLParam(r, "project")
 
+	// message encoding
+	params.Encoding = r.URL.Query().Get("encoding")
+
 	// query params
 	params.SessionId = r.URL.Query().Get("session_id")
 

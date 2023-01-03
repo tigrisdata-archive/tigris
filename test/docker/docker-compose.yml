@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-version: '3.3'
+version: "3.3"
 
 services:
   tigris_db:
@@ -33,7 +33,6 @@ services:
       - FDB_NETWORKING_MODE=host
     ports:
       - "4500:4500"
-
 
   tigris_search:
     container_name: tigris_search
@@ -101,6 +100,7 @@ services:
     depends_on:
       - tigris_server
       - tigris_db2
+      - tigris_cache
 
   tigris_realtime:
     container_name: tigris_realtime
