@@ -52,7 +52,6 @@ func TestChannel(t *testing.T) {
 		streamMessages, hasData, err := channel.Read(ctx, "0")
 		require.NoError(t, err)
 		require.True(t, hasData)
-		require.NoError(t, err)
 
 		out, err := streamMessages.Decode(streamMessages.Messages[0])
 		require.NoError(t, err)

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/lib/uuid"
@@ -142,6 +143,7 @@ func (session *Session) Start(ctx context.Context) error {
 		}
 		session.lastReceived = time.Now()
 		if errEvent := session.onMessage(ctx, message); errEvent != nil {
+			log.Err(err).Msgf("realtime send error '%s'", session.id)
 			SendReply(session.conn, session.encType, api.EventType_error, errEvent)
 		}
 	}
@@ -291,14 +293,14 @@ func (session *Session) handleMessage(ctx context.Context, req *api.RealTimeMess
 }
 
 func SendReply(conn *websocket.Conn, encType WSEncodingType, eventType api.EventType, event proto.Message) {
-	eventEnc, err := EncodeEvent(encType, eventType, event)
+	encEvent, err := EncodeEvent(encType, eventType, event)
 	if err != nil {
 		panic(err)
 	}
 
 	msg := &api.RealTimeMessage{
 		EventType: eventType,
-		Event:     eventEnc,
+		Event:     encEvent,
 	}
 
 	encRealtime, err := EncodeRealtime(encType, msg)
@@ -306,17 +308,16 @@ func SendReply(conn *websocket.Conn, encType WSEncodingType, eventType api.Event
 		panic(err)
 	}
 
-	if encType == MsgpackEncoding {
-		_ = conn.WriteMessage(
-			websocket.BinaryMessage,
-			encRealtime,
-		)
-	} else {
-		_ = conn.WriteMessage(
-			websocket.TextMessage,
-			encRealtime,
-		)
+	msgType := websocket.BinaryMessage
+
+	if encType == JsonEncoding {
+		msgType = websocket.TextMessage
 	}
+
+	_ = conn.WriteMessage(
+		msgType,
+		encRealtime,
+	)
 }
 
 func (session *Session) sendHeartbeat() error {

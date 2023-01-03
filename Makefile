@@ -39,9 +39,16 @@ local_test: generate lint
 # Start local instance with server running on the host.
 # This is useful for debugging the server. The process is attachable from IDE.
 local_run: server
-	$(DOCKER_COMPOSE) up --no-build --detach tigris_search tigris_db2
+	$(DOCKER_COMPOSE) up --no-build --detach tigris_search tigris_db2 tigris_cache
 	fdbcli -C ./test/config/fdb.cluster --exec "configure new single memory" || true
 	./server/service -c config/server.dev.yaml
+
+# Start local instance with server running on the host in realtime mode.
+# This is useful for debugging the server. The process is attachable from IDE.
+local_rt_run: server
+	$(DOCKER_COMPOSE) up --no-build --detach tigris_search tigris_db2 tigris_cache
+	fdbcli -C ./test/config/fdb.cluster --exec "configure new single memory" || true
+	TIGRIS_SERVER_SERVER_TYPE=realtime ./server/service -c config/server.dev.yaml
 
 # Runs tigris server and foundationdb, plus additional tools for it like:
 # - prometheus and grafana for monitoring
