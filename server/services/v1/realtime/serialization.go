@@ -107,6 +107,14 @@ func DecodeEvent(encodingType WSEncodingType, eventType api.EventType, message [
 	case MsgpackEncoding:
 	case JsonEncoding:
 		switch eventType {
+		case api.EventType_attach:
+			var event *api.AttachEvent
+			err := jsoniter.Unmarshal(message, &event)
+			return event, err
+		case api.EventType_detach:
+			var event *api.DetachEvent
+			err := jsoniter.Unmarshal(message, &event)
+			return event, err
 		case api.EventType_auth:
 			var event *api.AuthEvent
 			err := jsoniter.Unmarshal(message, &event)
