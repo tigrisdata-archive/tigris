@@ -62,9 +62,6 @@ func (s *Sessions) CreateDeviceSession(ctx context.Context, conn *websocket.Conn
 
 	proj, err := tenant.GetDatabase(ctx, metadata.NewDatabaseName(params.ProjectName))
 	if err != nil {
-		return nil, errors.NotFound("project '%s' not found", params.ProjectName)
-	}
-	if proj == nil {
 		tx, err := s.txMgr.StartTx(ctx)
 		if err != nil {
 			return nil, err
@@ -74,12 +71,11 @@ func (s *Sessions) CreateDeviceSession(ctx context.Context, conn *websocket.Conn
 		if version, err = s.versionH.Read(ctx, tx, false); err != nil {
 			return nil, err
 		}
-
 		if err = tenant.Reload(ctx, tx, version); err != nil {
 			return nil, err
 		}
 
-		if proj, _ = tenant.GetDatabase(ctx, metadata.NewDatabaseName(params.ProjectName)); proj == nil {
+		if proj, err = tenant.GetDatabase(ctx, metadata.NewDatabaseName(params.ProjectName)); err != nil {
 			return nil, errors.NotFound("project '%s' not found", params.ProjectName)
 		}
 	}
