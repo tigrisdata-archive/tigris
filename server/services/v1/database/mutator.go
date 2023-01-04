@@ -228,6 +228,7 @@ func (p *baseMutator) traverse(parentMap map[string]any, value any, keys []strin
 			p.mutated = true
 			return nil
 		}
+		return nil
 	}
 
 	switch converted := value.(type) {
