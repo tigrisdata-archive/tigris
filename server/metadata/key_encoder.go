@@ -29,6 +29,7 @@ import (
 type CacheEncoder interface {
 	EncodeCacheTableName(tenantId uint32, projId uint32, name string) (string, error)
 	DecodeCacheTableName(stream string) (uint32, uint32, string, bool)
+	DecodeInternalCacheKeyNameToExternal(internalKey string) string
 }
 
 // Encoder is used to encode/decode values of the Key.
@@ -155,6 +156,20 @@ func (d *DictKeyEncoder) DecodeIndexName(indexName []byte) uint32 {
 
 func (d *DictKeyEncoder) EncodeCacheTableName(tenantId uint32, projId uint32, name string) (string, error) {
 	return fmt.Sprintf("%s:%d:%d:%s", internal.CacheKeyPrefix, tenantId, projId, name), nil
+}
+
+func (d *DictKeyEncoder) DecodeInternalCacheKeyNameToExternal(internalKey string) string {
+	i := 0
+	// first four parts are internal (cache prefix, tenant, project, cache name)
+	for m := 1; m <= 4; m++ {
+		x := strings.Index(internalKey[i:], ":")
+		if x < 0 {
+			break
+		}
+		i += x
+		i += 1
+	}
+	return internalKey[i:]
 }
 
 func (d *DictKeyEncoder) DecodeCacheTableName(name string) (uint32, uint32, string, bool) {

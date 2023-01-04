@@ -1609,9 +1609,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 
 func createDatabaseMetadata(ctx context.Context) (*metadata.DatabaseMetadata, error) {
 	currentSub, err := auth.GetCurrentSub(ctx)
-	if err != nil && !config.DefaultConfig.Auth.EnableNamespaceIsolation {
-		return nil, nil
-	} else if err != nil {
+	if err != nil && config.DefaultConfig.Auth.Enabled {
 		return nil, errors.Internal("Failed to create database metadata")
 	}
 	return &metadata.DatabaseMetadata{

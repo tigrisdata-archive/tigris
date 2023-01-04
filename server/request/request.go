@@ -240,6 +240,14 @@ func GetAccessToken(ctx context.Context) (*types.AccessToken, error) {
 	return nil, errors.NotFound("Access token not found")
 }
 
+func GetCurrentSub(ctx context.Context) (string, error) {
+	tkn, err := GetAccessToken(ctx)
+	if err != nil {
+		return "", err
+	}
+	return tkn.Sub, nil
+}
+
 func GetNamespace(ctx context.Context) (string, error) {
 	// read token
 	if value := ctx.Value(MetadataCtxKey{}); value != nil {

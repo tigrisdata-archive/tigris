@@ -17,7 +17,14 @@ package metadata
 import "strings"
 
 type DatabaseMetadata struct {
-	Id        uint32
+	Id             uint32
+	Creator        string
+	CreatedAt      int64
+	CachesMetadata []CachesMetadata
+}
+
+type CachesMetadata struct {
+	Name      string
 	Creator   string
 	CreatedAt int64
 }
