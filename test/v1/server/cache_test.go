@@ -78,6 +78,37 @@ func TestDeleteCache(t *testing.T) {
 	assert.Equal(t, "NOT_FOUND", code)
 }
 
+func TestListCaches(t *testing.T) {
+	project := setupTestsOnlyProject(t)
+	for i := 1; i <= 5; i++ {
+		cacheName := fmt.Sprintf("cache_%d", i)
+		createCache(t, project, cacheName)
+	}
+
+	listCachesResp := listCaches(t, project)
+	caches := listCachesResp.Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("caches").
+		Array()
+
+	assert.Equal(t, 5, len(caches.Raw()))
+	for i := 1; i <= 5; i++ {
+		cacheName := fmt.Sprintf("cache_%d", i)
+		var contains = false
+		for _, c := range caches.Iter() {
+			if c.Object().Value("name").Raw() == cacheName {
+				if contains {
+					assert.Failf(t, "Cache name %s is present more than once", cacheName)
+				}
+				contains = true
+				break
+			}
+		}
+		assert.Truef(t, contains, "Cache name: %s is found in list caches response", cacheName)
+	}
+}
+
 func TestCacheCRUD(t *testing.T) {
 	project := setupTestsOnlyProject(t)
 	cacheName := "c1"
@@ -186,6 +217,12 @@ func createCache(t *testing.T, project string, cache string) *httpexpect.Respons
 	e := cacheExpect(t)
 	return e.POST(cacheOperationURL(project, cache, "create")).
 		WithJSON(CacheTestMap{}).
+		Expect()
+}
+
+func listCaches(t *testing.T, project string) *httpexpect.Response {
+	e := cacheExpect(t)
+	return e.GET(fmt.Sprintf("/v1/projects/%s/caches/list", project)).
 		Expect()
 }
 

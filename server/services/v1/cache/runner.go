@@ -57,6 +57,12 @@ type DeleteCacheRunner struct {
 	req *api.DeleteCacheRequest
 }
 
+type ListCachesRunner struct {
+	*BaseRunner
+
+	req *api.ListCachesRequest
+}
+
 type SetRunner struct {
 	*BaseRunner
 
@@ -102,6 +108,13 @@ func (f *RunnerFactory) GetCreateCacheRunner(r *api.CreateCacheRequest, accessTo
 
 func (f *RunnerFactory) GetDeleteCacheRunner(r *api.DeleteCacheRequest, accessToken *types.AccessToken) *DeleteCacheRunner {
 	return &DeleteCacheRunner{
+		BaseRunner: NewBaseRunner(f.encoder, accessToken, f.cacheStore),
+		req:        r,
+	}
+}
+
+func (f *RunnerFactory) GetListCachesRunner(r *api.ListCachesRequest, accessToken *types.AccessToken) *ListCachesRunner {
+	return &ListCachesRunner{
 		BaseRunner: NewBaseRunner(f.encoder, accessToken, f.cacheStore),
 		req:        r,
 	}
@@ -180,6 +193,22 @@ func (runner *DeleteCacheRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}
 	return &CacheResponse{
 		Status: database.DeletedStatus,
+	}, ctx, nil
+}
+
+func (runner *ListCachesRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*CacheResponse, context.Context, error) {
+	caches, err := tenant.ListCaches(ctx, tx, runner.req.GetProject())
+	if err != nil {
+		return nil, ctx, err
+	}
+	cachesMetadata := make([]*api.CacheMetadata, len(caches))
+	for i, cache := range caches {
+		cachesMetadata[i] = &api.CacheMetadata{
+			Name: cache,
+		}
+	}
+	return &CacheResponse{
+		Caches: cachesMetadata,
 	}, ctx, nil
 }
 

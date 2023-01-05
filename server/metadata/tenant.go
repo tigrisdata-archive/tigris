@@ -641,6 +641,23 @@ func (tenant *Tenant) CreateCache(ctx context.Context, tx transaction.Tx, projec
 	return true, nil
 }
 
+func (tenant *Tenant) ListCaches(ctx context.Context, tx transaction.Tx, project string) ([]string, error) {
+	tenant.Lock()
+	defer tenant.Unlock()
+	dbMetadata, err := tenant.namespaceStore.GetDatabaseMetadata(ctx, tx, tenant.namespace.Id(), project)
+	if err != nil {
+		return nil, errors.Internal("Failed to get project metadata for project %s", project)
+	}
+	if dbMetadata.CachesMetadata == nil {
+		return []string{}, nil
+	}
+	caches := make([]string, len(dbMetadata.CachesMetadata))
+	for i, cacheMetadata := range dbMetadata.CachesMetadata {
+		caches[i] = cacheMetadata.Name
+	}
+	return caches, nil
+}
+
 func (tenant *Tenant) DeleteCache(ctx context.Context, tx transaction.Tx, project string, cache string) (bool, error) {
 	tenant.Lock()
 	defer tenant.Unlock()

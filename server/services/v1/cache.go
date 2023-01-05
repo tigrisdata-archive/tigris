@@ -78,6 +78,18 @@ func (c *cacheService) DeleteCache(ctx context.Context, req *api.DeleteCacheRequ
 	}, nil
 }
 
+func (c *cacheService) ListCaches(ctx context.Context, req *api.ListCachesRequest) (*api.ListCachesResponse, error) {
+	accessToken, _ := request.GetAccessToken(ctx)
+
+	resp, err := c.sessions.TxExecute(ctx, c.runnerFactory.GetListCachesRunner(req, accessToken))
+	if err != nil {
+		return nil, err
+	}
+	return &api.ListCachesResponse{
+		Caches: resp.Caches,
+	}, nil
+}
+
 func (c *cacheService) Set(ctx context.Context, req *api.SetRequest) (*api.SetResponse, error) {
 	accessToken, _ := request.GetAccessToken(ctx)
 	resp, err := c.sessions.Execute(ctx, c.runnerFactory.GetSetRunner(req, accessToken))
