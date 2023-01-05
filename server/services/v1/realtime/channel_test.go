@@ -42,11 +42,11 @@ func TestChannel(t *testing.T) {
 		defer channel.Close(ctx)
 
 		first := []byte(`{"a": 1}`)
-		id1, err := channel.PublishMessage(ctx, internal.NewStreamData(nil, first))
+		id1, err := channel.PublishMessage(ctx, internal.NewStreamData(internal.MsgpackEncoding, nil, first))
 		require.NoError(t, err)
 
 		second := []byte(`{"b": 2}`)
-		id2, err := channel.PublishMessage(ctx, internal.NewStreamData(nil, second))
+		id2, err := channel.PublishMessage(ctx, internal.NewStreamData(internal.MsgpackEncoding, nil, second))
 		require.NoError(t, err)
 
 		streamMessages, hasData, err := channel.Read(ctx, "0")
@@ -93,7 +93,7 @@ func TestChannel(t *testing.T) {
 
 		var expectedIds []string
 		for i := 0; i < totalEvents; i++ {
-			id, err := channel.PublishMessage(ctx, internal.NewStreamData(nil, dummyWatch.expEvents[i]))
+			id, err := channel.PublishMessage(ctx, internal.NewStreamData(internal.MsgpackEncoding, nil, dummyWatch.expEvents[i]))
 			require.NoError(t, err)
 			expectedIds = append(expectedIds, id)
 		}
@@ -160,7 +160,7 @@ func TestChannel(t *testing.T) {
 		}
 
 		for i := 0; i < totalEvents; i++ {
-			id, err := channel.PublishMessage(ctx, internal.NewStreamData(nil, publishedEvents[i]))
+			id, err := channel.PublishMessage(ctx, internal.NewStreamData(internal.MsgpackEncoding, nil, publishedEvents[i]))
 			require.NoError(t, err)
 			v := idsAtomic.Load().([]string)
 			v[i] = id

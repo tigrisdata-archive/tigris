@@ -22,6 +22,7 @@ import (
 
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/store/cache"
 )
@@ -108,7 +109,13 @@ func (runner *MessagesRunner) Run(ctx context.Context, tenant *metadata.Tenant) 
 
 	ids := make([]string, len(runner.req.Messages))
 	for i, m := range runner.req.Messages {
-		streamData, err := NewEventDataFromMessage("", "", m.Name, m)
+		// the user data is stored as msgpacked
+		m.Data, err = EncodeAsMsgPack(m.Data)
+		if err != nil {
+			return nil, err
+		}
+
+		streamData, err := NewEventDataFromMessage(internal.MsgpackEncoding, "", "", m.Name, m)
 		if err != nil {
 			return nil, err
 		}
@@ -172,11 +179,17 @@ func (runner *ReadMessagesRunner) Run(ctx context.Context, tenant *metadata.Tena
 			if err != nil {
 				return nil, err
 			}
+
+			rawData, err := SanitizeUserData(internal.JsonEncoding, data)
+			if err != nil {
+				return nil, err
+			}
+
 			_ = runner.streaming.Send(&api.ReadMessagesResponse{
 				Message: &api.Message{
 					Id:   &m.ID,
 					Name: md.EventName,
-					Data: data.RawData,
+					Data: rawData,
 				},
 			})
 			count++

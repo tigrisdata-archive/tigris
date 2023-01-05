@@ -42,24 +42,24 @@ func NewStreamMessageMD(dataType string, clientId string, socketId string, event
 	}
 }
 
-func NewPresenceData(clientId string, socketId string, eventName string, msg *api.MessageEvent) (*internal.StreamData, error) {
-	return newStreamData(PresenceChannelData, clientId, socketId, eventName, msg.Data)
+func NewPresenceData(encType internal.UserDataEncType, clientId string, socketId string, eventName string, msg *api.MessageEvent) (*internal.StreamData, error) {
+	return newStreamData(PresenceChannelData, encType, clientId, socketId, eventName, msg.Data)
 }
 
-func NewMessageData(clientId string, socketId string, eventName string, msg *api.MessageEvent) (*internal.StreamData, error) {
-	return newStreamData(MessageChannelData, clientId, socketId, eventName, msg.Data)
+func NewMessageData(encType internal.UserDataEncType, clientId string, socketId string, eventName string, msg *api.MessageEvent) (*internal.StreamData, error) {
+	return newStreamData(MessageChannelData, encType, clientId, socketId, eventName, msg.Data)
 }
 
-func NewEventDataFromMessage(clientId string, socketId string, eventName string, msg *api.Message) (*internal.StreamData, error) {
-	return newStreamData(MessageChannelData, clientId, socketId, eventName, msg.Data)
+func NewEventDataFromMessage(encType internal.UserDataEncType, clientId string, socketId string, eventName string, msg *api.Message) (*internal.StreamData, error) {
+	return newStreamData(MessageChannelData, encType, clientId, socketId, eventName, msg.Data)
 }
 
-func newStreamData(dataType string, clientId string, socketId string, eventName string, rawData []byte) (*internal.StreamData, error) {
+func newStreamData(dataType string, encType internal.UserDataEncType, clientId string, socketId string, eventName string, rawData []byte) (*internal.StreamData, error) {
 	md := NewStreamMessageMD(dataType, clientId, socketId, eventName)
-	enc, err := EncodeStreamMD(md)
+	encMD, err := EncodeStreamMD(md)
 	if err != nil {
 		return nil, err
 	}
 
-	return internal.NewStreamData(enc, rawData), nil
+	return internal.NewStreamData(encType, encMD, rawData), nil
 }

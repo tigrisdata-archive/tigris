@@ -44,8 +44,11 @@ const (
 	StreamDataType
 )
 
+type UserDataEncType int8
+
 const (
-	JsonEncoding = iota + 1
+	MsgpackEncoding UserDataEncType = 1
+	JsonEncoding    UserDataEncType = 2
 )
 
 // CreateNewTimestamp is a method used to construct timestamp from unixNano. In search backend we store internal

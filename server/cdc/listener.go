@@ -46,7 +46,7 @@ func (p *Publisher) OnCommit(ctx context.Context, tx transaction.Tx, listener kv
 		return err
 	}
 
-	td := internal.NewTableDataWithEncoding(json, internal.JsonEncoding)
+	td := internal.NewTableDataWithEncoding(json, int32(internal.JsonEncoding))
 	enc, err := internal.Encode(td)
 	if err != nil {
 		return err

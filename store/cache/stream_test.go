@@ -40,7 +40,7 @@ func TestStream(t *testing.T) {
 		}()
 
 		rawI := []byte("hello")
-		id, err := stream.Add(ctx, internal.NewStreamData(nil, rawI))
+		id, err := stream.Add(ctx, internal.NewStreamData(internal.JsonEncoding, nil, rawI))
 		require.NotEmpty(t, id)
 		require.NoError(t, err)
 
@@ -104,7 +104,7 @@ func TestBenchmarkingStreams(t *testing.T) {
 }
 
 func getEvent() *internal.StreamData {
-	return internal.NewStreamData(nil, []byte(fmt.Sprintf(`{"key": %s}`, RandStringRunes(64))))
+	return internal.NewStreamData(internal.JsonEncoding, nil, []byte(fmt.Sprintf(`{"key": %s}`, RandStringRunes(64))))
 }
 
 var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
