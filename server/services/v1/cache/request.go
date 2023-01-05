@@ -29,4 +29,5 @@ type CacheResponse struct {
 	Data         []byte
 	Keys         []string
 	DeletedCount int64
+	Caches       []*api.CacheMetadata
 }
