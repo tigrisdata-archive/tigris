@@ -23,6 +23,7 @@ import (
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/lib/uuid"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/request"
@@ -36,7 +37,7 @@ type Session struct {
 	clientId     string
 	socketId     string
 	closed       bool
-	encType      WSEncodingType
+	encType      internal.UserDataEncType
 	conn         *websocket.Conn
 	lastReceived time.Time
 	chFactory    *ChannelFactory
@@ -260,7 +261,7 @@ func (session *Session) handleMessage(ctx context.Context, req *api.RealTimeMess
 			return errors.InternalWS(err.Error())
 		}
 
-		streamData, err := NewMessageData(session.clientId, session.socketId, event.Name, event)
+		streamData, err := NewMessageData(session.encType, session.clientId, session.socketId, event.Name, event)
 		if err != nil {
 			return errors.InternalWS(err.Error())
 		}
@@ -279,7 +280,7 @@ func (session *Session) handleMessage(ctx context.Context, req *api.RealTimeMess
 			return errors.InternalWS(err.Error())
 		}
 
-		streamData, err := NewPresenceData(session.clientId, session.socketId, event.Name, event)
+		streamData, err := NewPresenceData(session.encType, session.clientId, session.socketId, event.Name, event)
 		if err != nil {
 			return errors.InternalWS(err.Error())
 		}
@@ -292,7 +293,7 @@ func (session *Session) handleMessage(ctx context.Context, req *api.RealTimeMess
 	return nil
 }
 
-func SendReply(conn *websocket.Conn, encType WSEncodingType, eventType api.EventType, event proto.Message) {
+func SendReply(conn *websocket.Conn, encType internal.UserDataEncType, eventType api.EventType, event proto.Message) {
 	encEvent, err := EncodeEvent(encType, eventType, event)
 	if err != nil {
 		panic(err)
@@ -310,7 +311,7 @@ func SendReply(conn *websocket.Conn, encType WSEncodingType, eventType api.Event
 
 	msgType := websocket.BinaryMessage
 
-	if encType == JsonEncoding {
+	if encType == internal.JsonEncoding {
 		msgType = websocket.TextMessage
 	}
 

@@ -14,12 +14,7 @@
 
 package realtime
 
-type WSEncodingType int8
-
-const (
-	MsgpackEncoding WSEncodingType = 1
-	JsonEncoding    WSEncodingType = 2
-)
+import "github.com/tigrisdata/tigris/internal"
 
 const (
 	msgPackEncodingStr = "msgpack"
@@ -34,11 +29,11 @@ type ConnectionParams struct {
 	Encoding    string
 }
 
-func (params ConnectionParams) ToEncodingType() WSEncodingType {
+func (params ConnectionParams) ToEncodingType() internal.UserDataEncType {
 	if params.Encoding == jsonEncodingStr {
-		return JsonEncoding
+		return internal.JsonEncoding
 	}
 
 	// default is msgpack
-	return MsgpackEncoding
+	return internal.MsgpackEncoding
 }

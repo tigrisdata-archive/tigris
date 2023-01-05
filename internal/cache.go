@@ -20,8 +20,9 @@ import (
 )
 
 // NewStreamData returns a stream data for anything that we need to store in streams.
-func NewStreamData(md []byte, data []byte) *StreamData {
+func NewStreamData(enc UserDataEncType, md []byte, data []byte) *StreamData {
 	return &StreamData{
+		Encoding:  int32(enc),
 		Md:        md,
 		RawData:   data,
 		CreatedAt: NewTimestamp(),

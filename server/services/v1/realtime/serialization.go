@@ -20,6 +20,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/internal"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/ugorji/go/codec"
 	"google.golang.org/protobuf/proto"
@@ -49,27 +50,27 @@ func DecodeStreamMD(enc []byte) (*StreamMessageMD, error) {
 	return v, nil
 }
 
-func EncodeRealtime(encodingType WSEncodingType, msg *api.RealTimeMessage) ([]byte, error) {
+func EncodeRealtime(encodingType internal.UserDataEncType, msg *api.RealTimeMessage) ([]byte, error) {
 	switch encodingType {
-	case MsgpackEncoding:
+	case internal.MsgpackEncoding:
 		var buf bytes.Buffer
 		enc := codec.NewEncoder(&buf, &msgpackHandle)
 		if err := enc.Encode(msg); ulog.E(err) {
 			return nil, err
 		}
 		return buf.Bytes(), nil
-	case JsonEncoding:
+	case internal.JsonEncoding:
 		return jsoniter.Marshal(msg)
 	}
 
 	return nil, fmt.Errorf("unsupported event '%d'", encodingType)
 }
 
-func EncodeEvent(encodingType WSEncodingType, eventType api.EventType, event proto.Message) ([]byte, error) {
+func EncodeEvent(encodingType internal.UserDataEncType, eventType api.EventType, event proto.Message) ([]byte, error) {
 	switch encodingType {
-	case MsgpackEncoding:
-		return EncodeAsMsgPack(eventType, event)
-	case JsonEncoding:
+	case internal.MsgpackEncoding:
+		return EncodeEventAsMsgPack(eventType, event)
+	case internal.JsonEncoding:
 		return EncodeAsJSON(eventType, event)
 	}
 
@@ -80,22 +81,26 @@ func EncodeAsJSON(_ api.EventType, event proto.Message) ([]byte, error) {
 	return jsoniter.Marshal(event)
 }
 
-func EncodeAsMsgPack(eventType api.EventType, event proto.Message) ([]byte, error) {
+func EncodeEventAsMsgPack(eventType api.EventType, event proto.Message) ([]byte, error) {
+	return EncodeAsMsgPack(event)
+}
+
+func EncodeAsMsgPack(data interface{}) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := codec.NewEncoder(&buf, &msgpackHandle)
-	if err := enc.Encode(event); ulog.E(err) {
+	if err := enc.Encode(data); ulog.E(err) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
 }
 
-func DecodeRealtime(encodingType WSEncodingType, message []byte) (*api.RealTimeMessage, error) {
+func DecodeRealtime(encodingType internal.UserDataEncType, message []byte) (*api.RealTimeMessage, error) {
 	var req *api.RealTimeMessage
 	switch encodingType {
-	case MsgpackEncoding:
+	case internal.MsgpackEncoding:
 		err := codec.NewDecoderBytes(message, &msgpackHandle).Decode(&req)
 		return req, err
-	case JsonEncoding:
+	case internal.JsonEncoding:
 		err := jsoniter.Unmarshal(message, &req)
 		return req, err
 	}
@@ -103,7 +108,7 @@ func DecodeRealtime(encodingType WSEncodingType, message []byte) (*api.RealTimeM
 	return nil, fmt.Errorf("unsupported event '%d'", encodingType)
 }
 
-func DecodeEvent(encodingType WSEncodingType, eventType api.EventType, message []byte) (proto.Message, error) {
+func DecodeEvent(encodingType internal.UserDataEncType, eventType api.EventType, message []byte) (proto.Message, error) {
 	var event proto.Message
 
 	switch eventType {
@@ -130,13 +135,51 @@ func DecodeEvent(encodingType WSEncodingType, eventType api.EventType, message [
 	}
 
 	switch encodingType {
-	case MsgpackEncoding:
+	case internal.MsgpackEncoding:
 		err := codec.NewDecoderBytes(message, &msgpackHandle).Decode(&event)
 		return event, err
-	case JsonEncoding:
+	case internal.JsonEncoding:
 		err := jsoniter.Unmarshal(message, &event)
 		return event, err
 	}
 
 	return nil, fmt.Errorf("unsupported encoding '%d'", encodingType)
+}
+
+// SanitizeUserData is an optimization so that we can store received raw data and return as-is in case encoding that is
+// used during writing is same as during reading. In case encoding changed then this method is doing a conversion. A typical
+// case of needing this conversion is when the message is published through websocket and encoding used was msgpack and
+// then these messages were read back using HTTP APIs in that case we need to convert from msgpack to JSON.
+func SanitizeUserData(toEnc internal.UserDataEncType, data *internal.StreamData) ([]byte, error) {
+	if int32(toEnc) == data.Encoding {
+		// for websocket communication toEnc should be msgpack by default which is how the data is encoded
+		// and stored in cache.
+		return data.RawData, nil
+	}
+
+	var rawDecoded jsoniter.RawMessage
+	switch internal.UserDataEncType(data.Encoding) {
+	case internal.MsgpackEncoding:
+		if err := codec.NewDecoderBytes(data.RawData, &msgpackHandle).Decode(&rawDecoded); err != nil {
+			return nil, err
+		}
+	case internal.JsonEncoding:
+		if err := jsoniter.Unmarshal(data.RawData, &rawDecoded); err != nil {
+			return nil, err
+		}
+	}
+
+	switch toEnc {
+	case internal.MsgpackEncoding:
+		var buf bytes.Buffer
+		enc := codec.NewEncoder(&buf, &msgpackHandle)
+		if err := enc.Encode(rawDecoded); ulog.E(err) {
+			return nil, err
+		}
+		return buf.Bytes(), nil
+	case internal.JsonEncoding:
+		return jsoniter.Marshal(rawDecoded)
+	}
+
+	return nil, fmt.Errorf("unsupported encoding '%d'", toEnc)
 }

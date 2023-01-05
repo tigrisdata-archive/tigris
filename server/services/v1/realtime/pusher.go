@@ -16,6 +16,7 @@ package realtime
 
 import (
 	"github.com/gorilla/websocket"
+	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/store/cache"
@@ -25,7 +26,7 @@ type DevicePusher struct {
 	channel    string
 	sessionId  string
 	socketId   string
-	encType    WSEncodingType
+	encType    internal.UserDataEncType
 	connection *websocket.Conn
 }
 
@@ -66,11 +67,17 @@ func (pusher *DevicePusher) Watch(events *cache.StreamMessages, err error) ([]st
 }
 
 func (pusher *DevicePusher) sendMessage(msgId string, md *StreamMessageMD, data *internal.StreamData) {
+	rawData, err := SanitizeUserData(pusher.encType, data)
+	if err != nil {
+		log.Err(err).Msgf("sanitizing user data failed")
+		return
+	}
+
 	message := &api.MessageEvent{
 		Id:      msgId,
 		Name:    md.EventName,
 		Channel: pusher.channel,
-		Data:    data.RawData,
+		Data:    rawData,
 	}
 
 	SendReply(pusher.connection, pusher.encType, api.EventType_message, message)
