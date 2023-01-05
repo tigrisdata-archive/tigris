@@ -412,7 +412,7 @@ func (runner *ImportQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	coll, err := runner.getCollection(db, runner.req.GetCollection())
 	//FIXME: errors.As(err, &ep) doesn't work
-	//nolint:golint,errorlint
+	//nolint:errorlint
 	ep, ok := err.(*api.TigrisError)
 	if err != nil && (!ok || ep.Code != api.Code_NOT_FOUND || !runner.req.CreateCollection) {
 		return nil, ctx, err
@@ -944,8 +944,9 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 			options.from, _ = keys.FromBinary(options.table, last)
 			continue
 		}
+
 		if err != nil {
-			return nil, ctx, nil
+			return nil, ctx, err
 		}
 
 		ctx = runner.instrumentRunner(ctx, options)
@@ -1271,7 +1272,7 @@ func (runner *SearchQueryRunner) getFieldSelection(coll *schema.DefaultCollectio
 	var selectionFields []string
 
 	// Only one of include/exclude. Honor inclusion over exclusion
-	//nolint:golint,gocritic
+	//nolint:gocritic
 	if len(runner.req.IncludeFields) > 0 {
 		selectionFields = runner.req.IncludeFields
 	} else if len(runner.req.ExcludeFields) > 0 {

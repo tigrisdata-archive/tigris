@@ -37,8 +37,8 @@ func TestStorageQuota(t *testing.T) {
 
 	txMgr := transaction.NewManager(kvStore)
 
-	ns := fmt.Sprintf("ns-test-tenantQuota-1-%x", rand.Uint64()) //nolint:golint,gosec
-	id := rand.Uint32()                                          //nolint:golint,gosec
+	ns := fmt.Sprintf("ns-test-tenantQuota-1-%x", rand.Uint64()) //nolint:gosec
+	id := rand.Uint32()                                          //nolint:gosec
 
 	tenant, err := tenants.CreateOrGetTenant(ctx, metadata.NewTenantNamespace(ns, metadata.NewNamespaceMetadata(id, ns, ns+"-display_name")))
 	require.NoError(t, err)

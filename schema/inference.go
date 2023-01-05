@@ -91,7 +91,7 @@ func translateStringType(v interface{}) (string, string, error) {
 func translateType(v interface{}) (string, string, error) {
 	t := reflect.TypeOf(v)
 
-	//nolint:golint,exhaustive
+	//nolint:exhaustive
 	switch t.Kind() {
 	case reflect.Bool:
 		return jsonSpecBool, "", nil

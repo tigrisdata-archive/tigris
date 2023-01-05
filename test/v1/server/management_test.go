@@ -47,7 +47,7 @@ func TestCreateNamespace(t *testing.T) {
 		}
 	}
 
-	displayName := fmt.Sprintf("namespace-a-%x", rand.Int63()) //nolint:golint,gosec
+	displayName := fmt.Sprintf("namespace-a-%x", rand.Int63()) //nolint:gosec
 	createResp := createNamespace(t, displayName)
 	createRespMsg := createResp.Status(http.StatusOK).
 		JSON().
@@ -73,7 +73,7 @@ func adminExpect(s httpexpect.LoggerReporter) *httpexpect.Expect {
 }
 
 func TestListNamespaces(t *testing.T) {
-	name := fmt.Sprintf("namespace-b-%x", rand.Int63()) //nolint:golint,gosec
+	name := fmt.Sprintf("namespace-b-%x", rand.Int63()) //nolint:gosec
 	_ = createNamespace(t, name)
 	resp := listNamespaces(t)
 	namespaces := resp.Status(http.StatusOK).

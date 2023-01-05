@@ -269,8 +269,8 @@ func IsHumanUser(ctx context.Context) bool {
 
 func (tokenNamespaceExtractor *AccessTokenNamespaceExtractor) Extract(ctx context.Context) (string, error) {
 	// read token
-	token, err := GetAccessToken(ctx)
-	if err != nil {
+	token, _ := GetAccessToken(ctx)
+	if token == nil {
 		return "unknown", nil
 	}
 

@@ -286,14 +286,21 @@ func (m *TenantManager) GetNamespaceId(namespaceName string) (uint32, error) {
 
 // GetTenant is responsible for returning the tenant from the cache. If the tenant is not available in the cache then
 // this method will attempt to load it from the database and will update the tenant manager cache accordingly.
-func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string) (tenant *Tenant, err error) {
+func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string) (*Tenant, error) {
+	var (
+		tenant *Tenant
+		err    error
+	)
+
 	if tenant = m.getTenantFromCache(namespaceName); tenant != nil {
-		return
+		return tenant, nil
 	}
 
 	m.Lock()
 	defer m.Unlock()
-	if tenant, found := m.tenants[namespaceName]; found {
+	var found bool
+
+	if tenant, found = m.tenants[namespaceName]; found {
 		return tenant, nil
 	}
 
@@ -341,7 +348,8 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string) (te
 	if err = tenant.reload(ctx, tx, currentVersion, collectionsInSearch); err != nil {
 		return nil, err
 	}
-	return
+
+	return tenant, nil
 }
 
 // ListNamespaces returns all the namespaces(tenants) exist in this cluster.
@@ -1403,9 +1411,9 @@ func NewTestTenantMgr(kvStore kv.KeyValueStore) (*TenantManager, context.Context
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
 	m := newTenantManager(kvStore, &search.NoopStore{}, &TestMDNameRegistry{
-		ReserveSB:  fmt.Sprintf("test_tenant_reserve_%x", rand.Uint64()),  //nolint:golint,gosec
-		EncodingSB: fmt.Sprintf("test_tenant_encoding_%x", rand.Uint64()), //nolint:golint,gosec
-		SchemaSB:   fmt.Sprintf("test_tenant_schema_%x", rand.Uint64()),   //nolint:golint,gosec
+		ReserveSB:  fmt.Sprintf("test_tenant_reserve_%x", rand.Uint64()),  //nolint:gosec
+		EncodingSB: fmt.Sprintf("test_tenant_encoding_%x", rand.Uint64()), //nolint:gosec
+		SchemaSB:   fmt.Sprintf("test_tenant_schema_%x", rand.Uint64()),   //nolint:gosec
 	},
 		transaction.NewManager(kvStore),
 	)

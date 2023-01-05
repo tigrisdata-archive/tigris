@@ -135,8 +135,8 @@ func (s *StrictEqKeyComposer) Compose(selectors []*Selector, userDefinedKeys []*
 		for j := 1; j < len(repeatedFields); j++ {
 			keyPartsCopy := make([]*Selector, len(compositeKeys[0])-1)
 			copy(keyPartsCopy, compositeKeys[0][0:len(compositeKeys[0])-1])
-			keyPartsCopy = append(keyPartsCopy, repeatedFields[j]) //nolint:golint,makezero
-			compositeKeys = append(compositeKeys, keyPartsCopy)    //nolint:golint,makezero
+			keyPartsCopy = append(keyPartsCopy, repeatedFields[j]) //nolint:makezero
+			compositeKeys = append(compositeKeys, keyPartsCopy)    //nolint:makezero
 		}
 	}
 

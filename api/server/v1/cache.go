@@ -25,8 +25,9 @@ import (
 func (x *SetRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
 	if err := jsoniter.Unmarshal(data, &mp); err != nil {
-		return nil
+		return err
 	}
+
 	for key, value := range mp {
 		var v interface{}
 
@@ -65,8 +66,9 @@ func (x *SetRequest) UnmarshalJSON(data []byte) error {
 func (x *DelRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
 	if err := jsoniter.Unmarshal(data, &mp); err != nil {
-		return nil
+		return err
 	}
+
 	for key, value := range mp {
 		var v interface{}
 		switch strings.ToLower(key) {
@@ -91,8 +93,9 @@ func (x *DelRequest) UnmarshalJSON(data []byte) error {
 func (x *KeysRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
 	if err := jsoniter.Unmarshal(data, &mp); err != nil {
-		return nil
+		return err
 	}
+
 	for key, value := range mp {
 		var v interface{}
 		switch strings.ToLower(key) {
@@ -109,6 +112,7 @@ func (x *KeysRequest) UnmarshalJSON(data []byte) error {
 			return err
 		}
 	}
+
 	return nil
 }
 

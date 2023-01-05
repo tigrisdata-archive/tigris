@@ -49,13 +49,13 @@ func TestNamespaceQuota(t *testing.T) {
 	tenants, ctx, cancel := metadata.NewTestTenantMgr(kvStore)
 	defer cancel()
 
-	ns := fmt.Sprintf("ns-test-tenantQuota-1-%x", rand.Uint64()) //nolint:golint,gosec
-	id := rand.Uint32()                                          //nolint:golint,gosec
+	ns := fmt.Sprintf("ns-test-tenantQuota-1-%x", rand.Uint64()) //nolint:gosec
+	id := rand.Uint32()                                          //nolint:gosec
 
 	_, err := tenants.CreateOrGetTenant(ctx, metadata.NewTenantNamespace(ns, metadata.NewNamespaceMetadata(id, ns, ns+"-display_name")))
 	require.NoError(t, err)
 
-	id = rand.Uint32() //nolint:golint,gosec
+	id = rand.Uint32() //nolint:gosec
 	_, err = tenants.CreateOrGetTenant(ctx, metadata.NewTenantNamespace(ns+"_other", metadata.NewNamespaceMetadata(id, ns+"_other", ns+"_other-display_name")))
 	require.NoError(t, err)
 
@@ -245,7 +245,7 @@ func TestQuotaConfigLimits(t *testing.T) {
 	tenants, ctx, cancel := metadata.NewTestTenantMgr(kvStore)
 	defer cancel()
 
-	ns := fmt.Sprintf("ns-test-tenantQuota-1-%x", rand.Uint64()) //nolint:golint,gosec
+	ns := fmt.Sprintf("ns-test-tenantQuota-1-%x", rand.Uint64()) //nolint:gosec
 
 	tb := &testMetricsBackend{}
 

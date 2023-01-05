@@ -312,7 +312,7 @@ func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet contai
 					}
 					itemObj = itemObj.Items
 				}
-				builder.Fields = append(nestedFields, first) //nolint:golint,gocritic
+				builder.Fields = append(nestedFields, first) //nolint:gocritic
 			}
 		}
 

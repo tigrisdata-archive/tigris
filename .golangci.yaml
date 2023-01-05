@@ -2,11 +2,9 @@ linters:
   enable-all: true
   disable:
     # Work on fixing this
-    #- reassign
     - reassign
     - interfacebloat
     - maintidx
-    - nakedret
     - gocyclo
     - gocognit
     - funlen
@@ -17,7 +15,6 @@ linters:
     - cyclop
     - errorlint
     - forcetypeassert
-    - nilerr
     - nosprintfhostport
     - exhaustive
     - thelper

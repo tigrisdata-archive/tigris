@@ -130,7 +130,7 @@ func (w *DDLWorkload) validate(iteration int16, client driver.Driver, isCommit b
 		}
 
 		if strings.Contains(err.Error(), "concurrent create collection request, aborting") {
-			time.Sleep(time.Duration(i*25+rand.Intn(50)) * time.Millisecond) //nolint:golint,gosec
+			time.Sleep(time.Duration(i*25+rand.Intn(50)) * time.Millisecond) //nolint:gosec
 			continue
 		}
 
@@ -138,6 +138,7 @@ func (w *DDLWorkload) validate(iteration int16, client driver.Driver, isCommit b
 	}
 	if err != nil {
 		// ignore this thread check, concurrency is causing conflicts
+		//nolint:nilerr
 		return true, nil
 	}
 

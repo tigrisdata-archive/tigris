@@ -303,7 +303,7 @@ func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, runner Quer
 			}
 
 			log.Debug().Msgf("retrying transactions id: %s, since: %v", session.txCtx.Id, time.Since(start))
-			time.Sleep(time.Duration(rand.Intn(25)) * time.Millisecond) //nolint:golint,gosec
+			time.Sleep(time.Duration(rand.Intn(25)) * time.Millisecond) //nolint:gosec
 		}
 	}
 }

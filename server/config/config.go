@@ -162,7 +162,7 @@ func GetTestFDBConfig(path string) (*FoundationDBConfig, error) {
 		_, err = cmd.Output()
 	}
 	if err != nil {
-		fmt.Printf("\nRun `make local_run` in the terminal to start FDB instance for tests\n") //nolint:golint,forbidigo
+		fmt.Printf("\nRun `make local_run` in the terminal to start FDB instance for tests\n") //nolint:forbidigo
 		return nil, err
 	}
 

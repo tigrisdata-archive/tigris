@@ -246,7 +246,7 @@ func (s *TxSession) SetVersionstampedValue(ctx context.Context, key []byte, valu
 	defer s.Unlock()
 
 	if err := s.validateSession(); err != nil {
-		return nil
+		return err
 	}
 
 	return s.kTx.SetVersionstampedValue(ctx, key, value)
@@ -257,7 +257,7 @@ func (s *TxSession) SetVersionstampedKey(ctx context.Context, key []byte, value 
 	defer s.Unlock()
 
 	if err := s.validateSession(); err != nil {
-		return nil
+		return err
 	}
 
 	return s.kTx.SetVersionstampedKey(ctx, key, value)

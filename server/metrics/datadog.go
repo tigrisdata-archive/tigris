@@ -30,7 +30,7 @@ import (
 )
 
 var (
-	dDApiKey           = "DD-API-KEY" //nolint:golint,gosec
+	dDApiKey           = "DD-API-KEY" //nolint:gosec
 	dDAppKey           = "DD-APPLICATION-KEY"
 	rateLimitLimit     = "X-RateLimit-Period"
 	rateLimitPeriod    = "X-RateLimit-Period"
