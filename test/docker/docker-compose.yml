@@ -100,7 +100,6 @@ services:
     depends_on:
       - tigris_server
       - tigris_db2
-      - tigris_cache
 
   tigris_realtime:
     container_name: tigris_realtime
