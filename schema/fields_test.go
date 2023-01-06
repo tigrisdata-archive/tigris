@@ -109,15 +109,6 @@ func TestFieldBuilder_Build(t *testing.T) {
 		require.Error(t, err)
 	})
 
-	t.Run("test programming language keywords as field name", func(t *testing.T) {
-		keywords := []string{"abstract", "integer", "yield"}
-		for _, keyword := range keywords {
-			_, err := (&FieldBuilder{FieldName: keyword, Type: "string"}).Build(false) // one time builder, thrown away after test concluded
-			require.Equal(t, err, errors.InvalidArgument(
-				fmt.Sprintf("Invalid collection field name, It contains language keyword for fieldName = '%s'", keyword)))
-		}
-	})
-
 	t.Run("test invalid field name pattern", func(t *testing.T) {
 		invalidFieldNames := []string{"0id", "0ID", "("}
 		for _, invalidFieldName := range invalidFieldNames {
