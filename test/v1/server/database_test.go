@@ -48,7 +48,7 @@ func TestCreateDatabase(t *testing.T) {
 }
 
 func TestCreateDatabaseInvalidName(t *testing.T) {
-	invalidDbNames := []string{"", "$testdb", "testdb$", "test$db", "abstract", "yield"}
+	invalidDbNames := []string{"", "$testdb", "testdb$", "test$db"}
 	for _, name := range invalidDbNames {
 		resp := createProject(t, name)
 		resp.Status(http.StatusBadRequest).

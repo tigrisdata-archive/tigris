@@ -16,8 +16,6 @@ package api
 
 import (
 	"regexp"
-
-	"github.com/tigrisdata/tigris/util"
 )
 
 var validNamePattern = regexp.MustCompile("^[a-zA-Z]+[a-zA-Z0-9_-]+$")
@@ -204,7 +202,7 @@ func isValidCollection(name string) error {
 	if len(name) == 0 {
 		return Errorf(Code_INVALID_ARGUMENT, "invalid collection name")
 	}
-	if !validNamePattern.MatchString(name) || util.LanguageKeywords.Contains(name) {
+	if !validNamePattern.MatchString(name) {
 		return Errorf(Code_INVALID_ARGUMENT, "invalid collection name")
 	}
 	return nil
@@ -214,7 +212,7 @@ func isValidDatabase(name string) error {
 	if len(name) == 0 {
 		return Errorf(Code_INVALID_ARGUMENT, "invalid database name")
 	}
-	if !validNamePattern.MatchString(name) || util.LanguageKeywords.Contains(name) {
+	if !validNamePattern.MatchString(name) {
 		return Errorf(Code_INVALID_ARGUMENT, "invalid database name")
 	}
 	return nil
