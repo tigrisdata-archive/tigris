@@ -109,8 +109,10 @@ func (runner *MessagesRunner) Run(ctx context.Context, tenant *metadata.Tenant) 
 
 	ids := make([]string, len(runner.req.Messages))
 	for i, m := range runner.req.Messages {
-		// the user data is stored as msgpacked
-		m.Data, err = EncodeAsMsgPack(m.Data)
+		// The data is a json encoded Byte.
+		// Convert that to a msgback bytes to store
+		m.Data, err = JsonByteToMsgPack(m.Data)
+
 		if err != nil {
 			return nil, err
 		}
