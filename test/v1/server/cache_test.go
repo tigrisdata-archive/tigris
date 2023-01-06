@@ -218,7 +218,7 @@ func TestCacheSetWithGet(t *testing.T) {
 
 func setCacheKey(t *testing.T, project string, cache string, key string, value string) *httpexpect.Response {
 	e := cacheExpect(t)
-	return e.POST(cacheKeysOperationURL(project, cache, key, "set")).
+	return e.POST(cacheKVOperationURL(project, cache, key, "set")).
 		WithJSON(CacheTestMap{
 			"value": value,
 		}).
@@ -227,7 +227,7 @@ func setCacheKey(t *testing.T, project string, cache string, key string, value s
 
 func GetSetCacheKey(t *testing.T, project string, cache string, key string, value string) *httpexpect.Response {
 	e := cacheExpect(t)
-	return e.POST(cacheKeysOperationURL(project, cache, key, "getset")).
+	return e.POST(cacheKVOperationURL(project, cache, key, "getset")).
 		WithJSON(CacheTestMap{
 			"value": value,
 		}).
@@ -236,19 +236,19 @@ func GetSetCacheKey(t *testing.T, project string, cache string, key string, valu
 
 func getCacheKey(t *testing.T, project string, cache string, key string) *httpexpect.Response {
 	e := cacheExpect(t)
-	return e.GET(cacheKeysOperationURL(project, cache, key, "get")).
+	return e.GET(cacheKVOperationURL(project, cache, key, "get")).
 		Expect()
 }
 
 func delCacheKey(t *testing.T, project string, cache string, key string) *httpexpect.Response {
 	e := cacheExpect(t)
-	return e.DELETE(cacheKeysOperationURL(project, cache, key, "delete")).
+	return e.DELETE(cacheKVOperationURL(project, cache, key, "delete")).
 		Expect()
 }
 
 func listCacheKeys(t *testing.T, project string, cache string) *httpexpect.Response {
 	e := cacheExpect(t)
-	return e.GET(fmt.Sprintf("/v1/projects/%s/caches/%s/keys", project, cache)).
+	return e.GET(fmt.Sprintf("/v1/projects/%s/caches/%s/kv/keys", project, cache)).
 		Expect()
 }
 
@@ -283,6 +283,6 @@ func cacheOperationURL(project string, cache string, operation string) string {
 	return fmt.Sprintf("/v1/projects/%s/caches/%s/%s", project, cache, operation)
 }
 
-func cacheKeysOperationURL(project string, cache string, key string, operation string) string {
-	return fmt.Sprintf("/v1/projects/%s/caches/%s/%s/%s", project, cache, key, operation)
+func cacheKVOperationURL(project string, cache string, key string, operation string) string {
+	return fmt.Sprintf("/v1/projects/%s/caches/%s/kv/%s/%s", project, cache, key, operation)
 }
