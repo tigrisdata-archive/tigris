@@ -62,6 +62,41 @@ func (x *SetRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// UnmarshalJSON for SetRequest.
+func (x *GetSetRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+
+	for key, value := range mp {
+		var v interface{}
+
+		switch strings.ToLower(key) {
+		case "project":
+			v = &x.Project
+		case "name":
+			v = &x.Name
+		case "key":
+			v = &x.Key
+		case "value":
+			var doc jsoniter.RawMessage
+			if err := jsoniter.Unmarshal(value, &doc); err != nil {
+				return err
+			}
+			x.Value = doc
+			continue
+		default:
+			continue
+		}
+		if err := jsoniter.Unmarshal(value, v); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // UnmarshalJSON for DelRequest.
 func (x *DelRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
@@ -114,6 +149,19 @@ func (x *KeysRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	return nil
+}
+
+func (x *GetSetResponse) MarshalJSON() ([]byte, error) {
+	resp := struct {
+		Status   string          `json:"status,omitempty"`
+		Message  string          `json:"message,omitempty"`
+		OldValue json.RawMessage `json:"old_value,omitempty"`
+	}{
+		Status:   x.GetStatus(),
+		Message:  x.GetMessage(),
+		OldValue: x.GetOldValue(),
+	}
+	return json.Marshal(resp)
 }
 
 func (x *GetResponse) MarshalJSON() ([]byte, error) {

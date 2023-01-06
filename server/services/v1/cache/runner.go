@@ -16,7 +16,6 @@ package cache
 
 import (
 	"context"
-	"time"
 
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
@@ -67,6 +66,12 @@ type SetRunner struct {
 	*BaseRunner
 
 	req *api.SetRequest
+}
+
+type GetSetRunner struct {
+	*BaseRunner
+
+	req *api.GetSetRequest
 }
 
 type GetRunner struct {
@@ -122,6 +127,13 @@ func (f *RunnerFactory) GetListCachesRunner(r *api.ListCachesRequest, accessToke
 
 func (f *RunnerFactory) GetSetRunner(r *api.SetRequest, accessToken *types.AccessToken) *SetRunner {
 	return &SetRunner{
+		BaseRunner: NewBaseRunner(f.encoder, accessToken, f.cacheStore),
+		req:        r,
+	}
+}
+
+func (f *RunnerFactory) GetGetSetRunner(r *api.GetSetRequest, accessToken *types.AccessToken) *GetSetRunner {
+	return &GetSetRunner{
 		BaseRunner: NewBaseRunner(f.encoder, accessToken, f.cacheStore),
 		req:        r,
 	}
@@ -221,14 +233,38 @@ func (runner *SetRunner) Run(ctx context.Context, tenant *metadata.Tenant) (*Cac
 	options := &cache.SetOptions{
 		NX: runner.req.GetNx(),
 		XX: runner.req.GetXx(),
-		EX: time.Duration(runner.req.GetEx()) * time.Second,
+		EX: runner.req.GetEx(),
+		PX: runner.req.GetPx(),
 	}
+
 	if err = runner.cacheStore.Set(ctx, tableName, runner.req.GetKey(), internal.NewCacheData(runner.req.GetValue()), options); err != nil {
 		return nil, errors.Internal("Failed to invoke set, reason %s", err.Error())
 	}
+
 	return &CacheResponse{
 		Status: SetStatus,
 	}, nil
+}
+
+func (runner *GetSetRunner) Run(ctx context.Context, tenant *metadata.Tenant) (*CacheResponse, error) {
+	tableName, err := getEncodedCacheTableName(ctx, tenant, runner.req.GetProject(), runner.req.GetName(), runner.encoder)
+	if err != nil {
+		return nil, err
+	}
+
+	oldVal, err := runner.cacheStore.GetSet(ctx, tableName, runner.req.GetKey(), internal.NewCacheData(runner.req.GetValue()))
+	if err != nil {
+		return nil, errors.Internal("Failed to invoke set, reason %s", err.Error())
+	}
+
+	var result *CacheResponse = &CacheResponse{
+		Status: SetStatus,
+	}
+
+	if oldVal != nil && oldVal.RawData != nil {
+		result.OldValue = oldVal.GetRawData()
+	}
+	return result, nil
 }
 
 func (runner *GetRunner) Run(ctx context.Context, tenant *metadata.Tenant) (*CacheResponse, error) {

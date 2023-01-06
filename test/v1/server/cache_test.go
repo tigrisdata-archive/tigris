@@ -186,9 +186,48 @@ func TestCacheCRUD(t *testing.T) {
 	assert.Equal(t, "NOT_FOUND", delKeyRespCode3)
 }
 
+func TestCacheSetWithGet(t *testing.T) {
+	project := setupTestsOnlyProject(t)
+	cacheName := "c1"
+	createCache(t, project, cacheName)
+
+	getSetResp := GetSetCacheKey(t, project, cacheName, "k1", "v1")
+	status := getSetResp.Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("status").
+		Raw()
+	assert.Equal(t, cache.SetStatus, status)
+
+	getSetResp1 := GetSetCacheKey(t, project, cacheName, "k1", "v2")
+	oldValue := getSetResp1.Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("old_value").
+		Raw()
+	assert.Equal(t, "v1", oldValue)
+
+	getSetResp2 := GetSetCacheKey(t, project, cacheName, "k1", "v3")
+	oldValue1 := getSetResp2.Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("old_value").
+		Raw()
+	assert.Equal(t, "v2", oldValue1)
+}
+
 func setCacheKey(t *testing.T, project string, cache string, key string, value string) *httpexpect.Response {
 	e := cacheExpect(t)
 	return e.POST(cacheKeysOperationURL(project, cache, key, "set")).
+		WithJSON(CacheTestMap{
+			"value": value,
+		}).
+		Expect()
+}
+
+func GetSetCacheKey(t *testing.T, project string, cache string, key string, value string) *httpexpect.Response {
+	e := cacheExpect(t)
+	return e.POST(cacheKeysOperationURL(project, cache, key, "getset")).
 		WithJSON(CacheTestMap{
 			"value": value,
 		}).
