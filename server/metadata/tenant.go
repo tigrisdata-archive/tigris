@@ -974,6 +974,13 @@ func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbN
 			continue
 		}
 
+		encName, err := tenant.Encoder.EncodeTableName(tenant.namespace, database, collection)
+		if err != nil {
+			return nil, err
+		}
+
+		collection.EncodedName = encName
+
 		database.collections[coll] = NewCollectionHolder(id, coll, collection, idxNameToId)
 		database.idToCollectionMap[id] = coll
 	}
@@ -1045,6 +1052,14 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 	// store the collection to the databaseObject, this is actually cloned database object passed by the query runner.
 	// So failure of the transaction won't impact the consistency of the cache
 	collection := schema.NewDefaultCollection(schFactory.Name, collectionId, baseSchemaVersion, schFactory.CollectionType, schFactory, tenant.getSearchCollName(database.Name(), schFactory.Name), nil)
+
+	encName, err := tenant.Encoder.EncodeTableName(tenant.namespace, database, collection)
+	if err != nil {
+		return err
+	}
+
+	collection.EncodedName = encName
+
 	database.collections[schFactory.Name] = NewCollectionHolder(collectionId, schFactory.Name, collection, idxNameToId)
 
 	if config.DefaultConfig.Search.WriteEnabled {
@@ -1102,6 +1117,13 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 	// store the collection to the databaseObject, this is actually cloned database object passed by the query runner.
 	// So failure of the transaction won't impact the consistency of the cache
 	collection := schema.NewDefaultCollection(schFactory.Name, c.id, schRevision, schFactory.CollectionType, schFactory, searchCollectionName, existingSearch.Fields)
+
+	encName, err := tenant.Encoder.EncodeTableName(tenant.namespace, database, collection)
+	if err != nil {
+		return err
+	}
+
+	collection.EncodedName = encName
 
 	// recreating collection holder is fine because we are working on databaseClone and also has a lock on the tenant
 	database.collections[schFactory.Name] = NewCollectionHolder(c.id, schFactory.Name, collection, c.idxNameToId)
@@ -1218,7 +1240,6 @@ func (tenant *Tenant) DatabaseSize(ctx context.Context, db *Database) (int64, er
 // CollectionSize returns approximate data size on disk for all the collections for the database provided by the caller.
 func (tenant *Tenant) CollectionSize(ctx context.Context, db *Database, coll *schema.DefaultCollection) (int64, error) {
 	tenant.Lock()
-
 	nsName, _ := tenant.Encoder.EncodeTableName(tenant.namespace, db, coll)
 	tenant.Unlock()
 
@@ -1350,6 +1371,8 @@ func (c *collectionHolder) clone() *collectionHolder {
 	if err != nil {
 		panic(err)
 	}
+
+	copyC.collection.EncodedName = c.collection.EncodedName
 	copyC.idxNameToId = make(map[string]uint32)
 	for k, v := range c.idxNameToId {
 		copyC.idxNameToId[k] = v

@@ -42,6 +42,8 @@ type DefaultCollection struct {
 	SchVer int32
 	// Name is the name of the collection.
 	Name string
+	// EncodedName is the encoded name of the collection.
+	EncodedName []byte
 	// Fields are derived from the user schema.
 	Fields []*Field
 	// Indexes is a wrapper on the indexes part of this collection.

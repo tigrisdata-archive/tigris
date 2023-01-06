@@ -132,10 +132,6 @@ func TestInsert_SchemaValidationRequired(t *testing.T) {
 		delete(testCreateSchema["schema"].(Map)["properties"].(Map)["array_value"].(Map)["items"].(Map), "required")
 	}()
 
-	b, err := json.MarshalIndent(testCreateSchema, "", "  ")
-	require.NoError(t, err)
-	fmt.Printf("%s\n", string(b))
-
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)
 
