@@ -145,7 +145,8 @@ func (session *Session) Start(ctx context.Context) error {
 		session.lastReceived = time.Now()
 		if errEvent := session.onMessage(ctx, message); errEvent != nil {
 			log.Err(err).Msgf("realtime send error '%s' %s", session.id, errEvent)
-			SendReply(session.conn, session.encType, api.EventType_error, errEvent)
+			err = SendReply(session.conn, session.encType, api.EventType_error, errEvent)
+			log.Err(err).Msgf("failed to send error reply message")
 		}
 	}
 }
@@ -246,9 +247,10 @@ func (session *Session) handleMessage(ctx context.Context, req *api.RealTimeMess
 		}
 		session.watchers[event.Channel] = watcher
 		watcher.StartWatching(NewDevicePusher(session, event.Channel).Watch)
-		SendReply(session.conn, session.encType, api.EventType_subscribed, &api.SubscribedEvent{
+		err = SendReply(session.conn, session.encType, api.EventType_subscribed, &api.SubscribedEvent{
 			Channel: event.Channel,
 		})
+		log.Err(err).Msgf("failed to send subscribe message")
 		return nil
 	case api.EventType_message:
 		event, ok := decoded.(*api.MessageEvent)
