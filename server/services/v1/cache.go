@@ -102,6 +102,19 @@ func (c *cacheService) Set(ctx context.Context, req *api.SetRequest) (*api.SetRe
 	}, nil
 }
 
+func (c *cacheService) GetSet(ctx context.Context, req *api.GetSetRequest) (*api.GetSetResponse, error) {
+	accessToken, _ := request.GetAccessToken(ctx)
+	resp, err := c.sessions.Execute(ctx, c.runnerFactory.GetGetSetRunner(req, accessToken))
+	if err != nil {
+		return nil, err
+	}
+	return &api.GetSetResponse{
+		Status:   resp.Status,
+		Message:  "Key is set successfully",
+		OldValue: resp.OldValue,
+	}, nil
+}
+
 func (c *cacheService) Get(ctx context.Context, req *api.GetRequest) (*api.GetResponse, error) {
 	accessToken, _ := request.GetAccessToken(ctx)
 	resp, err := c.sessions.Execute(ctx, c.runnerFactory.GetGetRunner(req, accessToken))

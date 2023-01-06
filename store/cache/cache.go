@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	xredis "github.com/go-redis/redis/v8"
 	"github.com/tigrisdata/tigris/internal"
@@ -47,9 +48,13 @@ func (c *cache) Set(ctx context.Context, tableName string, key string, value *in
 	}
 
 	args := xredis.SetArgs{}
+
 	if options != nil && options.EX > 0 {
-		args.TTL = options.EX
+		args.TTL = time.Duration(options.EX) * time.Second
+	} else if options != nil && options.PX > 0 {
+		args.TTL = time.Duration(options.PX) * time.Millisecond
 	}
+
 	if options != nil && options.XX {
 		args.Mode = "XX"
 
@@ -78,8 +83,11 @@ func (c *cache) GetSet(ctx context.Context, tableName string, key string, value 
 	}
 
 	val, err := c.Client.GetSet(ctx, cacheKey, enc).Bytes()
-	if err != nil {
+	if err != nil && err != xredis.Nil {
 		return nil, err
+	}
+	if len(val) == 0 {
+		return nil, nil
 	}
 
 	return internal.DecodeCacheData(val)

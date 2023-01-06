@@ -55,8 +55,10 @@ type SetOptions struct {
 	NX bool
 	// XX is SetIfExists i.e. only set the key if it already exists.
 	XX bool
-	// EX sets the Expiry time of the key in seconds
-	EX time.Duration
+	// EX sets the Expiry time of the key in second
+	EX uint64
+	// PX sets the Expiry time of the key in millisecond
+	PX uint64
 }
 
 type GetOptions struct {

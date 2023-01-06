@@ -26,8 +26,8 @@ import (
 )
 
 const (
-	heartbeatTable    = "heartbeat"
-	defaultExpiryTime = 120 * time.Second
+	heartbeatTable           = "heartbeat"
+	defaultExpiryTimeSeconds = 120
 )
 
 type HeartbeatFactory struct {
@@ -85,7 +85,7 @@ func (h *HeartbeatTable) Ping(sessionId string) error {
 		h.tableName,
 		sessionId,
 		internal.NewCacheData([]byte(fmt.Sprintf("%d", time.Now().UnixNano()))),
-		&cache.SetOptions{EX: defaultExpiryTime},
+		&cache.SetOptions{EX: defaultExpiryTimeSeconds},
 	)
 	h.lastHeartbeat = time.Now()
 	return err
