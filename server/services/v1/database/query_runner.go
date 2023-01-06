@@ -835,8 +835,13 @@ func (runner *StreamingQueryRunner) buildReaderOptions(collection *schema.Defaul
 		}
 	}
 
-	if collection.Type() == schema.TopicType {
-		// if it is event streaming then fallback to indexing store for all reads
+	if filter.None(runner.req.Filter) {
+		if options.sorting != nil {
+			options.inMemoryStore = true
+		} else {
+			options.noFilter = true
+		}
+	} else if options.ikeys, err = runner.buildKeysUsingFilter(collection, runner.req.Filter, collation); err != nil {
 		if !config.DefaultConfig.Search.IsReadEnabled() {
 			if options.from == nil {
 				// in this case, scan will happen from the beginning of the table.
@@ -844,28 +849,6 @@ func (runner *StreamingQueryRunner) buildReaderOptions(collection *schema.Defaul
 			}
 		} else {
 			options.inMemoryStore = true
-		}
-	} else {
-		var collation *api.Collation
-		if runner.req.Options != nil {
-			collation = runner.req.Options.Collation
-		}
-
-		if filter.None(runner.req.Filter) {
-			if options.sorting != nil {
-				options.inMemoryStore = true
-			} else {
-				options.noFilter = true
-			}
-		} else if options.ikeys, err = runner.buildKeysUsingFilter(collection, runner.req.Filter, collation); err != nil {
-			if !config.DefaultConfig.Search.IsReadEnabled() {
-				if options.from == nil {
-					// in this case, scan will happen from the beginning of the table.
-					options.from = keys.NewKey(options.table)
-				}
-			} else {
-				options.inMemoryStore = true
-			}
 		}
 	}
 

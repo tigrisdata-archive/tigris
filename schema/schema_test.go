@@ -460,21 +460,4 @@ func TestGetCollectionType(t *testing.T) {
 	ty, err := GetCollectionType(schema)
 	require.Equal(t, DocumentsType, ty)
 	require.NoError(t, err)
-
-	schema = []byte(`{
-	"title": "t1",
-	"properties": {
-		"k1": {
-			"type": "string"
-		},
-		"id": {
-			"type": "integer"
-		}
-	},
-    "collection_type": "topic"
-}`)
-
-	ty, err = GetCollectionType(schema)
-	require.Equal(t, TopicType, ty)
-	require.NoError(t, err)
 }
