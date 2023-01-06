@@ -179,19 +179,23 @@ func (runner *ReadMessagesRunner) Run(ctx context.Context, tenant *metadata.Tena
 			if err != nil {
 				return nil, err
 			}
-
 			rawData, err := SanitizeUserData(internal.JsonEncoding, data)
 			if err != nil {
 				return nil, err
 			}
 
-			_ = runner.streaming.Send(&api.ReadMessagesResponse{
+			err = runner.streaming.Send(&api.ReadMessagesResponse{
 				Message: &api.Message{
 					Id:   &m.ID,
 					Name: md.EventName,
 					Data: rawData,
 				},
 			})
+
+			if err != nil {
+				return nil, err
+			}
+
 			count++
 			if runner.req.GetLimit() > 0 && count == runner.req.GetLimit() {
 				return nil, nil

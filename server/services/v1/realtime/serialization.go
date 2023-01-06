@@ -66,22 +66,22 @@ func EncodeRealtime(encodingType internal.UserDataEncType, msg *api.RealTimeMess
 	return nil, fmt.Errorf("unsupported event '%d'", encodingType)
 }
 
-func EncodeEvent(encodingType internal.UserDataEncType, eventType api.EventType, event proto.Message) ([]byte, error) {
+func EncodeEvent(encodingType internal.UserDataEncType, event proto.Message) ([]byte, error) {
 	switch encodingType {
 	case internal.MsgpackEncoding:
-		return EncodeEventAsMsgPack(eventType, event)
+		return EncodeEventAsMsgPack(event)
 	case internal.JsonEncoding:
-		return EncodeAsJSON(eventType, event)
+		return EncodeAsJSON(event)
 	}
 
 	return nil, fmt.Errorf("unsupported event '%d'", encodingType)
 }
 
-func EncodeAsJSON(_ api.EventType, event proto.Message) ([]byte, error) {
+func EncodeAsJSON(event proto.Message) ([]byte, error) {
 	return jsoniter.Marshal(event)
 }
 
-func EncodeEventAsMsgPack(eventType api.EventType, event proto.Message) ([]byte, error) {
+func EncodeEventAsMsgPack(event proto.Message) ([]byte, error) {
 	return EncodeAsMsgPack(event)
 }
 
@@ -114,6 +114,8 @@ func DecodeEvent(encodingType internal.UserDataEncType, eventType api.EventType,
 	switch eventType {
 	case api.EventType_auth:
 		event = &api.AuthEvent{}
+	case api.EventType_heartbeat:
+		event = &api.HeartbeatEvent{}
 	case api.EventType_subscribe:
 		event = &api.SubscribeEvent{}
 	case api.EventType_presence:
@@ -157,7 +159,7 @@ func SanitizeUserData(toEnc internal.UserDataEncType, data *internal.StreamData)
 		return data.RawData, nil
 	}
 
-	var rawDecoded jsoniter.RawMessage
+	var rawDecoded interface{}
 	switch internal.UserDataEncType(data.Encoding) {
 	case internal.MsgpackEncoding:
 		if err := codec.NewDecoderBytes(data.RawData, &msgpackHandle).Decode(&rawDecoded); err != nil {
