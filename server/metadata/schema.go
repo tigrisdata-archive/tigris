@@ -22,6 +22,7 @@ import (
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
+	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 )
@@ -59,50 +60,47 @@ func (s *SchemaSubspace) Put(ctx context.Context, tx transaction.Tx, namespaceId
 }
 
 // GetLatest returns the latest version stored for a collection inside a given namespace and database.
-func (s *SchemaSubspace) GetLatest(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbId uint32, collId uint32) ([]byte, int, error) {
-	schemas, revisions, err := s.Get(ctx, tx, namespaceId, dbId, collId)
+func (s *SchemaSubspace) GetLatest(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbId uint32, collId uint32) (*schema.Version, error) {
+	schemas, err := s.Get(ctx, tx, namespaceId, dbId, collId)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	if len(schemas) == 0 {
-		return nil, 0, nil
+		return nil, nil
 	}
 
-	return schemas[len(schemas)-1], revisions[len(revisions)-1], nil
+	return &schemas[len(schemas)-1], nil
 }
 
 // Get returns all the version stored for a collection inside a given namespace and database.
-func (s *SchemaSubspace) Get(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbId uint32, collId uint32) ([][]byte, []int, error) {
+func (s *SchemaSubspace) Get(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbId uint32, collId uint32) (schema.Versions, error) {
 	key := keys.NewKey(s.SchemaSubspaceName(), schVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), keyEnd)
 	it, err := tx.Read(ctx, key)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	revisionToSchemaMapping := make(map[uint32][]byte)
-	var revisions []int
-	var row kv.KeyValue
+	var (
+		versions schema.Versions
+		row      kv.KeyValue
+	)
+
 	for it.Next(&row) {
-		revision, ok := row.Key[len(row.Key)-1].([]byte)
+		ver, ok := row.Key[len(row.Key)-1].([]byte)
 		if !ok {
-			return nil, nil, errors.Internal("not able to extract revision from schema %v", row.Key)
+			return nil, errors.Internal("not able to extract revision from schema %v", row.Key)
 		}
-		revisionToSchemaMapping[ByteToUInt32(revision)] = row.Data.RawData
-		revisions = append(revisions, int(ByteToUInt32(revision)))
+
+		versions = append(versions, schema.Version{Version: int(ByteToUInt32(ver)), Schema: row.Data.RawData})
 	}
+
 	if it.Err() != nil {
-		return nil, nil, it.Err()
+		return nil, it.Err()
 	}
 
-	// sort revisions now
-	sort.Ints(revisions)
-	schemas := make([][]byte, 0, len(revisions))
-	for _, r := range revisions {
-		schema := revisionToSchemaMapping[uint32(r)]
-		schemas = append(schemas, schema)
-	}
+	sort.Sort(versions)
 
-	return schemas, revisions, nil
+	return versions, nil
 }
 
 // Delete is to remove schema for a given namespace, database and collection.

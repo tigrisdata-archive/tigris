@@ -109,13 +109,8 @@ func (factory *FieldFactory) Apply(document []byte) ([]byte, error) {
 	}
 
 	factory.FetchedValues = make(map[string]*JSONObject)
-	var err error
 	// first extract all fields that may be useful
-	err = jsonparser.ObjectEach(document, func(key []byte, value []byte, dataType jsonparser.ValueType, offset int) error {
-		if err != nil {
-			return err
-		}
-
+	err := jsonparser.ObjectEach(document, func(key []byte, value []byte, dataType jsonparser.ValueType, offset int) error {
 		// a, b, c, d
 		// a:1, b:0
 		// a:1, b:1
@@ -133,10 +128,14 @@ func (factory *FieldFactory) Apply(document []byte) ([]byte, error) {
 
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 
-	if len(factory.Include) == 0 && len(factory.Exclude) > 0 {
+	if len(factory.Include) == 0 {
 		return factory.applyExcludeOnly()
 	}
+
 	return factory.applyIncludeOnly()
 }
 
@@ -191,9 +190,9 @@ func (factory *FieldFactory) applyIncludeOnly() ([]byte, error) {
 }
 
 func (factory *FieldFactory) applyExcludeOnly() ([]byte, error) {
-	var err error
 	bb := bytebufferpool.Get()
-	_, err = bb.WriteString("{")
+
+	_, err := bb.WriteString("{")
 	if ulog.E(err) {
 		return nil, errors.Internal(err.Error())
 	}
@@ -224,8 +223,10 @@ func (factory *FieldFactory) applyExcludeOnly() ([]byte, error) {
 		if ulog.E(err) {
 			return nil, errors.Internal(err.Error())
 		}
+
 		index++
 	}
+
 	_, err = bb.WriteString("}")
 	if ulog.E(err) {
 		return nil, errors.Internal(err.Error())

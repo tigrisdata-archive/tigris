@@ -60,7 +60,7 @@ func TestMutateSetDefaults(t *testing.T) {
 
 	schFactory, err := schema.Build("t1", reqSchema)
 	require.NoError(t, err)
-	coll := schema.NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil)
+	coll := schema.NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil, nil)
 	p := newInsertPayloadMutator(coll, time.Now().UTC().String())
 
 	cases := []struct {
@@ -157,7 +157,7 @@ func TestMutateSetDefaultsComplexSchema(t *testing.T) {
 
 	schFactory, err := schema.Build("t1", reqSchema)
 	require.NoError(t, err)
-	coll := schema.NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil)
+	coll := schema.NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil, nil)
 
 	cases := []struct {
 		input   []byte
@@ -249,7 +249,7 @@ func TestMutatePayload(t *testing.T) {
 
 	schFactory, err := schema.Build("t1", reqSchema)
 	require.NoError(t, err)
-	coll := schema.NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil)
+	coll := schema.NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil, nil)
 	require.Equal(t, 4, len(coll.GetInt64FieldsPath()))
 
 	cases := []struct {
@@ -364,7 +364,7 @@ func BenchmarkStringToInteger(b *testing.B) {
 
 	schFactory, err := schema.Build("t1", reqSchema)
 	require.NoError(b, err)
-	coll := schema.NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil)
+	coll := schema.NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil, nil)
 	require.Equal(b, 4, len(coll.GetInt64FieldsPath()))
 
 	data := []byte(`{"name":"fiona handbag","id":9223372036854775800,"brand":"michael kors","nested_object":{"obj": {"intField": "9223372036854775800"}},"array_items":[{"name": "test0", "id": "9223372036854775800"}, {"name": "test1", "id": 9223372036854775801}, {"name": "test2", "id": "9223372036854775802"}],"array_simple_items":[9223372036854775800, "9223372036854775801", 9223372036854775802]}`)

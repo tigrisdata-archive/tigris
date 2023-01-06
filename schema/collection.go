@@ -39,7 +39,7 @@ type DefaultCollection struct {
 	// Id is the dictionary encoded value for this collection.
 	Id uint32
 	// SchVer returns the schema version
-	SchVer int32
+	SchVer int
 	// Name is the name of the collection.
 	Name string
 	// EncodedName is the encoded name of the collection.
@@ -53,6 +53,8 @@ type DefaultCollection struct {
 	Validator *jsonschema.Schema
 	// JSON schema
 	Schema jsoniter.RawMessage
+	// SchemaDeltas contains incompatible schema changes from version to version
+	SchemaDeltas []VersionDelta
 	// search schema
 	Search *tsApi.CollectionSchema
 	// QueryableFields are similar to Fields but these are flattened forms of fields. For instance, a simple field
@@ -86,7 +88,9 @@ func disableAdditionalProperties(properties map[string]*jsonschema.Schema) {
 	}
 }
 
-func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionType, factory *Factory, searchCollectionName string, fieldsInSearch []tsApi.Field) *DefaultCollection {
+func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionType, factory *Factory,
+	searchCollectionName string, fieldsInSearch []tsApi.Field, schemas Versions,
+) *DefaultCollection {
 	url := name + ".json"
 	compiler := jsonschema.NewCompiler()
 	compiler.Draft = jsonschema.Draft7 // Format is only working for draft7
@@ -108,7 +112,7 @@ func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionTy
 
 	d := &DefaultCollection{
 		Id:                       id,
-		SchVer:                   int32(schVer),
+		SchVer:                   schVer,
 		Name:                     name,
 		Fields:                   factory.Fields,
 		Indexes:                  factory.Indexes,
@@ -121,6 +125,7 @@ func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionTy
 		FieldsInSearch:           fieldsInSearch,
 		fieldsWithInsertDefaults: make(map[string]struct{}),
 		fieldsWithUpdateDefaults: make(map[string]struct{}),
+		SchemaDeltas:             buildSchemaDeltas(schemas),
 	}
 
 	// set paths for int64 fields
@@ -136,7 +141,7 @@ func (d *DefaultCollection) GetName() string {
 }
 
 func (d *DefaultCollection) GetVersion() int32 {
-	return d.SchVer
+	return int32(d.SchVer)
 }
 
 func (d *DefaultCollection) Type() CollectionType {
