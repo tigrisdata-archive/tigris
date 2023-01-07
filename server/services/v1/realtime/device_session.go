@@ -144,8 +144,9 @@ func (session *Session) Start(ctx context.Context) error {
 		}
 		session.lastReceived = time.Now()
 		if errEvent := session.onMessage(ctx, message); errEvent != nil {
-			log.Err(err).Msgf("realtime send error '%s'", session.id)
-			SendReply(session.conn, session.encType, api.EventType_error, errEvent)
+			log.Err(err).Msgf("realtime send error '%s' %s", session.id, errEvent)
+			err = SendReply(session.conn, session.encType, api.EventType_error, errEvent)
+			log.Err(err).Msgf("failed to send error reply message")
 		}
 	}
 }
@@ -246,9 +247,10 @@ func (session *Session) handleMessage(ctx context.Context, req *api.RealTimeMess
 		}
 		session.watchers[event.Channel] = watcher
 		watcher.StartWatching(NewDevicePusher(session, event.Channel).Watch)
-		SendReply(session.conn, session.encType, api.EventType_subscribed, &api.SubscribedEvent{
+		err = SendReply(session.conn, session.encType, api.EventType_subscribed, &api.SubscribedEvent{
 			Channel: event.Channel,
 		})
+		log.Err(err).Msgf("failed to send subscribe message")
 		return nil
 	case api.EventType_message:
 		event, ok := decoded.(*api.MessageEvent)
@@ -293,8 +295,8 @@ func (session *Session) handleMessage(ctx context.Context, req *api.RealTimeMess
 	return nil
 }
 
-func SendReply(conn *websocket.Conn, encType internal.UserDataEncType, eventType api.EventType, event proto.Message) {
-	encEvent, err := EncodeEvent(encType, eventType, event)
+func SendReply(conn *websocket.Conn, encType internal.UserDataEncType, eventType api.EventType, event proto.Message) error {
+	encEvent, err := EncodeEvent(encType, event)
 	if err != nil {
 		panic(err)
 	}
@@ -315,15 +317,15 @@ func SendReply(conn *websocket.Conn, encType internal.UserDataEncType, eventType
 		msgType = websocket.TextMessage
 	}
 
-	_ = conn.WriteMessage(
+	return conn.WriteMessage(
 		msgType,
 		encRealtime,
 	)
 }
 
 func (session *Session) sendHeartbeat() error {
-	b, _ := EncodeRealtime(session.encType, &api.RealTimeMessage{EventType: api.EventType_heartbeat})
-	return session.conn.WriteMessage(websocket.TextMessage, b)
+	var event proto.Message
+	return SendReply(session.conn, session.encType, api.EventType_heartbeat, event)
 }
 
 func (session *Session) SendConnSuccess() error {
@@ -333,6 +335,5 @@ func (session *Session) SendConnSuccess() error {
 		SocketId:  session.socketId,
 	}
 
-	SendReply(session.conn, session.encType, api.EventType_connected, event)
-	return nil
+	return SendReply(session.conn, session.encType, api.EventType_connected, event)
 }

@@ -109,8 +109,10 @@ func (runner *MessagesRunner) Run(ctx context.Context, tenant *metadata.Tenant) 
 
 	ids := make([]string, len(runner.req.Messages))
 	for i, m := range runner.req.Messages {
-		// the user data is stored as msgpacked
-		m.Data, err = EncodeAsMsgPack(m.Data)
+		// The data is a json encoded Byte.
+		// Convert that to a msgback bytes to store
+		m.Data, err = JsonByteToMsgPack(m.Data)
+
 		if err != nil {
 			return nil, err
 		}
@@ -179,19 +181,23 @@ func (runner *ReadMessagesRunner) Run(ctx context.Context, tenant *metadata.Tena
 			if err != nil {
 				return nil, err
 			}
-
 			rawData, err := SanitizeUserData(internal.JsonEncoding, data)
 			if err != nil {
 				return nil, err
 			}
 
-			_ = runner.streaming.Send(&api.ReadMessagesResponse{
+			err = runner.streaming.Send(&api.ReadMessagesResponse{
 				Message: &api.Message{
 					Id:   &m.ID,
 					Name: md.EventName,
 					Data: rawData,
 				},
 			})
+
+			if err != nil {
+				return nil, err
+			}
+
 			count++
 			if runner.req.GetLimit() > 0 && count == runner.req.GetLimit() {
 				return nil, nil

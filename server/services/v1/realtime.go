@@ -23,6 +23,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
@@ -120,7 +121,8 @@ func (s *realtimeService) DeviceConnectionHandler(w http.ResponseWriter, r *http
 	ctx := r.Context()
 	session, err := s.devices.AddDevice(ctx, conn, params)
 	if err != nil {
-		realtime.SendReply(conn, params.ToEncodingType(), api.EventType_error, errors.InternalWS(err.Error()))
+		err = realtime.SendReply(conn, params.ToEncodingType(), api.EventType_error, errors.InternalWS(err.Error()))
+		log.Err(err).Msgf("failed to send error msg")
 		_ = conn.Close()
 		return
 	}
