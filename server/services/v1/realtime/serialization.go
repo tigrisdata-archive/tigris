@@ -97,7 +97,6 @@ func EncodeAsMsgPack(data interface{}) ([]byte, error) {
 func JsonByteToMsgPack(data []byte) ([]byte, error) {
 	var obj interface{}
 	err := jsoniter.Unmarshal(data, &obj)
-
 	if err != nil {
 		return nil, err
 	}

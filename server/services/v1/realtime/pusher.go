@@ -82,5 +82,4 @@ func (pusher *DevicePusher) sendMessage(msgId string, md *StreamMessageMD, data 
 
 	err = SendReply(pusher.connection, pusher.encType, api.EventType_message, message)
 	log.Err(err).Msgf("failed to push message")
-
 }
