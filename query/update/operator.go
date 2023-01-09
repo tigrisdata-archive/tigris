@@ -79,68 +79,93 @@ type FieldOperatorFactory struct {
 // MergeAndGet method to converts the input to the output after applying all the operators. First "$set" operation is
 // applied and then "$unset" which means if a field is present in both $set and $unset then it won't be stored in the
 // resulting document.
-func (factory *FieldOperatorFactory) MergeAndGet(existingDoc jsoniter.RawMessage, collection *schema.DefaultCollection) (jsoniter.RawMessage, error) {
+func (factory *FieldOperatorFactory) MergeAndGet(existingDoc jsoniter.RawMessage, collection *schema.DefaultCollection) (jsoniter.RawMessage, bool, error) {
+	primaryKeyMutation := false
 	out := existingDoc
 	var err error
 	if setFieldOp, ok := factory.FieldOperators[string(Set)]; ok {
-		if out, err = factory.set(out, setFieldOp.Input); err != nil {
-			return nil, err
+		if out, primaryKeyMutation, err = factory.set(collection, out, setFieldOp); err != nil {
+			return nil, false, err
 		}
 	}
 	if incrFieldOp, ok := factory.FieldOperators[string(Increment)]; ok {
-		if out, err = factory.atomicOperations(collection, out, incrFieldOp); err != nil {
-			return nil, err
+		if out, primaryKeyMutation, err = factory.atomicOperations(collection, out, incrFieldOp); err != nil {
+			return nil, false, err
 		}
 	}
 	if decrFieldOp, ok := factory.FieldOperators[string(Decrement)]; ok {
-		if out, err = factory.atomicOperations(collection, out, decrFieldOp); err != nil {
-			return nil, err
+		if out, primaryKeyMutation, err = factory.atomicOperations(collection, out, decrFieldOp); err != nil {
+			return nil, false, err
 		}
 	}
 	if multFieldOp, ok := factory.FieldOperators[string(Multiply)]; ok {
-		if out, err = factory.atomicOperations(collection, out, multFieldOp); err != nil {
-			return nil, err
+		if out, primaryKeyMutation, err = factory.atomicOperations(collection, out, multFieldOp); err != nil {
+			return nil, false, err
 		}
 	}
 	if divFieldOp, ok := factory.FieldOperators[string(Divide)]; ok {
-		if out, err = factory.atomicOperations(collection, out, divFieldOp); err != nil {
-			return nil, err
+		if out, primaryKeyMutation, err = factory.atomicOperations(collection, out, divFieldOp); err != nil {
+			return nil, false, err
 		}
 	}
 	if unsetFieldOp, ok := factory.FieldOperators[string(UnSet)]; ok {
-		if out, err = factory.remove(out, unsetFieldOp.Input); err != nil {
-			return nil, err
+		if out, primaryKeyMutation, err = factory.remove(collection, out, unsetFieldOp); err != nil {
+			return nil, false, err
+		}
+		if primaryKeyMutation {
+			return nil, false, errors.InvalidArgument("primary key field can't be unset")
 		}
 	}
 
-	return out, nil
+	return out, primaryKeyMutation, nil
 }
 
-func (factory *FieldOperatorFactory) remove(out jsoniter.RawMessage, toRemove jsoniter.RawMessage) (jsoniter.RawMessage, error) {
+func isPrimaryKeyMutation(collection *schema.DefaultCollection, mutationKey string) bool {
+	field := collection.GetField(mutationKey)
+	return field != nil && field.IsPrimaryKey()
+}
+
+func (factory *FieldOperatorFactory) remove(collection *schema.DefaultCollection, out jsoniter.RawMessage, operator *FieldOperator) (jsoniter.RawMessage, bool, error) {
 	var unsetArray []string
-	if err := jsoniter.Unmarshal(toRemove, &unsetArray); err != nil {
-		return nil, err
+	if err := jsoniter.Unmarshal(operator.Input, &unsetArray); err != nil {
+		return nil, false, err
 	}
 
+	primaryKeyMutation := false
 	for _, unset := range unsetArray {
 		unsetKeys := strings.Split(unset, ".")
+		if !primaryKeyMutation {
+			primaryKeyMutation = isPrimaryKeyMutation(collection, unsetKeys[0])
+		}
 		out = jsonparser.Delete(out, unsetKeys...)
 	}
 
-	return out, nil
+	return out, primaryKeyMutation, nil
 }
 
-func (factory *FieldOperatorFactory) set(existingDoc jsoniter.RawMessage, setDoc jsoniter.RawMessage) (jsoniter.RawMessage, error) {
+func (factory *FieldOperatorFactory) set(collection *schema.DefaultCollection, existingDoc jsoniter.RawMessage, operator *FieldOperator) (jsoniter.RawMessage, bool, error) {
 	var (
 		output []byte = existingDoc
 		err    error
 	)
-	err = jsonparser.ObjectEach(setDoc, func(key []byte, value []byte, dataType jsonparser.ValueType, offset int) error {
+
+	primaryKeyMutation := false
+	err = jsonparser.ObjectEach(operator.Input, func(key []byte, value []byte, dataType jsonparser.ValueType, offset int) error {
+		if err != nil {
+			return err
+		}
 		if dataType == jsonparser.String {
 			value = []byte(fmt.Sprintf(`"%s"`, value))
 		}
-
 		keys := strings.Split(string(key), ".")
+		isPrimaryKeyMutation := isPrimaryKeyMutation(collection, keys[0])
+		if isPrimaryKeyMutation && dataType == jsonparser.Null {
+			return errors.InvalidArgument("primary key field can't be set as null")
+		}
+
+		if !primaryKeyMutation {
+			primaryKeyMutation = isPrimaryKeyMutation
+		}
 		output, err = jsonparser.Set(output, value, keys...)
 		if err != nil {
 			return err
@@ -149,47 +174,52 @@ func (factory *FieldOperatorFactory) set(existingDoc jsoniter.RawMessage, setDoc
 	})
 
 	if err != nil {
-		return nil, err
+		return nil, primaryKeyMutation, err
 	}
 
-	return output, nil
+	return output, primaryKeyMutation, nil
 }
 
-func (factory *FieldOperatorFactory) atomicOperations(collection *schema.DefaultCollection, existingDoc jsoniter.RawMessage, operator *FieldOperator) (jsoniter.RawMessage, error) {
+func (factory *FieldOperatorFactory) atomicOperations(collection *schema.DefaultCollection, existingDoc jsoniter.RawMessage, operator *FieldOperator) (jsoniter.RawMessage, bool, error) {
 	var output []byte = existingDoc
 	var atomicInput map[string]float64
 	if err := jsoniter.Unmarshal(operator.Input, &atomicInput); err != nil {
-		return nil, errors.InvalidArgument("invalid input '%s'", string(operator.Input))
+		return nil, false, errors.InvalidArgument("invalid input '%s'", string(operator.Input))
 	}
 
+	primaryKeyMutation := false
 	for key, value := range atomicInput {
 		field, err := collection.GetQueryableField(key)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
 		keys := strings.Split(key, ".")
 		existingVal, dataType, _, err := jsonparser.Get(existingDoc, keys...)
 		if err != nil && dataType != jsonparser.NotExist {
-			return nil, errors.Internal("failing to get key '%s' err: '%s'", keys, err.Error())
+			return nil, false, errors.Internal("failing to get key '%s' err: '%s'", keys, err.Error())
 		}
 		if dataType == jsonparser.NotExist {
 			// If a field is null, it will not be updated
 			continue
 		}
 
+		if !primaryKeyMutation {
+			primaryKeyMutation = isPrimaryKeyMutation(collection, keys[0])
+		}
+
 		newValue, err := operator.apply(field.DataType, existingVal, value)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
 		output, err = jsonparser.Set(output, newValue, keys...)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 	}
 
-	return output, nil
+	return output, primaryKeyMutation, nil
 }
 
 // A FieldOperator can be of the following type:

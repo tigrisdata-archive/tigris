@@ -692,7 +692,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 		// MergeAndGet merge the user input with existing doc and return the merged JSON document which we need to
 		// persist back.
-		merged, err := factory.MergeAndGet(row.Data.RawData, coll)
+		merged, primaryKeyMutation, err := factory.MergeAndGet(row.Data.RawData, coll)
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -704,7 +704,23 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		newData := internal.NewTableDataWithTS(row.Data.CreatedAt, ts, merged)
 		newData.SetVersion(coll.GetVersion())
 		// as we have merged the data, it is safe to call replace
-		if err = tx.Replace(ctx, key, newData, true); ulog.E(err) {
+
+		isUpdate := true
+		newKey := key
+		if primaryKeyMutation {
+			// we need to delete old key and build new key from new data
+			keyGen := newKeyGenerator(newData.RawData, tenant.TableKeyGenerator, coll.Indexes.PrimaryKey)
+			if newKey, err = keyGen.generate(ctx, runner.txMgr, runner.encoder, coll.EncodedName); err != nil {
+				return nil, nil, err
+			}
+
+			// delete old key
+			if err = tx.Delete(ctx, key); ulog.E(err) {
+				return nil, ctx, err
+			}
+			isUpdate = false
+		}
+		if err = tx.Replace(ctx, newKey, newData, isUpdate); ulog.E(err) {
 			return nil, ctx, err
 		}
 		modifiedCount++

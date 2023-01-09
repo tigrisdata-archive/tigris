@@ -70,13 +70,14 @@ func TestMergeAndGet(t *testing.T) {
 		f, err := BuildFieldOperators(reqInput)
 		require.NoError(t, err)
 
-		actualOut, err := f.MergeAndGet(c.existingDoc, testCollection(t))
+		actualOut, pkeyMutation, err := f.MergeAndGet(c.existingDoc, testCollection(t))
+		require.False(t, pkeyMutation)
 		require.NoError(t, err)
 		require.Equal(t, c.outputDoc, actualOut, fmt.Sprintf("exp '%s' actual '%s'", string(c.outputDoc), string(actualOut)))
 	}
 }
 
-func TestMergeAndGetWithUnset(t *testing.T) {
+func TestMergeAndGet_Unset(t *testing.T) {
 	cases := []struct {
 		inputSet    jsoniter.RawMessage
 		inputRemove jsoniter.RawMessage
@@ -120,13 +121,14 @@ func TestMergeAndGetWithUnset(t *testing.T) {
 		f, err := BuildFieldOperators(reqInput)
 		require.NoError(t, err)
 
-		actualOut, err := f.MergeAndGet(c.existingDoc, testCollection(t))
+		actualOut, pkeyMutation, err := f.MergeAndGet(c.existingDoc, testCollection(t))
+		require.False(t, pkeyMutation)
 		require.NoError(t, err)
 		require.Equal(t, c.outputDoc, actualOut, fmt.Sprintf("exp '%s' actual '%s'", string(c.outputDoc), string(actualOut)))
 	}
 }
 
-func TestMergeAndGetAtomic(t *testing.T) {
+func TestMergeAndGet_Atomic(t *testing.T) {
 	cases := []struct {
 		inputDoc    jsoniter.RawMessage
 		existingDoc jsoniter.RawMessage
@@ -165,13 +167,14 @@ func TestMergeAndGetAtomic(t *testing.T) {
 		f, err := BuildFieldOperators(reqInput)
 		require.NoError(t, err)
 
-		actualOut, err := f.MergeAndGet(c.existingDoc, testCollection(t))
+		actualOut, pkeyMutation, err := f.MergeAndGet(c.existingDoc, testCollection(t))
+		require.False(t, pkeyMutation)
 		require.NoError(t, err)
 		require.JSONEq(t, string(c.outputDoc), string(actualOut), fmt.Sprintf("exp '%s' actual '%s'", string(c.outputDoc), string(actualOut)))
 	}
 }
 
-func TestMergeAndGetAtomicErrors(t *testing.T) {
+func TestMergeAndGet_AtomicErrors(t *testing.T) {
 	cases := []struct {
 		inputDoc    jsoniter.RawMessage
 		existingDoc jsoniter.RawMessage
@@ -195,9 +198,99 @@ func TestMergeAndGetAtomicErrors(t *testing.T) {
 		f, err := BuildFieldOperators(reqInput)
 		require.NoError(t, err)
 
-		actualOut, err := f.MergeAndGet(c.existingDoc, testCollection(t))
+		actualOut, pkeyMutation, err := f.MergeAndGet(c.existingDoc, testCollection(t))
 		require.Equal(t, c.error, err)
+		require.False(t, pkeyMutation)
 		require.Nil(t, actualOut)
+	}
+}
+
+func TestMergeAndGet_PrimaryKeyMutation(t *testing.T) {
+	cases := []struct {
+		inputDoc           jsoniter.RawMessage
+		existingDoc        jsoniter.RawMessage
+		outputDoc          jsoniter.RawMessage
+		apply              FieldOPType
+		primaryKeyMutation bool
+		expError           error
+	}{
+		{
+			[]byte(`{"a": 10}`),
+			[]byte(`{"a": 1, "b": "foo", "c": "c", "f": {"f_str": "f"}}`),
+			[]byte(`{"a": 10, "b": "foo", "c": "c", "f": {"f_str": "f"}}`),
+			Set,
+			true,
+			nil,
+		}, {
+			[]byte(`{"b": 10, "a": 10}`),
+			[]byte(`{"a": 1, "b": 1, "c": "c", "f": {"f_str": "f"}}`),
+			[]byte(`{"a": 10, "b": 10, "c": "c", "f": {"f_str": "f"}}`),
+			Set,
+			true,
+			nil,
+		}, {
+			[]byte(`{"b": 1, "d": 10.22}`),
+			[]byte(`{"a": 1, "b": 10, "d": 1.22}`),
+			[]byte(`{"a": 1, "b": 1, "d": 10.22}`),
+			Set,
+			false,
+			nil,
+		}, {
+			[]byte(`{"f.f_str": "ff", "g": "new"}`),
+			[]byte(`{"a": 1, "c": "c", "f": {"f_str": "f"}}`),
+			[]byte(`{"a": 1, "c": "c", "f": {"f_str": "ff"},"g":"new"}`),
+			Set,
+			false,
+			nil,
+		}, {
+			[]byte(`{"a": 1, "c": "foo"}`),
+			[]byte(`{"a": 10, "b": 10, "d": 1.22}`),
+			[]byte(`{"a": 1, "b": 10, "d": 1.22,"c":"foo"}`),
+			Set,
+			true,
+			nil,
+		}, {
+			[]byte(`["a", "b"]`),
+			[]byte(`{"a": 10, "b": 10, "d": 1.22}`),
+			[]byte(`{ "d": 1.22}`),
+			UnSet,
+			true,
+			errors.InvalidArgument("primary key field can't be unset"),
+		}, {
+			[]byte(`["b", "d"]`),
+			[]byte(`{"a": 10, "b": 10, "d": 1.22}`),
+			[]byte(`{"a": 10}`),
+			UnSet,
+			false,
+			nil,
+		}, {
+			[]byte(`{"a": 10}`),
+			[]byte(`{"a": 1, "b": 10, "d": 1.22}`),
+			[]byte(`{"a": 11, "b": 10, "d": 1.22}`),
+			Increment,
+			true,
+			nil,
+		}, {
+			[]byte(`{"b": 10}`),
+			[]byte(`{"a": 1, "b": 10, "d": 1.22}`),
+			[]byte(`{"a": 1, "b": 20, "d": 1.22}`),
+			Increment,
+			false,
+			nil,
+		},
+	}
+	for _, c := range cases {
+		reqInput := []byte(fmt.Sprintf(`{"%s": %s}`, c.apply, c.inputDoc))
+		f, err := BuildFieldOperators(reqInput)
+		require.NoError(t, err)
+
+		actualOut, pkeyMutation, err := f.MergeAndGet(c.existingDoc, testCollection2(t))
+		require.Equal(t, c.expError, err)
+		if c.expError != nil {
+			continue
+		}
+		require.Equal(t, c.primaryKeyMutation, pkeyMutation)
+		require.Equal(t, c.outputDoc, actualOut, fmt.Sprintf("exp '%s' actual '%s'", string(c.outputDoc), string(actualOut)))
 	}
 }
 
@@ -237,8 +330,9 @@ func TestMergeAndGet_MarshalInput(t *testing.T) {
 		require.NoError(t, err)
 		existingDoc, err := jsoniter.Marshal(c.existingDoc)
 		require.NoError(t, err)
-		actualOut, err := f.MergeAndGet(existingDoc, testCollection(t))
+		actualOut, pkeyMutation, err := f.MergeAndGet(existingDoc, testCollection(t))
 		require.NoError(t, err)
+		require.False(t, pkeyMutation)
 		require.JSONEqf(t, string(c.outputDoc), string(actualOut), fmt.Sprintf("exp '%s' actual '%s'", string(c.outputDoc), string(actualOut)))
 	}
 }
@@ -363,6 +457,58 @@ func testCollection(t *testing.T) *schema.DefaultCollection {
 		}
 	},
 	"primary_key": ["id"]
+}`)
+
+	schFactory, err := schema.Build("test_update", reqSchema)
+	require.NoError(t, err)
+
+	return schema.NewDefaultCollection("test_update", 1, 1, schFactory.CollectionType, schFactory, "test_update", nil)
+}
+
+func testCollection2(t *testing.T) *schema.DefaultCollection {
+	reqSchema := []byte(`{
+	"title": "test_update",
+	"properties": {
+		"id": {
+			"type": "integer"
+		},
+		"a": {
+			"type": "integer",
+			"format": "int32"
+		},
+		"b": {
+			"type": "integer"
+		},
+		"c": {
+			"type": "string",
+			"maxLength": 128
+		},
+		"d": {
+			"type": "number"
+		},
+		"e": {
+			"type": "array",
+			"items": {
+				"type": "integer"
+			}
+		},
+		"f": {
+			"type": "object",
+			"properties": {
+				"f_str": {
+					"type": "string"
+				},
+				"f_64": {
+					"type": "integer"
+				}
+			}
+		},
+		"g": {
+			"type": "string",
+			"maxLength": 128
+		}
+	},
+	"primary_key": ["id", "a", "c"]
 }`)
 
 	schFactory, err := schema.Build("test_update", reqSchema)

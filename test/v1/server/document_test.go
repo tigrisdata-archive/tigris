@@ -2337,6 +2337,266 @@ func testUpdateAtomicOperationsFailure(t *testing.T, userInput Map, expErrorCode
 	require.Equal(t, expErrorMsg, rawMessage)
 }
 
+func TestUpdate_MutatePrimaryKey(t *testing.T) {
+	db, _ := setupTests(t)
+	defer cleanupTests(t, db)
+
+	collection := "test_mutatepkey_collection"
+	schema := Map{
+		"schema": Map{
+			"title": collection,
+			"properties": Map{
+				"a": Map{
+					"type": "integer",
+				},
+				"b": Map{
+					"type": "string",
+				},
+				"c": Map{
+					"type": "integer",
+				},
+				"d": Map{
+					"type": "string",
+				},
+				"e": Map{
+					"type": "integer",
+				},
+			},
+			"primary_key": []interface{}{"a", "b"},
+		},
+	}
+
+	inputDocument := []Doc{
+		{
+			"a": 1,
+			"b": "1",
+			"c": 1,
+			"d": "1",
+			"e": 1,
+		},
+	}
+
+	cases := []struct {
+		userInput          Map
+		oldShouldBeRemoved bool
+		expOutPKey         Map
+		expOut             []Doc
+		expError           string
+	}{
+		{
+			Map{
+				"fields": Map{
+					"$set": Map{
+						"b": "2",
+					},
+				},
+			},
+			true,
+			Map{
+				"a": 1,
+				"b": "2",
+			},
+			[]Doc{{
+				"a": 1,
+				"b": "2",
+				"c": 1,
+				"d": "1",
+				"e": 1,
+			}},
+			"",
+		},
+		{
+			Map{
+				"fields": Map{
+					"$set": Map{
+						"a": 2,
+					},
+				},
+			},
+			true,
+			Map{
+				"a": 2,
+				"b": "1",
+			},
+			[]Doc{{
+				"a": 2,
+				"b": "1",
+				"c": 1,
+				"d": "1",
+				"e": 1,
+			}},
+			"",
+		},
+		{
+			Map{
+				"fields": Map{
+					"$set": Map{
+						"c": 2,
+					},
+				},
+			},
+			false,
+			Map{
+				"a": 1,
+				"b": "1",
+			},
+			[]Doc{{
+				"a": 1,
+				"b": "1",
+				"c": 2,
+				"d": "1",
+				"e": 1,
+			}},
+			"",
+		},
+		{
+			Map{
+				"fields": Map{
+					"$set": Map{
+						"d": "2",
+					},
+				},
+			},
+			false,
+			Map{
+				"a": 1,
+				"b": "1",
+			},
+			[]Doc{{
+				"a": 1,
+				"b": "1",
+				"c": 1,
+				"d": "2",
+				"e": 1,
+			}},
+			"",
+		},
+		{
+			Map{
+				"fields": Map{
+					"$set": Map{
+						"a": nil,
+					},
+				},
+			},
+			false,
+			Map{
+				"a": 1,
+				"b": "1",
+			},
+			[]Doc{{
+				"a": 1,
+				"b": "1",
+				"c": 1,
+				"d": "2",
+				"e": 1,
+			}},
+			"primary key field can't be set as null",
+		},
+		{
+			Map{
+				"fields": Map{
+					"$unset": []string{"a"},
+				},
+			},
+			true,
+			Map{
+				"filter": Map{
+					"b": "1",
+				},
+			},
+			[]Doc{{
+				"b": "1",
+				"c": 1,
+				"d": "2",
+			}},
+			"primary key field can't be unset",
+		},
+		{
+			Map{
+				"fields": Map{
+					"$unset": []string{"b"},
+				},
+			},
+			true,
+			Map{
+				"a": 1,
+			},
+			[]Doc{{
+				"a": 1,
+				"c": 1,
+				"d": "2",
+			}},
+			"primary key field can't be unset",
+		},
+		{
+			Map{
+				"fields": Map{
+					"$unset": []string{"c", "d"},
+				},
+			},
+			false,
+			Map{
+				"a": 1,
+				"b": "1",
+			},
+			[]Doc{{
+				"a": 1,
+				"b": "1",
+				"e": 1,
+			}},
+			"",
+		},
+	}
+	for _, c := range cases {
+		createCollection(t, db, collection, schema).Status(200)
+
+		insertDocuments(t, db, collection, inputDocument, false).
+			Status(http.StatusOK)
+
+		if len(c.expError) == 0 {
+			updateByFilter(t,
+				db,
+				collection,
+				Map{
+					"filter": Map{
+						"e": 1,
+					},
+				},
+				c.userInput,
+				nil).Status(http.StatusOK).
+				JSON().
+				Object().
+				ValueEqual("modified_count", 1).
+				Path("$.metadata").Object()
+		} else {
+			updateByFilter(t,
+				db,
+				collection,
+				Map{
+					"filter": Map{
+						"e": 1,
+					},
+				},
+				c.userInput,
+				nil).Status(http.StatusBadRequest).
+				JSON().Path("$.error").Object().
+				ValueEqual("message", c.expError)
+
+			continue
+		}
+
+		readAndValidate(t,
+			db,
+			collection,
+			c.expOutPKey,
+			nil,
+			c.expOut)
+
+		dropCollection(t, db, collection)
+	}
+}
+
 func TestDelete_BadRequest(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)
