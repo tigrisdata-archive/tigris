@@ -64,8 +64,6 @@ type DefaultCollection struct {
 	// Track all the int64 paths in the collection. For example, if top level object has a int64 field then key would be
 	// obj.fieldName so that caller can easily navigate to this field.
 	int64FieldsPath map[string]struct{}
-	// PartitionFields are the fields that make up the partition key, if applicable to the collection.
-	PartitionFields []*Field
 	// This is the existing fields in search
 	FieldsInSearch []tsApi.Field
 
@@ -107,7 +105,6 @@ func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionTy
 	disableAdditionalProperties(validator.Properties)
 
 	queryableFields := BuildQueryableFields(factory.Fields, fieldsInSearch)
-	partitionFields := BuildPartitionFields(factory.Fields)
 
 	d := &DefaultCollection{
 		Id:                       id,
@@ -121,7 +118,6 @@ func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionTy
 		QueryableFields:          queryableFields,
 		CollectionType:           ctype,
 		int64FieldsPath:          make(map[string]struct{}),
-		PartitionFields:          partitionFields,
 		FieldsInSearch:           fieldsInSearch,
 		fieldsWithInsertDefaults: make(map[string]struct{}),
 		fieldsWithUpdateDefaults: make(map[string]struct{}),
