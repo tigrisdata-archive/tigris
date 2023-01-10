@@ -41,9 +41,9 @@ type Session interface {
 	Create(ctx context.Context, trackVerInOwnTxn bool, instantVerTracking bool, track bool) (*QuerySession, error)
 	Get(ctx context.Context) (*QuerySession, error)
 	Remove(ctx context.Context) error
-	ReadOnlyExecute(ctx context.Context, runner ReadOnlyQueryRunner, req *ReqOptions) (*Response, error)
-	Execute(ctx context.Context, runner QueryRunner, req *ReqOptions) (*Response, error)
-	executeWithRetry(ctx context.Context, runner QueryRunner, req *ReqOptions) (resp *Response, err error)
+	ReadOnlyExecute(ctx context.Context, runner ReadOnlyQueryRunner, req ReqOptions) (Response, error)
+	Execute(ctx context.Context, runner QueryRunner, req ReqOptions) (Response, error)
+	executeWithRetry(ctx context.Context, runner QueryRunner, req ReqOptions) (resp Response, err error)
 }
 
 type SessionManager struct {
@@ -93,7 +93,7 @@ func (m *SessionManagerWithMetrics) Remove(ctx context.Context) (err error) {
 	return m.s.Remove(ctx)
 }
 
-func (m *SessionManagerWithMetrics) ReadOnlyExecute(ctx context.Context, runner ReadOnlyQueryRunner, req *ReqOptions) (resp *Response, err error) {
+func (m *SessionManagerWithMetrics) ReadOnlyExecute(ctx context.Context, runner ReadOnlyQueryRunner, req ReqOptions) (resp Response, err error) {
 	m.measure(ctx, "ReadOnlyExecute", func(ctx context.Context) error {
 		resp, err = m.s.ReadOnlyExecute(ctx, runner, req)
 		return err
@@ -101,7 +101,7 @@ func (m *SessionManagerWithMetrics) ReadOnlyExecute(ctx context.Context, runner 
 	return
 }
 
-func (m *SessionManagerWithMetrics) Execute(ctx context.Context, runner QueryRunner, req *ReqOptions) (resp *Response, err error) {
+func (m *SessionManagerWithMetrics) Execute(ctx context.Context, runner QueryRunner, req ReqOptions) (resp Response, err error) {
 	m.measure(ctx, "Execute", func(ctx context.Context) error {
 		resp, err = m.s.Execute(ctx, runner, req)
 		return err
@@ -109,7 +109,7 @@ func (m *SessionManagerWithMetrics) Execute(ctx context.Context, runner QueryRun
 	return
 }
 
-func (m *SessionManagerWithMetrics) executeWithRetry(ctx context.Context, runner QueryRunner, req *ReqOptions) (resp *Response, err error) {
+func (m *SessionManagerWithMetrics) executeWithRetry(ctx context.Context, runner QueryRunner, req ReqOptions) (resp Response, err error) {
 	m.measure(ctx, "executeWithRetry", func(ctx context.Context) error {
 		resp, err = m.s.executeWithRetry(ctx, runner, req)
 		return err
@@ -236,11 +236,11 @@ func (sessMgr *SessionManager) Remove(ctx context.Context) error {
 // Execute is responsible to execute a query. In a way this method is managing the lifecycle of a query. For implicit
 // transaction everything is done in this method. For explicit transaction, a session may already exist, so it only
 // needs to run without calling Commit/Rollback.
-func (sessMgr *SessionManager) Execute(ctx context.Context, runner QueryRunner, req *ReqOptions) (*Response, error) {
+func (sessMgr *SessionManager) Execute(ctx context.Context, runner QueryRunner, req ReqOptions) (Response, error) {
 	if req.TxCtx != nil {
 		session := sessMgr.tracker.get(req.TxCtx.Id)
 		if session == nil {
-			return nil, transaction.ErrSessionIsGone
+			return Response{}, transaction.ErrSessionIsGone
 		}
 		resp, ctx, err := session.Run(runner)
 		session.ctx = ctx
@@ -249,29 +249,29 @@ func (sessMgr *SessionManager) Execute(ctx context.Context, runner QueryRunner, 
 
 	resp, err := sessMgr.executeWithRetry(ctx, runner, req)
 	if err == kv.ErrConflictingTransaction {
-		return nil, errors.Aborted(err.Error())
+		return Response{}, errors.Aborted(err.Error())
 	}
 	return resp, err
 }
 
-func (sessMgr *SessionManager) ReadOnlyExecute(ctx context.Context, runner ReadOnlyQueryRunner, _ *ReqOptions) (*Response, error) {
+func (sessMgr *SessionManager) ReadOnlyExecute(ctx context.Context, runner ReadOnlyQueryRunner, _ ReqOptions) (Response, error) {
 	session, err := sessMgr.CreateReadOnlySession(ctx)
 	if err != nil {
-		return nil, err
+		return Response{}, err
 	}
 
 	resp, _, err := session.Run(runner)
 	return resp, err
 }
 
-func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, runner QueryRunner, req *ReqOptions) (resp *Response, err error) {
+func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, runner QueryRunner, req ReqOptions) (resp Response, err error) {
 	delta := time.Duration(50) * time.Millisecond
 	start := time.Now()
 	for {
 		var session *QuerySession
 		// implicit sessions doesn't need tracking
 		if session, err = sessMgr.Create(ctx, req.MetadataChange, req.InstantVerTracking, false); err != nil {
-			return nil, err
+			return Response{}, err
 		}
 
 		// use the same ctx assigned in the session
@@ -313,7 +313,7 @@ type ReadOnlySession struct {
 	tenant *metadata.Tenant
 }
 
-func (s *ReadOnlySession) Run(runner ReadOnlyQueryRunner) (*Response, context.Context, error) {
+func (s *ReadOnlySession) Run(runner ReadOnlyQueryRunner) (Response, context.Context, error) {
 	return runner.ReadOnly(s.ctx, s.tenant)
 }
 
@@ -335,7 +335,7 @@ func (s *QuerySession) GetTransactionCtx() *api.TransactionCtx {
 	return s.txCtx
 }
 
-func (s *QuerySession) Run(runner QueryRunner) (*Response, context.Context, error) {
+func (s *QuerySession) Run(runner QueryRunner) (Response, context.Context, error) {
 	return runner.Run(s.ctx, s.tx, s.tenant)
 }
 

@@ -29,7 +29,7 @@ import (
 
 // RTMRunner is used to run the realtime HTTP APIs related to channel like accessing a channel, subscribing to a channel, etc.
 type RTMRunner interface {
-	Run(ctx context.Context, tenant *metadata.Tenant) (*Response, error)
+	Run(ctx context.Context, tenant *metadata.Tenant) (Response, error)
 }
 
 type RTMRunnerFactory struct {
@@ -96,15 +96,15 @@ type MessagesRunner struct {
 	req *api.MessagesRequest
 }
 
-func (runner *MessagesRunner) Run(ctx context.Context, tenant *metadata.Tenant) (*Response, error) {
+func (runner *MessagesRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Response, error) {
 	project, err := runner.getProject(ctx, tenant, runner.req.Project)
 	if err != nil {
-		return nil, err
+		return Response{}, err
 	}
 
 	channel, err := runner.factory.GetOrCreateChannel(ctx, tenant.GetNamespace().Id(), project.Id(), runner.req.Channel)
 	if err != nil {
-		return nil, err
+		return Response{}, err
 	}
 
 	ids := make([]string, len(runner.req.Messages))
@@ -112,25 +112,24 @@ func (runner *MessagesRunner) Run(ctx context.Context, tenant *metadata.Tenant) 
 		// The data is a json encoded Byte.
 		// Convert that to a msgback bytes to store
 		m.Data, err = JsonByteToMsgPack(m.Data)
-
 		if err != nil {
-			return nil, err
+			return Response{}, err
 		}
 
 		streamData, err := NewEventDataFromMessage(internal.MsgpackEncoding, "", "", m.Name, m)
 		if err != nil {
-			return nil, err
+			return Response{}, err
 		}
 
 		id, err := channel.PublishMessage(ctx, streamData)
 		if err != nil {
-			return nil, err
+			return Response{}, err
 		}
 
 		ids[i] = id
 	}
 
-	return &Response{
+	return Response{
 		Response: &api.MessagesResponse{
 			Ids: ids,
 		},
@@ -144,15 +143,15 @@ type ReadMessagesRunner struct {
 	streaming Streaming
 }
 
-func (runner *ReadMessagesRunner) Run(ctx context.Context, tenant *metadata.Tenant) (*Response, error) {
+func (runner *ReadMessagesRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Response, error) {
 	project, err := runner.getProject(ctx, tenant, runner.req.Project)
 	if err != nil {
-		return nil, err
+		return Response{}, err
 	}
 
 	channel, err := runner.factory.GetChannel(ctx, tenant.GetNamespace().Id(), project.Id(), runner.req.Channel)
 	if err != nil {
-		return nil, err
+		return Response{}, err
 	}
 
 	pos := runner.req.GetStart()
@@ -164,26 +163,26 @@ func (runner *ReadMessagesRunner) Run(ctx context.Context, tenant *metadata.Tena
 	for {
 		resp, exists, err := channel.Read(ctx, pos)
 		if !exists {
-			return nil, nil
+			return Response{}, nil
 		}
 		if err != nil {
-			return nil, err
+			return Response{}, err
 		}
 
 		var id string
 		for _, m := range resp.Messages {
 			data, err := resp.Decode(m)
 			if err != nil {
-				return nil, err
+				return Response{}, err
 			}
 
 			md, err := DecodeStreamMD(data.Md)
 			if err != nil {
-				return nil, err
+				return Response{}, err
 			}
 			rawData, err := SanitizeUserData(internal.JsonEncoding, data)
 			if err != nil {
-				return nil, err
+				return Response{}, err
 			}
 
 			err = runner.streaming.Send(&api.ReadMessagesResponse{
@@ -193,14 +192,13 @@ func (runner *ReadMessagesRunner) Run(ctx context.Context, tenant *metadata.Tena
 					Data: rawData,
 				},
 			})
-
 			if err != nil {
-				return nil, err
+				return Response{}, err
 			}
 
 			count++
 			if runner.req.GetLimit() > 0 && count == runner.req.GetLimit() {
-				return nil, nil
+				return Response{}, nil
 			}
 
 			id = m.ID
@@ -234,21 +232,21 @@ func (runner *ChannelRunner) SetListSubscriptionsReq(req *api.ListSubscriptionRe
 	runner.listSubscriptions = req
 }
 
-func (runner *ChannelRunner) Run(ctx context.Context, tenant *metadata.Tenant) (*Response, error) {
+func (runner *ChannelRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Response, error) {
 	switch {
 	case runner.listSubscriptions != nil:
 		project, err := runner.getProject(ctx, tenant, runner.listSubscriptions.Project)
 		if err != nil {
-			return nil, err
+			return Response{}, err
 		}
 
 		channel, err := runner.factory.GetChannel(ctx, tenant.GetNamespace().Id(), project.Id(), runner.listSubscriptions.Channel)
 		if err != nil {
-			return nil, err
+			return Response{}, err
 		}
 
 		watchers := channel.ListWatchers()
-		return &Response{
+		return Response{
 			Response: &api.ListSubscriptionResponse{
 				Devices: watchers,
 			},
@@ -256,12 +254,12 @@ func (runner *ChannelRunner) Run(ctx context.Context, tenant *metadata.Tenant) (
 	case runner.channelsReq != nil:
 		project, err := runner.getProject(ctx, tenant, runner.channelsReq.Project)
 		if err != nil {
-			return nil, err
+			return Response{}, err
 		}
 
 		channels, err := runner.factory.ListChannels(ctx, tenant.GetNamespace().Id(), project.Id(), "*")
 		if err != nil {
-			return nil, err
+			return Response{}, err
 		}
 
 		var channelsResp []*api.ChannelMetadata
@@ -271,7 +269,7 @@ func (runner *ChannelRunner) Run(ctx context.Context, tenant *metadata.Tenant) (
 			})
 		}
 
-		return &Response{
+		return Response{
 			Response: &api.GetRTChannelsResponse{
 				Channels: channelsResp,
 			},
@@ -279,19 +277,19 @@ func (runner *ChannelRunner) Run(ctx context.Context, tenant *metadata.Tenant) (
 	default:
 		project, err := runner.getProject(ctx, tenant, runner.channelReq.Project)
 		if err != nil {
-			return nil, err
+			return Response{}, err
 		}
 
 		channels, err := runner.factory.ListChannels(ctx, tenant.GetNamespace().Id(), project.Id(), runner.channelReq.Channel)
 		if err != nil {
-			return nil, err
+			return Response{}, err
 		}
 
 		if len(channels) == 0 {
-			return nil, errors.NotFound("channel '%s' not present ", runner.channelReq.Channel)
+			return Response{}, errors.NotFound("channel '%s' not present ", runner.channelReq.Channel)
 		}
 
-		return &Response{
+		return Response{
 			Response: &api.GetRTChannelResponse{
 				Channel: channels[0],
 			},

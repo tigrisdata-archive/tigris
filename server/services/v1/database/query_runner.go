@@ -49,14 +49,14 @@ import (
 
 // QueryRunner is responsible for executing the current query and return the response.
 type QueryRunner interface {
-	Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error)
+	Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error)
 }
 
 // ReadOnlyQueryRunner is the QueryRunner which decides inside the ReadOnly method if the query needs to be run inside
 // a transaction or can opt to just execute the query. This interface allows caller to control the state of the transaction
 // or can choose to execute without starting any transaction.
 type ReadOnlyQueryRunner interface {
-	ReadOnly(ctx context.Context, tenant *metadata.Tenant) (*Response, context.Context, error)
+	ReadOnly(ctx context.Context, tenant *metadata.Tenant) (Response, context.Context, error)
 }
 
 // QueryRunnerFactory is responsible for creating query runners for different queries.
@@ -447,7 +447,7 @@ func (runner *ImportQueryRunner) evolveSchema(ctx context.Context, tenant *metad
 	return tx.Commit(ctx)
 }
 
-func (runner *ImportQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
+func (runner *ImportQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
 	db, coll, err := runner.getDBAndCollection(ctx, tx, tenant,
 		runner.req.GetProject(), runner.req.GetCollection(), runner.req.GetBranch())
 
@@ -455,37 +455,37 @@ func (runner *ImportQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	//nolint:errorlint
 	ep, ok := err.(*api.TigrisError)
 	if err != nil && (!ok || ep.Code != api.Code_NOT_FOUND || !runner.req.CreateCollection) {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 	if err != nil {
 		// api.Code_NOT_FOUND && runner.req.CreateCollection
 		// Infer schema and create collection from the first batch of documents
 		if err := runner.evolveSchema(ctx, tenant, nil); err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
 		db, coll, err = runner.getDBAndCollection(ctx, tx, tenant,
 			runner.req.GetProject(), runner.req.GetCollection(), runner.req.GetBranch())
 		if err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
 	if err = runner.mustBeDocumentsCollection(coll, "insert"); err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	ts, allKeys, err := runner.insertOrReplace(ctx, tx, tenant, coll, runner.req.GetDocuments(), true)
 	if err != nil {
 		if err == kv.ErrDuplicateKey {
-			return nil, ctx, errors.AlreadyExists(err.Error())
+			return Response{}, ctx, errors.AlreadyExists(err.Error())
 		}
 
 		ep, ok = err.(*api.TigrisError)
 		if !ok || ep.Code != api.Code_INVALID_ARGUMENT {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
 		// Rollback original transaction, where partial batch insert might be succeeded.
@@ -493,35 +493,35 @@ func (runner *ImportQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 		// Failed to insert due to schema change. Infer and update the schema.
 		if err := runner.evolveSchema(ctx, tenant, coll.Schema); err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
 		// Retry insert after schema update in its own transaction
 		tx, err := runner.txMgr.StartTx(ctx)
 		if err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 		defer func() { _ = tx.Rollback(ctx) }()
 
 		// Retry insert after updating the schema
 		ts, allKeys, err = runner.insertOrReplace(ctx, tx, tenant, coll, runner.req.GetDocuments(), true)
 		if err == kv.ErrDuplicateKey {
-			return nil, ctx, errors.AlreadyExists(err.Error())
+			return Response{}, ctx, errors.AlreadyExists(err.Error())
 		}
 
 		if err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
 		if err = tx.Commit(ctx); err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 	}
 
 	runner.queryMetrics.SetWriteType("import")
 	metrics.UpdateSpanTags(ctx, runner.queryMetrics)
 
-	return &Response{
+	return Response{
 		CreatedAt: ts,
 		AllKeys:   allKeys,
 		Status:    InsertedStatus,
@@ -535,32 +535,32 @@ type InsertQueryRunner struct {
 	queryMetrics *metrics.WriteQueryMetrics
 }
 
-func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
+func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
 	db, coll, err := runner.getDBAndCollection(ctx, tx, tenant,
 		runner.req.GetProject(), runner.req.GetCollection(), runner.req.GetBranch())
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
 	if err = runner.mustBeDocumentsCollection(coll, "insert"); err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	ts, allKeys, err := runner.insertOrReplace(ctx, tx, tenant, coll, runner.req.GetDocuments(), true)
 	if err != nil {
 		if err == kv.ErrDuplicateKey {
-			return nil, ctx, errors.AlreadyExists(err.Error())
+			return Response{}, ctx, errors.AlreadyExists(err.Error())
 		}
 
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	runner.queryMetrics.SetWriteType("insert")
 	metrics.UpdateSpanTags(ctx, runner.queryMetrics)
 
-	return &Response{
+	return Response{
 		CreatedAt: ts,
 		AllKeys:   allKeys,
 		Status:    InsertedStatus,
@@ -574,28 +574,28 @@ type ReplaceQueryRunner struct {
 	queryMetrics *metrics.WriteQueryMetrics
 }
 
-func (runner *ReplaceQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
+func (runner *ReplaceQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
 	db, coll, err := runner.getDBAndCollection(ctx, tx, tenant,
 		runner.req.GetProject(), runner.req.GetCollection(), runner.req.GetBranch())
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
 	if err = runner.mustBeDocumentsCollection(coll, "replace"); err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	ts, allKeys, err := runner.insertOrReplace(ctx, tx, tenant, coll, runner.req.GetDocuments(), false)
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	runner.queryMetrics.SetWriteType("replace")
 	metrics.UpdateSpanTags(ctx, runner.queryMetrics)
 
-	return &Response{
+	return Response{
 		CreatedAt: ts,
 		AllKeys:   allKeys,
 		Status:    ReplacedStatus,
@@ -634,27 +634,27 @@ func updateDefaults(collection *schema.DefaultCollection, doc []byte, ts *intern
 	return doc, nil
 }
 
-func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
+func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
 	db, coll, err := runner.getDBAndCollection(ctx, tx, tenant,
 		runner.req.GetProject(), runner.req.GetCollection(), runner.req.GetBranch())
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
 	if filter.None(runner.req.Filter) {
-		return nil, ctx, errors.InvalidArgument("updating all documents is not allowed")
+		return Response{}, ctx, errors.InvalidArgument("updating all documents is not allowed")
 	}
 
 	if err = runner.mustBeDocumentsCollection(coll, "update"); err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	var factory *update.FieldOperatorFactory
 	factory, err = update.BuildFieldOperators(runner.req.Fields)
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	ts := internal.NewTimestamp()
@@ -663,7 +663,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		// Set operation needs schema validation as well as mutation if we need to convert numeric fields from string to int64
 		fieldOperator.Input, err = runner.mutateAndValidatePayload(coll, newUpdatePayloadMutator(coll, ts.ToRFC3339()), fieldOperator.Input)
 		if err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 	}
 
@@ -674,7 +674,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	iterator, err := runner.getWriteIterator(ctx, tx, coll, runner.req.Filter, collation, runner.queryMetrics)
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	limit := int32(0)
@@ -687,18 +687,18 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	for iterator.Next(&row) {
 		key, err := keys.FromBinary(coll.EncodedName, row.Key)
 		if err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
 		// MergeAndGet merge the user input with existing doc and return the merged JSON document which we need to
 		// persist back.
 		merged, primaryKeyMutation, err := factory.MergeAndGet(row.Data.RawData, coll)
 		if err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
 		if merged, err = updateDefaults(coll, merged, ts); err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
 		newData := internal.NewTableDataWithTS(row.Data.CreatedAt, ts, merged)
@@ -711,17 +711,17 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			// we need to delete old key and build new key from new data
 			keyGen := newKeyGenerator(newData.RawData, tenant.TableKeyGenerator, coll.Indexes.PrimaryKey)
 			if newKey, err = keyGen.generate(ctx, runner.txMgr, runner.encoder, coll.EncodedName); err != nil {
-				return nil, nil, err
+				return Response{}, nil, err
 			}
 
 			// delete old key
 			if err = tx.Delete(ctx, key); ulog.E(err) {
-				return nil, ctx, err
+				return Response{}, ctx, err
 			}
 			isUpdate = false
 		}
 		if err = tx.Replace(ctx, newKey, newData, isUpdate); ulog.E(err) {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 		modifiedCount++
 		if limit > 0 && modifiedCount == limit {
@@ -730,7 +730,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}
 
 	ctx = metrics.UpdateSpanTags(ctx, runner.queryMetrics)
-	return &Response{
+	return Response{
 		Status:        UpdatedStatus,
 		UpdatedAt:     ts,
 		ModifiedCount: modifiedCount,
@@ -744,17 +744,17 @@ type DeleteQueryRunner struct {
 	queryMetrics *metrics.WriteQueryMetrics
 }
 
-func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
+func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
 	db, coll, err := runner.getDBAndCollection(ctx, tx, tenant,
 		runner.req.GetProject(), runner.req.GetCollection(), runner.req.GetBranch())
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
 	if err = runner.mustBeDocumentsCollection(coll, "delete"); err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	ts := internal.NewTimestamp()
@@ -773,7 +773,7 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		iterator, err = runner.getWriteIterator(ctx, tx, coll, runner.req.Filter, collation, runner.queryMetrics)
 	}
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	limit := int32(0)
@@ -786,11 +786,11 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	for iterator.Next(&row) {
 		key, err := keys.FromBinary(coll.EncodedName, row.Key)
 		if err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
 		if err = tx.Delete(ctx, key); ulog.E(err) {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
 		modifiedCount++
@@ -800,7 +800,7 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}
 
 	ctx = metrics.UpdateSpanTags(ctx, runner.queryMetrics)
-	return &Response{
+	return Response{
 		Status:        DeletedStatus,
 		DeletedAt:     ts,
 		ModifiedCount: modifiedCount,
@@ -890,29 +890,29 @@ func (runner *StreamingQueryRunner) instrumentRunner(ctx context.Context, option
 
 // ReadOnly is used by the read query runner to handle long-running reads. This method operates by starting a new
 // transaction when needed which means a single user request may end up creating multiple read only transactions.
-func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.Tenant) (*Response, context.Context, error) {
+func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.Tenant) (Response, context.Context, error) {
 	db, err := runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetProject(), runner.req.GetBranch())
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
 	collection, err := runner.getCollection(db, runner.req.GetCollection())
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	options, err := runner.buildReaderOptions(collection)
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	if options.inMemoryStore {
 		if err = runner.iterateOnIndexingStore(ctx, collection, options); err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
-		return &Response{}, ctx, nil
+		return Response{}, ctx, nil
 	}
 
 	for {
@@ -920,7 +920,7 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 		// This is mainly needed for long-running transactions, otherwise reads should be small.
 		tx, err := runner.txMgr.StartTx(ctx)
 		if err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
 		var last []byte
@@ -935,44 +935,44 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 		}
 
 		if err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
 		ctx = runner.instrumentRunner(ctx, options)
 
-		return &Response{}, ctx, nil
+		return Response{}, ctx, nil
 	}
 }
 
 // Run is responsible for running the read in the transaction started by the session manager. This doesn't do any retry
 // if we see ErrTransactionMaxDurationReached which is expected because we do not expect caller to do long reads in an
 // explicit transaction.
-func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
+func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
 	db, coll, err := runner.getDBAndCollection(ctx, tx, tenant,
 		runner.req.GetProject(), runner.req.GetCollection(), runner.req.GetBranch())
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
 	options, err := runner.buildReaderOptions(coll)
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	ctx = runner.instrumentRunner(ctx, options)
 
 	if options.inMemoryStore {
 		if err = runner.iterateOnIndexingStore(ctx, coll, options); err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
-		return &Response{}, ctx, nil
+		return Response{}, ctx, nil
 	} else {
 		if _, err = runner.iterateOnKvStore(ctx, tx, options); err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
-		return &Response{}, ctx, nil
+		return Response{}, ctx, nil
 	}
 }
 
@@ -1058,32 +1058,32 @@ type SearchQueryRunner struct {
 
 // ReadOnly on search query runner is implemented as search queries do not need to be inside a transaction; in fact,
 // there is no need to start any transaction for search queries as they are simply forwarded to the indexing store.
-func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.Tenant) (*Response, context.Context, error) {
+func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.Tenant) (Response, context.Context, error) {
 	db, err := runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetProject(), runner.req.GetBranch())
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
 	collection, err := runner.getCollection(db, runner.req.GetCollection())
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	wrappedF, err := filter.NewFactory(collection.QueryableFields, runner.req.Collation).WrappedFilter(runner.req.Filter)
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	searchFields, err := runner.getSearchFields(collection)
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	facets, err := runner.getFacetFields(collection)
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	if len(facets.Fields) == 0 {
@@ -1094,12 +1094,12 @@ func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.
 
 	fieldSelection, err := runner.getFieldSelection(collection)
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	sortOrder, err := runner.getSortOrdering(collection, runner.req.Sort)
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	if sortOrder != nil {
@@ -1134,7 +1134,7 @@ func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.
 		iterator = searchReader.Iterator(collection, wrappedF)
 	}
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	pageNo := int32(defaultPageNo)
@@ -1149,7 +1149,7 @@ func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.
 				// apply field selection
 				newValue, err := searchQ.ReadFields.Apply(row.Data.RawData)
 				if ulog.E(err) {
-					return nil, ctx, err
+					return Response{}, ctx, err
 				}
 				row.Data.RawData = newValue
 			}
@@ -1187,7 +1187,7 @@ func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.
 		// if some hits, no error, continue to send response
 		if len(resp.Hits) == 0 {
 			if iterator.Interrupted() != nil {
-				return nil, ctx, iterator.Interrupted()
+				return Response{}, ctx, iterator.Interrupted()
 			}
 			if pageNo > defaultPageNo && pageNo > runner.req.Page {
 				break
@@ -1195,13 +1195,13 @@ func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.
 		}
 
 		if err := runner.streaming.Send(resp); err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
 		pageNo++
 	}
 
-	return &Response{}, ctx, nil
+	return Response{}, ctx, nil
 }
 
 func (runner *SearchQueryRunner) getSearchFields(coll *schema.DefaultCollection) ([]string, error) {
@@ -1311,12 +1311,12 @@ func (runner *CollectionQueryRunner) SetDescribeCollectionReq(describe *api.Desc
 	runner.describeReq = describe
 }
 
-func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
+func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
 	switch {
 	case runner.dropReq != nil:
 		db, err := runner.getDatabase(ctx, tx, tenant, runner.dropReq.GetProject(), runner.dropReq.GetBranch())
 		if err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
 		if tx.Context().GetStagedDatabase() == nil {
@@ -1326,26 +1326,26 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		}
 
 		if err = tenant.DropCollection(ctx, tx, db, runner.dropReq.GetCollection()); err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
-		return &Response{
+		return Response{
 			Status: DroppedStatus,
 		}, ctx, nil
 	case runner.createOrUpdateReq != nil:
 		db, err := runner.getDatabase(ctx, tx, tenant, runner.createOrUpdateReq.GetProject(), runner.createOrUpdateReq.GetBranch())
 		if err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
 		if db.GetCollection(runner.createOrUpdateReq.GetCollection()) != nil && runner.createOrUpdateReq.OnlyCreate {
 			// check if onlyCreate is set and if set then return an error if collection already exist
-			return nil, ctx, errors.AlreadyExists("collection already exist")
+			return Response{}, ctx, errors.AlreadyExists("collection already exist")
 		}
 
 		schFactory, err := schema.Build(runner.createOrUpdateReq.GetCollection(), runner.createOrUpdateReq.GetSchema())
 		if err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
 		if tx.Context().GetStagedDatabase() == nil {
@@ -1357,18 +1357,18 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		if err = tenant.CreateCollection(ctx, tx, db, schFactory); err != nil {
 			if err == kv.ErrDuplicateKey {
 				// this simply means, concurrently CreateCollection is called,
-				return nil, ctx, errors.Aborted("concurrent create collection request, aborting")
+				return Response{}, ctx, errors.Aborted("concurrent create collection request, aborting")
 			}
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
-		return &Response{
+		return Response{
 			Status: CreatedStatus,
 		}, ctx, nil
 	case runner.listReq != nil:
 		db, err := runner.getDatabase(ctx, tx, tenant, runner.listReq.GetProject(), runner.listReq.GetBranch())
 		if err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
 		collectionList := db.ListCollection()
@@ -1378,7 +1378,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 				Collection: c.GetName(),
 			}
 		}
-		return &Response{
+		return Response{
 			Response: &api.ListCollectionsResponse{
 				Collections: collections,
 			},
@@ -1388,12 +1388,12 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		db, coll, err := runner.getDBAndCollection(ctx, tx, tenant,
 			req.GetProject(), req.GetCollection(), req.GetBranch())
 		if err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
 		size, err := tenant.CollectionSize(ctx, db, coll)
 		if err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
 		tenantName := tenant.GetNamespace().Metadata().Name
@@ -1411,11 +1411,11 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		if runner.describeReq.SchemaFormat != "" {
 			sch, err = schema.Generate(sch, runner.describeReq.SchemaFormat)
 			if err != nil {
-				return nil, ctx, err
+				return Response{}, ctx, err
 			}
 		}
 
-		return &Response{
+		return Response{
 			Response: &api.DescribeCollectionResponse{
 				Collection: coll.Name,
 				Metadata:   &api.CollectionMetadata{},
@@ -1425,7 +1425,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		}, ctx, nil
 	}
 
-	return &Response{}, ctx, errors.Unknown("unknown request path")
+	return Response{}, ctx, errors.Unknown("unknown request path")
 }
 
 type DatabaseQueryRunner struct {
@@ -1463,34 +1463,34 @@ func (runner *DatabaseQueryRunner) SetDeleteBranchReq(deleteBranch *api.DeleteBr
 	runner.deleteBranch = deleteBranch
 }
 
-func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
+func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
 	switch {
 	case runner.delete != nil:
 		exist, err := tenant.DropDatabase(ctx, tx, runner.delete.GetProject())
 		if err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 		if !exist {
-			return nil, ctx, errors.NotFound("database doesn't exist '%s'", runner.delete.GetProject())
+			return Response{}, ctx, errors.NotFound("database doesn't exist '%s'", runner.delete.GetProject())
 		}
 
-		return &Response{
+		return Response{
 			Status: DroppedStatus,
 		}, ctx, nil
 	case runner.create != nil:
 		dbMetadata, err := createDatabaseMetadata(ctx)
 		if err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 		exist, err := tenant.CreateDatabase(ctx, tx, runner.create.GetProject(), dbMetadata)
 		if exist || err == kv.ErrDuplicateKey {
-			return nil, ctx, errors.AlreadyExists("database already exist")
+			return Response{}, ctx, errors.AlreadyExists("database already exist")
 		}
 		if err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
-		return &Response{
+		return Response{
 			Status: CreatedStatus,
 		}, ctx, nil
 	case runner.list != nil:
@@ -1502,7 +1502,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 				Project: l,
 			}
 		}
-		return &Response{
+		return Response{
 			Response: &api.ListProjectsResponse{
 				Projects: databases,
 			},
@@ -1510,7 +1510,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 	case runner.describe != nil:
 		db, err := runner.getDatabase(ctx, tx, tenant, runner.describe.GetProject(), runner.describe.GetBranch())
 		if err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
 		namespace, err := request.GetNamespace(ctx)
@@ -1524,7 +1524,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		for i, c := range collectionList {
 			size, err := tenant.CollectionSize(ctx, db, c)
 			if err != nil {
-				return nil, ctx, err
+				return Response{}, ctx, err
 			}
 
 			metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.Name(), c.GetName(), size)
@@ -1536,7 +1536,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			if runner.describe.SchemaFormat != "" {
 				sch, err = schema.Generate(sch, runner.describe.SchemaFormat)
 				if err != nil {
-					return nil, ctx, err
+					return Response{}, ctx, err
 				}
 			}
 
@@ -1550,12 +1550,12 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 
 		size, err := tenant.DatabaseSize(ctx, db)
 		if err != nil {
-			return nil, ctx, err
+			return Response{}, ctx, err
 		}
 
 		metrics.UpdateDbSizeMetrics(namespace, tenantName, db.Name(), size)
 
-		return &Response{
+		return Response{
 			Response: &api.DescribeDatabaseResponse{
 				Metadata:    &api.DatabaseMetadata{},
 				Collections: collections,
@@ -1568,9 +1568,9 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		dbBranch := metadata.NewDatabaseNameWithBranch(runner.createBranch.GetProject(), runner.createBranch.GetBranch())
 		err := tenant.CreateBranch(ctx, tx, dbBranch)
 		if err != nil {
-			return nil, ctx, createApiError(err)
+			return Response{}, ctx, createApiError(err)
 		}
-		return &Response{
+		return Response{
 			Response: &api.CreateBranchResponse{
 				Status: CreatedStatus,
 			},
@@ -1579,16 +1579,16 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		dbBranch := metadata.NewDatabaseNameWithBranch(runner.deleteBranch.GetProject(), runner.deleteBranch.GetBranch())
 		err := tenant.DeleteBranch(ctx, tx, dbBranch)
 		if err != nil {
-			return nil, ctx, createApiError(err)
+			return Response{}, ctx, createApiError(err)
 		}
-		return &Response{
+		return Response{
 			Response: &api.DeleteBranchResponse{
 				Status: DeletedStatus,
 			},
 		}, ctx, nil
 	}
 
-	return &Response{}, ctx, errors.Unknown("unknown request path")
+	return Response{}, ctx, errors.Unknown("unknown request path")
 }
 
 func createDatabaseMetadata(ctx context.Context) (*metadata.DatabaseMetadata, error) {

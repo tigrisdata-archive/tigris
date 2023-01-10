@@ -27,11 +27,11 @@ import (
 
 type Session interface {
 	// Execute executes the request using the query runner
-	Execute(ctx context.Context, runner Runner) (*CacheResponse, error)
+	Execute(ctx context.Context, runner Runner) (Response, error)
 
 	// TxExecute executes in a fdb transaction.
 	// Metadata of caches are stored in fdb as part of project metadata and that modification is a transactional operation.
-	TxExecute(ctx context.Context, runner TxRunner) (*CacheResponse, error)
+	TxExecute(ctx context.Context, runner TxRunner) (Response, error)
 }
 
 type SessionManager struct {
@@ -52,55 +52,55 @@ func NewSessionManager(txMgr *transaction.Manager, tenantMgr *metadata.TenantMan
 	}
 }
 
-func (sessMgr *SessionManager) Execute(ctx context.Context, runner Runner) (*CacheResponse, error) {
+func (sessMgr *SessionManager) Execute(ctx context.Context, runner Runner) (Response, error) {
 	namespaceForThisSession, err := request.GetNamespace(ctx)
 	if err != nil {
-		return nil, err
+		return Response{}, err
 	}
 	tenant, err := sessMgr.tenantMgr.GetTenant(ctx, namespaceForThisSession)
 	if err != nil {
 		log.Warn().Err(err).Msgf("Could not find tenant, this must not happen with right authn/authz configured")
-		return nil, errors.NotFound("Tenant %s not found", namespaceForThisSession)
+		return Response{}, errors.NotFound("Tenant %s not found", namespaceForThisSession)
 	}
 
 	// check and reload caches
 	if _, err = sessMgr.tenantTracker.InstantTracking(ctx, nil, tenant); err != nil {
-		return nil, err
+		return Response{}, err
 	}
 	return runner.Run(ctx, tenant)
 }
 
-func (sessMgr *SessionManager) TxExecute(ctx context.Context, runner TxRunner) (*CacheResponse, error) {
+func (sessMgr *SessionManager) TxExecute(ctx context.Context, runner TxRunner) (Response, error) {
 	namespaceForThisSession, err := request.GetNamespace(ctx)
 	if err != nil {
-		return nil, err
+		return Response{}, err
 	}
 	tenant, err := sessMgr.tenantMgr.GetTenant(ctx, namespaceForThisSession)
 	if err != nil {
 		log.Warn().Err(err).Msgf("Could not find tenant, this must not happen with right authn/authz configured")
-		return nil, errors.NotFound("Tenant %s not found", namespaceForThisSession)
+		return Response{}, errors.NotFound("Tenant %s not found", namespaceForThisSession)
 	}
 
 	// check and reload caches
 	// TODO: optimize it
 	if _, err = sessMgr.tenantTracker.InstantTracking(ctx, nil, tenant); err != nil {
-		return nil, err
+		return Response{}, err
 	}
 
 	tx, err := sessMgr.txMgr.StartTx(ctx)
 	if err != nil {
 		log.Warn().Err(err).Msgf("Could not begin transaction")
-		return nil, errors.Internal("Failed to perform transaction")
+		return Response{}, errors.Internal("Failed to perform transaction")
 	}
 
 	resp, ctx, err := runner.Run(ctx, tx, tenant)
 	if err != nil {
 		log.Warn().Err(err).Msgf("Failed to run runner in transaction")
 		_ = tx.Rollback(ctx)
-		return nil, err
+		return Response{}, err
 	}
 	if err = tx.Commit(ctx); err != nil {
-		return nil, errors.Internal("Failed to run runner in transaction, failed to commit")
+		return Response{}, errors.Internal("Failed to run runner in transaction, failed to commit")
 	}
 	return resp, nil
 }

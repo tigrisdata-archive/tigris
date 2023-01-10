@@ -30,6 +30,16 @@ import (
 	"github.com/tigrisdata/tigris/store/cache"
 )
 
+// Runner is responsible for executing the current query and return the response.
+type Runner interface {
+	Run(ctx context.Context, tenant *metadata.Tenant) (Response, error)
+}
+
+// TxRunner is responsible for executing the current query and return the response.
+type TxRunner interface {
+	Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error)
+}
+
 type BaseRunner struct {
 	encoder     metadata.CacheEncoder
 	cacheStore  cache.Cache
@@ -160,30 +170,30 @@ func (f *RunnerFactory) GetKeysRunner(r *api.KeysRequest, accessToken *types.Acc
 	}
 }
 
-func (runner *CreateCacheRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*CacheResponse, context.Context, error) {
+func (runner *CreateCacheRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
 	currentSub, err := request.GetCurrentSub(ctx)
 	if err != nil && config.DefaultConfig.Auth.Enabled {
-		return nil, ctx, errors.Internal("Failed to get current sub for the request")
+		return Response{}, ctx, errors.Internal("Failed to get current sub for the request")
 	}
 
 	_, err = tenant.CreateCache(ctx, tx, runner.req.GetProject(), runner.req.GetName(), currentSub)
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
-	return &CacheResponse{
+	return Response{
 		Status: database.CreatedStatus,
 	}, ctx, nil
 }
 
-func (runner *DeleteCacheRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*CacheResponse, context.Context, error) {
+func (runner *DeleteCacheRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
 	tableName, err := getEncodedCacheTableName(ctx, tenant, runner.req.GetProject(), runner.req.GetName(), runner.encoder)
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 
 	internalKeys, err := runner.cacheStore.Keys(ctx, tableName, "*")
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 	for _, internalKey := range internalKeys {
 		// translate the key to user key
@@ -201,17 +211,17 @@ func (runner *DeleteCacheRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			Str("project", runner.req.GetProject()).
 			Str("cache", runner.req.GetName()).
 			Msg("Failed to update project metadata entry to delete cache")
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
-	return &CacheResponse{
+	return Response{
 		Status: database.DeletedStatus,
 	}, ctx, nil
 }
 
-func (runner *ListCachesRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*CacheResponse, context.Context, error) {
+func (runner *ListCachesRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
 	caches, err := tenant.ListCaches(ctx, tx, runner.req.GetProject())
 	if err != nil {
-		return nil, ctx, err
+		return Response{}, ctx, err
 	}
 	cachesMetadata := make([]*api.CacheMetadata, len(caches))
 	for i, cache := range caches {
@@ -219,15 +229,15 @@ func (runner *ListCachesRunner) Run(ctx context.Context, tx transaction.Tx, tena
 			Name: cache,
 		}
 	}
-	return &CacheResponse{
+	return Response{
 		Caches: cachesMetadata,
 	}, ctx, nil
 }
 
-func (runner *SetRunner) Run(ctx context.Context, tenant *metadata.Tenant) (*CacheResponse, error) {
+func (runner *SetRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Response, error) {
 	tableName, err := getEncodedCacheTableName(ctx, tenant, runner.req.GetProject(), runner.req.GetName(), runner.encoder)
 	if err != nil {
-		return nil, err
+		return Response{}, err
 	}
 
 	options := &cache.SetOptions{
@@ -238,26 +248,26 @@ func (runner *SetRunner) Run(ctx context.Context, tenant *metadata.Tenant) (*Cac
 	}
 
 	if err = runner.cacheStore.Set(ctx, tableName, runner.req.GetKey(), internal.NewCacheData(runner.req.GetValue()), options); err != nil {
-		return nil, errors.Internal("Failed to invoke set, reason %s", err.Error())
+		return Response{}, errors.Internal("Failed to invoke set, reason %s", err.Error())
 	}
 
-	return &CacheResponse{
+	return Response{
 		Status: SetStatus,
 	}, nil
 }
 
-func (runner *GetSetRunner) Run(ctx context.Context, tenant *metadata.Tenant) (*CacheResponse, error) {
+func (runner *GetSetRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Response, error) {
 	tableName, err := getEncodedCacheTableName(ctx, tenant, runner.req.GetProject(), runner.req.GetName(), runner.encoder)
 	if err != nil {
-		return nil, err
+		return Response{}, err
 	}
 
 	oldVal, err := runner.cacheStore.GetSet(ctx, tableName, runner.req.GetKey(), internal.NewCacheData(runner.req.GetValue()))
 	if err != nil {
-		return nil, errors.Internal("Failed to invoke set, reason %s", err.Error())
+		return Response{}, errors.Internal("Failed to invoke set, reason %s", err.Error())
 	}
 
-	var result *CacheResponse = &CacheResponse{
+	var result Response = Response{
 		Status: SetStatus,
 	}
 
@@ -267,10 +277,10 @@ func (runner *GetSetRunner) Run(ctx context.Context, tenant *metadata.Tenant) (*
 	return result, nil
 }
 
-func (runner *GetRunner) Run(ctx context.Context, tenant *metadata.Tenant) (*CacheResponse, error) {
+func (runner *GetRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Response, error) {
 	tableName, err := getEncodedCacheTableName(ctx, tenant, runner.req.GetProject(), runner.req.GetName(), runner.encoder)
 	if err != nil {
-		return nil, err
+		return Response{}, err
 	}
 
 	options := &cache.GetOptions{
@@ -280,35 +290,35 @@ func (runner *GetRunner) Run(ctx context.Context, tenant *metadata.Tenant) (*Cac
 	data, err := runner.cacheStore.Get(ctx, tableName, runner.req.GetKey(), options)
 	if err != nil {
 		if err == cache.ErrKeyNotFound {
-			return nil, errors.NotFound(err.Error())
+			return Response{}, errors.NotFound(err.Error())
 		}
-		return nil, err
+		return Response{}, err
 	}
-	return &CacheResponse{
+	return Response{
 		Data: data.GetRawData(),
 	}, nil
 }
 
-func (runner *DelRunner) Run(ctx context.Context, tenant *metadata.Tenant) (*CacheResponse, error) {
+func (runner *DelRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Response, error) {
 	tableName, err := getEncodedCacheTableName(ctx, tenant, runner.req.GetProject(), runner.req.GetName(), runner.encoder)
 	if err != nil {
-		return nil, err
+		return Response{}, err
 	}
 
 	deletedCount, err := runner.cacheStore.Delete(ctx, tableName, runner.req.GetKey())
 	if err != nil {
-		return nil, errors.Internal("Failed to invoke del, reason %s", err.Error())
+		return Response{}, errors.Internal("Failed to invoke del, reason %s", err.Error())
 	}
-	return &CacheResponse{
+	return Response{
 		Status:       DeletedStatus,
 		DeletedCount: deletedCount,
 	}, nil
 }
 
-func (runner *KeysRunner) Run(ctx context.Context, tenant *metadata.Tenant) (*CacheResponse, error) {
+func (runner *KeysRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Response, error) {
 	tableName, err := getEncodedCacheTableName(ctx, tenant, runner.req.GetProject(), runner.req.GetName(), runner.encoder)
 	if err != nil {
-		return nil, err
+		return Response{}, err
 	}
 
 	pattern := runner.req.GetPattern()
@@ -318,7 +328,7 @@ func (runner *KeysRunner) Run(ctx context.Context, tenant *metadata.Tenant) (*Ca
 	// TODO: add the pagination
 	internalKeys, err := runner.cacheStore.Keys(ctx, tableName, pattern)
 	if err != nil {
-		return nil, errors.Internal("Failed to invoke keys, reason %s", err.Error())
+		return Response{}, errors.Internal("Failed to invoke keys, reason %s", err.Error())
 	}
 
 	// transform internal keys to user facing keys
@@ -327,7 +337,7 @@ func (runner *KeysRunner) Run(ctx context.Context, tenant *metadata.Tenant) (*Ca
 		userKeys[index] = runner.encoder.DecodeInternalCacheKeyNameToExternal(internalKey)
 	}
 
-	return &CacheResponse{
+	return Response{
 		Keys: userKeys,
 	}, nil
 }
@@ -342,14 +352,4 @@ func getEncodedCacheTableName(ctx context.Context, tenant *metadata.Tenant, proj
 		return "", err
 	}
 	return encodedCacheTableName, nil
-}
-
-// Runner is responsible for executing the current query and return the response.
-type Runner interface {
-	Run(ctx context.Context, tenant *metadata.Tenant) (*CacheResponse, error)
-}
-
-// TxRunner is responsible for executing the current query and return the response.
-type TxRunner interface {
-	Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*CacheResponse, context.Context, error)
 }
