@@ -23,6 +23,7 @@ type ProjectMetadata struct {
 	Creator        string
 	CreatedAt      int64
 	CachesMetadata []CachesMetadata
+	SearchMetadata []SearchMetadata
 }
 
 type CachesMetadata struct {
@@ -33,6 +34,12 @@ type CachesMetadata struct {
 
 func (dm *ProjectMetadata) SetId(id uint32) {
 	dm.Id = id
+}
+
+type SearchMetadata struct {
+	Name      string
+	Creator   string
+	CreatedAt int64
 }
 
 const (

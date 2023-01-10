@@ -28,6 +28,7 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
+	"github.com/tigrisdata/tigris/store/search"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
@@ -499,6 +500,77 @@ func TestTenantManager_DropCollection(t *testing.T) {
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.EncodingSubspaceName())
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.SchemaSubspaceName())
 	})
+}
+
+func TestTenantManager_SearchIndexes(t *testing.T) {
+	tm := transaction.NewManager(kvStore)
+	m, ctx, cancel := NewTestTenantMgr(kvStore)
+	defer cancel()
+
+	var err error
+	searchConfig := config.GetTestSearchConfig()
+	searchConfig.AuthKey = "ts_test_key"
+	m.searchStore, err = search.NewStore(searchConfig)
+	require.NoError(t, err)
+
+	_, err = m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
+	require.NoError(t, err)
+
+	tenant := m.tenants["ns-test1"]
+	tx, err := tm.StartTx(ctx)
+	require.NoError(t, err)
+	_, err = tenant.CreateProject(ctx, tx, tenantProj1, nil)
+	require.NoError(t, err)
+
+	require.NoError(t, tenant.reload(ctx, tx, nil, nil))
+
+	proj1, err := tenant.GetProject(tenantProj1)
+	require.NoError(t, err)
+
+	jsSchema := []byte(`{
+        "title": "test_index",
+		"properties": {
+			"K1": {
+				"type": "string"
+			},
+			"K2": {
+				"type": "integer"
+			},
+			"D1": {
+				"type": "string",
+				"maxLength": 128
+			}
+		}
+	}`)
+
+	factory, err := schema.BuildSearch("test_index", jsSchema)
+	require.NoError(t, err)
+	require.NoError(t, tenant.CreateSearchIndex(ctx, tx, proj1, factory))
+
+	indexesInSearchStore, err := tenant.searchStore.AllCollections(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, indexesInSearchStore[tenant.getSearchCollName(proj1.Name(), factory.Name)])
+
+	require.NoError(t, tenant.reload(ctx, tx, nil, indexesInSearchStore))
+
+	proj1, err = tenant.GetProject(tenantProj1)
+	require.NoError(t, err)
+
+	index, ok := proj1.search.GetIndex("test_index")
+	require.True(t, ok)
+	require.Equal(t, "test_index", index.Name)
+	require.Equal(t, 1, len(proj1.search.GetIndexes()))
+
+	require.NoError(t, tenant.DeleteSearchIndex(ctx, tx, proj1, "test_index"))
+	indexesInSearchStore, err = tenant.searchStore.AllCollections(ctx)
+	require.NoError(t, err)
+	require.Nil(t, indexesInSearchStore[tenant.getSearchCollName(proj1.Name(), factory.Name)])
+
+	require.NoError(t, tx.Commit(ctx))
+
+	_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
+	_ = kvStore.DropTable(ctx, m.mdNameRegistry.EncodingSubspaceName())
+	_ = kvStore.DropTable(ctx, m.mdNameRegistry.SchemaSubspaceName())
 }
 
 func TestTenantManager_DataSize(t *testing.T) {

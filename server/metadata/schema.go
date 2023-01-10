@@ -114,3 +114,89 @@ func (s *SchemaSubspace) Delete(ctx context.Context, tx transaction.Tx, namespac
 	log.Debug().Str("key", key.String()).Msg("deleting schema succeed")
 	return nil
 }
+
+// SearchSchemaSubspace is used to manage search schemas.
+type SearchSchemaSubspace struct {
+	searchSubspaceName []byte
+}
+
+func NewSearchSchemaStore(mdNameRegistry MDNameRegistry) *SearchSchemaSubspace {
+	return &SearchSchemaSubspace{
+		searchSubspaceName: mdNameRegistry.SearchSchemaSubspaceName(),
+	}
+}
+
+// Put is to persist schema for a given namespace, database and search index.
+func (s *SearchSchemaSubspace) Put(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbId uint32, search string, schema []byte, revision int) error {
+	if revision <= 0 {
+		return errors.InvalidArgument("invalid schema version %d", revision)
+	}
+	if len(schema) == 0 {
+		return errors.InvalidArgument("empty schema")
+	}
+
+	key := keys.NewKey(s.searchSubspaceName, schVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), search, keyEnd, UInt32ToByte(uint32(revision)))
+	if err := tx.Insert(ctx, key, internal.NewTableData(schema)); err != nil {
+		log.Debug().Str("key", key.String()).Str("value", string(schema)).Err(err).Msg("storing schema failed")
+		return err
+	}
+
+	log.Debug().Str("key", key.String()).Str("value", string(schema)).Msg("storing schema succeed")
+	return nil
+}
+
+// GetLatest returns the latest version stored for a collection inside a given namespace and database.
+func (s *SearchSchemaSubspace) GetLatest(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbId uint32, index string) (*schema.Version, error) {
+	schemas, err := s.Get(ctx, tx, namespaceId, dbId, index)
+	if err != nil {
+		return nil, err
+	}
+	if len(schemas) == 0 {
+		return nil, nil
+	}
+
+	return &schemas[len(schemas)-1], nil
+}
+
+// Get returns all the version stored for a collection inside a given namespace and database.
+func (s *SearchSchemaSubspace) Get(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbId uint32, index string) (schema.Versions, error) {
+	key := keys.NewKey(s.searchSubspaceName, schVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), index, keyEnd)
+	it, err := tx.Read(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		versions schema.Versions
+		row      kv.KeyValue
+	)
+
+	for it.Next(&row) {
+		ver, ok := row.Key[len(row.Key)-1].([]byte)
+		if !ok {
+			return nil, errors.Internal("not able to extract revision from schema %v", row.Key)
+		}
+
+		versions = append(versions, schema.Version{Version: int(ByteToUInt32(ver)), Schema: row.Data.RawData})
+	}
+
+	if it.Err() != nil {
+		return nil, it.Err()
+	}
+
+	sort.Sort(versions)
+
+	return versions, nil
+}
+
+// Delete is to remove schema for a given namespace, database and collection.
+func (s *SearchSchemaSubspace) Delete(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbId uint32, index string) error {
+	key := keys.NewKey(s.searchSubspaceName, schVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), index, keyEnd)
+	if err := tx.Delete(ctx, key); err != nil {
+		log.Debug().Str("key", key.String()).Err(err).Msg("deleting schema failed")
+		return err
+	}
+
+	log.Debug().Str("key", key.String()).Msg("deleting schema succeed")
+	return nil
+}

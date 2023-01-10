@@ -15,9 +15,10 @@
 package metadata
 
 const (
-	reservedSubspaceName = "reserved"
-	encodingSubspaceName = "encoding"
-	schemaSubspaceName   = "schema"
+	reservedSubspaceName     = "reserved"
+	encodingSubspaceName     = "encoding"
+	schemaSubspaceName       = "schema"
+	searchSchemaSubspaceName = "search_schema"
 )
 
 // MDNameRegistry provides the names of the internal tables(subspaces) maintained by the metadata package. The interface
@@ -44,6 +45,8 @@ type MDNameRegistry interface {
 	//
 	SchemaSubspaceName() []byte
 
+	SearchSchemaSubspaceName() []byte
+
 	UserSubspaceName() []byte
 
 	NamespaceSubspaceName() []byte
@@ -65,6 +68,10 @@ func (d *DefaultMDNameRegistry) SchemaSubspaceName() []byte {
 	return []byte(schemaSubspaceName)
 }
 
+func (d *DefaultMDNameRegistry) SearchSchemaSubspaceName() []byte {
+	return []byte(searchSchemaSubspaceName)
+}
+
 func (d *DefaultMDNameRegistry) UserSubspaceName() []byte {
 	return []byte(UserSubspaceName)
 }
@@ -78,6 +85,7 @@ type TestMDNameRegistry struct {
 	ReserveSB   string
 	EncodingSB  string
 	SchemaSB    string
+	SearchSB    string
 	UserSB      string
 	NamespaceSB string
 }
@@ -92,6 +100,10 @@ func (d *TestMDNameRegistry) EncodingSubspaceName() []byte {
 
 func (d *TestMDNameRegistry) SchemaSubspaceName() []byte {
 	return []byte(d.SchemaSB)
+}
+
+func (d *TestMDNameRegistry) SearchSchemaSubspaceName() []byte {
+	return []byte(d.SearchSB)
 }
 
 func (d *TestMDNameRegistry) UserSubspaceName() []byte {

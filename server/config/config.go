@@ -179,3 +179,14 @@ func GetTestCacheConfig() *CacheConfig {
 
 	return &DefaultConfig.Cache
 }
+
+func GetTestSearchConfig() *SearchConfig {
+	LoadEnvironment()
+
+	if GetEnvironment() == EnvTest {
+		DefaultConfig.Search.Host = "tigris_search"
+		return &DefaultConfig.Search
+	}
+
+	return &DefaultConfig.Search
+}
