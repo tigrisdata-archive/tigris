@@ -22,8 +22,8 @@ const (
 	CreatedStatus string = "created"
 )
 
-// CacheResponse is a wrapper on api.Response.
-type CacheResponse struct {
+// Response is a wrapper on api.Response.
+type Response struct {
 	api.Response
 	Status       string
 	Data         []byte

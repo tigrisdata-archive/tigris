@@ -24,7 +24,7 @@ function wait_for_typesense() {
 	while [ ${LIST_COLLECTIONS_RESP} -ne 0 ]
 	do
 		# Try to do list collections and see the response code, this can take time
-		curl -H "X-TYPESENSE-API-KEY: ${TIGRIS_SERVER_SEARCH_AUTH_KEY}" -I -X GETlocalhost:8108/collections | grep "200 OK"
+		curl -H "X-TYPESENSE-API-KEY: ${TIGRIS_SERVER_SEARCH_AUTH_KEY}" -I -X GET localhost:8108/collections | grep "200 OK"
 		LIST_COLLECTIONS_RESP=$?
 		if [ ${LIST_COLLECTIONS_RESP} -ne 0 ]
 		then

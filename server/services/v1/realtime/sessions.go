@@ -116,18 +116,18 @@ func (s *Sessions) AddDevice(ctx context.Context, conn *websocket.Conn, params C
 	return sess, nil
 }
 
-func (s *Sessions) ExecuteRunner(ctx context.Context, runner RTMRunner) (*Response, error) {
+func (s *Sessions) ExecuteRunner(ctx context.Context, runner RTMRunner) (Response, error) {
 	namespaceForThisSession, err := request.GetNamespace(ctx)
 	if err != nil {
-		return nil, err
+		return Response{}, err
 	}
 	tenant, err := s.tenantMgr.GetTenant(ctx, namespaceForThisSession)
 	if err != nil {
-		return nil, errors.NotFound("tenant '%s' not found", namespaceForThisSession)
+		return Response{}, errors.NotFound("tenant '%s' not found", namespaceForThisSession)
 	}
 
 	if _, err = s.tenantTracker.InstantTracking(ctx, nil, tenant); err != nil {
-		return nil, err
+		return Response{}, err
 	}
 
 	return runner.Run(ctx, tenant)
