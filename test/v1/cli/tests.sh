@@ -396,5 +396,7 @@ test_dev_alias() {
 	$cli dev stop $port
 }
 
-test_dev_alias
+if [ -z "$noup" ]; then
+  test_dev_alias
+fi
 
