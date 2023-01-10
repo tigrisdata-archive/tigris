@@ -12,25 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cache
+package search
 
-import (
-	apiErrors "github.com/tigrisdata/tigris/errors"
-	"github.com/tigrisdata/tigris/server/metadata"
-)
+import api "github.com/tigrisdata/tigris/api/server/v1"
 
-// createApiError helps construct API errors from internal errors.
-func createApiError(err error) error {
-	switch e := err.(type) {
-	case metadata.Error:
-		switch e.Code() {
-		case metadata.ErrCodeProjectNotFound, metadata.ErrCodeCacheNotFound:
-			return apiErrors.NotFound(e.Error())
-		case metadata.ErrCodeCacheExists:
-			return apiErrors.AlreadyExists(e.Error())
-		}
-	default:
-		return err
-	}
-	return err
+type Streaming interface{}
+
+type Response struct {
+	api.Response
+
+	Status string
 }

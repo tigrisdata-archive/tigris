@@ -30,7 +30,6 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/defaults"
 	"github.com/tigrisdata/tigris/server/transaction"
-	cache2 "github.com/tigrisdata/tigris/store/cache"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
 	ulog "github.com/tigrisdata/tigris/util/log"
@@ -137,6 +136,7 @@ type TenantManager struct {
 
 	metaStore         *MetadataDictionary
 	schemaStore       *SchemaSubspace
+	searchSchemaStore *SearchSchemaSubspace
 	namespaceStore    *NamespaceSubspace
 	kvStore           kv.KeyValueStore
 	searchStore       search.Store
@@ -166,6 +166,7 @@ func newTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, mdName
 		encoder:           NewEncoder(),
 		metaStore:         NewMetadataDictionary(mdNameRegistry),
 		schemaStore:       NewSchemaStore(mdNameRegistry),
+		searchSchemaStore: NewSearchSchemaStore(mdNameRegistry),
 		namespaceStore:    NewNamespaceStore(mdNameRegistry),
 		tenants:           make(map[string]*Tenant),
 		idToTenantMap:     make(map[uint32]string),
@@ -344,7 +345,7 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string) (*T
 	}
 
 	namespace := NewTenantNamespace(namespaceName, metadata)
-	tenant = NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.namespaceStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
+	tenant = NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.searchSchemaStore, m.namespaceStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
 	if err = tenant.reload(ctx, tx, currentVersion, collectionsInSearch); err != nil {
 		return nil, err
 	}
@@ -386,7 +387,7 @@ func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transa
 		if err != nil {
 			return nil, err
 		}
-		tenant := NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.namespaceStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
+		tenant := NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.searchSchemaStore, m.namespaceStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
 		tenant.Lock()
 		err = tenant.reload(ctx, tx, currentVersion, collectionsInSearch)
 		tenant.Unlock()
@@ -404,7 +405,7 @@ func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transa
 		return nil, err
 	}
 
-	return NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.namespaceStore, m.encoder, m.versionH, nil, m.tableKeyGenerator), nil
+	return NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.searchSchemaStore, m.namespaceStore, m.encoder, m.versionH, nil, m.tableKeyGenerator), nil
 }
 
 // GetTableNameFromIds returns tenant name, database name, collection name corresponding to their encoded ids.
@@ -476,7 +477,7 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVe
 
 	for namespace, metadata := range namespaces {
 		if _, ok := m.tenants[namespace]; !ok {
-			m.tenants[namespace] = NewTenant(NewTenantNamespace(namespace, metadata), m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.namespaceStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
+			m.tenants[namespace] = NewTenant(NewTenantNamespace(namespace, metadata), m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.searchSchemaStore, m.namespaceStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
 			m.idToTenantMap[metadata.Id] = namespace
 		}
 	}
@@ -501,6 +502,7 @@ type Tenant struct {
 	kvStore           kv.KeyValueStore
 	searchStore       search.Store
 	schemaStore       *SchemaSubspace
+	searchSchemaStore *SearchSchemaSubspace
 	namespaceStore    *NamespaceSubspace
 	metaStore         *MetadataDictionary
 	Encoder           Encoder
@@ -516,25 +518,57 @@ type Tenant struct {
 	idToDatabaseMap map[uint32]*Database
 }
 
-func NewTenant(namespace Namespace, kvStore kv.KeyValueStore, searchStore search.Store, dict *MetadataDictionary, schemaStore *SchemaSubspace, namespaceStore *NamespaceSubspace, encoder Encoder, versionH *VersionHandler, currentVersion Version, _ *TableKeyGenerator) *Tenant {
+func NewTenant(namespace Namespace, kvStore kv.KeyValueStore, searchStore search.Store, dict *MetadataDictionary, schemaStore *SchemaSubspace, searchSchemaStore *SearchSchemaSubspace, namespaceStore *NamespaceSubspace, encoder Encoder, versionH *VersionHandler, currentVersion Version, _ *TableKeyGenerator) *Tenant {
 	return &Tenant{
-		kvStore:         kvStore,
-		searchStore:     searchStore,
-		namespace:       namespace,
-		metaStore:       dict,
-		schemaStore:     schemaStore,
-		namespaceStore:  namespaceStore,
-		projects:        make(map[string]*Project),
-		idToDatabaseMap: make(map[uint32]*Database),
-		versionH:        versionH,
-		version:         currentVersion,
-		Encoder:         encoder,
+		kvStore:           kvStore,
+		searchStore:       searchStore,
+		namespace:         namespace,
+		metaStore:         dict,
+		schemaStore:       schemaStore,
+		searchSchemaStore: searchSchemaStore,
+		namespaceStore:    namespaceStore,
+		projects:          make(map[string]*Project),
+		idToDatabaseMap:   make(map[uint32]*Database),
+		versionH:          versionH,
+		version:           currentVersion,
+		Encoder:           encoder,
 	}
+}
+
+// Reload is used to reload this tenant. The reload method compares the currently attached version to the tenant to the
+// version passed in the API call to detect whether reloading is needed. This check is needed to ensure only a single
+// thread will actually perform reload. This is a blocking API which means if most of the requests detected that the
+// tenant state is stale then they all will block till one of them will reload the tenant state from the database. All
+// the blocking transactions will be restarted to ensure they see the latest view of the tenant.
+func (tenant *Tenant) Reload(ctx context.Context, tx transaction.Tx, version Version) error {
+	if !tenant.shouldReload(version) {
+		return nil
+	}
+
+	tenant.Lock()
+	defer tenant.Unlock()
+	if bytes.Compare(version, tenant.version) < 1 {
+		// do not reload if version retrogressed
+		return nil
+	}
+
+	indexesInSearchStore, err := tenant.searchStore.AllCollections(ctx)
+	if err != nil {
+		return err
+	}
+	return tenant.reload(ctx, tx, version, indexesInSearchStore)
+}
+
+func (tenant *Tenant) shouldReload(currentVersion Version) bool {
+	tenant.RLock()
+	defer tenant.RUnlock()
+
+	return bytes.Compare(currentVersion, tenant.version) > 0
 }
 
 // reload will reload all the databases for this tenant. This is only reloading all the databases that exists in the
 // tenant.
-func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVersion Version, collectionsInSearch map[string]*tsApi.CollectionResponse) error {
+func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVersion Version, indexesInSearchStore map[string]*tsApi.CollectionResponse) error {
 	// reset
 	tenant.projects = make(map[string]*Project)
 	tenant.idToDatabaseMap = make(map[uint32]*Database)
@@ -555,7 +589,7 @@ func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVers
 
 	// Iterate one more time on all the databases and now add branches and main database to the Project object
 	for db, id := range dbNameToId {
-		database, err := tenant.reloadDatabase(ctx, tx, db, id, collectionsInSearch)
+		database, err := tenant.reloadDatabase(ctx, tx, db, id, indexesInSearchStore)
 		if ulog.E(err) {
 			return err
 		}
@@ -570,39 +604,108 @@ func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVers
 		tenant.idToDatabaseMap[id] = database
 	}
 
+	// load search
+	for _, p := range tenant.projects {
+		var err error
+		if p.search, err = tenant.reloadSearch(ctx, tx, p, indexesInSearchStore); err != nil {
+			return err
+		}
+	}
+
 	tenant.version = currentVersion
 	return nil
 }
 
-// Reload is used to reload this tenant. The reload method compares the currently attached version to the tenant to the
-// version passed in the API call to detect whether reloading is needed. This check is needed to ensure only a single
-// thread will actually perform reload. This is a blocking API which means if most of the requests detected that the
-// tenant state is stale then they all will block till one of them will reload the tenant state from the database. All
-// the blocking transactions will be restarted to ensure they see the latest view of the tenant.
-func (tenant *Tenant) Reload(ctx context.Context, tx transaction.Tx, version Version) error {
-	if !tenant.shouldReload(version) {
-		return nil
-	}
+// reloadDatabase is called by tenant to reload the database state.
+func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbName string, dbId uint32, searchCollections map[string]*tsApi.CollectionResponse) (*Database, error) {
+	database := NewDatabase(dbId, dbName)
 
-	tenant.Lock()
-	defer tenant.Unlock()
-	if bytes.Compare(version, tenant.version) < 1 {
-		// do not reload if version retrogressed
-		return nil
-	}
-
-	collectionsInSearch, err := tenant.searchStore.AllCollections(ctx)
+	collNameToId, err := tenant.metaStore.GetCollections(ctx, tx, tenant.namespace.Id(), database.id)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return tenant.reload(ctx, tx, version, collectionsInSearch)
+
+	for coll, id := range collNameToId {
+		idxNameToId, err := tenant.metaStore.GetIndexes(ctx, tx, tenant.namespace.Id(), database.id, id)
+		if err != nil {
+			database.needFixingCollections[coll] = struct{}{}
+			log.Debug().Err(err).Str("collection", coll).Msg("skipping loading collection")
+			continue
+		}
+
+		schemas, err := tenant.schemaStore.Get(ctx, tx, tenant.namespace.Id(), database.id, id)
+		if err != nil {
+			database.needFixingCollections[coll] = struct{}{}
+			log.Debug().Err(err).Str("collection", coll).Msg("skipping loading collection")
+			continue
+		}
+
+		var fieldsInSearch []tsApi.Field
+		searchCollectionName := tenant.getSearchCollName(dbName, coll)
+		if searchSchema, ok := searchCollections[searchCollectionName]; ok {
+			fieldsInSearch = searchSchema.Fields
+		}
+		if len(fieldsInSearch) == 0 {
+			log.Error().Str("search_collection", searchCollectionName).Msg("fields are not present in search")
+		}
+
+		collection, err := createCollection(id, coll, schemas, idxNameToId, searchCollectionName, fieldsInSearch)
+		if err != nil {
+			database.needFixingCollections[coll] = struct{}{}
+			log.Debug().Err(err).Str("collection", coll).Msg("skipping loading collection")
+			continue
+		}
+
+		encName, err := tenant.Encoder.EncodeTableName(tenant.namespace, database, collection)
+		if err != nil {
+			return nil, err
+		}
+
+		collection.EncodedName = encName
+
+		database.collections[coll] = newCollectionHolder(id, coll, collection, idxNameToId)
+		database.idToCollectionMap[id] = coll
+	}
+
+	return database, nil
 }
 
-func (tenant *Tenant) shouldReload(currentVersion Version) bool {
-	tenant.RLock()
-	defer tenant.RUnlock()
+func (tenant *Tenant) reloadSearch(ctx context.Context, tx transaction.Tx, project *Project, searchCollections map[string]*tsApi.CollectionResponse) (*Search, error) {
+	projMetadata, err := tenant.namespaceStore.GetProjectMetadata(ctx, tx, tenant.namespace.Id(), project.Name())
+	if err != nil {
+		return nil, errors.Internal("failed to get project metadata for project %s", project.Name())
+	}
 
-	return bytes.Compare(currentVersion, tenant.version) > 0
+	search := NewSearch()
+	if projMetadata == nil {
+		// nothing to load
+		return search, nil
+	}
+
+	for _, index := range projMetadata.SearchMetadata {
+		schV, err := tenant.searchSchemaStore.GetLatest(ctx, tx, tenant.namespace.Id(), project.id, index.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		searchFactory, err := schema.BuildSearch(index.Name, schV.Schema)
+		if err != nil {
+			return nil, err
+		}
+
+		var fieldsInSearch []tsApi.Field
+		searchStoreIndexName := tenant.getSearchCollName(project.Name(), index.Name)
+		if searchSchema, ok := searchCollections[searchStoreIndexName]; ok {
+			fieldsInSearch = searchSchema.Fields
+		}
+		if len(fieldsInSearch) == 0 {
+			log.Error().Str("search_collection", searchStoreIndexName).Msg("fields are not present in search")
+		}
+
+		search.indexes[index.Name] = schema.NewSearchIndex(schV.Version, searchStoreIndexName, searchFactory, fieldsInSearch)
+	}
+
+	return search, nil
 }
 
 // GetNamespace returns the namespace of this tenant.
@@ -611,6 +714,154 @@ func (tenant *Tenant) GetNamespace() Namespace {
 	defer tenant.RUnlock()
 
 	return tenant.namespace
+}
+
+func (tenant *Tenant) CreateSearchIndex(ctx context.Context, tx transaction.Tx, project *Project, factory *schema.SearchFactory) error {
+	tenant.Lock()
+	defer tenant.Unlock()
+
+	if index, ok := project.search.GetIndex(factory.Name); ok {
+		if eq, err := isSchemaEq(index.Schema, factory.Schema); eq || err != nil {
+			// shortcut to just check if schema is eq then return early
+			return err
+		}
+		return tenant.updateSearchIndex(ctx, tx, project, factory, index)
+	}
+
+	metadata, err := tenant.namespaceStore.GetProjectMetadata(ctx, tx, tenant.namespace.Id(), project.Name())
+	if err != nil {
+		return errors.Internal("failed to get project metadata for project %s", project.Name())
+	}
+
+	updateMetadata := true
+	if metadata == nil {
+		// we need to initialize metadata and do insert instead of update
+		metadata = &ProjectMetadata{
+			Id: project.Id(),
+		}
+		updateMetadata = false
+	}
+
+	metadata.SearchMetadata = append(metadata.SearchMetadata, SearchMetadata{
+		Name:      factory.Name,
+		Creator:   factory.Sub,
+		CreatedAt: time.Now().Unix(),
+	})
+
+	if updateMetadata {
+		if err = tenant.namespaceStore.UpdateProjectMetadata(ctx, tx, tenant.namespace.Id(), project.Name(), metadata); err != nil {
+			return errors.Internal("failed to update project metadata for index creation")
+		}
+	} else {
+		if err = tenant.namespaceStore.InsertProjectMetadata(ctx, tx, tenant.namespace.Id(), project.Name(), metadata); err != nil {
+			return errors.Internal("failed to update project metadata for index creation")
+		}
+	}
+
+	// store schema now in searchSchemaStore
+	if err := tenant.searchSchemaStore.Put(ctx, tx, tenant.namespace.Id(), project.id, factory.Name, factory.Schema, baseSchemaVersion); err != nil {
+		return err
+	}
+
+	indexStoreName := tenant.getSearchCollName(project.Name(), factory.Name)
+	index := schema.NewSearchIndex(baseSchemaVersion, indexStoreName, factory, nil)
+	if err := tenant.searchStore.CreateCollection(ctx, index.StoreSchema); err != nil {
+		if err != search.ErrDuplicateEntity {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (tenant *Tenant) updateSearchIndex(ctx context.Context, tx transaction.Tx, project *Project, factory *schema.SearchFactory, index *schema.SearchIndex) error {
+	tenant.Lock()
+	defer tenant.Unlock()
+
+	version := index.Version + 1
+	if err := tenant.searchSchemaStore.Put(ctx, tx, tenant.namespace.Id(), project.id, factory.Name, factory.Schema, version); err != nil {
+		return err
+	}
+
+	indexStoreName := tenant.getSearchCollName(project.Name(), factory.Name)
+	previousIndexInStore, err := tenant.searchStore.DescribeCollection(ctx, indexStoreName)
+	if err != nil {
+		return err
+	}
+
+	// store the collection to the databaseObject, this is actually cloned database object passed by the query runner.
+	// So failure of the transaction won't impact the consistency of the cache
+	updatedIndex := schema.NewSearchIndex(version, indexStoreName, factory, previousIndexInStore.Fields)
+
+	// update indexing store schema if there is a change
+	if deltaFields := schema.GetSearchDeltaFields(updatedIndex.QueryableFields, updatedIndex.Fields, previousIndexInStore.Fields); len(deltaFields) > 0 {
+		if err := tenant.searchStore.UpdateCollection(ctx, updatedIndex.StoreSchema.Name, &tsApi.CollectionUpdateSchema{
+			Fields: deltaFields,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (tenant *Tenant) DeleteSearchIndex(ctx context.Context, tx transaction.Tx, project *Project, indexName string) error {
+	tenant.Lock()
+	defer tenant.Unlock()
+
+	index, ok := project.search.GetIndex(indexName)
+	if !ok {
+		return NewSearchIndexNotFoundErr(indexName)
+	}
+
+	metadata, err := tenant.namespaceStore.GetProjectMetadata(ctx, tx, tenant.namespace.Id(), project.name)
+	if err != nil {
+		return errors.Internal("failed to get project metadata for project %s", project.name)
+	}
+
+	foundIdx := -1
+	for i := range metadata.SearchMetadata {
+		if metadata.SearchMetadata[i].Name == indexName {
+			foundIdx = i
+			break
+		}
+	}
+	if foundIdx == -1 {
+		return NewSearchIndexNotFoundErr(indexName)
+	}
+
+	metadata.SearchMetadata[foundIdx] = metadata.SearchMetadata[len(metadata.SearchMetadata)-1]
+	metadata.SearchMetadata = metadata.SearchMetadata[:len(metadata.SearchMetadata)-1]
+	if err = tenant.namespaceStore.UpdateProjectMetadata(ctx, tx, tenant.namespace.Id(), project.name, metadata); err != nil {
+		return errors.Internal("failed to update project metadata for cache deletion")
+	}
+
+	// cleanup all the schemas
+	if err = tenant.searchSchemaStore.Delete(ctx, tx, tenant.namespace.Id(), project.Id(), index.Name); err != nil {
+		return errors.Internal(err.Error())
+	}
+
+	// clean up from the underlying search store
+	if err := tenant.searchStore.DropCollection(ctx, index.StoreSchema.Name); err != nil && err != search.ErrNotFound {
+		return err
+	}
+
+	return nil
+}
+
+func (tenant *Tenant) ListSearchIndexes(ctx context.Context, tx transaction.Tx, project *Project) ([]string, error) {
+	tenant.Lock()
+	defer tenant.Unlock()
+
+	metadata, err := tenant.namespaceStore.GetProjectMetadata(ctx, tx, tenant.namespace.Id(), project.name)
+	if err != nil {
+		return nil, errors.Internal("failed to get project metadata for project %s", project.name)
+	}
+
+	indexes := make([]string, len(metadata.SearchMetadata))
+	for i := range metadata.SearchMetadata {
+		indexes[i] = metadata.SearchMetadata[i].Name
+	}
+	return indexes, nil
 }
 
 func (tenant *Tenant) CreateCache(ctx context.Context, tx transaction.Tx, project string, cache string, currentSub string) (bool, error) {
@@ -623,9 +874,9 @@ func (tenant *Tenant) CreateCache(ctx context.Context, tx transaction.Tx, projec
 	if projMetadata.CachesMetadata == nil {
 		projMetadata.CachesMetadata = []CachesMetadata{}
 	}
-	for _, cacheMetadata := range projMetadata.CachesMetadata {
-		if cacheMetadata.Name == cache {
-			return false, errors.AlreadyExists(cache2.CacheAlreadyExist)
+	for i := range projMetadata.CachesMetadata {
+		if projMetadata.CachesMetadata[i].Name == cache {
+			return false, NewCacheExistsErr(cache)
 		}
 	}
 	projMetadata.CachesMetadata = append(projMetadata.CachesMetadata, CachesMetadata{
@@ -651,8 +902,8 @@ func (tenant *Tenant) ListCaches(ctx context.Context, tx transaction.Tx, project
 		return []string{}, nil
 	}
 	caches := make([]string, len(projMetadata.CachesMetadata))
-	for i, cacheMetadata := range projMetadata.CachesMetadata {
-		caches[i] = cacheMetadata.Name
+	for i := range projMetadata.CachesMetadata {
+		caches[i] = projMetadata.CachesMetadata[i].Name
 	}
 	return caches, nil
 }
@@ -670,15 +921,15 @@ func (tenant *Tenant) DeleteCache(ctx context.Context, tx transaction.Tx, projec
 	}
 	var tempCachesMetadata []CachesMetadata
 	var found bool
-	for _, cacheMetadata := range projMetadata.CachesMetadata {
-		if cacheMetadata.Name != cache {
-			tempCachesMetadata = append(tempCachesMetadata, cacheMetadata)
+	for i := range projMetadata.CachesMetadata {
+		if projMetadata.CachesMetadata[i].Name != cache {
+			tempCachesMetadata = append(tempCachesMetadata, projMetadata.CachesMetadata[i])
 		} else {
 			found = true
 		}
 	}
 	if !found {
-		return false, errors.NotFound(cache2.CacheNotFound)
+		return false, NewCacheNotFoundErr(cache)
 	}
 	projMetadata.CachesMetadata = tempCachesMetadata
 
@@ -890,60 +1141,6 @@ func (tenant *Tenant) ListDatabaseBranches(projName string) []string {
 		i++
 	}
 	return branchNames
-}
-
-// reloadDatabase is called by tenant to reload the database state.
-func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbName string, dbId uint32, searchCollections map[string]*tsApi.CollectionResponse) (*Database, error) {
-	database := NewDatabase(dbId, dbName)
-
-	collNameToId, err := tenant.metaStore.GetCollections(ctx, tx, tenant.namespace.Id(), database.id)
-	if err != nil {
-		return nil, err
-	}
-
-	for coll, id := range collNameToId {
-		idxNameToId, err := tenant.metaStore.GetIndexes(ctx, tx, tenant.namespace.Id(), database.id, id)
-		if err != nil {
-			database.needFixingCollections[coll] = struct{}{}
-			log.Debug().Err(err).Str("collection", coll).Msg("skipping loading collection")
-			continue
-		}
-
-		schemas, err := tenant.schemaStore.Get(ctx, tx, tenant.namespace.Id(), database.id, id)
-		if err != nil {
-			database.needFixingCollections[coll] = struct{}{}
-			log.Debug().Err(err).Str("collection", coll).Msg("skipping loading collection")
-			continue
-		}
-
-		var fieldsInSearch []tsApi.Field
-		searchCollectionName := tenant.getSearchCollName(dbName, coll)
-		if searchSchema, ok := searchCollections[searchCollectionName]; ok {
-			fieldsInSearch = searchSchema.Fields
-		}
-		if len(fieldsInSearch) == 0 {
-			log.Error().Str("search_collection", searchCollectionName).Msg("fields are not present in search")
-		}
-
-		collection, err := createCollection(id, coll, schemas, idxNameToId, searchCollectionName, fieldsInSearch)
-		if err != nil {
-			database.needFixingCollections[coll] = struct{}{}
-			log.Debug().Err(err).Str("collection", coll).Msg("skipping loading collection")
-			continue
-		}
-
-		encName, err := tenant.Encoder.EncodeTableName(tenant.namespace, database, collection)
-		if err != nil {
-			return nil, err
-		}
-
-		collection.EncodedName = encName
-
-		database.collections[coll] = newCollectionHolder(id, coll, collection, idxNameToId)
-		database.idToCollectionMap[id] = coll
-	}
-
-	return database, nil
 }
 
 func (tenant *Tenant) GetCollection(db string, collection string) *schema.DefaultCollection {
@@ -1217,6 +1414,7 @@ type Project struct {
 	// project shares the same id as the main database
 	id               uint32
 	name             string
+	search           *Search
 	database         *Database
 	databaseBranches map[string]*Database
 }
@@ -1258,6 +1456,11 @@ func (p *Project) GetDatabaseWithBranches() []*Database {
 // GetMainDatabase returns the main database of this project.
 func (p *Project) GetMainDatabase() *Database {
 	return p.database
+}
+
+// GetSearch returns the search for this project which will have all search indexes.
+func (p *Project) GetSearch() *Search {
+	return p.search
 }
 
 // GetDatabase returns either the main database or a database branch. This depends on the DatabaseName object.
@@ -1449,6 +1652,47 @@ func createCollection(id uint32, name string, schemas schema.Versions, idxNameTo
 		fieldsInSearch, schemas), nil
 }
 
+type Search struct {
+	sync.RWMutex
+
+	indexes map[string]*schema.SearchIndex
+}
+
+func NewSearch() *Search {
+	return &Search{
+		indexes: make(map[string]*schema.SearchIndex),
+	}
+}
+
+func (s *Search) AddIndex(index *schema.SearchIndex) {
+	s.Lock()
+	defer s.Unlock()
+
+	s.indexes[index.Name] = index
+}
+
+func (s *Search) GetIndex(name string) (*schema.SearchIndex, bool) {
+	s.RLock()
+	defer s.RUnlock()
+
+	index, ok := s.indexes[name]
+	return index, ok
+}
+
+func (s *Search) GetIndexes() []*schema.SearchIndex {
+	s.RLock()
+	defer s.RUnlock()
+
+	indexes := make([]*schema.SearchIndex, len(s.indexes))
+	i := 0
+	for _, index := range s.indexes {
+		indexes[i] = index
+		i++
+	}
+
+	return indexes
+}
+
 func isSchemaEq(s1, s2 []byte) (bool, error) {
 	var j, j2 interface{}
 	if err := jsoniter.Unmarshal(s1, &j); err != nil {
@@ -1465,9 +1709,10 @@ func NewTestTenantMgr(kvStore kv.KeyValueStore) (*TenantManager, context.Context
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
 	m := newTenantManager(kvStore, &search.NoopStore{}, &TestMDNameRegistry{
-		ReserveSB:  fmt.Sprintf("test_tenant_reserve_%x", rand.Uint64()),  //nolint:gosec
-		EncodingSB: fmt.Sprintf("test_tenant_encoding_%x", rand.Uint64()), //nolint:gosec
-		SchemaSB:   fmt.Sprintf("test_tenant_schema_%x", rand.Uint64()),   //nolint:gosec
+		ReserveSB:  fmt.Sprintf("test_tenant_reserve_%x", rand.Uint64()),       //nolint:gosec
+		EncodingSB: fmt.Sprintf("test_tenant_encoding_%x", rand.Uint64()),      //nolint:gosec
+		SchemaSB:   fmt.Sprintf("test_tenant_schema_%x", rand.Uint64()),        //nolint:gosec
+		SearchSB:   fmt.Sprintf("test_tenant_search_schema_%x", rand.Uint64()), //nolint:gosec
 	},
 		transaction.NewManager(kvStore),
 	)

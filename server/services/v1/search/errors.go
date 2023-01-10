@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cache
+package search
 
 import (
 	apiErrors "github.com/tigrisdata/tigris/errors"
@@ -24,9 +24,9 @@ func createApiError(err error) error {
 	switch e := err.(type) {
 	case metadata.Error:
 		switch e.Code() {
-		case metadata.ErrCodeProjectNotFound, metadata.ErrCodeCacheNotFound:
+		case metadata.ErrCodeProjectNotFound, metadata.ErrCodeSearchIndexNotFound:
 			return apiErrors.NotFound(e.Error())
-		case metadata.ErrCodeCacheExists:
+		case metadata.ErrCodeSearchIndexExists:
 			return apiErrors.AlreadyExists(e.Error())
 		}
 	default:

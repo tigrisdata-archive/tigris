@@ -12,25 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cache
+package api
 
 import (
-	apiErrors "github.com/tigrisdata/tigris/errors"
-	"github.com/tigrisdata/tigris/server/metadata"
+	"strings"
+
+	jsoniter "github.com/json-iterator/go"
 )
 
-// createApiError helps construct API errors from internal errors.
-func createApiError(err error) error {
-	switch e := err.(type) {
-	case metadata.Error:
-		switch e.Code() {
-		case metadata.ErrCodeProjectNotFound, metadata.ErrCodeCacheNotFound:
-			return apiErrors.NotFound(e.Error())
-		case metadata.ErrCodeCacheExists:
-			return apiErrors.AlreadyExists(e.Error())
-		}
-	default:
+func (x *CreateOrUpdateIndexRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
 		return err
 	}
-	return err
+
+	for key, value := range mp {
+		var v interface{}
+		switch strings.ToLower(key) {
+		case "project":
+			v = &x.Project
+		case "name":
+			v = &x.Name
+		case "schema":
+			x.Schema = value
+			continue
+		default:
+			continue
+		}
+		if err := jsoniter.Unmarshal(value, v); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

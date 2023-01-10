@@ -178,7 +178,7 @@ func (runner *CreateCacheRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	_, err = tenant.CreateCache(ctx, tx, runner.req.GetProject(), runner.req.GetName(), currentSub)
 	if err != nil {
-		return Response{}, ctx, err
+		return Response{}, ctx, createApiError(err)
 	}
 	return Response{
 		Status: database.CreatedStatus,
@@ -211,7 +211,7 @@ func (runner *DeleteCacheRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			Str("project", runner.req.GetProject()).
 			Str("cache", runner.req.GetName()).
 			Msg("Failed to update project metadata entry to delete cache")
-		return Response{}, ctx, err
+		return Response{}, ctx, createApiError(err)
 	}
 	return Response{
 		Status: database.DeletedStatus,
