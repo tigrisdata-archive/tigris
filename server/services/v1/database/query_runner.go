@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -169,14 +169,11 @@ func NewBaseQueryRunner(encoder metadata.Encoder, cdcMgr *cdc.Manager, txMgr *tr
 
 // getDatabaseFromTenant is a helper method to get database from the tenant object. Returns a user facing error if
 // the database is not present.
-func (runner *BaseQueryRunner) getDatabaseFromTenant(ctx context.Context, tenant *metadata.Tenant, dbName string) (*metadata.Database, error) {
-	db, err := tenant.GetDatabase(ctx, dbName)
+func (runner *BaseQueryRunner) getDatabaseFromTenant(ctx context.Context, tenant *metadata.Tenant, dbName string, branch string) (*metadata.Database, error) {
+	dbBranch := metadata.NewDatabaseNameWithBranch(dbName, branch)
+	db, err := tenant.GetDatabase(ctx, dbBranch)
 	if err != nil {
-		return nil, err
-	}
-	if db == nil {
-		// database not found
-		return nil, errors.NotFound("database doesn't exist '%s'", dbName)
+		return nil, createApiError(err)
 	}
 
 	return db, nil
@@ -184,7 +181,7 @@ func (runner *BaseQueryRunner) getDatabaseFromTenant(ctx context.Context, tenant
 
 // getDatabase is a helper method to return database either from the transactional context for explicit transactions or
 // from the tenant object. Returns a user facing error if the database is not present.
-func (runner *BaseQueryRunner) getDatabase(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, dbName string) (*metadata.Database, error) {
+func (runner *BaseQueryRunner) getDatabase(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, dbName string, branch string) (*metadata.Database, error) {
 	if tx.Context().GetStagedDatabase() != nil {
 		// this means that some DDL operation has modified the database object, then we need to perform all the operations
 		// on this staged database.
@@ -192,13 +189,10 @@ func (runner *BaseQueryRunner) getDatabase(ctx context.Context, tx transaction.T
 	}
 
 	// otherwise, simply read from the in-memory cache/disk.
-	db, err := tenant.GetDatabase(ctx, dbName)
+	dbBranch := metadata.NewDatabaseNameWithBranch(dbName, branch)
+	db, err := tenant.GetDatabase(ctx, dbBranch)
 	if err != nil {
-		return nil, err
-	}
-	if db == nil {
-		// database not found
-		return nil, errors.NotFound("database doesn't exist '%s'", dbName)
+		return nil, createApiError(err)
 	}
 
 	return db, nil
@@ -215,7 +209,23 @@ func (runner *BaseQueryRunner) getCollection(db *metadata.Database, collName str
 	return collection, nil
 }
 
-func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, db *metadata.Database,
+func (runner *BaseQueryRunner) getDBAndCollection(ctx context.Context, tx transaction.Tx,
+	tenant *metadata.Tenant, dbName string, collName string, branch string,
+) (*metadata.Database, *schema.DefaultCollection, error) {
+	db, err := runner.getDatabase(ctx, tx, tenant, dbName, branch)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	collection, err := runner.getCollection(db, collName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return db, collection, nil
+}
+
+func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant,
 	coll *schema.DefaultCollection, documents [][]byte, insert bool,
 ) (*internal.Timestamp, [][]byte, error) {
 	var err error
@@ -228,13 +238,8 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 			return nil, nil, err
 		}
 
-		table, err := runner.encoder.EncodeTableName(tenant.GetNamespace(), db, coll)
-		if err != nil {
-			return nil, nil, err
-		}
-
 		keyGen := newKeyGenerator(doc, tenant.TableKeyGenerator, coll.Indexes.PrimaryKey)
-		key, err := keyGen.generate(ctx, runner.txMgr, runner.encoder, table)
+		key, err := keyGen.generate(ctx, runner.txMgr, runner.encoder, coll.EncodedName)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -296,7 +301,7 @@ func (runner *BaseQueryRunner) mutateAndValidatePayload(coll *schema.DefaultColl
 	return doc, nil
 }
 
-func (runner *BaseQueryRunner) buildKeysUsingFilter(tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection,
+func (runner *BaseQueryRunner) buildKeysUsingFilter(coll *schema.DefaultCollection,
 	reqFilter []byte, collation *api.Collation,
 ) ([]keys.Key, error) {
 	filterFactory := filter.NewFactory(coll.QueryableFields, collation)
@@ -305,14 +310,9 @@ func (runner *BaseQueryRunner) buildKeysUsingFilter(tenant *metadata.Tenant, db 
 		return nil, err
 	}
 
-	encodedTable, err := runner.encoder.EncodeTableName(tenant.GetNamespace(), db, coll)
-	if err != nil {
-		return nil, err
-	}
-
 	primaryKeyIndex := coll.Indexes.PrimaryKey
 	kb := filter.NewKeyBuilder(filter.NewStrictEqKeyComposer(func(indexParts ...interface{}) (keys.Key, error) {
-		return runner.encoder.EncodeKey(encodedTable, primaryKeyIndex, indexParts)
+		return runner.encoder.EncodeKey(coll.EncodedName, primaryKeyIndex, indexParts)
 	}))
 
 	return kb.Build(filters, coll.Indexes.PrimaryKey.Fields)
@@ -346,6 +346,45 @@ func (runner *BaseQueryRunner) getSortOrdering(coll *schema.DefaultCollection, s
 		}
 	}
 	return ordering, nil
+}
+
+func (runner *BaseQueryRunner) getWriteIterator(ctx context.Context, tx transaction.Tx,
+	collection *schema.DefaultCollection, reqFilter []byte, collation *api.Collation,
+	metrics *metrics.WriteQueryMetrics,
+) (Iterator, error) {
+	var (
+		err      error
+		iKeys    []keys.Key
+		iterator Iterator
+	)
+
+	reader := NewDatabaseReader(ctx, tx)
+
+	if iKeys, err = runner.buildKeysUsingFilter(collection, reqFilter, collation); err == nil {
+		iterator, err = reader.KeyIterator(iKeys)
+	} else {
+		if iterator, err = reader.ScanTable(collection.EncodedName); err != nil {
+			return nil, err
+		}
+		filterFactory := filter.NewFactory(collection.QueryableFields, collation)
+		var filters []filter.Filter
+		if filters, err = filterFactory.Factorize(reqFilter); err != nil {
+			return nil, err
+		}
+
+		iterator, err = reader.FilteredRead(iterator, filter.NewWrappedFilter(filters))
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	if len(iKeys) == 0 {
+		metrics.SetWriteType("pkey")
+	} else {
+		metrics.SetWriteType("non-pkey")
+	}
+
+	return iterator, nil
 }
 
 type ImportQueryRunner struct {
@@ -390,7 +429,7 @@ func (runner *ImportQueryRunner) evolveSchema(ctx context.Context, tenant *metad
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
-	db, err := runner.getDatabase(ctx, tx, tenant, req.GetProject())
+	db, err := runner.getDatabase(ctx, tx, tenant, req.GetProject(), "")
 	if err != nil {
 		return err
 	}
@@ -409,16 +448,11 @@ func (runner *ImportQueryRunner) evolveSchema(ctx context.Context, tenant *metad
 }
 
 func (runner *ImportQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject())
-	if err != nil {
-		return nil, ctx, err
-	}
+	db, coll, err := runner.getDBAndCollection(ctx, tx, tenant,
+		runner.req.GetProject(), runner.req.GetCollection(), runner.req.GetBranch())
 
-	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
-
-	coll, err := runner.getCollection(db, runner.req.GetCollection())
 	//FIXME: errors.As(err, &ep) doesn't work
-	//nolint:golint,errorlint
+	//nolint:errorlint
 	ep, ok := err.(*api.TigrisError)
 	if err != nil && (!ok || ep.Code != api.Code_NOT_FOUND || !runner.req.CreateCollection) {
 		return nil, ctx, err
@@ -430,17 +464,20 @@ func (runner *ImportQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			return nil, ctx, err
 		}
 
-		coll, err = runner.getCollection(db, runner.req.GetCollection())
+		db, coll, err = runner.getDBAndCollection(ctx, tx, tenant,
+			runner.req.GetProject(), runner.req.GetCollection(), runner.req.GetBranch())
 		if err != nil {
 			return nil, ctx, err
 		}
 	}
 
+	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
+
 	if err = runner.mustBeDocumentsCollection(coll, "insert"); err != nil {
 		return nil, ctx, err
 	}
 
-	ts, allKeys, err := runner.insertOrReplace(ctx, tx, tenant, db, coll, runner.req.GetDocuments(), true)
+	ts, allKeys, err := runner.insertOrReplace(ctx, tx, tenant, coll, runner.req.GetDocuments(), true)
 	if err != nil {
 		if err == kv.ErrDuplicateKey {
 			return nil, ctx, errors.AlreadyExists(err.Error())
@@ -467,7 +504,7 @@ func (runner *ImportQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		defer func() { _ = tx.Rollback(ctx) }()
 
 		// Retry insert after updating the schema
-		ts, allKeys, err = runner.insertOrReplace(ctx, tx, tenant, db, coll, runner.req.GetDocuments(), true)
+		ts, allKeys, err = runner.insertOrReplace(ctx, tx, tenant, coll, runner.req.GetDocuments(), true)
 		if err == kv.ErrDuplicateKey {
 			return nil, ctx, errors.AlreadyExists(err.Error())
 		}
@@ -499,22 +536,19 @@ type InsertQueryRunner struct {
 }
 
 func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject())
+	db, coll, err := runner.getDBAndCollection(ctx, tx, tenant,
+		runner.req.GetProject(), runner.req.GetCollection(), runner.req.GetBranch())
 	if err != nil {
 		return nil, ctx, err
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
-	coll, err := runner.getCollection(db, runner.req.GetCollection())
-	if err != nil {
-		return nil, ctx, err
-	}
 	if err = runner.mustBeDocumentsCollection(coll, "insert"); err != nil {
 		return nil, ctx, err
 	}
 
-	ts, allKeys, err := runner.insertOrReplace(ctx, tx, tenant, db, coll, runner.req.GetDocuments(), true)
+	ts, allKeys, err := runner.insertOrReplace(ctx, tx, tenant, coll, runner.req.GetDocuments(), true)
 	if err != nil {
 		if err == kv.ErrDuplicateKey {
 			return nil, ctx, errors.AlreadyExists(err.Error())
@@ -541,22 +575,19 @@ type ReplaceQueryRunner struct {
 }
 
 func (runner *ReplaceQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject())
+	db, coll, err := runner.getDBAndCollection(ctx, tx, tenant,
+		runner.req.GetProject(), runner.req.GetCollection(), runner.req.GetBranch())
 	if err != nil {
 		return nil, ctx, err
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
-	coll, err := runner.getCollection(db, runner.req.GetCollection())
-	if err != nil {
-		return nil, ctx, err
-	}
 	if err = runner.mustBeDocumentsCollection(coll, "replace"); err != nil {
 		return nil, ctx, err
 	}
 
-	ts, allKeys, err := runner.insertOrReplace(ctx, tx, tenant, db, coll, runner.req.GetDocuments(), false)
+	ts, allKeys, err := runner.insertOrReplace(ctx, tx, tenant, coll, runner.req.GetDocuments(), false)
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -578,20 +609,45 @@ type UpdateQueryRunner struct {
 	queryMetrics *metrics.WriteQueryMetrics
 }
 
+func updateDefaults(collection *schema.DefaultCollection, doc []byte, ts *internal.Timestamp) ([]byte, error) {
+	if len(collection.TaggedDefaultsForUpdate()) > 0 {
+		// ToDo: revisit this path. We are deserializing here the merged payload (existing + incoming) and then
+		// we are setting the updated value if any field is tagged with @updatedAt and then we are packing
+		// it again.
+		deserializedDoc, err := ljson.Decode(doc)
+		if ulog.E(err) {
+			return nil, err
+		}
+
+		mutator := newUpdatePayloadMutator(collection, ts.ToRFC3339())
+		if err = mutator.setDefaultsInExistingPayload(deserializedDoc); err != nil {
+			return nil, err
+		}
+
+		if mutator.isMutated() {
+			if doc, err = ljson.Encode(deserializedDoc); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return doc, nil
+}
+
 func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	ts := internal.NewTimestamp()
-	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject())
+	db, coll, err := runner.getDBAndCollection(ctx, tx, tenant,
+		runner.req.GetProject(), runner.req.GetCollection(), runner.req.GetBranch())
 	if err != nil {
 		return nil, ctx, err
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
-	collection, err := runner.getCollection(db, runner.req.GetCollection())
-	if err != nil {
-		return nil, ctx, err
+	if filter.None(runner.req.Filter) {
+		return nil, ctx, errors.InvalidArgument("updating all documents is not allowed")
 	}
-	if err = runner.mustBeDocumentsCollection(collection, "update"); err != nil {
+
+	if err = runner.mustBeDocumentsCollection(coll, "update"); err != nil {
 		return nil, ctx, err
 	}
 
@@ -601,21 +657,14 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return nil, ctx, err
 	}
 
+	ts := internal.NewTimestamp()
+
 	if fieldOperator, ok := factory.FieldOperators[string(update.Set)]; ok {
 		// Set operation needs schema validation as well as mutation if we need to convert numeric fields from string to int64
-		fieldOperator.Input, err = runner.mutateAndValidatePayload(collection, newUpdatePayloadMutator(collection, ts.ToRFC3339()), fieldOperator.Input)
+		fieldOperator.Input, err = runner.mutateAndValidatePayload(coll, newUpdatePayloadMutator(coll, ts.ToRFC3339()), fieldOperator.Input)
 		if err != nil {
 			return nil, ctx, err
 		}
-	}
-
-	table, err := runner.encoder.EncodeTableName(tenant.GetNamespace(), db, collection)
-	if err != nil {
-		return nil, ctx, err
-	}
-
-	if filter.None(runner.req.Filter) {
-		return nil, ctx, errors.InvalidArgument("updating all documents is not allowed")
 	}
 
 	var collation *api.Collation
@@ -623,76 +672,55 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		collation = runner.req.Options.Collation
 	}
 
-	var iterator Iterator
-	reader := NewDatabaseReader(ctx, tx)
-	iKeys, err := runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter, collation)
-	if err == nil {
-		iterator, err = reader.KeyIterator(iKeys)
-	} else {
-		if iterator, err = reader.ScanTable(table); err != nil {
-			return nil, ctx, err
-		}
-		filterFactory := filter.NewFactory(collection.QueryableFields, collation)
-		var filters []filter.Filter
-		if filters, err = filterFactory.Factorize(runner.req.Filter); err != nil {
-			return nil, ctx, err
-		}
-
-		iterator, err = reader.FilteredRead(iterator, filter.NewWrappedFilter(filters))
-	}
+	iterator, err := runner.getWriteIterator(ctx, tx, coll, runner.req.Filter, collation, runner.queryMetrics)
 	if err != nil {
 		return nil, ctx, err
-	}
-	if len(iKeys) == 0 {
-		runner.queryMetrics.SetWriteType("pkey")
-	} else {
-		runner.queryMetrics.SetWriteType("non-pkey")
 	}
 
 	limit := int32(0)
 	if runner.req.Options != nil {
 		limit = int32(runner.req.Options.Limit)
 	}
+
 	modifiedCount := int32(0)
 	var row Row
 	for iterator.Next(&row) {
-		key, err := keys.FromBinary(table, row.Key)
+		key, err := keys.FromBinary(coll.EncodedName, row.Key)
 		if err != nil {
 			return nil, ctx, err
 		}
 
 		// MergeAndGet merge the user input with existing doc and return the merged JSON document which we need to
 		// persist back.
-		merged, err := factory.MergeAndGet(row.Data.RawData, collection)
+		merged, primaryKeyMutation, err := factory.MergeAndGet(row.Data.RawData, coll)
 		if err != nil {
 			return nil, ctx, err
 		}
 
-		if len(collection.TaggedDefaultsForUpdate()) > 0 {
-			// ToDo: revisit this path. We are deserializing here the merged payload (existing + incoming) and then
-			// we are setting the updated value if any field is tagged with @updatedAt and then we are packing
-			// it again.
-			deserializedDoc, err := ljson.Decode(merged)
-			if ulog.E(err) {
-				return nil, ctx, err
-			}
-
-			mutator := newUpdatePayloadMutator(collection, ts.ToRFC3339())
-			if err := mutator.setDefaultsInExistingPayload(deserializedDoc); err != nil {
-				return nil, ctx, err
-			}
-
-			if mutator.isMutated() {
-				if merged, err = ljson.Encode(deserializedDoc); err != nil {
-					return nil, ctx, err
-				}
-			}
+		if merged, err = updateDefaults(coll, merged, ts); err != nil {
+			return nil, ctx, err
 		}
 
 		newData := internal.NewTableDataWithTS(row.Data.CreatedAt, ts, merged)
-		newData.SetVersion(collection.GetVersion())
+		newData.SetVersion(coll.GetVersion())
 		// as we have merged the data, it is safe to call replace
-		if err = tx.Replace(ctx, key, newData, true); ulog.E(err) {
+
+		isUpdate := true
+		newKey := key
+		if primaryKeyMutation {
+			// we need to delete old key and build new key from new data
+			keyGen := newKeyGenerator(newData.RawData, tenant.TableKeyGenerator, coll.Indexes.PrimaryKey)
+			if newKey, err = keyGen.generate(ctx, runner.txMgr, runner.encoder, coll.EncodedName); err != nil {
+				return nil, nil, err
+			}
+
+			// delete old key
+			if err = tx.Delete(ctx, key); ulog.E(err) {
+				return nil, ctx, err
+			}
+			isUpdate = false
+		}
+		if err = tx.Replace(ctx, newKey, newData, isUpdate); ulog.E(err) {
 			return nil, ctx, err
 		}
 		modifiedCount++
@@ -717,33 +745,24 @@ type DeleteQueryRunner struct {
 }
 
 func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	ts := internal.NewTimestamp()
-	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject())
+	db, coll, err := runner.getDBAndCollection(ctx, tx, tenant,
+		runner.req.GetProject(), runner.req.GetCollection(), runner.req.GetBranch())
 	if err != nil {
 		return nil, ctx, err
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
-	collection, err := runner.getCollection(db, runner.req.GetCollection())
-	if err != nil {
-		return nil, ctx, err
-	}
-	if err = runner.mustBeDocumentsCollection(collection, "delete"); err != nil {
+	if err = runner.mustBeDocumentsCollection(coll, "delete"); err != nil {
 		return nil, ctx, err
 	}
 
-	table, err := runner.encoder.EncodeTableName(tenant.GetNamespace(), db, collection)
-	if err != nil {
-		return nil, ctx, err
-	}
+	ts := internal.NewTimestamp()
 
 	var iterator Iterator
-	reader := NewDatabaseReader(ctx, tx)
 	if filter.None(runner.req.Filter) {
-		if iterator, err = reader.ScanTable(table); err != nil {
-			return nil, ctx, err
-		}
+		reader := NewDatabaseReader(ctx, tx)
+		iterator, err = reader.ScanTable(coll.EncodedName)
 		runner.queryMetrics.SetWriteType("full_scan")
 	} else {
 		var collation *api.Collation
@@ -751,26 +770,7 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			collation = runner.req.Options.Collation
 		}
 
-		var iKeys []keys.Key
-		if iKeys, err = runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter, collation); err == nil {
-			iterator, err = reader.KeyIterator(iKeys)
-		} else {
-			if iterator, err = reader.ScanTable(table); err != nil {
-				return nil, ctx, err
-			}
-			filterFactory := filter.NewFactory(collection.QueryableFields, collation)
-			var filters []filter.Filter
-			if filters, err = filterFactory.Factorize(runner.req.Filter); err != nil {
-				return nil, ctx, err
-			}
-
-			iterator, err = reader.FilteredRead(iterator, filter.NewWrappedFilter(filters))
-		}
-		if len(iKeys) == 0 {
-			runner.queryMetrics.SetWriteType("pkey")
-		} else {
-			runner.queryMetrics.SetWriteType("non-pkey")
-		}
+		iterator, err = runner.getWriteIterator(ctx, tx, coll, runner.req.Filter, collation, runner.queryMetrics)
 	}
 	if err != nil {
 		return nil, ctx, err
@@ -780,10 +780,11 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	if runner.req.Options != nil {
 		limit = int32(runner.req.Options.Limit)
 	}
+
 	modifiedCount := int32(0)
 	var row Row
 	for iterator.Next(&row) {
-		key, err := keys.FromBinary(table, row.Key)
+		key, err := keys.FromBinary(coll.EncodedName, row.Key)
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -826,7 +827,7 @@ type readerOptions struct {
 	fieldFactory  *read.FieldFactory
 }
 
-func (runner *StreamingQueryRunner) buildReaderOptions(tenant *metadata.Tenant, db *metadata.Database, collection *schema.DefaultCollection) (readerOptions, error) {
+func (runner *StreamingQueryRunner) buildReaderOptions(collection *schema.DefaultCollection) (readerOptions, error) {
 	var err error
 	options := readerOptions{}
 	var collation *api.Collation
@@ -839,9 +840,8 @@ func (runner *StreamingQueryRunner) buildReaderOptions(tenant *metadata.Tenant, 
 	if options.filter, err = filter.NewFactory(collection.QueryableFields, collation).WrappedFilter(runner.req.Filter); err != nil {
 		return options, err
 	}
-	if options.table, err = runner.encoder.EncodeTableName(tenant.GetNamespace(), db, collection); err != nil {
-		return options, err
-	}
+
+	options.table = collection.EncodedName
 	if options.fieldFactory, err = read.BuildFields(runner.req.GetFields()); err != nil {
 		return options, err
 	}
@@ -851,8 +851,13 @@ func (runner *StreamingQueryRunner) buildReaderOptions(tenant *metadata.Tenant, 
 		}
 	}
 
-	if collection.Type() == schema.TopicType {
-		// if it is event streaming then fallback to indexing store for all reads
+	if filter.None(runner.req.Filter) {
+		if options.sorting != nil {
+			options.inMemoryStore = true
+		} else {
+			options.noFilter = true
+		}
+	} else if options.ikeys, err = runner.buildKeysUsingFilter(collection, runner.req.Filter, collation); err != nil {
 		if !config.DefaultConfig.Search.IsReadEnabled() {
 			if options.from == nil {
 				// in this case, scan will happen from the beginning of the table.
@@ -860,28 +865,6 @@ func (runner *StreamingQueryRunner) buildReaderOptions(tenant *metadata.Tenant, 
 			}
 		} else {
 			options.inMemoryStore = true
-		}
-	} else {
-		var collation *api.Collation
-		if runner.req.Options != nil {
-			collation = runner.req.Options.Collation
-		}
-
-		if filter.None(runner.req.Filter) {
-			if options.sorting != nil {
-				options.inMemoryStore = true
-			} else {
-				options.noFilter = true
-			}
-		} else if options.ikeys, err = runner.buildKeysUsingFilter(tenant, db, collection, runner.req.Filter, collation); err != nil {
-			if !config.DefaultConfig.Search.IsReadEnabled() {
-				if options.from == nil {
-					// in this case, scan will happen from the beginning of the table.
-					options.from = keys.NewKey(options.table)
-				}
-			} else {
-				options.inMemoryStore = true
-			}
 		}
 	}
 
@@ -908,7 +891,7 @@ func (runner *StreamingQueryRunner) instrumentRunner(ctx context.Context, option
 // ReadOnly is used by the read query runner to handle long-running reads. This method operates by starting a new
 // transaction when needed which means a single user request may end up creating multiple read only transactions.
 func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetProject())
+	db, err := runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetProject(), runner.req.GetBranch())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -920,7 +903,7 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 		return nil, ctx, err
 	}
 
-	options, err := runner.buildReaderOptions(tenant, db, collection)
+	options, err := runner.buildReaderOptions(collection)
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -950,8 +933,9 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 			options.from, _ = keys.FromBinary(options.table, last)
 			continue
 		}
+
 		if err != nil {
-			return nil, ctx, nil
+			return nil, ctx, err
 		}
 
 		ctx = runner.instrumentRunner(ctx, options)
@@ -964,19 +948,15 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 // if we see ErrTransactionMaxDurationReached which is expected because we do not expect caller to do long reads in an
 // explicit transaction.
 func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.getDatabase(ctx, tx, tenant, runner.req.GetProject())
+	db, coll, err := runner.getDBAndCollection(ctx, tx, tenant,
+		runner.req.GetProject(), runner.req.GetCollection(), runner.req.GetBranch())
 	if err != nil {
 		return nil, ctx, err
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
-	collection, err := runner.getCollection(db, runner.req.GetCollection())
-	if err != nil {
-		return nil, ctx, err
-	}
-
-	options, err := runner.buildReaderOptions(tenant, db, collection)
+	options, err := runner.buildReaderOptions(coll)
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -984,7 +964,7 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 	ctx = runner.instrumentRunner(ctx, options)
 
 	if options.inMemoryStore {
-		if err = runner.iterateOnIndexingStore(ctx, collection, options); err != nil {
+		if err = runner.iterateOnIndexingStore(ctx, coll, options); err != nil {
 			return nil, ctx, err
 		}
 		return &Response{}, ctx, nil
@@ -1079,7 +1059,7 @@ type SearchQueryRunner struct {
 // ReadOnly on search query runner is implemented as search queries do not need to be inside a transaction; in fact,
 // there is no need to start any transaction for search queries as they are simply forwarded to the indexing store.
 func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.Tenant) (*Response, context.Context, error) {
-	db, err := runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetProject())
+	db, err := runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetProject(), runner.req.GetBranch())
 	if err != nil {
 		return nil, ctx, err
 	}
@@ -1277,7 +1257,7 @@ func (runner *SearchQueryRunner) getFieldSelection(coll *schema.DefaultCollectio
 	var selectionFields []string
 
 	// Only one of include/exclude. Honor inclusion over exclusion
-	//nolint:golint,gocritic
+	//nolint:gocritic
 	if len(runner.req.IncludeFields) > 0 {
 		selectionFields = runner.req.IncludeFields
 	} else if len(runner.req.ExcludeFields) > 0 {
@@ -1334,7 +1314,7 @@ func (runner *CollectionQueryRunner) SetDescribeCollectionReq(describe *api.Desc
 func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
 	switch {
 	case runner.dropReq != nil:
-		db, err := runner.getDatabase(ctx, tx, tenant, runner.dropReq.GetProject())
+		db, err := runner.getDatabase(ctx, tx, tenant, runner.dropReq.GetProject(), runner.dropReq.GetBranch())
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -1353,7 +1333,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			Status: DroppedStatus,
 		}, ctx, nil
 	case runner.createOrUpdateReq != nil:
-		db, err := runner.getDatabase(ctx, tx, tenant, runner.createOrUpdateReq.GetProject())
+		db, err := runner.getDatabase(ctx, tx, tenant, runner.createOrUpdateReq.GetProject(), runner.createOrUpdateReq.GetBranch())
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -1386,7 +1366,7 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			Status: CreatedStatus,
 		}, ctx, nil
 	case runner.listReq != nil:
-		db, err := runner.getDatabase(ctx, tx, tenant, runner.listReq.GetProject())
+		db, err := runner.getDatabase(ctx, tx, tenant, runner.listReq.GetProject(), runner.listReq.GetBranch())
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -1404,16 +1384,9 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			},
 		}, ctx, nil
 	case runner.describeReq != nil:
-		db, err := runner.getDatabase(ctx, tx, tenant, runner.describeReq.GetProject())
-		if err != nil {
-			return nil, ctx, err
-		}
-		namespace, err := request.GetNamespace(ctx)
-		if err != nil {
-			namespace = "unknown"
-		}
-
-		coll, err := runner.getCollection(db, runner.describeReq.GetCollection())
+		req := runner.describeReq
+		db, coll, err := runner.getDBAndCollection(ctx, tx, tenant,
+			req.GetProject(), req.GetCollection(), req.GetBranch())
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -1424,6 +1397,11 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 		}
 
 		tenantName := tenant.GetNamespace().Metadata().Name
+
+		namespace, err := request.GetNamespace(ctx)
+		if err != nil {
+			namespace = "unknown"
+		}
 
 		metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.Name(), coll.GetName(), size)
 		// remove indexing version from the schema before returning the response
@@ -1453,10 +1431,12 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 type DatabaseQueryRunner struct {
 	*BaseQueryRunner
 
-	delete   *api.DeleteProjectRequest
-	create   *api.CreateProjectRequest
-	list     *api.ListProjectsRequest
-	describe *api.DescribeDatabaseRequest
+	delete       *api.DeleteProjectRequest
+	create       *api.CreateProjectRequest
+	list         *api.ListProjectsRequest
+	describe     *api.DescribeDatabaseRequest
+	createBranch *api.CreateBranchRequest
+	deleteBranch *api.DeleteBranchRequest
 }
 
 func (runner *DatabaseQueryRunner) SetCreateProjectReq(create *api.CreateProjectRequest) {
@@ -1473,6 +1453,14 @@ func (runner *DatabaseQueryRunner) SetListProjectsReq(list *api.ListProjectsRequ
 
 func (runner *DatabaseQueryRunner) SetDescribeDatabaseReq(describe *api.DescribeDatabaseRequest) {
 	runner.describe = describe
+}
+
+func (runner *DatabaseQueryRunner) SetCreateBranchReq(create *api.CreateBranchRequest) {
+	runner.createBranch = create
+}
+
+func (runner *DatabaseQueryRunner) SetDeleteBranchReq(deleteBranch *api.DeleteBranchRequest) {
+	runner.deleteBranch = deleteBranch
 }
 
 func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (*Response, context.Context, error) {
@@ -1506,7 +1494,8 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			Status: CreatedStatus,
 		}, ctx, nil
 	case runner.list != nil:
-		databaseList := tenant.ListDatabases(ctx)
+		// list projects need not include any branches
+		databaseList := tenant.ListDatabasesOnly(ctx)
 		databases := make([]*api.ProjectInfo, len(databaseList))
 		for i, l := range databaseList {
 			databases[i] = &api.ProjectInfo{
@@ -1519,7 +1508,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			},
 		}, ctx, nil
 	case runner.describe != nil:
-		db, err := runner.getDatabase(ctx, tx, tenant, runner.describe.GetProject())
+		db, err := runner.getDatabase(ctx, tx, tenant, runner.describe.GetProject(), runner.describe.GetBranch())
 		if err != nil {
 			return nil, ctx, err
 		}
@@ -1531,7 +1520,6 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		tenantName := tenant.GetNamespace().Metadata().Name
 
 		collectionList := db.ListCollection()
-
 		collections := make([]*api.CollectionDescription, len(collectionList))
 		for i, c := range collectionList {
 			size, err := tenant.CollectionSize(ctx, db, c)
@@ -1572,6 +1560,30 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 				Metadata:    &api.DatabaseMetadata{},
 				Collections: collections,
 				Size:        size,
+				Branches:    tenant.ListBranches(ctx, db),
+			},
+		}, ctx, nil
+
+	case runner.createBranch != nil:
+		dbBranch := metadata.NewDatabaseNameWithBranch(runner.createBranch.GetProject(), runner.createBranch.GetBranch())
+		err := tenant.CreateBranch(ctx, tx, dbBranch)
+		if err != nil {
+			return nil, ctx, createApiError(err)
+		}
+		return &Response{
+			Response: &api.CreateBranchResponse{
+				Status: CreatedStatus,
+			},
+		}, ctx, nil
+	case runner.deleteBranch != nil:
+		dbBranch := metadata.NewDatabaseNameWithBranch(runner.deleteBranch.GetProject(), runner.deleteBranch.GetBranch())
+		err := tenant.DeleteBranch(ctx, tx, dbBranch)
+		if err != nil {
+			return nil, ctx, createApiError(err)
+		}
+		return &Response{
+			Response: &api.DeleteBranchResponse{
+				Status: DeletedStatus,
 			},
 		}, ctx, nil
 	}
@@ -1581,9 +1593,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 
 func createDatabaseMetadata(ctx context.Context) (*metadata.DatabaseMetadata, error) {
 	currentSub, err := auth.GetCurrentSub(ctx)
-	if err != nil && !config.DefaultConfig.Auth.EnableNamespaceIsolation {
-		return nil, nil
-	} else if err != nil {
+	if err != nil && config.DefaultConfig.Auth.Enabled {
 		return nil, errors.Internal("Failed to create database metadata")
 	}
 	return &metadata.DatabaseMetadata{

@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,8 +44,11 @@ const (
 	StreamDataType
 )
 
+type UserDataEncType int8
+
 const (
-	JsonEncoding = iota + 1
+	MsgpackEncoding UserDataEncType = 1
+	JsonEncoding    UserDataEncType = 2
 )
 
 // CreateNewTimestamp is a method used to construct timestamp from unixNano. In search backend we store internal

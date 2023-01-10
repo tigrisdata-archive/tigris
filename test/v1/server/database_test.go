@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ func TestCreateDatabase(t *testing.T) {
 }
 
 func TestCreateDatabaseInvalidName(t *testing.T) {
-	invalidDbNames := []string{"", "$testdb", "testdb$", "test$db", "abstract", "yield"}
+	invalidDbNames := []string{"", "$testdb", "testdb$", "test$db"}
 	for _, name := range invalidDbNames {
 		resp := createProject(t, name)
 		resp.Status(http.StatusBadRequest).

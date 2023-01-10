@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,14 +23,6 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 )
 
-const (
-	// StreamFromCurrentPos is for creating a consumer group that sets the position as current.
-	StreamFromCurrentPos = "$"
-
-	// StreamFromCurrentPosRead is to let stream know that reads needs to happen from current.
-	StreamFromCurrentPosRead = ">"
-)
-
 type Stream interface {
 	Name() string
 	// Add is to add streamData to a stream
@@ -39,7 +31,7 @@ type Stream interface {
 	Read(ctx context.Context, pos string) (*StreamMessages, bool, error)
 	// ReadGroup is similar to Read but with support for reading from a group. We don't have multiple consumers in a
 	// single group. Currently, it creates an internal _tigris_consumer.
-	ReadGroup(ctx context.Context, group string, pos string) (*StreamMessages, bool, error)
+	ReadGroup(ctx context.Context, group string, pos ReadGroupPos) (*StreamMessages, bool, error)
 	// CreateConsumerGroup creates a consumer group and attach it to the stream. The pos is used to specify the position
 	// for this consumer group.
 	CreateConsumerGroup(ctx context.Context, group string, pos string) error
@@ -49,6 +41,8 @@ type Stream interface {
 	GetConsumerGroups(ctx context.Context) ([]xredis.XInfoGroup, error)
 	// GetConsumerGroup returns only information about the consumer group passed in the API.
 	GetConsumerGroup(ctx context.Context, group string) (*xredis.XInfoGroup, bool, error)
+	// SetID is used to set the position of the group again.
+	SetID(ctx context.Context, group string, pos string) error
 	// Ack is to acknowledge messages once they are read by the consumer group. This is required to be called in case
 	// ReadGroup is used so that messages doesn't end up in pending entries list.
 	Ack(ctx context.Context, group string, ids ...string) error
@@ -61,8 +55,10 @@ type SetOptions struct {
 	NX bool
 	// XX is SetIfExists i.e. only set the key if it already exists.
 	XX bool
-	// EX sets the Expiry time of the key in seconds
-	EX time.Duration
+	// EX sets the Expiry time of the key in second
+	EX uint64
+	// PX sets the Expiry time of the key in millisecond
+	PX uint64
 }
 
 type GetOptions struct {
@@ -91,6 +87,8 @@ type Cache interface {
 	GetStream(ctx context.Context, streamName string) (Stream, error)
 	// ListStreams returns the all the streams with the prefix
 	ListStreams(ctx context.Context, streamNamePrefix string) ([]string, error)
+	// DeleteStream to delete a stream if exists
+	DeleteStream(ctx context.Context, streamName string) error
 }
 
 func NewCache(cfg *config.CacheConfig) Cache {

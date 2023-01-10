@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -159,8 +159,8 @@ func (s *storage) updateMetricsForNamespace(ctx context.Context, namespace strin
 	}
 	tenantName := tenant.GetNamespace().Metadata().Name
 
-	for _, dbName := range tenant.ListDatabases(ctx) {
-		db, err := tenant.GetDatabase(ctx, dbName)
+	for _, dbName := range tenant.ListDatabaseWithBranches(ctx) {
+		db, err := tenant.GetDatabase(ctx, metadata.NewDatabaseName(dbName))
 		if ulog.E(err) {
 			return
 		}

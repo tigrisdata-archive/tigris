@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@ type ErrCode byte
 const (
 	errStrNoSuchKey              = "ERR no such key"
 	errStrConsGroupAlreadyExists = "Consumer Group name already exists"
+	CacheAlreadyExist            = "Cache already exist"
+	CacheNotFound                = "Cache not found"
 )
 
 const (

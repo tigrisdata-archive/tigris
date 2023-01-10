@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -287,6 +287,44 @@ func TestNamespacesSubspace(t *testing.T) {
 		value, err = n.GetDatabaseMetadata(ctx, tx, 1, "db-name")
 		require.NoError(t, err)
 		require.Nil(t, value)
+		_ = kvStore.DropTable(ctx, n.NamespaceSubspaceName())
+	})
+
+	t.Run("database_metadata_put_get_update_get", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		n := NewNamespaceStore(&TestMDNameRegistry{
+			NamespaceSB: "test_namespace",
+		})
+		_ = kvStore.DropTable(ctx, n.NamespaceSubspaceName())
+
+		dbMetadata := &DatabaseMetadata{
+			Id:        1,
+			Creator:   "google|123",
+			CreatedAt: 1668733841287,
+		}
+
+		tm := transaction.NewManager(kvStore)
+		tx, err := tm.StartTx(ctx)
+		require.NoError(t, err)
+		require.NoError(t, n.InsertDatabaseMetadata(ctx, tx, 1, "db-name", dbMetadata))
+		value, err := n.GetDatabaseMetadata(ctx, tx, 1, "db-name")
+		require.NoError(t, err)
+		require.Equal(t, dbMetadata, value)
+
+		dbMetadata2 := &DatabaseMetadata{
+			Id:        1,
+			Creator:   "google|456",
+			CreatedAt: 1668733841287,
+		}
+
+		err = n.UpdateDatabaseMetadata(ctx, tx, 1, "db-name", dbMetadata2)
+		require.NoError(t, err)
+
+		value, err = n.GetDatabaseMetadata(ctx, tx, 1, "db-name")
+		require.NoError(t, err)
+		require.Equal(t, dbMetadata2, value)
 		_ = kvStore.DropTable(ctx, n.NamespaceSubspaceName())
 	})
 }

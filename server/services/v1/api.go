@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,11 +64,11 @@ type apiService struct {
 	authProvider  auth.Provider
 }
 
-func newApiService(kv kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager, authProvider auth.Provider) *apiService {
+func newApiService(kv kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager, authProvider auth.Provider, versionH *metadata.VersionHandler) *apiService {
 	u := &apiService{
 		kvStore:      kv,
 		txMgr:        txMgr,
-		versionH:     &metadata.VersionHandler{},
+		versionH:     versionH,
 		searchStore:  searchStore,
 		cdcMgr:       cdc.NewManager(),
 		tenantMgr:    tenantMgr,
@@ -469,6 +469,38 @@ func (s *apiService) DescribeDatabase(ctx context.Context, r *api.DescribeDataba
 	}
 
 	return resp.Response.(*api.DescribeDatabaseResponse), nil
+}
+
+func (s *apiService) CreateBranch(ctx context.Context, r *api.CreateBranchRequest) (*api.CreateBranchResponse, error) {
+	accessToken, _ := request.GetAccessToken(ctx)
+	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
+	runner.SetCreateBranchReq(r)
+
+	resp, err := s.sessions.Execute(ctx, runner, &database.ReqOptions{
+		MetadataChange:     true,
+		InstantVerTracking: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.CreateBranchResponse), nil
+}
+
+func (s *apiService) DeleteBranch(ctx context.Context, r *api.DeleteBranchRequest) (*api.DeleteBranchResponse, error) {
+	accessToken, _ := request.GetAccessToken(ctx)
+	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
+	runner.SetDeleteBranchReq(r)
+
+	resp, err := s.sessions.Execute(ctx, runner, &database.ReqOptions{
+		MetadataChange:     true,
+		InstantVerTracking: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.DeleteBranchResponse), nil
 }
 
 func (s *apiService) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest) (*api.CreateAppKeyResponse, error) {

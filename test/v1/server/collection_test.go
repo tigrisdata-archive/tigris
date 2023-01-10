@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -75,7 +75,7 @@ func TestCreateCollection(t *testing.T) {
 }
 
 func TestCreateCollectionInvalidName(t *testing.T) {
-	invalidCollectionName := []string{"", "$testcoll", "testcoll$", "test$coll", "abstract", "yield"}
+	invalidCollectionName := []string{"", "$testcoll", "testcoll$", "test$coll"}
 	for _, name := range invalidCollectionName {
 		resp := createCollection(t, "valid_db_name", name, testCreateSchema)
 		resp.Status(http.StatusBadRequest).

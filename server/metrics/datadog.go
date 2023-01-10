@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ import (
 )
 
 var (
-	dDApiKey           = "DD-API-KEY" //nolint:golint,gosec
+	dDApiKey           = "DD-API-KEY" //nolint:gosec
 	dDAppKey           = "DD-APPLICATION-KEY"
 	rateLimitLimit     = "X-RateLimit-Period"
 	rateLimitPeriod    = "X-RateLimit-Period"

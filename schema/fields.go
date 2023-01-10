@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/lib/container"
-	"github.com/tigrisdata/tigris/util"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
@@ -236,6 +235,8 @@ var SupportedFieldProperties = container.NewHashSet(
 	"default",
 	"createdAt",
 	"updatedAt",
+	"title",
+	"required",
 )
 
 // Indexes is to wrap different index that a collection can have.
@@ -322,11 +323,6 @@ func (f *FieldBuilder) Validate(v []byte) error {
 func (f *FieldBuilder) Build(isArrayElement bool) (*Field, error) {
 	if IsReservedField(f.FieldName) {
 		return nil, errors.InvalidArgument("following reserved fields are not allowed %q", ReservedFields)
-	}
-
-	// check for language keywords
-	if util.LanguageKeywords.Contains(strings.ToLower(f.FieldName)) {
-		return nil, errors.InvalidArgument(MsgFieldNameAsLanguageKeyword, f.FieldName)
 	}
 
 	// for array elements, items will have field name empty so skip the test for that.

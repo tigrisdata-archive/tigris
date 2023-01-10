@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ func TestStream(t *testing.T) {
 		}()
 
 		rawI := []byte("hello")
-		id, err := stream.Add(ctx, internal.NewStreamData(rawI))
+		id, err := stream.Add(ctx, internal.NewStreamData(internal.JsonEncoding, nil, rawI))
 		require.NotEmpty(t, id)
 		require.NoError(t, err)
 
@@ -104,7 +104,7 @@ func TestBenchmarkingStreams(t *testing.T) {
 }
 
 func getEvent() *internal.StreamData {
-	return internal.NewStreamData([]byte(fmt.Sprintf(`{"key": %s}`, RandStringRunes(64))))
+	return internal.NewStreamData(internal.JsonEncoding, nil, []byte(fmt.Sprintf(`{"key": %s}`, RandStringRunes(64))))
 }
 
 var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")

@@ -7,13 +7,31 @@ function start_typesense() {
 function wait_for_typesense() {
 	echo "Waiting for typesense to start"
 	IS_LEADER=1
+	echo "Waiting for typesense to become leader"
   while [ ${IS_LEADER} -ne 0 ]
   do
 		curl -H "X-TYPESENSE-API-KEY: ${TIGRIS_SERVER_SEARCH_AUTH_KEY}" localhost:8108/status | grep LEADER
 		IS_LEADER=$?
+		if [ ${IS_LEADER} -ne 0 ]
+		then
+			echo "Typesense is not leader yet, waiting"
+		fi
 		sleep 2
 	done
 
+	echo "Waiting for typesense to respond to list collections"
+	LIST_COLLECTIONS_RESP=1
+	while [ ${LIST_COLLECTIONS_RESP} -ne 0 ]
+	do
+		# Try to do list collections and see the response code, this can take time
+		curl -H "X-TYPESENSE-API-KEY: ${TIGRIS_SERVER_SEARCH_AUTH_KEY}" -I -X GETlocalhost:8108/collections | grep "200 OK"
+		LIST_COLLECTIONS_RESP=$?
+		if [ ${LIST_COLLECTIONS_RESP} -ne 0 ]
+		then
+			echo "Typesense could not list collections yet, waiting"
+		fi
+		sleep 2
+	done
 }
 
 function start_fdb() {
@@ -31,6 +49,7 @@ function wait_for_fdb() {
 	done
 }
 
+export TIGRIS_SERVER_TYPE=database
 export TIGRIS_SERVER_SEARCH_AUTH_KEY=ts_dev_key
 export TIGRIS_SERVER_SEARCH_HOST=localhost
 export TIGRIS_SERVER_CDC_ENABLED=true

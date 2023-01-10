@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/defaults"
 	"github.com/tigrisdata/tigris/server/transaction"
+	cache2 "github.com/tigrisdata/tigris/store/cache"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
 	ulog "github.com/tigrisdata/tigris/util/log"
@@ -176,9 +177,16 @@ func newTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, mdName
 }
 
 func (m *TenantManager) EnsureDefaultNamespace() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_, err := m.CreateOrGetTenant(ctx, NewDefaultNamespace())
+	var err error
+	for i := 0; i < 3; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		_, err = m.CreateOrGetTenant(ctx, NewDefaultNamespace())
+		cancel()
+		if err != kv.ErrConflictingTransaction {
+			return err
+		}
+		time.Sleep(1 * time.Second)
+	}
 	return err
 }
 
@@ -278,14 +286,21 @@ func (m *TenantManager) GetNamespaceId(namespaceName string) (uint32, error) {
 
 // GetTenant is responsible for returning the tenant from the cache. If the tenant is not available in the cache then
 // this method will attempt to load it from the database and will update the tenant manager cache accordingly.
-func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string) (tenant *Tenant, err error) {
+func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string) (*Tenant, error) {
+	var (
+		tenant *Tenant
+		err    error
+	)
+
 	if tenant = m.getTenantFromCache(namespaceName); tenant != nil {
-		return
+		return tenant, nil
 	}
 
 	m.Lock()
 	defer m.Unlock()
-	if tenant, found := m.tenants[namespaceName]; found {
+	var found bool
+
+	if tenant, found = m.tenants[namespaceName]; found {
 		return tenant, nil
 	}
 
@@ -333,7 +348,8 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string) (te
 	if err = tenant.reload(ctx, tx, currentVersion, collectionsInSearch); err != nil {
 		return nil, err
 	}
-	return
+
+	return tenant, nil
 }
 
 // ListNamespaces returns all the namespaces(tenants) exist in this cluster.
@@ -509,13 +525,15 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVe
 type Tenant struct {
 	sync.RWMutex
 
-	kvStore           kv.KeyValueStore
-	searchStore       search.Store
-	schemaStore       *SchemaSubspace
-	namespaceStore    *NamespaceSubspace
-	metaStore         *MetadataDictionary
-	Encoder           Encoder
-	databases         map[string]*Database
+	kvStore        kv.KeyValueStore
+	searchStore    search.Store
+	schemaStore    *SchemaSubspace
+	namespaceStore *NamespaceSubspace
+
+	metaStore *MetadataDictionary
+	Encoder   Encoder
+	databases map[string]*Database
+
 	idToDatabaseMap   map[uint32]string
 	namespace         Namespace
 	version           Version
@@ -557,8 +575,8 @@ func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVers
 			return err
 		}
 
-		tenant.databases[database.name] = database
-		tenant.idToDatabaseMap[database.id] = database.name
+		tenant.databases[database.Name()] = database
+		tenant.idToDatabaseMap[database.id] = database.Name()
 	}
 
 	tenant.version = currentVersion
@@ -604,6 +622,82 @@ func (tenant *Tenant) GetNamespace() Namespace {
 	return tenant.namespace
 }
 
+func (tenant *Tenant) CreateCache(ctx context.Context, tx transaction.Tx, project string, cache string, currentSub string) (bool, error) {
+	tenant.Lock()
+	defer tenant.Unlock()
+	dbMetadata, err := tenant.namespaceStore.GetDatabaseMetadata(ctx, tx, tenant.namespace.Id(), project)
+	if err != nil {
+		return false, errors.Internal("Failed to get project metadata for project %s", project)
+	}
+	if dbMetadata.CachesMetadata == nil {
+		dbMetadata.CachesMetadata = []CachesMetadata{}
+	}
+	for _, cacheMetadata := range dbMetadata.CachesMetadata {
+		if cacheMetadata.Name == cache {
+			return false, errors.AlreadyExists(cache2.CacheAlreadyExist)
+		}
+	}
+	dbMetadata.CachesMetadata = append(dbMetadata.CachesMetadata, CachesMetadata{
+		Name:      cache,
+		Creator:   currentSub,
+		CreatedAt: time.Now().Unix(),
+	})
+	err = tenant.namespaceStore.UpdateDatabaseMetadata(ctx, tx, tenant.namespace.Id(), project, dbMetadata)
+	if err != nil {
+		return false, errors.Internal("Failed to update project metadata for cache creation")
+	}
+	return true, nil
+}
+
+func (tenant *Tenant) ListCaches(ctx context.Context, tx transaction.Tx, project string) ([]string, error) {
+	tenant.Lock()
+	defer tenant.Unlock()
+	dbMetadata, err := tenant.namespaceStore.GetDatabaseMetadata(ctx, tx, tenant.namespace.Id(), project)
+	if err != nil {
+		return nil, errors.Internal("Failed to get project metadata for project %s", project)
+	}
+	if dbMetadata.CachesMetadata == nil {
+		return []string{}, nil
+	}
+	caches := make([]string, len(dbMetadata.CachesMetadata))
+	for i, cacheMetadata := range dbMetadata.CachesMetadata {
+		caches[i] = cacheMetadata.Name
+	}
+	return caches, nil
+}
+
+func (tenant *Tenant) DeleteCache(ctx context.Context, tx transaction.Tx, project string, cache string) (bool, error) {
+	tenant.Lock()
+	defer tenant.Unlock()
+
+	dbMetadata, err := tenant.namespaceStore.GetDatabaseMetadata(ctx, tx, tenant.namespace.Id(), project)
+	if err != nil {
+		return false, errors.Internal("Failed to get project metadata for project %s", project)
+	}
+	if dbMetadata.CachesMetadata == nil {
+		dbMetadata.CachesMetadata = []CachesMetadata{}
+	}
+	var tempCachesMetadata []CachesMetadata
+	var found bool
+	for _, cacheMetadata := range dbMetadata.CachesMetadata {
+		if cacheMetadata.Name != cache {
+			tempCachesMetadata = append(tempCachesMetadata, cacheMetadata)
+		} else {
+			found = true
+		}
+	}
+	if !found {
+		return false, errors.NotFound(cache2.CacheNotFound)
+	}
+	dbMetadata.CachesMetadata = tempCachesMetadata
+
+	err = tenant.namespaceStore.UpdateDatabaseMetadata(ctx, tx, tenant.namespace.Id(), project, dbMetadata)
+	if err != nil {
+		return false, errors.Internal("Failed to update project metadata for cache deletion")
+	}
+	return true, nil
+}
+
 // CreateDatabase is responsible for creating a dictionary encoding of the database name. This method is not adding the
 // entry to the tenant because the outer layer may still roll back the transaction. The session manager is bumping the
 // metadata version once the commit is successful so reloading happens at the next call when a transaction sees a stale
@@ -613,8 +707,13 @@ func (tenant *Tenant) CreateDatabase(ctx context.Context, tx transaction.Tx, dbN
 	tenant.Lock()
 	defer tenant.Unlock()
 
-	if _, ok := tenant.databases[dbName]; ok {
-		return true, nil
+	_, exists, err := tenant.createDatabase(ctx, tx, dbName, dbMetadata)
+	return exists, err
+}
+
+func (tenant *Tenant) createDatabase(ctx context.Context, tx transaction.Tx, dbName string, dbMetadata *DatabaseMetadata) (uint32, bool, error) {
+	if db, ok := tenant.databases[dbName]; ok {
+		return db.Id(), true, nil
 	}
 
 	// otherwise, proceed to create the database if there are concurrent requests on different workers then one of
@@ -625,29 +724,83 @@ func (tenant *Tenant) CreateDatabase(ctx context.Context, tx transaction.Tx, dbN
 		err = tenant.namespaceStore.InsertDatabaseMetadata(ctx, tx, tenant.namespace.Id(), dbName, dbMetadata)
 		if err != nil {
 			log.Err(err).Msg("Failed to insert database metadata")
-			return false, errors.Internal("Failed to setup db metadata")
+			return dbId, false, errors.Internal("Failed to setup db metadata")
 		}
 	}
-	return false, err
+	return dbId, false, err
+}
+
+// CreateBranch is used to create a database branch. A database branch is essentially a schema-only copy of a database.
+// A new database is created in the tenant namespace and all the collection schemas from primary database are created
+// in this branch. A branch may drift overtime from the primary database.
+func (tenant *Tenant) CreateBranch(ctx context.Context, tx transaction.Tx, dbName *DatabaseName) error {
+	tenant.Lock()
+	defer tenant.Unlock()
+
+	// Create a database branch only if parent database exists
+	mainDb, ok := tenant.databases[dbName.Db()]
+	if !ok {
+		return NewDatabaseNotFoundErr(dbName.Db())
+	}
+
+	// Create a database
+	id, exists, err := tenant.createDatabase(ctx, tx, dbName.Name(), nil)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return NewDatabaseBranchExistsErr(dbName.Branch())
+	}
+
+	branch := NewDatabase(id, dbName.Name())
+
+	// Create collections inside the new database branch
+	for _, coll := range mainDb.ListCollection() {
+		schFactory, err := schema.Build(coll.Name, coll.Schema)
+		if err != nil {
+			return err
+		}
+
+		if err := tenant.createCollection(ctx, tx, branch, schFactory); err != nil {
+			return err
+		}
+	}
+
+	return err
 }
 
 // DropDatabase is responsible for first dropping a dictionary encoding of the database and then adding a corresponding
 // dropped encoding entry in the encoding table. Drop returns "false" if the database doesn't exist so that caller can
 // reason about it. DropDatabase is more involved than CreateDatabase as with Drop we also need to iterate over all the
-// collections present in this database and call drop collection on each one of them.
+// collections present in this database and call drop collection on each one of them. Returns "False" if database didn't
+// exist.
 func (tenant *Tenant) DropDatabase(ctx context.Context, tx transaction.Tx, dbName string) (bool, error) {
 	tenant.Lock()
 	defer tenant.Unlock()
 
 	// check first if it exists
-	db, ok := tenant.databases[dbName]
-	if !ok {
+	db, found := tenant.databases[dbName]
+	if !found {
 		return false, nil
 	}
 
-	// if there are concurrent requests on different workers then one of them will fail with duplicate entry and only
-	// one will succeed.
-	if err := tenant.metaStore.DropDatabase(ctx, tx, dbName, tenant.namespace.Id(), db.id); err != nil {
+	// Only main branch can be deleted from this method, use DeleteBranch instead
+	if db.IsBranch() {
+		return true, NewMetadataError(ErrCodeCannotDeleteBranch, "Cannot delete branch '%s'. Use 'DeleteBranch' instead.", db.BranchName())
+	}
+
+	// Get all the branches for deletion
+	branches := tenant.getBranches(ctx, db, false)
+	// iterate over each branch to delete it
+	for _, branch := range branches {
+		if err := tenant.deleteBranch(ctx, tx, NewDatabaseNameWithBranch(branch.DbName(), branch.BranchName())); err != nil {
+			return true, err
+		}
+	}
+
+	// delete the main branch, collections and associated metadata if there are concurrent requests on different workers
+	// then one of them will fail with duplicate entry and only one will succeed.
+	if err := tenant.metaStore.DropDatabase(ctx, tx, db.Name(), tenant.namespace.Id(), db.Id()); err != nil {
 		return true, err
 	}
 
@@ -662,30 +815,123 @@ func (tenant *Tenant) DropDatabase(ctx context.Context, tx transaction.Tx, dbNam
 		log.Err(err).Msg("Failed to delete database metadata")
 		return false, errors.Internal("Failed to delete database metadata")
 	}
+
 	return true, nil
+}
+
+// DeleteBranch is responsible for deleting a database branch. Throws error if database/branch does not exist
+// or if 'main' branch is being deleted.
+func (tenant *Tenant) DeleteBranch(ctx context.Context, tx transaction.Tx, dbBranch *DatabaseName) error {
+	tenant.Lock()
+	defer tenant.Unlock()
+	if dbBranch.IsMainBranch() {
+		return NewMetadataError(ErrCodeCannotDeleteBranch, "'main' branch cannot be deleted. Use 'DropDatabase' instead.")
+	}
+	return tenant.deleteBranch(ctx, tx, dbBranch)
+}
+
+func (tenant *Tenant) deleteBranch(ctx context.Context, tx transaction.Tx, dbBranch *DatabaseName) error {
+	dbName := dbBranch.Name()
+	// check first if it exists
+	db, found := tenant.databases[dbName]
+	if !found {
+		return NewBranchNotFoundErr(dbBranch.Branch())
+	}
+
+	// if there are concurrent requests on different workers then one of them will fail with duplicate entry and only
+	// one will succeed.
+	if err := tenant.metaStore.DropDatabase(ctx, tx, db.Name(), tenant.namespace.Id(), db.Id()); err != nil {
+		return err
+	}
+
+	for _, c := range db.collections {
+		if err := tenant.dropCollection(ctx, tx, db, c.collection.Name); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // GetDatabase returns the database object, or null if there is no database existing with the name passed in the param.
 // As reloading of tenant state is happening at the session manager layer so GetDatabase calls assume that the caller
 // just needs the state from the cache.
-func (tenant *Tenant) GetDatabase(_ context.Context, dbName string) (*Database, error) {
+func (tenant *Tenant) GetDatabase(_ context.Context, dbName *DatabaseName) (*Database, error) {
 	tenant.Lock()
 	defer tenant.Unlock()
 
-	return tenant.databases[dbName], nil
+	db, found := tenant.databases[dbName.Name()]
+	if !found {
+		if dbName.IsMainBranch() {
+			return nil, NewDatabaseNotFoundErr(dbName.Db())
+		} else {
+			return nil, NewBranchNotFoundErr(dbName.Branch())
+		}
+	}
+
+	return db, nil
 }
 
-// ListDatabases is used to list all database available for this tenant.
-func (tenant *Tenant) ListDatabases(_ context.Context) []string {
+// GetBranches returns an array of all the branches associated with this database including "main" branch (primary Db).
+func (tenant *Tenant) GetBranches(ctx context.Context, db *Database) []*Database {
+	tenant.Lock()
+	defer tenant.Unlock()
+
+	return tenant.getBranches(ctx, db, true)
+}
+
+// ListBranches returns an array of branch names associated with this database including "main" branch.
+func (tenant *Tenant) ListBranches(ctx context.Context, db *Database) []string {
+	tenant.Lock()
+	defer tenant.Unlock()
+
+	dbBranches := tenant.getBranches(ctx, db, true)
+	branchNames := make([]string, len(dbBranches))
+	for i, branch := range dbBranches {
+		branchNames[i] = branch.BranchName()
+	}
+	return branchNames
+}
+
+func (tenant *Tenant) getBranches(_ context.Context, mainDb *Database, includeMain bool) []*Database {
+	var branches []*Database
+
+	for _, db := range tenant.databases {
+		if (includeMain || db.IsBranch()) && (db.DbName() == mainDb.Name()) {
+			branches = append(branches, db)
+		}
+	}
+	return branches
+}
+
+// ListDatabasesOnly is used to list all databases (no branches) available for this tenant.
+func (tenant *Tenant) ListDatabasesOnly(_ context.Context) []string {
 	tenant.RLock()
 	defer tenant.RUnlock()
 
-	databases := make([]string, 0, len(tenant.databases))
+	var databases []string
 	for dbName := range tenant.databases {
-		databases = append(databases, dbName)
+		// do not list database branches
+		if !tenant.databases[dbName].IsBranch() {
+			databases = append(databases, dbName)
+		}
 	}
 
 	return databases
+}
+
+// ListDatabaseWithBranches returns a list of all databases and their branches.
+func (tenant *Tenant) ListDatabaseWithBranches(_ context.Context) []string {
+	tenant.RLock()
+	defer tenant.RUnlock()
+
+	branches := make([]string, len(tenant.databases))
+	i := 0
+	for name := range tenant.databases {
+		branches[i] = name
+		i++
+	}
+
+	return branches
 }
 
 // reloadDatabase is called by tenant to reload the database state.
@@ -728,6 +974,13 @@ func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbN
 			continue
 		}
 
+		encName, err := tenant.Encoder.EncodeTableName(tenant.namespace, database, collection)
+		if err != nil {
+			return nil, err
+		}
+
+		collection.EncodedName = encName
+
 		database.collections[coll] = NewCollectionHolder(id, coll, collection, idxNameToId)
 		database.idToCollectionMap[id] = coll
 	}
@@ -751,6 +1004,10 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 	tenant.Lock()
 	defer tenant.Unlock()
 
+	return tenant.createCollection(ctx, tx, database, schFactory)
+}
+
+func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, database *Database, schFactory *schema.Factory) error {
 	if database == nil {
 		return errors.NotFound("database missing")
 	}
@@ -794,7 +1051,15 @@ func (tenant *Tenant) CreateCollection(ctx context.Context, tx transaction.Tx, d
 
 	// store the collection to the databaseObject, this is actually cloned database object passed by the query runner.
 	// So failure of the transaction won't impact the consistency of the cache
-	collection := schema.NewDefaultCollection(schFactory.Name, collectionId, baseSchemaVersion, schFactory.CollectionType, schFactory, tenant.getSearchCollName(database.name, schFactory.Name), nil)
+	collection := schema.NewDefaultCollection(schFactory.Name, collectionId, baseSchemaVersion, schFactory.CollectionType, schFactory, tenant.getSearchCollName(database.Name(), schFactory.Name), nil)
+
+	encName, err := tenant.Encoder.EncodeTableName(tenant.namespace, database, collection)
+	if err != nil {
+		return err
+	}
+
+	collection.EncodedName = encName
+
 	database.collections[schFactory.Name] = NewCollectionHolder(collectionId, schFactory.Name, collection, idxNameToId)
 
 	if config.DefaultConfig.Search.WriteEnabled {
@@ -843,7 +1108,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 		return err
 	}
 
-	searchCollectionName := tenant.getSearchCollName(database.name, schFactory.Name)
+	searchCollectionName := tenant.getSearchCollName(database.Name(), schFactory.Name)
 	existingSearch, err := tenant.searchStore.DescribeCollection(ctx, searchCollectionName)
 	if err != nil {
 		return err
@@ -852,6 +1117,13 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 	// store the collection to the databaseObject, this is actually cloned database object passed by the query runner.
 	// So failure of the transaction won't impact the consistency of the cache
 	collection := schema.NewDefaultCollection(schFactory.Name, c.id, schRevision, schFactory.CollectionType, schFactory, searchCollectionName, existingSearch.Fields)
+
+	encName, err := tenant.Encoder.EncodeTableName(tenant.namespace, database, collection)
+	if err != nil {
+		return err
+	}
+
+	collection.EncodedName = encName
 
 	// recreating collection holder is fine because we are working on databaseClone and also has a lock on the tenant
 	database.collections[schFactory.Name] = NewCollectionHolder(c.id, schFactory.Name, collection, c.idxNameToId)
@@ -968,7 +1240,6 @@ func (tenant *Tenant) DatabaseSize(ctx context.Context, db *Database) (int64, er
 // CollectionSize returns approximate data size on disk for all the collections for the database provided by the caller.
 func (tenant *Tenant) CollectionSize(ctx context.Context, db *Database, coll *schema.DefaultCollection) (int64, error) {
 	tenant.Lock()
-
 	nsName, _ := tenant.Encoder.EncodeTableName(tenant.namespace, db, coll)
 	tenant.Unlock()
 
@@ -980,7 +1251,7 @@ type Database struct {
 	sync.RWMutex
 
 	id                    uint32
-	name                  string
+	name                  *DatabaseName
 	collections           map[string]*collectionHolder
 	needFixingCollections map[string]struct{}
 	idToCollectionMap     map[uint32]string
@@ -989,7 +1260,7 @@ type Database struct {
 func NewDatabase(id uint32, name string) *Database {
 	return &Database{
 		id:                    id,
-		name:                  name,
+		name:                  NewDatabaseName(name),
 		collections:           make(map[string]*collectionHolder),
 		idToCollectionMap:     make(map[uint32]string),
 		needFixingCollections: make(map[string]struct{}),
@@ -1016,9 +1287,9 @@ func (d *Database) Clone() *Database {
 	return &copyDB
 }
 
-// Name returns the database name.
+// Name returns the internal database name.
 func (d *Database) Name() string {
-	return d.name
+	return d.name.Name()
 }
 
 // Id returns the dictionary encoded value of this collection.
@@ -1049,6 +1320,18 @@ func (d *Database) GetCollection(cname string) *schema.DefaultCollection {
 	}
 
 	return nil
+}
+
+func (d *Database) DbName() string {
+	return d.name.Db()
+}
+
+func (d *Database) BranchName() string {
+	return d.name.Branch()
+}
+
+func (d *Database) IsBranch() bool {
+	return !d.name.IsMainBranch()
 }
 
 // collectionHolder is to manage a single collection. Check the Clone method before changing this struct.
@@ -1088,6 +1371,8 @@ func (c *collectionHolder) clone() *collectionHolder {
 	if err != nil {
 		panic(err)
 	}
+
+	copyC.collection.EncodedName = c.collection.EncodedName
 	copyC.idxNameToId = make(map[string]uint32)
 	for k, v := range c.idxNameToId {
 		copyC.idxNameToId[k] = v
@@ -1149,9 +1434,9 @@ func NewTestTenantMgr(kvStore kv.KeyValueStore) (*TenantManager, context.Context
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
 	m := newTenantManager(kvStore, &search.NoopStore{}, &TestMDNameRegistry{
-		ReserveSB:  fmt.Sprintf("test_tenant_reserve_%x", rand.Uint64()),  //nolint:golint,gosec
-		EncodingSB: fmt.Sprintf("test_tenant_encoding_%x", rand.Uint64()), //nolint:golint,gosec
-		SchemaSB:   fmt.Sprintf("test_tenant_schema_%x", rand.Uint64()),   //nolint:golint,gosec
+		ReserveSB:  fmt.Sprintf("test_tenant_reserve_%x", rand.Uint64()),  //nolint:gosec
+		EncodingSB: fmt.Sprintf("test_tenant_encoding_%x", rand.Uint64()), //nolint:gosec
+		SchemaSB:   fmt.Sprintf("test_tenant_schema_%x", rand.Uint64()),   //nolint:gosec
 	},
 		transaction.NewManager(kvStore),
 	)

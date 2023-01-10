@@ -2,11 +2,9 @@ linters:
   enable-all: true
   disable:
     # Work on fixing this
-    #- reassign
     - reassign
     - interfacebloat
     - maintidx
-    - nakedret
     - gocyclo
     - gocognit
     - funlen
@@ -17,7 +15,6 @@ linters:
     - cyclop
     - errorlint
     - forcetypeassert
-    - nilerr
     - nosprintfhostport
     - exhaustive
     - thelper
@@ -63,7 +60,7 @@ linters:
 linters-settings:
   goheader:
     template: |-
-      Copyright {{ YEAR }} Tigris Data, Inc.
+      Copyright {{ YEAR-RANGE }} Tigris Data, Inc.
 
       Licensed under the Apache License, Version 2.0 (the "License");
       you may not use this file except in compliance with the License.

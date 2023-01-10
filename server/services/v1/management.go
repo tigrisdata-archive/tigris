@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -180,8 +180,8 @@ func (m *managementService) getNameSpaceDetails(ctx context.Context) (nsDetailsR
 			return nil, err
 		}
 
-		for _, dbName := range tenant.ListDatabases(ctx) {
-			db, err := tenant.GetDatabase(ctx, dbName)
+		for _, dbName := range tenant.ListDatabaseWithBranches(ctx) {
+			db, err := tenant.GetDatabase(ctx, metadata.NewDatabaseName(dbName))
 			if err != nil {
 				return nil, err
 			}

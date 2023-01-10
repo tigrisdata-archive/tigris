@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,10 +20,17 @@ import (
 	"github.com/tigrisdata/tigris/util/log"
 )
 
+const (
+	DatabaseServerType = "database"
+	RealtimeServerType = "realtime"
+)
+
 type ServerConfig struct {
-	Host        string
-	Port        int16
-	FDBHardDrop bool `mapstructure:"fdb_hard_drop" yaml:"fdb_hard_drop" json:"fdb_hard_drop"`
+	Host         string
+	Port         int16
+	Type         string `mapstructure:"type" yaml:"type" json:"type"`
+	FDBHardDrop  bool   `mapstructure:"fdb_hard_drop" yaml:"fdb_hard_drop" json:"fdb_hard_drop"`
+	RealtimePort int16  `mapstructure:"realtime_port" yaml:"realtime_port" json:"realtime_port"`
 }
 
 type Config struct {
@@ -190,9 +197,11 @@ var DefaultConfig = Config{
 		SampleRate: 0.01,
 	},
 	Server: ServerConfig{
-		Host:        "0.0.0.0",
-		Port:        8081,
-		FDBHardDrop: false,
+		Type:         DatabaseServerType,
+		Host:         "0.0.0.0",
+		Port:         8081,
+		RealtimePort: 8083,
+		FDBHardDrop:  false,
 	},
 	Auth: AuthConfig{
 		Enabled:          false,

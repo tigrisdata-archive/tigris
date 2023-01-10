@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -156,58 +156,54 @@ func (x *ReadRequest) UnmarshalJSON(data []byte) error {
 // UnmarshalJSON for SearchRequest avoids unmarshalling filter, facets, sort and fields.
 func (x *SearchRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
+
 	if err := jsoniter.Unmarshal(data, &mp); err != nil {
-		return nil
+		return err
 	}
+
 	for key, value := range mp {
+		var v interface{}
+
 		switch key {
 		case "project":
-			if err := jsoniter.Unmarshal(value, &x.Project); err != nil {
-				return err
-			}
+			v = &x.Project
 		case "collection":
-			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
-				return err
-			}
+			v = &x.Collection
 		case "search_fields":
-			if err := jsoniter.Unmarshal(value, &x.SearchFields); err != nil {
-				return err
-			}
+			v = &x.SearchFields
 		case "q":
-			if err := jsoniter.Unmarshal(value, &x.Q); err != nil {
-				return err
-			}
+			v = &x.Q
 		case "filter":
 			// not decoding it here and let it decode during filter parsing
 			x.Filter = value
+			continue
 		case "facet":
 			// delaying the facet deserialization to dedicated handler
 			x.Facet = value
+			continue
 		case "sort":
 			// delaying the sort deserialization
 			x.Sort = value
+			continue
 		case "include_fields":
-			if err := jsoniter.Unmarshal(value, &x.IncludeFields); err != nil {
-				return err
-			}
+			v = &x.IncludeFields
 		case "exclude_fields":
-			if err := jsoniter.Unmarshal(value, &x.ExcludeFields); err != nil {
-				return err
-			}
+			v = &x.ExcludeFields
 		case "page_size":
-			if err := jsoniter.Unmarshal(value, &x.PageSize); err != nil {
-				return err
-			}
+			v = &x.PageSize
 		case "page":
-			if err := jsoniter.Unmarshal(value, &x.Page); err != nil {
-				return err
-			}
+			v = &x.Page
 		case "collation":
-			if err := jsoniter.Unmarshal(value, &x.Collation); err != nil {
-				return err
-			}
+			v = &x.Collation
+		default:
+			continue
+		}
+
+		if err := jsoniter.Unmarshal(value, v); err != nil {
+			return err
 		}
 	}
+
 	return nil
 }
 
@@ -596,9 +592,11 @@ func (x *DescribeDatabaseResponse) MarshalJSON() ([]byte, error) {
 		Metadata    *DatabaseMetadata `json:"metadata"`
 		Collections []*collDesc       `json:"collections"`
 		Size        int64             `json:"size"`
+		Branches    []string          `json:"branches"`
 	}{
 		Metadata: x.Metadata,
 		Size:     x.Size,
+		Branches: x.Branches,
 	}
 
 	for _, v := range x.Collections {

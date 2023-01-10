@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -162,7 +162,7 @@ func GetTestFDBConfig(path string) (*FoundationDBConfig, error) {
 		_, err = cmd.Output()
 	}
 	if err != nil {
-		fmt.Printf("\nRun `make local_run` in the terminal to start FDB instance for tests\n") //nolint:golint,forbidigo
+		fmt.Printf("\nRun `make local_run` in the terminal to start FDB instance for tests\n") //nolint:forbidigo
 		return nil, err
 	}
 

@@ -36,3 +36,18 @@ workflows:
     then:
       - '$warn("The description is empty. Please add more information!")'
       - '$fail("Empty description")'
+
+  - name: nothing-to-release
+    always-run: true
+    if:
+      - rule: '$base() == "beta" && ! $any($commits(), ($c: String => $startsWith($c, "fix:")  )) && ! $any($commits(), ($c: String => $startsWith($c, "feat:")  ))'
+    then:
+      - '$warn("Release pull request should contain at least one bug fix or feature commit")'
+      - '$fail("No commits suitable for release found")'
+
+  - name: automerge-release-pr
+    always-run: true
+    if:
+      - rule: '$base() == "beta" && $approvalsCount() >= 1 && $haveAllChecksRunCompleted([], "success")'
+    then:
+      - '$merge("merge")'

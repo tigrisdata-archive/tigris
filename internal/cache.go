@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,8 +20,10 @@ import (
 )
 
 // NewStreamData returns a stream data for anything that we need to store in streams.
-func NewStreamData(data []byte) *StreamData {
+func NewStreamData(enc UserDataEncType, md []byte, data []byte) *StreamData {
 	return &StreamData{
+		Encoding:  int32(enc),
+		Md:        md,
 		RawData:   data,
 		CreatedAt: NewTimestamp(),
 	}

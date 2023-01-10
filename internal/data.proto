@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,14 +40,16 @@ message TableData {
 // are used by channels to store channel metadata but these can be ignored for storing some regular stream data.
 message StreamData {
   // the id generated for this data, in most cases will be filled when returning this in response
-  int32 id = 1;
+  string id = 1;
   // ver is the version for the raw bytes, this may be the version of the event
   int32 ver = 2;
-  // encoding represents encoding of the event field.
+  // encoding represents encoding of the raw_data field.
   int32 encoding = 3;
   Timestamp created_at = 4;
+  // md is the is the metadata of this stream data.
+  bytes md = 5;
   // raw_data is the raw bytes stored, caller controls how they want to store these raw bytes in event store.
-  bytes raw_data = 5;
+  bytes raw_data = 6;
 }
 
 // CacheData is used to store a serialized data that has user data and some Tigris metadata in Cache

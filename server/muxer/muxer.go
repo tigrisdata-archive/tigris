@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,8 +41,13 @@ func NewMuxer(cfg *config.Config) *Muxer {
 	return &Muxer{servers: []Server{NewHTTPServer(cfg), NewGRPCServer(cfg)}}
 }
 
-func (m *Muxer) RegisterServices(kvStore kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) {
-	services := v1.GetRegisteredServices(kvStore, searchStore, tenantMgr, txMgr)
+func (m *Muxer) RegisterServices(cfg *config.ServerConfig, kvStore kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) {
+	var services []v1.Service
+	if cfg.Type == config.RealtimeServerType {
+		services = v1.GetRegisteredServicesRealtime(kvStore, searchStore, tenantMgr, txMgr)
+	} else {
+		services = v1.GetRegisteredServices(kvStore, searchStore, tenantMgr, txMgr)
+	}
 	for _, r := range services {
 		for _, v := range m.servers {
 			if s, ok := v.(*GRPCServer); ok {

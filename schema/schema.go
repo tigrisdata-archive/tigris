@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -134,21 +134,8 @@ func SetIndexingVersion(factory *Factory) error {
 	return nil
 }
 
-func GetCollectionType(reqSchema jsoniter.RawMessage) (CollectionType, error) {
-	val, dt, _, err := jsonparser.Get(reqSchema, CollectionTypeF)
-	if err == nil && dt != jsonparser.NotExist {
-		switch string(val) {
-		case "documents":
-			return DocumentsType, nil
-		case "messages", "topic":
-			return TopicType, nil
-		}
-	}
-	if dt == jsonparser.NotExist {
-		return DocumentsType, nil
-	}
-
-	return "", err
+func GetCollectionType(_ jsoniter.RawMessage) (CollectionType, error) {
+	return DocumentsType, nil
 }
 
 // Build is used to deserialize the user json schema into a schema factory.
@@ -161,13 +148,11 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 		})
 	}
 
-	if cType != TopicType {
-		if reqSchema, err = setPrimaryKey(reqSchema, jsonSpecFormatUUID, true); err != nil {
-			return nil, api.Errorf(api.Code_INTERNAL, err.Error()).WithDetails(&api.ErrorDetails{
-				Code:    api.Code_INTERNAL.String(),
-				Message: fmt.Sprintf("schema: '%s', setting primary key failed", string(reqSchema)),
-			})
-		}
+	if reqSchema, err = setPrimaryKey(reqSchema, jsonSpecFormatUUID, true); err != nil {
+		return nil, api.Errorf(api.Code_INTERNAL, err.Error()).WithDetails(&api.ErrorDetails{
+			Code:    api.Code_INTERNAL.String(),
+			Message: fmt.Sprintf("schema: '%s', setting primary key failed", string(reqSchema)),
+		})
 	}
 
 	schema := &JSONSchema{}
@@ -183,11 +168,8 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 	if len(schema.Properties) == 0 {
 		return nil, errors.InvalidArgument("missing properties field in schema")
 	}
-
-	if len(schema.PrimaryKeys) == 0 && cType == DocumentsType {
+	if len(schema.PrimaryKeys) == 0 {
 		return nil, errors.InvalidArgument("missing primary key field in schema")
-	} else if len(schema.PrimaryKeys) > 0 && cType == TopicType {
-		return nil, errors.InvalidArgument("setting primary key is not supported for messages collection")
 	}
 
 	primaryKeysSet := container.NewHashSet(schema.PrimaryKeys...)
@@ -312,7 +294,7 @@ func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet contai
 					}
 					itemObj = itemObj.Items
 				}
-				builder.Fields = append(nestedFields, first) //nolint:golint,gocritic
+				builder.Fields = append(nestedFields, first) //nolint:gocritic
 			}
 		}
 

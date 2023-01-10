@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,13 +20,12 @@ import (
 )
 
 const (
-	InsertedStatus  string = "inserted"
-	ReplacedStatus  string = "replaced"
-	UpdatedStatus   string = "updated"
-	DeletedStatus   string = "deleted"
-	CreatedStatus   string = "created"
-	DroppedStatus   string = "dropped"
-	PublishedStatus string = "published"
+	InsertedStatus string = "inserted"
+	ReplacedStatus string = "replaced"
+	UpdatedStatus  string = "updated"
+	DeletedStatus  string = "deleted"
+	CreatedStatus  string = "created"
+	DroppedStatus  string = "dropped"
 )
 
 // Streaming is a wrapper interface for passing around for streaming reads.

@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -63,6 +63,13 @@ type Metadata struct {
 
 func Init(tg metadata.TenantGetter) {
 	tenantGetter = tg
+}
+
+func NewRequestMetadata(ctx context.Context) Metadata {
+	ns, utype, sub := GetMetadataFromHeader(ctx)
+	md := Metadata{IsHuman: utype, Sub: sub}
+	md.SetNamespace(ctx, ns)
+	return md
 }
 
 func NewRequestEndpointMetadata(ctx context.Context, serviceName string, methodInfo grpc.MethodInfo, db string, coll string) Metadata {
@@ -233,6 +240,14 @@ func GetAccessToken(ctx context.Context) (*types.AccessToken, error) {
 	return nil, errors.NotFound("Access token not found")
 }
 
+func GetCurrentSub(ctx context.Context) (string, error) {
+	tkn, err := GetAccessToken(ctx)
+	if err != nil {
+		return "", err
+	}
+	return tkn.Sub, nil
+}
+
 func GetNamespace(ctx context.Context) (string, error) {
 	// read token
 	if value := ctx.Value(MetadataCtxKey{}); value != nil {
@@ -254,8 +269,8 @@ func IsHumanUser(ctx context.Context) bool {
 
 func (tokenNamespaceExtractor *AccessTokenNamespaceExtractor) Extract(ctx context.Context) (string, error) {
 	// read token
-	token, err := GetAccessToken(ctx)
-	if err != nil {
+	token, _ := GetAccessToken(ctx)
+	if token == nil {
 		return "unknown", nil
 	}
 

@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,13 +43,21 @@ const (
 type realtimeService struct {
 	api.UnimplementedRealtimeServer
 
-	cache cache.Cache
+	cache     cache.Cache
+	devices   *realtime.Sessions
+	rtmRunner *realtime.RTMRunnerFactory
 }
 
-func newRealtimeService(_ kv.KeyValueStore, _ search.Store, _ *metadata.TenantManager, _ *transaction.Manager) *realtimeService {
+func newRealtimeService(_ kv.KeyValueStore, _ search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) *realtimeService {
 	cacheS := cache.NewCache(&config.DefaultConfig.Cache)
+	encoder := metadata.NewCacheEncoder()
+	heartbeatF := realtime.NewHeartbeatFactory(cacheS, encoder)
+	channelFactory := realtime.NewChannelFactory(cacheS, encoder, heartbeatF)
+
 	return &realtimeService{
-		cache: cacheS,
+		cache:     cacheS,
+		rtmRunner: realtime.NewRTMRunnerFactory(cacheS, channelFactory),
+		devices:   realtime.NewSessionMgr(cacheS, tenantMgr, txMgr, heartbeatF, channelFactory),
 	}
 }
 
@@ -91,6 +99,9 @@ func (s *realtimeService) extractConnParams(r *http.Request) realtime.Connection
 	// project name is part of path
 	params.ProjectName = chi.URLParam(r, "project")
 
+	// message encoding
+	params.Encoding = r.URL.Query().Get("encoding")
+
 	// query params
 	params.SessionId = r.URL.Query().Get("session_id")
 
@@ -103,13 +114,28 @@ func (s *realtimeService) DeviceConnectionHandler(w http.ResponseWriter, r *http
 	if err != nil {
 		// ToDo: Change to WS errors
 		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(fmt.Sprintf(`{"error": "%s"}`, err.Error())))
+		_, _ = w.Write([]byte(fmt.Sprintf(`{"event_type": 2, "event": {"code": 1011, "message": "%s"}}`, err.Error())))
 		return
 	}
 
-	log.Debug().Msgf("params '%v'", params)
-	_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error": "not implemented"}`))
-	_ = conn.Close()
+	ctx := r.Context()
+	session, err := s.devices.AddDevice(ctx, conn, params)
+	if err != nil {
+		err = realtime.SendReply(conn, params.ToEncodingType(), api.EventType_error, errors.InternalWS(err.Error()))
+		log.Err(err).Msgf("failed to send error msg")
+		_ = conn.Close()
+		return
+	}
+	defer func() {
+		_ = session.Close()
+		s.devices.RemoveDevice(ctx, session)
+	}()
+	conn.SetPingHandler(session.OnPing)
+	conn.SetPongHandler(session.OnPong)
+	conn.SetCloseHandler(session.OnClose)
+
+	_ = session.SendConnSuccess()
+	_ = session.Start(ctx)
 }
 
 func (s *realtimeService) Ping(_ context.Context, _ *api.HeartbeatEvent) (*api.HeartbeatEvent, error) {
@@ -117,21 +143,53 @@ func (s *realtimeService) Ping(_ context.Context, _ *api.HeartbeatEvent) (*api.H
 }
 
 func (s *realtimeService) GetRTChannel(ctx context.Context, req *api.GetRTChannelRequest) (*api.GetRTChannelResponse, error) {
-	return nil, errors.Unimplemented("not implemented")
+	runner := s.rtmRunner.GetChannelRunner()
+	runner.SetChannelReq(req)
+
+	resp, err := s.devices.ExecuteRunner(ctx, runner)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Response.(*api.GetRTChannelResponse), nil
 }
 
 func (s *realtimeService) GetRTChannels(ctx context.Context, req *api.GetRTChannelsRequest) (*api.GetRTChannelsResponse, error) {
-	return nil, errors.Unimplemented("not implemented")
+	runner := s.rtmRunner.GetChannelRunner()
+	runner.SetChannelsReq(req)
+
+	resp, err := s.devices.ExecuteRunner(ctx, runner)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Response.(*api.GetRTChannelsResponse), nil
 }
 
 func (s *realtimeService) ReadMessages(req *api.ReadMessagesRequest, stream api.Realtime_ReadMessagesServer) error {
-	return errors.Unimplemented("not implemented")
+	runner := s.rtmRunner.GetReadMessagesRunner(req, stream)
+
+	_, err := s.devices.ExecuteRunner(stream.Context(), runner)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *realtimeService) Messages(ctx context.Context, req *api.MessagesRequest) (*api.MessagesResponse, error) {
-	return nil, errors.Unimplemented("not implemented")
+	runner := s.rtmRunner.GetMessagesRunner(req)
+	resp, err := s.devices.ExecuteRunner(ctx, runner)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Response.(*api.MessagesResponse), nil
 }
 
 func (s *realtimeService) ListSubscriptions(ctx context.Context, req *api.ListSubscriptionRequest) (*api.ListSubscriptionResponse, error) {
-	return nil, errors.Unimplemented("not implemented")
+	runner := s.rtmRunner.GetChannelRunner()
+	runner.SetListSubscriptionsReq(req)
+
+	resp, err := s.devices.ExecuteRunner(ctx, runner)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Response.(*api.ListSubscriptionResponse), nil
 }

@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,12 +14,7 @@
 
 package realtime
 
-type wsEncodingType int8
-
-const (
-	msgpackEncoding wsEncodingType = 1
-	jsonEncoding    wsEncodingType = 2
-)
+import "github.com/tigrisdata/tigris/internal"
 
 const (
 	msgPackEncodingStr = "msgpack"
@@ -34,11 +29,11 @@ type ConnectionParams struct {
 	Encoding    string
 }
 
-func (params ConnectionParams) ToEncodingType() wsEncodingType {
+func (params ConnectionParams) ToEncodingType() internal.UserDataEncType {
 	if params.Encoding == jsonEncodingStr {
-		return jsonEncoding
+		return internal.JsonEncoding
 	}
 
 	// default is msgpack
-	return msgpackEncoding
+	return internal.MsgpackEncoding
 }

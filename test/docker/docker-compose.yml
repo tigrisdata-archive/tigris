@@ -1,4 +1,4 @@
-# Copyright 2022 Tigris Data, Inc.
+# Copyright 2022-2023 Tigris Data, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-version: '3.3'
+version: "3.3"
 
 services:
   tigris_db:
@@ -34,7 +34,6 @@ services:
     ports:
       - "4500:4500"
 
-
   tigris_search:
     container_name: tigris_search
     image: typesense/typesense:0.23.1
@@ -55,10 +54,11 @@ services:
     image: tigris_server
     environment:
       - TIGRIS_ENVIRONMENT=test
+      - TIGRIS_SERVER_CACHE_HOST=tigris_cache
+      - TIGRIS_SERVER_LOG_FORMAT=console
       - TIGRIS_SERVER_SEARCH_AUTH_KEY=ts_test_key
       - TIGRIS_SERVER_SEARCH_HOST=tigris_search
-      - TIGRIS_SERVER_LOG_FORMAT=console
-      - TIGRIS_SERVER_CDC_ENABLED=true
+      - TIGRIS_SERVER_SERVER_TYPE=database
     build:
       context: ../../
       dockerfile: docker/Dockerfile
@@ -81,6 +81,7 @@ services:
     image: tigris_server
     environment:
       - TIGRIS_ENVIRONMENT=test
+      - TIGRIS_SERVER_SERVER_TYPE=database
       - TIGRIS_SERVER_SEARCH_AUTH_KEY=ts_test_key
       - TIGRIS_SERVER_SEARCH_HOST=tigris_search
       - TIGRIS_SERVER_LOG_FORMAT=console
@@ -99,6 +100,30 @@ services:
     depends_on:
       - tigris_server
       - tigris_db2
+
+  tigris_realtime:
+    container_name: tigris_realtime
+    image: tigris_server
+    environment:
+      - TIGRIS_SERVER_SERVER_TYPE=realtime
+      - TIGRIS_ENVIRONMENT=test
+      - TIGRIS_SERVER_SEARCH_AUTH_KEY=ts_test_key
+      - TIGRIS_SERVER_SEARCH_HOST=tigris_search
+      - TIGRIS_SERVER_CACHE_HOST=tigris_cache
+      - TIGRIS_SERVER_LOG_FORMAT=console
+    build:
+      context: ../../
+      dockerfile: docker/Dockerfile
+    volumes:
+      - type: volume
+        source: dbdata
+        target: /etc/foundationdb/
+    ports:
+      - "8083:8083"
+    command: >
+      bash -c '/server/service'
+    depends_on:
+      - tigris_server
 
   tigris_test:
     container_name: tigris_test
@@ -124,6 +149,7 @@ services:
         target: /root/.cache/go-build
     depends_on:
       - tigris_server2
+      - tigris_realtime
 
   tigris_victoriametrics:
     container_name: tigris_victoriametrics

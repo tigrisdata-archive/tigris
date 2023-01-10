@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -109,6 +109,36 @@ func (n *NamespaceSubspace) GetDatabaseMetadata(ctx context.Context, tx transact
 		return &dbMetadata, nil
 	}
 	return nil, it.Err()
+}
+
+func (n *NamespaceSubspace) UpdateDatabaseMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbName string, dbMetadata *DatabaseMetadata) error {
+	if namespaceId < 1 {
+		return errors.InvalidArgument("invalid namespace, id must be greater than 0")
+	}
+	if dbName == "" {
+		return errors.InvalidArgument("invalid dbName, dbName must not be blank")
+	}
+	if dbMetadata == nil {
+		return errors.InvalidArgument("invalid dbMetadata, dbMetadata must not be nil")
+	}
+
+	payload, err := json.Marshal(dbMetadata)
+	if err != nil {
+		log.Err(err).Msg("Failed to marshal db metadata")
+		return errors.Internal("Failed to update db metadata, failed to marshal db metadata")
+	}
+	key := keys.NewKey(n.NamespaceSubspaceName(), namespaceVersion, UInt32ToByte(namespaceId), dbKey, dbName)
+
+	_, err = tx.Update(ctx, key, func(data *internal.TableData) (*internal.TableData, error) {
+		return internal.NewTableData(payload), nil
+	})
+	if err != nil {
+		log.Warn().Str("key", key.String()).Str("value", string(payload)).Err(err).Msg("Updating project metadata failed")
+		return err
+	}
+
+	log.Debug().Str("key", key.String()).Str("value", string(payload)).Msg("Updating db metadata succeed")
+	return nil
 }
 
 func (n *NamespaceSubspace) DeleteDatabaseMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbName string) error {

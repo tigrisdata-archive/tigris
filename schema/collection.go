@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,6 +42,8 @@ type DefaultCollection struct {
 	SchVer int32
 	// Name is the name of the collection.
 	Name string
+	// EncodedName is the encoded name of the collection.
+	EncodedName []byte
 	// Fields are derived from the user schema.
 	Fields []*Field
 	// Indexes is a wrapper on the indexes part of this collection.
@@ -75,7 +77,6 @@ type CollectionType string
 
 const (
 	DocumentsType CollectionType = "documents"
-	TopicType     CollectionType = "topic"
 )
 
 func disableAdditionalProperties(properties map[string]*jsonschema.Schema) {

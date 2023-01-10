@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -91,7 +91,7 @@ func translateStringType(v interface{}) (string, string, error) {
 func translateType(v interface{}) (string, string, error) {
 	t := reflect.TypeOf(v)
 
-	//nolint:golint,exhaustive
+	//nolint:exhaustive
 	switch t.Kind() {
 	case reflect.Bool:
 		return jsonSpecBool, "", nil

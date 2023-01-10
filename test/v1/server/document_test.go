@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -120,6 +120,85 @@ func TestInsert_AlreadyExists(t *testing.T) {
 	resp := e.POST(getDocumentURL(db, coll, "insert")).
 		WithJSON(Map{"documents": inputDocument}).Expect()
 	testError(resp, http.StatusConflict, api.Code_ALREADY_EXISTS, "duplicate key value, violates key constraint")
+}
+
+func TestInsert_SchemaValidationRequired(t *testing.T) {
+	testCreateSchema["schema"].(Map)["required"] = []string{"string_value"}
+	testCreateSchema["schema"].(Map)["properties"].(Map)["object_value"].(Map)["required"] = []string{"name"}
+	testCreateSchema["schema"].(Map)["properties"].(Map)["array_value"].(Map)["items"].(Map)["required"] = []string{"id"}
+	defer func() {
+		delete(testCreateSchema["schema"].(Map), "required")
+		delete(testCreateSchema["schema"].(Map)["properties"].(Map)["object_value"].(Map), "required")
+		delete(testCreateSchema["schema"].(Map)["properties"].(Map)["array_value"].(Map)["items"].(Map), "required")
+	}()
+
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	cases := []struct {
+		documents  []Doc
+		expMessage string
+	}{
+		{
+			[]Doc{
+				{
+					"pkey_int": 1,
+					"object_value": Map{
+						"name": "bbb",
+					},
+				},
+			},
+			"json schema validation failed for field '' reason 'missing properties: 'string_value''",
+		},
+		{
+			[]Doc{
+				{
+					"pkey_int":     1,
+					"string_value": nil,
+					"object_value": Map{
+						"name": "bbb",
+					},
+				},
+			},
+			"json schema validation failed for field '' reason 'missing properties: 'string_value''",
+		},
+		{
+			[]Doc{
+				{
+					"pkey_int":     1,
+					"string_value": "aaa",
+					"object_value": Map{
+						"noname": "bbb",
+					},
+				},
+			},
+			"jsonschema: '/object_value' does not validate with file:///server/test_collection.json#/properties/object_value/required: missing properties: 'name'",
+		},
+		{
+			[]Doc{
+				{
+					"pkey_int":     1,
+					"string_value": "aaa",
+					"object_value": Map{
+						"name": "bbb",
+					},
+					"array_value": []Doc{
+						{
+							"product": "foo",
+						},
+					},
+				},
+			},
+
+			"json schema validation failed for field 'array_value/0' reason 'missing properties: 'id''",
+		},
+	}
+	for _, c := range cases {
+		resp := expect(t).POST(getDocumentURL(db, coll, "insert")).
+			WithJSON(Map{"documents": c.documents}).Expect()
+
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, c.expMessage)
+	}
 }
 
 func TestInsert_SchemaValidationError(t *testing.T) {
@@ -2256,6 +2335,266 @@ func testUpdateAtomicOperationsFailure(t *testing.T, userInput Map, expErrorCode
 		userInput,
 		nil).Status(expErrorCode).Body().Raw()
 	require.Equal(t, expErrorMsg, rawMessage)
+}
+
+func TestUpdate_MutatePrimaryKey(t *testing.T) {
+	db, _ := setupTests(t)
+	defer cleanupTests(t, db)
+
+	collection := "test_mutatepkey_collection"
+	schema := Map{
+		"schema": Map{
+			"title": collection,
+			"properties": Map{
+				"a": Map{
+					"type": "integer",
+				},
+				"b": Map{
+					"type": "string",
+				},
+				"c": Map{
+					"type": "integer",
+				},
+				"d": Map{
+					"type": "string",
+				},
+				"e": Map{
+					"type": "integer",
+				},
+			},
+			"primary_key": []interface{}{"a", "b"},
+		},
+	}
+
+	inputDocument := []Doc{
+		{
+			"a": 1,
+			"b": "1",
+			"c": 1,
+			"d": "1",
+			"e": 1,
+		},
+	}
+
+	cases := []struct {
+		userInput          Map
+		oldShouldBeRemoved bool
+		expOutPKey         Map
+		expOut             []Doc
+		expError           string
+	}{
+		{
+			Map{
+				"fields": Map{
+					"$set": Map{
+						"b": "2",
+					},
+				},
+			},
+			true,
+			Map{
+				"a": 1,
+				"b": "2",
+			},
+			[]Doc{{
+				"a": 1,
+				"b": "2",
+				"c": 1,
+				"d": "1",
+				"e": 1,
+			}},
+			"",
+		},
+		{
+			Map{
+				"fields": Map{
+					"$set": Map{
+						"a": 2,
+					},
+				},
+			},
+			true,
+			Map{
+				"a": 2,
+				"b": "1",
+			},
+			[]Doc{{
+				"a": 2,
+				"b": "1",
+				"c": 1,
+				"d": "1",
+				"e": 1,
+			}},
+			"",
+		},
+		{
+			Map{
+				"fields": Map{
+					"$set": Map{
+						"c": 2,
+					},
+				},
+			},
+			false,
+			Map{
+				"a": 1,
+				"b": "1",
+			},
+			[]Doc{{
+				"a": 1,
+				"b": "1",
+				"c": 2,
+				"d": "1",
+				"e": 1,
+			}},
+			"",
+		},
+		{
+			Map{
+				"fields": Map{
+					"$set": Map{
+						"d": "2",
+					},
+				},
+			},
+			false,
+			Map{
+				"a": 1,
+				"b": "1",
+			},
+			[]Doc{{
+				"a": 1,
+				"b": "1",
+				"c": 1,
+				"d": "2",
+				"e": 1,
+			}},
+			"",
+		},
+		{
+			Map{
+				"fields": Map{
+					"$set": Map{
+						"a": nil,
+					},
+				},
+			},
+			false,
+			Map{
+				"a": 1,
+				"b": "1",
+			},
+			[]Doc{{
+				"a": 1,
+				"b": "1",
+				"c": 1,
+				"d": "2",
+				"e": 1,
+			}},
+			"primary key field can't be set as null",
+		},
+		{
+			Map{
+				"fields": Map{
+					"$unset": []string{"a"},
+				},
+			},
+			true,
+			Map{
+				"filter": Map{
+					"b": "1",
+				},
+			},
+			[]Doc{{
+				"b": "1",
+				"c": 1,
+				"d": "2",
+			}},
+			"primary key field can't be unset",
+		},
+		{
+			Map{
+				"fields": Map{
+					"$unset": []string{"b"},
+				},
+			},
+			true,
+			Map{
+				"a": 1,
+			},
+			[]Doc{{
+				"a": 1,
+				"c": 1,
+				"d": "2",
+			}},
+			"primary key field can't be unset",
+		},
+		{
+			Map{
+				"fields": Map{
+					"$unset": []string{"c", "d"},
+				},
+			},
+			false,
+			Map{
+				"a": 1,
+				"b": "1",
+			},
+			[]Doc{{
+				"a": 1,
+				"b": "1",
+				"e": 1,
+			}},
+			"",
+		},
+	}
+	for _, c := range cases {
+		createCollection(t, db, collection, schema).Status(200)
+
+		insertDocuments(t, db, collection, inputDocument, false).
+			Status(http.StatusOK)
+
+		if len(c.expError) == 0 {
+			updateByFilter(t,
+				db,
+				collection,
+				Map{
+					"filter": Map{
+						"e": 1,
+					},
+				},
+				c.userInput,
+				nil).Status(http.StatusOK).
+				JSON().
+				Object().
+				ValueEqual("modified_count", 1).
+				Path("$.metadata").Object()
+		} else {
+			updateByFilter(t,
+				db,
+				collection,
+				Map{
+					"filter": Map{
+						"e": 1,
+					},
+				},
+				c.userInput,
+				nil).Status(http.StatusBadRequest).
+				JSON().Path("$.error").Object().
+				ValueEqual("message", c.expError)
+
+			continue
+		}
+
+		readAndValidate(t,
+			db,
+			collection,
+			c.expOutPKey,
+			nil,
+			c.expOut)
+
+		dropCollection(t, db, collection)
+	}
 }
 
 func TestDelete_BadRequest(t *testing.T) {

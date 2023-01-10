@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import (
 type CacheEncoder interface {
 	EncodeCacheTableName(tenantId uint32, projId uint32, name string) (string, error)
 	DecodeCacheTableName(stream string) (uint32, uint32, string, bool)
+	DecodeInternalCacheKeyNameToExternal(internalKey string) string
 }
 
 // Encoder is used to encode/decode values of the Key.
@@ -157,6 +158,20 @@ func (d *DictKeyEncoder) EncodeCacheTableName(tenantId uint32, projId uint32, na
 	return fmt.Sprintf("%s:%d:%d:%s", internal.CacheKeyPrefix, tenantId, projId, name), nil
 }
 
+func (d *DictKeyEncoder) DecodeInternalCacheKeyNameToExternal(internalKey string) string {
+	i := 0
+	// first four parts are internal (cache prefix, tenant, project, cache name)
+	for m := 1; m <= 4; m++ {
+		x := strings.Index(internalKey[i:], ":")
+		if x < 0 {
+			break
+		}
+		i += x
+		i += 1
+	}
+	return internalKey[i:]
+}
+
 func (d *DictKeyEncoder) DecodeCacheTableName(name string) (uint32, uint32, string, bool) {
 	if !strings.HasPrefix(name, internal.CacheKeyPrefix) {
 		return 0, 0, "", false
@@ -165,5 +180,5 @@ func (d *DictKeyEncoder) DecodeCacheTableName(name string) (uint32, uint32, stri
 	nsId, _ := strconv.ParseInt(allParts[1], 10, 64)
 	pid, _ := strconv.ParseInt(allParts[2], 10, 64)
 
-	return uint32(nsId), uint32(pid), allParts[2], true
+	return uint32(nsId), uint32(pid), allParts[3], true
 }

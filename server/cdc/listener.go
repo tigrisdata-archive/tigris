@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ func (p *Publisher) OnCommit(ctx context.Context, tx transaction.Tx, listener kv
 		return err
 	}
 
-	td := internal.NewTableDataWithEncoding(json, internal.JsonEncoding)
+	td := internal.NewTableDataWithEncoding(json, int32(internal.JsonEncoding))
 	enc, err := internal.Encode(td)
 	if err != nil {
 		return err

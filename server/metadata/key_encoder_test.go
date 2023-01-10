@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ func TestEncodeDecodeKey(t *testing.T) {
 	ns := NewTenantNamespace("test_ns", NewNamespaceMetadata(1, "test_ns", "test_ns-display_name"))
 	db := &Database{
 		id:   3,
-		name: "test_db",
+		name: NewDatabaseName("test_db"),
 		idToCollectionMap: map[uint32]string{
 			coll.Id: coll.Name,
 		},
@@ -45,7 +45,7 @@ func TestEncodeDecodeKey(t *testing.T) {
 			ns.StrId(): {
 				namespace: ns,
 				databases: map[string]*Database{
-					db.name: db,
+					db.Name(): db,
 				},
 				idToDatabaseMap: map[uint32]string{
 					db.id: db.Name(),
@@ -72,7 +72,17 @@ func TestEncodeDecodeKey(t *testing.T) {
 	require.True(t, ok)
 
 	require.Equal(t, ns.StrId(), tenantName)
-	require.Equal(t, db.name, dbName)
+	require.Equal(t, db.Name(), dbName)
 	require.Equal(t, coll.Name, collName)
 	require.True(t, ok)
+}
+
+func TestCacheEncoderKeyConversion(t *testing.T) {
+	cacheEncoder := NewCacheEncoder()
+
+	externalKey1 := cacheEncoder.DecodeInternalCacheKeyNameToExternal("cache:1:1:c1:k1")
+	require.Equal(t, "k1", externalKey1)
+
+	externalKey2 := cacheEncoder.DecodeInternalCacheKeyNameToExternal("cache:1:1:c1:k1:x1")
+	require.Equal(t, "k1:x1", externalKey2)
 }

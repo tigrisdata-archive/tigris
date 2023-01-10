@@ -1,4 +1,4 @@
-// Copyright 2022 Tigris Data, Inc.
+// Copyright 2022-2023 Tigris Data, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,8 +41,9 @@ func mainWithCode() int {
 	config.LoadConfig(&config.DefaultConfig)
 	ulog.Configure(config.DefaultConfig.Log)
 
-	log.Info().Msgf("Environment: %v\n", config.GetEnvironment())
+	log.Info().Msgf("Environment: '%v'", config.GetEnvironment())
 	log.Info().Msgf("Number of CPUs: %v", runtime.NumCPU())
+	log.Info().Msgf("Server Type: '%v'", config.DefaultConfig.Server.Type)
 
 	closerFunc, err := tracing.InitTracer(&config.DefaultConfig)
 	if err != nil {
@@ -86,19 +87,24 @@ func mainWithCode() int {
 	log.Info().Msg("initialized tenant manager")
 
 	if err = tenantMgr.EnsureDefaultNamespace(); err != nil {
+		// ToDo: do not load collections for realtime deployment
 		log.Error().Err(err).Msg("error initializing default namespace")
 		return 1
 	}
 
+	cfg := &config.DefaultConfig
 	request.Init(tenantMgr)
-	_ = quota.Init(tenantMgr, &config.DefaultConfig)
+	_ = quota.Init(tenantMgr, cfg)
 	defer quota.Cleanup()
 
-	mx := muxer.NewMuxer(&config.DefaultConfig)
-	mx.RegisterServices(kvStore, searchStore, tenantMgr, txMgr)
-
-	if err := mx.Start(config.DefaultConfig.Server.Host, config.DefaultConfig.Server.Port); err != nil {
-		log.Error().Err(err).Msgf("error starting server")
+	mx := muxer.NewMuxer(cfg)
+	mx.RegisterServices(&cfg.Server, kvStore, searchStore, tenantMgr, txMgr)
+	port := cfg.Server.Port
+	if cfg.Server.Type == config.RealtimeServerType {
+		port = cfg.Server.RealtimePort
+	}
+	if err := mx.Start(cfg.Server.Host, port); err != nil {
+		log.Error().Err(err).Msgf("error starting realtime server")
 		return 1
 	}
 
