@@ -131,8 +131,11 @@ func TestClientCollectionTx(t *testing.T) {
 	var db *tigris.Database
 	cfg := &tigris.Config{URL: net.JoinHostPort(h, p), Project: "db111333"}
 	for {
-		drv, _ := driver.NewDriver(ctx, &config.Driver{URL: cfg.URL})
-		_, _ = drv.CreateProject(ctx, "db111333")
+		drv, err := driver.NewDriver(ctx, &config.Driver{URL: cfg.URL})
+		require.NoError(t, err)
+
+		_, err = drv.CreateProject(ctx, "db111333")
+		require.NoError(t, err)
 
 		c, _ := tigris.NewClient(ctx, cfg)
 		db, err = c.OpenDatabase(ctx, &Coll1{})

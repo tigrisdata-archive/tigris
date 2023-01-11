@@ -102,7 +102,7 @@ func E(err error) bool {
 func CE(format string, args ...interface{}) error {
 	err := fmt.Errorf(format, args...)
 
-	log.Error().CallerSkipFrame(2).Msg(err.Error())
+	log.Error().CallerSkipFrame(1).Msg(err.Error())
 
 	return err
 }

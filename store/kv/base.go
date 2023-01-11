@@ -55,7 +55,6 @@ type baseTx interface {
 type baseKVStore interface {
 	baseKV
 	BeginTx(ctx context.Context) (baseTx, error)
-	Batch() (baseTx, error)
 	CreateTable(ctx context.Context, name []byte) error
 	DropTable(ctx context.Context, name []byte) error
 }

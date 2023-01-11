@@ -17,6 +17,12 @@ jobs:
         with:
           submodules: true
 
+      # temporary. remove once ubuntu-latest runner includes Go1.20
+      - name: Install Go 1.20
+        run: |
+          rm -rf /usr/local/go
+          sudo /bin/bash scripts/install_go.sh
+
       # this is just to separate deps and docker pull logs from the main tests step
       - name: Warmup tests
         run: make run
@@ -38,5 +44,10 @@ jobs:
           echo "^^ Tests failed. Check tests output and logs in the steps above ^^"
           exit 1
 
+      - name: Dump integration tests coverage
+        run: sudo make dump_integration_coverage
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.out,./coverage1.out

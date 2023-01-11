@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"time"
 	"unsafe"
 
@@ -32,20 +31,12 @@ import (
 )
 
 const (
-	maxTxSizeBytes = 10000000
-
 	fdbAPIVersion = 710
 )
 
 // fdbkv is an implementation of kv on top of FoundationDB.
 type fdbkv struct {
 	db fdb.Database
-}
-
-type fbatch struct {
-	db  *fdbkv
-	tx  baseTx
-	rtx fdb.Transaction
 }
 
 type ftx struct {
@@ -276,134 +267,6 @@ func (d *fdbkv) TableSize(ctx context.Context, name []byte) (int64, error) {
 	return sz, err
 }
 
-func (d *fdbkv) Batch() (baseTx, error) {
-	tx, err := d.db.CreateTransaction()
-	if ulog.E(err) {
-		return nil, err
-	}
-	log.Debug().Msg("create batch")
-	b := &fbatch{db: d, tx: &ftx{d: d, tx: &tx}, rtx: tx}
-	return b, nil
-}
-
-func (b *fbatch) flushBatch(ctx context.Context, _ Key, _ Key, data []byte) error {
-	fsz := b.rtx.GetApproximateSize()
-	sz, err := fsz.Get()
-	if ulog.E(err) {
-		return err
-	}
-
-	// FIXME: Include lkey and rKey in size calculation
-
-	if sz+int64(len(data)) > maxTxSizeBytes {
-		log.Debug().Int64("size", sz).Msg("flush batch")
-		err = b.tx.Commit(ctx)
-		if ulog.E(err) {
-			return err
-		}
-		tx, err := b.db.db.CreateTransaction()
-		if ulog.E(err) {
-			return err
-		}
-		b.rtx = tx
-		b.tx = &ftx{d: b.db, tx: &tx}
-	}
-
-	return nil
-}
-
-func (b *fbatch) Insert(ctx context.Context, table []byte, key Key, data []byte) error {
-	if err := b.flushBatch(ctx, key, nil, data); err != nil {
-		return err
-	}
-	return b.tx.Insert(ctx, table, key, data)
-}
-
-func (b *fbatch) Replace(ctx context.Context, table []byte, key Key, data []byte, isUpdate bool) error {
-	if err := b.flushBatch(ctx, key, nil, data); err != nil {
-		return err
-	}
-	return b.tx.Replace(ctx, table, key, data, isUpdate)
-}
-
-func (b *fbatch) Delete(ctx context.Context, table []byte, key Key) error {
-	if err := b.flushBatch(ctx, key, nil, nil); err != nil {
-		return err
-	}
-	return b.tx.Delete(ctx, table, key)
-}
-
-func (b *fbatch) DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key) error {
-	if err := b.flushBatch(ctx, lKey, rKey, nil); err != nil {
-		return err
-	}
-	return b.tx.DeleteRange(ctx, table, lKey, rKey)
-}
-
-func (b *fbatch) Update(ctx context.Context, table []byte, key Key, apply func([]byte) ([]byte, error)) (int32, error) {
-	if err := b.flushBatch(ctx, key, nil, nil); err != nil {
-		return -1, err
-	}
-	return b.tx.Update(ctx, table, key, apply)
-}
-
-func (b *fbatch) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) (int32, error) {
-	if err := b.flushBatch(ctx, lKey, rKey, nil); err != nil {
-		return -1, err
-	}
-	return b.tx.UpdateRange(ctx, table, lKey, rKey, apply)
-}
-
-func (b *fbatch) Read(ctx context.Context, table []byte, key Key) (baseIterator, error) {
-	if err := b.flushBatch(ctx, key, nil, nil); err != nil {
-		return nil, err
-	}
-	return b.tx.Read(ctx, table, key)
-}
-
-func (b *fbatch) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key, isSnapshot bool) (baseIterator, error) {
-	if err := b.flushBatch(ctx, lKey, rKey, nil); err != nil {
-		return nil, err
-	}
-	return b.tx.ReadRange(ctx, table, lKey, rKey, isSnapshot)
-}
-
-func (b *fbatch) SetVersionstampedValue(_ context.Context, _ []byte, _ []byte) error {
-	return fmt.Errorf("batch doesn't support setting versionstamped value")
-}
-
-func (b *fbatch) SetVersionstampedKey(_ context.Context, _ []byte, _ []byte) error {
-	return fmt.Errorf("batch doesn't support setting versionstamped key")
-}
-
-func (b *fbatch) AtomicAdd(_ context.Context, _ []byte, _ Key, _ int64) error {
-	return fmt.Errorf("batch doesn't support atomic add")
-}
-
-func (b *fbatch) AtomicRead(_ context.Context, _ []byte, _ Key) (int64, error) {
-	return 0, fmt.Errorf("batch doesn't support atomic read")
-}
-
-func (b *fbatch) AtomicReadRange(_ context.Context, _ []byte, _ Key, _ Key, _ bool) (AtomicIterator, error) {
-	return nil, fmt.Errorf("batch doesn't support atomic read")
-}
-
-func (b *fbatch) Get(_ context.Context, _ []byte, _ bool) (Future, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (b *fbatch) Commit(ctx context.Context) error {
-	return b.tx.Commit(ctx)
-}
-
-func (b *fbatch) Rollback(ctx context.Context) error {
-	return b.tx.Rollback(ctx)
-}
-
-func (b *fbatch) IsRetriable() bool {
-	return false
-}
-
 func (d *fdbkv) BeginTx(ctx context.Context) (baseTx, error) {
 	tx, err := d.db.CreateTransaction()
 	if ulog.E(err) {
@@ -598,7 +461,7 @@ func (t *ftx) SetVersionstampedKey(_ context.Context, key []byte, value []byte) 
 	return nil
 }
 
-func (t *ftx) AtomicAdd(ctx context.Context, table []byte, key Key, value int64) error {
+func (t *ftx) AtomicAdd(_ context.Context, table []byte, key Key, value int64) error {
 	fdbKey := getFDBKey(table, key)
 
 	buf := new(bytes.Buffer)
@@ -613,7 +476,7 @@ func (t *ftx) AtomicAdd(ctx context.Context, table []byte, key Key, value int64)
 	return nil
 }
 
-func (t *ftx) AtomicRead(ctx context.Context, table []byte, key Key) (int64, error) {
+func (t *ftx) AtomicRead(_ context.Context, table []byte, key Key) (int64, error) {
 	fdbKey := getFDBKey(table, key)
 	raw, err := t.tx.Get(fdbKey).Get()
 	if err != nil {

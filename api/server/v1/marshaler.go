@@ -675,13 +675,13 @@ func (x *UpdateUserMetadataRequest) UnmarshalJSON(data []byte) error {
 func (x *GetUserMetadataResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
 		MetadataKey string              `json:"metadataKey,omitempty"`
-		NamespaceId uint32              `json:"namespaceId,omitempty"`
-		UserId      string              `json:"userId,omitempty"`
+		NamespaceID uint32              `json:"namespaceId,omitempty"`
+		UserID      string              `json:"userId,omitempty"`
 		Value       jsoniter.RawMessage `json:"value,omitempty"`
 	}{
 		MetadataKey: x.MetadataKey,
-		NamespaceId: x.NamespaceId,
-		UserId:      x.UserId,
+		NamespaceID: x.NamespaceId,
+		UserID:      x.UserId,
 		Value:       x.Value,
 	}
 	return jsoniter.Marshal(resp)
@@ -690,13 +690,13 @@ func (x *GetUserMetadataResponse) MarshalJSON() ([]byte, error) {
 func (x *InsertUserMetadataResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
 		MetadataKey string              `json:"metadataKey,omitempty"`
-		NamespaceId uint32              `json:"namespaceId,omitempty"`
-		UserId      string              `json:"userId,omitempty"`
+		NamespaceID uint32              `json:"namespaceId,omitempty"`
+		UserID      string              `json:"userId,omitempty"`
 		Value       jsoniter.RawMessage `json:"value,omitempty"`
 	}{
 		MetadataKey: x.MetadataKey,
-		NamespaceId: x.NamespaceId,
-		UserId:      x.UserId,
+		NamespaceID: x.NamespaceId,
+		UserID:      x.UserId,
 		Value:       x.Value,
 	}
 	return jsoniter.Marshal(resp)
@@ -705,13 +705,13 @@ func (x *InsertUserMetadataResponse) MarshalJSON() ([]byte, error) {
 func (x *UpdateUserMetadataResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
 		MetadataKey string              `json:"metadataKey,omitempty"`
-		NamespaceId uint32              `json:"namespaceId,omitempty"`
-		UserId      string              `json:"userId,omitempty"`
+		NamespaceID uint32              `json:"namespaceId,omitempty"`
+		UserID      string              `json:"userId,omitempty"`
 		Value       jsoniter.RawMessage `json:"value,omitempty"`
 	}{
 		MetadataKey: x.MetadataKey,
-		NamespaceId: x.NamespaceId,
-		UserId:      x.UserId,
+		NamespaceID: x.NamespaceId,
+		UserID:      x.UserId,
 		Value:       x.Value,
 	}
 	return jsoniter.Marshal(resp)
@@ -756,11 +756,11 @@ func (x *UpdateNamespaceMetadataRequest) UnmarshalJSON(data []byte) error {
 func (x *GetNamespaceMetadataResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
 		MetadataKey string              `json:"metadataKey,omitempty"`
-		NamespaceId uint32              `json:"namespaceId,omitempty"`
+		NamespaceID uint32              `json:"namespaceId,omitempty"`
 		Value       jsoniter.RawMessage `json:"value,omitempty"`
 	}{
 		MetadataKey: x.MetadataKey,
-		NamespaceId: x.NamespaceId,
+		NamespaceID: x.NamespaceId,
 		Value:       x.Value,
 	}
 	return jsoniter.Marshal(resp)
@@ -769,11 +769,11 @@ func (x *GetNamespaceMetadataResponse) MarshalJSON() ([]byte, error) {
 func (x *InsertNamespaceMetadataResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
 		MetadataKey string              `json:"metadataKey,omitempty"`
-		NamespaceId uint32              `json:"namespaceId,omitempty"`
+		NamespaceID uint32              `json:"namespaceId,omitempty"`
 		Value       jsoniter.RawMessage `json:"value,omitempty"`
 	}{
 		MetadataKey: x.MetadataKey,
-		NamespaceId: x.NamespaceId,
+		NamespaceID: x.NamespaceId,
 		Value:       x.Value,
 	}
 	return jsoniter.Marshal(resp)
@@ -782,11 +782,11 @@ func (x *InsertNamespaceMetadataResponse) MarshalJSON() ([]byte, error) {
 func (x *UpdateNamespaceMetadataResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
 		MetadataKey string              `json:"metadataKey,omitempty"`
-		NamespaceId uint32              `json:"namespaceId,omitempty"`
+		NamespaceID uint32              `json:"namespaceId,omitempty"`
 		Value       jsoniter.RawMessage `json:"value,omitempty"`
 	}{
 		MetadataKey: x.MetadataKey,
-		NamespaceId: x.NamespaceId,
+		NamespaceID: x.NamespaceId,
 		Value:       x.Value,
 	}
 	return jsoniter.Marshal(resp)

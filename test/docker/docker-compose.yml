@@ -58,15 +58,20 @@ services:
       - TIGRIS_SERVER_LOG_FORMAT=console
       - TIGRIS_SERVER_SEARCH_AUTH_KEY=ts_test_key
       - TIGRIS_SERVER_SEARCH_HOST=tigris_search
-      - TIGRIS_SERVER_SERVER_TYPE=database
       - TIGRIS_SERVER_TRACING_ENABLED=true
+      - GOCOVERDIR=/tmp/tigris_coverdata
     build:
       context: ../../
       dockerfile: docker/Dockerfile
+      args:
+        - BUILD_PARAM_ARG="-cover"
     volumes:
       - type: volume
         source: dbdata
         target: /etc/foundationdb/
+      - type: bind
+        source: /tmp/tigris_coverdata
+        target: /tmp/tigris_coverdata
     ports:
       - "8081:8081"
     command: >
@@ -82,7 +87,6 @@ services:
     image: tigris_server
     environment:
       - TIGRIS_ENVIRONMENT=test
-      - TIGRIS_SERVER_SERVER_TYPE=database
       - TIGRIS_SERVER_SEARCH_AUTH_KEY=ts_test_key
       - TIGRIS_SERVER_SEARCH_HOST=tigris_search
       - TIGRIS_SERVER_LOG_FORMAT=console
@@ -90,6 +94,8 @@ services:
     build:
       context: ../../
       dockerfile: docker/Dockerfile
+      args:
+        - BUILD_PARAM_ARG="-cover"
     volumes:
       - type: volume
         source: dbdata
@@ -115,6 +121,8 @@ services:
     build:
       context: ../../
       dockerfile: docker/Dockerfile
+      args:
+        - BUILD_PARAM_ARG="-cover"
     volumes:
       - type: volume
         source: dbdata
