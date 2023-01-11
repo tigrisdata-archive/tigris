@@ -195,6 +195,7 @@ func authFunction(ctx context.Context, jwtValidator *validator.Validator, config
 				Sub:       validatedClaims.RegisteredClaims.Subject,
 			}
 			reqMetadata.SetAccessToken(token)
+			log.Info().Msg("Authentication successful")
 			return ctx, nil
 		}
 	}

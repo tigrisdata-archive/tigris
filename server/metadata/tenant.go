@@ -333,6 +333,9 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string) (*T
 	if namespaces, err = m.metaStore.GetNamespaces(ctx, tx); err != nil {
 		return nil, err
 	}
+
+	log.Err(err).Msg("Failed to get namespace from metadata store")
+
 	metadata, ok := namespaces[namespaceName]
 	if !ok {
 		return nil, fmt.Errorf("namespace not found: %s", namespaceName)
@@ -348,6 +351,8 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string) (*T
 	if err = tenant.reload(ctx, tx, currentVersion, collectionsInSearch); err != nil {
 		return nil, err
 	}
+
+	log.Info().Msg("Fetched tenant successfully")
 
 	return tenant, nil
 }
