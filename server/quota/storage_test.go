@@ -32,7 +32,7 @@ import (
 
 func TestStorageQuota(t *testing.T) {
 	tenants, ctx, cancel := metadata.NewTestTenantMgr(kvStore)
-	dbName := metadata.NewDatabaseName("tenant_db1")
+	projName := "tenant_proj1"
 	defer cancel()
 
 	txMgr := transaction.NewManager(kvStore)
@@ -46,7 +46,7 @@ func TestStorageQuota(t *testing.T) {
 	tx, err := txMgr.StartTx(context.TODO())
 	require.NoError(t, err)
 
-	_, err = tenant.CreateDatabase(ctx, tx, dbName.Name(), nil)
+	_, err = tenant.CreateProject(ctx, tx, projName, nil)
 	require.NoError(t, err)
 
 	jsSchema := []byte(`{
@@ -65,15 +65,15 @@ func TestStorageQuota(t *testing.T) {
 	err = tenant.Reload(ctx, tx, []byte("aaa"))
 	require.NoError(t, err)
 
-	db1, err := tenant.GetDatabase(ctx, dbName)
+	proj1, err := tenant.GetProject(projName)
 	require.NoError(t, err)
 
-	require.NoError(t, tenant.CreateCollection(ctx, tx, db1, factory))
+	require.NoError(t, tenant.CreateCollection(ctx, tx, proj1.GetMainDatabase(), factory))
 
 	require.NoError(t, tx.Commit(context.TODO()))
 
-	coll1 := db1.GetCollection("test_collection")
-	table, err := metadata.NewEncoder().EncodeTableName(tenant.GetNamespace(), db1, coll1)
+	coll1 := proj1.GetMainDatabase().GetCollection("test_collection")
+	table, err := metadata.NewEncoder().EncodeTableName(tenant.GetNamespace(), proj1.GetMainDatabase(), coll1)
 	require.NoError(t, err)
 
 	m := initStorage(tenants, &config.QuotaConfig{

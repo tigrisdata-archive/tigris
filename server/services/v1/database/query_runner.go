@@ -143,8 +143,14 @@ func (f *QueryRunnerFactory) GetCollectionQueryRunner(accessToken *types.AccessT
 	}
 }
 
-func (f *QueryRunnerFactory) GetDatabaseQueryRunner(accessToken *types.AccessToken) *DatabaseQueryRunner {
-	return &DatabaseQueryRunner{
+func (f *QueryRunnerFactory) GetProjectQueryRunner(accessToken *types.AccessToken) *ProjectQueryRunner {
+	return &ProjectQueryRunner{
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
+	}
+}
+
+func (f *QueryRunnerFactory) GetBranchQueryRunner(accessToken *types.AccessToken) *BranchQueryRunner {
+	return &BranchQueryRunner{
 		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
 	}
 }
@@ -167,30 +173,23 @@ func NewBaseQueryRunner(encoder metadata.Encoder, cdcMgr *cdc.Manager, txMgr *tr
 	}
 }
 
-// getDatabaseFromTenant is a helper method to get database from the tenant object. Returns a user facing error if
-// the database is not present.
-func (runner *BaseQueryRunner) getDatabaseFromTenant(ctx context.Context, tenant *metadata.Tenant, dbName string, branch string) (*metadata.Database, error) {
-	dbBranch := metadata.NewDatabaseNameWithBranch(dbName, branch)
-	db, err := tenant.GetDatabase(ctx, dbBranch)
-	if err != nil {
-		return nil, createApiError(err)
-	}
-
-	return db, nil
-}
-
 // getDatabase is a helper method to return database either from the transactional context for explicit transactions or
 // from the tenant object. Returns a user facing error if the database is not present.
-func (runner *BaseQueryRunner) getDatabase(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant, dbName string, branch string) (*metadata.Database, error) {
-	if tx.Context().GetStagedDatabase() != nil {
+func (runner *BaseQueryRunner) getDatabase(_ context.Context, tx transaction.Tx, tenant *metadata.Tenant, projName string, branch string) (*metadata.Database, error) {
+	if tx != nil && tx.Context().GetStagedDatabase() != nil {
 		// this means that some DDL operation has modified the database object, then we need to perform all the operations
 		// on this staged database.
 		return tx.Context().GetStagedDatabase().(*metadata.Database), nil
 	}
 
+	project, err := tenant.GetProject(projName)
+	if err != nil {
+		return nil, createApiError(err)
+	}
+
 	// otherwise, simply read from the in-memory cache/disk.
-	dbBranch := metadata.NewDatabaseNameWithBranch(dbName, branch)
-	db, err := tenant.GetDatabase(ctx, dbBranch)
+	dbBranch := metadata.NewDatabaseNameWithBranch(projName, branch)
+	db, err := project.GetDatabase(dbBranch)
 	if err != nil {
 		return nil, createApiError(err)
 	}
@@ -882,7 +881,7 @@ func (runner *StreamingQueryRunner) instrumentRunner(ctx context.Context, option
 // ReadOnly is used by the read query runner to handle long-running reads. This method operates by starting a new
 // transaction when needed which means a single user request may end up creating multiple read only transactions.
 func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.Tenant) (Response, context.Context, error) {
-	db, err := runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetProject(), runner.req.GetBranch())
+	db, err := runner.getDatabase(ctx, nil, tenant, runner.req.GetProject(), runner.req.GetBranch())
 	if err != nil {
 		return Response{}, ctx, err
 	}
@@ -1048,7 +1047,7 @@ type SearchQueryRunner struct {
 // ReadOnly on search query runner is implemented as search queries do not need to be inside a transaction; in fact,
 // there is no need to start any transaction for search queries as they are simply forwarded to the indexing store.
 func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.Tenant) (Response, context.Context, error) {
-	db, err := runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetProject(), runner.req.GetBranch())
+	db, err := runner.getDatabase(ctx, nil, tenant, runner.req.GetProject(), runner.req.GetBranch())
 	if err != nil {
 		return Response{}, ctx, err
 	}
@@ -1417,45 +1416,35 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 	return Response{}, ctx, errors.Unknown("unknown request path")
 }
 
-type DatabaseQueryRunner struct {
+type ProjectQueryRunner struct {
 	*BaseQueryRunner
 
-	delete       *api.DeleteProjectRequest
-	create       *api.CreateProjectRequest
-	list         *api.ListProjectsRequest
-	describe     *api.DescribeDatabaseRequest
-	createBranch *api.CreateBranchRequest
-	deleteBranch *api.DeleteBranchRequest
+	delete   *api.DeleteProjectRequest
+	create   *api.CreateProjectRequest
+	list     *api.ListProjectsRequest
+	describe *api.DescribeDatabaseRequest
 }
 
-func (runner *DatabaseQueryRunner) SetCreateProjectReq(create *api.CreateProjectRequest) {
+func (runner *ProjectQueryRunner) SetCreateProjectReq(create *api.CreateProjectRequest) {
 	runner.create = create
 }
 
-func (runner *DatabaseQueryRunner) SetDeleteProjectReq(d *api.DeleteProjectRequest) {
+func (runner *ProjectQueryRunner) SetDeleteProjectReq(d *api.DeleteProjectRequest) {
 	runner.delete = d
 }
 
-func (runner *DatabaseQueryRunner) SetListProjectsReq(list *api.ListProjectsRequest) {
+func (runner *ProjectQueryRunner) SetListProjectsReq(list *api.ListProjectsRequest) {
 	runner.list = list
 }
 
-func (runner *DatabaseQueryRunner) SetDescribeDatabaseReq(describe *api.DescribeDatabaseRequest) {
+func (runner *ProjectQueryRunner) SetDescribeDatabaseReq(describe *api.DescribeDatabaseRequest) {
 	runner.describe = describe
 }
 
-func (runner *DatabaseQueryRunner) SetCreateBranchReq(create *api.CreateBranchRequest) {
-	runner.createBranch = create
-}
-
-func (runner *DatabaseQueryRunner) SetDeleteBranchReq(deleteBranch *api.DeleteBranchRequest) {
-	runner.deleteBranch = deleteBranch
-}
-
-func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
+func (runner *ProjectQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
 	switch {
 	case runner.delete != nil:
-		exist, err := tenant.DropDatabase(ctx, tx, runner.delete.GetProject())
+		exist, err := tenant.DeleteProject(ctx, tx, runner.delete.GetProject())
 		if err != nil {
 			return Response{}, ctx, err
 		}
@@ -1467,13 +1456,13 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 			Status: DroppedStatus,
 		}, ctx, nil
 	case runner.create != nil:
-		dbMetadata, err := createDatabaseMetadata(ctx)
+		projMetadata, err := createProjectMetadata(ctx)
 		if err != nil {
 			return Response{}, ctx, err
 		}
-		exist, err := tenant.CreateDatabase(ctx, tx, runner.create.GetProject(), dbMetadata)
+		exist, err := tenant.CreateProject(ctx, tx, runner.create.GetProject(), projMetadata)
 		if exist || err == kv.ErrDuplicateKey {
-			return Response{}, ctx, errors.AlreadyExists("database already exist")
+			return Response{}, ctx, errors.AlreadyExists("project already exist")
 		}
 		if err != nil {
 			return Response{}, ctx, err
@@ -1484,16 +1473,16 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		}, ctx, nil
 	case runner.list != nil:
 		// list projects need not include any branches
-		databaseList := tenant.ListDatabasesOnly(ctx)
-		databases := make([]*api.ProjectInfo, len(databaseList))
-		for i, l := range databaseList {
-			databases[i] = &api.ProjectInfo{
+		projectList := tenant.ListProjects(ctx)
+		projects := make([]*api.ProjectInfo, len(projectList))
+		for i, l := range projectList {
+			projects[i] = &api.ProjectInfo{
 				Project: l,
 			}
 		}
 		return Response{
 			Response: &api.ListProjectsResponse{
-				Projects: databases,
+				Projects: projects,
 			},
 		}, ctx, nil
 	case runner.describe != nil:
@@ -1549,13 +1538,34 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 				Metadata:    &api.DatabaseMetadata{},
 				Collections: collections,
 				Size:        size,
-				Branches:    tenant.ListBranches(ctx, db),
+				Branches:    tenant.ListDatabaseBranches(runner.describe.GetProject()),
 			},
 		}, ctx, nil
+	}
 
+	return Response{}, ctx, errors.Unknown("unknown request path")
+}
+
+type BranchQueryRunner struct {
+	*BaseQueryRunner
+
+	createBranch *api.CreateBranchRequest
+	deleteBranch *api.DeleteBranchRequest
+}
+
+func (runner *BranchQueryRunner) SetCreateBranchReq(create *api.CreateBranchRequest) {
+	runner.createBranch = create
+}
+
+func (runner *BranchQueryRunner) SetDeleteBranchReq(deleteBranch *api.DeleteBranchRequest) {
+	runner.deleteBranch = deleteBranch
+}
+
+func (runner *BranchQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
+	switch {
 	case runner.createBranch != nil:
 		dbBranch := metadata.NewDatabaseNameWithBranch(runner.createBranch.GetProject(), runner.createBranch.GetBranch())
-		err := tenant.CreateBranch(ctx, tx, dbBranch)
+		err := tenant.CreateBranch(ctx, tx, runner.createBranch.GetProject(), dbBranch)
 		if err != nil {
 			return Response{}, ctx, createApiError(err)
 		}
@@ -1566,7 +1576,7 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 		}, ctx, nil
 	case runner.deleteBranch != nil:
 		dbBranch := metadata.NewDatabaseNameWithBranch(runner.deleteBranch.GetProject(), runner.deleteBranch.GetBranch())
-		err := tenant.DeleteBranch(ctx, tx, dbBranch)
+		err := tenant.DeleteBranch(ctx, tx, runner.deleteBranch.GetProject(), dbBranch)
 		if err != nil {
 			return Response{}, ctx, createApiError(err)
 		}
@@ -1580,12 +1590,12 @@ func (runner *DatabaseQueryRunner) Run(ctx context.Context, tx transaction.Tx, t
 	return Response{}, ctx, errors.Unknown("unknown request path")
 }
 
-func createDatabaseMetadata(ctx context.Context) (*metadata.DatabaseMetadata, error) {
+func createProjectMetadata(ctx context.Context) (*metadata.ProjectMetadata, error) {
 	currentSub, err := auth.GetCurrentSub(ctx)
 	if err != nil && config.DefaultConfig.Auth.Enabled {
 		return nil, errors.Internal("Failed to create database metadata")
 	}
-	return &metadata.DatabaseMetadata{
+	return &metadata.ProjectMetadata{
 		Id:        0, // it will be set to right value later on
 		Creator:   currentSub,
 		CreatedAt: time.Now().Unix(),
