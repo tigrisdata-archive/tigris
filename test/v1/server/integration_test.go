@@ -18,11 +18,9 @@ package server
 
 import (
 	"fmt"
-	"math/rand"
 	"net/http"
 	"os"
 	"testing"
-	"time"
 
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/test/config"
@@ -30,7 +28,6 @@ import (
 )
 
 var (
-	testDB         string
 	testCollection = "test_collection"
 )
 
@@ -156,19 +153,20 @@ func cleanupTests(t *testing.T, db string) {
 	deleteProject(t, db).Status(http.StatusOK)
 }
 
-func expectLow(s httpexpect.LoggerReporter, url string) *httpexpect.Expect {
+func expectLow(t *testing.T, url string) *httpexpect.Expect {
 	return httpexpect.WithConfig(httpexpect.Config{
-		BaseURL:  url,
-		Reporter: httpexpect.NewAssertReporter(s),
+		BaseURL: url,
+		//Reporter: httpexpect.NewAssertReporter(s),
+		Reporter: httpexpect.NewRequireReporter(t),
 	})
 }
 
-func expect(s httpexpect.LoggerReporter) *httpexpect.Expect {
-	return expectLow(s, config.GetBaseURL())
+func expect(t *testing.T) *httpexpect.Expect {
+	return expectLow(t, config.GetBaseURL())
 }
 
-func expectRealtime(s httpexpect.LoggerReporter) *httpexpect.Expect {
-	return expectLow(s, config.GetBaseRealtimeURL())
+func expectRealtime(t *testing.T) *httpexpect.Expect {
+	return expectLow(t, config.GetBaseRealtimeURL())
 }
 
 func getDocumentURL(databaseName, collectionName string, methodName string) string {
@@ -213,6 +211,5 @@ func testError(resp *httpexpect.Response, status int, code api.Code, message str
 }
 
 func TestMain(m *testing.M) {
-	rand.Seed(time.Now().Unix())
 	os.Exit(m.Run())
 }

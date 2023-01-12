@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/errors"
@@ -1056,6 +1057,7 @@ func (tenant *Tenant) GetProject(projName string) (*Project, error) {
 
 	proj, ok := tenant.projects[projName]
 	if !ok {
+		spew.Dump(tenant.projects)
 		return nil, NewProjectNotFoundErr(projName)
 	}
 	return proj, nil
@@ -1086,6 +1088,7 @@ func (tenant *Tenant) CreateBranch(ctx context.Context, tx transaction.Tx, projN
 	// first get the project
 	proj, ok := tenant.projects[projName]
 	if !ok {
+		spew.Dump(tenant.projects)
 		return NewProjectNotFoundErr(projName)
 	}
 	if _, ok := proj.databaseBranches[dbName.Name()]; ok {
@@ -1126,6 +1129,7 @@ func (tenant *Tenant) DeleteBranch(ctx context.Context, tx transaction.Tx, projN
 
 	proj, found := tenant.projects[projName]
 	if !found {
+		spew.Dump(tenant.projects)
 		return NewProjectNotFoundErr(projName)
 	}
 
@@ -1250,15 +1254,16 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 		nil,
 	)
 
-	collection := schema.NewDefaultCollection(
-		schFactory.Name,
+	collection, err := schema.NewDefaultCollection(
 		collectionId,
 		baseSchemaVersion,
-		schFactory.CollectionType,
 		schFactory,
 		nil,
 		implicitSearchIndex,
 	)
+	if err != nil {
+		return err
+	}
 
 	encName, err := tenant.Encoder.EncodeTableName(tenant.namespace, database, collection)
 	if err != nil {
@@ -1320,9 +1325,12 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 		return err
 	}
 
-	existingSearch, err := tenant.searchStore.DescribeCollection(ctx, existingCollection.ImplicitSearchIndex.StoreIndexName())
-	if err != nil {
-		return err
+	existingSearch := &tsApi.CollectionResponse{}
+	if config.DefaultConfig.Search.WriteEnabled {
+		existingSearch, err = tenant.searchStore.DescribeCollection(ctx, existingCollection.ImplicitSearchIndex.StoreIndexName())
+		if err != nil {
+			return err
+		}
 	}
 
 	updatedSearchIndex := schema.NewImplicitSearchIndex(
@@ -1334,15 +1342,16 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 
 	// store the collection to the databaseObject, this is actually cloned database object passed by the query runner.
 	// So failure of the transaction won't impact the consistency of the cache
-	collection := schema.NewDefaultCollection(
-		schFactory.Name,
+	collection, err := schema.NewDefaultCollection(
 		c.id,
 		schRevision,
-		schFactory.CollectionType,
 		schFactory,
 		allSchemas,
 		updatedSearchIndex,
 	)
+	if err != nil {
+		return err
+	}
 
 	encName, err := tenant.Encoder.EncodeTableName(tenant.namespace, database, collection)
 	if err != nil {
@@ -1354,14 +1363,17 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 	// recreating collection holder is fine because we are working on databaseClone and also has a lock on the tenant
 	database.collections[schFactory.Name] = newCollectionHolder(c.id, schFactory.Name, collection, c.idxNameToId)
 
-	// update indexing store schema if there is a change
-	if deltaFields := schema.GetSearchDeltaFields(existingCollection.ImplicitSearchIndex.QueryableFields, schFactory.Fields, existingSearch.Fields); len(deltaFields) > 0 {
-		if err := tenant.searchStore.UpdateCollection(ctx, collection.ImplicitSearchIndex.StoreIndexName(), &tsApi.CollectionUpdateSchema{
-			Fields: deltaFields,
-		}); err != nil {
-			return err
+	if config.DefaultConfig.Search.WriteEnabled {
+		// update indexing store schema if there is a change
+		if deltaFields := schema.GetSearchDeltaFields(existingCollection.ImplicitSearchIndex.QueryableFields, schFactory.Fields, existingSearch.Fields); len(deltaFields) > 0 {
+			if err := tenant.searchStore.UpdateCollection(ctx, collection.ImplicitSearchIndex.StoreIndexName(), &tsApi.CollectionUpdateSchema{
+				Fields: deltaFields,
+			}); err != nil {
+				return err
+			}
 		}
 	}
+
 	return nil
 }
 
@@ -1729,7 +1741,12 @@ func createCollection(id uint32, name string, schemas schema.Versions, idxNameTo
 
 	implicitSearchIndex := schema.NewImplicitSearchIndex(name, searchCollectionName, schFactory.Fields, fieldsInSearch)
 
-	return schema.NewDefaultCollection(name, id, schemas.Latest().Version, schFactory.CollectionType, schFactory, schemas, implicitSearchIndex), nil
+	c, err := schema.NewDefaultCollection(id, schemas.Latest().Version, schFactory, schemas, implicitSearchIndex)
+	if err != nil {
+		return nil, err
+	}
+
+	return c, nil
 }
 
 // Search is to manage all the search indexes that are explicitly created by the user.

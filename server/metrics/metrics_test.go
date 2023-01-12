@@ -37,6 +37,9 @@ func TestInitializeMetrics(t *testing.T) {
 		config.DefaultConfig.Metrics.Enabled = true
 		// Will panic if the high level structure cannot be created
 		InitializeMetrics()
+
+		SchemaReadOutdated("proj1", "coll1")
+		SchemaUpdateRepaired("proj1", "coll1")
 	})
 }
 

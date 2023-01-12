@@ -21,6 +21,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/lib/container"
+	"github.com/tigrisdata/tigris/server/config"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
@@ -409,7 +410,7 @@ func (f *Field) IsSorted() bool {
 }
 
 func (f *Field) IsCompatible(f1 *Field) error {
-	if f.DataType != f1.DataType {
+	if f.DataType != f1.DataType && !config.DefaultConfig.Schema.AllowIncompatible {
 		return errors.InvalidArgument("data type mismatch for field %q", f.FieldName)
 	}
 
@@ -418,7 +419,7 @@ func (f *Field) IsCompatible(f1 *Field) error {
 	}
 
 	if f.MaxLength != nil && f1.MaxLength != nil {
-		if *f.MaxLength > *f1.MaxLength {
+		if *f.MaxLength > *f1.MaxLength && !config.DefaultConfig.Schema.AllowIncompatible {
 			return errors.InvalidArgument("reducing length of an existing field is not allowed %q", f.FieldName)
 		}
 	}

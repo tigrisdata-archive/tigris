@@ -37,6 +37,7 @@ var (
 	QuotaMetrics   tally.Scope
 	NetworkMetrics tally.Scope
 	AuthMetrics    tally.Scope
+	SchemaMetrics  tally.Scope
 )
 
 func getVersion() string {
@@ -75,6 +76,18 @@ func getTimerSummaryObjectives() map[float64]float64 {
 		}
 	}
 	return res
+}
+
+func SchemaReadOutdated(project string, collection string) {
+	if SchemaMetrics != nil {
+		SchemaMetrics.Tagged(GetProjectCollTags(project, collection)).Counter("read_outdated").Inc(1)
+	}
+}
+
+func SchemaUpdateRepaired(project string, collection string) {
+	if SchemaMetrics != nil {
+		SchemaMetrics.Tagged(GetProjectCollTags(project, collection)).Counter("update_repaired").Inc(1)
+	}
 }
 
 func InitializeMetrics() func() {
@@ -130,6 +143,8 @@ func InitializeMetrics() func() {
 		if config.DefaultConfig.Quota.Namespace.Enabled {
 			initializeQuotaScopes()
 		}
+
+		SchemaMetrics = root.SubScope("schema")
 	}
 
 	return func() {

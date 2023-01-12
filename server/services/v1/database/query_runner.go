@@ -268,13 +268,15 @@ func (runner *BaseQueryRunner) mutateAndValidatePayload(coll *schema.DefaultColl
 	}
 
 	// this will mutate map, so we need to serialize this map again
-	if err := mutator.stringToInt64(deserializedDoc); err != nil {
+	if err = mutator.stringToInt64(deserializedDoc); err != nil {
 		return doc, err
 	}
-	if err := mutator.setDefaultsInIncomingPayload(deserializedDoc); err != nil {
+
+	if err = mutator.setDefaultsInIncomingPayload(deserializedDoc); err != nil {
 		return doc, err
 	}
-	if err := coll.Validate(deserializedDoc); err != nil {
+
+	if err = coll.Validate(deserializedDoc); err != nil {
 		// schema validation failed
 		return doc, err
 	}
@@ -594,7 +596,7 @@ type UpdateQueryRunner struct {
 	queryMetrics *metrics.WriteQueryMetrics
 }
 
-func updateDefaultsAndSchema(collection *schema.DefaultCollection, doc []byte, version int32, ts *internal.Timestamp) ([]byte, error) {
+func updateDefaultsAndSchema(db string, collection *schema.DefaultCollection, doc []byte, version int32, ts *internal.Timestamp) ([]byte, error) {
 	var (
 		err    error
 		decDoc map[string]any
@@ -612,8 +614,9 @@ func updateDefaultsAndSchema(collection *schema.DefaultCollection, doc []byte, v
 		return nil, err
 	}
 
-	if err = collection.UpdateRowSchema(decDoc, version); err != nil {
-		return nil, err
+	if !collection.CompatibleSchemaSince(version) {
+		collection.UpdateRowSchema(decDoc, version)
+		metrics.SchemaUpdateRepaired(db, collection.Name)
 	}
 
 	if len(collection.TaggedDefaultsForUpdate()) > 0 {
@@ -684,7 +687,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			return Response{}, ctx, err
 		}
 
-		merged, err := updateDefaultsAndSchema(coll, row.Data.RawData, row.Data.Ver, ts)
+		merged, err := updateDefaultsAndSchema(db.Name(), coll, row.Data.RawData, row.Data.Ver, ts)
 		if err != nil {
 			return Response{}, ctx, err
 		}
@@ -1010,9 +1013,16 @@ func (runner *StreamingQueryRunner) iterate(coll *schema.DefaultCollection, iter
 
 	var row Row
 	for i := int64(0); (limit == 0 || i < limit) && iterator.Next(&row); i++ {
-		rawData, err := coll.UpdateRowSchemaRaw(row.Data.RawData, row.Data.Ver)
-		if err != nil {
-			return row.Key, err
+		rawData := row.Data.RawData
+		var err error
+
+		if !coll.CompatibleSchemaSince(row.Data.Ver) {
+			rawData, err = coll.UpdateRowSchemaRaw(rawData, row.Data.Ver)
+			if err != nil {
+				return row.Key, err
+			}
+
+			metrics.SchemaReadOutdated(runner.req.GetProject(), coll.Name)
 		}
 
 		newValue, err := fieldFactory.Apply(rawData)

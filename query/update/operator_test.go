@@ -462,7 +462,10 @@ func testCollection(t *testing.T) *schema.DefaultCollection {
 	schFactory, err := schema.Build("test_update", reqSchema)
 	require.NoError(t, err)
 
-	return schema.NewDefaultCollection("test_update", 1, 1, schFactory.CollectionType, schFactory, nil, nil)
+	c, err := schema.NewDefaultCollection(1, 1, schFactory, nil, nil)
+	require.NoError(t, err)
+
+	return c
 }
 
 func testCollection2(t *testing.T) *schema.DefaultCollection {
@@ -514,5 +517,8 @@ func testCollection2(t *testing.T) *schema.DefaultCollection {
 	schFactory, err := schema.Build("test_update", reqSchema)
 	require.NoError(t, err)
 
-	return schema.NewDefaultCollection("test_update", 1, 1, schFactory.CollectionType, schFactory, nil, nil)
+	c, err := schema.NewDefaultCollection(1, 1, schFactory, nil, nil)
+	require.NoError(t, err)
+
+	return c
 }

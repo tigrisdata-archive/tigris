@@ -214,7 +214,7 @@ func (sessMgr *SessionManager) Create(ctx context.Context, trackVerInOwnTxn bool
 		tenant:         tenant,
 		versionTracker: versionTracker,
 		txListeners:    sessMgr.txListeners,
-		tenantTracker: sessMgr.tenantTracker,
+		tenantTracker:  sessMgr.tenantTracker,
 	}
 	if track {
 		sessMgr.tracker.add(txCtx.Id, q)
@@ -284,6 +284,7 @@ func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, runner Quer
 		}
 
 		err = session.Commit(sessMgr.versionH, req.MetadataChange, err)
+		log.Debug().Err(err).Msg("session.commit after")
 		if err != kv.ErrConflictingTransaction {
 			return
 		}
@@ -326,7 +327,7 @@ type QuerySession struct {
 	tenant         *metadata.Tenant
 	versionTracker *metadata.Tracker
 	txListeners    []TxListener
-	tenantTracker *metadata.CacheTracker
+	tenantTracker  *metadata.CacheTracker
 }
 
 func (s *QuerySession) GetTx() transaction.Tx {

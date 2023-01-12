@@ -54,7 +54,7 @@ type DefaultCollection struct {
 	Schema jsoniter.RawMessage
 	// SchemaDeltas contains incompatible schema changes from version to version
 	SchemaDeltas []VersionDelta
-	// ImplicitSearchIndex is created by Tigris to use a search index for inmemory indexes. This is needed till we move
+	// ImplicitSearchIndex is created by the Tigris to use a search index for in-memory indexes. This is needed till we move
 	// to secondary indexes which will be stored in FDB.
 	ImplicitSearchIndex *ImplicitSearchIndex
 	// search indexes are indexes that are explicitly created by the user and tagged Tigris as source. Collection will be
@@ -124,18 +124,17 @@ func disableAdditionalPropertiesAndAllowNullable(required []string, properties m
 	}
 }
 
-func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionType, factory *Factory, schemas Versions, implicitSearchIndex *ImplicitSearchIndex) *DefaultCollection {
-	url := name + ".json"
+func NewDefaultCollection(id uint32, schVer int, factory *Factory, schemas Versions,
+	implicitSearchIndex *ImplicitSearchIndex,
+) (*DefaultCollection, error) {
+	url := factory.Name + ".json"
 	compiler := jsonschema.NewCompiler()
 	compiler.Draft = jsonschema.Draft7 // Format is only working for draft7
 	if err := compiler.AddResource(url, bytes.NewReader(factory.Schema)); err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	validator, err := compiler.Compile(url)
-	if err != nil {
-		panic(err)
-	}
+	validator := compiler.MustCompile(url)
 
 	// Tigris doesn't allow additional fields as part of the write requests. Setting it to false ensures strict
 	// schema validation.
@@ -144,22 +143,27 @@ func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionTy
 
 	queryableFields := BuildQueryableFields(factory.Fields, nil)
 
+	schemaDeltas, err := buildSchemaDeltas(schemas)
+	if err != nil {
+		return nil, err
+	}
+
 	d := &DefaultCollection{
 		Id:                       id,
 		SchVer:                   schVer,
-		Name:                     name,
+		Name:                     factory.Name,
 		Fields:                   factory.Fields,
 		Indexes:                  factory.Indexes,
 		Validator:                validator,
 		Schema:                   factory.Schema,
 		QueryableFields:          queryableFields,
-		CollectionType:           ctype,
+		CollectionType:           factory.CollectionType,
 		ImplicitSearchIndex:      implicitSearchIndex,
 		int64FieldsPath:          make(map[string]struct{}),
 		fieldsWithInsertDefaults: make(map[string]struct{}),
 		fieldsWithUpdateDefaults: make(map[string]struct{}),
-		SchemaDeltas:             buildSchemaDeltas(schemas),
 		SearchIndexes:            make(map[string]*SearchIndex),
+		SchemaDeltas:             schemaDeltas,
 	}
 
 	// set paths for int64 fields
@@ -167,7 +171,7 @@ func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionTy
 	// set fieldDefaulter for default fields
 	d.setFieldsForDefaults("", d.Fields)
 
-	return d
+	return d, nil
 }
 
 func (d *DefaultCollection) AddSearchIndex(index *SearchIndex) {

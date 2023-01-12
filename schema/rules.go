@@ -16,6 +16,7 @@ package schema
 
 import (
 	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/server/config"
 )
 
 var (
@@ -55,6 +56,10 @@ func (v *FieldSchemaValidator) Validate(existing *DefaultCollection, current *Fa
 	for name, f := range existingFields {
 		c, ok := currentFields[name]
 		if !ok {
+			if config.DefaultConfig.Schema.AllowIncompatible {
+				continue
+			}
+
 			return ErrMissingField
 		}
 
@@ -70,10 +75,8 @@ func (v *FieldSchemaValidator) Validate(existing *DefaultCollection, current *Fa
 // following validations,
 //   - Primary Key Changed, or order of fields part of the primary key is changed
 //   - Collection name change
-//   - Type of existing field is changed
 //   - A validation on field property is also applied like for instance if existing field has some property, but it is
 //     removed in the new schema
-//   - Removing a field
 //   - Any index exist on the collection will also have same checks like type, etc
 func ApplySchemaRules(existing *DefaultCollection, current *Factory) error {
 	if existing.Name != current.Name {

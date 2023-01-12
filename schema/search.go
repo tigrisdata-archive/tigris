@@ -20,7 +20,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
-	"github.com/tigrisdata/tigris/lib/container"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
@@ -186,27 +185,53 @@ func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.Co
 }
 
 func GetSearchDeltaFields(existingFields []*QueryableField, incomingFields []*Field, fieldsInSearch []tsApi.Field) []tsApi.Field {
+	ptrTrue := true
+
 	incomingQueryable := BuildQueryableFields(incomingFields, fieldsInSearch)
 
-	existingFieldSet := container.NewHashSet()
+	existingFieldMap := make(map[string]*QueryableField)
+
 	for _, f := range existingFields {
-		existingFieldSet.Insert(f.FieldName)
+		existingFieldMap[f.FieldName] = f
 	}
 
-	ptrTrue := true
 	tsFields := make([]tsApi.Field, 0, len(incomingQueryable))
 	for _, f := range incomingQueryable {
-		if existingFieldSet.Contains(f.FieldName) {
+		e := existingFieldMap[f.FieldName]
+		delete(existingFieldMap, f.FieldName)
+
+		if e != nil && f.SearchType == e.SearchType {
 			continue
 		}
 
-		tsFields = append(tsFields, tsApi.Field{
+		tsField := tsApi.Field{
 			Name:     f.FieldName,
 			Type:     f.SearchType,
 			Facet:    &f.Faceted,
 			Index:    &f.Indexed,
 			Optional: &ptrTrue,
-		})
+		}
+
+		// type changed. drop the field first
+		if e != nil {
+			tsFields = append(tsFields, tsApi.Field{
+				Name: f.FieldName,
+				Drop: &ptrTrue,
+			})
+		}
+
+		// add new field
+		tsFields = append(tsFields, tsField)
+	}
+
+	// drop fields non existing in new schema
+	for _, f := range existingFieldMap {
+		tsField := tsApi.Field{
+			Name: f.FieldName,
+			Drop: &ptrTrue,
+		}
+
+		tsFields = append(tsFields, tsField)
 	}
 
 	return tsFields

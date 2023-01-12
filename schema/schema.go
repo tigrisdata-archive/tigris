@@ -191,7 +191,7 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 			Message: fmt.Sprintf("schema: '%s', unmarshalling failed", string(reqSchema)),
 		})
 	}
-	if collection != schema.Name {
+	if collection != "" && collection != schema.Name {
 		return nil, errors.InvalidArgument("collection name is not same as schema name '%s' '%s'", collection, schema.Name)
 	}
 	if len(schema.Properties) == 0 {
