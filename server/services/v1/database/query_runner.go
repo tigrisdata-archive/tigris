@@ -268,16 +268,6 @@ func (runner *BaseQueryRunner) mutateAndValidatePayload(coll *schema.DefaultColl
 		return doc, err
 	}
 
-	var nulls []string
-	for k, v := range deserializedDoc {
-		// for schema validation, if the field is set to null, remove it.
-		if v == nil {
-			// nulls will be added back if we need to serialize the payload again.
-			nulls = append(nulls, k)
-			delete(deserializedDoc, k)
-		}
-	}
-
 	// this will mutate map, so we need to serialize this map again
 	if err := mutator.stringToInt64(deserializedDoc); err != nil {
 		return doc, err
@@ -291,10 +281,6 @@ func (runner *BaseQueryRunner) mutateAndValidatePayload(coll *schema.DefaultColl
 	}
 
 	if mutator.isMutated() {
-		for _, n := range nulls {
-			deserializedDoc[n] = nil
-		}
-
 		return ljson.Encode(deserializedDoc)
 	}
 
@@ -609,26 +595,37 @@ type UpdateQueryRunner struct {
 	queryMetrics *metrics.WriteQueryMetrics
 }
 
-func updateDefaults(collection *schema.DefaultCollection, doc []byte, ts *internal.Timestamp) ([]byte, error) {
+func updateDefaultsAndSchema(collection *schema.DefaultCollection, doc []byte, version int32, ts *internal.Timestamp) ([]byte, error) {
+	var (
+		err    error
+		decDoc map[string]any
+	)
+
+	if len(collection.TaggedDefaultsForUpdate()) == 0 && collection.CompatibleSchemaSince(version) {
+		return doc, nil
+	}
+
+	// TODO: revisit this path. We are deserializing here the merged payload (existing + incoming) and then
+	// we are setting the updated value if any field is tagged with @updatedAt and then we are packing
+	// it again.
+	decDoc, err = ljson.Decode(doc)
+	if ulog.E(err) {
+		return nil, err
+	}
+
+	if err = collection.UpdateRowSchema(decDoc, version); err != nil {
+		return nil, err
+	}
+
 	if len(collection.TaggedDefaultsForUpdate()) > 0 {
-		// ToDo: revisit this path. We are deserializing here the merged payload (existing + incoming) and then
-		// we are setting the updated value if any field is tagged with @updatedAt and then we are packing
-		// it again.
-		deserializedDoc, err := ljson.Decode(doc)
-		if ulog.E(err) {
-			return nil, err
-		}
-
 		mutator := newUpdatePayloadMutator(collection, ts.ToRFC3339())
-		if err = mutator.setDefaultsInExistingPayload(deserializedDoc); err != nil {
+		if err = mutator.setDefaultsInExistingPayload(decDoc); err != nil {
 			return nil, err
 		}
+	}
 
-		if mutator.isMutated() {
-			if doc, err = ljson.Encode(deserializedDoc); err != nil {
-				return nil, err
-			}
-		}
+	if doc, err = ljson.Encode(decDoc); err != nil {
+		return nil, err
 	}
 
 	return doc, nil
@@ -651,13 +648,18 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return Response{}, ctx, err
 	}
 
-	var factory *update.FieldOperatorFactory
-	factory, err = update.BuildFieldOperators(runner.req.Fields)
+	factory, err := update.BuildFieldOperators(runner.req.Fields)
 	if err != nil {
 		return Response{}, ctx, err
 	}
 
-	ts := internal.NewTimestamp()
+	var (
+		collation     *api.Collation
+		limit         int32
+		modifiedCount int32
+		row           Row
+		ts            = internal.NewTimestamp()
+	)
 
 	if fieldOperator, ok := factory.FieldOperators[string(update.Set)]; ok {
 		// Set operation needs schema validation as well as mutation if we need to convert numeric fields from string to int64
@@ -667,9 +669,9 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		}
 	}
 
-	var collation *api.Collation
 	if runner.req.Options != nil {
 		collation = runner.req.Options.Collation
+		limit = int32(runner.req.Options.Limit)
 	}
 
 	iterator, err := runner.getWriteIterator(ctx, tx, coll, runner.req.Filter, collation, runner.queryMetrics)
@@ -677,27 +679,21 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return Response{}, ctx, err
 	}
 
-	limit := int32(0)
-	if runner.req.Options != nil {
-		limit = int32(runner.req.Options.Limit)
-	}
-
-	modifiedCount := int32(0)
-	var row Row
-	for iterator.Next(&row) {
+	for ; (limit == 0 || modifiedCount < limit) && iterator.Next(&row); modifiedCount++ {
 		key, err := keys.FromBinary(coll.EncodedName, row.Key)
+		if err != nil {
+			return Response{}, ctx, err
+		}
+
+		merged, err := updateDefaultsAndSchema(coll, row.Data.RawData, row.Data.Ver, ts)
 		if err != nil {
 			return Response{}, ctx, err
 		}
 
 		// MergeAndGet merge the user input with existing doc and return the merged JSON document which we need to
 		// persist back.
-		merged, primaryKeyMutation, err := factory.MergeAndGet(row.Data.RawData, coll)
+		merged, primaryKeyMutation, err := factory.MergeAndGet(merged, coll)
 		if err != nil {
-			return Response{}, ctx, err
-		}
-
-		if merged, err = updateDefaults(coll, merged, ts); err != nil {
 			return Response{}, ctx, err
 		}
 
@@ -722,10 +718,6 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		}
 		if err = tx.Replace(ctx, newKey, newData, isUpdate); ulog.E(err) {
 			return Response{}, ctx, err
-		}
-		modifiedCount++
-		if limit > 0 && modifiedCount == limit {
-			break
 		}
 	}
 
@@ -761,8 +753,7 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	var iterator Iterator
 	if filter.None(runner.req.Filter) {
-		reader := NewDatabaseReader(ctx, tx)
-		iterator, err = reader.ScanTable(coll.EncodedName)
+		iterator, err = NewDatabaseReader(ctx, tx).ScanTable(coll.EncodedName)
 		runner.queryMetrics.SetWriteType("full_scan")
 	} else {
 		var collation *api.Collation
@@ -924,7 +915,7 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 		}
 
 		var last []byte
-		last, err = runner.iterateOnKvStore(ctx, tx, options)
+		last, err = runner.iterateOnKvStore(ctx, tx, collection, options)
 		_ = tx.Rollback(ctx)
 
 		if err == kv.ErrTransactionMaxDurationReached {
@@ -969,14 +960,14 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 		}
 		return Response{}, ctx, nil
 	} else {
-		if _, err = runner.iterateOnKvStore(ctx, tx, options); err != nil {
+		if _, err = runner.iterateOnKvStore(ctx, tx, coll, options); err != nil {
 			return Response{}, ctx, err
 		}
 		return Response{}, ctx, nil
 	}
 }
 
-func (runner *StreamingQueryRunner) iterateOnKvStore(ctx context.Context, tx transaction.Tx, options readerOptions) ([]byte, error) {
+func (runner *StreamingQueryRunner) iterateOnKvStore(ctx context.Context, tx transaction.Tx, coll *schema.DefaultCollection, options readerOptions) ([]byte, error) {
 	var err error
 	var iter Iterator
 	reader := NewDatabaseReader(ctx, tx)
@@ -995,39 +986,39 @@ func (runner *StreamingQueryRunner) iterateOnKvStore(ctx context.Context, tx tra
 		return nil, err
 	}
 
-	return runner.iterate(iter, options.fieldFactory)
+	return runner.iterate(coll, iter, options.fieldFactory)
 }
 
-func (runner *StreamingQueryRunner) iterateOnIndexingStore(ctx context.Context, collection *schema.DefaultCollection, options readerOptions) error {
-	rowReader := NewSearchReader(ctx, runner.searchStore, collection, qsearch.NewBuilder().
+func (runner *StreamingQueryRunner) iterateOnIndexingStore(ctx context.Context, coll *schema.DefaultCollection, options readerOptions) error {
+	rowReader := NewSearchReader(ctx, runner.searchStore, coll, qsearch.NewBuilder().
 		Filter(options.filter).
 		SortOrder(options.sorting).
 		PageSize(defaultPerPage).
 		Build())
 
-	if _, err := runner.iterate(rowReader.Iterator(collection, options.filter), options.fieldFactory); err != nil {
+	if _, err := runner.iterate(coll, rowReader.Iterator(coll, options.filter), options.fieldFactory); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (runner *StreamingQueryRunner) iterate(iterator Iterator, fieldFactory *read.FieldFactory) ([]byte, error) {
-	limit, totalResults := int64(0), int64(0)
+func (runner *StreamingQueryRunner) iterate(coll *schema.DefaultCollection, iterator Iterator, fieldFactory *read.FieldFactory) ([]byte, error) {
+	limit := int64(0)
 	if runner.req.GetOptions() != nil {
 		limit = runner.req.GetOptions().Limit
 	}
 
-	var lastRowKey []byte
 	var row Row
-	for iterator.Next(&row) {
-		if limit > 0 && limit <= totalResults {
-			return lastRowKey, nil
+	for i := int64(0); (limit == 0 || i < limit) && iterator.Next(&row); i++ {
+		rawData, err := coll.UpdateRowSchemaRaw(row.Data.RawData, row.Data.Ver)
+		if err != nil {
+			return row.Key, err
 		}
 
-		newValue, err := fieldFactory.Apply(row.Data.RawData)
+		newValue, err := fieldFactory.Apply(rawData)
 		if ulog.E(err) {
-			return lastRowKey, err
+			return row.Key, err
 		}
 
 		if err := runner.streaming.Send(&api.ReadResponse{
@@ -1038,13 +1029,11 @@ func (runner *StreamingQueryRunner) iterate(iterator Iterator, fieldFactory *rea
 			},
 			ResumeToken: row.Key,
 		}); ulog.E(err) {
-			return lastRowKey, err
+			return row.Key, err
 		}
-		lastRowKey = row.Key
-		totalResults++
 	}
 
-	return lastRowKey, iterator.Interrupted()
+	return row.Key, iterator.Interrupted()
 }
 
 // SearchQueryRunner is a runner used for Queries that are reads and needs to return result in streaming fashion.

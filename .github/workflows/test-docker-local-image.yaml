@@ -1,0 +1,33 @@
+name: test local docker image
+
+on:
+  pull_request:
+    paths:
+      - docker/Dockerfile.local
+      - scripts/install_local_deps.sh
+      - .github/workflows/test-docker-local-image.yaml
+  push:
+    branches:
+      - main
+
+jobs:
+  test-local-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - name: Build local image
+        run: DOCKER_BUILDKIT=1 docker build -f docker/Dockerfile.local -t tigrisdata/tigris-local-test .
+
+      - name: Run local image
+        run: docker run -d -p 8081:8081 tigrisdata/tigris-local-test
+
+      - name: Run CLI tests
+        run: |
+          curl -sSL https://tigris.dev/cli-linux | tar -xz -C .
+          TIGRIS_URL=localhost:8081 ./tigris ping --timeout 20s
+          noup=1 /bin/bash test/v1/cli/main.sh
+

@@ -17,12 +17,13 @@
 package server
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"
 
-	"bytes"
-	"encoding/json"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/gavv/httpexpect.v1"
 )
@@ -97,6 +98,10 @@ func TestMessages(t *testing.T) {
 		require.NoError(t, dec.Decode(&mp))
 
 		var msg map[string]json.RawMessage
+		if mp["result"] == nil {
+			spew.Dump(mp)
+		}
+		require.NotNil(t, mp["result"])
 		require.NoError(t, json.Unmarshal(mp["result"], &msg))
 
 		var userMsg map[string]json.RawMessage

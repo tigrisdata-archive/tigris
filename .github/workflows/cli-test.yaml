@@ -27,4 +27,4 @@ jobs:
           sleep 20
 
       - name: Run CLI tests
-        run: noup=1 /bin/bash test/v1/cli/tests.sh
+        run: noup=1 /bin/bash test/v1/cli/main.sh

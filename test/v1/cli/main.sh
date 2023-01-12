@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2022-2023 Tigris Data, Inc.
+# Copyright 2022 Tigris Data, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,12 +13,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -exv
+set -ex
 PS4='${LINENO}: '
 
 if [ -z "$cli" ]; then
-	cli="./tigris"
+	cli="$(pwd)/tigris"
 fi
+
+unset TIGRIS_URL
+unset TIGRIS_TOKEN
+unset TIGRIS_CLIENT_SECRET
+unset TIGRIS_CLIENT_ID
 
 # Just to check if any config is set
 env|grep TIGRIS || true
@@ -48,9 +53,16 @@ if [ -z "$noup" ]; then
 	$cli local logs >/dev/null 2>&1
 fi
 
+
+OS=$(uname -s)
+
 export TIGRIS_URL=localhost:8081
 $cli server info
 $cli server version
+
+if [ "$OS" == 'Darwin' ]; then
+  export TIGRIS_TIMEOUT=15s
+fi
 
 test_config() {
   export TIGRIS_CLIENT_ID=test_id_1
@@ -325,7 +337,7 @@ db_errors_tests() {
 }
 
 db_generate_schema_test() {
-  $cli generate sample-schema --create
+  $cli generate sample-schema --project sampledb --create
   $cli delete-project -f sampledb
 }
 
@@ -344,7 +356,11 @@ main() {
 	unset TIGRIS_PROTOCOL
 	export TIGRIS_URL=localhost:8081
 	db_tests
-	test_scaffold
+	# Scaffold tests require local instance to start/stop
+	# so skip these tests in Tigris server repo integration tests
+  if [ -z "$noup" ]; then
+	  test_scaffold
+	fi
 	test_import
 	test_backup
 
@@ -354,7 +370,6 @@ main() {
 	$cli config show | grep "protocol: grpc"
 	$cli config show | grep "url: localhost:8081"
 	db_tests
-	test_scaffold
 	test_import
 	test_backup
 
@@ -396,5 +411,7 @@ test_dev_alias() {
 	$cli dev stop $port
 }
 
-test_dev_alias
+if [ -z "$noup" ]; then
+  test_dev_alias
+fi
 

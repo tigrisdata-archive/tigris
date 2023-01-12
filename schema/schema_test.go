@@ -27,7 +27,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		reqSchema := []byte(`{"title":"t1", "description":"This document records the details of an order","properties":{"order_id":{"description":"A unique identifier for an order","type":"integer"},"cust_id":{"description":"A unique identifier for a customer","type":"integer"},"product":{"description":"name of the product","type":"string","maxLength":100},"quantity":{"description":"number of products ordered","type":"integer"},"price":{"description":"price of the product","type":"number"}},"primary_key":["cust_id","order_id"]}`)
 		schF, err := Build("t1", reqSchema)
 		require.NoError(t, err)
-		c := NewDefaultCollection("t1", 1, 1, schF.CollectionType, schF, "t1", nil)
+		c := NewDefaultCollection("t1", 1, 1, schF.CollectionType, schF, "t1", nil, nil)
 		require.Equal(t, c.Name, "t1")
 		require.Equal(t, c.Indexes.PrimaryKey.Fields[0].FieldName, "cust_id")
 		require.Equal(t, c.Indexes.PrimaryKey.Fields[1].FieldName, "order_id")
@@ -70,7 +70,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 }`)
 		sch, err := Build("t1", schema)
 		require.NoError(t, err)
-		c := NewDefaultCollection("t1", 1, 1, sch.CollectionType, sch, "t1", nil)
+		c := NewDefaultCollection("t1", 1, 1, sch.CollectionType, sch, "t1", nil, nil)
 		fields := c.GetFields()
 		require.Equal(t, StringType, fields[0].DataType)
 		require.Equal(t, Int64Type, fields[1].DataType)
@@ -107,7 +107,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 }`)
 		sch, err := Build("t1", schema)
 		require.NoError(t, err)
-		c := NewDefaultCollection("t1", 1, 1, sch.CollectionType, sch, "t1", nil)
+		c := NewDefaultCollection("t1", 1, 1, sch.CollectionType, sch, "t1", nil, nil)
 		require.NoError(t, err)
 		require.Equal(t, StringType, c.Indexes.PrimaryKey.Fields[0].DataType)
 		require.Equal(t, Int64Type, c.Indexes.PrimaryKey.Fields[1].DataType)
@@ -131,6 +131,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		_, err := Build("t1", schema)
 		require.Equal(t, "unsupported primary key type detected 'number'", err.(*api.TigrisError).Error())
 	})
+
 	t.Run("test_complex_types", func(t *testing.T) {
 		schema := []byte(`{
 	"title": "t1",
@@ -181,33 +182,131 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 					}
 				}
 			}
+		},
+		"array_2d_simple": {
+			"type": "array",
+			"items": {
+				"type": "array",
+				"items": {
+					"type": "string"
+				}
+			}
+		},
+		"array_2d_object": {
+			"type": "array",
+			"items": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"properties": {
+						"id": {
+							"type": "integer"
+						},
+						"item_name": {
+							"type": "string"
+						}
+					}
+				}
+			}
 		}
 	},
 	"primary_key": ["id"]
 }`)
 		sch, err := Build("t1", schema)
 		require.NoError(t, err)
-		coll := NewDefaultCollection("t1", 1, 1, sch.CollectionType, sch, "t1", nil)
-		require.Equal(t, "simple_items", coll.Fields[4].FieldName)
-		require.Equal(t, Int64Type, coll.Fields[4].Fields[0].DataType)
-		require.Equal(t, 1, len(coll.Fields[4].Fields))
 
-		require.Equal(t, "simple_object", coll.Fields[5].FieldName)
-		require.Equal(t, 1, len(coll.Fields[5].Fields))
-		require.Equal(t, StringType, coll.Fields[5].Fields[0].DataType)
-		require.Equal(t, "name", coll.Fields[5].Fields[0].FieldName)
+		coll := NewDefaultCollection("t1", 1, 1, sch.CollectionType, sch, "t1", nil, nil)
+		coll.Validator = nil
+		coll.Search = nil
+		coll.QueryableFields = nil
+		coll.int64FieldsPath = nil
+		coll.fieldsWithInsertDefaults = nil
+		coll.fieldsWithUpdateDefaults = nil
+		coll.SchemaDeltas = nil
 
-		require.Equal(t, "product_items", coll.Fields[6].FieldName)
-		require.Equal(t, ArrayType, coll.Fields[6].DataType)
-		require.Equal(t, 1, len(coll.Fields[6].Fields))
-		require.Equal(t, ObjectType, coll.Fields[6].Fields[0].DataType)
-		require.Equal(t, Int64Type, coll.Fields[6].Fields[0].Fields[0].DataType)
-		require.Equal(t, "id", coll.Fields[6].Fields[0].Fields[0].FieldName)
-		require.Equal(t, StringType, coll.Fields[6].Fields[0].Fields[1].DataType)
-		require.Equal(t, "item_name", coll.Fields[6].Fields[0].Fields[1].FieldName)
-		require.Equal(t, ArrayType, coll.Fields[6].Fields[0].Fields[2].DataType)
-		require.Equal(t, "nested_array", coll.Fields[6].Fields[0].Fields[2].FieldName)
+		b := true
+		max1024 := int32(1024)
+		max100 := int32(100)
+		expColl := &DefaultCollection{
+			CollectionType: "documents",
+			Schema:         schema,
+			Id:             1,
+			SchVer:         1,
+			Name:           "t1",
+			Indexes: &Indexes{
+				PrimaryKey: &Index{
+					Fields: []*Field{{FieldName: "id", DataType: Int64Type, PrimaryKeyField: &b}},
+					Name:   "pkey",
+				},
+			},
+			Fields: []*Field{
+				{FieldName: "id", DataType: Int64Type, PrimaryKeyField: &b},
+				{FieldName: "random", DataType: ByteType, MaxLength: &max1024},
+				{FieldName: "product", DataType: StringType, MaxLength: &max100},
+				{FieldName: "price", DataType: DoubleType},
+				{
+					FieldName: "simple_items", DataType: ArrayType,
+					Fields: []*Field{{DataType: Int64Type}},
+				},
+				{
+					FieldName: "simple_object",
+					DataType:  ObjectType,
+					Fields: []*Field{
+						{FieldName: "name", DataType: StringType},
+					},
+				},
+				{
+					FieldName: "product_items", DataType: ArrayType,
+					Fields: []*Field{
+						{
+							FieldName: "", DataType: ObjectType,
+							Fields: []*Field{
+								{FieldName: "id", DataType: Int64Type},
+								{FieldName: "item_name", DataType: StringType},
+								{
+									FieldName: "nested_array", DataType: ArrayType,
+									Fields: []*Field{
+										{FieldName: "", DataType: Int64Type},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					FieldName: "array_2d_simple", DataType: ArrayType,
+					Fields: []*Field{
+						{
+							FieldName: "", DataType: ArrayType,
+							Fields: []*Field{
+								{FieldName: "", DataType: StringType},
+							},
+						},
+					},
+				},
+				{
+					FieldName: "array_2d_object", DataType: ArrayType,
+					Fields: []*Field{
+						{
+							FieldName: "", DataType: ArrayType,
+							Fields: []*Field{
+								{
+									FieldName: "", DataType: ObjectType,
+									Fields: []*Field{
+										{FieldName: "id", DataType: Int64Type},
+										{FieldName: "item_name", DataType: StringType},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		require.Equal(t, expColl, coll)
 	})
+
 	t.Run("test_array_missing_items_error", func(t *testing.T) {
 		schema := []byte(`{
 	"title": "t1",
@@ -224,6 +323,32 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		_, err := Build("t1", schema)
 		require.Equal(t, errors.InvalidArgument("missing items for array field"), err)
 	})
+
+	t.Run("test_array_items_and_props_error", func(t *testing.T) {
+		schema := []byte(`{
+	"title": "t1",
+	"properties": {
+		"id": {
+			"type": "integer"
+		},
+		"simple_items": {
+			"type": "array",
+			"properties": {
+				"id": {
+					"type": "integer"
+				}
+			},
+			"items": {
+				"type": "integer"
+			}
+		}
+	},
+	"primary_key": ["id"]
+}`)
+		_, err := Build("t1", schema)
+		require.Equal(t, "properties only allowed for object type", err.Error())
+	})
+
 	t.Run("test_object_missing_properties_error", func(t *testing.T) {
 		schema := []byte(`{
 	"title": "t1",
@@ -239,7 +364,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 }`)
 		sch, err := Build("t1", schema)
 		require.NoError(t, err)
-		c := NewDefaultCollection("t1", 1, 1, sch.CollectionType, sch, "t1", nil)
+		c := NewDefaultCollection("t1", 1, 1, sch.CollectionType, sch, "t1", nil, nil)
 		fields := c.GetFields()
 		require.Equal(t, ObjectType, fields[1].DataType)
 	})
@@ -268,7 +393,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 }`)
 		sch, err := Build("t1", schema)
 		require.NoError(t, err)
-		c := NewDefaultCollection("t1", 1, 1, sch.CollectionType, sch, "t1", nil)
+		c := NewDefaultCollection("t1", 1, 1, sch.CollectionType, sch, "t1", nil, nil)
 		fields := c.GetFields()
 		require.True(t, *fields[0].PrimaryKeyField)
 		require.True(t, *fields[0].AutoGenerated)
@@ -303,7 +428,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 }`)
 		sch, err := Build("t1", schema)
 		require.NoError(t, err)
-		c := NewDefaultCollection("t1", 1, 1, sch.CollectionType, sch, "t1", nil)
+		c := NewDefaultCollection("t1", 1, 1, sch.CollectionType, sch, "t1", nil, nil)
 		fields := c.GetFields()
 		require.True(t, fields[0].Defaulter.createdAt)
 		require.Equal(t, "a", fields[1].Defaulter.value)
@@ -363,7 +488,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 }`)
 		sch, err := Build("t1", schema)
 		require.NoError(t, err)
-		c := NewDefaultCollection("t1", 1, 1, sch.CollectionType, sch, "t1", nil)
+		c := NewDefaultCollection("t1", 1, 1, sch.CollectionType, sch, "t1", nil, nil)
 		fields := c.GetFields()
 		require.Equal(t, 3, len(fields))
 		primaryKeyPresent := false
@@ -394,7 +519,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 }`)
 		sch, err := Build("t1", schema)
 		require.NoError(t, err)
-		c := NewDefaultCollection("t1", 1, 1, sch.CollectionType, sch, "t1", nil)
+		c := NewDefaultCollection("t1", 1, 1, sch.CollectionType, sch, "t1", nil, nil)
 		fields := c.GetFields()
 		require.Equal(t, 2, len(fields))
 		primaryKeyPresent := false
@@ -409,38 +534,6 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		}
 		require.True(t, primaryKeyPresent)
 		require.Equal(t, Int64Type, c.Indexes.PrimaryKey.Fields[0].DataType)
-	})
-	t.Run("test_partition-key", func(t *testing.T) {
-		schema := []byte(`{
-	"title": "t1",
-    "key": [ "k1", "k3" ],
-	"properties": {
-		"k1": {
-			"type": "string"
-		},
-		"k2": {
-			"type": "string"
-		},
-		"k3": {
-			"type": "integer"
-		},
-		"k4": {
-			"type": "integer"
-		}
-	}
-}`)
-		sch, err := Build("t1", schema)
-		require.NoError(t, err)
-		c := NewDefaultCollection("t1", 1, 1, sch.CollectionType, sch, "t1", nil)
-		fields := c.GetFields()
-		require.Equal(t, 5, len(fields))
-		for _, f := range fields {
-			if f.FieldName == "k1" || f.FieldName == "k3" {
-				require.True(t, f.IsPartitionKey())
-			} else {
-				require.False(t, f.IsPartitionKey())
-			}
-		}
 	})
 }
 

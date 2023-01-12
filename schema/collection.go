@@ -39,7 +39,7 @@ type DefaultCollection struct {
 	// Id is the dictionary encoded value for this collection.
 	Id uint32
 	// SchVer returns the schema version
-	SchVer int32
+	SchVer int
 	// Name is the name of the collection.
 	Name string
 	// EncodedName is the encoded name of the collection.
@@ -53,6 +53,8 @@ type DefaultCollection struct {
 	Validator *jsonschema.Schema
 	// JSON schema
 	Schema jsoniter.RawMessage
+	// SchemaDeltas contains incompatible schema changes from version to version
+	SchemaDeltas []VersionDelta
 	// search schema
 	Search *tsApi.CollectionSchema
 	// QueryableFields are similar to Fields but these are flattened forms of fields. For instance, a simple field
@@ -64,8 +66,6 @@ type DefaultCollection struct {
 	// Track all the int64 paths in the collection. For example, if top level object has a int64 field then key would be
 	// obj.fieldName so that caller can easily navigate to this field.
 	int64FieldsPath map[string]struct{}
-	// PartitionFields are the fields that make up the partition key, if applicable to the collection.
-	PartitionFields []*Field
 	// This is the existing fields in search
 	FieldsInSearch []tsApi.Field
 
@@ -79,16 +79,51 @@ const (
 	DocumentsType CollectionType = "documents"
 )
 
-func disableAdditionalProperties(properties map[string]*jsonschema.Schema) {
-	for _, p := range properties {
+func disableAdditionalPropertiesAndAllowNullable(required []string, properties map[string]*jsonschema.Schema) {
+	for name, p := range properties {
+		isRequired := false
+		for _, r := range required {
+			if r == name {
+				isRequired = true
+				break
+			}
+		}
+		if isRequired {
+			continue
+		}
+
+		// add additional null types so that validation can succeed if fields are explicitly set as null
+		if len(p.Types) == 1 {
+			switch p.Types[0] {
+			case "string", "number", "object", "integer", "boolean":
+				p.Types = append(p.Types, "null")
+			case "array":
+				p.Types = append(p.Types, "null")
+				if items, ok := p.Items.(*jsonschema.Schema); ok {
+					if len(items.Properties) == 0 {
+						items.Types = append(items.Types, "null")
+					} else {
+						for _, itemsP := range items.Properties {
+							switch itemsP.Types[0] {
+							case "string", "number", "object", "integer", "array", "boolean":
+								itemsP.Types = append(itemsP.Types, "null")
+							}
+						}
+					}
+				}
+			}
+		}
+
 		if len(p.Properties) > 0 {
 			p.AdditionalProperties = false
-			disableAdditionalProperties(p.Properties)
+			disableAdditionalPropertiesAndAllowNullable(p.Required, p.Properties)
 		}
 	}
 }
 
-func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionType, factory *Factory, searchCollectionName string, fieldsInSearch []tsApi.Field) *DefaultCollection {
+func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionType, factory *Factory,
+	searchCollectionName string, fieldsInSearch []tsApi.Field, schemas Versions,
+) *DefaultCollection {
 	url := name + ".json"
 	compiler := jsonschema.NewCompiler()
 	compiler.Draft = jsonschema.Draft7 // Format is only working for draft7
@@ -104,14 +139,13 @@ func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionTy
 	// Tigris doesn't allow additional fields as part of the write requests. Setting it to false ensures strict
 	// schema validation.
 	validator.AdditionalProperties = false
-	disableAdditionalProperties(validator.Properties)
+	disableAdditionalPropertiesAndAllowNullable(validator.Required, validator.Properties)
 
 	queryableFields := BuildQueryableFields(factory.Fields, fieldsInSearch)
-	partitionFields := BuildPartitionFields(factory.Fields)
 
 	d := &DefaultCollection{
 		Id:                       id,
-		SchVer:                   int32(schVer),
+		SchVer:                   schVer,
 		Name:                     name,
 		Fields:                   factory.Fields,
 		Indexes:                  factory.Indexes,
@@ -121,10 +155,10 @@ func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionTy
 		QueryableFields:          queryableFields,
 		CollectionType:           ctype,
 		int64FieldsPath:          make(map[string]struct{}),
-		PartitionFields:          partitionFields,
 		FieldsInSearch:           fieldsInSearch,
 		fieldsWithInsertDefaults: make(map[string]struct{}),
 		fieldsWithUpdateDefaults: make(map[string]struct{}),
+		SchemaDeltas:             buildSchemaDeltas(schemas),
 	}
 
 	// set paths for int64 fields
@@ -140,7 +174,7 @@ func (d *DefaultCollection) GetName() string {
 }
 
 func (d *DefaultCollection) GetVersion() int32 {
-	return d.SchVer
+	return int32(d.SchVer)
 }
 
 func (d *DefaultCollection) Type() CollectionType {
@@ -324,6 +358,10 @@ func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.Co
 
 func init() {
 	jsonschema.Formats[FieldNames[ByteType]] = func(i interface{}) bool {
+		if i == nil {
+			return true
+		}
+
 		if v, ok := i.(string); ok {
 			_, err := base64.StdEncoding.DecodeString(v)
 			return err == nil
