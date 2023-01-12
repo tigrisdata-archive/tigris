@@ -79,11 +79,44 @@ const (
 	DocumentsType CollectionType = "documents"
 )
 
-func disableAdditionalProperties(properties map[string]*jsonschema.Schema) {
-	for _, p := range properties {
+func disableAdditionalPropertiesAndAllowNullable(required []string, properties map[string]*jsonschema.Schema) {
+	for name, p := range properties {
+		isRequired := false
+		for _, r := range required {
+			if r == name {
+				isRequired = true
+				break
+			}
+		}
+		if isRequired {
+			continue
+		}
+
+		// add additional null types so that validation can succeed if fields are explicitly set as null
+		if len(p.Types) == 1 {
+			switch p.Types[0] {
+			case "string", "number", "object", "integer", "boolean":
+				p.Types = append(p.Types, "null")
+			case "array":
+				p.Types = append(p.Types, "null")
+				if items, ok := p.Items.(*jsonschema.Schema); ok {
+					if len(items.Properties) == 0 {
+						items.Types = append(items.Types, "null")
+					} else {
+						for _, itemsP := range items.Properties {
+							switch itemsP.Types[0] {
+							case "string", "number", "object", "integer", "array", "boolean":
+								itemsP.Types = append(itemsP.Types, "null")
+							}
+						}
+					}
+				}
+			}
+		}
+
 		if len(p.Properties) > 0 {
 			p.AdditionalProperties = false
-			disableAdditionalProperties(p.Properties)
+			disableAdditionalPropertiesAndAllowNullable(p.Required, p.Properties)
 		}
 	}
 }
@@ -106,7 +139,7 @@ func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionTy
 	// Tigris doesn't allow additional fields as part of the write requests. Setting it to false ensures strict
 	// schema validation.
 	validator.AdditionalProperties = false
-	disableAdditionalProperties(validator.Properties)
+	disableAdditionalPropertiesAndAllowNullable(validator.Required, validator.Properties)
 
 	queryableFields := BuildQueryableFields(factory.Fields, fieldsInSearch)
 
@@ -325,6 +358,10 @@ func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.Co
 
 func init() {
 	jsonschema.Formats[FieldNames[ByteType]] = func(i interface{}) bool {
+		if i == nil {
+			return true
+		}
+
 		if v, ok := i.(string); ok {
 			_, err := base64.StdEncoding.DecodeString(v)
 			return err == nil

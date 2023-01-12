@@ -88,6 +88,13 @@ var testCreateSchema = Map{
 				"type":        "string",
 				"format":      "date-time",
 			},
+			"simple_array_value": Map{
+				"description": "array field",
+				"type":        "array",
+				"items": Map{
+					"type": "string",
+				},
+			},
 			"array_value": Map{
 				"description": "array field",
 				"type":        "array",

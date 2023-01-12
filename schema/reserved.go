@@ -26,6 +26,7 @@ const (
 	Metadata
 	IdToSearchKey
 	DateSearchKeyPrefix
+	SearchArrNullItem
 )
 
 var ReservedFields = [...]string{
@@ -34,6 +35,7 @@ var ReservedFields = [...]string{
 	Metadata:            "metadata",
 	IdToSearchKey:       "_tigris_id",
 	DateSearchKeyPrefix: "_tigris_date_",
+	SearchArrNullItem:   "_tigris_null",
 }
 
 func IsReservedField(name string) bool {

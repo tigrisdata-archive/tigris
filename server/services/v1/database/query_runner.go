@@ -268,16 +268,6 @@ func (runner *BaseQueryRunner) mutateAndValidatePayload(coll *schema.DefaultColl
 		return doc, err
 	}
 
-	var nulls []string
-	for k, v := range deserializedDoc {
-		// for schema validation, if the field is set to null, remove it.
-		if v == nil {
-			// nulls will be added back if we need to serialize the payload again.
-			nulls = append(nulls, k)
-			delete(deserializedDoc, k)
-		}
-	}
-
 	// this will mutate map, so we need to serialize this map again
 	if err := mutator.stringToInt64(deserializedDoc); err != nil {
 		return doc, err
@@ -291,10 +281,6 @@ func (runner *BaseQueryRunner) mutateAndValidatePayload(coll *schema.DefaultColl
 	}
 
 	if mutator.isMutated() {
-		for _, n := range nulls {
-			deserializedDoc[n] = nil
-		}
-
 		return ljson.Encode(deserializedDoc)
 	}
 
