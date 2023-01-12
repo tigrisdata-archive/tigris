@@ -910,6 +910,12 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 			return Response{}, ctx, err
 		}
 
+		// reload db again
+		db, err = runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetProject(), runner.req.GetBranch())
+		if err != nil {
+			_ = tx.Rollback(ctx)
+			return Response{}, ctx, err
+		}
 		collection, err = runner.getCollection(db, runner.req.GetCollection())
 		if err != nil {
 			_ = tx.Rollback(ctx)
