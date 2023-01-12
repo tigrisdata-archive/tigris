@@ -24,6 +24,7 @@ const (
 	ErrCodeDatabaseBranchExists ErrorCode = 0x02
 	ErrCodeBranchNotFound       ErrorCode = 0x03
 	ErrCodeCannotDeleteBranch   ErrorCode = 0x04
+	ErrCodeProjectNotFound      ErrorCode = 0x05
 )
 
 type Error struct {
@@ -46,18 +47,14 @@ func (e Error) Code() ErrorCode {
 	return e.code
 }
 
-func NewDatabaseNotFoundErr(name string) error {
-	return NewMetadataError(ErrCodeDatabaseNotFound, "database doesn't exist '%s'", name)
-}
-
-func NewDatabaseExistsErr(name string) error {
-	return NewMetadataError(ErrCodeDatabaseExists, "database already exist '%s'", name)
-}
-
 func NewDatabaseBranchExistsErr(name string) error {
 	return NewMetadataError(ErrCodeDatabaseBranchExists, "branch already exist '%s'", name)
 }
 
 func NewBranchNotFoundErr(name string) error {
 	return NewMetadataError(ErrCodeBranchNotFound, "database branch doesn't exist '%s'", name)
+}
+
+func NewProjectNotFoundErr(name string) error {
+	return NewMetadataError(ErrCodeProjectNotFound, "database doesn't exist '%s'", name)
 }

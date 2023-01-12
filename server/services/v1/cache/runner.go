@@ -342,12 +342,14 @@ func (runner *KeysRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Res
 	}, nil
 }
 
-func getEncodedCacheTableName(ctx context.Context, tenant *metadata.Tenant, project string, cacheName string, encoder metadata.CacheEncoder) (string, error) {
-	db, err := tenant.GetDatabase(ctx, metadata.NewDatabaseNameWithBranch(project, metadata.MainBranch))
+func getEncodedCacheTableName(_ context.Context, tenant *metadata.Tenant, projectName string, cacheName string, encoder metadata.CacheEncoder) (string, error) {
+	project, err := tenant.GetProject(projectName)
 	if err != nil {
-		return "", err
+		return "", createApiError(err)
 	}
-	encodedCacheTableName, err := encoder.EncodeCacheTableName(tenant.GetNamespace().Id(), db.Id(), cacheName)
+
+	// Encode cache table is encoding tenant id, project id(main database id) and cache name.
+	encodedCacheTableName, err := encoder.EncodeCacheTableName(tenant.GetNamespace().Id(), project.Id(), cacheName)
 	if err != nil {
 		return "", err
 	}

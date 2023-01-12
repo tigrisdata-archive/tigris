@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package database
+package cache
 
 import (
 	apiErrors "github.com/tigrisdata/tigris/errors"
@@ -23,14 +23,7 @@ import (
 func createApiError(err error) error {
 	switch e := err.(type) {
 	case metadata.Error:
-		switch e.Code() {
-		case metadata.ErrCodeDatabaseNotFound, metadata.ErrCodeBranchNotFound:
-			return apiErrors.NotFound(e.Error())
-		case metadata.ErrCodeDatabaseBranchExists, metadata.ErrCodeDatabaseExists:
-			return apiErrors.AlreadyExists(e.Error())
-		case metadata.ErrCodeCannotDeleteBranch:
-			return apiErrors.InvalidArgument(e.Error())
-		case metadata.ErrCodeProjectNotFound:
+		if e.Code() == metadata.ErrCodeProjectNotFound {
 			return apiErrors.NotFound(e.Error())
 		}
 	default:

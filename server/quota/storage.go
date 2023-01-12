@@ -159,20 +159,20 @@ func (s *storage) updateMetricsForNamespace(ctx context.Context, namespace strin
 	}
 	tenantName := tenant.GetNamespace().Metadata().Name
 
-	for _, dbName := range tenant.ListDatabaseWithBranches(ctx) {
-		db, err := tenant.GetDatabase(ctx, metadata.NewDatabaseName(dbName))
-		if ulog.E(err) {
-			return
-		}
-		if db == nil {
-			// as there is no coordination between listDatabase and getDatabase that means a database can be dropped in between
+	for _, projName := range tenant.ListProjects(ctx) {
+		project, err := tenant.GetProject(projName)
+		if err != nil {
+			// as there is no coordination between listProject and getProject that means a project can be dropped in between
 			continue
 		}
 
-		metrics.UpdateDbSizeMetrics(namespace, tenantName, dbName, getDbSize(ctx, tenant, db))
+		databases := project.GetDatabaseWithBranches()
+		for _, db := range databases {
+			metrics.UpdateDbSizeMetrics(namespace, tenantName, db.Name(), getDbSize(ctx, tenant, db))
 
-		for _, coll := range db.ListCollection() {
-			metrics.UpdateCollectionSizeMetrics(namespace, tenantName, dbName, coll.Name, getCollSize(ctx, tenant, db, coll))
+			for _, coll := range db.ListCollection() {
+				metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.Name(), coll.Name, getCollSize(ctx, tenant, db, coll))
+			}
 		}
 	}
 
