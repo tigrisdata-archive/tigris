@@ -152,6 +152,7 @@ func (sessMgr *SessionManager) CreateReadOnlySession(ctx context.Context) (*Read
 		return nil, errors.NotFound("Tenant %s not found", namespaceForThisSession)
 	}
 
+	/**
 	tx, err := sessMgr.txMgr.StartTx(ctx)
 	if err != nil {
 		return nil, err
@@ -161,11 +162,12 @@ func (sessMgr *SessionManager) CreateReadOnlySession(ctx context.Context) (*Read
 		_ = tx.Rollback(ctx)
 		return nil, err
 	}
-	_ = tx.Commit(ctx)
+	_ = tx.Commit(ctx)*/
 
 	return &ReadOnlySession{
-		ctx:    ctx,
-		tenant: tenant,
+		ctx:     ctx,
+		tenant:  tenant,
+		tracker: sessMgr.tenantTracker,
 	}, nil
 }
 
@@ -309,12 +311,13 @@ func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, runner Quer
 }
 
 type ReadOnlySession struct {
-	ctx    context.Context
-	tenant *metadata.Tenant
+	ctx     context.Context
+	tenant  *metadata.Tenant
+	tracker *metadata.CacheTracker
 }
 
 func (s *ReadOnlySession) Run(runner ReadOnlyQueryRunner) (Response, context.Context, error) {
-	return runner.ReadOnly(s.ctx, s.tenant)
+	return runner.ReadOnly(s.ctx, s.tenant, s.tracker)
 }
 
 type QuerySession struct {

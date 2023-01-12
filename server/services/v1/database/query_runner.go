@@ -56,7 +56,7 @@ type QueryRunner interface {
 // a transaction or can opt to just execute the query. This interface allows caller to control the state of the transaction
 // or can choose to execute without starting any transaction.
 type ReadOnlyQueryRunner interface {
-	ReadOnly(ctx context.Context, tenant *metadata.Tenant) (Response, context.Context, error)
+	ReadOnly(ctx context.Context, tenant *metadata.Tenant, tenantTracker *metadata.CacheTracker) (Response, context.Context, error)
 }
 
 // QueryRunnerFactory is responsible for creating query runners for different queries.
@@ -881,17 +881,40 @@ func (runner *StreamingQueryRunner) instrumentRunner(ctx context.Context, option
 
 // ReadOnly is used by the read query runner to handle long-running reads. This method operates by starting a new
 // transaction when needed which means a single user request may end up creating multiple read only transactions.
-func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.Tenant) (Response, context.Context, error) {
-	db, err := runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetProject(), runner.req.GetBranch())
+func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.Tenant, tenantTracker *metadata.CacheTracker) (Response, context.Context, error) {
+	tx, err := runner.txMgr.StartTx(ctx)
 	if err != nil {
 		return Response{}, ctx, err
+	}
+
+	db, err := runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetProject(), runner.req.GetBranch())
+	if err != nil {
+		if _, err = tenantTracker.InstantTracking(ctx, tx, tenant); err != nil {
+			_ = tx.Rollback(ctx)
+			return Response{}, ctx, err
+		}
+
+		db, err = runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetProject(), runner.req.GetBranch())
+		if err != nil {
+			_ = tx.Rollback(ctx)
+			return Response{}, ctx, err
+		}
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
 	collection, err := runner.getCollection(db, runner.req.GetCollection())
 	if err != nil {
-		return Response{}, ctx, err
+		if _, err = tenantTracker.InstantTracking(ctx, tx, tenant); err != nil {
+			_ = tx.Rollback(ctx)
+			return Response{}, ctx, err
+		}
+
+		collection, err = runner.getCollection(db, runner.req.GetCollection())
+		if err != nil {
+			_ = tx.Rollback(ctx)
+			return Response{}, ctx, err
+		}
 	}
 
 	options, err := runner.buildReaderOptions(collection)
@@ -906,13 +929,17 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 		return Response{}, ctx, nil
 	}
 
+	i := 0
 	for {
 		// A for loop is needed to recreate the transaction after exhausting the duration of the previous transaction.
 		// This is mainly needed for long-running transactions, otherwise reads should be small.
-		tx, err := runner.txMgr.StartTx(ctx)
-		if err != nil {
-			return Response{}, ctx, err
+		if i > 0 {
+			tx, err = runner.txMgr.StartTx(ctx)
+			if err != nil {
+				return Response{}, ctx, err
+			}
 		}
+		i++
 
 		var last []byte
 		last, err = runner.iterateOnKvStore(ctx, tx, collection, options)
@@ -1047,7 +1074,7 @@ type SearchQueryRunner struct {
 
 // ReadOnly on search query runner is implemented as search queries do not need to be inside a transaction; in fact,
 // there is no need to start any transaction for search queries as they are simply forwarded to the indexing store.
-func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.Tenant) (Response, context.Context, error) {
+func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.Tenant, tenantTracker *metadata.CacheTracker) (Response, context.Context, error) {
 	db, err := runner.getDatabaseFromTenant(ctx, tenant, runner.req.GetProject(), runner.req.GetBranch())
 	if err != nil {
 		return Response{}, ctx, err
