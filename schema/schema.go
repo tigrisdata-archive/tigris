@@ -61,6 +61,36 @@ A sample user JSON schema looks like below,
 			"description": "The date order was made",
 			"type": "string",
 			"format": "date-time"
+		},
+		"array_field": {
+			"items": {
+				"type": "string",
+   			}
+			"description": "Array field description",
+			"type": "array",
+		},
+		"array_of_objects": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"field1": {
+						"type": "integer"
+					}
+				}
+   			}
+		},
+		"array_nested": {
+			"type": "array",
+			"items": {
+				"type": "array",
+				"items": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				}
+   			}
 		}
 	},
 	"primary_key": [
@@ -172,7 +202,7 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 	}
 
 	primaryKeysSet := container.NewHashSet(schema.PrimaryKeys...)
-	fields, err := deserializeProperties(schema.Properties, primaryKeysSet)
+	fields, err := deserializeProperties(schema.Properties, &primaryKeysSet)
 	if err != nil {
 		return nil, err
 	}
@@ -237,15 +267,49 @@ func setPrimaryKey(reqSchema jsoniter.RawMessage, format string, ifMissing bool)
 	return jsoniter.Marshal(schema)
 }
 
-func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet container.HashSet) ([]*Field, error) {
-	var fields []*Field
-	var err error
-	err = jsonparser.ObjectEach(properties, func(key []byte, v []byte, dataType jsonparser.ValueType, offset int) error {
+func deserializeArray(items *FieldBuilder, current *[]*Field) error {
+	for ; items.Items != nil; items = items.Items {
+		it, err := items.Build(true)
 		if err != nil {
-			return errors.Internal(fmt.Errorf("failed to iterate on user schema: %w", err).Error())
+			return err
 		}
 
+		*current = []*Field{it}
+		current = &it.Fields
+	}
+
+	// object array type
+	if len(items.Properties) > 0 {
+		if items.Type != jsonSpecObject {
+			return errors.InvalidArgument("properties only allowed for object type")
+		}
+
+		nestedFields, err := deserializeProperties(items.Properties, nil)
+		if err != nil {
+			return err
+		}
+
+		*current = []*Field{{DataType: ObjectType, Fields: nestedFields}}
+	} else {
+		// primitive array type
+		it, err := items.Build(true)
+		if err != nil {
+			return err
+		}
+
+		*current = []*Field{it}
+	}
+
+	return nil
+}
+
+func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet *container.HashSet) ([]*Field, error) {
+	var fields []*Field
+
+	err := jsonparser.ObjectEach(properties, func(key []byte, v []byte, dataType jsonparser.ValueType, offset int) error {
+		var err error
 		var builder FieldBuilder
+
 		if err = builder.Validate(v); err != nil {
 			// builder validates against the supported schema attributes on properties
 			return err
@@ -259,62 +323,39 @@ func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet contai
 		if err = dec.Decode(&builder); err != nil {
 			return errors.Internal(err.Error())
 		}
-		if builder.Type == jsonSpecArray && builder.Items == nil {
-			return errors.InvalidArgument("missing items for array field")
-		}
 
-		if builder.Items != nil {
-			// for arrays, items must be set, and it is possible that item type is object in that case deserialize those
-			// fields
-			var nestedFields []*Field
-			if len(builder.Items.Properties) > 0 {
-				builder.Fields = []*Field{
-					{
-						DataType: ObjectType,
-					},
-				}
-				if nestedFields, err = deserializeProperties(builder.Items.Properties, primaryKeysSet); err != nil {
-					return err
-				}
-				builder.Fields[0].Fields = nestedFields
-			} else {
-				var current *Field
-				itemObj := builder.Items
-				var first *Field
-				for itemObj != nil {
-					if current, err = itemObj.Build(true); err != nil {
-						return err
-					}
-					if first == nil {
-						first = current
-					} else {
-						first.Fields = append(first.Fields, current)
-					}
-					itemObj = itemObj.Items
-				}
-				builder.Fields = append(nestedFields, first) //nolint:gocritic
+		if builder.Type == jsonSpecArray {
+			if builder.Items == nil {
+				return errors.InvalidArgument("missing items for array field")
+			}
+
+			if err = deserializeArray(builder.Items, &builder.Fields); err != nil {
+				return err
 			}
 		}
 
 		// for objects, properties are part of the field definitions in that case deserialize those
 		// nested fields
 		if len(builder.Properties) > 0 {
-			var nestedFields []*Field
-			if nestedFields, err = deserializeProperties(builder.Properties, primaryKeysSet); err != nil {
+			if builder.Type != jsonSpecObject {
+				return errors.InvalidArgument("properties only allowed for object type")
+			}
+
+			if builder.Fields, err = deserializeProperties(builder.Properties, nil); err != nil {
 				return err
 			}
-			builder.Fields = nestedFields
 		}
-		if primaryKeysSet.Contains(builder.FieldName) {
+
+		if primaryKeysSet != nil && primaryKeysSet.Contains(builder.FieldName) {
 			boolTrue := true
 			builder.Primary = &boolTrue
 		}
 
-		var f *Field
-		f, err = builder.Build(false)
+		f, err := builder.Build(false)
 		if err != nil {
 			return err
 		}
+
 		fields = append(fields, f)
 
 		return nil

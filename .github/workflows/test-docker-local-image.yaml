@@ -29,5 +29,5 @@ jobs:
         run: |
           curl -sSL https://tigris.dev/cli-linux | tar -xz -C .
           TIGRIS_URL=localhost:8081 ./tigris ping --timeout 20s
-          noup=1 /bin/bash test/v1/cli/tests.sh
+          noup=1 /bin/bash test/v1/cli/main.sh
 
