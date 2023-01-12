@@ -17,6 +17,7 @@ package util
 import (
 	"bytes"
 	"io"
+	"strings"
 	"text/template"
 
 	jsoniter "github.com/json-iterator/go"
@@ -30,7 +31,7 @@ var Version string
 var Service string = "tigris-server"
 
 func ExecTemplate(w io.Writer, tmpl string, vars interface{}) error {
-	t, err := template.New("exec_template").Parse(tmpl)
+	t, err := template.New("exec_template").Funcs(template.FuncMap{"repeat": strings.Repeat}).Parse(tmpl)
 	if ulog.E(err) {
 		return err
 	}

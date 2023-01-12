@@ -43,6 +43,7 @@ type Product struct {
 	Name string ` + "`" + `json:"name"` + "`" + `
 	Price float64 ` + "`" + `json:"price"` + "`" + `
 	Time1 time.Time ` + "`" + `json:"time1"` + "`" + `
+	TwoDArrs []int64 ` + "`" + `json:"twoDArr"` + "`" + `
 	UUID1 uuid.UUID ` + "`" + `json:"uUID1"` + "`" + `
 }
 `,
@@ -54,6 +55,13 @@ type Product struct {
 	Gen int32 ` + "`" + `tigris:"autoGenerate"` + "`" + `
 	Key int32 ` + "`" + `tigris:"primaryKey:1"` + "`" + `
 	KeyGenIdx int32 ` + "`" + `tigris:"primaryKey:2,autoGenerate"` + "`" + `
+	DefValCuid string ` + "`" + `json:"def_val_cuid"` + "`" + `
+	DefValDate time.Time ` + "`" + `json:"def_val_date"` + "`" + `
+	DefValDateConst time.Time ` + "`" + `json:"def_val_date_const"` + "`" + `
+	DefValInt int64 ` + "`" + `json:"def_val_int"` + "`" + `
+	DefValStr string ` + "`" + `json:"def_val_str"` + "`" + `
+	DefValUuid uuid.UUID ` + "`" + `json:"def_val_uuid"` + "`" + `
+	MaxLenStr string ` + "`" + `json:"max_len_str"` + "`" + `
 	NameGen int32 ` + "`" + `json:"name_gen" tigris:"autoGenerate"` + "`" + `
 	NameGenKey int32 ` + "`" + `json:"name_gen_key" tigris:"primaryKey:4,autoGenerate"` + "`" + `
 	NameKey int32 ` + "`" + `json:"name_key" tigris:"primaryKey:3"` + "`" + `

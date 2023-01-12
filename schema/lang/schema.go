@@ -59,12 +59,16 @@ const (
 
 // Field represents JSON schema object.
 type Field struct {
-	Type   string            `json:"type,omitempty"`
-	Format string            `json:"format,omitempty"`
-	Tags   []string          `json:"tags,omitempty"`
-	Desc   string            `json:"description,omitempty"`
-	Fields map[string]*Field `json:"properties,omitempty"`
-	Items  *Field            `json:"items,omitempty"`
+	Type      string            `json:"type,omitempty"`
+	Format    string            `json:"format,omitempty"`
+	Tags      []string          `json:"tags,omitempty"`
+	Desc      string            `json:"description,omitempty"`
+	Fields    map[string]*Field `json:"properties,omitempty"`
+	Items     *Field            `json:"items,omitempty"`
+	Default   any               `json:"default,omitempty"`
+	CreatedAt bool              `json:"createdAt,omitempty"`
+	UpdatedAt bool              `json:"updatedAt,omitempty"`
+	MaxLength int32             `json:"maxLength,omitempty"`
 
 	AutoGenerate bool `json:"autoGenerate,omitempty"`
 }
@@ -108,6 +112,13 @@ type FieldGen struct {
 	PrimaryKeyIdx   int
 	ArrayDimensions int
 
+	Default    any
+	DefaultStr string
+
+	MaxLength int32
+	UpdatedAt bool
+	CreatedAt bool
+
 	Description string
 }
 
@@ -137,6 +148,11 @@ func genField(w io.Writer, n string, v *Field, pk []string, c JSONToLangType,
 	f.JSONCap = strings.ToUpper(n[0:1]) + n[1:]
 	f.NamePlural = plural.Plural(n)
 	f.Name = strcase.ToCamel(n)
+	f.MaxLength = v.MaxLength
+	f.Default = v.Default
+	if s, ok := f.Default.(string); ok {
+		f.DefaultStr = fmt.Sprintf(`%q`, s)
+	}
 
 	if v.Type == typeArray {
 		f.Name = plural.Plural(f.Name)
