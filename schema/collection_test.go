@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
+	"github.com/tigrisdata/tigris/lib/uuid"
 )
 
 func TestCollection_SchemaValidate(t *testing.T) {
@@ -70,6 +70,12 @@ func TestCollection_SchemaValidate(t *testing.T) {
 					"type": "integer"
 				}
 			},
+			"simple_items_string": {
+				"type": "array",
+				"items": {
+					"type": "string"
+				}
+			},
 			"simple_object": {
 				"type": "object",
 				"properties": {
@@ -86,6 +92,9 @@ func TestCollection_SchemaValidate(t *testing.T) {
 						},
 						"item_name": {
 							"type": "string"
+						},
+						"id_product_items": {
+							"type": "integer"
 						}
 					}
 				}
@@ -114,23 +123,23 @@ func TestCollection_SchemaValidate(t *testing.T) {
 		},
 		{
 			document: []byte(`{"id": 1.01}`),
-			expError: "expected integer, but got number",
+			expError: "expected integer or null, but got number",
 		},
 		{
 			document: []byte(`{"id": 1, "product": 1.01}`),
-			expError: "expected string, but got number",
+			expError: "expected string or null, but got number",
 		},
 		{
 			document: []byte(`{"id": 1, "random": 1}`),
-			expError: "expected string, but got number",
+			expError: "expected string or null, but got number",
 		},
 		{
 			document: []byte(`{"id": 1, "simple_items": ["1"]}`),
-			expError: "expected integer, but got string",
+			expError: "expected integer or null, but got string",
 		},
 		{
 			document: []byte(`{"id": 1, "simple_items": [1, 1.2]}`),
-			expError: "expected integer, but got number",
+			expError: "expected integer or null, but got number",
 		},
 		{
 			document: []byte(`{"id": 1, "simple_items": [1, 2]}`),
@@ -142,7 +151,11 @@ func TestCollection_SchemaValidate(t *testing.T) {
 		},
 		{
 			document: []byte(`{"id": 1, "product_items": [{"id": 1, "item_name": 2}]}`),
-			expError: "expected string, but got number",
+			expError: "expected string or null, but got number",
+		},
+		{
+			document: []byte(`{"id": 1, "product_items": [{"id": 1, "item_name": null}]}`),
+			expError: "",
 		},
 		{
 			document: []byte(`{"id": 1, "product_items": [{"id": 1, "item_name": "foo"}]}`),
@@ -170,7 +183,7 @@ func TestCollection_SchemaValidate(t *testing.T) {
 		},
 		{
 			document: []byte(`{"id": 1, "random_binary": 1}`),
-			expError: "expected string, but got number",
+			expError: "expected string or null, but got number",
 		},
 		{
 			document: []byte(fmt.Sprintf(`{"id": 1, "random_binary": "%s"}`, []byte(`1`))),
@@ -196,6 +209,14 @@ func TestCollection_SchemaValidate(t *testing.T) {
 		{
 			document: []byte(`{"id": 123456789, "id_32": 2147483647, "id_64": 9223372036854775808}`),
 			expError: "reason '9223372036854775808 is not valid 'int64'",
+		},
+		{
+			document: []byte(`{"id": 1, "ts": null, "product": null, "simple_object": null, "simple_items": null}`),
+			expError: "",
+		},
+		{
+			document: []byte(`{"id": 1, "ts": null, "product": null, "simple_object": {"name": null}, "simple_items": [1, null], "simple_items_string": ["1", null]}`),
+			expError: "",
 		},
 	}
 	for _, c := range cases {

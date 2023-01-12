@@ -184,6 +184,16 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 		if value == nil {
 			continue
 		}
+		if f.SearchType == "string[]" {
+			// if string array has null set then replace it with our null marker
+			if valueArr, ok := value.([]interface{}); ok {
+				for i, item := range valueArr {
+					if item == nil {
+						valueArr[i] = schema.ReservedFields[schema.SearchArrNullItem]
+					}
+				}
+			}
+		}
 		if f.ShouldPack() {
 			switch f.DataType {
 			case schema.DateTimeType:
@@ -220,6 +230,16 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 
 func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCollection) (string, *internal.TableData, map[string]interface{}, error) {
 	for _, f := range collection.QueryableFields {
+		if f.SearchType == "string[]" {
+			// if string array has our internal null marker
+			if valueArr, ok := doc[f.FieldName].([]interface{}); ok {
+				for i, item := range valueArr {
+					if item == schema.ReservedFields[schema.SearchArrNullItem] {
+						valueArr[i] = nil
+					}
+				}
+			}
+		}
 		if f.ShouldPack() {
 			if v, ok := doc[f.Name()]; ok {
 				switch f.DataType {

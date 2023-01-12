@@ -160,7 +160,7 @@ func TestInsert_SchemaValidationRequired(t *testing.T) {
 					},
 				},
 			},
-			"json schema validation failed for field '' reason 'missing properties: 'string_value''",
+			"json schema validation failed for field 'string_value' reason 'expected string, but got null'",
 		},
 		{
 			[]Doc{
@@ -216,7 +216,7 @@ func TestInsert_SchemaValidationError(t *testing.T) {
 					"int_value": 10.20,
 				},
 			},
-			"json schema validation failed for field 'int_value' reason 'expected integer, but got number'",
+			"json schema validation failed for field 'int_value' reason 'expected integer or null, but got number'",
 		}, {
 			[]Doc{
 				{
@@ -224,10 +224,10 @@ func TestInsert_SchemaValidationError(t *testing.T) {
 					"string_value": 12,
 				},
 			},
-			"json schema validation failed for field 'string_value' reason 'expected string, but got number'",
+			"json schema validation failed for field 'string_value' reason 'expected string or null, but got number'",
 		}, {
 			[]Doc{{"bytes_value": 12.30}},
-			"json schema validation failed for field 'bytes_value' reason 'expected string, but got number'",
+			"json schema validation failed for field 'bytes_value' reason 'expected string or null, but got number'",
 		}, {
 			[]Doc{{"bytes_value": "not enough"}},
 			"json schema validation failed for field 'bytes_value' reason ''not enough' is not valid 'byte''",
@@ -445,6 +445,64 @@ func TestInsert_SingleRow(t *testing.T) {
 		ValueEqual("keys", []map[string]interface{}{{"pkey_int": 10}}).
 		Path("$.metadata").Object().
 		Value("created_at").String().DateTime(time.RFC3339Nano).InRange(tstart, time.Now().UTC().Add(1*time.Second))
+
+	readResp := readByFilter(t,
+		db,
+		coll,
+		Map{
+			"pkey_int": 10,
+		},
+		nil,
+		nil,
+		nil)
+
+	var doc map[string]json.RawMessage
+	require.Equal(t, 1, len(readResp))
+	require.NoError(t, json.Unmarshal(readResp[0]["result"], &doc))
+
+	actualDoc := []byte(doc["data"])
+	expDoc, err := json.Marshal(inputDocument[0])
+	require.NoError(t, err)
+	require.Equal(t, expDoc, actualDoc)
+}
+
+func TestInsert_Nulls(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	inputDocument := []Doc{
+		{
+			"pkey_int":        10,
+			"int_value":       nil,
+			"string_value":    nil,
+			"bool_value":      nil,
+			"double_value":    nil,
+			"bytes_value":     nil,
+			"date_time_value": nil,
+			"uuid_value":      nil,
+			"simple_array_value": []interface{}{"abc", nil, "def"},
+			"array_value": []Doc{
+				{
+					"id":      1,
+					"product": nil,
+				},
+			},
+			"object_value": Map{
+				"name": nil,
+			},
+		},
+	}
+
+	expect(t).POST(getDocumentURL(db, coll, "insert")).
+		WithJSON(Map{
+			"documents": inputDocument,
+		}).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("status", "inserted").
+		ValueEqual("keys", []map[string]interface{}{{"pkey_int": 10}})
 
 	readResp := readByFilter(t,
 		db,
@@ -1557,7 +1615,7 @@ func TestUpdate_SchemaValidationError(t *testing.T) {
 					"string_value": 1,
 				},
 			},
-			"json schema validation failed for field 'string_value' reason 'expected string, but got number'",
+			"json schema validation failed for field 'string_value' reason 'expected string or null, but got number'",
 			api.Code_INVALID_ARGUMENT,
 		}, {
 			Map{
@@ -1565,7 +1623,7 @@ func TestUpdate_SchemaValidationError(t *testing.T) {
 					"int_value": 1.1,
 				},
 			},
-			"json schema validation failed for field 'int_value' reason 'expected integer, but got number'",
+			"json schema validation failed for field 'int_value' reason 'expected integer or null, but got number'",
 			api.Code_INVALID_ARGUMENT,
 		},
 	}
