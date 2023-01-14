@@ -1449,7 +1449,7 @@ func (runner *ProjectQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 			return Response{}, ctx, err
 		}
 		if !exist {
-			return Response{}, ctx, errors.NotFound("database doesn't exist '%s'", runner.delete.GetProject())
+			return Response{}, ctx, errors.NotFound("project doesn't exist '%s'", runner.delete.GetProject())
 		}
 
 		return Response{

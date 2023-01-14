@@ -56,5 +56,5 @@ func NewBranchNotFoundErr(name string) error {
 }
 
 func NewProjectNotFoundErr(name string) error {
-	return NewMetadataError(ErrCodeProjectNotFound, "database doesn't exist '%s'", name)
+	return NewMetadataError(ErrCodeProjectNotFound, "project doesn't exist '%s'", name)
 }
