@@ -31,4 +31,10 @@ type Response struct {
 	Keys         []string
 	DeletedCount int64
 	Caches       []*api.CacheMetadata
+	Cursor       uint64
+}
+
+// StreamingKeys is a wrapper interface for passing around for streaming cache keys.
+type StreamingKeys interface {
+	api.Cache_KeysServer
 }

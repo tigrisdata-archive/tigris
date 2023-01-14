@@ -16,6 +16,7 @@ package cache
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"testing"
 
@@ -115,5 +116,38 @@ func TestRedis(t *testing.T) {
 		require.NoError(t, err)
 		sort.Strings(keys)
 		require.Equal(t, []string{encodeToCacheKey(tableName, "key1"), encodeToCacheKey(tableName, "key2")}, keys)
+	})
+
+	t.Run("scan", func(t *testing.T) {
+		defer dropCacheTable(t, c, tableName)
+
+		s1 := []byte(`{"a": "b"}`)
+		for i := 1; i <= 50; i++ {
+			require.NoError(t, c.Set(ctx, tableName, fmt.Sprintf("key%d", i), internal.NewCacheData(s1), nil))
+		}
+
+		var totalKeys []string
+		var cursor uint64 = 0
+
+		keys, cursor := c.Scan(ctx, tableName, cursor, 10, "*")
+		totalKeys = append(totalKeys, keys...)
+
+		for cursor != 0 {
+			keys, cursor = c.Scan(ctx, tableName, cursor, 10, "*")
+			totalKeys = append(totalKeys, keys...)
+		}
+		require.Equal(t, 50, len(totalKeys))
+
+		for i := 1; i <= 50; i++ {
+			contains := false
+			keyToSearch := fmt.Sprintf("key%d", i)
+			for _, key := range totalKeys {
+				if key == encodeToCacheKey(tableName, keyToSearch) {
+					contains = true
+					break
+				}
+			}
+			require.Truef(t, contains, "key %s not found", keyToSearch)
+		}
 	})
 }

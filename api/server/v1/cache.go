@@ -138,6 +138,10 @@ func (x *KeysRequest) UnmarshalJSON(data []byte) error {
 			v = &x.Project
 		case "name":
 			v = &x.Name
+		case "cursor":
+			v = &x.Cursor
+		case "count":
+			v = &x.Count
 		case "pattern":
 			v = &x.Pattern
 		default:
@@ -175,9 +179,11 @@ func (x *GetResponse) MarshalJSON() ([]byte, error) {
 
 func (x *KeysResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
-		Keys []string `json:"keys,omitempty"`
+		Keys   []string `json:"keys"`
+		Cursor uint64   `json:"cursor"`
 	}{
-		Keys: x.GetKeys(),
+		Keys:   x.GetKeys(),
+		Cursor: x.GetCursor(),
 	}
 	return json.Marshal(resp)
 }

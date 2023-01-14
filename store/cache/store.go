@@ -78,6 +78,7 @@ type Cache interface {
 	// Exists returns if the key exists, for multiple keys it returns the count of the number of keys that exists
 	Exists(ctx context.Context, tableName string, key ...string) (int64, error)
 	Keys(ctx context.Context, tableName string, pattern string) ([]string, error)
+	Scan(ctx context.Context, tableName string, cursor uint64, count int64, pattern string) ([]string, uint64)
 
 	// CreateStream creates and returns a stream object, throws an error if stream already exists
 	CreateStream(ctx context.Context, streamName string) (Stream, error)
