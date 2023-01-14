@@ -45,10 +45,10 @@ func TestInsert_Bad_NotFoundRequest(t *testing.T) {
 		status         int
 	}{
 		{
-			"random_database1",
+			"random_project1",
 			coll,
 			[]Doc{{"pkey_int": 1}},
-			"database doesn't exist 'random_database1'",
+			"project doesn't exist 'random_project1'",
 			http.StatusNotFound,
 		}, {
 			db,
@@ -472,14 +472,14 @@ func TestInsert_Nulls(t *testing.T) {
 
 	inputDocument := []Doc{
 		{
-			"pkey_int":        10,
-			"int_value":       nil,
-			"string_value":    nil,
-			"bool_value":      nil,
-			"double_value":    nil,
-			"bytes_value":     nil,
-			"date_time_value": nil,
-			"uuid_value":      nil,
+			"pkey_int":           10,
+			"int_value":          nil,
+			"string_value":       nil,
+			"bool_value":         nil,
+			"double_value":       nil,
+			"bytes_value":        nil,
+			"date_time_value":    nil,
+			"uuid_value":         nil,
 			"simple_array_value": []interface{}{"abc", nil, "def"},
 			"array_value": []Doc{
 				{
@@ -1281,7 +1281,7 @@ func TestUpdate_BadRequest(t *testing.T) {
 		status     int
 	}{
 		{
-			"random_database1",
+			"random_project1",
 			coll,
 			Map{
 				"$set": Map{
@@ -1291,7 +1291,7 @@ func TestUpdate_BadRequest(t *testing.T) {
 			Map{
 				"pkey_int": 1,
 			},
-			"database doesn't exist 'random_database1'",
+			"project doesn't exist 'random_project1'",
 			http.StatusNotFound,
 		}, {
 			db,
@@ -2667,10 +2667,10 @@ func TestDelete_BadRequest(t *testing.T) {
 		status         int
 	}{
 		{
-			"random_database1",
+			"random_project1",
 			coll,
 			Map{"pkey_int": 1},
-			"database doesn't exist 'random_database1'",
+			"project doesn't exist 'random_project1'",
 			http.StatusNotFound,
 		}, {
 			db,
@@ -2846,10 +2846,10 @@ func TestRead_BadRequest(t *testing.T) {
 		status         int
 	}{
 		{
-			"random_database1",
+			"random_project1",
 			coll,
 			Map{"pkey_int": 1},
-			"database doesn't exist 'random_database1'",
+			"project doesn't exist 'random_project1'",
 			http.StatusNotFound,
 		}, {
 			db,
