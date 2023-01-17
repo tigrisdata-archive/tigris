@@ -201,7 +201,7 @@ var DefaultConfig = Config{
 		Host:         "0.0.0.0",
 		Port:         8081,
 		RealtimePort: 8083,
-		FDBHardDrop:  false,
+		FDBHardDrop:  true,
 	},
 	Auth: AuthConfig{
 		Enabled:          false,
