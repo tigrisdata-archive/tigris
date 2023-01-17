@@ -369,6 +369,10 @@ func init() {
 		return false
 	}
 	jsonschema.Formats[FieldNames[Int32Type]] = func(i interface{}) bool {
+		if i == nil {
+			return true
+		}
+
 		val, err := parseInt(i)
 		if err != nil {
 			return false
@@ -377,6 +381,10 @@ func init() {
 		return !(val < math.MinInt32 || val > math.MaxInt32)
 	}
 	jsonschema.Formats[FieldNames[Int64Type]] = func(i interface{}) bool {
+		if i == nil {
+			return true
+		}
+
 		_, err := parseInt(i)
 		return err == nil
 	}

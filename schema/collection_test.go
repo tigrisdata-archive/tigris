@@ -154,6 +154,10 @@ func TestCollection_SchemaValidate(t *testing.T) {
 			expError: "expected string or null, but got number",
 		},
 		{
+			document: []byte(`{"id": 1, "id_32": null, "id_64": null}`),
+			expError: "",
+		},
+		{
 			document: []byte(`{"id": 1, "product_items": [{"id": 1, "item_name": null}]}`),
 			expError: "",
 		},
