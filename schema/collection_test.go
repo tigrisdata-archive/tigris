@@ -227,7 +227,7 @@ func TestCollection_SchemaValidate(t *testing.T) {
 		schFactory, err := Build("t1", reqSchema)
 		require.NoError(t, err)
 
-		coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil, nil)
+		coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, nil, nil)
 
 		dec := jsoniter.NewDecoder(bytes.NewReader(c.document))
 		dec.UseNumber()
@@ -238,105 +238,6 @@ func TestCollection_SchemaValidate(t *testing.T) {
 		} else {
 			require.NoError(t, coll.Validate(v))
 		}
-	}
-}
-
-func TestCollection_SearchSchema(t *testing.T) {
-	reqSchema := []byte(`{
-	"title": "t1",
-	"properties": {
-		"id": {
-			"type": "integer"
-		},
-		"id_32": {
-			"type": "integer",
-			"format": "int32"
-		},
-		"product": {
-			"type": "string",
-			"maxLength": 100
-		},
-		"id_uuid": {
-			"type": "string",
-			"format": "uuid"
-		},
-		"ts": {
-			"type": "string",
-			"format": "date-time"
-		},
-		"price": {
-			"type": "number"
-		},
-		"simple_items": {
-			"type": "array",
-			"items": {
-				"type": "integer"
-			}
-		},
-		"simple_object": {
-			"type": "object",
-			"properties": {
-				"name": {
-					"type": "string"
-				},
-				"phone": {
-					"type": "string"
-				},
-				"address": {
-					"type": "object",
-					"properties": {
-						"street": {
-							"type": "string"
-						}
-					}
-				},
-				"details": {
-					"type": "object",
-					"properties": {
-						"nested_id": {
-							"type": "integer"
-						},
-						"nested_obj": {
-							"type": "object",
-							"properties": {
-								"id": {
-									"type": "integer"
-								},
-								"name": {
-									"type": "string"
-								}
-							}
-						},
-						"nested_array": {
-							"type": "array",
-							"items": {
-								"type": "integer"
-							}
-						},
-						"nested_string": {
-							"type": "string"
-						}
-					}
-				}
-			}
-		}
-	},
-	"primary_key": ["id"]
-}`)
-
-	schFactory, err := Build("t1", reqSchema)
-	require.NoError(t, err)
-
-	expFlattenedFields := []string{
-		"id", "_tigris_id", "id_32", "product", "id_uuid", "ts", ToSearchDateKey("ts"), "price", "simple_items", "simple_object.name",
-		"simple_object.phone", "simple_object.address.street", "simple_object.details.nested_id", "simple_object.details.nested_obj.id",
-		"simple_object.details.nested_obj.name", "simple_object.details.nested_array", "simple_object.details.nested_string",
-		"created_at", "updated_at",
-	}
-
-	coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil, nil)
-	for i, f := range coll.Search.Fields {
-		require.Equal(t, expFlattenedFields[i], f.Name)
 	}
 }
 
@@ -387,7 +288,7 @@ func TestCollection_AdditionalProperties(t *testing.T) {
 	for _, c := range cases {
 		schFactory, err := Build("t1", reqSchema)
 		require.NoError(t, err)
-		coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil, nil)
+		coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, nil, nil)
 
 		dec := jsoniter.NewDecoder(bytes.NewReader(c.document))
 		dec.UseNumber()
@@ -423,7 +324,7 @@ func TestCollection_Object(t *testing.T) {
 	for _, c := range cases {
 		schFactory, err := Build("t1", reqSchema)
 		require.NoError(t, err)
-		coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil, nil)
+		coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, nil, nil)
 
 		dec := jsoniter.NewDecoder(bytes.NewReader(c.document))
 		dec.UseNumber()
@@ -481,7 +382,7 @@ func TestCollection_Int64(t *testing.T) {
 
 	schFactory, err := Build("t1", reqSchema)
 	require.NoError(t, err)
-	coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, "t1", nil, nil)
+	coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, nil, nil)
 	require.Equal(t, 4, len(coll.int64FieldsPath))
 	_, ok := coll.int64FieldsPath["id"]
 	require.True(t, ok)

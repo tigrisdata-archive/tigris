@@ -80,7 +80,7 @@ type pageReader struct {
 	pages        []*page
 	query        *qsearch.Query
 	store        search.Store
-	collection   *schema.DefaultCollection
+	searchIndex  *schema.ImplicitSearchIndex
 	cachedFacets map[string]*api.SearchFacet
 }
 
@@ -90,14 +90,14 @@ func newPageReader(ctx context.Context, store search.Store, coll *schema.Default
 		found:        -1,
 		query:        query,
 		store:        store,
-		collection:   coll,
 		pageNo:       int(firstPage),
+		searchIndex:  coll.GetImplicitSearchIndex(),
 		cachedFacets: make(map[string]*api.SearchFacet),
 	}
 }
 
 func (p *pageReader) read() error {
-	result, err := p.store.Search(p.ctx, p.collection.SearchCollectionName(), p.query, p.pageNo)
+	result, err := p.store.Search(p.ctx, p.searchIndex.StoreIndexName(), p.query, p.pageNo)
 	if err != nil {
 		return err
 	}

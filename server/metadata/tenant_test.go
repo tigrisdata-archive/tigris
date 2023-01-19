@@ -549,7 +549,7 @@ func TestTenantManager_SearchIndexes(t *testing.T) {
 
 	indexesInSearchStore, err := tenant.searchStore.AllCollections(ctx)
 	require.NoError(t, err)
-	require.NotNil(t, indexesInSearchStore[tenant.getSearchCollName(proj1.Name(), factory.Name)])
+	require.NotNil(t, indexesInSearchStore[tenant.Encoder.EncodeSearchTableName(tenant.namespace.Id(), proj1.Id(), factory.Name, "")])
 
 	require.NoError(t, tenant.reload(ctx, tx, nil, indexesInSearchStore))
 
