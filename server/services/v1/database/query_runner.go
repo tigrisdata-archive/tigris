@@ -1313,8 +1313,25 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			tx.Context().StageDatabase(db)
 		}
 
+		collection, err := runner.getCollection(db, runner.dropReq.GetCollection())
+		if err != nil {
+			return Response{}, ctx, err
+		}
+
+		project, _ := tenant.GetProject(runner.dropReq.GetProject())
+		searchIndexes := collection.SearchIndexes
+		// Drop Collection will also drop the implicit search index.
 		if err = tenant.DropCollection(ctx, tx, db, runner.dropReq.GetCollection()); err != nil {
 			return Response{}, ctx, err
+		}
+
+		if config.DefaultConfig.Search.WriteEnabled {
+			for _, searchIndex := range searchIndexes {
+				// Delete all the indexes that are created by the user and is tied to this collection.
+				if err = tenant.DeleteSearchIndex(ctx, tx, project, searchIndex.Name); err != nil {
+					return Response{}, ctx, err
+				}
+			}
 		}
 
 		return Response{

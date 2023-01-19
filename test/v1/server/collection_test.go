@@ -100,7 +100,7 @@ func TestDropCollection(t *testing.T) {
 
 	// dropping again should return in a NOT FOUND error
 	resp = dropCollection(t, db, coll)
-	testError(resp, http.StatusNotFound, api.Code_NOT_FOUND, "collection doesn't exists 'test_collection'")
+	testError(resp, http.StatusNotFound, api.Code_NOT_FOUND, "collection doesn't exist 'test_collection'")
 }
 
 func TestDescribeCollection(t *testing.T) {
