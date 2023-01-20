@@ -138,15 +138,10 @@ func (c *cacheService) Del(ctx context.Context, req *api.DelRequest) (*api.DelRe
 	}, nil
 }
 
-func (c *cacheService) Keys(ctx context.Context, req *api.KeysRequest) (*api.KeysResponse, error) {
-	accessToken, _ := request.GetAccessToken(ctx)
-	resp, err := c.sessions.Execute(ctx, c.runnerFactory.GetKeysRunner(req, accessToken))
-	if err != nil {
-		return nil, err
-	}
-	return &api.KeysResponse{
-		Keys: resp.Keys,
-	}, nil
+func (c *cacheService) Keys(req *api.KeysRequest, streaming api.Cache_KeysServer) error {
+	accessToken, _ := request.GetAccessToken(streaming.Context())
+	_, err := c.sessions.Execute(streaming.Context(), c.runnerFactory.GetKeysRunner(req, accessToken, streaming))
+	return err
 }
 
 func (c *cacheService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {
