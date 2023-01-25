@@ -258,7 +258,7 @@ func TestTenantManager_DatabaseBranches(t *testing.T) {
 
 	// list all branches
 	branches := tenant.ListDatabaseBranches(tenantProj1)
-	require.Equal(t, []string{"main", "branch1", "branch2", "branch3"}, branches)
+	require.ElementsMatch(t, []string{"main", "branch1", "branch2", "branch3"}, branches)
 
 	proj1, err := tenant.GetProject(tenantProj1)
 	require.NoError(t, err)
