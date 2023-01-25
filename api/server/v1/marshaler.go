@@ -136,6 +136,10 @@ func (x *ReadRequest) UnmarshalJSON(data []byte) error {
 			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
 				return err
 			}
+		case "branch":
+			if err := jsoniter.Unmarshal(value, &x.Branch); err != nil {
+				return err
+			}
 		case "filter":
 			// not decoding it here and let it decode during filter parsing
 			x.Filter = value
@@ -169,6 +173,8 @@ func (x *SearchRequest) UnmarshalJSON(data []byte) error {
 			v = &x.Project
 		case "collection":
 			v = &x.Collection
+		case "branch":
+			v = &x.Branch
 		case "search_fields":
 			v = &x.SearchFields
 		case "q":
@@ -228,6 +234,8 @@ func (x *ImportRequest) UnmarshalJSON(data []byte) error {
 			v = &x.Project
 		case "collection":
 			v = &x.Collection
+		case "branch":
+			v = &x.Branch
 		case "options":
 			v = &x.Options
 		case "documents":
@@ -281,6 +289,8 @@ func (x *InsertRequest) UnmarshalJSON(data []byte) error {
 			v = &x.Project
 		case "collection":
 			v = &x.Collection
+		case "branch":
+			v = &x.Branch
 		case "options":
 			v = &x.Options
 		case "documents":
@@ -325,6 +335,10 @@ func (x *ReplaceRequest) UnmarshalJSON(data []byte) error {
 			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
 				return err
 			}
+		case "branch":
+			if err := jsoniter.Unmarshal(value, &x.Branch); err != nil {
+				return err
+			}
 		case "documents":
 			var docs []jsoniter.RawMessage
 			if err := jsoniter.Unmarshal(value, &docs); err != nil {
@@ -361,6 +375,10 @@ func (x *UpdateRequest) UnmarshalJSON(data []byte) error {
 			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
 				return err
 			}
+		case "branch":
+			if err := jsoniter.Unmarshal(value, &x.Branch); err != nil {
+				return err
+			}
 		case "fields":
 			// not decoding it here and let it decode during Fields parsing
 			x.Fields = value
@@ -393,6 +411,10 @@ func (x *DeleteRequest) UnmarshalJSON(data []byte) error {
 			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
 				return err
 			}
+		case "branch":
+			if err := jsoniter.Unmarshal(value, &x.Branch); err != nil {
+				return err
+			}
 		case "filter":
 			// not decoding it here and let it decode during filter parsing
 			x.Filter = value
@@ -419,6 +441,10 @@ func (x *CreateOrUpdateCollectionRequest) UnmarshalJSON(data []byte) error {
 			}
 		case "collection":
 			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
+				return err
+			}
+		case "branch":
+			if err := jsoniter.Unmarshal(value, &x.Branch); err != nil {
 				return err
 			}
 		case "only_create":
