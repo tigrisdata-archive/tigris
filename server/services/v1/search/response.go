@@ -12,29 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cache
+package search
 
 import api "github.com/tigrisdata/tigris/api/server/v1"
 
-const (
-	SetStatus     string = "set"
-	DeletedStatus string = "deleted"
-	CreatedStatus string = "created"
-)
+type Streaming interface{}
 
-// Response is a wrapper on api.Response.
 type Response struct {
 	api.Response
-	Status       string
-	Data         []byte
-	OldValue     []byte
-	Keys         []string
-	DeletedCount int64
-	Caches       []*api.CacheMetadata
-	Cursor       uint64
-}
 
-// StreamingKeys is a wrapper interface for passing around for streaming cache keys.
-type StreamingKeys interface {
-	api.Cache_KeysServer
+	Status string
 }

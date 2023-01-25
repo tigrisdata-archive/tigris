@@ -180,25 +180,23 @@ func (m *managementService) getNameSpaceDetails(ctx context.Context) (nsDetailsR
 			return nil, err
 		}
 
-		for _, dbName := range tenant.ListDatabaseWithBranches(ctx) {
-			db, err := tenant.GetDatabase(ctx, metadata.NewDatabaseName(dbName))
+		for _, projName := range tenant.ListProjects(ctx) {
+			project, err := tenant.GetProject(projName)
 			if err != nil {
-				return nil, err
-			}
-
-			if db == nil {
-				// database was dropped in the meantime
+				// project was dropped in the meantime
 				continue
 			}
 
-			for _, coll := range db.ListCollection() {
-				size, err := tenant.CollectionSize(ctx, db, coll)
-				if err != nil {
-					return nil, err
-				}
-				res[nsName][dbName][coll.Name] = map[string]string{
-					"schema": string(coll.Schema),
-					"size":   strconv.FormatInt(size, 10),
+			for _, db := range project.GetDatabaseWithBranches() {
+				for _, coll := range db.ListCollection() {
+					size, err := tenant.CollectionSize(ctx, db, coll)
+					if err != nil {
+						return nil, err
+					}
+					res[nsName][db.Name()][coll.Name] = map[string]string{
+						"schema": string(coll.Schema),
+						"size":   strconv.FormatInt(size, 10),
+					}
 				}
 			}
 		}

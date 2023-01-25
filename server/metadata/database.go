@@ -14,13 +14,16 @@
 
 package metadata
 
-import "strings"
+import (
+	"strings"
+)
 
-type DatabaseMetadata struct {
+type ProjectMetadata struct {
 	Id             uint32
 	Creator        string
 	CreatedAt      int64
 	CachesMetadata []CachesMetadata
+	SearchMetadata []SearchMetadata
 }
 
 type CachesMetadata struct {
@@ -29,8 +32,14 @@ type CachesMetadata struct {
 	CreatedAt int64
 }
 
-func (dm *DatabaseMetadata) SetDatabaseId(id uint32) {
+func (dm *ProjectMetadata) SetId(id uint32) {
 	dm.Id = id
+}
+
+type SearchMetadata struct {
+	Name      string
+	Creator   string
+	CreatedAt int64
 }
 
 const (
@@ -72,7 +81,7 @@ func (b *DatabaseName) Name() string {
 	return b.Db() + BranchNameSeparator + b.Branch()
 }
 
-// Db is the user facing name of the oprimary database.
+// Db is the user facing name of the primary database.
 func (b *DatabaseName) Db() string {
 	return b.db
 }

@@ -28,6 +28,7 @@ import (
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/server/types"
 	"github.com/tigrisdata/tigris/store/cache"
+	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 // Runner is responsible for executing the current query and return the response.
@@ -98,9 +99,10 @@ type DelRunner struct {
 
 type KeysRunner struct {
 	*BaseRunner
-
-	req *api.KeysRequest
+	req       *api.KeysRequest
+	streaming StreamingKeys
 }
+
 type RunnerFactory struct {
 	encoder    metadata.CacheEncoder
 	cacheStore cache.Cache
@@ -163,9 +165,10 @@ func (f *RunnerFactory) GetDelRunner(r *api.DelRequest, accessToken *types.Acces
 	}
 }
 
-func (f *RunnerFactory) GetKeysRunner(r *api.KeysRequest, accessToken *types.AccessToken) *KeysRunner {
+func (f *RunnerFactory) GetKeysRunner(r *api.KeysRequest, accessToken *types.AccessToken, streaming StreamingKeys) *KeysRunner {
 	return &KeysRunner{
 		BaseRunner: NewBaseRunner(f.encoder, accessToken, f.cacheStore),
+		streaming:  streaming,
 		req:        r,
 	}
 }
@@ -178,7 +181,7 @@ func (runner *CreateCacheRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	_, err = tenant.CreateCache(ctx, tx, runner.req.GetProject(), runner.req.GetName(), currentSub)
 	if err != nil {
-		return Response{}, ctx, err
+		return Response{}, ctx, createApiError(err)
 	}
 	return Response{
 		Status: database.CreatedStatus,
@@ -211,7 +214,7 @@ func (runner *DeleteCacheRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			Str("project", runner.req.GetProject()).
 			Str("cache", runner.req.GetName()).
 			Msg("Failed to update project metadata entry to delete cache")
-		return Response{}, ctx, err
+		return Response{}, ctx, createApiError(err)
 	}
 	return Response{
 		Status: database.DeletedStatus,
@@ -325,29 +328,38 @@ func (runner *KeysRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Res
 	if pattern == "" {
 		pattern = "*"
 	}
-	// TODO: add the pagination
-	internalKeys, err := runner.cacheStore.Keys(ctx, tableName, pattern)
-	if err != nil {
-		return Response{}, errors.Internal("Failed to invoke keys, reason %s", err.Error())
-	}
+	cursor := runner.req.GetCursor()
+	var internalKeys []string
+	for {
+		internalKeys, cursor = runner.cacheStore.Scan(ctx, tableName, cursor, runner.req.GetCount(), pattern)
 
-	// transform internal keys to user facing keys
-	userKeys := make([]string, len(internalKeys))
-	for index, internalKey := range internalKeys {
-		userKeys[index] = runner.encoder.DecodeInternalCacheKeyNameToExternal(internalKey)
-	}
+		// transform internal keys to user facing keys
+		userKeys := make([]string, len(internalKeys))
+		for index, internalKey := range internalKeys {
+			userKeys[index] = runner.encoder.DecodeInternalCacheKeyNameToExternal(internalKey)
+		}
 
-	return Response{
-		Keys: userKeys,
-	}, nil
+		if err := runner.streaming.Send(&api.KeysResponse{
+			Keys:   userKeys,
+			Cursor: &cursor,
+		}); ulog.E(err) {
+			return Response{}, err
+		}
+		if cursor == 0 {
+			break
+		}
+	}
+	return Response{}, nil
 }
 
-func getEncodedCacheTableName(ctx context.Context, tenant *metadata.Tenant, project string, cacheName string, encoder metadata.CacheEncoder) (string, error) {
-	db, err := tenant.GetDatabase(ctx, metadata.NewDatabaseNameWithBranch(project, metadata.MainBranch))
+func getEncodedCacheTableName(_ context.Context, tenant *metadata.Tenant, projectName string, cacheName string, encoder metadata.CacheEncoder) (string, error) {
+	project, err := tenant.GetProject(projectName)
 	if err != nil {
-		return "", err
+		return "", createApiError(err)
 	}
-	encodedCacheTableName, err := encoder.EncodeCacheTableName(tenant.GetNamespace().Id(), db.Id(), cacheName)
+
+	// Encode cache table is encoding tenant id, project id(main database id) and cache name.
+	encodedCacheTableName, err := encoder.EncodeCacheTableName(tenant.GetNamespace().Id(), project.Id(), cacheName)
 	if err != nil {
 		return "", err
 	}

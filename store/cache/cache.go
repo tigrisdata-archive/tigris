@@ -148,6 +148,14 @@ func (c *cache) Keys(ctx context.Context, tableName string, pattern string) ([]s
 	return c.Client.Keys(ctx, encodeToCacheKey(tableName, pattern)).Result()
 }
 
+func (c *cache) Scan(ctx context.Context, tableName string, cursor uint64, count int64, pattern string) ([]string, uint64) {
+	if count > config.DefaultConfig.Cache.MaxScan {
+		count = config.DefaultConfig.Cache.MaxScan
+	}
+	scanCmd := c.Client.Scan(ctx, cursor, encodeToCacheKey(tableName, pattern), count)
+	return scanCmd.Val()
+}
+
 func (c *cache) ListStreams(ctx context.Context, streamNamePrefix string) ([]string, error) {
 	return c.Client.Keys(ctx, streamNamePrefix).Result()
 }

@@ -201,7 +201,7 @@ var DefaultConfig = Config{
 		Host:         "0.0.0.0",
 		Port:         8081,
 		RealtimePort: 8083,
-		FDBHardDrop:  false,
+		FDBHardDrop:  true,
 	},
 	Auth: AuthConfig{
 		Enabled:          false,
@@ -224,8 +224,9 @@ var DefaultConfig = Config{
 		WriteEnabled: true,
 	},
 	Cache: CacheConfig{
-		Host: "0.0.0.0",
-		Port: 6379,
+		Host:    "0.0.0.0",
+		Port:    6379,
+		MaxScan: 500,
 	},
 	Tracing: TracingConfig{
 		Enabled: false,
@@ -370,8 +371,9 @@ type SearchConfig struct {
 }
 
 type CacheConfig struct {
-	Host string `mapstructure:"host" json:"host" yaml:"host"`
-	Port int16  `mapstructure:"port" json:"port" yaml:"port"`
+	Host    string `mapstructure:"host" json:"host" yaml:"host"`
+	Port    int16  `mapstructure:"port" json:"port" yaml:"port"`
+	MaxScan int64  `mapstructure:"max_scan" json:"max_scan" yaml:"max_scan"`
 }
 
 type LimitsConfig struct {

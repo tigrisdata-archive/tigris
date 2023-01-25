@@ -391,7 +391,7 @@ func (s *apiService) ListCollections(ctx context.Context, r *api.ListCollections
 
 func (s *apiService) ListProjects(ctx context.Context, r *api.ListProjectsRequest) (*api.ListProjectsResponse, error) {
 	accessToken, _ := request.GetAccessToken(ctx)
-	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
+	runner := s.runnerFactory.GetProjectQueryRunner(accessToken)
 	runner.SetListProjectsReq(r)
 
 	resp, err := s.sessions.Execute(ctx, runner, database.ReqOptions{})
@@ -404,7 +404,7 @@ func (s *apiService) ListProjects(ctx context.Context, r *api.ListProjectsReques
 
 func (s *apiService) CreateProject(ctx context.Context, r *api.CreateProjectRequest) (*api.CreateProjectResponse, error) {
 	accessToken, _ := request.GetAccessToken(ctx)
-	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
+	runner := s.runnerFactory.GetProjectQueryRunner(accessToken)
 	runner.SetCreateProjectReq(r)
 	resp, err := s.sessions.Execute(ctx, runner, database.ReqOptions{
 		MetadataChange:     true,
@@ -422,7 +422,7 @@ func (s *apiService) CreateProject(ctx context.Context, r *api.CreateProjectRequ
 
 func (s *apiService) DeleteProject(ctx context.Context, r *api.DeleteProjectRequest) (*api.DeleteProjectResponse, error) {
 	accessToken, _ := request.GetAccessToken(ctx)
-	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
+	runner := s.runnerFactory.GetProjectQueryRunner(accessToken)
 	runner.SetDeleteProjectReq(r)
 	resp, err := s.sessions.Execute(ctx, runner, database.ReqOptions{
 		MetadataChange:     true,
@@ -460,7 +460,7 @@ func (s *apiService) DescribeCollection(ctx context.Context, r *api.DescribeColl
 
 func (s *apiService) DescribeDatabase(ctx context.Context, r *api.DescribeDatabaseRequest) (*api.DescribeDatabaseResponse, error) {
 	accessToken, _ := request.GetAccessToken(ctx)
-	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
+	runner := s.runnerFactory.GetProjectQueryRunner(accessToken)
 	runner.SetDescribeDatabaseReq(r)
 
 	resp, err := s.sessions.Execute(ctx, runner, database.ReqOptions{})
@@ -473,7 +473,7 @@ func (s *apiService) DescribeDatabase(ctx context.Context, r *api.DescribeDataba
 
 func (s *apiService) CreateBranch(ctx context.Context, r *api.CreateBranchRequest) (*api.CreateBranchResponse, error) {
 	accessToken, _ := request.GetAccessToken(ctx)
-	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
+	runner := s.runnerFactory.GetBranchQueryRunner(accessToken)
 	runner.SetCreateBranchReq(r)
 
 	resp, err := s.sessions.Execute(ctx, runner, database.ReqOptions{
@@ -489,7 +489,7 @@ func (s *apiService) CreateBranch(ctx context.Context, r *api.CreateBranchReques
 
 func (s *apiService) DeleteBranch(ctx context.Context, r *api.DeleteBranchRequest) (*api.DeleteBranchResponse, error) {
 	accessToken, _ := request.GetAccessToken(ctx)
-	runner := s.runnerFactory.GetDatabaseQueryRunner(accessToken)
+	runner := s.runnerFactory.GetBranchQueryRunner(accessToken)
 	runner.SetDeleteBranchReq(r)
 
 	resp, err := s.sessions.Execute(ctx, runner, database.ReqOptions{

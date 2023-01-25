@@ -12,29 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package cache
+package api
 
-import api "github.com/tigrisdata/tigris/api/server/v1"
+import (
+	"strings"
 
-const (
-	SetStatus     string = "set"
-	DeletedStatus string = "deleted"
-	CreatedStatus string = "created"
+	jsoniter "github.com/json-iterator/go"
 )
 
-// Response is a wrapper on api.Response.
-type Response struct {
-	api.Response
-	Status       string
-	Data         []byte
-	OldValue     []byte
-	Keys         []string
-	DeletedCount int64
-	Caches       []*api.CacheMetadata
-	Cursor       uint64
-}
+func (x *CreateOrUpdateIndexRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
 
-// StreamingKeys is a wrapper interface for passing around for streaming cache keys.
-type StreamingKeys interface {
-	api.Cache_KeysServer
+	for key, value := range mp {
+		var v interface{}
+		switch strings.ToLower(key) {
+		case "project":
+			v = &x.Project
+		case "name":
+			v = &x.Name
+		case "schema":
+			x.Schema = value
+			continue
+		default:
+			continue
+		}
+		if err := jsoniter.Unmarshal(value, v); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

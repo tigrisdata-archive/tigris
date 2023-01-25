@@ -25,7 +25,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	"github.com/tigrisdata/tigris/errors"
-	"github.com/tigrisdata/tigris/lib/container"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
@@ -55,8 +54,12 @@ type DefaultCollection struct {
 	Schema jsoniter.RawMessage
 	// SchemaDeltas contains incompatible schema changes from version to version
 	SchemaDeltas []VersionDelta
-	// search schema
-	Search *tsApi.CollectionSchema
+	// ImplicitSearchIndex is created by Tigris to use a search index for inmemory indexes. This is needed till we move
+	// to secondary indexes which will be stored in FDB.
+	ImplicitSearchIndex *ImplicitSearchIndex
+	// search indexes are indexes that are explicitly created by the user and tagged Tigris as source. Collection will be
+	// responsible for ensuring these indexes are in sync when any mutation happens to this collection.
+	SearchIndexes map[string]*SearchIndex
 	// QueryableFields are similar to Fields but these are flattened forms of fields. For instance, a simple field
 	// will be one to one mapped to queryable field but complex fields like object type field there may be more than
 	// one queryableFields. As queryableFields represent a flattened state these can be used as-is to index in memory.
@@ -121,9 +124,7 @@ func disableAdditionalPropertiesAndAllowNullable(required []string, properties m
 	}
 }
 
-func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionType, factory *Factory,
-	searchCollectionName string, fieldsInSearch []tsApi.Field, schemas Versions,
-) *DefaultCollection {
+func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionType, factory *Factory, schemas Versions, implicitSearchIndex *ImplicitSearchIndex) *DefaultCollection {
 	url := name + ".json"
 	compiler := jsonschema.NewCompiler()
 	compiler.Draft = jsonschema.Draft7 // Format is only working for draft7
@@ -141,7 +142,7 @@ func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionTy
 	validator.AdditionalProperties = false
 	disableAdditionalPropertiesAndAllowNullable(validator.Required, validator.Properties)
 
-	queryableFields := BuildQueryableFields(factory.Fields, fieldsInSearch)
+	queryableFields := BuildQueryableFields(factory.Fields, nil)
 
 	d := &DefaultCollection{
 		Id:                       id,
@@ -151,14 +152,14 @@ func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionTy
 		Indexes:                  factory.Indexes,
 		Validator:                validator,
 		Schema:                   factory.Schema,
-		Search:                   buildSearchSchema(searchCollectionName, queryableFields),
 		QueryableFields:          queryableFields,
 		CollectionType:           ctype,
+		ImplicitSearchIndex:      implicitSearchIndex,
 		int64FieldsPath:          make(map[string]struct{}),
-		FieldsInSearch:           fieldsInSearch,
 		fieldsWithInsertDefaults: make(map[string]struct{}),
 		fieldsWithUpdateDefaults: make(map[string]struct{}),
 		SchemaDeltas:             buildSchemaDeltas(schemas),
+		SearchIndexes:            make(map[string]*SearchIndex),
 	}
 
 	// set paths for int64 fields
@@ -167,6 +168,10 @@ func NewDefaultCollection(name string, id uint32, schVer int, ctype CollectionTy
 	d.setFieldsForDefaults("", d.Fields)
 
 	return d
+}
+
+func (d *DefaultCollection) AddSearchIndex(index *SearchIndex) {
+	d.SearchIndexes[index.Name] = index
 }
 
 func (d *DefaultCollection) GetName() string {
@@ -232,8 +237,8 @@ func (d *DefaultCollection) Validate(document interface{}) error {
 	return errors.InvalidArgument(err.Error())
 }
 
-func (d *DefaultCollection) SearchCollectionName() string {
-	return d.Search.Name
+func (d *DefaultCollection) GetImplicitSearchIndex() *ImplicitSearchIndex {
+	return d.ImplicitSearchIndex
 }
 
 func (d *DefaultCollection) GetInt64FieldsPath() map[string]struct{} {
@@ -287,75 +292,6 @@ func buildPath(parent string, field string) string {
 	}
 }
 
-func GetSearchDeltaFields(existingFields []*QueryableField, incomingFields []*Field, fieldsInSearch []tsApi.Field) []tsApi.Field {
-	incomingQueryable := BuildQueryableFields(incomingFields, fieldsInSearch)
-
-	existingFieldSet := container.NewHashSet()
-	for _, f := range existingFields {
-		existingFieldSet.Insert(f.FieldName)
-	}
-
-	ptrTrue := true
-	tsFields := make([]tsApi.Field, 0, len(incomingQueryable))
-	for _, f := range incomingQueryable {
-		if existingFieldSet.Contains(f.FieldName) {
-			continue
-		}
-
-		tsFields = append(tsFields, tsApi.Field{
-			Name:     f.FieldName,
-			Type:     f.SearchType,
-			Facet:    &f.Faceted,
-			Index:    &f.Indexed,
-			Optional: &ptrTrue,
-		})
-	}
-
-	return tsFields
-}
-
-func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.CollectionSchema {
-	ptrTrue, ptrFalse := true, false
-	tsFields := make([]tsApi.Field, 0, len(queryableFields))
-	for _, s := range queryableFields {
-		tsFields = append(tsFields, tsApi.Field{
-			Name:     s.Name(),
-			Type:     s.SearchType,
-			Facet:    &s.Faceted,
-			Index:    &s.Indexed,
-			Sort:     &s.Sortable,
-			Optional: &ptrTrue,
-		})
-		if s.InMemoryName() != s.Name() {
-			// we are storing this field differently in in-memory store
-			tsFields = append(tsFields, tsApi.Field{
-				Name:     s.InMemoryName(),
-				Type:     s.SearchType,
-				Facet:    &s.Faceted,
-				Index:    &s.Indexed,
-				Sort:     &s.Sortable,
-				Optional: &ptrTrue,
-			})
-		}
-		// Save original date as string to disk
-		if !s.IsReserved() && s.DataType == DateTimeType {
-			tsFields = append(tsFields, tsApi.Field{
-				Name:     ToSearchDateKey(s.Name()),
-				Type:     toSearchFieldType(StringType, UnknownType),
-				Facet:    &ptrFalse,
-				Index:    &ptrFalse,
-				Sort:     &ptrFalse,
-				Optional: &ptrTrue,
-			})
-		}
-	}
-
-	return &tsApi.CollectionSchema{
-		Name:   name,
-		Fields: tsFields,
-	}
-}
-
 func init() {
 	jsonschema.Formats[FieldNames[ByteType]] = func(i interface{}) bool {
 		if i == nil {
@@ -369,6 +305,10 @@ func init() {
 		return false
 	}
 	jsonschema.Formats[FieldNames[Int32Type]] = func(i interface{}) bool {
+		if i == nil {
+			return true
+		}
+
 		val, err := parseInt(i)
 		if err != nil {
 			return false
@@ -377,6 +317,10 @@ func init() {
 		return !(val < math.MinInt32 || val > math.MaxInt32)
 	}
 	jsonschema.Formats[FieldNames[Int64Type]] = func(i interface{}) bool {
+		if i == nil {
+			return true
+		}
+
 		_, err := parseInt(i)
 		return err == nil
 	}

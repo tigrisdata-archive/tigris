@@ -36,6 +36,8 @@ func TestEncodeDecodeKey(t *testing.T) {
 			coll.Id: coll.Name,
 		},
 	}
+	proj := NewProject(db.id, db.Name())
+	proj.database = db
 
 	mgr := &TenantManager{
 		idToTenantMap: map[uint32]string{
@@ -44,11 +46,11 @@ func TestEncodeDecodeKey(t *testing.T) {
 		tenants: map[string]*Tenant{
 			ns.StrId(): {
 				namespace: ns,
-				databases: map[string]*Database{
-					db.Name(): db,
+				projects: map[string]*Project{
+					db.Name(): proj,
 				},
-				idToDatabaseMap: map[uint32]string{
-					db.id: db.Name(),
+				idToDatabaseMap: map[uint32]*Database{
+					db.id: db,
 				},
 			},
 		},

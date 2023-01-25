@@ -218,7 +218,7 @@ func TestNamespacesSubspace(t *testing.T) {
 		})
 		_ = kvStore.DropTable(ctx, n.NamespaceSubspaceName())
 
-		dbMetadata := &DatabaseMetadata{
+		dbMetadata := &ProjectMetadata{
 			Id:        1,
 			Creator:   "google|123",
 			CreatedAt: 1668733841287,
@@ -227,9 +227,9 @@ func TestNamespacesSubspace(t *testing.T) {
 		tm := transaction.NewManager(kvStore)
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		require.Equal(t, errors.InvalidArgument("invalid dbName, dbName must not be blank"), n.InsertDatabaseMetadata(ctx, tx, 1, "", dbMetadata))
-		require.Equal(t, errors.InvalidArgument("invalid dbMetadata, dbMetadata must not be nil"), n.InsertDatabaseMetadata(ctx, tx, 1, "valid-db-name", nil))
-		require.Equal(t, errors.InvalidArgument("invalid namespace, id must be greater than 0"), n.InsertDatabaseMetadata(ctx, tx, 0, "valid-db-name", dbMetadata))
+		require.Equal(t, errors.InvalidArgument("invalid projName, projName must not be blank"), n.InsertProjectMetadata(ctx, tx, 1, "", dbMetadata))
+		require.Equal(t, errors.InvalidArgument("invalid projMetadata, projMetadata must not be nil"), n.InsertProjectMetadata(ctx, tx, 1, "valid-db-name", nil))
+		require.Equal(t, errors.InvalidArgument("invalid namespace, id must be greater than 0"), n.InsertProjectMetadata(ctx, tx, 0, "valid-db-name", dbMetadata))
 		_ = kvStore.DropTable(ctx, n.NamespaceSubspaceName())
 	})
 
@@ -242,7 +242,7 @@ func TestNamespacesSubspace(t *testing.T) {
 		})
 		_ = kvStore.DropTable(ctx, n.NamespaceSubspaceName())
 
-		dbMetadata := &DatabaseMetadata{
+		dbMetadata := &ProjectMetadata{
 			Id:        1,
 			Creator:   "google|123",
 			CreatedAt: 1668733841287,
@@ -251,8 +251,8 @@ func TestNamespacesSubspace(t *testing.T) {
 		tm := transaction.NewManager(kvStore)
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		require.NoError(t, n.InsertDatabaseMetadata(ctx, tx, 1, "db-name", dbMetadata))
-		value, err := n.GetDatabaseMetadata(ctx, tx, 1, "db-name")
+		require.NoError(t, n.InsertProjectMetadata(ctx, tx, 1, "db-name", dbMetadata))
+		value, err := n.GetProjectMetadata(ctx, tx, 1, "db-name")
 		require.NoError(t, err)
 		require.Equal(t, dbMetadata, value)
 		_ = kvStore.DropTable(ctx, n.NamespaceSubspaceName())
@@ -267,7 +267,7 @@ func TestNamespacesSubspace(t *testing.T) {
 		})
 		_ = kvStore.DropTable(ctx, n.NamespaceSubspaceName())
 
-		dbMetadata := &DatabaseMetadata{
+		dbMetadata := &ProjectMetadata{
 			Id:        1,
 			Creator:   "google|123",
 			CreatedAt: 1668733841287,
@@ -276,15 +276,15 @@ func TestNamespacesSubspace(t *testing.T) {
 		tm := transaction.NewManager(kvStore)
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		require.NoError(t, n.InsertDatabaseMetadata(ctx, tx, 1, "db-name", dbMetadata))
-		value, err := n.GetDatabaseMetadata(ctx, tx, 1, "db-name")
+		require.NoError(t, n.InsertProjectMetadata(ctx, tx, 1, "db-name", dbMetadata))
+		value, err := n.GetProjectMetadata(ctx, tx, 1, "db-name")
 		require.NoError(t, err)
 		require.Equal(t, dbMetadata, value)
 
-		err = n.DeleteDatabaseMetadata(ctx, tx, 1, "db-name")
+		err = n.DeleteProjectMetadata(ctx, tx, 1, "db-name")
 		require.NoError(t, err)
 
-		value, err = n.GetDatabaseMetadata(ctx, tx, 1, "db-name")
+		value, err = n.GetProjectMetadata(ctx, tx, 1, "db-name")
 		require.NoError(t, err)
 		require.Nil(t, value)
 		_ = kvStore.DropTable(ctx, n.NamespaceSubspaceName())
@@ -299,7 +299,7 @@ func TestNamespacesSubspace(t *testing.T) {
 		})
 		_ = kvStore.DropTable(ctx, n.NamespaceSubspaceName())
 
-		dbMetadata := &DatabaseMetadata{
+		dbMetadata := &ProjectMetadata{
 			Id:        1,
 			Creator:   "google|123",
 			CreatedAt: 1668733841287,
@@ -308,21 +308,21 @@ func TestNamespacesSubspace(t *testing.T) {
 		tm := transaction.NewManager(kvStore)
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		require.NoError(t, n.InsertDatabaseMetadata(ctx, tx, 1, "db-name", dbMetadata))
-		value, err := n.GetDatabaseMetadata(ctx, tx, 1, "db-name")
+		require.NoError(t, n.InsertProjectMetadata(ctx, tx, 1, "db-name", dbMetadata))
+		value, err := n.GetProjectMetadata(ctx, tx, 1, "db-name")
 		require.NoError(t, err)
 		require.Equal(t, dbMetadata, value)
 
-		dbMetadata2 := &DatabaseMetadata{
+		dbMetadata2 := &ProjectMetadata{
 			Id:        1,
 			Creator:   "google|456",
 			CreatedAt: 1668733841287,
 		}
 
-		err = n.UpdateDatabaseMetadata(ctx, tx, 1, "db-name", dbMetadata2)
+		err = n.UpdateProjectMetadata(ctx, tx, 1, "db-name", dbMetadata2)
 		require.NoError(t, err)
 
-		value, err = n.GetDatabaseMetadata(ctx, tx, 1, "db-name")
+		value, err = n.GetProjectMetadata(ctx, tx, 1, "db-name")
 		require.NoError(t, err)
 		require.Equal(t, dbMetadata2, value)
 		_ = kvStore.DropTable(ctx, n.NamespaceSubspaceName())

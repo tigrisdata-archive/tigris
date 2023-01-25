@@ -78,15 +78,12 @@ func newBaseRunner(cache cache.Cache, factory *ChannelFactory) *baseRunner {
 	}
 }
 
-func (runner *baseRunner) getProject(ctx context.Context, tenant *metadata.Tenant, project string) (*metadata.Database, error) {
-	proj, err := tenant.GetDatabase(ctx, metadata.NewDatabaseName(project))
+func (runner *baseRunner) getProject(tenant *metadata.Tenant, project string) (*metadata.Project, error) {
+	proj, err := tenant.GetProject(project)
 	if err != nil {
-		return nil, err
+		return nil, createApiError(err)
 	}
-	if proj == nil {
-		return nil, errors.NotFound("project doesn't exist '%s'", project)
-	}
-	return proj, err
+	return proj, nil
 }
 
 // MessagesRunner is to publish messages to a channel.
@@ -97,7 +94,7 @@ type MessagesRunner struct {
 }
 
 func (runner *MessagesRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Response, error) {
-	project, err := runner.getProject(ctx, tenant, runner.req.Project)
+	project, err := runner.getProject(tenant, runner.req.Project)
 	if err != nil {
 		return Response{}, err
 	}
@@ -144,7 +141,7 @@ type ReadMessagesRunner struct {
 }
 
 func (runner *ReadMessagesRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Response, error) {
-	project, err := runner.getProject(ctx, tenant, runner.req.Project)
+	project, err := runner.getProject(tenant, runner.req.Project)
 	if err != nil {
 		return Response{}, err
 	}
@@ -235,7 +232,7 @@ func (runner *ChannelRunner) SetListSubscriptionsReq(req *api.ListSubscriptionRe
 func (runner *ChannelRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Response, error) {
 	switch {
 	case runner.listSubscriptions != nil:
-		project, err := runner.getProject(ctx, tenant, runner.listSubscriptions.Project)
+		project, err := runner.getProject(tenant, runner.listSubscriptions.Project)
 		if err != nil {
 			return Response{}, err
 		}
@@ -252,7 +249,7 @@ func (runner *ChannelRunner) Run(ctx context.Context, tenant *metadata.Tenant) (
 			},
 		}, nil
 	case runner.channelsReq != nil:
-		project, err := runner.getProject(ctx, tenant, runner.channelsReq.Project)
+		project, err := runner.getProject(tenant, runner.channelsReq.Project)
 		if err != nil {
 			return Response{}, err
 		}
@@ -275,7 +272,7 @@ func (runner *ChannelRunner) Run(ctx context.Context, tenant *metadata.Tenant) (
 			},
 		}, nil
 	default:
-		project, err := runner.getProject(ctx, tenant, runner.channelReq.Project)
+		project, err := runner.getProject(tenant, runner.channelReq.Project)
 		if err != nil {
 			return Response{}, err
 		}

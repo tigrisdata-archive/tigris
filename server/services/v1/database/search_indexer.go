@@ -78,8 +78,12 @@ func (i *SearchIndexer) OnPostCommit(ctx context.Context, tenant *metadata.Tenan
 			return err
 		}
 
+		searchIndex := collection.GetImplicitSearchIndex()
+		if searchIndex == nil {
+			return fmt.Errorf("implicit search index not found")
+		}
 		if event.Op == kv.DeleteEvent {
-			if err = i.searchStore.DeleteDocuments(ctx, collection.SearchCollectionName(), searchKey); err != nil {
+			if err = i.searchStore.DeleteDocuments(ctx, searchIndex.StoreIndexName(), searchKey); err != nil {
 				if err != search.ErrNotFound {
 					return err
 				}
@@ -107,7 +111,7 @@ func (i *SearchIndexer) OnPostCommit(ctx context.Context, tenant *metadata.Tenan
 			}
 
 			reader := bytes.NewReader(searchData)
-			if err = i.searchStore.IndexDocuments(ctx, collection.SearchCollectionName(), reader, search.IndexDocumentsOptions{
+			if err = i.searchStore.IndexDocuments(ctx, searchIndex.StoreIndexName(), reader, search.IndexDocumentsOptions{
 				Action:    action,
 				BatchSize: 1,
 			}); err != nil {

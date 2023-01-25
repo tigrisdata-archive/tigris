@@ -302,23 +302,23 @@ error() {
 db_errors_tests() {
 	$cli list projects
 
-	error "database doesn't exist 'db2'" $cli delete-project -f db2
+	error "project doesn't exist 'db2'" $cli delete-project -f db2
 
-	error "database doesn't exist 'db2'" $cli drop collection --project=db2 coll1
+	error "project doesn't exist 'db2'" $cli drop collection --project=db2 coll1
 
-	error "database doesn't exist 'db2'" $cli create collection --project=db2 \
+	error "project doesn't exist 'db2'" $cli create collection --project=db2 \
 		'{ "title" : "coll1", "properties": { "Key1": { "type": "string" }, "Field1": { "type": "integer" }, "Field2": { "type": "integer" } }, "primary_key": ["Key1"] }'
 
-	error "database doesn't exist 'db2'" $cli list collections --project=db2
+	error "project doesn't exist 'db2'" $cli list collections --project=db2
 
-	error "database doesn't exist 'db2'" $cli insert --project=db2 coll1 '{}'
+	error "project doesn't exist 'db2'" $cli insert --project=db2 coll1 '{}'
 
-	error "database doesn't exist 'db2'" $cli read --project=db2 coll1 '{}' ||
+	error "project doesn't exist 'db2'" $cli read --project=db2 coll1 '{}' ||
 	error "404 Not Found" $cli read --project=db2 coll1 '{}'
 
-	error "database doesn't exist 'db2'" $cli update --project=db2 coll1 '{}' '{}'
+	error "project doesn't exist 'db2'" $cli update --project=db2 coll1 '{}' '{}'
 
-	error "database doesn't exist 'db2'" $cli delete --project=db2 coll1 '{}'
+	error "project doesn't exist 'db2'" $cli delete --project=db2 coll1 '{}'
 
 	$cli create project db2
 	error "collection doesn't exist 'coll1'" $cli insert --project=db2 coll1 '{}'

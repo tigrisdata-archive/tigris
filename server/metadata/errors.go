@@ -24,6 +24,11 @@ const (
 	ErrCodeDatabaseBranchExists ErrorCode = 0x02
 	ErrCodeBranchNotFound       ErrorCode = 0x03
 	ErrCodeCannotDeleteBranch   ErrorCode = 0x04
+	ErrCodeProjectNotFound      ErrorCode = 0x05
+	ErrCodeSearchIndexExists    ErrorCode = 0x06
+	ErrCodeSearchIndexNotFound  ErrorCode = 0x07
+	ErrCodeCacheExists          ErrorCode = 0x08
+	ErrCodeCacheNotFound        ErrorCode = 0x09
 )
 
 type Error struct {
@@ -46,18 +51,30 @@ func (e Error) Code() ErrorCode {
 	return e.code
 }
 
-func NewDatabaseNotFoundErr(name string) error {
-	return NewMetadataError(ErrCodeDatabaseNotFound, "database doesn't exist '%s'", name)
-}
-
-func NewDatabaseExistsErr(name string) error {
-	return NewMetadataError(ErrCodeDatabaseExists, "database already exist '%s'", name)
-}
-
 func NewDatabaseBranchExistsErr(name string) error {
 	return NewMetadataError(ErrCodeDatabaseBranchExists, "branch already exist '%s'", name)
 }
 
 func NewBranchNotFoundErr(name string) error {
 	return NewMetadataError(ErrCodeBranchNotFound, "database branch doesn't exist '%s'", name)
+}
+
+func NewProjectNotFoundErr(name string) error {
+	return NewMetadataError(ErrCodeProjectNotFound, "project doesn't exist '%s'", name)
+}
+
+func NewSearchIndexExistsErr(name string) error {
+	return NewMetadataError(ErrCodeSearchIndexExists, "search index already exist '%s'", name)
+}
+
+func NewSearchIndexNotFoundErr(name string) error {
+	return NewMetadataError(ErrCodeSearchIndexExists, "search index not found '%s'", name)
+}
+
+func NewCacheExistsErr(name string) error {
+	return NewMetadataError(ErrCodeCacheExists, "cache already exist '%s'", name)
+}
+
+func NewCacheNotFoundErr(name string) error {
+	return NewMetadataError(ErrCodeCacheNotFound, "cache not found '%s'", name)
 }

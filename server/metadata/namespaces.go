@@ -58,23 +58,23 @@ func (n *NamespaceSubspace) InsertNamespaceMetadata(ctx context.Context, tx tran
 	return nil
 }
 
-func (n *NamespaceSubspace) InsertDatabaseMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbName string, dbMetadata *DatabaseMetadata) error {
+func (n *NamespaceSubspace) InsertProjectMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, projName string, projMetadata *ProjectMetadata) error {
 	if namespaceId < 1 {
 		return errors.InvalidArgument("invalid namespace, id must be greater than 0")
 	}
-	if dbName == "" {
-		return errors.InvalidArgument("invalid dbName, dbName must not be blank")
+	if projName == "" {
+		return errors.InvalidArgument("invalid projName, projName must not be blank")
 	}
-	if dbMetadata == nil {
-		return errors.InvalidArgument("invalid dbMetadata, dbMetadata must not be nil")
+	if projMetadata == nil {
+		return errors.InvalidArgument("invalid projMetadata, projMetadata must not be nil")
 	}
 
-	payload, err := json.Marshal(dbMetadata)
+	payload, err := json.Marshal(projMetadata)
 	if err != nil {
 		log.Err(err).Msg("Failed to marshal db metadata")
 		return errors.Internal("Failed to update db metadata, failed to marshal db metadata")
 	}
-	key := keys.NewKey(n.NamespaceSubspaceName(), namespaceVersion, UInt32ToByte(namespaceId), dbKey, dbName)
+	key := keys.NewKey(n.NamespaceSubspaceName(), namespaceVersion, UInt32ToByte(namespaceId), dbKey, projName)
 
 	if err := tx.Insert(ctx, key, internal.NewTableData(payload)); err != nil {
 		log.Debug().Str("key", key.String()).Str("value", string(payload)).Err(err).Msg("storing namespace metadata failed")
@@ -85,15 +85,15 @@ func (n *NamespaceSubspace) InsertDatabaseMetadata(ctx context.Context, tx trans
 	return nil
 }
 
-func (n *NamespaceSubspace) GetDatabaseMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbName string) (*DatabaseMetadata, error) {
+func (n *NamespaceSubspace) GetProjectMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, projName string) (*ProjectMetadata, error) {
 	if namespaceId < 1 {
 		return nil, errors.InvalidArgument("invalid namespace, id must be greater than 0")
 	}
-	if dbName == "" {
-		return nil, errors.InvalidArgument("invalid dbName, dbName must not be blank")
+	if projName == "" {
+		return nil, errors.InvalidArgument("invalid projName, projName must not be blank")
 	}
 
-	key := keys.NewKey(n.NamespaceSubspaceName(), namespaceVersion, UInt32ToByte(namespaceId), dbKey, dbName)
+	key := keys.NewKey(n.NamespaceSubspaceName(), namespaceVersion, UInt32ToByte(namespaceId), dbKey, projName)
 	it, err := tx.Read(ctx, key)
 	if err != nil {
 		return nil, err
@@ -101,33 +101,33 @@ func (n *NamespaceSubspace) GetDatabaseMetadata(ctx context.Context, tx transact
 	var row kv.KeyValue
 	if it.Next(&row) {
 		log.Debug().Str("key", key.String()).Str("value", string(row.Data.RawData)).Msg("reading namespace metadata succeed")
-		var dbMetadata DatabaseMetadata
-		if err = json.Unmarshal(row.Data.RawData, &dbMetadata); err != nil {
+		var projMetadata ProjectMetadata
+		if err = json.Unmarshal(row.Data.RawData, &projMetadata); err != nil {
 			log.Err(err).Msg("Failed to read db metadata")
 			return nil, errors.Internal("Failed to read database metadata")
 		}
-		return &dbMetadata, nil
+		return &projMetadata, nil
 	}
 	return nil, it.Err()
 }
 
-func (n *NamespaceSubspace) UpdateDatabaseMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbName string, dbMetadata *DatabaseMetadata) error {
+func (n *NamespaceSubspace) UpdateProjectMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, projName string, projMetadata *ProjectMetadata) error {
 	if namespaceId < 1 {
 		return errors.InvalidArgument("invalid namespace, id must be greater than 0")
 	}
-	if dbName == "" {
-		return errors.InvalidArgument("invalid dbName, dbName must not be blank")
+	if projName == "" {
+		return errors.InvalidArgument("invalid projName, projName must not be blank")
 	}
-	if dbMetadata == nil {
-		return errors.InvalidArgument("invalid dbMetadata, dbMetadata must not be nil")
+	if projMetadata == nil {
+		return errors.InvalidArgument("invalid projMetadata, projMetadata must not be nil")
 	}
 
-	payload, err := json.Marshal(dbMetadata)
+	payload, err := json.Marshal(projMetadata)
 	if err != nil {
 		log.Err(err).Msg("Failed to marshal db metadata")
 		return errors.Internal("Failed to update db metadata, failed to marshal db metadata")
 	}
-	key := keys.NewKey(n.NamespaceSubspaceName(), namespaceVersion, UInt32ToByte(namespaceId), dbKey, dbName)
+	key := keys.NewKey(n.NamespaceSubspaceName(), namespaceVersion, UInt32ToByte(namespaceId), dbKey, projName)
 
 	_, err = tx.Update(ctx, key, func(data *internal.TableData) (*internal.TableData, error) {
 		return internal.NewTableData(payload), nil
@@ -141,14 +141,14 @@ func (n *NamespaceSubspace) UpdateDatabaseMetadata(ctx context.Context, tx trans
 	return nil
 }
 
-func (n *NamespaceSubspace) DeleteDatabaseMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbName string) error {
+func (n *NamespaceSubspace) DeleteProjectMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, projName string) error {
 	if namespaceId < 1 {
 		return errors.InvalidArgument("invalid namespace, id must be greater than 0")
 	}
-	if dbName == "" {
-		return errors.InvalidArgument("invalid dbName, dbName must not be blank")
+	if projName == "" {
+		return errors.InvalidArgument("invalid projName, projName must not be blank")
 	}
-	key := keys.NewKey(n.NamespaceSubspaceName(), namespaceVersion, UInt32ToByte(namespaceId), dbKey, dbName)
+	key := keys.NewKey(n.NamespaceSubspaceName(), namespaceVersion, UInt32ToByte(namespaceId), dbKey, projName)
 	err := tx.Delete(ctx, key)
 	if err != nil {
 		log.Debug().Str("key", key.String()).Err(err).Msg("Delete database metadata failed")

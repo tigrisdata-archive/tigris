@@ -17,11 +17,14 @@
 package server
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/server/services/v1/cache"
 	"github.com/tigrisdata/tigris/test/config"
 	"gopkg.in/gavv/httpexpect.v1"
@@ -137,9 +140,11 @@ func TestCacheCRUD(t *testing.T) {
 	}
 
 	// list all keys
-	listKeysResp := listCacheKeys(t, project, cacheName)
+	listKeysResp := listCacheKeys(t, project, cacheName, 0)
 	keys := listKeysResp.Status(http.StatusOK).
 		JSON().
+		Object().
+		Value("result").
 		Object().
 		Value("keys").
 		Array().
@@ -156,9 +161,11 @@ func TestCacheCRUD(t *testing.T) {
 	assert.Equal(t, cache.DeletedStatus, delKeyRespStatus)
 
 	// list all keys
-	listKeysResp2 := listCacheKeys(t, project, cacheName)
+	listKeysResp2 := listCacheKeys(t, project, cacheName, 0)
 	keys2 := listKeysResp2.Status(http.StatusOK).
 		JSON().
+		Object().
+		Value("result").
 		Object().
 		Value("keys").
 		Array().
@@ -184,6 +191,46 @@ func TestCacheCRUD(t *testing.T) {
 		Value("code").
 		Raw()
 	assert.Equal(t, "NOT_FOUND", delKeyRespCode3)
+}
+
+func TestCacheKeysScan(t *testing.T) {
+	project := setupTestsOnlyProject(t)
+	cacheName := "c1"
+	createCache(t, project, cacheName)
+	// set 501 kvs
+	for i := 0; i < 501; i++ {
+		setResp := setCacheKey(t, project, cacheName, fmt.Sprintf("k%d", i), fmt.Sprintf("value-%d", i))
+		status := setResp.Status(http.StatusOK).
+			JSON().
+			Object().
+			Value("status").
+			Raw()
+		assert.Equal(t, cache.SetStatus, status)
+	}
+	var allKeys []string
+
+	respLines := listCacheKeysAndRead(t, project, cacheName)
+	for _, respLine := range respLines {
+		var doc map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(respLine["result"], &doc))
+
+		var thisBatchKeys []string
+		_ = json.Unmarshal(doc["keys"], &thisBatchKeys)
+		allKeys = append(allKeys, thisBatchKeys...)
+	}
+
+	assert.Equal(t, 501, len(allKeys))
+	for i := 0; i < 501; i++ {
+		keyToSearch := fmt.Sprintf("k%d", i)
+		var contains = false
+		for _, key := range allKeys {
+			if key == keyToSearch {
+				contains = true
+				break
+			}
+		}
+		require.Truef(t, contains, "key %s not found", keyToSearch)
+	}
 }
 
 func TestCacheSetWithGet(t *testing.T) {
@@ -246,12 +293,31 @@ func delCacheKey(t *testing.T, project string, cache string, key string) *httpex
 		Expect()
 }
 
-func listCacheKeys(t *testing.T, project string, cache string) *httpexpect.Response {
+func listCacheKeys(t *testing.T, project string, cache string, cursor int64) *httpexpect.Response {
 	e := cacheExpect(t)
-	return e.GET(fmt.Sprintf("/v1/projects/%s/caches/%s/kv/keys", project, cache)).
+	return e.GET(fmt.Sprintf("/v1/projects/%s/caches/%s/keys", project, cache)).WithQuery("cursor", cursor).
 		Expect()
 }
 
+func listCacheKeysAndRead(t *testing.T, project string, cache string) []map[string]json.RawMessage {
+	e := cacheExpect(t)
+
+	str := e.GET(fmt.Sprintf("/v1/projects/%s/caches/%s/keys", project, cache)).
+		Expect().
+		Status(http.StatusOK).
+		Body().
+		Raw()
+
+	var resp []map[string]json.RawMessage
+	dec := json.NewDecoder(bytes.NewReader([]byte(str)))
+	for dec.More() {
+		var mp map[string]json.RawMessage
+		require.NoError(t, dec.Decode(&mp))
+		resp = append(resp, mp)
+	}
+
+	return resp
+}
 func createCache(t *testing.T, project string, cache string) *httpexpect.Response {
 	e := cacheExpect(t)
 	return e.POST(cacheOperationURL(project, cache, "create")).
@@ -284,5 +350,5 @@ func cacheOperationURL(project string, cache string, operation string) string {
 }
 
 func cacheKVOperationURL(project string, cache string, key string, operation string) string {
-	return fmt.Sprintf("/v1/projects/%s/caches/%s/kv/%s/%s", project, cache, key, operation)
+	return fmt.Sprintf("/v1/projects/%s/caches/%s/%s/%s", project, cache, key, operation)
 }
