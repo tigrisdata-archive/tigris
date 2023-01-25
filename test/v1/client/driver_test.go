@@ -345,7 +345,7 @@ func testTxClient(t *testing.T, c driver.Driver) {
 	_, err := c.CreateProject(ctx, projectName)
 	require.NoError(t, err)
 	defer func() {
-		//_ = c.DropDatabase(ctx, dbName)
+		_, _= c.DeleteProject(ctx, projectName)
 	}()
 
 	db1 := c.UseDatabase(projectName)

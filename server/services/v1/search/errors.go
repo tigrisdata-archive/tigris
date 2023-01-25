@@ -15,8 +15,13 @@
 package search
 
 import (
+	"fmt"
+	"net/http"
+
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	apiErrors "github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/store/search"
 )
 
 // createApiError helps construct API errors from internal errors.
@@ -29,8 +34,34 @@ func createApiError(err error) error {
 		case metadata.ErrCodeSearchIndexExists:
 			return apiErrors.AlreadyExists(e.Error())
 		}
+	case search.Error:
+		switch e.HttpCode {
+		case http.StatusConflict:
+			return apiErrors.AlreadyExists(e.Msg)
+		default:
+			return api.Errorf(api.FromHttpCode(e.HttpCode), e.Msg)
+		}
 	default:
 		return err
 	}
 	return err
+}
+
+func convertStoreErrToApiErr(id string, code int, msg string) *api.Error {
+	if len(msg) == 0 || code == 0 {
+		return nil
+	}
+
+	switch code {
+	case http.StatusConflict:
+		return &api.Error{
+			Code:    http.StatusConflict,
+			Message: fmt.Sprintf("A document with id '%s' already exists.", id),
+		}
+	default:
+		return &api.Error{
+			Code:    api.Code(code),
+			Message: msg,
+		}
+	}
 }

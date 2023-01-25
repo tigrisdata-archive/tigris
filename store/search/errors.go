@@ -29,26 +29,32 @@ const (
 	ErrCodeUnhandled         ErrCode = 0x04
 )
 
-var (
-	ErrDuplicateEntity = NewSearchError(http.StatusConflict, ErrCodeDuplicate, "entity already exists")
-	ErrNotFound        = NewSearchError(http.StatusNotFound, ErrCodeNotFound, "not found")
-)
-
 type Error struct {
-	httpCode int
-	code     ErrCode
-	msg      string
+	HttpCode int
+	Code     ErrCode
+	Msg      string
 }
 
 func NewSearchError(httpCode int, code ErrCode, msg string, args ...interface{}) error {
-	return Error{httpCode: httpCode, code: code, msg: fmt.Sprintf(msg, args...)}
+	return Error{HttpCode: httpCode, Code: code, Msg: fmt.Sprintf(msg, args...)}
 }
 
 func (se Error) Error() string {
-	return se.msg
+	return se.Msg
 }
 
-func IsSearchError(err error) bool {
-	_, ok := err.(*Error)
-	return ok
+func IsErrDuplicateEntity(err error) bool {
+	if e, ok := err.(Error); ok {
+		return e.HttpCode == http.StatusConflict
+	}
+
+	return false
+}
+
+func IsErrNotFound(err error) bool {
+	if e, ok := err.(Error); ok {
+		return e.HttpCode == http.StatusNotFound
+	}
+
+	return false
 }

@@ -214,6 +214,7 @@ func (sessMgr *SessionManager) Create(ctx context.Context, trackVerInOwnTxn bool
 		tenant:         tenant,
 		versionTracker: versionTracker,
 		txListeners:    sessMgr.txListeners,
+		tenantTracker: sessMgr.tenantTracker,
 	}
 	if track {
 		sessMgr.tracker.add(txCtx.Id, q)
@@ -325,6 +326,7 @@ type QuerySession struct {
 	tenant         *metadata.Tenant
 	versionTracker *metadata.Tracker
 	txListeners    []TxListener
+	tenantTracker *metadata.CacheTracker
 }
 
 func (s *QuerySession) GetTx() transaction.Tx {
@@ -372,6 +374,15 @@ func (s *QuerySession) Commit(versionMgr *metadata.VersionHandler, incVersion bo
 	}
 
 	if err = s.tx.Commit(s.ctx); err == nil {
+		if len(s.txListeners) > 0 {
+			if s.GetTx().Context().GetStagedDatabase() != nil {
+				// we need to reload tenant if in a transaction there is a DML as well as DDL both.
+				if _, err = s.tenantTracker.InstantTracking(s.ctx, nil, s.tenant); err != nil {
+					return err
+				}
+			}
+		}
+
 		for _, listener := range s.txListeners {
 			if err = listener.OnPostCommit(s.ctx, s.tenant, kv.GetEventListener(s.ctx)); ulog.E(err) {
 				return errors.DeadlineExceeded(err.Error())

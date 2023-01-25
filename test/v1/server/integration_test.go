@@ -128,11 +128,19 @@ var testCreateSchema = Map{
 }
 
 func setupTestsOnlyProject(t *testing.T) string {
-	db := fmt.Sprintf("integration_%s", t.Name())
-	deleteProject(t, db)
-	createProject(t, db).Status(http.StatusOK)
+	proj := fmt.Sprintf("integration_%s", t.Name())
+	deleteProject(t, proj)
+	createProject(t, proj).Status(http.StatusOK)
 
-	return db
+	return proj
+}
+
+func setupTestsProjectAndSearchIndex(t *testing.T) (string, string) {
+	proj := fmt.Sprintf("integration_%s", t.Name())
+	deleteProject(t, proj)
+	createProject(t, proj).Status(http.StatusOK)
+	createSearchIndex(t, proj, testIndex, testSearchIndexSchema).Status(http.StatusOK)
+	return proj, testIndex
 }
 
 func setupTests(t *testing.T) (string, string) {

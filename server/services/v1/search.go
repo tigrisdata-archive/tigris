@@ -26,6 +26,7 @@ import (
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/services/v1/search"
 	"github.com/tigrisdata/tigris/server/transaction"
+	searchStore "github.com/tigrisdata/tigris/store/search"
 	"google.golang.org/grpc"
 )
 
@@ -43,13 +44,13 @@ type searchService struct {
 	runnerFactory *search.RunnerFactory
 }
 
-func newSearchService(tenantMgr *metadata.TenantManager, txMgr *transaction.Manager, versionH *metadata.VersionHandler) *searchService {
+func newSearchService(store searchStore.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager, versionH *metadata.VersionHandler) *searchService {
 	return &searchService{
 		txMgr:         txMgr,
 		tenantMgr:     tenantMgr,
 		versionH:      versionH,
 		sessions:      search.NewSessionManager(txMgr, tenantMgr, metadata.NewCacheTracker(tenantMgr, txMgr), versionH),
-		runnerFactory: search.NewRunnerFactory(),
+		runnerFactory: search.NewRunnerFactory(store, tenantMgr.GetEncoder()),
 	}
 }
 
@@ -122,4 +123,96 @@ func (s *searchService) ListIndexes(ctx context.Context, req *api.ListIndexesReq
 	}
 
 	return resp.Response.(*api.ListIndexesResponse), nil
+}
+
+func (s *searchService) Get(ctx context.Context, req *api.GetDocumentRequest) (*api.GetDocumentResponse, error) {
+	accessToken, _ := request.GetAccessToken(ctx)
+
+	runner := s.runnerFactory.GetReadRunner(req, accessToken)
+	resp, err := s.sessions.Execute(ctx, runner)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.GetDocumentResponse), nil
+}
+
+func (s *searchService) CreateById(ctx context.Context, req *api.CreateByIdRequest) (*api.CreateByIdResponse, error) {
+	accessToken, _ := request.GetAccessToken(ctx)
+
+	runner := s.runnerFactory.GetCreateRunner(accessToken)
+	runner.SetCreateByIdReq(req)
+
+	resp, err := s.sessions.Execute(ctx, runner)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.CreateByIdResponse), nil
+}
+
+func (s *searchService) Create(ctx context.Context, req *api.CreateDocumentRequest) (*api.CreateDocumentResponse, error) {
+	accessToken, _ := request.GetAccessToken(ctx)
+
+	runner := s.runnerFactory.GetCreateRunner(accessToken)
+	runner.SetCreateDocumentsReq(req)
+
+	resp, err := s.sessions.Execute(ctx, runner)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.CreateDocumentResponse), nil
+}
+
+func (s *searchService) CreateOrReplace(ctx context.Context, req *api.CreateOrReplaceDocumentRequest) (*api.CreateOrReplaceDocumentResponse, error) {
+	accessToken, _ := request.GetAccessToken(ctx)
+
+	runner := s.runnerFactory.GetCreateOrReplaceRunner(req, accessToken)
+	resp, err := s.sessions.Execute(ctx, runner)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.CreateOrReplaceDocumentResponse), nil
+}
+
+func (s *searchService) Update(ctx context.Context, req *api.UpdateDocumentRequest) (*api.UpdateDocumentResponse, error) {
+	accessToken, _ := request.GetAccessToken(ctx)
+
+	runner := s.runnerFactory.GetUpdateQueryRunner(req, accessToken)
+	resp, err := s.sessions.Execute(ctx, runner)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.UpdateDocumentResponse), nil
+}
+
+func (s *searchService) Delete(ctx context.Context, req *api.DeleteDocumentRequest) (*api.DeleteDocumentResponse, error) {
+	accessToken, _ := request.GetAccessToken(ctx)
+
+	runner := s.runnerFactory.GetDeleteQueryRunner(accessToken)
+	runner.SetDeleteDocumentReq(req)
+
+	resp, err := s.sessions.Execute(ctx, runner)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.DeleteDocumentResponse), nil
+}
+
+func (s *searchService) DeleteByQuery(ctx context.Context, req *api.DeleteByQueryRequest) (*api.DeleteByQueryResponse, error) {
+	accessToken, _ := request.GetAccessToken(ctx)
+
+	runner := s.runnerFactory.GetDeleteQueryRunner(accessToken)
+	runner.SetDeleteByQueryReq(req)
+
+	resp, err := s.sessions.Execute(ctx, runner)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.DeleteByQueryResponse), nil
 }

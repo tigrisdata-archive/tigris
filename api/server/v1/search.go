@@ -15,10 +15,54 @@
 package api
 
 import (
+	"encoding/json"
 	"strings"
 
 	jsoniter "github.com/json-iterator/go"
 )
+
+func (x *GetDocumentResponse) MarshalJSON() ([]byte, error) {
+	type resp struct {
+		Documents []json.RawMessage `json:"documents,omitempty"`
+	}
+
+	r := resp{}
+	r.Documents = make([]json.RawMessage, len(x.Documents))
+	for i, doc := range x.Documents {
+		if len(doc) == 0 {
+			r.Documents[i] = nil
+			continue
+		}
+
+		r.Documents[i] = doc
+	}
+
+	return json.Marshal(r)
+}
+
+func (x *DocStatus) MarshalJSON() ([]byte, error) {
+	resp := struct {
+		Id    string `json:"id,omitempty"`
+		Error *Error `json:"error"`
+	}{
+		Id:    x.Id,
+		Error: x.Error,
+	}
+	return json.Marshal(resp)
+}
+
+func (x *IndexInfo) MarshalJSON() ([]byte, error) {
+	resp := struct {
+		Name   string          `json:"name,omitempty"`
+		Schema json.RawMessage `json:"schema,omitempty"`
+		Source *IndexSource    `json:"source,omitempty"`
+	}{
+		Name:   x.Name,
+		Schema: x.Schema,
+		Source: x.Source,
+	}
+	return json.Marshal(resp)
+}
 
 func (x *CreateOrUpdateIndexRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
@@ -44,5 +88,202 @@ func (x *CreateOrUpdateIndexRequest) UnmarshalJSON(data []byte) error {
 		}
 	}
 
+	return nil
+}
+
+func (x *CreateByIdRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+
+	for key, value := range mp {
+		var v interface{}
+
+		switch key {
+		case "project":
+			v = &x.Project
+		case "index":
+			v = &x.Index
+		case "id":
+			v = &x.Id
+		case "document":
+			x.Document = value
+			continue
+		default:
+			continue
+		}
+
+		if err := jsoniter.Unmarshal(value, v); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (x *CreateDocumentRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+
+	for key, value := range mp {
+		var v interface{}
+
+		switch key {
+		case "project":
+			v = &x.Project
+		case "index":
+			v = &x.Index
+		case "documents":
+			var docs []jsoniter.RawMessage
+			if err := jsoniter.Unmarshal(value, &docs); err != nil {
+				return err
+			}
+
+			x.Documents = make([][]byte, len(docs))
+			for i := 0; i < len(docs); i++ {
+				x.Documents[i] = docs[i]
+			}
+			continue
+		default:
+			continue
+		}
+
+		if err := jsoniter.Unmarshal(value, v); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (x *CreateOrReplaceDocumentRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+
+	for key, value := range mp {
+		var v interface{}
+
+		switch key {
+		case "project":
+			v = &x.Project
+		case "index":
+			v = &x.Index
+		case "documents":
+			var docs []jsoniter.RawMessage
+			if err := jsoniter.Unmarshal(value, &docs); err != nil {
+				return err
+			}
+
+			x.Documents = make([][]byte, len(docs))
+			for i := 0; i < len(docs); i++ {
+				x.Documents[i] = docs[i]
+			}
+			continue
+		default:
+			continue
+		}
+
+		if err := jsoniter.Unmarshal(value, v); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (x *UpdateDocumentRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+	for key, value := range mp {
+		var v interface{}
+
+		switch key {
+		case "project":
+			v = &x.Project
+		case "index":
+			v = &x.Index
+		case "documents":
+			var docs []jsoniter.RawMessage
+			if err := jsoniter.Unmarshal(value, &docs); err != nil {
+				return err
+			}
+
+			x.Documents = make([][]byte, len(docs))
+			for i := 0; i < len(docs); i++ {
+				x.Documents[i] = docs[i]
+			}
+			continue
+		default:
+			continue
+		}
+
+		if err := jsoniter.Unmarshal(value, v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (x *DeleteDocumentRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+	for key, value := range mp {
+		var v interface{}
+
+		switch key {
+		case "project":
+			v = &x.Project
+		case "index":
+			v = &x.Index
+		case "ids":
+			v = &x.Ids
+		default:
+			continue
+		}
+
+		if err := jsoniter.Unmarshal(value, v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (x *DeleteByQueryRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+	for key, value := range mp {
+		var v interface{}
+
+		switch key {
+		case "project":
+			v = &x.Project
+		case "index":
+			v = &x.Index
+		case "filter":
+			// not decoding it here and let it decode during filter parsing
+			x.Filter = value
+			continue
+		default:
+			continue
+		}
+
+		if err := jsoniter.Unmarshal(value, v); err != nil {
+			return err
+		}
+	}
 	return nil
 }
