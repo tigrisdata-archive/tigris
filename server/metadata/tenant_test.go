@@ -256,6 +256,10 @@ func TestTenantManager_DatabaseBranches(t *testing.T) {
 	// reload again to get all the branches
 	require.NoError(t, tenant.reload(ctx, tx, nil, nil))
 
+	// list all branches
+	branches := tenant.ListDatabaseBranches(tenantProj1)
+	require.Equal(t, []string{"main", "branch1", "branch2", "branch3"}, branches)
+
 	proj1, err := tenant.GetProject(tenantProj1)
 	require.NoError(t, err)
 	require.Equal(t, proj1.id, proj1.database.id)
