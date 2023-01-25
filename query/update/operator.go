@@ -226,7 +226,7 @@ func (factory *FieldOperatorFactory) atomicOperations(collection *schema.Default
 // { "$set": { <field1>: <value1>, ... } }
 // { "$increment": { <field1>: <incrementBy> } }
 // { "$decrement": { <field1>: <decrementBy> } }
-// { "$multiple": { <field1>: <multipleBy> } }
+// { "$multiply": { <field1>: <multiplyBy> } }
 // { "$divide": { <field1>: <divideBy> } }
 // { "$unset": ["d"] }.
 type FieldOperator struct {
