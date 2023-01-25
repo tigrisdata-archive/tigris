@@ -1173,11 +1173,11 @@ func (tenant *Tenant) ListDatabaseBranches(projName string) []string {
 	}
 
 	branchNames := make([]string, len(project.databaseBranches)+1)
-	branchNames[0] = projName
+	branchNames[0] = project.database.BranchName()
 
 	i := 1
 	for name := range project.databaseBranches {
-		branchNames[i] = name
+		branchNames[i] = project.databaseBranches[name].BranchName()
 		i++
 	}
 	return branchNames
