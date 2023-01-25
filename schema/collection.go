@@ -53,7 +53,7 @@ type DefaultCollection struct {
 	// JSON schema
 	Schema jsoniter.RawMessage
 	// SchemaDeltas contains incompatible schema changes from version to version
-	SchemaDeltas        []VersionDelta
+	SchemaDeltas []VersionDelta
 	// ImplicitSearchIndex is created by Tigris to use a search index for inmemory indexes. This is needed till we move
 	// to secondary indexes which will be stored in FDB.
 	ImplicitSearchIndex *ImplicitSearchIndex
