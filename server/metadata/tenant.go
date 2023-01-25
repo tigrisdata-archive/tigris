@@ -790,7 +790,7 @@ func (tenant *Tenant) createSearchIndex(ctx context.Context, tx transaction.Tx, 
 	indexNameInStore := tenant.Encoder.EncodeSearchTableName(tenant.namespace.Id(), project.id, factory.Name, factory.Source.DatabaseBranch)
 	index := schema.NewSearchIndex(baseSchemaVersion, indexNameInStore, factory, nil)
 	if err := tenant.searchStore.CreateCollection(ctx, index.StoreSchema); err != nil {
-		if err != search.ErrDuplicateEntity {
+		if !search.IsErrDuplicateEntity(err) {
 			return err
 		}
 	}
@@ -869,25 +869,22 @@ func (tenant *Tenant) deleteSearchIndex(ctx context.Context, tx transaction.Tx, 
 	}
 
 	// clean up from the underlying search store
-	if err := tenant.searchStore.DropCollection(ctx, index.StoreIndexName()); err != nil && err != search.ErrNotFound {
+	if err := tenant.searchStore.DropCollection(ctx, index.StoreIndexName()); err != nil && !search.IsErrNotFound(err) {
 		return err
 	}
 
 	return nil
 }
 
-func (tenant *Tenant) ListSearchIndexes(ctx context.Context, tx transaction.Tx, project *Project) ([]string, error) {
+func (tenant *Tenant) ListSearchIndexes(ctx context.Context, tx transaction.Tx, project *Project) ([]*schema.SearchIndex, error) {
 	tenant.Lock()
 	defer tenant.Unlock()
 
-	metadata, err := tenant.namespaceStore.GetProjectMetadata(ctx, tx, tenant.namespace.Id(), project.name)
-	if err != nil {
-		return nil, errors.Internal("failed to get project metadata for project %s", project.name)
-	}
-
-	indexes := make([]string, len(metadata.SearchMetadata))
-	for i := range metadata.SearchMetadata {
-		indexes[i] = metadata.SearchMetadata[i].Name
+	indexes := make([]*schema.SearchIndex, len(project.search.indexes))
+	i := 0
+	for _, idx := range project.search.indexes {
+		indexes[i] = idx
+		i++
 	}
 	return indexes, nil
 }
@@ -1035,8 +1032,8 @@ func (tenant *Tenant) DeleteProject(ctx context.Context, tx transaction.Tx, proj
 		}
 	}
 
-	for i := range proj.search.indexes {
-		if err := tenant.deleteSearchIndex(ctx, tx, proj, proj.search.indexes[i]); err != nil {
+	for key := range proj.search.indexes {
+		if err := tenant.deleteSearchIndex(ctx, tx, proj, proj.search.indexes[key]); err != nil {
 			return true, err
 		}
 	}
@@ -1274,7 +1271,7 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 	if config.DefaultConfig.Search.WriteEnabled {
 		// only creating implicit index here
 		if err := tenant.searchStore.CreateCollection(ctx, implicitSearchIndex.StoreSchema); err != nil {
-			if err != search.ErrDuplicateEntity {
+			if !search.IsErrDuplicateEntity(err) {
 				return err
 			}
 		}
@@ -1431,7 +1428,7 @@ func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db 
 
 	if config.DefaultConfig.Search.WriteEnabled {
 		if err := tenant.searchStore.DropCollection(ctx, cHolder.collection.ImplicitSearchIndex.StoreIndexName()); err != nil {
-			if err != search.ErrNotFound {
+			if !search.IsErrNotFound(err) {
 				return err
 			}
 		}

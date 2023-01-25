@@ -22,14 +22,16 @@ import (
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
+	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 type Session interface {
 	// Execute executes the request using the query runner
 	Execute(ctx context.Context, runner Runner) (Response, error)
 
-	// TxExecute executes in a fdb transaction.
-	// Metadata of caches are stored in fdb as part of project metadata and that modification is a transactional operation.
+	// TxExecute executes in a fdb transaction. This is mainly used to manage search indexes. This metadata
+	// is stored in fdb as part of project metadata and that modification is a transactional operation. This API
+	// is automatically bumping up the metadata version as this should only be used for metadata operation.
 	TxExecute(ctx context.Context, runner TxRunner) (Response, error)
 }
 
@@ -52,7 +54,17 @@ func NewSessionManager(txMgr *transaction.Manager, tenantMgr *metadata.TenantMan
 }
 
 func (sessions *SessionManager) Execute(ctx context.Context, runner Runner) (Response, error) {
-	return Response{}, nil
+	namespace, err := request.GetNamespace(ctx)
+	if err != nil {
+		return Response{}, err
+	}
+
+	tenant, err := sessions.tenantMgr.GetTenant(ctx, namespace)
+	if err != nil {
+		return Response{}, errors.NotFound("tenant '%s' not found", namespace)
+	}
+
+	return runner.Run(ctx, tenant)
 }
 
 func (sessions *SessionManager) TxExecute(ctx context.Context, runner TxRunner) (Response, error) {
@@ -62,7 +74,7 @@ func (sessions *SessionManager) TxExecute(ctx context.Context, runner TxRunner) 
 	}
 	tenant, err := sessions.tenantMgr.GetTenant(ctx, namespace)
 	if err != nil {
-		return Response{}, errors.NotFound("tenant %s not found", namespace)
+		return Response{}, errors.NotFound("tenant '%s' not found", namespace)
 	}
 
 	if _, err = sessions.tenantTracker.InstantTracking(ctx, nil, tenant); err != nil {
@@ -78,6 +90,11 @@ func (sessions *SessionManager) TxExecute(ctx context.Context, runner TxRunner) 
 		_ = tx.Rollback(ctx)
 		return Response{}, err
 	}
+	if err = sessions.versionH.Increment(ctx, tx); ulog.E(err) {
+		_ = tx.Rollback(ctx)
+		return Response{}, err
+	}
+
 	if err = tx.Commit(ctx); err != nil {
 		return Response{}, errors.Internal("failed to commit transaction")
 	}

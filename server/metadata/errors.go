@@ -68,7 +68,7 @@ func NewSearchIndexExistsErr(name string) error {
 }
 
 func NewSearchIndexNotFoundErr(name string) error {
-	return NewMetadataError(ErrCodeSearchIndexExists, "search index not found '%s'", name)
+	return NewMetadataError(ErrCodeSearchIndexNotFound, "search index not found '%s'", name)
 }
 
 func NewCacheExistsErr(name string) error {

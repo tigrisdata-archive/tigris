@@ -126,6 +126,7 @@ type SearchIndex struct {
 
 func NewSearchIndex(ver int, searchStoreName string, factory *SearchFactory, fieldsInSearch []tsApi.Field) *SearchIndex {
 	queryableFields := BuildQueryableFields(factory.Fields, fieldsInSearch)
+	queryableFields = append(queryableFields, NewQueryableField("id", StringType, UnknownType, nil, nil))
 
 	return &SearchIndex{
 		Version:         ver,

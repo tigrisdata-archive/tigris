@@ -198,6 +198,18 @@ func (x *ListProjectsRequest) Validate() error {
 	return nil
 }
 
+func (x *CreateOrUpdateIndexRequest) Validate() error {
+	if err := isValidProjectAndSearchIndex(x.Project, x.Name); err != nil {
+		return err
+	}
+
+	if len(x.Schema) == 0 {
+		return Errorf(Code_INVALID_ARGUMENT, "schema is a required during index creation")
+	}
+
+	return nil
+}
+
 func isValidCollection(name string) error {
 	if len(name) == 0 {
 		return Errorf(Code_INVALID_ARGUMENT, "invalid collection name")
@@ -218,12 +230,34 @@ func isValidDatabase(name string) error {
 	return nil
 }
 
+func isValidSearchIndexName(name string) error {
+	if len(name) == 0 {
+		return Errorf(Code_INVALID_ARGUMENT, "invalid index name")
+	}
+	if !validNamePattern.MatchString(name) {
+		return Errorf(Code_INVALID_ARGUMENT, "invalid index name")
+	}
+	return nil
+}
+
 func isValidCollectionAndDatabase(c string, db string) error {
 	if err := isValidCollection(c); err != nil {
 		return err
 	}
 
 	if err := isValidDatabase(db); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func isValidProjectAndSearchIndex(project string, index string) error {
+	if err := isValidDatabase(project); err != nil {
+		return err
+	}
+
+	if err := isValidSearchIndexName(index); err != nil {
 		return err
 	}
 

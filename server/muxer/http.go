@@ -63,7 +63,7 @@ func (s *HTTPServer) SetupMiddlewares(cfg *config.Config) {
 }
 
 func (s *HTTPServer) Start(mux cmux.CMux) error {
-	match := mux.Match(cmux.HTTP1Fast(), cmux.HTTP1HeaderField("Upgrade", "websocket"))
+	match := mux.Match(cmux.HTTP1Fast("PATCH"), cmux.HTTP1HeaderField("Upgrade", "websocket"))
 	go func() {
 		srv := &http.Server{Handler: s.Router, ReadHeaderTimeout: readHeaderTimeout}
 		err := srv.Serve(match)

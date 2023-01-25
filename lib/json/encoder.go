@@ -16,9 +16,20 @@ package json
 
 import (
 	"bytes"
+	"io"
 
 	jsoniter "github.com/json-iterator/go"
 )
+
+type RawMessage jsoniter.RawMessage
+
+func NewEncoder(writer io.Writer) *jsoniter.Encoder {
+	return jsoniter.NewEncoder(writer)
+}
+
+func NewDecoder(reader io.Reader) *jsoniter.Decoder {
+	return jsoniter.NewDecoder(reader)
+}
 
 func Encode(data map[string]any) ([]byte, error) {
 	var buffer bytes.Buffer
