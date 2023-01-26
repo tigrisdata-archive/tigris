@@ -157,6 +157,83 @@ func buildSchemaDeltas(schemas Versions) ([]VersionDelta, error) {
 	return []VersionDelta{{0, nil}}, nil
 }
 
+// FieldVersion contains individual field change,
+// along with the schema version at which this change has happened.
+type FieldVersion struct {
+	Change  *VersionDeltaField
+	Version int
+}
+
+// FieldVersions contains all the changes of the field,
+// across all the schema versions
+type FieldVersions struct {
+	versions []*FieldVersion
+
+	// child is not nil for the object type.
+	// empty string key means array type
+	child map[string]*FieldVersions
+}
+
+// addFieldVersion adds individual field change to the tree
+func addFieldVersion(versions map[string]*FieldVersions, version int, change *VersionDeltaField) {
+	m, i := versions, 0
+
+	// traverse existing path
+	for ; i < len(change.KeyPath); i++ {
+		//		prev = m
+		if m[change.KeyPath[i]] == nil {
+			m[change.KeyPath[i]] = &FieldVersions{}
+		}
+		if i < len(change.KeyPath)-1 {
+			if m[change.KeyPath[i]].child == nil {
+				m[change.KeyPath[i]].child = make(map[string]*FieldVersions)
+			}
+			m = m[change.KeyPath[i]].child
+		}
+	}
+
+	last := change.KeyPath[len(change.KeyPath)-1]
+	m[last].versions = append(m[last].versions, &FieldVersion{Version: version, Change: change})
+}
+
+// buildFieldVersions build a tree of all incompatible field changes.
+func buildFieldVersions(deltas []VersionDelta) map[string]*FieldVersions {
+	fieldVersions := make(map[string]*FieldVersions)
+
+	for _, d := range deltas {
+		for _, f := range d.Fields {
+			addFieldVersion(fieldVersions, d.Version, f)
+		}
+	}
+
+	return fieldVersions
+}
+
+func lookupFieldVersion(fieldVersions map[string]*FieldVersions, keyPath []string) []*FieldVersion {
+	m := fieldVersions
+	i := 0
+
+	// go down till the last element of keyPath and keyPath element exists in the tree
+	for ; i < len(keyPath)-1 && m != nil && m[keyPath[i]] != nil; i++ {
+		m = m[keyPath[i]].child
+	}
+
+	// keyPath doesn't exist in the tree
+	if m == nil || m[keyPath[i]] == nil {
+		return nil
+	}
+
+	// here 'i' is at last element, and it exists in the tree
+	return m[keyPath[i]].versions
+}
+
+// LookupFieldVersion returns the list of the schema versions for the specified keyPath,
+// when this field had incompatible change.
+// Returns nil if the field has never been changed, meaning that it has version 1.
+func (d *DefaultCollection) LookupFieldVersion(keyPath []string) []*FieldVersion {
+	return lookupFieldVersion(d.FieldVersions, keyPath)
+}
+
 // CompatibleSchemaSince determines if there was incompatible schema change since given version.
 func (d *DefaultCollection) CompatibleSchemaSince(version int32) bool {
 	// last element in the array contains last incompatible schema change

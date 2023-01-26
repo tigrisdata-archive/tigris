@@ -767,3 +767,359 @@ func TestTypeConversionRules(t *testing.T) {
 		}
 	})
 }
+
+func TestBuildFieldVersions(t *testing.T) {
+	cases := []struct {
+		name   string
+		deltas []VersionDelta
+		exp    map[string]*FieldVersions
+	}{
+		{
+			name: "base",
+			deltas: []VersionDelta{
+				{
+					Version: 2,
+					Fields: []*VersionDeltaField{
+						{KeyPath: []string{"to_change_type_top_level1"}, From: StringType, To: DoubleType},
+						{KeyPath: []string{"field3", "to_change_type_in_object_1"}, From: StringType, To: DoubleType},
+						{KeyPath: []string{"field3", "field6", "to_change_type_in_nested_obj1"}, From: StringType, To: DoubleType},
+						{KeyPath: []string{"to_change_top_level_array1", ""}, From: StringType, To: DoubleType},
+						{KeyPath: []string{"to_change_complex_2d_array1", "", "", "to_change_in_2d_array1"}, From: StringType, To: DoubleType},
+					},
+				},
+			},
+			exp: map[string]*FieldVersions{
+				"to_change_type_top_level1": {
+					versions: []*FieldVersion{
+						{
+							Change:  &VersionDeltaField{KeyPath: []string{"to_change_type_top_level1"}, From: StringType, To: DoubleType},
+							Version: 2,
+						},
+					},
+				},
+				"field3": {
+					child: map[string]*FieldVersions{
+						"to_change_type_in_object_1": {
+							versions: []*FieldVersion{
+								{
+									Change:  &VersionDeltaField{KeyPath: []string{"field3", "to_change_type_in_object_1"}, From: StringType, To: DoubleType},
+									Version: 2,
+								},
+							},
+						},
+						"field6": {
+							child: map[string]*FieldVersions{
+								"to_change_type_in_nested_obj1": {
+									versions: []*FieldVersion{
+										{
+											Change:  &VersionDeltaField{KeyPath: []string{"field3", "field6", "to_change_type_in_nested_obj1"}, From: StringType, To: DoubleType},
+											Version: 2,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				"to_change_top_level_array1": {
+					child: map[string]*FieldVersions{
+						"": {
+							versions: []*FieldVersion{
+								{
+									Change:  &VersionDeltaField{KeyPath: []string{"to_change_top_level_array1", ""}, From: StringType, To: DoubleType},
+									Version: 2,
+								},
+							},
+						},
+					},
+				},
+				"to_change_complex_2d_array1": {
+					child: map[string]*FieldVersions{
+						"": {
+							child: map[string]*FieldVersions{
+								"": {
+									child: map[string]*FieldVersions{
+										"to_change_in_2d_array1": {
+											versions: []*FieldVersion{
+												{
+													Change:  &VersionDeltaField{KeyPath: []string{"to_change_complex_2d_array1", "", "", "to_change_in_2d_array1"}, From: StringType, To: DoubleType},
+													Version: 2,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "two_versions",
+			deltas: []VersionDelta{
+				{
+					Version: 2,
+					Fields: []*VersionDeltaField{
+						{KeyPath: []string{"to_change_type_top_level1"}, From: StringType, To: DoubleType},
+					},
+				},
+				{
+					Version: 3,
+					Fields: []*VersionDeltaField{
+						{KeyPath: []string{"to_change_type_top_level1"}, From: DoubleType, To: StringType},
+					},
+				},
+			},
+			exp: map[string]*FieldVersions{
+				"to_change_type_top_level1": {
+					versions: []*FieldVersion{
+						{
+							Change:  &VersionDeltaField{KeyPath: []string{"to_change_type_top_level1"}, From: StringType, To: DoubleType},
+							Version: 2,
+						},
+						{
+							Change:  &VersionDeltaField{KeyPath: []string{"to_change_type_top_level1"}, From: DoubleType, To: StringType},
+							Version: 3,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "object_to_primitive",
+			deltas: []VersionDelta{
+				{
+					Version: 2,
+					Fields: []*VersionDeltaField{
+						{KeyPath: []string{"field3", "to_change_type_in_object_1"}, From: StringType, To: DoubleType},
+					},
+				},
+				{
+					Version: 3,
+					Fields: []*VersionDeltaField{
+						{KeyPath: []string{"field3"}, From: ObjectType, To: DoubleType},
+					},
+				},
+			},
+			exp: map[string]*FieldVersions{
+				"field3": {
+					versions: []*FieldVersion{
+						{
+							Change:  &VersionDeltaField{KeyPath: []string{"field3"}, From: ObjectType, To: DoubleType},
+							Version: 3,
+						},
+					},
+					child: map[string]*FieldVersions{
+						"to_change_type_in_object_1": {
+							versions: []*FieldVersion{
+								{
+									Change:  &VersionDeltaField{KeyPath: []string{"field3", "to_change_type_in_object_1"}, From: StringType, To: DoubleType},
+									Version: 2,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "primitive_to_object",
+			deltas: []VersionDelta{
+				{
+					Version: 2,
+					Fields: []*VersionDeltaField{
+						{KeyPath: []string{"field3"}, From: StringType, To: DoubleType},
+					},
+				},
+				{
+					Version: 3,
+					Fields: []*VersionDeltaField{
+						{KeyPath: []string{"field3"}, From: DoubleType, To: ObjectType},
+					},
+				},
+				{
+					Version: 4,
+					Fields: []*VersionDeltaField{
+						{KeyPath: []string{"field3", "to_change_type_in_object_1"}, From: DoubleType, To: StringType},
+					},
+				},
+			},
+			exp: map[string]*FieldVersions{
+				"field3": {
+					versions: []*FieldVersion{
+						{
+							Change:  &VersionDeltaField{KeyPath: []string{"field3"}, From: StringType, To: DoubleType},
+							Version: 2,
+						},
+						{
+							Change:  &VersionDeltaField{KeyPath: []string{"field3"}, From: DoubleType, To: ObjectType},
+							Version: 3,
+						},
+					},
+					child: map[string]*FieldVersions{
+						"to_change_type_in_object_1": {
+							versions: []*FieldVersion{
+								{
+									Change:  &VersionDeltaField{KeyPath: []string{"field3", "to_change_type_in_object_1"}, From: DoubleType, To: StringType},
+									Version: 4,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "array_to_primitive",
+			deltas: []VersionDelta{
+				{
+					Version: 2,
+					Fields: []*VersionDeltaField{
+						{KeyPath: []string{"field3", ""}, From: StringType, To: DoubleType},
+					},
+				},
+				{
+					Version: 3,
+					Fields: []*VersionDeltaField{
+						{KeyPath: []string{"field3"}, From: ArrayType, To: DoubleType},
+					},
+				},
+			},
+			exp: map[string]*FieldVersions{
+				"field3": {
+					versions: []*FieldVersion{
+						{
+							Change:  &VersionDeltaField{KeyPath: []string{"field3"}, From: ArrayType, To: DoubleType},
+							Version: 3,
+						},
+					},
+					child: map[string]*FieldVersions{
+						"": {
+							versions: []*FieldVersion{
+								{
+									Change:  &VersionDeltaField{KeyPath: []string{"field3", ""}, From: StringType, To: DoubleType},
+									Version: 2,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "primitive_to_array",
+			deltas: []VersionDelta{
+				{
+					Version: 2,
+					Fields: []*VersionDeltaField{
+						{KeyPath: []string{"field3"}, From: StringType, To: DoubleType},
+					},
+				},
+				{
+					Version: 3,
+					Fields: []*VersionDeltaField{
+						{KeyPath: []string{"field3"}, From: DoubleType, To: ArrayType},
+					},
+				},
+			},
+			exp: map[string]*FieldVersions{
+				"field3": {
+					versions: []*FieldVersion{
+						{
+							Change:  &VersionDeltaField{KeyPath: []string{"field3"}, From: StringType, To: DoubleType},
+							Version: 2,
+						},
+						{
+							Change:  &VersionDeltaField{KeyPath: []string{"field3"}, From: DoubleType, To: ArrayType},
+							Version: 3,
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "reduce_array_dimensions",
+			deltas: []VersionDelta{
+				{
+					Version: 2,
+					Fields: []*VersionDeltaField{
+						{KeyPath: []string{"field3", "", ""}, From: StringType, To: DoubleType},
+					},
+				},
+				{
+					Version: 3,
+					Fields: []*VersionDeltaField{
+						{KeyPath: []string{"field3", ""}, From: ArrayType, To: DoubleType},
+					},
+				},
+			},
+			exp: map[string]*FieldVersions{
+				"field3": {
+					child: map[string]*FieldVersions{
+						"": {
+							versions: []*FieldVersion{
+								{
+									Change:  &VersionDeltaField{KeyPath: []string{"field3", ""}, From: ArrayType, To: DoubleType},
+									Version: 3,
+								},
+							},
+							child: map[string]*FieldVersions{
+								"": {
+									versions: []*FieldVersion{
+										{
+											Change:  &VersionDeltaField{KeyPath: []string{"field3", "", ""}, From: StringType, To: DoubleType},
+											Version: 2,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "increase_array_dimensions",
+			deltas: []VersionDelta{
+				{
+					Version: 2,
+					Fields: []*VersionDeltaField{
+						{KeyPath: []string{"field3", ""}, From: StringType, To: DoubleType},
+					},
+				},
+				{
+					Version: 3,
+					Fields: []*VersionDeltaField{
+						{KeyPath: []string{"field3", ""}, From: DoubleType, To: ArrayType},
+					},
+				},
+			},
+			exp: map[string]*FieldVersions{
+				"field3": {
+					child: map[string]*FieldVersions{
+						"": {
+							versions: []*FieldVersion{
+								{
+									Change:  &VersionDeltaField{KeyPath: []string{"field3", ""}, From: StringType, To: DoubleType},
+									Version: 2,
+								},
+								{
+									Change:  &VersionDeltaField{KeyPath: []string{"field3", ""}, From: DoubleType, To: ArrayType},
+									Version: 3,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			res := buildFieldVersions(c.deltas)
+			require.Equal(t, c.exp, res)
+		})
+	}
+}

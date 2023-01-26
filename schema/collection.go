@@ -54,6 +54,8 @@ type DefaultCollection struct {
 	Schema jsoniter.RawMessage
 	// SchemaDeltas contains incompatible schema changes from version to version
 	SchemaDeltas []VersionDelta
+	// FieldVersions contains the list of schema versions at which the field had incompatible change
+	FieldVersions map[string]*FieldVersions
 	// ImplicitSearchIndex is created by the Tigris to use a search index for in-memory indexes. This is needed till we move
 	// to secondary indexes which will be stored in FDB.
 	ImplicitSearchIndex *ImplicitSearchIndex
@@ -148,6 +150,8 @@ func NewDefaultCollection(id uint32, schVer int, factory *Factory, schemas Versi
 		return nil, err
 	}
 
+	fieldVersions := buildFieldVersions(schemaDeltas)
+
 	d := &DefaultCollection{
 		Id:                       id,
 		SchVer:                   schVer,
@@ -164,6 +168,7 @@ func NewDefaultCollection(id uint32, schVer int, factory *Factory, schemas Versi
 		fieldsWithUpdateDefaults: make(map[string]struct{}),
 		SearchIndexes:            make(map[string]*SearchIndex),
 		SchemaDeltas:             schemaDeltas,
+		FieldVersions:            fieldVersions,
 	}
 
 	// set paths for int64 fields

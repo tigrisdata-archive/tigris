@@ -308,6 +308,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 				},
 			},
 			SearchIndexes: make(map[string]*SearchIndex),
+			FieldVersions: make(map[string]*FieldVersions),
 		}
 
 		require.Equal(t, expColl, coll)
