@@ -22,8 +22,8 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
-	"github.com/tigrisdata/tigris/lib/json"
 	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/util"
 )
 
 func TestMutateSetDefaults(t *testing.T) {
@@ -89,12 +89,12 @@ func TestMutateSetDefaults(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		doc, err := json.Decode(c.input)
+		doc, err := util.JSONToMap(c.input)
 		require.NoError(t, err)
 
 		require.NoError(t, p.setDefaultsInIncomingPayload(doc))
 		require.Equal(t, c.mutated, p.isMutated())
-		actualJS, err := json.Encode(doc)
+		actualJS, err := util.MapToJSON(doc)
 		require.NoError(t, err)
 		require.JSONEq(t, string(c.output), string(actualJS))
 	}
@@ -191,13 +191,13 @@ func TestMutateSetDefaultsComplexSchema(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		doc, err := json.Decode(c.input)
+		doc, err := util.JSONToMap(c.input)
 		require.NoError(t, err)
 
 		p := newInsertPayloadMutator(coll, time.Now().UTC().String())
 		require.NoError(t, p.setDefaultsInIncomingPayload(doc))
 		require.Equal(t, c.mutated, p.isMutated())
-		actualJS, err := json.Encode(doc)
+		actualJS, err := util.MapToJSON(doc)
 		require.NoError(t, err)
 		require.JSONEq(t, string(c.output), string(actualJS))
 	}
@@ -306,14 +306,14 @@ func TestMutatePayload(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		doc, err := json.Decode(c.input)
+		doc, err := util.JSONToMap(c.input)
 		require.NoError(t, err)
 
 		p := newInsertPayloadMutator(coll, time.Now().UTC().String())
 		require.NoError(t, p.stringToInt64(doc))
 		require.Equal(t, c.mutated, p.isMutated())
 
-		actualJS, err := json.Encode(doc)
+		actualJS, err := util.MapToJSON(doc)
 		require.NoError(t, err)
 		require.JSONEq(t, string(c.output), string(actualJS))
 	}

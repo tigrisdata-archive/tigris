@@ -26,8 +26,8 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/internal"
-	encoder "github.com/tigrisdata/tigris/lib/json"
 	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/util"
 )
 
 func TestFlattenObj(t *testing.T) {
@@ -73,7 +73,7 @@ func TestPackSearchFields(t *testing.T) {
 			res, err := PackSearchFields(td, emptyColl, "123")
 			require.NoError(t, err)
 
-			decData, err := encoder.Decode(res)
+			decData, err := util.JSONToMap(res)
 			require.NoError(t, err)
 
 			createdAt, err := decData["created_at"].(json.Number).Int64()
@@ -94,7 +94,7 @@ func TestPackSearchFields(t *testing.T) {
 		res, err := PackSearchFields(td, emptyColl, "123")
 		require.NoError(t, err)
 
-		decData, err := encoder.Decode(res)
+		decData, err := util.JSONToMap(res)
 		require.NoError(t, err)
 
 		createdAt, err := decData["created_at"].(json.Number).Int64()
@@ -113,7 +113,7 @@ func TestPackSearchFields(t *testing.T) {
 		res, err := PackSearchFields(td, emptyColl, "123")
 		require.NoError(t, err)
 
-		decData, err := encoder.Decode(res)
+		decData, err := util.JSONToMap(res)
 		require.NoError(t, err)
 
 		require.Equal(t, decData["id"], "123")
@@ -128,7 +128,7 @@ func TestPackSearchFields(t *testing.T) {
 		res, err := PackSearchFields(td, emptyColl, "123")
 		require.NoError(t, err)
 
-		decData, err := encoder.Decode(res)
+		decData, err := util.JSONToMap(res)
 		require.NoError(t, err)
 
 		require.Equal(t, decData["id"], "123")
@@ -144,7 +144,7 @@ func TestPackSearchFields(t *testing.T) {
 		res, err := PackSearchFields(td, emptyColl, "123")
 		require.NoError(t, err)
 
-		decData, err := encoder.Decode(res)
+		decData, err := util.JSONToMap(res)
 		require.NoError(t, err)
 		require.Equal(t, decData["parent.node_2"], "nested")
 
@@ -166,7 +166,7 @@ func TestPackSearchFields(t *testing.T) {
 		res, err := PackSearchFields(td, coll, "123")
 		require.NoError(t, err)
 
-		decData, err := encoder.Decode(res)
+		decData, err := util.JSONToMap(res)
 		require.NoError(t, err)
 		require.Equal(t, "[1,2,3,4,5]", decData["arrayField"])
 	})
@@ -183,7 +183,7 @@ func TestPackSearchFields(t *testing.T) {
 		res, err := PackSearchFields(td, coll, "123")
 		require.NoError(t, err)
 
-		decData, err := encoder.Decode(res)
+		decData, err := util.JSONToMap(res)
 		require.NoError(t, err)
 
 		require.Equal(t, "2022-10-11T04:19:32+05:30", decData[schema.ToSearchDateKey(f.Name())])
@@ -200,7 +200,7 @@ func TestPackSearchFields(t *testing.T) {
 		res, err := PackSearchFields(td, emptyColl, "123")
 		require.NoError(t, err)
 
-		decData, err := encoder.Decode(res)
+		decData, err := util.JSONToMap(res)
 		require.NoError(t, err)
 		require.Equal(t, "strValue", decData["strField"])
 		require.Nil(t, decData["nilField"])

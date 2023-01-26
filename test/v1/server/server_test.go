@@ -18,11 +18,11 @@ package server
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris/api/server/v1"
@@ -67,7 +67,7 @@ func TestTxForwarder(t *testing.T) {
 		TxCtx api.TransactionCtx `json:"tx_ctx"`
 	}{}
 
-	err = json.Unmarshal([]byte(r1), &res1)
+	err = jsoniter.Unmarshal([]byte(r1), &res1)
 	require.NoError(t, err)
 
 	e2.POST(getDocumentURL(dbName, collName, "insert")).
@@ -111,10 +111,10 @@ func TestTxForwarder(t *testing.T) {
 		WithHeader("Tigris-Tx-Origin", res1.TxCtx.Origin).
 		Expect().Status(http.StatusOK).Body().Raw()
 
-	dec := json.NewDecoder(bytes.NewReader([]byte(str)))
+	dec := jsoniter.NewDecoder(bytes.NewReader([]byte(str)))
 	res := []int32{1, 2, 3, 4, 7}
 	for i := 0; dec.More(); i++ {
-		var mp map[string]map[string]json.RawMessage
+		var mp map[string]map[string]jsoniter.RawMessage
 		require.NoError(t, dec.Decode(&mp))
 		if i != 4 {
 			assert.Equal(t, fmt.Sprintf(`{"pkey_int":%d}`, res[i]), string(mp["result"]["data"]))

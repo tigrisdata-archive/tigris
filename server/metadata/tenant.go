@@ -23,7 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/errors"
@@ -1057,7 +1056,6 @@ func (tenant *Tenant) GetProject(projName string) (*Project, error) {
 
 	proj, ok := tenant.projects[projName]
 	if !ok {
-		spew.Dump(tenant.projects)
 		return nil, NewProjectNotFoundErr(projName)
 	}
 	return proj, nil
@@ -1088,7 +1086,6 @@ func (tenant *Tenant) CreateBranch(ctx context.Context, tx transaction.Tx, projN
 	// first get the project
 	proj, ok := tenant.projects[projName]
 	if !ok {
-		spew.Dump(tenant.projects)
 		return NewProjectNotFoundErr(projName)
 	}
 	if _, ok := proj.databaseBranches[dbName.Name()]; ok {
@@ -1129,7 +1126,6 @@ func (tenant *Tenant) DeleteBranch(ctx context.Context, tx transaction.Tx, projN
 
 	proj, found := tenant.projects[projName]
 	if !found {
-		spew.Dump(tenant.projects)
 		return NewProjectNotFoundErr(projName)
 	}
 

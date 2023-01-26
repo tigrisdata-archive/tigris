@@ -21,7 +21,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
-	"github.com/tigrisdata/tigris/lib/json"
 	"github.com/tigrisdata/tigris/lib/uuid"
 	"github.com/tigrisdata/tigris/query/filter"
 	"github.com/tigrisdata/tigris/schema"
@@ -32,6 +31,7 @@ import (
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/server/types"
 	"github.com/tigrisdata/tigris/store/search"
+	"github.com/tigrisdata/tigris/util"
 )
 
 type Runner interface {
@@ -125,9 +125,9 @@ func (runner *baseRunner) getIndex(tenant *metadata.Tenant, projName string, ind
 
 func (runner *baseRunner) encodeDocuments(index *schema.SearchIndex, documents [][]byte, buffer *bytes.Buffer, addIdIfMissing bool) ([]string, error) {
 	ids := make([]string, len(documents))
-	encoder := json.NewEncoder(buffer)
+	encoder := jsoniter.NewEncoder(buffer)
 	for i, doc := range documents {
-		decDoc, err := json.Decode(doc)
+		decDoc, err := util.JSONToMap(doc)
 		if err != nil {
 			return nil, err
 		}
@@ -192,7 +192,7 @@ func (runner *ReadRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Res
 			return Response{}, err
 		}
 
-		enc, err := json.Encode(doc)
+		enc, err := util.MapToJSON(doc)
 		if err != nil {
 			return Response{}, err
 		}
@@ -237,7 +237,7 @@ func (runner *CreateRunner) createDocumentById(ctx context.Context, tenant *meta
 		return Response{}, err
 	}
 
-	decDoc, err := json.Decode(req.Document)
+	decDoc, err := util.JSONToMap(req.Document)
 	if err != nil {
 		return Response{}, err
 	}

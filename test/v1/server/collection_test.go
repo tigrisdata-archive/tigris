@@ -17,7 +17,6 @@
 package server
 
 import (
-	"github.com/davecgh/go-spew/spew"
 	"net/http"
 	"testing"
 
@@ -174,7 +173,6 @@ func TestCollection_Update(t *testing.T) {
 			},
 		})
 
-	spew.Dump(resp.Body().Raw())
 	resp.Status(http.StatusOK)
 
 	cases := []struct {

@@ -19,7 +19,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	ljson "github.com/tigrisdata/tigris/lib/json"
+	"github.com/tigrisdata/tigris/util"
 )
 
 var delta = &VersionDelta{
@@ -547,14 +547,14 @@ func TestApplySchemaDeltas(t *testing.T) {
 
 	for _, v := range cases {
 		t.Run(v.name, func(t *testing.T) {
-			doc, err := ljson.Decode([]byte(v.before))
+			doc, err := util.JSONToMap([]byte(v.before))
 			require.NoError(t, err)
 
 			for _, dlt := range v.deltas {
 				applySchemaDelta(doc, dlt)
 			}
 
-			b, err := ljson.Encode(doc)
+			b, err := util.MapToJSON(doc)
 			require.NoError(t, err)
 
 			require.JSONEq(t, v.after, string(b))

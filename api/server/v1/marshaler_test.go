@@ -15,20 +15,20 @@
 package api
 
 import (
-	"encoding/json"
 	"testing"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
 )
 
 func TestJSONEncoding(t *testing.T) {
 	// ToDo: add marshaler tests
 	inputDoc := []byte(`{"pkey_int": 1, "int_value": 2, "str_value": "foo"}`)
-	b, err := json.Marshal(inputDoc)
+	b, err := jsoniter.Marshal(inputDoc)
 	require.NoError(t, err)
 
 	var bb []byte
-	require.NoError(t, json.Unmarshal(b, &bb))
+	require.NoError(t, jsoniter.Unmarshal(b, &bb))
 
 	t.Run("unmarshal SearchRequest", func(t *testing.T) {
 		inputDoc := []byte(`{"q":"my search text","search_fields":["first_name","last_name"],
@@ -36,7 +36,7 @@ func TestJSONEncoding(t *testing.T) {
 							"sort":[{"salary":"$asc"}],"include_fields":["employment","history"]}`)
 
 		req := &SearchRequest{}
-		err := json.Unmarshal(inputDoc, req)
+		err := jsoniter.Unmarshal(inputDoc, req)
 		require.NoError(t, err)
 		require.Equal(t, "my search text", req.GetQ())
 		require.Equal(t, []string{"first_name", "last_name"}, req.GetSearchFields())
@@ -74,7 +74,7 @@ func TestJSONEncoding(t *testing.T) {
 				},
 			},
 		}
-		r, err := json.Marshal(resp)
+		r, err := jsoniter.Marshal(resp)
 		require.NoError(t, err)
 		require.JSONEq(t, `{"hits":[{"metadata":{}}],"facets":{"myField":{"counts":[{"count":32,"value":"adidas"}],"stats":{"avg":40,"count":50}}},"meta":{"found":1234,"total_pages":0,"page":{"current":2,"size":10}}}`, string(r))
 	})

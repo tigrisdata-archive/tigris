@@ -22,8 +22,8 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/errors"
-	"github.com/tigrisdata/tigris/lib/json"
 	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/util"
 )
 
 func TestMergeAndGet(t *testing.T) {
@@ -373,7 +373,7 @@ func BenchmarkSetDeserializeInput(b *testing.B) {
 	require.NoError(b, err)
 
 	for i := 0; i < b.N; i++ {
-		mp, err := json.Decode(existingDoc)
+		mp, err := util.JSONToMap(existingDoc)
 		require.NoError(b, err)
 
 		err = f.testSetDeserializeInput(mp, []byte(`{"$set": {"name": "Men's Wallet", "labels": "Handbag, Purse, Men's fashion, shoes, clothes", "price": 75}}`))
@@ -382,7 +382,7 @@ func BenchmarkSetDeserializeInput(b *testing.B) {
 }
 
 func (factory *FieldOperatorFactory) testSetDeserializeInput(outMap map[string]any, setDoc jsoniter.RawMessage) error {
-	setMap, err := json.Decode(setDoc)
+	setMap, err := util.JSONToMap(setDoc)
 	if err != nil {
 		return err
 	}

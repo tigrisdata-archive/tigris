@@ -18,12 +18,12 @@ package server
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/gavv/httpexpect.v1"
 )
@@ -92,22 +92,22 @@ func TestMessages(t *testing.T) {
 		Raw()
 
 	index := 0
-	dec := json.NewDecoder(bytes.NewReader([]byte(str)))
+	dec := jsoniter.NewDecoder(bytes.NewReader([]byte(str)))
 	for dec.More() {
-		var mp map[string]json.RawMessage
+		var mp map[string]jsoniter.RawMessage
 		require.NoError(t, dec.Decode(&mp))
 
-		var msg map[string]json.RawMessage
+		var msg map[string]jsoniter.RawMessage
 		if mp["result"] == nil {
 			spew.Dump(mp)
 		}
 		require.NotNil(t, mp["result"])
-		require.NoError(t, json.Unmarshal(mp["result"], &msg))
+		require.NoError(t, jsoniter.Unmarshal(mp["result"], &msg))
 
-		var userMsg map[string]json.RawMessage
-		require.NoError(t, json.Unmarshal(msg["message"], &userMsg))
+		var userMsg map[string]jsoniter.RawMessage
+		require.NoError(t, jsoniter.Unmarshal(msg["message"], &userMsg))
 
-		jsInput, err := json.Marshal(messages[index])
+		jsInput, err := jsoniter.Marshal(messages[index])
 		require.NoError(t, err)
 		require.JSONEq(t, string(jsInput), string(userMsg["data"]))
 		index++

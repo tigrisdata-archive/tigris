@@ -15,7 +15,6 @@
 package api
 
 import (
-	"encoding/json"
 	"strings"
 
 	jsoniter "github.com/json-iterator/go"
@@ -157,24 +156,24 @@ func (x *KeysRequest) UnmarshalJSON(data []byte) error {
 
 func (x *GetSetResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
-		Status   string          `json:"status,omitempty"`
-		Message  string          `json:"message,omitempty"`
-		OldValue json.RawMessage `json:"old_value,omitempty"`
+		Status   string              `json:"status,omitempty"`
+		Message  string              `json:"message,omitempty"`
+		OldValue jsoniter.RawMessage `json:"old_value,omitempty"`
 	}{
 		Status:   x.GetStatus(),
 		Message:  x.GetMessage(),
 		OldValue: x.GetOldValue(),
 	}
-	return json.Marshal(resp)
+	return jsoniter.Marshal(resp)
 }
 
 func (x *GetResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
-		Value json.RawMessage `json:"value,omitempty"`
+		Value jsoniter.RawMessage `json:"value,omitempty"`
 	}{
 		Value: x.GetValue(),
 	}
-	return json.Marshal(resp)
+	return jsoniter.Marshal(resp)
 }
 
 func (x *KeysResponse) MarshalJSON() ([]byte, error) {
@@ -185,5 +184,5 @@ func (x *KeysResponse) MarshalJSON() ([]byte, error) {
 		Keys:   x.GetKeys(),
 		Cursor: x.GetCursor(),
 	}
-	return json.Marshal(resp)
+	return jsoniter.Marshal(resp)
 }

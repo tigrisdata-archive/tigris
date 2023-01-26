@@ -17,7 +17,6 @@ package schema
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"sort"
@@ -25,6 +24,7 @@ import (
 
 	"github.com/gertd/go-pluralize"
 	"github.com/iancoleman/strcase"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/tigrisdata/tigris/util"
 )
 
@@ -232,7 +232,7 @@ func genSchema(w io.Writer, name string, desc string, field map[string]*Field,
 func genCollectionSchema(w io.Writer, rawSchema []byte, c JSONToLangType, hasTime *bool, hasUUID *bool) error {
 	var sch Schema
 
-	if err := json.Unmarshal(rawSchema, &sch); err != nil {
+	if err := jsoniter.Unmarshal(rawSchema, &sch); err != nil {
 		return err
 	}
 

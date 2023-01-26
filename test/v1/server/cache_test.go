@@ -25,7 +25,6 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tigrisdata/tigris/lib/json"
 	"github.com/tigrisdata/tigris/server/services/v1/cache"
 	"github.com/tigrisdata/tigris/test/config"
 	"gopkg.in/gavv/httpexpect.v1"
@@ -151,7 +150,7 @@ func TestCacheCRUD(t *testing.T) {
 	// list all keys
 	listKeysResp := listCacheKeys(t, project, cacheName, 0)
 	bb := listKeysResp.Status(http.StatusOK).Body().Raw()
-	dd := json.NewDecoder(bytes.NewBufferString(bb))
+	dd := jsoniter.NewDecoder(bytes.NewBufferString(bb))
 	i := 0
 	for dd.More() {
 		var r struct {
@@ -178,7 +177,7 @@ func TestCacheCRUD(t *testing.T) {
 	// list all keys
 	listKeysResp2 := listCacheKeys(t, project, cacheName, 0)
 	bb = listKeysResp2.Status(http.StatusOK).Body().Raw()
-	dd = json.NewDecoder(bytes.NewBufferString(bb))
+	dd = jsoniter.NewDecoder(bytes.NewBufferString(bb))
 	i = 0
 	for dd.More() {
 		var r struct {
@@ -330,7 +329,7 @@ func listCacheKeysAndRead(t *testing.T, project string, cache string) []map[stri
 		Raw()
 
 	var resp []map[string]jsoniter.RawMessage
-	dec := json.NewDecoder(bytes.NewReader([]byte(str)))
+	dec := jsoniter.NewDecoder(bytes.NewReader([]byte(str)))
 	for dec.More() {
 		var mp map[string]jsoniter.RawMessage
 		require.NoError(t, dec.Decode(&mp))

@@ -25,7 +25,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-	ljson "github.com/tigrisdata/tigris/lib/json"
+	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
@@ -454,14 +454,14 @@ func (d *DefaultCollection) UpdateRowSchema(doc map[string]any, version int32) {
 // UpdateRowSchemaRaw fixes the schema of provided document from given Version to the latest
 // collection schema.
 func (d *DefaultCollection) UpdateRowSchemaRaw(doc []byte, version int32) ([]byte, error) {
-	decDoc, err := ljson.Decode(doc)
+	decDoc, err := util.JSONToMap(doc)
 	if ulog.E(err) {
 		return nil, err
 	}
 
 	d.UpdateRowSchema(decDoc, version)
 
-	if doc, err = ljson.Encode(decDoc); err != nil {
+	if doc, err = util.MapToJSON(decDoc); err != nil {
 		return nil, err
 	}
 

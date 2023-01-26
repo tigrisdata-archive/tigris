@@ -15,9 +15,11 @@
 package util
 
 import (
+	"bytes"
 	"io"
 	"text/template"
 
+	jsoniter "github.com/json-iterator/go"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
@@ -38,4 +40,27 @@ func ExecTemplate(w io.Writer, tmpl string, vars interface{}) error {
 	}
 
 	return nil
+}
+
+func MapToJSON(data map[string]any) ([]byte, error) {
+	var buffer bytes.Buffer
+	encoder := jsoniter.NewEncoder(&buffer)
+	err := encoder.Encode(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return buffer.Bytes(), nil
+}
+
+func JSONToMap(data []byte) (map[string]any, error) {
+	var decoded map[string]any
+
+	decoder := jsoniter.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	if err := decoder.Decode(&decoded); err != nil {
+		return nil, err
+	}
+
+	return decoded, nil
 }

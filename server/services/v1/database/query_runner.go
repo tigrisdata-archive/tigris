@@ -16,7 +16,6 @@ package database
 
 import (
 	"context"
-	"encoding/json"
 	"math"
 	"time"
 
@@ -26,7 +25,6 @@ import (
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
-	ljson "github.com/tigrisdata/tigris/lib/json"
 	"github.com/tigrisdata/tigris/query/filter"
 	"github.com/tigrisdata/tigris/query/read"
 	qsearch "github.com/tigrisdata/tigris/query/search"
@@ -44,6 +42,7 @@ import (
 	"github.com/tigrisdata/tigris/server/types"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
+	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
@@ -262,7 +261,7 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 }
 
 func (runner *BaseQueryRunner) mutateAndValidatePayload(coll *schema.DefaultCollection, mutator mutator, doc []byte) ([]byte, error) {
-	deserializedDoc, err := ljson.Decode(doc)
+	deserializedDoc, err := util.JSONToMap(doc)
 	if ulog.E(err) {
 		return doc, err
 	}
@@ -282,7 +281,7 @@ func (runner *BaseQueryRunner) mutateAndValidatePayload(coll *schema.DefaultColl
 	}
 
 	if mutator.isMutated() {
-		return ljson.Encode(deserializedDoc)
+		return util.MapToJSON(deserializedDoc)
 	}
 
 	return doc, nil
@@ -386,7 +385,7 @@ func (runner *ImportQueryRunner) evolveSchema(ctx context.Context, tenant *metad
 	req := runner.req
 
 	if rawSchema != nil {
-		err := json.Unmarshal(rawSchema, &sch)
+		err := jsoniter.Unmarshal(rawSchema, &sch)
 		if ulog.E(err) {
 			return err
 		}
@@ -397,7 +396,7 @@ func (runner *ImportQueryRunner) evolveSchema(ctx context.Context, tenant *metad
 		return err
 	}
 
-	b, err := json.Marshal(&sch)
+	b, err := jsoniter.Marshal(&sch)
 	if ulog.E(err) {
 		return err
 	}
@@ -609,7 +608,7 @@ func updateDefaultsAndSchema(db string, collection *schema.DefaultCollection, do
 	// TODO: revisit this path. We are deserializing here the merged payload (existing + incoming) and then
 	// we are setting the updated value if any field is tagged with @updatedAt and then we are packing
 	// it again.
-	decDoc, err = ljson.Decode(doc)
+	decDoc, err = util.JSONToMap(doc)
 	if ulog.E(err) {
 		return nil, err
 	}
@@ -626,7 +625,7 @@ func updateDefaultsAndSchema(db string, collection *schema.DefaultCollection, do
 		}
 	}
 
-	if doc, err = ljson.Encode(decDoc); err != nil {
+	if doc, err = util.MapToJSON(decDoc); err != nil {
 		return nil, err
 	}
 

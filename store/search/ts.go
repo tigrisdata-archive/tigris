@@ -21,10 +21,11 @@ import (
 	"io"
 	"net/http"
 
-	tjson "github.com/tigrisdata/tigris/lib/json"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/tigrisdata/tigris/query/filter"
 	qsearch "github.com/tigrisdata/tigris/query/search"
 	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/typesense/typesense-go/typesense"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
@@ -160,7 +161,7 @@ type IndexDocumentsOptions struct {
 
 func (s *storeImpl) convertToInternalError(err error) error {
 	if e, ok := err.(*typesense.HTTPError); ok {
-		msgMap, decErr := tjson.Decode(e.Body)
+		msgMap, decErr := util.JSONToMap(e.Body)
 		if decErr != nil {
 			return NewSearchError(e.Status, ErrCodeUnhandled, string(e.Body))
 		}
@@ -206,7 +207,7 @@ func (s *storeImpl) IndexDocuments(_ context.Context, table string, reader io.Re
 	defer closer.Close()
 
 	var responses []IndexResp
-	decoder := tjson.NewDecoder(closer)
+	decoder := jsoniter.NewDecoder(closer)
 	for decoder.More() {
 		var single IndexResp
 		if err := decoder.Decode(&single); err != nil {
@@ -269,7 +270,7 @@ func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query
 	}
 
 	reader := bytes.NewReader(res.Body)
-	decoder := tjson.NewDecoder(reader)
+	decoder := jsoniter.NewDecoder(reader)
 	decoder.UseNumber()
 
 	var dest tsApi.MultiSearchResult

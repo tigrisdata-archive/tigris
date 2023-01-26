@@ -22,9 +22,10 @@ import (
 	"net/http"
 	"testing"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-	"github.com/tigrisdata/tigris/lib/json"
+	"github.com/tigrisdata/tigris/util"
 	"gopkg.in/gavv/httpexpect.v1"
 )
 
@@ -237,10 +238,10 @@ func TestCreate_ById(t *testing.T) {
 			ValueEqual("id", "1")
 
 		docs := getDocuments(t, project, index, "1")
-		encResp, err := json.Encode(docs[0])
+		encResp, err := util.MapToJSON(docs[0])
 		require.NoError(t, err)
 
-		encInp, err := json.Encode(doc)
+		encInp, err := util.MapToJSON(doc)
 		require.NoError(t, err)
 		require.JSONEq(t, string(encInp), string(encResp))
 	})
@@ -282,10 +283,10 @@ func TestCreate(t *testing.T) {
 	output := getDocuments(t, project, index, "1", "2")
 	require.Equal(t, 2, len(output))
 	for i, out := range output {
-		encResp, err := json.Encode(out)
+		encResp, err := util.MapToJSON(out)
 		require.NoError(t, err)
 
-		encInp, err := json.Encode(docs[i])
+		encInp, err := util.MapToJSON(docs[i])
 		require.NoError(t, err)
 		require.JSONEq(t, string(encInp), string(encResp))
 	}
@@ -320,10 +321,10 @@ func TestCreate(t *testing.T) {
 		)
 
 	output = getDocuments(t, project, index, "3")
-	encResp, err := json.Encode(output[0])
+	encResp, err := util.MapToJSON(output[0])
 	require.NoError(t, err)
 
-	encInp, err := json.Encode(docsNext[1])
+	encInp, err := util.MapToJSON(docsNext[1])
 	require.NoError(t, err)
 	require.JSONEq(t, string(encInp), string(encResp))
 }
@@ -364,10 +365,10 @@ func TestCreateOrReplace(t *testing.T) {
 	output := getDocuments(t, project, index, "1", "2")
 	require.Equal(t, 2, len(output))
 	for i, out := range output {
-		encResp, err := json.Encode(out)
+		encResp, err := util.MapToJSON(out)
 		require.NoError(t, err)
 
-		encInp, err := json.Encode(docs[i])
+		encInp, err := util.MapToJSON(docs[i])
 		require.NoError(t, err)
 		require.JSONEq(t, string(encInp), string(encResp))
 	}
@@ -404,10 +405,10 @@ func TestCreateOrReplace(t *testing.T) {
 	output = getDocuments(t, project, index, "1", "3")
 	require.Equal(t, 2, len(output))
 	for i, out := range output {
-		encResp, err := json.Encode(out)
+		encResp, err := util.MapToJSON(out)
 		require.NoError(t, err)
 
-		encInp, err := json.Encode(docsNext[i])
+		encInp, err := util.MapToJSON(docsNext[i])
 		require.NoError(t, err)
 		require.JSONEq(t, string(encInp), string(encResp))
 	}
@@ -490,10 +491,10 @@ func TestUpdate(t *testing.T) {
 			require.Nil(t, out)
 			continue
 		}
-		encResp, err := json.Encode(out)
+		encResp, err := util.MapToJSON(out)
 		require.NoError(t, err)
 
-		encInp, err := json.Encode(docsUpdated[i])
+		encInp, err := util.MapToJSON(docsUpdated[i])
 		require.NoError(t, err)
 		require.JSONEq(t, string(encInp), string(encResp))
 	}
@@ -562,10 +563,10 @@ func TestDelete(t *testing.T) {
 			continue
 		}
 
-		encResp, err := json.Encode(out)
+		encResp, err := util.MapToJSON(out)
 		require.NoError(t, err)
 
-		encInp, err := json.Encode(docs[i])
+		encInp, err := util.MapToJSON(docs[i])
 		require.NoError(t, err)
 		require.JSONEq(t, string(encInp), string(encResp))
 	}
@@ -583,7 +584,7 @@ func getDocuments(t *testing.T, project string, index string, ids ...string) []D
 		Body().
 		Raw()
 
-	dec := json.NewDecoder(bytes.NewReader([]byte(str)))
+	dec := jsoniter.NewDecoder(bytes.NewReader([]byte(str)))
 	var mp map[string][]Doc
 	require.NoError(t, dec.Decode(&mp))
 	return mp["documents"]

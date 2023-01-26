@@ -17,10 +17,10 @@ package metadata
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"sync"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
@@ -151,7 +151,7 @@ func (r *reservedSubspace) reload(ctx context.Context, tx transaction.Tx) error 
 			// for legacy use display name same as the namespace name
 			namespaceMetadata = NewNamespaceMetadata(namespaceId, namespaceName, namespaceName)
 		} else if row.Data.Encoding == namespaceJsonEncoding {
-			err = json.Unmarshal(row.Data.RawData, &namespaceMetadata)
+			err = jsoniter.Unmarshal(row.Data.RawData, &namespaceMetadata)
 			if err != nil {
 				return errors.Internal("unable to read the namespace for the namespaceKey %s", allocatedTo)
 			}
@@ -189,7 +189,7 @@ func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.
 
 	key := keys.NewKey(r.ReservedSubspaceName(), namespaceKey, namespaceId, keyEnd)
 	// now do an insert to fail if namespace already exists.
-	namespaceMetadataBytes, err := json.Marshal(namespaceMetadata)
+	namespaceMetadataBytes, err := jsoniter.Marshal(namespaceMetadata)
 	if err != nil {
 		return err
 	}

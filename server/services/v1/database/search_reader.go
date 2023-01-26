@@ -18,12 +18,12 @@ import (
 	"context"
 
 	api "github.com/tigrisdata/tigris/api/server/v1"
-	"github.com/tigrisdata/tigris/lib/json"
 	"github.com/tigrisdata/tigris/query/filter"
 	qsearch "github.com/tigrisdata/tigris/query/search"
 	"github.com/tigrisdata/tigris/schema"
 	tsearch "github.com/tigrisdata/tigris/server/search"
 	"github.com/tigrisdata/tigris/store/search"
+	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
@@ -234,7 +234,7 @@ func (it *FilterableSearchIterator) Next(row *Row) bool {
 
 			var rawData []byte
 			// marshal the doc as bytes
-			if rawData, it.err = json.Encode(doc); it.err != nil {
+			if rawData, it.err = util.MapToJSON(doc); it.err != nil {
 				return false
 			}
 			row.Data.RawData = rawData

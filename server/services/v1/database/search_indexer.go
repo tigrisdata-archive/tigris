@@ -28,12 +28,12 @@ import (
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/lib/date"
-	tjson "github.com/tigrisdata/tigris/lib/json"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
+	"github.com/tigrisdata/tigris/util"
 	"github.com/tigrisdata/tigris/util/log"
 )
 
@@ -160,7 +160,7 @@ func CreateSearchKey(table []byte, fdbKey []byte) (string, error) {
 
 func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollection, id string) ([]byte, error) {
 	// better to decode it and then update the JSON
-	decData, err := tjson.Decode(data.RawData)
+	decData, err := util.JSONToMap(data.RawData)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +214,7 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 		decData[schema.ReservedFields[schema.UpdatedAt]] = data.UpdatedAt.UnixNano()
 	}
 
-	encoded, err := tjson.Encode(decData)
+	encoded, err := util.MapToJSON(decData)
 	if err != nil {
 		return nil, err
 	}

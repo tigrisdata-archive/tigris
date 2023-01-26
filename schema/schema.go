@@ -16,7 +16,6 @@ package schema
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -385,7 +384,7 @@ func Generate(jsonSchema []byte, format string) ([]byte, error) {
 		}
 	}
 
-	b, err := json.Marshal(schemas)
+	b, err := jsoniter.Marshal(schemas)
 	if ulog.E(err) {
 		return nil, errors.Internal("error generating schema")
 	}

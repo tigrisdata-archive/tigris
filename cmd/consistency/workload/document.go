@@ -15,11 +15,11 @@
 package workload
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	jsoniter "github.com/json-iterator/go"
 )
 
 type Document struct {
@@ -41,11 +41,11 @@ func NewDocument(uniqueId int64) *Document {
 }
 
 func Serialize(doc *Document) ([]byte, error) {
-	return json.Marshal(doc)
+	return jsoniter.Marshal(doc)
 }
 
 func Deserialize(raw []byte) (*Document, error) {
 	var doc Document
-	err := json.Unmarshal(raw, &doc)
+	err := jsoniter.Unmarshal(raw, &doc)
 	return &doc, err
 }

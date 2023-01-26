@@ -16,7 +16,6 @@ package schema
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -103,7 +102,7 @@ func TestCollection_SchemaValidate(t *testing.T) {
 		"primary_key": ["id"]
 	}`)
 
-	base64Encoded, err := json.Marshal([]byte(`"base64 string"`))
+	base64Encoded, err := jsoniter.Marshal([]byte(`"base64 string"`))
 	require.NoError(t, err)
 	cases := []struct {
 		document []byte

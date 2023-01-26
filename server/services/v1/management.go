@@ -16,7 +16,6 @@ package v1
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -24,6 +23,7 @@ import (
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
@@ -210,7 +210,7 @@ func (m *managementService) DescribeNamespaces(ctx context.Context, _ *api.Descr
 		return nil, err
 	}
 
-	jsonStr, err := json.Marshal(data)
+	jsonStr, err := jsoniter.Marshal(data)
 	if ulog.E(err) {
 		return nil, err
 	}

@@ -16,8 +16,8 @@ package metadata
 
 import (
 	"context"
-	"encoding/json"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
@@ -69,7 +69,7 @@ func (n *NamespaceSubspace) InsertProjectMetadata(ctx context.Context, tx transa
 		return errors.InvalidArgument("invalid projMetadata, projMetadata must not be nil")
 	}
 
-	payload, err := json.Marshal(projMetadata)
+	payload, err := jsoniter.Marshal(projMetadata)
 	if err != nil {
 		log.Err(err).Msg("Failed to marshal db metadata")
 		return errors.Internal("Failed to update db metadata, failed to marshal db metadata")
@@ -102,7 +102,7 @@ func (n *NamespaceSubspace) GetProjectMetadata(ctx context.Context, tx transacti
 	if it.Next(&row) {
 		log.Debug().Str("key", key.String()).Str("value", string(row.Data.RawData)).Msg("reading namespace metadata succeed")
 		var projMetadata ProjectMetadata
-		if err = json.Unmarshal(row.Data.RawData, &projMetadata); err != nil {
+		if err = jsoniter.Unmarshal(row.Data.RawData, &projMetadata); err != nil {
 			log.Err(err).Msg("Failed to read db metadata")
 			return nil, errors.Internal("Failed to read database metadata")
 		}
@@ -122,7 +122,7 @@ func (n *NamespaceSubspace) UpdateProjectMetadata(ctx context.Context, tx transa
 		return errors.InvalidArgument("invalid projMetadata, projMetadata must not be nil")
 	}
 
-	payload, err := json.Marshal(projMetadata)
+	payload, err := jsoniter.Marshal(projMetadata)
 	if err != nil {
 		log.Err(err).Msg("Failed to marshal db metadata")
 		return errors.Internal("Failed to update db metadata, failed to marshal db metadata")

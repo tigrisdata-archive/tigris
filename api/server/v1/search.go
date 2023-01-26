@@ -15,7 +15,6 @@
 package api
 
 import (
-	"encoding/json"
 	"strings"
 
 	jsoniter "github.com/json-iterator/go"
@@ -23,11 +22,11 @@ import (
 
 func (x *GetDocumentResponse) MarshalJSON() ([]byte, error) {
 	type resp struct {
-		Documents []json.RawMessage `json:"documents,omitempty"`
+		Documents []jsoniter.RawMessage `json:"documents,omitempty"`
 	}
 
 	r := resp{}
-	r.Documents = make([]json.RawMessage, len(x.Documents))
+	r.Documents = make([]jsoniter.RawMessage, len(x.Documents))
 	for i, doc := range x.Documents {
 		if len(doc) == 0 {
 			r.Documents[i] = nil
@@ -37,7 +36,7 @@ func (x *GetDocumentResponse) MarshalJSON() ([]byte, error) {
 		r.Documents[i] = doc
 	}
 
-	return json.Marshal(r)
+	return jsoniter.Marshal(r)
 }
 
 func (x *DocStatus) MarshalJSON() ([]byte, error) {
@@ -48,20 +47,20 @@ func (x *DocStatus) MarshalJSON() ([]byte, error) {
 		Id:    x.Id,
 		Error: x.Error,
 	}
-	return json.Marshal(resp)
+	return jsoniter.Marshal(resp)
 }
 
 func (x *IndexInfo) MarshalJSON() ([]byte, error) {
 	resp := struct {
-		Name   string          `json:"name,omitempty"`
-		Schema json.RawMessage `json:"schema,omitempty"`
-		Source *IndexSource    `json:"source,omitempty"`
+		Name   string              `json:"name,omitempty"`
+		Schema jsoniter.RawMessage `json:"schema,omitempty"`
+		Source *IndexSource        `json:"source,omitempty"`
 	}{
 		Name:   x.Name,
 		Schema: x.Schema,
 		Source: x.Source,
 	}
-	return json.Marshal(resp)
+	return jsoniter.Marshal(resp)
 }
 
 func (x *CreateOrUpdateIndexRequest) UnmarshalJSON(data []byte) error {

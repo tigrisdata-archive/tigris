@@ -19,7 +19,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/json"
 	"io"
 	"math"
 	"net/http"
@@ -28,6 +27,7 @@ import (
 	"time"
 
 	"github.com/auth0/go-auth0/management"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
@@ -358,7 +358,7 @@ func getAccessTokenUsingRefreshToken(ctx context.Context, req *api.GetAccessToke
 	if resp.StatusCode == http.StatusOK {
 		getAccessTokenResponse := api.GetAccessTokenResponse{}
 
-		err = json.Unmarshal([]byte(bodyStr), &getAccessTokenResponse)
+		err = jsoniter.Unmarshal([]byte(bodyStr), &getAccessTokenResponse)
 		if err != nil {
 			return nil, errors.Internal("Failed to parse external response: reason = %s", err.Error())
 		}
@@ -391,7 +391,7 @@ func getAccessTokenUsingClientCredentials(ctx context.Context, req *api.GetAcces
 
 	if cachedToken != nil {
 		tokenMetadataEntry := &tokenMetadataEntry{}
-		err := json.Unmarshal(cachedToken, tokenMetadataEntry)
+		err := jsoniter.Unmarshal(cachedToken, tokenMetadataEntry)
 		if err != nil {
 			return nil, tokenError("Failed to get access token: reason = could not internally lookup", err)
 		}
@@ -415,7 +415,7 @@ func getAccessTokenUsingClientCredentials(ctx context.Context, req *api.GetAcces
 	payload["client_secret"] = req.ClientSecret
 	payload["audience"] = a.AuthConfig.Audience
 	payload["grant_type"] = clientCredentials
-	jsonPayload, err := json.Marshal(payload)
+	jsonPayload, err := jsoniter.Marshal(payload)
 	if err != nil {
 		return nil, tokenError("Failed to get access token: reason = failed to create external request payload", err)
 	}
@@ -434,7 +434,7 @@ func getAccessTokenUsingClientCredentials(ctx context.Context, req *api.GetAcces
 	if resp.StatusCode == http.StatusOK {
 		getAccessTokenResponse := api.GetAccessTokenResponse{}
 
-		err = json.Unmarshal([]byte(bodyStr), &getAccessTokenResponse)
+		err = jsoniter.Unmarshal([]byte(bodyStr), &getAccessTokenResponse)
 		if err != nil {
 			return nil, tokenError("Failed to parse external response: reason = failed to unmarshal JSON", err)
 		}
@@ -528,7 +528,7 @@ func insertApplicationMetadata(ctx context.Context, metadataKey string, req *api
 		AccessToken: getAccessTokenResponse.GetAccessToken(),
 		ExpireAt:    time.Now().Add(time.Second * time.Duration(getAccessTokenResponse.GetExpiresIn())).Unix(),
 	}
-	cacheEntryBytes, err := json.Marshal(&cacheEntry)
+	cacheEntryBytes, err := jsoniter.Marshal(&cacheEntry)
 	if err != nil {
 		return tokenError("Failed to get access token: reason = could not process cache", err)
 	}
