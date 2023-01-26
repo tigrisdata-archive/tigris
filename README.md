@@ -37,18 +37,17 @@ infrastructure.
 
 # Helpful Links
 
-- [Quickstart](https://docs.tigrisdata.com/quickstart)
-- [Architecture](https://docs.tigrisdata.com/overview/architecture)
-- [Databases and Collections](https://docs.tigrisdata.com/overview/databases)
-- [Documents](https://docs.tigrisdata.com/documents/)
-- [Event Streaming](https://docs.tigrisdata.com/events/)
-- [Search](https://docs.tigrisdata.com/searching/)
-- [Observability](https://docs.tigrisdata.com/observability/)
-- [TypeScript Reference](https://docs.tigrisdata.com/typescript/)
-- [Go Reference](https://docs.tigrisdata.com/golang/)
-- [Java Reference](https://docs.tigrisdata.com/java/)
-- [CLI](https://docs.tigrisdata.com/cli)
-- [Guides](https://docs.tigrisdata.com/guides/)
+- [Quickstart](https://www.tigrisdata.com/docs/quickstarts)
+- [Architecture](https://www.tigrisdata.com/docs/concepts/architecture)
+- [Databases and Collections](https://www.tigrisdata.com/docs/concepts/database)
+- [Documents](https://www.tigrisdata.com/docs/concepts/database/documents)
+- [Search](https://www.tigrisdata.com/docs/concepts/searching)
+- [Observability](https://www.tigrisdata.com/docs/concepts/platform/metrics)
+- [TypeScript Reference](https://www.tigrisdata.com/docs/sdkstools/typescript)
+- [Go Reference](https://www.tigrisdata.com/docs/sdkstools/golang)
+- [Java Reference](https://www.tigrisdata.com/docs/sdkstools/java/getting-started)
+- [CLI](https://www.tigrisdata.com/docs/sdkstools/cli)
+- [Guides](https://www.tigrisdata.com/docs/guides)
 
 # Community & Support
 
