@@ -51,7 +51,7 @@ infrastructure.
 
 # Community & Support
 
-- [Slack Community](https://join.slack.com/t/tigrisdatacommunity/shared_invite/zt-16fn5ogio-OjxJlgttJIV0ZDywcBItJQ)
+- [Discord Community](https://www.tigrisdata.com/discord/)
 - [GitHub Issues](https://github.com/tigrisdata/tigris/issues)
 - [GitHub Discussions](https://github.com/tigrisdata/tigris/discussions)
 
