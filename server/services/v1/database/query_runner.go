@@ -44,6 +44,7 @@ import (
 	"github.com/tigrisdata/tigris/store/search"
 	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
+	"github.com/tigrisdata/tigris/value"
 )
 
 // QueryRunner is responsible for executing the current query and return the response.
@@ -288,7 +289,7 @@ func (runner *BaseQueryRunner) mutateAndValidatePayload(coll *schema.DefaultColl
 }
 
 func (runner *BaseQueryRunner) buildKeysUsingFilter(coll *schema.DefaultCollection,
-	reqFilter []byte, collation *api.Collation,
+	reqFilter []byte, collation *value.Collation,
 ) ([]keys.Key, error) {
 	filterFactory := filter.NewFactory(coll.QueryableFields, collation)
 	filters, err := filterFactory.Factorize(reqFilter)
@@ -335,7 +336,7 @@ func (runner *BaseQueryRunner) getSortOrdering(coll *schema.DefaultCollection, s
 }
 
 func (runner *BaseQueryRunner) getWriteIterator(ctx context.Context, tx transaction.Tx,
-	collection *schema.DefaultCollection, reqFilter []byte, collation *api.Collation,
+	collection *schema.DefaultCollection, reqFilter []byte, collation *value.Collation,
 	metrics *metrics.WriteQueryMetrics,
 ) (Iterator, error) {
 	var (
@@ -655,7 +656,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}
 
 	var (
-		collation     *api.Collation
+		collation     *value.Collation
 		limit         int32
 		modifiedCount int32
 		row           Row
@@ -671,8 +672,10 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}
 
 	if runner.req.Options != nil {
-		collation = runner.req.Options.Collation
+		collation = value.NewCollationFrom(runner.req.Options.Collation)
 		limit = int32(runner.req.Options.Limit)
+	} else {
+		collation = value.NewCollation()
 	}
 
 	iterator, err := runner.getWriteIterator(ctx, tx, coll, runner.req.Filter, collation, runner.queryMetrics)
@@ -757,9 +760,11 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		iterator, err = NewDatabaseReader(ctx, tx).ScanTable(coll.EncodedName)
 		runner.queryMetrics.SetWriteType("full_scan")
 	} else {
-		var collation *api.Collation
+		var collation *value.Collation
 		if runner.req.Options != nil {
-			collation = runner.req.Options.Collation
+			collation = value.NewCollationFrom(runner.req.Options.Collation)
+		} else {
+			collation = value.NewCollation()
 		}
 
 		iterator, err = runner.getWriteIterator(ctx, tx, coll, runner.req.Filter, collation, runner.queryMetrics)
@@ -822,9 +827,9 @@ type readerOptions struct {
 func (runner *StreamingQueryRunner) buildReaderOptions(collection *schema.DefaultCollection) (readerOptions, error) {
 	var err error
 	options := readerOptions{}
-	var collation *api.Collation
+	var collation *value.Collation
 	if runner.req.Options != nil {
-		collation = runner.req.Options.Collation
+		collation = value.NewCollationFrom(runner.req.Options.Collation)
 	}
 	if options.sorting, err = runner.getSortOrdering(collection, runner.req.Sort); err != nil {
 		return options, err
@@ -1068,7 +1073,7 @@ func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.
 		return Response{}, ctx, err
 	}
 
-	wrappedF, err := filter.NewFactory(collection.QueryableFields, runner.req.Collation).WrappedFilter(runner.req.Filter)
+	wrappedF, err := filter.NewFactory(collection.QueryableFields, value.NewCollationFrom(runner.req.Collation)).WrappedFilter(runner.req.Filter)
 	if err != nil {
 		return Response{}, ctx, err
 	}
