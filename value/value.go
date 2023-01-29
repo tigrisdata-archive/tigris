@@ -245,10 +245,6 @@ func NewStringValue(v string, collation *Collation) *StringValue {
 		Collation: collation,
 	}
 
-	// if collation != nil && collation.IsCaseInsensitive() {
-	// 	s.Value = strings.ToLower(s.Value)
-	// }
-
 	return s
 }
 
@@ -261,10 +257,6 @@ func (s *StringValue) CompareTo(v Value) (int, error) {
 	if !ok {
 		return -2, fmt.Errorf("wrong type compared ")
 	}
-
-	// if s.Collation != nil && s.Collation.IsCaseInsensitive() {
-	// 	converted.Value = strings.ToLower(converted.Value)
-	// }
 
 	return s.Collation.CompareString(s.Value, converted.Value), nil
 }
