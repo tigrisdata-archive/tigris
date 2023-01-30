@@ -15,7 +15,6 @@
 package schema
 
 import (
-	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -26,6 +25,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	schema "github.com/tigrisdata/tigris/schema/lang"
+	"github.com/tigrisdata/tigris/util"
 )
 
 // Supported subtypes.
@@ -273,12 +273,8 @@ func traverseFields(sch map[string]*schema.Field, fields map[string]interface{},
 }
 
 func docToSchema(sch *schema.Schema, name string, data []byte, pk []string, autoGen []string) error {
-	var m map[string]interface{}
-
-	dec := json.NewDecoder(bytes.NewBuffer(data))
-	dec.UseNumber()
-
-	if err := dec.Decode(&m); err != nil {
+	m, err := util.JSONToMap(data)
+	if err != nil {
 		return err
 	}
 

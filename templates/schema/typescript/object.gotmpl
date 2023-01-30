@@ -1,64 +1,69 @@
+{{ if .Description }}
+// {{ .Description }}{{end -}}
+{{if not .Nested }}
+@TigrisCollection("{{.NameJSON}}"){{end}}
+export class {{.Name}} {
 
-{{ if .Description -}}
-// {{ .Name }} {{ .Description }}
-{{ end -}}
-{{ if not .Nested }}export {{end}}interface {{.Name}} {{ if not .Nested }}extends TigrisCollectionType {{end}}{
 {{- range $k, $v := .Fields }}
-{{- $tsType := $v.Type }}
-{{- if eq $v.Type "INT64" }}
-{{- $tsType = "string" }}
-{{- else if eq $v.Type "INT32" }}
-{{- $tsType = "number" }}
-{{- else if eq $v.Type "STRING" }}
-{{- $tsType = "string" }}
-{{- else if eq $v.Type "BOOLEAN" }}
-{{- $tsType = "boolean" }}
-{{- else if eq $v.Type "UUID" }}
-{{- $tsType = "string" }}
-{{- else if eq $v.Type "DATE_TIME" }}
-{{- $tsType = "string" }}
-{{- else if eq $v.Type "BYTE_STRING" }}
-{{- $tsType = "string" }}
-{{- else if eq $v.Type "NUMBER" }}
-{{- $tsType = "number" }}
-{{- end}}
-  {{- if .Description}}
-  // {{.NameJSON}} {{.Description}}{{end}}
-  {{$v.NameJSON}}{{if $v.AutoGenerate}}?{{end}}: {{if $v.IsArray}}Array<{{end}}{{ $tsType }}{{if $v.IsArray}}>{{end}};
-{{- end}}
-}
 
-{{ if not .Nested }}export {{end}}const {{.NameDecap}}Schema: TigrisSchema<{{.Name}}> = {
-{{- range $k, $v := .Fields}}
-  {{$v.NameJSON}}: {
-    {{- if $v.IsArray}}
-    type: TigrisDataTypes.ARRAY,
-    {{- else}}
-      {{- if $v.IsObject }}
-    type: {{$v.TypeDecap}}Schema,
-      {{- else }}
-    type: TigrisDataTypes.{{$v.Type}},
-      {{- end}}
-    {{- end}}
-    {{- if or $v.PrimaryKeyIdx $v.AutoGenerate}}
-    primary_key: {
-      {{- if $v.PrimaryKeyIdx }}
-      order: {{$v.PrimaryKeyIdx}},
-      {{- end}}
-      {{- if $v.AutoGenerate}}
-      autoGenerate: true,
-      {{- end}}
-    },
-    {{- end}}
-    {{- if $v.IsArray}}
-    items: {
-    {{- if $v.IsObject }}
-      type: {{$v.TypeDecap}}Schema,
-    {{- else }}
-      type: TigrisDataTypes.{{$v.Type}},
-    {{- end }}
-    },
-    {{- end}}
-  },
-{{- end}}
+  {{- $def := $v.Default}}
+  {{- if eq $v.DefaultStr `"now()"`}}
+    {{- $def = `Generated.NOW`}}
+  {{- else if eq $v.DefaultStr `"uuid()"`}}
+    {{- $def = `Generated.UUID`}}
+  {{- else if eq $v.DefaultStr `"cuid()"`}}
+    {{- $def = `Generated.CUID`}}
+  {{- else if $v.DefaultStr }}
+    {{- $def = $v.DefaultStr}}
+  {{- end}}
+
+  {{- $tsType := $v.Type }}
+  {{- $obj := false }}
+  {{- $eqType := false }}
+  {{- if eq $v.Type "INT64" }}
+    {{- $tsType = "string" }}
+  {{- else if eq $v.Type "INT32" }}
+    {{- $tsType = "number" }}
+  {{- else if eq $v.Type "STRING" }}
+    {{- $tsType = "string" }}
+    {{- $eqType = true }}
+  {{- else if eq $v.Type "BOOLEAN" }}
+    {{- $tsType = "boolean" }}
+    {{- $eqType = true }}
+  {{- else if eq $v.Type "UUID" }}
+    {{- $tsType = "string" }}
+  {{- else if eq $v.Type "DATE_TIME" }}
+    {{- $tsType = "Date" }}
+  {{- else if eq $v.Type "BYTE_STRING" }}
+    {{- $tsType = "string" }}
+  {{- else if eq $v.Type "NUMBER" }}
+    {{- $tsType = "number" }}
+    {{- $eqType = true }}
+  {{- else}}
+    {{- $eqType = true }}
+    {{- $obj = true}}
+  {{- end}}
+
+  {{- $m := false -}}
+
+  {{if $v.Description}}
+  // {{$v.Description}}{{end}}
+  {{if $v.PrimaryKeyIdx }}@PrimaryKey({{else}}@Field({{end}}
+  {{- if not $v.IsArray }}{{- if not $eqType }}TigrisDataTypes.{{$v.Type}}{{end}}{{end}}
+
+  {{- if or $v.PrimaryKeyIdx $v.IsArray $def $v.AutoGenerate $v.UpdatedAt $v.CreatedAt $v.MaxLength }}
+    {{- if not $v.IsArray }}{{- if not $eqType }}, {{end}}{{end -}}
+    {
+      {{- if $v.PrimaryKeyIdx }} order: {{$v.PrimaryKeyIdx}} {{- $m = true }}{{end -}}
+      {{- if $v.IsArray}}{{if $m}},{{end}} elements: {{if not $obj }}TigrisDataTypes.{{end}}{{$v.Type}} {{- $m = true}}{{end -}}
+      {{- if $v.IsArray}}{{if gt $v.ArrayDimensions 1}}{{if $m}},{{end}} depth: {{$v.ArrayDimensions}} {{- $m = true}}{{end}}{{end -}}
+      {{- if $def}}{{if $m}},{{end}} default: {{$def}} {{- $m = true}}{{end -}}
+      {{- if $v.AutoGenerate}}{{if $m}},{{end}} autoGenerate: true {{- $m = true }}{{end -}}
+      {{- if $v.UpdatedAt}}{{if $m}},{{end}} timestamp: "updatedAt" {{- $m = true }}{{end -}}
+      {{- if $v.CreatedAt}}{{if $m}},{{end}} timestamp: "createdAt" {{- end}}
+      {{- if $v.MaxLength}}{{if $m}},{{end}} maxLength: {{$v.MaxLength}} {{- end}} }
+  {{- end -}}
+  )
+  {{$v.NameJSON}}{{if $v.AutoGenerate}}?{{end}}: {{if $v.IsArray}}{{repeat "Array<" $v.ArrayDimensions}}{{end}}{{ $tsType }}{{if $v.IsArray}}{{repeat ">" $v.ArrayDimensions}}{{end}};
+{{end -}}
 };

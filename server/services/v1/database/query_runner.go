@@ -16,7 +16,6 @@ package database
 
 import (
 	"context"
-	"encoding/json"
 	"math"
 	"time"
 
@@ -26,7 +25,6 @@ import (
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
-	ljson "github.com/tigrisdata/tigris/lib/json"
 	"github.com/tigrisdata/tigris/query/filter"
 	"github.com/tigrisdata/tigris/query/read"
 	qsearch "github.com/tigrisdata/tigris/query/search"
@@ -44,7 +42,9 @@ import (
 	"github.com/tigrisdata/tigris/server/types"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
+	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
+	"github.com/tigrisdata/tigris/value"
 )
 
 // QueryRunner is responsible for executing the current query and return the response.
@@ -262,32 +262,34 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 }
 
 func (runner *BaseQueryRunner) mutateAndValidatePayload(coll *schema.DefaultCollection, mutator mutator, doc []byte) ([]byte, error) {
-	deserializedDoc, err := ljson.Decode(doc)
+	deserializedDoc, err := util.JSONToMap(doc)
 	if ulog.E(err) {
 		return doc, err
 	}
 
 	// this will mutate map, so we need to serialize this map again
-	if err := mutator.stringToInt64(deserializedDoc); err != nil {
+	if err = mutator.stringToInt64(deserializedDoc); err != nil {
 		return doc, err
 	}
-	if err := mutator.setDefaultsInIncomingPayload(deserializedDoc); err != nil {
+
+	if err = mutator.setDefaultsInIncomingPayload(deserializedDoc); err != nil {
 		return doc, err
 	}
-	if err := coll.Validate(deserializedDoc); err != nil {
+
+	if err = coll.Validate(deserializedDoc); err != nil {
 		// schema validation failed
 		return doc, err
 	}
 
 	if mutator.isMutated() {
-		return ljson.Encode(deserializedDoc)
+		return util.MapToJSON(deserializedDoc)
 	}
 
 	return doc, nil
 }
 
 func (runner *BaseQueryRunner) buildKeysUsingFilter(coll *schema.DefaultCollection,
-	reqFilter []byte, collation *api.Collation,
+	reqFilter []byte, collation *value.Collation,
 ) ([]keys.Key, error) {
 	filterFactory := filter.NewFactory(coll.QueryableFields, collation)
 	filters, err := filterFactory.Factorize(reqFilter)
@@ -334,7 +336,7 @@ func (runner *BaseQueryRunner) getSortOrdering(coll *schema.DefaultCollection, s
 }
 
 func (runner *BaseQueryRunner) getWriteIterator(ctx context.Context, tx transaction.Tx,
-	collection *schema.DefaultCollection, reqFilter []byte, collation *api.Collation,
+	collection *schema.DefaultCollection, reqFilter []byte, collation *value.Collation,
 	metrics *metrics.WriteQueryMetrics,
 ) (Iterator, error) {
 	var (
@@ -384,7 +386,7 @@ func (runner *ImportQueryRunner) evolveSchema(ctx context.Context, tenant *metad
 	req := runner.req
 
 	if rawSchema != nil {
-		err := json.Unmarshal(rawSchema, &sch)
+		err := jsoniter.Unmarshal(rawSchema, &sch)
 		if ulog.E(err) {
 			return err
 		}
@@ -395,7 +397,7 @@ func (runner *ImportQueryRunner) evolveSchema(ctx context.Context, tenant *metad
 		return err
 	}
 
-	b, err := json.Marshal(&sch)
+	b, err := jsoniter.Marshal(&sch)
 	if ulog.E(err) {
 		return err
 	}
@@ -594,7 +596,7 @@ type UpdateQueryRunner struct {
 	queryMetrics *metrics.WriteQueryMetrics
 }
 
-func updateDefaultsAndSchema(collection *schema.DefaultCollection, doc []byte, version int32, ts *internal.Timestamp) ([]byte, error) {
+func updateDefaultsAndSchema(db string, collection *schema.DefaultCollection, doc []byte, version int32, ts *internal.Timestamp) ([]byte, error) {
 	var (
 		err    error
 		decDoc map[string]any
@@ -607,13 +609,14 @@ func updateDefaultsAndSchema(collection *schema.DefaultCollection, doc []byte, v
 	// TODO: revisit this path. We are deserializing here the merged payload (existing + incoming) and then
 	// we are setting the updated value if any field is tagged with @updatedAt and then we are packing
 	// it again.
-	decDoc, err = ljson.Decode(doc)
+	decDoc, err = util.JSONToMap(doc)
 	if ulog.E(err) {
 		return nil, err
 	}
 
-	if err = collection.UpdateRowSchema(decDoc, version); err != nil {
-		return nil, err
+	if !collection.CompatibleSchemaSince(version) {
+		collection.UpdateRowSchema(decDoc, version)
+		metrics.SchemaUpdateRepaired(db, collection.Name)
 	}
 
 	if len(collection.TaggedDefaultsForUpdate()) > 0 {
@@ -623,7 +626,7 @@ func updateDefaultsAndSchema(collection *schema.DefaultCollection, doc []byte, v
 		}
 	}
 
-	if doc, err = ljson.Encode(decDoc); err != nil {
+	if doc, err = util.MapToJSON(decDoc); err != nil {
 		return nil, err
 	}
 
@@ -653,7 +656,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}
 
 	var (
-		collation     *api.Collation
+		collation     *value.Collation
 		limit         int32
 		modifiedCount int32
 		row           Row
@@ -669,8 +672,10 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}
 
 	if runner.req.Options != nil {
-		collation = runner.req.Options.Collation
+		collation = value.NewCollationFrom(runner.req.Options.Collation)
 		limit = int32(runner.req.Options.Limit)
+	} else {
+		collation = value.NewCollation()
 	}
 
 	iterator, err := runner.getWriteIterator(ctx, tx, coll, runner.req.Filter, collation, runner.queryMetrics)
@@ -684,7 +689,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			return Response{}, ctx, err
 		}
 
-		merged, err := updateDefaultsAndSchema(coll, row.Data.RawData, row.Data.Ver, ts)
+		merged, err := updateDefaultsAndSchema(db.Name(), coll, row.Data.RawData, row.Data.Ver, ts)
 		if err != nil {
 			return Response{}, ctx, err
 		}
@@ -755,9 +760,11 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		iterator, err = NewDatabaseReader(ctx, tx).ScanTable(coll.EncodedName)
 		runner.queryMetrics.SetWriteType("full_scan")
 	} else {
-		var collation *api.Collation
+		var collation *value.Collation
 		if runner.req.Options != nil {
-			collation = runner.req.Options.Collation
+			collation = value.NewCollationFrom(runner.req.Options.Collation)
+		} else {
+			collation = value.NewCollation()
 		}
 
 		iterator, err = runner.getWriteIterator(ctx, tx, coll, runner.req.Filter, collation, runner.queryMetrics)
@@ -820,9 +827,9 @@ type readerOptions struct {
 func (runner *StreamingQueryRunner) buildReaderOptions(collection *schema.DefaultCollection) (readerOptions, error) {
 	var err error
 	options := readerOptions{}
-	var collation *api.Collation
+	var collation *value.Collation
 	if runner.req.Options != nil {
-		collation = runner.req.Options.Collation
+		collation = value.NewCollationFrom(runner.req.Options.Collation)
 	}
 	if options.sorting, err = runner.getSortOrdering(collection, runner.req.Sort); err != nil {
 		return options, err
@@ -1010,9 +1017,16 @@ func (runner *StreamingQueryRunner) iterate(coll *schema.DefaultCollection, iter
 
 	var row Row
 	for i := int64(0); (limit == 0 || i < limit) && iterator.Next(&row); i++ {
-		rawData, err := coll.UpdateRowSchemaRaw(row.Data.RawData, row.Data.Ver)
-		if err != nil {
-			return row.Key, err
+		rawData := row.Data.RawData
+		var err error
+
+		if !coll.CompatibleSchemaSince(row.Data.Ver) {
+			rawData, err = coll.UpdateRowSchemaRaw(rawData, row.Data.Ver)
+			if err != nil {
+				return row.Key, err
+			}
+
+			metrics.SchemaReadOutdated(runner.req.GetProject(), coll.Name)
 		}
 
 		newValue, err := fieldFactory.Apply(rawData)
@@ -1059,7 +1073,7 @@ func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.
 		return Response{}, ctx, err
 	}
 
-	wrappedF, err := filter.NewFactory(collection.QueryableFields, runner.req.Collation).WrappedFilter(runner.req.Filter)
+	wrappedF, err := filter.NewFactory(collection.QueryableFields, value.NewCollationFrom(runner.req.Collation)).WrappedFilter(runner.req.Filter)
 	if err != nil {
 		return Response{}, ctx, err
 	}

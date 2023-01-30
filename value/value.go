@@ -20,10 +20,8 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"strings"
 
 	jsoniter "github.com/json-iterator/go"
-	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/schema"
 )
@@ -49,7 +47,7 @@ type Value interface {
 	AsInterface() interface{}
 }
 
-func NewValueUsingCollation(fieldType schema.FieldType, value []byte, collation *api.Collation) (Value, error) {
+func NewValueUsingCollation(fieldType schema.FieldType, value []byte, collation *Collation) (Value, error) {
 	if fieldType == schema.StringType {
 		return NewStringValue(string(value), collation), nil
 	}
@@ -234,17 +232,17 @@ func (d *DoubleValue) String() string {
 
 type StringValue struct {
 	Value     string
-	Collation *api.Collation
+	Collation *Collation
 }
 
-func NewStringValue(v string, collation *api.Collation) *StringValue {
+func NewStringValue(v string, collation *Collation) *StringValue {
+	if collation == nil {
+		collation = NewCollation()
+	}
+
 	s := &StringValue{
 		Value:     v,
 		Collation: collation,
-	}
-
-	if collation != nil && collation.IsCaseInsensitive() {
-		s.Value = strings.ToLower(s.Value)
 	}
 
 	return s
@@ -260,17 +258,7 @@ func (s *StringValue) CompareTo(v Value) (int, error) {
 		return -2, fmt.Errorf("wrong type compared ")
 	}
 
-	if s.Collation != nil && s.Collation.IsCaseInsensitive() {
-		converted.Value = strings.ToLower(converted.Value)
-	}
-
-	if s.Value == converted.Value {
-		return 0, nil
-	} else if s.Value < converted.Value {
-		return -1, nil
-	}
-
-	return 1, nil
+	return s.Collation.CompareString(s.Value, converted.Value), nil
 }
 
 func (s *StringValue) AsInterface() interface{} {

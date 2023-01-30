@@ -339,11 +339,13 @@ func (runner *KeysRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Res
 			userKeys[index] = runner.encoder.DecodeInternalCacheKeyNameToExternal(internalKey)
 		}
 
-		if err := runner.streaming.Send(&api.KeysResponse{
-			Keys:   userKeys,
-			Cursor: &cursor,
-		}); ulog.E(err) {
-			return Response{}, err
+		if len(userKeys) > 0 {
+			if err := runner.streaming.Send(&api.KeysResponse{
+				Keys:   userKeys,
+				Cursor: &cursor,
+			}); ulog.E(err) {
+				return Response{}, err
+			}
 		}
 		if cursor == 0 {
 			break
@@ -363,5 +365,6 @@ func getEncodedCacheTableName(_ context.Context, tenant *metadata.Tenant, projec
 	if err != nil {
 		return "", err
 	}
+
 	return encodedCacheTableName, nil
 }

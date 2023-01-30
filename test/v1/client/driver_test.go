@@ -18,12 +18,12 @@ package client
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris-client-go/api/server/v1"
@@ -209,7 +209,7 @@ func testDriverBinary(t *testing.T, c driver.Driver) {
 		K1: []byte("vK1"),
 		D1: "vD1",
 	}
-	docEnc, err := json.Marshal(doc1)
+	docEnc, err := jsoniter.Marshal(doc1)
 	require.NoError(t, err)
 
 	_, err = db1.Insert(ctx, "c1", []driver.Document{docEnc})
@@ -219,13 +219,13 @@ func testDriverBinary(t *testing.T, c driver.Driver) {
 		K1: []byte(`1234`),
 		D1: "vD2",
 	}
-	docEnc, err = json.Marshal(doc2)
+	docEnc, err = jsoniter.Marshal(doc2)
 	require.NoError(t, err)
 
 	_, err = db1.Insert(ctx, "c1", []driver.Document{docEnc})
 	require.NoError(t, err)
 
-	filterEnc, err := json.Marshal(map[string]interface{}{
+	filterEnc, err := jsoniter.Marshal(map[string]interface{}{
 		"K1": []byte("vK1"),
 	})
 	require.NoError(t, err)
@@ -233,17 +233,17 @@ func testDriverBinary(t *testing.T, c driver.Driver) {
 	var actualDoc doc
 	docs := getDocuments(t, db1, filterEnc)
 	require.Greater(t, len(docs), 0)
-	require.NoError(t, json.Unmarshal(docs[0], &actualDoc))
+	require.NoError(t, jsoniter.Unmarshal(docs[0], &actualDoc))
 	require.Equal(t, doc1, actualDoc)
 
-	filterEnc, err = json.Marshal(map[string]interface{}{
+	filterEnc, err = jsoniter.Marshal(map[string]interface{}{
 		"K1": []byte(`1234`),
 	})
 	require.NoError(t, err)
 
 	docs = getDocuments(t, db1, filterEnc)
 	require.Greater(t, len(docs), 0)
-	require.NoError(t, json.Unmarshal(docs[0], &actualDoc))
+	require.NoError(t, jsoniter.Unmarshal(docs[0], &actualDoc))
 	require.Equal(t, doc2, actualDoc)
 
 	err = db1.DropCollection(ctx, "c1")
@@ -345,7 +345,7 @@ func testTxClient(t *testing.T, c driver.Driver) {
 	_, err := c.CreateProject(ctx, projectName)
 	require.NoError(t, err)
 	defer func() {
-		//_ = c.DropDatabase(ctx, dbName)
+		_, _ = c.DeleteProject(ctx, projectName)
 	}()
 
 	db1 := c.UseDatabase(projectName)

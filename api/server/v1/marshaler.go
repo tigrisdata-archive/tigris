@@ -15,7 +15,6 @@
 package api
 
 import (
-	"encoding/json"
 	"io"
 	"net/url"
 	"strings"
@@ -32,7 +31,7 @@ const (
 )
 
 type CustomDecoder struct {
-	jsonDecoder *json.Decoder
+	jsonDecoder *jsoniter.Decoder
 	reader      io.Reader
 }
 
@@ -55,7 +54,7 @@ type CustomMarshaler struct {
 
 func (c *CustomMarshaler) NewDecoder(r io.Reader) runtime.Decoder {
 	return CustomDecoder{
-		jsonDecoder: json.NewDecoder(r),
+		jsonDecoder: jsoniter.NewDecoder(r),
 		reader:      r,
 	}
 }
@@ -262,12 +261,12 @@ func (x *ImportRequest) UnmarshalJSON(data []byte) error {
 }
 
 func (x *ImportResponse) MarshalJSON() ([]byte, error) {
-	keys := make([]json.RawMessage, 0, len(x.Keys))
+	keys := make([]jsoniter.RawMessage, 0, len(x.Keys))
 	for _, k := range x.Keys {
 		keys = append(keys, k)
 	}
 
-	return json.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status, Keys: keys})
+	return jsoniter.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status, Keys: keys})
 }
 
 // UnmarshalJSON on InsertRequest avoids unmarshalling user document. We only need to extract primary/index keys from
@@ -600,12 +599,12 @@ func (x *GetAccessTokenRequest) UnmarshalJSON(data []byte) error {
 type collDesc struct {
 	Collection string              `json:"collection"`
 	Metadata   *CollectionMetadata `json:"metadata"`
-	Schema     json.RawMessage     `json:"schema"`
+	Schema     jsoniter.RawMessage `json:"schema"`
 	Size       int64               `json:"size"`
 }
 
 func (x *DescribeCollectionResponse) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&collDesc{
+	return jsoniter.Marshal(&collDesc{
 		Collection: x.Collection,
 		Metadata:   x.Metadata,
 		Schema:     x.Schema,
@@ -634,7 +633,7 @@ func (x *DescribeDatabaseResponse) MarshalJSON() ([]byte, error) {
 		})
 	}
 
-	return json.Marshal(&resp)
+	return jsoniter.Marshal(&resp)
 }
 
 func (x *InsertUserMetadataRequest) UnmarshalJSON(data []byte) error {
@@ -675,47 +674,47 @@ func (x *UpdateUserMetadataRequest) UnmarshalJSON(data []byte) error {
 
 func (x *GetUserMetadataResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
-		MetadataKey string          `json:"metadataKey,omitempty"`
-		NamespaceId uint32          `json:"namespaceId,omitempty"`
-		UserId      string          `json:"userId,omitempty"`
-		Value       json.RawMessage `json:"value,omitempty"`
+		MetadataKey string              `json:"metadataKey,omitempty"`
+		NamespaceId uint32              `json:"namespaceId,omitempty"`
+		UserId      string              `json:"userId,omitempty"`
+		Value       jsoniter.RawMessage `json:"value,omitempty"`
 	}{
 		MetadataKey: x.MetadataKey,
 		NamespaceId: x.NamespaceId,
 		UserId:      x.UserId,
 		Value:       x.Value,
 	}
-	return json.Marshal(resp)
+	return jsoniter.Marshal(resp)
 }
 
 func (x *InsertUserMetadataResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
-		MetadataKey string          `json:"metadataKey,omitempty"`
-		NamespaceId uint32          `json:"namespaceId,omitempty"`
-		UserId      string          `json:"userId,omitempty"`
-		Value       json.RawMessage `json:"value,omitempty"`
+		MetadataKey string              `json:"metadataKey,omitempty"`
+		NamespaceId uint32              `json:"namespaceId,omitempty"`
+		UserId      string              `json:"userId,omitempty"`
+		Value       jsoniter.RawMessage `json:"value,omitempty"`
 	}{
 		MetadataKey: x.MetadataKey,
 		NamespaceId: x.NamespaceId,
 		UserId:      x.UserId,
 		Value:       x.Value,
 	}
-	return json.Marshal(resp)
+	return jsoniter.Marshal(resp)
 }
 
 func (x *UpdateUserMetadataResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
-		MetadataKey string          `json:"metadataKey,omitempty"`
-		NamespaceId uint32          `json:"namespaceId,omitempty"`
-		UserId      string          `json:"userId,omitempty"`
-		Value       json.RawMessage `json:"value,omitempty"`
+		MetadataKey string              `json:"metadataKey,omitempty"`
+		NamespaceId uint32              `json:"namespaceId,omitempty"`
+		UserId      string              `json:"userId,omitempty"`
+		Value       jsoniter.RawMessage `json:"value,omitempty"`
 	}{
 		MetadataKey: x.MetadataKey,
 		NamespaceId: x.NamespaceId,
 		UserId:      x.UserId,
 		Value:       x.Value,
 	}
-	return json.Marshal(resp)
+	return jsoniter.Marshal(resp)
 }
 
 func (x *InsertNamespaceMetadataRequest) UnmarshalJSON(data []byte) error {
@@ -756,73 +755,73 @@ func (x *UpdateNamespaceMetadataRequest) UnmarshalJSON(data []byte) error {
 
 func (x *GetNamespaceMetadataResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
-		MetadataKey string          `json:"metadataKey,omitempty"`
-		NamespaceId uint32          `json:"namespaceId,omitempty"`
-		Value       json.RawMessage `json:"value,omitempty"`
+		MetadataKey string              `json:"metadataKey,omitempty"`
+		NamespaceId uint32              `json:"namespaceId,omitempty"`
+		Value       jsoniter.RawMessage `json:"value,omitempty"`
 	}{
 		MetadataKey: x.MetadataKey,
 		NamespaceId: x.NamespaceId,
 		Value:       x.Value,
 	}
-	return json.Marshal(resp)
+	return jsoniter.Marshal(resp)
 }
 
 func (x *InsertNamespaceMetadataResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
-		MetadataKey string          `json:"metadataKey,omitempty"`
-		NamespaceId uint32          `json:"namespaceId,omitempty"`
-		Value       json.RawMessage `json:"value,omitempty"`
+		MetadataKey string              `json:"metadataKey,omitempty"`
+		NamespaceId uint32              `json:"namespaceId,omitempty"`
+		Value       jsoniter.RawMessage `json:"value,omitempty"`
 	}{
 		MetadataKey: x.MetadataKey,
 		NamespaceId: x.NamespaceId,
 		Value:       x.Value,
 	}
-	return json.Marshal(resp)
+	return jsoniter.Marshal(resp)
 }
 
 func (x *UpdateNamespaceMetadataResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
-		MetadataKey string          `json:"metadataKey,omitempty"`
-		NamespaceId uint32          `json:"namespaceId,omitempty"`
-		Value       json.RawMessage `json:"value,omitempty"`
+		MetadataKey string              `json:"metadataKey,omitempty"`
+		NamespaceId uint32              `json:"namespaceId,omitempty"`
+		Value       jsoniter.RawMessage `json:"value,omitempty"`
 	}{
 		MetadataKey: x.MetadataKey,
 		NamespaceId: x.NamespaceId,
 		Value:       x.Value,
 	}
-	return json.Marshal(resp)
+	return jsoniter.Marshal(resp)
 }
 
 // Proper marshal timestamp in metadata.
 type dmlResponse struct {
-	Metadata      Metadata          `json:"metadata,omitempty"`
-	Status        string            `json:"status,omitempty"`
-	ModifiedCount int32             `json:"modified_count,omitempty"`
-	Keys          []json.RawMessage `json:"keys,omitempty"`
+	Metadata      Metadata              `json:"metadata,omitempty"`
+	Status        string                `json:"status,omitempty"`
+	ModifiedCount int32                 `json:"modified_count,omitempty"`
+	Keys          []jsoniter.RawMessage `json:"keys,omitempty"`
 }
 
 func (x *InsertResponse) MarshalJSON() ([]byte, error) {
-	keys := make([]json.RawMessage, 0, len(x.Keys))
+	keys := make([]jsoniter.RawMessage, 0, len(x.Keys))
 	for _, k := range x.Keys {
 		keys = append(keys, k)
 	}
-	return json.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status, Keys: keys})
+	return jsoniter.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status, Keys: keys})
 }
 
 func (x *ReplaceResponse) MarshalJSON() ([]byte, error) {
-	keys := make([]json.RawMessage, 0, len(x.Keys))
+	keys := make([]jsoniter.RawMessage, 0, len(x.Keys))
 	for _, k := range x.Keys {
 		keys = append(keys, k)
 	}
-	return json.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status, Keys: keys})
+	return jsoniter.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status, Keys: keys})
 }
 
 func (x *DeleteResponse) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status})
+	return jsoniter.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status})
 }
 
 func (x *UpdateResponse) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status, ModifiedCount: x.ModifiedCount})
+	return jsoniter.Marshal(&dmlResponse{Metadata: CreateMDFromResponseMD(x.Metadata), Status: x.Status, ModifiedCount: x.ModifiedCount})
 }
 
 // MarshalJSON on read response avoid any encoding/decoding on x.Data. With this approach we are not doing any extra
@@ -833,15 +832,15 @@ func (x *UpdateResponse) MarshalJSON() ([]byte, error) {
 // the openAPI specs needs to be specified Data as object instead of bytes.
 func (x *ReadResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
-		Data        json.RawMessage `json:"data,omitempty"`
-		Metadata    Metadata        `json:"metadata,omitempty"`
-		ResumeToken []byte          `json:"resume_token,omitempty"`
+		Data        jsoniter.RawMessage `json:"data,omitempty"`
+		Metadata    Metadata            `json:"metadata,omitempty"`
+		ResumeToken []byte              `json:"resume_token,omitempty"`
 	}{
 		Data:        x.Data,
 		Metadata:    CreateMDFromResponseMD(x.Metadata),
 		ResumeToken: x.ResumeToken,
 	}
-	return json.Marshal(resp)
+	return jsoniter.Marshal(resp)
 }
 
 // Explicit custom marshalling of some search data structures required
@@ -864,18 +863,18 @@ func (x *SearchResponse) MarshalJSON() ([]byte, error) {
 	if resp.Facets == nil {
 		resp.Facets = make(map[string]*SearchFacet)
 	}
-	return json.Marshal(resp)
+	return jsoniter.Marshal(resp)
 }
 
 func (x *SearchHit) MarshalJSON() ([]byte, error) {
 	resp := struct {
-		Data     json.RawMessage   `json:"data,omitempty"`
-		Metadata SearchHitMetadata `json:"metadata,omitempty"`
+		Data     jsoniter.RawMessage `json:"data,omitempty"`
+		Metadata SearchHitMetadata   `json:"metadata,omitempty"`
 	}{
 		Data:     x.Data,
 		Metadata: CreateMDFromSearchMD(x.Metadata),
 	}
-	return json.Marshal(resp)
+	return jsoniter.Marshal(resp)
 }
 
 func (x *SearchMetadata) MarshalJSON() ([]byte, error) {
@@ -888,7 +887,7 @@ func (x *SearchMetadata) MarshalJSON() ([]byte, error) {
 		TotalPages: x.TotalPages,
 		Page:       x.Page,
 	}
-	return json.Marshal(resp)
+	return jsoniter.Marshal(resp)
 }
 
 func (x *SearchFacet) MarshalJSON() ([]byte, error) {
@@ -902,7 +901,7 @@ func (x *SearchFacet) MarshalJSON() ([]byte, error) {
 	if resp.Counts == nil {
 		resp.Counts = make([]*FacetCount, 0)
 	}
-	return json.Marshal(resp)
+	return jsoniter.Marshal(resp)
 }
 
 func (x *FacetStats) MarshalJSON() ([]byte, error) {
@@ -919,7 +918,7 @@ func (x *FacetStats) MarshalJSON() ([]byte, error) {
 		Sum:   x.Sum,
 		Count: x.Count,
 	}
-	return json.Marshal(resp)
+	return jsoniter.Marshal(resp)
 }
 
 type SearchHitMetadata struct {

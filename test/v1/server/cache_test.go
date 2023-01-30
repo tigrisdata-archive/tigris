@@ -18,11 +18,11 @@ package server
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/server/services/v1/cache"
@@ -32,10 +32,16 @@ import (
 
 type CacheTestMap map[string]interface{}
 
+// getCacheName generates per test cache name
+func getCacheName(t *testing.T) string {
+	return fmt.Sprintf("%s", t.Name())
+}
+
 func TestCreateCache(t *testing.T) {
 	project := setupTestsOnlyProject(t)
+	cn := getCacheName(t)
 
-	createCacheResp := createCache(t, project, "c1")
+	createCacheResp := createCache(t, project, cn)
 	status := createCacheResp.Status(http.StatusOK).
 		JSON().
 		Object().
@@ -44,7 +50,7 @@ func TestCreateCache(t *testing.T) {
 
 	assert.Equal(t, cache.CreatedStatus, status)
 
-	createCacheAgainResp := createCache(t, project, "c1")
+	createCacheAgainResp := createCache(t, project, cn)
 	code := createCacheAgainResp.Status(http.StatusConflict).
 		JSON().
 		Object().
@@ -58,9 +64,11 @@ func TestCreateCache(t *testing.T) {
 
 func TestDeleteCache(t *testing.T) {
 	project := setupTestsOnlyProject(t)
-	createCache(t, project, "c1")
+	cn := getCacheName(t)
 
-	deleteCacheResp := deleteCache(t, project, "c1")
+	createCache(t, project, cn)
+
+	deleteCacheResp := deleteCache(t, project, cn)
 	status := deleteCacheResp.Status(http.StatusOK).
 		JSON().
 		Object().
@@ -69,7 +77,7 @@ func TestDeleteCache(t *testing.T) {
 
 	assert.Equal(t, cache.DeletedStatus, status)
 
-	deleteCacheAgainResp := deleteCache(t, project, "c1")
+	deleteCacheAgainResp := deleteCache(t, project, cn)
 	code := deleteCacheAgainResp.Status(http.StatusNotFound).
 		JSON().
 		Object().
@@ -114,7 +122,7 @@ func TestListCaches(t *testing.T) {
 
 func TestCacheCRUD(t *testing.T) {
 	project := setupTestsOnlyProject(t)
-	cacheName := "c1"
+	cacheName := getCacheName(t)
 	createCache(t, project, cacheName)
 
 	// set 5 keys
@@ -141,15 +149,21 @@ func TestCacheCRUD(t *testing.T) {
 
 	// list all keys
 	listKeysResp := listCacheKeys(t, project, cacheName, 0)
-	keys := listKeysResp.Status(http.StatusOK).
-		JSON().
-		Object().
-		Value("result").
-		Object().
-		Value("keys").
-		Array().
-		Raw()
-	assert.Equal(t, 5, len(keys))
+	bb := listKeysResp.Status(http.StatusOK).Body().Raw()
+	dd := jsoniter.NewDecoder(bytes.NewBufferString(bb))
+	i := 0
+	for dd.More() {
+		var r struct {
+			Result struct {
+				Keys []string
+			}
+		}
+		err := dd.Decode(&r)
+		require.NoError(t, err)
+
+		i += len(r.Result.Keys)
+	}
+	assert.Equal(t, 5, i)
 
 	// delete a key
 	delKeyResp := delCacheKey(t, project, cacheName, "k1")
@@ -162,15 +176,21 @@ func TestCacheCRUD(t *testing.T) {
 
 	// list all keys
 	listKeysResp2 := listCacheKeys(t, project, cacheName, 0)
-	keys2 := listKeysResp2.Status(http.StatusOK).
-		JSON().
-		Object().
-		Value("result").
-		Object().
-		Value("keys").
-		Array().
-		Raw()
-	assert.Equal(t, 4, len(keys2))
+	bb = listKeysResp2.Status(http.StatusOK).Body().Raw()
+	dd = jsoniter.NewDecoder(bytes.NewBufferString(bb))
+	i = 0
+	for dd.More() {
+		var r struct {
+			Result struct {
+				Keys []string
+			}
+		}
+		err := dd.Decode(&r)
+		require.NoError(t, err)
+
+		i += len(r.Result.Keys)
+	}
+	assert.Equal(t, 4, i)
 
 	// delete already deleted key
 	delKeyResp2 := delCacheKey(t, project, cacheName, "k1")
@@ -195,7 +215,7 @@ func TestCacheCRUD(t *testing.T) {
 
 func TestCacheKeysScan(t *testing.T) {
 	project := setupTestsOnlyProject(t)
-	cacheName := "c1"
+	cacheName := getCacheName(t)
 	createCache(t, project, cacheName)
 	// set 501 kvs
 	for i := 0; i < 501; i++ {
@@ -211,11 +231,11 @@ func TestCacheKeysScan(t *testing.T) {
 
 	respLines := listCacheKeysAndRead(t, project, cacheName)
 	for _, respLine := range respLines {
-		var doc map[string]json.RawMessage
-		require.NoError(t, json.Unmarshal(respLine["result"], &doc))
+		var doc map[string]jsoniter.RawMessage
+		require.NoError(t, jsoniter.Unmarshal(respLine["result"], &doc))
 
 		var thisBatchKeys []string
-		_ = json.Unmarshal(doc["keys"], &thisBatchKeys)
+		_ = jsoniter.Unmarshal(doc["keys"], &thisBatchKeys)
 		allKeys = append(allKeys, thisBatchKeys...)
 	}
 
@@ -235,7 +255,7 @@ func TestCacheKeysScan(t *testing.T) {
 
 func TestCacheSetWithGet(t *testing.T) {
 	project := setupTestsOnlyProject(t)
-	cacheName := "c1"
+	cacheName := getCacheName(t)
 	createCache(t, project, cacheName)
 
 	getSetResp := GetSetCacheKey(t, project, cacheName, "k1", "v1")
@@ -299,7 +319,7 @@ func listCacheKeys(t *testing.T, project string, cache string, cursor int64) *ht
 		Expect()
 }
 
-func listCacheKeysAndRead(t *testing.T, project string, cache string) []map[string]json.RawMessage {
+func listCacheKeysAndRead(t *testing.T, project string, cache string) []map[string]jsoniter.RawMessage {
 	e := cacheExpect(t)
 
 	str := e.GET(fmt.Sprintf("/v1/projects/%s/caches/%s/keys", project, cache)).
@@ -308,10 +328,10 @@ func listCacheKeysAndRead(t *testing.T, project string, cache string) []map[stri
 		Body().
 		Raw()
 
-	var resp []map[string]json.RawMessage
-	dec := json.NewDecoder(bytes.NewReader([]byte(str)))
+	var resp []map[string]jsoniter.RawMessage
+	dec := jsoniter.NewDecoder(bytes.NewReader([]byte(str)))
 	for dec.More() {
-		var mp map[string]json.RawMessage
+		var mp map[string]jsoniter.RawMessage
 		require.NoError(t, dec.Decode(&mp))
 		resp = append(resp, mp)
 	}

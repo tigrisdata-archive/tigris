@@ -47,6 +47,7 @@ type Config struct {
 	Quota         QuotaConfig
 	Observability ObservabilityConfig `yaml:"observability" json:"observability"`
 	Management    ManagementConfig    `yaml:"management" json:"management"`
+	Schema        SchemaConfig
 }
 
 type AuthConfig struct {
@@ -355,6 +356,26 @@ var DefaultConfig = Config{
 	Management: ManagementConfig{
 		Enabled: true,
 	},
+	Schema: SchemaConfig{
+		AllowIncompatible: false,
+	},
+}
+
+// SchemaConfig contains schema related settings.
+type SchemaConfig struct {
+	// AllowIncompatible when set to true enables incompatible schema changes support.
+	//
+	// Compatible schema change include:
+	//	* adding new fields
+	//  * adding defaults
+	//  * extending max_length of the string fields
+	//
+	// Incompatible schema changes include:
+	//	* deleting a field
+	//  * changing field type
+	//  * reducing max_length of the string fields
+	//  * setting "required" property
+	AllowIncompatible bool `mapstructure:"allow_incompatible" json:"allow_incompatible" yaml:"allow_incompatible"`
 }
 
 // FoundationDBConfig keeps FoundationDB configuration parameters.

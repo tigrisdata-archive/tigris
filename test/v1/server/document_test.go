@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris/api/server/v1"
@@ -77,11 +78,7 @@ func TestInsert_Bad_NotFoundRequest(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		resp := expect(t).POST(getDocumentURL(c.databaseName, c.collectionName, "insert")).
-			WithJSON(Map{
-				"documents": c.documents,
-			}).
-			Expect()
+		resp := insertDocuments(t, c.databaseName, c.collectionName, c.documents, true)
 
 		code := api.Code_INVALID_ARGUMENT
 		if c.status == http.StatusNotFound {
@@ -106,153 +103,15 @@ func TestInsert_AlreadyExists(t *testing.T) {
 		},
 	}
 
-	e := expect(t)
-	e.POST(getDocumentURL(db, coll, "insert")).
-		WithJSON(Map{
-			"documents": inputDocument,
-		}).
-		Expect().
+	insertDocuments(t, db, coll, inputDocument, true).
 		Status(http.StatusOK).
 		JSON().
 		Object().
 		ValueEqual("status", "inserted")
 
-	resp := e.POST(getDocumentURL(db, coll, "insert")).
-		WithJSON(Map{"documents": inputDocument}).Expect()
+	resp := insertDocuments(t, db, coll, inputDocument, true)
+
 	testError(resp, http.StatusConflict, api.Code_ALREADY_EXISTS, "duplicate key value, violates key constraint")
-}
-
-func TestInsert_SchemaValidationRequired(t *testing.T) {
-	testCreateSchema["schema"].(Map)["required"] = []string{"string_value"}
-	testCreateSchema["schema"].(Map)["properties"].(Map)["object_value"].(Map)["required"] = []string{"name"}
-	testCreateSchema["schema"].(Map)["properties"].(Map)["array_value"].(Map)["items"].(Map)["required"] = []string{"id"}
-	defer func() {
-		delete(testCreateSchema["schema"].(Map), "required")
-		delete(testCreateSchema["schema"].(Map)["properties"].(Map)["object_value"].(Map), "required")
-		delete(testCreateSchema["schema"].(Map)["properties"].(Map)["array_value"].(Map)["items"].(Map), "required")
-	}()
-
-	db, coll := setupTests(t)
-	defer cleanupTests(t, db)
-
-	cases := []struct {
-		documents  []Doc
-		expMessage string
-	}{
-		{
-			[]Doc{
-				{
-					"pkey_int": 1,
-					"object_value": Map{
-						"name": "bbb",
-					},
-				},
-			},
-			"json schema validation failed for field '' reason 'missing properties: 'string_value''",
-		},
-		{
-			[]Doc{
-				{
-					"pkey_int":     1,
-					"string_value": nil,
-					"object_value": Map{
-						"name": "bbb",
-					},
-				},
-			},
-			"json schema validation failed for field 'string_value' reason 'expected string, but got null'",
-		},
-		{
-			[]Doc{
-				{
-					"pkey_int":     1,
-					"string_value": "aaa",
-					"object_value": Map{
-						"noname": "bbb",
-					},
-				},
-			},
-			"jsonschema: '/object_value' does not validate with file:///server/test_collection.json#/properties/object_value/required: missing properties: 'name'",
-		},
-		{
-			[]Doc{
-				{
-					"pkey_int":     1,
-					"string_value": "aaa",
-					"object_value": Map{
-						"name": "bbb",
-					},
-					"array_value": []Doc{
-						{
-							"product": "foo",
-						},
-					},
-				},
-			},
-
-			"json schema validation failed for field 'array_value/0' reason 'missing properties: 'id''",
-		},
-	}
-	for _, c := range cases {
-		resp := expect(t).POST(getDocumentURL(db, coll, "insert")).
-			WithJSON(Map{"documents": c.documents}).Expect()
-
-		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, c.expMessage)
-	}
-}
-
-func TestInsert_SchemaValidationError(t *testing.T) {
-	db, coll := setupTests(t)
-	defer cleanupTests(t, db)
-
-	cases := []struct {
-		documents  []Doc
-		expMessage string
-	}{
-		{
-			[]Doc{
-				{
-					"pkey_int":  1,
-					"int_value": 10.20,
-				},
-			},
-			"json schema validation failed for field 'int_value' reason 'expected integer or null, but got number'",
-		}, {
-			[]Doc{
-				{
-					"pkey_int":     1,
-					"string_value": 12,
-				},
-			},
-			"json schema validation failed for field 'string_value' reason 'expected string or null, but got number'",
-		}, {
-			[]Doc{{"bytes_value": 12.30}},
-			"json schema validation failed for field 'bytes_value' reason 'expected string or null, but got number'",
-		}, {
-			[]Doc{{"bytes_value": "not enough"}},
-			"json schema validation failed for field 'bytes_value' reason ''not enough' is not valid 'byte''",
-		}, {
-			[]Doc{{"date_time_value": "Mon, 02 Jan 2006"}},
-			"json schema validation failed for field 'date_time_value' reason ''Mon, 02 Jan 2006' is not valid 'date-time''",
-		}, {
-			[]Doc{{"uuid_value": "abc-bcd"}},
-			"json schema validation failed for field 'uuid_value' reason ''abc-bcd' is not valid 'uuid''",
-		}, {
-			[]Doc{
-				{
-					"pkey_int":  10,
-					"extra_key": "abc-bcd",
-				},
-			},
-			"json schema validation failed for field '' reason 'additionalProperties 'extra_key' not allowed'",
-		},
-	}
-	for _, c := range cases {
-		resp := expect(t).POST(getDocumentURL(db, coll, "insert")).
-			WithJSON(Map{"documents": c.documents}).Expect()
-
-		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, c.expMessage)
-	}
 }
 
 func TestInsert_SupportedPrimaryKeys(t *testing.T) {
@@ -379,12 +238,8 @@ func TestInsert_SupportedPrimaryKeys(t *testing.T) {
 			key = k
 			value = v
 		}
-		e := expect(t)
-		e.POST(getDocumentURL(db, collectionName, "insert")).
-			WithJSON(Map{
-				"documents": c.inputDoc,
-			}).
-			Expect().
+
+		insertDocuments(t, db, collectionName, c.inputDoc, true).
 			Status(http.StatusOK).
 			JSON().
 			Object().
@@ -393,14 +248,14 @@ func TestInsert_SupportedPrimaryKeys(t *testing.T) {
 
 		readResp := readByFilter(t, db, collectionName, c.primaryKeyLookup, nil, nil, nil)
 
-		var doc map[string]json.RawMessage
+		var doc map[string]jsoniter.RawMessage
 		require.Greater(t, len(readResp), 0)
-		require.NoError(t, json.Unmarshal(readResp[0]["result"], &doc))
+		require.NoError(t, jsoniter.Unmarshal(readResp[0]["result"], &doc))
 
 		actualDoc := []byte(doc["data"])
-		expDoc, err := json.Marshal(c.inputDoc[0])
+		expDoc, err := jsoniter.Marshal(c.inputDoc[0])
 		require.NoError(t, err)
-		require.Equal(t, expDoc, actualDoc)
+		require.JSONEq(t, string(expDoc), string(actualDoc))
 	}
 }
 
@@ -433,11 +288,7 @@ func TestInsert_SingleRow(t *testing.T) {
 	}
 
 	tstart := time.Now().UTC()
-	expect(t).POST(getDocumentURL(db, coll, "insert")).
-		WithJSON(Map{
-			"documents": inputDocument,
-		}).
-		Expect().
+	insertDocuments(t, db, coll, inputDocument, true).
 		Status(http.StatusOK).
 		JSON().
 		Object().
@@ -456,14 +307,14 @@ func TestInsert_SingleRow(t *testing.T) {
 		nil,
 		nil)
 
-	var doc map[string]json.RawMessage
+	var doc map[string]jsoniter.RawMessage
 	require.Equal(t, 1, len(readResp))
-	require.NoError(t, json.Unmarshal(readResp[0]["result"], &doc))
+	require.NoError(t, jsoniter.Unmarshal(readResp[0]["result"], &doc))
 
 	actualDoc := []byte(doc["data"])
-	expDoc, err := json.Marshal(inputDocument[0])
+	expDoc, err := jsoniter.Marshal(inputDocument[0])
 	require.NoError(t, err)
-	require.Equal(t, expDoc, actualDoc)
+	require.JSONEq(t, string(expDoc), string(actualDoc))
 }
 
 func TestInsert_Nulls(t *testing.T) {
@@ -514,14 +365,14 @@ func TestInsert_Nulls(t *testing.T) {
 		nil,
 		nil)
 
-	var doc map[string]json.RawMessage
+	var doc map[string]jsoniter.RawMessage
 	require.Equal(t, 1, len(readResp))
-	require.NoError(t, json.Unmarshal(readResp[0]["result"], &doc))
+	require.NoError(t, jsoniter.Unmarshal(readResp[0]["result"], &doc))
 
 	actualDoc := []byte(doc["data"])
-	expDoc, err := json.Marshal(inputDocument[0])
+	expDoc, err := jsoniter.Marshal(inputDocument[0])
 	require.NoError(t, err)
-	require.Equal(t, expDoc, actualDoc)
+	require.JSONEq(t, string(expDoc), string(actualDoc))
 }
 
 func TestInsert_StringInt64(t *testing.T) {
@@ -549,11 +400,7 @@ func TestInsert_StringInt64(t *testing.T) {
 	}
 
 	tstart := time.Now().UTC()
-	expect(t).POST(getDocumentURL(db, coll, "insert")).
-		WithJSON(Map{
-			"documents": inputDocument,
-		}).
-		Expect().
+	insertDocuments(t, db, coll, inputDocument, true).
 		Status(http.StatusOK).
 		JSON().
 		Object().
@@ -572,9 +419,9 @@ func TestInsert_StringInt64(t *testing.T) {
 		nil,
 		nil)
 
-	var doc map[string]json.RawMessage
+	var doc map[string]jsoniter.RawMessage
 	require.Equal(t, 1, len(readResp))
-	require.NoError(t, json.Unmarshal(readResp[0]["result"], &doc))
+	require.NoError(t, jsoniter.Unmarshal(readResp[0]["result"], &doc))
 
 	actualDoc := []byte(doc["data"])
 	expDoc := []byte(`{"pkey_int":9223372036854776000,"int_value":9223372036854776000,"string_value":"simple_insert","array_value":[{"id":9223372036854776000,"product":"foo"},{"id":9223372036854776000,"product":"foo"}],"object_value":{"bignumber":9223372036854776000}}`)
@@ -604,12 +451,7 @@ func TestInsert_MultipleRows(t *testing.T) {
 		},
 	}
 
-	e := expect(t)
-	e.POST(getDocumentURL(db, coll, "insert")).
-		WithJSON(Map{
-			"documents": inputDocument,
-		}).
-		Expect().
+	insertDocuments(t, db, coll, inputDocument, true).
 		Status(http.StatusOK).
 		JSON().
 		Object().
@@ -631,13 +473,13 @@ func TestInsert_MultipleRows(t *testing.T) {
 
 	require.Equal(t, 2, len(readResp))
 	for i := 0; i < len(inputDocument); i++ {
-		var doc map[string]json.RawMessage
-		require.NoError(t, json.Unmarshal(readResp[i]["result"], &doc))
+		var doc map[string]jsoniter.RawMessage
+		require.NoError(t, jsoniter.Unmarshal(readResp[i]["result"], &doc))
 
 		actualDoc := []byte(doc["data"])
-		expDoc, err := json.Marshal(inputDocument[i])
+		expDoc, err := jsoniter.Marshal(inputDocument[i])
 		require.NoError(t, err)
-		require.Equal(t, expDoc, actualDoc)
+		require.JSONEq(t, string(expDoc), string(actualDoc))
 	}
 }
 
@@ -693,23 +535,14 @@ func TestInsert_SchemaUpdate(t *testing.T) {
 		}).Status(http.StatusOK)
 
 	inputDoc := []Doc{{"int_value": 1, "string_value": "foo"}}
-	e := expect(t)
-	e.POST(getDocumentURL(dbName, collectionName, "insert")).
-		WithJSON(Map{
-			"documents": inputDoc,
-		}).
-		Expect().
+	insertDocuments(t, dbName, collectionName, inputDoc, true).
 		Status(http.StatusOK).
 		JSON().
 		Object().
 		ValueEqual("status", "inserted")
 
 	inputDoc = []Doc{{"int_value": 1, "string_value": "foo", "extra_field": "bar"}}
-	e.POST(getDocumentURL(dbName, collectionName, "insert")).
-		WithJSON(Map{
-			"documents": inputDoc,
-		}).
-		Expect().
+	insertDocuments(t, dbName, collectionName, inputDoc, true).
 		Status(http.StatusBadRequest).
 		JSON().
 		Path("$.error").Object().
@@ -735,11 +568,7 @@ func TestInsert_SchemaUpdate(t *testing.T) {
 		}).Status(http.StatusOK)
 
 	// try same insert
-	e.POST(getDocumentURL(dbName, collectionName, "insert")).
-		WithJSON(Map{
-			"documents": inputDoc,
-		}).
-		Expect().
+	insertDocuments(t, dbName, collectionName, inputDoc, true).
 		Status(http.StatusOK).
 		JSON().
 		Object().
@@ -772,12 +601,7 @@ func testAutoGenerated(t *testing.T, dbName string, collectionName string, pkey 
 
 	// insert 1, 2
 	inputDoc := []Doc{{"int_value": 1}, {"int_value": 2}}
-	e := expect(t)
-	e.POST(getDocumentURL(dbName, collectionName, "insert")).
-		WithJSON(Map{
-			"documents": inputDoc,
-		}).
-		Expect().
+	insertDocuments(t, dbName, collectionName, inputDoc, true).
 		Status(http.StatusOK).
 		JSON().
 		Object().
@@ -785,12 +609,7 @@ func testAutoGenerated(t *testing.T, dbName string, collectionName string, pkey 
 
 	// insert 3
 	thirdDoc := []Doc{{"int_value": 3}}
-	e = expect(t)
-	e.POST(getDocumentURL(dbName, collectionName, "insert")).
-		WithJSON(Map{
-			"documents": thirdDoc,
-		}).
-		Expect().
+	insertDocuments(t, dbName, collectionName, thirdDoc, true).
 		Status(http.StatusOK).
 		JSON().
 		Object().
@@ -814,11 +633,8 @@ func testAutoGenerated(t *testing.T, dbName string, collectionName string, pkey 
 	}
 
 	fourthDoc := []Doc{{"pkey": pk, "int_value": 4}}
-	e = expect(t)
-	e.POST(getDocumentURL(dbName, collectionName, "insert")).
-		WithJSON(Map{
-			"documents": fourthDoc,
-		}).Expect().Status(http.StatusOK).
+	insertDocuments(t, dbName, collectionName, fourthDoc, true).
+		Status(http.StatusOK).
 		JSON().
 		Object().
 		ValueEqual("status", "inserted")
@@ -838,8 +654,7 @@ func testAutoGenerated(t *testing.T, dbName string, collectionName string, pkey 
 	}
 
 	fifthDoc := []Doc{{"pkey": pk, "int_value": 5}}
-	e = expect(t)
-	i := e.POST(getDocumentURL(dbName, collectionName, "insert")).
+	i := expect(t).POST(getDocumentURL(dbName, collectionName, "insert")).
 		WithJSON(Map{
 			"documents": fifthDoc,
 		}).Expect().Status(http.StatusOK).JSON().Object().Raw()
@@ -851,10 +666,10 @@ func testAutoGenerated(t *testing.T, dbName string, collectionName string, pkey 
 	readResp := readByFilter(t, dbName, collectionName, nil, nil, nil, nil)
 	decodedResult := make([]map[string]interface{}, 5)
 	for _, response := range readResp {
-		var doc map[string]json.RawMessage
-		require.NoError(t, json.Unmarshal(response["result"], &doc))
+		var doc map[string]jsoniter.RawMessage
+		require.NoError(t, jsoniter.Unmarshal(response["result"], &doc))
 		var actualDoc map[string]interface{}
-		require.NoError(t, json.Unmarshal(doc["data"], &actualDoc))
+		require.NoError(t, jsoniter.Unmarshal(doc["data"], &actualDoc))
 
 		val := int64(actualDoc["int_value"].(float64))
 		if val > 5 || val < 1 {
@@ -979,7 +794,7 @@ func TestInsertUpdate_Defaults(t *testing.T) {
 	}
 }`)
 	var schemaObj map[string]any
-	require.NoError(t, json.Unmarshal(schema, &schemaObj))
+	require.NoError(t, jsoniter.Unmarshal(schema, &schemaObj))
 	createCollection(t, db, collection, schemaObj).Status(200)
 
 	inputDocument := []Doc{
@@ -1012,7 +827,7 @@ func TestInsertUpdate_Defaults(t *testing.T) {
 		nil)
 
 	var data map[string]any
-	require.NoError(t, json.Unmarshal(readResp[0]["result"], &data))
+	require.NoError(t, jsoniter.Unmarshal(readResp[0]["result"], &data))
 	var doc = data["data"].(map[string]any)
 
 	createdAtBefore, err := time.Parse(time.RFC3339, doc["created"].(string))
@@ -1060,7 +875,7 @@ func TestInsertUpdate_Defaults(t *testing.T) {
 		nil,
 		nil)
 
-	require.NoError(t, json.Unmarshal(readResp[0]["result"], &data))
+	require.NoError(t, jsoniter.Unmarshal(readResp[0]["result"], &data))
 	doc = data["data"].(map[string]any)
 
 	createdAtAfter, err := time.Parse(time.RFC3339, doc["created"].(string))
@@ -1167,7 +982,7 @@ func TestInsertUpdate_AllDefaults(t *testing.T) {
 }
 }`)
 	var schemaObj map[string]any
-	require.NoError(t, json.Unmarshal(schema, &schemaObj))
+	require.NoError(t, jsoniter.Unmarshal(schema, &schemaObj))
 	createCollection(t, db, collection, schemaObj).Status(200)
 
 	inputDocument := []Doc{
@@ -1190,7 +1005,7 @@ func TestInsertUpdate_AllDefaults(t *testing.T) {
 		nil)
 
 	var data map[string]any
-	require.NoError(t, json.Unmarshal(readResp[0]["result"], &data))
+	require.NoError(t, jsoniter.Unmarshal(readResp[0]["result"], &data))
 	var doc = data["data"].(map[string]any)
 	require.True(t, doc["bool_f"].(bool))
 	require.Equal(t, 1.1, doc["double_f"].(float64))
@@ -1244,7 +1059,7 @@ func TestInsertUpdate_AllDefaults(t *testing.T) {
 		nil,
 		nil)
 
-	require.NoError(t, json.Unmarshal(readResp[0]["result"], &data))
+	require.NoError(t, jsoniter.Unmarshal(readResp[0]["result"], &data))
 	doc = data["data"].(map[string]any)
 	require.True(t, doc["bool_f"].(bool))
 	require.Equal(t, 2.1, doc["double_f"].(float64))
@@ -2099,11 +1914,11 @@ func testUpdateOnAnyField(t *testing.T, db string, collection string, filter Map
 	}
 
 	for _, i := range changed {
-		var data map[string]json.RawMessage
-		require.NoError(t, json.Unmarshal(out[i]["result"], &data))
+		var data map[string]jsoniter.RawMessage
+		require.NoError(t, jsoniter.Unmarshal(out[i]["result"], &data))
 
-		var doc map[string]json.RawMessage
-		require.NoError(t, json.Unmarshal(data["data"], &doc))
+		var doc map[string]jsoniter.RawMessage
+		require.NoError(t, jsoniter.Unmarshal(data["data"], &doc))
 
 		require.Equal(t, "\"after\"", string(doc["added_string_value"]))
 	}
@@ -3437,12 +3252,7 @@ func TestRead_NestedFields(t *testing.T) {
 		}).Status(http.StatusOK)
 
 	inputDoc := []Doc{{"id": 1, "object_field": Map{"nested_id": 1, "nested_str": "foo"}}, {"id": 2, "object_field": Map{"nested_id": 2, "nested_str": "bar"}}}
-	e := expect(t)
-	e.POST(getDocumentURL(db, coll, "insert")).
-		WithJSON(Map{
-			"documents": inputDoc,
-		}).
-		Expect().
+	insertDocuments(t, db, coll, inputDoc, true).
 		Status(http.StatusOK).
 		JSON().
 		Object().
@@ -3458,12 +3268,12 @@ func TestRead_NestedFields(t *testing.T) {
 		nil,
 		nil)
 
-	var doc map[string]json.RawMessage
+	var doc map[string]jsoniter.RawMessage
 	require.Equal(t, 1, len(readResp))
-	require.NoError(t, json.Unmarshal(readResp[0]["result"], &doc))
+	require.NoError(t, jsoniter.Unmarshal(readResp[0]["result"], &doc))
 
 	actualDoc := []byte(doc["data"])
-	expDoc, err := json.Marshal(inputDoc[1])
+	expDoc, err := jsoniter.Marshal(inputDoc[1])
 	require.NoError(t, err)
 	require.JSONEq(t, string(expDoc), string(actualDoc))
 }
@@ -3481,7 +3291,7 @@ func TestTransaction_BadID(t *testing.T) {
 		TxCtx api.TransactionCtx `json:"tx_ctx"`
 	}{}
 
-	err := json.Unmarshal([]byte(r), &res)
+	err := jsoniter.Unmarshal([]byte(r), &res)
 	require.NoError(t, err)
 
 	resp := e.POST(getDocumentURL(db, coll, "insert")).
@@ -3583,7 +3393,7 @@ func TestFilteringOnArrays_Primitives(t *testing.T) {
   }
 }`)
 	var schemaObj map[string]any
-	require.NoError(t, json.Unmarshal(schema, &schemaObj))
+	require.NoError(t, jsoniter.Unmarshal(schema, &schemaObj))
 	createCollection(t, db, collection, schemaObj).Status(200)
 
 	jsonDocuments := []byte(`[
@@ -3749,12 +3559,12 @@ func TestFilteringOnArrays_Primitives(t *testing.T) {
   }
 ]`)
 
-	var inputRaw []json.RawMessage
-	require.NoError(t, json.Unmarshal(jsonDocuments, &inputRaw))
+	var inputRaw []jsoniter.RawMessage
+	require.NoError(t, jsoniter.Unmarshal(jsonDocuments, &inputRaw))
 	var inputDocument []Doc
 	for _, raw := range inputRaw {
 		var doc Doc
-		require.NoError(t, json.Unmarshal(raw, &doc))
+		require.NoError(t, jsoniter.Unmarshal(raw, &doc))
 		inputDocument = append(inputDocument, doc)
 	}
 
@@ -4175,7 +3985,7 @@ func TestImport(t *testing.T) {
 					Object().
 					ValueEqual("collection", c.coll).Raw()
 
-				b, err := json.Marshal(sch)
+				b, err := jsoniter.Marshal(sch)
 				require.NoError(t, err)
 				require.JSONEq(t, c.exp, string(b))
 			} else {
@@ -4229,7 +4039,7 @@ func deleteByFilter(t *testing.T, db string, collection string, filter Map) *htt
 func readExpError(t *testing.T, db string, collection string, filter Map, expectedErrorCode int) {
 	payload := make(Map)
 	if filter == nil {
-		payload["filter"] = json.RawMessage(`{}`)
+		payload["filter"] = jsoniter.RawMessage(`{}`)
 	} else {
 		payload["filter"] = filter
 	}
@@ -4243,7 +4053,7 @@ func readExpError(t *testing.T, db string, collection string, filter Map, expect
 		Raw()
 }
 
-func readByFilter(t *testing.T, db string, collection string, filter Map, fields Map, collation Map, order []Map) []map[string]json.RawMessage {
+func readByFilter(t *testing.T, db string, collection string, filter Map, fields Map, collation Map, order []Map) []map[string]jsoniter.RawMessage {
 	payload := make(Map)
 	payload["fields"] = fields
 	if filter == nil {
@@ -4266,10 +4076,10 @@ func readByFilter(t *testing.T, db string, collection string, filter Map, fields
 		Body().
 		Raw()
 
-	var resp []map[string]json.RawMessage
-	dec := json.NewDecoder(bytes.NewReader([]byte(str)))
+	var resp []map[string]jsoniter.RawMessage
+	dec := jsoniter.NewDecoder(bytes.NewReader([]byte(str)))
 	for dec.More() {
-		var mp map[string]json.RawMessage
+		var mp map[string]jsoniter.RawMessage
 		require.NoError(t, dec.Decode(&mp))
 		resp = append(resp, mp)
 	}
@@ -4292,17 +4102,17 @@ func readAndValidatePkeyOrder(t *testing.T, db string, collection string, filter
 	outputKeyToValue := make(map[int]Doc)
 	for i := 0; i < len(inputDocument); i++ {
 		var data Doc
-		require.NoError(t, json.Unmarshal(readResp[i]["result"], &data))
+		require.NoError(t, jsoniter.Unmarshal(readResp[i]["result"], &data))
 		doc := data["data"].(map[string]any)
 		outputKeyToValue[int(doc["pkey_int"].(float64))] = doc
 	}
 	sort.Ints(primaryKeys)
 
 	for _, p := range primaryKeys {
-		expDoc, err := json.Marshal(inputKeyToValue[p])
+		expDoc, err := jsoniter.Marshal(inputKeyToValue[p])
 		require.NoError(t, err)
 
-		actualDoc, err := json.Marshal(outputKeyToValue[p])
+		actualDoc, err := jsoniter.Marshal(outputKeyToValue[p])
 		require.NoError(t, err)
 		require.JSONEqf(t, string(expDoc), string(actualDoc), "exp '%s' actual '%s'", string(expDoc), string(actualDoc))
 	}
@@ -4326,12 +4136,12 @@ func readAndValidateOrder(t *testing.T, db string, collection string, filter Map
 	}
 }
 
-func validateInputDocToRes(t *testing.T, readResp map[string]json.RawMessage, input Doc) {
-	var doc map[string]json.RawMessage
-	require.NoError(t, json.Unmarshal(readResp["result"], &doc))
+func validateInputDocToRes(t *testing.T, readResp map[string]jsoniter.RawMessage, input Doc) {
+	var doc map[string]jsoniter.RawMessage
+	require.NoError(t, jsoniter.Unmarshal(readResp["result"], &doc))
 
 	actualDoc := []byte(doc["data"])
-	expDoc, err := json.Marshal(input)
+	expDoc, err := jsoniter.Marshal(input)
 	require.NoError(t, err)
 	require.JSONEqf(t, string(expDoc), string(actualDoc), "exp '%s' actual '%s'", string(expDoc), string(actualDoc))
 }

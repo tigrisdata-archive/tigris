@@ -28,23 +28,13 @@ import (
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/lib/date"
-	tjson "github.com/tigrisdata/tigris/lib/json"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
+	"github.com/tigrisdata/tigris/util"
 	"github.com/tigrisdata/tigris/util/log"
-)
-
-var (
-// ErrSearchIndexingFailed = fmt.Errorf("failed to index documents")
-)
-
-const (
-	searchCreate string = "create"
-	searchUpsert string = "upsert"
-	searchUpdate string = "update"
 )
 
 type SearchIndexer struct {
@@ -83,21 +73,21 @@ func (i *SearchIndexer) OnPostCommit(ctx context.Context, tenant *metadata.Tenan
 			return fmt.Errorf("implicit search index not found")
 		}
 		if event.Op == kv.DeleteEvent {
-			if err = i.searchStore.DeleteDocuments(ctx, searchIndex.StoreIndexName(), searchKey); err != nil {
-				if err != search.ErrNotFound {
+			if err = i.searchStore.DeleteDocument(ctx, searchIndex.StoreIndexName(), searchKey); err != nil {
+				if !search.IsErrNotFound(err) {
 					return err
 				}
 				return nil
 			}
 		} else {
-			var action string
+			var action search.IndexAction
 			switch event.Op {
 			case kv.InsertEvent:
-				action = searchCreate
+				action = search.Create
 			case kv.ReplaceEvent:
-				action = searchUpsert
+				action = search.Replace
 			case kv.UpdateEvent:
-				action = searchUpdate
+				action = search.Update
 			}
 
 			tableData, err := internal.Decode(event.Data)
@@ -111,7 +101,7 @@ func (i *SearchIndexer) OnPostCommit(ctx context.Context, tenant *metadata.Tenan
 			}
 
 			reader := bytes.NewReader(searchData)
-			if err = i.searchStore.IndexDocuments(ctx, searchIndex.StoreIndexName(), reader, search.IndexDocumentsOptions{
+			if _, err = i.searchStore.IndexDocuments(ctx, searchIndex.StoreIndexName(), reader, search.IndexDocumentsOptions{
 				Action:    action,
 				BatchSize: 1,
 			}); err != nil {
@@ -170,7 +160,7 @@ func CreateSearchKey(table []byte, fdbKey []byte) (string, error) {
 
 func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollection, id string) ([]byte, error) {
 	// better to decode it and then update the JSON
-	decData, err := tjson.Decode(data.RawData)
+	decData, err := util.JSONToMap(data.RawData)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +214,7 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 		decData[schema.ReservedFields[schema.UpdatedAt]] = data.UpdatedAt.UnixNano()
 	}
 
-	encoded, err := tjson.Encode(decData)
+	encoded, err := util.MapToJSON(decData)
 	if err != nil {
 		return nil, err
 	}

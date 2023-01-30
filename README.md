@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://www.tigrisdata.com/"><img src="https://docs.tigrisdata.com/logo/dark.png" alt="Tigris" width="298" /></a> 
+  <a href="https://www.tigrisdata.com/"><img src="https://www.tigrisdata.com/docs/logo/dark.png" alt="Tigris" width="298" /></a> 
 </p>
 
 <p align="center">
@@ -29,30 +29,29 @@ infrastructure.
 
 <p align="center">
   <a href="https://www.tigrisdata.com/">Website</a> |
-  <a href="https://docs.tigrisdata.com/quickstart">Quickstart</a> |
-  <a href="https://docs.tigrisdata.com/apidocs/">API Reference</a> |
-  <a href="https://join.slack.com/t/tigrisdatacommunity/shared_invite/zt-16fn5ogio-OjxJlgttJIV0ZDywcBItJQ">Slack Community</a> | 
+  <a href="https://www.tigrisdata.com/docs/quickstarts/">Quickstart</a> |
+  <a href="https://www.tigrisdata.com/docs/references/api/">API Reference</a> |
+  <a href="https://www.tigrisdata.com/discord/">Discord</a> | 
   <a href="https://twitter.com/TigrisData">Twitter</a>
 </p>
 
 # Helpful Links
 
-- [Quickstart](https://docs.tigrisdata.com/quickstart)
-- [Architecture](https://docs.tigrisdata.com/overview/architecture)
-- [Databases and Collections](https://docs.tigrisdata.com/overview/databases)
-- [Documents](https://docs.tigrisdata.com/documents/)
-- [Event Streaming](https://docs.tigrisdata.com/events/)
-- [Search](https://docs.tigrisdata.com/searching/)
-- [Observability](https://docs.tigrisdata.com/observability/)
-- [TypeScript Reference](https://docs.tigrisdata.com/typescript/)
-- [Go Reference](https://docs.tigrisdata.com/golang/)
-- [Java Reference](https://docs.tigrisdata.com/java/)
-- [CLI](https://docs.tigrisdata.com/cli)
-- [Guides](https://docs.tigrisdata.com/guides/)
+- [Quickstart](https://www.tigrisdata.com/docs/quickstarts)
+- [Architecture](https://www.tigrisdata.com/docs/concepts/architecture)
+- [Databases and Collections](https://www.tigrisdata.com/docs/concepts/database)
+- [Documents](https://www.tigrisdata.com/docs/concepts/database/documents)
+- [Search](https://www.tigrisdata.com/docs/concepts/searching)
+- [Observability](https://www.tigrisdata.com/docs/concepts/platform/metrics)
+- [TypeScript Reference](https://www.tigrisdata.com/docs/sdkstools/typescript)
+- [Go Reference](https://www.tigrisdata.com/docs/sdkstools/golang)
+- [Java Reference](https://www.tigrisdata.com/docs/sdkstools/java/getting-started)
+- [CLI](https://www.tigrisdata.com/docs/sdkstools/cli)
+- [Guides](https://www.tigrisdata.com/docs/guides)
 
 # Community & Support
 
-- [Slack Community](https://join.slack.com/t/tigrisdatacommunity/shared_invite/zt-16fn5ogio-OjxJlgttJIV0ZDywcBItJQ)
+- [Discord Community](https://www.tigrisdata.com/discord/)
 - [GitHub Issues](https://github.com/tigrisdata/tigris/issues)
 - [GitHub Discussions](https://github.com/tigrisdata/tigris/discussions)
 

@@ -99,10 +99,10 @@ func None(reqFilter []byte) bool {
 
 type Factory struct {
 	fields    []*schema.QueryableField
-	collation *api.Collation
+	collation *value.Collation
 }
 
-func NewFactory(fields []*schema.QueryableField, collation *api.Collation) *Factory {
+func NewFactory(fields []*schema.QueryableField, collation *value.Collation) *Factory {
 	return &Factory{
 		fields:    fields,
 		collation: collation,
@@ -270,21 +270,23 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 // instead of a simple JSON value. Apart from comparison operators, this object can have its own collation, which
 // needs to be honored at the field level. Therefore, the caller needs to check if the collation returned by the
 // method is not nil and if yes, use this collation..
-func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField) (ValueMatcher, *api.Collation, error) {
+func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField) (ValueMatcher, *value.Collation, error) {
 	if len(input) == 0 {
 		return nil, nil, errors.InvalidArgument("empty object")
 	}
 
-	var collation *api.Collation
+	var collation *value.Collation
 	c, dt, _, e := jsonparser.Get(input, api.CollationKey)
 	if e == nil && dt != jsonparser.NotExist {
+		var apiCollation *api.Collation
 		// this will override the default collation
-		if e = jsoniter.Unmarshal(c, &collation); e != nil {
+		if e = jsoniter.Unmarshal(c, &apiCollation); e != nil {
 			return nil, nil, e
 		}
-		if err := collation.IsValid(); err != nil {
+		if err := apiCollation.IsValid(); err != nil {
 			return nil, nil, err
 		}
+		collation = value.NewCollationFrom(apiCollation)
 	}
 
 	var err error

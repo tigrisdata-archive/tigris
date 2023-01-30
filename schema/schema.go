@@ -16,7 +16,6 @@ package schema
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -191,7 +190,7 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 			Message: fmt.Sprintf("schema: '%s', unmarshalling failed", string(reqSchema)),
 		})
 	}
-	if collection != schema.Name {
+	if collection != "" && collection != schema.Name {
 		return nil, errors.InvalidArgument("collection name is not same as schema name '%s' '%s'", collection, schema.Name)
 	}
 	if len(schema.Properties) == 0 {
@@ -385,7 +384,7 @@ func Generate(jsonSchema []byte, format string) ([]byte, error) {
 		}
 	}
 
-	b, err := json.Marshal(schemas)
+	b, err := jsoniter.Marshal(schemas)
 	if ulog.E(err) {
 		return nil, errors.Internal("error generating schema")
 	}

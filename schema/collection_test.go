@@ -16,7 +16,6 @@ package schema
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -103,7 +102,7 @@ func TestCollection_SchemaValidate(t *testing.T) {
 		"primary_key": ["id"]
 	}`)
 
-	base64Encoded, err := json.Marshal([]byte(`"base64 string"`))
+	base64Encoded, err := jsoniter.Marshal([]byte(`"base64 string"`))
 	require.NoError(t, err)
 	cases := []struct {
 		document []byte
@@ -227,7 +226,8 @@ func TestCollection_SchemaValidate(t *testing.T) {
 		schFactory, err := Build("t1", reqSchema)
 		require.NoError(t, err)
 
-		coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, nil, nil)
+		coll, err := NewDefaultCollection(1, 1, schFactory, nil, nil)
+		require.NoError(t, err)
 
 		dec := jsoniter.NewDecoder(bytes.NewReader(c.document))
 		dec.UseNumber()
@@ -288,7 +288,9 @@ func TestCollection_AdditionalProperties(t *testing.T) {
 	for _, c := range cases {
 		schFactory, err := Build("t1", reqSchema)
 		require.NoError(t, err)
-		coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, nil, nil)
+
+		coll, err := NewDefaultCollection(1, 1, schFactory, nil, nil)
+		require.NoError(t, err)
 
 		dec := jsoniter.NewDecoder(bytes.NewReader(c.document))
 		dec.UseNumber()
@@ -324,7 +326,9 @@ func TestCollection_Object(t *testing.T) {
 	for _, c := range cases {
 		schFactory, err := Build("t1", reqSchema)
 		require.NoError(t, err)
-		coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, nil, nil)
+
+		coll, err := NewDefaultCollection(1, 1, schFactory, nil, nil)
+		require.NoError(t, err)
 
 		dec := jsoniter.NewDecoder(bytes.NewReader(c.document))
 		dec.UseNumber()
@@ -382,7 +386,8 @@ func TestCollection_Int64(t *testing.T) {
 
 	schFactory, err := Build("t1", reqSchema)
 	require.NoError(t, err)
-	coll := NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, nil, nil)
+	coll, err := NewDefaultCollection(1, 1, schFactory, nil, nil)
+	require.NoError(t, err)
 	require.Equal(t, 4, len(coll.int64FieldsPath))
 	_, ok := coll.int64FieldsPath["id"]
 	require.True(t, ok)

@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/tigrisdata/tigris/lib/date"
 	"github.com/tigrisdata/tigris/query/sort"
@@ -436,16 +437,15 @@ var documents = map[string]document{
 func generateTsHits(docs ...document) []tsApi.SearchResultHit {
 	hits := make([]tsApi.SearchResultHit, 0, len(docs))
 	for _, doc := range docs {
-		encoded, err := json.Marshal(doc)
+		encoded, err := jsoniter.Marshal(doc)
 		if err != nil {
 			panic(err)
 		}
 		reader := bytes.NewReader(encoded)
-		decoder := json.NewDecoder(reader)
+		decoder := jsoniter.NewDecoder(reader)
 		decoder.UseNumber()
 		var decoded map[string]interface{}
 		_ = decoder.Decode(&decoded)
-		// _ = json.Unmarshal(encoded, &decoded)
 		score := doc["_text_match"].(int64)
 		hits = append(hits, tsApi.SearchResultHit{
 			Document:  &decoded,

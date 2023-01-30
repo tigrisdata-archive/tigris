@@ -22,8 +22,8 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
-	"github.com/tigrisdata/tigris/lib/json"
 	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/util"
 )
 
 func TestMutateSetDefaults(t *testing.T) {
@@ -60,7 +60,8 @@ func TestMutateSetDefaults(t *testing.T) {
 
 	schFactory, err := schema.Build("t1", reqSchema)
 	require.NoError(t, err)
-	coll := schema.NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, nil, nil)
+	coll, err := schema.NewDefaultCollection(1, 1, schFactory, nil, nil)
+	require.NoError(t, err)
 	p := newInsertPayloadMutator(coll, time.Now().UTC().String())
 
 	cases := []struct {
@@ -88,12 +89,12 @@ func TestMutateSetDefaults(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		doc, err := json.Decode(c.input)
+		doc, err := util.JSONToMap(c.input)
 		require.NoError(t, err)
 
 		require.NoError(t, p.setDefaultsInIncomingPayload(doc))
 		require.Equal(t, c.mutated, p.isMutated())
-		actualJS, err := json.Encode(doc)
+		actualJS, err := util.MapToJSON(doc)
 		require.NoError(t, err)
 		require.JSONEq(t, string(c.output), string(actualJS))
 	}
@@ -157,7 +158,8 @@ func TestMutateSetDefaultsComplexSchema(t *testing.T) {
 
 	schFactory, err := schema.Build("t1", reqSchema)
 	require.NoError(t, err)
-	coll := schema.NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, nil, nil)
+	coll, err := schema.NewDefaultCollection(1, 1, schFactory, nil, nil)
+	require.NoError(t, err)
 
 	cases := []struct {
 		input   []byte
@@ -189,13 +191,13 @@ func TestMutateSetDefaultsComplexSchema(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		doc, err := json.Decode(c.input)
+		doc, err := util.JSONToMap(c.input)
 		require.NoError(t, err)
 
 		p := newInsertPayloadMutator(coll, time.Now().UTC().String())
 		require.NoError(t, p.setDefaultsInIncomingPayload(doc))
 		require.Equal(t, c.mutated, p.isMutated())
-		actualJS, err := json.Encode(doc)
+		actualJS, err := util.MapToJSON(doc)
 		require.NoError(t, err)
 		require.JSONEq(t, string(c.output), string(actualJS))
 	}
@@ -249,7 +251,8 @@ func TestMutatePayload(t *testing.T) {
 
 	schFactory, err := schema.Build("t1", reqSchema)
 	require.NoError(t, err)
-	coll := schema.NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, nil, nil)
+	coll, err := schema.NewDefaultCollection(1, 1, schFactory, nil, nil)
+	require.NoError(t, err)
 	require.Equal(t, 4, len(coll.GetInt64FieldsPath()))
 
 	cases := []struct {
@@ -303,14 +306,14 @@ func TestMutatePayload(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		doc, err := json.Decode(c.input)
+		doc, err := util.JSONToMap(c.input)
 		require.NoError(t, err)
 
 		p := newInsertPayloadMutator(coll, time.Now().UTC().String())
 		require.NoError(t, p.stringToInt64(doc))
 		require.Equal(t, c.mutated, p.isMutated())
 
-		actualJS, err := json.Encode(doc)
+		actualJS, err := util.MapToJSON(doc)
 		require.NoError(t, err)
 		require.JSONEq(t, string(c.output), string(actualJS))
 	}
@@ -364,7 +367,8 @@ func BenchmarkStringToInteger(b *testing.B) {
 
 	schFactory, err := schema.Build("t1", reqSchema)
 	require.NoError(b, err)
-	coll := schema.NewDefaultCollection("t1", 1, 1, schFactory.CollectionType, schFactory, nil, nil)
+	coll, err := schema.NewDefaultCollection(1, 1, schFactory, nil, nil)
+	require.NoError(b, err)
 	require.Equal(b, 4, len(coll.GetInt64FieldsPath()))
 
 	data := []byte(`{"name":"fiona handbag","id":9223372036854775800,"brand":"michael kors","nested_object":{"obj": {"intField": "9223372036854775800"}},"array_items":[{"name": "test0", "id": "9223372036854775800"}, {"name": "test1", "id": 9223372036854775801}, {"name": "test2", "id": "9223372036854775802"}],"array_simple_items":[9223372036854775800, "9223372036854775801", 9223372036854775802]}`)

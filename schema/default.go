@@ -55,7 +55,7 @@ type FieldDefaulter struct {
 	updatedAt bool
 }
 
-func newDefaulter(createdAt *bool, updatedAt *bool, name string, dataType FieldType, v interface{}) (*FieldDefaulter, error) {
+func newDefaulter(createdAt *bool, updatedAt *bool, name string, dataType FieldType, v any) (*FieldDefaulter, error) {
 	if createdAt != nil && *createdAt {
 		return &FieldDefaulter{
 			createdAt: true,
@@ -100,13 +100,13 @@ func newDefaulter(createdAt *bool, updatedAt *bool, name string, dataType FieldT
 		if defaulter.updatedAt && dataType != DateTimeType {
 			return nil, errors.InvalidArgument("updated is only supported for date-time type")
 		}
-		if v.(string) == funcNowName && dataType != DateTimeType {
+		if ty == funcNowName && dataType != DateTimeType {
 			return nil, errors.InvalidArgument("now() is only supported for date-time type")
 		}
-		if !isSupportedDefaultFunction(v.(string)) {
+		if !isSupportedDefaultFunction(ty) {
 			return nil, errors.InvalidArgument("'%s' function is not supported", v)
 		}
-		if v.(string) == funcNowName {
+		if ty == funcNowName {
 			// if it is now() then we can just set createdAt
 			defaulter.createdAt = true
 			v = nil

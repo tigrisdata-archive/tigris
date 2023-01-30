@@ -44,6 +44,7 @@ class Product {
     private String name;
     private double price;
     private Date time1;
+    private long[] twoDArr;
     private UUID uUID1;
 
     public long[] getArrInts() {
@@ -118,6 +119,14 @@ class Product {
         this.time1 = time1;
     }
 
+    public long[] getTwoDArr() {
+        return twoDArr;
+    }
+
+    public void setTwoDArr(long[] twoDArrs) {
+        this.twoDArr = twoDArrs;
+    }
+
     public UUID getUUID1() {
         return uUID1;
     }
@@ -138,6 +147,7 @@ class Product {
         String name,
         double price,
         Date time1,
+        long[] twoDArrs,
         UUID uUID1
     ) {
         this.arrInts = arrInts;
@@ -149,6 +159,7 @@ class Product {
         this.name = name;
         this.price = price;
         this.time1 = time1;
+        this.twoDArr = twoDArrs;
         this.uUID1 = uUID1;
     };
 
@@ -172,6 +183,7 @@ class Product {
             name == other.name &&
             price == other.price &&
             time1 == other.time1 &&
+            Arrays.equals(twoDArr, other.twoDArr) &&
             uUID1 == other.uUID1;
     }
 
@@ -187,6 +199,7 @@ class Product {
             name,
             price,
             time1,
+            twoDArr,
             uUID1
         );
     }
@@ -204,12 +217,22 @@ public class Product implements TigrisCollectionType {
     private int Key;
     @TigrisPrimaryKey(order = 2, autoGenerate = true)
     private int KeyGenIdx;
+    private String def_val_cuid;
+    private Date def_val_date;
+    private Date def_val_date_const;
+    private long def_val_int;
+    private String def_val_str;
+    private String def_val_str_q;
+    private UUID def_val_uuid;
+    private String max_len_str;
     @TigrisPrimaryKey(autoGenerate = true)
     private int name_gen;
     @TigrisPrimaryKey(order = 4, autoGenerate = true)
     private int name_gen_key;
     @TigrisPrimaryKey(order = 3)
     private int name_key;
+    private int req_field;
+    private Date time_f;
     private int user_name;
 
     public int getGen() {
@@ -236,6 +259,70 @@ public class Product implements TigrisCollectionType {
         this.KeyGenIdx = keyGenIdx;
     }
 
+    public String getDef_val_cuid() {
+        return def_val_cuid;
+    }
+
+    public void setDef_val_cuid(String defValCuid) {
+        this.def_val_cuid = defValCuid;
+    }
+
+    public Date getDef_val_date() {
+        return def_val_date;
+    }
+
+    public void setDef_val_date(Date defValDate) {
+        this.def_val_date = defValDate;
+    }
+
+    public Date getDef_val_date_const() {
+        return def_val_date_const;
+    }
+
+    public void setDef_val_date_const(Date defValDateConst) {
+        this.def_val_date_const = defValDateConst;
+    }
+
+    public long getDef_val_int() {
+        return def_val_int;
+    }
+
+    public void setDef_val_int(long defValInt) {
+        this.def_val_int = defValInt;
+    }
+
+    public String getDef_val_str() {
+        return def_val_str;
+    }
+
+    public void setDef_val_str(String defValStr) {
+        this.def_val_str = defValStr;
+    }
+
+    public String getDef_val_str_q() {
+        return def_val_str_q;
+    }
+
+    public void setDef_val_str_q(String defValStrQ) {
+        this.def_val_str_q = defValStrQ;
+    }
+
+    public UUID getDef_val_uuid() {
+        return def_val_uuid;
+    }
+
+    public void setDef_val_uuid(UUID defValUuid) {
+        this.def_val_uuid = defValUuid;
+    }
+
+    public String getMax_len_str() {
+        return max_len_str;
+    }
+
+    public void setMax_len_str(String maxLenStr) {
+        this.max_len_str = maxLenStr;
+    }
+
     public int getName_gen() {
         return name_gen;
     }
@@ -260,6 +347,22 @@ public class Product implements TigrisCollectionType {
         this.name_key = nameKey;
     }
 
+    public int getReq_field() {
+        return req_field;
+    }
+
+    public void setReq_field(int reqField) {
+        this.req_field = reqField;
+    }
+
+    public Date getTime_f() {
+        return time_f;
+    }
+
+    public void setTime_f(Date timeF) {
+        this.time_f = timeF;
+    }
+
     public int getUser_name() {
         return user_name;
     }
@@ -274,17 +377,37 @@ public class Product implements TigrisCollectionType {
         int gen,
         int key,
         int keyGenIdx,
+        String defValCuid,
+        Date defValDate,
+        Date defValDateConst,
+        long defValInt,
+        String defValStr,
+        String defValStrQ,
+        UUID defValUuid,
+        String maxLenStr,
         int nameGen,
         int nameGenKey,
         int nameKey,
+        int reqField,
+        Date timeF,
         int userName
     ) {
         this.Gen = gen;
         this.Key = key;
         this.KeyGenIdx = keyGenIdx;
+        this.def_val_cuid = defValCuid;
+        this.def_val_date = defValDate;
+        this.def_val_date_const = defValDateConst;
+        this.def_val_int = defValInt;
+        this.def_val_str = defValStr;
+        this.def_val_str_q = defValStrQ;
+        this.def_val_uuid = defValUuid;
+        this.max_len_str = maxLenStr;
         this.name_gen = nameGen;
         this.name_gen_key = nameGenKey;
         this.name_key = nameKey;
+        this.req_field = reqField;
+        this.time_f = timeF;
         this.user_name = userName;
     };
 
@@ -302,9 +425,19 @@ public class Product implements TigrisCollectionType {
             Gen == other.Gen &&
             Key == other.Key &&
             KeyGenIdx == other.KeyGenIdx &&
+            def_val_cuid == other.def_val_cuid &&
+            def_val_date == other.def_val_date &&
+            def_val_date_const == other.def_val_date_const &&
+            def_val_int == other.def_val_int &&
+            def_val_str == other.def_val_str &&
+            def_val_str_q == other.def_val_str_q &&
+            def_val_uuid == other.def_val_uuid &&
+            max_len_str == other.max_len_str &&
             name_gen == other.name_gen &&
             name_gen_key == other.name_gen_key &&
             name_key == other.name_key &&
+            req_field == other.req_field &&
+            time_f == other.time_f &&
             user_name == other.user_name;
     }
 
@@ -314,9 +447,19 @@ public class Product implements TigrisCollectionType {
             Gen,
             Key,
             KeyGenIdx,
+            def_val_cuid,
+            def_val_date,
+            def_val_date_const,
+            def_val_int,
+            def_val_str,
+            def_val_str_q,
+            def_val_uuid,
+            max_len_str,
             name_gen,
             name_gen_key,
             name_key,
+            req_field,
+            time_f,
             user_name
         );
     }

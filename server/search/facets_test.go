@@ -15,9 +15,9 @@
 package search
 
 import (
-	"encoding/json"
 	"testing"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
@@ -57,7 +57,7 @@ func TestSortedFacets(t *testing.T) {
 		}
 
 		for _, data := range inputData {
-			err := json.Unmarshal(data, &tsCounts)
+			err := jsoniter.Unmarshal(data, &tsCounts)
 			assert.NoError(t, err)
 			_ = facets.Add(&tsCounts)
 		}
@@ -126,7 +126,7 @@ func TestSortedFacets(t *testing.T) {
 
 		for _, data := range inputData {
 			var tsCounts tsApi.FacetCounts
-			err := json.Unmarshal(data, &tsCounts)
+			err := jsoniter.Unmarshal(data, &tsCounts)
 			assert.NoError(t, err)
 
 			err = facets.Add(&tsCounts)
@@ -142,7 +142,7 @@ func TestSortedFacets(t *testing.T) {
 	t.Run("Cannot insert once sorted", func(t *testing.T) {
 		var tsCounts tsApi.FacetCounts
 		data := []byte(`{"field_name":"field_2","counts":[{"count":14,"value":"value_1"},{"count":12,"value":"value_2"}]}`)
-		err := json.Unmarshal(data, &tsCounts)
+		err := jsoniter.Unmarshal(data, &tsCounts)
 		assert.NoError(t, err)
 
 		facets := NewSortedFacets()

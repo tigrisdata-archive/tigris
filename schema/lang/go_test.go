@@ -43,6 +43,7 @@ type Product struct {
 	Name string ` + "`" + `json:"name"` + "`" + `
 	Price float64 ` + "`" + `json:"price"` + "`" + `
 	Time1 time.Time ` + "`" + `json:"time1"` + "`" + `
+	TwoDArrs []int64 ` + "`" + `json:"twoDArr"` + "`" + `
 	UUID1 uuid.UUID ` + "`" + `json:"uUID1"` + "`" + `
 }
 `,
@@ -54,9 +55,19 @@ type Product struct {
 	Gen int32 ` + "`" + `tigris:"autoGenerate"` + "`" + `
 	Key int32 ` + "`" + `tigris:"primaryKey:1"` + "`" + `
 	KeyGenIdx int32 ` + "`" + `tigris:"primaryKey:2,autoGenerate"` + "`" + `
+	DefValCuid string ` + "`" + `json:"def_val_cuid" tigris:"default:'cuid()'"` + "`" + `
+	DefValDate time.Time ` + "`" + `json:"def_val_date" tigris:"default:'now()'"` + "`" + `
+	DefValDateConst time.Time ` + "`" + `json:"def_val_date_const" tigris:"default:'2022-12-01T21:21:21.409Z'"` + "`" + `
+	DefValInt int64 ` + "`" + `json:"def_val_int" tigris:"default:32"` + "`" + `
+	DefValStr string ` + "`" + `json:"def_val_str" tigris:"default:'str1'"` + "`" + `
+	DefValStrQ string ` + "`" + `json:"def_val_str_q" tigris:"default:'st\\'r1'"` + "`" + `
+	DefValUuid uuid.UUID ` + "`" + `json:"def_val_uuid" tigris:"default:'uuid()'"` + "`" + `
+	MaxLenStr string ` + "`" + `json:"max_len_str" tigris:"maxLength:11"` + "`" + `
 	NameGen int32 ` + "`" + `json:"name_gen" tigris:"autoGenerate"` + "`" + `
 	NameGenKey int32 ` + "`" + `json:"name_gen_key" tigris:"primaryKey:4,autoGenerate"` + "`" + `
 	NameKey int32 ` + "`" + `json:"name_key" tigris:"primaryKey:3"` + "`" + `
+	ReqField int32 ` + "`" + `json:"req_field" tigris:"required"` + "`" + `
+	TimeF time.Time ` + "`" + `json:"time_f" tigris:"default:'now()',updatedAt,createdAt,required"` + "`" + `
 	UserName int32 ` + "`" + `json:"user_name"` + "`" + `
 }
 `,

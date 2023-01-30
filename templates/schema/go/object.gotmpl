@@ -3,19 +3,32 @@
 // {{ .Name }} {{ .Description }}
 {{end -}}
 type {{ .Name }} struct {
+
 {{- range $k, $v := .Fields}}
+
     {{- if .Description}}
 {{"\t"}}// {{.Name}} {{.Description}}{{end}}
     {{- $jsonTag := ne $v.NameJSON $v.Name }}
-{{"\t"}}{{ $v.Name }} {{ if $v.IsArray -}} [] {{- end -}} {{ $v.Type }}{{if or $v.AutoGenerate $v.PrimaryKeyIdx $jsonTag }} `
-        {{- end}}
-        {{- if $jsonTag }}json:"{{$v.NameJSON}}"{{ end }}
-        {{- if and $jsonTag (or $v.AutoGenerate $v.PrimaryKeyIdx) }} {{ end -}}
-        {{- if or $v.AutoGenerate $v.PrimaryKeyIdx -}}
-        tigris:"{{ with $v.PrimaryKeyIdx }}primaryKey:{{ . }}{{ end }}{{ if and $v.AutoGenerate $v.PrimaryKeyIdx }},{{ end }}{{ if $v.AutoGenerate }}autoGenerate{{ end }}"
-        {{- end -}}
-        {{- if or $v.AutoGenerate $v.PrimaryKeyIdx $jsonTag -}}
-        `
-    {{- end }}
+{{"\t"}}{{ $v.Name }} {{ if $v.IsArray -}} [] {{- end -}} {{ $v.Type }}
+
+    {{- $m := false -}}
+    {{- $def := $v.Default}}
+    {{- if $v.DefaultStrSingleQuotes }}
+        {{- $def = $v.DefaultStrSingleQuotes}}
+    {{- end}}
+
+    {{- if or $jsonTag $v.PrimaryKeyIdx $def $v.AutoGenerate $v.UpdatedAt $v.CreatedAt $v.MaxLength $v.Required }} `
+         {{- if $jsonTag }}json:"{{$v.NameJSON}}"{{- if or $v.PrimaryKeyIdx $def $v.AutoGenerate $v.UpdatedAt $v.CreatedAt $v.MaxLength $v.Required}} {{end}}{{end -}}
+         {{- if or $v.PrimaryKeyIdx $def $v.AutoGenerate $v.UpdatedAt $v.CreatedAt $v.MaxLength $v.Required -}}
+                    tigris:"
+         {{- if $v.PrimaryKeyIdx }}primaryKey:{{$v.PrimaryKeyIdx}} {{- $m = true }}{{end -}}
+         {{- if $def}}{{if $m}},{{end}}default:{{$def}}{{- $m = true}}{{end -}}
+         {{- if $v.AutoGenerate}}{{if $m}},{{end}}autoGenerate{{- $m = true }}{{end -}}
+         {{- if $v.UpdatedAt}}{{if $m}},{{end}}updatedAt{{- $m = true }}{{end -}}
+         {{- if $v.CreatedAt}}{{if $m}},{{end}}createdAt{{- end}}
+         {{- if $v.MaxLength}}{{if $m}},{{end}}maxLength:{{$v.MaxLength}}{{- end -}}
+         {{- if $v.Required}}{{if $m}},{{end}}required{{- end -}}
+                    "{{end}}`
+    {{- end -}}
 {{- end}}
 }

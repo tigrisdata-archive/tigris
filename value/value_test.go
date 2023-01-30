@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/schema"
 )
@@ -178,4 +179,38 @@ func TestFloatingPoint(t *testing.T) {
 
 	r, _ = v1.CompareTo(v2)
 	require.Equal(t, 1, r)
+}
+
+func TestStringCollation(t *testing.T) {
+	t.Run("case insensitive", func(t *testing.T) {
+		v1 := NewStringValue("abc", NewCollationFrom(&api.Collation{Case: "ci"}))
+
+		v2 := NewStringValue("abc", nil)
+		r, _ := v1.CompareTo(v2)
+		require.Equal(t, 0, r)
+
+		v3 := NewStringValue("aBc", nil)
+		r, _ = v1.CompareTo(v3)
+		require.Equal(t, 0, r)
+
+		v4 := NewStringValue("xyz", nil)
+		r, _ = v1.CompareTo(v4)
+		require.Equal(t, -1, r)
+	})
+
+	t.Run("case sensitive", func(t *testing.T) {
+		v1 := NewStringValue("abc", NewCollationFrom(&api.Collation{Case: "cs"}))
+
+		v2 := NewStringValue("abc", nil)
+		r, _ := v1.CompareTo(v2)
+		require.Equal(t, 0, r)
+
+		v3 := NewStringValue("aBc", nil)
+		r, _ = v1.CompareTo(v3)
+		require.Equal(t, -1, r)
+
+		v4 := NewStringValue("xyz", nil)
+		r, _ = v1.CompareTo(v4)
+		require.Equal(t, -1, r)
+	})
 }

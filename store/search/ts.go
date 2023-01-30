@@ -18,17 +18,25 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/tigrisdata/tigris/query/filter"
 	qsearch "github.com/tigrisdata/tigris/query/search"
 	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/typesense/typesense-go/typesense"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
+
+type IndexResp struct {
+	Code     int
+	Document string
+	Error    string
+	Success  bool
+}
 
 type storeImpl struct {
 	client *typesense.Client
@@ -98,17 +106,25 @@ func (m *storeImplWithMetrics) DropCollection(ctx context.Context, table string)
 	return
 }
 
-func (m *storeImplWithMetrics) IndexDocuments(ctx context.Context, table string, documents io.Reader, options IndexDocumentsOptions) (err error) {
+func (m *storeImplWithMetrics) IndexDocuments(ctx context.Context, table string, documents io.Reader, options IndexDocumentsOptions) (resp []IndexResp, err error) {
 	m.measure(ctx, "IndexDocuments", func(ctx context.Context) error {
-		err = m.s.IndexDocuments(ctx, table, documents, options)
+		resp, err = m.s.IndexDocuments(ctx, table, documents, options)
 		return err
 	})
 	return
 }
 
-func (m *storeImplWithMetrics) DeleteDocuments(ctx context.Context, table string, key string) (err error) {
+func (m *storeImplWithMetrics) DeleteDocument(ctx context.Context, table string, key string) (err error) {
+	m.measure(ctx, "DeleteDocument", func(ctx context.Context) error {
+		err = m.s.DeleteDocument(ctx, table, key)
+		return err
+	})
+	return
+}
+
+func (m *storeImplWithMetrics) DeleteDocuments(ctx context.Context, table string, filter *filter.WrappedFilter) (count int, err error) {
 	m.measure(ctx, "DeleteDocuments", func(ctx context.Context) error {
-		err = m.s.DeleteDocuments(ctx, table, key)
+		count, err = m.s.DeleteDocuments(ctx, table, filter)
 		return err
 	})
 	return
@@ -122,20 +138,34 @@ func (m *storeImplWithMetrics) Search(ctx context.Context, table string, query *
 	return
 }
 
+func (m *storeImplWithMetrics) GetDocuments(ctx context.Context, table string, ids []string) (result *tsApi.SearchResult, err error) {
+	m.measure(ctx, "Get", func(ctx context.Context) error {
+		result, err = m.s.GetDocuments(ctx, table, ids)
+		return err
+	})
+	return
+}
+
+func (m *storeImplWithMetrics) CreateDocument(ctx context.Context, table string, doc map[string]any) (err error) {
+	m.measure(ctx, "Create", func(ctx context.Context) error {
+		err = m.s.CreateDocument(ctx, table, doc)
+		return err
+	})
+	return
+}
+
 type IndexDocumentsOptions struct {
-	Action    string
+	Action    IndexAction
 	BatchSize int
 }
 
 func (s *storeImpl) convertToInternalError(err error) error {
 	if e, ok := err.(*typesense.HTTPError); ok {
-		switch e.Status {
-		case http.StatusConflict:
-			return ErrDuplicateEntity
-		case http.StatusNotFound:
-			return ErrNotFound
+		msgMap, decErr := util.JSONToMap(e.Body)
+		if decErr != nil {
+			return NewSearchError(e.Status, ErrCodeUnhandled, string(e.Body))
 		}
-		return NewSearchError(e.Status, ErrCodeUnhandled, e.Error())
+		return NewSearchError(e.Status, ErrCodeUnhandled, msgMap["message"].(string))
 	}
 
 	if e, ok := err.(*json.UnmarshalTypeError); ok {
@@ -146,45 +176,48 @@ func (s *storeImpl) convertToInternalError(err error) error {
 	return err
 }
 
-func (s *storeImpl) DeleteDocuments(_ context.Context, table string, key string) error {
+func (s *storeImpl) DeleteDocument(_ context.Context, table string, key string) error {
 	_, err := s.client.Collection(table).Document(key).Delete()
 	return s.convertToInternalError(err)
 }
 
-func (s *storeImpl) IndexDocuments(_ context.Context, table string, reader io.Reader, options IndexDocumentsOptions) (err error) {
+func (s *storeImpl) DeleteDocuments(_ context.Context, table string, filter *filter.WrappedFilter) (int, error) {
+	var params *tsApi.DeleteDocumentsParams
+	params.FilterBy = &filter.SearchFilter()[0]
+	count, err := s.client.Collection(table).Documents().Delete(params)
+	return count, err
+}
+
+func (s *storeImpl) CreateDocument(_ context.Context, table string, doc map[string]any) error {
+	_, err := s.client.Collection(table).Documents().Create(doc)
+	return s.convertToInternalError(err)
+}
+
+func (s *storeImpl) IndexDocuments(_ context.Context, table string, reader io.Reader, options IndexDocumentsOptions) ([]IndexResp, error) {
+	var err error
 	var closer io.ReadCloser
+	action := string(options.Action)
 	closer, err = s.client.Collection(table).Documents().ImportJsonl(reader, &tsApi.ImportDocumentsParams{
-		Action:    &options.Action,
+		Action:    &action,
 		BatchSize: &options.BatchSize,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer func() { ulog.E(closer.Close()) }()
+	defer closer.Close()
 
-	type resp struct {
-		Code     int
-		Document string
-		Error    string
-		Success  bool
-	}
-	if closer != nil {
-		var r resp
-		res, err := io.ReadAll(closer)
-		if err != nil {
-			return err
+	var responses []IndexResp
+	decoder := jsoniter.NewDecoder(closer)
+	for decoder.More() {
+		var single IndexResp
+		if err := decoder.Decode(&single); err != nil {
+			return nil, err
 		}
-		if err = jsoniter.Unmarshal(res, &r); err != nil {
-			return err
-		}
-		if len(r.Error) > 0 {
-			if err = fmt.Errorf(r.Error); err != nil {
-				return err
-			}
-		}
+
+		responses = append(responses, single)
 	}
 
-	return nil
+	return responses, nil
 }
 
 func (s *storeImpl) getBaseSearchParam(query *qsearch.Query, pageNo int) tsApi.MultiSearchParameters {
@@ -282,4 +315,22 @@ func (s *storeImpl) UpdateCollection(_ context.Context, name string, schema *tsA
 func (s *storeImpl) DropCollection(_ context.Context, table string) error {
 	_, err := s.client.Collection(table).Delete()
 	return s.convertToInternalError(err)
+}
+
+func (s *storeImpl) GetDocuments(ctx context.Context, table string, ids []string) (*tsApi.SearchResult, error) {
+	filterBy := "id: ["
+	for i, id := range ids {
+		if i != 0 {
+			filterBy += ","
+		}
+		filterBy += id
+	}
+	filterBy += "]"
+
+	res, err := s.client.Collection(table).Documents().Search(&tsApi.SearchCollectionParams{
+		Q:        "*",
+		FilterBy: &filterBy,
+	})
+
+	return res, err
 }

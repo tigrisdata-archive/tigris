@@ -20,21 +20,44 @@ import (
 	"io"
 
 	"github.com/rs/zerolog/log"
+	"github.com/tigrisdata/tigris/query/filter"
 	qsearch "github.com/tigrisdata/tigris/query/search"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/typesense/typesense-go/typesense"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
+type IndexAction string
+
+var (
+	Create  IndexAction = "create"
+	Replace IndexAction = "upsert"
+	Update  IndexAction = "update"
+)
+
 type Store interface {
+	// AllCollections is to describe all search indexes.
 	AllCollections(ctx context.Context) (map[string]*tsApi.CollectionResponse, error)
+	// DescribeCollection is to describe a search index.
 	DescribeCollection(ctx context.Context, name string) (*tsApi.CollectionResponse, error)
+	// CreateCollection is to create a search index.
 	CreateCollection(ctx context.Context, schema *tsApi.CollectionSchema) error
+	// UpdateCollection is to update the search index.
 	UpdateCollection(ctx context.Context, name string, schema *tsApi.CollectionUpdateSchema) error
+	// DropCollection is to drop the search index.
 	DropCollection(ctx context.Context, table string) error
-	IndexDocuments(ctx context.Context, table string, documents io.Reader, options IndexDocumentsOptions) error
-	DeleteDocuments(ctx context.Context, table string, key string) error
+	// CreateDocument is to create and index a single document
+	CreateDocument(_ context.Context, table string, doc map[string]any) error
+	// IndexDocuments is to index batch of documents. It expects index action to decide whether it needs to create/upsert/update documents.
+	IndexDocuments(ctx context.Context, table string, documents io.Reader, options IndexDocumentsOptions) ([]IndexResp, error)
+	// DeleteDocument is deleting a single document using id.
+	DeleteDocument(ctx context.Context, table string, key string) error
+	// DeleteDocuments is to delete multiple documents using filter.
+	DeleteDocuments(ctx context.Context, table string, filter *filter.WrappedFilter) (int, error)
+	// Search is to search using Query.
 	Search(ctx context.Context, table string, query *qsearch.Query, pageNo int) ([]tsApi.SearchResult, error)
+	// GetDocuments is to get a single or multiple documents by id.
+	GetDocuments(ctx context.Context, table string, ids []string) (*tsApi.SearchResult, error)
 }
 
 func NewStore(config *config.SearchConfig) (Store, error) {
@@ -73,10 +96,22 @@ func (n *NoopStore) UpdateCollection(context.Context, string, *tsApi.CollectionU
 	return nil
 }
 func (n *NoopStore) DropCollection(context.Context, string) error { return nil }
-func (n *NoopStore) IndexDocuments(context.Context, string, io.Reader, IndexDocumentsOptions) error {
-	return nil
+func (n *NoopStore) IndexDocuments(context.Context, string, io.Reader, IndexDocumentsOptions) ([]IndexResp, error) {
+	return nil, nil
 }
-func (n *NoopStore) DeleteDocuments(context.Context, string, string) error { return nil }
+func (n *NoopStore) DeleteDocument(context.Context, string, string) error { return nil }
+func (n *NoopStore) DeleteDocuments(context.Context, string, *filter.WrappedFilter) (int, error) {
+	return 0, nil
+}
+
 func (n *NoopStore) Search(context.Context, string, *qsearch.Query, int) ([]tsApi.SearchResult, error) {
 	return nil, nil
+}
+
+func (n *NoopStore) GetDocuments(ctx context.Context, table string, ids []string) (*tsApi.SearchResult, error) {
+	return nil, nil
+}
+
+func (n *NoopStore) CreateDocument(_ context.Context, table string, doc map[string]any) error {
+	return nil
 }

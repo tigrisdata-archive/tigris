@@ -790,7 +790,7 @@ func (tenant *Tenant) createSearchIndex(ctx context.Context, tx transaction.Tx, 
 	indexNameInStore := tenant.Encoder.EncodeSearchTableName(tenant.namespace.Id(), project.id, factory.Name, factory.Source.DatabaseBranch)
 	index := schema.NewSearchIndex(baseSchemaVersion, indexNameInStore, factory, nil)
 	if err := tenant.searchStore.CreateCollection(ctx, index.StoreSchema); err != nil {
-		if err != search.ErrDuplicateEntity {
+		if !search.IsErrDuplicateEntity(err) {
 			return err
 		}
 	}
@@ -869,25 +869,22 @@ func (tenant *Tenant) deleteSearchIndex(ctx context.Context, tx transaction.Tx, 
 	}
 
 	// clean up from the underlying search store
-	if err := tenant.searchStore.DropCollection(ctx, index.StoreIndexName()); err != nil && err != search.ErrNotFound {
+	if err := tenant.searchStore.DropCollection(ctx, index.StoreIndexName()); err != nil && !search.IsErrNotFound(err) {
 		return err
 	}
 
 	return nil
 }
 
-func (tenant *Tenant) ListSearchIndexes(ctx context.Context, tx transaction.Tx, project *Project) ([]string, error) {
+func (tenant *Tenant) ListSearchIndexes(ctx context.Context, tx transaction.Tx, project *Project) ([]*schema.SearchIndex, error) {
 	tenant.Lock()
 	defer tenant.Unlock()
 
-	metadata, err := tenant.namespaceStore.GetProjectMetadata(ctx, tx, tenant.namespace.Id(), project.name)
-	if err != nil {
-		return nil, errors.Internal("failed to get project metadata for project %s", project.name)
-	}
-
-	indexes := make([]string, len(metadata.SearchMetadata))
-	for i := range metadata.SearchMetadata {
-		indexes[i] = metadata.SearchMetadata[i].Name
+	indexes := make([]*schema.SearchIndex, len(project.search.indexes))
+	i := 0
+	for _, idx := range project.search.indexes {
+		indexes[i] = idx
+		i++
 	}
 	return indexes, nil
 }
@@ -1035,8 +1032,8 @@ func (tenant *Tenant) DeleteProject(ctx context.Context, tx transaction.Tx, proj
 		}
 	}
 
-	for i := range proj.search.indexes {
-		if err := tenant.deleteSearchIndex(ctx, tx, proj, proj.search.indexes[i]); err != nil {
+	for key := range proj.search.indexes {
+		if err := tenant.deleteSearchIndex(ctx, tx, proj, proj.search.indexes[key]); err != nil {
 			return true, err
 		}
 	}
@@ -1253,15 +1250,16 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 		nil,
 	)
 
-	collection := schema.NewDefaultCollection(
-		schFactory.Name,
+	collection, err := schema.NewDefaultCollection(
 		collectionId,
 		baseSchemaVersion,
-		schFactory.CollectionType,
 		schFactory,
 		nil,
 		implicitSearchIndex,
 	)
+	if err != nil {
+		return err
+	}
 
 	encName, err := tenant.Encoder.EncodeTableName(tenant.namespace, database, collection)
 	if err != nil {
@@ -1274,7 +1272,7 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 	if config.DefaultConfig.Search.WriteEnabled {
 		// only creating implicit index here
 		if err := tenant.searchStore.CreateCollection(ctx, implicitSearchIndex.StoreSchema); err != nil {
-			if err != search.ErrDuplicateEntity {
+			if !search.IsErrDuplicateEntity(err) {
 				return err
 			}
 		}
@@ -1323,9 +1321,12 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 		return err
 	}
 
-	existingSearch, err := tenant.searchStore.DescribeCollection(ctx, existingCollection.ImplicitSearchIndex.StoreIndexName())
-	if err != nil {
-		return err
+	existingSearch := &tsApi.CollectionResponse{}
+	if config.DefaultConfig.Search.WriteEnabled {
+		existingSearch, err = tenant.searchStore.DescribeCollection(ctx, existingCollection.ImplicitSearchIndex.StoreIndexName())
+		if err != nil {
+			return err
+		}
 	}
 
 	updatedSearchIndex := schema.NewImplicitSearchIndex(
@@ -1337,15 +1338,16 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 
 	// store the collection to the databaseObject, this is actually cloned database object passed by the query runner.
 	// So failure of the transaction won't impact the consistency of the cache
-	collection := schema.NewDefaultCollection(
-		schFactory.Name,
+	collection, err := schema.NewDefaultCollection(
 		c.id,
 		schRevision,
-		schFactory.CollectionType,
 		schFactory,
 		allSchemas,
 		updatedSearchIndex,
 	)
+	if err != nil {
+		return err
+	}
 
 	encName, err := tenant.Encoder.EncodeTableName(tenant.namespace, database, collection)
 	if err != nil {
@@ -1357,14 +1359,17 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 	// recreating collection holder is fine because we are working on databaseClone and also has a lock on the tenant
 	database.collections[schFactory.Name] = newCollectionHolder(c.id, schFactory.Name, collection, c.idxNameToId)
 
-	// update indexing store schema if there is a change
-	if deltaFields := schema.GetSearchDeltaFields(existingCollection.ImplicitSearchIndex.QueryableFields, schFactory.Fields, existingSearch.Fields); len(deltaFields) > 0 {
-		if err := tenant.searchStore.UpdateCollection(ctx, collection.ImplicitSearchIndex.StoreIndexName(), &tsApi.CollectionUpdateSchema{
-			Fields: deltaFields,
-		}); err != nil {
-			return err
+	if config.DefaultConfig.Search.WriteEnabled {
+		// update indexing store schema if there is a change
+		if deltaFields := schema.GetSearchDeltaFields(existingCollection.ImplicitSearchIndex.QueryableFields, schFactory.Fields, existingSearch.Fields); len(deltaFields) > 0 {
+			if err := tenant.searchStore.UpdateCollection(ctx, collection.ImplicitSearchIndex.StoreIndexName(), &tsApi.CollectionUpdateSchema{
+				Fields: deltaFields,
+			}); err != nil {
+				return err
+			}
 		}
 	}
+
 	return nil
 }
 
@@ -1431,7 +1436,7 @@ func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db 
 
 	if config.DefaultConfig.Search.WriteEnabled {
 		if err := tenant.searchStore.DropCollection(ctx, cHolder.collection.ImplicitSearchIndex.StoreIndexName()); err != nil {
-			if err != search.ErrNotFound {
+			if !search.IsErrNotFound(err) {
 				return err
 			}
 		}
@@ -1732,7 +1737,12 @@ func createCollection(id uint32, name string, schemas schema.Versions, idxNameTo
 
 	implicitSearchIndex := schema.NewImplicitSearchIndex(name, searchCollectionName, schFactory.Fields, fieldsInSearch)
 
-	return schema.NewDefaultCollection(name, id, schemas.Latest().Version, schFactory.CollectionType, schFactory, schemas, implicitSearchIndex), nil
+	c, err := schema.NewDefaultCollection(id, schemas.Latest().Version, schFactory, schemas, implicitSearchIndex)
+	if err != nil {
+		return nil, err
+	}
+
+	return c, nil
 }
 
 // Search is to manage all the search indexes that are explicitly created by the user.

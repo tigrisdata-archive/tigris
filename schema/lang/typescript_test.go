@@ -33,185 +33,138 @@ func TestTypeScriptSchemaGenerator(t *testing.T) {
 	}{
 		{
 			"types", typesTest, `
-interface Product {
+export class Product {
+  @Field({ elements: TigrisDataTypes.INT64 })
   arrInts: Array<string>;
-  bool: boolean;
-  byte1: string;
-  id: number;
-  int64: string;
-  // int64WithDesc field description
-  int64WithDesc: string;
-  name: string;
-  price: number;
-  time1: string;
-  uUID1: string;
-}
 
-const productSchema: TigrisSchema<Product> = {
-  arrInts: {
-    type: TigrisDataTypes.ARRAY,
-    items: {
-      type: TigrisDataTypes.INT64,
-    },
-  },
-  bool: {
-    type: TigrisDataTypes.BOOLEAN,
-  },
-  byte1: {
-    type: TigrisDataTypes.BYTE_STRING,
-  },
-  id: {
-    type: TigrisDataTypes.INT32,
-  },
-  int64: {
-    type: TigrisDataTypes.INT64,
-  },
-  int64WithDesc: {
-    type: TigrisDataTypes.INT64,
-  },
-  name: {
-    type: TigrisDataTypes.STRING,
-  },
-  price: {
-    type: TigrisDataTypes.NUMBER,
-  },
-  time1: {
-    type: TigrisDataTypes.DATE_TIME,
-  },
-  uUID1: {
-    type: TigrisDataTypes.UUID,
-  },
+  @Field()
+  bool: boolean;
+
+  @Field(TigrisDataTypes.BYTE_STRING)
+  byte1: string;
+
+  @Field(TigrisDataTypes.INT32)
+  id: number;
+
+  @Field(TigrisDataTypes.INT64)
+  int64: string;
+
+  // field description
+  @Field(TigrisDataTypes.INT64)
+  int64WithDesc: string;
+
+  @Field()
+  name: string;
+
+  @Field()
+  price: number;
+
+  @Field(TigrisDataTypes.DATE_TIME)
+  time1: Date;
+
+  @Field({ elements: TigrisDataTypes.INT64, depth: 2 })
+  twoDArr: Array<Array<string>>;
+
+  @Field(TigrisDataTypes.UUID)
+  uUID1: string;
 };
 `,
 		},
 		{
 			"tags", tagsTest, `
-// Product type description
-export interface Product extends TigrisCollectionType {
+// type description
+@TigrisCollection("products")
+export class Product {
+  @Field(TigrisDataTypes.INT32, { autoGenerate: true })
   Gen?: number;
-  Key: number;
-  KeyGenIdx?: number;
-  name_gen?: number;
-  name_gen_key?: number;
-  name_key: number;
-  user_name: number;
-}
 
-export const productSchema: TigrisSchema<Product> = {
-  Gen: {
-    type: TigrisDataTypes.INT32,
-    primary_key: {
-      autoGenerate: true,
-    },
-  },
-  Key: {
-    type: TigrisDataTypes.INT32,
-    primary_key: {
-      order: 1,
-    },
-  },
-  KeyGenIdx: {
-    type: TigrisDataTypes.INT32,
-    primary_key: {
-      order: 2,
-      autoGenerate: true,
-    },
-  },
-  name_gen: {
-    type: TigrisDataTypes.INT32,
-    primary_key: {
-      autoGenerate: true,
-    },
-  },
-  name_gen_key: {
-    type: TigrisDataTypes.INT32,
-    primary_key: {
-      order: 4,
-      autoGenerate: true,
-    },
-  },
-  name_key: {
-    type: TigrisDataTypes.INT32,
-    primary_key: {
-      order: 3,
-    },
-  },
-  user_name: {
-    type: TigrisDataTypes.INT32,
-  },
+  @PrimaryKey(TigrisDataTypes.INT32, { order: 1 })
+  Key: number;
+
+  @PrimaryKey(TigrisDataTypes.INT32, { order: 2, autoGenerate: true })
+  KeyGenIdx?: number;
+
+  @Field({ default: Generated.CUID })
+  def_val_cuid: string;
+
+  @Field(TigrisDataTypes.DATE_TIME, { default: Generated.NOW })
+  def_val_date: Date;
+
+  @Field(TigrisDataTypes.DATE_TIME, { default: "2022-12-01T21:21:21.409Z" })
+  def_val_date_const: Date;
+
+  @Field(TigrisDataTypes.INT64, { default: 32 })
+  def_val_int: string;
+
+  @Field({ default: "str1" })
+  def_val_str: string;
+
+  @Field({ default: "st'r1" })
+  def_val_str_q: string;
+
+  @Field(TigrisDataTypes.UUID, { default: Generated.UUID })
+  def_val_uuid: string;
+
+  @Field({ maxLength: 11 })
+  max_len_str: string;
+
+  @Field(TigrisDataTypes.INT32, { autoGenerate: true })
+  name_gen?: number;
+
+  @PrimaryKey(TigrisDataTypes.INT32, { order: 4, autoGenerate: true })
+  name_gen_key?: number;
+
+  @PrimaryKey(TigrisDataTypes.INT32, { order: 3 })
+  name_key: number;
+
+  @Field(TigrisDataTypes.INT32)
+  req_field: number;
+
+  @Field(TigrisDataTypes.DATE_TIME, { default: Generated.NOW, timestamp: "updatedAt", timestamp: "createdAt" })
+  time_f: Date;
+
+  @Field(TigrisDataTypes.INT32)
+  user_name: number;
 };
 `,
 		},
 		{
 			"object", objectTest, `
-interface SubArrayNested {
+export class SubArrayNested {
+  @Field(TigrisDataTypes.INT32)
   field_3: number;
-}
-
-const subArrayNestedSchema: TigrisSchema<SubArrayNested> = {
-  field_3: {
-    type: TigrisDataTypes.INT32,
-  },
 };
 
-interface SubObjectNested {
+export class SubObjectNested {
+  @Field(TigrisDataTypes.INT32)
   field_3: number;
-}
-
-const subObjectNestedSchema: TigrisSchema<SubObjectNested> = {
-  field_3: {
-    type: TigrisDataTypes.INT32,
-  },
 };
 
-interface SubArray {
+export class SubArray {
+  @Field(TigrisDataTypes.INT32)
   field_3: number;
+
+  @Field({ elements: SubArrayNested })
   subArrayNesteds: Array<SubArrayNested>;
+
+  @Field()
   subObjectNested: SubObjectNested;
-}
-
-const subArraySchema: TigrisSchema<SubArray> = {
-  field_3: {
-    type: TigrisDataTypes.INT32,
-  },
-  subArrayNesteds: {
-    type: TigrisDataTypes.ARRAY,
-    items: {
-      type: subArrayNestedSchema,
-    },
-  },
-  subObjectNested: {
-    type: subObjectNestedSchema,
-  },
 };
 
-// Subtype sub type description
-interface Subtype {
+// sub type description
+export class Subtype {
+  @Field(TigrisDataTypes.INT32)
   id2: number;
-}
-
-const subtypeSchema: TigrisSchema<Subtype> = {
-  id2: {
-    type: TigrisDataTypes.INT32,
-  },
 };
 
-export interface Product extends TigrisCollectionType {
+@TigrisCollection("products")
+export class Product {
+  @Field({ elements: SubArray })
   subArrays: Array<SubArray>;
-  // subtype sub type description
-  subtype: Subtype;
-}
 
-export const productSchema: TigrisSchema<Product> = {
-  subArrays: {
-    type: TigrisDataTypes.ARRAY,
-    items: {
-      type: subArraySchema,
-    },
-  },
-  subtype: {
-    type: subtypeSchema,
-  },
+  // sub type description
+  @Field()
+  subtype: Subtype;
 };
 `,
 		},
