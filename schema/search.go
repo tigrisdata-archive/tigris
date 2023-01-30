@@ -36,9 +36,9 @@ type SearchSource struct {
 	// Type is the source type i.e. either it is Tigris or the index will be maintained by the user.
 	Type SearchSourceType `json:"type,omitempty"`
 	// CollectionName is the source name i.e. collection name in case of Tigris otherwise it is optional.
-	CollectionName string `json:"collection_name,omitempty"`
+	CollectionName string `json:"collection,omitempty"`
 	// DatabaseBranch is in case the collection is part of a database branch. Only applicable if Type is Tigris.
-	DatabaseBranch string `json:"database_branch,omitempty"`
+	DatabaseBranch string `json:"branch,omitempty"`
 }
 
 type SearchJSONSchema struct {

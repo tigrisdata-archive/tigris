@@ -530,31 +530,47 @@ func (runner *IndexRunner) Run(ctx context.Context, tx transaction.Tx, tenant *m
 			Source schema.SearchSource `json:"source,omitempty"`
 		}
 
-		indexesResp := make([]*api.IndexInfo, len(indexes))
-		for i, index := range indexes {
-			indexesResp[i] = &api.IndexInfo{
-				Name: index.Name,
+		var indexesResp []*api.IndexInfo
+		for _, index := range indexes {
+			var source IndexSource
+			if err = jsoniter.Unmarshal(index.Schema, &source); err != nil {
+				return Response{}, err
 			}
+			if runner.list.Filter != nil {
+				if string(source.Source.Type) != runner.list.Filter.Type {
+					continue
+				}
 
+				if len(runner.list.Filter.Collection) > 0 && runner.list.Filter.Collection != source.Source.CollectionName {
+					continue
+				}
+
+				if len(source.Source.DatabaseBranch) == 0 {
+					if len(runner.list.Filter.Branch) > 0 && runner.list.Filter.Branch != metadata.MainBranch {
+						continue
+					}
+				} else if len(runner.list.Filter.Branch) > 0 && runner.list.Filter.Branch != source.Source.DatabaseBranch {
+					continue
+				}
+			}
 			var us UserSchema
 			if err := jsoniter.Unmarshal(index.Schema, &us); err != nil {
 				return Response{}, err
 			}
 
-			if indexesResp[i].Schema, err = jsoniter.Marshal(us); err != nil {
+			var indexInfo = &api.IndexInfo{
+				Name: index.Name,
+			}
+			if indexInfo.Schema, err = jsoniter.Marshal(us); err != nil {
 				return Response{}, err
 			}
-
-			var source IndexSource
-			if err = jsoniter.Unmarshal(index.Schema, &source); err != nil {
-				return Response{}, err
-			}
-
-			indexesResp[i].Source = &api.IndexSource{
+			indexInfo.Source = &api.IndexSource{
 				Type:       string(source.Source.Type),
 				Collection: source.Source.CollectionName,
 				Branch:     source.Source.DatabaseBranch,
 			}
+
+			indexesResp = append(indexesResp, indexInfo)
 		}
 
 		return Response{
