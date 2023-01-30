@@ -41,6 +41,7 @@ var (
         "title": "products",
         "primary_key": ["Key", "KeyGenIdx", "name_key", "name_gen_key"],
         "description": "type description",
+        "required": ["req_field", "time_f"],
         "properties": {
           "Gen": { "type": "integer", "format": "int32", "autoGenerate": true },
           "Key": { "type": "integer", "format": "int32"},
@@ -51,11 +52,14 @@ var (
           "name_gen_key": { "type": "integer", "format": "int32", "autoGenerate": true },
           "def_val_int": { "type": "integer", "default": 32 },
           "def_val_str": { "type": "string", "default": "str1" },
+          "def_val_str_q": { "type": "string", "default": "st'r1" },
           "def_val_date": { "type": "string", "format": "date-time", "default": "now()" },
           "def_val_date_const": { "type": "string", "format": "date-time", "default": "2022-12-01T21:21:21.409Z" },
           "def_val_uuid": { "type": "string", "format": "uuid", "default": "uuid()" },
           "def_val_cuid": { "type": "string", "default": "cuid()" },
-          "max_len_str": { "type": "string", "maxLength" : 11 }
+          "max_len_str": { "type": "string", "maxLength" : 11 },
+          "req_field": { "type": "integer", "format": "int32"},
+          "time_f": { "type": "string", "format": "date-time", "default": "now()", "updatedAt": true, "createdAt": true }
 		}}`
 	objectTest = `{
           "title": "products",

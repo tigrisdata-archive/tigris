@@ -222,6 +222,7 @@ public class Product implements TigrisCollectionType {
     private Date def_val_date_const;
     private long def_val_int;
     private String def_val_str;
+    private String def_val_str_q;
     private UUID def_val_uuid;
     private String max_len_str;
     @TigrisPrimaryKey(autoGenerate = true)
@@ -230,6 +231,8 @@ public class Product implements TigrisCollectionType {
     private int name_gen_key;
     @TigrisPrimaryKey(order = 3)
     private int name_key;
+    private int req_field;
+    private Date time_f;
     private int user_name;
 
     public int getGen() {
@@ -296,6 +299,14 @@ public class Product implements TigrisCollectionType {
         this.def_val_str = defValStr;
     }
 
+    public String getDef_val_str_q() {
+        return def_val_str_q;
+    }
+
+    public void setDef_val_str_q(String defValStrQ) {
+        this.def_val_str_q = defValStrQ;
+    }
+
     public UUID getDef_val_uuid() {
         return def_val_uuid;
     }
@@ -336,6 +347,22 @@ public class Product implements TigrisCollectionType {
         this.name_key = nameKey;
     }
 
+    public int getReq_field() {
+        return req_field;
+    }
+
+    public void setReq_field(int reqField) {
+        this.req_field = reqField;
+    }
+
+    public Date getTime_f() {
+        return time_f;
+    }
+
+    public void setTime_f(Date timeF) {
+        this.time_f = timeF;
+    }
+
     public int getUser_name() {
         return user_name;
     }
@@ -355,11 +382,14 @@ public class Product implements TigrisCollectionType {
         Date defValDateConst,
         long defValInt,
         String defValStr,
+        String defValStrQ,
         UUID defValUuid,
         String maxLenStr,
         int nameGen,
         int nameGenKey,
         int nameKey,
+        int reqField,
+        Date timeF,
         int userName
     ) {
         this.Gen = gen;
@@ -370,11 +400,14 @@ public class Product implements TigrisCollectionType {
         this.def_val_date_const = defValDateConst;
         this.def_val_int = defValInt;
         this.def_val_str = defValStr;
+        this.def_val_str_q = defValStrQ;
         this.def_val_uuid = defValUuid;
         this.max_len_str = maxLenStr;
         this.name_gen = nameGen;
         this.name_gen_key = nameGenKey;
         this.name_key = nameKey;
+        this.req_field = reqField;
+        this.time_f = timeF;
         this.user_name = userName;
     };
 
@@ -397,11 +430,14 @@ public class Product implements TigrisCollectionType {
             def_val_date_const == other.def_val_date_const &&
             def_val_int == other.def_val_int &&
             def_val_str == other.def_val_str &&
+            def_val_str_q == other.def_val_str_q &&
             def_val_uuid == other.def_val_uuid &&
             max_len_str == other.max_len_str &&
             name_gen == other.name_gen &&
             name_gen_key == other.name_gen_key &&
             name_key == other.name_key &&
+            req_field == other.req_field &&
+            time_f == other.time_f &&
             user_name == other.user_name;
     }
 
@@ -416,11 +452,14 @@ public class Product implements TigrisCollectionType {
             def_val_date_const,
             def_val_int,
             def_val_str,
+            def_val_str_q,
             def_val_uuid,
             max_len_str,
             name_gen,
             name_gen_key,
             name_key,
+            req_field,
+            time_f,
             user_name
         );
     }

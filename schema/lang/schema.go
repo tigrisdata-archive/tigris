@@ -59,26 +59,33 @@ const (
 
 // Field represents JSON schema object.
 type Field struct {
-	Type      string            `json:"type,omitempty"`
-	Format    string            `json:"format,omitempty"`
-	Tags      []string          `json:"tags,omitempty"`
-	Desc      string            `json:"description,omitempty"`
-	Fields    map[string]*Field `json:"properties,omitempty"`
-	Items     *Field            `json:"items,omitempty"`
-	Default   any               `json:"default,omitempty"`
-	CreatedAt bool              `json:"createdAt,omitempty"`
-	UpdatedAt bool              `json:"updatedAt,omitempty"`
-	MaxLength int32             `json:"maxLength,omitempty"`
+	Type   string            `json:"type,omitempty"`
+	Format string            `json:"format,omitempty"`
+	Tags   []string          `json:"tags,omitempty"`
+	Desc   string            `json:"description,omitempty"`
+	Fields map[string]*Field `json:"properties,omitempty"`
+	Items  *Field            `json:"items,omitempty"`
 
+	Default      any  `json:"default,omitempty"`
+	MaxLength    int  `json:"maxLength,omitempty"`
+	CreatedAt    bool `json:"createdAt,omitempty"`
+	UpdatedAt    bool `json:"updatedAt,omitempty"`
 	AutoGenerate bool `json:"autoGenerate,omitempty"`
+
+	Required []string `json:"required,omitempty"`
+
+	// RequiredTag is used during schema building only
+	RequiredTag bool `json:"-"`
 }
 
 // Schema is top level JSON schema object.
 type Schema struct {
-	Name       string            `json:"title,omitempty"`
-	Desc       string            `json:"description,omitempty"`
-	Fields     map[string]*Field `json:"properties,omitempty"`
-	PrimaryKey []string          `json:"primary_key,omitempty"`
+	Name   string            `json:"title,omitempty"`
+	Desc   string            `json:"description,omitempty"`
+	Fields map[string]*Field `json:"properties,omitempty"`
+
+	PrimaryKey []string `json:"primary_key,omitempty"`
+	Required   []string `json:"required,omitempty"`
 
 	CollectionType string `json:"collection_type,omitempty"`
 }
@@ -112,12 +119,14 @@ type FieldGen struct {
 	PrimaryKeyIdx   int
 	ArrayDimensions int
 
-	Default    any
-	DefaultStr string
+	Default                any
+	DefaultStr             string
+	DefaultStrSingleQuotes string
 
-	MaxLength int32
+	MaxLength int
 	UpdatedAt bool
 	CreatedAt bool
+	Required  bool
 
 	Description string
 }
@@ -137,7 +146,7 @@ type Object struct {
 	Fields []FieldGen
 }
 
-func genField(w io.Writer, n string, v *Field, pk []string, c JSONToLangType,
+func genField(w io.Writer, n string, v *Field, pk []string, required bool, c JSONToLangType,
 	hasTime *bool, hasUUID *bool,
 ) (*FieldGen, error) {
 	var err error
@@ -148,10 +157,15 @@ func genField(w io.Writer, n string, v *Field, pk []string, c JSONToLangType,
 	f.JSONCap = strings.ToUpper(n[0:1]) + n[1:]
 	f.NamePlural = plural.Plural(n)
 	f.Name = strcase.ToCamel(n)
+	f.UpdatedAt = v.UpdatedAt
+	f.CreatedAt = v.CreatedAt
 	f.MaxLength = v.MaxLength
+	f.Required = required
+
 	f.Default = v.Default
 	if s, ok := f.Default.(string); ok {
 		f.DefaultStr = fmt.Sprintf(`%q`, s)
+		f.DefaultStrSingleQuotes = fmt.Sprintf(`'%s'`, strings.ReplaceAll(s, "'", "\\\\'"))
 	}
 
 	if v.Type == typeArray {
@@ -170,7 +184,7 @@ func genField(w io.Writer, n string, v *Field, pk []string, c JSONToLangType,
 	f.IsArray = f.ArrayDimensions > 0
 
 	if v.Type == typeObject {
-		if err := genSchema(w, n, v.Desc, v.Fields, nil, c, hasTime, hasUUID); err != nil {
+		if err := genSchema(w, n, v.Desc, v.Fields, nil, v.Required, c, hasTime, hasUUID); err != nil {
 			return nil, err
 		}
 
@@ -199,7 +213,7 @@ func genField(w io.Writer, n string, v *Field, pk []string, c JSONToLangType,
 }
 
 func genSchema(w io.Writer, name string, desc string, field map[string]*Field,
-	pk []string, c JSONToLangType, hasTime *bool, hasUUID *bool,
+	pk []string, required []string, c JSONToLangType, hasTime *bool, hasUUID *bool,
 ) error {
 	var obj Object
 
@@ -223,6 +237,8 @@ func genSchema(w io.Writer, name string, desc string, field map[string]*Field,
 
 	sort.Sort(names)
 
+	reqPtr := 0
+
 	for _, n := range names {
 		v := field[n]
 
@@ -230,7 +246,15 @@ func genSchema(w io.Writer, name string, desc string, field map[string]*Field,
 			return ErrEmptyObjectName
 		}
 
-		f, err := genField(w, n, v, pk, c, hasTime, hasUUID)
+		req := false
+		if reqPtr < len(required) {
+			if required[reqPtr] == n {
+				reqPtr++
+				req = true
+			}
+		}
+
+		f, err := genField(w, n, v, pk, req, c, hasTime, hasUUID)
 		if err != nil {
 			return err
 		}
@@ -252,7 +276,7 @@ func genCollectionSchema(w io.Writer, rawSchema []byte, c JSONToLangType, hasTim
 		return err
 	}
 
-	if err := genSchema(w, sch.Name, sch.Desc, sch.Fields, sch.PrimaryKey, c, hasTime, hasUUID); err != nil {
+	if err := genSchema(w, sch.Name, sch.Desc, sch.Fields, sch.PrimaryKey, sch.Required, c, hasTime, hasUUID); err != nil {
 		return err
 	}
 

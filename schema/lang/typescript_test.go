@@ -99,6 +99,9 @@ export class Product {
   @Field({ default: "str1" })
   def_val_str: string;
 
+  @Field({ default: "st'r1" })
+  def_val_str_q: string;
+
   @Field(TigrisDataTypes.UUID, { default: Generated.UUID })
   def_val_uuid: string;
 
@@ -113,6 +116,12 @@ export class Product {
 
   @PrimaryKey(TigrisDataTypes.INT32, { order: 3 })
   name_key: number;
+
+  @Field(TigrisDataTypes.INT32)
+  req_field: number;
+
+  @Field(TigrisDataTypes.DATE_TIME, { default: Generated.NOW, timestamp: "updatedAt", timestamp: "createdAt" })
+  time_f: Date;
 
   @Field(TigrisDataTypes.INT32)
   user_name: number;
