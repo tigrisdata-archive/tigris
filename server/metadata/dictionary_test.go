@@ -29,7 +29,7 @@ func TestDictionaryEncoding(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	k := NewMetadataDictionary(&TestMDNameRegistry{
+	k := NewMetadataDictionary(&NameRegistry{
 		ReserveSB:  "test_reserved",
 		EncodingSB: "test_encoding",
 	})
@@ -88,7 +88,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 	defer cancel()
 
 	t.Run("drop_database", func(t *testing.T) {
-		k := NewMetadataDictionary(&TestMDNameRegistry{
+		k := NewMetadataDictionary(&NameRegistry{
 			ReserveSB:  "test_reserved",
 			EncodingSB: "test_encoding",
 		})
@@ -130,7 +130,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 		require.Equal(t, v, InvalidId)
 	})
 	t.Run("drop_collection", func(t *testing.T) {
-		k := NewMetadataDictionary(&TestMDNameRegistry{
+		k := NewMetadataDictionary(&NameRegistry{
 			ReserveSB:  "test_reserved",
 			EncodingSB: "test_encoding",
 		})
@@ -177,7 +177,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 		require.Equal(t, v, InvalidId)
 	})
 	t.Run("drop_index", func(t *testing.T) {
-		k := NewMetadataDictionary(&TestMDNameRegistry{
+		k := NewMetadataDictionary(&NameRegistry{
 			ReserveSB:  "test_reserved",
 			EncodingSB: "test_encoding",
 		})
@@ -230,7 +230,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 		require.Equal(t, v, InvalidId)
 	})
 	t.Run("drop_collection_multiple", func(t *testing.T) {
-		k := NewMetadataDictionary(&TestMDNameRegistry{
+		k := NewMetadataDictionary(&NameRegistry{
 			ReserveSB:  "test_reserved",
 			EncodingSB: "test_encoding",
 		})
@@ -295,7 +295,7 @@ func TestDictionaryEncoding_Error(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	k := NewMetadataDictionary(&TestMDNameRegistry{
+	k := NewMetadataDictionary(&NameRegistry{
 		ReserveSB:  "test_reserved",
 		EncodingSB: "test_encoding",
 	})
@@ -326,7 +326,7 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 
 	tm := transaction.NewManager(kvStore)
 	t.Run("get_databases", func(t *testing.T) {
-		k := NewMetadataDictionary(&TestMDNameRegistry{
+		k := NewMetadataDictionary(&NameRegistry{
 			ReserveSB:  "test_reserved",
 			EncodingSB: "test_encoding",
 		})
@@ -349,7 +349,7 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 		require.Equal(t, dbToId["db-2"], dbId2)
 	})
 	t.Run("get_collections", func(t *testing.T) {
-		k := NewMetadataDictionary(&TestMDNameRegistry{
+		k := NewMetadataDictionary(&NameRegistry{
 			ReserveSB:  "test_reserved",
 			EncodingSB: "test_encoding",
 		})
@@ -375,7 +375,7 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 		require.Equal(t, collToId["coll-2"], cid2)
 	})
 	t.Run("get_indexes", func(t *testing.T) {
-		k := NewMetadataDictionary(&TestMDNameRegistry{
+		k := NewMetadataDictionary(&NameRegistry{
 			ReserveSB:  "test_reserved",
 			EncodingSB: "test_encoding",
 		})
@@ -405,7 +405,7 @@ func TestReservedNamespace(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	r := newReservedSubspace(&TestMDNameRegistry{
+	r := newReservedSubspace(&NameRegistry{
 		ReserveSB:  "test_reserved",
 		EncodingSB: "test_encoding",
 	})
@@ -435,7 +435,7 @@ func TestReservedNamespace(t *testing.T) {
 
 func TestDecode(t *testing.T) {
 	k := kv.BuildKey(encVersion, UInt32ToByte(1234), dbKey, "db-1", keyEnd)
-	mp, err := NewMetadataDictionary(&TestMDNameRegistry{
+	mp, err := NewMetadataDictionary(&NameRegistry{
 		ReserveSB:  "test_reserved",
 		EncodingSB: "test_encoding",
 	}).decode(context.TODO(), k)

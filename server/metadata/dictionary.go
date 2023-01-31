@@ -100,15 +100,15 @@ var (
 // reservedSubspace struct is used to manage reserved subspace.
 type reservedSubspace struct {
 	sync.RWMutex
-	MDNameRegistry
+	NameRegistry
 
 	idToNamespaceStruct    map[uint32]NamespaceMetadata
 	strIdToNamespaceStruct map[string]NamespaceMetadata
 }
 
-func newReservedSubspace(mdNameRegistry MDNameRegistry) *reservedSubspace {
+func newReservedSubspace(mdNameRegistry *NameRegistry) *reservedSubspace {
 	return &reservedSubspace{
-		MDNameRegistry: mdNameRegistry,
+		NameRegistry: *mdNameRegistry,
 
 		idToNamespaceStruct:    make(map[uint32]NamespaceMetadata),
 		strIdToNamespaceStruct: make(map[string]NamespaceMetadata),
@@ -232,15 +232,15 @@ func (r *reservedSubspace) allocateToken(ctx context.Context, tx transaction.Tx,
 // MetadataDictionary is used to replace variable length strings to their corresponding codes to allocateAndSave it. Compression
 // is achieved by replacing long strings with a simple 4byte representation.
 type MetadataDictionary struct {
-	MDNameRegistry
+	NameRegistry
 
 	reservedSb *reservedSubspace
 }
 
-func NewMetadataDictionary(mdNameRegistry MDNameRegistry) *MetadataDictionary {
+func NewMetadataDictionary(mdNameRegistry *NameRegistry) *MetadataDictionary {
 	return &MetadataDictionary{
-		MDNameRegistry: mdNameRegistry,
-		reservedSb:     newReservedSubspace(mdNameRegistry),
+		NameRegistry: *mdNameRegistry,
+		reservedSb:   newReservedSubspace(mdNameRegistry),
 	}
 }
 

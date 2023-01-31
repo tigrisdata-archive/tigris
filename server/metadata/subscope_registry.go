@@ -14,23 +14,15 @@
 
 package metadata
 
-const (
-	reservedSubspaceName     = "reserved"
-	encodingSubspaceName     = "encoding"
-	schemaSubspaceName       = "schema"
-	searchSchemaSubspaceName = "search_schema"
-)
-
-// MDNameRegistry provides the names of the internal tables(subspaces) maintained by the metadata package. The interface
+// NameRegistry is used by tests to inject table names that can be used by tests.
+// NameRegistry provides the names of the internal tables(subspaces) maintained by the metadata package. The interface
 // helps in creating test tables for these structures.
-type MDNameRegistry interface {
+type NameRegistry struct {
 	// ReservedSubspaceName is the name of the table(subspace) where all the counters are stored.
-	ReservedSubspaceName() []byte
-
+	ReserveSB string
 	// EncodingSubspaceName is the name of the table(subspace) which is used by the dictionary encoder to store all the
 	// dictionary encoded values.
-	EncodingSubspaceName() []byte
-
+	EncodingSB string
 	// SchemaSubspaceName (the schema subspace) will be storing the actual schema of the user for a collection. The schema subspace will
 	// look like below
 	//    ["schema", 0x01, x, 0x01, 0x03, "created", 0x01] => {"title": "t1", properties: {"a": int}, primary_key: ["a"]}
@@ -43,73 +35,55 @@ type MDNameRegistry interface {
 	//    - 0x03 is the value for the collection.
 	//    - "created" is keyword.
 	//
-	SchemaSubspaceName() []byte
-
-	SearchSchemaSubspaceName() []byte
-
-	UserSubspaceName() []byte
-
-	NamespaceSubspaceName() []byte
+	SchemaSB     string
+	SearchSB     string
+	UserSB       string
+	NamespaceSB  string
+	ClusterSB    string
+	CollectionSB string
 }
 
-// DefaultMDNameRegistry provides the names of the subspaces used by the metadata package for managing dictionary
+// DefaultNameRegistry provides the names of the subspaces used by the metadata package for managing dictionary
 // encoded values, counters and schemas.
-type DefaultMDNameRegistry struct{}
-
-func (d *DefaultMDNameRegistry) ReservedSubspaceName() []byte {
-	return []byte(reservedSubspaceName)
+var DefaultNameRegistry = &NameRegistry{
+	ReserveSB:    "reserved",
+	EncodingSB:   "encoding",
+	SchemaSB:     "schema",
+	SearchSB:     "search_schema",
+	UserSB:       "user",
+	NamespaceSB:  "namespace",
+	ClusterSB:    "cluster",
+	CollectionSB: "collection",
 }
 
-func (d *DefaultMDNameRegistry) EncodingSubspaceName() []byte {
-	return []byte(encodingSubspaceName)
-}
-
-func (d *DefaultMDNameRegistry) SchemaSubspaceName() []byte {
-	return []byte(schemaSubspaceName)
-}
-
-func (d *DefaultMDNameRegistry) SearchSchemaSubspaceName() []byte {
-	return []byte(searchSchemaSubspaceName)
-}
-
-func (d *DefaultMDNameRegistry) UserSubspaceName() []byte {
-	return []byte(UserSubspaceName)
-}
-
-func (d *DefaultMDNameRegistry) NamespaceSubspaceName() []byte {
-	return []byte(NamespaceSubspaceName)
-}
-
-// TestMDNameRegistry is used by tests to inject table names that can be used by tests.
-type TestMDNameRegistry struct {
-	ReserveSB   string
-	EncodingSB  string
-	SchemaSB    string
-	SearchSB    string
-	UserSB      string
-	NamespaceSB string
-}
-
-func (d *TestMDNameRegistry) ReservedSubspaceName() []byte {
+func (d *NameRegistry) ReservedSubspaceName() []byte {
 	return []byte(d.ReserveSB)
 }
 
-func (d *TestMDNameRegistry) EncodingSubspaceName() []byte {
+func (d *NameRegistry) EncodingSubspaceName() []byte {
 	return []byte(d.EncodingSB)
 }
 
-func (d *TestMDNameRegistry) SchemaSubspaceName() []byte {
+func (d *NameRegistry) SchemaSubspaceName() []byte {
 	return []byte(d.SchemaSB)
 }
 
-func (d *TestMDNameRegistry) SearchSchemaSubspaceName() []byte {
+func (d *NameRegistry) SearchSchemaSubspaceName() []byte {
 	return []byte(d.SearchSB)
 }
 
-func (d *TestMDNameRegistry) UserSubspaceName() []byte {
+func (d *NameRegistry) UserSubspaceName() []byte {
 	return []byte(d.UserSB)
 }
 
-func (d *TestMDNameRegistry) NamespaceSubspaceName() []byte {
+func (d *NameRegistry) NamespaceSubspaceName() []byte {
 	return []byte(d.NamespaceSB)
+}
+
+func (d *NameRegistry) ClusterSubspaceName() []byte {
+	return []byte(d.ClusterSB)
+}
+
+func (d *NameRegistry) CollectionSubspaceName() []byte {
+	return []byte(d.CollectionSB)
 }

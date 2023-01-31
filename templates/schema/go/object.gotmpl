@@ -25,9 +25,9 @@ type {{ .Name }} struct {
          {{- if $def}}{{if $m}},{{end}}default:{{$def}}{{- $m = true}}{{end -}}
          {{- if $v.AutoGenerate}}{{if $m}},{{end}}autoGenerate{{- $m = true }}{{end -}}
          {{- if $v.UpdatedAt}}{{if $m}},{{end}}updatedAt{{- $m = true }}{{end -}}
-         {{- if $v.CreatedAt}}{{if $m}},{{end}}createdAt{{- end}}
-         {{- if $v.MaxLength}}{{if $m}},{{end}}maxLength:{{$v.MaxLength}}{{- end -}}
-         {{- if $v.Required}}{{if $m}},{{end}}required{{- end -}}
+         {{- if $v.CreatedAt}}{{if $m}},{{end}}createdAt{{- $m = true }}{{- end}}
+         {{- if $v.MaxLength}}{{if $m}},{{end}}maxLength:{{$v.MaxLength}}{{- $m = true }}{{- end -}}
+         {{- if $v.Required}}{{if $m}},{{end}}required{{- $m = true }}{{- end -}}
                     "{{end}}`
     {{- end -}}
 {{- end}}

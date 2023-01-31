@@ -41,7 +41,7 @@ var (
         "title": "products",
         "primary_key": ["Key", "KeyGenIdx", "name_key", "name_gen_key"],
         "description": "type description",
-        "required": ["req_field", "time_f"],
+        "required": ["max_len_str_req", "req_field", "time_f"],
         "properties": {
           "Gen": { "type": "integer", "format": "int32", "autoGenerate": true },
           "Key": { "type": "integer", "format": "int32"},
@@ -58,6 +58,7 @@ var (
           "def_val_uuid": { "type": "string", "format": "uuid", "default": "uuid()" },
           "def_val_cuid": { "type": "string", "default": "cuid()" },
           "max_len_str": { "type": "string", "maxLength" : 11 },
+          "max_len_str_req": { "type": "string", "maxLength" : 11 },
           "req_field": { "type": "integer", "format": "int32"},
           "time_f": { "type": "string", "format": "date-time", "default": "now()", "updatedAt": true, "createdAt": true }
 		}}`

@@ -28,10 +28,6 @@ import (
 
 type ContentType string
 
-const (
-	JSON ContentType = "application/json"
-)
-
 type Service interface {
 	RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error
 	RegisterGRPC(grpc *grpc.Server) error
@@ -50,7 +46,7 @@ func GetRegisteredServices(kvStore kv.KeyValueStore, searchStore search.Store, t
 	versionHandler := &metadata.VersionHandler{}
 	v1Services = append(v1Services, newHealthService(txMgr))
 
-	userStore := metadata.NewUserStore(&metadata.DefaultMDNameRegistry{})
+	userStore := metadata.NewUserStore(metadata.DefaultNameRegistry)
 
 	authProvider := auth.NewProvider(userStore, txMgr)
 	v1Services = append(v1Services, newApiService(kvStore, searchStore, tenantMgr, txMgr, authProvider, versionHandler))
