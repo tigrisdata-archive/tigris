@@ -170,7 +170,7 @@ func (s *storage) updateMetricsForNamespace(ctx context.Context, namespace strin
 		for _, db := range databases {
 			metrics.UpdateDbSizeMetrics(namespace, tenantName, db.DbName(), db.BranchName(), getDbSize(ctx, tenant, db))
 
-			for _, coll := range db.ListCollection() {
+			for _, coll := range db.ListCollections() {
 				metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.DbName(), db.BranchName(), coll.Name, getCollSize(ctx, tenant, db, coll))
 			}
 		}

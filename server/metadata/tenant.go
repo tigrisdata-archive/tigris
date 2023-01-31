@@ -1069,7 +1069,7 @@ func (tenant *Tenant) CreateBranch(ctx context.Context, tx transaction.Tx, projN
 
 	// Create collections inside the new database branch
 	branch := NewDatabase(branchMeta.ID, dbName.Name())
-	for _, coll := range proj.database.ListCollection() {
+	for _, coll := range proj.database.ListCollections() {
 		schFactory, err := schema.Build(coll.Name, coll.Schema)
 		if err != nil {
 			return err
@@ -1564,8 +1564,8 @@ func (d *Database) Id() uint32 {
 	return d.id
 }
 
-// ListCollection returns the collection object of all the collections in this database.
-func (d *Database) ListCollection() []*schema.DefaultCollection {
+// ListCollections returns the collection object of all the collections in this database.
+func (d *Database) ListCollections() []*schema.DefaultCollection {
 	d.RLock()
 	defer d.RUnlock()
 
@@ -1573,6 +1573,7 @@ func (d *Database) ListCollection() []*schema.DefaultCollection {
 	for _, c := range d.collections {
 		collections = append(collections, c.collection)
 	}
+
 	return collections
 }
 

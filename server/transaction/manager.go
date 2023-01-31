@@ -25,6 +25,7 @@ import (
 	"github.com/tigrisdata/tigris/lib/uuid"
 	"github.com/tigrisdata/tigris/server/types"
 	"github.com/tigrisdata/tigris/store/kv"
+	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 var (
@@ -100,6 +101,24 @@ func (m *Manager) StartTx(ctx context.Context) (Tx, error) {
 	}
 
 	return session, nil
+}
+
+// Tx runs function in a transaction
+func (m *Manager) Tx(ctx context.Context, fn func(ctx context.Context, tx Tx) error) error {
+	tx, err := m.StartTx(ctx)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		ulog.E(tx.Rollback(ctx))
+	}()
+
+	if err = fn(ctx, tx); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }
 
 type sessionState uint8

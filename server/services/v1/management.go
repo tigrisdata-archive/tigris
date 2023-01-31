@@ -188,7 +188,7 @@ func (m *managementService) getNameSpaceDetails(ctx context.Context) (nsDetailsR
 			}
 
 			for _, db := range project.GetDatabaseWithBranches() {
-				for _, coll := range db.ListCollection() {
+				for _, coll := range db.ListCollections() {
 					size, err := tenant.CollectionSize(ctx, db, coll)
 					if err != nil {
 						return nil, err
