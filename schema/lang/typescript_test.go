@@ -108,6 +108,9 @@ export class Product {
   @Field({ maxLength: 11 })
   max_len_str: string;
 
+  @Field({ maxLength: 11 })
+  max_len_str_req: string;
+
   @Field(TigrisDataTypes.INT32, { autoGenerate: true })
   name_gen?: number;
 

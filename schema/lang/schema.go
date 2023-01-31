@@ -246,6 +246,7 @@ func genSchema(w io.Writer, name string, desc string, field map[string]*Field,
 			return ErrEmptyObjectName
 		}
 
+		// TODO: We assume required array is sorted, need fix to not depend on it.
 		req := false
 		if reqPtr < len(required) {
 			if required[reqPtr] == n {

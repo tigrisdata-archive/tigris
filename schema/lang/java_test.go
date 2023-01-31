@@ -225,6 +225,7 @@ public class Product implements TigrisCollectionType {
     private String def_val_str_q;
     private UUID def_val_uuid;
     private String max_len_str;
+    private String max_len_str_req;
     @TigrisPrimaryKey(autoGenerate = true)
     private int name_gen;
     @TigrisPrimaryKey(order = 4, autoGenerate = true)
@@ -323,6 +324,14 @@ public class Product implements TigrisCollectionType {
         this.max_len_str = maxLenStr;
     }
 
+    public String getMax_len_str_req() {
+        return max_len_str_req;
+    }
+
+    public void setMax_len_str_req(String maxLenStrReq) {
+        this.max_len_str_req = maxLenStrReq;
+    }
+
     public int getName_gen() {
         return name_gen;
     }
@@ -385,6 +394,7 @@ public class Product implements TigrisCollectionType {
         String defValStrQ,
         UUID defValUuid,
         String maxLenStr,
+        String maxLenStrReq,
         int nameGen,
         int nameGenKey,
         int nameKey,
@@ -403,6 +413,7 @@ public class Product implements TigrisCollectionType {
         this.def_val_str_q = defValStrQ;
         this.def_val_uuid = defValUuid;
         this.max_len_str = maxLenStr;
+        this.max_len_str_req = maxLenStrReq;
         this.name_gen = nameGen;
         this.name_gen_key = nameGenKey;
         this.name_key = nameKey;
@@ -433,6 +444,7 @@ public class Product implements TigrisCollectionType {
             def_val_str_q == other.def_val_str_q &&
             def_val_uuid == other.def_val_uuid &&
             max_len_str == other.max_len_str &&
+            max_len_str_req == other.max_len_str_req &&
             name_gen == other.name_gen &&
             name_gen_key == other.name_gen_key &&
             name_key == other.name_key &&
@@ -455,6 +467,7 @@ public class Product implements TigrisCollectionType {
             def_val_str_q,
             def_val_uuid,
             max_len_str,
+            max_len_str_req,
             name_gen,
             name_gen_key,
             name_key,

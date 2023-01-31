@@ -63,6 +63,7 @@ type Product struct {
 	DefValStrQ string ` + "`" + `json:"def_val_str_q" tigris:"default:'st\\'r1'"` + "`" + `
 	DefValUuid uuid.UUID ` + "`" + `json:"def_val_uuid" tigris:"default:'uuid()'"` + "`" + `
 	MaxLenStr string ` + "`" + `json:"max_len_str" tigris:"maxLength:11"` + "`" + `
+	MaxLenStrReq string ` + "`" + `json:"max_len_str_req" tigris:"maxLength:11,required"` + "`" + `
 	NameGen int32 ` + "`" + `json:"name_gen" tigris:"autoGenerate"` + "`" + `
 	NameGenKey int32 ` + "`" + `json:"name_gen_key" tigris:"primaryKey:4,autoGenerate"` + "`" + `
 	NameKey int32 ` + "`" + `json:"name_key" tigris:"primaryKey:3"` + "`" + `
