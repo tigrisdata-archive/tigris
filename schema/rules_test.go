@@ -159,3 +159,60 @@ func TestApplySchemaRulesIncompatible(t *testing.T) {
 		require.Equal(t, c.expErr, err)
 	}
 }
+
+func TestApplyIndexSchemaRules(t *testing.T) {
+	cases := []struct {
+		existing []byte
+		incoming []byte
+		expErr   error
+	}{
+		{
+			// field added
+			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}}}`),
+			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}, "b": { "type": "string", "format": "byte"}}}`),
+			nil,
+		},
+		{
+			// field removed
+			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}},"primary_key": ["id"]}`),
+			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}},"primary_key": ["id"]}`),
+			nil,
+		},
+		{
+			// type changed
+			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}}}`),
+			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string", "format":"byte"}}}`),
+			errors.InvalidArgument("data type mismatch for field 's'"),
+		},
+		{
+			// source changed
+			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}}, "source": {"type": "user"}}`),
+			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}}, "source": {"type": "tigris", "collection": "foo"}}`),
+			errors.InvalidArgument("changing index source type is not allowed from: 'user', to: 'tigris'"),
+		},
+		{
+			// collection changed
+			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}}, "source": {"type": "tigris", "collection": "foo"}}`),
+			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}}, "source": {"type": "tigris", "collection": "bar"}}`),
+			errors.InvalidArgument("changing index source collection is not allowed from: 'foo', to: 'bar'"),
+		},
+		{
+			// branch changed
+			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}}, "source": {"type": "tigris", "collection": "foo", "branch": "featA"}}`),
+			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}}, "source": {"type": "tigris", "collection": "foo", "branch": "featB"}}`),
+			errors.InvalidArgument("changing index source database branch is not allowed from: 'featA', to: 'featB'"),
+		},
+	}
+
+	for _, c := range cases {
+		f1, err := BuildSearch("t1", c.existing)
+		require.NoError(t, err)
+		f2, err := BuildSearch("t1", c.incoming)
+		require.NoError(t, err)
+
+		existingC := NewSearchIndex(1, "1.1.t1", f1, nil)
+
+		err = ApplySearchIndexSchemaRules(existingC, f2)
+		require.Equal(t, c.expErr, err)
+	}
+}
