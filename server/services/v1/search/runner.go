@@ -558,7 +558,7 @@ func (runner *IndexRunner) Run(ctx context.Context, tx transaction.Tx, tenant *m
 				return Response{}, err
 			}
 
-			var indexInfo = &api.IndexInfo{
+			indexInfo := &api.IndexInfo{
 				Name: index.Name,
 			}
 			if indexInfo.Schema, err = jsoniter.Marshal(us); err != nil {

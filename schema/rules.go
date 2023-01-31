@@ -22,7 +22,7 @@ import (
 var (
 	ErrMissingField           = errors.InvalidArgument("removing a field is a backward incompatible change")
 	ErrCollectionNameMismatch = errors.InvalidArgument("mismatch in the collection name")
-	// ErrModifiedPrimaryKey     = errors.InvalidArgument("changing primary key is a backward incompatible change").
+	ErrIndexNameMismatch      = errors.InvalidArgument("mismatch in the index name")
 )
 
 var validators = []Validator{
@@ -30,8 +30,17 @@ var validators = []Validator{
 	&FieldSchemaValidator{},
 }
 
+var searchIndexValidators = []SearchIndexValidator{
+	&FieldSchemaValidator{},
+	&IndexSourceValidator{},
+}
+
 type Validator interface {
 	Validate(existing *DefaultCollection, current *Factory) error
+}
+
+type SearchIndexValidator interface {
+	ValidateIndex(existing *SearchIndex, current *SearchFactory) error
 }
 
 type IndexSchemaValidator struct{}
@@ -71,6 +80,64 @@ func (v *FieldSchemaValidator) Validate(existing *DefaultCollection, current *Fa
 	return nil
 }
 
+func (v *FieldSchemaValidator) ValidateIndex(existing *SearchIndex, current *SearchFactory) error {
+	existingFields := make(map[string]*Field)
+	for _, e := range existing.Fields {
+		existingFields[e.FieldName] = e
+	}
+
+	currentFields := make(map[string]*Field)
+	for _, e := range current.Fields {
+		currentFields[e.FieldName] = e
+	}
+
+	for name, f := range existingFields {
+		f1, ok := currentFields[name]
+		if !ok {
+			// dropping a field is allowed
+			continue
+		}
+
+		if f.DataType != f1.DataType {
+			return errors.InvalidArgument("data type mismatch for field '%s'", f.FieldName)
+		}
+	}
+
+	return nil
+}
+
+type IndexSourceValidator struct{}
+
+func (v *IndexSourceValidator) ValidateIndex(existing *SearchIndex, current *SearchFactory) error {
+	if len(existing.Source.Type) > 0 && existing.Source.Type != current.Source.Type {
+		return errors.InvalidArgument(
+			"changing index source type is not allowed from: '%s', to: '%s'",
+			existing.Source.Type,
+			current.Source.Type,
+		)
+	}
+
+	if len(existing.Source.CollectionName) > 0 && existing.Source.CollectionName != current.Source.CollectionName {
+		return errors.InvalidArgument(
+			"changing index source collection is not allowed from: '%s', to: '%s'",
+			existing.Source.CollectionName,
+			current.Source.CollectionName,
+		)
+	}
+
+	if len(existing.Source.DatabaseBranch) > 0 {
+		if len(current.Source.DatabaseBranch) > 0 && existing.Source.DatabaseBranch != current.Source.DatabaseBranch {
+			return errors.InvalidArgument(
+				"changing index source database branch is not allowed from: '%s', to: '%s'",
+				existing.Source.DatabaseBranch,
+				current.Source.DatabaseBranch,
+			)
+		}
+	}
+
+	return nil
+}
+
 // ApplySchemaRules is to validate incoming collection request against the existing present collection. It performs
 // following validations,
 //   - Primary Key Changed, or order of fields part of the primary key is changed
@@ -85,6 +152,25 @@ func ApplySchemaRules(existing *DefaultCollection, current *Factory) error {
 
 	for _, v := range validators {
 		if err := v.Validate(existing, current); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// ApplySearchIndexSchemaRules is to validate incoming index schema against the existing index version. It performs
+// following validations,
+//   - Collection name change.
+//   - A validation on field like changing the type is not allowed.
+//   - A validation on index source, it is defined during index creation and should not change afterwards.
+func ApplySearchIndexSchemaRules(existing *SearchIndex, current *SearchFactory) error {
+	if existing.Name != current.Name {
+		return ErrIndexNameMismatch
+	}
+
+	for _, v := range searchIndexValidators {
+		if err := v.ValidateIndex(existing, current); err != nil {
 			return err
 		}
 	}
