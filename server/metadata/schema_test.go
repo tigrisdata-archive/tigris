@@ -19,53 +19,61 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 )
 
+func initSchemaTest(t *testing.T) (*SchemaSubspace, transaction.Tx) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	s := NewSchemaStore(&NameRegistry{
+		SchemaSB: "test_schema",
+	})
+
+	_ = kvStore.DropTable(ctx, s.SubspaceName)
+
+	tm := transaction.NewManager(kvStore)
+	tx, err := tm.StartTx(ctx)
+	require.NoError(t, err)
+
+	return s, tx
+}
+
 func TestSchemaSubspace(t *testing.T) {
 	t.Run("put_error", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		s := NewSchemaStore(&TestMDNameRegistry{
-			SchemaSB: "test_schema",
-		})
-		_ = kvStore.DropTable(ctx, s.SchemaSubspaceName())
-		tm := transaction.NewManager(kvStore)
-		tx, err := tm.StartTx(ctx)
-		require.NoError(t, err)
+		s, tx := initSchemaTest(t)
+		defer func() { assert.NoError(t, tx.Rollback(ctx)) }()
+
 		require.Equal(t, errors.InvalidArgument("invalid schema version %d", 0), s.Put(ctx, tx, 1, 2, 3, nil, 0))
 		require.Equal(t, errors.InvalidArgument("empty schema"), s.Put(ctx, tx, 1, 2, 3, nil, 1))
-		require.NoError(t, tx.Rollback(ctx))
 	})
+
 	t.Run("put_duplicate_error", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
 		schema := []byte(`{"title": "test schema1"}`)
 
-		s := NewSchemaStore(&TestMDNameRegistry{
-			SchemaSB: "test_schema",
-		})
-		_ = kvStore.DropTable(ctx, s.SchemaSubspaceName())
-		tm := transaction.NewManager(kvStore)
-		tx, err := tm.StartTx(ctx)
-		require.NoError(t, err)
+		s, tx := initSchemaTest(t)
+		defer func() { assert.NoError(t, tx.Rollback(ctx)) }()
+
 		require.NoError(t, s.Put(ctx, tx, 1, 2, 3, schema, 1))
 		require.Equal(t, kv.ErrDuplicateKey, s.Put(ctx, tx, 1, 2, 3, schema, 1))
-		require.NoError(t, tx.Rollback(ctx))
 	})
+
 	t.Run("put_get", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		s := NewSchemaStore(&TestMDNameRegistry{
-			SchemaSB: "test_schema",
-		})
-		_ = kvStore.DropTable(ctx, s.SchemaSubspaceName())
+		s, tx := initSchemaTest(t)
+		defer func() { assert.NoError(t, tx.Rollback(ctx)) }()
 
 		schema := []byte(`{
 		"title": "collection1",
@@ -85,9 +93,6 @@ func TestSchemaSubspace(t *testing.T) {
 		"primary_key": ["K1", "K2"]
 	}`)
 
-		tm := transaction.NewManager(kvStore)
-		tx, err := tm.StartTx(ctx)
-		require.NoError(t, err)
 		require.NoError(t, s.Put(ctx, tx, 1, 2, 3, schema, 1))
 		sch, err := s.GetLatest(ctx, tx, 1, 2, 3)
 		require.NoError(t, err)
@@ -98,18 +103,16 @@ func TestSchemaSubspace(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, schema, schemas[0].Schema)
 		require.Equal(t, 1, schemas[0].Version)
-		require.NoError(t, tx.Commit(ctx))
 
-		_ = kvStore.DropTable(ctx, s.SchemaSubspaceName())
+		_ = kvStore.DropTable(ctx, s.SubspaceName)
 	})
+
 	t.Run("put_get_multiple", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		s := NewSchemaStore(&TestMDNameRegistry{
-			SchemaSB: "test_schema",
-		})
-		_ = kvStore.DropTable(ctx, s.SchemaSubspaceName())
+		s, tx := initSchemaTest(t)
+		defer func() { assert.NoError(t, tx.Rollback(ctx)) }()
 
 		schema1 := []byte(`{
 		"title": "collection1",
@@ -142,9 +145,6 @@ func TestSchemaSubspace(t *testing.T) {
 		"primary_key": ["K1"]
 	}`)
 
-		tm := transaction.NewManager(kvStore)
-		tx, err := tm.StartTx(ctx)
-		require.NoError(t, err)
 		require.NoError(t, s.Put(ctx, tx, 1, 2, 3, schema1, 1))
 		require.NoError(t, s.Put(ctx, tx, 1, 2, 3, schema2, 2))
 		sch, err := s.GetLatest(ctx, tx, 1, 2, 3)
@@ -158,16 +158,14 @@ func TestSchemaSubspace(t *testing.T) {
 		require.Equal(t, schema2, schemas[1].Schema)
 		require.Equal(t, 1, schemas[0].Version)
 		require.Equal(t, 2, schemas[1].Version)
-		require.NoError(t, tx.Commit(ctx))
 	})
+
 	t.Run("put_delete_get", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		s := NewSchemaStore(&TestMDNameRegistry{
-			SchemaSB: "test_schema",
-		})
-		_ = kvStore.DropTable(ctx, s.SchemaSubspaceName())
+		s, tx := initSchemaTest(t)
+		defer func() { assert.NoError(t, tx.Rollback(ctx)) }()
 
 		schema1 := []byte(`{
 		"title": "collection1",
@@ -200,9 +198,6 @@ func TestSchemaSubspace(t *testing.T) {
 		"primary_key": ["K1"]
 	}`)
 
-		tm := transaction.NewManager(kvStore)
-		tx, err := tm.StartTx(ctx)
-		require.NoError(t, err)
 		require.NoError(t, s.Put(ctx, tx, 1, 2, 3, schema1, 1))
 		require.NoError(t, s.Put(ctx, tx, 1, 2, 3, schema2, 2))
 
@@ -212,6 +207,8 @@ func TestSchemaSubspace(t *testing.T) {
 		require.Equal(t, schema2, schemas[1].Schema)
 		require.Len(t, schemas, 2)
 		require.NoError(t, tx.Commit(ctx))
+
+		tm := transaction.NewManager(kvStore)
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)

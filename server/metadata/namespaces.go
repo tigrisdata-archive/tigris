@@ -16,243 +16,173 @@ package metadata
 
 import (
 	"context"
-
 	jsoniter "github.com/json-iterator/go"
-	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/errors"
-	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/server/transaction"
-	"github.com/tigrisdata/tigris/store/kv"
-)
-
-const (
-	NamespaceSubspaceName = "namespace"
+	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 // NamespaceSubspace is used to store metadata about Tigris namespaces.
 type NamespaceSubspace struct {
-	MDNameRegistry
+	metadataSubspace
 }
 
 var namespaceVersion = []byte{0x01}
 
-func NewNamespaceStore(mdNameRegistry MDNameRegistry) *NamespaceSubspace {
+func NewNamespaceStore(mdNameRegistry *NameRegistry) *NamespaceSubspace {
 	return &NamespaceSubspace{
-		MDNameRegistry: mdNameRegistry,
+		metadataSubspace{
+			SubspaceName: mdNameRegistry.NamespaceSubspaceName(),
+			Version:      namespaceVersion,
+		},
 	}
 }
 
-func (n *NamespaceSubspace) InsertNamespaceMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, metadataKey string, payload []byte) error {
-	if err := validateNamespaceArgs(namespaceId, metadataKey, payload); err != nil {
-		return err
-	}
-	key := keys.NewKey(n.NamespaceSubspaceName(), namespaceVersion, UInt32ToByte(namespaceId), []byte(metadataKey))
-	if err := tx.Insert(ctx, key, internal.NewTableData(payload)); err != nil {
-		log.Debug().Str("key", key.String()).Str("value", string(payload)).Err(err).Msg("storing namespace metadata failed")
-		return err
+func (n *NamespaceSubspace) getProjKey(namespaceId uint32, projName string) keys.Key {
+	return keys.NewKey(n.SubspaceName, n.Version, UInt32ToByte(namespaceId), dbKey, projName)
+}
+
+func (n *NamespaceSubspace) getNSKey(namespaceId uint32, metadataKey string) keys.Key {
+	if metadataKey != "" {
+		return keys.NewKey(n.SubspaceName, n.Version, UInt32ToByte(namespaceId), []byte(metadataKey))
 	}
 
-	log.Debug().Str("key", key.String()).Str("value", string(payload)).Msg("storing namespace metadata succeed")
-
-	return nil
+	return keys.NewKey(n.SubspaceName, n.Version, UInt32ToByte(namespaceId))
 }
 
 func (n *NamespaceSubspace) InsertProjectMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, projName string, projMetadata *ProjectMetadata) error {
-	if namespaceId < 1 {
-		return errors.InvalidArgument("invalid namespace, id must be greater than 0")
-	}
-	if projName == "" {
-		return errors.InvalidArgument("invalid projName, projName must not be blank")
-	}
-	if projMetadata == nil {
-		return errors.InvalidArgument("invalid projMetadata, projMetadata must not be nil")
-	}
-
-	payload, err := jsoniter.Marshal(projMetadata)
-	if err != nil {
-		log.Err(err).Msg("Failed to marshal db metadata")
-		return errors.Internal("Failed to update db metadata, failed to marshal db metadata")
-	}
-	key := keys.NewKey(n.NamespaceSubspaceName(), namespaceVersion, UInt32ToByte(namespaceId), dbKey, projName)
-
-	if err := tx.Insert(ctx, key, internal.NewTableData(payload)); err != nil {
-		log.Debug().Str("key", key.String()).Str("value", string(payload)).Err(err).Msg("storing namespace metadata failed")
+	if err := n.validateProjectArgs(namespaceId, projName, &projMetadata); err != nil {
 		return err
 	}
 
-	log.Debug().Str("key", key.String()).Str("value", string(payload)).Msg("storing namespace metadata succeed")
-	return nil
+	payload, err := jsoniter.Marshal(projMetadata)
+	if ulog.E(err) {
+		return errors.Internal("Failed to update db metadata, failed to marshal db metadata")
+	}
+
+	return n.insertMetadata(ctx, tx, nil, n.getProjKey(namespaceId, projName), payload)
 }
 
 func (n *NamespaceSubspace) GetProjectMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, projName string) (*ProjectMetadata, error) {
-	if namespaceId < 1 {
-		return nil, errors.InvalidArgument("invalid namespace, id must be greater than 0")
-	}
-	if projName == "" {
-		return nil, errors.InvalidArgument("invalid projName, projName must not be blank")
-	}
-
-	key := keys.NewKey(n.NamespaceSubspaceName(), namespaceVersion, UInt32ToByte(namespaceId), dbKey, projName)
-	it, err := tx.Read(ctx, key)
+	payload, err := n.getMetadata(ctx, tx,
+		n.validateProjectArgs(namespaceId, projName, nil),
+		n.getProjKey(namespaceId, projName),
+	)
 	if err != nil {
 		return nil, err
 	}
-	var row kv.KeyValue
-	if it.Next(&row) {
-		log.Debug().Str("key", key.String()).Str("value", string(row.Data.RawData)).Msg("reading namespace metadata succeed")
-		var projMetadata ProjectMetadata
-		if err = jsoniter.Unmarshal(row.Data.RawData, &projMetadata); err != nil {
-			log.Err(err).Msg("Failed to read db metadata")
-			return nil, errors.Internal("Failed to read database metadata")
-		}
-		return &projMetadata, nil
+
+	if payload == nil {
+		return nil, nil
 	}
-	return nil, it.Err()
+
+	var projMetadata ProjectMetadata
+	if err = jsoniter.Unmarshal(payload, &projMetadata); ulog.E(err) {
+		return nil, errors.Internal("Failed to read database metadata")
+	}
+
+	return &projMetadata, nil
 }
 
 func (n *NamespaceSubspace) UpdateProjectMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, projName string, projMetadata *ProjectMetadata) error {
-	if namespaceId < 1 {
-		return errors.InvalidArgument("invalid namespace, id must be greater than 0")
-	}
-	if projName == "" {
-		return errors.InvalidArgument("invalid projName, projName must not be blank")
-	}
-	if projMetadata == nil {
-		return errors.InvalidArgument("invalid projMetadata, projMetadata must not be nil")
+	if err := n.validateProjectArgs(namespaceId, projName, &projMetadata); err != nil {
+		return err
 	}
 
 	payload, err := jsoniter.Marshal(projMetadata)
-	if err != nil {
-		log.Err(err).Msg("Failed to marshal db metadata")
+	if ulog.E(err) {
 		return errors.Internal("Failed to update db metadata, failed to marshal db metadata")
 	}
-	key := keys.NewKey(n.NamespaceSubspaceName(), namespaceVersion, UInt32ToByte(namespaceId), dbKey, projName)
 
-	_, err = tx.Update(ctx, key, func(data *internal.TableData) (*internal.TableData, error) {
-		return internal.NewTableData(payload), nil
-	})
-	if err != nil {
-		log.Warn().Str("key", key.String()).Str("value", string(payload)).Err(err).Msg("Updating project metadata failed")
-		return err
-	}
-
-	log.Debug().Str("key", key.String()).Str("value", string(payload)).Msg("Updating db metadata succeed")
-	return nil
+	return n.updateMetadata(ctx, tx,
+		nil,
+		n.getProjKey(namespaceId, projName),
+		payload,
+	)
 }
 
 func (n *NamespaceSubspace) DeleteProjectMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, projName string) error {
+	return n.deleteMetadata(ctx, tx,
+		n.validateProjectArgs(namespaceId, projName, nil),
+		n.getProjKey(namespaceId, projName),
+	)
+}
+
+func (n *NamespaceSubspace) validateProjectArgs(namespaceId uint32, projName string, metadata **ProjectMetadata) error {
 	if namespaceId < 1 {
 		return errors.InvalidArgument("invalid namespace, id must be greater than 0")
 	}
+
 	if projName == "" {
 		return errors.InvalidArgument("invalid projName, projName must not be blank")
 	}
-	key := keys.NewKey(n.NamespaceSubspaceName(), namespaceVersion, UInt32ToByte(namespaceId), dbKey, projName)
-	err := tx.Delete(ctx, key)
-	if err != nil {
-		log.Debug().Str("key", key.String()).Err(err).Msg("Delete database metadata failed")
-		return err
+
+	if metadata != nil && *metadata == nil {
+		return errors.InvalidArgument("invalid projMetadata, projMetadata must not be nil")
 	}
-	log.Debug().Str("key", key.String()).Msg("Delete database metadata succeed")
+
 	return nil
+}
+
+func (n *NamespaceSubspace) InsertNamespaceMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, metadataKey string, payload []byte) error {
+	return n.insertMetadata(ctx, tx,
+		n.validateNSArgs(namespaceId, &metadataKey, &payload),
+		n.getNSKey(namespaceId, metadataKey),
+		payload,
+	)
 }
 
 func (n *NamespaceSubspace) GetNamespaceMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, metadataKey string) ([]byte, error) {
-	if err := validateNamespaceArgsPartial1(namespaceId, metadataKey); err != nil {
-		return nil, err
-	}
-	key := keys.NewKey(n.NamespaceSubspaceName(), namespaceVersion, UInt32ToByte(namespaceId), []byte(metadataKey))
-	it, err := tx.Read(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-	var row kv.KeyValue
-	if it.Next(&row) {
-		log.Debug().Str("key", key.String()).Str("value", string(row.Data.RawData)).Msg("reading namespace metadata succeed")
-		return row.Data.RawData, nil
-	}
-
-	return nil, it.Err()
+	return n.getMetadata(ctx, tx,
+		n.validateNSArgs(namespaceId, &metadataKey, nil),
+		n.getNSKey(namespaceId, metadataKey),
+	)
 }
 
 func (n *NamespaceSubspace) UpdateNamespaceMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, metadataKey string, payload []byte) error {
-	if err := validateNamespaceArgs(namespaceId, metadataKey, payload); err != nil {
-		return err
-	}
-	key := keys.NewKey(n.NamespaceSubspaceName(), namespaceVersion, UInt32ToByte(namespaceId), []byte(metadataKey))
-
-	_, err := tx.Update(ctx, key, func(data *internal.TableData) (*internal.TableData, error) {
-		return internal.NewTableData(payload), nil
-	})
-	if err != nil {
-		return err
-	}
-	log.Debug().Str("key", key.String()).Str("value", string(payload)).Msg("update namespace metadata succeed")
-	return nil
+	return n.updateMetadata(ctx, tx,
+		n.validateNSArgs(namespaceId, &metadataKey, &payload),
+		n.getNSKey(namespaceId, metadataKey),
+		payload,
+	)
 }
 
 func (n *NamespaceSubspace) DeleteNamespaceMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, metadataKey string) error {
-	if err := validateNamespaceArgsPartial1(namespaceId, metadataKey); err != nil {
-		return err
-	}
-	key := keys.NewKey(n.NamespaceSubspaceName(), namespaceVersion, UInt32ToByte(namespaceId), []byte(metadataKey))
-	err := tx.Delete(ctx, key)
-	if err != nil {
-		log.Debug().Str("key", key.String()).Err(err).Msg("Delete namespace metadata failed")
-		return err
-	}
-	log.Debug().Str("key", key.String()).Msg("Delete namespace metadata  succeed")
-	return nil
+	return n.deleteMetadata(ctx, tx,
+		n.validateNSArgs(namespaceId, &metadataKey, nil),
+		n.getNSKey(namespaceId, metadataKey),
+	)
 }
 
 func (n *NamespaceSubspace) DeleteNamespace(ctx context.Context, tx transaction.Tx, namespaceId uint32) error {
-	if err := validateNamespaceArgsPartial2(namespaceId); err != nil {
-		return err
-	}
-	key := keys.NewKey(n.NamespaceSubspaceName(), namespaceVersion, UInt32ToByte(namespaceId))
-	err := tx.Delete(ctx, key)
-	if err != nil {
-		log.Debug().Str("key", key.String()).Err(err).Msg("Delete namespace failed")
-		return err
-	}
-	log.Debug().Str("key", key.String()).Msg("Delete namespace succeed")
-	return nil
+	return n.deleteMetadata(ctx, tx,
+		n.validateNSArgs(namespaceId, nil, nil),
+		n.getNSKey(namespaceId, ""),
+	)
 }
 
-func validateNamespaceArgs(namespaceId uint32, metadataKey string, value []byte) error {
-	if err := validateNamespaceArgsPartial1(namespaceId, metadataKey); err != nil {
-		return err
-	}
-
-	if value == nil {
-		return errors.InvalidArgument("invalid nil payload")
-	}
-	return nil
-}
-
-func validateNamespaceArgsPartial1(namespaceId uint32, metadataKey string) error {
-	if err := validateNamespaceArgsPartial2(namespaceId); err != nil {
-		return err
-	}
-	if metadataKey == "" {
-		return errors.InvalidArgument("invalid empty metadataKey")
-	}
-
-	if metadataKey == dbKey {
-		return errors.InvalidArgument("invalid metadataKey. " + dbKey + " is reserved")
-	}
-
-	if metadataKey == namespaceKey {
-		return errors.InvalidArgument("invalid metadataKey. " + namespaceKey + " is reserved")
-	}
-
-	return nil
-}
-
-func validateNamespaceArgsPartial2(namespaceId uint32) error {
+func (n *NamespaceSubspace) validateNSArgs(namespaceId uint32, metadataKey *string, value *[]byte) error {
 	if namespaceId < 1 {
 		return errors.InvalidArgument("invalid namespace, id must be greater than 0")
+	}
+
+	if metadataKey != nil {
+		if *metadataKey == "" {
+			return errors.InvalidArgument("invalid empty metadataKey")
+		}
+
+		if *metadataKey == dbKey {
+			return errors.InvalidArgument("invalid metadataKey. " + dbKey + " is reserved")
+		}
+
+		if *metadataKey == namespaceKey {
+			return errors.InvalidArgument("invalid metadataKey. " + namespaceKey + " is reserved")
+		}
+	}
+
+	if value != nil && *value == nil {
+		return errors.InvalidArgument("invalid nil payload")
 	}
 
 	return nil

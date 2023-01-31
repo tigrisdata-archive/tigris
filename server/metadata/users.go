@@ -17,21 +17,14 @@ package metadata
 import (
 	"context"
 
-	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/errors"
-	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/server/transaction"
-	"github.com/tigrisdata/tigris/store/kv"
-)
-
-const (
-	UserSubspaceName = "user"
 )
 
 // UserSubspace is used to store metadata about Tigris users.
 type UserSubspace struct {
-	MDNameRegistry
+	metadataSubspace
 }
 
 var userVersion = []byte{0x01}
@@ -43,115 +36,75 @@ const (
 	Application UserType = 1
 )
 
-func NewUserStore(mdNameRegistry MDNameRegistry) *UserSubspace {
+func NewUserStore(mdNameRegistry *NameRegistry) *UserSubspace {
 	return &UserSubspace{
-		MDNameRegistry: mdNameRegistry,
+		metadataSubspace{
+			SubspaceName: mdNameRegistry.UserSubspaceName(),
+			Version:      userVersion,
+		},
 	}
+}
+
+func (u *UserSubspace) getKey(namespaceId uint32, userType UserType, userId string, metadataKey string) keys.Key {
+	if metadataKey != "" {
+		return keys.NewKey(u.SubspaceName, u.Version, UInt32ToByte(namespaceId), UInt32ToByte(uint32(userType)), []byte(userId), []byte(metadataKey))
+	}
+
+	return keys.NewKey(u.SubspaceName, u.Version, UInt32ToByte(namespaceId), UInt32ToByte(uint32(userType)), []byte(userId))
 }
 
 func (u *UserSubspace) InsertUserMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, userType UserType, userId string, metadataKey string, payload []byte) error {
-	if err := validateUserArgs(namespaceId, userId, metadataKey, payload); err != nil {
-		return err
-	}
-	key := keys.NewKey(u.UserSubspaceName(), userVersion, UInt32ToByte(namespaceId), UInt32ToByte(uint32(userType)), []byte(userId), []byte(metadataKey))
-	if err := tx.Insert(ctx, key, internal.NewTableData(payload)); err != nil {
-		log.Debug().Str("key", key.String()).Str("value", string(payload)).Err(err).Msg("storing user metadata failed")
-		return err
-	}
-
-	log.Debug().Str("key", key.String()).Str("value", string(payload)).Msg("storing user metadata succeed")
-
-	return nil
+	return u.insertMetadata(ctx, tx,
+		u.validateArgs(namespaceId, userId, &metadataKey, &payload),
+		u.getKey(namespaceId, userType, userId, metadataKey),
+		payload,
+	)
 }
 
 func (u *UserSubspace) GetUserMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, userType UserType, userId string, metadataKey string) ([]byte, error) {
-	if err := validateUserArgsPartial1(namespaceId, userId, metadataKey); err != nil {
-		return nil, err
-	}
-	key := keys.NewKey(u.UserSubspaceName(), userVersion, UInt32ToByte(namespaceId), UInt32ToByte(uint32(userType)), []byte(userId), []byte(metadataKey))
-	it, err := tx.Read(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-	var row kv.KeyValue
-	if it.Next(&row) {
-		log.Debug().Str("key", key.String()).Str("value", string(row.Data.RawData)).Msg("reading user metadata succeed")
-		return row.Data.RawData, nil
-	}
-
-	return nil, it.Err()
+	return u.getMetadata(ctx, tx,
+		u.validateArgs(namespaceId, userId, &metadataKey, nil),
+		u.getKey(namespaceId, userType, userId, metadataKey),
+	)
 }
 
 func (u *UserSubspace) UpdateUserMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, userType UserType, userId string, metadataKey string, payload []byte) error {
-	if err := validateUserArgs(namespaceId, userId, metadataKey, payload); err != nil {
-		return err
-	}
-	key := keys.NewKey(u.UserSubspaceName(), userVersion, UInt32ToByte(namespaceId), UInt32ToByte(uint32(userType)), []byte(userId), []byte(metadataKey))
-
-	_, err := tx.Update(ctx, key, func(data *internal.TableData) (*internal.TableData, error) {
-		return internal.NewTableData(payload), nil
-	})
-	if err != nil {
-		return err
-	}
-	log.Debug().Str("key", key.String()).Str("value", string(payload)).Msg("update user metadata succeed")
-	return nil
+	return u.updateMetadata(ctx, tx,
+		u.validateArgs(namespaceId, userId, &metadataKey, &payload),
+		u.getKey(namespaceId, userType, userId, metadataKey),
+		payload,
+	)
 }
 
 func (u *UserSubspace) DeleteUserMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, userType UserType, userId string, metadataKey string) error {
-	if err := validateUserArgsPartial1(namespaceId, userId, metadataKey); err != nil {
-		return err
-	}
-	key := keys.NewKey(u.UserSubspaceName(), userVersion, UInt32ToByte(namespaceId), UInt32ToByte(uint32(userType)), []byte(userId), []byte(metadataKey))
-	err := tx.Delete(ctx, key)
-	if err != nil {
-		log.Debug().Str("key", key.String()).Err(err).Msg("Delete user metadata failed")
-		return err
-	}
-	log.Debug().Str("key", key.String()).Msg("Delete user metadata  succeed")
-	return nil
+	return u.deleteMetadata(ctx, tx,
+		u.validateArgs(namespaceId, userId, &metadataKey, nil),
+		u.getKey(namespaceId, userType, userId, metadataKey),
+	)
 }
 
 func (u *UserSubspace) DeleteUser(ctx context.Context, tx transaction.Tx, namespaceId uint32, userType UserType, userId string) error {
-	if err := validateUserArgsPartial2(namespaceId, userId); err != nil {
-		return err
-	}
-	key := keys.NewKey(u.UserSubspaceName(), userVersion, UInt32ToByte(namespaceId), UInt32ToByte(uint32(userType)), []byte(userId))
-	err := tx.Delete(ctx, key)
-	if err != nil {
-		log.Debug().Str("key", key.String()).Err(err).Msg("Delete user failed")
-		return err
-	}
-	log.Debug().Str("key", key.String()).Msg("Delete user succeed")
-	return nil
+	return u.deleteMetadata(ctx, tx,
+		u.validateArgs(namespaceId, userId, nil, nil),
+		u.getKey(namespaceId, userType, userId, ""),
+	)
 }
 
-func validateUserArgs(namespaceId uint32, userId string, metadataKey string, payload []byte) error {
-	if err := validateUserArgsPartial1(namespaceId, userId, metadataKey); err != nil {
-		return err
-	}
-	if payload == nil {
-		return errors.InvalidArgument("invalid nil payload")
-	}
-	return nil
-}
-
-func validateUserArgsPartial1(namespaceId uint32, userId string, metadataKey string) error {
-	if err := validateUserArgsPartial2(namespaceId, userId); err != nil {
-		return err
-	}
-	if metadataKey == "" {
-		return errors.InvalidArgument("invalid empty metadataKey")
-	}
-	return nil
-}
-
-func validateUserArgsPartial2(namespaceId uint32, userId string) error {
+func (u *UserSubspace) validateArgs(namespaceId uint32, userId string, metadataKey *string, payload *[]byte) error {
 	if namespaceId < 1 {
 		return errors.InvalidArgument("invalid namespace, id must be greater than 0")
 	}
+
 	if userId == "" {
 		return errors.InvalidArgument("invalid empty userId")
+	}
+
+	if metadataKey != nil && *metadataKey == "" {
+		return errors.InvalidArgument("invalid empty metadataKey")
+	}
+
+	if payload != nil && *payload == nil {
+		return errors.InvalidArgument("invalid nil payload")
 	}
 
 	return nil

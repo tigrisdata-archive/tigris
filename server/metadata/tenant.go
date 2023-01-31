@@ -144,7 +144,7 @@ type TenantManager struct {
 	idToTenantMap     map[uint32]string
 	version           Version
 	versionH          *VersionHandler
-	mdNameRegistry    MDNameRegistry
+	mdNameRegistry    *NameRegistry
 	encoder           Encoder
 	tableKeyGenerator *TableKeyGenerator
 	txMgr             *transaction.Manager
@@ -155,11 +155,10 @@ func (m *TenantManager) GetNamespaceStore() *NamespaceSubspace {
 }
 
 func NewTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, txMgr *transaction.Manager) *TenantManager {
-	mdNameRegistry := &DefaultMDNameRegistry{}
-	return newTenantManager(kvStore, searchStore, mdNameRegistry, txMgr)
+	return newTenantManager(kvStore, searchStore, DefaultNameRegistry, txMgr)
 }
 
-func newTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, mdNameRegistry MDNameRegistry, txMgr *transaction.Manager) *TenantManager {
+func newTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, mdNameRegistry *NameRegistry, txMgr *transaction.Manager) *TenantManager {
 	return &TenantManager{
 		kvStore:           kvStore,
 		searchStore:       searchStore,
@@ -1805,7 +1804,7 @@ func isSchemaEq(s1, s2 []byte) (bool, error) {
 func NewTestTenantMgr(kvStore kv.KeyValueStore) (*TenantManager, context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 
-	m := newTenantManager(kvStore, &search.NoopStore{}, &TestMDNameRegistry{
+	m := newTenantManager(kvStore, &search.NoopStore{}, &NameRegistry{
 		ReserveSB:  fmt.Sprintf("test_tenant_reserve_%x", rand.Uint64()),       //nolint:gosec
 		EncodingSB: fmt.Sprintf("test_tenant_encoding_%x", rand.Uint64()),      //nolint:gosec
 		SchemaSB:   fmt.Sprintf("test_tenant_schema_%x", rand.Uint64()),        //nolint:gosec
