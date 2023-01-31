@@ -715,7 +715,7 @@ func (tenant *Tenant) reloadSearch(ctx context.Context, tx transaction.Tx, proje
 		}
 
 		var fieldsInSearchStore []tsApi.Field
-		searchStoreIndexName := tenant.Encoder.EncodeSearchTableName(tenant.namespace.Id(), project.Id(), searchMD.Name, searchFactory.Source.DatabaseBranch)
+		searchStoreIndexName := tenant.Encoder.EncodeSearchTableName(tenant.namespace.Id(), project.Id(), searchMD.Name)
 		if searchIndexInStore, ok := indexesInSearchStore[searchStoreIndexName]; ok {
 			fieldsInSearchStore = searchIndexInStore.Fields
 		}
@@ -787,7 +787,7 @@ func (tenant *Tenant) createSearchIndex(ctx context.Context, tx transaction.Tx, 
 		return err
 	}
 
-	indexNameInStore := tenant.Encoder.EncodeSearchTableName(tenant.namespace.Id(), project.id, factory.Name, factory.Source.DatabaseBranch)
+	indexNameInStore := tenant.Encoder.EncodeSearchTableName(tenant.namespace.Id(), project.id, factory.Name)
 	index := schema.NewSearchIndex(baseSchemaVersion, indexNameInStore, factory, nil)
 	if err := tenant.searchStore.CreateCollection(ctx, index.StoreSchema); err != nil {
 		if !search.IsErrDuplicateEntity(err) {
@@ -801,6 +801,11 @@ func (tenant *Tenant) createSearchIndex(ctx context.Context, tx transaction.Tx, 
 }
 
 func (tenant *Tenant) updateSearchIndex(ctx context.Context, tx transaction.Tx, project *Project, factory *schema.SearchFactory, index *schema.SearchIndex) error {
+	// first apply schema change whether it conforms to the backward compatibility rules.
+	if err := schema.ApplySearchIndexSchemaRules(index, factory); err != nil {
+		return err
+	}
+
 	version := index.Version + 1
 	if err := tenant.searchSchemaStore.Put(ctx, tx, tenant.namespace.Id(), project.id, factory.Name, factory.Schema, version); err != nil {
 		return err
@@ -811,12 +816,10 @@ func (tenant *Tenant) updateSearchIndex(ctx context.Context, tx transaction.Tx, 
 		return err
 	}
 
-	// store the collection to the databaseObject, this is actually cloned database object passed by the query runner.
-	// So failure of the transaction won't impact the consistency of the cache
 	updatedIndex := schema.NewSearchIndex(version, index.StoreIndexName(), factory, previousIndexInStore.Fields)
 
 	// update indexing store schema if there is a change
-	if deltaFields := schema.GetSearchDeltaFields(updatedIndex.QueryableFields, updatedIndex.Fields, previousIndexInStore.Fields); len(deltaFields) > 0 {
+	if deltaFields := schema.GetSearchDeltaFields(index.QueryableFields, updatedIndex.Fields, previousIndexInStore.Fields); len(deltaFields) > 0 {
 		if err := tenant.searchStore.UpdateCollection(ctx, updatedIndex.StoreIndexName(), &tsApi.CollectionUpdateSchema{
 			Fields: deltaFields,
 		}); err != nil {

@@ -26,18 +26,13 @@ import (
 	"github.com/tigrisdata/tigris/schema"
 )
 
-const (
-	searchNameBranchSeparator = "$branch$"
-)
-
 type SearchEncoder interface {
 	// EncodeSearchTableName will encode search index created by the user and return an encoded string that will be use
-	// as an index name in the underlying search store. Source branch is an identifier which will be added to the
-	// index name if it is non-empty.
-	EncodeSearchTableName(tenantId uint32, projId uint32, indexName string, sourceBranch string) string
+	// as an index name in the underlying search store.
+	EncodeSearchTableName(tenantId uint32, projId uint32, indexName string) string
 	// DecodeSearchTableName will decode the information from encoded search index Name. This method returns tenant id,
-	// project id, index name and source branch.
-	DecodeSearchTableName(name string) (uint32, uint32, string, string, bool)
+	// project id, index name.
+	DecodeSearchTableName(name string) (uint32, uint32, string, bool)
 }
 
 type CacheEncoder interface {
@@ -200,29 +195,21 @@ func (d *DictKeyEncoder) DecodeCacheTableName(name string) (uint32, uint32, stri
 }
 
 // EncodeSearchTableName will encode search index created by the user and return an encoded string that will be use
-// as an index name in the underlying search store. Source branch is an identifier which will be added to the
-// index name if it is non-empty.
-func (d *DictKeyEncoder) EncodeSearchTableName(tenantId uint32, projId uint32, indexName string, sourceBranch string) string {
-	if len(sourceBranch) > 0 {
-		return fmt.Sprintf("%d:%d:%s", tenantId, projId, indexName+searchNameBranchSeparator+sourceBranch)
-	}
+// as an index name in the underlying search store.
+func (d *DictKeyEncoder) EncodeSearchTableName(tenantId uint32, projId uint32, indexName string) string {
 	return fmt.Sprintf("%d:%d:%s", tenantId, projId, indexName)
 }
 
 // DecodeSearchTableName will decode the information from encoded search index Name. This method returns tenant id,
-// project id, index name and source branch.
-func (d *DictKeyEncoder) DecodeSearchTableName(name string) (uint32, uint32, string, string, bool) {
+// project id, and index name.
+func (d *DictKeyEncoder) DecodeSearchTableName(name string) (uint32, uint32, string, bool) {
 	allParts := strings.Split(name, ":")
 	if len(allParts) != 3 {
-		return 0, 0, "", "", false
+		return 0, 0, "", false
 	}
 
 	nsId, _ := strconv.ParseInt(allParts[0], 10, 64)
 	pid, _ := strconv.ParseInt(allParts[1], 10, 64)
 
-	searchWithBranch := strings.Split(allParts[2], searchNameBranchSeparator)
-	if len(searchWithBranch) == 2 {
-		return uint32(nsId), uint32(pid), searchWithBranch[0], searchWithBranch[1], true
-	}
-	return uint32(nsId), uint32(pid), allParts[2], "", true
+	return uint32(nsId), uint32(pid), allParts[2], true
 }

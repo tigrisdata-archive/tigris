@@ -165,7 +165,7 @@ type FieldVersion struct {
 }
 
 // FieldVersions contains all the changes of the field,
-// across all the schema versions
+// across all the schema versions.
 type FieldVersions struct {
 	versions []*FieldVersion
 
@@ -174,7 +174,7 @@ type FieldVersions struct {
 	child map[string]*FieldVersions
 }
 
-// addFieldVersion adds individual field change to the tree
+// addFieldVersion adds individual field change to the tree.
 func addFieldVersion(versions map[string]*FieldVersions, version int, change *VersionDeltaField) {
 	m, i := versions, 0
 

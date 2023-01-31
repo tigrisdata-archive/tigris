@@ -36,9 +36,9 @@ type SearchSource struct {
 	// Type is the source type i.e. either it is Tigris or the index will be maintained by the user.
 	Type SearchSourceType `json:"type,omitempty"`
 	// CollectionName is the source name i.e. collection name in case of Tigris otherwise it is optional.
-	CollectionName string `json:"collection_name,omitempty"`
+	CollectionName string `json:"collection,omitempty"`
 	// DatabaseBranch is in case the collection is part of a database branch. Only applicable if Type is Tigris.
-	DatabaseBranch string `json:"database_branch,omitempty"`
+	DatabaseBranch string `json:"branch,omitempty"`
 }
 
 type SearchJSONSchema struct {
@@ -92,6 +92,34 @@ func BuildSearch(index string, reqSchema jsoniter.RawMessage) (*SearchFactory, e
 	} else {
 		source = *schema.Source
 	}
+	if schema.Source.Type != SearchSourceUser && schema.Source.Type != SearchSourceTigris {
+		return nil, errors.InvalidArgument("unsupported index source '%s'", schema.Source.Type)
+	}
+	if schema.Source.Type == SearchSourceTigris && len(schema.Source.CollectionName) == 0 {
+		return nil, errors.InvalidArgument("collection name is required for tigris backed search indexes")
+	}
+	if schema.Source.Type == SearchSourceTigris && len(schema.Source.DatabaseBranch) == 0 {
+		// we set main branch by default if branch is not explicitly provided
+		schema.Source.DatabaseBranch = "main"
+		if searchSchema, err = jsoniter.Marshal(schema); err != nil {
+			return nil, err
+		}
+	}
+
+	found := false
+	for _, f := range fields {
+		if f.FieldName == SearchId {
+			found = true
+			break
+		}
+	}
+	if !found {
+		// add id field if not in the schema
+		fields = append(fields, &Field{
+			FieldName: "id",
+			DataType:  StringType,
+		})
+	}
 
 	factory := &SearchFactory{
 		Name:   index,
@@ -125,7 +153,6 @@ type SearchIndex struct {
 
 func NewSearchIndex(ver int, searchStoreName string, factory *SearchFactory, fieldsInSearch []tsApi.Field) *SearchIndex {
 	queryableFields := BuildQueryableFields(factory.Fields, fieldsInSearch)
-	queryableFields = append(queryableFields, NewQueryableField("id", StringType, UnknownType, nil, nil))
 
 	return &SearchIndex{
 		Version:         ver,
