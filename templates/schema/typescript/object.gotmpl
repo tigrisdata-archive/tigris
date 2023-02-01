@@ -66,4 +66,4 @@ export class {{.Name}} {
   )
   {{$v.NameJSON}}{{if $v.AutoGenerate}}?{{end}}: {{if $v.IsArray}}{{repeat "Array<" $v.ArrayDimensions}}{{end}}{{ $tsType }}{{if $v.IsArray}}{{repeat ">" $v.ArrayDimensions}}{{end}};
 {{end -}}
-};
+}
