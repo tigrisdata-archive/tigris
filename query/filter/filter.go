@@ -52,6 +52,9 @@ type Filter interface {
 	// MatchesDoc similar to Matches but used when document is already parsed
 	MatchesDoc(doc map[string]interface{}) bool
 	ToSearchFilter() []string
+	// IsIndexed to let caller knows if there is any non-indexed field in the query. This
+	// will trigger full scan.
+	IsIndexed() bool
 }
 
 type EmptyFilter struct{}
@@ -59,6 +62,7 @@ type EmptyFilter struct{}
 func (f *EmptyFilter) Matches(_ []byte) bool                    { return true }
 func (f *EmptyFilter) MatchesDoc(_ map[string]interface{}) bool { return true }
 func (f *EmptyFilter) ToSearchFilter() []string                 { return nil }
+func (f *EmptyFilter) IsIndexed() bool                          { return false }
 
 type WrappedFilter struct {
 	Filter
@@ -89,8 +93,16 @@ func NewWrappedFilter(filters []Filter) *WrappedFilter {
 	}
 }
 
+func (w *WrappedFilter) None() bool {
+	return w.Filter == emptyFilter
+}
+
 func (w *WrappedFilter) SearchFilter() []string {
 	return w.searchFilter
+}
+
+func (w *WrappedFilter) IsIndexed() bool {
+	return w.Filter.IsIndexed()
 }
 
 func None(reqFilter []byte) bool {
@@ -232,11 +244,15 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 	}
 
 	switch dataType {
-	case jsonparser.Boolean, jsonparser.Number, jsonparser.String, jsonparser.Array:
+	case jsonparser.Boolean, jsonparser.Number, jsonparser.String, jsonparser.Array, jsonparser.Null:
 		tigrisType := field.DataType
 		if tigrisType == schema.ArrayType && dataType != jsonparser.Array {
 			// this allows querying primitive arrays
 			tigrisType = field.SubType
+		}
+		if dataType == jsonparser.Null {
+			// need to explicitly set as nil otherwise, jsonparser is setting it as []byte{null}
+			v = nil
 		}
 
 		var val value.Value

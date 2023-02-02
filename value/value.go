@@ -57,6 +57,10 @@ func NewValueUsingCollation(fieldType schema.FieldType, value []byte, collation 
 
 // NewValue returns the value of the field from the raw json value. It uses schema to get the type of the field.
 func NewValue(fieldType schema.FieldType, value []byte) (Value, error) {
+	if len(value) == 0 {
+		return NewNullValue(), nil
+	}
+
 	switch fieldType {
 	case schema.BoolType:
 		b, err := strconv.ParseBool(string(value))
@@ -191,9 +195,14 @@ func NewDoubleValue(raw string) (*DoubleValue, error) {
 		return nil, errors.InvalidArgument(fmt.Errorf("unsupported value type: %w ", err).Error())
 	}
 
+	f, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return nil, errors.InvalidArgument(fmt.Errorf("unsupported value type: %w ", err).Error())
+	}
+
 	i := &DoubleValue{
 		Double:   val,
-		asString: raw,
+		asString: strconv.FormatFloat(f, 'f', -1, 64),
 		bin64Enc: math.Float64bits(val),
 	}
 	return i, nil
@@ -341,4 +350,29 @@ func (b *BoolValue) String() string {
 	}
 
 	return fmt.Sprintf("%v", *b)
+}
+
+type NullValue struct{}
+
+func NewNullValue() *NullValue {
+	return &NullValue{}
+}
+
+func (n *NullValue) AsInterface() interface{} {
+	return nil
+}
+
+func (n *NullValue) String() string {
+	return ""
+}
+
+func (n *NullValue) CompareTo(v Value) (int, error) {
+	if v == nil {
+		return 0, nil
+	}
+	if _, ok := v.(*NullValue); ok {
+		return 0, nil
+	}
+
+	return -1, nil
 }

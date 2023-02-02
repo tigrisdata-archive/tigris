@@ -67,7 +67,7 @@ export class Product {
 
   @Field(TigrisDataTypes.UUID)
   uUID1: string;
-};
+}
 `,
 		},
 		{
@@ -128,7 +128,7 @@ export class Product {
 
   @Field(TigrisDataTypes.INT32)
   user_name: number;
-};
+}
 `,
 		},
 		{
@@ -136,12 +136,12 @@ export class Product {
 export class SubArrayNested {
   @Field(TigrisDataTypes.INT32)
   field_3: number;
-};
+}
 
 export class SubObjectNested {
   @Field(TigrisDataTypes.INT32)
   field_3: number;
-};
+}
 
 export class SubArray {
   @Field(TigrisDataTypes.INT32)
@@ -152,13 +152,13 @@ export class SubArray {
 
   @Field()
   subObjectNested: SubObjectNested;
-};
+}
 
 // sub type description
 export class Subtype {
   @Field(TigrisDataTypes.INT32)
   id2: number;
-};
+}
 
 @TigrisCollection("products")
 export class Product {
@@ -168,7 +168,7 @@ export class Product {
   // sub type description
   @Field()
   subtype: Subtype;
-};
+}
 `,
 		},
 	}
