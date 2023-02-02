@@ -152,6 +152,16 @@ func (a *AndFilter) flattenAnd(soFar string, filters []Filter) []string {
 	return combs
 }
 
+func (a *AndFilter) IsIndexed() bool {
+	for _, f := range a.filter {
+		if !f.IsIndexed() {
+			return false
+		}
+	}
+
+	return true
+}
+
 // OrFilter performs a logical OR operation on an array of two or more expressions. The or filter looks like this,
 // {"$or": [{"f1":1}, {"f2": 3}....]}
 // It can be nested i.e. a top level "$or" can have multiple nested $and/$or.
@@ -215,6 +225,16 @@ func (o *OrFilter) ToSearchFilter() []string {
 		ORs = append(ORs, f.ToSearchFilter()...)
 	}
 	return ORs
+}
+
+func (o *OrFilter) IsIndexed() bool {
+	for _, f := range o.filter {
+		if !f.IsIndexed() {
+			return false
+		}
+	}
+
+	return true
 }
 
 // String a helpful method for logging.

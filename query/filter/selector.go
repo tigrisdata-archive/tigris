@@ -90,6 +90,9 @@ func (s *Selector) Matches(doc []byte) bool {
 	if dtp == jsonparser.NotExist {
 		return false
 	}
+	if dtp == jsonparser.Null {
+		docValue = nil
+	}
 
 	var val value.Value
 	if s.Collation != nil {
@@ -142,6 +145,10 @@ func (s *Selector) ToSearchFilter() []string {
 		}
 	}
 	return []string{fmt.Sprintf(op, s.Field.InMemoryName(), v.AsInterface())}
+}
+
+func (s *Selector) IsIndexed() bool {
+	return !(s.Field.DataType == schema.ByteType || s.Matcher.GetValue().AsInterface() == nil)
 }
 
 // String a helpful method for logging.

@@ -317,10 +317,11 @@ func TestInsert_SingleRow(t *testing.T) {
 	require.JSONEq(t, string(expDoc), string(actualDoc))
 }
 
-func TestInsert_Nulls(t *testing.T) {
+func TestInsert_ReadNullsAndByte(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)
 
+	byteV := []byte("62ea6a943d44b10e1b6b8797")
 	inputDocument := []Doc{
 		{
 			"pkey_int":           10,
@@ -328,7 +329,7 @@ func TestInsert_Nulls(t *testing.T) {
 			"string_value":       nil,
 			"bool_value":         nil,
 			"double_value":       nil,
-			"bytes_value":        nil,
+			"bytes_value":        byteV,
 			"date_time_value":    nil,
 			"uuid_value":         nil,
 			"simple_array_value": []interface{}{"abc", nil, "def"},
@@ -355,24 +356,53 @@ func TestInsert_Nulls(t *testing.T) {
 		ValueEqual("status", "inserted").
 		ValueEqual("keys", []map[string]interface{}{{"pkey_int": 10}})
 
-	readResp := readByFilter(t,
-		db,
-		coll,
-		Map{
-			"pkey_int": 10,
+	cases := []struct {
+		filter Map
+	}{
+		{
+			Map{
+				"pkey_int": 10,
+			},
 		},
-		nil,
-		nil,
-		nil)
+		{
+			Map{
+				"string_value": nil,
+			},
+		},
+		{
+			Map{
+				"int_value": nil,
+			},
+		},
+		{
+			Map{
+				"double_value": nil,
+			},
+		},
+		{
+			Map{
+				"bytes_value": byteV,
+			},
+		},
+	}
+	for _, c := range cases {
+		readResp := readByFilter(t,
+			db,
+			coll,
+			c.filter,
+			nil,
+			nil,
+			nil)
 
-	var doc map[string]jsoniter.RawMessage
-	require.Equal(t, 1, len(readResp))
-	require.NoError(t, jsoniter.Unmarshal(readResp[0]["result"], &doc))
+		var doc map[string]jsoniter.RawMessage
+		require.Equal(t, 1, len(readResp))
+		require.NoError(t, jsoniter.Unmarshal(readResp[0]["result"], &doc))
 
-	actualDoc := []byte(doc["data"])
-	expDoc, err := jsoniter.Marshal(inputDocument[0])
-	require.NoError(t, err)
-	require.JSONEq(t, string(expDoc), string(actualDoc))
+		actualDoc := []byte(doc["data"])
+		expDoc, err := jsoniter.Marshal(inputDocument[0])
+		require.NoError(t, err)
+		require.JSONEq(t, string(expDoc), string(actualDoc))
+	}
 }
 
 func TestInsert_StringInt64(t *testing.T) {
