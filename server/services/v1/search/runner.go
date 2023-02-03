@@ -456,12 +456,17 @@ type IndexRunner struct {
 	*baseRunner
 
 	create *api.CreateOrUpdateIndexRequest
+	get    *api.GetIndexRequest
 	delete *api.DeleteIndexRequest
 	list   *api.ListIndexesRequest
 }
 
 func (runner *IndexRunner) SetCreateIndexReq(create *api.CreateOrUpdateIndexRequest) {
 	runner.create = create
+}
+
+func (runner *IndexRunner) SetGetIndexReq(get *api.GetIndexRequest) {
+	runner.get = get
 }
 
 func (runner *IndexRunner) SetDeleteIndexReq(drop *api.DeleteIndexRequest) {
@@ -497,6 +502,25 @@ func (runner *IndexRunner) Run(ctx context.Context, tx transaction.Tx, tenant *m
 		return Response{
 			Status: database.CreatedStatus,
 		}, nil
+	case runner.get != nil:
+		project, err := tenant.GetProject(runner.get.GetProject())
+		if err != nil {
+			return Response{}, createApiError(err)
+		}
+
+		index, err := tenant.GetSearchIndex(ctx, tx, project, runner.get.Name)
+		if err != nil {
+			return Response{}, createApiError(err)
+		}
+
+		return Response{
+			Response: &api.GetIndexResponse{
+				Index: &api.IndexInfo{
+					Name:   index.Name,
+					Schema: index.Schema,
+				},
+			},
+		}, nil
 	case runner.delete != nil:
 		project, err := tenant.GetProject(runner.delete.GetProject())
 		if err != nil {
@@ -520,57 +544,30 @@ func (runner *IndexRunner) Run(ctx context.Context, tx transaction.Tx, tenant *m
 			return Response{}, createApiError(err)
 		}
 
-		type UserSchema struct {
-			Name        string              `json:"title,omitempty"`
-			Description string              `json:"description,omitempty"`
-			Properties  jsoniter.RawMessage `json:"properties,omitempty"`
-		}
-
-		type IndexSource struct {
-			Source schema.SearchSource `json:"source,omitempty"`
-		}
-
 		var indexesResp []*api.IndexInfo
 		for _, index := range indexes {
-			var source IndexSource
-			if err = jsoniter.Unmarshal(index.Schema, &source); err != nil {
-				return Response{}, err
-			}
 			if runner.list.Filter != nil {
-				if string(source.Source.Type) != runner.list.Filter.Type {
+				if string(index.Source.Type) != runner.list.Filter.Type {
 					continue
 				}
 
-				if len(runner.list.Filter.Collection) > 0 && runner.list.Filter.Collection != source.Source.CollectionName {
+				if len(runner.list.Filter.Collection) > 0 && runner.list.Filter.Collection != index.Source.CollectionName {
 					continue
 				}
 
-				if len(source.Source.DatabaseBranch) == 0 {
+				if len(index.Source.DatabaseBranch) == 0 {
 					if len(runner.list.Filter.Branch) > 0 && runner.list.Filter.Branch != metadata.MainBranch {
 						continue
 					}
-				} else if len(runner.list.Filter.Branch) > 0 && runner.list.Filter.Branch != source.Source.DatabaseBranch {
+				} else if len(runner.list.Filter.Branch) > 0 && runner.list.Filter.Branch != index.Source.DatabaseBranch {
 					continue
 				}
 			}
-			var us UserSchema
-			if err := jsoniter.Unmarshal(index.Schema, &us); err != nil {
-				return Response{}, err
-			}
 
-			indexInfo := &api.IndexInfo{
-				Name: index.Name,
-			}
-			if indexInfo.Schema, err = jsoniter.Marshal(us); err != nil {
-				return Response{}, err
-			}
-			indexInfo.Source = &api.IndexSource{
-				Type:       string(source.Source.Type),
-				Collection: source.Source.CollectionName,
-				Branch:     source.Source.DatabaseBranch,
-			}
-
-			indexesResp = append(indexesResp, indexInfo)
+			indexesResp = append(indexesResp, &api.IndexInfo{
+				Name:   index.Name,
+				Schema: index.Schema,
+			})
 		}
 
 		return Response{

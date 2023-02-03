@@ -95,6 +95,20 @@ func (s *searchService) CreateOrUpdateIndex(ctx context.Context, req *api.Create
 	}, nil
 }
 
+func (s *searchService) GetIndex(ctx context.Context, req *api.GetIndexRequest) (*api.GetIndexResponse, error) {
+	accessToken, _ := request.GetAccessToken(ctx)
+
+	runner := s.runnerFactory.GetIndexRunner(accessToken)
+	runner.SetGetIndexReq(req)
+
+	resp, err := s.sessions.TxExecute(ctx, runner)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.GetIndexResponse), nil
+}
+
 func (s *searchService) DeleteIndex(ctx context.Context, req *api.DeleteIndexRequest) (*api.DeleteIndexResponse, error) {
 	accessToken, _ := request.GetAccessToken(ctx)
 

@@ -31,9 +31,7 @@ import (
 	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
-var (
-	maxCandidates = 100
-)
+var maxCandidates = 100
 
 type IndexResp struct {
 	Code     int
