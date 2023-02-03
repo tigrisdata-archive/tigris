@@ -830,6 +830,18 @@ func (tenant *Tenant) updateSearchIndex(ctx context.Context, tx transaction.Tx, 
 	return nil
 }
 
+func (tenant *Tenant) GetSearchIndex(ctx context.Context, tx transaction.Tx, project *Project, indexName string) (*schema.SearchIndex, error) {
+	tenant.Lock()
+	defer tenant.Unlock()
+
+	index, ok := project.search.GetIndex(indexName)
+	if !ok {
+		return nil, NewSearchIndexNotFoundErr(indexName)
+	}
+
+	return index, nil
+}
+
 func (tenant *Tenant) DeleteSearchIndex(ctx context.Context, tx transaction.Tx, project *Project, indexName string) error {
 	tenant.Lock()
 	defer tenant.Unlock()
