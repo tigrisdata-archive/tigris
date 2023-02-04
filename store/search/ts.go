@@ -31,6 +31,8 @@ import (
 	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
+var maxCandidates = 100
+
 type IndexResp struct {
 	Code     int
 	Document string
@@ -262,7 +264,9 @@ func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query
 		})
 	}
 
-	res, err := s.client.MultiSearch.PerformWithContentType(&tsApi.MultiSearchParams{}, tsApi.MultiSearchSearchesParameter{
+	res, err := s.client.MultiSearch.PerformWithContentType(&tsApi.MultiSearchParams{
+		MaxCandidates: &maxCandidates,
+	}, tsApi.MultiSearchSearchesParameter{
 		Searches: params,
 	}, StreamContentType)
 	if err != nil {

@@ -54,11 +54,9 @@ func (x *IndexInfo) MarshalJSON() ([]byte, error) {
 	resp := struct {
 		Name   string              `json:"name,omitempty"`
 		Schema jsoniter.RawMessage `json:"schema,omitempty"`
-		Source *IndexSource        `json:"source,omitempty"`
 	}{
 		Name:   x.Name,
 		Schema: x.Schema,
-		Source: x.Source,
 	}
 	return jsoniter.Marshal(resp)
 }
