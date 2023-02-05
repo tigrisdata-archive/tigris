@@ -317,6 +317,110 @@ func TestInsert_SingleRow(t *testing.T) {
 	require.JSONEq(t, string(expDoc), string(actualDoc))
 }
 
+func TestInsert_CreatedUpdatedAt(t *testing.T) {
+	dbName := fmt.Sprintf("db_test_%s", t.Name())
+
+	deleteProject(t, dbName)
+	createProject(t, dbName)
+	defer deleteProject(t, dbName)
+
+	collectionName := fmt.Sprintf("test_collection_%s", t.Name())
+	createCollection(t, dbName, collectionName,
+		Map{
+			"schema": Map{
+				"title": collectionName,
+				"properties": Map{
+					"id": Map{
+						"type": "integer",
+					},
+					"int_value": Map{
+						"type": "integer",
+					},
+					"string_value": Map{
+						"type": "string",
+					},
+					"created_at": Map{
+						"type":   "string",
+						"format": "date-time",
+					},
+					"updated_at": Map{
+						"type":   "string",
+						"format": "date-time",
+					},
+					"metadata": Map{
+						"type": "object",
+						"properties": Map{
+							"created_at": Map{
+								"type":   "string",
+								"format": "date-time",
+							},
+						},
+					},
+				},
+			},
+		}).Status(http.StatusOK)
+
+	inputDoc := []Doc{{"id": 1, "int_value": 1, "string_value": "foo", "created_at": "2023-02-05T21:45:35Z", "updated_at": "2023-02-05T23:04:33.01234567Z", "metadata": Doc{"created_at": "2023-02-05T21:45:35.01234Z"}}}
+	insertDocuments(t, dbName, collectionName, inputDoc, true).
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("status", "inserted")
+
+	cases := []struct {
+		filter Map
+		exp    bool
+	}{
+		{
+			Map{
+				"created_at": "2023-02-05T21:45:35Z",
+			},
+			true,
+		},
+		{
+			Map{
+				"updated_at": "2023-02-05T23:04:33.01234567Z",
+			},
+			true,
+		},
+		{
+			Map{
+				"metadata.created_at": "2023-02-05T21:45:35.01234Z",
+			},
+			true,
+		},
+		{
+			Map{
+				"metadata.created_at": "2023-02-05T21:45:35Z",
+			},
+			false,
+		},
+	}
+	for _, c := range cases {
+		readResp := readByFilter(t,
+			dbName,
+			collectionName,
+			c.filter,
+			nil,
+			nil,
+			nil)
+
+		var doc map[string]jsoniter.RawMessage
+		if !c.exp {
+			require.Equal(t, 0, len(readResp))
+			continue
+		}
+
+		require.Equal(t, 1, len(readResp))
+		require.NoError(t, jsoniter.Unmarshal(readResp[0]["result"], &doc))
+
+		actualDoc := []byte(doc["data"])
+		expDoc, err := jsoniter.Marshal(inputDoc[0])
+		require.NoError(t, err)
+		require.JSONEq(t, string(expDoc), string(actualDoc))
+	}
+}
+
 func TestInsert_ReadNullsAndByte(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)

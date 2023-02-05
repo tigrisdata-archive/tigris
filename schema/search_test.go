@@ -110,7 +110,7 @@ func TestSearchIndex_CollectionSchema(t *testing.T) {
 		"id", "_tigris_id", "id_32", "product", "id_uuid", "ts", ToSearchDateKey("ts"), "price", "simple_items", "simple_object.name",
 		"simple_object.phone", "simple_object.address.street", "simple_object.details.nested_id", "simple_object.details.nested_obj.id",
 		"simple_object.details.nested_obj.name", "simple_object.details.nested_array", "simple_object.details.nested_string",
-		"created_at", "updated_at",
+		"_tigris_created_at", "_tigris_updated_at",
 	}
 
 	implicitSearchIndex := NewImplicitSearchIndex("t1", "t1", schFactory.Fields, nil)

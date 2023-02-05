@@ -143,7 +143,11 @@ func NewDefaultCollection(id uint32, schVer int, factory *Factory, schemas Versi
 	validator.AdditionalProperties = false
 	disableAdditionalPropertiesAndAllowNullable(validator.Required, validator.Properties)
 
-	queryableFields := BuildQueryableFields(factory.Fields, nil)
+	var fieldsInSearch []tsApi.Field
+	if implicitSearchIndex != nil {
+		fieldsInSearch = implicitSearchIndex.fieldsInSearch
+	}
+	queryableFields := BuildQueryableFields(factory.Fields, fieldsInSearch)
 
 	schemaDeltas, err := buildSchemaDeltas(schemas)
 	if err != nil {

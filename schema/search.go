@@ -217,9 +217,13 @@ func GetSearchDeltaFields(existingFields []*QueryableField, incomingFields []*Fi
 	incomingQueryable := BuildQueryableFields(incomingFields, fieldsInSearch)
 
 	existingFieldMap := make(map[string]*QueryableField)
-
 	for _, f := range existingFields {
 		existingFieldMap[f.FieldName] = f
+	}
+
+	fieldsInSearchMap := make(map[string]tsApi.Field)
+	for _, f := range fieldsInSearch {
+		fieldsInSearchMap[f.Name] = f
 	}
 
 	tsFields := make([]tsApi.Field, 0, len(incomingQueryable))
@@ -245,6 +249,14 @@ func GetSearchDeltaFields(existingFields []*QueryableField, incomingFields []*Fi
 				Name: f.FieldName,
 				Drop: &ptrTrue,
 			})
+		} else if f.FieldName == "created_at" || f.FieldName == "updated_at" {
+			// if we have our internal old "created_at"/"updated_at" then drop it first
+			if _, found := fieldsInSearchMap[f.FieldName]; found {
+				tsFields = append(tsFields, tsApi.Field{
+					Name: f.FieldName,
+					Drop: &ptrTrue,
+				})
+			}
 		}
 
 		// add new field
@@ -275,6 +287,8 @@ type ImplicitSearchIndex struct {
 	// will be one to one mapped to queryable field but complex fields like object type field there may be more than
 	// one queryableFields. As queryableFields represent a flattened state these can be used as-is to index in memory.
 	QueryableFields []*QueryableField
+
+	fieldsInSearch []tsApi.Field
 }
 
 func NewImplicitSearchIndex(name string, searchStoreName string, fields []*Field, fieldsInSearch []tsApi.Field) *ImplicitSearchIndex {
@@ -283,6 +297,7 @@ func NewImplicitSearchIndex(name string, searchStoreName string, fields []*Field
 		Name:            name,
 		QueryableFields: queryableFields,
 		StoreSchema:     buildSearchSchema(searchStoreName, queryableFields),
+		fieldsInSearch:  fieldsInSearch,
 	}
 }
 
