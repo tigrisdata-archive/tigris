@@ -76,11 +76,11 @@ func TestPackSearchFields(t *testing.T) {
 			decData, err := util.JSONToMap(res)
 			require.NoError(t, err)
 
-			createdAt, err := decData["created_at"].(json.Number).Int64()
+			createdAt, err := decData[schema.ReservedFields[schema.CreatedAt]].(json.Number).Int64()
 			require.NoError(t, err)
 			require.Equal(t, createdAt, td.CreatedAt.UnixNano())
 
-			updatedAt, err := decData["updated_at"].(json.Number).Int64()
+			updatedAt, err := decData[schema.ReservedFields[schema.UpdatedAt]].(json.Number).Int64()
 			require.NoError(t, err)
 			require.Equal(t, updatedAt, td.UpdatedAt.UnixNano())
 		})
@@ -97,11 +97,11 @@ func TestPackSearchFields(t *testing.T) {
 		decData, err := util.JSONToMap(res)
 		require.NoError(t, err)
 
-		createdAt, err := decData["created_at"].(json.Number).Int64()
+		createdAt, err := decData[schema.ReservedFields[schema.CreatedAt]].(json.Number).Int64()
 		require.NoError(t, err)
 		require.Equal(t, createdAt, td.CreatedAt.UnixNano())
 
-		updatedAt := decData["updated_at"]
+		updatedAt := decData[schema.ReservedFields[schema.UpdatedAt]]
 		require.Nil(t, updatedAt)
 	})
 
@@ -242,27 +242,30 @@ func TestUnpackSearchFields(t *testing.T) {
 	})
 
 	t.Run("created_at metadata gets populated", func(t *testing.T) {
+		createdAt := any(json.Number("1666054267528106000"))
 		doc := map[string]any{
 			"id":         "123",
-			"created_at": json.Number("1666054267528106000"),
+			"created_at": createdAt,
 		}
 		_, td, unpacked, err := UnpackSearchFields(doc, emptyColl)
+		require.True(t, len(unpacked) == 0)
 		require.NoError(t, err)
 		require.Empty(t, unpacked)
-		expected, _ := doc["created_at"].(json.Number).Int64()
+		expected, _ := createdAt.(json.Number).Int64()
 		require.Equal(t, expected, td.CreatedAt.UnixNano())
 		require.Nil(t, td.UpdatedAt)
 	})
 
 	t.Run("updated_at metadata gets populated", func(t *testing.T) {
+		updatedAt := any(json.Number("1666054267528106000"))
 		doc := map[string]any{
 			"id":         "123",
-			"updated_at": json.Number("1666054267528106000"),
+			"updated_at": updatedAt,
 		}
 		_, td, unpacked, err := UnpackSearchFields(doc, emptyColl)
 		require.NoError(t, err)
 		require.Empty(t, unpacked)
-		expected, _ := doc["updated_at"].(json.Number).Int64()
+		expected, _ := updatedAt.(json.Number).Int64()
 		require.Equal(t, expected, td.UpdatedAt.UnixNano())
 		require.Nil(t, td.CreatedAt)
 	})

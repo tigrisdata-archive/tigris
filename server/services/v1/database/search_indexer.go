@@ -223,6 +223,41 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 }
 
 func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCollection) (string, *internal.TableData, map[string]interface{}, error) {
+	userCreatedAt := false
+	userUpdatedAt := false
+	for _, f := range collection.QueryableFields {
+		if f.FieldName == "created_at" {
+			userCreatedAt = true
+		}
+		if f.FieldName == "updated_at" {
+			userUpdatedAt = true
+		}
+	}
+	// set tableData with metadata
+	tableData := &internal.TableData{}
+	// data prior to _tigris_ prefix
+	tableData.CreatedAt = getInternalTS(doc, "created_at")
+	if !userCreatedAt {
+		delete(doc, "created_at")
+	}
+	if createdAt := getInternalTS(doc, schema.ReservedFields[schema.CreatedAt]); createdAt != nil {
+		// prioritize the value from the _tigris_ prefix
+		tableData.CreatedAt = createdAt
+		delete(doc, schema.ReservedFields[schema.CreatedAt])
+	}
+
+	// data prior to _tigris_ prefix
+	tableData.UpdatedAt = getInternalTS(doc, "updated_at")
+	if !userUpdatedAt {
+		delete(doc, "updated_at")
+	}
+	if updatedAt := getInternalTS(doc, schema.ReservedFields[schema.UpdatedAt]); updatedAt != nil {
+		// prioritize the value from the _tigris_ prefix
+		tableData.UpdatedAt = updatedAt
+		delete(doc, schema.ReservedFields[schema.UpdatedAt])
+	}
+
+	// process user fields now
 	for _, f := range collection.QueryableFields {
 		if f.SearchType == "string[]" {
 			// if string array has our internal null marker
@@ -276,24 +311,21 @@ func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCo
 		delete(doc, schema.SearchId)
 	}
 
-	// set tableData with metadata
-	tableData := &internal.TableData{}
-	if value, ok := doc[schema.ReservedFields[schema.CreatedAt]]; ok {
-		nano, err := value.(json.Number).Int64()
-		if !log.E(err) {
-			tableData.CreatedAt = internal.CreateNewTimestamp(nano)
-			delete(doc, schema.ReservedFields[schema.CreatedAt])
-		}
-	}
-	if value, ok := (doc)[schema.ReservedFields[schema.UpdatedAt]]; ok {
-		nano, err := value.(json.Number).Int64()
-		if !log.E(err) {
-			tableData.UpdatedAt = internal.CreateNewTimestamp(nano)
-			delete(doc, schema.ReservedFields[schema.UpdatedAt])
+	return searchKey, tableData, doc, nil
+}
+
+func getInternalTS(doc map[string]any, keyName string) *internal.Timestamp {
+	if value, ok := doc[keyName]; ok {
+		conv, ok := value.(json.Number)
+		if ok {
+			nano, err := conv.Int64()
+			if !log.E(err) {
+				return internal.CreateNewTimestamp(nano)
+			}
 		}
 	}
 
-	return searchKey, tableData, doc, nil
+	return nil
 }
 
 func FlattenObjects(data map[string]any) map[string]any {

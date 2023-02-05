@@ -30,9 +30,9 @@ const (
 )
 
 var ReservedFields = [...]string{
-	CreatedAt:           "created_at",
-	UpdatedAt:           "updated_at",
-	Metadata:            "metadata",
+	CreatedAt:           "_tigris_created_at",
+	UpdatedAt:           "_tigris_updated_at",
+	Metadata:            "_tigris_metadata",
 	IdToSearchKey:       "_tigris_id",
 	DateSearchKeyPrefix: "_tigris_date_",
 	SearchArrNullItem:   "_tigris_null",
