@@ -44,12 +44,12 @@ type searchService struct {
 	runnerFactory *search.RunnerFactory
 }
 
-func newSearchService(store searchStore.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager, versionH *metadata.VersionHandler) *searchService {
+func newSearchService(store searchStore.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) *searchService {
 	return &searchService{
 		txMgr:         txMgr,
 		tenantMgr:     tenantMgr,
-		versionH:      versionH,
-		sessions:      search.NewSessionManager(txMgr, tenantMgr, metadata.NewCacheTracker(tenantMgr, txMgr), versionH),
+		versionH:      tenantMgr.GetVersionHandler(),
+		sessions:      search.NewSessionManager(txMgr, tenantMgr, metadata.NewCacheTracker(tenantMgr, txMgr)),
 		runnerFactory: search.NewRunnerFactory(store, tenantMgr.GetEncoder()),
 	}
 }

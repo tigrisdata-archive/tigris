@@ -17,17 +17,14 @@ package metadata
 import (
 	"context"
 
+	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
-var (
-	// VersionKey is the metadata version key whose value is returned to the clients in the transaction.
-	VersionKey = []byte{0xff, '/', 'm', 'e', 't', 'a', 'd', 'a', 't', 'a', 'V', 'e', 'r', 's', 'i', 'o', 'n'}
-	// VersionValue is the value set when calling setVersionstampedValue, any value other than this is rejected.
-	VersionValue = []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-)
+// versionKey is the metadata version key whose value is returned to the clients in the transaction.
+var versionKey = append([]byte{0xff}, []byte("/metadataVersion")...) // versionValue is the value set when calling setVersionstampedValue, any value other than this is rejected.
 
 type (
 	Version       []byte
@@ -37,11 +34,27 @@ type (
 // VersionHandler is used to maintain a version for each schema change. Using this we can implement transactional DDL APIs.
 // This will also be used to provide a strongly consistent Cache lookup on the schemas i.e. anytime version changes we
 // know that a DDL operation is performed which means we can invalidate the cache and reload from the disk.
-type VersionHandler struct{}
+type VersionHandler struct {
+	Key   []byte
+	Value []byte
+}
+
+func newVersionHandler(key []byte) *VersionHandler {
+	if len(key) == 0 {
+		key = versionKey
+	}
+
+	log.Debug().Str("key", string(key)).Msg("init version handler")
+
+	// IMPORTANT: Version stamp value must be 14 bytes long. Otherwise, FDB API call will fail.
+	h := VersionHandler{Key: key, Value: make([]byte, 14)}
+
+	return &h
+}
 
 // Increment is used to increment the metadata version.
 func (m *VersionHandler) Increment(ctx context.Context, tx transaction.Tx) error {
-	return tx.SetVersionstampedValue(ctx, VersionKey, VersionValue)
+	return tx.SetVersionstampedValue(ctx, m.Key, m.Value)
 }
 
 // Read is blocking and returns the latest metadata version.
@@ -56,7 +69,7 @@ func (m *VersionHandler) Read(ctx context.Context, tx transaction.Tx, isSnapshot
 
 // ReadFuture is a non-blocking API to return the future corresponding to the latest metadata version.
 func (m *VersionHandler) ReadFuture(ctx context.Context, tx transaction.Tx, isSnapshot bool) (VersionFuture, error) {
-	return tx.Get(ctx, VersionKey, isSnapshot)
+	return tx.Get(ctx, m.Key, isSnapshot)
 }
 
 // ReadInOwnTxn creates a transaction and then reads the version. This is useful when a transaction is also changing

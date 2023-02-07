@@ -15,7 +15,6 @@ linters:
     - cyclop
     - errorlint
     - forcetypeassert
-    - nosprintfhostport
     - exhaustive
     - thelper
     - nonamedreturns

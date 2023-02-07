@@ -18,7 +18,7 @@ package client
 
 import (
 	"context"
-	"fmt"
+	"net"
 	"sync"
 	"testing"
 	"time"
@@ -32,13 +32,13 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 )
 
-func getTestServerHostPort() (string, int16) {
+func getTestServerHostPort() (string, string) {
 	config.LoadEnvironment() // Move this to test.Main
 
 	if config.GetEnvironment() == config.EnvTest {
-		return "tigris_server", 8081
+		return "tigris_server", "8081"
 	}
-	return "localhost", 8081
+	return "localhost", "8081"
 }
 
 func getDocuments(t *testing.T, db driver.Database, filter driver.Filter) []driver.Document {
@@ -354,6 +354,8 @@ func testTxClient(t *testing.T, c driver.Driver) {
 	doc2, doc3 := driver.Document(`{"K1": "vK1", "K2": 2, "D1": "vD2"}`), driver.Document(`{"K1": "vK1", "K2": 3, "D1": "vD3"}`)
 	for {
 		tx, err := c.UseDatabase(projectName).BeginTx(ctx)
+		require.NoError(t, err)
+
 		err = tx.CreateOrUpdateCollection(ctx, "c1", driver.Schema(schema))
 		require.NoError(t, err)
 
@@ -408,7 +410,7 @@ func initDriver(t *testing.T, proto string) driver.Driver {
 
 	h, p := getTestServerHostPort()
 	driver.DefaultProtocol = proto
-	url := fmt.Sprintf("%s:%d", h, p)
+	url := net.JoinHostPort(h, p)
 	if proto == driver.HTTP {
 		url = "http://" + url
 	}

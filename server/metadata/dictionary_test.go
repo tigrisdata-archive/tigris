@@ -25,16 +25,22 @@ import (
 	"github.com/tigrisdata/tigris/store/kv"
 )
 
+func testClearDictionary(ctx context.Context, k *Dictionary, kvStore kv.KeyValueStore) {
+	_ = kvStore.DropTable(ctx, k.EncodingSubspaceName())
+	_ = kvStore.DropTable(ctx, k.ReservedSubspaceName())
+	_ = kvStore.DropTable(ctx, k.NamespaceSubspaceName())
+}
+
 func TestDictionaryEncoding(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	k := NewMetadataDictionary(&NameRegistry{
-		ReserveSB:  "test_reserved",
-		EncodingSB: "test_encoding",
-	})
-	_ = kvStore.DropTable(ctx, k.EncodingSubspaceName())
-	_ = kvStore.DropTable(ctx, k.ReservedSubspaceName())
+	nr := newTestNameRegistry(t)
+	k := NewMetadataDictionary(nr)
+
+	startId := nr.BaseCounterValue
+
+	testClearDictionary(ctx, k, kvStore)
 
 	tm := transaction.NewManager(kvStore)
 
@@ -45,35 +51,35 @@ func TestDictionaryEncoding(t *testing.T) {
 
 	tx, err = tm.StartTx(ctx)
 	require.NoError(t, err)
-	dbId, err := k.CreateDatabase(ctx, tx, "db-1", 1234)
+	dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1234)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit(ctx))
 
 	tx, err = tm.StartTx(ctx)
 	require.NoError(t, err)
-	collId, err := k.CreateCollection(ctx, tx, "coll-1", 1234, 1)
+	collMeta, err := k.CreateCollection(ctx, tx, "coll-1", 1234, startId)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit(ctx))
 
 	tx, err = tm.StartTx(ctx)
 	require.NoError(t, err)
-	indexId, err := k.CreateIndex(ctx, tx, "pkey", 1234, 1, 2)
+	indexMeta, err := k.CreateIndex(ctx, tx, "pkey", 1234, startId, startId+1)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit(ctx))
 
 	tx, err = tm.StartTx(ctx)
 	require.NoError(t, err)
-	v, err := k.GetDatabaseId(ctx, tx, "db-1", 1234)
+	d, err := k.GetDatabase(ctx, tx, "db-1", 1234)
 	require.NoError(t, err)
-	require.Equal(t, v, dbId)
+	require.Equal(t, d.ID, dbMeta.ID)
 
-	v, err = k.GetCollectionId(ctx, tx, "coll-1", 1234, dbId)
+	c, err := k.GetCollection(ctx, tx, "coll-1", 1234, dbMeta.ID)
 	require.NoError(t, err)
-	require.Equal(t, v, collId)
+	require.Equal(t, c.ID, collMeta.ID)
 
-	v, err = k.GetIndexId(ctx, tx, "pkey", 1234, dbId, collId)
+	i, err := k.GetIndex(ctx, tx, "pkey", 1234, dbMeta.ID, collMeta.ID)
 	require.NoError(t, err)
-	require.Equal(t, v, indexId)
+	require.Equal(t, i.ID, indexMeta.ID)
 	require.NoError(t, tx.Commit(ctx))
 
 	// try assigning the same namespace id to some other namespace
@@ -84,19 +90,14 @@ func TestDictionaryEncoding(t *testing.T) {
 }
 
 func TestDictionaryEncodingDropped(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
 	t.Run("drop_database", func(t *testing.T) {
-		k := NewMetadataDictionary(&NameRegistry{
-			ReserveSB:  "test_reserved",
-			EncodingSB: "test_encoding",
-		})
-
-		_ = kvStore.DropTable(ctx, k.EncodingSubspaceName())
-		_ = kvStore.DropTable(ctx, k.ReservedSubspaceName())
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 
 		tm := transaction.NewManager(kvStore)
+
+		k := NewMetadataDictionary(newTestNameRegistry(t))
+		testClearDictionary(ctx, k, kvStore)
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
@@ -105,40 +106,40 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		dbId, err := k.CreateDatabase(ctx, tx, "db-1", 1234)
+		dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1234)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		v, err := k.GetDatabaseId(ctx, tx, "db-1", 1234)
+		v, err := k.GetDatabase(ctx, tx, "db-1", 1234)
 		require.NoError(t, err)
-		require.Equal(t, v, dbId)
+		require.Equal(t, v.ID, dbMeta.ID)
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		err = k.DropDatabase(ctx, tx, "db-1", 1234, dbId)
+		err = k.DropDatabase(ctx, tx, "db-1", 1234)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		v, err = k.GetDatabaseId(ctx, tx, "db-1", 1234)
-		require.NoError(t, err)
+		_, err = k.GetDatabase(ctx, tx, "db-1", 1234)
+		require.Equal(t, errors.ErrNotFound, err)
+
 		require.NoError(t, tx.Commit(ctx))
-		require.Equal(t, v, InvalidId)
 	})
+
 	t.Run("drop_collection", func(t *testing.T) {
-		k := NewMetadataDictionary(&NameRegistry{
-			ReserveSB:  "test_reserved",
-			EncodingSB: "test_encoding",
-		})
-
-		_ = kvStore.DropTable(ctx, k.EncodingSubspaceName())
-		_ = kvStore.DropTable(ctx, k.ReservedSubspaceName())
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 
 		tm := transaction.NewManager(kvStore)
+
+		k := NewMetadataDictionary(newTestNameRegistry(t))
+		testClearDictionary(ctx, k, kvStore)
+
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
 		require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", NewNamespaceMetadata(1234, "proj1-org-1", "proj1-org-1-display_name")))
@@ -146,46 +147,46 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		dbId, err := k.CreateDatabase(ctx, tx, "db-1", 1234)
+		dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1234)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		collId, err := k.CreateCollection(ctx, tx, "coll-1", 1234, dbId)
+		collMeta, err := k.CreateCollection(ctx, tx, "coll-1", 1234, dbMeta.ID)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		v, err := k.GetCollectionId(ctx, tx, "coll-1", 1234, dbId)
+		v, err := k.GetCollection(ctx, tx, "coll-1", 1234, dbMeta.ID)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
-		require.Equal(t, v, collId)
+		require.Equal(t, v.ID, collMeta.ID)
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		err = k.DropCollection(ctx, tx, "coll-1", 1234, dbId, collId)
+		err = k.DropCollection(ctx, tx, "coll-1", 1234, dbMeta.ID)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		v, err = k.GetCollectionId(ctx, tx, "coll-1", 1234, dbId)
-		require.NoError(t, err)
+		_, err = k.GetCollection(ctx, tx, "coll-1", 1234, dbMeta.ID)
+		require.Error(t, errors.ErrNotFound, err)
+
 		require.NoError(t, tx.Commit(ctx))
-		require.Equal(t, v, InvalidId)
 	})
+
 	t.Run("drop_index", func(t *testing.T) {
-		k := NewMetadataDictionary(&NameRegistry{
-			ReserveSB:  "test_reserved",
-			EncodingSB: "test_encoding",
-		})
-
-		_ = kvStore.DropTable(ctx, k.EncodingSubspaceName())
-		_ = kvStore.DropTable(ctx, k.ReservedSubspaceName())
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 
 		tm := transaction.NewManager(kvStore)
+
+		k := NewMetadataDictionary(newTestNameRegistry(t))
+		testClearDictionary(ctx, k, kvStore)
+
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
 		require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", NewNamespaceMetadata(1234, "proj1-org-1", "proj1-org-1-display_name")))
@@ -193,52 +194,54 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		dbId, err := k.CreateDatabase(ctx, tx, "db-1", 1234)
+		dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1234)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+		require.NotEqual(t, 0, dbMeta.ID)
+
+		tx, err = tm.StartTx(ctx)
+		require.NoError(t, err)
+		collMeta, err := k.CreateCollection(ctx, tx, "coll-1", 1234, dbMeta.ID)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+		require.NotEqual(t, 0, collMeta.ID)
+
+		tx, err = tm.StartTx(ctx)
+		require.NoError(t, err)
+		idxMeta, err := k.CreateIndex(ctx, tx, "idx-1", 1234, dbMeta.ID, collMeta.ID)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+		require.NotEqual(t, 0, idxMeta.ID)
+
+		tx, err = tm.StartTx(ctx)
+		require.NoError(t, err)
+		v, err := k.GetIndex(ctx, tx, "idx-1", 1234, dbMeta.ID, collMeta.ID)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+		require.Equal(t, v.ID, idxMeta.ID)
+
+		tx, err = tm.StartTx(ctx)
+		require.NoError(t, err)
+		err = k.DropIndex(ctx, tx, "idx-1", 1234, dbMeta.ID, collMeta.ID)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		collId, err := k.CreateCollection(ctx, tx, "coll-1", 1234, dbId)
-		require.NoError(t, err)
+		_, err = k.GetIndex(ctx, tx, "idx-1", 1234, dbMeta.ID, collMeta.ID)
+		require.Equal(t, errors.ErrNotFound, err)
 		require.NoError(t, tx.Commit(ctx))
-
-		tx, err = tm.StartTx(ctx)
-		require.NoError(t, err)
-		idxId, err := k.CreateIndex(ctx, tx, "idx-1", 1234, dbId, collId)
-		require.NoError(t, err)
-		require.NoError(t, tx.Commit(ctx))
-
-		tx, err = tm.StartTx(ctx)
-		require.NoError(t, err)
-		v, err := k.GetIndexId(ctx, tx, "idx-1", 1234, dbId, collId)
-		require.NoError(t, err)
-		require.NoError(t, tx.Commit(ctx))
-		require.Equal(t, v, idxId)
-
-		tx, err = tm.StartTx(ctx)
-		require.NoError(t, err)
-		err = k.DropIndex(ctx, tx, "idx-1", 1234, dbId, collId, idxId)
-		require.NoError(t, err)
-		require.NoError(t, tx.Commit(ctx))
-
-		tx, err = tm.StartTx(ctx)
-		require.NoError(t, err)
-		v, err = k.GetIndexId(ctx, tx, "idx-1", 1234, dbId, collId)
-		require.NoError(t, err)
-		require.NoError(t, tx.Commit(ctx))
-		require.Equal(t, v, InvalidId)
 	})
-	t.Run("drop_collection_multiple", func(t *testing.T) {
-		k := NewMetadataDictionary(&NameRegistry{
-			ReserveSB:  "test_reserved",
-			EncodingSB: "test_encoding",
-		})
 
-		_ = kvStore.DropTable(ctx, k.EncodingSubspaceName())
-		_ = kvStore.DropTable(ctx, k.ReservedSubspaceName())
+	t.Run("drop_collection_multiple", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 
 		tm := transaction.NewManager(kvStore)
+
+		k := NewMetadataDictionary(newTestNameRegistry(t))
+		testClearDictionary(ctx, k, kvStore)
+
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
 		require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", NewNamespaceMetadata(1234, "proj1-org-1", "proj1-org-1-display_name")))
@@ -246,48 +249,47 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		dbId, err := k.CreateDatabase(ctx, tx, "db-1", 1234)
+		dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1234)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		collId, err := k.CreateCollection(ctx, tx, "coll-1", 1234, dbId)
+		collMeta, err := k.CreateCollection(ctx, tx, "coll-1", 1234, dbMeta.ID)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		v, err := k.GetCollectionId(ctx, tx, "coll-1", 1234, dbId)
+		v, err := k.GetCollection(ctx, tx, "coll-1", 1234, dbMeta.ID)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
-		require.Equal(t, v, collId)
+		require.Equal(t, v.ID, collMeta.ID)
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		err = k.DropCollection(ctx, tx, "coll-1", 1234, dbId, collId)
-		require.NoError(t, err)
-		require.NoError(t, tx.Commit(ctx))
-
-		tx, err = tm.StartTx(ctx)
-		require.NoError(t, err)
-		v, err = k.GetCollectionId(ctx, tx, "coll-1", 1234, dbId)
-		require.NoError(t, err)
-		require.NoError(t, tx.Commit(ctx))
-		require.Equal(t, v, InvalidId)
-
-		tx, err = tm.StartTx(ctx)
-		require.NoError(t, err)
-		newCollId, err := k.CreateCollection(ctx, tx, "coll-1", 1234, dbId)
+		err = k.DropCollection(ctx, tx, "coll-1", 1234, dbMeta.ID)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		v, err = k.GetCollectionId(ctx, tx, "coll-1", 1234, dbId)
+		_, err = k.GetCollection(ctx, tx, "coll-1", 1234, dbMeta.ID)
+		require.Equal(t, errors.ErrNotFound, err)
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = tm.StartTx(ctx)
+		require.NoError(t, err)
+		newColl, err := k.CreateCollection(ctx, tx, "coll-1", 1234, dbMeta.ID)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
-		require.Equal(t, v, newCollId)
+
+		tx, err = tm.StartTx(ctx)
+		require.NoError(t, err)
+		v, err = k.GetCollection(ctx, tx, "coll-1", 1234, dbMeta.ID)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
+		require.Equal(t, v.ID, newColl.ID)
 	})
 }
 
@@ -295,105 +297,94 @@ func TestDictionaryEncoding_Error(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	k := NewMetadataDictionary(&NameRegistry{
-		ReserveSB:  "test_reserved",
-		EncodingSB: "test_encoding",
-	})
-
-	_ = kvStore.DropTable(ctx, k.EncodingSubspaceName())
-	_ = kvStore.DropTable(ctx, k.ReservedSubspaceName())
+	k := NewMetadataDictionary(newTestNameRegistry(t))
+	testClearDictionary(ctx, k, kvStore)
 
 	tm := transaction.NewManager(kvStore)
+
 	tx, err := tm.StartTx(ctx)
 	require.NoError(t, err)
-	dbId, err := k.CreateDatabase(ctx, tx, "db-1", 0)
+
+	_, err = k.CreateDatabase(ctx, tx, "db-1", 0)
 	require.Error(t, errors.InvalidArgument("invalid namespace id"), err)
-	require.Equal(t, InvalidId, dbId)
 
-	collId, err := k.CreateCollection(ctx, tx, "coll-1", 1234, 0)
+	_, err = k.CreateCollection(ctx, tx, "coll-1", 1234, 0)
 	require.Error(t, errors.InvalidArgument("invalid database id"), err)
-	require.Equal(t, InvalidId, collId)
 
-	indexId, err := k.CreateIndex(ctx, tx, "pkey", 1234, 1, 0)
+	_, err = k.CreateIndex(ctx, tx, "pkey", 1234, 1, 0)
 	require.Error(t, errors.InvalidArgument("invalid collection id"), err)
-	require.Equal(t, InvalidId, indexId)
+
 	require.NoError(t, tx.Rollback(context.TODO()))
 }
 
 func TestDictionaryEncoding_GetMethods(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
 	tm := transaction.NewManager(kvStore)
-	t.Run("get_databases", func(t *testing.T) {
-		k := NewMetadataDictionary(&NameRegistry{
-			ReserveSB:  "test_reserved",
-			EncodingSB: "test_encoding",
-		})
 
-		_ = kvStore.DropTable(ctx, k.EncodingSubspaceName())
-		_ = kvStore.DropTable(ctx, k.ReservedSubspaceName())
+	t.Run("get_databases", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		k := NewMetadataDictionary(newTestNameRegistry(t))
+		testClearDictionary(ctx, k, kvStore)
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		dbId1, err := k.CreateDatabase(ctx, tx, "db-1", 1)
+		dbMeta1, err := k.CreateDatabase(ctx, tx, "db-1", 1)
 		require.NoError(t, err)
-		dbId2, err := k.CreateDatabase(ctx, tx, "db-2", 1)
+		dbMeta2, err := k.CreateDatabase(ctx, tx, "db-2", 1)
 		require.NoError(t, err)
 
 		dbToId, err := k.GetDatabases(ctx, tx, 1)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 		require.Len(t, dbToId, 2)
-		require.Equal(t, dbToId["db-1"], dbId1)
-		require.Equal(t, dbToId["db-2"], dbId2)
+		require.Equal(t, dbToId["db-1"].ID, dbMeta1.ID)
+		require.Equal(t, dbToId["db-2"].ID, dbMeta2.ID)
 	})
-	t.Run("get_collections", func(t *testing.T) {
-		k := NewMetadataDictionary(&NameRegistry{
-			ReserveSB:  "test_reserved",
-			EncodingSB: "test_encoding",
-		})
 
-		_ = kvStore.DropTable(ctx, k.EncodingSubspaceName())
-		_ = kvStore.DropTable(ctx, k.ReservedSubspaceName())
+	t.Run("get_collections", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		k := NewMetadataDictionary(newTestNameRegistry(t))
+		testClearDictionary(ctx, k, kvStore)
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		dbId, err := k.CreateDatabase(ctx, tx, "db-1", 1)
+		dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1)
 		require.NoError(t, err)
 
-		cid1, err := k.CreateCollection(ctx, tx, "coll-1", 1, dbId)
+		cid1, err := k.CreateCollection(ctx, tx, "coll-1", 1, dbMeta.ID)
 		require.NoError(t, err)
-		cid2, err := k.CreateCollection(ctx, tx, "coll-2", 1, dbId)
+		cid2, err := k.CreateCollection(ctx, tx, "coll-2", 1, dbMeta.ID)
 		require.NoError(t, err)
 
-		collToId, err := k.GetCollections(ctx, tx, 1, dbId)
+		collToId, err := k.GetCollections(ctx, tx, 1, dbMeta.ID)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 		require.Len(t, collToId, 2)
 		require.Equal(t, collToId["coll-1"], cid1)
 		require.Equal(t, collToId["coll-2"], cid2)
 	})
-	t.Run("get_indexes", func(t *testing.T) {
-		k := NewMetadataDictionary(&NameRegistry{
-			ReserveSB:  "test_reserved",
-			EncodingSB: "test_encoding",
-		})
 
-		_ = kvStore.DropTable(ctx, k.EncodingSubspaceName())
-		_ = kvStore.DropTable(ctx, k.ReservedSubspaceName())
+	t.Run("get_indexes", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		k := NewMetadataDictionary(newTestNameRegistry(t))
+		testClearDictionary(ctx, k, kvStore)
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		dbId, err := k.CreateDatabase(ctx, tx, "db-1", 1)
+		dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1)
 		require.NoError(t, err)
 
-		cid1, err := k.CreateCollection(ctx, tx, "coll-1", 1, dbId)
+		cid1, err := k.CreateCollection(ctx, tx, "coll-1", 1, dbMeta.ID)
 		require.NoError(t, err)
 
-		pkID, err := k.CreateIndex(ctx, tx, "pkey", 1, dbId, cid1)
+		pkID, err := k.CreateIndex(ctx, tx, "pkey", 1, dbMeta.ID, cid1.ID)
 		require.NoError(t, err)
-		idxToId, err := k.GetIndexes(ctx, tx, 1, dbId, cid1)
+		idxToId, err := k.GetIndexes(ctx, tx, 1, dbMeta.ID, cid1.ID)
 		require.NoError(t, err)
 		require.Len(t, idxToId, 1)
 		require.Equal(t, idxToId["pkey"], pkID)
@@ -405,13 +396,11 @@ func TestReservedNamespace(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	r := newReservedSubspace(&NameRegistry{
-		ReserveSB:  "test_reserved",
-		EncodingSB: "test_encoding",
-	})
+	r := newReservedSubspace(newTestNameRegistry(t))
 
 	_ = kvStore.DropTable(ctx, r.EncodingSubspaceName())
 	_ = kvStore.DropTable(ctx, r.ReservedSubspaceName())
+	_ = kvStore.DropTable(ctx, r.NamespaceSubspaceName())
 
 	tm := transaction.NewManager(kvStore)
 
@@ -425,20 +414,19 @@ func TestReservedNamespace(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, r.reload(ctx, tx))
 	require.Equal(t, "p1-o1", r.idToNamespaceStruct[123].StrId)
+	require.NoError(t, tx.Commit(ctx))
 
 	// try assigning the same namespace id to some other namespace
 	tx, err = tm.StartTx(context.TODO())
 	require.NoError(t, err)
 	expError := errors.AlreadyExists("id is already assigned to the namespace 'p1-o1'")
 	require.Equal(t, expError, r.reserveNamespace(context.TODO(), tx, "p2-o2", NewNamespaceMetadata(123, "p2-o2", "p2-o2-display_name")))
+	require.NoError(t, tx.Rollback(ctx))
 }
 
 func TestDecode(t *testing.T) {
-	k := kv.BuildKey(encVersion, UInt32ToByte(1234), dbKey, "db-1", keyEnd)
-	mp, err := NewMetadataDictionary(&NameRegistry{
-		ReserveSB:  "test_reserved",
-		EncodingSB: "test_encoding",
-	}).decode(context.TODO(), k)
+	k := kv.BuildKey(encKeyVersion, UInt32ToByte(1234), dbKey, "db-1", keyEnd)
+	mp, err := NewMetadataDictionary(newTestNameRegistry(t)).decode(context.TODO(), k)
 	require.NoError(t, err)
 	require.Equal(t, mp[dbKey], "db-1")
 }

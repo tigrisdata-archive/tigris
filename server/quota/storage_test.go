@@ -15,7 +15,6 @@
 package quota
 
 import (
-	"context"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -31,7 +30,7 @@ import (
 )
 
 func TestStorageQuota(t *testing.T) {
-	tenants, ctx, cancel := metadata.NewTestTenantMgr(kvStore)
+	tenants, ctx, cancel := metadata.NewTestTenantMgr(t, kvStore)
 	projName := "tenant_proj1"
 	defer cancel()
 
@@ -43,10 +42,10 @@ func TestStorageQuota(t *testing.T) {
 	tenant, err := tenants.CreateOrGetTenant(ctx, metadata.NewTenantNamespace(ns, metadata.NewNamespaceMetadata(id, ns, ns+"-display_name")))
 	require.NoError(t, err)
 
-	tx, err := txMgr.StartTx(context.TODO())
+	tx, err := txMgr.StartTx(ctx)
 	require.NoError(t, err)
 
-	_, err = tenant.CreateProject(ctx, tx, projName, nil)
+	err = tenant.CreateProject(ctx, tx, projName, nil)
 	require.NoError(t, err)
 
 	jsSchema := []byte(`{
@@ -70,7 +69,7 @@ func TestStorageQuota(t *testing.T) {
 
 	require.NoError(t, tenant.CreateCollection(ctx, tx, proj1.GetMainDatabase(), factory))
 
-	require.NoError(t, tx.Commit(context.TODO()))
+	require.NoError(t, tx.Commit(ctx))
 
 	coll1 := proj1.GetMainDatabase().GetCollection("test_collection")
 	table, err := metadata.NewEncoder().EncodeTableName(tenant.GetNamespace(), proj1.GetMainDatabase(), coll1)

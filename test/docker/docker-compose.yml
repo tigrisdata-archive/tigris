@@ -59,6 +59,7 @@ services:
       - TIGRIS_SERVER_SEARCH_AUTH_KEY=ts_test_key
       - TIGRIS_SERVER_SEARCH_HOST=tigris_search
       - TIGRIS_SERVER_SERVER_TYPE=database
+      - TIGRIS_SERVER_TRACING_ENABLED=true
     build:
       context: ../../
       dockerfile: docker/Dockerfile

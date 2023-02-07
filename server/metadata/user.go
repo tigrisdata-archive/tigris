@@ -27,7 +27,9 @@ type UserSubspace struct {
 	metadataSubspace
 }
 
-var userVersion = []byte{0x01}
+const userMetaValueVersion = 1
+
+const userMetaKeyVersion byte = 1
 
 type UserType uint32
 
@@ -40,50 +42,69 @@ func NewUserStore(mdNameRegistry *NameRegistry) *UserSubspace {
 	return &UserSubspace{
 		metadataSubspace{
 			SubspaceName: mdNameRegistry.UserSubspaceName(),
-			Version:      userVersion,
+			KeyVersion:   []byte{userMetaKeyVersion},
 		},
 	}
 }
 
 func (u *UserSubspace) getKey(namespaceId uint32, userType UserType, userId string, metadataKey string) keys.Key {
 	if metadataKey != "" {
-		return keys.NewKey(u.SubspaceName, u.Version, UInt32ToByte(namespaceId), UInt32ToByte(uint32(userType)), []byte(userId), []byte(metadataKey))
+		return keys.NewKey(u.SubspaceName, u.KeyVersion, UInt32ToByte(namespaceId), UInt32ToByte(uint32(userType)),
+			[]byte(userId), []byte(metadataKey))
 	}
 
-	return keys.NewKey(u.SubspaceName, u.Version, UInt32ToByte(namespaceId), UInt32ToByte(uint32(userType)), []byte(userId))
+	return keys.NewKey(u.SubspaceName, u.KeyVersion, UInt32ToByte(namespaceId), UInt32ToByte(uint32(userType)),
+		[]byte(userId))
 }
 
-func (u *UserSubspace) InsertUserMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, userType UserType, userId string, metadataKey string, payload []byte) error {
-	return u.insertMetadata(ctx, tx,
+func (u *UserSubspace) InsertUserMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, userType UserType,
+	userId string, metadataKey string, payload []byte,
+) error {
+	return u.insertPayload(ctx, tx,
 		u.validateArgs(namespaceId, userId, &metadataKey, &payload),
 		u.getKey(namespaceId, userType, userId, metadataKey),
+		userMetaValueVersion,
 		payload,
 	)
 }
 
-func (u *UserSubspace) GetUserMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, userType UserType, userId string, metadataKey string) ([]byte, error) {
-	return u.getMetadata(ctx, tx,
+func (u *UserSubspace) GetUserMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, userType UserType,
+	userId string, metadataKey string,
+) ([]byte, error) {
+	payload, err := u.getPayload(ctx, tx,
 		u.validateArgs(namespaceId, userId, &metadataKey, nil),
 		u.getKey(namespaceId, userType, userId, metadataKey),
 	)
+	if err != nil {
+		return nil, err
+	}
+
+	return payload.RawData, nil
 }
 
-func (u *UserSubspace) UpdateUserMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, userType UserType, userId string, metadataKey string, payload []byte) error {
-	return u.updateMetadata(ctx, tx,
+func (u *UserSubspace) UpdateUserMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, userType UserType,
+	userId string, metadataKey string, payload []byte,
+) error {
+	return u.updatePayload(ctx, tx,
 		u.validateArgs(namespaceId, userId, &metadataKey, &payload),
 		u.getKey(namespaceId, userType, userId, metadataKey),
+		userMetaValueVersion,
 		payload,
 	)
 }
 
-func (u *UserSubspace) DeleteUserMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, userType UserType, userId string, metadataKey string) error {
+func (u *UserSubspace) DeleteUserMetadata(ctx context.Context, tx transaction.Tx, namespaceId uint32, userType UserType,
+	userId string, metadataKey string,
+) error {
 	return u.deleteMetadata(ctx, tx,
 		u.validateArgs(namespaceId, userId, &metadataKey, nil),
 		u.getKey(namespaceId, userType, userId, metadataKey),
 	)
 }
 
-func (u *UserSubspace) DeleteUser(ctx context.Context, tx transaction.Tx, namespaceId uint32, userType UserType, userId string) error {
+func (u *UserSubspace) DeleteUser(ctx context.Context, tx transaction.Tx, namespaceId uint32, userType UserType,
+	userId string,
+) error {
 	return u.deleteMetadata(ctx, tx,
 		u.validateArgs(namespaceId, userId, nil, nil),
 		u.getKey(namespaceId, userType, userId, ""),

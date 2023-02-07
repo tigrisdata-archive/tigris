@@ -64,11 +64,11 @@ type apiService struct {
 	authProvider  auth.Provider
 }
 
-func newApiService(kv kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager, authProvider auth.Provider, versionH *metadata.VersionHandler) *apiService {
+func newApiService(kv kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager, authProvider auth.Provider) *apiService {
 	u := &apiService{
 		kvStore:      kv,
 		txMgr:        txMgr,
-		versionH:     versionH,
+		versionH:     tenantMgr.GetVersionHandler(),
 		searchStore:  searchStore,
 		cdcMgr:       cdc.NewManager(),
 		tenantMgr:    tenantMgr,
@@ -102,9 +102,9 @@ func newApiService(kv kv.KeyValueStore, searchStore search.Store, tenantMgr *met
 	}
 
 	if config.DefaultConfig.Tracing.Enabled {
-		u.sessions = database.NewSessionManagerWithMetrics(u.txMgr, u.tenantMgr, u.versionH, txListeners, metadata.NewCacheTracker(tenantMgr, txMgr))
+		u.sessions = database.NewSessionManagerWithMetrics(u.txMgr, u.tenantMgr, txListeners, metadata.NewCacheTracker(tenantMgr, txMgr))
 	} else {
-		u.sessions = database.NewSessionManager(u.txMgr, u.tenantMgr, u.versionH, txListeners, metadata.NewCacheTracker(tenantMgr, txMgr))
+		u.sessions = database.NewSessionManager(u.txMgr, u.tenantMgr, txListeners, metadata.NewCacheTracker(tenantMgr, txMgr))
 	}
 	u.runnerFactory = database.NewQueryRunnerFactory(u.txMgr, u.cdcMgr, u.searchStore)
 

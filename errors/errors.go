@@ -16,6 +16,7 @@ package errors
 
 import (
 	"errors"
+	"fmt"
 
 	api "github.com/tigrisdata/tigris/api/server/v1"
 )
@@ -97,4 +98,6 @@ func Unknown(format string, args ...any) error {
 var (
 	As = errors.As
 	Is = errors.Is
+
+	ErrNotFound = fmt.Errorf("not found")
 )

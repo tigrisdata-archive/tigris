@@ -17,7 +17,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"math/rand"
+	"net"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -137,11 +137,9 @@ func CreateWorkloads() []Workload {
 }
 
 func main() {
-	rand.Seed(time.Now().Unix())
-
 	driver.DefaultProtocol = driver.HTTP
 	client, err := driver.NewDriver(context.TODO(), &clientConfig.Driver{
-		URL: fmt.Sprintf("http://%s:%d", "localhost", 8081),
+		URL: fmt.Sprintf("http://%s", net.JoinHostPort("localhost", "8081")),
 	})
 	if err != nil {
 		panic(err)

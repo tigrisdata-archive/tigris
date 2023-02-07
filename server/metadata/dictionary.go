@@ -87,20 +87,18 @@ const (
 const (
 	namespaceIntEncoding  = 0
 	namespaceJsonEncoding = 1
+
+	encKeyVersion byte = 1
 )
 
-var (
-	// versions.
-	encVersion = []byte{0x01}
-
-	InvalidId         = uint32(0)
-	reservedBaseValue = uint32(1)
-)
+var reservedBaseValue = uint32(1)
 
 // reservedSubspace struct is used to manage reserved subspace.
 type reservedSubspace struct {
 	sync.RWMutex
 	NameRegistry
+
+	BaseCounterValue uint32
 
 	idToNamespaceStruct    map[uint32]NamespaceMetadata
 	strIdToNamespaceStruct map[string]NamespaceMetadata
@@ -108,7 +106,8 @@ type reservedSubspace struct {
 
 func newReservedSubspace(mdNameRegistry *NameRegistry) *reservedSubspace {
 	return &reservedSubspace{
-		NameRegistry: *mdNameRegistry,
+		NameRegistry:     *mdNameRegistry,
+		BaseCounterValue: mdNameRegistry.BaseCounterValue,
 
 		idToNamespaceStruct:    make(map[uint32]NamespaceMetadata),
 		strIdToNamespaceStruct: make(map[string]NamespaceMetadata),
@@ -121,6 +120,7 @@ func (r *reservedSubspace) getNamespaces() map[string]NamespaceMetadata {
 	for name, metadata := range r.strIdToNamespaceStruct {
 		result[name] = metadata
 	}
+
 	return result
 }
 
@@ -141,29 +141,38 @@ func (r *reservedSubspace) reload(ctx context.Context, tx transaction.Tx) error 
 		}
 
 		allocatedTo := row.Key[len(row.Key)-2]
-		if _, ok := allocatedTo.(string); !ok {
+		nsName, ok := allocatedTo.(string)
+		if !ok {
 			return errors.Internal("unable to deduce the encoded key from fdb key %T", allocatedTo)
 		}
-		var namespaceMetadata NamespaceMetadata
-		if row.Data.Encoding == namespaceIntEncoding {
-			namespaceName := allocatedTo.(string)
-			namespaceId := ByteToUInt32(row.Data.RawData)
-			// for legacy use display name same as the namespace name
-			namespaceMetadata = NewNamespaceMetadata(namespaceId, namespaceName, namespaceName)
-		} else if row.Data.Encoding == namespaceJsonEncoding {
-			err = jsoniter.Unmarshal(row.Data.RawData, &namespaceMetadata)
-			if err != nil {
+
+		var nsMeta NamespaceMetadata
+
+		// TODO: Remove Encoding field from the TableData and use Ver
+		// TODO: after all metadata migrated.
+		// TODO: If the cluster is created after the time of writing this
+		// TODO: comment then it's safe to remove below Encoding check.
+		if row.Data.Encoding == namespaceJsonEncoding || row.Data.Ver != 0 {
+			if err = jsoniter.Unmarshal(row.Data.RawData, &nsMeta); err != nil {
 				return errors.Internal("unable to read the namespace for the namespaceKey %s", allocatedTo)
 			}
+		} else if row.Data.Encoding == namespaceIntEncoding {
+			namespaceId := ByteToUInt32(row.Data.RawData)
+			log.Warn().Uint32("id", namespaceId).Str("name", nsName).Msg("legacy namespace metadata format")
+			// for legacy use display name same as the namespace name
+			nsMeta = NewNamespaceMetadata(namespaceId, nsName, nsName)
 		}
-		r.idToNamespaceStruct[namespaceMetadata.Id] = namespaceMetadata
-		r.strIdToNamespaceStruct[namespaceMetadata.StrId] = namespaceMetadata
+
+		r.idToNamespaceStruct[nsMeta.Id] = nsMeta
+		r.strIdToNamespaceStruct[nsMeta.StrId] = nsMeta
 	}
 
 	return it.Err()
 }
 
-func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.Tx, namespaceId string, namespaceMetadata NamespaceMetadata) error {
+func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.Tx, namespaceId string,
+	namespaceMetadata NamespaceMetadata,
+) error {
 	if len(namespaceId) == 0 {
 		return errors.InvalidArgument("namespaceId is empty")
 	}
@@ -181,7 +190,8 @@ func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.
 	if _, ok := r.idToNamespaceStruct[namespaceMetadata.Id]; ok {
 		for strId := range r.strIdToNamespaceStruct {
 			if r.strIdToNamespaceStruct[strId].Id == namespaceMetadata.Id {
-				log.Debug().Uint32("id", namespaceMetadata.Id).Str("strId", strId).Msg("namespace reserved for")
+				log.Debug().Uint32("id", namespaceMetadata.Id).Str("strId", strId).
+					Msg("namespace reserved for")
 				return errors.AlreadyExists("id is already assigned to the namespace '%s'", strId)
 			}
 		}
@@ -193,13 +203,13 @@ func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.
 	if err != nil {
 		return err
 	}
-	if err := tx.Insert(ctx, key, internal.NewTableDataWithEncoding(namespaceMetadataBytes, namespaceJsonEncoding)); err != nil {
-		log.Debug().Str("key", key.String()).Uint32("value", namespaceMetadata.Id).Err(err).Msg("reserving namespace failed")
-		return err
-	}
 
-	log.Debug().Str("key", key.String()).Uint32("value", namespaceMetadata.Id).Msg("reserving namespace succeed")
-	return nil
+	err = tx.Insert(ctx, key, internal.NewTableDataWithVersion(namespaceMetadataBytes, nsMetaValueVersion))
+
+	log.Debug().Err(err).Str("key", key.String()).Uint32("value", namespaceMetadata.Id).
+		Msg("reserving namespace")
+
+	return err
 }
 
 func (r *reservedSubspace) allocateToken(ctx context.Context, tx transaction.Tx, keyName string) (uint32, error) {
@@ -209,48 +219,98 @@ func (r *reservedSubspace) allocateToken(ctx context.Context, tx transaction.Tx,
 		return 0, err
 	}
 
-	newReservedValue := reservedBaseValue
+	newValue := r.BaseCounterValue
+
 	var row kv.KeyValue
 	if it.Next(&row) {
-		newReservedValue = ByteToUInt32(row.Data.RawData) + 1
+		newValue = ByteToUInt32(row.Data.RawData) + 1
 	}
 
-	if err := it.Err(); err != nil {
+	if err = it.Err(); err != nil {
 		return 0, err
 	}
 
-	if err := tx.Replace(ctx, key, internal.NewTableData(UInt32ToByte(newReservedValue)), false); err != nil {
-		log.Debug().Str("key", key.String()).Uint32("value", newReservedValue).Msg("allocating token failed")
+	if err = tx.Replace(ctx, key, internal.NewTableData(UInt32ToByte(newValue)), false); err != nil {
+		log.Debug().Str("key", key.String()).Uint32("value", newValue).
+			Msg("allocating token failed")
 		return 0, err
 	}
 
-	log.Debug().Str("key", key.String()).Uint32("value", newReservedValue).Msg("allocating token succeed")
+	log.Debug().Str("key", key.String()).Uint32("value", newValue).Msg("allocating token succeed")
 
-	return newReservedValue, nil
+	return newValue, nil
 }
 
-// MetadataDictionary is used to replace variable length strings to their corresponding codes to allocateAndSave it. Compression
-// is achieved by replacing long strings with a simple 4byte representation.
-type MetadataDictionary struct {
+// Dictionary is used to replace variable length strings to their corresponding codes to allocateAndSave it.
+// Compression is achieved by replacing long strings with a simple 4byte representation.
+type Dictionary struct {
 	NameRegistry
 
 	reservedSb *reservedSubspace
+
+	nsStore      *NamespaceSubspace
+	clusterStore *ClusterSubspace
+	collStore    *CollectionSubspace
+	dbStore      *DatabaseSubspace
+	idxStore     *IndexSubspace
+
+	schemaStore       *SchemaSubspace
+	searchSchemaStore *SearchSchemaSubspace
 }
 
-func NewMetadataDictionary(mdNameRegistry *NameRegistry) *MetadataDictionary {
-	return &MetadataDictionary{
+func NewMetadataDictionary(mdNameRegistry *NameRegistry) *Dictionary {
+	return &Dictionary{
 		NameRegistry: *mdNameRegistry,
-		reservedSb:   newReservedSubspace(mdNameRegistry),
+
+		reservedSb:        newReservedSubspace(mdNameRegistry),
+		nsStore:           NewNamespaceStore(mdNameRegistry),
+		clusterStore:      NewClusterStore(mdNameRegistry),
+		collStore:         newCollectionStore(mdNameRegistry),
+		idxStore:          newIndexStore(mdNameRegistry),
+		dbStore:           newDatabaseStore(mdNameRegistry),
+		schemaStore:       NewSchemaStore(mdNameRegistry),
+		searchSchemaStore: NewSearchSchemaStore(mdNameRegistry),
 	}
+}
+
+func (k *Dictionary) Cluster() *ClusterSubspace {
+	return k.clusterStore
+}
+
+func (k *Dictionary) Collection() *CollectionSubspace {
+	return k.collStore
+}
+
+func (k *Dictionary) Database() *DatabaseSubspace {
+	return k.dbStore
+}
+
+func (k *Dictionary) Index() *IndexSubspace {
+	return k.idxStore
+}
+
+func (k *Dictionary) Schema() *SchemaSubspace {
+	return k.schemaStore
+}
+
+func (k *Dictionary) SearchSchema() *SearchSchemaSubspace {
+	return k.searchSchemaStore
+}
+
+func (k *Dictionary) Namespace() *NamespaceSubspace {
+	return k.nsStore
 }
 
 // ReserveNamespace is the first step in the encoding and the mapping is passed the caller. As this is the first encoded
 // integer the caller needs to make sure a unique value is assigned to this namespace.
-func (k *MetadataDictionary) ReserveNamespace(ctx context.Context, tx transaction.Tx, namespaceId string, namespaceMetadata NamespaceMetadata) error {
+func (k *Dictionary) ReserveNamespace(ctx context.Context, tx transaction.Tx, namespaceId string,
+	namespaceMetadata NamespaceMetadata,
+) error {
 	return k.reservedSb.reserveNamespace(ctx, tx, namespaceId, namespaceMetadata)
 }
 
-func (k *MetadataDictionary) GetNamespaces(ctx context.Context, tx transaction.Tx) (map[string]NamespaceMetadata, error) {
+func (k *Dictionary) GetNamespaces(ctx context.Context, tx transaction.Tx,
+) (map[string]NamespaceMetadata, error) {
 	if err := k.reservedSb.reload(ctx, tx); err != nil {
 		return nil, err
 	}
@@ -258,334 +318,118 @@ func (k *MetadataDictionary) GetNamespaces(ctx context.Context, tx transaction.T
 	return k.reservedSb.getNamespaces(), nil
 }
 
-func (k *MetadataDictionary) CreateDatabase(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32) (uint32, error) {
-	if err := k.validNamespaceId(namespaceId); err != nil {
-		return InvalidId, err
-	}
-	if len(dbName) == 0 {
-		return InvalidId, errors.InvalidArgument("database name is empty")
+func (k *Dictionary) CreateDatabase(ctx context.Context, tx transaction.Tx, name string, namespaceId uint32,
+) (*DatabaseMetadata, error) {
+	id, err := k.allocate(ctx, tx)
+	if err != nil {
+		return nil, err
 	}
 
-	key := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyEnd)
-	return k.allocateAndSave(ctx, tx, key, dbKey)
+	meta := &DatabaseMetadata{ID: id}
+
+	if err = k.Database().insert(ctx, tx, namespaceId, name, meta); err != nil {
+		return nil, err
+	}
+
+	return meta, nil
 }
 
 // DropDatabase will remove the "created" entry from the encoding subspace and will add a "dropped" entry with the same
 // value.
-func (k *MetadataDictionary) DropDatabase(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32, existingId uint32) error {
-	if err := k.validNamespaceId(namespaceId); err != nil {
-		return err
-	}
-	if len(dbName) == 0 {
-		return errors.InvalidArgument("database name is empty")
-	}
-
-	// remove existing entry
-	toDeleteKey := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyEnd)
-	newKey := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyDroppedEnd)
-	return k.delete(ctx, tx, toDeleteKey, newKey, existingId, dbKey)
+func (k *Dictionary) DropDatabase(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32,
+) error {
+	return k.Database().softDelete(ctx, tx, namespaceId, dbName)
 }
 
-func (k *MetadataDictionary) CreateCollection(ctx context.Context, tx transaction.Tx, collection string, namespaceId uint32, dbId uint32) (uint32, error) {
-	if err := k.validNamespaceId(namespaceId); err != nil {
-		return InvalidId, err
-	}
-	if err := k.validDatabaseId(dbId); err != nil {
-		return InvalidId, err
-	}
-	if len(collection) == 0 {
-		return InvalidId, errors.InvalidArgument("collection name is empty")
-	}
-
-	key := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collection, keyEnd)
-	return k.allocateAndSave(ctx, tx, key, collectionKey)
-}
-
-func (k *MetadataDictionary) DropCollection(ctx context.Context, tx transaction.Tx, collection string, namespaceId uint32, dbId uint32, existingId uint32) error {
-	if err := k.validNamespaceId(namespaceId); err != nil {
-		return err
-	}
-	if err := k.validDatabaseId(dbId); err != nil {
-		return err
-	}
-	if len(collection) == 0 {
-		return errors.InvalidArgument("collection name is empty")
-	}
-
-	// remove existing entry
-	toDeleteKey := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collection, keyEnd)
-	newKey := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collection, keyDroppedEnd)
-	return k.delete(ctx, tx, toDeleteKey, newKey, existingId, collectionKey)
-}
-
-func (k *MetadataDictionary) CreateIndex(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32, dbId uint32, collId uint32) (uint32, error) {
-	if err := k.validNamespaceId(namespaceId); err != nil {
-		return InvalidId, err
-	}
-	if err := k.validDatabaseId(dbId); err != nil {
-		return InvalidId, err
-	}
-	if err := k.validCollectionId(collId); err != nil {
-		return InvalidId, err
-	}
-	if len(indexName) == 0 {
-		return InvalidId, errors.InvalidArgument("index name is empty")
-	}
-
-	key := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyEnd)
-	return k.allocateAndSave(ctx, tx, key, indexKey)
-}
-
-func (k *MetadataDictionary) DropIndex(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32, dbId uint32, collId uint32, existingId uint32) error {
-	if err := k.validNamespaceId(namespaceId); err != nil {
-		return err
-	}
-	if err := k.validDatabaseId(dbId); err != nil {
-		return err
-	}
-	if err := k.validCollectionId(collId); err != nil {
-		return err
-	}
-	if len(indexName) == 0 {
-		return errors.InvalidArgument("index name is empty")
-	}
-
-	toDeleteKey := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyEnd)
-	newKey := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyDroppedEnd)
-	return k.delete(ctx, tx, toDeleteKey, newKey, existingId, indexKey)
-}
-
-func (k *MetadataDictionary) delete(ctx context.Context, tx transaction.Tx, toDeleteKey keys.Key, newKey keys.Key, newValue uint32, encName string) error {
-	if err := tx.Delete(ctx, toDeleteKey); err != nil {
-		log.Debug().Str("key", toDeleteKey.String()).Err(err).Str("type", encName).Msg("existing entry deletion failed")
-		return err
-	}
-	log.Debug().Str("key", toDeleteKey.String()).Str("type", encName).Msg("existing entry deletion succeed")
-
-	// now do insert because we need to fail if token is already assigned
-	if err := tx.Replace(ctx, newKey, internal.NewTableData(UInt32ToByte(newValue)), false); err != nil {
-		log.Debug().Str("key", newKey.String()).Uint32("value", newValue).Err(err).Str("type", encName).Msg("encoding failed")
-		return err
-	}
-	log.Debug().Str("key", newKey.String()).Uint32("value", newValue).Str("type", encName).Msg("encoding succeed")
-
-	return nil
-}
-
-func (k *MetadataDictionary) allocateAndSave(ctx context.Context, tx transaction.Tx, key keys.Key, encName string) (uint32, error) {
-	reserveToken, err := k.reservedSb.allocateToken(ctx, tx, string(k.EncodingSubspaceName()))
-	if err != nil {
-		return InvalidId, err
-	}
-
-	// now do insert because we need to fail if token is already assigned
-	if err := tx.Insert(ctx, key, internal.NewTableData(UInt32ToByte(reserveToken))); err != nil {
-		log.Debug().Str("type", encName).Str("key", key.String()).Uint32("value", reserveToken).Err(err).Msg("encoding failed for")
-		return InvalidId, err
-	}
-	log.Debug().Str("type", encName).Str("key", key.String()).Uint32("value", reserveToken).Msg("encoding succeed for")
-
-	return reserveToken, nil
-}
-
-func (k *MetadataDictionary) validNamespaceId(id uint32) error {
-	if id == InvalidId {
-		return errors.InvalidArgument("invalid namespace id")
-	}
-	return nil
-}
-
-func (k *MetadataDictionary) validDatabaseId(id uint32) error {
-	if id == InvalidId {
-		return errors.InvalidArgument("invalid database id")
-	}
-	return nil
-}
-
-func (k *MetadataDictionary) validCollectionId(id uint32) error {
-	if id == InvalidId {
-		return errors.InvalidArgument("invalid collection id")
-	}
-	return nil
-}
-
-func (k *MetadataDictionary) GetDatabases(ctx context.Context, tx transaction.Tx, namespaceId uint32) (map[string]uint32, error) {
-	databases := make(map[string]uint32)
-	it, err := tx.Read(ctx, keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), dbKey))
+func (k *Dictionary) CreateCollection(ctx context.Context, tx transaction.Tx, name string,
+	namespaceId uint32, dbId uint32,
+) (*CollectionMetadata, error) {
+	id, err := k.allocate(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
 
-	droppedDatabase := make(map[string]uint32)
-	var v kv.KeyValue
-	for it.Next(&v) {
-		if len(v.Key) < 5 {
-			return nil, errors.Internal("not a valid key %v", v.Key)
-		}
-		if len(v.Key) == 5 {
-			// format <version,namespace-id,db,dbName,keyEnd>
-			end, ok := v.Key[4].(string)
-			if !ok || (end != keyEnd && end != keyDroppedEnd) {
-				return nil, errors.Internal("database encoding is missing %v", v.Key)
-			}
+	meta := &CollectionMetadata{ID: id}
 
-			name, ok := v.Key[3].(string)
-			if !ok {
-				return nil, errors.Internal("database name not found %T %v", v.Key[3], v.Key[3])
-			}
-
-			if end == keyDroppedEnd {
-				droppedDatabase[name] = ByteToUInt32(v.Data.RawData)
-				continue
-			}
-
-			databases[name] = ByteToUInt32(v.Data.RawData)
-		}
-	}
-
-	// retrogression check; if created and dropped both exists then the created id should be greater than dropped id
-	log.Debug().Interface("existing_dropped", droppedDatabase).Msg("dropped databases")
-	log.Debug().Interface("existing_created", databases).Msg("created databases")
-	for droppedDB, droppedValue := range droppedDatabase {
-		if createdValue, ok := databases[droppedDB]; ok && droppedValue >= createdValue {
-			return nil, errors.Internal("retrogression found in database assigned value database [%s] droppedValue [%d] createdValue [%d]", droppedDB, droppedValue, createdValue)
-		}
-	}
-
-	return databases, it.Err()
-}
-
-func (k *MetadataDictionary) GetCollections(ctx context.Context, tx transaction.Tx, namespaceId uint32, databaseId uint32) (map[string]uint32, error) {
-	collections := make(map[string]uint32)
-	it, err := tx.Read(ctx, keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(databaseId)))
+	err = k.Collection().insert(ctx, tx, namespaceId, dbId, name, meta)
 	if err != nil {
 		return nil, err
 	}
 
-	droppedCollection := make(map[string]uint32)
-	var v kv.KeyValue
-	for it.Next(&v) {
-		if len(v.Key) < 6 {
-			return nil, errors.Internal("not a valid key %v", v.Key)
-		}
-
-		if len(v.Key) == 6 {
-			// format <version,namespace-id,db-id,coll,coll-name,keyEnd>
-			end, ok := v.Key[5].(string)
-			if !ok || (end != keyEnd && end != keyDroppedEnd) {
-				return nil, errors.Internal("collection encoding is missing %v", v.Key)
-			}
-
-			name, ok := v.Key[4].(string)
-			if !ok {
-				return nil, errors.Internal("collection name not found %T %v", v.Key[4], v.Key[4])
-			}
-
-			if end == keyDroppedEnd {
-				droppedCollection[name] = ByteToUInt32(v.Data.RawData)
-				continue
-			}
-
-			collections[name] = ByteToUInt32(v.Data.RawData)
-		}
-	}
-
-	// retrogression check; if created and dropped both exists then the created id should be greater than dropped id
-	log.Debug().Uint32("db", databaseId).Interface("existing_dropped", droppedCollection).Msg("dropped collections")
-	log.Debug().Uint32("db", databaseId).Interface("existing_created", collections).Msg("created collections")
-	for droppedC, droppedValue := range droppedCollection {
-		if createdValue, ok := collections[droppedC]; ok && droppedValue >= createdValue {
-			return nil, errors.Internal("retrogression found in collection assigned value collection [%s] droppedValue [%d] createdValue [%d]", droppedC, droppedValue, createdValue)
-		}
-	}
-
-	return collections, it.Err()
+	return meta, nil
 }
 
-func (k *MetadataDictionary) GetIndexes(ctx context.Context, tx transaction.Tx, namespaceId uint32, databaseId uint32, collId uint32) (map[string]uint32, error) {
-	indexes := make(map[string]uint32)
-	it, err := tx.Read(ctx, keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(databaseId), UInt32ToByte(collId)))
+func (k *Dictionary) DropCollection(ctx context.Context, tx transaction.Tx, collection string,
+	namespaceId uint32, dbId uint32,
+) error {
+	return k.Collection().softDelete(ctx, tx, namespaceId, dbId, collection)
+}
+
+func (k *Dictionary) CreateIndex(ctx context.Context, tx transaction.Tx, name string, namespaceId uint32,
+	dbId uint32, collId uint32,
+) (*IndexMetadata, error) {
+	id, err := k.allocate(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
 
-	droppedIndexes := make(map[string]uint32)
-	var v kv.KeyValue
-	for it.Next(&v) {
-		if len(v.Key) < 6 {
-			return nil, errors.Internal("not a valid key %v", v.Key)
-		}
-		if len(v.Key) == 7 {
-			// if it is the format <version,namespace-id,db-id,coll-id,indexName,index-name,keyEnd>
-			end, ok := v.Key[6].(string)
-			if !ok || (end != keyEnd && end != keyDroppedEnd) {
-				// if it is not index skip it
-				continue
-			}
+	meta := &IndexMetadata{ID: id}
 
-			name, ok := v.Key[5].(string)
-			if !ok {
-				return nil, errors.Internal("index name not found %T %v", v.Key[5], v.Key[5])
-			}
-
-			if end == keyDroppedEnd {
-				droppedIndexes[name] = ByteToUInt32(v.Data.RawData)
-				continue
-			}
-
-			indexes[name] = ByteToUInt32(v.Data.RawData)
-		}
-	}
-
-	log.Debug().Uint32("db", databaseId).Uint32("coll", collId).Interface("existing_dropped", droppedIndexes).Msg("dropped indexes")
-	log.Debug().Uint32("db", databaseId).Uint32("coll", collId).Interface("existing_created", indexes).Msg("created indexes")
-	// retrogression check
-	for droppedC, droppedValue := range droppedIndexes {
-		if createdValue, ok := indexes[droppedC]; ok && droppedValue >= createdValue {
-			return nil, errors.Internal("retrogression found in indexes assigned value index [%s] droppedValue [%d] createdValue [%d]", droppedC, droppedValue, createdValue)
-		}
-	}
-
-	return indexes, it.Err()
-}
-
-func (k *MetadataDictionary) GetDatabaseId(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32) (uint32, error) {
-	key := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), dbKey, dbName, keyEnd)
-	return k.getId(ctx, tx, key)
-}
-
-func (k *MetadataDictionary) GetCollectionId(ctx context.Context, tx transaction.Tx, collName string, namespaceId uint32, dbId uint32) (uint32, error) {
-	key := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), collectionKey, collName, keyEnd)
-	return k.getId(ctx, tx, key)
-}
-
-func (k *MetadataDictionary) GetIndexId(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32, dbId uint32, collId uint32) (uint32, error) {
-	key := keys.NewKey(k.EncodingSubspaceName(), encVersion, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), indexKey, indexName, keyEnd)
-	return k.getId(ctx, tx, key)
-}
-
-func (k *MetadataDictionary) getId(ctx context.Context, tx transaction.Tx, key keys.Key) (uint32, error) {
-	it, err := tx.Read(ctx, key)
+	err = k.Index().insert(ctx, tx, namespaceId, dbId, collId, name, meta)
 	if err != nil {
-		return InvalidId, err
+		return nil, err
 	}
 
-	var row kv.KeyValue
-	if it.Next(&row) {
-		return ByteToUInt32(row.Data.RawData), nil
-	}
-
-	if err := it.Err(); err != nil {
-		return 0, err
-	}
-
-	// no need to return an error if not found, upper layer will convert this as an error.
-	return InvalidId, nil
+	return meta, nil
 }
 
-// decode is currently only use for debugging purpose, once we have a layer on top of this encoding then we leverage this
-// method.
-func (k *MetadataDictionary) decode(_ context.Context, fdbKey kv.Key) (map[string]interface{}, error) {
+func (k *Dictionary) DropIndex(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32,
+	dbId uint32, collId uint32,
+) error {
+	return k.Index().softDelete(ctx, tx, namespaceId, dbId, collId, indexName)
+}
+
+func (k *Dictionary) allocate(ctx context.Context, tx transaction.Tx) (uint32, error) {
+	return k.reservedSb.allocateToken(ctx, tx, string(k.EncodingSubspaceName()))
+}
+
+func (k *Dictionary) GetDatabases(ctx context.Context, tx transaction.Tx, namespaceId uint32,
+) (map[string]*DatabaseMetadata, error) {
+	return k.Database().list(ctx, tx, namespaceId)
+}
+
+func (k *Dictionary) GetCollections(ctx context.Context, tx transaction.Tx, namespaceId uint32,
+	databaseId uint32,
+) (map[string]*CollectionMetadata, error) {
+	return k.Collection().list(ctx, tx, namespaceId, databaseId)
+}
+
+func (k *Dictionary) GetIndexes(ctx context.Context, tx transaction.Tx, namespaceId uint32, databaseId uint32,
+	collId uint32,
+) (map[string]*IndexMetadata, error) {
+	return k.Index().list(ctx, tx, namespaceId, databaseId, collId)
+}
+
+func (k *Dictionary) GetDatabase(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32,
+) (*DatabaseMetadata, error) {
+	return k.Database().Get(ctx, tx, namespaceId, dbName)
+}
+
+func (k *Dictionary) GetCollection(ctx context.Context, tx transaction.Tx, collName string,
+	namespaceId uint32, dbId uint32,
+) (*CollectionMetadata, error) {
+	return k.Collection().Get(ctx, tx, namespaceId, dbId, collName)
+}
+
+func (k *Dictionary) GetIndex(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32,
+	dbId uint32, collId uint32,
+) (*IndexMetadata, error) {
+	return k.Index().Get(ctx, tx, namespaceId, dbId, collId, indexName)
+}
+
+// decode is currently only use for debugging purpose, once we have a layer on top of this encoding then
+// we leverage this method.
+func (k *Dictionary) decode(_ context.Context, fdbKey kv.Key) (map[string]interface{}, error) {
 	decoded := make(map[string]interface{})
 	if len(fdbKey) > 0 {
 		decoded["version"] = fdbKey[0]
@@ -613,17 +457,6 @@ func (k *MetadataDictionary) decode(_ context.Context, fdbKey kv.Key) (map[strin
 	}
 
 	return decoded, nil
-}
-
-func ByteToUInt16(b []byte) uint16 {
-	return binary.BigEndian.Uint16(b)
-}
-
-func UInt16ToByte(v uint16) []byte {
-	b := make([]byte, 2)
-
-	binary.BigEndian.PutUint16(b, v)
-	return b
 }
 
 func ByteToUInt32(b []byte) uint32 {

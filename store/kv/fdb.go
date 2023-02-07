@@ -370,11 +370,12 @@ func (d *fdbkv) BeginTx(ctx context.Context) (baseTx, error) {
 		return nil, err
 	}
 
-	if err := setTxTimeout(&tx, getCtxTimeout(ctx)); err != nil {
+	if err = setTxTimeout(&tx, getCtxTimeout(ctx)); err != nil {
 		return nil, err
 	}
 
 	log.Trace().Msg("create transaction")
+
 	return &ftx{d: d, tx: &tx}, nil
 }
 
@@ -551,7 +552,7 @@ func (t *ftx) SetVersionstampedValue(_ context.Context, key []byte, value []byte
 	return nil
 }
 
-func (t *ftx) SetVersionstampedKey(ctx context.Context, key []byte, value []byte) error {
+func (t *ftx) SetVersionstampedKey(_ context.Context, key []byte, value []byte) error {
 	t.tx.SetVersionstampedKey(fdb.Key(key), value)
 
 	return nil

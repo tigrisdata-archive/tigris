@@ -176,10 +176,22 @@ func NewBaseQueryRunner(encoder metadata.Encoder, cdcMgr *cdc.Manager, txMgr *tr
 // getDatabase is a helper method to return database either from the transactional context for explicit transactions or
 // from the tenant object. Returns a user facing error if the database is not present.
 func (runner *BaseQueryRunner) getDatabase(_ context.Context, tx transaction.Tx, tenant *metadata.Tenant, projName string, branch string) (*metadata.Database, error) {
+	dbBranch := metadata.NewDatabaseNameWithBranch(projName, branch)
+
 	if tx != nil && tx.Context().GetStagedDatabase() != nil {
 		// this means that some DDL operation has modified the database object, then we need to perform all the operations
 		// on this staged database.
-		return tx.Context().GetStagedDatabase().(*metadata.Database), nil
+
+		db, ok := tx.Context().GetStagedDatabase().(*metadata.Database)
+		if !ok {
+			return nil, errors.Internal("invalid transaction staged database")
+		}
+
+		if db.Name() != dbBranch.Name() {
+			return nil, errors.InvalidArgument("collections should belong to the same database branch in the transaction")
+		}
+
+		return db, nil
 	}
 
 	project, err := tenant.GetProject(projName)
@@ -188,7 +200,6 @@ func (runner *BaseQueryRunner) getDatabase(_ context.Context, tx transaction.Tx,
 	}
 
 	// otherwise, simply read from the in-memory cache/disk.
-	dbBranch := metadata.NewDatabaseNameWithBranch(projName, branch)
 	db, err := project.GetDatabase(dbBranch)
 	if err != nil {
 		return nil, createApiError(err)
@@ -424,7 +435,7 @@ func (runner *ImportQueryRunner) evolveSchema(ctx context.Context, tenant *metad
 	err = tenant.CreateCollection(ctx, tx, db, schFactory)
 	if err == kv.ErrDuplicateKey {
 		// this simply means, concurrently CreateCollection is called,
-		return errors.Aborted("concurrent create collection request, aborting")
+		return errors.Aborted("concurrent createReq collection request, aborting")
 	}
 
 	if err != nil {
@@ -446,7 +457,7 @@ func (runner *ImportQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}
 	if err != nil {
 		// api.Code_NOT_FOUND && runner.req.CreateCollection
-		// Infer schema and create collection from the first batch of documents
+		// Infer schema and createReq collection from the first batch of documents
 		if err := runner.evolveSchema(ctx, tenant, nil); err != nil {
 			return Response{}, ctx, err
 		}
@@ -716,13 +727,13 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		isUpdate := true
 		newKey := key
 		if primaryKeyMutation {
-			// we need to delete old key and build new key from new data
+			// we need to deleteReq old key and build new key from new data
 			keyGen := newKeyGenerator(newData.RawData, tenant.TableKeyGenerator, coll.Indexes.PrimaryKey)
 			if newKey, err = keyGen.generate(ctx, runner.txMgr, runner.encoder, coll.EncodedName); err != nil {
 				return Response{}, nil, err
 			}
 
-			// delete old key
+			// deleteReq old key
 			if err = tx.Delete(ctx, key); ulog.E(err) {
 				return Response{}, ctx, err
 			}
@@ -757,7 +768,7 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
-	if err = runner.mustBeDocumentsCollection(coll, "delete"); err != nil {
+	if err = runner.mustBeDocumentsCollection(coll, "deleteReq"); err != nil {
 		return Response{}, ctx, err
 	}
 
@@ -1322,118 +1333,252 @@ func (runner *CollectionQueryRunner) SetDescribeCollectionReq(describe *api.Desc
 	runner.describeReq = describe
 }
 
+func (runner *CollectionQueryRunner) drop(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
+	db, err := runner.getDatabase(ctx, tx, tenant, runner.dropReq.GetProject(), runner.dropReq.GetBranch())
+	if err != nil {
+		return Response{}, ctx, err
+	}
+
+	if tx.Context().GetStagedDatabase() == nil {
+		// do not modify the actual database object yet, just work on the clone
+		db = db.Clone()
+		tx.Context().StageDatabase(db)
+	}
+
+	collection, err := runner.getCollection(db, runner.dropReq.GetCollection())
+	if err != nil {
+		return Response{}, ctx, err
+	}
+
+	project, _ := tenant.GetProject(runner.dropReq.GetProject())
+	searchIndexes := collection.SearchIndexes
+	// Drop Collection will also drop the implicit search index.
+	if err = tenant.DropCollection(ctx, tx, db, runner.dropReq.GetCollection()); err != nil {
+		return Response{}, ctx, err
+	}
+
+	if config.DefaultConfig.Search.WriteEnabled {
+		for _, searchIndex := range searchIndexes {
+			// Delete all the indexes that are created by the user and is tied to this collection.
+			if err = tenant.DeleteSearchIndex(ctx, tx, project, searchIndex.Name); err != nil {
+				return Response{}, ctx, err
+			}
+		}
+	}
+
+	return Response{Status: DroppedStatus}, ctx, nil
+}
+
+func (runner *CollectionQueryRunner) createOrUpdate(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
+	req := runner.createOrUpdateReq
+
+	db, err := runner.getDatabase(ctx, tx, tenant, req.GetProject(), req.GetBranch())
+	if err != nil {
+		return Response{}, ctx, err
+	}
+
+	if db.GetCollection(req.GetCollection()) != nil && req.OnlyCreate {
+		// check if onlyCreate is set and if set then return an error if collection already exist
+		return Response{}, ctx, errors.AlreadyExists("collection already exist")
+	}
+
+	schFactory, err := schema.Build(req.GetCollection(), req.GetSchema())
+	if err != nil {
+		return Response{}, ctx, err
+	}
+
+	if tx.Context().GetStagedDatabase() == nil {
+		// do not modify the actual database object yet, just work on the clone
+		db = db.Clone()
+		tx.Context().StageDatabase(db)
+	}
+
+	if err = tenant.CreateCollection(ctx, tx, db, schFactory); err != nil {
+		if err == kv.ErrDuplicateKey {
+			// this simply means, concurrently CreateCollection is called,
+			return Response{}, ctx, errors.Aborted("concurrent createReq collection request, aborting")
+		}
+		return Response{}, ctx, err
+	}
+
+	return Response{Status: CreatedStatus}, ctx, nil
+}
+
+func (runner *CollectionQueryRunner) list(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
+	db, err := runner.getDatabase(ctx, tx, tenant, runner.listReq.GetProject(), runner.listReq.GetBranch())
+	if err != nil {
+		return Response{}, ctx, err
+	}
+
+	collectionList := db.ListCollection()
+	collections := make([]*api.CollectionInfo, len(collectionList))
+	for i, c := range collectionList {
+		collections[i] = &api.CollectionInfo{
+			Collection: c.GetName(),
+		}
+	}
+
+	return Response{
+		Response: &api.ListCollectionsResponse{
+			Collections: collections,
+		},
+	}, ctx, nil
+}
+
+func (runner *CollectionQueryRunner) describe(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
+	req := runner.describeReq
+	db, coll, err := runner.getDBAndCollection(ctx, tx, tenant,
+		req.GetProject(), req.GetCollection(), req.GetBranch())
+	if err != nil {
+		return Response{}, ctx, err
+	}
+
+	size, err := tenant.CollectionSize(ctx, db, coll)
+	if err != nil {
+		return Response{}, ctx, err
+	}
+
+	tenantName := tenant.GetNamespace().Metadata().Name
+
+	namespace, err := request.GetNamespace(ctx)
+	if err != nil {
+		namespace = "unknown"
+	}
+
+	metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.Name(), coll.GetName(), size)
+	// remove indexing version from the schema before returning the response
+	sch := schema.RemoveIndexingVersion(coll.Schema)
+
+	// Generate schema in the requested language format
+	if runner.describeReq.SchemaFormat != "" {
+		sch, err = schema.Generate(sch, runner.describeReq.SchemaFormat)
+		if err != nil {
+			return Response{}, ctx, err
+		}
+	}
+
+	return Response{
+		Response: &api.DescribeCollectionResponse{
+			Collection: coll.Name,
+			Metadata:   &api.CollectionMetadata{},
+			Schema:     sch,
+			Size:       size,
+		},
+	}, ctx, nil
+}
+
 func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
 	switch {
 	case runner.dropReq != nil:
-		db, err := runner.getDatabase(ctx, tx, tenant, runner.dropReq.GetProject(), runner.dropReq.GetBranch())
-		if err != nil {
-			return Response{}, ctx, err
-		}
-
-		if tx.Context().GetStagedDatabase() == nil {
-			// do not modify the actual database object yet, just work on the clone
-			db = db.Clone()
-			tx.Context().StageDatabase(db)
-		}
-
-		collection, err := runner.getCollection(db, runner.dropReq.GetCollection())
-		if err != nil {
-			return Response{}, ctx, err
-		}
-
-		project, _ := tenant.GetProject(runner.dropReq.GetProject())
-		searchIndexes := collection.SearchIndexes
-		// Drop Collection will also drop the implicit search index.
-		if err = tenant.DropCollection(ctx, tx, db, runner.dropReq.GetCollection()); err != nil {
-			return Response{}, ctx, err
-		}
-
-		if config.DefaultConfig.Search.WriteEnabled {
-			for _, searchIndex := range searchIndexes {
-				// Delete all the indexes that are created by the user and is tied to this collection.
-				if err = tenant.DeleteSearchIndex(ctx, tx, project, searchIndex.Name); err != nil {
-					return Response{}, ctx, err
-				}
-			}
-		}
-
-		return Response{
-			Status: DroppedStatus,
-		}, ctx, nil
+		return runner.drop(ctx, tx, tenant)
 	case runner.createOrUpdateReq != nil:
-		db, err := runner.getDatabase(ctx, tx, tenant, runner.createOrUpdateReq.GetProject(), runner.createOrUpdateReq.GetBranch())
-		if err != nil {
-			return Response{}, ctx, err
-		}
-
-		if db.GetCollection(runner.createOrUpdateReq.GetCollection()) != nil && runner.createOrUpdateReq.OnlyCreate {
-			// check if onlyCreate is set and if set then return an error if collection already exist
-			return Response{}, ctx, errors.AlreadyExists("collection already exist")
-		}
-
-		schFactory, err := schema.Build(runner.createOrUpdateReq.GetCollection(), runner.createOrUpdateReq.GetSchema())
-		if err != nil {
-			return Response{}, ctx, err
-		}
-
-		if tx.Context().GetStagedDatabase() == nil {
-			// do not modify the actual database object yet, just work on the clone
-			db = db.Clone()
-			tx.Context().StageDatabase(db)
-		}
-
-		if err = tenant.CreateCollection(ctx, tx, db, schFactory); err != nil {
-			if err == kv.ErrDuplicateKey {
-				// this simply means, concurrently CreateCollection is called,
-				return Response{}, ctx, errors.Aborted("concurrent create collection request, aborting")
-			}
-			return Response{}, ctx, err
-		}
-
-		return Response{
-			Status: CreatedStatus,
-		}, ctx, nil
+		return runner.createOrUpdate(ctx, tx, tenant)
 	case runner.listReq != nil:
-		db, err := runner.getDatabase(ctx, tx, tenant, runner.listReq.GetProject(), runner.listReq.GetBranch())
-		if err != nil {
-			return Response{}, ctx, err
-		}
-
-		collectionList := db.ListCollection()
-		collections := make([]*api.CollectionInfo, len(collectionList))
-		for i, c := range collectionList {
-			collections[i] = &api.CollectionInfo{
-				Collection: c.GetName(),
-			}
-		}
-		return Response{
-			Response: &api.ListCollectionsResponse{
-				Collections: collections,
-			},
-		}, ctx, nil
+		return runner.list(ctx, tx, tenant)
 	case runner.describeReq != nil:
-		req := runner.describeReq
-		db, coll, err := runner.getDBAndCollection(ctx, tx, tenant,
-			req.GetProject(), req.GetCollection(), req.GetBranch())
+		return runner.describe(ctx, tx, tenant)
+	}
+
+	return Response{}, ctx, errors.Unknown("unknown request path")
+}
+
+type ProjectQueryRunner struct {
+	*BaseQueryRunner
+
+	deleteReq   *api.DeleteProjectRequest
+	createReq   *api.CreateProjectRequest
+	listReq     *api.ListProjectsRequest
+	describeReq *api.DescribeDatabaseRequest
+}
+
+func (runner *ProjectQueryRunner) SetCreateProjectReq(create *api.CreateProjectRequest) {
+	runner.createReq = create
+}
+
+func (runner *ProjectQueryRunner) SetDeleteProjectReq(d *api.DeleteProjectRequest) {
+	runner.deleteReq = d
+}
+
+func (runner *ProjectQueryRunner) SetListProjectsReq(list *api.ListProjectsRequest) {
+	runner.listReq = list
+}
+
+func (runner *ProjectQueryRunner) SetDescribeDatabaseReq(describe *api.DescribeDatabaseRequest) {
+	runner.describeReq = describe
+}
+
+func (runner *ProjectQueryRunner) create(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
+	projMetadata, err := createProjectMetadata(ctx)
+	if err != nil {
+		return Response{}, ctx, err
+	}
+
+	err = tenant.CreateProject(ctx, tx, runner.createReq.GetProject(), projMetadata)
+	if err == kv.ErrDuplicateKey {
+		return Response{}, ctx, errors.AlreadyExists("project already exist")
+	}
+
+	if err != nil {
+		return Response{}, ctx, err
+	}
+
+	return Response{Status: CreatedStatus}, ctx, nil
+}
+
+func (runner *ProjectQueryRunner) delete(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
+	exist, err := tenant.DeleteProject(ctx, tx, runner.deleteReq.GetProject())
+	if err != nil {
+		return Response{}, ctx, err
+	}
+
+	if !exist {
+		return Response{}, ctx, errors.NotFound("project doesn't exist '%s'", runner.deleteReq.GetProject())
+	}
+
+	return Response{Status: DroppedStatus}, ctx, nil
+}
+
+func (runner *ProjectQueryRunner) list(ctx context.Context, _ transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
+	// listReq projects need not include any branches
+	projectList := tenant.ListProjects(ctx)
+	projects := make([]*api.ProjectInfo, len(projectList))
+	for i, l := range projectList {
+		projects[i] = &api.ProjectInfo{
+			Project: l,
+		}
+	}
+
+	return Response{
+		Response: &api.ListProjectsResponse{
+			Projects: projects,
+		},
+	}, ctx, nil
+}
+
+func (runner *ProjectQueryRunner) describe(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
+	db, err := runner.getDatabase(ctx, tx, tenant, runner.describeReq.GetProject(), runner.describeReq.GetBranch())
+	if err != nil {
+		return Response{}, ctx, err
+	}
+
+	namespace, err := request.GetNamespace(ctx)
+	if err != nil {
+		namespace = "unknown"
+	}
+	tenantName := tenant.GetNamespace().Metadata().Name
+
+	collectionList := db.ListCollection()
+	collections := make([]*api.CollectionDescription, len(collectionList))
+	for i, c := range collectionList {
+		size, err := tenant.CollectionSize(ctx, db, c)
 		if err != nil {
 			return Response{}, ctx, err
 		}
 
-		size, err := tenant.CollectionSize(ctx, db, coll)
-		if err != nil {
-			return Response{}, ctx, err
-		}
+		metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.Name(), c.GetName(), size)
 
-		tenantName := tenant.GetNamespace().Metadata().Name
-
-		namespace, err := request.GetNamespace(ctx)
-		if err != nil {
-			namespace = "unknown"
-		}
-
-		metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.Name(), coll.GetName(), size)
 		// remove indexing version from the schema before returning the response
-		sch := schema.RemoveIndexingVersion(coll.Schema)
+		sch := schema.RemoveIndexingVersion(c.Schema)
 
 		// Generate schema in the requested language format
 		if runner.describeReq.SchemaFormat != "" {
@@ -1443,144 +1588,41 @@ func (runner *CollectionQueryRunner) Run(ctx context.Context, tx transaction.Tx,
 			}
 		}
 
-		return Response{
-			Response: &api.DescribeCollectionResponse{
-				Collection: coll.Name,
-				Metadata:   &api.CollectionMetadata{},
-				Schema:     sch,
-				Size:       size,
-			},
-		}, ctx, nil
+		collections[i] = &api.CollectionDescription{
+			Collection: c.GetName(),
+			Metadata:   &api.CollectionMetadata{},
+			Schema:     sch,
+			Size:       size,
+		}
 	}
 
-	return Response{}, ctx, errors.Unknown("unknown request path")
-}
+	size, err := tenant.DatabaseSize(ctx, db)
+	if err != nil {
+		return Response{}, ctx, err
+	}
 
-type ProjectQueryRunner struct {
-	*BaseQueryRunner
+	metrics.UpdateDbSizeMetrics(namespace, tenantName, db.Name(), size)
 
-	delete   *api.DeleteProjectRequest
-	create   *api.CreateProjectRequest
-	list     *api.ListProjectsRequest
-	describe *api.DescribeDatabaseRequest
-}
-
-func (runner *ProjectQueryRunner) SetCreateProjectReq(create *api.CreateProjectRequest) {
-	runner.create = create
-}
-
-func (runner *ProjectQueryRunner) SetDeleteProjectReq(d *api.DeleteProjectRequest) {
-	runner.delete = d
-}
-
-func (runner *ProjectQueryRunner) SetListProjectsReq(list *api.ListProjectsRequest) {
-	runner.list = list
-}
-
-func (runner *ProjectQueryRunner) SetDescribeDatabaseReq(describe *api.DescribeDatabaseRequest) {
-	runner.describe = describe
+	return Response{
+		Response: &api.DescribeDatabaseResponse{
+			Metadata:    &api.DatabaseMetadata{},
+			Collections: collections,
+			Size:        size,
+			Branches:    tenant.ListDatabaseBranches(runner.describeReq.GetProject()),
+		},
+	}, ctx, nil
 }
 
 func (runner *ProjectQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
 	switch {
-	case runner.delete != nil:
-		exist, err := tenant.DeleteProject(ctx, tx, runner.delete.GetProject())
-		if err != nil {
-			return Response{}, ctx, err
-		}
-		if !exist {
-			return Response{}, ctx, errors.NotFound("project doesn't exist '%s'", runner.delete.GetProject())
-		}
-
-		return Response{
-			Status: DroppedStatus,
-		}, ctx, nil
-	case runner.create != nil:
-		projMetadata, err := createProjectMetadata(ctx)
-		if err != nil {
-			return Response{}, ctx, err
-		}
-		exist, err := tenant.CreateProject(ctx, tx, runner.create.GetProject(), projMetadata)
-		if exist || err == kv.ErrDuplicateKey {
-			return Response{}, ctx, errors.AlreadyExists("project already exist")
-		}
-		if err != nil {
-			return Response{}, ctx, err
-		}
-
-		return Response{
-			Status: CreatedStatus,
-		}, ctx, nil
-	case runner.list != nil:
-		// list projects need not include any branches
-		projectList := tenant.ListProjects(ctx)
-		projects := make([]*api.ProjectInfo, len(projectList))
-		for i, l := range projectList {
-			projects[i] = &api.ProjectInfo{
-				Project: l,
-			}
-		}
-		return Response{
-			Response: &api.ListProjectsResponse{
-				Projects: projects,
-			},
-		}, ctx, nil
-	case runner.describe != nil:
-		db, err := runner.getDatabase(ctx, tx, tenant, runner.describe.GetProject(), runner.describe.GetBranch())
-		if err != nil {
-			return Response{}, ctx, err
-		}
-
-		namespace, err := request.GetNamespace(ctx)
-		if err != nil {
-			namespace = "unknown"
-		}
-		tenantName := tenant.GetNamespace().Metadata().Name
-
-		collectionList := db.ListCollection()
-		collections := make([]*api.CollectionDescription, len(collectionList))
-		for i, c := range collectionList {
-			size, err := tenant.CollectionSize(ctx, db, c)
-			if err != nil {
-				return Response{}, ctx, err
-			}
-
-			metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.Name(), c.GetName(), size)
-
-			// remove indexing version from the schema before returning the response
-			sch := schema.RemoveIndexingVersion(c.Schema)
-
-			// Generate schema in the requested language format
-			if runner.describe.SchemaFormat != "" {
-				sch, err = schema.Generate(sch, runner.describe.SchemaFormat)
-				if err != nil {
-					return Response{}, ctx, err
-				}
-			}
-
-			collections[i] = &api.CollectionDescription{
-				Collection: c.GetName(),
-				Metadata:   &api.CollectionMetadata{},
-				Schema:     sch,
-				Size:       size,
-			}
-		}
-
-		size, err := tenant.DatabaseSize(ctx, db)
-		if err != nil {
-			return Response{}, ctx, err
-		}
-
-		metrics.UpdateDbSizeMetrics(namespace, tenantName, db.Name(), size)
-
-		return Response{
-			Response: &api.DescribeDatabaseResponse{
-				Metadata:    &api.DatabaseMetadata{},
-				Collections: collections,
-				Size:        size,
-				Branches:    tenant.ListDatabaseBranches(runner.describe.GetProject()),
-			},
-		}, ctx, nil
+	case runner.deleteReq != nil:
+		return runner.delete(ctx, tx, tenant)
+	case runner.createReq != nil:
+		return runner.create(ctx, tx, tenant)
+	case runner.listReq != nil:
+		return runner.list(ctx, tx, tenant)
+	case runner.describeReq != nil:
+		return runner.describe(ctx, tx, tenant)
 	}
 
 	return Response{}, ctx, errors.Unknown("unknown request path")
@@ -1633,10 +1675,10 @@ func (runner *BranchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 func createProjectMetadata(ctx context.Context) (*metadata.ProjectMetadata, error) {
 	currentSub, err := auth.GetCurrentSub(ctx)
 	if err != nil && config.DefaultConfig.Auth.Enabled {
-		return nil, errors.Internal("Failed to create database metadata")
+		return nil, errors.Internal("Failed to createReq database metadata")
 	}
 	return &metadata.ProjectMetadata{
-		Id:        0, // it will be set to right value later on
+		ID:        0, // it will be set to right value later on
 		Creator:   currentSub,
 		CreatedAt: time.Now().Unix(),
 	}, nil

@@ -23,7 +23,6 @@ import (
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/lib/uuid"
-	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/types"
 	"github.com/tigrisdata/tigris/store/kv"
 )
@@ -58,22 +57,17 @@ type Tx interface {
 	Rollback(ctx context.Context) error
 }
 
-type StagedDB interface {
-	Name() string
-	GetCollection(string) *schema.DefaultCollection
-}
-
 // SessionCtx is used to store any baggage for the lifetime of the transaction. We use it to stage the database inside
 // a transaction when the transaction is performing any DDLs.
 type SessionCtx struct {
-	db StagedDB
+	db interface{}
 }
 
-func (c *SessionCtx) StageDatabase(db StagedDB) {
+func (c *SessionCtx) StageDatabase(db interface{}) {
 	c.db = db
 }
 
-func (c *SessionCtx) GetStagedDatabase() StagedDB {
+func (c *SessionCtx) GetStagedDatabase() interface{} {
 	return c.db
 }
 

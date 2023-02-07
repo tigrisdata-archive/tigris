@@ -59,9 +59,9 @@ func Configure(config LogConfig) {
 	if config.Format == "console" {
 		output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}
 		output.FormatCaller = consoleFormatCaller
-		log.Logger = zerolog.New(output).Level(lvl).With().Timestamp().CallerWithSkipFrameCount(3).Stack().Logger()
+		log.Logger = zerolog.New(output).Level(lvl).With().Timestamp().CallerWithSkipFrameCount(2).Stack().Logger()
 	} else {
-		log.Logger = zerolog.New(os.Stdout).Level(lvl).With().Timestamp().CallerWithSkipFrameCount(3).Stack().Logger()
+		log.Logger = zerolog.New(os.Stdout).Level(lvl).With().Timestamp().CallerWithSkipFrameCount(2).Stack().Logger()
 	}
 }
 
@@ -84,7 +84,7 @@ func E(err error) bool {
 		return false
 	}
 
-	log.Error().CallerSkipFrame(2).Msg(err.Error())
+	log.Error().CallerSkipFrame(1).Msg(err.Error())
 
 	return true
 }
