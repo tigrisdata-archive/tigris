@@ -54,15 +54,23 @@ type User struct {
 }
 
 type CustomClaim struct {
-	Namespace Namespace `json:"https://tigris/n"`
-	User      User      `json:"https://tigris/u"`
+	Namespace    Namespace    `json:"https://tigris/n"`
+	User         User         `json:"https://tigris/u"`
+	TigrisClaims TigrisClaims `json:"https://tigris"`
 }
 
 func (c CustomClaim) Validate(_ context.Context) error {
-	if len(c.Namespace.Code) == 0 {
+	if len(c.Namespace.Code) == 0 && len(c.TigrisClaims.NamespaceCode) == 0 {
 		return errors.PermissionDenied("empty namespace code in token")
 	}
 	return nil
+}
+
+type TigrisClaims struct {
+	NamespaceCode        string `json:"nc"`
+	NamespaceDisplayName string `json:"nd"`
+	Project              string `json:"p"`
+	UserEmail            string `json:"ue"`
 }
 
 func AuthFromMD(ctx context.Context, expectedScheme string) (string, error) {
@@ -171,8 +179,15 @@ func authFunction(ctx context.Context, jwtValidator *validator.Validator, config
 		}
 
 		if customClaims, ok := validatedClaims.CustomClaims.(*CustomClaim); ok {
+
+			// for migration purpose
+			var namespaceCode = customClaims.Namespace.Code
+			if namespaceCode == "" {
+				namespaceCode = customClaims.TigrisClaims.NamespaceCode
+			}
+
 			// if incoming namespace is empty, set it to unknown for observables and reject request
-			if customClaims.Namespace.Code == "" {
+			if namespaceCode == "" {
 				log.Warn().Msg("Valid token with empty namespace received")
 				reqMetadata.SetNamespace(ctx, defaults.UnknownValue)
 				return ctx, errors.Unauthenticated("You are not authorized to perform this admin action")
@@ -180,10 +195,10 @@ func authFunction(ctx context.Context, jwtValidator *validator.Validator, config
 			isAdmin := fullMethodNameFound && request.IsAdminApi(fullMethodName)
 			if isAdmin {
 				// admin api being called, let's check if the user is of admin allowed namespaces
-				if !isAdminNamespace(customClaims.Namespace.Code, config) {
+				if !isAdminNamespace(namespaceCode, config) {
 					log.Warn().
 						Interface("AdminNamespaces", config.Auth.AdminNamespaces).
-						Str("IncomingNamespace", customClaims.Namespace.Code).
+						Str("IncomingNamespace", namespaceCode).
 						Msg("Valid token received for admin action - but not allowed to administer from this namespace")
 					return ctx, errors.Unauthenticated("You are not authorized to perform this admin action")
 				}
@@ -191,7 +206,7 @@ func authFunction(ctx context.Context, jwtValidator *validator.Validator, config
 
 			log.Debug().Msg("Valid token received")
 			token := &types.AccessToken{
-				Namespace: customClaims.Namespace.Code,
+				Namespace: namespaceCode,
 				Sub:       validatedClaims.RegisteredClaims.Subject,
 			}
 			reqMetadata.SetAccessToken(token)
