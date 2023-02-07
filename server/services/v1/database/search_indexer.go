@@ -53,12 +53,12 @@ func (i *SearchIndexer) OnPostCommit(ctx context.Context, tenant *metadata.Tenan
 	for _, event := range eventListener.GetEvents() {
 		var err error
 
-		_, db, coll, ok := i.tenantMgr.DecodeTableName(event.Table)
+		_, db, collName, ok := i.tenantMgr.DecodeTableName(event.Table)
 		if !ok {
 			continue
 		}
 
-		collection := tenant.GetCollection(db, coll)
+		collection := db.GetCollection(collName)
 		if collection == nil {
 			continue
 		}

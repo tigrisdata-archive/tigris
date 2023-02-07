@@ -407,42 +407,45 @@ func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transa
 	return NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.searchSchemaStore, m.namespaceStore, m.encoder, m.versionH, nil, m.tableKeyGenerator), nil
 }
 
-// GetTableNameFromIds returns tenant name, database name, collection name corresponding to their encoded ids.
-func (m *TenantManager) GetTableNameFromIds(tenantId uint32, dbId uint32, collId uint32) (string, string, string, bool) {
+// GetTableFromIds returns tenant name, database object, collection name corresponding to their encoded ids.
+func (m *TenantManager) GetTableFromIds(tenantId uint32, dbId uint32, collId uint32) (string, *Database, string, bool) {
 	m.RLock()
 	defer m.RUnlock()
 
 	// get tenant info
 	tenantName, ok := m.idToTenantMap[tenantId]
 	if !ok {
-		return "", "", "", ok
+		return "", nil, "", ok
 	}
 	tenant, ok := m.tenants[tenantName]
 	if !ok {
-		return "", "", "", ok
+		return "", nil, "", ok
 	}
 
 	// get db info
 	dbObj, ok := tenant.idToDatabaseMap[dbId]
 	if !ok {
-		return tenantName, "", "", ok
+		return tenantName, nil, "", ok
 	}
 
 	// finally, the collection
 	collName, ok := dbObj.idToCollectionMap[collId]
 	if !ok {
-		return tenantName, dbObj.Name(), "", ok
+		return tenantName, dbObj, "", ok
 	}
-	return tenantName, dbObj.Name(), collName, ok
+	return tenantName, dbObj, collName, ok
 }
 
-func (m *TenantManager) DecodeTableName(tableName []byte) (string, string, string, bool) {
+func (m *TenantManager) DecodeTableName(tableName []byte) (string, *Database, string, bool) {
 	n, d, c, ok := m.encoder.DecodeTableName(tableName)
 	if !ok {
-		return "", "", "", false
+		return "", nil, "", false
 	}
-
-	return m.GetTableNameFromIds(n, d, c)
+	tenantName, db, collName, ok := m.GetTableFromIds(n, d, c)
+	if !ok {
+		return "", nil, "", false
+	}
+	return tenantName, db, collName, ok
 }
 
 // Reload reads all the tenants exist in the database and builds an in-memory view of the manager to track the tenants.
@@ -1192,17 +1195,6 @@ func (tenant *Tenant) ListDatabaseBranches(projName string) []string {
 		i++
 	}
 	return branchNames
-}
-
-func (tenant *Tenant) GetCollection(db string, collection string) *schema.DefaultCollection {
-	tenant.RLock()
-	defer tenant.RUnlock()
-
-	if proj := tenant.projects[db]; proj != nil {
-		return proj.database.GetCollection(collection)
-	}
-
-	return nil
 }
 
 // CreateCollection is to create a collection inside tenant namespace.
