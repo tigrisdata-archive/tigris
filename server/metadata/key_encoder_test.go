@@ -70,11 +70,11 @@ func TestEncodeDecodeKey(t *testing.T) {
 	tenantID, dbID, collID, ok := k.DecodeTableName(encodedTable)
 	require.True(t, ok)
 
-	tenantName, dbName, collName, ok := mgr.GetTableNameFromIds(tenantID, dbID, collID)
+	tenantName, dbObj, collName, ok := mgr.GetTableFromIds(tenantID, dbID, collID)
 	require.True(t, ok)
 
 	require.Equal(t, ns.StrId(), tenantName)
-	require.Equal(t, db.Name(), dbName)
+	require.Equal(t, db.Name(), dbObj.Name())
 	require.Equal(t, coll.Name, collName)
 	require.True(t, ok)
 }
