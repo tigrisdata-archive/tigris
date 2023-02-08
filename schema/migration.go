@@ -31,7 +31,7 @@ import (
 
 // Version is schema associated with it version.
 type Version struct {
-	Version int
+	Version uint32
 	Schema  []byte
 }
 
@@ -58,7 +58,7 @@ type VersionDeltaField struct {
 
 // VersionDelta contains all fields schema changes in particular schema Version.
 type VersionDelta struct {
-	Version int
+	Version uint32
 	Fields  []*VersionDeltaField
 }
 
@@ -162,7 +162,7 @@ func buildSchemaDeltas(schemas Versions) ([]VersionDelta, error) {
 // along with the schema version at which this change has happened.
 type FieldVersion struct {
 	Change  *VersionDeltaField
-	Version int
+	Version uint32
 }
 
 // FieldVersions contains all the changes of the field,
@@ -176,7 +176,7 @@ type FieldVersions struct {
 }
 
 // addFieldVersion adds individual field change to the tree.
-func addFieldVersion(versions map[string]*FieldVersions, version int, change *VersionDeltaField) {
+func addFieldVersion(versions map[string]*FieldVersions, version uint32, change *VersionDeltaField) {
 	m, i := versions, 0
 
 	// traverse existing path
@@ -236,9 +236,9 @@ func (d *DefaultCollection) LookupFieldVersion(keyPath []string) []*FieldVersion
 }
 
 // CompatibleSchemaSince determines if there was incompatible schema change since given version.
-func (d *DefaultCollection) CompatibleSchemaSince(version int32) bool {
+func (d *DefaultCollection) CompatibleSchemaSince(version uint32) bool {
 	// last element in the array contains last incompatible schema change
-	return int(version) >= d.SchemaDeltas[len(d.SchemaDeltas)-1].Version
+	return version >= d.SchemaDeltas[len(d.SchemaDeltas)-1].Version
 }
 
 func convertFromBool(toType FieldType, val bool) any {
@@ -518,20 +518,20 @@ func applySchemaDelta(doc map[string]any, delta *VersionDelta) {
 
 // UpdateRowSchema fixes the schema of provided, unmarshalled, document from given Version to the latest
 // collection schema.
-func (d *DefaultCollection) UpdateRowSchema(doc map[string]any, version int32) {
+func (d *DefaultCollection) UpdateRowSchema(doc map[string]any, version uint32) {
 	// Find first incompatible schema after the row schema version
-	i := sort.Search(len(d.SchemaDeltas), func(i int) bool { return d.SchemaDeltas[i].Version > int(version) })
+	i := sort.Search(len(d.SchemaDeltas), func(i int) bool { return d.SchemaDeltas[i].Version > version })
 
 	// Apply all deltas after first incompatible change
 	for ; i < len(d.SchemaDeltas); i++ {
-		log.Debug().Int("to_version", d.SchemaDeltas[i].Version).Interface("doc", doc).Msg("Updating row schema")
+		log.Debug().Uint32("to_version", d.SchemaDeltas[i].Version).Interface("doc", doc).Msg("Updating row schema")
 		applySchemaDelta(doc, &d.SchemaDeltas[i])
 	}
 }
 
 // UpdateRowSchemaRaw fixes the schema of provided document from given Version to the latest
 // collection schema.
-func (d *DefaultCollection) UpdateRowSchemaRaw(doc []byte, version int32) ([]byte, error) {
+func (d *DefaultCollection) UpdateRowSchemaRaw(doc []byte, version uint32) ([]byte, error) {
 	decDoc, err := util.JSONToMap(doc)
 	if ulog.E(err) {
 		return nil, err

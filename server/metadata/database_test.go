@@ -16,12 +16,15 @@ package metadata
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/keys"
+	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/transaction"
 )
 
@@ -294,4 +297,204 @@ func TestDatabaseSubspaceMigrationV1(t *testing.T) {
 	meta, err = d.Get(ctx, tx, 1, "name7")
 	require.NoError(t, err)
 	require.Equal(t, &DatabaseMetadata{ID: 123}, meta)
+}
+
+func TestUpdateSchemaVersion(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	testDB := "version_test_db"
+
+	k := NewMetadataDictionary(newTestNameRegistry(t))
+	testClearDictionary(ctx, k, kvStore)
+
+	tm := transaction.NewManager(kvStore)
+
+	t.Run("first_version", func(t *testing.T) {
+		tx, cleanupTx := initTx(t, ctx, tm)
+		defer cleanupTx()
+
+		err := k.Database().delete(ctx, tx, 1, testDB)
+		require.NoError(t, err)
+
+		fb := schema.NewFactoryBuilder(true)
+
+		db := &Database{name: NewDatabaseName(testDB)}
+
+		schFactory, err := fb.Build("", []byte(`{"primary_key": ["id"], "properties" : { "id" : { "type" : "integer" } } }`))
+		require.NoError(t, err)
+
+		err = UpdateSchemaVersion(ctx, k, tx, 1, db, schFactory)
+		require.NoError(t, err)
+
+		assert.Equal(t, uint32(0), db.PendingSchemaVersion) // no version set
+
+		schFactory, err = fb.Build("", []byte(`{"version":1, "primary_key": ["id"], "properties" : { "id" : { "type" : "integer" } } }`))
+		require.NoError(t, err)
+
+		err = UpdateSchemaVersion(ctx, k, tx, 1, db, schFactory)
+		require.NoError(t, err)
+
+		assert.Equal(t, uint32(1), db.PendingSchemaVersion)
+	})
+
+	t.Run("first_version", func(t *testing.T) {
+		tx, _ := initTx(t, ctx, tm)
+
+		err := k.Database().delete(ctx, tx, 1, testDB)
+		require.NoError(t, err)
+
+		fb := schema.NewFactoryBuilder(true)
+
+		db := &Database{name: NewDatabaseName(testDB)}
+
+		schFactory, err := fb.Build("test_coll1", []byte(`{"title":"test_coll1", "version":1, "primary_key": ["id"], "properties" : { "id" : { "type" : "integer" } } }`))
+		require.NoError(t, err)
+
+		assert.Equal(t, uint32(0), db.PendingSchemaVersion)
+		assert.Equal(t, uint32(0), db.CurrentSchemaVersion)
+
+		err = UpdateSchemaVersion(ctx, k, tx, 1, db, schFactory)
+		require.NoError(t, err)
+
+		assert.Equal(t, uint32(1), db.PendingSchemaVersion)
+		assert.Equal(t, uint32(0), db.CurrentSchemaVersion)
+
+		err = tx.Commit(ctx)
+		require.NoError(t, err)
+	})
+
+	t.Run("version_must_be_plus_one", func(t *testing.T) {
+		tx, _ := initTx(t, ctx, tm)
+
+		fb := schema.NewFactoryBuilder(true)
+
+		err := k.Database().delete(ctx, tx, 1, testDB)
+		require.NoError(t, err)
+
+		db := &Database{name: NewDatabaseName(testDB)}
+
+		schFactory, err := fb.Build("test_coll1", []byte(`{"title":"test_coll1", "version":1, "primary_key": ["id"], "properties" : { "id" : { "type" : "integer" } } }`))
+		require.NoError(t, err)
+
+		assert.Equal(t, uint32(0), db.PendingSchemaVersion)
+		assert.Equal(t, uint32(0), db.CurrentSchemaVersion)
+
+		err = UpdateSchemaVersion(ctx, k, tx, 1, db, schFactory)
+		require.NoError(t, err)
+
+		assert.Equal(t, uint32(1), db.PendingSchemaVersion)
+		assert.Equal(t, uint32(0), db.CurrentSchemaVersion)
+
+		err = tx.Commit(ctx)
+		require.NoError(t, err)
+
+		db = &Database{name: NewDatabaseName(testDB)} // db is staged in tx so should be clear on new tx
+
+		tx, _ = initTx(t, ctx, tm)
+
+		schFactory, err = fb.Build("test_coll1", []byte(`{"title":"test_coll1", "version":3, "primary_key": ["id"], "properties" : { "id" : { "type" : "integer" } } }`))
+		require.NoError(t, err)
+
+		err = UpdateSchemaVersion(ctx, k, tx, 1, db, schFactory)
+		require.Error(t, fmt.Errorf("next schema version must be 2"), err)
+
+		schFactory, err = fb.Build("test_coll1", []byte(`{"title":"test_coll1", "version":2, "primary_key": ["id"], "properties" : { "id" : { "type" : "integer" } } }`))
+		require.NoError(t, err)
+
+		err = UpdateSchemaVersion(ctx, k, tx, 1, db, schFactory)
+		require.NoError(t, err)
+
+		err = tx.Commit(ctx)
+		require.NoError(t, err)
+	})
+
+	// test calculating first explicit schema version
+	t.Run("max_schema_version", func(t *testing.T) {
+		tx, _ := initTx(t, ctx, tm)
+
+		fb := schema.NewFactoryBuilder(true)
+
+		err := k.Database().delete(ctx, tx, 2, testDB)
+		require.NoError(t, err)
+
+		db := &Database{name: NewDatabaseName(testDB), id: 12345}
+
+		err = k.schemaStore.Delete(ctx, tx, 2, db.Id(), 123)
+		require.NoError(t, err)
+
+		// simulate existing collections with some schema versions
+		// 7 and 10 to be exact
+		for i := 1; i <= 7; i++ {
+			sch := []byte(`{"title":"test_coll2", "primary_key": ["id"], "properties" : { "id" : { "type" : "integer" } } }`)
+
+			err = k.schemaStore.Put(ctx, tx, 2, db.Id(), 123, sch, uint32(i))
+			require.NoError(t, err)
+		}
+
+		err = k.schemaStore.Delete(ctx, tx, 2, db.Id(), 1230)
+		require.NoError(t, err)
+
+		for i := 1; i <= 10; i++ {
+			sch := []byte(`{"title":"test_coll3", "primary_key": ["id"], "properties" : { "id" : { "type" : "integer" } } }`)
+
+			err = k.schemaStore.Put(ctx, tx, 2, db.Id(), 1230, sch, uint32(i))
+			require.NoError(t, err)
+		}
+
+		err = tx.Commit(ctx)
+		require.NoError(t, err)
+
+		db = &Database{
+			name: NewDatabaseName(testDB), id: 12345,
+			collections: map[string]*collectionHolder{
+				"test_coll2": {collection: &schema.DefaultCollection{Id: 123}},
+				"test_coll3": {collection: &schema.DefaultCollection{Id: 1230}},
+			},
+		} // db is staged in tx so should be clear on new tx
+
+		tx, _ = initTx(t, ctx, tm)
+
+		schFactory, err := fb.Build("test_coll1", []byte(`{"title":"test_coll1", "version":3, "primary_key": ["id"], "properties" : { "id" : { "type" : "integer" } } }`))
+		require.NoError(t, err)
+
+		err = UpdateSchemaVersion(ctx, k, tx, 2, db, schFactory)
+		require.Equal(t, errors.InvalidArgument("next schema version should be 11"), err)
+
+		schFactory, err = fb.Build("test_coll1", []byte(`{"title":"test_coll1", "version":11, "primary_key": ["id"], "properties" : { "id" : { "type" : "integer" } } }`))
+		require.NoError(t, err)
+
+		err = UpdateSchemaVersion(ctx, k, tx, 2, db, schFactory)
+		require.NoError(t, err)
+
+		assert.Equal(t, uint32(11), db.PendingSchemaVersion)
+
+		err = tx.Commit(ctx)
+		require.NoError(t, err)
+	})
+
+	t.Run("change_version_in_tx", func(t *testing.T) {
+		tx, cleanupTx := initTx(t, ctx, tm)
+		defer cleanupTx()
+
+		err := k.Database().delete(ctx, tx, 1, testDB)
+		require.NoError(t, err)
+
+		fb := schema.NewFactoryBuilder(true)
+		schFactory, err := fb.Build("", []byte(`{"version":1, "primary_key": ["id"], "properties" : { "id" : { "type" : "integer" } } }`))
+		require.NoError(t, err)
+
+		db := &Database{}
+		db.PendingSchemaVersion = 2
+
+		err = UpdateSchemaVersion(ctx, k, tx, 1, db, schFactory)
+		require.Equal(t,
+			errors.InvalidArgument("collection schema version should be the same in the transaction. got 1 expected 2"),
+			err,
+		)
+
+		db.PendingSchemaVersion = 1
+		err = UpdateSchemaVersion(ctx, k, tx, 1, db, schFactory)
+		require.NoError(t, err)
+	})
 }

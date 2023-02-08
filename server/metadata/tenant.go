@@ -38,7 +38,7 @@ import (
 type NamespaceType string
 
 const (
-	baseSchemaVersion = 1
+	baseSchemaVersion = uint32(1)
 )
 
 type TenantGetter interface {
@@ -572,7 +572,7 @@ type Tenant struct {
 	schemaStore       *SchemaSubspace
 	searchSchemaStore *SearchSchemaSubspace
 	namespaceStore    *NamespaceSubspace
-	metaStore         *Dictionary
+	MetaStore         *Dictionary
 	Encoder           Encoder
 	namespace         Namespace
 	version           Version
@@ -593,7 +593,7 @@ func NewTenant(namespace Namespace, kvStore kv.TxStore, searchStore search.Store
 		kvStore:           kvStore,
 		searchStore:       searchStore,
 		namespace:         namespace,
-		metaStore:         dict,
+		MetaStore:         dict,
 		schemaStore:       dict.Schema(),
 		searchSchemaStore: dict.SearchSchema(),
 		namespaceStore:    dict.Namespace(),
@@ -643,7 +643,7 @@ func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVers
 	tenant.projects = make(map[string]*Project)
 	tenant.idToDatabaseMap = make(map[uint32]*Database)
 
-	dbs, err := tenant.metaStore.GetDatabases(ctx, tx, tenant.namespace.Id())
+	dbs, err := tenant.MetaStore.GetDatabases(ctx, tx, tenant.namespace.Id())
 	if err != nil {
 		return err
 	}
@@ -710,13 +710,13 @@ func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbN
 ) (*Database, error) {
 	database := NewDatabase(dbId, dbName)
 
-	colls, err := tenant.metaStore.GetCollections(ctx, tx, tenant.namespace.Id(), database.id)
+	colls, err := tenant.MetaStore.GetCollections(ctx, tx, tenant.namespace.Id(), database.id)
 	if err != nil {
 		return nil, err
 	}
 
 	for coll, meta := range colls {
-		primaryIdxMeta, err := tenant.metaStore.GetPrimaryIndexes(ctx, tx, tenant.namespace.Id(), database.id, meta.ID)
+		primaryIdxMeta, err := tenant.MetaStore.GetPrimaryIndexes(ctx, tx, tenant.namespace.Id(), database.id, meta.ID)
 		if err != nil {
 			database.needFixingCollections[coll] = struct{}{}
 			log.Debug().Err(err).Str("collection", coll).Msg("skipping loading collection")
@@ -1061,7 +1061,7 @@ func (tenant *Tenant) createProject(ctx context.Context, tx transaction.Tx, proj
 
 	// otherwise, proceed to create the database if there are concurrent requests on different workers then one of
 	// them will fail with duplicate entry and only one will succeed.
-	meta, err := tenant.metaStore.CreateDatabase(ctx, tx, projName, tenant.namespace.Id())
+	meta, err := tenant.MetaStore.CreateDatabase(ctx, tx, projName, tenant.namespace.Id(), 0)
 	if err != nil {
 		return err
 	}
@@ -1104,7 +1104,7 @@ func (tenant *Tenant) DeleteProject(ctx context.Context, tx transaction.Tx, proj
 
 	// delete the main branch, collections and associated metadata if there are concurrent requests on different workers
 	// then one of them will fail with duplicate entry and only one will succeed.
-	if err := tenant.metaStore.DropDatabase(ctx, tx, proj.Name(), tenant.namespace.Id()); err != nil {
+	if err := tenant.MetaStore.DropDatabase(ctx, tx, proj.Name(), tenant.namespace.Id()); err != nil {
 		return true, err
 	}
 
@@ -1182,6 +1182,11 @@ func (tenant *Tenant) CreateBranch(ctx context.Context, tx transaction.Tx, projN
 	tenant.Lock()
 	defer tenant.Unlock()
 
+	dbMeta, err := tenant.MetaStore.Database().Get(ctx, tx, tenant.namespace.Id(), projName)
+	if err != nil {
+		return err
+	}
+
 	// first get the project
 	proj, ok := tenant.projects[projName]
 	if !ok {
@@ -1193,7 +1198,7 @@ func (tenant *Tenant) CreateBranch(ctx context.Context, tx transaction.Tx, projN
 	}
 
 	// Create a database branch
-	branchMeta, err := tenant.metaStore.CreateDatabase(ctx, tx, dbName.Name(), tenant.namespace.Id())
+	branchMeta, err := tenant.MetaStore.CreateDatabase(ctx, tx, dbName.Name(), tenant.namespace.Id(), dbMeta.SchemaVersion)
 	if err != nil {
 		return err
 	}
@@ -1240,7 +1245,7 @@ func (tenant *Tenant) deleteBranch(ctx context.Context, tx transaction.Tx, proje
 	}
 
 	// drop the dictionary encoding for this database branch.
-	if err := tenant.metaStore.DropDatabase(ctx, tx, branch.Name(), tenant.namespace.Id()); err != nil {
+	if err := tenant.MetaStore.DropDatabase(ctx, tx, branch.Name(), tenant.namespace.Id()); err != nil {
 		return err
 	}
 
@@ -1295,10 +1300,30 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 
 	// first check if we need to run update collection
 	if c, ok := database.collections[schFactory.Name]; ok {
+		// not current version provided in the request.
+		// check that the schema is identical to the schema persisted in the schema store
+		if schFactory.Version != 0 && schFactory.Version <= database.CurrentSchemaVersion {
+			v, err := tenant.schemaStore.GetNotGreater(ctx, tx, tenant.namespace.Id(), database.id, c.collection.Id,
+				schFactory.Version)
+			if err != nil {
+				return err
+			}
+
+			if eq, err := isSchemaEq(v.Schema, schFactory.Schema); err != nil {
+				return err
+			} else if !eq {
+				return errors.InvalidArgument("historical schema mismatch. provided version %d. current version %d",
+					schFactory.Version, database.CurrentSchemaVersion)
+			}
+
+			return nil // schema is identical. noop.
+		}
+
 		if eq, err := isSchemaEq(c.collection.Schema, schFactory.Schema); eq || err != nil {
 			// shortcut to just check if schema is eq then return early
 			return err
 		}
+
 		return tenant.updateCollection(ctx, tx, database, c, schFactory)
 	}
 
@@ -1308,7 +1333,7 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 	}
 	schFactory.IndexingVersion = schema.DefaultIndexingSchemaVersion
 
-	collMeta, err := tenant.metaStore.CreateCollection(ctx, tx, schFactory.Name, tenant.namespace.Id(), database.id, schFactory.SecondaryIndexes())
+	collMeta, err := tenant.MetaStore.CreateCollection(ctx, tx, schFactory.Name, tenant.namespace.Id(), database.id, schFactory.SecondaryIndexes())
 	if err != nil {
 		return err
 	}
@@ -1316,7 +1341,7 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 	// encode indexes and add this back in the collection
 	primaryIndex := schFactory.PrimaryKey
 	primaryIdxMeta := make(map[string]*PrimaryIndexMetadata, 1)
-	imeta, err := tenant.metaStore.CreatePrimaryIndex(ctx, tx, primaryIndex.Name, tenant.namespace.Id(), database.id, collMeta.ID)
+	imeta, err := tenant.MetaStore.CreatePrimaryIndex(ctx, tx, primaryIndex.Name, tenant.namespace.Id(), database.id, collMeta.ID)
 	if err != nil {
 		return err
 	}
@@ -1324,8 +1349,13 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 	primaryIdxMeta[primaryIndex.Name] = imeta
 	primaryIndex.Id = imeta.ID
 
+	ver := baseSchemaVersion
+	if schFactory.Version > 0 {
+		ver = schFactory.Version
+	}
+
 	// all good now persist the schema
-	if err = tenant.schemaStore.Put(ctx, tx, tenant.namespace.Id(), database.id, collMeta.ID, schFactory.Schema, baseSchemaVersion); err != nil {
+	if err = tenant.schemaStore.Put(ctx, tx, tenant.namespace.Id(), database.id, collMeta.ID, schFactory.Schema, ver); err != nil {
 		return err
 	}
 
@@ -1392,7 +1422,18 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 		return err
 	}
 
-	schRevision := int(cHolder.collection.GetVersion()) + 1
+	// generate new schema version or use provided by the client
+	schRevision := cHolder.collection.GetVersion() + 1
+	if schFactory.Version != 0 {
+		if schRevision > schFactory.Version {
+			return errors.InvalidArgument(
+				"provided collection schema version %d is less then existing schema version %d",
+				schFactory.Version, schRevision)
+		}
+
+		schRevision = schFactory.Version
+	}
+
 	if err := tenant.schemaStore.Put(ctx, tx, tenant.namespace.Id(), database.id, cHolder.id, schFactory.Schema, schRevision); err != nil {
 		return err
 	}
@@ -1402,7 +1443,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 		return err
 	}
 
-	collMeta, err := tenant.metaStore.UpdateCollection(ctx, tx, existingCollection.Name, tenant.namespace.Id(), database.id, existingCollection.Id, schFactory.SecondaryIndexes())
+	collMeta, err := tenant.MetaStore.UpdateCollection(ctx, tx, existingCollection.Name, tenant.namespace.Id(), database.id, existingCollection.Id, schFactory.SecondaryIndexes())
 	if err != nil {
 		return err
 	}
@@ -1476,7 +1517,7 @@ func (tenant *Tenant) UpdateCollectionIndexes(ctx context.Context, tx transactio
 	if !ok {
 		return errors.NotFound("collection doesn't exists '%s'", collectionName)
 	}
-	_, err := tenant.metaStore.Collection().Update(ctx, tx, tenant.namespace.Id(), db.id, collectionName, cHolder.id, indexes)
+	_, err := tenant.MetaStore.Collection().Update(ctx, tx, tenant.namespace.Id(), db.id, collectionName, cHolder.id, indexes)
 	if err != nil {
 		return err
 	}
@@ -1485,7 +1526,7 @@ func (tenant *Tenant) UpdateCollectionIndexes(ctx context.Context, tx transactio
 }
 
 func (tenant *Tenant) GetCollectionMetadata(ctx context.Context, tx transaction.Tx, db *Database, collectionName string) (*CollectionMetadata, error) {
-	metadata, err := tenant.metaStore.Collection().Get(ctx, tx, tenant.namespace.Id(), db.id, collectionName)
+	metadata, err := tenant.MetaStore.Collection().Get(ctx, tx, tenant.namespace.Id(), db.id, collectionName)
 	if err != nil {
 		return nil, err
 	}
@@ -1521,12 +1562,12 @@ func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db 
 		return errors.NotFound("collection doesn't exists '%s'", collectionName)
 	}
 
-	if err := tenant.metaStore.DropCollection(ctx, tx, cHolder.name, tenant.namespace.Id(), db.id); err != nil {
+	if err := tenant.MetaStore.DropCollection(ctx, tx, cHolder.name, tenant.namespace.Id(), db.id); err != nil {
 		return err
 	}
 
 	for idxName := range cHolder.primaryIdxMeta {
-		if err := tenant.metaStore.DropPrimaryIndex(ctx, tx, idxName, tenant.namespace.Id(), db.id, cHolder.id); err != nil {
+		if err := tenant.MetaStore.DropPrimaryIndex(ctx, tx, idxName, tenant.namespace.Id(), db.id, cHolder.id); err != nil {
 			return err
 		}
 	}
@@ -1773,6 +1814,10 @@ type Database struct {
 	collections           map[string]*collectionHolder
 	needFixingCollections map[string]struct{}
 	idToCollectionMap     map[uint32]string
+
+	// valid during transactional collection schema update
+	PendingSchemaVersion uint32
+	CurrentSchemaVersion uint32
 }
 
 func NewDatabase(id uint32, name string) *Database {
@@ -2003,15 +2048,19 @@ func (s *Search) GetIndexes() []*schema.SearchIndex {
 }
 
 func isSchemaEq(s1, s2 []byte) (bool, error) {
-	var j, j2 interface{}
+	var j, j2 map[string]interface{}
 
 	if err := jsoniter.Unmarshal(s1, &j); err != nil {
 		return false, err
 	}
 
+	delete(j, "version")
+
 	if err := jsoniter.Unmarshal(s2, &j2); err != nil {
 		return false, err
 	}
+
+	delete(j2, "version")
 
 	return reflect.DeepEqual(j2, j), nil
 }

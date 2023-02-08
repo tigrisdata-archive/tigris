@@ -373,13 +373,14 @@ func (k *Dictionary) UpdateNamespace(ctx context.Context, tx transaction.Tx, nam
 }
 
 func (k *Dictionary) CreateDatabase(ctx context.Context, tx transaction.Tx, name string, namespaceId uint32,
+	schemaVersion uint32,
 ) (*DatabaseMetadata, error) {
 	id, err := k.allocate(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
 
-	meta := &DatabaseMetadata{ID: id}
+	meta := &DatabaseMetadata{ID: id, SchemaVersion: schemaVersion}
 
 	if err = k.Database().insert(ctx, tx, namespaceId, name, meta); err != nil {
 		return nil, err
