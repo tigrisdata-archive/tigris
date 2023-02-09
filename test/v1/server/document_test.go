@@ -2604,6 +2604,84 @@ func TestUpdate_MutatePrimaryKey(t *testing.T) {
 	}
 }
 
+func TestUpdate_Object(t *testing.T) {
+	db, _ := setupTests(t)
+	defer cleanupTests(t, db)
+
+	collection := "test_update_collection"
+	schema := Map{
+		"schema": Map{
+			"title": collection,
+			"properties": Map{
+				"a": Map{
+					"type": "integer",
+				},
+				"b": Map{
+					"type": "string",
+				},
+				"c": Map{
+					"type": "object",
+					"properties": Map{
+						"f1": Map{
+							"type": "string",
+						},
+						"f2": Map{
+							"type": "string",
+						},
+					},
+				},
+			},
+			"primary_key": []interface{}{"a"},
+		},
+	}
+	createCollection(t, db, collection, schema).Status(200)
+
+	inputDocument := []Doc{
+		{
+			"a": 1,
+			"b": "1",
+			"c": Doc{"f1": "A", "f2": "B"},
+		},
+	}
+
+	insertDocuments(t, db, collection, inputDocument, false).
+		Status(http.StatusOK)
+
+	updateByFilter(t,
+		db,
+		collection,
+		Map{
+			"filter": Map{
+				"b": "1",
+			},
+		},
+		Map{
+			"fields": Map{
+				"$set": Map{
+					"c": Doc{"f1": "F1"},
+				},
+			},
+		},
+		nil).Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("modified_count", 1).
+		Path("$.metadata").Object()
+
+	readAndValidate(t,
+		db,
+		collection,
+		Map{
+			"b": "1",
+		},
+		nil,
+		[]Doc{{
+			"a": 1,
+			"b": "1",
+			"c": Doc{"f1": "F1"},
+		}})
+}
+
 func TestDelete_BadRequest(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)

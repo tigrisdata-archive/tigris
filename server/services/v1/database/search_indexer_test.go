@@ -15,6 +15,7 @@
 package database
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -49,7 +50,7 @@ func TestPackSearchFields(t *testing.T) {
 
 	t.Run("with empty data should throw error", func(t *testing.T) {
 		td := &internal.TableData{}
-		res, err := PackSearchFields(td, emptyColl, "1")
+		res, err := PackSearchFields(context.TODO(), td, emptyColl, "1")
 		require.ErrorContains(t, err, "EOF")
 		require.Nil(t, res)
 	})
@@ -70,7 +71,7 @@ func TestPackSearchFields(t *testing.T) {
 				RawData:   v.rawData,
 			}
 			td.RawData = v.rawData
-			res, err := PackSearchFields(td, emptyColl, "123")
+			res, err := PackSearchFields(context.TODO(), td, emptyColl, "123")
 			require.NoError(t, err)
 
 			decData, err := util.JSONToMap(res)
@@ -91,7 +92,7 @@ func TestPackSearchFields(t *testing.T) {
 			CreatedAt: nanoTs,
 			RawData:   []byte(`{}`),
 		}
-		res, err := PackSearchFields(td, emptyColl, "123")
+		res, err := PackSearchFields(context.TODO(), td, emptyColl, "123")
 		require.NoError(t, err)
 
 		decData, err := util.JSONToMap(res)
@@ -110,7 +111,7 @@ func TestPackSearchFields(t *testing.T) {
 			CreatedAt: nanoTs,
 			RawData:   []byte(`{"id":"myData_321"}`),
 		}
-		res, err := PackSearchFields(td, emptyColl, "123")
+		res, err := PackSearchFields(context.TODO(), td, emptyColl, "123")
 		require.NoError(t, err)
 
 		decData, err := util.JSONToMap(res)
@@ -125,7 +126,7 @@ func TestPackSearchFields(t *testing.T) {
 			CreatedAt: nanoTs,
 			RawData:   []byte(`{"some_id":"myData_321"}`),
 		}
-		res, err := PackSearchFields(td, emptyColl, "123")
+		res, err := PackSearchFields(context.TODO(), td, emptyColl, "123")
 		require.NoError(t, err)
 
 		decData, err := util.JSONToMap(res)
@@ -141,7 +142,7 @@ func TestPackSearchFields(t *testing.T) {
 			CreatedAt: nanoTs,
 			RawData:   []byte(`{"parent":{"node_1":123,"node_2":"nested"}}`),
 		}
-		res, err := PackSearchFields(td, emptyColl, "123")
+		res, err := PackSearchFields(context.TODO(), td, emptyColl, "123")
 		require.NoError(t, err)
 
 		decData, err := util.JSONToMap(res)
@@ -163,7 +164,7 @@ func TestPackSearchFields(t *testing.T) {
 			QueryableFields: schema.BuildQueryableFields([]*schema.Field{f}, nil),
 		}
 
-		res, err := PackSearchFields(td, coll, "123")
+		res, err := PackSearchFields(context.TODO(), td, coll, "123")
 		require.NoError(t, err)
 
 		decData, err := util.JSONToMap(res)
@@ -180,7 +181,7 @@ func TestPackSearchFields(t *testing.T) {
 		coll := &schema.DefaultCollection{
 			QueryableFields: schema.BuildQueryableFields([]*schema.Field{f}, nil),
 		}
-		res, err := PackSearchFields(td, coll, "123")
+		res, err := PackSearchFields(context.TODO(), td, coll, "123")
 		require.NoError(t, err)
 
 		decData, err := util.JSONToMap(res)
@@ -197,7 +198,7 @@ func TestPackSearchFields(t *testing.T) {
 			CreatedAt: nanoTs,
 			RawData:   []byte(`{"strField":"strValue", "floatField":99999.12345, "intField": 12, "nilField": null}`),
 		}
-		res, err := PackSearchFields(td, emptyColl, "123")
+		res, err := PackSearchFields(context.TODO(), td, emptyColl, "123")
 		require.NoError(t, err)
 
 		decData, err := util.JSONToMap(res)
