@@ -28,40 +28,59 @@ import (
 
 func TestMergeAndGet(t *testing.T) {
 	cases := []struct {
-		inputDoc    jsoniter.RawMessage
-		existingDoc jsoniter.RawMessage
-		outputDoc   jsoniter.RawMessage
-		apply       FieldOPType
+		inputDoc        jsoniter.RawMessage
+		existingDoc     jsoniter.RawMessage
+		outputDoc       jsoniter.RawMessage
+		expKeysToRemove []string
+		apply           FieldOPType
 	}{
 		{
 			[]byte(`{"a": 10}`),
 			[]byte(`{"a": 1, "b": "foo", "c": 1.01, "d": {"f": 22, "g": 44}}`),
 			[]byte(`{"a": 10, "b": "foo", "c": 1.01, "d": {"f": 22, "g": 44}}`),
+			nil,
 			Set,
 		}, {
 			[]byte(`{"b": "bar", "a": 10}`),
 			[]byte(`{"a": 1, "b": "foo", "c": 1.01, "d": {"f": 22, "g": 44}}`),
 			[]byte(`{"a": 10, "b": "bar", "c": 1.01, "d": {"f": 22, "g": 44}}`),
+			nil,
 			Set,
 		}, {
 			[]byte(`{"b": "test", "c": 10.22}`),
 			[]byte(`{"a": 1, "b": "foo", "c": 1.01, "d": {"f": 22, "g": 44}}`),
 			[]byte(`{"a": 1, "b": "test", "c": 10.22, "d": {"f": 22, "g": 44}}`),
+			nil,
 			Set,
 		}, {
 			[]byte(`{"c": 10.000022, "e": "new"}`),
 			[]byte(`{"a": 1, "b": "foo", "c": 1.01, "d": {"f": 22, "g": 44}}`),
 			[]byte(`{"a": 1, "b": "foo", "c": 10.000022, "d": {"f": 22, "g": 44},"e":"new"}`),
+			nil,
 			Set,
 		}, {
 			[]byte(`{"e": "again", "a": 1.000000022, "c": 23}`),
 			[]byte(`{"a": 1, "b": "foo", "c": 1.01, "d": {"f": 22, "g": 44}}`),
 			[]byte(`{"a": 1.000000022, "b": "foo", "c": 23, "d": {"f": 22, "g": 44},"e":"again"}`),
+			nil,
 			Set,
 		}, {
 			[]byte(`{"e": "again", "d.f": 29, "d.g": "bar", "d.h": "new nested"}`),
 			[]byte(`{"a":1, "b":"foo", "c":1.01, "d": {"f": 22, "g": "foo"}}`),
 			[]byte(`{"a":1, "b":"foo", "c":1.01, "d": {"f": 29, "g": "bar","h":"new nested"},"e":"again"}`),
+			nil,
+			Set,
+		}, {
+			[]byte(`{"e": "again", "d": {"f": 10}}`),
+			[]byte(`{"a":1, "b":"foo", "c":1.01, "d": {"f": 22, "g": "foo"}}`),
+			[]byte(`{"a":1, "b":"foo", "c":1.01, "d": {"f": 10},"e":"again"}`),
+			[]string{"d.f", "d.g"},
+			Set,
+		}, {
+			[]byte(`{"d": {"n": {"b": "BB"}}}`),
+			[]byte(`{"a":1, "d": {"f": 22, "g": "foo", "n": {"a": "A", "b": "B"}}}`),
+			[]byte(`{"a":1, "d": {"n": {"b": "BB"}}}`),
+			[]string{"d.f", "d.g", "d.n.a", "d.n.b"},
 			Set,
 		},
 	}
@@ -70,9 +89,10 @@ func TestMergeAndGet(t *testing.T) {
 		f, err := BuildFieldOperators(reqInput)
 		require.NoError(t, err)
 
-		actualOut, pkeyMutation, err := f.MergeAndGet(c.existingDoc, testCollection(t))
+		actualOut, keysToRemove, pkeyMutation, err := f.MergeAndGet(c.existingDoc, testCollection(t))
 		require.False(t, pkeyMutation)
 		require.NoError(t, err)
+		require.Equal(t, c.expKeysToRemove, keysToRemove)
 		require.Equal(t, c.outputDoc, actualOut, fmt.Sprintf("exp '%s' actual '%s'", string(c.outputDoc), string(actualOut)))
 	}
 }
@@ -121,9 +141,10 @@ func TestMergeAndGet_Unset(t *testing.T) {
 		f, err := BuildFieldOperators(reqInput)
 		require.NoError(t, err)
 
-		actualOut, pkeyMutation, err := f.MergeAndGet(c.existingDoc, testCollection(t))
+		actualOut, keysToRemove, pkeyMutation, err := f.MergeAndGet(c.existingDoc, testCollection(t))
 		require.False(t, pkeyMutation)
 		require.NoError(t, err)
+		require.Nil(t, keysToRemove)
 		require.Equal(t, c.outputDoc, actualOut, fmt.Sprintf("exp '%s' actual '%s'", string(c.outputDoc), string(actualOut)))
 	}
 }
@@ -167,9 +188,10 @@ func TestMergeAndGet_Atomic(t *testing.T) {
 		f, err := BuildFieldOperators(reqInput)
 		require.NoError(t, err)
 
-		actualOut, pkeyMutation, err := f.MergeAndGet(c.existingDoc, testCollection(t))
+		actualOut, keysToRemove, pkeyMutation, err := f.MergeAndGet(c.existingDoc, testCollection(t))
 		require.False(t, pkeyMutation)
 		require.NoError(t, err)
+		require.Nil(t, keysToRemove)
 		require.JSONEq(t, string(c.outputDoc), string(actualOut), fmt.Sprintf("exp '%s' actual '%s'", string(c.outputDoc), string(actualOut)))
 	}
 }
@@ -198,9 +220,10 @@ func TestMergeAndGet_AtomicErrors(t *testing.T) {
 		f, err := BuildFieldOperators(reqInput)
 		require.NoError(t, err)
 
-		actualOut, pkeyMutation, err := f.MergeAndGet(c.existingDoc, testCollection(t))
+		actualOut, keysToRemove, pkeyMutation, err := f.MergeAndGet(c.existingDoc, testCollection(t))
 		require.Equal(t, c.error, err)
 		require.False(t, pkeyMutation)
+		require.Nil(t, keysToRemove)
 		require.Nil(t, actualOut)
 	}
 }
@@ -284,11 +307,12 @@ func TestMergeAndGet_PrimaryKeyMutation(t *testing.T) {
 		f, err := BuildFieldOperators(reqInput)
 		require.NoError(t, err)
 
-		actualOut, pkeyMutation, err := f.MergeAndGet(c.existingDoc, testCollection2(t))
+		actualOut, keysToRemove, pkeyMutation, err := f.MergeAndGet(c.existingDoc, testCollection2(t))
 		require.Equal(t, c.expError, err)
 		if c.expError != nil {
 			continue
 		}
+		require.Nil(t, keysToRemove)
 		require.Equal(t, c.primaryKeyMutation, pkeyMutation)
 		require.Equal(t, c.outputDoc, actualOut, fmt.Sprintf("exp '%s' actual '%s'", string(c.outputDoc), string(actualOut)))
 	}
@@ -330,9 +354,10 @@ func TestMergeAndGet_MarshalInput(t *testing.T) {
 		require.NoError(t, err)
 		existingDoc, err := jsoniter.Marshal(c.existingDoc)
 		require.NoError(t, err)
-		actualOut, pkeyMutation, err := f.MergeAndGet(existingDoc, testCollection(t))
+		actualOut, keysToRemove, pkeyMutation, err := f.MergeAndGet(existingDoc, testCollection(t))
 		require.NoError(t, err)
 		require.False(t, pkeyMutation)
+		require.Nil(t, keysToRemove)
 		require.JSONEqf(t, string(c.outputDoc), string(actualOut), fmt.Sprintf("exp '%s' actual '%s'", string(c.outputDoc), string(actualOut)))
 	}
 }

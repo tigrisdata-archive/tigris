@@ -37,6 +37,8 @@ import (
 	"github.com/tigrisdata/tigris/util/log"
 )
 
+type TentativeSearchKeysToRemove struct{}
+
 type SearchIndexer struct {
 	searchStore search.Store
 	tenantMgr   *metadata.TenantManager
@@ -95,7 +97,7 @@ func (i *SearchIndexer) OnPostCommit(ctx context.Context, tenant *metadata.Tenan
 				return err
 			}
 
-			searchData, err := PackSearchFields(tableData, collection, searchKey)
+			searchData, err := PackSearchFields(ctx, tableData, collection, searchKey)
 			if err != nil {
 				return err
 			}
@@ -158,7 +160,7 @@ func CreateSearchKey(table []byte, fdbKey []byte) (string, error) {
 	}
 }
 
-func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollection, id string) ([]byte, error) {
+func PackSearchFields(ctx context.Context, data *internal.TableData, collection *schema.DefaultCollection, id string) ([]byte, error) {
 	// better to decode it and then update the JSON
 	decData, err := util.JSONToMap(data.RawData)
 	if err != nil {
@@ -171,6 +173,19 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 	}
 
 	decData = FlattenObjects(decData)
+
+	keysToRemove := ctx.Value(TentativeSearchKeysToRemove{})
+	if keysToRemove != nil {
+		if conv, ok := keysToRemove.([]string); ok {
+			for _, k := range conv {
+				// remove object keys that are not part of the update request but needs to be cleaned up from search.
+				if _, found := decData[k]; !found {
+					// only remove if it is not set in the current payload
+					decData[k] = nil
+				}
+			}
+		}
+	}
 
 	// pack any date time or array fields here
 	for _, f := range collection.QueryableFields {
@@ -358,7 +373,10 @@ func UnFlattenObjects(flat map[string]any) map[string]any {
 			if _, ok := m[keys[i-1]]; !ok {
 				m[keys[i-1]] = make(map[string]any)
 			}
-			m = m[keys[i-1]].(map[string]any)
+			// Updating an object, because it is indexed with dot notation so we need to cleanup
+			if m[keys[i-1]] != nil {
+				m = m[keys[i-1]].(map[string]any)
+			}
 		}
 		m[keys[len(keys)-1]] = v
 	}

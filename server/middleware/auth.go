@@ -179,9 +179,8 @@ func authFunction(ctx context.Context, jwtValidator *validator.Validator, config
 		}
 
 		if customClaims, ok := validatedClaims.CustomClaims.(*CustomClaim); ok {
-
 			// for migration purpose
-			var namespaceCode = customClaims.Namespace.Code
+			namespaceCode := customClaims.Namespace.Code
 			if namespaceCode == "" {
 				namespaceCode = customClaims.TigrisClaims.NamespaceCode
 			}

@@ -696,9 +696,17 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 		// MergeAndGet merge the user input with existing doc and return the merged JSON document which we need to
 		// persist back.
-		merged, primaryKeyMutation, err := factory.MergeAndGet(merged, coll)
+		merged, tentativeKeysToRemove, primaryKeyMutation, err := factory.MergeAndGet(merged, coll)
 		if err != nil {
 			return Response{}, ctx, err
+		}
+		if len(tentativeKeysToRemove) > 0 {
+			// When an object is updated then we need to remove all the keys inside the object that are not part of the
+			// update request. The reason is as we store data in flattened form we need to remove the stale keys.
+			// The decision of what keys to be removed is pushed down to search indexer, the reason is performance.
+			// The indexer is already deserializing the payload so it can eliminate the keys that are not needed
+			// to be removed. Mainly filtering out keys that are part of incoming payload.
+			ctx = context.WithValue(ctx, TentativeSearchKeysToRemove{}, tentativeKeysToRemove)
 		}
 
 		newData := internal.NewTableDataWithTS(row.Data.CreatedAt, ts, merged)
