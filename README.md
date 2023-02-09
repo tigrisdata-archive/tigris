@@ -3,16 +3,9 @@
 </p>
 
 <p align="center">
-Tigris is the all-in-one open source developer data platform. 
-</p>
-
-<p align="center">
-Use it as a
-scalable transactional document store. Perform real-time search across your
-data stores automatically. Build event-driven apps with real-time event
-streaming. All provided to you through a unified serverless API enabling you
-to focus on building applications and stop worrying about the data
-infrastructure.
+Tigris is an open source developer data platform that provides an integrated 
+suite of database and data services, enabling you to build rich applications 
+that perform consistently at any scale.
 </p>
 
 <p align="center">
@@ -37,17 +30,17 @@ infrastructure.
 
 # Helpful Links
 
-- [Quickstart](https://www.tigrisdata.com/docs/quickstarts)
-- [Architecture](https://www.tigrisdata.com/docs/concepts/architecture)
-- [Databases and Collections](https://www.tigrisdata.com/docs/concepts/database)
-- [Documents](https://www.tigrisdata.com/docs/concepts/database/documents)
-- [Search](https://www.tigrisdata.com/docs/concepts/searching)
-- [Observability](https://www.tigrisdata.com/docs/concepts/platform/metrics)
-- [TypeScript Reference](https://www.tigrisdata.com/docs/sdkstools/typescript)
-- [Go Reference](https://www.tigrisdata.com/docs/sdkstools/golang)
-- [Java Reference](https://www.tigrisdata.com/docs/sdkstools/java/getting-started)
-- [CLI](https://www.tigrisdata.com/docs/sdkstools/cli)
-- [Guides](https://www.tigrisdata.com/docs/guides)
+- [Quickstart](https://www.tigrisdata.com/docs/quickstarts/)
+- [Architecture](https://www.tigrisdata.com/docs/concepts/architecture/)
+- [Databases and Collections](https://www.tigrisdata.com/docs/concepts/database/)
+- [Documents](https://www.tigrisdata.com/docs/concepts/database/documents/)
+- [Search](https://www.tigrisdata.com/docs/concepts/searching/)
+- [Observability](https://www.tigrisdata.com/docs/concepts/platform/metrics/)
+- [TypeScript Reference](https://www.tigrisdata.com/docs/sdkstools/typescript/)
+- [Go Reference](https://www.tigrisdata.com/docs/sdkstools/golang/)
+- [Java Reference](https://www.tigrisdata.com/docs/sdkstools/java/getting-started/)
+- [CLI](https://www.tigrisdata.com/docs/sdkstools/cli/)
+- [Guides](https://www.tigrisdata.com/docs/guides/)
 
 # Community & Support
 
