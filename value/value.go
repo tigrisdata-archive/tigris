@@ -48,7 +48,7 @@ type Value interface {
 }
 
 func NewValueUsingCollation(fieldType schema.FieldType, value []byte, collation *Collation) (Value, error) {
-	if fieldType == schema.StringType {
+	if fieldType == schema.StringType && len(value) > 0 {
 		return NewStringValue(string(value), collation), nil
 	}
 

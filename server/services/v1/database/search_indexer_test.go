@@ -15,6 +15,7 @@
 package database
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -49,7 +50,7 @@ func TestPackSearchFields(t *testing.T) {
 
 	t.Run("with empty data should throw error", func(t *testing.T) {
 		td := &internal.TableData{}
-		res, err := PackSearchFields(td, emptyColl, "1")
+		res, err := PackSearchFields(context.TODO(), td, emptyColl, "1")
 		require.ErrorContains(t, err, "EOF")
 		require.Nil(t, res)
 	})
@@ -70,17 +71,17 @@ func TestPackSearchFields(t *testing.T) {
 				RawData:   v.rawData,
 			}
 			td.RawData = v.rawData
-			res, err := PackSearchFields(td, emptyColl, "123")
+			res, err := PackSearchFields(context.TODO(), td, emptyColl, "123")
 			require.NoError(t, err)
 
 			decData, err := util.JSONToMap(res)
 			require.NoError(t, err)
 
-			createdAt, err := decData["created_at"].(json.Number).Int64()
+			createdAt, err := decData[schema.ReservedFields[schema.CreatedAt]].(json.Number).Int64()
 			require.NoError(t, err)
 			require.Equal(t, createdAt, td.CreatedAt.UnixNano())
 
-			updatedAt, err := decData["updated_at"].(json.Number).Int64()
+			updatedAt, err := decData[schema.ReservedFields[schema.UpdatedAt]].(json.Number).Int64()
 			require.NoError(t, err)
 			require.Equal(t, updatedAt, td.UpdatedAt.UnixNano())
 		})
@@ -91,17 +92,17 @@ func TestPackSearchFields(t *testing.T) {
 			CreatedAt: nanoTs,
 			RawData:   []byte(`{}`),
 		}
-		res, err := PackSearchFields(td, emptyColl, "123")
+		res, err := PackSearchFields(context.TODO(), td, emptyColl, "123")
 		require.NoError(t, err)
 
 		decData, err := util.JSONToMap(res)
 		require.NoError(t, err)
 
-		createdAt, err := decData["created_at"].(json.Number).Int64()
+		createdAt, err := decData[schema.ReservedFields[schema.CreatedAt]].(json.Number).Int64()
 		require.NoError(t, err)
 		require.Equal(t, createdAt, td.CreatedAt.UnixNano())
 
-		updatedAt := decData["updated_at"]
+		updatedAt := decData[schema.ReservedFields[schema.UpdatedAt]]
 		require.Nil(t, updatedAt)
 	})
 
@@ -110,7 +111,7 @@ func TestPackSearchFields(t *testing.T) {
 			CreatedAt: nanoTs,
 			RawData:   []byte(`{"id":"myData_321"}`),
 		}
-		res, err := PackSearchFields(td, emptyColl, "123")
+		res, err := PackSearchFields(context.TODO(), td, emptyColl, "123")
 		require.NoError(t, err)
 
 		decData, err := util.JSONToMap(res)
@@ -125,7 +126,7 @@ func TestPackSearchFields(t *testing.T) {
 			CreatedAt: nanoTs,
 			RawData:   []byte(`{"some_id":"myData_321"}`),
 		}
-		res, err := PackSearchFields(td, emptyColl, "123")
+		res, err := PackSearchFields(context.TODO(), td, emptyColl, "123")
 		require.NoError(t, err)
 
 		decData, err := util.JSONToMap(res)
@@ -141,7 +142,7 @@ func TestPackSearchFields(t *testing.T) {
 			CreatedAt: nanoTs,
 			RawData:   []byte(`{"parent":{"node_1":123,"node_2":"nested"}}`),
 		}
-		res, err := PackSearchFields(td, emptyColl, "123")
+		res, err := PackSearchFields(context.TODO(), td, emptyColl, "123")
 		require.NoError(t, err)
 
 		decData, err := util.JSONToMap(res)
@@ -163,7 +164,7 @@ func TestPackSearchFields(t *testing.T) {
 			QueryableFields: schema.BuildQueryableFields([]*schema.Field{f}, nil),
 		}
 
-		res, err := PackSearchFields(td, coll, "123")
+		res, err := PackSearchFields(context.TODO(), td, coll, "123")
 		require.NoError(t, err)
 
 		decData, err := util.JSONToMap(res)
@@ -180,7 +181,7 @@ func TestPackSearchFields(t *testing.T) {
 		coll := &schema.DefaultCollection{
 			QueryableFields: schema.BuildQueryableFields([]*schema.Field{f}, nil),
 		}
-		res, err := PackSearchFields(td, coll, "123")
+		res, err := PackSearchFields(context.TODO(), td, coll, "123")
 		require.NoError(t, err)
 
 		decData, err := util.JSONToMap(res)
@@ -197,7 +198,7 @@ func TestPackSearchFields(t *testing.T) {
 			CreatedAt: nanoTs,
 			RawData:   []byte(`{"strField":"strValue", "floatField":99999.12345, "intField": 12, "nilField": null}`),
 		}
-		res, err := PackSearchFields(td, emptyColl, "123")
+		res, err := PackSearchFields(context.TODO(), td, emptyColl, "123")
 		require.NoError(t, err)
 
 		decData, err := util.JSONToMap(res)
@@ -242,27 +243,30 @@ func TestUnpackSearchFields(t *testing.T) {
 	})
 
 	t.Run("created_at metadata gets populated", func(t *testing.T) {
+		createdAt := any(json.Number("1666054267528106000"))
 		doc := map[string]any{
 			"id":         "123",
-			"created_at": json.Number("1666054267528106000"),
+			"created_at": createdAt,
 		}
 		_, td, unpacked, err := UnpackSearchFields(doc, emptyColl)
+		require.True(t, len(unpacked) == 0)
 		require.NoError(t, err)
 		require.Empty(t, unpacked)
-		expected, _ := doc["created_at"].(json.Number).Int64()
+		expected, _ := createdAt.(json.Number).Int64()
 		require.Equal(t, expected, td.CreatedAt.UnixNano())
 		require.Nil(t, td.UpdatedAt)
 	})
 
 	t.Run("updated_at metadata gets populated", func(t *testing.T) {
+		updatedAt := any(json.Number("1666054267528106000"))
 		doc := map[string]any{
 			"id":         "123",
-			"updated_at": json.Number("1666054267528106000"),
+			"updated_at": updatedAt,
 		}
 		_, td, unpacked, err := UnpackSearchFields(doc, emptyColl)
 		require.NoError(t, err)
 		require.Empty(t, unpacked)
-		expected, _ := doc["updated_at"].(json.Number).Int64()
+		expected, _ := updatedAt.(json.Number).Int64()
 		require.Equal(t, expected, td.UpdatedAt.UnixNano())
 		require.Nil(t, td.CreatedAt)
 	})

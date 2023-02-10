@@ -59,12 +59,8 @@ func (s *Selector) MatchesDoc(doc map[string]interface{}) bool {
 	var val value.Value
 	switch s.Field.DataType {
 	case schema.StringType:
-		if s.Collation == nil || s.Collation.IsCaseSensitive() {
-			val = value.NewStringValue(v.(string), s.Collation)
-		} else {
-			// if it is 'ci' then no need to apply filter as indexing store returns case-sensitive results.
-			return true
-		}
+		// there can be special characters in the string, we need to perform exact match.
+		val = value.NewStringValue(v.(string), s.Collation)
 	case schema.DoubleType:
 		// this method is only used with indexing store and it returns `json.Number` for all numeric types
 		var err error

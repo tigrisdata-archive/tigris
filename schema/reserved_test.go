@@ -21,7 +21,7 @@ import (
 )
 
 func TestIsReservedField(t *testing.T) {
-	require.True(t, IsReservedField("created_at"))
-	require.True(t, IsReservedField("updated_at"))
+	require.True(t, IsReservedField("_tigris_created_at"))
+	require.True(t, IsReservedField("_tigris_updated_at"))
 	require.False(t, IsReservedField("id"))
 }

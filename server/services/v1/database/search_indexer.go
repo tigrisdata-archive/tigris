@@ -37,6 +37,8 @@ import (
 	"github.com/tigrisdata/tigris/util/log"
 )
 
+type TentativeSearchKeysToRemove struct{}
+
 type SearchIndexer struct {
 	searchStore search.Store
 	tenantMgr   *metadata.TenantManager
@@ -95,7 +97,7 @@ func (i *SearchIndexer) OnPostCommit(ctx context.Context, tenant *metadata.Tenan
 				return err
 			}
 
-			searchData, err := PackSearchFields(tableData, collection, searchKey)
+			searchData, err := PackSearchFields(ctx, tableData, collection, searchKey)
 			if err != nil {
 				return err
 			}
@@ -158,7 +160,7 @@ func CreateSearchKey(table []byte, fdbKey []byte) (string, error) {
 	}
 }
 
-func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollection, id string) ([]byte, error) {
+func PackSearchFields(ctx context.Context, data *internal.TableData, collection *schema.DefaultCollection, id string) ([]byte, error) {
 	// better to decode it and then update the JSON
 	decData, err := util.JSONToMap(data.RawData)
 	if err != nil {
@@ -171,6 +173,19 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 	}
 
 	decData = FlattenObjects(decData)
+
+	keysToRemove := ctx.Value(TentativeSearchKeysToRemove{})
+	if keysToRemove != nil {
+		if conv, ok := keysToRemove.([]string); ok {
+			for _, k := range conv {
+				// remove object keys that are not part of the update request but needs to be cleaned up from search.
+				if _, found := decData[k]; !found {
+					// only remove if it is not set in the current payload
+					decData[k] = nil
+				}
+			}
+		}
+	}
 
 	// pack any date time or array fields here
 	for _, f := range collection.QueryableFields {
@@ -223,6 +238,41 @@ func PackSearchFields(data *internal.TableData, collection *schema.DefaultCollec
 }
 
 func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCollection) (string, *internal.TableData, map[string]interface{}, error) {
+	userCreatedAt := false
+	userUpdatedAt := false
+	for _, f := range collection.QueryableFields {
+		if f.FieldName == "created_at" {
+			userCreatedAt = true
+		}
+		if f.FieldName == "updated_at" {
+			userUpdatedAt = true
+		}
+	}
+	// set tableData with metadata
+	tableData := &internal.TableData{}
+	// data prior to _tigris_ prefix
+	tableData.CreatedAt = getInternalTS(doc, "created_at")
+	if !userCreatedAt {
+		delete(doc, "created_at")
+	}
+	if createdAt := getInternalTS(doc, schema.ReservedFields[schema.CreatedAt]); createdAt != nil {
+		// prioritize the value from the _tigris_ prefix
+		tableData.CreatedAt = createdAt
+		delete(doc, schema.ReservedFields[schema.CreatedAt])
+	}
+
+	// data prior to _tigris_ prefix
+	tableData.UpdatedAt = getInternalTS(doc, "updated_at")
+	if !userUpdatedAt {
+		delete(doc, "updated_at")
+	}
+	if updatedAt := getInternalTS(doc, schema.ReservedFields[schema.UpdatedAt]); updatedAt != nil {
+		// prioritize the value from the _tigris_ prefix
+		tableData.UpdatedAt = updatedAt
+		delete(doc, schema.ReservedFields[schema.UpdatedAt])
+	}
+
+	// process user fields now
 	for _, f := range collection.QueryableFields {
 		if f.SearchType == "string[]" {
 			// if string array has our internal null marker
@@ -276,24 +326,21 @@ func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCo
 		delete(doc, schema.SearchId)
 	}
 
-	// set tableData with metadata
-	tableData := &internal.TableData{}
-	if value, ok := doc[schema.ReservedFields[schema.CreatedAt]]; ok {
-		nano, err := value.(json.Number).Int64()
-		if !log.E(err) {
-			tableData.CreatedAt = internal.CreateNewTimestamp(nano)
-			delete(doc, schema.ReservedFields[schema.CreatedAt])
-		}
-	}
-	if value, ok := (doc)[schema.ReservedFields[schema.UpdatedAt]]; ok {
-		nano, err := value.(json.Number).Int64()
-		if !log.E(err) {
-			tableData.UpdatedAt = internal.CreateNewTimestamp(nano)
-			delete(doc, schema.ReservedFields[schema.UpdatedAt])
+	return searchKey, tableData, doc, nil
+}
+
+func getInternalTS(doc map[string]any, keyName string) *internal.Timestamp {
+	if value, ok := doc[keyName]; ok {
+		conv, ok := value.(json.Number)
+		if ok {
+			nano, err := conv.Int64()
+			if !log.E(err) {
+				return internal.CreateNewTimestamp(nano)
+			}
 		}
 	}
 
-	return searchKey, tableData, doc, nil
+	return nil
 }
 
 func FlattenObjects(data map[string]any) map[string]any {
@@ -326,7 +373,10 @@ func UnFlattenObjects(flat map[string]any) map[string]any {
 			if _, ok := m[keys[i-1]]; !ok {
 				m[keys[i-1]] = make(map[string]any)
 			}
-			m = m[keys[i-1]].(map[string]any)
+			// Updating an object, because it is indexed with dot notation so we need to cleanup
+			if m[keys[i-1]] != nil {
+				m = m[keys[i-1]].(map[string]any)
+			}
 		}
 		m[keys[len(keys)-1]] = v
 	}
