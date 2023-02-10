@@ -15,7 +15,9 @@
 package kv
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"time"
@@ -204,6 +206,32 @@ func (d *fdbkv) SetVersionstampedKey(ctx context.Context, key []byte, value []by
 	return err
 }
 
+func (d *fdbkv) AtomicAdd(ctx context.Context, table []byte, key Key, value int64) error {
+	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+		return nil, (&ftx{d: d, tx: &tr}).AtomicAdd(ctx, table, key, value)
+	})
+	return err
+}
+
+func (d *fdbkv) AtomicRead(ctx context.Context, table []byte, key Key) (int64, error) {
+	val, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+		return (&ftx{d: d, tx: &tr}).AtomicRead(ctx, table, key)
+	})
+	return val.(int64), err
+}
+
+func (d *fdbkv) AtomicReadRange(ctx context.Context, table []byte, lKey Key, rKey Key, isSnapshot bool) (AtomicIterator, error) {
+	tx, err := d.BeginTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	it, err := tx.ReadRange(ctx, table, lKey, rKey, isSnapshot)
+	if err != nil {
+		return nil, err
+	}
+	return &AtomicIteratorImpl{it, nil}, nil
+}
+
 func (d *fdbkv) Get(ctx context.Context, key []byte, isSnapshot bool) (Future, error) {
 	val, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
 		return (&ftx{d: d, tx: &tr}).Get(ctx, key, isSnapshot)
@@ -346,6 +374,18 @@ func (b *fbatch) SetVersionstampedValue(_ context.Context, _ []byte, _ []byte) e
 
 func (b *fbatch) SetVersionstampedKey(_ context.Context, _ []byte, _ []byte) error {
 	return fmt.Errorf("batch doesn't support setting versionstamped key")
+}
+
+func (b *fbatch) AtomicAdd(_ context.Context, _ []byte, _ Key, _ int64) error {
+	return fmt.Errorf("batch doesn't support atomic add")
+}
+
+func (b *fbatch) AtomicRead(_ context.Context, _ []byte, _ Key) (int64, error) {
+	return 0, fmt.Errorf("batch doesn't support atomic read")
+}
+
+func (b *fbatch) AtomicReadRange(_ context.Context, _ []byte, _ Key, _ Key, _ bool) (AtomicIterator, error) {
+	return nil, fmt.Errorf("batch doesn't support atomic read")
 }
 
 func (b *fbatch) Get(_ context.Context, _ []byte, _ bool) (Future, error) {
@@ -557,6 +597,41 @@ func (t *ftx) SetVersionstampedKey(ctx context.Context, key []byte, value []byte
 	return nil
 }
 
+func (t *ftx) AtomicAdd(ctx context.Context, table []byte, key Key, value int64) error {
+	fdbKey := getFDBKey(table, key)
+
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, binary.LittleEndian, value)
+	if err != nil {
+		return err
+	}
+	encVal := buf.Bytes()
+
+	t.tx.Add(fdbKey, encVal)
+
+	return nil
+}
+
+func (t *ftx) AtomicRead(ctx context.Context, table []byte, key Key) (int64, error) {
+	fdbKey := getFDBKey(table, key)
+	raw, err := t.tx.Get(fdbKey).Get()
+
+	if err != nil {
+		return 0, err
+	}
+
+	return fdbByteToInt64(&raw)
+}
+
+func (t *ftx) AtomicReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (AtomicIterator, error) {
+	iter, err := t.ReadRange(ctx, table, lkey, rkey, isSnapshot)
+	if err != nil {
+		return nil, err
+	}
+
+	return &AtomicIteratorImpl{iter, nil}, nil
+}
+
 func (t *ftx) Get(_ context.Context, key []byte, isSnapshot bool) (Future, error) {
 	if isSnapshot {
 		return t.tx.Snapshot().Get(fdb.Key(key)), nil
@@ -705,4 +780,10 @@ func setTxTimeout(tx *fdb.Transaction, ms int64) error {
 	}
 
 	return tx.Options().SetTimeout(ms)
+}
+
+func fdbByteToInt64(value *[]byte) (int64, error) {
+	var numVal int64
+	err := binary.Read(bytes.NewReader(*value), binary.LittleEndian, &numVal)
+	return numVal, err
 }

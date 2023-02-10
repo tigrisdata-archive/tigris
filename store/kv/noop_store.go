@@ -25,6 +25,11 @@ type NoopIterator struct{}
 func (n *NoopIterator) Next(value *KeyValue) bool { return false }
 func (n *NoopIterator) Err() error                { return nil }
 
+type NoopFDBTypeIterator struct{}
+
+func (n *NoopFDBTypeIterator) Next(value *FdbBaseKeyValue[int64]) bool { return false }
+func (n *NoopFDBTypeIterator) Err() error                              { return nil }
+
 type NoopTx struct {
 	*NoopKV
 }
@@ -78,6 +83,18 @@ func (n *NoopKV) SetVersionstampedValue(ctx context.Context, key []byte, value [
 
 func (n *NoopKV) SetVersionstampedKey(ctx context.Context, key []byte, value []byte) error {
 	return nil
+}
+
+func (n *NoopKV) AtomicAdd(ctx context.Context, table []byte, key Key, value int64) error {
+	return nil
+}
+
+func (n *NoopKV) AtomicRead(ctx context.Context, table []byte, key Key) (int64, error) {
+	return 0, nil
+}
+
+func (n *NoopKV) AtomicReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (AtomicIterator, error) {
+	return &NoopFDBTypeIterator{}, nil
 }
 
 func (n *NoopKV) Get(ctx context.Context, key []byte, isSnapshot bool) (Future, error) {
