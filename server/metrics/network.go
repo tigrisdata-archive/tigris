@@ -31,6 +31,7 @@ func getNetworkTagKeys() []string {
 		"env",
 		"db",
 		"project",
+		"branch",
 		"collection",
 	}
 }

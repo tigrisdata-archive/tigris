@@ -30,9 +30,11 @@ type Response interface {
 
 type RequestWithProject interface {
 	GetProject() string
+	GetBranch() string
 }
 
 type RequestWithProjectAndCollection interface {
 	GetProject() string
 	GetCollection() string
+	GetBranch() string
 }

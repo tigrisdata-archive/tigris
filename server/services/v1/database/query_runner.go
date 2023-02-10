@@ -16,6 +16,7 @@ package database
 
 import (
 	"context"
+
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
@@ -129,7 +130,7 @@ type UpdateQueryRunner struct {
 	queryMetrics *metrics.WriteQueryMetrics
 }
 
-func updateDefaultsAndSchema(db string, collection *schema.DefaultCollection, doc []byte, version int32, ts *internal.Timestamp) ([]byte, error) {
+func updateDefaultsAndSchema(db string, branch string, collection *schema.DefaultCollection, doc []byte, version int32, ts *internal.Timestamp) ([]byte, error) {
 	var (
 		err    error
 		decDoc map[string]any
@@ -149,7 +150,7 @@ func updateDefaultsAndSchema(db string, collection *schema.DefaultCollection, do
 
 	if !collection.CompatibleSchemaSince(version) {
 		collection.UpdateRowSchema(decDoc, version)
-		metrics.SchemaUpdateRepaired(db, collection.Name)
+		metrics.SchemaUpdateRepaired(db, branch, collection.Name)
 	}
 
 	if len(collection.TaggedDefaultsForUpdate()) > 0 {
@@ -222,7 +223,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			return Response{}, ctx, err
 		}
 
-		merged, err := updateDefaultsAndSchema(db.Name(), coll, row.Data.RawData, row.Data.Ver, ts)
+		merged, err := updateDefaultsAndSchema(db.DbName(), db.BranchName(), coll, row.Data.RawData, row.Data.Ver, ts)
 		if err != nil {
 			return Response{}, ctx, err
 		}
@@ -558,6 +559,10 @@ func (runner *StreamingQueryRunner) iterate(coll *schema.DefaultCollection, iter
 	}
 
 	var row Row
+	branch := "main"
+	if runner.req.GetBranch() != "" {
+		branch = runner.req.GetBranch()
+	}
 	for i := int64(0); (limit == 0 || i < limit) && iterator.Next(&row); i++ {
 		rawData := row.Data.RawData
 		var err error
@@ -568,7 +573,7 @@ func (runner *StreamingQueryRunner) iterate(coll *schema.DefaultCollection, iter
 				return row.Key, err
 			}
 
-			metrics.SchemaReadOutdated(runner.req.GetProject(), coll.Name)
+			metrics.SchemaReadOutdated(runner.req.GetProject(), branch, coll.Name)
 		}
 
 		newValue, err := fieldFactory.Apply(rawData)
