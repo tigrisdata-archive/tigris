@@ -169,6 +169,15 @@ func (s *SearchIndex) StoreIndexName() string {
 	return s.StoreSchema.Name
 }
 
+func (s *SearchIndex) GetQueryableField(name string) (*QueryableField, error) {
+	for _, qf := range s.QueryableFields {
+		if qf.Name() == name {
+			return qf, nil
+		}
+	}
+	return nil, errors.InvalidArgument("Field `%s` is not present in collection", name)
+}
+
 func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.CollectionSchema {
 	ptrTrue, ptrFalse := true, false
 	tsFields := make([]tsApi.Field, 0, len(queryableFields))

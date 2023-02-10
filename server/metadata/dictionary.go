@@ -75,8 +75,9 @@ import (
 //
 //	["encoding", 0x01, x, 0x01, 0x03, "index", "pkey", "dropped"] = 0x04
 const (
-	namespaceKey  = "namespace"
-	dbKey         = "db"
+	namespaceKey = "namespace"
+	dbKey        = "db"
+
 	collectionKey = "coll"
 	counterKey    = "counter"
 	indexKey      = "index"

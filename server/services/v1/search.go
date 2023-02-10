@@ -230,3 +230,15 @@ func (s *searchService) DeleteByQuery(ctx context.Context, req *api.DeleteByQuer
 
 	return resp.Response.(*api.DeleteByQueryResponse), nil
 }
+
+func (s *searchService) Search(req *api.SearchIndexRequest, stream api.Search_SearchServer) error {
+	accessToken, _ := request.GetAccessToken(stream.Context())
+
+	runner := s.runnerFactory.GetSearchRunner(req, stream, accessToken)
+	_, err := s.sessions.Execute(stream.Context(), runner)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
