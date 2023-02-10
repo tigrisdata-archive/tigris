@@ -48,6 +48,9 @@ type BaseTx interface {
 	Get(ctx context.Context, key []byte, isSnapshot bool) (kv.Future, error)
 	SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error
 	SetVersionstampedKey(ctx context.Context, key []byte, value []byte) error
+	AtomicAdd(ctx context.Context, key keys.Key, value int64) error
+	AtomicRead(ctx context.Context, key keys.Key) (int64, error)
+	AtomicReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key, isSnapshot bool) (kv.AtomicIterator, error)
 }
 
 type Tx interface {
@@ -232,7 +235,7 @@ func (s *TxSession) ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key,
 		return s.kTx.ReadRange(ctx, lKey.Table(), kv.BuildKey(lKey.IndexParts()...), nil, isSnapshot)
 	}
 
-	return s.kTx.ReadRange(ctx, lKey.Table(), nil, kv.BuildKey(rKey.IndexParts()...), isSnapshot)
+	return s.kTx.ReadRange(ctx, rKey.Table(), nil, kv.BuildKey(rKey.IndexParts()...), isSnapshot)
 }
 
 func (s *TxSession) SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error {
@@ -255,6 +258,45 @@ func (s *TxSession) SetVersionstampedKey(ctx context.Context, key []byte, value 
 	}
 
 	return s.kTx.SetVersionstampedKey(ctx, key, value)
+}
+
+func (s *TxSession) AtomicAdd(ctx context.Context, key keys.Key, value int64) error {
+	s.Lock()
+	defer s.Unlock()
+
+	if err := s.validateSession(); err != nil {
+		return err
+	}
+
+	return s.kTx.AtomicAdd(ctx, key.Table(), kv.BuildKey(key.IndexParts()...), value)
+}
+
+func (s *TxSession) AtomicRead(ctx context.Context, key keys.Key) (int64, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	if err := s.validateSession(); err != nil {
+		return 0, err
+	}
+
+	return s.kTx.AtomicRead(ctx, key.Table(), kv.BuildKey(key.IndexParts()...))
+}
+
+func (s *TxSession) AtomicReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key, isSnapshot bool) (kv.AtomicIterator, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	if err := s.validateSession(); err != nil {
+		return nil, err
+	}
+
+	if rKey != nil && lKey != nil {
+		return s.kTx.AtomicReadRange(ctx, lKey.Table(), kv.BuildKey(lKey.IndexParts()...), kv.BuildKey(rKey.IndexParts()...), isSnapshot)
+	} else if lKey != nil {
+		return s.kTx.AtomicReadRange(ctx, lKey.Table(), kv.BuildKey(lKey.IndexParts()...), nil, isSnapshot)
+	}
+
+	return s.kTx.AtomicReadRange(ctx, rKey.Table(), nil, kv.BuildKey(rKey.IndexParts()...), isSnapshot)
 }
 
 func (s *TxSession) Get(ctx context.Context, key []byte, isSnapshot bool) (kv.Future, error) {

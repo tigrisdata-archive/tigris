@@ -30,6 +30,17 @@ type KeyValue struct {
 	Data   *internal.TableData
 }
 
+type fdbBaseType interface {
+	[]byte | int64
+}
+
+// KeyValue type for when we not iterating over TableData.
+type FdbBaseKeyValue[T fdbBaseType] struct {
+	Key    Key
+	FDBKey []byte
+	Data   T
+}
+
 type Future fdb.FutureByteSlice
 
 type KV interface {
@@ -44,6 +55,9 @@ type KV interface {
 	SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error
 	SetVersionstampedKey(ctx context.Context, key []byte, value []byte) error
 	Get(ctx context.Context, key []byte, isSnapshot bool) (Future, error)
+	AtomicAdd(ctx context.Context, table []byte, key Key, value int64) error
+	AtomicRead(ctx context.Context, table []byte, key Key) (int64, error)
+	AtomicReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (AtomicIterator, error)
 }
 
 type Tx interface {
@@ -64,6 +78,11 @@ type KeyValueStore interface {
 
 type Iterator interface {
 	Next(value *KeyValue) bool
+	Err() error
+}
+
+type AtomicIterator interface {
+	Next(value *FdbBaseKeyValue[int64]) bool
 	Err() error
 }
 
@@ -176,6 +195,30 @@ func (m *KeyValueStoreImplWithMetrics) SetVersionstampedKey(ctx context.Context,
 func (m *KeyValueStoreImplWithMetrics) Get(ctx context.Context, key []byte, isSnapshot bool) (val Future, err error) {
 	m.measure(ctx, "Get", func() error {
 		val, err = m.kv.Get(ctx, key, isSnapshot)
+		return err
+	})
+	return
+}
+
+func (m *KeyValueStoreImplWithMetrics) AtomicAdd(ctx context.Context, table []byte, key Key, value int64) (err error) {
+	m.measure(ctx, "AtomicAdd", func() error {
+		err = m.kv.AtomicAdd(ctx, table, key, value)
+		return err
+	})
+	return
+}
+
+func (m *KeyValueStoreImplWithMetrics) AtomicRead(ctx context.Context, table []byte, key Key) (value int64, err error) {
+	m.measure(ctx, "AtomicRead", func() error {
+		value, err = m.kv.AtomicRead(ctx, table, key)
+		return err
+	})
+	return
+}
+
+func (m *KeyValueStoreImplWithMetrics) AtomicReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (iter AtomicIterator, err error) {
+	m.measure(ctx, "AtomicRead", func() error {
+		iter, err = m.kv.AtomicReadRange(ctx, table, lkey, rkey, isSnapshot)
 		return err
 	})
 	return
@@ -302,6 +345,18 @@ func (k *KeyValueStoreImpl) UpdateRange(ctx context.Context, table []byte, lKey 
 	})
 }
 
+func (k *KeyValueStoreImpl) AtomicAdd(ctx context.Context, table []byte, key Key, value int64) error {
+	return k.fdbkv.AtomicAdd(ctx, table, key, value)
+}
+
+func (k *KeyValueStoreImpl) AtomicRead(ctx context.Context, table []byte, key Key) (int64, error) {
+	return k.fdbkv.AtomicRead(ctx, table, key)
+}
+
+func (k *KeyValueStoreImpl) AtomicReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (AtomicIterator, error) {
+	return k.fdbkv.AtomicReadRange(ctx, table, lkey, rkey, isSnapshot)
+}
+
 func (m *KeyValueStoreImplWithMetrics) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func(*internal.TableData) (*internal.TableData, error)) (encoded int32, err error) {
 	m.measure(ctx, "UpdateRange", func() error {
 		encoded, err = m.kv.UpdateRange(ctx, table, lKey, rKey, apply)
@@ -382,6 +437,30 @@ func (m *TxImplWithMetrics) SetVersionstampedValue(ctx context.Context, key []by
 func (m *TxImplWithMetrics) SetVersionstampedKey(ctx context.Context, key []byte, value []byte) (err error) {
 	m.measure(ctx, "SetVersionstampedKey", func() error {
 		err = m.tx.SetVersionstampedKey(ctx, key, value)
+		return err
+	})
+	return
+}
+
+func (m *TxImplWithMetrics) AtomicAdd(ctx context.Context, table []byte, key Key, value int64) (err error) {
+	m.measure(ctx, "AtomicAdd", func() error {
+		err = m.tx.AtomicAdd(ctx, table, key, value)
+		return err
+	})
+	return
+}
+
+func (m *TxImplWithMetrics) AtomicRead(ctx context.Context, table []byte, key Key) (value int64, err error) {
+	m.measure(ctx, "AtomicRead", func() error {
+		value, err = m.tx.AtomicRead(ctx, table, key)
+		return err
+	})
+	return
+}
+
+func (m *TxImplWithMetrics) AtomicReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (iter AtomicIterator, err error) {
+	m.measure(ctx, "AtomicReadRange", func() error {
+		iter, err = m.tx.AtomicReadRange(ctx, table, lkey, rkey, isSnapshot)
 		return err
 	})
 	return
@@ -565,6 +644,34 @@ func (i *IteratorImpl) Next(value *KeyValue) bool {
 }
 
 func (i *IteratorImpl) Err() error {
+	if i.err != nil {
+		return i.err
+	}
+	return i.baseIterator.Err()
+}
+
+type AtomicIteratorImpl struct {
+	baseIterator
+	err error
+}
+
+func (i *AtomicIteratorImpl) Next(value *FdbBaseKeyValue[int64]) bool {
+	var v baseKeyValue
+	hasNext := i.baseIterator.Next(&v)
+	if hasNext {
+		value.Key = v.Key
+		value.FDBKey = v.FDBKey
+		num, err := fdbByteToInt64(&v.Value)
+		if err != nil {
+			i.err = err
+			return false
+		}
+		value.Data = num
+	}
+	return hasNext
+}
+
+func (i *AtomicIteratorImpl) Err() error {
 	if i.err != nil {
 		return i.err
 	}
