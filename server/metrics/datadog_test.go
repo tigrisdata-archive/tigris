@@ -241,4 +241,18 @@ func TestDatadogQueryFormation(t *testing.T) {
 	formedQuery, err = FormDatadogQuery("test-namespace", req)
 	require.NoError(t, err)
 	require.Equal(t, "sum:requests_count_ok.count{db:db1 AND collection:col1 AND tigris_tenant:test-namespace}.as_rate()", formedQuery)
+
+	req = &api.QueryTimeSeriesMetricsRequest{
+		Db:               "db1",
+		Branch:           "b1",
+		Collection:       "col1",
+		From:             1,
+		To:               10,
+		MetricName:       "requests_count_ok.count",
+		SpaceAggregation: api.MetricQuerySpaceAggregation_SUM,
+		Function:         api.MetricQueryFunction_RATE,
+	}
+	formedQuery, err = FormDatadogQuery("test-namespace", req)
+	require.NoError(t, err)
+	require.Equal(t, "sum:requests_count_ok.count{db:db1 AND branch:b1 AND collection:col1 AND tigris_tenant:test-namespace}.as_rate()", formedQuery)
 }
