@@ -16,7 +16,9 @@ package search
 
 import api "github.com/tigrisdata/tigris/api/server/v1"
 
-type Streaming interface{}
+type Streaming interface {
+	api.Search_SearchServer
+}
 
 type Response struct {
 	api.Response

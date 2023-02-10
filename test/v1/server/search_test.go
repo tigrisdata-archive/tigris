@@ -238,7 +238,7 @@ func TestCreate_ById(t *testing.T) {
 			ValueEqual("id", "1")
 
 		docs := getDocuments(t, project, index, "1")
-		encResp, err := util.MapToJSON(docs[0])
+		encResp, err := util.MapToJSON(docs[0]["doc"].(map[string]any))
 		require.NoError(t, err)
 
 		encInp, err := util.MapToJSON(doc)
@@ -283,7 +283,7 @@ func TestCreate(t *testing.T) {
 	output := getDocuments(t, project, index, "1", "2")
 	require.Equal(t, 2, len(output))
 	for i, out := range output {
-		encResp, err := util.MapToJSON(out)
+		encResp, err := util.MapToJSON(out["doc"].(map[string]any))
 		require.NoError(t, err)
 
 		encInp, err := util.MapToJSON(docs[i])
@@ -321,7 +321,7 @@ func TestCreate(t *testing.T) {
 		)
 
 	output = getDocuments(t, project, index, "3")
-	encResp, err := util.MapToJSON(output[0])
+	encResp, err := util.MapToJSON(output[0]["doc"].(map[string]any))
 	require.NoError(t, err)
 
 	encInp, err := util.MapToJSON(docsNext[1])
@@ -365,7 +365,7 @@ func TestCreateOrReplace(t *testing.T) {
 	output := getDocuments(t, project, index, "1", "2")
 	require.Equal(t, 2, len(output))
 	for i, out := range output {
-		encResp, err := util.MapToJSON(out)
+		encResp, err := util.MapToJSON(out["doc"].(map[string]any))
 		require.NoError(t, err)
 
 		encInp, err := util.MapToJSON(docs[i])
@@ -405,7 +405,7 @@ func TestCreateOrReplace(t *testing.T) {
 	output = getDocuments(t, project, index, "1", "3")
 	require.Equal(t, 2, len(output))
 	for i, out := range output {
-		encResp, err := util.MapToJSON(out)
+		encResp, err := util.MapToJSON(out["doc"].(map[string]any))
 		require.NoError(t, err)
 
 		encInp, err := util.MapToJSON(docsNext[i])
@@ -491,7 +491,7 @@ func TestUpdate(t *testing.T) {
 			require.Nil(t, out)
 			continue
 		}
-		encResp, err := util.MapToJSON(out)
+		encResp, err := util.MapToJSON(out["doc"].(map[string]any))
 		require.NoError(t, err)
 
 		encInp, err := util.MapToJSON(docsUpdated[i])
@@ -563,7 +563,7 @@ func TestDelete(t *testing.T) {
 			continue
 		}
 
-		encResp, err := util.MapToJSON(out)
+		encResp, err := util.MapToJSON(out["doc"].(map[string]any))
 		require.NoError(t, err)
 
 		encInp, err := util.MapToJSON(docs[i])

@@ -15,15 +15,18 @@
 package search
 
 import (
+	"encoding/json"
 	"strings"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/lib/date"
 	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/util/log"
 )
 
-func MutateSearchDocument(index *schema.SearchIndex, decData map[string]any) (map[string]any, error) {
+func MutateSearchDocument(index *schema.SearchIndex, ts *internal.Timestamp, decData map[string]any, isUpdate bool) (map[string]any, error) {
 	decData = FlattenObjects(decData)
 
 	// pack any date time or array fields here
@@ -63,10 +66,17 @@ func MutateSearchDocument(index *schema.SearchIndex, decData map[string]any) (ma
 		}
 	}
 
+	field := schema.CreatedAt
+	if isUpdate {
+		field = schema.UpdatedAt
+	}
+	decData[schema.ReservedFields[field]] = ts.UnixNano()
+
 	return decData, nil
 }
 
-func UnpackSearchFields(index *schema.SearchIndex, doc map[string]any) (map[string]any, error) {
+func UnpackSearchFields(index *schema.SearchIndex, doc map[string]any) (map[string]any, *internal.Timestamp, *internal.Timestamp, error) {
+	// set tableData with metadata
 	for _, f := range index.QueryableFields {
 		if f.SearchType == "string[]" {
 			// if string array has our internal null marker
@@ -85,7 +95,7 @@ func UnpackSearchFields(index *schema.SearchIndex, doc map[string]any) (map[stri
 					if _, ok := v.(string); ok {
 						var value interface{}
 						if err := jsoniter.UnmarshalFromString(v.(string), &value); err != nil {
-							return nil, err
+							return nil, nil, nil, err
 						}
 						doc[f.Name()] = value
 					}
@@ -98,7 +108,7 @@ func UnpackSearchFields(index *schema.SearchIndex, doc map[string]any) (map[stri
 					if _, ok := v.(string); ok {
 						var value interface{}
 						if err := jsoniter.UnmarshalFromString(v.(string), &value); err != nil {
-							return nil, err
+							return nil, nil, nil, err
 						}
 						doc[f.Name()] = value
 					}
@@ -107,9 +117,30 @@ func UnpackSearchFields(index *schema.SearchIndex, doc map[string]any) (map[stri
 		}
 	}
 
+	createdAt := getInternalTS(doc, schema.ReservedFields[schema.CreatedAt])
+	updatedAt := getInternalTS(doc, schema.ReservedFields[schema.UpdatedAt])
+	delete(doc, schema.ReservedFields[schema.CreatedAt])
+	delete(doc, schema.ReservedFields[schema.UpdatedAt])
+
 	// unFlatten the map now
 	doc = UnFlattenObjects(doc)
-	return doc, nil
+	return doc, createdAt, updatedAt, nil
+}
+
+func getInternalTS(doc map[string]any, keyName string) *internal.Timestamp {
+	if value, ok := doc[keyName]; ok {
+		switch conv := value.(type) {
+		case json.Number:
+			nano, err := conv.Int64()
+			if !log.E(err) {
+				return internal.CreateNewTimestamp(nano)
+			}
+		case float64:
+			return internal.CreateNewTimestamp(int64(conv))
+		}
+	}
+
+	return nil
 }
 
 func FlattenObjects(data map[string]any) map[string]any {
