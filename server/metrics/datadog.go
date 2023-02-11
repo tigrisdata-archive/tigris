@@ -119,6 +119,10 @@ func FormDatadogQueryNoMeta(namespace string, noMeta bool, req *api.QueryTimeSer
 		tags = append(tags, "db:"+req.Db)
 	}
 
+	if req.GetBranch() != "" {
+		tags = append(tags, "branch:"+req.GetBranch())
+	}
+
 	if req.Collection != "" {
 		tags = append(tags, "collection:"+req.Collection)
 	}
