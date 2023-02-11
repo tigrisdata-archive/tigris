@@ -35,6 +35,9 @@ type baseKV interface {
 	UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) (int32, error)
 	SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error
 	Get(ctx context.Context, key []byte, isSnapshot bool) (Future, error)
+	AtomicAdd(ctx context.Context, table []byte, key Key, value int64) error
+	AtomicRead(ctx context.Context, table []byte, key Key) (int64, error)
+	AtomicReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (AtomicIterator, error)
 }
 
 type baseIterator interface {
