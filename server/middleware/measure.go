@@ -29,10 +29,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const (
-	TigrisStreamSpan string = "rpcstream"
-)
-
 type wrappedStream struct {
 	*middleware.WrappedServerStream
 	measurement *metrics.Measurement
@@ -63,7 +59,7 @@ func measureUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryS
 		ulog.E(err)
 		tags := reqMetadata.GetInitialTags()
 		measurement := metrics.NewMeasurement(util.Service, info.FullMethod, metrics.GrpcSpanType, tags)
-		measurement.AddTags(metrics.GetProjectCollTags(reqMetadata.GetProject(), reqMetadata.GetCollection()))
+		measurement.AddTags(metrics.GetProjectBranchCollTags(reqMetadata.GetProject(), reqMetadata.GetBranch(), reqMetadata.GetCollection()))
 		measurement.AddTags(map[string]string{
 			"sub": reqMetadata.Sub,
 		})
@@ -128,15 +124,18 @@ func (w *wrappedStream) RecvMsg(m interface{}) error {
 
 	if len(w.measurement.GetProjectCollTags()) == 0 {
 		// The request is not tagged yet with db and collection, need to do it on the first message
-		project, coll := request.GetProjectAndColl(m)
+		project, branch, coll := request.GetProjectAndBranchAndColl(m)
 		reqMetadata, err := request.GetRequestMetadataFromContext(w.WrappedContext)
 		if err != nil {
 			log.Debug().Str("error", err.Error()).Msg("error while getting request metadata, not measuring")
 			return recvErr
 		}
 		reqMetadata.SetProject(project)
+		reqMetadata.SetBranch(branch)
 		reqMetadata.SetCollection(coll)
-		w.measurement.AddProjectCollTags(project, coll)
+		w.WrappedContext = reqMetadata.SaveToContext(w.WrappedContext)
+
+		w.measurement.AddProjectBranchCollTags(project, branch, coll)
 	}
 
 	w.measurement.CountReceivedBytes(metrics.BytesReceived, w.measurement.GetNetworkTags(), proto.Size(m.(proto.Message)))
@@ -154,15 +153,20 @@ func (w *wrappedStream) SendMsg(m interface{}) error {
 
 	if len(w.measurement.GetProjectCollTags()) == 0 {
 		// The request is not tagged yet with db and collection, need to do it on the first message
-		project, coll := request.GetProjectAndColl(m)
+		project, branch, coll := request.GetProjectAndBranchAndColl(m)
 		reqMetadata, err := request.GetRequestMetadataFromContext(w.WrappedContext)
 		if err != nil {
 			log.Debug().Str("error", err.Error()).Msg("error while getting request metadata, not measuring")
 			return nil
 		}
 		reqMetadata.SetProject(project)
+		reqMetadata.SetBranch(branch)
 		reqMetadata.SetCollection(coll)
-		w.measurement.AddProjectCollTags(project, coll)
+
+		reqMetadata.SaveToContext(w.WrappedContext)
+		w.WrappedContext = reqMetadata.SaveToContext(w.WrappedContext)
+
+		w.measurement.AddProjectBranchCollTags(project, branch, coll)
 	}
 
 	w.measurement.CountSentBytes(metrics.BytesSent, w.measurement.GetNetworkTags(), proto.Size(m.(proto.Message)))

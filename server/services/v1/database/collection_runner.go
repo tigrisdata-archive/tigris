@@ -165,7 +165,7 @@ func (runner *CollectionQueryRunner) describe(ctx context.Context, tx transactio
 		namespace = "unknown"
 	}
 
-	metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.Name(), coll.GetName(), size)
+	metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.DbName(), db.BranchName(), coll.GetName(), size)
 	// remove indexing version from the schema before returning the response
 	sch := schema.RemoveIndexingVersion(coll.Schema)
 

@@ -168,10 +168,10 @@ func (s *storage) updateMetricsForNamespace(ctx context.Context, namespace strin
 
 		databases := project.GetDatabaseWithBranches()
 		for _, db := range databases {
-			metrics.UpdateDbSizeMetrics(namespace, tenantName, db.Name(), getDbSize(ctx, tenant, db))
+			metrics.UpdateDbSizeMetrics(namespace, tenantName, db.DbName(), db.BranchName(), getDbSize(ctx, tenant, db))
 
 			for _, coll := range db.ListCollection() {
-				metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.Name(), coll.Name, getCollSize(ctx, tenant, db, coll))
+				metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.DbName(), db.BranchName(), coll.Name, getCollSize(ctx, tenant, db, coll))
 			}
 		}
 	}

@@ -93,9 +93,9 @@ func (m *Measurement) countError(scope tally.Scope, tags map[string]string) {
 	scope.Tagged(tags).Counter("error").Inc(1)
 }
 
-func (m *Measurement) AddProjectCollTags(project string, coll string) {
+func (m *Measurement) AddProjectBranchCollTags(project string, branch string, coll string) {
 	// For stream requests we will add the tags once based on the flag rather than for every result document
-	m.projectCollTags = GetProjectCollTags(project, coll)
+	m.projectCollTags = GetProjectBranchCollTags(project, branch, coll)
 	m.RecursiveAddTags(m.projectCollTags)
 }
 
@@ -190,7 +190,7 @@ func (m *Measurement) GetSpanOptions() []ddtracer.StartSpanOption {
 
 func (m *Measurement) AddTags(tags map[string]string) {
 	for k, v := range tags {
-		if _, exists := m.tags[k]; !exists || m.tags[k] == defaults.UnknownValue {
+		if _, exists := m.tags[k]; !exists || m.tags[k] == defaults.UnknownValue || m.tags[k] == "" {
 			m.tags[k] = v
 			if m.datadogSpan != nil {
 				// The span already exists, set the tag there as well
