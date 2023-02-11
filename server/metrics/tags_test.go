@@ -63,13 +63,14 @@ func TestTagsHelpers(t *testing.T) {
 	})
 
 	t.Run("Test getDbTags", func(t *testing.T) {
-		assert.Equal(t, map[string]string{"project": "foobar", "db": "foobar"}, GetProjectCollTags("foobar", ""))
+		assert.Equal(t, map[string]string{"project": "foobar", "branch": "dev", "db": "foobar"}, GetProjectBranchCollTags("foobar", "dev", ""))
 	})
 
 	t.Run("Test getDbCollTags", func(t *testing.T) {
-		projectCollTags := GetProjectCollTags("foodb", "foocoll")
+		projectCollTags := GetProjectBranchCollTags("foodb", "test", "foocoll")
 		assert.Equal(t, "foodb", projectCollTags["project"])
 		assert.Equal(t, "foodb", projectCollTags["db"])
+		assert.Equal(t, "test", projectCollTags["branch"])
 		assert.Equal(t, "foocoll", projectCollTags["collection"])
 	})
 }

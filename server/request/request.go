@@ -55,6 +55,7 @@ type Metadata struct {
 	// this will hold the information about the project and collection under target
 	// this will be set to empty string for requests which are not project/collection specific
 	project    string
+	branch     string
 	collection string
 
 	// Current user/application
@@ -72,15 +73,15 @@ func NewRequestMetadata(ctx context.Context) Metadata {
 	return md
 }
 
-func NewRequestEndpointMetadata(ctx context.Context, serviceName string, methodInfo grpc.MethodInfo, db string, coll string) Metadata {
+func NewRequestEndpointMetadata(ctx context.Context, serviceName string, methodInfo grpc.MethodInfo, db string, branch string, coll string) Metadata {
 	ns, utype, sub := GetMetadataFromHeader(ctx)
-	md := Metadata{serviceName: serviceName, methodInfo: methodInfo, IsHuman: utype, Sub: sub}
+	md := Metadata{serviceName: serviceName, methodInfo: methodInfo, IsHuman: utype, Sub: sub, project: db, branch: branch, collection: coll}
 	md.SetNamespace(ctx, ns)
 	return md
 }
 
 func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod string, methodType string, req interface{}) Metadata {
-	project, coll := GetProjectAndColl(req)
+	project, branch, coll := GetProjectAndBranchAndColl(req)
 	var methodInfo grpc.MethodInfo
 	methodList := strings.Split(fullMethod, "/")
 	svcName := methodList[1]
@@ -98,11 +99,19 @@ func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod strin
 			IsServerStream: true,
 		}
 	}
-	return NewRequestEndpointMetadata(ctx, svcName, methodInfo, project, coll)
+	return NewRequestEndpointMetadata(ctx, svcName, methodInfo, project, branch, coll)
 }
 
 func (m *Metadata) SetProject(project string) {
 	m.project = project
+}
+
+func (m *Metadata) GetBranch() string {
+	return m.branch
+}
+
+func (m *Metadata) SetBranch(branch string) {
+	m.branch = branch
 }
 
 func (m *Metadata) SetCollection(collection string) {
@@ -159,23 +168,38 @@ func (m *Metadata) GetInitialTags() map[string]string {
 		"tigris_tenant":      m.namespace,
 		"tigris_tenant_name": m.GetTigrisNamespaceNameTag(),
 		"env":                config.GetEnvironment(),
-		"project":            defaults.UnknownValue,
-		"collection":         defaults.UnknownValue,
+		// these can be empty strings initially for stream initialization
+		// first send message will set it
+		"project":    m.GetProject(),
+		"db":         m.GetProject(),
+		"branch":     m.GetBranch(),
+		"collection": m.GetCollection(),
 	}
 }
 
-func GetProjectAndColl(req interface{}) (string, string) {
+func GetProjectAndBranchAndColl(req interface{}) (string, string, string) {
 	project := ""
+	branch := defaults.UnknownValue
 	coll := ""
 	if req != nil {
 		if rc, ok := req.(api.RequestWithProjectAndCollection); ok {
 			project = rc.GetProject()
 			coll = rc.GetCollection()
+			if rc.GetBranch() != "" {
+				branch = rc.GetBranch()
+			} else {
+				branch = "main"
+			}
 		} else if r, ok := req.(api.RequestWithProject); ok {
 			project = r.GetProject()
+			if r.GetBranch() != "" {
+				branch = r.GetBranch()
+			} else {
+				branch = "main"
+			}
 		}
 	}
-	return project, coll
+	return project, branch, coll
 }
 
 func (m *Metadata) GetFullMethod() string {

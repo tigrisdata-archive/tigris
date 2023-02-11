@@ -33,6 +33,7 @@ func getFdbOkTagKeys() []string {
 		"env",
 		"project",
 		"db",
+		"branch",
 		"collection",
 		"fdb_method",
 	}
@@ -46,6 +47,7 @@ func getFdbErrorTagKeys() []string {
 		"env",
 		"project",
 		"db",
+		"branch",
 		"collection",
 		"fdb_method",
 		"error_source",

@@ -78,15 +78,15 @@ func getTimerSummaryObjectives() map[float64]float64 {
 	return res
 }
 
-func SchemaReadOutdated(project string, collection string) {
+func SchemaReadOutdated(project string, branch string, collection string) {
 	if SchemaMetrics != nil {
-		SchemaMetrics.Tagged(GetProjectCollTags(project, collection)).Counter("read_outdated").Inc(1)
+		SchemaMetrics.Tagged(GetProjectBranchCollTags(project, branch, collection)).Counter("read_outdated").Inc(1)
 	}
 }
 
-func SchemaUpdateRepaired(project string, collection string) {
+func SchemaUpdateRepaired(project string, branch string, collection string) {
 	if SchemaMetrics != nil {
-		SchemaMetrics.Tagged(GetProjectCollTags(project, collection)).Counter("update_repaired").Inc(1)
+		SchemaMetrics.Tagged(GetProjectBranchCollTags(project, branch, collection)).Counter("update_repaired").Inc(1)
 	}
 }
 

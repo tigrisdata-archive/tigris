@@ -18,6 +18,7 @@ import (
 	"context"
 	"time"
 
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/config"
@@ -27,7 +28,6 @@ import (
 	"github.com/tigrisdata/tigris/server/services/v1/auth"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
-	api "github.com/tigrisdata/tigris/api/server/v1"
 )
 
 type ProjectQueryRunner struct {
@@ -123,7 +123,7 @@ func (runner *ProjectQueryRunner) describe(ctx context.Context, tx transaction.T
 			return Response{}, ctx, err
 		}
 
-		metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.Name(), c.GetName(), size)
+		metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.DbName(), db.BranchName(), c.GetName(), size)
 
 		// remove indexing version from the schema before returning the response
 		sch := schema.RemoveIndexingVersion(c.Schema)
@@ -149,7 +149,7 @@ func (runner *ProjectQueryRunner) describe(ctx context.Context, tx transaction.T
 		return Response{}, ctx, err
 	}
 
-	metrics.UpdateDbSizeMetrics(namespace, tenantName, db.Name(), size)
+	metrics.UpdateDbSizeMetrics(namespace, tenantName, db.DbName(), db.BranchName(), size)
 
 	return Response{
 		Response: &api.DescribeDatabaseResponse{
