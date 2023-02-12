@@ -17,10 +17,26 @@ jobs:
         with:
           submodules: true
 
+      # this is just to separate deps and docker pull logs from the main tests step
+      - name: Warmup tests
+        run: make run
+
       - name: Run tests
-        run: make test || ( docker-compose -f test/docker/docker-compose.yml logs && false )
+        id: tests
+        run: make test
+        continue-on-error: true
         env:
           TEST_PARAM: "-coverprofile=coverage.out -covermode=atomic"
+
+      - name: Server logs
+        if: steps.tests.outcome != 'success'
+        run: docker-compose -f test/docker/docker-compose.yml logs
+
+      - name: Check tests status
+        if: steps.tests.outcome != 'success'
+        run: |
+          echo "^^ Tests failed. Check tests output and logs in the steps above ^^"
+          exit 1
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3

@@ -18,13 +18,29 @@
 
 set -e
 
+VERSION=1.20
 ARCH=$(dpkg --print-architecture)
+FN="go${VERSION}.linux-${ARCH}.tar.gz"
 
-VERSION=1.19.2
+case "$ARCH" in
+"amd64")
+  SHA256="5a9ebcc65c1cce56e0d2dc616aff4c4cedcfbda8cc6f0288cc08cda3b18dcbf1"
+  ;;
+"arm64")
+  SHA256="17700b6e5108e2a2c3b1a43cd865d3f9c66b7f1c5f0cec26d3672cc131cc0994"
+  ;;
+*)
+  echo "No supported architecture."
+  exit 1
+  ;;
+esac
+
+wget "https://go.dev/dl/$FN"
+echo "$SHA256  $FN" | shasum -a 256 -c
+
 mkdir -p /usr/local
-wget "https://go.dev/dl/go${VERSION}.linux-${ARCH}.tar.gz"
-tar -C /usr/local -xzf "go${VERSION}.linux-${ARCH}.tar.gz"
-rm "go${VERSION}.linux-${ARCH}.tar.gz"
+tar -C /usr/local -xzf "$FN"
+rm "$FN"
 
 export PATH=$PATH:/usr/local/go/bin
 
