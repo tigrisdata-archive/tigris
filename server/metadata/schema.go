@@ -25,6 +25,7 @@ import (
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
+	"github.com/tigrisdata/tigris/util"
 )
 
 var schVersion = []byte{0x01}
@@ -138,7 +139,8 @@ func schemaGetLatest(ctx context.Context, tx transaction.Tx, key keys.Key) (*sch
 		return nil, nil
 	}
 
-	return &schemas[len(schemas)-1], nil
+	last := util.Last(schemas)
+	return &last, nil
 }
 
 // Get returns all the version stored for a collection inside a given namespace and database.
@@ -154,7 +156,7 @@ func schemaGet(ctx context.Context, tx transaction.Tx, key keys.Key) (schema.Ver
 	)
 
 	for it.Next(&row) {
-		ver, ok := row.Key[len(row.Key)-1].([]byte)
+		ver, ok := util.Last(row.Key).([]byte)
 		if !ok {
 			return nil, errors.Internal("not able to extract revision from schema %v", row.Key)
 		}

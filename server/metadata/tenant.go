@@ -31,6 +31,7 @@ import (
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
+	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
@@ -809,7 +810,7 @@ func (tenant *Tenant) deleteSearchIndex(ctx context.Context, tx transaction.Tx, 
 		return NewSearchIndexNotFoundErr(index.Name)
 	}
 
-	metadata.SearchMetadata[foundIdx] = metadata.SearchMetadata[len(metadata.SearchMetadata)-1]
+	metadata.SearchMetadata[foundIdx] = util.Last(metadata.SearchMetadata)
 	metadata.SearchMetadata = metadata.SearchMetadata[:len(metadata.SearchMetadata)-1]
 	if err = tenant.namespaceStore.UpdateProjectMetadata(ctx, tx, tenant.namespace.Id(), project.name, metadata); err != nil {
 		return errors.Internal("failed to update project metadata for cache deletion")

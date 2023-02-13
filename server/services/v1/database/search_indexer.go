@@ -378,8 +378,8 @@ func UnFlattenObjects(flat map[string]any) map[string]any {
 				m = m[keys[i-1]].(map[string]any)
 			}
 		}
-		m[keys[len(keys)-1]] = v
+		last := util.Last(keys)
+		m[last] = v
 	}
-
 	return result
 }

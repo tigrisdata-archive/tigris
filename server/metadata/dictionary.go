@@ -27,6 +27,7 @@ import (
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
+	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
@@ -438,7 +439,7 @@ func (k *Dictionary) decode(_ context.Context, fdbKey kv.Key) (map[string]interf
 	if len(fdbKey) > 1 {
 		decoded[namespaceKey] = ByteToUInt32(fdbKey[1].([]byte))
 	}
-	if end, ok := fdbKey[len(fdbKey)-1].(string); !ok || end != keyEnd {
+	if end, ok := util.Last(fdbKey).(string); !ok || end != keyEnd {
 		return nil, fmt.Errorf("key is not from encoding subspace")
 	}
 

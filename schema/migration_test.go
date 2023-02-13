@@ -629,7 +629,6 @@ func TestTypeConversionRules(t *testing.T) {
 			{ObjectType, "YWFhYQ==", nil},
 		}
 
-		//nolint:dupword
 		/*
 			Example how to generate base64 encoded binary values for: date-time and uuid
 			u := uuid.New()

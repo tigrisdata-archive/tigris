@@ -42,7 +42,7 @@ func (x Versions) Len() int           { return len(x) }
 func (x Versions) Less(i, j int) bool { return x[i].Version < x[j].Version }
 func (x Versions) Swap(i, j int)      { x[i], x[j] = x[j], x[i] }
 
-func (x Versions) Latest() Version { return x[len(x)-1] }
+func (x Versions) Latest() Version { return util.Last(x) }
 
 // VersionDeltaField describes field schema change.
 //
@@ -192,7 +192,7 @@ func addFieldVersion(versions map[string]*FieldVersions, version int, change *Ve
 		}
 	}
 
-	last := change.KeyPath[len(change.KeyPath)-1]
+	last := util.Last(change.KeyPath)
 	m[last].versions = append(m[last].versions, &FieldVersion{Version: version, Change: change})
 }
 
@@ -237,7 +237,7 @@ func (d *DefaultCollection) LookupFieldVersion(keyPath []string) []*FieldVersion
 // CompatibleSchemaSince determines if there was incompatible schema change since given version.
 func (d *DefaultCollection) CompatibleSchemaSince(version int32) bool {
 	// last element in the array contains last incompatible schema change
-	return int(version) >= d.SchemaDeltas[len(d.SchemaDeltas)-1].Version
+	return int(version) >= util.Last(d.SchemaDeltas).Version
 }
 
 func convertFromBool(toType FieldType, val bool) any {
@@ -471,7 +471,7 @@ func applyArrayFieldDelta(arr []any, change *VersionDeltaField, i int) bool {
 }
 
 func applyPrimitiveFieldDelta(doc map[string]any, change *VersionDeltaField) bool {
-	key := change.KeyPath[len(change.KeyPath)-1]
+	key := util.Last(change.KeyPath)
 
 	// deleted field
 	if change.To == UnknownType {

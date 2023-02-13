@@ -65,3 +65,11 @@ func JSONToMap(data []byte) (map[string]any, error) {
 
 	return decoded, nil
 }
+
+func Last[T any](list []T) T {
+	if len(list) == 0 {
+		var zeroVal T
+		return zeroVal
+	}
+	return list[len(list)-1]
+}
