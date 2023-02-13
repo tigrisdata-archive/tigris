@@ -158,6 +158,14 @@ func (it *FilterIterator) Next(row *Row) bool {
 }
 
 func (it *FilterIterator) advanceToMatchingRow(row *Row) bool {
+	// Convert the created_at and updated_at to a json blob
+	// this allows them to be processed by our filter and check if the query
+	// matches those fields
+	ts, err := row.Data.TimestampsToJSON()
+	if err == nil && it.filter.Matches(ts) {
+		return true
+	}
+
 	return it.filter.Matches(row.Data.RawData)
 }
 

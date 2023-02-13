@@ -18,15 +18,19 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/value"
 )
 
 func testFilters(t testing.TB, fields []*schema.QueryableField, input []byte) []Filter {
 	factory := Factory{
-		fields: fields,
+		fields:    fields,
+		collation: value.NewCollationFrom(&api.Collation{Case: "csk"}),
 	}
 	filters, err := factory.Factorize(input)
 	require.NoError(t, err)
@@ -35,7 +39,7 @@ func testFilters(t testing.TB, fields []*schema.QueryableField, input []byte) []
 	return filters
 }
 
-func TestKeyBuilder(t *testing.T) {
+func TestKeyBuilderStrictEq(t *testing.T) {
 	cases := []struct {
 		userFields []*schema.QueryableField
 		userKeys   []*schema.Field
@@ -116,9 +120,9 @@ func TestKeyBuilder(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		b := NewKeyBuilder(NewStrictEqKeyComposer(dummyEncodeFunc))
+		b := NewKeyBuilder(NewStrictEqKeyComposer(dummyEncodeFunc, PKBuildIndexPartsFunc))
 		filters := testFilters(t, c.userFields, c.userInput)
-		buildKeys, err := b.Build(filters, c.userKeys)
+		buildKeys, err := b.BuildFromFields(filters, c.userKeys)
 		require.Equal(t, c.expError, err)
 		require.Equal(t, len(c.expKeys), len(buildKeys))
 		for _, k := range c.expKeys {
@@ -134,11 +138,107 @@ func TestKeyBuilder(t *testing.T) {
 	}
 }
 
+func TestKeyBuilderRangeKey(t *testing.T) {
+	cases := []struct {
+		userFields []*schema.QueryableField
+		userKeys   []*schema.Field
+		userInput  []byte
+		queryType  string
+		expKeys    []keys.Key
+	}{
+		{
+			// single gt
+			[]*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
+			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}},
+			[]byte(`{"a": {"$gt": 1}}`),
+			FULLRANGE,
+			[]keys.Key{keys.NewKey(nil, "a", int64(1), 0xFF), keys.NewKey(nil, "a", 0xFF)},
+		},
+		{
+			// single gte
+			[]*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
+			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}},
+			[]byte(`{"a": {"$gte": 1}}`),
+			FULLRANGE,
+			[]keys.Key{keys.NewKey(nil, "a", int64(1)), keys.NewKey(nil, "a", 0xFF)},
+		},
+		{
+			// single lt
+			[]*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
+			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}},
+			[]byte(`{"a": {"$lt": 30}}`),
+			FULLRANGE,
+			[]keys.Key{keys.NewKey(nil, "a", 0x00), keys.NewKey(nil, "a", int64(30))},
+		},
+		{
+			// single lte
+			[]*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
+			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}},
+			[]byte(`{"a": {"$lte": 30}}`),
+			FULLRANGE,
+			[]keys.Key{keys.NewKey(nil, "a", 0x00), keys.NewKey(nil, "a", int64(30), 0xFF)},
+		},
+		{
+			// single range user defined key
+			[]*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
+			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}},
+			[]byte(`{"$and": [{"a": {"$gte": 1}}, {"a": {"$lt": 10}}]}`),
+			RANGE,
+			[]keys.Key{keys.NewKey(nil, "a", int64(1)), keys.NewKey(nil, "a", int64(10))},
+		},
+		{
+			// single range user defined string key
+			[]*schema.QueryableField{{FieldName: "a", DataType: schema.StringType}},
+			[]*schema.Field{{FieldName: "a", DataType: schema.StringType}},
+			[]byte(`{"$and": [{"a": {"$gte": "f"}}, {"a": {"$lt": "m"}}]}`),
+			RANGE,
+			[]keys.Key{keys.NewKey(nil, "a", "\x16\x84\x00\x00\x00 \x00\x00\x02"), keys.NewKey(nil, "a", "\x17A\x00\x00\x00 \x00\x00\x02")},
+		},
+		// {
+		// 	// single range user defined key
+		// 	[]*schema.QueryableField{{FieldName: "a.b.c", DataType: schema.Int64Type}},
+		// 	[]*schema.Field{{FieldName: "z", DataType: schema.Int64Type}},
+		// 	[]byte(`{"a": {"b": {"c": {"$gt": 1}}}}`),
+		// 	nil,
+		// 	[]keys.Key{keys.NewKey(nil, int64(1)), nil},
+		// },
+	}
+
+	for _, c := range cases {
+		b := NewKeyBuilder(NewRangeKeyComposer(dummyEncodeFunc, dummyBuildIndexParts))
+		filters := testFilters(t, c.userFields, c.userInput)
+		keyReads, err := b.BuildFromFields(filters, c.userKeys)
+		assert.NoError(t, err)
+		assert.Len(t, keyReads, 1)
+		buildKeys := keyReads[0]
+		assert.Equal(t, len(c.expKeys), len(buildKeys.Keys))
+		assert.Equal(t, len(c.queryType), len(buildKeys.QueryType))
+		for i, k := range c.expKeys {
+			assert.Equal(t, k, buildKeys.Keys[i], string(c.userInput))
+		}
+	}
+}
+
+func TestKeyBuilderMultipleRangeKey(t *testing.T) {
+	userFields := []*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}}
+	userKeys := []*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}}
+	filter := []byte(`{"$and": [{"a": {"$gte": 1}}, {"a": {"$lt": 10}}, {"b": {"$gt": 3}}, {"b": {"$lte": 30}}]}`)
+
+	b := NewKeyBuilder(NewRangeKeyComposer(dummyEncodeFunc, dummyBuildIndexParts))
+	filters := testFilters(t, userFields, filter)
+	keyReads, err := b.BuildFromFields(filters, userKeys)
+
+	assert.NoError(t, err)
+	assert.Len(t, keyReads, 2)
+	assert.Equal(t, []keys.Key{keys.NewKey(nil, "a", int64(1)), keys.NewKey(nil, "a", int64(10))}, keyReads[0].Keys)
+	assert.Equal(t, []keys.Key{keys.NewKey(nil, "b", int64(3), 0xFF), keys.NewKey(nil, "b", int64(30), 0xFF)}, keyReads[1].Keys)
+}
+
 func BenchmarkStrictEqKeyComposer_Compose(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		kb := NewKeyBuilder(NewStrictEqKeyComposer(dummyEncodeFunc))
+		kb := NewKeyBuilder(NewStrictEqKeyComposer(dummyEncodeFunc, PKBuildIndexPartsFunc))
 		filters := testFilters(b, []*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.Int64Type}}, []byte(`{"b": 10, "a": {"$eq": 10}, "c": "foo"}}`))
-		_, err := kb.Build(filters, []*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.Int64Type}})
+		_, err := kb.BuildFromFields(filters, []*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.Int64Type}})
 		require.NoError(b, err)
 	}
 	b.ReportAllocs()
@@ -146,4 +246,8 @@ func BenchmarkStrictEqKeyComposer_Compose(b *testing.B) {
 
 func dummyEncodeFunc(indexParts ...interface{}) (keys.Key, error) {
 	return keys.NewKey(nil, indexParts...), nil
+}
+
+func dummyBuildIndexParts(fieldName string, datatype schema.FieldType, value interface{}) []interface{} {
+	return []interface{}{fieldName, value}
 }
