@@ -97,6 +97,10 @@ func (i *SearchIndexer) OnPostCommit(ctx context.Context, tenant *metadata.Tenan
 				return err
 			}
 
+			if tableData == nil {
+				continue
+			}
+
 			searchData, err := PackSearchFields(ctx, tableData, collection, searchKey)
 			if err != nil {
 				return err

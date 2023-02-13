@@ -174,6 +174,8 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return Response{}, ctx, err
 	}
 
+	secondaryIndexer := NewSecondaryIndexer(coll)
+
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
 	if filter.None(runner.req.Filter) {
@@ -261,6 +263,22 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 				return Response{}, ctx, err
 			}
 			isUpdate = false
+
+			if config.DefaultConfig.SecondaryIndex.WriteEnabled {
+				err := secondaryIndexer.Delete(ctx, tx, row.Data, key.IndexParts())
+				if err != nil {
+					return Response{}, nil, err
+				}
+				err = secondaryIndexer.Index(ctx, tx, newData, key.IndexParts())
+				if err != nil {
+					return Response{}, nil, err
+				}
+			}
+		} else if config.DefaultConfig.SecondaryIndex.WriteEnabled {
+			err := secondaryIndexer.Update(ctx, tx, newData, row.Data, key.IndexParts())
+			if err != nil {
+				return Response{}, nil, err
+			}
 		}
 		if err = tx.Replace(ctx, newKey, newData, isUpdate); ulog.E(err) {
 			return Response{}, ctx, err
@@ -290,6 +308,7 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
+	secondaryIndexer := NewSecondaryIndexer(coll)
 
 	if err = runner.mustBeDocumentsCollection(coll, "deleteReq"); err != nil {
 		return Response{}, ctx, err
@@ -326,6 +345,13 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		key, err := keys.FromBinary(coll.EncodedName, row.Key)
 		if err != nil {
 			return Response{}, ctx, err
+		}
+
+		if config.DefaultConfig.SecondaryIndex.WriteEnabled {
+			err := secondaryIndexer.Delete(ctx, tx, row.Data, key.IndexParts())
+			if err != nil {
+				return Response{}, ctx, err
+			}
 		}
 
 		if err = tx.Delete(ctx, key); ulog.E(err) {
