@@ -48,6 +48,10 @@ type Value interface {
 }
 
 func NewValueUsingCollation(fieldType schema.FieldType, value []byte, collation *Collation) (Value, error) {
+	if isNull(fieldType, value) {
+		return NewNullValue(), nil
+	}
+
 	if fieldType == schema.StringType {
 		return NewStringValue(string(value), collation), nil
 	}
@@ -57,7 +61,7 @@ func NewValueUsingCollation(fieldType schema.FieldType, value []byte, collation 
 
 // NewValue returns the value of the field from the raw json value. It uses schema to get the type of the field.
 func NewValue(fieldType schema.FieldType, value []byte) (Value, error) {
-	if len(value) == 0 {
+	if isNull(fieldType, value) {
 		return NewNullValue(), nil
 	}
 
@@ -99,6 +103,22 @@ func NewValue(fieldType schema.FieldType, value []byte) (Value, error) {
 
 func isIntegral(val float64) bool {
 	return val == float64(int(val))
+}
+
+func isNull(fieldType schema.FieldType, value []byte) bool {
+	if fieldType == schema.NullType || len(value) == 0 || string(value) == "null" {
+		return true
+	}
+
+	return false
+}
+
+func isNullValue(v Value) bool {
+	if v == nil || v.String() == "" {
+		return true
+	}
+
+	return false
 }
 
 type ArrayValue struct {
@@ -145,7 +165,7 @@ func NewIntValue(v int64) *IntValue {
 }
 
 func (i *IntValue) CompareTo(v Value) (int, error) {
-	if v == nil {
+	if isNullValue(v) {
 		return 1, nil
 	}
 
@@ -209,7 +229,7 @@ func NewDoubleValue(raw string) (*DoubleValue, error) {
 }
 
 func (d *DoubleValue) CompareTo(v Value) (int, error) {
-	if v == nil {
+	if isNullValue(v) {
 		return 1, nil
 	}
 
@@ -258,7 +278,7 @@ func NewStringValue(v string, collation *Collation) *StringValue {
 }
 
 func (s *StringValue) CompareTo(v Value) (int, error) {
-	if v == nil {
+	if isNullValue(v) {
 		return 1, nil
 	}
 
@@ -271,6 +291,10 @@ func (s *StringValue) CompareTo(v Value) (int, error) {
 }
 
 func (s *StringValue) AsInterface() interface{} {
+	if s.Collation.IsCollationSortKey() {
+		return s.Collation.GenerateSortKey(s.Value)
+	}
+
 	return s.Value
 }
 
@@ -290,7 +314,7 @@ func NewBytesValue(v []byte) *BytesValue {
 }
 
 func (b *BytesValue) CompareTo(v Value) (int, error) {
-	if v == nil {
+	if isNullValue(v) {
 		return 1, nil
 	}
 
@@ -322,7 +346,7 @@ func NewBoolValue(v bool) *BoolValue {
 }
 
 func (b *BoolValue) CompareTo(v Value) (int, error) {
-	if v == nil {
+	if isNullValue(v) {
 		return 1, nil
 	}
 
@@ -375,4 +399,19 @@ func (n *NullValue) CompareTo(v Value) (int, error) {
 	}
 
 	return -1, nil
+}
+
+func Min(datatype schema.FieldType, val Value) any {
+	return nil
+}
+
+func Max(datatype schema.FieldType, val Value) any {
+	switch datatype {
+	case schema.Int32Type, schema.Int64Type:
+		return math.MaxInt64
+	case schema.DoubleType:
+		return math.MaxFloat64
+	default:
+		return 0xFF
+	}
 }

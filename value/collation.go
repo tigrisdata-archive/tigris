@@ -20,16 +20,21 @@ import (
 	"golang.org/x/text/language"
 )
 
+const (
+	INDEX_MAX_STRING_LEN = 64
+)
+
 type Collation struct {
 	collator     collate.Collator
 	apiCollation *api.Collation
 }
 
 func NewCollation() *Collation {
-	return &Collation{
-		collator:     *collate.New(language.English),
-		apiCollation: &api.Collation{},
-	}
+	return NewCollationFrom(nil)
+}
+
+func NewSortKeyCollation() *Collation {
+	return NewCollationFrom(&api.Collation{Case: "csk"})
 }
 
 func NewCollationFrom(apiCollation *api.Collation) *Collation {
@@ -62,6 +67,21 @@ func (x *Collation) IsCaseInsensitive() bool {
 	return x.apiCollation.IsCaseInsensitive()
 }
 
+func (x *Collation) IsCollationSortKey() bool {
+	return x.apiCollation.IsCollationSortKey()
+}
+
 func (x *Collation) IsValid() error {
 	return x.apiCollation.IsValid()
+}
+
+func (x *Collation) GenerateSortKey(input string) []byte {
+	// Only index up to MAX_STRING_LEN of the string
+	if len(input) > INDEX_MAX_STRING_LEN {
+		input = input[:INDEX_MAX_STRING_LEN]
+	}
+
+	var buf collate.Buffer
+	collated := x.collator.KeyFromString(&buf, input)
+	return collated
 }
