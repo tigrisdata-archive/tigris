@@ -6,6 +6,7 @@ on:
       - "!alpha"
       - "!beta"
       - "!rc"
+      - "main"
   workflow_call:
   pull_request:
 jobs:
