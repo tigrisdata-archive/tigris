@@ -32,11 +32,11 @@ import (
 )
 
 var (
-	StubbFieldName = "._tigris_stub"
-	KVSubspace     = "kvs"
-	InfoSubspace   = "_info"
-	CountSubSpace  = "count"
-	SizeSubSpace   = "size"
+	StubFieldName = "._tigris_array_stub"
+	KVSubspace    = "kvs"
+	InfoSubspace  = "_info"
+	CountSubSpace = "count"
+	SizeSubSpace  = "size"
 )
 
 type IndexRow struct {
@@ -61,7 +61,7 @@ func newIndexRow(dataType schema.FieldType, collation *value.Collation, name str
 
 func (f IndexRow) Name() string {
 	if f.stub {
-		return f.name + StubbFieldName
+		return f.name + StubFieldName
 	}
 	return f.name
 }
@@ -126,18 +126,10 @@ func (q *SecondaryIndexer) IndexInfo(ctx context.Context, tx transaction.Tx) (*S
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		lkeySize := keys.NewKey(q.coll.EncodedName, q.coll.Indexes.SecondaryIndex.Name, InfoSubspace, SizeSubSpace, "")
-		rkeySize := keys.NewKey(q.coll.EncodedName, q.coll.Indexes.SecondaryIndex.Name, InfoSubspace, SizeSubSpace, 0xFF)
-		size, errSize = q.aggregateInfo(ctx, tx, lkeySize, rkeySize)
+		size, errSize = q.aggregateInfo(ctx, tx, SizeSubSpace)
 	}()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		lkeyCount := keys.NewKey(q.coll.EncodedName, q.coll.Indexes.SecondaryIndex.Name, InfoSubspace, CountSubSpace, "")
-		rkeyCount := keys.NewKey(q.coll.EncodedName, q.coll.Indexes.SecondaryIndex.Name, InfoSubspace, CountSubSpace, 0xFF)
-		rows, errCount = q.aggregateInfo(ctx, tx, lkeyCount, rkeyCount)
-	}()
+	rows, errCount = q.aggregateInfo(ctx, tx, CountSubSpace)
 	wg.Wait()
 
 	if errCount != nil {
@@ -153,13 +145,15 @@ func (q *SecondaryIndexer) IndexInfo(ctx context.Context, tx transaction.Tx) (*S
 	}, nil
 }
 
-func (q *SecondaryIndexer) aggregateInfo(ctx context.Context, tx transaction.Tx, lkey keys.Key, rkey keys.Key) (int64, error) {
-	counter := int64(0)
+func (q *SecondaryIndexer) aggregateInfo(ctx context.Context, tx transaction.Tx, subSpace string) (int64, error) {
+	lkey := keys.NewKey(q.coll.EncodedName, q.coll.Indexes.SecondaryIndex.Name, InfoSubspace, subSpace, "")
+	rkey := keys.NewKey(q.coll.EncodedName, q.coll.Indexes.SecondaryIndex.Name, InfoSubspace, subSpace, 0xFF)
 	iter, err := tx.AtomicReadRange(ctx, lkey, rkey, false)
 	if err != nil {
 		return 0, err
 	}
 
+	counter := int64(0)
 	var val kv.FdbBaseKeyValue[int64]
 	for iter.Next(&val) {
 		counter += val.Data
@@ -170,6 +164,26 @@ func (q *SecondaryIndexer) aggregateInfo(ctx context.Context, tx transaction.Tx,
 	}
 
 	return counter, nil
+}
+
+func (q *SecondaryIndexer) ReadDocAndDelete(ctx context.Context, tx transaction.Tx, key keys.Key) error {
+	iter, err := tx.Read(ctx, key)
+	if err != nil {
+		return err
+	}
+	var oldDoc kv.KeyValue
+	if iter.Next(&oldDoc) {
+		err := q.Delete(ctx, tx, oldDoc.Data, key.IndexParts())
+		if err != nil {
+			return err
+		}
+	}
+
+	if iter.Err() != nil {
+		return iter.Err()
+	}
+
+	return nil
 }
 
 func (q *SecondaryIndexer) Delete(ctx context.Context, tx transaction.Tx, td *internal.TableData, primaryKey []interface{}) error {
@@ -219,12 +233,16 @@ func (q *SecondaryIndexer) Update(ctx context.Context, tx transaction.Tx, newTd 
 	return nil
 }
 
+// The process here:
+// 1. Build key values for old and new doc
+// 2. Remove keys from the old doc that are exactly the same in the new doc
+// 3. Remove keys from the new doc that are exactly the same as the old doc
+// 4. Create list of keys to remove and size and counts fields to be decremented
+// 5. Create list of keys to add to index along with size and count fields to be decremented
 func (q *SecondaryIndexer) buildAddAndRemoveKVs(newTableData *internal.TableData, oldTableData *internal.TableData, primaryKey []interface{}) *IndexerUpdateSet {
 	newRows := q.buildTableRows(newTableData)
 	oldRows := q.buildTableRows(oldTableData)
 
-	// Remove any rows in the oldRow set that will be overwritten in the newRows
-	// We do not want to issue an unneeded delete when it will be overwritten with the update
 	rowsToRemove := removeDuplicateRows(newRows, oldRows)
 	rowsToAdd := removeDuplicateRows(oldRows, newRows)
 

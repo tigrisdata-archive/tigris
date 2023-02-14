@@ -152,6 +152,12 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 			// as Int64 or timestamp to ensure uniqueness if multiple workers end up generating same timestamp.
 			err = tx.Insert(ctx, key, tableData)
 		} else {
+			if config.DefaultConfig.SecondaryIndex.WriteEnabled {
+				err := secondaryIndexer.ReadDocAndDelete(ctx, tx, key)
+				if err != nil {
+					return nil, nil, err
+				}
+			}
 			err = tx.Replace(ctx, key, tableData, false)
 		}
 		if err != nil {
