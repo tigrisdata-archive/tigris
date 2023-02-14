@@ -18,9 +18,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"math/rand"
 	"reflect"
 	"sync"
+	"testing"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
@@ -28,7 +28,6 @@ import (
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/config"
-	"github.com/tigrisdata/tigris/server/defaults"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
@@ -42,52 +41,8 @@ const (
 	baseSchemaVersion = 1
 )
 
-// A Namespace is a logical grouping of databases.
-type Namespace interface {
-	// Id for the namespace is used by the cluster to append as the first element in the key.
-	Id() uint32
-	// StrId is the name used for the lookup.
-	StrId() string
-	// Metadata for the namespace
-	Metadata() NamespaceMetadata
-}
-
-// NamespaceMetadata - This structure is persisted as the namespace in DB.
-type NamespaceMetadata struct {
-	// unique namespace Id
-	Id uint32
-	// unique namespace name StrId
-	StrId string
-	// displayName for the namespace
-	Name string
-}
-
-// DefaultNamespace is for "default" namespace in the cluster. This is useful when there is no need to logically group
-// databases. All databases will be created under a single namespace. It is totally fine for a deployment to choose this
-// and just have one namespace. The default assigned value for this namespace is 1.
-type DefaultNamespace struct{}
-
 type TenantGetter interface {
 	GetTenant(ctx context.Context, id string) (*Tenant, error)
-}
-
-// StrId returns id assigned to the namespace.
-func (n *DefaultNamespace) StrId() string {
-	return defaults.DefaultNamespaceName
-}
-
-// Id returns id assigned to the namespace.
-func (n *DefaultNamespace) Id() uint32 {
-	return defaults.DefaultNamespaceId
-}
-
-// Metadata returns metadata assigned to the namespace.
-func (n *DefaultNamespace) Metadata() NamespaceMetadata {
-	return NewNamespaceMetadata(defaults.DefaultNamespaceId, defaults.DefaultNamespaceName, defaults.DefaultNamespaceName)
-}
-
-func NewDefaultNamespace() *DefaultNamespace {
-	return &DefaultNamespace{}
 }
 
 // TenantNamespace is used when there is a finer isolation of databases is needed. The caller provides a unique
@@ -96,14 +51,6 @@ type TenantNamespace struct {
 	lookupStrId string
 	lookupId    uint32
 	metadata    NamespaceMetadata
-}
-
-func NewNamespaceMetadata(id uint32, name string, displayName string) NamespaceMetadata {
-	return NamespaceMetadata{
-		Id:    id,
-		StrId: name,
-		Name:  displayName,
-	}
 }
 
 func NewTenantNamespace(name string, metadata NamespaceMetadata) *TenantNamespace {
@@ -134,10 +81,7 @@ func (n *TenantNamespace) Metadata() NamespaceMetadata {
 type TenantManager struct {
 	sync.RWMutex
 
-	metaStore         *MetadataDictionary
-	schemaStore       *SchemaSubspace
-	searchSchemaStore *SearchSchemaSubspace
-	namespaceStore    *NamespaceSubspace
+	metaStore         *Dictionary
 	kvStore           kv.KeyValueStore
 	searchStore       search.Store
 	tenants           map[string]*Tenant
@@ -151,7 +95,11 @@ type TenantManager struct {
 }
 
 func (m *TenantManager) GetNamespaceStore() *NamespaceSubspace {
-	return m.namespaceStore
+	return m.metaStore.Namespace()
+}
+
+func (m *TenantManager) GetVersionHandler() *VersionHandler {
+	return m.versionH
 }
 
 func NewTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, txMgr *transaction.Manager) *TenantManager {
@@ -164,12 +112,9 @@ func newTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, mdName
 		searchStore:       searchStore,
 		encoder:           NewEncoder(),
 		metaStore:         NewMetadataDictionary(mdNameRegistry),
-		schemaStore:       NewSchemaStore(mdNameRegistry),
-		searchSchemaStore: NewSearchSchemaStore(mdNameRegistry),
-		namespaceStore:    NewNamespaceStore(mdNameRegistry),
 		tenants:           make(map[string]*Tenant),
 		idToTenantMap:     make(map[uint32]string),
-		versionH:          &VersionHandler{},
+		versionH:          newVersionHandler(mdNameRegistry.GetVersionKey()),
 		mdNameRegistry:    mdNameRegistry,
 		tableKeyGenerator: NewTableKeyGenerator(),
 		txMgr:             txMgr,
@@ -262,17 +207,19 @@ func (m *TenantManager) CreateTenant(ctx context.Context, tx transaction.Tx, nam
 func (m *TenantManager) getTenantFromCache(namespaceName string) (tenant *Tenant) {
 	m.RLock()
 	defer m.RUnlock()
-	if tenant, found := m.tenants[namespaceName]; found {
-		return tenant
-	}
-	return nil
+
+	return m.tenants[namespaceName]
 }
 
 func (m *TenantManager) GetNamespaceNames() []string {
+	m.RLock()
+	defer m.RUnlock()
+
 	res := make([]string, 0, len(m.tenants))
 	for name := range m.tenants {
 		res = append(res, name)
 	}
+
 	return res
 }
 
@@ -281,6 +228,7 @@ func (m *TenantManager) GetNamespaceId(namespaceName string) (uint32, error) {
 	if tenant == nil {
 		return 0, errors.NotFound("Namespace not found")
 	}
+
 	return tenant.namespace.Id(), nil
 }
 
@@ -344,7 +292,8 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string) (*T
 	}
 
 	namespace := NewTenantNamespace(namespaceName, metadata)
-	tenant = NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.searchSchemaStore, m.namespaceStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
+	tenant = NewTenant(namespace, m.kvStore, m.searchStore,
+		m.metaStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
 	if err = tenant.reload(ctx, tx, currentVersion, collectionsInSearch); err != nil {
 		return nil, err
 	}
@@ -386,7 +335,7 @@ func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transa
 		if err != nil {
 			return nil, err
 		}
-		tenant := NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.searchSchemaStore, m.namespaceStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
+		tenant := NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
 		tenant.Lock()
 		err = tenant.reload(ctx, tx, currentVersion, collectionsInSearch)
 		tenant.Unlock()
@@ -404,7 +353,7 @@ func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transa
 		return nil, err
 	}
 
-	return NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.searchSchemaStore, m.namespaceStore, m.encoder, m.versionH, nil, m.tableKeyGenerator), nil
+	return NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.encoder, m.versionH, nil, m.tableKeyGenerator), nil
 }
 
 // GetTableFromIds returns tenant name, database object, collection name corresponding to their encoded ids.
@@ -479,7 +428,7 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVe
 
 	for namespace, metadata := range namespaces {
 		if _, ok := m.tenants[namespace]; !ok {
-			m.tenants[namespace] = NewTenant(NewTenantNamespace(namespace, metadata), m.kvStore, m.searchStore, m.metaStore, m.schemaStore, m.searchSchemaStore, m.namespaceStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
+			m.tenants[namespace] = NewTenant(NewTenantNamespace(namespace, metadata), m.kvStore, m.searchStore, m.metaStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
 			m.idToTenantMap[metadata.Id] = namespace
 		}
 	}
@@ -506,7 +455,7 @@ type Tenant struct {
 	schemaStore       *SchemaSubspace
 	searchSchemaStore *SearchSchemaSubspace
 	namespaceStore    *NamespaceSubspace
-	metaStore         *MetadataDictionary
+	metaStore         *Dictionary
 	Encoder           Encoder
 	namespace         Namespace
 	version           Version
@@ -520,15 +469,17 @@ type Tenant struct {
 	idToDatabaseMap map[uint32]*Database
 }
 
-func NewTenant(namespace Namespace, kvStore kv.KeyValueStore, searchStore search.Store, dict *MetadataDictionary, schemaStore *SchemaSubspace, searchSchemaStore *SearchSchemaSubspace, namespaceStore *NamespaceSubspace, encoder Encoder, versionH *VersionHandler, currentVersion Version, _ *TableKeyGenerator) *Tenant {
+func NewTenant(namespace Namespace, kvStore kv.KeyValueStore, searchStore search.Store, dict *Dictionary,
+	encoder Encoder, versionH *VersionHandler, currentVersion Version, _ *TableKeyGenerator,
+) *Tenant {
 	return &Tenant{
 		kvStore:           kvStore,
 		searchStore:       searchStore,
 		namespace:         namespace,
 		metaStore:         dict,
-		schemaStore:       schemaStore,
-		searchSchemaStore: searchSchemaStore,
-		namespaceStore:    namespaceStore,
+		schemaStore:       dict.Schema(),
+		searchSchemaStore: dict.SearchSchema(),
+		namespaceStore:    dict.Namespace(),
 		projects:          make(map[string]*Project),
 		idToDatabaseMap:   make(map[uint32]*Database),
 		versionH:          versionH,
@@ -579,23 +530,23 @@ func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVers
 	tenant.projects = make(map[string]*Project)
 	tenant.idToDatabaseMap = make(map[uint32]*Database)
 
-	dbNameToId, err := tenant.metaStore.GetDatabases(ctx, tx, tenant.namespace.Id())
+	dbs, err := tenant.metaStore.GetDatabases(ctx, tx, tenant.namespace.Id())
 	if err != nil {
 		return err
 	}
 
 	// load projects
-	for db, id := range dbNameToId {
-		databaseName := NewDatabaseName(db)
+	for name, meta := range dbs {
+		databaseName := NewDatabaseName(name)
 		if databaseName.IsMainBranch() {
 			// we don't care about branches here so the main database here means a project.
-			tenant.projects[databaseName.Name()] = NewProject(id, db)
+			tenant.projects[databaseName.Name()] = NewProject(meta.ID, name)
 		}
 	}
 
 	// Iterate one more time on all the databases and now add branches and main database to the Project object
-	for db, id := range dbNameToId {
-		database, err := tenant.reloadDatabase(ctx, tx, db, id, indexesInSearchStore)
+	for name, meta := range dbs {
+		database, err := tenant.reloadDatabase(ctx, tx, name, meta.ID, indexesInSearchStore)
 		if ulog.E(err) {
 			return err
 		}
@@ -607,7 +558,7 @@ func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVers
 			project.database = database
 		}
 
-		tenant.idToDatabaseMap[id] = database
+		tenant.idToDatabaseMap[meta.ID] = database
 	}
 
 	// load search indexes, this is essentially loading all the search indexes created by the user and attaching it to
@@ -635,28 +586,31 @@ func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVers
 	}
 
 	tenant.version = currentVersion
+
 	return nil
 }
 
 // reloadDatabase is called by tenant to reload the database state. This also loads all the collections that are part of
 // this database and implicit search index for these collections.
-func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbName string, dbId uint32, indexesInSearchStore map[string]*tsApi.CollectionResponse) (*Database, error) {
+func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbName string, dbId uint32,
+	indexesInSearchStore map[string]*tsApi.CollectionResponse,
+) (*Database, error) {
 	database := NewDatabase(dbId, dbName)
 
-	collNameToId, err := tenant.metaStore.GetCollections(ctx, tx, tenant.namespace.Id(), database.id)
+	colls, err := tenant.metaStore.GetCollections(ctx, tx, tenant.namespace.Id(), database.id)
 	if err != nil {
 		return nil, err
 	}
 
-	for coll, id := range collNameToId {
-		idxNameToId, err := tenant.metaStore.GetIndexes(ctx, tx, tenant.namespace.Id(), database.id, id)
+	for coll, meta := range colls {
+		idxMeta, err := tenant.metaStore.GetIndexes(ctx, tx, tenant.namespace.Id(), database.id, meta.ID)
 		if err != nil {
 			database.needFixingCollections[coll] = struct{}{}
 			log.Debug().Err(err).Str("collection", coll).Msg("skipping loading collection")
 			continue
 		}
 
-		schemas, err := tenant.schemaStore.Get(ctx, tx, tenant.namespace.Id(), database.id, id)
+		schemas, err := tenant.schemaStore.Get(ctx, tx, tenant.namespace.Id(), database.id, meta.ID)
 		if err != nil {
 			database.needFixingCollections[coll] = struct{}{}
 			log.Debug().Err(err).Str("collection", coll).Msg("skipping loading collection")
@@ -672,7 +626,7 @@ func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbN
 			log.Error().Str("search_collection", searchCollectionName).Msg("fields are not present in search")
 		}
 
-		collection, err := createCollection(id, coll, schemas, idxNameToId, searchCollectionName, fieldsInSearch)
+		collection, err := createCollection(meta.ID, coll, schemas, idxMeta, searchCollectionName, fieldsInSearch)
 		if err != nil {
 			database.needFixingCollections[coll] = struct{}{}
 			log.Debug().Err(err).Str("collection", coll).Msg("skipping loading collection")
@@ -685,8 +639,8 @@ func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbN
 		}
 		collection.EncodedName = encName
 
-		database.collections[coll] = newCollectionHolder(id, coll, collection, idxNameToId)
-		database.idToCollectionMap[id] = coll
+		database.collections[coll] = newCollectionHolder(meta.ID, coll, collection, idxMeta)
+		database.idToCollectionMap[meta.ID] = coll
 	}
 
 	return database, nil
@@ -700,10 +654,6 @@ func (tenant *Tenant) reloadSearch(ctx context.Context, tx transaction.Tx, proje
 	}
 
 	searchObj := NewSearch()
-	if projMetadata == nil {
-		// nothing to load
-		return searchObj, nil
-	}
 
 	for _, searchMD := range projMetadata.SearchMetadata {
 		schV, err := tenant.searchSchemaStore.GetLatest(ctx, tx, tenant.namespace.Id(), project.id, searchMD.Name)
@@ -759,29 +709,14 @@ func (tenant *Tenant) createSearchIndex(ctx context.Context, tx transaction.Tx, 
 		return errors.Internal("failed to get project metadata for project %s", project.Name())
 	}
 
-	updateMetadata := true
-	if metadata == nil {
-		// we need to initialize metadata and do insert instead of update
-		metadata = &ProjectMetadata{
-			Id: project.Id(),
-		}
-		updateMetadata = false
-	}
-
 	metadata.SearchMetadata = append(metadata.SearchMetadata, SearchMetadata{
 		Name:      factory.Name,
 		Creator:   factory.Sub,
 		CreatedAt: time.Now().Unix(),
 	})
 
-	if updateMetadata {
-		if err = tenant.namespaceStore.UpdateProjectMetadata(ctx, tx, tenant.namespace.Id(), project.Name(), metadata); err != nil {
-			return errors.Internal("failed to update project metadata for index creation")
-		}
-	} else {
-		if err = tenant.namespaceStore.InsertProjectMetadata(ctx, tx, tenant.namespace.Id(), project.Name(), metadata); err != nil {
-			return errors.Internal("failed to update project metadata for index creation")
-		}
+	if err = tenant.namespaceStore.UpdateProjectMetadata(ctx, tx, tenant.namespace.Id(), project.Name(), metadata); err != nil {
+		return errors.Internal("failed to update project metadata for index creation")
 	}
 
 	// store schema now in searchSchemaStore
@@ -833,7 +768,7 @@ func (tenant *Tenant) updateSearchIndex(ctx context.Context, tx transaction.Tx, 
 	return nil
 }
 
-func (tenant *Tenant) GetSearchIndex(ctx context.Context, tx transaction.Tx, project *Project, indexName string) (*schema.SearchIndex, error) {
+func (tenant *Tenant) GetSearchIndex(_ context.Context, _ transaction.Tx, project *Project, indexName string) (*schema.SearchIndex, error) {
 	tenant.Lock()
 	defer tenant.Unlock()
 
@@ -893,7 +828,7 @@ func (tenant *Tenant) deleteSearchIndex(ctx context.Context, tx transaction.Tx, 
 	return nil
 }
 
-func (tenant *Tenant) ListSearchIndexes(ctx context.Context, tx transaction.Tx, project *Project) ([]*schema.SearchIndex, error) {
+func (tenant *Tenant) ListSearchIndexes(_ context.Context, _ transaction.Tx, project *Project) ([]*schema.SearchIndex, error) {
 	tenant.Lock()
 	defer tenant.Unlock()
 
@@ -909,19 +844,20 @@ func (tenant *Tenant) ListSearchIndexes(ctx context.Context, tx transaction.Tx, 
 func (tenant *Tenant) CreateCache(ctx context.Context, tx transaction.Tx, project string, cache string, currentSub string) (bool, error) {
 	tenant.Lock()
 	defer tenant.Unlock()
+
 	projMetadata, err := tenant.namespaceStore.GetProjectMetadata(ctx, tx, tenant.namespace.Id(), project)
 	if err != nil {
 		return false, errors.Internal("Failed to get project metadata for project %s", project)
 	}
 	if projMetadata.CachesMetadata == nil {
-		projMetadata.CachesMetadata = []CachesMetadata{}
+		projMetadata.CachesMetadata = []CacheMetadata{}
 	}
 	for i := range projMetadata.CachesMetadata {
 		if projMetadata.CachesMetadata[i].Name == cache {
 			return false, NewCacheExistsErr(cache)
 		}
 	}
-	projMetadata.CachesMetadata = append(projMetadata.CachesMetadata, CachesMetadata{
+	projMetadata.CachesMetadata = append(projMetadata.CachesMetadata, CacheMetadata{
 		Name:      cache,
 		Creator:   currentSub,
 		CreatedAt: time.Now().Unix(),
@@ -959,9 +895,9 @@ func (tenant *Tenant) DeleteCache(ctx context.Context, tx transaction.Tx, projec
 		return false, errors.Internal("Failed to get project metadata for project %s", project)
 	}
 	if projMetadata.CachesMetadata == nil {
-		projMetadata.CachesMetadata = []CachesMetadata{}
+		projMetadata.CachesMetadata = []CacheMetadata{}
 	}
-	var tempCachesMetadata []CachesMetadata
+	var tempCachesMetadata []CacheMetadata
 	var found bool
 	for i := range projMetadata.CachesMetadata {
 		if projMetadata.CachesMetadata[i].Name != cache {
@@ -979,6 +915,7 @@ func (tenant *Tenant) DeleteCache(ctx context.Context, tx transaction.Tx, projec
 	if err != nil {
 		return false, errors.Internal("Failed to update project metadata for cache deletion")
 	}
+
 	return true, nil
 }
 
@@ -988,31 +925,37 @@ func (tenant *Tenant) DeleteCache(ctx context.Context, tx transaction.Tx, projec
 // successful so reloading happens at the next call when a transaction sees a stale tenant version. This applies to the
 // reloading mechanism on all the servers. It returns "true" If the project already exists, else "false" and an error. The
 // project metadata if not nil is also added inside this transaction.
-func (tenant *Tenant) CreateProject(ctx context.Context, tx transaction.Tx, projName string, projMetadata *ProjectMetadata) (bool, error) {
+func (tenant *Tenant) CreateProject(ctx context.Context, tx transaction.Tx, projName string, projMetadata *ProjectMetadata) error {
 	tenant.Lock()
 	defer tenant.Unlock()
 
-	_, exists, err := tenant.createProject(ctx, tx, projName, projMetadata)
-	return exists, err
+	return tenant.createProject(ctx, tx, projName, projMetadata)
 }
 
-func (tenant *Tenant) createProject(ctx context.Context, tx transaction.Tx, projName string, projMetadata *ProjectMetadata) (uint32, bool, error) {
-	if proj, ok := tenant.projects[projName]; ok {
-		return proj.Id(), true, nil
+func (tenant *Tenant) createProject(ctx context.Context, tx transaction.Tx, projName string, projMetadata *ProjectMetadata) error {
+	if _, ok := tenant.projects[projName]; ok {
+		return kv.ErrDuplicateKey
 	}
 
 	// otherwise, proceed to create the database if there are concurrent requests on different workers then one of
 	// them will fail with duplicate entry and only one will succeed.
-	dbId, err := tenant.metaStore.CreateDatabase(ctx, tx, projName, tenant.namespace.Id())
-	if projMetadata != nil {
-		// add id to the project, which is same as main database id of this project.
-		projMetadata.SetId(dbId)
-		if err = tenant.namespaceStore.InsertProjectMetadata(ctx, tx, tenant.namespace.Id(), projName, projMetadata); err != nil {
-			log.Err(err).Msg("failed to insert database metadata")
-			return dbId, false, errors.Internal("failed to setup project metadata")
-		}
+	meta, err := tenant.metaStore.CreateDatabase(ctx, tx, projName, tenant.namespace.Id())
+	if err != nil {
+		return err
 	}
-	return dbId, false, err
+
+	if projMetadata == nil {
+		projMetadata = &ProjectMetadata{}
+	}
+
+	// add id to the project, which is same as main database id of this project.
+	projMetadata.ID = meta.ID
+	if err = tenant.namespaceStore.InsertProjectMetadata(ctx, tx, tenant.namespace.Id(), projName, projMetadata); err != nil {
+		log.Err(err).Msg("failed to insert database metadata")
+		return errors.Internal("failed to setup project metadata")
+	}
+
+	return err
 }
 
 // DeleteProject is responsible for first dropping a dictionary encoding of the main database attached to this project
@@ -1039,7 +982,7 @@ func (tenant *Tenant) DeleteProject(ctx context.Context, tx transaction.Tx, proj
 
 	// delete the main branch, collections and associated metadata if there are concurrent requests on different workers
 	// then one of them will fail with duplicate entry and only one will succeed.
-	if err := tenant.metaStore.DropDatabase(ctx, tx, proj.Name(), tenant.namespace.Id(), proj.Id()); err != nil {
+	if err := tenant.metaStore.DropDatabase(ctx, tx, proj.Name(), tenant.namespace.Id()); err != nil {
 		return true, err
 	}
 
@@ -1075,6 +1018,7 @@ func (tenant *Tenant) GetProject(projName string) (*Project, error) {
 	if !ok {
 		return nil, NewProjectNotFoundErr(projName)
 	}
+
 	return proj, nil
 }
 
@@ -1105,30 +1049,31 @@ func (tenant *Tenant) CreateBranch(ctx context.Context, tx transaction.Tx, projN
 	if !ok {
 		return NewProjectNotFoundErr(projName)
 	}
-	if _, ok := proj.databaseBranches[dbName.Name()]; ok {
+
+	if _, ok = proj.databaseBranches[dbName.Name()]; ok {
 		return NewDatabaseBranchExistsErr(dbName.Branch())
 	}
 
 	// Create a database branch
-	branchId, err := tenant.metaStore.CreateDatabase(ctx, tx, dbName.Name(), tenant.namespace.Id())
+	branchMeta, err := tenant.metaStore.CreateDatabase(ctx, tx, dbName.Name(), tenant.namespace.Id())
 	if err != nil {
 		return err
 	}
 
 	// Create collections inside the new database branch
-	branch := NewDatabase(branchId, dbName.Name())
+	branch := NewDatabase(branchMeta.ID, dbName.Name())
 	for _, coll := range proj.database.ListCollection() {
 		schFactory, err := schema.Build(coll.Name, coll.Schema)
 		if err != nil {
 			return err
 		}
 
-		if err := tenant.createCollection(ctx, tx, branch, schFactory); err != nil {
+		if err = tenant.createCollection(ctx, tx, branch, schFactory); err != nil {
 			return err
 		}
 	}
 
-	return err
+	return nil
 }
 
 // DeleteBranch is responsible for deleting a database branch. Throws error if database/branch does not exist
@@ -1157,7 +1102,7 @@ func (tenant *Tenant) deleteBranch(ctx context.Context, tx transaction.Tx, proje
 	}
 
 	// drop the dictionary encoding for this database branch.
-	if err := tenant.metaStore.DropDatabase(ctx, tx, branch.Name(), tenant.namespace.Id(), branch.Id()); err != nil {
+	if err := tenant.metaStore.DropDatabase(ctx, tx, branch.Name(), tenant.namespace.Id()); err != nil {
 		return err
 	}
 
@@ -1225,25 +1170,26 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 	}
 	schFactory.IndexingVersion = schema.DefaultIndexingSchemaVersion
 
-	collectionId, err := tenant.metaStore.CreateCollection(ctx, tx, schFactory.Name, tenant.namespace.Id(), database.id)
+	collMeta, err := tenant.metaStore.CreateCollection(ctx, tx, schFactory.Name, tenant.namespace.Id(), database.id)
 	if err != nil {
 		return err
 	}
 
 	// encode indexes and add this back in the collection
 	indexes := schFactory.Indexes.GetIndexes()
-	idxNameToId := make(map[string]uint32)
+	idxMeta := make(map[string]*IndexMetadata)
 	for _, i := range indexes {
-		id, err := tenant.metaStore.CreateIndex(ctx, tx, i.Name, tenant.namespace.Id(), database.id, collectionId)
+		imeta, err := tenant.metaStore.CreateIndex(ctx, tx, i.Name, tenant.namespace.Id(), database.id, collMeta.ID)
 		if err != nil {
 			return err
 		}
-		i.Id = id
-		idxNameToId[i.Name] = id
+
+		idxMeta[i.Name] = imeta
+		i.Id = imeta.ID
 	}
 
 	// all good now persist the schema
-	if err := tenant.schemaStore.Put(ctx, tx, tenant.namespace.Id(), database.id, collectionId, schFactory.Schema, baseSchemaVersion); err != nil {
+	if err = tenant.schemaStore.Put(ctx, tx, tenant.namespace.Id(), database.id, collMeta.ID, schFactory.Schema, baseSchemaVersion); err != nil {
 		return err
 	}
 
@@ -1257,7 +1203,7 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 	)
 
 	collection, err := schema.NewDefaultCollection(
-		collectionId,
+		collMeta.ID,
 		baseSchemaVersion,
 		schFactory,
 		nil,
@@ -1274,7 +1220,7 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 
 	collection.EncodedName = encName
 
-	database.collections[schFactory.Name] = newCollectionHolder(collectionId, schFactory.Name, collection, idxNameToId)
+	database.collections[schFactory.Name] = newCollectionHolder(collMeta.ID, schFactory.Name, collection, idxMeta)
 	if config.DefaultConfig.Search.WriteEnabled {
 		// only creating implicit index here
 		if err := tenant.searchStore.CreateCollection(ctx, implicitSearchIndex.StoreSchema); err != nil {
@@ -1287,31 +1233,24 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 }
 
 func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, database *Database, c *collectionHolder, schFactory *schema.Factory) error {
-	var newIndexes []*schema.Index
-	for _, idx := range schFactory.Indexes.GetIndexes() {
-		if _, ok := c.idxNameToId[idx.Name]; !ok {
-			newIndexes = append(newIndexes, idx)
-		}
-	}
-
-	for _, idx := range newIndexes {
-		// these are the new indexes present in the new collection
-		id, err := tenant.metaStore.CreateIndex(ctx, tx, idx.Name, tenant.namespace.Id(), database.id, c.id)
-		if err != nil {
-			return err
-		}
-		idx.Id = id
-		c.addIndex(idx.Name, idx.Id)
-	}
+	var err error
 
 	for _, idx := range schFactory.Indexes.GetIndexes() {
-		// now we have all indexes with dictionary encoded values, set it in the index struct
-		if id, ok := c.idxNameToId[idx.Name]; ok {
-			idx.Id = id
+		meta, ok := c.idxMeta[idx.Name]
+		if !ok {
+			// these are the new indexes present in the new collection
+			meta, err = tenant.metaStore.CreateIndex(ctx, tx, idx.Name, tenant.namespace.Id(), database.id, c.id)
+			if err != nil {
+				return err
+			}
+			c.addIndex(idx.Name, meta)
 		}
+
+		idx.Id = meta.ID
 	}
 
 	existingCollection := c.collection
+
 	// now validate if the new collection(schema) conforms to the backward compatibility rules.
 	if err := schema.ApplySchemaRules(existingCollection, schFactory); err != nil {
 		return err
@@ -1363,7 +1302,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 	collection.EncodedName = encName
 
 	// recreating collection holder is fine because we are working on databaseClone and also has a lock on the tenant
-	database.collections[schFactory.Name] = newCollectionHolder(c.id, schFactory.Name, collection, c.idxNameToId)
+	database.collections[schFactory.Name] = newCollectionHolder(c.id, schFactory.Name, collection, c.idxMeta)
 
 	if config.DefaultConfig.Search.WriteEnabled {
 		// update indexing store schema if there is a change
@@ -1407,12 +1346,12 @@ func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db 
 		return errors.NotFound("collection doesn't exists '%s'", collectionName)
 	}
 
-	if err := tenant.metaStore.DropCollection(ctx, tx, cHolder.name, tenant.namespace.Id(), db.id, cHolder.id); err != nil {
+	if err := tenant.metaStore.DropCollection(ctx, tx, cHolder.name, tenant.namespace.Id(), db.id); err != nil {
 		return err
 	}
 
-	for idxName, idxId := range cHolder.idxNameToId {
-		if err := tenant.metaStore.DropIndex(ctx, tx, idxName, tenant.namespace.Id(), db.id, cHolder.id, idxId); err != nil {
+	for idxName := range cHolder.idxMeta {
+		if err := tenant.metaStore.DropIndex(ctx, tx, idxName, tenant.namespace.Id(), db.id, cHolder.id); err != nil {
 			return err
 		}
 	}
@@ -1639,6 +1578,10 @@ func (d *Database) BranchName() string {
 	return d.name.Branch()
 }
 
+func (d *Database) SameBranch(branch string) bool {
+	return d.BranchName() == branch || branch == "" && !d.IsBranch()
+}
+
 func (d *Database) IsBranch() bool {
 	return !d.name.IsMainBranch()
 }
@@ -1653,16 +1596,16 @@ type collectionHolder struct {
 	name string
 	// collection
 	collection *schema.DefaultCollection
-	// idxNameToId is a map storing dictionary encoding values of all the indexes that are part of this collection.
-	idxNameToId map[string]uint32
+	// idxMeta is a map storing metadata of all the indexes that are part of this collection.
+	idxMeta map[string]*IndexMetadata
 }
 
-func newCollectionHolder(id uint32, name string, collection *schema.DefaultCollection, idxNameToId map[string]uint32) *collectionHolder {
+func newCollectionHolder(id uint32, name string, collection *schema.DefaultCollection, idxMeta map[string]*IndexMetadata) *collectionHolder {
 	return &collectionHolder{
-		id:          id,
-		name:        name,
-		collection:  collection,
-		idxNameToId: idxNameToId,
+		id:         id,
+		name:       name,
+		collection: collection,
+		idxMeta:    idxMeta,
 	}
 }
 
@@ -1681,7 +1624,7 @@ func (c *collectionHolder) clone() *collectionHolder {
 		c.id,
 		c.name,
 		schema.Versions{{Version: c.collection.SchVer, Schema: c.collection.Schema}},
-		c.idxNameToId,
+		c.idxMeta,
 		implicitIndex.StoreIndexName(),
 		implicitIndex.StoreSchema.Fields,
 	)
@@ -1692,9 +1635,10 @@ func (c *collectionHolder) clone() *collectionHolder {
 	copyC.collection.SchemaDeltas = c.collection.SchemaDeltas
 	copyC.collection.EncodedName = c.collection.EncodedName
 
-	copyC.idxNameToId = make(map[string]uint32)
-	for k, v := range c.idxNameToId {
-		copyC.idxNameToId[k] = v
+	copyC.idxMeta = make(map[string]*IndexMetadata)
+	for k, v := range c.idxMeta {
+		m := *v
+		copyC.idxMeta[k] = &m
 	}
 
 	copyC.collection.SearchIndexes = make(map[string]*schema.SearchIndex)
@@ -1705,11 +1649,11 @@ func (c *collectionHolder) clone() *collectionHolder {
 	return &copyC
 }
 
-func (c *collectionHolder) addIndex(name string, id uint32) {
+func (c *collectionHolder) addIndex(name string, idx *IndexMetadata) {
 	c.Lock()
 	defer c.Unlock()
 
-	c.idxNameToId[name] = id
+	c.idxMeta[name] = idx
 }
 
 // get returns the collection managed by this holder. At this point, a Collection object is safely constructed
@@ -1722,7 +1666,7 @@ func (c *collectionHolder) get() *schema.DefaultCollection {
 	return c.collection
 }
 
-func createCollection(id uint32, name string, schemas schema.Versions, idxNameToId map[string]uint32,
+func createCollection(id uint32, name string, schemas schema.Versions, idxMeta map[string]*IndexMetadata,
 	searchCollectionName string, fieldsInSearch []tsApi.Field,
 ) (*schema.DefaultCollection, error) {
 	schFactory, err := schema.Build(name, schemas.Latest().Schema)
@@ -1732,11 +1676,12 @@ func createCollection(id uint32, name string, schemas schema.Versions, idxNameTo
 
 	indexes := schFactory.Indexes.GetIndexes()
 	for _, index := range indexes {
-		id, ok := idxNameToId[index.Name]
+		idx, ok := idxMeta[index.Name]
 		if !ok {
 			return nil, errors.NotFound("dictionary encoding is missing for index '%s'", index.Name)
 		}
-		index.Id = id
+
+		index.Id = idx.ID
 	}
 
 	schFactory.Schema = schemas.Latest().Schema
@@ -1795,31 +1740,31 @@ func (s *Search) GetIndexes() []*schema.SearchIndex {
 
 func isSchemaEq(s1, s2 []byte) (bool, error) {
 	var j, j2 interface{}
+
 	if err := jsoniter.Unmarshal(s1, &j); err != nil {
 		return false, err
 	}
+
 	if err := jsoniter.Unmarshal(s2, &j2); err != nil {
 		return false, err
 	}
+
 	return reflect.DeepEqual(j2, j), nil
 }
 
 // NewTestTenantMgr creates new TenantManager for tests.
-func NewTestTenantMgr(kvStore kv.KeyValueStore) (*TenantManager, context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+func NewTestTenantMgr(t *testing.T, kvStore kv.KeyValueStore) (*TenantManager, context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
 
-	m := newTenantManager(kvStore, &search.NoopStore{}, &NameRegistry{
-		ReserveSB:  fmt.Sprintf("test_tenant_reserve_%x", rand.Uint64()),       //nolint:gosec
-		EncodingSB: fmt.Sprintf("test_tenant_encoding_%x", rand.Uint64()),      //nolint:gosec
-		SchemaSB:   fmt.Sprintf("test_tenant_schema_%x", rand.Uint64()),        //nolint:gosec
-		SearchSB:   fmt.Sprintf("test_tenant_search_schema_%x", rand.Uint64()), //nolint:gosec
-	},
-		transaction.NewManager(kvStore),
-	)
+	m := newTenantManager(kvStore, &search.NoopStore{}, newTestNameRegistry(t), transaction.NewManager(kvStore))
 
 	_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	_ = kvStore.DropTable(ctx, m.mdNameRegistry.EncodingSubspaceName())
 	_ = kvStore.DropTable(ctx, m.mdNameRegistry.SchemaSubspaceName())
+	_ = kvStore.DropTable(ctx, m.mdNameRegistry.NamespaceSubspaceName())
+	_ = kvStore.DropTable(ctx, m.mdNameRegistry.SearchSchemaSubspaceName())
+	_ = kvStore.DropTable(ctx, m.mdNameRegistry.UserSubspaceName())
+	_ = kvStore.DropTable(ctx, m.mdNameRegistry.ClusterSubspaceName())
 
 	return m, ctx, cancel
 }

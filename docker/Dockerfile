@@ -18,7 +18,11 @@ COPY go.mod /build
 WORKDIR /build
 RUN go mod download
 COPY . /build
-RUN --mount=type=cache,target=/root/.cache/go-build rm -f server/service && make bins
+
+# This is used to compile with integration coverage enabled
+ARG BUILD_PARAM_ARG
+
+RUN --mount=type=cache,target=/root/.cache/go-build rm -f server/service && BUILD_PARAM=${BUILD_PARAM_ARG} make bins
 
 
 FROM ubuntu:20.04 AS server

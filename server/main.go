@@ -16,7 +16,9 @@ package main
 
 import (
 	"os"
+	"os/signal"
 	"runtime"
+	"syscall"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/server/config"
@@ -34,6 +36,16 @@ import (
 )
 
 func main() {
+	sigs := make(chan os.Signal, 1)
+
+	signal.Notify(sigs, syscall.SIGTERM)
+
+	go func() {
+		<-sigs
+
+		os.Exit(0)
+	}()
+
 	os.Exit(mainWithCode())
 }
 

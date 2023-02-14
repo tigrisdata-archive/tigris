@@ -117,23 +117,23 @@ func (m *SessionManagerWithMetrics) executeWithRetry(ctx context.Context, runner
 	return
 }
 
-func NewSessionManager(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, versionH *metadata.VersionHandler, listeners []TxListener, tenantTracker *metadata.CacheTracker) *SessionManager {
+func NewSessionManager(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, listeners []TxListener, tenantTracker *metadata.CacheTracker) *SessionManager {
 	return &SessionManager{
 		txMgr:         txMgr,
 		tenantMgr:     tenantMgr,
-		versionH:      versionH,
+		versionH:      tenantMgr.GetVersionHandler(),
 		tracker:       newSessionTracker(),
 		txListeners:   listeners,
 		tenantTracker: tenantTracker,
 	}
 }
 
-func NewSessionManagerWithMetrics(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, versionH *metadata.VersionHandler, listeners []TxListener, tenantTracker *metadata.CacheTracker) *SessionManagerWithMetrics {
+func NewSessionManagerWithMetrics(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, listeners []TxListener, tenantTracker *metadata.CacheTracker) *SessionManagerWithMetrics {
 	return &SessionManagerWithMetrics{
 		&SessionManager{
 			txMgr:         txMgr,
 			tenantMgr:     tenantMgr,
-			versionH:      versionH,
+			versionH:      tenantMgr.GetVersionHandler(),
 			tracker:       newSessionTracker(),
 			txListeners:   listeners,
 			tenantTracker: tenantTracker,

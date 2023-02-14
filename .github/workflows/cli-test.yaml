@@ -6,6 +6,7 @@ on:
       - "!alpha"
       - "!beta"
       - "!rc"
+      - "main"
   workflow_call:
   pull_request:
 jobs:
@@ -17,6 +18,12 @@ jobs:
         with:
           submodules: true
 
+      # temporary. remove once ubuntu-latest runner includes Go1.20
+      - name: Install Go 1.20
+        run: |
+          rm -rf /usr/local/go
+          sudo /bin/bash scripts/install_go.sh
+
       - name: Install CLI
         run: |
           curl -sSL https://tigris.dev/cli-linux | sudo tar -xz -C .
@@ -24,7 +31,15 @@ jobs:
       - name: Start Tigris server
         run: |
           make run
-          sleep 20
+          TIGRIS_URL=localhost:8081 ./tigris ping --timeout 20s
 
       - name: Run CLI tests
         run: noup=1 /bin/bash test/v1/cli/main.sh
+
+      - name: Dump integration tests coverage
+        run: sudo make dump_integration_coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage1.out

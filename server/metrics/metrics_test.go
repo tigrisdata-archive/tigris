@@ -38,8 +38,8 @@ func TestInitializeMetrics(t *testing.T) {
 		// Will panic if the high level structure cannot be created
 		InitializeMetrics()
 
-		SchemaReadOutdated("proj1", "coll1")
-		SchemaUpdateRepaired("proj1", "coll1")
+		SchemaReadOutdated("proj1", "branch1", "coll1")
+		SchemaUpdateRepaired("proj1", "branch1", "coll1")
 	})
 }
 

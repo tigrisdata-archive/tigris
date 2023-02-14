@@ -24,7 +24,7 @@ setup: deps
 test: docker_test
 
 # Start local Tigris instance in the docker.
-run:
+run: coverdir
 	$(DOCKER_COMPOSE) up --build --detach tigris_server2
 
 # Dump logs of local Tigris instance started by `run`.
@@ -52,7 +52,7 @@ local_rt_run: server
 
 # Runs tigris server and foundationdb, plus additional tools for it like:
 # - prometheus and grafana for monitoring
-run_full:
+run_full: coverdir
 	${DOCKER_COMPOSE} up --build --detach tigris_grafana tigris_jaeger
 	./${DOCKER_DIR}/grafana/set_admin_password.sh
 	./${DOCKER_DIR}/grafana/add_victoriametrics_datasource.sh
@@ -68,7 +68,7 @@ clean:
 	rm -f server/service api/server/${V}/*.pb.go \
 		api/server/${V}/*.pb.gw.go \
 
-docker_test:
+docker_test: coverdir
 	$(DOCKER_COMPOSE) up --build tigris_test tigris_test
 	@[ $$(docker inspect tigris_test --format='{{.State.ExitCode}}') = "0" ]
 
@@ -95,6 +95,9 @@ ${PROTO_DIR}/%_openapi.yaml ${GEN_DIR}/%.pb.go ${GEN_DIR}/%.pb.gw.go: ${PROTO_DI
 ${DATA_PROTO_DIR}/%.pb.go: ${DATA_PROTO_DIR}/%.proto
 	protoc -I${DATA_PROTO_DIR} --go_out=${DATA_PROTO_DIR} --go_opt=paths=source_relative $<
 
+coverdir:
+	mkdir -p /tmp/tigris_coverdata && chmod a+w /tmp/tigris_coverdata; rm -f /tmp/tigris_coverdata/*
+
 generate: ${GEN_DIR}/api.pb.go ${GEN_DIR}/api.pb.gw.go ${GEN_DIR}/health.pb.go ${GEN_DIR}/health.pb.gw.go ${GEN_DIR}/admin.pb.go ${GEN_DIR}/admin.pb.gw.go ${DATA_PROTO_DIR}/data.pb.go
 
 # Build the server binary.
@@ -111,3 +114,9 @@ upgrade_api:
 # This is used to update https://hub.docker.com/repository/docker/tigrisdata/tigris-build-base
 build_and_push_base_docker:
 	docker buildx build -t tigrisdata/tigris-build-base:latest --platform linux/amd64,linux/arm64 --push -f docker/Dockerfile.base .
+
+# This is used in CI workflows
+dump_integration_coverage:
+	pkill -SIGTERM -f "/server/service" --exact
+	sleep 5
+	/usr/local/go/bin/go tool covdata textfmt -i=/tmp/tigris_coverdata/ -o coverage1.out

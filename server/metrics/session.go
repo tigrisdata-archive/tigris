@@ -33,6 +33,7 @@ func getSessionOkTagKeys() []string {
 		"env",
 		"db",
 		"project",
+		"branch",
 		"collection",
 		"session_method",
 	}
@@ -46,6 +47,7 @@ func getSessionErrorTagKeys() []string {
 		"env",
 		"db",
 		"project",
+		"branch",
 		"collection",
 		"error_source",
 		"error_value",

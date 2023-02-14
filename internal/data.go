@@ -102,11 +102,11 @@ func NewTableDataWithTS(createdAt *Timestamp, updatedAt *Timestamp, data []byte)
 	}
 }
 
-func NewTableDataWithEncoding(data []byte, encoding int32) *TableData {
+func NewTableDataWithVersion(data []byte, version int32) *TableData {
 	return &TableData{
 		CreatedAt: NewTimestamp(),
 		RawData:   data,
-		Encoding:  encoding,
+		Ver:       version,
 	}
 }
 

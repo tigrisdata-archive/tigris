@@ -117,6 +117,7 @@ type JSONSchema struct {
 	PrimaryKeys     []string            `json:"primary_key,omitempty"`
 	CollectionType  string              `json:"collection_type,omitempty"`
 	IndexingVersion string              `json:"indexing_version,omitempty"`
+	Version         int32               `json:"version,omitempty"`
 }
 
 // Factory is used as an intermediate step so that collection can be initialized with properly encoded values.
@@ -134,6 +135,7 @@ type Factory struct {
 	// CollectionType is the type of the collection. Only two types of collections are supported "messages" and "documents"
 	CollectionType  CollectionType
 	IndexingVersion string
+	Version         int32
 }
 
 func RemoveIndexingVersion(schema jsoniter.RawMessage) jsoniter.RawMessage {
@@ -233,6 +235,7 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 		Schema:          reqSchema,
 		CollectionType:  cType,
 		IndexingVersion: schema.IndexingVersion,
+		Version:         schema.Version,
 	}, nil
 }
 

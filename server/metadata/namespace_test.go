@@ -30,20 +30,22 @@ var testNSPayload = []byte(`{
 	"contact": "abc@abc.com"
 }`)
 
-func initNSTest(t *testing.T) (*NamespaceSubspace, transaction.Tx) {
+func initNSTest(t *testing.T) (*NamespaceSubspace, transaction.Tx, func()) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	n := NewNamespaceStore(&NameRegistry{
-		NamespaceSB: "test_namespace",
-	})
+	n := NewNamespaceStore(newTestNameRegistry(t))
 	_ = kvStore.DropTable(ctx, n.SubspaceName)
 
 	tm := transaction.NewManager(kvStore)
 	tx, err := tm.StartTx(ctx)
 	require.NoError(t, err)
 
-	return n, tx
+	return n, tx, func() {
+		assert.NoError(t, tx.Rollback(ctx))
+
+		_ = kvStore.DropTable(ctx, n.SubspaceName)
+	}
 }
 
 func TestNamespacesSubspace(t *testing.T) {
@@ -51,54 +53,48 @@ func TestNamespacesSubspace(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		n, tx := initNSTest(t)
-		defer func() { assert.NoError(t, tx.Rollback(ctx)) }()
+		n, tx, cleanup := initNSTest(t)
+		defer cleanup()
 
 		require.Equal(t, errors.InvalidArgument("invalid empty metadataKey"), n.InsertNamespaceMetadata(ctx, tx, 1, "", testNSPayload))
 		require.Equal(t, errors.InvalidArgument("invalid nil payload"), n.InsertNamespaceMetadata(ctx, tx, 1, "some-valid-metadata-id", nil))
 		require.Equal(t, errors.InvalidArgument("invalid namespace, id must be greater than 0"), n.InsertNamespaceMetadata(ctx, tx, 0, "meta-key-1", testNSPayload))
 		require.Equal(t, errors.InvalidArgument("invalid metadataKey. "+dbKey+" is reserved"), n.InsertNamespaceMetadata(ctx, tx, 1, dbKey, testNSPayload))
 		require.Equal(t, errors.InvalidArgument("invalid metadataKey. "+namespaceKey+" is reserved"), n.InsertNamespaceMetadata(ctx, tx, 1, namespaceKey, testNSPayload))
-
-		_ = kvStore.DropTable(ctx, n.SubspaceName)
 	})
 
 	t.Run("put_get_1", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		n, tx := initNSTest(t)
-		defer func() { assert.NoError(t, tx.Rollback(ctx)) }()
+		n, tx, cleanup := initNSTest(t)
+		defer cleanup()
 
 		require.NoError(t, n.InsertNamespaceMetadata(ctx, tx, 1, "meta-key-1", testNSPayload))
 		value, err := n.GetNamespaceMetadata(ctx, tx, 1, "meta-key-1")
 		require.NoError(t, err)
 		require.Equal(t, testNSPayload, value)
-
-		_ = kvStore.DropTable(ctx, n.SubspaceName)
 	})
 
 	t.Run("put_get_2", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		n, tx := initNSTest(t)
-		defer func() { assert.NoError(t, tx.Rollback(ctx)) }()
+		n, tx, cleanup := initNSTest(t)
+		defer cleanup()
 
 		require.NoError(t, n.InsertNamespaceMetadata(ctx, tx, 1, "meta-key-1", testNSPayload))
 		value, err := n.GetNamespaceMetadata(ctx, tx, 1, "meta-key-1")
 		require.NoError(t, err)
 		require.Equal(t, testNSPayload, value)
-
-		_ = kvStore.DropTable(ctx, n.SubspaceName)
 	})
 
 	t.Run("put_get_update_get", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		n, tx := initNSTest(t)
-		defer func() { assert.NoError(t, tx.Rollback(ctx)) }()
+		n, tx, cleanup := initNSTest(t)
+		defer cleanup()
 
 		require.NoError(t, n.InsertNamespaceMetadata(ctx, tx, 1, "meta-key-1", testNSPayload))
 		value, err := n.GetNamespaceMetadata(ctx, tx, 1, "meta-key-1")
@@ -113,16 +109,14 @@ func TestNamespacesSubspace(t *testing.T) {
 		value, err = n.GetNamespaceMetadata(ctx, tx, 1, "meta-key-1")
 		require.NoError(t, err)
 		require.Equal(t, updatedNamespacePayload, value)
-
-		_ = kvStore.DropTable(ctx, n.SubspaceName)
 	})
 
 	t.Run("put_get_delete_namespace_get", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		n, tx := initNSTest(t)
-		defer func() { assert.NoError(t, tx.Rollback(ctx)) }()
+		n, tx, cleanup := initNSTest(t)
+		defer cleanup()
 
 		metaVal1 := []byte(`{
 								"meta-key-1": "val1",
@@ -147,23 +141,19 @@ func TestNamespacesSubspace(t *testing.T) {
 
 		require.NoError(t, n.DeleteNamespace(ctx, tx, 1))
 
-		metaValRetrieved, err = n.GetNamespaceMetadata(ctx, tx, 1, "meta-key-1")
-		require.NoError(t, err)
-		require.Nil(t, metaValRetrieved)
+		_, err = n.GetNamespaceMetadata(ctx, tx, 1, "meta-key-1")
+		require.Equal(t, errors.ErrNotFound, err)
 
-		metaValRetrieved, err = n.GetNamespaceMetadata(ctx, tx, 1, "meta-key-2")
-		require.NoError(t, err)
-		require.Nil(t, metaValRetrieved)
-
-		_ = kvStore.DropTable(ctx, n.SubspaceName)
+		_, err = n.GetNamespaceMetadata(ctx, tx, 1, "meta-key-2")
+		require.Equal(t, errors.ErrNotFound, err)
 	})
 
 	t.Run("put_get_delete_get", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		n, tx := initNSTest(t)
-		defer func() { assert.NoError(t, tx.Rollback(ctx)) }()
+		n, tx, cleanup := initNSTest(t)
+		defer cleanup()
 
 		require.NoError(t, n.InsertNamespaceMetadata(ctx, tx, 1, "meta-key-1", testNSPayload))
 		value, err := n.GetNamespaceMetadata(ctx, tx, 1, "meta-key-1")
@@ -171,22 +161,20 @@ func TestNamespacesSubspace(t *testing.T) {
 		require.Equal(t, testNSPayload, value)
 
 		require.NoError(t, n.DeleteNamespaceMetadata(ctx, tx, 1, "meta-key-1"))
-		value, err = n.GetNamespaceMetadata(ctx, tx, 1, "meta-key-1")
-		require.NoError(t, err)
-		require.Nil(t, value)
 
-		_ = kvStore.DropTable(ctx, n.SubspaceName)
+		_, err = n.GetNamespaceMetadata(ctx, tx, 1, "meta-key-1")
+		require.Equal(t, errors.ErrNotFound, err)
 	})
 
 	t.Run("database_metadata_put_error", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		n, tx := initNSTest(t)
-		defer func() { assert.NoError(t, tx.Rollback(ctx)) }()
+		n, tx, cleanup := initNSTest(t)
+		defer cleanup()
 
 		dbMetadata := &ProjectMetadata{
-			Id:        1,
+			ID:        1,
 			Creator:   "google|123",
 			CreatedAt: 1668733841287,
 		}
@@ -194,18 +182,17 @@ func TestNamespacesSubspace(t *testing.T) {
 		require.Equal(t, errors.InvalidArgument("invalid projName, projName must not be blank"), n.InsertProjectMetadata(ctx, tx, 1, "", dbMetadata))
 		require.Equal(t, errors.InvalidArgument("invalid projMetadata, projMetadata must not be nil"), n.InsertProjectMetadata(ctx, tx, 1, "valid-db-name", nil))
 		require.Equal(t, errors.InvalidArgument("invalid namespace, id must be greater than 0"), n.InsertProjectMetadata(ctx, tx, 0, "valid-db-name", dbMetadata))
-		_ = kvStore.DropTable(ctx, n.SubspaceName)
 	})
 
 	t.Run("database_metadata_put_get_1", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		n, tx := initNSTest(t)
-		defer func() { assert.NoError(t, tx.Rollback(ctx)) }()
+		n, tx, cleanup := initNSTest(t)
+		defer cleanup()
 
 		dbMetadata := &ProjectMetadata{
-			Id:        1,
+			ID:        1,
 			Creator:   "google|123",
 			CreatedAt: 1668733841287,
 		}
@@ -214,18 +201,17 @@ func TestNamespacesSubspace(t *testing.T) {
 		value, err := n.GetProjectMetadata(ctx, tx, 1, "db-name")
 		require.NoError(t, err)
 		require.Equal(t, dbMetadata, value)
-		_ = kvStore.DropTable(ctx, n.SubspaceName)
 	})
 
 	t.Run("database_metadata_put_get_delete_get", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		n, tx := initNSTest(t)
-		defer func() { assert.NoError(t, tx.Rollback(ctx)) }()
+		n, tx, cleanup := initNSTest(t)
+		defer cleanup()
 
 		dbMetadata := &ProjectMetadata{
-			Id:        1,
+			ID:        1,
 			Creator:   "google|123",
 			CreatedAt: 1668733841287,
 		}
@@ -238,22 +224,19 @@ func TestNamespacesSubspace(t *testing.T) {
 		err = n.DeleteProjectMetadata(ctx, tx, 1, "db-name")
 		require.NoError(t, err)
 
-		val, err := n.GetProjectMetadata(ctx, tx, 1, "db-name")
-		require.NoError(t, err)
-		require.Nil(t, val)
-
-		_ = kvStore.DropTable(ctx, n.SubspaceName)
+		_, err = n.GetProjectMetadata(ctx, tx, 1, "db-name")
+		require.Equal(t, errors.ErrNotFound, err)
 	})
 
 	t.Run("database_metadata_put_get_update_get", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		n, tx := initNSTest(t)
-		defer func() { assert.NoError(t, tx.Rollback(ctx)) }()
+		n, tx, cleanup := initNSTest(t)
+		defer cleanup()
 
 		dbMetadata := &ProjectMetadata{
-			Id:        1,
+			ID:        1,
 			Creator:   "google|123",
 			CreatedAt: 1668733841287,
 		}
@@ -264,7 +247,7 @@ func TestNamespacesSubspace(t *testing.T) {
 		require.Equal(t, dbMetadata, value)
 
 		dbMetadata2 := &ProjectMetadata{
-			Id:        1,
+			ID:        1,
 			Creator:   "google|456",
 			CreatedAt: 1668733841287,
 		}
@@ -275,6 +258,5 @@ func TestNamespacesSubspace(t *testing.T) {
 		value, err = n.GetProjectMetadata(ctx, tx, 1, "db-name")
 		require.NoError(t, err)
 		require.Equal(t, dbMetadata2, value)
-		_ = kvStore.DropTable(ctx, n.SubspaceName)
 	})
 }

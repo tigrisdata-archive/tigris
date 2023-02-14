@@ -28,6 +28,8 @@ type Tx struct {
 	Ops []*kv.Event
 }
 
+const cdcValueVersion = 1
+
 func (p *Publisher) OnCommit(ctx context.Context, tx transaction.Tx, listener kv.EventListener) error {
 	events := listener.GetEvents()
 	if len(events) == 0 {
@@ -46,7 +48,7 @@ func (p *Publisher) OnCommit(ctx context.Context, tx transaction.Tx, listener kv
 		return err
 	}
 
-	td := internal.NewTableDataWithEncoding(json, int32(internal.JsonEncoding))
+	td := internal.NewTableDataWithVersion(json, cdcValueVersion)
 	enc, err := internal.Encode(td)
 	if err != nil {
 		return err

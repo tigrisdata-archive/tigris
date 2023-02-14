@@ -18,102 +18,122 @@ import (
 	"context"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/server/transaction"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
+
+// CollectionMetadata contains collection wide metadata.
+type CollectionMetadata struct {
+	ID uint32 `json:"id,omitempty"`
+}
 
 // CollectionSubspace is used to store metadata about Tigris collections.
 type CollectionSubspace struct {
 	metadataSubspace
 }
 
-// CollectionMetadata contains collection wide metadata.
-type CollectionMetadata struct {
-	OldestSchemaVersion int32
-}
+const collMetaValueVersion int32 = 1
 
-var collectionVersion = []byte{0x01}
-
-func NewCollectionStore(nameRegistry *NameRegistry) *CollectionSubspace {
+func newCollectionStore(nameRegistry *NameRegistry) *CollectionSubspace {
 	return &CollectionSubspace{
 		metadataSubspace{
-			SubspaceName: nameRegistry.CollectionSubspaceName(),
-			Version:      collectionVersion,
+			SubspaceName: nameRegistry.EncodingSubspaceName(),
+			KeyVersion:   []byte{encKeyVersion},
 		},
 	}
 }
 
-func (c *CollectionSubspace) getKey(nsID uint32, dbID uint32, collID uint32) keys.Key {
-	return keys.NewKey(c.SubspaceName, schVersion, UInt32ToByte(nsID), UInt32ToByte(dbID), UInt32ToByte(collID), keyEnd)
+func (c *CollectionSubspace) getKey(nsID uint32, dbID uint32, name string) keys.Key {
+	if name == "" {
+		return keys.NewKey(c.SubspaceName, c.KeyVersion, UInt32ToByte(nsID), UInt32ToByte(dbID), collectionKey)
+	}
+
+	return keys.NewKey(c.SubspaceName, c.KeyVersion, UInt32ToByte(nsID), UInt32ToByte(dbID), collectionKey, name, keyEnd)
 }
 
-func (c *CollectionSubspace) Insert(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, collID uint32, metadata *CollectionMetadata) error {
-	if err := c.validateArgs(nsID, dbID, collID, &metadata); err != nil {
-		return err
-	}
-
-	payload, err := jsoniter.Marshal(metadata)
-	if ulog.E(err) {
-		return errors.Internal("failed to marshal collection metadata")
-	}
-
+func (c *CollectionSubspace) insert(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, name string,
+	metadata *CollectionMetadata,
+) error {
 	return c.insertMetadata(ctx, tx,
-		nil,
-		c.getKey(nsID, dbID, collID),
-		payload,
+		c.validateArgs(nsID, dbID, name, &metadata),
+		c.getKey(nsID, dbID, name),
+		collMetaValueVersion,
+		metadata,
 	)
 }
 
-func (c *CollectionSubspace) Get(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, collID uint32) (*CollectionMetadata, error) {
-	payload, err := c.getMetadata(ctx, tx,
-		c.validateArgs(nsID, dbID, collID, nil),
-		c.getKey(nsID, dbID, collID),
-	)
-	if err != nil {
-		return nil, err
+func (c *CollectionSubspace) decodeMetadata(_ string, payload *internal.TableData) (*CollectionMetadata, error) {
+	if payload == nil {
+		return nil, errors.ErrNotFound
 	}
 
-	if payload == nil {
-		return nil, nil
+	if payload.Ver == 0 {
+		return &CollectionMetadata{ID: ByteToUInt32(payload.RawData)}, nil
 	}
 
 	var metadata CollectionMetadata
-	if err = jsoniter.Unmarshal(payload, &metadata); ulog.E(err) {
+	if err := jsoniter.Unmarshal(payload.RawData, &metadata); ulog.E(err) {
 		return nil, errors.Internal("failed to unmarshal collection metadata")
 	}
 
 	return &metadata, nil
 }
 
-func (c *CollectionSubspace) Update(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, collID uint32, metadata *CollectionMetadata) error {
-	if err := c.validateArgs(nsID, dbID, collID, &metadata); err != nil {
-		return err
+func (c *CollectionSubspace) Get(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, name string,
+) (*CollectionMetadata, error) {
+	payload, err := c.getPayload(ctx, tx,
+		c.validateArgs(nsID, dbID, name, nil),
+		c.getKey(nsID, dbID, name),
+	)
+	if err != nil {
+		return nil, err
 	}
 
-	payload, err := jsoniter.Marshal(metadata)
-	if ulog.E(err) {
-		return errors.Internal("failed to marshal collection metadata")
-	}
+	return c.decodeMetadata(name, payload)
+}
 
+func (c *CollectionSubspace) Update(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, name string,
+	metadata *CollectionMetadata,
+) error {
 	return c.updateMetadata(ctx, tx,
-		nil,
-		c.getKey(nsID, dbID, collID),
-		payload,
+		c.validateArgs(nsID, dbID, name, &metadata),
+		c.getKey(nsID, dbID, name),
+		collMetaValueVersion,
+		metadata,
 	)
 }
 
-func (c *CollectionSubspace) Delete(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, collID uint32) error {
+func (c *CollectionSubspace) delete(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, name string,
+) error {
 	return c.deleteMetadata(ctx, tx,
-		c.validateArgs(nsID, dbID, collID, nil),
-		c.getKey(nsID, dbID, collID),
+		c.validateArgs(nsID, dbID, name, nil),
+		c.getKey(nsID, dbID, name),
 	)
 }
 
-func (u *CollectionSubspace) validateArgs(nsID uint32, dbID uint32, collID uint32, metadata **CollectionMetadata) error {
-	if nsID == 0 || dbID == 0 || collID == 0 {
+func (c *CollectionSubspace) softDelete(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, name string,
+) error {
+	newKey := keys.NewKey(c.SubspaceName, c.KeyVersion, UInt32ToByte(nsID), UInt32ToByte(dbID), collectionKey, name,
+		keyDroppedEnd)
+
+	return c.softDeleteMetadata(ctx, tx,
+		c.validateArgs(nsID, dbID, name, nil),
+		c.getKey(nsID, dbID, name),
+		newKey,
+	)
+}
+
+func (_ *CollectionSubspace) validateArgs(nsID uint32, dbID uint32, name string, metadata **CollectionMetadata) error {
+	if nsID == 0 || dbID == 0 {
 		return errors.InvalidArgument("invalid id")
+	}
+
+	if name == "" {
+		return errors.InvalidArgument("empty collection name")
 	}
 
 	if metadata != nil && *metadata == nil {
@@ -121,4 +141,43 @@ func (u *CollectionSubspace) validateArgs(nsID uint32, dbID uint32, collID uint3
 	}
 
 	return nil
+}
+
+func (c *CollectionSubspace) list(ctx context.Context, tx transaction.Tx, namespaceId uint32, databaseId uint32,
+) (map[string]*CollectionMetadata, error) {
+	collections := make(map[string]*CollectionMetadata)
+	droppedCollections := make(map[string]uint32)
+
+	if err := c.listMetadata(ctx, tx, c.getKey(namespaceId, databaseId, ""), 6,
+		func(dropped bool, name string, data *internal.TableData) error {
+			cm, err := c.decodeMetadata(name, data)
+			if err != nil {
+				return err
+			}
+
+			if dropped {
+				droppedCollections[name] = cm.ID
+			} else {
+				collections[name] = cm
+			}
+
+			return nil
+		},
+	); err != nil {
+		return nil, err
+	}
+
+	// retrogression check; if created and dropped both exists then the created id should be greater than dropped id
+	log.Debug().Uint32("db", databaseId).Interface("list", droppedCollections).Msg("dropped collections")
+	log.Debug().Uint32("db", databaseId).Interface("list", collections).Msg("created collections")
+
+	for droppedC, droppedValue := range droppedCollections {
+		if createdValue, ok := collections[droppedC]; ok && droppedValue >= createdValue.ID {
+			return nil, errors.Internal(
+				"retrogression found in collection assigned value collection [%s] droppedValue [%d] createdValue [%d]",
+				droppedC, droppedValue, createdValue.ID)
+		}
+	}
+
+	return collections, nil
 }

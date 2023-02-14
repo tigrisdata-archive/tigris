@@ -15,7 +15,6 @@
 package metadata
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -42,7 +41,7 @@ var (
 
 func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 	t.Run("create_tenant", func(t *testing.T) {
-		m, ctx, cancel := NewTestTenantMgr(kvStore)
+		m, ctx, cancel := NewTestTenantMgr(t, kvStore)
 		defer cancel()
 
 		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
@@ -57,7 +56,7 @@ func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 	})
 
 	t.Run("create_multiple_tenants", func(t *testing.T) {
-		m, ctx, cancel := NewTestTenantMgr(kvStore)
+		m, ctx, cancel := NewTestTenantMgr(t, kvStore)
 		defer cancel()
 
 		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
@@ -83,7 +82,7 @@ func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
 	t.Run("create_duplicate_tenant_error", func(t *testing.T) {
-		m, ctx, cancel := NewTestTenantMgr(kvStore)
+		m, ctx, cancel := NewTestTenantMgr(t, kvStore)
 		defer cancel()
 
 		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
@@ -96,7 +95,7 @@ func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
 	t.Run("create_duplicate_tenant_id_error", func(t *testing.T) {
-		m, ctx, cancel := NewTestTenantMgr(kvStore)
+		m, ctx, cancel := NewTestTenantMgr(t, kvStore)
 		defer cancel()
 
 		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
@@ -114,9 +113,10 @@ func TestTenantManager_CreateOrGetTenant(t *testing.T) {
 }
 
 func TestTenantManager_CreateTenant(t *testing.T) {
-	tm := transaction.NewManager(kvStore)
 	t.Run("create_tenant", func(t *testing.T) {
-		m, ctx, cancel := NewTestTenantMgr(kvStore)
+		tm := transaction.NewManager(kvStore)
+
+		m, ctx, cancel := NewTestTenantMgr(t, kvStore)
 		defer cancel()
 
 		tx, e := tm.StartTx(ctx)
@@ -127,10 +127,15 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		require.NoError(t, err)
 		metadata := namespaces["ns-test1"]
 		require.Equal(t, uint32(2), metadata.Id)
+		require.NoError(t, tx.Commit(ctx))
+
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
+
 	t.Run("create_multiple_tenants", func(t *testing.T) {
-		m, ctx, cancel := NewTestTenantMgr(kvStore)
+		tm := transaction.NewManager(kvStore)
+
+		m, ctx, cancel := NewTestTenantMgr(t, kvStore)
 		defer cancel()
 
 		tx, e := tm.StartTx(ctx)
@@ -149,10 +154,15 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 
 		metadata = namespaces["ns-test2"]
 		require.Equal(t, uint32(3), metadata.Id)
+
+		require.NoError(t, tx.Commit(ctx))
+
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
 	t.Run("create_duplicate_tenant_error", func(t *testing.T) {
-		m, ctx, cancel := NewTestTenantMgr(kvStore)
+		tm := transaction.NewManager(kvStore)
+
+		m, ctx, cancel := NewTestTenantMgr(t, kvStore)
 		defer cancel()
 
 		tx, e := tm.StartTx(ctx)
@@ -164,10 +174,14 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		_, err = m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test1", 3, NewNamespaceMetadata(3, "ns-test1", "ns-test1-display_name")})
 		require.Equal(t, "namespace with same name already exists with id '2'", err.(*api.TigrisError).Error())
 
+		require.NoError(t, tx.Commit(ctx))
+
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
 	t.Run("create_duplicate_tenant_id_error", func(t *testing.T) {
-		m, ctx, cancel := NewTestTenantMgr(kvStore)
+		tm := transaction.NewManager(kvStore)
+
+		m, ctx, cancel := NewTestTenantMgr(t, kvStore)
 		defer cancel()
 
 		tx, e := tm.StartTx(ctx)
@@ -178,14 +192,18 @@ func TestTenantManager_CreateTenant(t *testing.T) {
 		// should fail now
 		_, err = m.CreateTenant(ctx, tx, &TenantNamespace{"ns-test2", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
 		require.Equal(t, "namespace with same id already exists with name 'ns-test1'", err.(*api.TigrisError).Error())
+
+		require.NoError(t, tx.Commit(ctx))
+
 		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
 	})
 }
 
 func TestTenantManager_CreateProjects(t *testing.T) {
-	tm := transaction.NewManager(kvStore)
 	t.Run("create_projects", func(t *testing.T) {
-		m, ctx, cancel := NewTestTenantMgr(kvStore)
+		tm := transaction.NewManager(kvStore)
+
+		m, ctx, cancel := NewTestTenantMgr(t, kvStore)
 		defer cancel()
 
 		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2, NamespaceMetadata{
@@ -198,12 +216,16 @@ func TestTenantManager_CreateProjects(t *testing.T) {
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		_, err = tenant.CreateProject(ctx, tx, tenantProj1, nil)
+		err = tenant.CreateProject(ctx, tx, tenantProj1, nil)
 		require.NoError(t, err)
-		_, err = tenant.CreateProject(ctx, tx, tenantProj2, nil)
+		err = tenant.CreateProject(ctx, tx, tenantProj2, nil)
 		require.NoError(t, err)
+		require.NoError(t, tx.Commit(ctx))
 
-		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
+		tx, err = tm.StartTx(ctx)
+		require.NoError(t, err)
+		err = tenant.reload(ctx, tx, nil, nil)
+		require.NoError(t, err)
 		proj1, err := tenant.GetProject(tenantProj1)
 		require.NoError(t, err)
 		require.Equal(t, tenantProj1, proj1.Name())
@@ -220,14 +242,14 @@ func TestTenantManager_CreateProjects(t *testing.T) {
 		require.Equal(t, proj2, tenant.projects[tenantProj2])
 		require.Equal(t, tenantProj2, tenant.idToDatabaseMap[proj2.id].Name())
 
-		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
-		_ = kvStore.DropTable(ctx, m.mdNameRegistry.EncodingSubspaceName())
+		testClearDictionary(ctx, m.metaStore, m.kvStore)
 	})
 }
 
 func TestTenantManager_DatabaseBranches(t *testing.T) {
 	tm := transaction.NewManager(kvStore)
-	m, ctx, cancel := NewTestTenantMgr(kvStore)
+
+	m, ctx, cancel := NewTestTenantMgr(t, kvStore)
 	defer cancel()
 
 	_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2, NamespaceMetadata{
@@ -235,14 +257,15 @@ func TestTenantManager_DatabaseBranches(t *testing.T) {
 		StrId: "ns-test1",
 		Name:  "ns-test1-displayName",
 	}})
+
 	require.NoError(t, err)
 	tenant := m.tenants["ns-test1"]
 
 	tx, err := tm.StartTx(ctx)
 	require.NoError(t, err)
-	_, err = tenant.CreateProject(ctx, tx, tenantProj1, nil)
+	err = tenant.CreateProject(ctx, tx, tenantProj1, nil)
 	require.NoError(t, err)
-	_, err = tenant.CreateProject(ctx, tx, tenantProj2, nil)
+	err = tenant.CreateProject(ctx, tx, tenantProj2, nil)
 	require.NoError(t, err)
 
 	require.NoError(t, tenant.reload(ctx, tx, nil, nil))
@@ -353,14 +376,13 @@ func TestTenantManager_DatabaseBranches(t *testing.T) {
 
 	require.NoError(t, tx.Commit(ctx))
 
-	_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
-	_ = kvStore.DropTable(ctx, m.mdNameRegistry.EncodingSubspaceName())
+	testClearDictionary(ctx, m.metaStore, m.kvStore)
 }
 
 func TestTenantManager_CreateCollections(t *testing.T) {
 	tm := transaction.NewManager(kvStore)
 	t.Run("create_collections", func(t *testing.T) {
-		m, ctx, cancel := NewTestTenantMgr(kvStore)
+		m, ctx, cancel := NewTestTenantMgr(t, kvStore)
 		defer cancel()
 
 		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
@@ -369,9 +391,9 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 		tenant := m.tenants["ns-test1"]
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		_, err = tenant.CreateProject(ctx, tx, tenantProj1, nil)
+		err = tenant.CreateProject(ctx, tx, tenantProj1, nil)
 		require.NoError(t, err)
-		_, err = tenant.CreateProject(ctx, tx, tenantProj2, nil)
+		err = tenant.CreateProject(ctx, tx, tenantProj2, nil)
 		require.NoError(t, err)
 
 		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
@@ -426,16 +448,14 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 
 		require.NoError(t, tx.Commit(ctx))
 
-		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
-		_ = kvStore.DropTable(ctx, m.mdNameRegistry.EncodingSubspaceName())
-		_ = kvStore.DropTable(ctx, m.mdNameRegistry.SchemaSubspaceName())
+		testClearDictionary(ctx, m.metaStore, m.kvStore)
 	})
 }
 
 func TestTenantManager_DropCollection(t *testing.T) {
 	tm := transaction.NewManager(kvStore)
 	t.Run("drop_collection", func(t *testing.T) {
-		m, ctx, cancel := NewTestTenantMgr(kvStore)
+		m, ctx, cancel := NewTestTenantMgr(t, kvStore)
 		defer cancel()
 
 		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
@@ -445,9 +465,9 @@ func TestTenantManager_DropCollection(t *testing.T) {
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		_, err = tenant.CreateProject(ctx, tx, tenantProj1, nil)
+		err = tenant.CreateProject(ctx, tx, tenantProj1, nil)
 		require.NoError(t, err)
-		_, err = tenant.CreateProject(ctx, tx, tenantProj2, nil)
+		err = tenant.CreateProject(ctx, tx, tenantProj2, nil)
 		require.NoError(t, err)
 
 		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
@@ -494,21 +514,17 @@ func TestTenantManager_DropCollection(t *testing.T) {
 		require.NoError(t, tenant.DropCollection(ctx, tx, db2, "test_collection"))
 		require.NoError(t, tx.Commit(ctx))
 
-		_, err = tm.StartTx(ctx)
-		require.NoError(t, err)
 		coll := db2.GetCollection("test_collection")
 		require.Nil(t, coll)
 		require.Empty(t, db2.idToCollectionMap[coll1.Id])
 
-		_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
-		_ = kvStore.DropTable(ctx, m.mdNameRegistry.EncodingSubspaceName())
-		_ = kvStore.DropTable(ctx, m.mdNameRegistry.SchemaSubspaceName())
+		testClearDictionary(ctx, m.metaStore, m.kvStore)
 	})
 }
 
 func TestTenantManager_SearchIndexes(t *testing.T) {
 	tm := transaction.NewManager(kvStore)
-	m, ctx, cancel := NewTestTenantMgr(kvStore)
+	m, ctx, cancel := NewTestTenantMgr(t, kvStore)
 	defer cancel()
 
 	var err error
@@ -523,7 +539,7 @@ func TestTenantManager_SearchIndexes(t *testing.T) {
 	tenant := m.tenants["ns-test1"]
 	tx, err := tm.StartTx(ctx)
 	require.NoError(t, err)
-	_, err = tenant.CreateProject(ctx, tx, tenantProj1, nil)
+	err = tenant.CreateProject(ctx, tx, tenantProj1, nil)
 	require.NoError(t, err)
 
 	require.NoError(t, tenant.reload(ctx, tx, nil, nil))
@@ -572,138 +588,101 @@ func TestTenantManager_SearchIndexes(t *testing.T) {
 
 	require.NoError(t, tx.Commit(ctx))
 
-	_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
-	_ = kvStore.DropTable(ctx, m.mdNameRegistry.EncodingSubspaceName())
-	_ = kvStore.DropTable(ctx, m.mdNameRegistry.SchemaSubspaceName())
+	testClearDictionary(ctx, m.metaStore, m.kvStore)
 }
 
 func TestTenantManager_DataSize(t *testing.T) {
-	tm := transaction.NewManager(kvStore)
-	m, ctx, cancel := NewTestTenantMgr(kvStore)
+	m, ctx, cancel := NewTestTenantMgr(t, kvStore)
 	defer cancel()
 
-	_, err := m.CreateOrGetTenant(context.TODO(), &TenantNamespace{"ns-test1", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
+	ns1id := uint32(2)
+	ns2id := uint32(3)
+
+	ns1 := &TenantNamespace{"ns-test1", ns1id, NewNamespaceMetadata(ns1id, "ns-test1", "ns-test1-display_name")}
+	ns2 := &TenantNamespace{"ns-test2", ns2id, NewNamespaceMetadata(ns2id, "ns-test2", "ns-test2-display_name")}
+
+	_, err := m.CreateOrGetTenant(ctx, ns1)
 	require.NoError(t, err)
 
-	_, err = m.CreateOrGetTenant(context.TODO(), &TenantNamespace{"ns-test2", 3, NewNamespaceMetadata(3, "ns-test2", "ns-test2-display_name")})
+	_, err = m.CreateOrGetTenant(ctx, ns2)
 	require.NoError(t, err)
 
 	tenant := m.tenants["ns-test1"]
-	tx, err := tm.StartTx(context.TODO())
-	require.NoError(t, err)
-
-	_, err = tenant.CreateProject(ctx, tx, tenantProj1, nil)
-	require.NoError(t, err)
-	_, err = tenant.CreateProject(ctx, tx, tenantProj2, nil)
-	require.NoError(t, err)
-
 	tenant2 := m.tenants["ns-test2"]
 
-	_, err = tenant2.CreateProject(ctx, tx, tenantProj1, nil)
-	require.NoError(t, err)
-	_, err = tenant2.CreateProject(ctx, tx, tenantProj2, nil)
-	require.NoError(t, err)
-
-	require.NoError(t, tenant.reload(ctx, tx, nil, nil))
-	require.NoError(t, tenant2.reload(ctx, tx, nil, nil))
-
-	jsSchema := []byte(`{
-        "title": "test_collection",
-		"properties": {
-			"K1": {
-				"type": "string"
-			},
-			"K2": {
-				"type": "integer"
-			},
-			"D1": {
-				"type": "string",
-				"maxLength": 128
-			}
-          },
-		  "primary_key": ["K1", "K2"]
-	    }`)
-
-	factory, err := schema.Build("test_collection", jsSchema)
-	require.NoError(t, err)
-
-	proj1, err := tenant.GetProject(tenantProj1)
-	require.NoError(t, err)
-	db1 := proj1.database
-
-	proj2, err := tenant.GetProject(tenantProj2)
-	require.NoError(t, err)
-	db2 := proj2.database
-
-	require.NoError(t, tenant.CreateCollection(ctx, tx, db1, factory))
-	require.NoError(t, err)
-	require.NoError(t, tenant.CreateCollection(ctx, tx, db2, factory))
-	require.NoError(t, err)
-
-	// create tenant2 dbs and collections
-	proj21, err := tenant2.GetProject(tenantProj1)
-	require.NoError(t, err)
-	proj22, err := tenant2.GetProject(tenantProj2)
-	require.NoError(t, err)
-
-	require.NoError(t, tenant2.CreateCollection(ctx, tx, proj21.database, factory))
-	require.NoError(t, err)
-	require.NoError(t, tenant2.CreateCollection(ctx, tx, proj22.database, factory))
-	require.NoError(t, err)
-
-	require.NoError(t, tenant.reload(ctx, tx, nil, nil))
-	require.NoError(t, tenant2.reload(ctx, tx, nil, nil))
-
-	require.NoError(t, tx.Commit(context.TODO()))
-
-	coll1 := db2.GetCollection("test_collection")
 	docSize := 10 * 1024
-	table, err := m.encoder.EncodeTableName(tenant.GetNamespace(), db1, coll1)
+
+	db1 := &Database{id: 10}
+	db2 := &Database{id: 11}
+	coll1 := &schema.DefaultCollection{Id: 256}
+
+	table, err := m.encoder.EncodeTableName(ns1, db1, coll1)
 	require.NoError(t, err)
 
-	err = tenant.kvStore.DropTable(ctx, table)
+	err = kvStore.DropTable(ctx, table)
 	require.NoError(t, err)
 
 	for i := 0; i < 100; i++ {
-		err = tenant.kvStore.Insert(ctx, table, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+		err = kvStore.Insert(ctx, table, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
 		require.NoError(t, err)
 	}
 
-	coll21 := proj21.database.GetCollection("test_collection")
-	table21, err := m.encoder.EncodeTableName(tenant2.GetNamespace(), proj21.database, coll21)
+	coll2 := &schema.DefaultCollection{Id: 512}
+	table2, err := m.encoder.EncodeTableName(ns1, db1, coll2)
 	require.NoError(t, err)
 
-	err = tenant2.kvStore.DropTable(ctx, table21)
+	err = kvStore.DropTable(ctx, table2)
+	require.NoError(t, err)
+
+	for i := 0; i < 200; i++ {
+		err = kvStore.Insert(ctx, table2, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+		require.NoError(t, err)
+	}
+
+	db21 := &Database{id: 20}
+	coll21 := &schema.DefaultCollection{Id: 1024}
+	// for second namespace insert 150 in one project and 50 record in to other
+	table21, err := m.encoder.EncodeTableName(ns2, db21, coll21)
+	require.NoError(t, err)
+
+	err = kvStore.DropTable(ctx, table21)
+	require.NoError(t, err)
+
+	for i := 0; i < 110; i++ {
+		err = kvStore.Insert(ctx, table21, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+		require.NoError(t, err)
+	}
+
+	db22 := &Database{id: 30}
+	coll22 := &schema.DefaultCollection{Id: 1024}
+	table22, err := m.encoder.EncodeTableName(ns2, db22, coll22)
+	require.NoError(t, err)
+
+	err = kvStore.DropTable(ctx, table22)
 	require.NoError(t, err)
 
 	for i := 0; i < 150; i++ {
-		err = tenant2.kvStore.Insert(ctx, table21, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+		err = kvStore.Insert(ctx, table22, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
 		require.NoError(t, err)
 	}
 
-	coll22 := proj22.database.GetCollection("test_collection")
-	table22, err := m.encoder.EncodeTableName(tenant2.GetNamespace(), proj22.database, coll22)
-	require.NoError(t, err)
-
-	err = tenant2.kvStore.DropTable(ctx, table22)
-	require.NoError(t, err)
-
-	for i := 0; i < 50; i++ {
-		err = tenant2.kvStore.Insert(ctx, table22, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
-		require.NoError(t, err)
-	}
-
+	// Tenant 1
+	// db1
 	sz, err := tenant.Size(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, int64(983500), sz)
+	assert.Equal(t, int64(3728000), sz)
 
 	sz, err = tenant.DatabaseSize(ctx, db1)
 	require.NoError(t, err)
-	assert.Equal(t, int64(983500), sz)
+	assert.Equal(t, int64(3728000), sz)
 
 	sz, err = tenant.CollectionSize(ctx, db1, coll1)
 	require.NoError(t, err)
-	assert.Equal(t, int64(983500), sz)
+	assert.Equal(t, int64(1229000), sz)
+
+	sz, err = tenant.CollectionSize(ctx, db1, coll2)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2499000), sz)
 
 	// db2 is empty
 	sz, err = tenant.DatabaseSize(ctx, db2)
@@ -714,40 +693,49 @@ func TestTenantManager_DataSize(t *testing.T) {
 	// db21
 	sz, err = tenant2.Size(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, int64(2186250), sz) // sum of db21 and db22
+	assert.Equal(t, int64(2710000), sz) // sum of db21 and db22
 
-	sz, err = tenant2.DatabaseSize(ctx, proj21.database)
+	sz, err = tenant2.DatabaseSize(ctx, db21)
 	require.NoError(t, err)
-	assert.Equal(t, int64(1694750), sz)
+	assert.Equal(t, int64(1322750), sz)
 
-	sz, err = tenant2.CollectionSize(ctx, proj21.database, coll21)
+	sz, err = tenant2.CollectionSize(ctx, db21, coll21)
 	require.NoError(t, err)
-	assert.Equal(t, int64(1694750), sz)
+	assert.Equal(t, int64(1322750), sz)
 
 	// db22
-	sz, err = tenant2.DatabaseSize(ctx, proj22.database)
+	sz, err = tenant2.DatabaseSize(ctx, db22)
 	require.NoError(t, err)
-	assert.Equal(t, int64(491500), sz)
+	assert.Equal(t, int64(1387250), sz)
 
-	sz, err = tenant2.CollectionSize(ctx, proj22.database, coll22)
+	sz, err = tenant2.CollectionSize(ctx, db22, coll22)
 	require.NoError(t, err)
-	assert.Equal(t, int64(491500), sz)
+	assert.Equal(t, int64(1387250), sz)
 
 	// cleanup
-	err = tenant2.kvStore.DropTable(ctx, table)
+	tns1, err := m.encoder.EncodeTableName(tenant.GetNamespace(), nil, nil)
 	require.NoError(t, err)
-	err = tenant2.kvStore.DropTable(ctx, table21)
-	require.NoError(t, err)
-	err = tenant2.kvStore.DropTable(ctx, table22)
+	err = tenant2.kvStore.DropTable(ctx, tns1)
 	require.NoError(t, err)
 
-	_ = kvStore.DropTable(ctx, m.mdNameRegistry.ReservedSubspaceName())
-	_ = kvStore.DropTable(ctx, m.mdNameRegistry.EncodingSubspaceName())
-	_ = kvStore.DropTable(ctx, m.mdNameRegistry.SchemaSubspaceName())
+	tns2, err := m.encoder.EncodeTableName(tenant2.GetNamespace(), nil, nil)
+	require.NoError(t, err)
+	err = tenant2.kvStore.DropTable(ctx, tns2)
+	require.NoError(t, err)
+
+	sz, err = tenant.Size(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), sz)
+
+	sz, err = tenant2.Size(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), sz)
+
+	testClearDictionary(ctx, m.metaStore, m.kvStore)
 }
 
 func TestMain(m *testing.M) {
-	ulog.Configure(ulog.LogConfig{Level: "disabled"})
+	ulog.Configure(ulog.LogConfig{Level: "disabled", Format: "console"})
 
 	fdbCfg, err := config.GetTestFDBConfig("../..")
 	if err != nil {

@@ -32,7 +32,7 @@ func TestMetaVersion(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("read versions", func(t *testing.T) {
-		m := &VersionHandler{}
+		m := newVersionHandler(nil)
 		ctx := context.TODO()
 		tm := transaction.NewManager(kv)
 		tx1, err := tm.StartTx(ctx)
@@ -50,7 +50,7 @@ func TestMetaVersion(t *testing.T) {
 		require.Equal(t, first, second)
 	})
 	t.Run("bump and read", func(t *testing.T) {
-		m := &VersionHandler{}
+		m := newVersionHandler(nil)
 		ctx := context.TODO()
 		tm := transaction.NewManager(kv)
 		tx, err := tm.StartTx(ctx)

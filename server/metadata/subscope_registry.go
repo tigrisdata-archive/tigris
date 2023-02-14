@@ -14,6 +14,12 @@
 
 package metadata
 
+import (
+	"math/rand"
+	"testing"
+	"time"
+)
+
 // NameRegistry is used by tests to inject table names that can be used by tests.
 // NameRegistry provides the names of the internal tables(subspaces) maintained by the metadata package. The interface
 // helps in creating test tables for these structures.
@@ -35,25 +41,26 @@ type NameRegistry struct {
 	//    - 0x03 is the value for the collection.
 	//    - "created" is keyword.
 	//
-	SchemaSB     string
-	SearchSB     string
-	UserSB       string
-	NamespaceSB  string
-	ClusterSB    string
-	CollectionSB string
+	SchemaSB    string
+	SearchSB    string
+	UserSB      string
+	NamespaceSB string
+	ClusterSB   string
+	VersionKey  string
+
+	BaseCounterValue uint32
 }
 
-// DefaultNameRegistry provides the names of the subspaces used by the metadata package for managing dictionary
-// encoded values, counters and schemas.
 var DefaultNameRegistry = &NameRegistry{
-	ReserveSB:    "reserved",
-	EncodingSB:   "encoding",
-	SchemaSB:     "schema",
-	SearchSB:     "search_schema",
-	UserSB:       "user",
-	NamespaceSB:  "namespace",
-	ClusterSB:    "cluster",
-	CollectionSB: "collection",
+	ReserveSB:   "reserved",
+	EncodingSB:  "encoding",
+	SchemaSB:    "schema",
+	SearchSB:    "search_schema",
+	UserSB:      "user",
+	NamespaceSB: "namespace",
+	ClusterSB:   "cluster",
+
+	BaseCounterValue: reservedBaseValue,
 }
 
 func (d *NameRegistry) ReservedSubspaceName() []byte {
@@ -84,6 +91,24 @@ func (d *NameRegistry) ClusterSubspaceName() []byte {
 	return []byte(d.ClusterSB)
 }
 
-func (d *NameRegistry) CollectionSubspaceName() []byte {
-	return []byte(d.CollectionSB)
+func (d *NameRegistry) GetVersionKey() []byte {
+	return []byte(d.VersionKey)
+}
+
+func newTestNameRegistry(t *testing.T) *NameRegistry {
+	r := rand.New(rand.NewSource(time.Now().UnixNano())) //nolint:gosec
+	s := t.Name()
+
+	return &NameRegistry{
+		ReserveSB:   "test_reserved_" + s,
+		EncodingSB:  "test_encoding_" + s,
+		SchemaSB:    "test_schema_" + s,
+		SearchSB:    "test_search_schema_" + s,
+		UserSB:      "test_user_" + s,
+		NamespaceSB: "test_namespace_" + s,
+		ClusterSB:   "test_cluster_" + s,
+		VersionKey:  "test_version_key" + s,
+
+		BaseCounterValue: r.Uint32(),
+	}
 }

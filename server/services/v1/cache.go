@@ -43,8 +43,8 @@ type cacheService struct {
 	runnerFactory *cache.RunnerFactory
 }
 
-func newCacheService(tenantMgr *metadata.TenantManager, txMgr *transaction.Manager, versionH *metadata.VersionHandler) *cacheService {
-	cacheSessions := cache.NewSessionManager(txMgr, tenantMgr, versionH, metadata.NewCacheTracker(tenantMgr, txMgr))
+func newCacheService(tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) *cacheService {
+	cacheSessions := cache.NewSessionManager(txMgr, tenantMgr, metadata.NewCacheTracker(tenantMgr, txMgr))
 	return &cacheService{
 		UnimplementedCacheServer: api.UnimplementedCacheServer{},
 		sessions:                 cacheSessions,

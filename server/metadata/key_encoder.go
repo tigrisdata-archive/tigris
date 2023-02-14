@@ -57,8 +57,6 @@ type Encoder interface {
 	//	   to the table name to form the Key. The first element of this list is the dictionary encoding of index type key
 	//	   information i.e. whether the index is pkey, etc. The remaining elements are values for this index.
 	EncodeKey(encodedTable []byte, idx *schema.Index, idxParts []interface{}) (keys.Key, error)
-	EncodePartitionKey(encodedTable []byte, idx *schema.Index, idxParts []interface{}, partition uint16) (keys.Key, error)
-	DecodePartitionKey(key keys.Key) ([]interface{}, uint16, error)
 
 	// DecodeTableName is used to decode the key stored in FDB and extract namespace name, database name and collection ids.
 	DecodeTableName(tableName []byte) (uint32, uint32, uint32, bool)
@@ -91,27 +89,6 @@ func (d *DictKeyEncoder) EncodePartitionTableName(ns Namespace, db *Database, co
 
 func (d *DictKeyEncoder) EncodeIndexName(idx *schema.Index) []byte {
 	return d.encodedIdxName(idx)
-}
-
-func (d *DictKeyEncoder) EncodePartitionKey(encodedTable []byte, idx *schema.Index, idxParts []interface{}, partition uint16) (keys.Key, error) {
-	if !bytes.Equal(encodedTable[0:4], internal.PartitionKeyPrefix) {
-		return nil, errors.Internal("invalid partition table prefix '%v'", encodedTable[0:4])
-	}
-
-	var allParts []interface{}
-	allParts = append(allParts, UInt16ToByte(partition))
-	allParts = append(allParts, idxParts...)
-	return d.EncodeKey(encodedTable, idx, allParts)
-}
-
-// DecodePartitionKey returns index parts and partition number.
-func (d *DictKeyEncoder) DecodePartitionKey(key keys.Key) ([]interface{}, uint16, error) {
-	if !bytes.Equal(key.Table()[0:4], internal.PartitionKeyPrefix) {
-		return nil, 0, errors.Internal("invalid partition table prefix '%v'", key.Table()[0:4])
-	}
-
-	idxParts := key.IndexParts()
-	return idxParts[2:], ByteToUInt16(idxParts[1].([]byte)), nil
 }
 
 func (d *DictKeyEncoder) EncodeKey(encodedTable []byte, idx *schema.Index, idxParts []interface{}) (keys.Key, error) {

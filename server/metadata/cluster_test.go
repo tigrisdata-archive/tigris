@@ -22,17 +22,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/lib/uuid"
 	"github.com/tigrisdata/tigris/server/transaction"
 )
 
 var testClusterPayload = &ClusterMetadata{
-	WorkerKeepalive: time.Now().UTC(),
+	ID: uuid.New(),
 }
 
-func initClusterTest(t *testing.T) (*ClusterSubspace, transaction.Tx) {
-	c := NewClusterStore(&NameRegistry{
-		ClusterSB: "test_cluster",
-	})
+func initClusterTest(t *testing.T) (*ClusterSubspace, transaction.Tx, func()) {
+	c := NewClusterStore(newTestNameRegistry(t))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -43,7 +42,11 @@ func initClusterTest(t *testing.T) (*ClusterSubspace, transaction.Tx) {
 	tx, err := tm.StartTx(ctx)
 	require.NoError(t, err)
 
-	return c, tx
+	return c, tx, func() {
+		assert.NoError(t, tx.Rollback(ctx))
+
+		_ = kvStore.DropTable(ctx, c.SubspaceName)
+	}
 }
 
 func TestClusterSubspace(t *testing.T) {
@@ -51,88 +54,83 @@ func TestClusterSubspace(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		u, tx := initClusterTest(t)
-		defer func() { assert.NoError(t, tx.Rollback(ctx)) }()
+		u, tx, cleanup := initClusterTest(t)
+		defer cleanup()
 
-		require.Equal(t, errors.InvalidArgument("invalid nil payload"), u.Insert(ctx, tx, nil))
-
-		_ = kvStore.DropTable(ctx, u.SubspaceName)
+		require.Equal(t, errors.InvalidArgument("invalid nil payload"), u.insert(ctx, tx, nil))
 	})
 
 	t.Run("put_get_1", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		u, tx := initClusterTest(t)
-		defer func() { assert.NoError(t, tx.Rollback(ctx)) }()
+		u, tx, cleanup := initClusterTest(t)
+		defer cleanup()
 
-		require.NoError(t, u.Insert(ctx, tx, testClusterPayload))
+		require.NoError(t, u.insert(ctx, tx, testClusterPayload))
 		cluster, err := u.Get(ctx, tx)
 		require.NoError(t, err)
 		require.Equal(t, testClusterPayload, cluster)
 
-		_ = kvStore.DropTable(ctx, u.SubspaceName)
+		// already exists
+		require.Error(t, u.insert(ctx, tx, testClusterPayload))
+
+		// empty payload
+		require.Error(t, u.insert(ctx, tx, nil))
 	})
 
 	t.Run("put_get_2", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		u, tx := initClusterTest(t)
-		defer func() { assert.NoError(t, tx.Rollback(ctx)) }()
+		u, tx, cleanup := initClusterTest(t)
+		defer cleanup()
 
 		appPayload := &ClusterMetadata{
-			WorkerKeepalive: time.Now().UTC(),
+			ID: uuid.New(),
 		}
 
-		require.NoError(t, u.Insert(ctx, tx, appPayload))
+		require.NoError(t, u.insert(ctx, tx, appPayload))
 		cluster, err := u.Get(ctx, tx)
 		require.NoError(t, err)
 		require.Equal(t, appPayload, cluster)
-
-		_ = kvStore.DropTable(ctx, u.SubspaceName)
 	})
 
 	t.Run("put_get_update_get", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		u, tx := initClusterTest(t)
-		defer func() { assert.NoError(t, tx.Rollback(ctx)) }()
+		u, tx, cleanup := initClusterTest(t)
+		defer cleanup()
 
-		require.NoError(t, u.Insert(ctx, tx, testClusterPayload))
+		require.NoError(t, u.insert(ctx, tx, testClusterPayload))
 		cluster, err := u.Get(ctx, tx)
 		require.NoError(t, err)
 		require.Equal(t, testClusterPayload, cluster)
 
 		updatedClusterPayload := &ClusterMetadata{
-			WorkerKeepalive: time.Now().UTC(),
+			ID: uuid.New(),
 		}
 		require.NoError(t, u.Update(ctx, tx, updatedClusterPayload))
 		cluster, err = u.Get(ctx, tx)
 		require.NoError(t, err)
 		require.Equal(t, updatedClusterPayload, cluster)
-
-		_ = kvStore.DropTable(ctx, u.SubspaceName)
 	})
 
 	t.Run("put_get_delete_get", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		u, tx := initClusterTest(t)
-		defer func() { assert.NoError(t, tx.Rollback(ctx)) }()
+		u, tx, cleanup := initClusterTest(t)
+		defer cleanup()
 
-		require.NoError(t, u.Insert(ctx, tx, testClusterPayload))
+		require.NoError(t, u.insert(ctx, tx, testClusterPayload))
 		cluster, err := u.Get(ctx, tx)
 		require.NoError(t, err)
 		require.Equal(t, testClusterPayload, cluster)
 
-		require.NoError(t, u.Delete(ctx, tx))
-		cluster, err = u.Get(ctx, tx)
-		require.NoError(t, err)
-		require.Nil(t, cluster)
-
-		_ = kvStore.DropTable(ctx, u.SubspaceName)
+		require.NoError(t, u.delete(ctx, tx))
+		_, err = u.Get(ctx, tx)
+		require.Equal(t, errors.ErrNotFound, err)
 	})
 }

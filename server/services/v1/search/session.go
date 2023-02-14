@@ -44,12 +44,12 @@ type SessionManager struct {
 	versionH      *metadata.VersionHandler
 }
 
-func NewSessionManager(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, tenantTracker *metadata.CacheTracker, versionH *metadata.VersionHandler) *SessionManager {
+func NewSessionManager(txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, tenantTracker *metadata.CacheTracker) *SessionManager {
 	return &SessionManager{
 		txMgr:         txMgr,
 		tenantMgr:     tenantMgr,
 		tenantTracker: tenantTracker,
-		versionH:      versionH,
+		versionH:      tenantMgr.GetVersionHandler(),
 	}
 }
 

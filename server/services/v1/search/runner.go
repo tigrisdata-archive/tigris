@@ -17,12 +17,17 @@ package search
 import (
 	"bytes"
 	"context"
+	"math"
 
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/lib/uuid"
 	"github.com/tigrisdata/tigris/query/filter"
+	"github.com/tigrisdata/tigris/query/read"
+	qsearch "github.com/tigrisdata/tigris/query/search"
+	"github.com/tigrisdata/tigris/query/sort"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
@@ -32,6 +37,8 @@ import (
 	"github.com/tigrisdata/tigris/server/types"
 	"github.com/tigrisdata/tigris/store/search"
 	"github.com/tigrisdata/tigris/util"
+	ulog "github.com/tigrisdata/tigris/util/log"
+	"github.com/tigrisdata/tigris/value"
 )
 
 type Runner interface {
@@ -65,6 +72,14 @@ func (f *RunnerFactory) GetReadRunner(r *api.GetDocumentRequest, accessToken *ty
 	return &ReadRunner{
 		baseRunner: newBaseRunner(f.store, f.encoder, accessToken),
 		req:        r,
+	}
+}
+
+func (f *RunnerFactory) GetSearchRunner(r *api.SearchIndexRequest, streaming Streaming, accessToken *types.AccessToken) *SearchRunner {
+	return &SearchRunner{
+		baseRunner: newBaseRunner(f.store, f.encoder, accessToken),
+		req:        r,
+		streaming:  streaming,
 	}
 }
 
@@ -123,9 +138,10 @@ func (runner *baseRunner) getIndex(tenant *metadata.Tenant, projName string, ind
 	return index, nil
 }
 
-func (runner *baseRunner) encodeDocuments(index *schema.SearchIndex, documents [][]byte, buffer *bytes.Buffer, addIdIfMissing bool) ([]string, error) {
+func (runner *baseRunner) encodeDocuments(index *schema.SearchIndex, documents [][]byte, buffer *bytes.Buffer, isUpdate bool) ([]string, error) {
 	ids := make([]string, len(documents))
 	encoder := jsoniter.NewEncoder(buffer)
+	ts := internal.NewTimestamp()
 	for i, doc := range documents {
 		decDoc, err := util.JSONToMap(doc)
 		if err != nil {
@@ -134,7 +150,7 @@ func (runner *baseRunner) encodeDocuments(index *schema.SearchIndex, documents [
 
 		_, found := decDoc[schema.SearchId]
 		if !found {
-			if !addIdIfMissing {
+			if isUpdate {
 				return nil, errors.InvalidArgument("doc missing 'id' field")
 			}
 
@@ -142,7 +158,7 @@ func (runner *baseRunner) encodeDocuments(index *schema.SearchIndex, documents [
 		}
 		ids[i] = decDoc[schema.SearchId].(string)
 
-		packed, err := MutateSearchDocument(index, decDoc)
+		packed, err := MutateSearchDocument(index, ts, decDoc, isUpdate)
 		if err != nil {
 			return nil, err
 		}
@@ -178,7 +194,7 @@ func (runner *ReadRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Res
 		idToHits[(*hit.Document)[schema.SearchId].(string)] = hit.Document
 	}
 
-	documents := make([][]byte, len(runner.req.Ids))
+	documents := make([]*api.IndexDoc, len(runner.req.Ids))
 	for i, id := range runner.req.Ids {
 		// Order of returning the id should be same in the order it is asked in the request.
 		outDoc, found := idToHits[id]
@@ -187,7 +203,7 @@ func (runner *ReadRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Res
 			continue
 		}
 
-		doc, err := UnpackSearchFields(index, *outDoc)
+		doc, created, updated, err := UnpackSearchFields(index, *outDoc)
 		if err != nil {
 			return Response{}, err
 		}
@@ -196,7 +212,19 @@ func (runner *ReadRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Res
 		if err != nil {
 			return Response{}, err
 		}
-		documents[i] = enc
+
+		meta := &api.DocMeta{}
+		if created != nil {
+			meta.CreatedAt = created.GetProtoTS()
+		}
+		if updated != nil {
+			meta.UpdatedAt = updated.GetProtoTS()
+		}
+
+		documents[i] = &api.IndexDoc{
+			Doc:      enc,
+			Metadata: meta,
+		}
 	}
 
 	return Response{
@@ -272,7 +300,7 @@ func (runner *CreateRunner) createDocuments(ctx context.Context, tenant *metadat
 		ids    []string
 		buffer bytes.Buffer
 	)
-	if ids, err = runner.encodeDocuments(index, req.Documents, &buffer, true); err != nil {
+	if ids, err = runner.encodeDocuments(index, req.Documents, &buffer, false); err != nil {
 		return Response{}, err
 	}
 
@@ -314,7 +342,7 @@ func (runner *CreateOrReplaceRunner) Run(ctx context.Context, tenant *metadata.T
 		buffer bytes.Buffer
 	)
 
-	if ids, err = runner.encodeDocuments(index, runner.req.Documents, &buffer, true); err != nil {
+	if ids, err = runner.encodeDocuments(index, runner.req.Documents, &buffer, false); err != nil {
 		return Response{}, err
 	}
 
@@ -355,7 +383,7 @@ func (runner *UpdateRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 		ids    []string
 		buffer bytes.Buffer
 	)
-	if ids, err = runner.encodeDocuments(index, runner.req.Documents, &buffer, false); err != nil {
+	if ids, err = runner.encodeDocuments(index, runner.req.Documents, &buffer, true); err != nil {
 		return Response{}, err
 	}
 
@@ -450,6 +478,247 @@ func (runner *DeleteRunner) deleteDocumentsByQuery(ctx context.Context, tenant *
 			Count: int32(count),
 		},
 	}, nil
+}
+
+type SearchRunner struct {
+	*baseRunner
+
+	req       *api.SearchIndexRequest
+	streaming Streaming
+}
+
+func (runner *SearchRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Response, error) {
+	index, err := runner.getIndex(tenant, runner.req.GetProject(), runner.req.GetIndex())
+	if err != nil {
+		return Response{}, err
+	}
+
+	wrappedF, err := filter.NewFactory(index.QueryableFields, value.NewCollationFrom(runner.req.Collation)).WrappedFilter(runner.req.Filter)
+	if err != nil {
+		return Response{}, err
+	}
+
+	facets, err := runner.getFacetFields(index)
+	if err != nil {
+		return Response{}, err
+	}
+
+	fieldSelection, err := runner.getFieldSelection(index)
+	if err != nil {
+		return Response{}, err
+	}
+
+	searchFields, err := runner.getSearchFields(index)
+	if err != nil {
+		return Response{}, err
+	}
+
+	sortOrder, err := runner.getSortOrdering(index, runner.req.Sort)
+	if err != nil {
+		return Response{}, err
+	}
+
+	pageSize := int(runner.req.PageSize)
+	if pageSize == 0 {
+		pageSize = defaultPerPage
+	}
+	var totalPages *int32
+
+	searchQ := qsearch.NewBuilder().
+		Query(runner.req.Q).
+		SearchFields(searchFields).
+		Facets(facets).
+		PageSize(pageSize).
+		Filter(wrappedF).
+		ReadFields(fieldSelection).
+		SortOrder(sortOrder).
+		Build()
+
+	searchReader := NewSearchReader(ctx, runner.store, index, searchQ)
+	var iterator *FilterableSearchIterator
+	if runner.req.Page != 0 {
+		iterator = searchReader.SinglePageIterator(index, wrappedF, runner.req.Page)
+	} else {
+		iterator = searchReader.Iterator(index, wrappedF)
+	}
+	if err != nil {
+		return Response{}, err
+	}
+
+	pageNo := int32(defaultPageNo)
+	if runner.req.Page > 0 {
+		pageNo = runner.req.Page
+	}
+	for {
+		resp := &api.SearchIndexResponse{}
+		var row Row
+		for iterator.Next(&row) {
+			if searchQ.ReadFields != nil {
+				// apply field selection
+				newValue, err := searchQ.ReadFields.Apply(row.Document)
+				if ulog.E(err) {
+					return Response{}, err
+				}
+				row.Document = newValue
+			}
+
+			metadata := &api.DocMeta{}
+			if row.CreatedAt != nil {
+				metadata.CreatedAt = row.CreatedAt.GetProtoTS()
+			}
+			if row.UpdatedAt != nil {
+				metadata.UpdatedAt = row.UpdatedAt.GetProtoTS()
+			}
+
+			resp.Hits = append(resp.Hits, &api.IndexDoc{
+				Doc:      row.Document,
+				Metadata: metadata,
+			})
+
+			if len(resp.Hits) == pageSize {
+				break
+			}
+		}
+
+		resp.Facets = iterator.getFacets()
+		if totalPages == nil {
+			tp := int32(math.Ceil(float64(iterator.getTotalFound()) / float64(pageSize)))
+			totalPages = &tp
+		}
+
+		resp.Meta = &api.SearchMetadata{
+			Found:      iterator.getTotalFound(),
+			TotalPages: *totalPages,
+			Page: &api.Page{
+				Current: pageNo,
+				Size:    int32(searchQ.PageSize),
+			},
+		}
+		// if no hits, got error, send only error
+		// if no hits, no error, at least one response and break
+		// if some hits, got an error, send current hits and then error (will be zero hits next time)
+		// if some hits, no error, continue to send response
+		if len(resp.Hits) == 0 {
+			if iterator.Interrupted() != nil {
+				return Response{}, iterator.Interrupted()
+			}
+			if pageNo > defaultPageNo && pageNo > runner.req.Page {
+				break
+			}
+		}
+
+		if err := runner.streaming.Send(resp); err != nil {
+			return Response{}, err
+		}
+
+		pageNo++
+	}
+
+	return Response{}, nil
+}
+
+func (runner *SearchRunner) getSearchFields(index *schema.SearchIndex) ([]string, error) {
+	searchFields := runner.req.SearchFields
+	if len(searchFields) == 0 {
+		// this is to include all searchable fields if not present in the query
+		for _, cf := range index.QueryableFields {
+			if cf.DataType == schema.StringType {
+				searchFields = append(searchFields, cf.InMemoryName())
+			}
+		}
+	} else {
+		for i, sf := range searchFields {
+			cf, err := index.GetQueryableField(sf)
+			if err != nil {
+				return nil, err
+			}
+			if !cf.Indexed {
+				return nil, errors.InvalidArgument("`%s` is not a searchable field. Only indexed fields can be queried", sf)
+			}
+			if cf.InMemoryName() != cf.Name() {
+				searchFields[i] = cf.InMemoryName()
+			}
+		}
+	}
+	return searchFields, nil
+}
+
+func (runner *SearchRunner) getFacetFields(index *schema.SearchIndex) (qsearch.Facets, error) {
+	facets, err := qsearch.UnmarshalFacet(runner.req.Facet)
+	if err != nil {
+		return qsearch.Facets{}, err
+	}
+
+	for i, ff := range facets.Fields {
+		cf, err := index.GetQueryableField(ff.Name)
+		if err != nil {
+			return qsearch.Facets{}, err
+		}
+		if !cf.Faceted {
+			return qsearch.Facets{}, errors.InvalidArgument(
+				"Cannot generate facets for `%s`. Faceting is only supported for numeric and text fields", ff.Name)
+		}
+		if cf.InMemoryName() != cf.Name() {
+			facets.Fields[i].Name = cf.InMemoryName()
+		}
+	}
+
+	return facets, nil
+}
+
+func (runner *SearchRunner) getFieldSelection(index *schema.SearchIndex) (*read.FieldFactory, error) {
+	var selectionFields []string
+
+	// Only one of include/exclude. Honor inclusion over exclusion
+	//nolint:gocritic
+	if len(runner.req.IncludeFields) > 0 {
+		selectionFields = runner.req.IncludeFields
+	} else if len(runner.req.ExcludeFields) > 0 {
+		selectionFields = runner.req.ExcludeFields
+	} else {
+		return nil, nil
+	}
+
+	factory := &read.FieldFactory{
+		Include: map[string]read.Field{},
+		Exclude: map[string]read.Field{},
+	}
+
+	for _, sf := range selectionFields {
+		cf, err := index.GetQueryableField(sf)
+		if err != nil {
+			return nil, err
+		}
+
+		factory.AddField(&read.SimpleField{
+			Name: cf.Name(),
+			Incl: len(runner.req.IncludeFields) > 0,
+		})
+	}
+
+	return factory, nil
+}
+
+func (runner *SearchRunner) getSortOrdering(index *schema.SearchIndex, sortReq jsoniter.RawMessage) (*sort.Ordering, error) {
+	ordering, err := sort.UnmarshalSort(sortReq)
+	if err != nil || ordering == nil {
+		return nil, err
+	}
+
+	for i, sf := range *ordering {
+		cf, err := index.GetQueryableField(sf.Name)
+		if err != nil {
+			return nil, err
+		}
+		if cf.InMemoryName() != cf.Name() {
+			(*ordering)[i].Name = cf.InMemoryName()
+		}
+
+		if !cf.Sortable {
+			return nil, errors.InvalidArgument("Cannot sort on `%s` field", sf.Name)
+		}
+	}
+	return ordering, nil
 }
 
 type IndexRunner struct {

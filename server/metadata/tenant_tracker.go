@@ -67,6 +67,7 @@ func NewCacheTracker(tenantMgr *TenantManager, txMgr *transaction.Manager) *Cach
 	return &CacheTracker{
 		txMgr:          txMgr,
 		tenantVersions: tenantVersionMap,
+		versionH:       tenantMgr.versionH,
 	}
 }
 

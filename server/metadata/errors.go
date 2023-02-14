@@ -29,6 +29,9 @@ const (
 	ErrCodeSearchIndexNotFound  ErrorCode = 0x07
 	ErrCodeCacheExists          ErrorCode = 0x08
 	ErrCodeCacheNotFound        ErrorCode = 0x09
+
+	ErrDBMismatch     ErrorCode = 0x0A
+	ErrBranchMismatch ErrorCode = 0x0B
 )
 
 type Error struct {
@@ -77,4 +80,12 @@ func NewCacheExistsErr(name string) error {
 
 func NewCacheNotFoundErr(name string) error {
 	return NewMetadataError(ErrCodeCacheNotFound, "cache not found '%s'", name)
+}
+
+func NewBranchMismatchErr(old string, newName string) error {
+	return NewMetadataError(ErrBranchMismatch, "branch mismatch was: '%s', got: '%s'", old, newName)
+}
+
+func NewDatabaseMismatchErr(old string, newName string) error {
+	return NewMetadataError(ErrDBMismatch, "database mismatch was: '%s', got: '%s'", old, newName)
 }

@@ -83,10 +83,11 @@ func getTagsForError(err error) map[string]string {
 	}
 }
 
-func GetProjectCollTags(project string, collection string) map[string]string {
+func GetProjectBranchCollTags(project string, branch string, collection string) map[string]string {
 	if project != "" && collection != "" {
 		return map[string]string{
 			"project":    project,
+			"branch":     branch,
 			"db":         project,
 			"collection": collection,
 		}
@@ -95,6 +96,7 @@ func GetProjectCollTags(project string, collection string) map[string]string {
 		return map[string]string{
 			"project": project,
 			"db":      project,
+			"branch":  branch,
 		}
 	}
 	return map[string]string{}

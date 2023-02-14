@@ -25,6 +25,7 @@ func TestSizeMetrics(t *testing.T) {
 	testNamespace := "test_namespace"
 	testNamespaceName := "test_namespace"
 	testDb := "test_db"
+	testBranch := "test_branch"
 	testCollection := "test_collection"
 
 	config.DefaultConfig.Tracing.Enabled = true
@@ -36,10 +37,10 @@ func TestSizeMetrics(t *testing.T) {
 	})
 
 	t.Run("Update database size metrics", func(t *testing.T) {
-		UpdateDbSizeMetrics(testNamespace, testNamespaceName, testDb, testSize)
+		UpdateDbSizeMetrics(testNamespace, testNamespaceName, testDb, testBranch, testSize)
 	})
 
 	t.Run("Update collection size metrics", func(t *testing.T) {
-		UpdateCollectionSizeMetrics(testNamespace, testNamespaceName, testDb, testCollection, testSize)
+		UpdateCollectionSizeMetrics(testNamespace, testNamespaceName, testDb, testBranch, testCollection, testSize)
 	})
 }

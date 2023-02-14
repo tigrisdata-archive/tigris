@@ -50,6 +50,7 @@ func TestRedis(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, s1, g1.RawData)
 	})
+
 	t.Run("set_get", func(t *testing.T) {
 		defer dropCacheTable(t, c, tableName)
 
@@ -65,6 +66,7 @@ func TestRedis(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, s2, g.RawData)
 	})
+
 	t.Run("set_nx", func(t *testing.T) {
 		defer dropCacheTable(t, c, tableName)
 
@@ -78,6 +80,7 @@ func TestRedis(t *testing.T) {
 			XX: true,
 		}))
 	})
+
 	t.Run("set_xx", func(t *testing.T) {
 		defer dropCacheTable(t, c, tableName)
 
@@ -90,6 +93,7 @@ func TestRedis(t *testing.T) {
 			NX: true,
 		}))
 	})
+
 	t.Run("delete", func(t *testing.T) {
 		defer dropCacheTable(t, c, tableName)
 
@@ -105,6 +109,7 @@ func TestRedis(t *testing.T) {
 		require.Nil(t, g1)
 		require.Equal(t, ErrKeyNotFound, err)
 	})
+
 	t.Run("keys", func(t *testing.T) {
 		defer dropCacheTable(t, c, tableName)
 

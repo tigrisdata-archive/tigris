@@ -16,27 +16,58 @@ package api
 
 import (
 	"strings"
+	"time"
 
 	jsoniter "github.com/json-iterator/go"
 )
 
+type DocMetadata struct {
+	CreatedAt *time.Time `json:"created_at,omitempty"`
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+}
+
+func (x *IndexDoc) MarshalJSON() ([]byte, error) {
+	if x.Doc == nil {
+		return []byte("null"), nil
+	}
+
+	resp := struct {
+		Doc      jsoniter.RawMessage `json:"doc,omitempty"`
+		Metadata *DocMetadata        `json:"metadata,omitempty"`
+	}{
+		Doc:      x.Doc,
+		Metadata: CreateMDFromDocMeta(x.Metadata),
+	}
+
+	return jsoniter.Marshal(resp)
+}
+
+func CreateMDFromDocMeta(x *DocMeta) *DocMetadata {
+	if x == nil {
+		return nil
+	}
+
+	var md DocMetadata
+	if x.CreatedAt != nil {
+		tm := x.CreatedAt.AsTime()
+		md.CreatedAt = &tm
+	}
+	if x.UpdatedAt != nil {
+		tm := x.UpdatedAt.AsTime()
+		md.UpdatedAt = &tm
+	}
+
+	return &md
+}
+
 func (x *GetDocumentResponse) MarshalJSON() ([]byte, error) {
-	type resp struct {
-		Documents []jsoniter.RawMessage `json:"documents,omitempty"`
+	resp := struct {
+		Documents []*IndexDoc `json:"documents,omitempty"`
+	}{
+		Documents: x.Documents,
 	}
 
-	r := resp{}
-	r.Documents = make([]jsoniter.RawMessage, len(x.Documents))
-	for i, doc := range x.Documents {
-		if len(doc) == 0 {
-			r.Documents[i] = nil
-			continue
-		}
-
-		r.Documents[i] = doc
-	}
-
-	return jsoniter.Marshal(r)
+	return jsoniter.Marshal(resp)
 }
 
 func (x *DocStatus) MarshalJSON() ([]byte, error) {

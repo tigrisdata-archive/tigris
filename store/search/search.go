@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/query/filter"
@@ -62,7 +63,7 @@ type Store interface {
 
 func NewStore(config *config.SearchConfig) (Store, error) {
 	client := typesense.NewClient(
-		typesense.WithServer(fmt.Sprintf("http://%s:%d", config.Host, config.Port)),
+		typesense.WithServer(fmt.Sprintf("http://%s", net.JoinHostPort(config.Host, fmt.Sprintf("%d", config.Port)))),
 		typesense.WithAPIKey(config.AuthKey))
 	log.Info().Str("host", config.Host).Int16("port", config.Port).Msg("initialized search store")
 	return &storeImpl{
@@ -72,7 +73,7 @@ func NewStore(config *config.SearchConfig) (Store, error) {
 
 func NewStoreWithMetrics(config *config.SearchConfig) (Store, error) {
 	client := typesense.NewClient(
-		typesense.WithServer(fmt.Sprintf("http://%s:%d", config.Host, config.Port)),
+		typesense.WithServer(fmt.Sprintf("http://%s", net.JoinHostPort(config.Host, fmt.Sprintf("%d", config.Port)))),
 		typesense.WithAPIKey(config.AuthKey))
 	log.Info().Str("host", config.Host).Int16("port", config.Port).Msg("initialized search store")
 	return &storeImplWithMetrics{
@@ -108,10 +109,10 @@ func (n *NoopStore) Search(context.Context, string, *qsearch.Query, int) ([]tsAp
 	return nil, nil
 }
 
-func (n *NoopStore) GetDocuments(ctx context.Context, table string, ids []string) (*tsApi.SearchResult, error) {
+func (n *NoopStore) GetDocuments(_ context.Context, _ string, _ []string) (*tsApi.SearchResult, error) {
 	return nil, nil
 }
 
-func (n *NoopStore) CreateDocument(_ context.Context, table string, doc map[string]any) error {
+func (n *NoopStore) CreateDocument(_ context.Context, _ string, _ map[string]any) error {
 	return nil
 }

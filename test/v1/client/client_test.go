@@ -18,7 +18,7 @@ package client
 
 import (
 	"context"
-	"fmt"
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -48,10 +48,13 @@ func TestClientCollectionBasic(t *testing.T) {
 	var err error
 	var cfg *tigris.Config
 	for {
-		cfg = &tigris.Config{URL: fmt.Sprintf("%v:%d", h, p), Project: "db111222"}
+		cfg = &tigris.Config{URL: net.JoinHostPort(h, p), Project: "db111222"}
 
-		drv, _ := driver.NewDriver(ctx, &config.Driver{URL: cfg.URL})
-		_, _ = drv.CreateProject(ctx, "db111222")
+		drv, err := driver.NewDriver(ctx, &config.Driver{URL: cfg.URL})
+		require.NoError(t, err)
+
+		_, err = drv.CreateProject(ctx, "db111222")
+		require.NoError(t, err)
 
 		db, err = tigris.OpenDatabase(ctx, cfg, &Coll1{}, &Coll2{})
 		if err != nil && err.Error() == "transaction not committed due to conflict with another transaction" {
@@ -126,14 +129,16 @@ func TestClientCollectionTx(t *testing.T) {
 	h, p := getTestServerHostPort()
 	var err error
 	var db *tigris.Database
-	cfg := &tigris.Config{URL: fmt.Sprintf("%v:%d", h, p), Project: "db111333"}
+	cfg := &tigris.Config{URL: net.JoinHostPort(h, p), Project: "db111333"}
 	for {
-		drv, _ := driver.NewDriver(ctx, &config.Driver{URL: cfg.URL})
-		_, _ = drv.CreateProject(ctx, "db111333")
+		drv, err := driver.NewDriver(ctx, &config.Driver{URL: cfg.URL})
+		require.NoError(t, err)
+
+		_, err = drv.CreateProject(ctx, "db111333")
+		require.NoError(t, err)
 
 		c, _ := tigris.NewClient(ctx, cfg)
-		c.OpenDatabase(ctx, &Coll1{})
-		db, err = tigris.OpenDatabase(ctx, cfg, &Coll1{})
+		db, err = c.OpenDatabase(ctx, &Coll1{})
 		if err != nil && err.Error() == "transaction not committed due to conflict with another transaction" {
 			continue
 		}

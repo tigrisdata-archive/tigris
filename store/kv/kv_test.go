@@ -607,6 +607,68 @@ func testSetVersionstampedValue(t *testing.T, kv baseKVStore) {
 	require.NoError(t, tx.Commit(ctx))
 }
 
+func testKVAddAtomicValue(t *testing.T, kv baseKVStore) {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	key := BuildKey([]byte("foo"))
+	key2 := BuildKey([]byte("foo-2"))
+	table := []byte("t1")
+
+	err := kv.DropTable(ctx, table)
+	require.NoError(t, err)
+
+	err = kv.CreateTable(ctx, table)
+	require.NoError(t, err)
+
+	tx, err := kv.BeginTx(ctx)
+	require.NoError(t, err)
+
+	require.NoError(t, tx.AtomicAdd(ctx, table, key, 1))
+	err = tx.Commit(ctx)
+	require.NoError(t, err)
+
+	tx, err = kv.BeginTx(ctx)
+	require.NoError(t, err)
+
+	val, err := tx.AtomicRead(ctx, table, key)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), val)
+
+	require.NoError(t, tx.AtomicAdd(ctx, table, key, -10))
+	require.NoError(t, tx.Commit(ctx))
+
+	tx, err = kv.BeginTx(ctx)
+	require.NoError(t, err)
+
+	val, err = tx.AtomicRead(ctx, table, key)
+	require.NoError(t, err)
+	require.Equal(t, int64(-9), val)
+
+	require.NoError(t, tx.AtomicAdd(ctx, table, key, 20))
+	require.NoError(t, tx.AtomicAdd(ctx, table, key2, 5))
+	err = tx.Commit(ctx)
+	require.NoError(t, err)
+
+	tx, err = kv.BeginTx(ctx)
+	require.NoError(t, err)
+
+	iter, err := tx.AtomicReadRange(ctx, table, key, nil, false)
+	require.NoError(t, err)
+
+	var rangeVal FdbBaseKeyValue[int64]
+	count := 0
+	expected := []int64{11, 5}
+	for iter.Next(&rangeVal) {
+		require.Equal(t, expected[count], rangeVal.Data)
+		count += 1
+	}
+
+	require.Equal(t, 2, count)
+	err = tx.Commit(ctx)
+	require.NoError(t, err)
+}
+
 func TestKVFDB(t *testing.T) {
 	cfg, err := config.GetTestFDBConfig("../..")
 	require.NoError(t, err)
@@ -641,6 +703,10 @@ func TestKVFDB(t *testing.T) {
 	})
 	t.Run("TestSetVersionstampedValue", func(t *testing.T) {
 		testSetVersionstampedValue(t, kv)
+	})
+
+	t.Run("TestAtomicAdd", func(t *testing.T) {
+		testKVAddAtomicValue(t, kv)
 	})
 }
 

@@ -45,9 +45,10 @@ func ExecTemplate(w io.Writer, tmpl string, vars interface{}) error {
 
 func MapToJSON(data map[string]any) ([]byte, error) {
 	var buffer bytes.Buffer
+
 	encoder := jsoniter.NewEncoder(&buffer)
-	err := encoder.Encode(data)
-	if err != nil {
+
+	if err := encoder.Encode(data); ulog.E(err) {
 		return nil, err
 	}
 
@@ -59,7 +60,8 @@ func JSONToMap(data []byte) (map[string]any, error) {
 
 	decoder := jsoniter.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
-	if err := decoder.Decode(&decoded); err != nil {
+
+	if err := decoder.Decode(&decoded); ulog.E(err) {
 		return nil, err
 	}
 

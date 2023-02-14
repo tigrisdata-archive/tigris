@@ -46,7 +46,7 @@ func (d *testMetricsBackend) CurRates(_ context.Context, _ string) (int64, int64
 }
 
 func TestNamespaceQuota(t *testing.T) {
-	tenants, ctx, cancel := metadata.NewTestTenantMgr(kvStore)
+	tenants, ctx, cancel := metadata.NewTestTenantMgr(t, kvStore)
 	defer cancel()
 
 	ns := fmt.Sprintf("ns-test-tenantQuota-1-%x", rand.Uint64()) //nolint:gosec
@@ -105,7 +105,7 @@ func TestNamespaceQuota(t *testing.T) {
 
 	i = 0
 	err = nil
-	for ; err == nil && 1 < 15; i++ {
+	for ; err == nil && i < 15; i++ {
 		err = m.Allow(ctx, ns, 512, true) // < 1024 = 1 unit
 	}
 	assert.Equal(t, ErrWriteUnitsExceeded, err)
@@ -242,7 +242,7 @@ func TestNamespaceQuotaCalcLimits(t *testing.T) {
 }
 
 func TestQuotaConfigLimits(t *testing.T) {
-	tenants, ctx, cancel := metadata.NewTestTenantMgr(kvStore)
+	tenants, ctx, cancel := metadata.NewTestTenantMgr(t, kvStore)
 	defer cancel()
 
 	ns := fmt.Sprintf("ns-test-tenantQuota-1-%x", rand.Uint64()) //nolint:gosec

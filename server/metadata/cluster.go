@@ -16,15 +16,17 @@ package metadata
 
 import (
 	"context"
-	"time"
 
 	"github.com/google/uuid"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/server/transaction"
-	ulog "github.com/tigrisdata/tigris/util/log"
 )
+
+// ClusterMetadata keeps cluster wide metadata.
+type ClusterMetadata struct {
+	ID uuid.UUID
+}
 
 // ClusterSubspace is used to store metadata about Tigris clusters.
 type ClusterSubspace struct {
@@ -32,78 +34,59 @@ type ClusterSubspace struct {
 }
 
 var (
-	clusterVersion     = []byte{0x01}
 	clusterID          = uuid.Nil.String()
-	clusterMetadataKey = "key"
+	clusterMetadataKey = "cluster"
 )
 
-// ClusterMetadata keeps cluster wide metadata.
-type ClusterMetadata struct {
-	WorkerKeepalive time.Time
-}
+const (
+	clusterMetaValueVersion int32 = 1
+	clusterMetaKeyVersion   byte  = 1
+)
 
 func NewClusterStore(nameRegistry *NameRegistry) *ClusterSubspace {
 	return &ClusterSubspace{
 		metadataSubspace{
 			SubspaceName: nameRegistry.ClusterSubspaceName(),
-			Version:      clusterVersion,
+			KeyVersion:   []byte{clusterMetaKeyVersion},
 		},
 	}
 }
 
 func (u *ClusterSubspace) getKey(clusterID string, clusterMetadataKey string) keys.Key {
-	return keys.NewKey(u.SubspaceName, clusterVersion,
-		[]byte(clusterID), []byte(clusterMetadataKey))
+	return keys.NewKey(u.SubspaceName, u.KeyVersion, []byte(clusterID), []byte(clusterMetadataKey))
 }
 
-func (u *ClusterSubspace) Insert(ctx context.Context, tx transaction.Tx, metadata *ClusterMetadata) error {
-	if err := u.validateArgs(clusterID, &clusterMetadataKey, &metadata); err != nil {
-		return err
-	}
-
-	payload, err := jsoniter.Marshal(metadata)
-	if ulog.E(err) {
-		return errors.Internal("failed to marshal cluster metadata")
-	}
-
-	return u.insertMetadata(ctx, tx, nil, u.getKey(clusterID, clusterMetadataKey), payload)
+func (u *ClusterSubspace) insert(ctx context.Context, tx transaction.Tx, metadata *ClusterMetadata) error {
+	return u.insertMetadata(ctx, tx,
+		u.validateArgs(clusterID, &clusterMetadataKey, &metadata),
+		u.getKey(clusterID, clusterMetadataKey),
+		clusterMetaValueVersion,
+		metadata)
 }
 
 func (u *ClusterSubspace) Get(ctx context.Context, tx transaction.Tx) (*ClusterMetadata, error) {
-	payload, err := u.getMetadata(ctx, tx,
+	var metadata ClusterMetadata
+
+	if err := u.getMetadata(ctx, tx,
 		u.validateArgs(clusterID, &clusterMetadataKey, nil),
 		u.getKey(clusterID, clusterMetadataKey),
-	)
-	if err != nil {
+		&metadata,
+	); err != nil {
 		return nil, err
-	}
-
-	if payload == nil {
-		return nil, nil
-	}
-
-	var metadata ClusterMetadata
-	if err = jsoniter.Unmarshal(payload, &metadata); ulog.E(err) {
-		return nil, errors.Internal("failed to unmarshal cluster metadata")
 	}
 
 	return &metadata, nil
 }
 
 func (u *ClusterSubspace) Update(ctx context.Context, tx transaction.Tx, metadata *ClusterMetadata) error {
-	if err := u.validateArgs(clusterID, &clusterMetadataKey, &metadata); err != nil {
-		return err
-	}
-
-	payload, err := jsoniter.Marshal(metadata)
-	if ulog.E(err) {
-		return errors.Internal("failed to marshal cluster metadata")
-	}
-
-	return u.updateMetadata(ctx, tx, nil, u.getKey(clusterID, clusterMetadataKey), payload)
+	return u.updateMetadata(ctx, tx,
+		u.validateArgs(clusterID, &clusterMetadataKey, &metadata),
+		u.getKey(clusterID, clusterMetadataKey),
+		clusterMetaValueVersion,
+		metadata)
 }
 
-func (u *ClusterSubspace) Delete(ctx context.Context, tx transaction.Tx) error {
+func (u *ClusterSubspace) delete(ctx context.Context, tx transaction.Tx) error {
 	return u.deleteMetadata(ctx, tx,
 		u.validateArgs(clusterID, nil, nil),
 		u.getKey(clusterID, clusterMetadataKey),
