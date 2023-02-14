@@ -80,7 +80,7 @@ func (s *Selector) MatchesDoc(doc map[string]interface{}) bool {
 
 // Matches returns true if the input doc matches this filter.
 func (s *Selector) Matches(doc []byte) bool {
-	docValue, dtp, _, err := jsonparser.Get(doc, s.Field.Name())
+	docValue, dtp, _, err := jsonparser.Get(doc, s.Field.KeyPath()...)
 	if ulog.E(err) {
 		return false
 	}

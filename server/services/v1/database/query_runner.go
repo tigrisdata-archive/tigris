@@ -381,12 +381,14 @@ type StreamingQueryRunner struct {
 type readerOptions struct {
 	from          keys.Key
 	ikeys         []keys.Key
+	secondaryPlan *filter.QueryPlan
 	table         []byte
 	noFilter      bool
 	inMemoryStore bool
-	sorting       *sort.Ordering
-	filter        *filter.WrappedFilter
-	fieldFactory  *read.FieldFactory
+	// secondaryIndex bool
+	sorting      *sort.Ordering
+	filter       *filter.WrappedFilter
+	fieldFactory *read.FieldFactory
 }
 
 func (runner *StreamingQueryRunner) buildReaderOptions(collection *schema.DefaultCollection) (readerOptions, error) {
@@ -413,6 +415,13 @@ func (runner *StreamingQueryRunner) buildReaderOptions(collection *schema.Defaul
 		}
 	}
 
+	if config.DefaultConfig.SecondaryIndex.ReadEnabled {
+		if queryPlan, err := runner.buildSecondaryIndexKeysUsingFilter(collection, runner.req.Filter); err == nil {
+			options.secondaryPlan = queryPlan
+			return options, nil
+		}
+	}
+
 	if options.filter.None() || !options.filter.IsIndexed() {
 		// trigger full scan in case there is a field in the filter which is not indexed
 		if options.sorting != nil {
@@ -436,7 +445,10 @@ func (runner *StreamingQueryRunner) buildReaderOptions(collection *schema.Defaul
 
 func (runner *StreamingQueryRunner) instrumentRunner(ctx context.Context, options readerOptions) context.Context {
 	// Set read type
-	if len(options.ikeys) == 0 {
+	//nolint:gocritic
+	if options.secondaryPlan != nil {
+		runner.queryMetrics.SetReadType("secondary")
+	} else if options.ikeys == nil {
 		runner.queryMetrics.SetReadType("non-pkey")
 	} else {
 		runner.queryMetrics.SetReadType("pkey")
@@ -470,9 +482,8 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 	if err != nil {
 		return Response{}, ctx, err
 	}
-
 	if options.inMemoryStore {
-		if err = runner.iterateOnIndexingStore(ctx, collection, options); err != nil {
+		if err = runner.iterateOnSearchStore(ctx, collection, options); err != nil {
 			return Response{}, ctx, err
 		}
 		return Response{}, ctx, nil
@@ -487,7 +498,12 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 		}
 
 		var last []byte
-		last, err = runner.iterateOnKvStore(ctx, tx, collection, options)
+		if options.secondaryPlan != nil {
+			last, err = runner.iterateOnSecondaryIndexStore(ctx, tx, collection, options)
+		} else {
+			last, err = runner.iterateOnKvStore(ctx, tx, collection, options)
+		}
+
 		_ = tx.Rollback(ctx)
 
 		if err == kv.ErrTransactionMaxDurationReached {
@@ -526,7 +542,7 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 
 	ctx = runner.instrumentRunner(ctx, options)
 	if options.inMemoryStore {
-		if err = runner.iterateOnIndexingStore(ctx, coll, options); err != nil {
+		if err = runner.iterateOnSearchStore(ctx, coll, options); err != nil {
 			return Response{}, ctx, err
 		}
 		return Response{}, ctx, nil
@@ -542,10 +558,10 @@ func (runner *StreamingQueryRunner) iterateOnKvStore(ctx context.Context, tx tra
 	var err error
 	var iter Iterator
 	reader := NewDatabaseReader(ctx, tx)
-	if len(options.ikeys) > 0 {
+	if len(options.ikeys) != 0 {
 		iter, err = reader.KeyIterator(options.ikeys)
 	} else if options.from != nil {
-		if iter, err = reader.ScanIterator(options.from); err == nil {
+		if iter, err = reader.ScanIterator(options.from, nil); err == nil {
 			// pass it to filterable
 			iter, err = reader.FilteredRead(iter, options.filter)
 		}
@@ -560,7 +576,16 @@ func (runner *StreamingQueryRunner) iterateOnKvStore(ctx context.Context, tx tra
 	return runner.iterate(coll, iter, options.fieldFactory)
 }
 
-func (runner *StreamingQueryRunner) iterateOnIndexingStore(ctx context.Context, coll *schema.DefaultCollection, options readerOptions) error {
+func (runner *StreamingQueryRunner) iterateOnSecondaryIndexStore(ctx context.Context, tx transaction.Tx, coll *schema.DefaultCollection, options readerOptions) ([]byte, error) {
+	iter, err := NewSecondaryIndexReader(ctx, tx, coll, options.filter, options.secondaryPlan)
+	if err != nil {
+		return nil, err
+	}
+
+	return runner.iterate(coll, NewFilterIterator(iter, options.filter), options.fieldFactory)
+}
+
+func (runner *StreamingQueryRunner) iterateOnSearchStore(ctx context.Context, coll *schema.DefaultCollection, options readerOptions) error {
 	rowReader := NewSearchReader(ctx, runner.searchStore, coll, qsearch.NewBuilder().
 		Filter(options.filter).
 		SortOrder(options.sorting).

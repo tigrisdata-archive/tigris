@@ -268,7 +268,7 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 
 		return NewSelector(field, NewEqualityMatcher(val), factory.collation), nil
 	case jsonparser.Object:
-		valueMatcher, collation, err := buildValueMatcher(v, field)
+		valueMatcher, collation, err := buildValueMatcher(v, field, factory.collation)
 		if err != nil {
 			return nil, err
 		}
@@ -286,7 +286,7 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 // instead of a simple JSON value. Apart from comparison operators, this object can have its own collation, which
 // needs to be honored at the field level. Therefore, the caller needs to check if the collation returned by the
 // method is not nil and if yes, use this collation..
-func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField) (ValueMatcher, *value.Collation, error) {
+func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField, factoryCollation *value.Collation) (ValueMatcher, *value.Collation, error) {
 	if len(input) == 0 {
 		return nil, nil, errors.InvalidArgument("empty object")
 	}
@@ -303,6 +303,8 @@ func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField) 
 			return nil, nil, err
 		}
 		collation = value.NewCollationFrom(apiCollation)
+	} else {
+		collation = factoryCollation
 	}
 
 	var err error
