@@ -122,7 +122,7 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 	var err error
 	ts := internal.NewTimestamp()
 	allKeys := make([][]byte, 0, len(documents))
-	secondaryIndexer := NewSecondaryIndexer(coll)
+	indexer := NewSecondaryIndexer(coll)
 	for _, doc := range documents {
 		// reset it back to doc
 		doc, err = runner.mutateAndValidatePayload(coll, newInsertPayloadMutator(coll, ts.ToRFC3339()), doc)
@@ -141,7 +141,7 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 		tableData.SetVersion(coll.GetVersion())
 
 		if config.DefaultConfig.SecondaryIndex.WriteEnabled {
-			err := secondaryIndexer.Index(ctx, tx, tableData, key.IndexParts())
+			err := indexer.Index(ctx, tx, tableData, key.IndexParts())
 			if err != nil {
 				return nil, nil, err
 			}
@@ -153,7 +153,7 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 			err = tx.Insert(ctx, key, tableData)
 		} else {
 			if config.DefaultConfig.SecondaryIndex.WriteEnabled {
-				err := secondaryIndexer.ReadDocAndDelete(ctx, tx, key)
+				err := indexer.ReadDocAndDelete(ctx, tx, key)
 				if err != nil {
 					return nil, nil, err
 				}

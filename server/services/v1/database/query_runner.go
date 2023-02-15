@@ -174,7 +174,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return Response{}, ctx, err
 	}
 
-	secondaryIndexer := NewSecondaryIndexer(coll)
+	indexer := NewSecondaryIndexer(coll)
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
@@ -265,15 +265,15 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			isUpdate = false
 
 			if config.DefaultConfig.SecondaryIndex.WriteEnabled {
-				if err := secondaryIndexer.Delete(ctx, tx, row.Data, key.IndexParts()); ulog.E(err) {
+				if err := indexer.Delete(ctx, tx, row.Data, key.IndexParts()); ulog.E(err) {
 					return Response{}, nil, err
 				}
-				if err = secondaryIndexer.Index(ctx, tx, newData, newKey.IndexParts()); ulog.E(err) {
+				if err = indexer.Index(ctx, tx, newData, newKey.IndexParts()); ulog.E(err) {
 					return Response{}, nil, err
 				}
 			}
 		} else if config.DefaultConfig.SecondaryIndex.WriteEnabled {
-			if err := secondaryIndexer.Update(ctx, tx, newData, row.Data, key.IndexParts()); ulog.E(err) {
+			if err := indexer.Update(ctx, tx, newData, row.Data, key.IndexParts()); ulog.E(err) {
 				return Response{}, nil, err
 			}
 		}
@@ -305,7 +305,7 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
-	secondaryIndexer := NewSecondaryIndexer(coll)
+	indexer := NewSecondaryIndexer(coll)
 
 	if err = runner.mustBeDocumentsCollection(coll, "deleteReq"); err != nil {
 		return Response{}, ctx, err
@@ -345,7 +345,7 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		}
 
 		if config.DefaultConfig.SecondaryIndex.WriteEnabled {
-			err := secondaryIndexer.Delete(ctx, tx, row.Data, key.IndexParts())
+			err := indexer.Delete(ctx, tx, row.Data, key.IndexParts())
 			if err != nil {
 				return Response{}, ctx, err
 			}

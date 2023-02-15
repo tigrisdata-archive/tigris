@@ -74,7 +74,8 @@ func TestIndexingCreateSimpleKVsforDoc(t *testing.T) {
 	indexStore := setupTest(t, reqSchema)
 	td, primaryKey := createDoc(`{"id":1, "double_f":2,"created":"2023-01-16T12:55:17.304154Z","updated": "2023-01-16T12:55:17.304154Z","binary_val": "cGVlay1hLWJvbwo=", "arr":[1,2]}`)
 	t.Run("insert", func(t *testing.T) {
-		updateSet := indexStore.buildAddAndRemoveKVs(td, nil, primaryKey)
+		updateSet, err := indexStore.buildAddAndRemoveKVs(td, nil, primaryKey)
+		assert.NoError(t, err)
 		expected := [][]interface{}{
 			{"skey", KVSubspace, "_tigris_created_at", 1, td.CreatedAt.ToRFC3339(), 0, 1},
 			{"skey", KVSubspace, "_tigris_updated_at", 1, td.UpdatedAt.ToRFC3339(), 0, 1},
@@ -90,7 +91,8 @@ func TestIndexingCreateSimpleKVsforDoc(t *testing.T) {
 	t.Run("update new values", func(t *testing.T) {
 		updateTD, _ := createDoc(`{"id":1, "double_f":3,"created":"2023-01-17T12:55:17.304154Z","updated": "2023-01-17T12:55:17.304154Z","binary_val": "cGVlay1hLWJvbwo=", "arr":[1,3]}`)
 		updateTD.CreatedAt = td.CreatedAt
-		updateSet := indexStore.buildAddAndRemoveKVs(updateTD, td, primaryKey)
+		updateSet, err := indexStore.buildAddAndRemoveKVs(updateTD, td, primaryKey)
+		assert.NoError(t, err)
 
 		expectedAdd := [][]interface{}{
 			{"skey", KVSubspace, "_tigris_updated_at", 1, updateTD.UpdatedAt.ToRFC3339(), 0, 1},
@@ -112,7 +114,8 @@ func TestIndexingCreateSimpleKVsforDoc(t *testing.T) {
 	})
 
 	t.Run("delete", func(t *testing.T) {
-		updateSet := indexStore.buildAddAndRemoveKVs(nil, td, primaryKey)
+		updateSet, err := indexStore.buildAddAndRemoveKVs(nil, td, primaryKey)
+		assert.NoError(t, err)
 		expected := [][]interface{}{
 			{"skey", KVSubspace, "_tigris_created_at", 1, td.CreatedAt.ToRFC3339(), 0, 1},
 			{"skey", KVSubspace, "_tigris_updated_at", 1, td.UpdatedAt.ToRFC3339(), 0, 1},
@@ -163,7 +166,8 @@ func TestIndexingNull(t *testing.T) {
 	td.UpdatedAt = nil
 
 	t.Run("create nulls", func(t *testing.T) {
-		updateSet := indexStore.buildAddAndRemoveKVs(td, nil, primaryKey)
+		updateSet, err := indexStore.buildAddAndRemoveKVs(td, nil, primaryKey)
+		assert.NoError(t, err)
 		expected := [][]interface{}{
 			{"skey", KVSubspace, "_tigris_created_at", 1, nil, 0, 1},
 			{"skey", KVSubspace, "_tigris_updated_at", 1, nil, 0, 1},
@@ -179,8 +183,8 @@ func TestIndexingNull(t *testing.T) {
 
 	t.Run("update nulls", func(t *testing.T) {
 		updatedTd, _ := createDoc(`{"id":1, "double_f":5,"created":null,"updated":"2023-01-16T12:55:17.304154Z", "arr":[null,1]}`)
-		updateSet := indexStore.buildAddAndRemoveKVs(updatedTd, td, primaryKey)
-
+		updateSet, err := indexStore.buildAddAndRemoveKVs(updatedTd, td, primaryKey)
+		assert.NoError(t, err)
 		expectedAdded := [][]interface{}{
 			{"skey", KVSubspace, "_tigris_created_at", 1, updatedTd.CreatedAt.ToRFC3339(), 0, 1},
 			{"skey", KVSubspace, "_tigris_updated_at", 1, updatedTd.UpdatedAt.ToRFC3339(), 0, 1},
@@ -229,7 +233,8 @@ func TestIndexingStringEncoding(t *testing.T) {
 
 	t.Run("encodes strings correctly", func(t *testing.T) {
 		td, primaryKey := createDoc(`{"id":1, "string_val":"a simple string value","created":"2023-01-16T12:55:17.304154Z","arr":["one", "two"]}`)
-		updateSet := indexStore.buildAddAndRemoveKVs(td, nil, primaryKey)
+		updateSet, err := indexStore.buildAddAndRemoveKVs(td, nil, primaryKey)
+		assert.NoError(t, err)
 		expected := [][]interface{}{
 			{"skey", KVSubspace, "_tigris_created_at", 1, td.CreatedAt.ToRFC3339(), 0, 1},
 			{"skey", KVSubspace, "_tigris_updated_at", 1, td.UpdatedAt.ToRFC3339(), 0, 1},
@@ -245,7 +250,8 @@ func TestIndexingStringEncoding(t *testing.T) {
 	t.Run("concaternates longer strings", func(t *testing.T) {
 		longStr := stringEncoder("this is a very long string that will be larger than 64 bytes so that we concaternate it correctly")
 		td, primaryKey := createDoc(`{"id":1, "string_val":"this is a very long string that will be larger than 64 bytes so that we concaternate it correctly","created":"2023-01-16T12:55:17.304154Z","arr":["one", "two"]}`)
-		updateSet := indexStore.buildAddAndRemoveKVs(td, nil, primaryKey)
+		updateSet, err := indexStore.buildAddAndRemoveKVs(td, nil, primaryKey)
+		assert.NoError(t, err)
 		assert.Equal(t, []interface{}{"skey", KVSubspace, "string_val", 1, longStr, 0, 1}, updateSet.addKeys[3].IndexParts())
 	})
 }
@@ -317,7 +323,8 @@ func TestIndexingObjectArrayKVGen(t *testing.T) {
 		"arr": [{"val1":1,"val2":2.0},{"val1":1,"val2":5.0}]}
 	`)
 
-	updateSet := indexStore.buildAddAndRemoveKVs(td, nil, primaryKey)
+	updateSet, err := indexStore.buildAddAndRemoveKVs(td, nil, primaryKey)
+	assert.NoError(t, err)
 
 	expected := [][]interface{}{
 		{"skey", KVSubspace, "_tigris_created_at", 1, td.CreatedAt.ToRFC3339(), 0, 1},
@@ -329,7 +336,7 @@ func TestIndexingObjectArrayKVGen(t *testing.T) {
 		{"skey", KVSubspace, "object1.val3.another", 1, float64(100), 0, 1},
 		{"skey", KVSubspace, "object1.val3.arrayval.val1", 1, stringEncoder("one"), 0, 1},
 		{"skey", KVSubspace, "object1.val3.arrayval.val2", 1, false, 0, 1},
-		{"skey", KVSubspace, "object1.val3.arrayval.val3._tigris_stub", 1, interface{}(nil), 0, 1},
+		{"skey", KVSubspace, "object1.val3.arrayval.val3._tigris_array_stub", 1, interface{}(nil), 0, 1},
 		{"skey", KVSubspace, "object1.val3.arrayval.val1", 1, stringEncoder("one"), 1, 1},
 		{"skey", KVSubspace, "object1.val3.arrayval.val2", 1, false, 1, 1},
 		{"skey", KVSubspace, "arr.val1", 1, float64(1), 0, 1},
@@ -404,7 +411,8 @@ func TestIndexingArrayWithObjectAndNestedArrayKeyGen(t *testing.T) {
 		}
 	`)
 
-	updateSet := indexStore.buildAddAndRemoveKVs(td, nil, primaryKey)
+	updateSet, err := indexStore.buildAddAndRemoveKVs(td, nil, primaryKey)
+	assert.NoError(t, err)
 
 	expected := [][]interface{}{
 		{"skey", KVSubspace, "_tigris_created_at", 1, td.CreatedAt.ToRFC3339(), 0, 1},
@@ -412,11 +420,11 @@ func TestIndexingArrayWithObjectAndNestedArrayKeyGen(t *testing.T) {
 		{"skey", KVSubspace, "id", 1, int64(1), 0, 1},
 		{"skey", KVSubspace, "arr.val1", 1, float64(1), 0, 1},
 		{"skey", KVSubspace, "arr.val2", 1, float64(2.0), 0, 1},
-		{"skey", KVSubspace, "arr.val3._tigris_stub", 1, interface{}(nil), 0, 1},
+		{"skey", KVSubspace, "arr.val3._tigris_array_stub", 1, interface{}(nil), 0, 1},
 
 		{"skey", KVSubspace, "arr.val1", 1, float64(1), 1, 1},
 		{"skey", KVSubspace, "arr.val2", 1, float64(5.0), 1, 1},
-		{"skey", KVSubspace, "arr2._tigris_stub", 1, interface{}(nil), 0, 1},
+		{"skey", KVSubspace, "arr2._tigris_array_stub", 1, interface{}(nil), 0, 1},
 	}
 
 	assertKVs(t, expected, updateSet.addKeys, updateSet.addCounts)
@@ -614,8 +622,7 @@ func setupTest(t *testing.T, reqSchema []byte) *SecondaryIndexer {
 	coll, err := schema.NewDefaultCollection(1, 1, schFactory, nil, nil)
 	assert.NoError(t, err)
 	coll.EncodedName = []byte("t1")
-	indexStore := NewSecondaryIndexer(coll)
-	return indexStore
+	return NewSecondaryIndexer(coll)
 }
 
 func assertKVs(t *testing.T, expected [][]interface{}, indexKeys []keys.Key, counts map[string]int64) {

@@ -195,38 +195,36 @@ func (q *SecondaryIndexer) Index(ctx context.Context, tx transaction.Tx, td *int
 }
 
 func (q *SecondaryIndexer) Update(ctx context.Context, tx transaction.Tx, newTd *internal.TableData, oldTd *internal.TableData, primaryKey []interface{}) error {
-	updateSet := q.buildAddAndRemoveKVs(newTd, oldTd, primaryKey)
-
-	// Update Row Count
-	err := incAtomicMap(ctx, tx, q.coll, genRowCountKey, updateSet.addCounts)
+	updateSet, err := q.buildAddAndRemoveKVs(newTd, oldTd, primaryKey)
 	if err != nil {
 		return err
 	}
-	err = decAtomicMap(ctx, tx, q.coll, genRowCountKey, updateSet.removeCounts)
-	if err != nil {
+
+	// Update Row Count
+	if err = incAtomicMap(ctx, tx, q.coll, genRowCountKey, updateSet.addCounts); err != nil {
+		return err
+	}
+
+	if err = decAtomicMap(ctx, tx, q.coll, genRowCountKey, updateSet.removeCounts); err != nil {
 		return err
 	}
 
 	// Update Row Size
-	err = incAtomicMap(ctx, tx, q.coll, genRowSizeKey, updateSet.addSizes)
-	if err != nil {
+	if err = incAtomicMap(ctx, tx, q.coll, genRowSizeKey, updateSet.addSizes); err != nil {
 		return err
 	}
-	err = decAtomicMap(ctx, tx, q.coll, genRowSizeKey, updateSet.removeSizes)
-	if err != nil {
+	if err = decAtomicMap(ctx, tx, q.coll, genRowSizeKey, updateSet.removeSizes); err != nil {
 		return err
 	}
 
 	for _, indexKey := range updateSet.removeKeys {
-		err := tx.Delete(ctx, indexKey)
-		if err != nil {
+		if err := tx.Delete(ctx, indexKey); err != nil {
 			return err
 		}
 	}
 
 	for _, indexKey := range updateSet.addKeys {
-		err := tx.Replace(ctx, indexKey, nil, false)
-		if err != nil {
+		if err := tx.Replace(ctx, indexKey, nil, false); err != nil {
 			return err
 		}
 	}
@@ -238,10 +236,16 @@ func (q *SecondaryIndexer) Update(ctx context.Context, tx transaction.Tx, newTd 
 // 2. Remove keys from the old doc that are exactly the same in the new doc
 // 3. Remove keys from the new doc that are exactly the same as the old doc
 // 4. Create list of keys to remove and size and counts fields to be decremented
-// 5. Create list of keys to add to index along with size and count fields to be decremented
-func (q *SecondaryIndexer) buildAddAndRemoveKVs(newTableData *internal.TableData, oldTableData *internal.TableData, primaryKey []interface{}) *IndexerUpdateSet {
-	newRows := q.buildTableRows(newTableData)
-	oldRows := q.buildTableRows(oldTableData)
+// 5. Create list of keys to add to index along with size and count fields to be decremented.
+func (q *SecondaryIndexer) buildAddAndRemoveKVs(newTableData *internal.TableData, oldTableData *internal.TableData, primaryKey []interface{}) (*IndexerUpdateSet, error) {
+	newRows, err := q.buildTableRows(newTableData)
+	if err != nil {
+		return nil, err
+	}
+	oldRows, err := q.buildTableRows(oldTableData)
+	if err != nil {
+		return nil, err
+	}
 
 	rowsToRemove := removeDuplicateRows(newRows, oldRows)
 	rowsToAdd := removeDuplicateRows(oldRows, newRows)
@@ -259,34 +263,45 @@ func (q *SecondaryIndexer) buildAddAndRemoveKVs(newTableData *internal.TableData
 		removeKeys,
 		removeSizes,
 		removeCounts,
-	}
+	}, nil
 }
 
-func (q *SecondaryIndexer) buildTableRows(tableData *internal.TableData) []IndexRow {
+func (q *SecondaryIndexer) buildTableRows(tableData *internal.TableData) ([]IndexRow, error) {
 	if tableData == nil {
-		return []IndexRow{}
+		return []IndexRow{}, nil
 	}
-	rows := q.buildTSRows(tableData)
+	rows, err := q.buildTSRows(tableData)
+	if err != nil {
+		return nil, err
+	}
 	for _, field := range q.coll.QueryableFields {
 		if schema.IsReservedField(field.Name()) {
 			continue
 		}
 
 		if field.DataType == schema.ArrayType {
-			rows = append(rows, q.indexArray(tableData.RawData, field, field.KeyPath())...)
+			newRows, err := q.indexArray(tableData.RawData, field, field.KeyPath())
+			if err != nil {
+				return nil, err
+			}
+			rows = append(rows, newRows...)
 		} else {
 			row, err := q.indexField(tableData.RawData, field.FieldName, field.DataType, 0, field.KeyPath()...)
 			if err != nil {
-				log.Err(err).Msgf("Failed to index field name: %s", field.FieldName)
-				continue
+				if isIgnoreableError(err) {
+					continue
+				} else {
+					log.Err(err).Msgf("Failed to index field name: %s", field.FieldName)
+					return nil, err
+				}
 			}
 			rows = append(rows, *row)
 		}
 	}
-	return rows
+	return rows, nil
 }
 
-func (q *SecondaryIndexer) buildTSRows(tableData *internal.TableData) []IndexRow {
+func (q *SecondaryIndexer) buildTSRows(tableData *internal.TableData) ([]IndexRow, error) {
 	var rows []IndexRow
 
 	timeStamps := []struct {
@@ -312,13 +327,20 @@ func (q *SecondaryIndexer) buildTSRows(tableData *internal.TableData) []IndexRow
 		}
 
 		row, err := newIndexRow(dt, q.collation, schema.ReservedFields[ts.field], val, 0, false)
+		if err != nil {
+			return nil, err
+		}
 		if err == nil {
 			rows = append(rows, *row)
 		} else {
-			log.Err(err).Msgf("Failed to index %s field", schema.ReservedFields[ts.field])
+			if isIgnoreableError(err) {
+				continue
+			} else {
+				return nil, err
+			}
 		}
 	}
-	return rows
+	return rows, nil
 }
 
 func (q *SecondaryIndexer) buildIndexKey(row IndexRow, primaryKey []interface{}) keys.Key {
@@ -376,7 +398,7 @@ func (q *SecondaryIndexer) indexField(doc []byte, fieldName string, dataType sch
 	return row, nil
 }
 
-func (q *SecondaryIndexer) indexNestedField(doc []byte, topField string, pos int) []IndexRow {
+func (q *SecondaryIndexer) indexNestedField(doc []byte, topField string, pos int) ([]IndexRow, error) {
 	var indexedFields []IndexRow
 	processor := func(key []byte, value []byte, dt jsonparser.ValueType, offset int) error {
 		fieldType := schema.ToFieldType(dt.String(), "", "")
@@ -385,14 +407,17 @@ func (q *SecondaryIndexer) indexNestedField(doc []byte, topField string, pos int
 		switch fieldType {
 		case schema.ArrayType:
 			// Create a stub for a nested array
-			row, _ := newIndexRow(fieldType, q.collation, fieldName, nil, pos, true)
+			row, err := newIndexRow(fieldType, q.collation, fieldName, nil, pos, true)
+			if err != nil {
+				return err
+			}
 			indexedFields = append(indexedFields, *row)
 		case schema.ObjectType:
-			q.indexNestedField(value, fieldName, pos)
+			// nested objects
+			return nil
 		default:
 			row, err := newIndexRow(fieldType, q.collation, fieldName, value, pos, false)
 			if err != nil {
-				log.Err(err).Msgf("Failed to index field name: %s", fieldName)
 				return err
 			}
 			indexedFields = append(indexedFields, *row)
@@ -402,27 +427,40 @@ func (q *SecondaryIndexer) indexNestedField(doc []byte, topField string, pos int
 	}
 	err := jsonparser.ObjectEach(doc, processor)
 	if err != nil {
-		log.Err(err).Msgf("Failed to index field name: %s", topField)
+		if isIgnoreableError(err) {
+			log.Err(err).Msgf("Failed to index field name: %s", topField)
+		} else {
+			return nil, err
+		}
 	}
-	return indexedFields
+	return indexedFields, nil
 }
 
-func (q *SecondaryIndexer) indexArray(doc []byte, field *schema.QueryableField, keyPath []string) []IndexRow {
+func (q *SecondaryIndexer) indexArray(doc []byte, field *schema.QueryableField, keyPath []string) ([]IndexRow, error) {
 	pos := 0
 	var rows []IndexRow
+	var errProcessor error
 	processor := func(value []byte, dt jsonparser.ValueType, offset int, err error) {
 		toFieldType := schema.ToFieldType(dt.String(), "", "")
 		switch toFieldType {
 		case schema.ObjectType:
-			indexedFields := q.indexNestedField(value, field.FieldName, pos)
+			indexedFields, err := q.indexNestedField(value, field.FieldName, pos)
+			if err != nil && !isIgnoreableError(err) {
+				errProcessor = err
+				return
+			}
 			rows = append(rows, indexedFields...)
 		case schema.ArrayType:
-			indexedField, _ := newIndexRow(toFieldType, q.collation, field.FieldName, nil, pos, true)
+			indexedField, err := newIndexRow(toFieldType, q.collation, field.FieldName, nil, pos, true)
+			if err != nil && !isIgnoreableError(err) {
+				errProcessor = err
+				return
+			}
 			rows = append(rows, *indexedField)
 		default:
 			indexedField, err := newIndexRow(field.SubType, q.collation, field.FieldName, value, pos, false)
-			if err != nil {
-				log.Err(err).Msgf("Failed to index field name: %s", field.FieldName)
+			if err != nil && !isIgnoreableError(err) {
+				errProcessor = err
 				return
 			}
 			rows = append(rows, *indexedField)
@@ -430,11 +468,16 @@ func (q *SecondaryIndexer) indexArray(doc []byte, field *schema.QueryableField, 
 		pos += 1
 	}
 
+	if errProcessor != nil {
+		return nil, errProcessor
+	}
+
 	_, err := jsonparser.ArrayEach(doc, processor, keyPath...)
 	if err != nil {
 		log.Err(err).Msgf("Failed to index field name: %s", field.FieldName)
+		return nil, err
 	}
-	return rows
+	return rows, nil
 }
 
 // This is used to append the Primary key to the end of the key.
@@ -504,4 +547,13 @@ func updateAtomicMap(ctx context.Context, tx transaction.Tx, coll *schema.Defaul
 		}
 	}
 	return nil
+}
+
+// These are acceptable errors during indexing. A field could be missing from the index or
+// the field could be of type binary.
+func isIgnoreableError(err error) bool {
+	if err.Error() == "Key path not found" || strings.Contains(err.Error(), "do not index byte field") {
+		return true
+	}
+	return false
 }
