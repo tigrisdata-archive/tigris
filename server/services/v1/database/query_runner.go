@@ -581,12 +581,24 @@ func (runner *StreamingQueryRunner) iterate(coll *schema.DefaultCollection, iter
 		limit = runner.req.GetOptions().Limit
 	}
 
+	skip := int64(0)
+	if runner.req.GetOptions() != nil {
+		skip = runner.req.GetOptions().Skip
+	}
+
 	var row Row
 	branch := "main"
 	if runner.req.GetBranch() != "" {
 		branch = runner.req.GetBranch()
 	}
+
+	limit += skip
 	for i := int64(0); (limit == 0 || i < limit) && iterator.Next(&row); i++ {
+		if skip > 0 {
+			skip -= 1
+			continue
+		}
+
 		rawData := row.Data.RawData
 		var err error
 
