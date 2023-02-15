@@ -108,6 +108,8 @@ const (
 	CollectionTypeF              = "collection_type"
 	IndexingSchemaVersionKey     = "indexing_version"
 	DefaultIndexingSchemaVersion = "v1"
+
+	SecondaryKeyIndexName = "skey"
 )
 
 type JSONSchema struct {
@@ -229,6 +231,10 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 			PrimaryKey: &Index{
 				Name:   PrimaryKeyIndexName,
 				Fields: primaryKeyFields,
+			},
+			SecondaryIndex: &Index{
+				Name:   SecondaryKeyIndexName,
+				Fields: []*Field{},
 			},
 		},
 		Name:            collection,

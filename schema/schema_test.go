@@ -243,6 +243,10 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 					Fields: []*Field{{FieldName: "id", DataType: Int64Type, PrimaryKeyField: &b}},
 					Name:   "pkey",
 				},
+				SecondaryIndex: &Index{
+					Fields: []*Field{},
+					Name:   "skey",
+				},
 			},
 			Fields: []*Field{
 				{FieldName: "id", DataType: Int64Type, PrimaryKeyField: &b},

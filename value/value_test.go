@@ -214,3 +214,39 @@ func TestStringCollation(t *testing.T) {
 		require.Equal(t, -1, r)
 	})
 }
+
+func TestUUIDAndDateValues(t *testing.T) {
+	t.Run("datetime", func(t *testing.T) {
+		v1, err := NewValue(schema.DateTimeType, []byte("2020-10-12T17:42:34Z"))
+		require.NoError(t, err)
+
+		v2, _ := NewValue(schema.DateTimeType, []byte("2020-10-12T17:42:34Z"))
+		r, _ := v1.CompareTo(v2)
+		require.Equal(t, 0, r)
+
+		v3, _ := NewValue(schema.DateTimeType, []byte("2022-09-11T12:41:01Z"))
+		r, _ = v1.CompareTo(v3)
+		require.Equal(t, -1, r)
+
+		v4, _ := NewValue(schema.DateTimeType, []byte("2010-11-22T19:42:55Z"))
+		r, _ = v1.CompareTo(v4)
+		require.Equal(t, 1, r)
+	})
+
+	t.Run("uuid", func(t *testing.T) {
+		v1, err := NewValue(schema.UUIDType, []byte("6f64e028-2ff5-490a-b10a-7c44c4595a8b"))
+		require.NoError(t, err)
+
+		v2, _ := NewValue(schema.DateTimeType, []byte("6f64e028-2ff5-490a-b10a-7c44c4595a8b"))
+		r, _ := v1.CompareTo(v2)
+		require.Equal(t, 0, r)
+
+		v3, _ := NewValue(schema.DateTimeType, []byte("6f899990-2ff5-490a-b10a-7c44c4595a8b"))
+		r, _ = v1.CompareTo(v3)
+		require.Equal(t, -1, r)
+
+		v4, _ := NewValue(schema.DateTimeType, []byte("6f64e028-1111-490a-b10a-7c44c4595a8b"))
+		r, _ = v1.CompareTo(v4)
+		require.Equal(t, 1, r)
+	})
+}
