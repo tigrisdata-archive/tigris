@@ -181,6 +181,7 @@ type BranchQueryRunner struct {
 
 	createBranch *api.CreateBranchRequest
 	deleteBranch *api.DeleteBranchRequest
+	listBranch   *api.ListBranchesRequest
 }
 
 func (runner *BranchQueryRunner) SetCreateBranchReq(create *api.CreateBranchRequest) {
@@ -189,6 +190,10 @@ func (runner *BranchQueryRunner) SetCreateBranchReq(create *api.CreateBranchRequ
 
 func (runner *BranchQueryRunner) SetDeleteBranchReq(deleteBranch *api.DeleteBranchRequest) {
 	runner.deleteBranch = deleteBranch
+}
+
+func (runner *BranchQueryRunner) SetListBranchReq(listBranch *api.ListBranchesRequest) {
+	runner.listBranch = listBranch
 }
 
 func (runner *BranchQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
@@ -213,6 +218,19 @@ func (runner *BranchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return Response{
 			Response: &api.DeleteBranchResponse{
 				Status: DeletedStatus,
+			},
+		}, ctx, nil
+	case runner.listBranch != nil:
+		branchList := tenant.ListDatabaseBranches(runner.listBranch.GetProject())
+		branches := make([]*api.BranchInfo, len(branchList))
+		for i, b := range branchList {
+			branches[i] = &api.BranchInfo{
+				Branch: b,
+			}
+		}
+		return Response{
+			Response: &api.ListBranchesResponse{
+				Branches: branches,
 			},
 		}, ctx, nil
 	}

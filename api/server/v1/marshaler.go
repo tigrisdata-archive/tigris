@@ -86,6 +86,11 @@ func (c *CustomMarshaler) Marshal(v interface{}) ([]byte, error) {
 			return []byte(`{"projects":[]}`), nil
 		}
 		return c.JSONBuiltin.Marshal(v)
+	case *ListBranchesResponse:
+		if len(ty.Branches) == 0 {
+			return []byte(`{"branches":[]}`), nil
+		}
+		return c.JSONBuiltin.Marshal(v)
 	}
 	return c.JSONBuiltin.Marshal(v)
 }
