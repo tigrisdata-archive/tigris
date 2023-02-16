@@ -72,10 +72,10 @@ func (x *GetDocumentResponse) MarshalJSON() ([]byte, error) {
 
 func (x *DocStatus) MarshalJSON() ([]byte, error) {
 	resp := struct {
-		Id    string `json:"id,omitempty"`
+		ID    string `json:"id,omitempty"`
 		Error *Error `json:"error"`
 	}{
-		Id:    x.Id,
+		ID:    x.Id,
 		Error: x.Error,
 	}
 	return jsoniter.Marshal(resp)
@@ -313,5 +313,58 @@ func (x *DeleteByQueryRequest) UnmarshalJSON(data []byte) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func (x *SearchIndexRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+
+	for key, value := range mp {
+		var v interface{}
+
+		switch key {
+		case "project":
+			v = &x.Project
+		case "index":
+			v = &x.Index
+		case "search_fields":
+			v = &x.SearchFields
+		case "q":
+			v = &x.Q
+		case "filter":
+			// not decoding it here and let it decode during filter parsing
+			x.Filter = value
+			continue
+		case "facet":
+			// delaying the facet deserialization to dedicated handler
+			x.Facet = value
+			continue
+		case "sort":
+			// delaying the sort deserialization
+			x.Sort = value
+			continue
+		case "include_fields":
+			v = &x.IncludeFields
+		case "exclude_fields":
+			v = &x.ExcludeFields
+		case "page_size":
+			v = &x.PageSize
+		case "page":
+			v = &x.Page
+		case "collation":
+			v = &x.Collation
+		default:
+			continue
+		}
+
+		if err := jsoniter.Unmarshal(value, v); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
