@@ -67,10 +67,10 @@ func (c CustomClaim) Validate(_ context.Context) error {
 }
 
 type TigrisClaims struct {
-	NamespaceCode        string `json:"nc"`
-	NamespaceDisplayName string `json:"nd"`
-	Project              string `json:"p"`
-	UserEmail            string `json:"ue"`
+	NamespaceCode        string   `json:"nc"`
+	NamespaceDisplayName string   `json:"nd"`
+	Project              []string `json:"p"`
+	UserEmail            string   `json:"ue"`
 }
 
 func AuthFromMD(ctx context.Context, expectedScheme string) (string, error) {
