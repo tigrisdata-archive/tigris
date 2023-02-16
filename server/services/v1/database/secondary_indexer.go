@@ -90,11 +90,11 @@ type IndexerUpdateSet struct {
 }
 
 func genRowCountKey(coll *schema.DefaultCollection, fieldPath string) keys.Key {
-	return keys.NewKey(coll.EncodedName, coll.Indexes.SecondaryIndex.Name, InfoSubspace, CountSubSpace, fieldPath)
+	return keys.NewKey(coll.EncodedSecondaryName, coll.Indexes.SecondaryIndex.Name, InfoSubspace, CountSubSpace, fieldPath)
 }
 
 func genRowSizeKey(coll *schema.DefaultCollection, fieldPath string) keys.Key {
-	return keys.NewKey(coll.EncodedName, coll.Indexes.SecondaryIndex.Name, InfoSubspace, SizeSubSpace, fieldPath)
+	return keys.NewKey(coll.EncodedSecondaryName, coll.Indexes.SecondaryIndex.Name, InfoSubspace, SizeSubSpace, fieldPath)
 }
 
 type SecondaryIndexer struct {
@@ -111,8 +111,8 @@ func NewSecondaryIndexer(coll *schema.DefaultCollection) *SecondaryIndexer {
 
 // For testing only, it reads the full index.
 func (q *SecondaryIndexer) scanIndex(ctx context.Context, tx transaction.Tx) (kv.Iterator, error) {
-	start := keys.NewKey(q.coll.EncodedName, q.coll.Indexes.SecondaryIndex.Name, KVSubspace)
-	end := keys.NewKey(q.coll.EncodedName, q.coll.Indexes.SecondaryIndex.Name, KVSubspace, 0xFF)
+	start := keys.NewKey(q.coll.EncodedSecondaryName, q.coll.Indexes.SecondaryIndex.Name, KVSubspace)
+	end := keys.NewKey(q.coll.EncodedSecondaryName, q.coll.Indexes.SecondaryIndex.Name, KVSubspace, 0xFF)
 	return tx.ReadRange(ctx, start, end, false)
 }
 
@@ -146,8 +146,8 @@ func (q *SecondaryIndexer) IndexInfo(ctx context.Context, tx transaction.Tx) (*S
 }
 
 func (q *SecondaryIndexer) aggregateInfo(ctx context.Context, tx transaction.Tx, subSpace string) (int64, error) {
-	lkey := keys.NewKey(q.coll.EncodedName, q.coll.Indexes.SecondaryIndex.Name, InfoSubspace, subSpace, "")
-	rkey := keys.NewKey(q.coll.EncodedName, q.coll.Indexes.SecondaryIndex.Name, InfoSubspace, subSpace, 0xFF)
+	lkey := keys.NewKey(q.coll.EncodedSecondaryName, q.coll.Indexes.SecondaryIndex.Name, InfoSubspace, subSpace, "")
+	rkey := keys.NewKey(q.coll.EncodedSecondaryName, q.coll.Indexes.SecondaryIndex.Name, InfoSubspace, subSpace, 0xFF)
 	iter, err := tx.AtomicReadRange(ctx, lkey, rkey, false)
 	if err != nil {
 		return 0, err
@@ -195,6 +195,9 @@ func (q *SecondaryIndexer) Index(ctx context.Context, tx transaction.Tx, td *int
 }
 
 func (q *SecondaryIndexer) Update(ctx context.Context, tx transaction.Tx, newTd *internal.TableData, oldTd *internal.TableData, primaryKey []interface{}) error {
+	if len(q.coll.EncodedSecondaryName) == 0 {
+		return fmt.Errorf("Could not index collection %s, encoded table not set", q.coll.Name)
+	}
 	updateSet, err := q.buildAddAndRemoveKVs(newTd, oldTd, primaryKey)
 	if err != nil {
 		return err
@@ -282,7 +285,12 @@ func (q *SecondaryIndexer) buildTableRows(tableData *internal.TableData) ([]Inde
 		if field.DataType == schema.ArrayType {
 			newRows, err := q.indexArray(tableData.RawData, field, field.KeyPath())
 			if err != nil {
-				return nil, err
+				if isIgnoreableError(err) {
+					continue
+				} else {
+					log.Err(err).Msgf("Failed to index field name: %s", field.FieldName)
+					return nil, err
+				}
 			}
 			rows = append(rows, newRows...)
 		} else {
@@ -345,7 +353,7 @@ func (q *SecondaryIndexer) buildTSRows(tableData *internal.TableData) ([]IndexRo
 
 func (q *SecondaryIndexer) buildIndexKey(row IndexRow, primaryKey []interface{}) keys.Key {
 	version := getFieldVersion(row.name, q.coll)
-	return newKeyWithPrimaryKey(primaryKey, q.coll.EncodedName, q.coll.Indexes.SecondaryIndex.Name, KVSubspace, row.Name(), version, row.value.AsInterface(), row.pos)
+	return newKeyWithPrimaryKey(primaryKey, q.coll.EncodedSecondaryName, q.coll.Indexes.SecondaryIndex.Name, KVSubspace, row.Name(), version, row.value.AsInterface(), row.pos)
 }
 
 func (q *SecondaryIndexer) createKeysAndIndexInfo(primaryKey []interface{}, rows []IndexRow) ([]keys.Key, map[string]int64, map[string]int64) {
