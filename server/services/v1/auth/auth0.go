@@ -385,7 +385,7 @@ func getAccessTokenUsingClientCredentials(ctx context.Context, req *api.GetAcces
 
 	metadataKey := createAccessTokenMetadataKey(req.GetClientSecret())
 	cachedToken, err := a.userStore.GetUserMetadata(ctx, tx, defaultNamespaceId, metadata.Application, req.GetClientId(), metadataKey)
-	if err != nil {
+	if err != nil && err != errors.ErrNotFound {
 		return nil, tokenError("Failed to get access token: reason = could not process cache", err)
 	}
 
