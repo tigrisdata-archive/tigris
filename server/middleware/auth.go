@@ -69,7 +69,7 @@ func (c CustomClaim) Validate(_ context.Context) error {
 type TigrisClaims struct {
 	NamespaceCode        string `json:"nc"`
 	NamespaceDisplayName string `json:"nd"`
-	Project              string `json:"p"`
+	Project              string `json:"-"`
 	UserEmail            string `json:"ue"`
 }
 
