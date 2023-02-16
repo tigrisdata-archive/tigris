@@ -300,26 +300,35 @@ func getMetadataFromToken(token string) (string, bool, string) {
 		log.Debug().Msg("Could not split the token into its parts")
 		return defaults.UnknownValue, false, ""
 	}
+
 	decodedToken, err := base64.RawStdEncoding.DecodeString(tokenParts[1])
 	if err != nil {
 		log.Debug().Err(err).Msg("Could not base64 decode token")
 		return defaults.UnknownValue, false, ""
 	}
-	namespace, err := jsonparser.GetString(decodedToken, "https://tigris/n", "code")
+
+	tigrisClaimObj, _, _, err := jsonparser.Get(decodedToken, "https://tigris")
 	if err != nil {
 		return defaults.UnknownValue, false, ""
 	}
-	user, _, _, err := jsonparser.Get(decodedToken, "https://tigris/u")
+
+	namespaceCode, err := jsonparser.GetString(tigrisClaimObj, "nc")
+	if err != nil {
+		return defaults.UnknownValue, false, ""
+	}
+
+	userEmail, err := jsonparser.GetString(tigrisClaimObj, "ue")
 	if err != nil {
 		// no-op
-		log.Trace().Err(err).Msg("Failed to read https://tigris/u from access token")
+		log.Trace().Err(err).Msg("Failed to read ue from access token")
 	}
+	
 	sub, err := jsonparser.GetString(decodedToken, "sub")
 	if err != nil {
 		log.Trace().Err(err).Msg("Failed to read sub from access token")
 		return defaults.UnknownValue, false, ""
 	}
-	return namespace, len(user) > 0, sub
+	return namespaceCode, len(userEmail) > 0, sub
 }
 
 func GetMetadataFromHeader(ctx context.Context) (string, bool, string) {
