@@ -16,7 +16,6 @@ package metadata
 
 import (
 	"context"
-
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/server/defaults"
@@ -144,6 +143,12 @@ func (n *NamespaceSubspace) GetProjectMetadata(ctx context.Context, tx transacti
 		n.getProjKey(namespaceId, projName),
 		&projMetadata,
 	); err != nil {
+		// TODO: This is not needed if the cluster created after writing of this comment
+		// Project metadata inserted during project creation and should always exist.
+		if err == errors.ErrNotFound {
+			return &ProjectMetadata{}, nil
+		}
+
 		return nil, err
 	}
 

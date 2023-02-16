@@ -63,6 +63,18 @@ func TestNamespacesSubspace(t *testing.T) {
 		require.Equal(t, errors.InvalidArgument("invalid metadataKey. "+namespaceKey+" is reserved"), n.InsertNamespaceMetadata(ctx, tx, 1, namespaceKey, testNSPayload))
 	})
 
+	t.Run("get_error", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		n, tx, cleanup := initNSTest(t)
+		defer cleanup()
+
+		r, err := n.GetNamespaceMetadata(ctx, tx, 1, "meta-key-non-existing")
+		require.Equal(t, errors.ErrNotFound, err)
+		require.Nil(t, r)
+	})
+
 	t.Run("put_get_1", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -184,6 +196,18 @@ func TestNamespacesSubspace(t *testing.T) {
 		require.Equal(t, errors.InvalidArgument("invalid namespace, id must be greater than 0"), n.InsertProjectMetadata(ctx, tx, 0, "valid-db-name", dbMetadata))
 	})
 
+	t.Run("database_metadata_get_error", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		n, tx, cleanup := initNSTest(t)
+		defer cleanup()
+
+		r, err := n.GetProjectMetadata(ctx, tx, 1, "meta-key-non-existing")
+		require.NoError(t, err)
+		require.NotNil(t, r)
+	})
+
 	t.Run("database_metadata_put_get_1", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -224,8 +248,9 @@ func TestNamespacesSubspace(t *testing.T) {
 		err = n.DeleteProjectMetadata(ctx, tx, 1, "db-name")
 		require.NoError(t, err)
 
-		_, err = n.GetProjectMetadata(ctx, tx, 1, "db-name")
-		require.Equal(t, errors.ErrNotFound, err)
+		r, err := n.GetProjectMetadata(ctx, tx, 1, "db-name")
+		require.NoError(t, err)
+		require.NotNil(t, r)
 	})
 
 	t.Run("database_metadata_put_get_update_get", func(t *testing.T) {
