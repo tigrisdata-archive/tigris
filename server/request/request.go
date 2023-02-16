@@ -34,6 +34,13 @@ import (
 	"google.golang.org/grpc"
 )
 
+const (
+	JWTTigrisClaimSpace = "https://tigris"
+	NamespaceCode       = "nc"
+	UserEmail           = "ue"
+	Subject             = "sub"
+)
+
 var (
 	adminMethods = container.NewHashSet(api.CreateNamespaceMethodName, api.ListNamespaceMethodName, api.DescribeNamespacesMethodName)
 	tenantGetter metadata.TenantGetter
@@ -324,26 +331,33 @@ func getMetadataFromToken(token string) (string, bool, string) {
 		log.Debug().Msg("Could not split the token into its parts")
 		return defaults.UnknownValue, false, ""
 	}
-	decodedToken, err := base64.RawStdEncoding.DecodeString(tokenParts[1])
+
+	decodedToken, err := base64.StdEncoding.DecodeString(tokenParts[1])
 	if err != nil {
-		log.Debug().Err(err).Msg("Could not base64 decode token")
+		if err != nil {
+			log.Error().Err(err).Msg("Could not base64 decode token")
+			return defaults.UnknownValue, false, ""
+		}
+	}
+
+	namespaceCode, err := jsonparser.GetString(decodedToken, JWTTigrisClaimSpace, NamespaceCode)
+	if err != nil {
+		log.Error().Err(err).Msg("Could not read namespace code")
 		return defaults.UnknownValue, false, ""
 	}
-	namespace, err := jsonparser.GetString(decodedToken, "https://tigris/n", "code")
+
+	userEmail, err := jsonparser.GetString(decodedToken, JWTTigrisClaimSpace, UserEmail)
+	if err != nil && err != jsonparser.KeyPathNotFoundError {
+		log.Debug().Err(err).Msg("Could not read user email")
+		// this is allowed for m2m apps
+	}
+
+	sub, err := jsonparser.GetString(decodedToken, Subject)
 	if err != nil {
+		log.Error().Err(err).Msg("Could not read subject")
 		return defaults.UnknownValue, false, ""
 	}
-	user, _, _, err := jsonparser.Get(decodedToken, "https://tigris/u")
-	if err != nil {
-		// no-op
-		log.Trace().Err(err).Msg("Failed to read https://tigris/u from access token")
-	}
-	sub, err := jsonparser.GetString(decodedToken, "sub")
-	if err != nil {
-		log.Trace().Err(err).Msg("Failed to read sub from access token")
-		return defaults.UnknownValue, false, ""
-	}
-	return namespace, len(user) > 0, sub
+	return namespaceCode, len(userEmail) > 0, sub
 }
 
 func GetMetadataFromHeader(ctx context.Context) (string, bool, string) {
