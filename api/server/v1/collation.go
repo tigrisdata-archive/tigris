@@ -22,11 +22,13 @@ const (
 	Undefined CollationType = iota
 	CaseInsensitive
 	CaseSensitive
+	CollationSortKey
 )
 
 var SupportedCollations = [...]string{
-	CaseInsensitive: "ci",
-	CaseSensitive:   "cs",
+	CaseInsensitive:  "ci",
+	CaseSensitive:    "cs",
+	CollationSortKey: "csk",
 }
 
 func (x *Collation) IsCaseSensitive() bool {
@@ -35,6 +37,10 @@ func (x *Collation) IsCaseSensitive() bool {
 
 func (x *Collation) IsCaseInsensitive() bool {
 	return x.Case == SupportedCollations[CaseInsensitive]
+}
+
+func (x *Collation) IsCollationSortKey() bool {
+	return x.Case == SupportedCollations[CollationSortKey]
 }
 
 func (x *Collation) IsValid() error {

@@ -3441,6 +3441,75 @@ func TestRead_EntireCollection(t *testing.T) {
 		inputDocument)
 }
 
+func TestRead_LimitSkip(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	inputDocument := []Doc{
+		{
+			"pkey_int":     1000,
+			"int_value":    1000,
+			"string_value": "simple_insert1000",
+		},
+		{
+			"pkey_int":     2000,
+			"int_value":    2000,
+			"string_value": "simple_insert2000",
+		},
+		{
+			"pkey_int":     3000,
+			"string_value": "simple_insert3000",
+			"bytes_value":  []byte(`"simple_insert3000"`),
+		},
+		{
+			"pkey_int":     4000,
+			"string_value": "simple_insert4000",
+			"bytes_value":  []byte(`"simple_insert4000"`),
+		},
+		{
+			"pkey_int":     5000,
+			"string_value": "simple_insert5000",
+			"bytes_value":  []byte(`"simple_insert5000"`),
+		},
+	}
+
+	// should always succeed with mustNotExists as false
+	insertDocuments(t, db, coll, inputDocument, false).
+		Status(http.StatusOK)
+
+	readAndValidateWithOptions(t,
+		db,
+		coll,
+		nil,
+		nil,
+		Map{
+			"limit": 2,
+		},
+		inputDocument[0:2])
+
+	readAndValidateWithOptions(t,
+		db,
+		coll,
+		nil,
+		nil,
+		Map{
+			"limit": 2,
+			"skip":  2,
+		},
+		inputDocument[2:4])
+
+	readAndValidateWithOptions(t,
+		db,
+		coll,
+		nil,
+		nil,
+		Map{
+			"limit": 2,
+			"skip":  4,
+		},
+		inputDocument[4:])
+}
+
 func TestRead_NestedFields(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)
@@ -4265,7 +4334,7 @@ func readExpError(t *testing.T, db string, collection string, filter Map, expect
 		Raw()
 }
 
-func readByFilter(t *testing.T, db string, collection string, filter Map, fields Map, collation Map, order []Map) []map[string]jsoniter.RawMessage {
+func readByFilter(t *testing.T, db string, collection string, filter Map, fields Map, options Map, order []Map) []map[string]jsoniter.RawMessage {
 	payload := make(Map)
 	payload["fields"] = fields
 	if filter == nil {
@@ -4273,11 +4342,11 @@ func readByFilter(t *testing.T, db string, collection string, filter Map, fields
 	} else {
 		payload["filter"] = filter
 	}
-	if collation != nil {
-		payload["options"] = collation
-	}
 	if len(order) > 0 {
 		payload["sort"] = order
+	}
+	if options!= nil {
+		payload["options"] = options
 	}
 
 	e := expect(t)
@@ -4327,6 +4396,15 @@ func readAndValidatePkeyOrder(t *testing.T, db string, collection string, filter
 		actualDoc, err := jsoniter.Marshal(outputKeyToValue[p])
 		require.NoError(t, err)
 		require.JSONEqf(t, string(expDoc), string(actualDoc), "exp '%s' actual '%s'", string(expDoc), string(actualDoc))
+	}
+}
+
+func readAndValidateWithOptions(t *testing.T, db string, collection string, filter Map, fields Map, options Map, inputDocument []Doc) {
+	readResp := readByFilter(t, db, collection, filter, fields, options, nil)
+	require.Equal(t, len(inputDocument), len(readResp))
+
+	for i := 0; i < len(inputDocument); i++ {
+		validateInputDocToRes(t, readResp[i], inputDocument[i])
 	}
 }
 

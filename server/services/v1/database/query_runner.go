@@ -174,6 +174,8 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return Response{}, ctx, err
 	}
 
+	indexer := NewSecondaryIndexer(coll)
+
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
 	if filter.None(runner.req.Filter) {
@@ -261,6 +263,19 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 				return Response{}, ctx, err
 			}
 			isUpdate = false
+
+			if config.DefaultConfig.SecondaryIndex.WriteEnabled {
+				if err := indexer.Delete(ctx, tx, row.Data, key.IndexParts()); ulog.E(err) {
+					return Response{}, nil, err
+				}
+				if err = indexer.Index(ctx, tx, newData, newKey.IndexParts()); ulog.E(err) {
+					return Response{}, nil, err
+				}
+			}
+		} else if config.DefaultConfig.SecondaryIndex.WriteEnabled {
+			if err := indexer.Update(ctx, tx, newData, row.Data, key.IndexParts()); ulog.E(err) {
+				return Response{}, nil, err
+			}
 		}
 		if err = tx.Replace(ctx, newKey, newData, isUpdate); ulog.E(err) {
 			return Response{}, ctx, err
@@ -290,6 +305,7 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
+	indexer := NewSecondaryIndexer(coll)
 
 	if err = runner.mustBeDocumentsCollection(coll, "deleteReq"); err != nil {
 		return Response{}, ctx, err
@@ -326,6 +342,13 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		key, err := keys.FromBinary(coll.EncodedName, row.Key)
 		if err != nil {
 			return Response{}, ctx, err
+		}
+
+		if config.DefaultConfig.SecondaryIndex.WriteEnabled {
+			err := indexer.Delete(ctx, tx, row.Data, key.IndexParts())
+			if err != nil {
+				return Response{}, ctx, err
+			}
 		}
 
 		if err = tx.Delete(ctx, key); ulog.E(err) {
@@ -558,12 +581,24 @@ func (runner *StreamingQueryRunner) iterate(coll *schema.DefaultCollection, iter
 		limit = runner.req.GetOptions().Limit
 	}
 
+	skip := int64(0)
+	if runner.req.GetOptions() != nil {
+		skip = runner.req.GetOptions().Skip
+	}
+
 	var row Row
 	branch := "main"
 	if runner.req.GetBranch() != "" {
 		branch = runner.req.GetBranch()
 	}
+
+	limit += skip
 	for i := int64(0); (limit == 0 || i < limit) && iterator.Next(&row); i++ {
+		if skip > 0 {
+			skip -= 1
+			continue
+		}
+
 		rawData := row.Data.RawData
 		var err error
 

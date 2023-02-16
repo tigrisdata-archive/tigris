@@ -242,7 +242,8 @@ var SupportedFieldProperties = container.NewHashSet(
 
 // Indexes is to wrap different index that a collection can have.
 type Indexes struct {
-	PrimaryKey *Index
+	PrimaryKey     *Index
+	SecondaryIndex *Index
 }
 
 func (i *Indexes) GetIndexes() []*Index {
@@ -538,6 +539,10 @@ func (q *QueryableField) ShouldPack() bool {
 // IsReserved returns true if the queryable field is internal field.
 func (q *QueryableField) IsReserved() bool {
 	return IsReservedField(q.Name())
+}
+
+func (q *QueryableField) KeyPath() []string {
+	return strings.Split(q.FieldName, ".")
 }
 
 func BuildQueryableFields(fields []*Field, fieldsInSearch []tsApi.Field) []*QueryableField {

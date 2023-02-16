@@ -34,20 +34,21 @@ type ServerConfig struct {
 }
 
 type Config struct {
-	Log           log.LogConfig
-	Server        ServerConfig    `yaml:"server" json:"server"`
-	Auth          AuthConfig      `yaml:"auth" json:"auth"`
-	Cdc           CdcConfig       `yaml:"cdc" json:"cdc"`
-	Search        SearchConfig    `yaml:"search" json:"search"`
-	Cache         CacheConfig     `yaml:"cache" json:"cache"`
-	Tracing       TracingConfig   `yaml:"tracing" json:"tracing"`
-	Metrics       MetricsConfig   `yaml:"metrics" json:"metrics"`
-	Profiling     ProfilingConfig `yaml:"profiling" json:"profiling"`
-	FoundationDB  FoundationDBConfig
-	Quota         QuotaConfig
-	Observability ObservabilityConfig `yaml:"observability" json:"observability"`
-	Management    ManagementConfig    `yaml:"management" json:"management"`
-	Schema        SchemaConfig
+	Log            log.LogConfig
+	Server         ServerConfig         `yaml:"server" json:"server"`
+	Auth           AuthConfig           `yaml:"auth" json:"auth"`
+	Cdc            CdcConfig            `yaml:"cdc" json:"cdc"`
+	Search         SearchConfig         `yaml:"search" json:"search"`
+	SecondaryIndex SecondaryIndexConfig `yaml:"secondary_index" json:"secondary_index"`
+	Cache          CacheConfig          `yaml:"cache" json:"cache"`
+	Tracing        TracingConfig        `yaml:"tracing" json:"tracing"`
+	Metrics        MetricsConfig        `yaml:"metrics" json:"metrics"`
+	Profiling      ProfilingConfig      `yaml:"profiling" json:"profiling"`
+	FoundationDB   FoundationDBConfig
+	Quota          QuotaConfig
+	Observability  ObservabilityConfig `yaml:"observability" json:"observability"`
+	Management     ManagementConfig    `yaml:"management" json:"management"`
+	Schema         SchemaConfig
 }
 
 type AuthConfig struct {
@@ -224,6 +225,10 @@ var DefaultConfig = Config{
 		ReadEnabled:  true,
 		WriteEnabled: true,
 	},
+	SecondaryIndex: SecondaryIndexConfig{
+		ReadEnabled:  false,
+		WriteEnabled: false,
+	},
 	Cache: CacheConfig{
 		Host:    "0.0.0.0",
 		Port:    6379,
@@ -389,6 +394,11 @@ type SearchConfig struct {
 	AuthKey      string `mapstructure:"auth_key" json:"auth_key" yaml:"auth_key"`
 	ReadEnabled  bool   `mapstructure:"read_enabled" yaml:"read_enabled" json:"read_enabled"`
 	WriteEnabled bool   `mapstructure:"write_enabled" yaml:"write_enabled" json:"write_enabled"`
+}
+
+type SecondaryIndexConfig struct {
+	ReadEnabled  bool `mapstructure:"read_enabled" yaml:"read_enabled" json:"read_enabled"`
+	WriteEnabled bool `mapstructure:"write_enabled" yaml:"write_enabled" json:"write_enabled"`
 }
 
 type CacheConfig struct {

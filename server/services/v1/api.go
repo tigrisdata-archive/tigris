@@ -503,6 +503,19 @@ func (s *apiService) DeleteBranch(ctx context.Context, r *api.DeleteBranchReques
 	return resp.Response.(*api.DeleteBranchResponse), nil
 }
 
+func (s *apiService) ListBranches(ctx context.Context, r *api.ListBranchesRequest) (*api.ListBranchesResponse, error) {
+	accessToken, _ := request.GetAccessToken(ctx)
+	runner := s.runnerFactory.GetBranchQueryRunner(accessToken)
+	runner.SetListBranchReq(r)
+
+	resp, err := s.sessions.Execute(ctx, runner, database.ReqOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.ListBranchesResponse), nil
+}
+
 func (s *apiService) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest) (*api.CreateAppKeyResponse, error) {
 	return s.authProvider.CreateAppKey(ctx, req)
 }
