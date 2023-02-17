@@ -94,7 +94,7 @@ func TestFieldBuilder_Build(t *testing.T) {
 				nil,
 			},
 			{
-				[]byte(`{"sorted": true}`),
+				[]byte(`{"sort": true}`),
 				nil,
 			},
 		}
