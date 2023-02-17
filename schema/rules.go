@@ -110,6 +110,10 @@ type IndexSourceValidator struct{}
 
 func (v *IndexSourceValidator) ValidateIndex(existing *SearchIndex, current *SearchFactory) error {
 	if len(existing.Source.Type) > 0 && existing.Source.Type != current.Source.Type {
+		if existing.Source.Type == "user" && current.Source.Type == SearchSourceExternal {
+			return nil
+		}
+
 		return errors.InvalidArgument(
 			"changing index source type is not allowed from: '%s', to: '%s'",
 			existing.Source.Type,

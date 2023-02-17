@@ -663,7 +663,8 @@ func (tenant *Tenant) reloadSearch(ctx context.Context, tx transaction.Tx, proje
 
 		searchFactory, err := schema.BuildSearch(searchMD.Name, schV.Schema)
 		if err != nil {
-			return nil, err
+			log.Err(err).Msgf("seeing rebuilding failure for search index %s", searchMD.Name)
+			continue
 		}
 
 		var fieldsInSearchStore []tsApi.Field
