@@ -628,5 +628,5 @@ func (runner *StreamingQueryRunner) iterate(coll *schema.DefaultCollection, iter
 		}
 	}
 
-	return row.Key, iterator.Interrupted()
+	return row.Key, createApiError(iterator.Interrupted())
 }

@@ -15,13 +15,19 @@
 package database
 
 import (
+	"net/http"
+
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	apiErrors "github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/store/search"
 )
 
 // createApiError helps construct API errors from internal errors.
 func createApiError(err error) error {
 	switch e := err.(type) {
+	case nil:
+		return nil
 	case metadata.Error:
 		switch e.Code() {
 		case metadata.ErrCodeDatabaseNotFound, metadata.ErrCodeBranchNotFound:
@@ -32,6 +38,15 @@ func createApiError(err error) error {
 			return apiErrors.InvalidArgument(e.Error())
 		case metadata.ErrCodeProjectNotFound:
 			return apiErrors.NotFound(e.Error())
+		}
+	case search.Error:
+		switch e.HttpCode {
+		case http.StatusConflict:
+			return apiErrors.AlreadyExists(e.Msg)
+		case http.StatusBadRequest:
+			return apiErrors.InvalidArgument(e.Msg)
+		default:
+			return api.Errorf(api.FromHttpCode(e.HttpCode), e.Msg)
 		}
 	default:
 		return err

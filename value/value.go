@@ -26,6 +26,12 @@ import (
 	"github.com/tigrisdata/tigris/schema"
 )
 
+const (
+	// SmallestNonZeroNormalFloat32 is the smallest positive non-zero floating number. The go package version
+	// has the denormalized form which is higher than this.
+	SmallestNonZeroNormalFloat32 = 0x1p-126
+)
+
 type Comparable interface {
 	// CompareTo returns a value indicating the relationship between the receiver and the parameter.
 	//

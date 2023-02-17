@@ -18,7 +18,7 @@ import (
 	"regexp"
 )
 
-var validNamePattern = regexp.MustCompile("^[a-zA-Z]+[a-zA-Z0-9_-]+$")
+var validNamePattern = regexp.MustCompile("^[a-zA-Z_]+[a-zA-Z0-9_-]+$")
 
 type Validator interface {
 	Validate() error

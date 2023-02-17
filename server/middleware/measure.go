@@ -145,7 +145,7 @@ func (w *wrappedStream) RecvMsg(m interface{}) error {
 func (w *wrappedStream) SendMsg(m interface{}) error {
 	err := w.ServerStream.SendMsg(m)
 	if err != nil {
-		return errors.Internal("Could not handle stream send message")
+		return errors.Internal("Could not handle stream send message err: %v", err.Error())
 	}
 	if w.measurement == nil {
 		return nil
