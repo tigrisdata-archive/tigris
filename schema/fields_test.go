@@ -62,6 +62,10 @@ func TestFieldBuilder_Build(t *testing.T) {
 				builder:  &FieldBuilder{FieldName: "test", Type: "integer", Primary: &boolTrue},
 				expError: nil,
 			},
+			{
+				builder:  &FieldBuilder{FieldName: "_test", Type: "integer"},
+				expError: nil,
+			},
 		}
 		for _, c := range cases {
 			_, err := c.builder.Build(false)
