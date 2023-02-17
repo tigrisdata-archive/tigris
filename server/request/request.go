@@ -343,14 +343,19 @@ func getMetadataFromToken(token string) (string, bool, string) {
 		decodedToken = stdDecoded
 	}
 
-	namespaceCode, err := jsonparser.GetString(decodedToken, JWTTigrisClaimSpace, NamespaceCode)
+	var namespaceCode, userEmail string
+	namespaceCode, err = jsonparser.GetString(decodedToken, JWTTigrisClaimSpace, NamespaceCode)
 	if err != nil {
-		log.Error().Err(err).Msg("Could not read namespace code")
-		return defaults.UnknownValue, false, ""
+		// try parsing the old way
+		namespaceCode, err = jsonparser.GetString(decodedToken, JWTTigrisClaimSpace+"/n", "code")
+		if err != nil {
+			log.Error().Err(err).Msg("Could not read namespace code")
+			return defaults.UnknownValue, false, ""
+		}
 	}
 
-	userEmail, err := jsonparser.GetString(decodedToken, JWTTigrisClaimSpace, UserEmail)
-	if err != nil && err != jsonparser.KeyPathNotFoundError {
+	userEmail, err = jsonparser.GetString(decodedToken, JWTTigrisClaimSpace, UserEmail)
+	if err != nil {
 		log.Debug().Err(err).Msg("Could not read user email")
 		// this is allowed for m2m apps
 	}
