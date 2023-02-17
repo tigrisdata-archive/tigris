@@ -233,6 +233,10 @@ var SupportedFieldProperties = container.NewHashSet(
 	"properties",
 	"autoGenerate",
 	"sorted",
+	"sort",
+	"index",
+	"facet",
+	"searchIndex",
 	"default",
 	"createdAt",
 	"updatedAt",
@@ -299,7 +303,7 @@ type FieldBuilder struct {
 	UpdatedAt   *bool               `json:"updatedAt,omitempty"`
 	MaxLength   *int32              `json:"maxLength,omitempty"`
 	Auto        *bool               `json:"autoGenerate,omitempty"`
-	Sorted      *bool               `json:"sorted,omitempty"`
+	Sorted      *bool               `json:"sort,omitempty"`
 	Items       *FieldBuilder       `json:"items,omitempty"`
 	Properties  jsoniter.RawMessage `json:"properties,omitempty"`
 	Primary     *bool
