@@ -281,6 +281,23 @@ func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query
 	if err := decoder.Decode(&dest); err != nil {
 		return nil, s.convertToInternalError(err)
 	}
+	for _, each := range dest.Results {
+		if each.Hits == nil {
+			type errResult struct {
+				Code int `json:"code"`
+				Message string `json:"error"`
+			}
+
+			type errorsResult struct {
+				Res []errResult `json:"results"`
+			}
+
+			var errorsRes errorsResult
+			if err = jsoniter.Unmarshal(res.Body, &errorsRes); err == nil && len(errorsRes.Res) > 0 {
+				return nil, NewSearchError(errorsRes.Res[0].Code, ErrCodeUnhandled, errorsRes.Res[0].Message)
+			}
+		}
+	}
 
 	return dest.Results, nil
 }

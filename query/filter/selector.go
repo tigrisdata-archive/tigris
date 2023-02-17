@@ -17,6 +17,7 @@ package filter
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 
 	"github.com/buger/jsonparser"
 	"github.com/tigrisdata/tigris/lib/date"
@@ -144,7 +145,21 @@ func (s *Selector) ToSearchFilter() []string {
 }
 
 func (s *Selector) IsIndexed() bool {
-	return !(s.Field.DataType == schema.ByteType || s.Matcher.GetValue().AsInterface() == nil)
+	switch {
+	case s.Field.DataType == schema.DoubleType:
+		v, ok := s.Matcher.GetValue().(*value.DoubleValue)
+		if !ok {
+			return false
+		}
+
+		if v.Double < value.SmallestNonZeroNormalFloat32 && v.Double > -value.SmallestNonZeroNormalFloat32 {
+			return false
+		}
+
+		return v.Double < math.MaxFloat32 && v.Double > -math.MaxFloat32
+	default:
+		return !(s.Field.DataType == schema.ByteType || s.Matcher.GetValue().AsInterface() == nil)
+	}
 }
 
 // String a helpful method for logging.

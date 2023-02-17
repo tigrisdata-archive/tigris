@@ -57,6 +57,15 @@ func TestUserSubspace(t *testing.T) {
 				testUserPayload))
 	})
 
+	t.Run("get_error", func(t *testing.T) {
+		tx, cleanup := initTx(t, ctx, tm)
+		defer cleanup()
+
+		r, err := u.GetUserMetadata(ctx, tx, 1, User, "uuu", "meta-key-non-existing")
+		require.Equal(t, errors.ErrNotFound, err)
+		require.Nil(t, r)
+	})
+
 	t.Run("put_get_1", func(t *testing.T) {
 		tx, cleanup := initTx(t, ctx, tm)
 		defer cleanup()

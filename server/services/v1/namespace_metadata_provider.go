@@ -22,6 +22,7 @@ import (
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/transaction"
+	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 type NamespaceMetadataProvider interface {
@@ -44,9 +45,12 @@ func (a *DefaultNamespaceMetadataProvider) GetNamespaceMetadata(ctx context.Cont
 
 	val, err := a.namespaceStore.GetNamespaceMetadata(ctx, tx, namespaceId, req.GetMetadataKey())
 	if err != nil {
-		if err = tx.Rollback(ctx); err != nil {
-			log.Error().Err(err).Msg("Failed to rollback transaction.")
+		ulog.E(tx.Rollback(ctx))
+
+		if err == errors.ErrNotFound {
+			return nil, errors.NotFound("namespace metadata not found")
 		}
+
 		return nil, errors.Internal("Failed to read namespace metadata.")
 	}
 

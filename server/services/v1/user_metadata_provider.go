@@ -24,6 +24,7 @@ import (
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/services/v1/auth"
 	"github.com/tigrisdata/tigris/server/transaction"
+	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 type UserMetadataProvider interface {
@@ -46,9 +47,12 @@ func (a *DefaultUserMetadataProvider) GetUserMetadata(ctx context.Context, req *
 
 	val, err := a.userStore.GetUserMetadata(ctx, tx, namespaceId, metadata.User, currentSub, req.GetMetadataKey())
 	if err != nil {
-		if err = tx.Rollback(ctx); err != nil {
-			log.Error().Err(err).Msg("Failed to rollback transaction.")
+		ulog.E(tx.Rollback(ctx))
+
+		if err == errors.ErrNotFound {
+			return nil, errors.Internal("user metadata not found")
 		}
+
 		return nil, errors.Internal("Failed to read user metadata.")
 	}
 
