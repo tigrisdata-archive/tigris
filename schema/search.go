@@ -92,7 +92,7 @@ func BuildSearch(index string, reqSchema jsoniter.RawMessage) (*SearchFactory, e
 	} else {
 		source = *schema.Source
 	}
-	if schema.Source.Type != SearchSourceExternal && schema.Source.Type != SearchSourceTigris {
+	if schema.Source.Type != SearchSourceExternal && schema.Source.Type != SearchSourceTigris && schema.Source.Type != "user" {
 		return nil, errors.InvalidArgument("unsupported index source '%s'", schema.Source.Type)
 	}
 	if schema.Source.Type == SearchSourceTigris && len(schema.Source.CollectionName) == 0 {

@@ -508,12 +508,18 @@ func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, 
 			shouldIndex := IndexableField(f.DataType, subType)
 			indexed = &shouldIndex
 		}
+
+		ptrTrue := true
 		if f.DataType == ByteType && indexed == nil {
-			ptrTrue := true
 			indexed = &ptrTrue
 		}
 
 		faceted = f.Faceted
+
+		if sortable == nil  && (f.DataType == Int32Type || f.DataType == Int64Type || f.DataType == DoubleType || f.DataType == DateTimeType) {
+			// enable it by default for numeric fields
+			sortable = &ptrTrue
+		}
 	} else {
 		if indexed == nil {
 			shouldIndex := IndexableField(f.DataType, subType)
