@@ -16,6 +16,7 @@ package metadata
 
 import (
 	"context"
+
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/server/defaults"
