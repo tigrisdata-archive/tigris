@@ -27,9 +27,9 @@ import (
 func TestSearchBuilder(t *testing.T) {
 	js := []byte(`{"a": 4, "$and": [{"int_value":1}, {"string_value1": "shoe"}]}`)
 	f := filter.NewFactory([]*schema.QueryableField{
-		schema.NewQueryableField("a", schema.Int64Type, schema.UnknownType, nil, nil),
-		schema.NewQueryableField("int_value", schema.Int64Type, schema.UnknownType, nil, nil),
-		schema.NewQueryableField("string_value1", schema.StringType, schema.UnknownType, nil, nil),
+		schema.NewQueryableFieldsBuilder(false).NewQueryableField("a", &schema.Field{DataType: schema.Int64Type}, nil),
+		schema.NewQueryableFieldsBuilder(false).NewQueryableField("int_value", &schema.Field{DataType: schema.Int64Type}, nil),
+		schema.NewQueryableFieldsBuilder(false).NewQueryableField("string_value1", &schema.Field{DataType: schema.StringType}, nil),
 	}, nil)
 	wrappedF, err := f.WrappedFilter(js)
 	require.NoError(t, err)
