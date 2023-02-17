@@ -88,9 +88,6 @@ var testSearchIndexSchema = Map{
 				},
 			},
 		},
-		"source": Map{
-			"type": "user",
-		},
 	},
 }
 

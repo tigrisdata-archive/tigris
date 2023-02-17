@@ -147,7 +147,7 @@ func NewDefaultCollection(id uint32, schVer int, factory *Factory, schemas Versi
 	if implicitSearchIndex != nil {
 		fieldsInSearch = implicitSearchIndex.fieldsInSearch
 	}
-	queryableFields := BuildQueryableFields(factory.Fields, fieldsInSearch)
+	queryableFields := NewQueryableFieldsBuilder(false).BuildQueryableFields(factory.Fields, fieldsInSearch)
 
 	schemaDeltas, err := buildSchemaDeltas(schemas)
 	if err != nil {
