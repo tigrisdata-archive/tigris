@@ -11,6 +11,10 @@ on:
     paths:
       - scripts/install_*.sh
       - Makefile
+      - docker/Dockerfile
+      - docker/Dockerfile.*
+      - test/docker/docker-compose.yml
+      - test/docker/Dockerfile
 jobs:
   linux:
     runs-on: ubuntu-latest

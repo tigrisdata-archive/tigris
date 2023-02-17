@@ -74,6 +74,8 @@ case "${OS}-${ARCH}" in
   ;;
 esac
 
+echo "$SHA  $FN" | shasum -a 256 -c
+
 curl -LO "https://go.dev/dl/go${VERSION}.${V}"
 
 if [[ "$OS" == "MINGW"* ]]; then
