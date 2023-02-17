@@ -84,7 +84,17 @@ func TestRequestMetadata(t *testing.T) {
 		assert.Equal(t, "google-oauth2|1", sub)
 	})
 
-	t.Run("Test get namespace from token 2", func(t *testing.T) {
+	t.Run("Test get namespace from token 2 (backward compatibility)", func(t *testing.T) {
+		// base64 encoding of {"https://tigris/n":{"code":"test_namespace"},"iss":"https://some-issuer","sub":"google2|12","aud":"https://test","iat":1676573357,"exp":1676659757,"azp":"123","gty":"client-credentials"}
+		testToken := "header.eyJodHRwczovL3RpZ3Jpcy9uIjp7ImNvZGUiOiJ0ZXN0X25hbWVzcGFjZSJ9LCJpc3MiOiJodHRwczovL3NvbWUtaXNzdWVyIiwic3ViIjoiZ29vZ2xlMnwxMiIsImF1ZCI6Imh0dHBzOi8vdGVzdCIsImlhdCI6MTY3NjU3MzM1NywiZXhwIjoxNjc2NjU5NzU3LCJhenAiOiIxMjMiLCJndHkiOiJjbGllbnQtY3JlZGVudGlhbHMifQ==.signature" //nolint:gosec
+		ns, utype, sub := getMetadataFromToken(testToken)
+		assert.Equal(t, "test_namespace", ns)
+		assert.Equal(t, false, utype)
+		assert.Equal(t, "google2|12", sub)
+	})
+
+	//
+	t.Run("Test get namespace from token 3", func(t *testing.T) {
 		// base64 encoding of {"https://tigris":{"nc":"test-namespace","ue":"test@test.com"},"iss":"https://test-issuer.com/","sub":"google-oauth2|2","aud":["https://tigris-api-test"],"iat":1662745495,"exp":1662831895,"azp":"test","scope":"openid profile email","org_id":"test"}
 		testToken := "header.eyJodHRwczovL3RpZ3JpcyI6eyJuYyI6InRlc3QtbmFtZXNwYWNlIiwidWUiOiJ0ZXN0QHRlc3QuY29tIn0sImlzcyI6Imh0dHBzOi8vdGVzdC1pc3N1ZXIuY29tLyIsInN1YiI6Imdvb2dsZS1vYXV0aDJ8MiIsImF1ZCI6WyJodHRwczovL3RpZ3Jpcy1hcGktdGVzdCJdLCJpYXQiOjE2NjI3NDU0OTUsImV4cCI6MTY2MjgzMTg5NSwiYXpwIjoidGVzdCIsInNjb3BlIjoib3BlbmlkIHByb2ZpbGUgZW1haWwiLCJvcmdfaWQiOiJ0ZXN0In0=.signature" //nolint:gosec
 		ns, utype, sub := getMetadataFromToken(testToken)
@@ -93,7 +103,7 @@ func TestRequestMetadata(t *testing.T) {
 		assert.Equal(t, "google-oauth2|2", sub)
 	})
 
-	t.Run("Test get namespace from token 3", func(t *testing.T) {
+	t.Run("Test get namespace from token 4", func(t *testing.T) {
 		// base64 encoding of {"https://tigris":{"nc":"test-namespace"},"iss":"https://test-issuer.com/","sub":"google-oauth2|1","aud":["https://tigris-api-test"],"iat":1662745495,"exp":1662831895,"azp":"test","scope":"openid profile email","org_id":"test"}
 		testToken := "header.eyJodHRwczovL3RpZ3JpcyI6eyJuYyI6InRlc3QtbmFtZXNwYWNlIn0sImlzcyI6Imh0dHBzOi8vdGVzdC1pc3N1ZXIuY29tLyIsInN1YiI6Imdvb2dsZS1vYXV0aDJ8MSIsImF1ZCI6WyJodHRwczovL3RpZ3Jpcy1hcGktdGVzdCJdLCJpYXQiOjE2NjI3NDU0OTUsImV4cCI6MTY2MjgzMTg5NSwiYXpwIjoidGVzdCIsInNjb3BlIjoib3BlbmlkIHByb2ZpbGUgZW1haWwiLCJvcmdfaWQiOiJ0ZXN0In0=.signature" //nolint:gosec
 		ns, utype, sub := getMetadataFromToken(testToken)
