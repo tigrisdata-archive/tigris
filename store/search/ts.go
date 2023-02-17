@@ -284,7 +284,7 @@ func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query
 	for _, each := range dest.Results {
 		if each.Hits == nil {
 			type errResult struct {
-				Code int `json:"code"`
+				Code    int    `json:"code"`
 				Message string `json:"error"`
 			}
 
