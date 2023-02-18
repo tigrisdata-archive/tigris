@@ -43,6 +43,8 @@ type DefaultCollection struct {
 	Name string
 	// EncodedName is the encoded name of the collection.
 	EncodedName []byte
+	// EncodedTableIndexName is the encoded name of the collection's Secondary Index.
+	EncodedTableIndexName []byte
 	// Fields are derived from the user schema.
 	Fields []*Field
 	// Indexes is a wrapper on the indexes part of this collection.

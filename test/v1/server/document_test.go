@@ -37,7 +37,6 @@ import (
 func TestInsert_Bad_NotFoundRequest(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)
-
 	cases := []struct {
 		databaseName   string
 		collectionName string
@@ -1823,7 +1822,6 @@ func TestUpdate_Limit(t *testing.T) {
 func TestUpdate_UsingCollation(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)
-
 	inputDocument := []Doc{
 		{
 			"pkey_int":     110,
@@ -1882,7 +1880,6 @@ func TestUpdate_UsingCollation(t *testing.T) {
 		Object().
 		ValueEqual("status", "updated").
 		ValueEqual("modified_count", 2)
-
 	outDocument := []Doc{
 		{
 			"pkey_int":     110,
@@ -1917,7 +1914,6 @@ func TestUpdate_UsingCollation(t *testing.T) {
 func TestUpdate_OnAnyField(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)
-
 	inputDocument := []Doc{
 		{
 			"pkey_int":           110,
@@ -4345,7 +4341,7 @@ func readByFilter(t *testing.T, db string, collection string, filter Map, fields
 	if len(order) > 0 {
 		payload["sort"] = order
 	}
-	if options!= nil {
+	if options != nil {
 		payload["options"] = options
 	}
 

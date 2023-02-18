@@ -273,8 +273,8 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 				}
 			}
 		} else if config.DefaultConfig.SecondaryIndex.WriteEnabled {
-			if err := indexer.Update(ctx, tx, newData, row.Data, key.IndexParts()); ulog.E(err) {
-				return Response{}, nil, err
+			if err = indexer.Update(ctx, tx, newData, row.Data, key.IndexParts()); ulog.E(err) {
+				return Response{}, ctx, err
 			}
 		}
 		if err = tx.Replace(ctx, newKey, newData, isUpdate); ulog.E(err) {
@@ -525,7 +525,6 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 	}
 
 	ctx = runner.instrumentRunner(ctx, options)
-
 	if options.inMemoryStore {
 		if err = runner.iterateOnIndexingStore(ctx, coll, options); err != nil {
 			return Response{}, ctx, err

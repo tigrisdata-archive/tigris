@@ -246,37 +246,31 @@ func (runner *BaseQueryRunner) getWriteIterator(ctx context.Context, tx transact
 	collection *schema.DefaultCollection, reqFilter []byte, collation *value.Collation,
 	metrics *metrics.WriteQueryMetrics,
 ) (Iterator, error) {
-	var (
-		err      error
-		iKeys    []keys.Key
-		iterator Iterator
-	)
-
 	reader := NewDatabaseReader(ctx, tx)
 
-	if iKeys, err = runner.buildKeysUsingFilter(collection, reqFilter, collation); err == nil {
-		iterator, err = reader.KeyIterator(iKeys)
-	} else {
-		if iterator, err = reader.ScanTable(collection.EncodedName); err != nil {
-			return nil, err
+	if iKeys, err := runner.buildKeysUsingFilter(collection, reqFilter, collation); err == nil {
+		if iterator, err := reader.KeyIterator(iKeys); err == nil {
+			metrics.SetWriteType("non-pkey")
+			return iterator, nil
 		}
-		filterFactory := filter.NewFactory(collection.QueryableFields, collation)
-		var filters []filter.Filter
-		if filters, err = filterFactory.Factorize(reqFilter); err != nil {
-			return nil, err
-		}
-
-		iterator, err = reader.FilteredRead(iterator, filter.NewWrappedFilter(filters))
 	}
+
+	pkIterator, err := reader.ScanTable(collection.EncodedName)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(iKeys) == 0 {
-		metrics.SetWriteType("pkey")
-	} else {
-		metrics.SetWriteType("non-pkey")
+	filterFactory := filter.NewFactory(collection.QueryableFields, collation)
+	var filters []filter.Filter
+	if filters, err = filterFactory.Factorize(reqFilter); err != nil {
+		return nil, err
 	}
 
+	iterator, err := reader.FilteredRead(pkIterator, filter.NewWrappedFilter(filters))
+	if err != nil {
+		return nil, err
+	}
+
+	metrics.SetWriteType("pkey")
 	return iterator, nil
 }
