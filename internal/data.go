@@ -26,7 +26,7 @@ import (
 
 var (
 	UserTableKeyPrefix      = []byte("data")
-	SecondaryTableKeyPrefix = []byte("sidx")
+	SecondaryTableKeyPrefix = []byte("idx")
 	PartitionKeyPrefix      = []byte("part")
 	CacheKeyPrefix          = "cache"
 )

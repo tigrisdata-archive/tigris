@@ -643,7 +643,7 @@ func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbN
 		if err != nil {
 			return nil, err
 		}
-		collection.EncodedSecondaryName = encIdxName
+		collection.EncodedTableIndexName = encIdxName
 
 		database.collections[coll] = newCollectionHolder(meta.ID, coll, collection, idxMeta)
 		database.idToCollectionMap[meta.ID] = coll
@@ -1231,7 +1231,7 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 	if err != nil {
 		return err
 	}
-	collection.EncodedSecondaryName = encIdxName
+	collection.EncodedTableIndexName = encIdxName
 
 	database.collections[schFactory.Name] = newCollectionHolder(collMeta.ID, schFactory.Name, collection, idxMeta)
 	if config.DefaultConfig.Search.WriteEnabled {
@@ -1318,7 +1318,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 	if err != nil {
 		return err
 	}
-	collection.EncodedSecondaryName = encIdxName
+	collection.EncodedTableIndexName = encIdxName
 
 	// recreating collection holder is fine because we are working on databaseClone and also has a lock on the tenant
 	database.collections[schFactory.Name] = newCollectionHolder(c.id, schFactory.Name, collection, c.idxMeta)
@@ -1653,7 +1653,7 @@ func (c *collectionHolder) clone() *collectionHolder {
 
 	copyC.collection.SchemaDeltas = c.collection.SchemaDeltas
 	copyC.collection.EncodedName = c.collection.EncodedName
-	copyC.collection.EncodedSecondaryName = c.collection.EncodedSecondaryName
+	copyC.collection.EncodedTableIndexName = c.collection.EncodedTableIndexName
 
 	copyC.idxMeta = make(map[string]*IndexMetadata)
 	for k, v := range c.idxMeta {

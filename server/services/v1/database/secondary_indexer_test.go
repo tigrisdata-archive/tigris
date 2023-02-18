@@ -523,7 +523,7 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 
 	t.Run("insert", func(t *testing.T) {
 		coll := indexStore.coll
-		_ = kvStore.DropTable(ctx, coll.EncodedSecondaryName)
+		_ = kvStore.DropTable(ctx, coll.EncodedTableIndexName)
 		tx, err := tm.StartTx(ctx)
 		assert.NoError(t, err)
 
@@ -558,7 +558,7 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 
 	t.Run("update", func(t *testing.T) {
 		coll := indexStore.coll
-		_ = kvStore.DropTable(ctx, coll.EncodedSecondaryName)
+		_ = kvStore.DropTable(ctx, coll.EncodedTableIndexName)
 		td, pk := createDoc(`{"id":1, "double_f":2,"created":"2023-01-16T12:55:17.304154Z","updated": "2023-01-16T12:55:17.304154Z", "arr":[1,2]}`)
 
 		tx, err := tm.StartTx(ctx)
@@ -614,7 +614,7 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 
 	t.Run("delete", func(t *testing.T) {
 		coll := indexStore.coll
-		_ = kvStore.DropTable(ctx, coll.EncodedSecondaryName)
+		_ = kvStore.DropTable(ctx, coll.EncodedTableIndexName)
 		tx, err := tm.StartTx(ctx)
 		assert.NoError(t, err)
 
@@ -672,7 +672,7 @@ func setupTest(t *testing.T, reqSchema []byte) *SecondaryIndexer {
 	coll, err := schema.NewDefaultCollection(1, 1, schFactory, nil, nil)
 	assert.NoError(t, err)
 	coll.EncodedName = []byte("t1")
-	coll.EncodedSecondaryName = []byte("sidx1")
+	coll.EncodedTableIndexName = []byte("sidx1")
 	return NewSecondaryIndexer(coll)
 }
 
