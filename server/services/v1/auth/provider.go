@@ -41,7 +41,8 @@ const (
 	// pagination param for list clients auth0 call.
 	perPage = 50
 
-	auth0name = "auth0"
+	auth0Name  = "auth0"
+	gotrueName = "gotrue"
 )
 
 type Provider interface {
@@ -57,7 +58,7 @@ type Provider interface {
 func NewProvider(userstore *metadata.UserSubspace, txMgr *transaction.Manager) Provider {
 	var authProvider Provider = &noop{}
 
-	if config.DefaultConfig.Auth.OAuthProvider == auth0name {
+	if config.DefaultConfig.Auth.OAuthProvider == auth0Name {
 		auth0HttpClient := &http.Client{Timeout: time.Duration(30) * time.Second}
 		m, err := management.New(config.DefaultConfig.Auth.ExternalDomain,
 			management.WithClientCredentials(config.DefaultConfig.Auth.ManagementClientId, config.DefaultConfig.Auth.ManagementClientSecret),
@@ -71,6 +72,12 @@ func NewProvider(userstore *metadata.UserSubspace, txMgr *transaction.Manager) P
 		authProvider = &auth0{
 			AuthConfig: config.DefaultConfig.Auth,
 			Management: m,
+			userStore:  userstore,
+			txMgr:      txMgr,
+		}
+	} else if config.DefaultConfig.Auth.OAuthProvider == gotrueName {
+		authProvider = &gotrue{
+			AuthConfig: config.DefaultConfig.Auth,
 			userStore:  userstore,
 			txMgr:      txMgr,
 		}

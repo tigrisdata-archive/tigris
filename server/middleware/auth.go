@@ -91,32 +91,37 @@ func AuthFromMD(ctx context.Context, expectedScheme string) (string, error) {
 	return splits[1], nil
 }
 
-func GetJWTValidator(config *config.Config) *validator.Validator {
-	issuerURL, _ := url.Parse(config.Auth.IssuerURL)
-	provider := jwks.NewCachingProvider(issuerURL, config.Auth.JWKSCacheTimeout)
+func GetJWTValidators(config *config.Config) []*validator.Validator {
+	jwtValidators := make([]*validator.Validator, len(config.Auth.Issuers))
+	for i, issuer := range config.Auth.Issuers {
+		log.Info().Msg(issuer)
+		issuerURL, _ := url.Parse(issuer)
+		provider := jwks.NewCachingProvider(issuerURL, config.Auth.JWKSCacheTimeout)
 
-	jwtValidator, err := validator.New(
-		provider.KeyFunc,
-		validator.RS256,
-		issuerURL.String(),
-		[]string{config.Auth.Audience},
-		validator.WithAllowedClockSkew(time.Duration(config.Auth.TokenClockSkewDurationSec)*time.Second),
-		validator.WithCustomClaims(
-			func() validator.CustomClaims {
-				return &CustomClaim{}
-			},
-		),
-	)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to configure JWTValidator")
+		jwtValidator, err := validator.New(
+			provider.KeyFunc,
+			validator.RS256,
+			issuerURL.String(),
+			[]string{config.Auth.Audience},
+			validator.WithAllowedClockSkew(time.Duration(config.Auth.TokenClockSkewDurationSec)*time.Second),
+			validator.WithCustomClaims(
+				func() validator.CustomClaims {
+					return &CustomClaim{}
+				},
+			),
+		)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to configure JWTValidator")
+		}
+		jwtValidators[i] = jwtValidator
 	}
-	return jwtValidator
+	return jwtValidators
 }
 
-func measuredAuthFunction(ctx context.Context, jwtValidator *validator.Validator, config *config.Config, cache *lru.Cache) (ctxResult context.Context, err error) {
+func measuredAuthFunction(ctx context.Context, jwtValidators []*validator.Validator, config *config.Config, cache *lru.Cache) (ctxResult context.Context, err error) {
 	measurement := metrics.NewMeasurement("auth", "auth", metrics.AuthSpanType, metrics.GetAuthBaseTags(ctx))
 	measurement.StartTracing(ctx, true)
-	ctxResult, err = authFunction(ctx, jwtValidator, config, cache)
+	ctxResult, err = authFunction(ctx, jwtValidators, config, cache)
 	if err != nil {
 		measurement.CountErrorForScope(metrics.AuthErrorCount, measurement.GetAuthErrorTags(err))
 		measurement.FinishWithError(ctxResult, err)
@@ -129,7 +134,7 @@ func measuredAuthFunction(ctx context.Context, jwtValidator *validator.Validator
 	return
 }
 
-func authFunction(ctx context.Context, jwtValidator *validator.Validator, config *config.Config, cache *lru.Cache) (ctxResult context.Context, err error) {
+func authFunction(ctx context.Context, jwtValidators []*validator.Validator, config *config.Config, cache *lru.Cache) (ctxResult context.Context, err error) {
 	reqMetadata, err := request.GetRequestMetadataFromContext(ctx)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to load request metadata")
@@ -159,16 +164,22 @@ func authFunction(ctx context.Context, jwtValidator *validator.Validator, config
 
 	validatedToken, found := cache.Get(tkn)
 	if !found {
-		validatedToken, err = jwtValidator.ValidateToken(ctx, tkn)
-		if err != nil {
-			if reqMetadata != nil {
-				log.Debug().Str("error", err.Error()).Str("unauthenticated_namespace", reqMetadata.GetNamespace()).Str("unauthenticated_namespace_name", reqMetadata.GetNamespaceName()).Err(err).Msg("Failed to validate access token")
-			} else {
-				log.Debug().Str("error", err.Error()).Err(err).Msg("Failed to validate access token")
+		for i, jwtValidator := range jwtValidators {
+			validatedToken, err = jwtValidator.ValidateToken(ctx, tkn)
+			if err == nil {
+				cache.Add(tkn, validatedToken)
+				break
 			}
-			return ctx, errors.Unauthenticated("Failed to validate access token")
+			// if none of the validator validated the token, then reject the request
+			if i == len(jwtValidators)-1 && err != nil {
+				if reqMetadata != nil {
+					log.Debug().Str("error", err.Error()).Str("unauthenticated_namespace", reqMetadata.GetNamespace()).Str("unauthenticated_namespace_name", reqMetadata.GetNamespaceName()).Err(err).Msg("Failed to validate access token")
+				} else {
+					log.Debug().Str("error", err.Error()).Err(err).Msg("Failed to validate access token")
+				}
+				return ctx, errors.Unauthenticated("Failed to validate access token")
+			}
 		}
-		cache.Add(tkn, validatedToken)
 	}
 
 	// validate custom claims
@@ -227,7 +238,7 @@ func isAdminNamespace(incomingNamespace string, config *config.Config) bool {
 
 func getAuthFunction(config *config.Config) func(ctx context.Context) (context.Context, error) {
 	if config.Auth.Enabled {
-		jwtValidator := GetJWTValidator(config)
+		jwtValidators := GetJWTValidators(config)
 
 		lruCache, err := lru.New(config.Auth.TokenCacheSize)
 		if err != nil {
@@ -237,11 +248,11 @@ func getAuthFunction(config *config.Config) func(ctx context.Context) (context.C
 		// inline closure to access the state of jwtValidator
 		if config.Tracing.Enabled {
 			return func(ctx context.Context) (context.Context, error) {
-				return measuredAuthFunction(ctx, jwtValidator, config, lruCache)
+				return measuredAuthFunction(ctx, jwtValidators, config, lruCache)
 			}
 		} else {
 			return func(ctx context.Context) (context.Context, error) {
-				return authFunction(ctx, jwtValidator, config, lruCache)
+				return authFunction(ctx, jwtValidators, config, lruCache)
 			}
 		}
 	}
