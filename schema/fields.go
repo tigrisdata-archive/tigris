@@ -516,7 +516,7 @@ func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, 
 
 		faceted = f.Faceted
 
-		if sortable == nil  && (f.DataType == Int32Type || f.DataType == Int64Type || f.DataType == DoubleType || f.DataType == DateTimeType) {
+		if sortable == nil && (f.DataType == Int32Type || f.DataType == Int64Type || f.DataType == DoubleType || f.DataType == DateTimeType) {
 			// enable it by default for numeric fields
 			sortable = &ptrTrue
 		}

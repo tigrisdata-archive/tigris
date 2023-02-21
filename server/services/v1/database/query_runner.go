@@ -72,7 +72,7 @@ func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	ts, allKeys, err := runner.insertOrReplace(ctx, tx, tenant, coll, runner.req.GetDocuments(), true)
 	if err != nil {
 		if err == kv.ErrDuplicateKey {
-			return Response{}, ctx, errors.AlreadyExists(err.Error())
+			return Response{}, ctx, errors.AlreadyExists(err.(kv.StoreError).Msg())
 		}
 
 		return Response{}, ctx, err

@@ -149,7 +149,7 @@ func (runner *ImportQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		// Retry insert after updating the schema
 		ts, allKeys, err = runner.insertOrReplace(ctx, tx, tenant, coll, runner.req.GetDocuments(), true)
 		if err == kv.ErrDuplicateKey {
-			return Response{}, ctx, errors.AlreadyExists(err.Error())
+			return Response{}, ctx, errors.AlreadyExists(err.(kv.StoreError).Msg())
 		}
 
 		if err != nil {
