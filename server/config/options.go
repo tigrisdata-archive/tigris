@@ -227,7 +227,7 @@ var DefaultConfig = Config{
 	},
 	SecondaryIndex: SecondaryIndexConfig{
 		ReadEnabled:  false,
-		WriteEnabled: false,
+		WriteEnabled: true,
 	},
 	Cache: CacheConfig{
 		Host:    "0.0.0.0",
