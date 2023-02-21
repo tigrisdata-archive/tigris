@@ -290,7 +290,7 @@ func (t *ftx) Insert(ctx context.Context, table []byte, key Key, data []byte) er
 	v := t.tx.Get(k)
 	vv, err := v.Get()
 	if err != nil {
-		return err
+		return convertFDBToStoreErr(err)
 	}
 	if vv != nil {
 		return ErrDuplicateKey
@@ -301,7 +301,7 @@ func (t *ftx) Insert(ctx context.Context, table []byte, key Key, data []byte) er
 
 	log.Debug().Str("table", string(table)).Interface("key", key).Msg("Insert")
 
-	return err
+	return nil
 }
 
 func (t *ftx) Replace(ctx context.Context, table []byte, key Key, data []byte, isUpdate bool) error {
@@ -324,7 +324,7 @@ func (t *ftx) Delete(ctx context.Context, table []byte, key Key) error {
 	listener := GetEventListener(ctx)
 	kr, err := fdb.PrefixRange(getFDBKey(table, key))
 	if ulog.E(err) {
-		return err
+		return convertFDBToStoreErr(err)
 	}
 
 	t.tx.ClearRange(kr)
@@ -352,7 +352,7 @@ func (t *ftx) Update(ctx context.Context, table []byte, key Key, apply func([]by
 	listener := GetEventListener(ctx)
 	k, err := fdb.PrefixRange(getFDBKey(table, key))
 	if ulog.E(err) {
-		return -1, err
+		return -1, convertFDBToStoreErr(err)
 	}
 
 	r := t.tx.GetRange(k, fdb.RangeOptions{})
@@ -513,12 +513,7 @@ func (t *ftx) Commit(_ context.Context) error {
 
 	log.Err(t.err).Msg("tx Commit")
 
-	var ep fdb.Error
-	if errors.As(t.err, &ep) {
-		if ep.Code == 1020 {
-			t.err = ErrConflictingTransaction
-		}
-	}
+	t.err = convertFDBToStoreErr(t.err)
 
 	t.tx.Cancel()
 
@@ -566,14 +561,7 @@ func (i *fdbIterator) Next(kv *baseKeyValue) bool {
 
 	tkv, err := i.it.Get()
 	if ulog.E(err) {
-		i.err = err
-
-		var ep fdb.Error
-		if errors.As(err, &ep) {
-			if ep.Code == 1007 {
-				i.err = ErrTransactionMaxDurationReached
-			}
-		}
+		i.err = convertFDBToStoreErr(err)
 		return false
 	}
 

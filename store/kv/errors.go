@@ -24,32 +24,50 @@ import (
 type StoreErrCode byte
 
 const (
-	ErrCodeInvalid                StoreErrCode = 0x00
-	ErrCodeDuplicateKey           StoreErrCode = 0x01
-	ErrCodeConflictingTransaction StoreErrCode = 0x02
-	ErrCodeTransactionMaxDuration StoreErrCode = 0x03
+	ErrCodeInvalid                 StoreErrCode = 0x00
+	ErrCodeDuplicateKey            StoreErrCode = 0x01
+	ErrCodeConflictingTransaction  StoreErrCode = 0x02
+	ErrCodeTransactionMaxDuration  StoreErrCode = 0x03
+	ErrCodeTransactionTimedOut     StoreErrCode = 0x04
+	ErrCodeTransactionNotCommitted StoreErrCode = 0x05
+	ErrCodeValueSizeExceeded       StoreErrCode = 0x06
+	ErrCodeTransactionSizeExceeded StoreErrCode = 0x07
 )
 
 var (
 	// ErrDuplicateKey is returned when an insert call is made for a key that already exist.
-	ErrDuplicateKey = NewStoreError(ErrCodeDuplicateKey, "duplicate key value, violates key constraint")
+	ErrDuplicateKey = NewStoreError(0, ErrCodeDuplicateKey, "duplicate key value, violates key constraint")
 	// ErrConflictingTransaction is returned when there are conflicting transactions.
-	ErrConflictingTransaction = NewStoreError(ErrCodeConflictingTransaction, "transaction not committed due to conflict with another transaction")
+	ErrConflictingTransaction = NewStoreError(1020, ErrCodeConflictingTransaction, "transaction not committed due to conflict with another transaction")
 	// ErrTransactionMaxDurationReached is returned when transaction running beyond 5seconds.
-	ErrTransactionMaxDurationReached = NewStoreError(ErrCodeTransactionMaxDuration, "transaction is old to perform reads or be committed")
+	ErrTransactionMaxDurationReached = NewStoreError(1007, ErrCodeTransactionMaxDuration, "transaction is old to perform reads or be committed")
+	// ErrTransactionTimedOut is returned when fdb abort the transaction because of 5seconds limit.
+	ErrTransactionTimedOut     = NewStoreError(1031, ErrCodeTransactionTimedOut, "operation aborted because the transaction timed out")
+	ErrTransactionNotCommitted = NewStoreError(1021, ErrCodeTransactionNotCommitted, "transaction may or may not have committed")
+	ErrValueSizeExceeded       = NewStoreError(2103, ErrCodeValueSizeExceeded, "document exceeds limit")
+	ErrTransactionSizeExceeded = NewStoreError(2101, ErrCodeTransactionSizeExceeded, "transaction exceeds limit")
 )
 
 type StoreError struct {
-	code StoreErrCode
-	msg  string
+	code    StoreErrCode
+	fdbCode int
+	msg     string
 }
 
-func NewStoreError(code StoreErrCode, msg string, args ...interface{}) error {
-	return StoreError{code: code, msg: fmt.Sprintf(msg, args...)}
+func NewStoreError(fdbCode int, code StoreErrCode, msg string, args ...interface{}) error {
+	return StoreError{fdbCode: fdbCode, code: code, msg: fmt.Sprintf(msg, args...)}
+}
+
+func (se StoreError) Code() StoreErrCode {
+	return se.code
+}
+
+func (se StoreError) Msg() string {
+	return se.msg
 }
 
 func (se StoreError) Error() string {
-	return se.msg
+	return fmt.Sprintf("fdb_code: %d, msg: %s", se.fdbCode, se.msg)
 }
 
 func IsTimedOut(err error) bool {
@@ -62,4 +80,26 @@ func IsTimedOut(err error) bool {
 	// 1004 timed_out
 	// 1031 transaction_timed_out
 	return ep.Code == 1004 || ep.Code == 1031
+}
+
+func convertFDBToStoreErr(fdbErr error) error {
+	var ep fdb.Error
+	if errors.As(fdbErr, &ep) {
+		switch ep.Code {
+		case 1020:
+			return ErrConflictingTransaction
+		case 1007:
+			return ErrTransactionMaxDurationReached
+		case 1031:
+			return ErrTransactionTimedOut
+		case 1021:
+			return ErrTransactionNotCommitted
+		case 2103:
+			return ErrValueSizeExceeded
+		case 2101:
+			return ErrTransactionSizeExceeded
+		}
+	}
+
+	return fdbErr
 }
