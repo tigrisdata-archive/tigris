@@ -481,22 +481,22 @@ public class Product implements TigrisCollectionType {
 		},
 		{"object", objectTest, `
 class SubArrayNested {
-    private int field_3;
+    private int field_arr;
 
-    public int getField_3() {
-        return field_3;
+    public int getField_arr() {
+        return field_arr;
     }
 
-    public void setField_3(int field3) {
-        this.field_3 = field3;
+    public void setField_arr(int fieldArr) {
+        this.field_arr = fieldArr;
     }
 
     public SubArrayNested() {};
 
     public SubArrayNested(
-        int field3
+        int fieldArr
     ) {
-        this.field_3 = field3;
+        this.field_arr = fieldArr;
     };
 
     @Override
@@ -510,13 +510,13 @@ class SubArrayNested {
 
         SubArrayNested other = (SubArrayNested) o;
         return
-            field_3 == other.field_3;
+            field_arr == other.field_arr;
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(
-            field_3
+            field_arr
         );
     }
 }
@@ -562,10 +562,217 @@ class SubObjectNested {
     }
 }
 
+class SubObjectNestedOne {
+    private int field_31;
+    private SubObjectNested subObjectNested;
+
+    public int getField_31() {
+        return field_31;
+    }
+
+    public void setField_31(int field31) {
+        this.field_31 = field31;
+    }
+
+    public SubObjectNested getSubObjectNested() {
+        return subObjectNested;
+    }
+
+    public void setSubObjectNested(SubObjectNested subObjectNested) {
+        this.subObjectNested = subObjectNested;
+    }
+
+    public SubObjectNestedOne() {};
+
+    public SubObjectNestedOne(
+        int field31,
+        SubObjectNested subObjectNested
+    ) {
+        this.field_31 = field31;
+        this.subObjectNested = subObjectNested;
+    };
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+
+        SubObjectNestedOne other = (SubObjectNestedOne) o;
+        return
+            field_31 == other.field_31 &&
+            Objects.equals(subObjectNested, other.subObjectNested);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(
+            field_31,
+            subObjectNested
+        );
+    }
+}
+
+class SubObjectNested1 {
+    private int field_4;
+
+    public int getField_4() {
+        return field_4;
+    }
+
+    public void setField_4(int field4) {
+        this.field_4 = field4;
+    }
+
+    public SubObjectNested1() {};
+
+    public SubObjectNested1(
+        int field4
+    ) {
+        this.field_4 = field4;
+    };
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+
+        SubObjectNested1 other = (SubObjectNested1) o;
+        return
+            field_4 == other.field_4;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(
+            field_4
+        );
+    }
+}
+
+class SubObjectNestedThree {
+    private int field_33;
+    private SubObjectNested1 subObjectNested;
+
+    public int getField_33() {
+        return field_33;
+    }
+
+    public void setField_33(int field33) {
+        this.field_33 = field33;
+    }
+
+    public SubObjectNested1 getSubObjectNested() {
+        return subObjectNested;
+    }
+
+    public void setSubObjectNested(SubObjectNested1 subObjectNested) {
+        this.subObjectNested = subObjectNested;
+    }
+
+    public SubObjectNestedThree() {};
+
+    public SubObjectNestedThree(
+        int field33,
+        SubObjectNested1 subObjectNested
+    ) {
+        this.field_33 = field33;
+        this.subObjectNested = subObjectNested;
+    };
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+
+        SubObjectNestedThree other = (SubObjectNestedThree) o;
+        return
+            field_33 == other.field_33 &&
+            Objects.equals(subObjectNested, other.subObjectNested);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(
+            field_33,
+            subObjectNested
+        );
+    }
+}
+
+class SubObjectNestedTwo {
+    private int field_32;
+    private SubObjectNested1 subObjectNested;
+
+    public int getField_32() {
+        return field_32;
+    }
+
+    public void setField_32(int field32) {
+        this.field_32 = field32;
+    }
+
+    public SubObjectNested1 getSubObjectNested() {
+        return subObjectNested;
+    }
+
+    public void setSubObjectNested(SubObjectNested1 subObjectNested) {
+        this.subObjectNested = subObjectNested;
+    }
+
+    public SubObjectNestedTwo() {};
+
+    public SubObjectNestedTwo(
+        int field32,
+        SubObjectNested1 subObjectNested
+    ) {
+        this.field_32 = field32;
+        this.subObjectNested = subObjectNested;
+    };
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+
+        SubObjectNestedTwo other = (SubObjectNestedTwo) o;
+        return
+            field_32 == other.field_32 &&
+            Objects.equals(subObjectNested, other.subObjectNested);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(
+            field_32,
+            subObjectNested
+        );
+    }
+}
+
 class SubArray {
     private int field_3;
     private SubArrayNested[] subArrayNesteds;
     private SubObjectNested subObjectNested;
+    private SubObjectNestedOne subObjectNestedOne;
+    private SubObjectNested subObjectNestedReuseTypeByBody;
+    private SubObjectNestedThree subObjectNestedThree;
+    private SubObjectNestedTwo subObjectNestedTwo;
 
     public int getField_3() {
         return field_3;
@@ -591,16 +798,56 @@ class SubArray {
         this.subObjectNested = subObjectNested;
     }
 
+    public SubObjectNestedOne getSubObjectNestedOne() {
+        return subObjectNestedOne;
+    }
+
+    public void setSubObjectNestedOne(SubObjectNestedOne subObjectNestedOne) {
+        this.subObjectNestedOne = subObjectNestedOne;
+    }
+
+    public SubObjectNested getSubObjectNestedReuseTypeByBody() {
+        return subObjectNestedReuseTypeByBody;
+    }
+
+    public void setSubObjectNestedReuseTypeByBody(SubObjectNested subObjectNestedReuseTypeByBody) {
+        this.subObjectNestedReuseTypeByBody = subObjectNestedReuseTypeByBody;
+    }
+
+    public SubObjectNestedThree getSubObjectNestedThree() {
+        return subObjectNestedThree;
+    }
+
+    public void setSubObjectNestedThree(SubObjectNestedThree subObjectNestedThree) {
+        this.subObjectNestedThree = subObjectNestedThree;
+    }
+
+    public SubObjectNestedTwo getSubObjectNestedTwo() {
+        return subObjectNestedTwo;
+    }
+
+    public void setSubObjectNestedTwo(SubObjectNestedTwo subObjectNestedTwo) {
+        this.subObjectNestedTwo = subObjectNestedTwo;
+    }
+
     public SubArray() {};
 
     public SubArray(
         int field3,
         SubArrayNested[] subArrayNesteds,
-        SubObjectNested subObjectNested
+        SubObjectNested subObjectNested,
+        SubObjectNestedOne subObjectNestedOne,
+        SubObjectNested subObjectNestedReuseTypeByBody,
+        SubObjectNestedThree subObjectNestedThree,
+        SubObjectNestedTwo subObjectNestedTwo
     ) {
         this.field_3 = field3;
         this.subArrayNesteds = subArrayNesteds;
         this.subObjectNested = subObjectNested;
+        this.subObjectNestedOne = subObjectNestedOne;
+        this.subObjectNestedReuseTypeByBody = subObjectNestedReuseTypeByBody;
+        this.subObjectNestedThree = subObjectNestedThree;
+        this.subObjectNestedTwo = subObjectNestedTwo;
     };
 
     @Override
@@ -616,7 +863,11 @@ class SubArray {
         return
             field_3 == other.field_3 &&
             Arrays.equals(subArrayNesteds, other.subArrayNesteds) &&
-            Objects.equals(subObjectNested, other.subObjectNested);
+            Objects.equals(subObjectNested, other.subObjectNested) &&
+            Objects.equals(subObjectNestedOne, other.subObjectNestedOne) &&
+            Objects.equals(subObjectNestedReuseTypeByBody, other.subObjectNestedReuseTypeByBody) &&
+            Objects.equals(subObjectNestedThree, other.subObjectNestedThree) &&
+            Objects.equals(subObjectNestedTwo, other.subObjectNestedTwo);
     }
 
     @Override
@@ -624,7 +875,11 @@ class SubArray {
         return Objects.hash(
             field_3,
             subArrayNesteds,
-            subObjectNested
+            subObjectNested,
+            subObjectNestedOne,
+            subObjectNestedReuseTypeByBody,
+            subObjectNestedThree,
+            subObjectNestedTwo
         );
     }
 }
@@ -733,9 +988,19 @@ public class Product implements TigrisCollectionType {
 		t.Run(v.name, func(t *testing.T) {
 			buf := bytes.Buffer{}
 			w := bufio.NewWriter(&buf)
-			var hasTime, hasUUID bool
-			err := genCollectionSchema(w, []byte(v.in), &JSONToJava{}, &hasTime, &hasUUID)
+
+			s := schemaGenerator{
+				hasTime:     false,
+				hasUUID:     false,
+				langTypeGen: &JSONToJava{},
+				writer:      w,
+				types:       make(map[string][]string),
+				bodyToType:  make(map[string]string),
+			}
+
+			err := s.genCollectionSchema([]byte(v.in))
 			require.NoError(t, err)
+
 			_ = w.Flush()
 			assert.Equal(t, v.exp, buf.String())
 		})

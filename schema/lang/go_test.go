@@ -75,17 +75,40 @@ type Product struct {
 		},
 		{"object", objectTest, `
 type SubArrayNested struct {
-	Field3 int32 ` + "`" + `json:"field_3"` + "`" + `
+	FieldArr int32 ` + "`" + `json:"field_arr"` + "`" + `
 }
 
 type SubObjectNested struct {
 	Field3 int32 ` + "`" + `json:"field_3"` + "`" + `
 }
 
+type SubObjectNestedOne struct {
+	Field31 int32 ` + "`" + `json:"field_31"` + "`" + `
+	SubObjectNested SubObjectNested ` + "`" + `json:"subObjectNested"` + "`" + `
+}
+
+type SubObjectNested1 struct {
+	Field4 int32 ` + "`" + `json:"field_4"` + "`" + `
+}
+
+type SubObjectNestedThree struct {
+	Field33 int32 ` + "`" + `json:"field_33"` + "`" + `
+	SubObjectNested SubObjectNested1 ` + "`" + `json:"subObjectNested"` + "`" + `
+}
+
+type SubObjectNestedTwo struct {
+	Field32 int32 ` + "`" + `json:"field_32"` + "`" + `
+	SubObjectNested SubObjectNested1 ` + "`" + `json:"subObjectNested"` + "`" + `
+}
+
 type SubArray struct {
 	Field3 int32 ` + "`" + `json:"field_3"` + "`" + `
 	SubArrayNesteds []SubArrayNested ` + "`" + `json:"subArrayNesteds"` + "`" + `
 	SubObjectNested SubObjectNested ` + "`" + `json:"subObjectNested"` + "`" + `
+	SubObjectNestedOne SubObjectNestedOne ` + "`" + `json:"subObjectNestedOne"` + "`" + `
+	SubObjectNestedReuseTypeByBody SubObjectNested ` + "`" + `json:"subObjectNestedReuseTypeByBody"` + "`" + `
+	SubObjectNestedThree SubObjectNestedThree ` + "`" + `json:"subObjectNestedThree"` + "`" + `
+	SubObjectNestedTwo SubObjectNestedTwo ` + "`" + `json:"subObjectNestedTwo"` + "`" + `
 }
 
 // Subtype sub type description
@@ -112,9 +135,19 @@ type Product struct {
 		t.Run(v.name, func(t *testing.T) {
 			buf := bytes.Buffer{}
 			w := bufio.NewWriter(&buf)
-			var hasTime, hasUUID bool
-			err := genCollectionSchema(w, []byte(v.in), &JSONToGo{}, &hasTime, &hasUUID)
+
+			s := schemaGenerator{
+				hasTime:     false,
+				hasUUID:     false,
+				langTypeGen: &JSONToGo{},
+				writer:      w,
+				types:       make(map[string][]string),
+				bodyToType:  make(map[string]string),
+			}
+
+			err := s.genCollectionSchema([]byte(v.in))
 			require.NoError(t, err)
+
 			_ = w.Flush()
 			assert.Equal(t, v.exp, buf.String())
 		})
