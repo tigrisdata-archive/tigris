@@ -26,10 +26,10 @@ import (
 func TestSearchQueryRunner_getFacetFields(t *testing.T) {
 	collection := &schema.DefaultCollection{
 		QueryableFields: []*schema.QueryableField{
-			schema.NewQueryableField("field_1", schema.StringType, schema.UnknownType, nil, nil),
-			schema.NewQueryableField("parent.field_2", schema.StringType, schema.UnknownType, nil, nil),
-			schema.NewQueryableField("field_3", schema.ByteType, schema.UnknownType, nil, nil),
-			schema.NewQueryableField("field_4", schema.StringType, schema.UnknownType, nil, nil),
+			schema.NewQueryableFieldsBuilder(false).NewQueryableField("field_1", &schema.Field{DataType: schema.StringType}, nil),
+			schema.NewQueryableFieldsBuilder(false).NewQueryableField("parent.field_2", &schema.Field{DataType: schema.StringType}, nil),
+			schema.NewQueryableFieldsBuilder(false).NewQueryableField("field_3", &schema.Field{DataType: schema.ByteType}, nil),
+			schema.NewQueryableFieldsBuilder(false).NewQueryableField("field_4", &schema.Field{DataType: schema.StringType}, nil),
 		},
 	}
 	runner := &SearchQueryRunner{req: &api.SearchRequest{}}
@@ -83,8 +83,8 @@ func TestSearchQueryRunner_getFacetFields(t *testing.T) {
 func TestSearchQueryRunner_getFieldSelection(t *testing.T) {
 	collection := &schema.DefaultCollection{
 		QueryableFields: []*schema.QueryableField{
-			schema.NewQueryableField("field_1", schema.StringType, schema.UnknownType, nil, nil),
-			schema.NewQueryableField("parent.field_2", schema.StringType, schema.UnknownType, nil, nil),
+			schema.NewQueryableFieldsBuilder(false).NewQueryableField("field_1", &schema.Field{DataType: schema.StringType}, nil),
+			schema.NewQueryableFieldsBuilder(false).NewQueryableField("parent.field_2", &schema.Field{DataType: schema.StringType}, nil),
 		},
 	}
 
@@ -159,9 +159,9 @@ func TestSearchQueryRunner_getFieldSelection(t *testing.T) {
 func TestSearchQueryRunner_getSortOrdering(t *testing.T) {
 	collection := &schema.DefaultCollection{
 		QueryableFields: []*schema.QueryableField{
-			schema.NewQueryableField("field_1", schema.StringType, schema.UnknownType, nil, nil),
-			schema.NewQueryableField("parent.field_2", schema.StringType, schema.UnknownType, nil, nil),
-			schema.NewQueryableField("field_3", schema.ByteType, schema.UnknownType, nil, nil),
+			schema.NewQueryableFieldsBuilder(false).NewQueryableField("field_1", &schema.Field{DataType: schema.StringType}, nil),
+			schema.NewQueryableFieldsBuilder(false).NewQueryableField("parent.field_2", &schema.Field{DataType: schema.StringType}, nil),
+			schema.NewQueryableFieldsBuilder(false).NewQueryableField("field_3", &schema.Field{DataType: schema.ByteType}, nil),
 		},
 	}
 	collection.QueryableFields[0].Sortable = true

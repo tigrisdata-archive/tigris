@@ -25,8 +25,8 @@ import (
 )
 
 var (
-	DefaultTimeout = 2 * time.Second
-	MaximumTimeout = 5 * time.Second
+	DefaultTimeout = 10 * time.Second
+	MaximumTimeout = 30 * time.Second
 )
 
 // timeoutUnaryServerInterceptor returns a new unary server interceptor
@@ -52,7 +52,7 @@ func timeoutUnaryServerInterceptor(timeout time.Duration) grpc.UnaryServerInterc
 				cancel()
 			}
 			if ctx.Err() == context.DeadlineExceeded {
-				err = errors.DeadlineExceeded("context deadline exceeded")
+				err = errors.DeadlineExceeded("the server is taking too long to process the request")
 			}
 		}()
 

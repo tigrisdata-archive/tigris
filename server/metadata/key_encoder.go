@@ -47,6 +47,8 @@ type Encoder interface {
 
 	// EncodeTableName returns encoded bytes which are formed by combining namespace, database, and collection.
 	EncodeTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) ([]byte, error)
+	// EncodeSecondaryIndexTableName returns encoded bytes for the table name of a collections secondary index.
+	EncodeSecondaryIndexTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) ([]byte, error)
 	EncodePartitionTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) ([]byte, error)
 	// EncodeIndexName returns encoded bytes for the index name
 	EncodeIndexName(idx *schema.Index) []byte
@@ -81,6 +83,10 @@ type DictKeyEncoder struct{}
 // If both database and collections are omitted then result name includes all databases in the namespace.
 func (d *DictKeyEncoder) EncodeTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) ([]byte, error) {
 	return d.encodedTableName(ns, db, coll, internal.UserTableKeyPrefix), nil
+}
+
+func (d *DictKeyEncoder) EncodeSecondaryIndexTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) ([]byte, error) {
+	return d.encodedTableName(ns, db, coll, internal.SecondaryTableKeyPrefix), nil
 }
 
 func (d *DictKeyEncoder) EncodePartitionTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) ([]byte, error) {

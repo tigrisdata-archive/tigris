@@ -131,6 +131,54 @@ func TestIndexingCreateSimpleKVsforDoc(t *testing.T) {
 	})
 }
 
+func TestIndexingMissing(t *testing.T) {
+	reqSchema := []byte(`{
+		"title": "t1",
+		"properties": {
+			"id": {
+				"type": "integer"
+			},
+			"double_f": {
+				"type": "number"
+			},
+			"a_string": {
+				"type": "string"
+			},
+			"updated": {
+				"type": "string",
+				"format": "date-time"
+			},
+			"arr": {
+				"type": "array",
+				"items": {
+					"type": "integer"
+				}
+			},
+			"arr2": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"properties": {
+						"nested": { "type": "boolean" }
+					}
+				}
+			}
+		},
+		"primary_key": ["id"]
+	}`)
+
+	indexStore := setupTest(t, reqSchema)
+	td, primaryKey := createDoc(`{"id":1`)
+	updateSet, err := indexStore.buildAddAndRemoveKVs(td, nil, primaryKey)
+	assert.NoError(t, err)
+	expected := [][]interface{}{
+		{"skey", KVSubspace, "_tigris_created_at", 1, td.CreatedAt.ToRFC3339(), 0, 1},
+		{"skey", KVSubspace, "_tigris_updated_at", 1, td.UpdatedAt.ToRFC3339(), 0, 1},
+		{"skey", KVSubspace, "id", 1, int64(1), 0, 1},
+	}
+	assertKVs(t, expected, updateSet.addKeys, updateSet.addCounts)
+}
+
 func TestIndexingNull(t *testing.T) {
 	reqSchema := []byte(`{
 		"title": "t1",
@@ -467,13 +515,15 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 
 	assert.NoError(t, kvStore.DropTable(ctx, []byte("t1")))
 	assert.NoError(t, kvStore.CreateTable(ctx, []byte("t1")))
+	assert.NoError(t, kvStore.DropTable(ctx, []byte("sidx1")))
+	assert.NoError(t, kvStore.CreateTable(ctx, []byte("sidx1")))
 	indexStore := setupTest(t, reqSchema)
 
 	tm := transaction.NewManager(kvStore)
 
 	t.Run("insert", func(t *testing.T) {
 		coll := indexStore.coll
-		_ = kvStore.DropTable(ctx, coll.EncodedName)
+		_ = kvStore.DropTable(ctx, coll.EncodedTableIndexName)
 		tx, err := tm.StartTx(ctx)
 		assert.NoError(t, err)
 
@@ -508,7 +558,7 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 
 	t.Run("update", func(t *testing.T) {
 		coll := indexStore.coll
-		_ = kvStore.DropTable(ctx, coll.EncodedName)
+		_ = kvStore.DropTable(ctx, coll.EncodedTableIndexName)
 		td, pk := createDoc(`{"id":1, "double_f":2,"created":"2023-01-16T12:55:17.304154Z","updated": "2023-01-16T12:55:17.304154Z", "arr":[1,2]}`)
 
 		tx, err := tm.StartTx(ctx)
@@ -564,7 +614,7 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 
 	t.Run("delete", func(t *testing.T) {
 		coll := indexStore.coll
-		_ = kvStore.DropTable(ctx, coll.EncodedName)
+		_ = kvStore.DropTable(ctx, coll.EncodedTableIndexName)
 		tx, err := tm.StartTx(ctx)
 		assert.NoError(t, err)
 
@@ -622,6 +672,7 @@ func setupTest(t *testing.T, reqSchema []byte) *SecondaryIndexer {
 	coll, err := schema.NewDefaultCollection(1, 1, schFactory, nil, nil)
 	assert.NoError(t, err)
 	coll.EncodedName = []byte("t1")
+	coll.EncodedTableIndexName = []byte("sidx1")
 	return NewSecondaryIndexer(coll)
 }
 

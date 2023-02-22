@@ -161,7 +161,7 @@ func TestPackSearchFields(t *testing.T) {
 		}
 		f := &schema.Field{DataType: schema.ArrayType, FieldName: "arrayField"}
 		coll := &schema.DefaultCollection{
-			QueryableFields: schema.BuildQueryableFields([]*schema.Field{f}, nil),
+			QueryableFields: schema.NewQueryableFieldsBuilder(false).BuildQueryableFields([]*schema.Field{f}, nil),
 		}
 
 		res, err := PackSearchFields(context.TODO(), td, coll, "123")
@@ -179,7 +179,7 @@ func TestPackSearchFields(t *testing.T) {
 		}
 		f := &schema.Field{DataType: schema.DateTimeType, FieldName: "dateField"}
 		coll := &schema.DefaultCollection{
-			QueryableFields: schema.BuildQueryableFields([]*schema.Field{f}, nil),
+			QueryableFields: schema.NewQueryableFieldsBuilder(false).BuildQueryableFields([]*schema.Field{f}, nil),
 		}
 		res, err := PackSearchFields(context.TODO(), td, coll, "123")
 		require.NoError(t, err)
@@ -291,7 +291,7 @@ func TestUnpackSearchFields(t *testing.T) {
 		}
 		f := &schema.Field{DataType: schema.ArrayType, FieldName: "arrayField"}
 		coll := &schema.DefaultCollection{
-			QueryableFields: schema.BuildQueryableFields([]*schema.Field{f}, nil),
+			QueryableFields: schema.NewQueryableFieldsBuilder(false).BuildQueryableFields([]*schema.Field{f}, nil),
 		}
 		_, _, unpacked, err := UnpackSearchFields(doc, coll)
 		require.NoError(t, err)
@@ -306,7 +306,7 @@ func TestUnpackSearchFields(t *testing.T) {
 		}
 		f := &schema.Field{DataType: schema.ArrayType, FieldName: "arrayField"}
 		coll := &schema.DefaultCollection{
-			QueryableFields: schema.BuildQueryableFields([]*schema.Field{f}, nil),
+			QueryableFields: schema.NewQueryableFieldsBuilder(false).BuildQueryableFields([]*schema.Field{f}, nil),
 		}
 		_, _, unpacked, err := UnpackSearchFields(doc, coll)
 		require.NoError(t, err)
@@ -322,7 +322,7 @@ func TestUnpackSearchFields(t *testing.T) {
 		}
 		f := &schema.Field{DataType: schema.DateTimeType, FieldName: "dateField"}
 		coll := &schema.DefaultCollection{
-			QueryableFields: schema.BuildQueryableFields([]*schema.Field{f}, nil),
+			QueryableFields: schema.NewQueryableFieldsBuilder(false).BuildQueryableFields([]*schema.Field{f}, nil),
 		}
 		_, _, unpacked, err := UnpackSearchFields(doc, coll)
 		require.NoError(t, err)

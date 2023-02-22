@@ -25,9 +25,10 @@ import (
 )
 
 var (
-	UserTableKeyPrefix = []byte("data")
-	PartitionKeyPrefix = []byte("part")
-	CacheKeyPrefix     = "cache"
+	UserTableKeyPrefix      = []byte("data")
+	SecondaryTableKeyPrefix = []byte("idx")
+	PartitionKeyPrefix      = []byte("part")
+	CacheKeyPrefix          = "cache"
 )
 
 var bh codec.BincHandle

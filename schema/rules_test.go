@@ -186,9 +186,9 @@ func TestApplyIndexSchemaRules(t *testing.T) {
 		},
 		{
 			// source changed
-			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}}, "source": {"type": "user"}}`),
+			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}}, "source": {"type": "external"}}`),
 			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}}, "source": {"type": "tigris", "collection": "foo"}}`),
-			errors.InvalidArgument("changing index source type is not allowed from: 'user', to: 'tigris'"),
+			errors.InvalidArgument("changing index source type is not allowed from: 'external', to: 'tigris'"),
 		},
 		{
 			// collection changed

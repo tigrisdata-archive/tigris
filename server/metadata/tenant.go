@@ -639,6 +639,12 @@ func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbN
 		}
 		collection.EncodedName = encName
 
+		encIdxName, err := tenant.Encoder.EncodeSecondaryIndexTableName(tenant.namespace, database, collection)
+		if err != nil {
+			return nil, err
+		}
+		collection.EncodedTableIndexName = encIdxName
+
 		database.collections[coll] = newCollectionHolder(meta.ID, coll, collection, idxMeta)
 		database.idToCollectionMap[meta.ID] = coll
 	}
@@ -663,7 +669,8 @@ func (tenant *Tenant) reloadSearch(ctx context.Context, tx transaction.Tx, proje
 
 		searchFactory, err := schema.BuildSearch(searchMD.Name, schV.Schema)
 		if err != nil {
-			return nil, err
+			log.Err(err).Msgf("seeing rebuilding failure for search index %s", searchMD.Name)
+			continue
 		}
 
 		var fieldsInSearchStore []tsApi.Field
@@ -756,7 +763,7 @@ func (tenant *Tenant) updateSearchIndex(ctx context.Context, tx transaction.Tx, 
 	updatedIndex := schema.NewSearchIndex(version, index.StoreIndexName(), factory, previousIndexInStore.Fields)
 
 	// update indexing store schema if there is a change
-	if deltaFields := schema.GetSearchDeltaFields(index.QueryableFields, updatedIndex.Fields, previousIndexInStore.Fields); len(deltaFields) > 0 {
+	if deltaFields := schema.GetSearchDeltaFields(true, index.QueryableFields, updatedIndex.Fields, previousIndexInStore.Fields); len(deltaFields) > 0 {
 		if err := tenant.searchStore.UpdateCollection(ctx, updatedIndex.StoreIndexName(), &tsApi.CollectionUpdateSchema{
 			Fields: deltaFields,
 		}); err != nil {
@@ -1220,6 +1227,12 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 
 	collection.EncodedName = encName
 
+	encIdxName, err := tenant.Encoder.EncodeSecondaryIndexTableName(tenant.namespace, database, collection)
+	if err != nil {
+		return err
+	}
+	collection.EncodedTableIndexName = encIdxName
+
 	database.collections[schFactory.Name] = newCollectionHolder(collMeta.ID, schFactory.Name, collection, idxMeta)
 	if config.DefaultConfig.Search.WriteEnabled {
 		// only creating implicit index here
@@ -1301,12 +1314,18 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 
 	collection.EncodedName = encName
 
+	encIdxName, err := tenant.Encoder.EncodeSecondaryIndexTableName(tenant.namespace, database, collection)
+	if err != nil {
+		return err
+	}
+	collection.EncodedTableIndexName = encIdxName
+
 	// recreating collection holder is fine because we are working on databaseClone and also has a lock on the tenant
 	database.collections[schFactory.Name] = newCollectionHolder(c.id, schFactory.Name, collection, c.idxMeta)
 
 	if config.DefaultConfig.Search.WriteEnabled {
 		// update indexing store schema if there is a change
-		if deltaFields := schema.GetSearchDeltaFields(existingCollection.ImplicitSearchIndex.QueryableFields, schFactory.Fields, existingSearch.Fields); len(deltaFields) > 0 {
+		if deltaFields := schema.GetSearchDeltaFields(false, existingCollection.ImplicitSearchIndex.QueryableFields, schFactory.Fields, existingSearch.Fields); len(deltaFields) > 0 {
 			if err := tenant.searchStore.UpdateCollection(ctx, collection.ImplicitSearchIndex.StoreIndexName(), &tsApi.CollectionUpdateSchema{
 				Fields: deltaFields,
 			}); err != nil {
@@ -1634,6 +1653,7 @@ func (c *collectionHolder) clone() *collectionHolder {
 
 	copyC.collection.SchemaDeltas = c.collection.SchemaDeltas
 	copyC.collection.EncodedName = c.collection.EncodedName
+	copyC.collection.EncodedTableIndexName = c.collection.EncodedTableIndexName
 
 	copyC.idxMeta = make(map[string]*IndexMetadata)
 	for k, v := range c.idxMeta {

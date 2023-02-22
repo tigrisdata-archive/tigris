@@ -24,18 +24,18 @@ import (
 func TestLogicalToSearch(t *testing.T) {
 	factory := Factory{
 		fields: []*schema.QueryableField{
-			schema.NewQueryableField("f1", schema.Int64Type, schema.UnknownType, nil, nil),
-			schema.NewQueryableField("f2", schema.Int64Type, schema.UnknownType, nil, nil),
-			schema.NewQueryableField("f3", schema.Int64Type, schema.UnknownType, nil, nil),
-			schema.NewQueryableField("f4", schema.Int64Type, schema.UnknownType, nil, nil),
-			schema.NewQueryableField("f5", schema.Int64Type, schema.UnknownType, nil, nil),
-			schema.NewQueryableField("f6", schema.Int64Type, schema.UnknownType, nil, nil),
-			schema.NewQueryableField("a", schema.Int64Type, schema.UnknownType, nil, nil),
-			schema.NewQueryableField("b", schema.Int64Type, schema.UnknownType, nil, nil),
-			schema.NewQueryableField("c", schema.Int64Type, schema.UnknownType, nil, nil),
-			schema.NewQueryableField("d", schema.Int64Type, schema.UnknownType, nil, nil),
-			schema.NewQueryableField("e", schema.Int64Type, schema.UnknownType, nil, nil),
-			schema.NewQueryableField("f", schema.Int64Type, schema.UnknownType, nil, nil),
+			schema.NewQueryableFieldsBuilder(false).NewQueryableField("f1", &schema.Field{DataType: schema.Int64Type}, nil),
+			schema.NewQueryableFieldsBuilder(false).NewQueryableField("f2", &schema.Field{DataType: schema.Int64Type}, nil),
+			schema.NewQueryableFieldsBuilder(false).NewQueryableField("f3", &schema.Field{DataType: schema.Int64Type}, nil),
+			schema.NewQueryableFieldsBuilder(false).NewQueryableField("f4", &schema.Field{DataType: schema.Int64Type}, nil),
+			schema.NewQueryableFieldsBuilder(false).NewQueryableField("f5", &schema.Field{DataType: schema.Int64Type}, nil),
+			schema.NewQueryableFieldsBuilder(false).NewQueryableField("f6", &schema.Field{DataType: schema.Int64Type}, nil),
+			schema.NewQueryableFieldsBuilder(false).NewQueryableField("a", &schema.Field{DataType: schema.Int64Type}, nil),
+			schema.NewQueryableFieldsBuilder(false).NewQueryableField("b", &schema.Field{DataType: schema.Int64Type}, nil),
+			schema.NewQueryableFieldsBuilder(false).NewQueryableField("c", &schema.Field{DataType: schema.Int64Type}, nil),
+			schema.NewQueryableFieldsBuilder(false).NewQueryableField("d", &schema.Field{DataType: schema.Int64Type}, nil),
+			schema.NewQueryableFieldsBuilder(false).NewQueryableField("e", &schema.Field{DataType: schema.Int64Type}, nil),
+			schema.NewQueryableFieldsBuilder(false).NewQueryableField("f", &schema.Field{DataType: schema.Int64Type}, nil),
 		},
 	}
 

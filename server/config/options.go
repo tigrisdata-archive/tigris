@@ -39,7 +39,7 @@ type Config struct {
 	Auth           AuthConfig           `yaml:"auth" json:"auth"`
 	Cdc            CdcConfig            `yaml:"cdc" json:"cdc"`
 	Search         SearchConfig         `yaml:"search" json:"search"`
-	SecondaryIndex SecondaryIndexConfig `yaml:"secondary_index" json:"secondary_index"`
+	SecondaryIndex SecondaryIndexConfig `mapstructure:"secondary_index" yaml:"secondary_index" json:"secondary_index"`
 	Cache          CacheConfig          `yaml:"cache" json:"cache"`
 	Tracing        TracingConfig        `yaml:"tracing" json:"tracing"`
 	Metrics        MetricsConfig        `yaml:"metrics" json:"metrics"`

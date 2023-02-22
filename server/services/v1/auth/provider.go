@@ -16,6 +16,8 @@ package auth
 
 import (
 	"context"
+	"net/http"
+	"time"
 
 	"github.com/auth0/go-auth0/management"
 	api "github.com/tigrisdata/tigris/api/server/v1"
@@ -56,7 +58,10 @@ func NewProvider(userstore *metadata.UserSubspace, txMgr *transaction.Manager) P
 	var authProvider Provider = &noop{}
 
 	if config.DefaultConfig.Auth.OAuthProvider == auth0name {
-		m, err := management.New(config.DefaultConfig.Auth.ExternalDomain, management.WithClientCredentials(config.DefaultConfig.Auth.ManagementClientId, config.DefaultConfig.Auth.ManagementClientSecret))
+		auth0HttpClient := &http.Client{Timeout: time.Duration(30) * time.Second}
+		m, err := management.New(config.DefaultConfig.Auth.ExternalDomain,
+			management.WithClientCredentials(config.DefaultConfig.Auth.ManagementClientId, config.DefaultConfig.Auth.ManagementClientSecret),
+			management.WithClient(auth0HttpClient))
 		if err != nil {
 			if config.DefaultConfig.Auth.EnableOauth {
 				panic("Unable to configure external oauth provider")

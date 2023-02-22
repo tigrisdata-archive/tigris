@@ -28,8 +28,8 @@ type SearchSourceType string
 const (
 	// SearchSourceTigris is when the source type is Tigris for the search index.
 	SearchSourceTigris SearchSourceType = "tigris"
-	// SearchSourceUser is when the source type is user for the search index.
-	SearchSourceUser SearchSourceType = "user"
+	// SearchSourceExternal is when the source type is external for the search index.
+	SearchSourceExternal SearchSourceType = "external"
 )
 
 type SearchSource struct {
@@ -82,7 +82,7 @@ func BuildSearch(index string, reqSchema jsoniter.RawMessage) (*SearchFactory, e
 	var source SearchSource
 	if schema.Source == nil {
 		source = SearchSource{
-			Type: SearchSourceUser,
+			Type: SearchSourceExternal,
 		}
 		schema.Source = &source
 
@@ -92,7 +92,7 @@ func BuildSearch(index string, reqSchema jsoniter.RawMessage) (*SearchFactory, e
 	} else {
 		source = *schema.Source
 	}
-	if schema.Source.Type != SearchSourceUser && schema.Source.Type != SearchSourceTigris {
+	if schema.Source.Type != SearchSourceExternal && schema.Source.Type != SearchSourceTigris && schema.Source.Type != "user" {
 		return nil, errors.InvalidArgument("unsupported index source '%s'", schema.Source.Type)
 	}
 	if schema.Source.Type == SearchSourceTigris && len(schema.Source.CollectionName) == 0 {
@@ -152,7 +152,7 @@ type SearchIndex struct {
 }
 
 func NewSearchIndex(ver int, searchStoreName string, factory *SearchFactory, fieldsInSearch []tsApi.Field) *SearchIndex {
-	queryableFields := BuildQueryableFields(factory.Fields, fieldsInSearch)
+	queryableFields := NewQueryableFieldsBuilder(true).BuildQueryableFields(factory.Fields, fieldsInSearch)
 
 	return &SearchIndex{
 		Version:         ver,
@@ -220,10 +220,10 @@ func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.Co
 	}
 }
 
-func GetSearchDeltaFields(existingFields []*QueryableField, incomingFields []*Field, fieldsInSearch []tsApi.Field) []tsApi.Field {
+func GetSearchDeltaFields(forSearchIndex bool, existingFields []*QueryableField, incomingFields []*Field, fieldsInSearch []tsApi.Field) []tsApi.Field {
 	ptrTrue := true
 
-	incomingQueryable := BuildQueryableFields(incomingFields, fieldsInSearch)
+	incomingQueryable := NewQueryableFieldsBuilder(forSearchIndex).BuildQueryableFields(incomingFields, fieldsInSearch)
 
 	existingFieldMap := make(map[string]*QueryableField)
 	for _, f := range existingFields {
@@ -301,7 +301,8 @@ type ImplicitSearchIndex struct {
 }
 
 func NewImplicitSearchIndex(name string, searchStoreName string, fields []*Field, fieldsInSearch []tsApi.Field) *ImplicitSearchIndex {
-	queryableFields := BuildQueryableFields(fields, fieldsInSearch)
+	// this is created by collection so the forSearchIndex is false.
+	queryableFields := NewQueryableFieldsBuilder(false).BuildQueryableFields(fields, fieldsInSearch)
 	return &ImplicitSearchIndex{
 		Name:            name,
 		QueryableFields: queryableFields,
