@@ -49,11 +49,9 @@ func (a *DefaultUserMetadataProvider) GetUserMetadata(ctx context.Context, req *
 	if err != nil {
 		ulog.E(tx.Rollback(ctx))
 
-		if err == errors.ErrNotFound {
-			return nil, errors.Internal("user metadata not found")
+		if err != errors.ErrNotFound {
+			return nil, errors.Internal("Failed to read user metadata.")
 		}
-
-		return nil, errors.Internal("Failed to read user metadata.")
 	}
 
 	return &api.GetUserMetadataResponse{

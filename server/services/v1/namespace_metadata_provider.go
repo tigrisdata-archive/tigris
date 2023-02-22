@@ -47,11 +47,9 @@ func (a *DefaultNamespaceMetadataProvider) GetNamespaceMetadata(ctx context.Cont
 	if err != nil {
 		ulog.E(tx.Rollback(ctx))
 
-		if err == errors.ErrNotFound {
-			return nil, errors.NotFound("namespace metadata not found")
+		if err != errors.ErrNotFound {
+			return nil, errors.Internal("Failed to read namespace metadata.")
 		}
-
-		return nil, errors.Internal("Failed to read namespace metadata.")
 	}
 
 	return &api.GetNamespaceMetadataResponse{
