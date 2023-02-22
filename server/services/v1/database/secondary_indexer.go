@@ -220,17 +220,17 @@ func (q *SecondaryIndexer) Update(ctx context.Context, tx transaction.Tx, newTd 
 		return err
 	}
 
-	for _, indexKey := range updateSet.removeKeys {
-		if err := tx.Delete(ctx, indexKey); err != nil {
-			return err
-		}
-	}
+	// for _, indexKey := range updateSet.removeKeys {
+	// 	if err := tx.Delete(ctx, indexKey); err != nil {
+	// 		return err
+	// 	}
+	// }
 
-	for _, indexKey := range updateSet.addKeys {
-		if err := tx.Replace(ctx, indexKey, nil, false); err != nil {
-			return err
-		}
-	}
+	// for _, indexKey := range updateSet.addKeys {
+	// 	if err := tx.Replace(ctx, indexKey, nil, false); err != nil {
+	// 		return err
+	// 	}
+	// }
 	return nil
 }
 
