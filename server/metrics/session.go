@@ -36,6 +36,7 @@ func getSessionOkTagKeys() []string {
 		"branch",
 		"collection",
 		"session_method",
+		"human",
 	}
 }
 
@@ -52,6 +53,7 @@ func getSessionErrorTagKeys() []string {
 		"error_source",
 		"error_value",
 		"session_method",
+		"human",
 	}
 }
 
