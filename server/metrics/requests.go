@@ -40,6 +40,7 @@ func getRequestOkTagKeys() []string {
 		"write_type",
 		"sort",
 		"sub",
+		"human",
 	}
 }
 
@@ -60,6 +61,7 @@ func getRequestErrorTagKeys() []string {
 		"write_type",
 		"sort",
 		"sub",
+		"human",
 	}
 }
 
