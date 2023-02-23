@@ -416,7 +416,7 @@ func (runner *StreamingQueryRunner) buildReaderOptions(collection *schema.Defaul
 	}
 
 	if config.DefaultConfig.SecondaryIndex.ReadEnabled {
-		if queryPlan, err := runner.buildSecondaryIndexKeysUsingFilter(collection, runner.req.Filter); err == nil {
+		if queryPlan, err := runner.buildSecondaryIndexKeysUsingFilter(collection, runner.req.Filter, collation); err == nil {
 			options.secondaryPlan = queryPlan
 			return options, nil
 		}

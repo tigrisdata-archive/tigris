@@ -26,6 +26,8 @@ import (
 	"github.com/tigrisdata/tigris/store/kv"
 )
 
+var PrimaryKeyPos = 6
+
 type SecondaryIndexReader struct {
 	ctx       context.Context
 	coll      *schema.DefaultCollection
@@ -141,8 +143,7 @@ func (it *SecondaryIndexReader) Next(row *Row) bool {
 			return false
 		}
 
-		partsLen := len(indexKey.IndexParts())
-		pks := indexKey.IndexParts()[partsLen-2:]
+		pks := indexKey.IndexParts()[PrimaryKeyPos:]
 		pkIndexParts := keys.NewKey(it.coll.EncodedName, pks...)
 
 		docIter, err := it.tx.Read(it.ctx, pkIndexParts)

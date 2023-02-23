@@ -215,11 +215,13 @@ func (runner *BaseQueryRunner) buildKeysUsingFilter(coll *schema.DefaultCollecti
 }
 
 func (runner *BaseQueryRunner) buildSecondaryIndexKeysUsingFilter(coll *schema.DefaultCollection,
-	reqFilter []byte,
+	reqFilter []byte, collation *value.Collation,
 ) (*filter.QueryPlan, error) {
-	// Using the SortKey collation will convert strings in the filter to collation sort keys
-	// to query correctly against the index
-	filterFactory := filter.NewFactory(coll.QueryableFields, value.NewSortKeyCollation())
+	if collation != nil && collation.IsCaseInsensitive() {
+		return nil, errors.InvalidArgument("secondary indexes do not support case insensitive collation")
+	}
+
+	filterFactory := filter.NewFactoryForSecondaryIndex(coll.QueryableFields)
 	filters, err := filterFactory.Factorize(reqFilter)
 	if err != nil {
 		return nil, err
@@ -264,7 +266,7 @@ func (runner *BaseQueryRunner) getWriteIterator(ctx context.Context, tx transact
 	reader := NewDatabaseReader(ctx, tx)
 
 	if config.DefaultConfig.SecondaryIndex.ReadEnabled {
-		if skIter, err := runner.getSecondaryWriterIterator(ctx, tx, collection, reqFilter); err == nil {
+		if skIter, err := runner.getSecondaryWriterIterator(ctx, tx, collection, reqFilter, collation); err == nil {
 			metrics.SetWriteType("secondary")
 			return skIter, nil
 		}
@@ -296,17 +298,16 @@ func (runner *BaseQueryRunner) getWriteIterator(ctx context.Context, tx transact
 	return iterator, nil
 }
 
-func (runn *BaseQueryRunner) getSecondaryWriterIterator(ctx context.Context, tx transaction.Tx,
-	coll *schema.DefaultCollection, reqFilter []byte,
+func (runner *BaseQueryRunner) getSecondaryWriterIterator(ctx context.Context, tx transaction.Tx,
+	coll *schema.DefaultCollection, reqFilter []byte, collation *value.Collation,
 ) (Iterator, error) {
-	// Using the SortKey collation will convert strings in the filter to collation sort keys
-	// to query correctly against the index
-	filterFactory := filter.NewFactory(coll.QueryableFields, value.NewSortKeyCollation())
-	filters, err := filterFactory.Factorize(reqFilter)
+	queryPlan, err := runner.buildSecondaryIndexKeysUsingFilter(coll, reqFilter, collation)
 	if err != nil {
 		return nil, err
 	}
-	queryPlan, err := BuildSecondaryIndexKeys(coll, filters)
+
+	filterFactory := filter.NewFactoryForSecondaryIndex(coll.QueryableFields)
+	filters, err := filterFactory.Factorize(reqFilter)
 	if err != nil {
 		return nil, err
 	}

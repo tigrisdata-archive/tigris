@@ -29,14 +29,17 @@ import (
 
 func testFilters(t testing.TB, fields []*schema.QueryableField, input []byte, stringEncoding bool) []Filter {
 	collation := value.NewCollation()
+	buildForSecondaryIndex := false
 
 	if stringEncoding {
 		collation = value.NewSortKeyCollation()
+		buildForSecondaryIndex = true
 	}
 
 	factory := Factory{
 		fields,
 		collation,
+		buildForSecondaryIndex,
 	}
 	filters, err := factory.Factorize(input)
 	require.NoError(t, err)

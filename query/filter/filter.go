@@ -112,12 +112,25 @@ func None(reqFilter []byte) bool {
 type Factory struct {
 	fields    []*schema.QueryableField
 	collation *value.Collation
+	// For secondary Indexes do the following:
+	// 1. Reject Case insensitive queries
+	// 2. Always use Factory Top level collation because it will be a sort key collation
+	buildForSecondaryIndex bool
 }
 
 func NewFactory(fields []*schema.QueryableField, collation *value.Collation) *Factory {
 	return &Factory{
-		fields:    fields,
-		collation: collation,
+		fields:                 fields,
+		collation:              collation,
+		buildForSecondaryIndex: false,
+	}
+}
+
+func NewFactoryForSecondaryIndex(fields []*schema.QueryableField) *Factory {
+	return &Factory{
+		fields:                 fields,
+		collation:              value.NewSortKeyCollation(),
+		buildForSecondaryIndex: true,
 	}
 }
 
@@ -268,7 +281,7 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 
 		return NewSelector(field, NewEqualityMatcher(val), factory.collation), nil
 	case jsonparser.Object:
-		valueMatcher, collation, err := buildValueMatcher(v, field, factory.collation)
+		valueMatcher, collation, err := buildValueMatcher(v, field, factory.collation, factory.buildForSecondaryIndex)
 		if err != nil {
 			return nil, err
 		}
@@ -286,7 +299,7 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 // instead of a simple JSON value. Apart from comparison operators, this object can have its own collation, which
 // needs to be honored at the field level. Therefore, the caller needs to check if the collation returned by the
 // method is not nil and if yes, use this collation..
-func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField, factoryCollation *value.Collation) (ValueMatcher, *value.Collation, error) {
+func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField, factoryCollation *value.Collation, buildForSecondaryIndex bool) (ValueMatcher, *value.Collation, error) {
 	if len(input) == 0 {
 		return nil, nil, errors.InvalidArgument("empty object")
 	}
@@ -303,6 +316,10 @@ func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField, 
 			return nil, nil, err
 		}
 		collation = value.NewCollationFrom(apiCollation)
+
+		if buildForSecondaryIndex && collation.IsCaseInsensitive() {
+			return nil, nil, errors.InvalidArgument("found case insensitive collation")
+		}
 	} else {
 		collation = factoryCollation
 	}
@@ -325,7 +342,10 @@ func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField, 
 				}
 
 				var val value.Value
-				if collation != nil {
+				//nolint:gocritic
+				if buildForSecondaryIndex {
+					val, err = value.NewValueUsingCollation(tigrisType, v, factoryCollation)
+				} else if collation != nil {
 					val, err = value.NewValueUsingCollation(tigrisType, v, collation)
 				} else {
 					val, err = value.NewValue(tigrisType, v)
