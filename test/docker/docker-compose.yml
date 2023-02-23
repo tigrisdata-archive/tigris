@@ -83,6 +83,7 @@ services:
       - tigris_search
       - tigris_cache
 
+  # `make run` target brings up this service and it's dependencies
   tigris_server2:
     container_name: tigris_server2
     image: tigris_server
@@ -93,6 +94,8 @@ services:
       - TIGRIS_SERVER_LOG_FORMAT=console
       - TIGRIS_SERVER_CDC_ENABLED=true
       - TIGRIS_SERVER_SECONDARY_INDEX_WRITE_ENABLED=true
+      - TIGRIS_SERVER_AUTH_PROVIDER=gotrue
+      - TIGRIS_SERVER_AUTH_GOTRUE_SECRET=gotrue_test_secret
     build:
       context: ../../
       dockerfile: docker/Dockerfile
@@ -110,6 +113,7 @@ services:
       - tigris_server
       - tigris_db2
       - tigris_realtime
+      - tigris_gotrue
 
   tigris_realtime:
     container_name: tigris_realtime
@@ -134,6 +138,16 @@ services:
       - "8083:8083"
     command: >
       bash -c '/server/service'
+    depends_on:
+      - tigris_server
+
+  tigris_gotrue:
+    container_name: tigris_gotrue
+    image: tigrisdata/gotrue:latest
+    environment:
+      - GOTRUE_SECRET=gotrue_test_secret
+    ports:
+      - "8084:8084"
     depends_on:
       - tigris_server
 

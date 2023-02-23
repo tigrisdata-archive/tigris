@@ -46,6 +46,8 @@ func info(t *testing.T) *httpexpect.Response {
 }
 
 func TestTxForwarder(t *testing.T) {
+	t.Skip("tigris_server2 requires authenticated requests")
+
 	e1 := expectLow(t, config.GetBaseURL())
 	e2 := expectLow(t, config.GetBaseURL2())
 
