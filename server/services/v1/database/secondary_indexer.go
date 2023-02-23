@@ -203,34 +203,34 @@ func (q *SecondaryIndexer) Update(ctx context.Context, tx transaction.Tx, newTd 
 		return err
 	}
 
-	// Update Row Count
-	if err = incAtomicMap(ctx, tx, q.coll, genRowCountKey, updateSet.addCounts); err != nil {
-		return err
-	}
-
-	if err = decAtomicMap(ctx, tx, q.coll, genRowCountKey, updateSet.removeCounts); err != nil {
-		return err
-	}
-
-	// Update Row Size
-	if err = incAtomicMap(ctx, tx, q.coll, genRowSizeKey, updateSet.addSizes); err != nil {
-		return err
-	}
-	if err = decAtomicMap(ctx, tx, q.coll, genRowSizeKey, updateSet.removeSizes); err != nil {
-		return err
-	}
-
-	// for _, indexKey := range updateSet.removeKeys {
-	// 	if err := tx.Delete(ctx, indexKey); err != nil {
-	// 		return err
-	// 	}
+	// // Update Row Count
+	// if err = incAtomicMap(ctx, tx, q.coll, genRowCountKey, updateSet.addCounts); err != nil {
+	// 	return err
 	// }
 
-	// for _, indexKey := range updateSet.addKeys {
-	// 	if err := tx.Replace(ctx, indexKey, nil, false); err != nil {
-	// 		return err
-	// 	}
+	// if err = decAtomicMap(ctx, tx, q.coll, genRowCountKey, updateSet.removeCounts); err != nil {
+	// 	return err
 	// }
+
+	// // Update Row Size
+	// if err = incAtomicMap(ctx, tx, q.coll, genRowSizeKey, updateSet.addSizes); err != nil {
+	// 	return err
+	// }
+	// if err = decAtomicMap(ctx, tx, q.coll, genRowSizeKey, updateSet.removeSizes); err != nil {
+	// 	return err
+	// }
+
+	for _, indexKey := range updateSet.removeKeys {
+		if err := tx.Delete(ctx, indexKey); err != nil {
+			return err
+		}
+	}
+
+	for _, indexKey := range updateSet.addKeys {
+		if err := tx.Replace(ctx, indexKey, nil, false); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
