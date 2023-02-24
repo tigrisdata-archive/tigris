@@ -93,8 +93,8 @@ func NewSecondaryKeyEqBuilder[F fieldable](keyEncodingFunc KeyEncodingFunc, buil
 	)
 }
 
-// NewQueryableKeyBuilder returns a KeyBuilder for use with schema.QueryableField.
-func NewQueryableKeyBuilder(composer KeyComposer[*schema.QueryableField], primaryKey bool) *KeyBuilder[*schema.QueryableField] {
+// NewRangeKeyBuilder returns a KeyBuilder for use with schema.QueryableField.
+func NewRangeKeyBuilder(composer KeyComposer[*schema.QueryableField], primaryKey bool) *KeyBuilder[*schema.QueryableField] {
 	return &KeyBuilder[*schema.QueryableField]{
 		composer:   composer,
 		primaryKey: primaryKey,

@@ -95,7 +95,7 @@ func BuildSecondaryIndexKeys(coll *schema.DefaultCollection, queryFilters []filt
 		}
 	}
 
-	rangKeyBuilder := filter.NewQueryableKeyBuilder(filter.NewRangeKeyComposer[*schema.QueryableField](encoder, buildIndexParts), false)
+	rangKeyBuilder := filter.NewRangeKeyBuilder(filter.NewRangeKeyComposer[*schema.QueryableField](encoder, buildIndexParts), false)
 	rangePlans, err := rangKeyBuilder.Build(queryFilters, coll.QueryableFields)
 	if err != nil {
 		return nil, err
@@ -105,8 +105,6 @@ func BuildSecondaryIndexKeys(coll *schema.DefaultCollection, queryFilters []filt
 		return nil, errors.InvalidArgument("Could not find a query range")
 	}
 
-	// Prefer a RANGE scan which should read back less keys than a FULLRANGE
-	// for _, queryType := range []filter.QueryPlanType{filter.RANGE, filter.FULLRANGE} {
 	for _, plan := range filter.SortQueryPlans(rangePlans) {
 		if indexedDataType(plan) {
 			return &plan, nil

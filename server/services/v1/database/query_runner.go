@@ -381,7 +381,7 @@ type StreamingQueryRunner struct {
 type readerOptions struct {
 	from          keys.Key
 	ikeys         []keys.Key
-	secondaryPlan *filter.QueryPlan
+	plan          *filter.QueryPlan
 	table         []byte
 	noFilter      bool
 	inMemoryStore bool
@@ -417,7 +417,7 @@ func (runner *StreamingQueryRunner) buildReaderOptions(collection *schema.Defaul
 
 	if config.DefaultConfig.SecondaryIndex.ReadEnabled {
 		if queryPlan, err := runner.buildSecondaryIndexKeysUsingFilter(collection, runner.req.Filter, collation); err == nil {
-			options.secondaryPlan = queryPlan
+			options.plan = queryPlan
 			return options, nil
 		}
 	}
@@ -446,7 +446,7 @@ func (runner *StreamingQueryRunner) buildReaderOptions(collection *schema.Defaul
 func (runner *StreamingQueryRunner) instrumentRunner(ctx context.Context, options readerOptions) context.Context {
 	// Set read type
 	//nolint:gocritic
-	if options.secondaryPlan != nil {
+	if options.plan != nil {
 		runner.queryMetrics.SetReadType("secondary")
 	} else if options.ikeys == nil {
 		runner.queryMetrics.SetReadType("non-pkey")
@@ -498,7 +498,7 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 		}
 
 		var last []byte
-		if options.secondaryPlan != nil {
+		if options.plan != nil {
 			last, err = runner.iterateOnSecondaryIndexStore(ctx, tx, collection, options)
 		} else {
 			last, err = runner.iterateOnKvStore(ctx, tx, collection, options)
@@ -547,6 +547,12 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 		}
 		return Response{}, ctx, nil
 	} else {
+		if options.plan != nil {
+			if _, err = runner.iterateOnSecondaryIndexStore(ctx, tx, coll, options); err != nil {
+				return Response{}, ctx, err
+			}
+			return Response{}, ctx, nil
+		}
 		if _, err = runner.iterateOnKvStore(ctx, tx, coll, options); err != nil {
 			return Response{}, ctx, err
 		}
@@ -577,7 +583,7 @@ func (runner *StreamingQueryRunner) iterateOnKvStore(ctx context.Context, tx tra
 }
 
 func (runner *StreamingQueryRunner) iterateOnSecondaryIndexStore(ctx context.Context, tx transaction.Tx, coll *schema.DefaultCollection, options readerOptions) ([]byte, error) {
-	iter, err := NewSecondaryIndexReader(ctx, tx, coll, options.filter, options.secondaryPlan)
+	iter, err := NewSecondaryIndexReader(ctx, tx, coll, options.filter, options.plan)
 	if err != nil {
 		return nil, err
 	}
