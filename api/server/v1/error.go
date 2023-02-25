@@ -173,6 +173,8 @@ func FromHttpCode(httpCode int) Code {
 		return Code_INTERNAL
 	case 503:
 		return Code_UNAVAILABLE
+	case 413:
+		return Code_CONTENT_TOO_LARGE
 	default:
 		return Code_UNKNOWN
 	}
@@ -222,6 +224,8 @@ func ToHTTPCode(code Code) int {
 		return 409
 	case Code_BAD_GATEWAY:
 		return 502
+	case Code_CONTENT_TOO_LARGE:
+		return 413
 	}
 
 	return 500

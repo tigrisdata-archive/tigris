@@ -16,7 +16,9 @@ package search
 
 import (
 	"encoding/json"
+	"fmt"
 
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/query/sort"
 	ulog "github.com/tigrisdata/tigris/util/log"
@@ -26,6 +28,7 @@ import (
 type Hit struct {
 	Document       map[string]interface{}
 	TextMatchScore int64
+	Match          *api.Match
 }
 
 // True - field absent in document
@@ -43,13 +46,32 @@ func NewSearchHit(tsHit *tsApi.SearchResultHit) *Hit {
 	if tsHit == nil || tsHit.Document == nil {
 		return nil
 	}
+
 	score := int64(0)
 	if tsHit.TextMatch != nil {
 		score = *tsHit.TextMatch
 	}
+
+	var fields []*api.MatchField
+	if tsHit.Highlights != nil {
+		for _, f := range *tsHit.Highlights {
+			name := ""
+			if f.Field != nil {
+				name = *f.Field
+			}
+			fields = append(fields, &api.MatchField{
+				Name: name,
+			})
+		}
+	}
+
 	return &Hit{
 		Document:       *tsHit.Document,
 		TextMatchScore: score,
+		Match: &api.Match{
+			Fields: fields,
+			Score:  fmt.Sprintf("%d", score),
+		},
 	}
 }
 

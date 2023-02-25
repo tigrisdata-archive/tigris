@@ -64,7 +64,8 @@ func (sessions *SessionManager) Execute(ctx context.Context, runner Runner) (Res
 		return Response{}, errors.NotFound("tenant '%s' not found", namespace)
 	}
 
-	return runner.Run(ctx, tenant)
+	resp, err := runner.Run(ctx, tenant)
+	return resp, createApiError(err)
 }
 
 func (sessions *SessionManager) TxExecute(ctx context.Context, runner TxRunner) (Response, error) {
@@ -88,7 +89,7 @@ func (sessions *SessionManager) TxExecute(ctx context.Context, runner TxRunner) 
 	resp, err := runner.Run(ctx, tx, tenant)
 	if err != nil {
 		_ = tx.Rollback(ctx)
-		return Response{}, err
+		return Response{}, createApiError(err)
 	}
 	if err = sessions.versionH.Increment(ctx, tx); ulog.E(err) {
 		_ = tx.Rollback(ctx)
@@ -96,7 +97,7 @@ func (sessions *SessionManager) TxExecute(ctx context.Context, runner TxRunner) 
 	}
 
 	if err = tx.Commit(ctx); err != nil {
-		return Response{}, errors.Internal("failed to commit transaction")
+		return Response{}, createApiError(err)
 	}
 	return resp, nil
 }

@@ -21,6 +21,7 @@ import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	apiErrors "github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
 )
 
@@ -40,6 +41,15 @@ func createApiError(err error) error {
 			return apiErrors.AlreadyExists(e.Msg)
 		default:
 			return api.Errorf(api.FromHttpCode(e.HttpCode), e.Msg)
+		}
+	case kv.StoreError:
+		switch e.Code() {
+		case kv.ErrCodeTransactionMaxDuration, kv.ErrCodeTransactionTimedOut:
+			return apiErrors.DeadlineExceeded("the server is taking longer than 5 seconds to process the transaction")
+		case kv.ErrCodeTransactionNotCommitted:
+			return apiErrors.DeadlineExceeded("the transaction may not be committed")
+		case kv.ErrCodeValueSizeExceeded, kv.ErrCodeTransactionSizeExceeded:
+			return apiErrors.ContentTooLarge(e.Msg())
 		}
 	default:
 		return err

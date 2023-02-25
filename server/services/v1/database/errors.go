@@ -57,7 +57,7 @@ func createApiError(err error) error {
 			return apiErrors.DeadlineExceeded("the transaction may not be committed")
 		case kv.ErrCodeValueSizeExceeded, kv.ErrCodeTransactionSizeExceeded:
 			// ToDo: change it to 413, need to add it in proto
-			return apiErrors.InvalidArgument(e.Msg())
+			return apiErrors.ContentTooLarge(e.Msg())
 		}
 	default:
 		return err
