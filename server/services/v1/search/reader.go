@@ -37,6 +37,7 @@ type Row struct {
 	CreatedAt *internal.Timestamp
 	UpdatedAt *internal.Timestamp
 	Document  []byte
+	Match     *api.Match
 }
 
 type page struct {
@@ -66,14 +67,14 @@ func (p *page) hasCapacity() bool {
 	return len(p.hits) < p.cap
 }
 
-// readRow should be used to read search data because this is the single point where we unpack search fields, apply
+// readHit should be used to read search data because this is the single point where we unpack search fields, apply
 // filter and then pack the document into bytes.
-func (p *page) readRow() map[string]interface{} {
+func (p *page) readHit() *tsearch.Hit {
 	for p.idx < len(p.hits) {
-		document := p.hits[p.idx].Document
+		hit := p.hits[p.idx]
 		p.idx++
-		if document != nil {
-			return document
+		if hit.Document != nil {
+			return hit
 		}
 	}
 
@@ -227,29 +228,30 @@ func (it *FilterableSearchIterator) Next(row *Row) bool {
 			}
 		}
 
-		if doc := it.page.readRow(); doc != nil {
+		if hit := it.page.readHit(); hit != nil {
 			var (
 				createdAt *internal.Timestamp
 				updatedAt *internal.Timestamp
 				rawData   []byte
 			)
-			if doc, createdAt, updatedAt, it.err = UnpackSearchFields(it.index, doc); it.err != nil {
+			if hit.Document, createdAt, updatedAt, it.err = UnpackSearchFields(it.index, hit.Document); it.err != nil {
 				return false
 			}
 
 			// now apply the filter
-			if !it.filter.MatchesDoc(doc) {
+			if !it.filter.MatchesDoc(hit.Document) {
 				continue
 			}
 
 			// marshal the doc as bytes
-			if rawData, it.err = util.MapToJSON(doc); it.err != nil {
+			if rawData, it.err = util.MapToJSON(hit.Document); it.err != nil {
 				return false
 			}
 
 			row.CreatedAt = createdAt
 			row.UpdatedAt = updatedAt
 			row.Document = rawData
+			row.Match = hit.Match
 			return true
 		}
 

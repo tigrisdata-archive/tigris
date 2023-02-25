@@ -23,6 +23,7 @@ import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
+	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/lib/uuid"
 	"github.com/tigrisdata/tigris/query/filter"
 	"github.com/tigrisdata/tigris/query/read"
@@ -549,6 +550,8 @@ func (runner *SearchRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 	if runner.req.Page > 0 {
 		pageNo = runner.req.Page
 	}
+
+	matchedFields := container.NewHashSet()
 	for {
 		resp := &api.SearchIndexResponse{}
 		var row Row
@@ -568,6 +571,14 @@ func (runner *SearchRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 			}
 			if row.UpdatedAt != nil {
 				metadata.UpdatedAt = row.UpdatedAt.GetProtoTS()
+			}
+			metadata.Match = row.Match
+			if metadata.Match != nil {
+				for _, f := range metadata.Match.Fields {
+					if f != nil {
+						matchedFields.Insert(f.Name)
+					}
+				}
 			}
 
 			resp.Hits = append(resp.Hits, &api.IndexDoc{
@@ -593,6 +604,7 @@ func (runner *SearchRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 				Current: pageNo,
 				Size:    int32(searchQ.PageSize),
 			},
+			MatchedFields: matchedFields.ToList(),
 		}
 		// if no hits, got error, send only error
 		// if no hits, no error, at least one response and break
