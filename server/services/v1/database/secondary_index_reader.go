@@ -76,6 +76,10 @@ func (reader *SecondaryIndexReader) createIter() (*SecondaryIndexReader, error) 
 }
 
 func BuildSecondaryIndexKeys(coll *schema.DefaultCollection, queryFilters []filter.Filter) (*filter.QueryPlan, error) {
+	if len(queryFilters) == 0 {
+		return nil, errors.InvalidArgument("Cannot index with an empty filter")
+	}
+
 	encoder := func(indexParts ...interface{}) (keys.Key, error) {
 		return newKeyWithPrimaryKey(indexParts, coll.EncodedTableIndexName, coll.Indexes.SecondaryIndex.Name, "kvs"), nil
 	}
