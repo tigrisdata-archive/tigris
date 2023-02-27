@@ -65,6 +65,7 @@ type Tx interface {
 	Commit(context.Context) error
 	Rollback(context.Context) error
 	IsRetriable() bool
+	RangeSize(ctx context.Context, table []byte, lkey Key, rkey Key) (int64, error)
 }
 
 type KeyValueStore interface {
@@ -469,6 +470,14 @@ func (m *TxImplWithMetrics) AtomicReadRange(ctx context.Context, table []byte, l
 func (m *TxImplWithMetrics) Get(ctx context.Context, key []byte, isSnapshot bool) (val Future, err error) {
 	m.measure(ctx, "Get", func() error {
 		val, err = m.tx.Get(ctx, key, isSnapshot)
+		return err
+	})
+	return
+}
+
+func (m *TxImplWithMetrics) RangeSize(ctx context.Context, table []byte, lkey Key, rkey Key) (size int64, err error) {
+	m.measure(ctx, "RangeSize", func() error {
+		size, err = m.tx.RangeSize(ctx, table, lkey, rkey)
 		return err
 	})
 	return

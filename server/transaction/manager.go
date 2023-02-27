@@ -51,6 +51,7 @@ type BaseTx interface {
 	AtomicAdd(ctx context.Context, key keys.Key, value int64) error
 	AtomicRead(ctx context.Context, key keys.Key) (int64, error)
 	AtomicReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key, isSnapshot bool) (kv.AtomicIterator, error)
+	RangeSize(ctx context.Context, table []byte, lKey keys.Key, rKey keys.Key) (size int64, err error)
 }
 
 type Tx interface {
@@ -308,6 +309,23 @@ func (s *TxSession) Get(ctx context.Context, key []byte, isSnapshot bool) (kv.Fu
 	}
 
 	return s.kTx.Get(ctx, key, isSnapshot)
+}
+
+func (s *TxSession) RangeSize(ctx context.Context, table []byte, lKey keys.Key, rKey keys.Key) (size int64, err error) {
+	s.Lock()
+	defer s.Unlock()
+
+	if err := s.validateSession(); err != nil {
+		return 0, err
+	}
+
+	if rKey != nil && lKey != nil {
+		return s.kTx.RangeSize(ctx, lKey.Table(), kv.BuildKey(lKey.IndexParts()...), kv.BuildKey(rKey.IndexParts()...))
+	} else if lKey != nil {
+		return s.kTx.RangeSize(ctx, lKey.Table(), kv.BuildKey(lKey.IndexParts()...), nil)
+	}
+
+	return s.kTx.RangeSize(ctx, rKey.Table(), nil, kv.BuildKey(rKey.IndexParts()...))
 }
 
 func (s *TxSession) Commit(ctx context.Context) error {

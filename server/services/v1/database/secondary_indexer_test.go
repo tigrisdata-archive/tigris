@@ -521,11 +521,41 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 
 	tm := transaction.NewManager(kvStore)
 
+	t.Run("lots of docs for size test", func(t *testing.T) {
+		coll := indexStore.coll
+		_ = kvStore.DropTable(ctx, coll.EncodedTableIndexName)
+
+		for z := 0; z < 100; z++ {
+			tx, err := tm.StartTx(ctx)
+			for i := z * 100; i < 100*z+100; i++ {
+				assert.NoError(t, err)
+				td, pk := createDoc(`{"id":1, "double_f":2,"created":"2023-01-16T12:55:17.304154Z","updated": "2023-01-16T12:55:17.304154Z", "arr":[1,2]}`, []interface{}{i}...)
+				err = indexStore.Index(ctx, tx, td, pk)
+				assert.NoError(t, err)
+			}
+			assert.NoError(t, tx.Commit(ctx))
+		}
+
+		tx, err := tm.StartTx(ctx)
+		assert.NoError(t, err)
+		info, err := indexStore.IndexInfo(ctx, tx)
+		assert.NoError(t, err)
+		assert.Greater(t, info.Size, int64(3600000))
+		assert.Equal(t, int64(80000), info.Rows)
+		err = tx.Commit(ctx)
+		assert.NoError(t, err)
+	})
+
 	t.Run("insert", func(t *testing.T) {
 		coll := indexStore.coll
 		_ = kvStore.DropTable(ctx, coll.EncodedTableIndexName)
 		tx, err := tm.StartTx(ctx)
 		assert.NoError(t, err)
+
+		info, err := indexStore.IndexInfo(ctx, tx)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(0), info.Rows)
+		assert.Equal(t, info.Size, int64(0))
 
 		td, pk := createDoc(`{"id":1, "double_f":2,"created":"2023-01-16T12:55:17.304154Z","updated": "2023-01-16T12:55:17.304154Z", "arr":[1,2]}`)
 
@@ -538,10 +568,9 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 		tx, err = tm.StartTx(ctx)
 		assert.NoError(t, err)
 
-		info, err := indexStore.IndexInfo(ctx, tx)
+		info, err = indexStore.IndexInfo(ctx, tx)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(8), info.Rows)
-		assert.Greater(t, info.Size, int64(1000))
 
 		iter, err := indexStore.scanIndex(ctx, tx)
 		assert.NoError(t, err)
@@ -572,7 +601,6 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 		info, err := indexStore.IndexInfo(ctx, tx)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(8), info.Rows)
-		assert.Greater(t, info.Size, int64(1000))
 
 		iter, err := indexStore.scanIndex(ctx, tx)
 		assert.NoError(t, err)
@@ -597,7 +625,6 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 		info, err = indexStore.IndexInfo(ctx, tx)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(7), info.Rows)
-		assert.Greater(t, info.Size, int64(1000))
 
 		iter, err = indexStore.scanIndex(ctx, tx)
 		assert.NoError(t, err)
@@ -635,7 +662,6 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 		info, err := indexStore.IndexInfo(ctx, tx)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(16), info.Rows)
-		assert.Greater(t, info.Size, int64(1000))
 
 		err = indexStore.Delete(ctx, tx, td1, pk1)
 		assert.NoError(t, err)
