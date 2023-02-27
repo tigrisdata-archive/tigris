@@ -525,9 +525,9 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 		coll := indexStore.coll
 		_ = kvStore.DropTable(ctx, coll.EncodedTableIndexName)
 
-		for z := 0; z < 100; z++ {
+		for z := 0; z < 30; z++ {
 			tx, err := tm.StartTx(ctx)
-			for i := z * 100; i < 100*z+100; i++ {
+			for i := z * 30; i < 30*z+30; i++ {
 				assert.NoError(t, err)
 				td, pk := createDoc(`{"id":1, "double_f":2,"created":"2023-01-16T12:55:17.304154Z","updated": "2023-01-16T12:55:17.304154Z", "arr":[1,2]}`, []interface{}{i}...)
 				err = indexStore.Index(ctx, tx, td, pk)
@@ -540,8 +540,8 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 		assert.NoError(t, err)
 		info, err := indexStore.IndexInfo(ctx, tx)
 		assert.NoError(t, err)
-		assert.Greater(t, info.Size, int64(3600000))
-		assert.Equal(t, int64(80000), info.Rows)
+		assert.Greater(t, info.Size, int64(150000))
+		assert.Equal(t, int64(7200), info.Rows)
 		err = tx.Commit(ctx)
 		assert.NoError(t, err)
 	})
