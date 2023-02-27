@@ -100,3 +100,7 @@ func (n *NoopKV) AtomicReadRange(ctx context.Context, table []byte, lkey Key, rk
 func (n *NoopKV) Get(ctx context.Context, key []byte, isSnapshot bool) (Future, error) {
 	return nil, nil
 }
+
+func (n *NoopKV) RangeSize(ctx context.Context, table []byte, lkey Key, rkey Key) (int64, error) {
+	return 0, nil
+}
