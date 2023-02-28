@@ -143,21 +143,23 @@ func (runner *baseRunner) encodeDocuments(index *schema.SearchIndex, documents [
 	ids := make([]string, len(documents))
 	encoder := jsoniter.NewEncoder(buffer)
 	ts := internal.NewTimestamp()
+
 	for i, doc := range documents {
 		decDoc, err := util.JSONToMap(doc)
 		if err != nil {
 			return nil, err
 		}
 
-		_, found := decDoc[schema.SearchId]
-		if !found {
+		if id, ok := decDoc[schema.SearchId]; !ok {
 			if isUpdate {
 				return nil, errors.InvalidArgument("doc missing 'id' field")
 			}
 
-			decDoc[schema.SearchId] = uuid.New().String()
+			ids[i] = uuid.New().String()
+			decDoc[schema.SearchId] = ids[i]
+		} else if ids[i], ok = id.(string); !ok {
+			return nil, errors.InvalidArgument("wrong type of 'id' field")
 		}
-		ids[i] = decDoc[schema.SearchId].(string)
 
 		packed, err := MutateSearchDocument(index, ts, decDoc, isUpdate)
 		if err != nil {

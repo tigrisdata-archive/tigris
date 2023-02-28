@@ -324,6 +324,16 @@ func TestCreate(t *testing.T) {
 	encInp, err := util.MapToJSON(docsNext[1])
 	require.NoError(t, err)
 	require.JSONEq(t, string(encInp), string(encResp))
+
+	// Invalid id type. Expected string.
+	docs[0]["id"] = 4
+	docs[1]["id"] = 5
+	expect(t).POST(getIndexDocumentURL(project, index, "")).
+		WithJSON(Map{
+			"documents": docs,
+		}).
+		Expect().
+		Status(http.StatusBadRequest)
 }
 
 func TestCreateOrReplace(t *testing.T) {
