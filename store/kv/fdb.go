@@ -502,6 +502,31 @@ func (t *ftx) Get(_ context.Context, key []byte, isSnapshot bool) (Future, error
 	return t.tx.Get(fdb.Key(key)), nil
 }
 
+// RangeSize calculates approximate range table size in bytes - this is an estimate
+// and a range smaller than 3mb will not be that accurate.
+func (t *ftx) RangeSize(ctx context.Context, table []byte, lKey Key, rKey Key) (int64, error) {
+	lk := getFDBKey(table, lKey)
+	var rk fdb.Key
+	if rKey == nil {
+		// add a table boundary
+		rk1 := make([]byte, len(table)+1)
+		copy(rk1, table)
+		rk1[len(rk1)-1] = byte(0xFF)
+		rk = rk1
+	} else {
+		rk = getFDBKey(table, rKey)
+	}
+
+	kr := fdb.KeyRange{Begin: lk, End: rk}
+	sz, err := t.tx.GetEstimatedRangeSizeBytes(kr).Get()
+	log.Trace().Str("table", string(table)).Interface("lKey", lKey).Interface("rKey", rKey).Int64("size", sz).Msg("tx range size")
+	if err != nil {
+		log.Err(err).Str("name", string(table)).Int64("size", sz).Msg("tx range size")
+	}
+
+	return sz, err
+}
+
 func (t *ftx) Commit(_ context.Context) error {
 	if t.err != nil {
 		return t.err

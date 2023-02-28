@@ -26,6 +26,7 @@ import (
 	"github.com/iancoleman/strcase"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tigrisdata/tigris/util"
+	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 var (
@@ -146,9 +147,18 @@ type Object struct {
 	Fields []FieldGen
 }
 
-func genField(w io.Writer, n string, v *Field, pk []string, required bool, c JSONToLangType,
-	hasTime *bool, hasUUID *bool,
-) (*FieldGen, error) {
+type schemaGenerator struct {
+	hasTime     bool
+	hasUUID     bool
+	langTypeGen JSONToLangType
+
+	writer io.Writer
+
+	types      map[string][]string
+	bodyToType map[string]string
+}
+
+func (s *schemaGenerator) genField(w io.Writer, n string, v *Field, pk []string, required bool) (*FieldGen, error) {
 	var err error
 
 	f := FieldGen{AutoGenerate: v.AutoGenerate}
@@ -184,23 +194,29 @@ func genField(w io.Writer, n string, v *Field, pk []string, required bool, c JSO
 	f.IsArray = f.ArrayDimensions > 0
 
 	if v.Type == typeObject {
-		if err := genSchema(w, n, v.Desc, v.Fields, nil, v.Required, c, hasTime, hasUUID); err != nil {
+		var tn string
+
+		if err := s.genSchema(w, n, v.Desc, v.Fields, nil, v.Required, &tn); err != nil {
 			return nil, err
 		}
 
-		f.Type = plural.Singular(f.Name)
+		if tn == "" {
+			tn = f.Name
+		}
+
+		f.Type = plural.Singular(tn)
 		f.TypeDecap = strings.ToLower(f.Type[0:1]) + f.Type[1:]
 		f.IsObject = true
-	} else if f.Type, err = c.GetType(v.Type, v.Format); err != nil {
+	} else if f.Type, err = s.langTypeGen.GetType(v.Type, v.Format); err != nil {
 		return nil, err
 	}
 
 	if v.Format == formatUUID {
-		*hasUUID = true
+		s.hasUUID = true
 	}
 
 	if v.Format == formatDateTime {
-		*hasTime = true
+		s.hasTime = true
 	}
 
 	for k1, v1 := range pk {
@@ -212,8 +228,37 @@ func genField(w io.Writer, n string, v *Field, pk []string, required bool, c JSO
 	return &f, nil
 }
 
-func genSchema(w io.Writer, name string, desc string, field map[string]*Field,
-	pk []string, required []string, c JSONToLangType, hasTime *bool, hasUUID *bool,
+func (s *schemaGenerator) getExistingObjType(name string, body string) string {
+	// First try to find type name and body match
+	if len(s.types[name]) != 0 {
+		for k, v := range s.types[name] {
+			// Name and content is the same. Just skip this duplicate.
+			if v == body {
+				if k != 0 {
+					// There maybe multiple types with the same name but different schema.
+					// We give them unique name by appending numerical order: User, User1, User2...
+					name = getObjTypeName(name, k)
+				}
+
+				return name
+			}
+		}
+	}
+
+	// Find a type with identical body and use it
+	if len(s.bodyToType[body]) != 0 {
+		return s.bodyToType[body]
+	}
+
+	return ""
+}
+
+func getObjTypeName(name string, idx int) string {
+	return fmt.Sprintf("%s%d", name, idx)
+}
+
+func (s *schemaGenerator) genSchema(w io.Writer, name string, desc string, field map[string]*Field,
+	pk []string, required []string, typeName *string,
 ) error {
 	var obj Object
 
@@ -223,7 +268,7 @@ func genSchema(w io.Writer, name string, desc string, field map[string]*Field,
 
 	obj.NamePlural = plural.Plural(name)
 	obj.NameJSON = name
-	name = pluralize.NewClient().Singular(name)
+	name = plural.Singular(name)
 	obj.Name = strcase.ToCamel(name)
 	obj.NameDecap = strings.ToLower(obj.Name[0:1]) + obj.Name[1:]
 	obj.NameSnake = strcase.ToSnake(obj.Name)
@@ -239,6 +284,11 @@ func genSchema(w io.Writer, name string, desc string, field map[string]*Field,
 
 	reqPtr := 0
 
+	// Write to local buffer first.
+	// We may need to skip writing to the main buffer in the case of duplicate types
+	buf := bytes.Buffer{}
+	tw := bufio.NewWriter(&buf)
+
 	for _, n := range names {
 		v := field[n]
 
@@ -248,6 +298,7 @@ func genSchema(w io.Writer, name string, desc string, field map[string]*Field,
 
 		// TODO: We assume required array is sorted, need fix to not depend on it.
 		req := false
+
 		if reqPtr < len(required) {
 			if required[reqPtr] == n {
 				reqPtr++
@@ -255,7 +306,7 @@ func genSchema(w io.Writer, name string, desc string, field map[string]*Field,
 			}
 		}
 
-		f, err := genField(w, n, v, pk, req, c, hasTime, hasUUID)
+		f, err := s.genField(tw, n, v, pk, req)
 		if err != nil {
 			return err
 		}
@@ -263,21 +314,51 @@ func genSchema(w io.Writer, name string, desc string, field map[string]*Field,
 		obj.Fields = append(obj.Fields, *f)
 	}
 
-	if err := util.ExecTemplate(w, c.GetObjectTemplate(), obj); err != nil {
+	body, err := jsoniter.Marshal(obj.Fields)
+	if ulog.E(err) {
+		return err
+	}
+
+	if *typeName = s.getExistingObjType(obj.Name, string(body)); *typeName != "" {
+		// Type has been produced already skip duplicate
+		return nil
+	}
+
+	// Different type with the same name
+	s.types[obj.Name] = append(s.types[obj.Name], string(body))
+	if len(s.types[obj.Name]) != 1 {
+		obj.Name = getObjTypeName(obj.Name, len(s.types[obj.Name])-1)
+		*typeName = obj.Name
+	}
+
+	if s.bodyToType[string(body)] == "" {
+		s.bodyToType[string(body)] = obj.Name
+	}
+
+	if err := util.ExecTemplate(tw, s.langTypeGen.GetObjectTemplate(), obj); err != nil {
+		return err
+	}
+
+	_ = tw.Flush()
+
+	// Produce the object type to the output
+	if _, err := w.Write(buf.Bytes()); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func genCollectionSchema(w io.Writer, rawSchema []byte, c JSONToLangType, hasTime *bool, hasUUID *bool) error {
+func (s *schemaGenerator) genCollectionSchema(rawSchema []byte) error {
 	var sch Schema
 
 	if err := jsoniter.Unmarshal(rawSchema, &sch); err != nil {
 		return err
 	}
 
-	if err := genSchema(w, sch.Name, sch.Desc, sch.Fields, sch.PrimaryKey, sch.Required, c, hasTime, hasUUID); err != nil {
+	var tn string
+
+	if err := s.genSchema(s.writer, sch.Name, sch.Desc, sch.Fields, sch.PrimaryKey, sch.Required, &tn); err != nil {
 		return err
 	}
 
@@ -310,8 +391,14 @@ func GenCollectionSchema(jsonSchema []byte, lang string) ([]byte, error) {
 	buf := bytes.Buffer{}
 	w := bufio.NewWriter(&buf)
 
-	var hasTime, hasUUID bool
-	if err := genCollectionSchema(w, jsonSchema, genType, &hasTime, &hasUUID); err != nil {
+	s := schemaGenerator{
+		langTypeGen: genType,
+		writer:      w,
+		types:       make(map[string][]string),
+		bodyToType:  make(map[string]string),
+	}
+
+	if err := s.genCollectionSchema(jsonSchema); err != nil {
 		return nil, err
 	}
 

@@ -33,6 +33,7 @@ func getNetworkTagKeys() []string {
 		"project",
 		"branch",
 		"collection",
+		"human",
 	}
 }
 

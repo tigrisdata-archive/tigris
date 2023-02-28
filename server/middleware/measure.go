@@ -16,6 +16,7 @@ package middleware
 
 import (
 	"context"
+	"strconv"
 
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware/v2"
 	"github.com/rs/zerolog/log"
@@ -61,7 +62,8 @@ func measureUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryS
 		measurement := metrics.NewMeasurement(util.Service, info.FullMethod, metrics.GrpcSpanType, tags)
 		measurement.AddTags(metrics.GetProjectBranchCollTags(reqMetadata.GetProject(), reqMetadata.GetBranch(), reqMetadata.GetCollection()))
 		measurement.AddTags(map[string]string{
-			"sub": reqMetadata.Sub,
+			"sub":   reqMetadata.Sub,
+			"human": strconv.FormatBool(reqMetadata.IsHuman),
 		})
 		ctx = measurement.StartTracing(ctx, false)
 		resp, err := handler(ctx, req)
@@ -133,6 +135,9 @@ func (w *wrappedStream) RecvMsg(m interface{}) error {
 		reqMetadata.SetProject(project)
 		reqMetadata.SetBranch(branch)
 		reqMetadata.SetCollection(coll)
+		w.measurement.AddTags(map[string]string{
+			"human": strconv.FormatBool(reqMetadata.IsHuman),
+		})
 		w.WrappedContext = reqMetadata.SaveToContext(w.WrappedContext)
 
 		w.measurement.AddProjectBranchCollTags(project, branch, coll)
@@ -162,7 +167,9 @@ func (w *wrappedStream) SendMsg(m interface{}) error {
 		reqMetadata.SetProject(project)
 		reqMetadata.SetBranch(branch)
 		reqMetadata.SetCollection(coll)
-
+		w.measurement.AddTags(map[string]string{
+			"human": strconv.FormatBool(reqMetadata.IsHuman),
+		})
 		reqMetadata.SaveToContext(w.WrappedContext)
 		w.WrappedContext = reqMetadata.SaveToContext(w.WrappedContext)
 

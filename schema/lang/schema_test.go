@@ -83,12 +83,46 @@ var (
                     "type": "array",
                     "items": {
                       "type": "object",
-                      "properties": { "field_3": { "type": "integer", "format": "int32" } }
+                      "properties": { "field_arr": { "type": "integer", "format": "int32" } }
                     }
                   },
 				  "subObjectNested": {
                     "type": "object",
                     "properties": { "field_3": { "type": "integer", "format": "int32" } }
+                  },
+				  "subObjectNestedReuseTypeByBody": {
+                    "type": "object",
+                    "properties": { "field_3": { "type": "integer", "format": "int32" } }
+                  },
+				  "subObjectNestedOne": {
+                    "type": "object",
+                    "properties": { 
+                  		"field_31": { "type": "integer", "format": "int32"},
+				  		"subObjectNested": {
+                    		"type": "object",
+                    		"properties": { "field_3": { "type": "integer", "format": "int32" } }
+						}
+					}
+                  },
+				  "subObjectNestedTwo": {
+                    "type": "object",
+                    "properties": { 
+                  		"field_32": { "type": "integer", "format": "int32"},
+				  		"subObjectNested": {
+                    		"type": "object",
+                    		"properties": { "field_4": { "type": "integer", "format": "int32" } }
+						}
+					}
+                  },
+				  "subObjectNestedThree": {
+                    "type": "object",
+                    "properties": { 
+                  		"field_33": { "type": "integer", "format": "int32"},
+				  		"subObjectNested": {
+                    		"type": "object",
+                    		"properties": { "field_4": { "type": "integer", "format": "int32" } }
+						}
+					}
                   }
                 }
               }

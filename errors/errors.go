@@ -63,6 +63,12 @@ func DeadlineExceeded(format string, args ...any) error {
 		format, args...)
 }
 
+// ContentTooLarge constructs content too large error (HTTP: 413).
+func ContentTooLarge(format string, args ...any) error {
+	return api.Errorf(api.Code_CONTENT_TOO_LARGE,
+		format, args...)
+}
+
 // Unimplemented constructs not implemented error (HTTP: 501).
 func Unimplemented(format string, args ...any) error {
 	return api.Errorf(api.Code_UNIMPLEMENTED,

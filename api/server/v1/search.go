@@ -24,6 +24,7 @@ import (
 type DocMetadata struct {
 	CreatedAt *time.Time `json:"created_at,omitempty"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+	Match     *Match     `json:"match,omitempty"`
 }
 
 func (x *IndexDoc) MarshalJSON() ([]byte, error) {
@@ -56,6 +57,7 @@ func CreateMDFromDocMeta(x *DocMeta) *DocMetadata {
 		tm := x.UpdatedAt.AsTime()
 		md.UpdatedAt = &tm
 	}
+	md.Match = x.Match
 
 	return &md
 }

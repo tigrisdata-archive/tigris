@@ -36,6 +36,7 @@ func getFdbOkTagKeys() []string {
 		"branch",
 		"collection",
 		"fdb_method",
+		"human",
 	}
 }
 
@@ -52,6 +53,7 @@ func getFdbErrorTagKeys() []string {
 		"fdb_method",
 		"error_source",
 		"error_value",
+		"human",
 	}
 }
 

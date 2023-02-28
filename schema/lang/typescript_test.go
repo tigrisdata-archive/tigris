@@ -135,12 +135,41 @@ export class Product {
 			"object", objectTest, `
 export class SubArrayNested {
   @Field(TigrisDataTypes.INT32)
-  field_3: number;
+  field_arr: number;
 }
 
 export class SubObjectNested {
   @Field(TigrisDataTypes.INT32)
   field_3: number;
+}
+
+export class SubObjectNestedOne {
+  @Field(TigrisDataTypes.INT32)
+  field_31: number;
+
+  @Field()
+  subObjectNested: SubObjectNested;
+}
+
+export class SubObjectNested1 {
+  @Field(TigrisDataTypes.INT32)
+  field_4: number;
+}
+
+export class SubObjectNestedThree {
+  @Field(TigrisDataTypes.INT32)
+  field_33: number;
+
+  @Field()
+  subObjectNested: SubObjectNested1;
+}
+
+export class SubObjectNestedTwo {
+  @Field(TigrisDataTypes.INT32)
+  field_32: number;
+
+  @Field()
+  subObjectNested: SubObjectNested1;
 }
 
 export class SubArray {
@@ -152,6 +181,18 @@ export class SubArray {
 
   @Field()
   subObjectNested: SubObjectNested;
+
+  @Field()
+  subObjectNestedOne: SubObjectNestedOne;
+
+  @Field()
+  subObjectNestedReuseTypeByBody: SubObjectNested;
+
+  @Field()
+  subObjectNestedThree: SubObjectNestedThree;
+
+  @Field()
+  subObjectNestedTwo: SubObjectNestedTwo;
 }
 
 // sub type description
@@ -177,9 +218,19 @@ export class Product {
 		t.Run(v.name, func(t *testing.T) {
 			buf := bytes.Buffer{}
 			w := bufio.NewWriter(&buf)
-			var hasTime, hasUUID bool
-			err := genCollectionSchema(w, []byte(v.in), &JSONToTypeScript{}, &hasTime, &hasUUID)
+
+			s := schemaGenerator{
+				hasTime:     false,
+				hasUUID:     false,
+				langTypeGen: &JSONToTypeScript{},
+				writer:      w,
+				types:       make(map[string][]string),
+				bodyToType:  make(map[string]string),
+			}
+
+			err := s.genCollectionSchema([]byte(v.in))
 			require.NoError(t, err)
+
 			_ = w.Flush()
 			assert.Equal(t, v.exp, buf.String())
 		})

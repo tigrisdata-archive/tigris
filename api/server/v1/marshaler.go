@@ -884,13 +884,15 @@ func (x *SearchHit) MarshalJSON() ([]byte, error) {
 
 func (x *SearchMetadata) MarshalJSON() ([]byte, error) {
 	resp := struct {
-		Found      int64 `json:"found"`
-		TotalPages int32 `json:"total_pages"`
-		Page       *Page `json:"page"`
+		Found         int64    `json:"found"`
+		TotalPages    int32    `json:"total_pages"`
+		Page          *Page    `json:"page"`
+		MatchedFields []string `json:"matched_fields"`
 	}{
-		Found:      x.Found,
-		TotalPages: x.TotalPages,
-		Page:       x.Page,
+		Found:         x.Found,
+		TotalPages:    x.TotalPages,
+		Page:          x.Page,
+		MatchedFields: x.MatchedFields,
 	}
 	return jsoniter.Marshal(resp)
 }
