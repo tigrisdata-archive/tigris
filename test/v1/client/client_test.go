@@ -43,17 +43,19 @@ func TestClientCollectionBasic(t *testing.T) {
 		Field1 int64
 	}
 
+	projectName := "db111222"
 	h, p := getTestServerHostPort()
 	var db *tigris.Database
 	var err error
 	var cfg *tigris.Config
 	for {
-		cfg = &tigris.Config{URL: net.JoinHostPort(h, p), Project: "db111222"}
+		cfg = &tigris.Config{URL: net.JoinHostPort(h, p), Project: projectName}
 
 		drv, err := driver.NewDriver(ctx, &config.Driver{URL: cfg.URL})
 		require.NoError(t, err)
 
-		_, err = drv.CreateProject(ctx, "db111222")
+		deleteIfExists(ctx, drv, projectName)
+		_, err = drv.CreateProject(ctx, projectName)
 		require.NoError(t, err)
 
 		db, err = tigris.OpenDatabase(ctx, cfg, &Coll1{}, &Coll2{})
@@ -125,16 +127,17 @@ func TestClientCollectionTx(t *testing.T) {
 		Key1   string `tigris:"primary_key"`
 		Field1 int64
 	}
-
+	projectName := "db111333"
 	h, p := getTestServerHostPort()
 	var err error
 	var db *tigris.Database
-	cfg := &tigris.Config{URL: net.JoinHostPort(h, p), Project: "db111333"}
+	cfg := &tigris.Config{URL: net.JoinHostPort(h, p), Project: projectName}
 	for {
 		drv, err := driver.NewDriver(ctx, &config.Driver{URL: cfg.URL})
 		require.NoError(t, err)
 
-		_, err = drv.CreateProject(ctx, "db111333")
+		deleteIfExists(ctx, drv, projectName)
+		_, err = drv.CreateProject(ctx, projectName)
 		require.NoError(t, err)
 
 		c, _ := tigris.NewClient(ctx, cfg)
@@ -218,4 +221,20 @@ func TestClientCollectionTx(t *testing.T) {
 
 	err = c.Drop(ctx)
 	require.NoError(t, err)
+}
+
+func deleteIfExists(ctx context.Context, drv driver.Driver, project string) error {
+	projects, err := drv.ListProjects(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, p := range projects {
+		if p == project {
+			_, err = drv.DeleteProject(ctx, project)
+			return err
+		}
+	}
+
+	return nil
 }
