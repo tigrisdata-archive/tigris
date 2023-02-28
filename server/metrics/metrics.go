@@ -140,9 +140,7 @@ func InitializeMetrics() func() {
 			initializeAuthScopes()
 		}
 
-		if config.DefaultConfig.Quota.Namespace.Enabled {
-			initializeQuotaScopes()
-		}
+		initializeQuotaScopes()
 
 		SchemaMetrics = root.SubScope("schema")
 	}
