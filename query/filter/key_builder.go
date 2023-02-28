@@ -137,6 +137,9 @@ func (k *KeyBuilder[F]) Build(filters []Filter, userDefinedKeys []F) ([]QueryPla
 	for len(queue) > 0 {
 		element := queue[0]
 		if e, ok := element.(LogicalFilter); ok {
+			if e.Type() == OrOP && !k.primaryKey {
+				return nil, errors.InvalidArgument("$or filter is not yet supported for secondary index")
+			}
 			var singleLevel []*Selector
 			for _, ee := range e.GetFilters() {
 				if ss, ok := ee.(*Selector); ok {

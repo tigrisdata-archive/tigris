@@ -210,6 +210,14 @@ func TestKeyBuilderSecondaryEq(t *testing.T) {
 				newQueryPlan(EQUAL, schema.StringType, []keys.Key{keys.NewKey(nil, encodeString("bbb"))}),
 			},
 		},
+		{
+			// composite with OR filter
+			[]*schema.QueryableField{{FieldName: "K1", DataType: schema.StringType}, {FieldName: "K2", DataType: schema.StringType}},
+			[]*schema.Field{{FieldName: "K1", DataType: schema.StringType}, {FieldName: "K1", DataType: schema.StringType}},
+			[]byte(`{"$or" :[{"$and":[{"K1":"vK1"},{"K2":1}]},{"$and":[{"K1": "vK1"}, {"K2":3}]}]}`),
+			errors.InvalidArgument("$or filter is not yet supported for secondary index"),
+			nil,
+		},
 		// NOT SUPPORTED YET
 		// {
 		// 	// simple OR filter

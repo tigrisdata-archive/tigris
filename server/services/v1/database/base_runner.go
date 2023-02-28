@@ -217,6 +217,10 @@ func (runner *BaseQueryRunner) buildKeysUsingFilter(coll *schema.DefaultCollecti
 func (runner *BaseQueryRunner) buildSecondaryIndexKeysUsingFilter(coll *schema.DefaultCollection,
 	reqFilter []byte, collation *value.Collation,
 ) (*filter.QueryPlan, error) {
+	if filter.None(reqFilter) {
+		return nil, errors.InvalidArgument("cannot query on an empty filter")
+	}
+
 	if collation != nil && collation.IsCaseInsensitive() {
 		return nil, errors.InvalidArgument("secondary indexes do not support case insensitive collation")
 	}
