@@ -235,7 +235,7 @@ func TestCreate_ById(t *testing.T) {
 			ValueEqual("id", "1")
 
 		docs := getDocuments(t, project, index, "1")
-		encResp, err := util.MapToJSON(docs[0]["doc"].(map[string]any))
+		encResp, err := util.MapToJSON(docs[0]["data"].(map[string]any))
 		require.NoError(t, err)
 
 		encInp, err := util.MapToJSON(doc)
@@ -280,7 +280,7 @@ func TestCreate(t *testing.T) {
 	output := getDocuments(t, project, index, "1", "2")
 	require.Equal(t, 2, len(output))
 	for i, out := range output {
-		encResp, err := util.MapToJSON(out["doc"].(map[string]any))
+		encResp, err := util.MapToJSON(out["data"].(map[string]any))
 		require.NoError(t, err)
 
 		encInp, err := util.MapToJSON(docs[i])
@@ -318,12 +318,22 @@ func TestCreate(t *testing.T) {
 		)
 
 	output = getDocuments(t, project, index, "3")
-	encResp, err := util.MapToJSON(output[0]["doc"].(map[string]any))
+	encResp, err := util.MapToJSON(output[0]["data"].(map[string]any))
 	require.NoError(t, err)
 
 	encInp, err := util.MapToJSON(docsNext[1])
 	require.NoError(t, err)
 	require.JSONEq(t, string(encInp), string(encResp))
+
+	// Invalid id type. Expected string.
+	docs[0]["id"] = 4
+	docs[1]["id"] = 5
+	expect(t).POST(getIndexDocumentURL(project, index, "")).
+		WithJSON(Map{
+			"documents": docs,
+		}).
+		Expect().
+		Status(http.StatusBadRequest)
 }
 
 func TestCreateOrReplace(t *testing.T) {
@@ -362,7 +372,7 @@ func TestCreateOrReplace(t *testing.T) {
 	output := getDocuments(t, project, index, "1", "2")
 	require.Equal(t, 2, len(output))
 	for i, out := range output {
-		encResp, err := util.MapToJSON(out["doc"].(map[string]any))
+		encResp, err := util.MapToJSON(out["data"].(map[string]any))
 		require.NoError(t, err)
 
 		encInp, err := util.MapToJSON(docs[i])
@@ -402,7 +412,7 @@ func TestCreateOrReplace(t *testing.T) {
 	output = getDocuments(t, project, index, "1", "3")
 	require.Equal(t, 2, len(output))
 	for i, out := range output {
-		encResp, err := util.MapToJSON(out["doc"].(map[string]any))
+		encResp, err := util.MapToJSON(out["data"].(map[string]any))
 		require.NoError(t, err)
 
 		encInp, err := util.MapToJSON(docsNext[i])
@@ -488,7 +498,7 @@ func TestUpdate(t *testing.T) {
 			require.Nil(t, out)
 			continue
 		}
-		encResp, err := util.MapToJSON(out["doc"].(map[string]any))
+		encResp, err := util.MapToJSON(out["data"].(map[string]any))
 		require.NoError(t, err)
 
 		encInp, err := util.MapToJSON(docsUpdated[i])
@@ -560,7 +570,7 @@ func TestDelete(t *testing.T) {
 			continue
 		}
 
-		encResp, err := util.MapToJSON(out["doc"].(map[string]any))
+		encResp, err := util.MapToJSON(out["data"].(map[string]any))
 		require.NoError(t, err)
 
 		encInp, err := util.MapToJSON(docs[i])

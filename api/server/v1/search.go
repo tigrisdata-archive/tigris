@@ -16,55 +16,13 @@ package api
 
 import (
 	"strings"
-	"time"
 
 	jsoniter "github.com/json-iterator/go"
 )
 
-type DocMetadata struct {
-	CreatedAt *time.Time `json:"created_at,omitempty"`
-	UpdatedAt *time.Time `json:"updated_at,omitempty"`
-	Match     *Match     `json:"match,omitempty"`
-}
-
-func (x *IndexDoc) MarshalJSON() ([]byte, error) {
-	if x.Doc == nil {
-		return []byte("null"), nil
-	}
-
-	resp := struct {
-		Doc      jsoniter.RawMessage `json:"doc,omitempty"`
-		Metadata *DocMetadata        `json:"metadata,omitempty"`
-	}{
-		Doc:      x.Doc,
-		Metadata: CreateMDFromDocMeta(x.Metadata),
-	}
-
-	return jsoniter.Marshal(resp)
-}
-
-func CreateMDFromDocMeta(x *DocMeta) *DocMetadata {
-	if x == nil {
-		return nil
-	}
-
-	var md DocMetadata
-	if x.CreatedAt != nil {
-		tm := x.CreatedAt.AsTime()
-		md.CreatedAt = &tm
-	}
-	if x.UpdatedAt != nil {
-		tm := x.UpdatedAt.AsTime()
-		md.UpdatedAt = &tm
-	}
-	md.Match = x.Match
-
-	return &md
-}
-
 func (x *GetDocumentResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
-		Documents []*IndexDoc `json:"documents,omitempty"`
+		Documents []*SearchHit `json:"documents,omitempty"`
 	}{
 		Documents: x.Documents,
 	}
@@ -90,6 +48,26 @@ func (x *IndexInfo) MarshalJSON() ([]byte, error) {
 	}{
 		Name:   x.Name,
 		Schema: x.Schema,
+	}
+	return jsoniter.Marshal(resp)
+}
+
+func (x *SearchIndexResponse) MarshalJSON() ([]byte, error) {
+	resp := struct {
+		Hits   []*SearchHit            `json:"hits"`
+		Facets map[string]*SearchFacet `json:"facets"`
+		Meta   *SearchMetadata         `json:"meta"`
+	}{
+		Hits:   x.Hits,
+		Facets: x.Facets,
+		Meta:   x.Meta,
+	}
+
+	if resp.Hits == nil {
+		resp.Hits = make([]*SearchHit, 0)
+	}
+	if resp.Facets == nil {
+		resp.Facets = make(map[string]*SearchFacet)
 	}
 	return jsoniter.Marshal(resp)
 }

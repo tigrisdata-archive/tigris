@@ -49,10 +49,7 @@ func TestJSONEncoding(t *testing.T) {
 	t.Run("marshal SearchResponse", func(t *testing.T) {
 		avg := float64(40)
 		resp := &SearchResponse{
-			Hits: []*SearchHit{{
-				Data:     nil,
-				Metadata: &SearchHitMeta{},
-			}},
+			Hits: nil,
 			Facets: map[string]*SearchFacet{
 				"myField": {
 					Counts: []*FacetCount{{
@@ -76,6 +73,6 @@ func TestJSONEncoding(t *testing.T) {
 		}
 		r, err := jsoniter.Marshal(resp)
 		require.NoError(t, err)
-		require.JSONEq(t, `{"hits":[{"metadata":{}}],"facets":{"myField":{"counts":[{"count":32,"value":"adidas"}],"stats":{"avg":40,"count":50}}},"meta":{"found":1234, "matched_fields":null, "total_pages":0,"page":{"current":2,"size":10}}}`, string(r))
+		require.JSONEq(t, `{"hits":[],"facets":{"myField":{"counts":[{"count":32,"value":"adidas"}],"stats":{"avg":40,"count":50}}},"meta":{"found":1234, "matched_fields":null, "total_pages":0,"page":{"current":2,"size":10}}}`, string(r))
 	})
 }

@@ -143,21 +143,23 @@ func (runner *baseRunner) encodeDocuments(index *schema.SearchIndex, documents [
 	ids := make([]string, len(documents))
 	encoder := jsoniter.NewEncoder(buffer)
 	ts := internal.NewTimestamp()
+
 	for i, doc := range documents {
 		decDoc, err := util.JSONToMap(doc)
 		if err != nil {
 			return nil, err
 		}
 
-		_, found := decDoc[schema.SearchId]
-		if !found {
+		if id, ok := decDoc[schema.SearchId]; !ok {
 			if isUpdate {
 				return nil, errors.InvalidArgument("doc missing 'id' field")
 			}
 
-			decDoc[schema.SearchId] = uuid.New().String()
+			ids[i] = uuid.New().String()
+			decDoc[schema.SearchId] = ids[i]
+		} else if ids[i], ok = id.(string); !ok {
+			return nil, errors.InvalidArgument("wrong type of 'id' field")
 		}
-		ids[i] = decDoc[schema.SearchId].(string)
 
 		packed, err := MutateSearchDocument(index, ts, decDoc, isUpdate)
 		if err != nil {
@@ -195,7 +197,7 @@ func (runner *ReadRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Res
 		idToHits[(*hit.Document)[schema.SearchId].(string)] = hit.Document
 	}
 
-	documents := make([]*api.IndexDoc, len(runner.req.Ids))
+	documents := make([]*api.SearchHit, len(runner.req.Ids))
 	for i, id := range runner.req.Ids {
 		// Order of returning the id should be same in the order it is asked in the request.
 		outDoc, found := idToHits[id]
@@ -214,7 +216,7 @@ func (runner *ReadRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Res
 			return Response{}, err
 		}
 
-		meta := &api.DocMeta{}
+		meta := &api.SearchHitMeta{}
 		if created != nil {
 			meta.CreatedAt = created.GetProtoTS()
 		}
@@ -222,8 +224,8 @@ func (runner *ReadRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Res
 			meta.UpdatedAt = updated.GetProtoTS()
 		}
 
-		documents[i] = &api.IndexDoc{
-			Doc:      enc,
+		documents[i] = &api.SearchHit{
+			Data:     enc,
 			Metadata: meta,
 		}
 	}
@@ -565,7 +567,7 @@ func (runner *SearchRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 				row.Document = newValue
 			}
 
-			metadata := &api.DocMeta{}
+			metadata := &api.SearchHitMeta{}
 			if row.CreatedAt != nil {
 				metadata.CreatedAt = row.CreatedAt.GetProtoTS()
 			}
@@ -581,8 +583,8 @@ func (runner *SearchRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 				}
 			}
 
-			resp.Hits = append(resp.Hits, &api.IndexDoc{
-				Doc:      row.Document,
+			resp.Hits = append(resp.Hits, &api.SearchHit{
+				Data:     row.Document,
 				Metadata: metadata,
 			})
 
