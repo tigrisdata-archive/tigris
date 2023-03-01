@@ -417,6 +417,8 @@ func Max(datatype schema.FieldType, val Value) any {
 		return math.MaxInt64
 	case schema.DoubleType:
 		return math.MaxFloat64
+	case schema.BoolType:
+		return val.AsInterface()
 	default:
 		return 0xFF
 	}

@@ -60,6 +60,8 @@ services:
       - TIGRIS_SERVER_SEARCH_HOST=tigris_search
       - TIGRIS_SERVER_TRACING_ENABLED=true
       - TIGRIS_SERVER_SECONDARY_INDEX_WRITE_ENABLED=true
+      - TIGRIS_SERVER_SECONDARY_INDEX_READ_ENABLED=true
+      - TIGRIS_SERVER_SECONDARY_INDEX_MUTATE_ENABLED=true
       - GOCOVERDIR=/tmp/tigris_coverdata
     build:
       context: ../../
@@ -93,6 +95,8 @@ services:
       - TIGRIS_SERVER_LOG_FORMAT=console
       - TIGRIS_SERVER_CDC_ENABLED=true
       - TIGRIS_SERVER_SECONDARY_INDEX_WRITE_ENABLED=true
+      - TIGRIS_SERVER_SECONDARY_INDEX_READ_ENABLED=true
+      - TIGRIS_SERVER_SECONDARY_INDEX_MUTATE_ENABLED=true
     build:
       context: ../../
       dockerfile: docker/Dockerfile

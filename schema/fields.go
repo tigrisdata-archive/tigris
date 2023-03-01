@@ -571,6 +571,11 @@ func (q *QueryableField) Name() string {
 	return q.FieldName
 }
 
+// Type returns the data type of this field.
+func (q *QueryableField) Type() FieldType {
+	return q.DataType
+}
+
 // ShouldPack returns true if we need to pack this field before sending to indexing store.
 func (q *QueryableField) ShouldPack() bool {
 	if q.packThis {
