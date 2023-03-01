@@ -516,7 +516,12 @@ func (runner *SearchRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 		return Response{}, err
 	}
 
-	sortOrder, err := runner.getSortOrdering(index, runner.req.Sort)
+	sortOrder, err := runner.getSortOrdering(index)
+	if err != nil {
+		return Response{}, err
+	}
+
+	groupBy, err := runner.getGroupBy(index)
 	if err != nil {
 		return Response{}, err
 	}
@@ -535,6 +540,7 @@ func (runner *SearchRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 		Filter(wrappedF).
 		ReadFields(fieldSelection).
 		SortOrder(sortOrder).
+		GroupBy(groupBy).
 		Build()
 
 	searchReader := NewSearchReader(ctx, runner.store, index, searchQ)
@@ -556,39 +562,51 @@ func (runner *SearchRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 	matchedFields := container.NewHashSet()
 	for {
 		resp := &api.SearchIndexResponse{}
-		var row Row
-		for iterator.Next(&row) {
-			if searchQ.ReadFields != nil {
-				// apply field selection
-				newValue, err := searchQ.ReadFields.Apply(row.Document)
-				if ulog.E(err) {
-					return Response{}, err
+		var rows ResultRow
+		for iterator.Next(&rows) {
+			var indexedDocs []*api.SearchHit
+			for _, row := range rows.Rows {
+				if searchQ.ReadFields != nil {
+					// apply field selection
+					newValue, err := searchQ.ReadFields.Apply(row.Document)
+					if ulog.E(err) {
+						return Response{}, err
+					}
+					row.Document = newValue
 				}
-				row.Document = newValue
-			}
 
-			metadata := &api.SearchHitMeta{}
-			if row.CreatedAt != nil {
-				metadata.CreatedAt = row.CreatedAt.GetProtoTS()
-			}
-			if row.UpdatedAt != nil {
-				metadata.UpdatedAt = row.UpdatedAt.GetProtoTS()
-			}
-			metadata.Match = row.Match
-			if metadata.Match != nil {
-				for _, f := range metadata.Match.Fields {
-					if f != nil {
-						matchedFields.Insert(f.Name)
+				metadata := &api.SearchHitMeta{}
+				if row.CreatedAt != nil {
+					metadata.CreatedAt = row.CreatedAt.GetProtoTS()
+				}
+				if row.UpdatedAt != nil {
+					metadata.UpdatedAt = row.UpdatedAt.GetProtoTS()
+				}
+				metadata.Match = row.Match
+				if metadata.Match != nil {
+					for _, f := range metadata.Match.Fields {
+						if f != nil {
+							matchedFields.Insert(f.Name)
+						}
 					}
 				}
+
+				indexedDocs = append(indexedDocs, &api.SearchHit{
+					Data:     row.Document,
+					Metadata: metadata,
+				})
 			}
 
-			resp.Hits = append(resp.Hits, &api.SearchHit{
-				Data:     row.Document,
-				Metadata: metadata,
-			})
+			if len(rows.Group) > 0 {
+				resp.Group = append(resp.Group, &api.GroupedSearchHits{
+					GroupKeys: rows.Group,
+					Hits:      indexedDocs,
+				})
+			} else {
+				resp.Hits = append(resp.Hits, indexedDocs...)
+			}
 
-			if len(resp.Hits) == pageSize {
+			if len(resp.Hits) == pageSize || len(resp.Group) == pageSize {
 				break
 			}
 		}
@@ -612,7 +630,7 @@ func (runner *SearchRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 		// if no hits, no error, at least one response and break
 		// if some hits, got an error, send current hits and then error (will be zero hits next time)
 		// if some hits, no error, continue to send response
-		if len(resp.Hits) == 0 {
+		if len(resp.Hits) == 0 && len(resp.Group) == 0 {
 			if iterator.Interrupted() != nil {
 				return Response{}, iterator.Interrupted()
 			}
@@ -716,8 +734,8 @@ func (runner *SearchRunner) getFieldSelection(index *schema.SearchIndex) (*read.
 	return factory, nil
 }
 
-func (runner *SearchRunner) getSortOrdering(index *schema.SearchIndex, sortReq jsoniter.RawMessage) (*sort.Ordering, error) {
-	ordering, err := sort.UnmarshalSort(sortReq)
+func (runner *SearchRunner) getSortOrdering(index *schema.SearchIndex) (*sort.Ordering, error) {
+	ordering, err := sort.UnmarshalSort(runner.req.Sort)
 	if err != nil || ordering == nil {
 		return nil, err
 	}
@@ -736,6 +754,31 @@ func (runner *SearchRunner) getSortOrdering(index *schema.SearchIndex, sortReq j
 		}
 	}
 	return ordering, nil
+}
+
+func (runner *SearchRunner) getGroupBy(index *schema.SearchIndex) (qsearch.GroupBy, error) {
+	groupBy, err := qsearch.UnmarshalGroupBy(runner.req.GroupBy)
+	if err != nil {
+		return groupBy, err
+	}
+
+	for i, f := range groupBy.Fields {
+		cf, err := index.GetQueryableField(f)
+		if err != nil {
+			return qsearch.GroupBy{}, err
+		}
+		if cf.InMemoryName() != cf.Name() {
+			groupBy.Fields[i] = cf.InMemoryName()
+		}
+
+		if !cf.Faceted {
+			return qsearch.GroupBy{}, errors.InvalidArgument("Cannot group by on `%s` field as facet is not enabled", f)
+		}
+		if cf.DataType != schema.StringType {
+			return qsearch.GroupBy{}, errors.InvalidArgument("Group by is only allowed on string field")
+		}
+	}
+	return groupBy, nil
 }
 
 type IndexRunner struct {
