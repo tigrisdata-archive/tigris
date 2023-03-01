@@ -872,13 +872,18 @@ func (x *SearchResponse) MarshalJSON() ([]byte, error) {
 }
 
 func (x *SearchHit) MarshalJSON() ([]byte, error) {
+	if x.Data == nil {
+		return []byte("null"), nil
+	}
+
 	resp := struct {
 		Data     jsoniter.RawMessage `json:"data,omitempty"`
-		Metadata SearchHitMetadata   `json:"metadata,omitempty"`
+		Metadata *SearchHitMetadata  `json:"metadata,omitempty"`
 	}{
 		Data:     x.Data,
 		Metadata: CreateMDFromSearchMD(x.Metadata),
 	}
+
 	return jsoniter.Marshal(resp)
 }
 
@@ -931,6 +936,7 @@ func (x *FacetStats) MarshalJSON() ([]byte, error) {
 type SearchHitMetadata struct {
 	CreatedAt *time.Time `json:"created_at,omitempty"`
 	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+	Match     *Match     `json:"match,omitempty"`
 }
 
 type Metadata struct {
@@ -960,11 +966,12 @@ func CreateMDFromResponseMD(x *ResponseMetadata) Metadata {
 	return md
 }
 
-func CreateMDFromSearchMD(x *SearchHitMeta) SearchHitMetadata {
-	var md SearchHitMetadata
+func CreateMDFromSearchMD(x *SearchHitMeta) *SearchHitMetadata {
 	if x == nil {
-		return md
+		return nil
 	}
+
+	var md SearchHitMetadata
 	if x.CreatedAt != nil {
 		tm := x.CreatedAt.AsTime()
 		md.CreatedAt = &tm
@@ -973,8 +980,9 @@ func CreateMDFromSearchMD(x *SearchHitMeta) SearchHitMetadata {
 		tm := x.UpdatedAt.AsTime()
 		md.UpdatedAt = &tm
 	}
+	md.Match = x.Match
 
-	return md
+	return &md
 }
 
 func unmarshalAdditionalFunction(data []byte) (*AdditionalFunction, error) {
