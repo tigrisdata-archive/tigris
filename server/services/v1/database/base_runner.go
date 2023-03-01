@@ -269,7 +269,7 @@ func (runner *BaseQueryRunner) getWriteIterator(ctx context.Context, tx transact
 ) (Iterator, error) {
 	reader := NewDatabaseReader(ctx, tx)
 
-	if config.DefaultConfig.SecondaryIndex.ReadEnabled {
+	if config.DefaultConfig.SecondaryIndex.MutateEnabled {
 		if skIter, err := runner.getSecondaryWriterIterator(ctx, tx, collection, reqFilter, collation); err == nil {
 			metrics.SetWriteType("secondary")
 			return skIter, nil
