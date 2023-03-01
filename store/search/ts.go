@@ -240,6 +240,9 @@ func (s *storeImpl) getBaseSearchParam(query *qsearch.Query, pageNo int) tsApi.M
 	if sortBy := query.ToSortFields(); len(sortBy) > 0 {
 		baseParam.SortBy = &sortBy
 	}
+	if groupBy := query.ToSearchGroupBy(); len(groupBy) > 0 {
+		baseParam.GroupBy = &groupBy
+	}
 
 	return baseParam
 }
@@ -282,7 +285,7 @@ func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query
 		return nil, s.convertToInternalError(err)
 	}
 	for _, each := range dest.Results {
-		if each.Hits == nil {
+		if each.Hits == nil && each.GroupedHits == nil {
 			type errResult struct {
 				Code    int    `json:"code"`
 				Message string `json:"error"`
