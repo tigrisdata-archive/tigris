@@ -54,7 +54,6 @@ func NewSecondaryIndexReader(ctx context.Context, tx transaction.Tx, coll *schem
 func (reader *SecondaryIndexReader) createIter() (*SecondaryIndexReader, error) {
 	var err error
 
-	reader.dbgPrintIndex()
 	log.Debug().Msgf("Query Plan Keys %v", reader.queryPlan.GetKeyInterfaceParts())
 
 	switch reader.queryPlan.QueryType {
@@ -80,6 +79,11 @@ func BuildSecondaryIndexKeys(coll *schema.DefaultCollection, queryFilters []filt
 		return nil, errors.InvalidArgument("Cannot index with an empty filter")
 	}
 
+	indexeableFields := coll.GetIndexedFields()
+	if len(indexeableFields) == 0 {
+		return nil, errors.InvalidArgument("No indexable fields")
+	}
+
 	encoder := func(indexParts ...interface{}) (keys.Key, error) {
 		return newKeyWithPrimaryKey(indexParts, coll.EncodedTableIndexName, coll.Indexes.SecondaryIndex.Name, "kvs"), nil
 	}
@@ -90,7 +94,7 @@ func BuildSecondaryIndexKeys(coll *schema.DefaultCollection, queryFilters []filt
 	}
 
 	eqKeyBuilder := filter.NewSecondaryKeyEqBuilder[*schema.QueryableField](encoder, buildIndexParts)
-	eqPlan, err := eqKeyBuilder.Build(queryFilters, coll.QueryableFields)
+	eqPlan, err := eqKeyBuilder.Build(queryFilters, indexeableFields)
 	if err == nil {
 		for _, plan := range eqPlan {
 			if indexedDataType(plan) {
@@ -100,7 +104,7 @@ func BuildSecondaryIndexKeys(coll *schema.DefaultCollection, queryFilters []filt
 	}
 
 	rangKeyBuilder := filter.NewRangeKeyBuilder(filter.NewRangeKeyComposer[*schema.QueryableField](encoder, buildIndexParts), false)
-	rangePlans, err := rangKeyBuilder.Build(queryFilters, coll.QueryableFields)
+	rangePlans, err := rangKeyBuilder.Build(queryFilters, indexeableFields)
 	if err != nil {
 		return nil, err
 	}
@@ -167,6 +171,8 @@ func (it *SecondaryIndexReader) Next(row *Row) bool {
 func (it *SecondaryIndexReader) Interrupted() error { return it.err }
 
 // For local debugging and testing.
+//
+//nolint:unused
 func (it *SecondaryIndexReader) dbgPrintIndex() {
 	indexer := NewSecondaryIndexer(it.coll)
 	tableIter, err := indexer.scanIndex(it.ctx, it.tx)

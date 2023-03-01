@@ -48,11 +48,13 @@ var testCreateSchema = Map{
 			"int_value": Map{
 				"description": "simple int field",
 				"type":        "integer",
+				"index":       true,
 			},
 			"string_value": Map{
 				"description": "simple string field",
 				"type":        "string",
 				"maxLength":   128,
+				"index":       true,
 			},
 			"added_string_value": Map{
 				"description": "simple string field",
@@ -61,10 +63,12 @@ var testCreateSchema = Map{
 			"bool_value": Map{
 				"description": "simple boolean field",
 				"type":        "boolean",
+				"index":       true,
 			},
 			"double_value": Map{
 				"description": "simple double field",
 				"type":        "number",
+				"index":       true,
 			},
 			"added_value_double": Map{
 				"description": "simple double field",
@@ -79,11 +83,13 @@ var testCreateSchema = Map{
 				"description": "uuid field",
 				"type":        "string",
 				"format":      "uuid",
+				"index":       true,
 			},
 			"date_time_value": Map{
 				"description": "date time field",
 				"type":        "string",
 				"format":      "date-time",
+				"index":       true,
 			},
 			"simple_array_value": Map{
 				"description": "array field",

@@ -318,105 +318,110 @@ func TestInsert_SingleRow(t *testing.T) {
 
 func TestInsert_CreatedUpdatedAt(t *testing.T) {
 	dbName := fmt.Sprintf("db_test_%s", t.Name())
+	for _, index := range []bool{false, true} {
+		deleteProject(t, dbName)
+		createProject(t, dbName)
+		defer deleteProject(t, dbName)
 
-	deleteProject(t, dbName)
-	createProject(t, dbName)
-	defer deleteProject(t, dbName)
-
-	collectionName := fmt.Sprintf("test_collection_%s", t.Name())
-	createCollection(t, dbName, collectionName,
-		Map{
-			"schema": Map{
-				"title": collectionName,
-				"properties": Map{
-					"id": Map{
-						"type": "integer",
-					},
-					"int_value": Map{
-						"type": "integer",
-					},
-					"string_value": Map{
-						"type": "string",
-					},
-					"created_at": Map{
-						"type":   "string",
-						"format": "date-time",
-					},
-					"updated_at": Map{
-						"type":   "string",
-						"format": "date-time",
-					},
-					"metadata": Map{
-						"type": "object",
-						"properties": Map{
-							"created_at": Map{
-								"type":   "string",
-								"format": "date-time",
+		collectionName := fmt.Sprintf("test_collection_%s", t.Name())
+		createCollection(t, dbName, collectionName,
+			Map{
+				"schema": Map{
+					"title": collectionName,
+					"properties": Map{
+						"id": Map{
+							"type": "integer",
+						},
+						"int_value": Map{
+							"type":  "integer",
+							"index": index,
+						},
+						"string_value": Map{
+							"type":  "string",
+							"index": index,
+						},
+						"created_at": Map{
+							"type":   "string",
+							"format": "date-time",
+							"index":  index,
+						},
+						"updated_at": Map{
+							"type":   "string",
+							"format": "date-time",
+							"index":  index,
+						},
+						"metadata": Map{
+							"type": "object",
+							"properties": Map{
+								"created_at": Map{
+									"type":   "string",
+									"format": "date-time",
+								},
 							},
 						},
 					},
 				},
-			},
-		}).Status(http.StatusOK)
+			}).Status(http.StatusOK)
 
-	inputDoc := []Doc{{"id": 1, "int_value": 1, "string_value": "foo", "created_at": "2023-02-05T21:45:35Z", "updated_at": "2023-02-05T23:04:33.01234567Z", "metadata": Doc{"created_at": "2023-02-05T21:45:35.01234Z"}}}
-	insertDocuments(t, dbName, collectionName, inputDoc, true).
-		Status(http.StatusOK).
-		JSON().
-		Object().
-		ValueEqual("status", "inserted")
+		inputDoc := []Doc{{"id": 1, "int_value": 1, "string_value": "foo", "created_at": "2023-02-05T21:45:35Z", "updated_at": "2023-02-05T23:04:33.01234567Z", "metadata": Doc{"created_at": "2023-02-05T21:45:35.01234Z"}}}
+		insertDocuments(t, dbName, collectionName, inputDoc, true).
+			Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status", "inserted")
 
-	cases := []struct {
-		filter Map
-		exp    bool
-	}{
-		{
-			Map{
-				"created_at": "2023-02-05T21:45:35Z",
+		cases := []struct {
+			filter Map
+			exp    bool
+		}{
+			{
+				Map{
+					"created_at": "2023-02-05T21:45:35Z",
+				},
+				true,
 			},
-			true,
-		},
-		{
-			Map{
-				"updated_at": "2023-02-05T23:04:33.01234567Z",
+			{
+				Map{
+					"updated_at": "2023-02-05T23:04:33.01234567Z",
+				},
+				true,
 			},
-			true,
-		},
-		{
-			Map{
-				"metadata.created_at": "2023-02-05T21:45:35.01234Z",
+			{
+				Map{
+					"metadata.created_at": "2023-02-05T21:45:35.01234Z",
+				},
+				true,
 			},
-			true,
-		},
-		{
-			Map{
-				"metadata.created_at": "2023-02-05T21:45:35Z",
+			{
+				Map{
+					"metadata.created_at": "2023-02-05T21:45:35Z",
+				},
+				false,
 			},
-			false,
-		},
-	}
-	for _, c := range cases {
-		readResp := readByFilter(t,
-			dbName,
-			collectionName,
-			c.filter,
-			nil,
-			nil,
-			nil)
-
-		var doc map[string]jsoniter.RawMessage
-		if !c.exp {
-			require.Equal(t, 0, len(readResp))
-			continue
 		}
+		for _, c := range cases {
+			readResp := readByFilter(t,
+				dbName,
+				collectionName,
+				c.filter,
+				nil,
+				nil,
+				nil)
 
-		require.Equal(t, 1, len(readResp))
-		require.NoError(t, jsoniter.Unmarshal(readResp[0]["result"], &doc))
+			var doc map[string]jsoniter.RawMessage
+			if !c.exp {
+				require.Equal(t, 0, len(readResp))
+				continue
+			}
 
-		actualDoc := []byte(doc["data"])
-		expDoc, err := jsoniter.Marshal(inputDoc[0])
-		require.NoError(t, err)
-		require.JSONEq(t, string(expDoc), string(actualDoc))
+			require.Equal(t, 1, len(readResp))
+			require.NoError(t, jsoniter.Unmarshal(readResp[0]["result"], &doc))
+
+			actualDoc := []byte(doc["data"])
+			expDoc, err := jsoniter.Marshal(inputDoc[0])
+			require.NoError(t, err)
+			require.JSONEq(t, string(expDoc), string(actualDoc))
+		}
 	}
 }
 
@@ -865,17 +870,20 @@ func TestInsertUpdate_Defaults(t *testing.T) {
 	"schema": {
 		"properties": {
 			"int_f": {
-				"type": "integer"
+				"type": "integer",
+				"index": true
 			},
 			"created": {
 				"type": "string",
 				"format": "date-time",
-				"createdAt": true
+				"createdAt": true,
+				"index": true
 			},
 			"updated": {
 				"type": "string",
 				"format": "date-time",
-				"updatedAt": true
+				"updatedAt": true,
+				"index": true
 			},
 			"arr_obj": {
 				"type": "array",

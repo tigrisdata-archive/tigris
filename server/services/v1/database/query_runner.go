@@ -422,7 +422,7 @@ func (runner *StreamingQueryRunner) buildReaderOptions(collection *schema.Defaul
 		}
 	}
 
-	if options.filter.None() || !options.filter.IsIndexed() {
+	if options.filter.None() || !options.filter.IsSearchIndexed() {
 		// trigger full scan in case there is a field in the filter which is not indexed
 		if options.sorting != nil {
 			options.inMemoryStore = true

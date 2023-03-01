@@ -161,7 +161,16 @@ func IsPrimitiveType(fieldType FieldType) bool {
 	return false
 }
 
-func IndexableField(fieldType FieldType, subType FieldType) bool {
+func IndexableField(fieldType FieldType) bool {
+	switch fieldType {
+	case BoolType, Int32Type, Int64Type, UUIDType, StringType, DateTimeType, DoubleType:
+		return true
+	default:
+		return false
+	}
+}
+
+func SearchIndexableField(fieldType FieldType, subType FieldType) bool {
 	switch fieldType {
 	case BoolType, Int32Type, Int64Type, UUIDType, StringType, DateTimeType, DoubleType:
 		return true
@@ -377,6 +386,10 @@ func (f *FieldBuilder) Build(isArrayElement bool) (*Field, error) {
 		SearchIndexed:   f.SearchIndex,
 	}
 
+	if err := f.ValidateIndexOnField(field); err != nil {
+		return nil, err
+	}
+
 	if f.CreatedAt != nil || f.UpdatedAt != nil || f.Default != nil {
 		var err error
 		if field.Defaulter, err = newDefaulter(f.CreatedAt, f.UpdatedAt, field.FieldName, field.DataType, f.Default); err != nil {
@@ -385,6 +398,37 @@ func (f *FieldBuilder) Build(isArrayElement bool) (*Field, error) {
 	}
 
 	return field, nil
+}
+
+func (f *FieldBuilder) ValidateIndexOnField(field *Field) error {
+	if err := checkFieldIndex(field, false); err != nil {
+		return err
+	}
+
+	for _, sub := range field.Fields {
+		if err := checkFieldIndex(sub, true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkFieldIndex(field *Field, isSubField bool) error {
+	indexed := false
+	if field.Indexed != nil {
+		indexed = *field.Indexed
+	}
+	if indexed && isSubField && len(field.Name()) > 0 {
+		return errors.InvalidArgument("Cannot index nested field '%s'", field.Name())
+	}
+
+	if indexed && isSubField {
+		return errors.InvalidArgument("Cannot index nested field in array")
+	}
+	if indexed && !field.IsIndexable() {
+		return errors.InvalidArgument("'%s' has been configured to be indexed but it is not a supported indexable type. Only top level non-byte fields can be indexed.", field.Name())
+	}
+	return nil
 }
 
 type Field struct {
@@ -457,11 +501,20 @@ func (f *Field) GetDefaulter() *FieldDefaulter {
 	return f.Defaulter
 }
 
+func (f *Field) IsIndexable() bool {
+	if f.Indexed != nil && *f.Indexed && IndexableField(f.DataType) {
+		return true
+	}
+
+	return false
+}
+
 type QueryableField struct {
 	FieldName     string
+	Indexed       bool // Secondary Index
 	InMemoryAlias string
 	Faceted       bool
-	Indexed       bool
+	SearchIndexed bool
 	Sortable      bool
 	DataType      FieldType
 	SubType       FieldType
@@ -471,10 +524,10 @@ type QueryableField struct {
 
 func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, fieldsInSearch []tsApi.Field) *QueryableField {
 	var (
-		searchType string
-		indexed    *bool
-		faceted    *bool
-		sortable   = f.Sorted
+		searchType    string
+		searchIndexed *bool
+		faceted       *bool
+		sortable      = f.Sorted
 	)
 
 	subType := UnknownType
@@ -491,7 +544,7 @@ func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, 
 					packThis = true
 				}
 
-				indexed = fieldInSearch.Index
+				searchIndexed = fieldInSearch.Index
 				faceted = fieldInSearch.Facet
 				sortable = fieldInSearch.Sort
 			}
@@ -503,15 +556,15 @@ func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, 
 	}
 
 	if builder.ForSearchIndex {
-		indexed = f.SearchIndexed
-		if indexed == nil {
-			shouldIndex := IndexableField(f.DataType, subType)
-			indexed = &shouldIndex
+		searchIndexed = f.SearchIndexed
+		if searchIndexed == nil {
+			shouldIndex := SearchIndexableField(f.DataType, subType)
+			searchIndexed = &shouldIndex
 		}
 
 		ptrTrue := true
-		if f.DataType == ByteType && indexed == nil {
-			indexed = &ptrTrue
+		if f.DataType == ByteType && searchIndexed == nil {
+			searchIndexed = &ptrTrue
 		}
 
 		faceted = f.Faceted
@@ -521,9 +574,9 @@ func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, 
 			sortable = &ptrTrue
 		}
 	} else {
-		if indexed == nil {
-			shouldIndex := IndexableField(f.DataType, subType)
-			indexed = &shouldIndex
+		if searchIndexed == nil {
+			shouldIndex := SearchIndexableField(f.DataType, subType)
+			searchIndexed = &shouldIndex
 		}
 		if faceted == nil {
 			shouldFacet := FacetableField(f.DataType)
@@ -541,9 +594,11 @@ func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, 
 		DataType:   f.DataType,
 		SubType:    subType,
 		packThis:   packThis,
+		Indexed:    f.IsIndexable(),
 	}
-	if indexed != nil && *indexed {
-		q.Indexed = true
+
+	if searchIndexed != nil && *searchIndexed {
+		q.SearchIndexed = true
 	}
 	if sortable != nil && *sortable {
 		q.Sortable = true
@@ -625,6 +680,7 @@ func (builder *QueryableFieldsBuilder) BuildQueryableFields(fields []*Field, fie
 		DataType:      DateTimeType,
 		Sorted:        &ptrTrue,
 		SearchIndexed: &ptrTrue,
+		Indexed:       &ptrTrue,
 	}, fieldsInSearch))
 
 	queryableFields = append(queryableFields, builder.NewQueryableField(ReservedFields[UpdatedAt], &Field{
@@ -632,6 +688,7 @@ func (builder *QueryableFieldsBuilder) BuildQueryableFields(fields []*Field, fie
 		DataType:      DateTimeType,
 		Sorted:        &ptrTrue,
 		SearchIndexed: &ptrTrue,
+		Indexed:       &ptrTrue,
 	}, fieldsInSearch))
 
 	return queryableFields
