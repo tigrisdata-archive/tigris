@@ -181,7 +181,7 @@ func FacetableField(fieldType FieldType) bool {
 	}
 }
 
-func SortableField(fieldType FieldType) bool {
+func DefaultSortableField(fieldType FieldType) bool {
 	switch fieldType {
 	case Int32Type, Int64Type, DoubleType, DateTimeType, BoolType:
 		return true
@@ -530,7 +530,7 @@ func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, 
 			faceted = &shouldFacet
 		}
 		if sortable == nil {
-			shouldSort := SortableField(f.DataType)
+			shouldSort := DefaultSortableField(f.DataType)
 			sortable = &shouldSort
 		}
 	}

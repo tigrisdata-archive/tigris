@@ -818,6 +818,9 @@ func (runner *IndexRunner) Run(ctx context.Context, tx transaction.Tx, tenant *m
 		if err != nil {
 			return Response{}, err
 		}
+		if err := schema.ValidateSearchSchema(factory); err != nil {
+			return Response{}, err
+		}
 
 		project, err := tenant.GetProject(runner.create.GetProject())
 		if err != nil {
