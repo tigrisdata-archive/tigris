@@ -26,7 +26,7 @@ var (
 )
 
 var validators = []Validator{
-	&IndexSchemaValidator{},
+	&PrimaryIndexSchemaValidator{},
 	&FieldSchemaValidator{},
 }
 
@@ -43,9 +43,9 @@ type SearchIndexValidator interface {
 	ValidateIndex(existing *SearchIndex, current *SearchFactory) error
 }
 
-type IndexSchemaValidator struct{}
+type PrimaryIndexSchemaValidator struct{}
 
-func (v *IndexSchemaValidator) Validate(existing *DefaultCollection, current *Factory) error {
+func (v *PrimaryIndexSchemaValidator) Validate(existing *DefaultCollection, current *Factory) error {
 	return existing.Indexes.PrimaryKey.IsCompatible(current.Indexes.PrimaryKey)
 }
 

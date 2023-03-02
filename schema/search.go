@@ -202,7 +202,7 @@ func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.Co
 			Name:     s.Name(),
 			Type:     s.SearchType,
 			Facet:    &s.Faceted,
-			Index:    &s.Indexed,
+			Index:    &s.SearchIndexed,
 			Sort:     &s.Sortable,
 			Optional: &ptrTrue,
 		})
@@ -212,7 +212,7 @@ func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.Co
 				Name:     s.InMemoryName(),
 				Type:     s.SearchType,
 				Facet:    &s.Faceted,
-				Index:    &s.Indexed,
+				Index:    &s.SearchIndexed,
 				Sort:     &s.Sortable,
 				Optional: &ptrTrue,
 			})
@@ -264,7 +264,7 @@ func GetSearchDeltaFields(forSearchIndex bool, existingFields []*QueryableField,
 			Name:     f.FieldName,
 			Type:     f.SearchType,
 			Facet:    &f.Faceted,
-			Index:    &f.Indexed,
+			Index:    &f.SearchIndexed,
 			Optional: &ptrTrue,
 		}
 

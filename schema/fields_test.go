@@ -134,6 +134,44 @@ func TestFieldBuilder_Build(t *testing.T) {
 	})
 }
 
+func TestIndexableFieldsAreChecked(t *testing.T) {
+	cases := []struct {
+		schema []byte
+		expErr error
+	}{
+		{
+			// cannot set a byte field as indexable
+			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string", "index": true}, "b": {"type": "string", "format":"byte", "index": true}}}`),
+			errors.InvalidArgument("'b' has been configured to be indexed but it is not a supported indexable type. Only top level non-byte fields can be indexed."),
+		},
+		{
+			// cannot index an array
+			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string", "index": true}, "arr": {"type": "array", "items":{"type": "string"}, "index": true}}}`),
+			errors.InvalidArgument("'arr' has been configured to be indexed but it is not a supported indexable type. Only top level non-byte fields can be indexed."),
+		},
+		{
+			// cannot index an object
+			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string", "index": true}, "obj": {"type": "object", "index": true, "properties":{"name": {"type": "string"}}}}}`),
+			errors.InvalidArgument("'obj' has been configured to be indexed but it is not a supported indexable type. Only top level non-byte fields can be indexed."),
+		},
+		{
+			// cannot index a subfield on an object
+			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string", "index": true}, "obj": {"type": "object", "properties":{"name": {"type": "string", "index": true}}}}}`),
+			errors.InvalidArgument("Cannot index nested field 'name'"),
+		},
+		{
+			// cannot index a subfield on an array
+			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string", "index": true},"arr": {"type": "array", "items":{"type": "string", "index": true}}}}`),
+			errors.InvalidArgument("Cannot index nested field in array"),
+		},
+	}
+
+	for _, c := range cases {
+		_, err := Build("t1", c.schema)
+		require.Equal(t, c.expErr, err)
+	}
+}
+
 func TestQueryableField_ShouldPack(t *testing.T) {
 	// reserved fields should never be packed
 	for _, f := range ReservedFields {

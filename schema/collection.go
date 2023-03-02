@@ -213,6 +213,16 @@ func (d *DefaultCollection) GetQueryableFields() []*QueryableField {
 	return d.QueryableFields
 }
 
+func (d *DefaultCollection) GetIndexedFields() []*QueryableField {
+	var indexed []*QueryableField
+	for _, q := range d.QueryableFields {
+		if q.Indexed {
+			indexed = append(indexed, q)
+		}
+	}
+	return indexed
+}
+
 func (d *DefaultCollection) GetQueryableField(name string) (*QueryableField, error) {
 	for _, qf := range d.QueryableFields {
 		if qf.Name() == name {

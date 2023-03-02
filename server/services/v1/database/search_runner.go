@@ -202,7 +202,7 @@ func (runner *SearchQueryRunner) getSearchFields(coll *schema.DefaultCollection)
 			if err != nil {
 				return nil, err
 			}
-			if !cf.Indexed {
+			if !cf.SearchIndexed {
 				return nil, errors.InvalidArgument("`%s` is not a searchable field. Only indexed fields can be queried", sf)
 			}
 			if cf.InMemoryName() != cf.Name() {

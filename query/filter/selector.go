@@ -144,7 +144,7 @@ func (s *Selector) ToSearchFilter() []string {
 	return []string{fmt.Sprintf(op, s.Field.InMemoryName(), v.AsInterface())}
 }
 
-func (s *Selector) IsIndexed() bool {
+func (s *Selector) IsSearchIndexed() bool {
 	switch {
 	case s.Field.DataType == schema.DoubleType:
 		v, ok := s.Matcher.GetValue().(*value.DoubleValue)

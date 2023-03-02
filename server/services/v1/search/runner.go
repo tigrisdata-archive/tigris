@@ -664,10 +664,10 @@ func (runner *SearchRunner) getSearchFields(index *schema.SearchIndex) ([]string
 			if err != nil {
 				return nil, err
 			}
-			if !cf.Indexed {
+			if !cf.SearchIndexed {
 				return nil, errors.InvalidArgument("`%s` is not a searchable field. Only indexed fields can be queried", sf)
 			}
-			if cf.Indexed && (cf.DataType == schema.Int32Type || cf.DataType == schema.Int64Type || cf.DataType == schema.DoubleType) {
+			if cf.SearchIndexed && (cf.DataType == schema.Int32Type || cf.DataType == schema.Int64Type || cf.DataType == schema.DoubleType) {
 				return nil, errors.InvalidArgument("`%s` is not a searchable field. Only indexed fields can be queried", sf)
 			}
 			if cf.InMemoryName() != cf.Name() {

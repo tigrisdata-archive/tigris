@@ -30,3 +30,8 @@ log:
 
 foundationdb:
   cluster_file: "./test/config/fdb.cluster"
+
+secondary_index:
+  read_enabled: true
+  write_enabled: true
+  mutate_enabled: true
