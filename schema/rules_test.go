@@ -160,7 +160,7 @@ func TestApplySchemaRulesIncompatible(t *testing.T) {
 	}
 }
 
-func TestApplyIndexSchemaRules(t *testing.T) {
+func TestApplySearchIndexSchemaRules(t *testing.T) {
 	cases := []struct {
 		existing []byte
 		incoming []byte

@@ -52,9 +52,9 @@ type Filter interface {
 	// MatchesDoc similar to Matches but used when document is already parsed
 	MatchesDoc(doc map[string]interface{}) bool
 	ToSearchFilter() []string
-	// IsIndexed to let caller knows if there is any non-indexed field in the query. This
+	// IsSearchIndexed to let caller knows if there is any fields in the query not indexed in search. This
 	// will trigger full scan.
-	IsIndexed() bool
+	IsSearchIndexed() bool
 }
 
 type EmptyFilter struct{}
@@ -62,7 +62,7 @@ type EmptyFilter struct{}
 func (f *EmptyFilter) Matches(_ []byte) bool                    { return true }
 func (f *EmptyFilter) MatchesDoc(_ map[string]interface{}) bool { return true }
 func (f *EmptyFilter) ToSearchFilter() []string                 { return nil }
-func (f *EmptyFilter) IsIndexed() bool                          { return false }
+func (f *EmptyFilter) IsSearchIndexed() bool                    { return false }
 
 type WrappedFilter struct {
 	Filter
@@ -101,8 +101,8 @@ func (w *WrappedFilter) SearchFilter() []string {
 	return w.searchFilter
 }
 
-func (w *WrappedFilter) IsIndexed() bool {
-	return w.Filter.IsIndexed()
+func (w *WrappedFilter) IsSearchIndexed() bool {
+	return w.Filter.IsSearchIndexed()
 }
 
 func None(reqFilter []byte) bool {
@@ -112,12 +112,25 @@ func None(reqFilter []byte) bool {
 type Factory struct {
 	fields    []*schema.QueryableField
 	collation *value.Collation
+	// For secondary Indexes do the following:
+	// 1. Reject Case insensitive queries
+	// 2. Always use Factory Top level collation because it will be a sort key collation
+	buildForSecondaryIndex bool
 }
 
 func NewFactory(fields []*schema.QueryableField, collation *value.Collation) *Factory {
 	return &Factory{
-		fields:    fields,
-		collation: collation,
+		fields:                 fields,
+		collation:              collation,
+		buildForSecondaryIndex: false,
+	}
+}
+
+func NewFactoryForSecondaryIndex(fields []*schema.QueryableField) *Factory {
+	return &Factory{
+		fields:                 fields,
+		collation:              value.NewSortKeyCollation(),
+		buildForSecondaryIndex: true,
 	}
 }
 
@@ -268,7 +281,7 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 
 		return NewSelector(field, NewEqualityMatcher(val), factory.collation), nil
 	case jsonparser.Object:
-		valueMatcher, collation, err := buildValueMatcher(v, field)
+		valueMatcher, collation, err := buildValueMatcher(v, field, factory.collation, factory.buildForSecondaryIndex)
 		if err != nil {
 			return nil, err
 		}
@@ -286,7 +299,7 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 // instead of a simple JSON value. Apart from comparison operators, this object can have its own collation, which
 // needs to be honored at the field level. Therefore, the caller needs to check if the collation returned by the
 // method is not nil and if yes, use this collation..
-func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField) (ValueMatcher, *value.Collation, error) {
+func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField, factoryCollation *value.Collation, buildForSecondaryIndex bool) (ValueMatcher, *value.Collation, error) {
 	if len(input) == 0 {
 		return nil, nil, errors.InvalidArgument("empty object")
 	}
@@ -303,6 +316,12 @@ func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField) 
 			return nil, nil, err
 		}
 		collation = value.NewCollationFrom(apiCollation)
+
+		if buildForSecondaryIndex && collation.IsCaseInsensitive() {
+			return nil, nil, errors.InvalidArgument("found case insensitive collation")
+		}
+	} else {
+		collation = factoryCollation
 	}
 
 	var err error
@@ -323,7 +342,10 @@ func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField) 
 				}
 
 				var val value.Value
-				if collation != nil {
+				//nolint:gocritic
+				if buildForSecondaryIndex {
+					val, err = value.NewValueUsingCollation(tigrisType, v, factoryCollation)
+				} else if collation != nil {
 					val, err = value.NewValueUsingCollation(tigrisType, v, collation)
 				} else {
 					val, err = value.NewValue(tigrisType, v)

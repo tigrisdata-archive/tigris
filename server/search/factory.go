@@ -30,6 +30,35 @@ func NewResponseFactory(inputQuery *search.Query) *ResponseFactory {
 	}
 }
 
+func (r *ResponseFactory) GetResponse(response []tsApi.SearchResult) Response {
+	resp := Response{}
+	if r.inputQuery.IsGroupByQuery() {
+		resp.groups = r.GetGroupedHitsIterator(response)
+	} else {
+		resp.hits = r.GetHitsIterator(response)
+	}
+
+	return resp
+}
+
+func (r *ResponseFactory) GetGroupedHitsIterator(response []tsApi.SearchResult) *Groups {
+	groups := NewGroups()
+	for _, r := range response {
+		if r.GroupedHits != nil {
+			for _, g := range *r.GroupedHits {
+				hits := NewHits()
+				for i := range g.Hits {
+					hits.add(NewSearchHit(&g.Hits[i]))
+				}
+
+				groups.add(NewGroup(g.GroupKey, hits.hits))
+			}
+		}
+	}
+
+	return groups
+}
+
 // GetHitsIterator returns an IHits interface which contains hits results in an order that we need to stream out to the user.
 func (r *ResponseFactory) GetHitsIterator(response []tsApi.SearchResult) IHits {
 	var hits IHitsMutable
@@ -63,4 +92,44 @@ type IHits interface {
 	Next() (*Hit, error)
 	Len() int
 	HasMoreHits() bool
+}
+
+type Response struct {
+	hits   IHits
+	groups *Groups
+}
+
+func (r *Response) HasMore() bool {
+	if r.groups != nil {
+		return r.groups.HasMoreGroups()
+	} else {
+		return r.hits.HasMoreHits()
+	}
+}
+
+func (r *Response) Next() (*ResultRow, error) {
+	if r.groups != nil {
+		group, err := r.groups.Next()
+		if err != nil {
+			return nil, err
+		}
+
+		return &ResultRow{
+			Group: group,
+		}, nil
+	} else {
+		hit, err := r.hits.Next()
+		if err != nil {
+			return nil, err
+		}
+
+		return &ResultRow{
+			Hit: hit,
+		}, nil
+	}
+}
+
+type ResultRow struct {
+	Hit   *Hit
+	Group *Group
 }

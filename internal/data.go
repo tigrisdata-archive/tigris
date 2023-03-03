@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"time"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/tigrisdata/tigris/errors"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/ugorji/go/codec"
@@ -127,6 +128,23 @@ func (x *TableData) UpdatedToProtoTS() *timestamppb.Timestamp {
 		return x.UpdatedAt.GetProtoTS()
 	}
 	return nil
+}
+
+func (x *TableData) TimestampsToJSON() ([]byte, error) {
+	data := map[string]jsoniter.RawMessage{
+		"_tigris_created_at": nil,
+		"_tigris_updated_at": nil,
+	}
+
+	if x.CreatedAt != nil {
+		data["_tigris_created_at"] = jsoniter.RawMessage(x.CreatedAt.ToRFC3339())
+	}
+
+	if x.UpdatedAt != nil {
+		data["_tigris_updated_at"] = jsoniter.RawMessage(x.CreatedAt.ToRFC3339())
+	}
+
+	return jsoniter.Marshal(data)
 }
 
 // Encode is used to encode data to the raw bytes which is used to store in storage as value. The first byte is storing

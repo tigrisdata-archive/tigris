@@ -699,7 +699,10 @@ func setupTest(t *testing.T, reqSchema []byte) *SecondaryIndexer {
 	assert.NoError(t, err)
 	coll.EncodedName = []byte("t1")
 	coll.EncodedTableIndexName = []byte("sidx1")
-	return NewSecondaryIndexer(coll)
+	indexer := NewSecondaryIndexer(coll)
+	indexer.indexAll = true
+
+	return indexer
 }
 
 func assertKVs(t *testing.T, expected [][]interface{}, indexKeys []keys.Key, counts map[string]int64) {

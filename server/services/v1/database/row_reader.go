@@ -43,8 +43,8 @@ type ScanIterator struct {
 	err error
 }
 
-func NewScanIterator(ctx context.Context, tx transaction.Tx, from keys.Key) (*ScanIterator, error) {
-	it, err := tx.ReadRange(ctx, from, nil, false)
+func NewScanIterator(ctx context.Context, tx transaction.Tx, from keys.Key, to keys.Key) (*ScanIterator, error) {
+	it, err := tx.ReadRange(ctx, from, to, false)
 	if ulog.E(err) {
 		return nil, err
 	}
@@ -158,6 +158,14 @@ func (it *FilterIterator) Next(row *Row) bool {
 }
 
 func (it *FilterIterator) advanceToMatchingRow(row *Row) bool {
+	// Convert the created_at and updated_at to a json blob
+	// this allows them to be processed by our filter and check if the query
+	// matches those fields
+	ts, err := row.Data.TimestampsToJSON()
+	if err == nil && it.filter.Matches(ts) {
+		return true
+	}
+
 	return it.filter.Matches(row.Data.RawData)
 }
 
@@ -179,8 +187,8 @@ func (reader *DatabaseReader) ScanTable(table []byte) (Iterator, error) {
 }
 
 // ScanIterator only returns an iterator that has elements starting from.
-func (reader *DatabaseReader) ScanIterator(from keys.Key) (Iterator, error) {
-	return NewScanIterator(reader.ctx, reader.tx, from)
+func (reader *DatabaseReader) ScanIterator(from keys.Key, to keys.Key) (Iterator, error) {
+	return NewScanIterator(reader.ctx, reader.tx, from, to)
 }
 
 // StrictlyKeysFrom is an optimized version that takes input keys and filter out keys that are lower than the "from".

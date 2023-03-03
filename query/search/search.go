@@ -34,6 +34,7 @@ type Query struct {
 	WrappedF     *filter.WrappedFilter
 	ReadFields   *read.FieldFactory
 	SortOrder    *sort.Ordering
+	GroupBy      GroupBy
 }
 
 func (q *Query) ToSearchFacetSize() int {
@@ -102,6 +103,26 @@ func (q *Query) ToSortFields() string {
 	return sortBy
 }
 
+func (q *Query) ToSearchGroupBy() string {
+	if len(q.GroupBy.Fields) == 0 {
+		return ""
+	}
+
+	var groupBy string
+	for i, f := range q.GroupBy.Fields {
+		if i != 0 {
+			groupBy += ","
+		}
+		groupBy += f
+	}
+
+	return groupBy
+}
+
+func (q *Query) IsGroupByQuery() bool {
+	return len(q.GroupBy.Fields) > 0
+}
+
 type Builder struct {
 	query *Query
 }
@@ -146,6 +167,11 @@ func (b *Builder) ReadFields(f *read.FieldFactory) *Builder {
 
 func (b *Builder) SortOrder(o *sort.Ordering) *Builder {
 	b.query.SortOrder = o
+	return b
+}
+
+func (b *Builder) GroupBy(groupBy GroupBy) *Builder {
+	b.query.GroupBy = groupBy
 	return b
 }
 

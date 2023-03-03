@@ -226,8 +226,9 @@ var DefaultConfig = Config{
 		WriteEnabled: true,
 	},
 	SecondaryIndex: SecondaryIndexConfig{
-		ReadEnabled:  false,
-		WriteEnabled: false,
+		ReadEnabled:   false,
+		WriteEnabled:  false,
+		MutateEnabled: false,
 	},
 	Cache: CacheConfig{
 		Host:    "0.0.0.0",
@@ -397,8 +398,9 @@ type SearchConfig struct {
 }
 
 type SecondaryIndexConfig struct {
-	ReadEnabled  bool `mapstructure:"read_enabled" yaml:"read_enabled" json:"read_enabled"`
-	WriteEnabled bool `mapstructure:"write_enabled" yaml:"write_enabled" json:"write_enabled"`
+	ReadEnabled   bool `mapstructure:"read_enabled" yaml:"read_enabled" json:"read_enabled"`
+	WriteEnabled  bool `mapstructure:"write_enabled" yaml:"write_enabled" json:"write_enabled"`
+	MutateEnabled bool `mapstructure:"mutate_enabled" yaml:"mutate_iterator" json:"mutate_enabled"`
 }
 
 type CacheConfig struct {

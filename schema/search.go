@@ -60,6 +60,28 @@ type SearchFactory struct {
 	Source SearchSource
 }
 
+func ValidateSearchSchema(factory *SearchFactory) error {
+	if factory.Source.Type != SearchSourceExternal {
+		return errors.InvalidArgument("unsupported index source '%s'", factory.Source.Type)
+	}
+
+	for _, f := range factory.Fields {
+		if f.Faceted != nil && *f.Faceted && !FacetableField(f.DataType) {
+			return errors.InvalidArgument("facet is not allowed for field type '%s'", FieldNames[f.DataType])
+		}
+
+		if f.Sorted != nil && *f.Sorted {
+			switch f.DataType {
+			case Int32Type, Int64Type, DoubleType, DateTimeType, BoolType, StringType:
+			default:
+				return errors.InvalidArgument("sort is not allowed for field type '%s'", FieldNames[f.DataType])
+			}
+		}
+	}
+
+	return nil
+}
+
 func BuildSearch(index string, reqSchema jsoniter.RawMessage) (*SearchFactory, error) {
 	searchSchema := make([]byte, len(reqSchema))
 	copy(searchSchema, reqSchema)
@@ -91,12 +113,6 @@ func BuildSearch(index string, reqSchema jsoniter.RawMessage) (*SearchFactory, e
 		}
 	} else {
 		source = *schema.Source
-	}
-	if schema.Source.Type != SearchSourceExternal && schema.Source.Type != SearchSourceTigris && schema.Source.Type != "user" {
-		return nil, errors.InvalidArgument("unsupported index source '%s'", schema.Source.Type)
-	}
-	if schema.Source.Type == SearchSourceTigris && len(schema.Source.CollectionName) == 0 {
-		return nil, errors.InvalidArgument("collection name is required for tigris backed search indexes")
 	}
 	if schema.Source.Type == SearchSourceTigris && len(schema.Source.DatabaseBranch) == 0 {
 		// we set main branch by default if branch is not explicitly provided
@@ -186,7 +202,7 @@ func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.Co
 			Name:     s.Name(),
 			Type:     s.SearchType,
 			Facet:    &s.Faceted,
-			Index:    &s.Indexed,
+			Index:    &s.SearchIndexed,
 			Sort:     &s.Sortable,
 			Optional: &ptrTrue,
 		})
@@ -196,7 +212,7 @@ func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.Co
 				Name:     s.InMemoryName(),
 				Type:     s.SearchType,
 				Facet:    &s.Faceted,
-				Index:    &s.Indexed,
+				Index:    &s.SearchIndexed,
 				Sort:     &s.Sortable,
 				Optional: &ptrTrue,
 			})
@@ -248,7 +264,7 @@ func GetSearchDeltaFields(forSearchIndex bool, existingFields []*QueryableField,
 			Name:     f.FieldName,
 			Type:     f.SearchType,
 			Facet:    &f.Faceted,
-			Index:    &f.Indexed,
+			Index:    &f.SearchIndexed,
 			Optional: &ptrTrue,
 		}
 

@@ -43,7 +43,8 @@ var testSearchIndexSchema = Map{
 			"string_value": Map{
 				"description": "simple string field",
 				"type":        "string",
-				"maxLength":   128,
+				"sort":        true,
+				"facet":       true,
 			},
 			"bool_value": Map{
 				"description": "simple boolean field",
@@ -63,10 +64,11 @@ var testSearchIndexSchema = Map{
 				"type":        "string",
 				"format":      "uuid",
 			},
-			"date_time_value": Map{
+			"created_at": Map{
 				"description": "date time field",
 				"type":        "string",
 				"format":      "date-time",
+				"sort":        true,
 			},
 			"array_simple_value": Map{
 				"description": "array field",
@@ -80,10 +82,14 @@ var testSearchIndexSchema = Map{
 				"type":        "object",
 				"properties": Map{
 					"string_value": Map{
-						"type": "string",
+						"type":  "string",
+						"sort":  true,
+						"facet": true,
 					},
 					"integer_value": Map{
-						"type": "integer",
+						"type":  "integer",
+						"sort":  true,
+						"facet": true,
 					},
 				},
 			},
@@ -577,6 +583,111 @@ func TestDelete(t *testing.T) {
 		require.NoError(t, err)
 		require.JSONEq(t, string(encInp), string(encResp))
 	}
+}
+
+func TestSearch(t *testing.T) {
+	project, index := setupTestsProjectAndSearchIndex(t)
+	defer cleanupTests(t, project)
+
+	docs := []Doc{
+		{
+			"id":                 "1",
+			"int_value":          1,
+			"string_value":       "data platform",
+			"double_value":       10.01,
+			"array_simple_value": []string{"abc", "def"},
+			"object_value": Doc{
+				"string_value":  "san francisco",
+				"integer_value": 1,
+			},
+			"created_at": "2023-02-02T05:50:19+00:00",
+		}, {
+			"id":                 "2",
+			"int_value":          2,
+			"string_value":       "big data",
+			"double_value":       20.01,
+			"array_simple_value": []string{"foo", "bar"},
+			"object_value": Doc{
+				"string_value":  "san diego",
+				"integer_value": 2,
+			},
+			"created_at": "2023-02-01T05:50:19+00:00",
+		}, {
+			"id":                 "3",
+			"int_value":          3,
+			"string_value":       "basedata",
+			"double_value":       30.01,
+			"array_simple_value": []string{"foo", "bar"},
+			"object_value": Doc{
+				"string_value":  "san francisco",
+				"integer_value": 3,
+			},
+			"created_at": "2023-01-02T05:50:19+00:00",
+		},
+	}
+
+	expect(t).PUT(getIndexDocumentURL(project, index, "")).
+		WithJSON(Map{
+			"documents": docs,
+		}).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("status",
+			[]map[string]any{
+				{"id": "1", "error": nil},
+				{"id": "2", "error": nil},
+				{"id": "3", "error": nil},
+			},
+		)
+
+	res := getSearchResults(t, project, index, Map{"q": "data", "sort": []Doc{{"created_at": "$asc"}}})
+	require.Equal(t, 2, len(res.Result.Hits))
+	compareDocs(t, docs[1], res.Result.Hits[0]["data"])
+	compareDocs(t, docs[0], res.Result.Hits[1]["data"])
+
+	res = getSearchResults(t, project, index, Map{"q": "*", "group_by": Doc{"fields": []string{"object_value.string_value"}}, "sort": []Doc{{"created_at": "$asc"}}})
+	require.Equal(t, 2, len(res.Result.Groups))
+	require.Equal(t, []interface{}{"san francisco"}, res.Result.Groups[0]["group_keys"])
+	require.Equal(t, []interface{}{"san diego"}, res.Result.Groups[1]["group_keys"])
+
+	compareDocs(t, docs[2], res.Result.Groups[0]["hits"].([]any)[0].(map[string]any)["data"].(map[string]any))
+	compareDocs(t, docs[0], res.Result.Groups[0]["hits"].([]any)[1].(map[string]any)["data"].(map[string]any))
+
+	compareDocs(t, docs[1], res.Result.Groups[1]["hits"].([]any)[0].(map[string]any)["data"].(map[string]any))
+}
+
+func compareDocs(t *testing.T, docA Doc, docB Doc) {
+	jsonA, err := jsoniter.Marshal(docA)
+	require.NoError(t, err)
+	jsonB, err := jsoniter.Marshal(docB)
+	require.NoError(t, err)
+
+	require.JSONEq(t, string(jsonA), string(jsonB))
+}
+
+type res struct {
+	Result struct {
+		Hits   []map[string]Doc `json:"hits"`
+		Groups []Doc            `json:"group"`
+		Meta   Doc              `json:"meta"`
+	} `json:"result"`
+}
+
+func getSearchResults(t *testing.T, project string, index string, query Map) *res {
+	req := expect(t).POST(fmt.Sprintf("/v1/projects/%s/search/indexes/%s/documents/search", project, index)).
+		WithJSON(query).
+		Expect().
+		Status(http.StatusOK).
+		Body().
+		Raw()
+
+	dec := jsoniter.NewDecoder(bytes.NewReader([]byte(req)))
+
+	var res *res
+	require.NoError(t, dec.Decode(&res))
+	return res
 }
 
 func getDocuments(t *testing.T, project string, index string, ids ...string) []Doc {

@@ -33,6 +33,13 @@ const (
 	defaultPageNo  = 1
 )
 
+// ResultRow is either a single Row(hit) or a batch of Row(hits) in case of group_by.
+type ResultRow struct {
+	Group []string
+	Rows  []*Row
+}
+
+// Row represents a single hit. This is used by the runner to finally push the row out.
 type Row struct {
 	CreatedAt *internal.Timestamp
 	UpdatedAt *internal.Timestamp
@@ -43,38 +50,38 @@ type Row struct {
 type page struct {
 	idx  int
 	cap  int
-	hits []*tsearch.Hit
+	rows []*tsearch.ResultRow
 }
 
 func newPage(c int) *page {
 	return &page{
 		idx:  0,
 		cap:  c,
-		hits: []*tsearch.Hit{},
+		rows: []*tsearch.ResultRow{},
 	}
 }
 
-func (p *page) append(h *tsearch.Hit) bool {
+func (p *page) append(row *tsearch.ResultRow) bool {
 	if !p.hasCapacity() {
 		return false
 	}
 
-	p.hits = append(p.hits, h)
+	p.rows = append(p.rows, row)
 	return p.hasCapacity()
 }
 
 func (p *page) hasCapacity() bool {
-	return len(p.hits) < p.cap
+	return len(p.rows) < p.cap
 }
 
 // readHit should be used to read search data because this is the single point where we unpack search fields, apply
 // filter and then pack the document into bytes.
-func (p *page) readHit() *tsearch.Hit {
-	for p.idx < len(p.hits) {
-		hit := p.hits[p.idx]
+func (p *page) readResultRow() *tsearch.ResultRow {
+	for p.idx < len(p.rows) {
+		row := p.rows[p.idx]
 		p.idx++
-		if hit.Document != nil {
-			return hit
+		if row.Group != nil || row.Hit != nil {
+			return row
 		}
 	}
 
@@ -110,7 +117,6 @@ func (p *pageReader) read() error {
 		return err
 	}
 
-	hits := tsearch.NewResponseFactory(p.query).GetHitsIterator(result)
 	sortedFacets := tsearch.NewSortedFacets()
 	for _, r := range result {
 		if r.FacetCounts != nil {
@@ -125,20 +131,22 @@ func (p *pageReader) read() error {
 	p.pageNo++
 	pg := newPage(p.query.PageSize)
 
-	for hits.HasMoreHits() {
-		hit, err := hits.Next()
+	response := tsearch.NewResponseFactory(p.query).GetResponse(result)
+	for response.HasMore() {
+		row, err := response.Next()
 		// log and skip to next hit
 		if ulog.E(err) {
 			continue
 		}
-		if !pg.append(hit) {
+
+		if !pg.append(row) {
 			p.pages = append(p.pages, pg)
 			pg = newPage(p.query.PageSize)
 		}
 	}
 
 	// include the last page in results if it has hits
-	if len(pg.hits) > 0 {
+	if len(pg.rows) > 0 {
 		p.pages = append(p.pages, pg)
 	}
 
@@ -216,7 +224,7 @@ func NewFilterableSearchIterator(index *schema.SearchIndex, reader *pageReader, 
 	}
 }
 
-func (it *FilterableSearchIterator) Next(row *Row) bool {
+func (it *FilterableSearchIterator) Next(row *ResultRow) bool {
 	if it.err != nil {
 		return false
 	}
@@ -228,30 +236,49 @@ func (it *FilterableSearchIterator) Next(row *Row) bool {
 			}
 		}
 
-		if hit := it.page.readHit(); hit != nil {
-			var (
-				createdAt *internal.Timestamp
-				updatedAt *internal.Timestamp
-				rawData   []byte
-			)
-			if hit.Document, createdAt, updatedAt, it.err = UnpackSearchFields(it.index, hit.Document); it.err != nil {
-				return false
+		var group []string
+		if resultRow := it.page.readResultRow(); resultRow != nil {
+			var hits []*tsearch.Hit
+			if resultRow.Group != nil {
+				hits = resultRow.Group.Hits
+				group = resultRow.Group.Keys
+			} else {
+				hits = []*tsearch.Hit{resultRow.Hit}
 			}
 
-			// now apply the filter
-			if !it.filter.MatchesDoc(hit.Document) {
-				continue
+			var rows []*Row
+			for i := range hits {
+				// a batch of hits in case of group by
+				var (
+					createdAt *internal.Timestamp
+					updatedAt *internal.Timestamp
+					rawData   []byte
+				)
+
+				if hits[i].Document, createdAt, updatedAt, it.err = UnpackSearchFields(it.index, hits[i].Document); it.err != nil {
+					return false
+				}
+
+				// now apply the filter
+				if !it.filter.MatchesDoc(hits[i].Document) {
+					continue
+				}
+
+				// marshal the doc as bytes
+				if rawData, it.err = util.MapToJSON(hits[i].Document); it.err != nil {
+					return false
+				}
+
+				rows = append(rows, &Row{
+					CreatedAt: createdAt,
+					UpdatedAt: updatedAt,
+					Document:  rawData,
+					Match:     hits[i].Match,
+				})
 			}
 
-			// marshal the doc as bytes
-			if rawData, it.err = util.MapToJSON(hit.Document); it.err != nil {
-				return false
-			}
-
-			row.CreatedAt = createdAt
-			row.UpdatedAt = updatedAt
-			row.Document = rawData
-			row.Match = hit.Match
+			row.Group = group
+			row.Rows = rows
 			return true
 		}
 

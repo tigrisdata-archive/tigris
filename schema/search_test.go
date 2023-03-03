@@ -118,3 +118,46 @@ func TestSearchIndex_CollectionSchema(t *testing.T) {
 		require.Equal(t, expFlattenedFields[i], f.Name)
 	}
 }
+
+func TestSearchIndex_Schema(t *testing.T) {
+	cases := []struct {
+		schema      []byte
+		expErrorMsg string
+	}{
+		{
+			[]byte(`{"title": "t1", "properties": { "simple_items": {"type": "array", "items": {"type": "integer"}, "sort": true}}}`),
+			"sort is not allowed",
+		},
+		{
+			[]byte(`{"title": "t1", "properties": { "simple_items": {"type": "array", "items": {"type": "integer"}, "facet": true}}}`),
+			"facet is not allowed",
+		},
+		{
+			[]byte(`{"title": "t1", "properties": { "simple_items": {"type": "object", "facet": true}}}`),
+			"facet is not allowed",
+		},
+		{
+			[]byte(`{"title": "t1", "properties": { "a": {"type": "string", "format": "byte", "facet": true}}}`),
+			"facet is not allowed",
+		},
+		{
+			[]byte(`{"title": "t1", "properties": { "a": {"type": "string", "format": "byte", "sort": true}}}`),
+			"sort is not allowed",
+		},
+		{
+			[]byte(`{"title": "t1", "properties": { "a": {"type": "integer", "sort": true, "facet": true}, "b": {"type": "string", "sort": true, "facet": true}, "c": {"type": "number", "sort": true, "facet": true}}}`),
+			"",
+		},
+	}
+	for _, c := range cases {
+		schFactory, err := BuildSearch("t1", c.schema)
+		require.NoError(t, err)
+		err = ValidateSearchSchema(schFactory)
+		if len(c.expErrorMsg) > 0 {
+			require.Contains(t, err.Error(), c.expErrorMsg)
+		} else {
+			require.NoError(t, err)
+		}
+
+	}
+}

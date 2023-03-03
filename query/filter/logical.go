@@ -152,9 +152,9 @@ func (a *AndFilter) flattenAnd(soFar string, filters []Filter) []string {
 	return combs
 }
 
-func (a *AndFilter) IsIndexed() bool {
+func (a *AndFilter) IsSearchIndexed() bool {
 	for _, f := range a.filter {
-		if !f.IsIndexed() {
+		if !f.IsSearchIndexed() {
 			return false
 		}
 	}
@@ -227,9 +227,9 @@ func (o *OrFilter) ToSearchFilter() []string {
 	return ORs
 }
 
-func (o *OrFilter) IsIndexed() bool {
+func (o *OrFilter) IsSearchIndexed() bool {
 	for _, f := range o.filter {
-		if !f.IsIndexed() {
+		if !f.IsSearchIndexed() {
 			return false
 		}
 	}

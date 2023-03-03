@@ -91,12 +91,16 @@ type IndexerUpdateSet struct {
 type SecondaryIndexer struct {
 	collation *value.Collation
 	coll      *schema.DefaultCollection
+	// Used for unit tests because it can index deeper into a schema than we currently expose to the user
+	// This can be removed once indexing into arrays and objects is exposed to the user
+	indexAll bool
 }
 
 func NewSecondaryIndexer(coll *schema.DefaultCollection) *SecondaryIndexer {
 	return &SecondaryIndexer{
 		collation: value.NewCollationFrom(&api.Collation{Case: "csk"}),
 		coll:      coll,
+		indexAll:  false,
 	}
 }
 
@@ -238,7 +242,7 @@ func (q *SecondaryIndexer) buildTableRows(tableData *internal.TableData) ([]Inde
 	if err != nil {
 		return nil, err
 	}
-	for _, field := range q.coll.QueryableFields {
+	for _, field := range q.getIndexedFields() {
 		if schema.IsReservedField(field.Name()) {
 			continue
 		}
@@ -447,6 +451,14 @@ func (q *SecondaryIndexer) indexArray(doc []byte, field *schema.QueryableField, 
 		return nil, err
 	}
 	return rows, nil
+}
+
+func (q *SecondaryIndexer) getIndexedFields() []*schema.QueryableField {
+	if q.indexAll {
+		return q.coll.QueryableFields
+	}
+
+	return q.coll.GetIndexedFields()
 }
 
 // This is used to append the Primary key to the end of the key.

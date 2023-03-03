@@ -57,10 +57,12 @@ func (x *SearchIndexResponse) MarshalJSON() ([]byte, error) {
 		Hits   []*SearchHit            `json:"hits"`
 		Facets map[string]*SearchFacet `json:"facets"`
 		Meta   *SearchMetadata         `json:"meta"`
+		Group  []*GroupedSearchHits    `json:"group"`
 	}{
 		Hits:   x.Hits,
 		Facets: x.Facets,
 		Meta:   x.Meta,
+		Group:  x.Group,
 	}
 
 	if resp.Hits == nil {
@@ -315,6 +317,16 @@ func (x *SearchIndexRequest) UnmarshalJSON(data []byte) error {
 			v = &x.SearchFields
 		case "q":
 			v = &x.Q
+		case "include_fields":
+			v = &x.IncludeFields
+		case "exclude_fields":
+			v = &x.ExcludeFields
+		case "page_size":
+			v = &x.PageSize
+		case "page":
+			v = &x.Page
+		case "collation":
+			v = &x.Collation
 		case "filter":
 			// not decoding it here and let it decode during filter parsing
 			x.Filter = value
@@ -327,16 +339,10 @@ func (x *SearchIndexRequest) UnmarshalJSON(data []byte) error {
 			// delaying the sort deserialization
 			x.Sort = value
 			continue
-		case "include_fields":
-			v = &x.IncludeFields
-		case "exclude_fields":
-			v = &x.ExcludeFields
-		case "page_size":
-			v = &x.PageSize
-		case "page":
-			v = &x.Page
-		case "collation":
-			v = &x.Collation
+		case "group_by":
+			// delaying the sort deserialization
+			x.GroupBy = value
+			continue
 		default:
 			continue
 		}
