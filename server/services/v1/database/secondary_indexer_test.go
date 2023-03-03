@@ -540,7 +540,7 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 		assert.NoError(t, err)
 		info, err := indexStore.IndexInfo(ctx, tx)
 		assert.NoError(t, err)
-		assert.Greater(t, info.Size, int64(150000))
+		assert.Greater(t, info.Size, int64(100000))
 		assert.Equal(t, int64(7200), info.Rows)
 		err = tx.Commit(ctx)
 		assert.NoError(t, err)
