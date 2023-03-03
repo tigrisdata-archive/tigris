@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"os"
 	"testing"
 
 	jsoniter "github.com/json-iterator/go"
@@ -46,6 +47,10 @@ func info(t *testing.T) *httpexpect.Response {
 }
 
 func TestTxForwarder(t *testing.T) {
+	t.Skip("tigris_server2 requires authenticated requests")
+	token, found := os.LookupEnv("TEST_AUTH_TOKEN")
+	require.True(t, found)
+
 	e1 := expectLow(t, config.GetBaseURL())
 	e2 := expectLow(t, config.GetBaseURL2())
 
@@ -74,25 +79,33 @@ func TestTxForwarder(t *testing.T) {
 		WithJSON(Map{"documents": []Doc{{"pkey_int": 1}, {"pkey_int": 3}, {"pkey_int": 5}, {"pkey_int": 7}}}).
 		WithHeader("Tigris-Tx-Id", res1.TxCtx.Id).
 		WithHeader("Tigris-Tx-Origin", res1.TxCtx.Origin).
-		Expect().Status(http.StatusOK).JSON().Object().ValueEqual("status", "inserted")
+		WithHeader(Authorization, Bearer+token).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("status", "inserted")
 
 	// direct request to the original server
 	e1.POST(getDocumentURL(dbName, collName, "insert")).
 		WithJSON(Map{"documents": []Doc{{"pkey_int": 2}}}).
 		WithHeader("Tigris-Tx-Id", res1.TxCtx.Id).
 		WithHeader("Tigris-Tx-Origin", res1.TxCtx.Origin).
+		WithHeader(Authorization, Bearer+token).
 		Expect().Status(http.StatusOK).JSON().Object().ValueEqual("status", "inserted")
 
 	e2.PUT(getDocumentURL(dbName, collName, "replace")).
 		WithJSON(Map{"documents": []Doc{{"pkey_int": 4}}}).
 		WithHeader("Tigris-Tx-Id", res1.TxCtx.Id).
 		WithHeader("Tigris-Tx-Origin", res1.TxCtx.Origin).
+		WithHeader(Authorization, Bearer+token).
 		Expect().Status(http.StatusOK).JSON().Object().ValueEqual("status", "replaced")
 
 	e2.DELETE(getDocumentURL(dbName, collName, "delete")).
 		WithJSON(Map{"filter": Map{"pkey_int": 5}}).
 		WithHeader("Tigris-Tx-Id", res1.TxCtx.Id).
 		WithHeader("Tigris-Tx-Origin", res1.TxCtx.Origin).
+		WithHeader(Authorization, Bearer+token).
 		Expect().Status(http.StatusOK).
 		JSON().Object().ValueEqual("status", "deleted")
 
@@ -100,6 +113,7 @@ func TestTxForwarder(t *testing.T) {
 		WithJSON(Map{"filter": Map{"pkey_int": 7}, "fields": Map{"$set": Map{"int_value": 70}}}).
 		WithHeader("Tigris-Tx-Id", res1.TxCtx.Id).
 		WithHeader("Tigris-Tx-Origin", res1.TxCtx.Origin).
+		WithHeader(Authorization, Bearer+token).
 		Expect().Status(http.StatusOK).
 		JSON().Object().ValueEqual("status", "updated")
 
@@ -109,6 +123,7 @@ func TestTxForwarder(t *testing.T) {
 		}).
 		WithHeader("Tigris-Tx-Id", res1.TxCtx.Id).
 		WithHeader("Tigris-Tx-Origin", res1.TxCtx.Origin).
+		WithHeader(Authorization, Bearer+token).
 		Expect().Status(http.StatusOK).Body().Raw()
 
 	dec := jsoniter.NewDecoder(bytes.NewReader([]byte(str)))
@@ -126,6 +141,7 @@ func TestTxForwarder(t *testing.T) {
 	e2.POST(fmt.Sprintf("/v1/projects/%s/database/transactions/commit", dbName)).
 		WithHeader("Tigris-Tx-Id", res1.TxCtx.Id).
 		WithHeader("Tigris-Tx-Origin", res1.TxCtx.Origin).
+		WithHeader(Authorization, Bearer+token).
 		Expect().
 		Status(http.StatusOK)
 }

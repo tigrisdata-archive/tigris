@@ -56,6 +56,7 @@ services:
       - TIGRIS_ENVIRONMENT=test
       - TIGRIS_SERVER_CACHE_HOST=tigris_cache
       - TIGRIS_SERVER_LOG_FORMAT=console
+      - TIGRIS_AUTH_ENABLED=false
       - TIGRIS_SERVER_SEARCH_AUTH_KEY=ts_test_key
       - TIGRIS_SERVER_SEARCH_HOST=tigris_search
       - TIGRIS_SERVER_TRACING_ENABLED=true
@@ -89,12 +90,27 @@ services:
     container_name: tigris_server2
     image: tigris_server
     environment:
+      - TIGRIS_SERVER_SERVER_PORT=8081
       - TIGRIS_ENVIRONMENT=test
       - TIGRIS_SERVER_SEARCH_AUTH_KEY=ts_test_key
       - TIGRIS_SERVER_SEARCH_HOST=tigris_search
       - TIGRIS_SERVER_LOG_FORMAT=console
       - TIGRIS_SERVER_CDC_ENABLED=true
       - TIGRIS_SERVER_SECONDARY_INDEX_WRITE_ENABLED=true
+      - TIGRIS_SERVER_AUTH_ENABLED=true
+      - TIGRIS_SERVER_AUTH_ENABLE_NAMESPACE_ISOLATION=true
+      - TIGRIS_SERVER_AUTH_ENABLE_OAUTH=true
+      - TIGRIS_SERVER_AUTH_LOG_ONLY=false
+      - TIGRIS_SERVER_AUTH_ADMIN_NAMESPACES=tigris_test
+      - TIGRIS_SERVER_AUTH_GOTRUE_SECRET=gotrue_test_secret
+      - TIGRIS_SERVER_AUTH_ISSUER_URLS=http://tigris_gotrue:8086,https://tigrisdata-dev.us.auth0.com
+      - TIGRIS_SERVER_AUTH_TOKEN_CACHE_SIZE=100
+      - TIGRIS_SERVER_AUTH_AUDIENCE=https://tigris-test
+      - TIGRIS_SERVER_AUTH_OAUTH_PROVIDER=gotrue
+      - TIGRIS_SERVER_AUTH_GOTRUE_USERNAME_SUFFIX=@m2m.tigrisdata.com
+      - TIGRIS_SERVER_AUTH_GOTRUE_URL=http://tigris_gotrue:8086
+      - TIGRIS_SERVER_AUTH_GOTRUE_ADMIN_USERNAME=test
+      - TIGRIS_SERVER_AUTH_GOTRUE_ADMIN_PASSWORD=test
       - TIGRIS_SERVER_SECONDARY_INDEX_READ_ENABLED=true
       - TIGRIS_SERVER_SECONDARY_INDEX_MUTATE_ENABLED=true
     build:
@@ -114,6 +130,7 @@ services:
       - tigris_server
       - tigris_db2
       - tigris_realtime
+      - tigris_gotrue
 
   tigris_realtime:
     container_name: tigris_realtime
@@ -149,6 +166,7 @@ services:
       # instead of test/config/fdb.cluster file when running on the host
       - TIGRIS_ENVIRONMENT=test
       - TEST_PARAM
+      - TEST_AUTH_TOKEN=eyJhbGciOiJSUzI1NiIsImtpZCI6IklhVk5FXzFVb01oQXRnQlo4cmFQdkR1RVJXMzd1dWVNU1VFUExENmx3NjAiLCJ0eXAiOiJKV1QifQ.eyJhdWQiOiJodHRwczovL3RpZ3Jpcy10ZXN0IiwiZXhwIjoxOTkyOTU4MjI5LCJpYXQiOjE2Nzc1OTgyMjksImlzcyI6Imh0dHA6Ly90aWdyaXNfZ290cnVlOjgwODYiLCJzdWIiOiJndHw1ZjY4MTJlNC02ZjRiLTQ0ZDUtYmMwNi01ZWJlMzNlOTM2ZWMiLCJodHRwczovL3RpZ3JpcyI6eyJuYyI6InRpZ3Jpc190ZXN0IiwicCI6IiJ9LCJhcHBfbWV0YWRhdGEiOm51bGwsInVzZXJfbWV0YWRhdGEiOm51bGx9.FdZLROcQH4L0B02Ef4HY7IPxWt7CbcwCYc1zfC2oSwLbo4K60NJ7IdIiESfxMkJ31i0oeYzHgNJ6kSsYcwS-NYZhxFn9JY6CztXZsmRTs5RfgRp5TlYn06NPMQ4MOVmgdjGINMsSIaw11V7dZjI1MOOW8OXxfGR4TLaeenxn54SrVsg4itcMZVKM2xAtwBBs-OoocqLVPO_CM3Czb7HyZIeUver7-I6A-lcKio3y0Va7nrZIkblrXgCMCaG9-p8wYKgGV8Tc1Yi_TV8tdCj752pLLuOKB4-Zp6vxCMmfegvlw1V2OQikppO0Rk_W6BYTfprlKtoMkNU4O7TAXL732b6WghAALEIP9gxcpNE2gl3aE22fXrZ2uQHZYOmJa9KBHZT-UTPtgxXLztM_o5avtu1pO5v__vdQ-TuRmWsyUJce0R5iNHawItCQloueCrjwBkdSMexhk53xiHg9BB6gPXi2G5Wa1lLd_3Zvss32CnPuNRW3ks_MdQ-V6MwoGRjFSDo97212T06FgZus2w2SEpsh9ijmLW0tPs6O4AlpqlQGbl7Fie5p9ZMKkT2x5g_2R5dRaTOertSRVfPQfWk_P_SjCTsvZURYPPvZiwuesxoiETc621m4xFjwOKhHD2t_1eh8S7ubjta5kDX6hmjJRiFN6vr0BBtNGgh7DdnAHeg
       - GOFLAGS=-buildvcs=false #FIXME: Added for golangci-lint to work in Github actions
     build:
       context: ../../
@@ -204,6 +222,37 @@ services:
     ports:
       - "14268:14268"
       - "16686:16686"
+    depends_on:
+      - tigris_server
+
+  tigris_gotrue:
+    container_name: tigris_gotrue
+    image: tigrisdata/gotrue
+    environment:
+      - GOTRUE_SECRET=gotrue_test_secret
+      - PORT=8086
+      - GOTRUE_MAILER_AUTOCONFIRM=true
+      - GOTRUE_DB_PROJECT=tigris_test_with_auth
+      - GOTRUE_DB_URL=http://tigris_server:8081
+      - GOTRUE_SITE_URL=http://tigris_gotrue:8086
+      - GOTRUE_JWT_ALGORITHM=RS256
+      - GOTRUE_JWT_RSA_PRIVATE_KEY=/home/netlify/keys/jwt.test.key
+      - GOTRUE_JWT_RSA_PUBLIC_KEYS=/home/netlify/keys/jwt.test.key.pub
+      - GOTRUE_DISABLE_SIGNUP=false
+      - GOTRUE_JWT_EXP=315360000
+      - GOTRUE_JWT_ISSUER=http://tigris_gotrue:8086
+      - GOTRUE_DB_BRANCH=main
+      - GOTRUE_DB_ENCRYPTION_KEY=test_encryption_key_____________
+      - GOTRUE_OPERATOR_TOKEN=test_token
+      - GOTRUE_JWT_SECRET=test_secret
+      - JWT_DEFAULT_GROUP_NAME=user
+      - CREATE_SUPER_ADMIN_USER=true
+      - GOTRUE_INSTANCE_ID=00000000-0000-0000-0000-000000000000
+      - GOTRUE_SUPERADMIN_AUD=https://tigris-test
+      - GOTRUE_SUPERADMIN_USERNAME=test
+      - GOTRUE_SUPERADMIN_PASSWORD=test
+    ports:
+      - "8086:8086"
     depends_on:
       - tigris_server
 

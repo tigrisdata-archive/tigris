@@ -51,10 +51,19 @@ type Config struct {
 	Schema         SchemaConfig
 }
 
+type Gotrue struct {
+	URL                string `mapstructure:"url" yaml:"url" json:"url"`
+	UsernameSuffix     string `mapstructure:"username_suffix" yaml:"username_suffix" json:"username_suffix"`
+	AdminUsername      string `mapstructure:"admin_username" yaml:"admin_username" json:"admin_username"`
+	AdminPassword      string `mapstructure:"admin_password" yaml:"admin_password" json:"admin_password"`
+	ClientIdLength     int    `mapstructure:"client_id_length" yaml:"client_id_length" json:"client_id_length"`
+	ClientSecretLength int    `mapstructure:"client_secret_length" yaml:"client_secret_length" json:"client_secret_length"`
+}
+
 type AuthConfig struct {
 	Enabled                   bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	IssuerURL                 string        `mapstructure:"issuer_url" yaml:"issuer_url" json:"issuer_url"`
 	Audience                  string        `mapstructure:"audience" yaml:"audience" json:"audience"`
+	Issuers                   []string      `mapstructure:"issuer_urls" yaml:"issuer_urls" json:"issuer_urls"`
 	JWKSCacheTimeout          time.Duration `mapstructure:"jwks_cache_timeout" yaml:"jwks_cache_timeout" json:"jwks_cache_timeout"`
 	LogOnly                   bool          `mapstructure:"log_only" yaml:"log_only" json:"log_only"`
 	EnableNamespaceIsolation  bool          `mapstructure:"enable_namespace_isolation" yaml:"enable_namespace_isolation" json:"enable_namespace_isolation"`
@@ -68,6 +77,7 @@ type AuthConfig struct {
 	ManagementClientId        string        `mapstructure:"management_client_id" yaml:"management_client_id" json:"management_client_id"`
 	ManagementClientSecret    string        `mapstructure:"management_client_secret" yaml:"management_client_secret" json:"management_client_secret"`
 	TokenClockSkewDurationSec int           `mapstructure:"token_clock_skew_duration_sec" yaml:"token_clock_skew_duration_sec" json:"token_clock_skew_duration_sec"`
+	Gotrue                    Gotrue        `mapstructure:"gotrue" yaml:"gotrue" json:"gotrue"`
 }
 
 type CdcConfig struct {
@@ -207,11 +217,15 @@ var DefaultConfig = Config{
 	},
 	Auth: AuthConfig{
 		Enabled:          false,
-		IssuerURL:        "https://tigrisdata-dev.us.auth0.com/",
+		Issuers:          []string{"https://tigrisdata-dev.us.auth0.com/"},
 		Audience:         "https://tigris-api",
 		JWKSCacheTimeout: 5 * time.Minute,
 		LogOnly:          true,
 		AdminNamespaces:  []string{"tigris-admin"},
+		Gotrue: Gotrue{
+			ClientIdLength:     30,
+			ClientSecretLength: 50,
+		},
 	},
 	Cdc: CdcConfig{
 		Enabled:        false,
