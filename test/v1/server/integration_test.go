@@ -175,6 +175,25 @@ func expectRealtime(t *testing.T) *httpexpect.Expect {
 	return expectLow(t, config.GetBaseRealtimeURL())
 }
 
+func createProjectUrl(project string) string {
+	return fmt.Sprintf("/v1/projects/%s/create", project)
+}
+
+func appKeysOperation(project string, operation string) string {
+	if operation == "get" {
+		return fmt.Sprintf("/v1/projects/%s/apps/keys", project)
+	}
+	return fmt.Sprintf("/v1/projects/%s/apps/keys/%s", project, operation)
+}
+
+func getAuthToken() string {
+	return "/v1/auth/token"
+}
+
+func namespaceOperation(operation string) string {
+	return fmt.Sprintf("/v1/management/namespaces/%s", operation)
+}
+
 func getDocumentURL(databaseName, collectionName string, methodName string) string {
 	return fmt.Sprintf("/v1/projects/%s/database/collections/%s/documents/%s", databaseName, collectionName, methodName)
 }

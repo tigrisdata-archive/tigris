@@ -17,8 +17,6 @@ package auth
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/base64"
 	"io"
 	"math"
 	"net/http"
@@ -31,7 +29,6 @@ import (
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
-	"github.com/tigrisdata/tigris/lib/date"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/request"
@@ -57,9 +54,9 @@ func (a *auth0) managementToTigrisErrorCode(err error) api.Code {
 func (a *auth0) GetAccessToken(ctx context.Context, req *api.GetAccessTokenRequest) (*api.GetAccessTokenResponse, error) {
 	switch req.GrantType {
 	case api.GrantType_REFRESH_TOKEN:
-		return getAccessTokenUsingRefreshToken(ctx, req, a)
+		return getAccessTokenUsingRefreshTokenAuth0(ctx, req, a)
 	case api.GrantType_CLIENT_CREDENTIALS:
-		return getAccessTokenUsingClientCredentials(ctx, req, a)
+		return getAccessTokenUsingClientCredentialsAuth0(ctx, req, a)
 	}
 	return nil, errors.InvalidArgument("Failed to GetAccessToken: reason = unsupported grant_type, it has to be one of [refresh_token, client_credentials]")
 }
@@ -127,13 +124,13 @@ func (a *auth0) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest) 
 }
 
 func (a *auth0) DeleteAppKey(ctx context.Context, req *api.DeleteAppKeyRequest) (*api.DeleteAppKeyResponse, error) {
-	_, _, err := validateOwnership(ctx, "delete_application", req.GetId(), a)
+	_, _, err := validateOwnershipAuth0(ctx, "delete_application", req.GetId(), a)
 	if err != nil {
 		return nil, err
 	}
 
 	// remove it from metadata cache
-	err = deleteApplication(ctx, req.GetId(), a)
+	err = deleteApplication(ctx, req.GetId(), a.userStore, a.txMgr)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +148,7 @@ func (a *auth0) DeleteAppKey(ctx context.Context, req *api.DeleteAppKeyRequest) 
 }
 
 func (a *auth0) UpdateAppKey(ctx context.Context, req *api.UpdateAppKeyRequest) (*api.UpdateAppKeyResponse, error) {
-	client, currentSub, err := validateOwnership(ctx, "rotate_app_secret", req.GetId(), a)
+	client, currentSub, err := validateOwnershipAuth0(ctx, "rotate_app_secret", req.GetId(), a)
 	if err != nil {
 		return nil, err
 	}
@@ -190,13 +187,13 @@ func (a *auth0) UpdateAppKey(ctx context.Context, req *api.UpdateAppKeyRequest) 
 }
 
 func (a *auth0) RotateAppKey(ctx context.Context, req *api.RotateAppKeyRequest) (*api.RotateAppKeyResponse, error) {
-	_, _, err := validateOwnership(ctx, "rotate_app_secret", req.GetId(), a)
+	_, _, err := validateOwnershipAuth0(ctx, "rotate_app_secret", req.GetId(), a)
 	if err != nil {
 		return nil, err
 	}
 
 	// remove it from metadata cache
-	err = deleteApplication(ctx, req.GetId(), a)
+	err = deleteApplication(ctx, req.GetId(), a.userStore, a.txMgr)
 	if err != nil {
 		return nil, err
 	}
@@ -311,7 +308,7 @@ func (a *auth0) DeleteAppKeys(ctx context.Context, project string) error {
 	return nil
 }
 
-func validateOwnership(ctx context.Context, operationName string, appId string, a *auth0) (*management.Client, string, error) {
+func validateOwnershipAuth0(ctx context.Context, operationName string, appId string, a *auth0) (*management.Client, string, error) {
 	client, err := a.Management.Client.Read(appId)
 	if err != nil {
 		return nil, "", api.Errorf(a.managementToTigrisErrorCode(err), "Failed to %s: reason = %s", operationName, err.Error())
@@ -328,16 +325,7 @@ func validateOwnership(ctx context.Context, operationName string, appId string, 
 	return client, currentSub, nil
 }
 
-func GetCurrentSub(ctx context.Context) (string, error) {
-	// further filter for this particular user
-	token, err := request.GetAccessToken(ctx)
-	if err != nil {
-		return "", errors.Internal("Failed to retrieve current sub: reason = %s", err.Error())
-	}
-	return token.Sub, nil
-}
-
-func getAccessTokenUsingRefreshToken(ctx context.Context, req *api.GetAccessTokenRequest, a *auth0) (*api.GetAccessTokenResponse, error) {
+func getAccessTokenUsingRefreshTokenAuth0(ctx context.Context, req *api.GetAccessTokenRequest, a *auth0) (*api.GetAccessTokenResponse, error) {
 	data := url.Values{
 		"refresh_token": {req.RefreshToken},
 		"client_id":     {a.AuthConfig.ClientId},
@@ -373,7 +361,7 @@ type tokenMetadataEntry struct {
 	ExpireAt    int64 // unix second
 }
 
-func getAccessTokenUsingClientCredentials(ctx context.Context, req *api.GetAccessTokenRequest, a *auth0) (*api.GetAccessTokenResponse, error) {
+func getAccessTokenUsingClientCredentialsAuth0(ctx context.Context, req *api.GetAccessTokenRequest, a *auth0) (*api.GetAccessTokenResponse, error) {
 	// lookup the internal namespace
 	tx, err := a.txMgr.StartTx(ctx)
 	if err != nil {
@@ -403,7 +391,7 @@ func getAccessTokenUsingClientCredentials(ctx context.Context, req *api.GetAcces
 			}, nil
 		} else {
 			// expired entry, delete it
-			err := deleteApplicationMetadata(ctx, defaultNamespaceId, req.GetClientId(), metadataKey, a)
+			err := deleteApplicationMetadata(ctx, defaultNamespaceId, req.GetClientId(), metadataKey, a.userStore, a.txMgr)
 			if err != nil {
 				return nil, err
 			}
@@ -440,7 +428,7 @@ func getAccessTokenUsingClientCredentials(ctx context.Context, req *api.GetAcces
 		}
 
 		// cache it
-		err = insertApplicationMetadata(ctx, metadataKey, req, &getAccessTokenResponse, a)
+		err = insertApplicationMetadata(ctx, metadataKey, req, &getAccessTokenResponse, a.userStore, a.txMgr)
 		if err != nil {
 			return nil, err
 		}
@@ -449,98 +437,4 @@ func getAccessTokenUsingClientCredentials(ctx context.Context, req *api.GetAcces
 	}
 	log.Error().Msgf("auth0 response status code=%d", resp.StatusCode)
 	return nil, errors.Internal("Failed to get access token: reason = %s", bodyStr)
-}
-
-func tokenError(userFacingErrorMsg string, err error) error {
-	log.Warn().Err(err).Msg(userFacingErrorMsg)
-	return errors.Internal(userFacingErrorMsg)
-}
-
-func readDate(dateStr string) int64 {
-	result, err := date.ToUnixMilli(time.RFC3339, dateStr)
-	if err != nil {
-		log.Warn().Err(err).Msgf("%s field was not parsed to int64", dateStr)
-		result = -1
-	}
-	return result
-}
-
-func createAccessTokenMetadataKey(clientSecret string) string {
-	hash := sha256.Sum256([]byte(clientSecret))
-	encodedHash := base64.StdEncoding.EncodeToString(hash[:])
-	return accessToken + encodedHash
-}
-
-func deleteApplicationMetadata(ctx context.Context, namespaceId uint32, appId string, metadataKey string, a *auth0) error {
-	// delete metadata related to this app from user metadata
-	tx, err := a.txMgr.StartTx(ctx)
-	if err != nil {
-		return tokenError("Failed to delete application metadata", err)
-	}
-	defer func() {
-		_ = tx.Rollback(ctx)
-	}()
-
-	err = a.userStore.DeleteUserMetadata(ctx, tx, namespaceId, metadata.Application, appId, metadataKey)
-	if err != nil {
-		return tokenError("Failed to delete metadata", err)
-	}
-
-	err = tx.Commit(ctx)
-	if err != nil {
-		return tokenError("Failed to delete metadata", err)
-	}
-	return nil
-}
-
-func deleteApplication(ctx context.Context, appId string, a *auth0) error {
-	tx, err := a.txMgr.StartTx(ctx)
-	if err != nil {
-		return tokenError("Failed to delete application metadata", err)
-	}
-	defer func() {
-		_ = tx.Rollback(ctx)
-	}()
-
-	err = a.userStore.DeleteUser(ctx, tx, defaultNamespaceId, metadata.Application, appId)
-	if err != nil {
-		return tokenError("Failed to delete metadata", err)
-	}
-
-	err = tx.Commit(ctx)
-	if err != nil {
-		return tokenError("Failed to delete metadata", err)
-	}
-	return nil
-}
-
-func insertApplicationMetadata(ctx context.Context, metadataKey string, req *api.GetAccessTokenRequest, getAccessTokenResponse *api.GetAccessTokenResponse, a *auth0) error {
-	// cache it
-	tx, err := a.txMgr.StartTx(ctx)
-	if err != nil {
-		return tokenError("Failed to get access token: reason = could not process cache", err)
-	}
-	defer func() {
-		_ = tx.Rollback(ctx)
-	}()
-
-	cacheEntry := &tokenMetadataEntry{
-		AccessToken: getAccessTokenResponse.GetAccessToken(),
-		ExpireAt:    time.Now().Add(time.Second * time.Duration(getAccessTokenResponse.GetExpiresIn())).Unix(),
-	}
-	cacheEntryBytes, err := jsoniter.Marshal(&cacheEntry)
-	if err != nil {
-		return tokenError("Failed to get access token: reason = could not process cache", err)
-	}
-
-	err = a.userStore.InsertUserMetadata(ctx, tx, defaultNamespaceId, metadata.Application, req.GetClientId(), metadataKey, cacheEntryBytes)
-	if err != nil {
-		return tokenError("Failed to get access token: reason = could not process cache", err)
-	}
-
-	err = tx.Commit(ctx)
-	if err != nil {
-		return tokenError("Failed to get access token: reason = could not process cache", err)
-	}
-	return nil
 }
