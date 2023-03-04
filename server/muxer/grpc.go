@@ -23,6 +23,10 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
+const (
+	defaultTigrisServerMaxReceiveMessageSize = 1024 * 1024 * 16
+)
+
 type GRPCServer struct {
 	*grpc.Server
 }
@@ -31,7 +35,7 @@ func NewGRPCServer(cfg *config.Config) *GRPCServer {
 	s := &GRPCServer{}
 
 	unary, stream := middleware.Get(cfg)
-	s.Server = grpc.NewServer(grpc.StreamInterceptor(stream), grpc.UnaryInterceptor(unary))
+	s.Server = grpc.NewServer(grpc.StreamInterceptor(stream), grpc.UnaryInterceptor(unary), grpc.MaxRecvMsgSize(defaultTigrisServerMaxReceiveMessageSize))
 	reflection.Register(s)
 	return s
 }
