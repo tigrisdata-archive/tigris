@@ -79,12 +79,16 @@ func (s *Selector) MatchesDoc(doc map[string]interface{}) bool {
 }
 
 // Matches returns true if the input doc matches this filter.
+// To note around the order of checking for not exist and error logging
+// An error is returned if the field does not exist
+// and that is an acceptable error, so return false
+// Only log an error that is unexpected
 func (s *Selector) Matches(doc []byte) bool {
 	docValue, dtp, _, err := jsonparser.Get(doc, s.Field.KeyPath()...)
-	if ulog.E(err) {
+	if dtp == jsonparser.NotExist {
 		return false
 	}
-	if dtp == jsonparser.NotExist {
+	if ulog.E(err) {
 		return false
 	}
 	if dtp == jsonparser.Null {
