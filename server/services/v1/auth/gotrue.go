@@ -516,7 +516,10 @@ func getAccessTokenUsingClientCredentialsGotrue(ctx context.Context, clientId st
 		return "", 0, err
 	}
 
-	if getTokenRes.StatusCode != http.StatusOK {
+	if getTokenRes.StatusCode == http.StatusBadRequest {
+		log.Error().Int("status", getTokenRes.StatusCode).Msg("Non OK status received to get access token")
+		return "", 0, errors.Unauthenticated("Invalid credentials")
+	} else if getTokenRes.StatusCode != http.StatusOK {
 		log.Error().Int("status", getTokenRes.StatusCode).Msg("Non OK status received to get access token")
 		return "", 0, errors.Internal("Non OK status code received from gotrue")
 	}

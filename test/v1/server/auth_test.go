@@ -214,6 +214,18 @@ func TestCreateAccessToken(t *testing.T) {
 	_ = e2.POST(createProjectUrl("new-project")).WithHeader(Authorization, Bearer+accessToken).Expect().Status(http.StatusOK)
 }
 
+func TestCreateAccessTokenUsingInvalidCreds(t *testing.T) {
+	e2 := expectLow(t, config.GetBaseURL2())
+	getAccessTokenResponse := e2.POST(getAuthToken()).
+		WithFormField("client_id", "invalid-id").
+		WithFormField("client_secret", "invalid-password").
+		WithFormField("grant_type", "client_credentials").
+		Expect()
+	getAccessTokenResponse.Status(http.StatusUnauthorized)
+	errorMessage := getAccessTokenResponse.JSON().Object().Value("error").Object().Value("message").String().Raw()
+	require.Equal(t, "Invalid credentials", errorMessage)
+}
+
 func TestAuthFailure(t *testing.T) {
 	e2 := expectLow(t, config.GetBaseURL2())
 	testProject := "auth_test"
