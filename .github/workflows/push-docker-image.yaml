@@ -14,6 +14,7 @@ on:
 
 env:
   DOCKER_REPOSITORY: "tigrisdata/tigris"
+  QUAY_IMAGE: "quay.io/tigrisdata/tigris"
 
 jobs:
   build-and-push-image:
@@ -39,6 +40,13 @@ jobs:
           username: ${{ secrets.GH_DOCKER_ACCESS_USER }}
           password: ${{ secrets.GH_DOCKER_ACCESS_TOKEN }}
 
+      - name: Login to Quay.io
+        uses: docker/login-action@v1
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_REGISTRY_USER }}
+          password: ${{ secrets.QUAY_REGISTRY_PASSWORD }}
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v4
@@ -46,6 +54,7 @@ jobs:
           # list of Docker images to use as base name for tags
           images: |
             ${{ env.DOCKER_REPOSITORY }}
+            ${{ env.QUAY_IMAGE }}
           # generate Docker tags based on the following events/attributes
           # we generate the latest tag off the beta branch
           tags: |
