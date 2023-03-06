@@ -14,7 +14,7 @@ on:
 
 env:
   DOCKER_REPOSITORY: "tigrisdata/tigris"
-  QUAY_IMAGE: "quay.io/tigrisdata/tigris"
+  QUAY_REPOSITORY: "quay.io/tigrisdata/tigris"
 
 jobs:
   build-and-push-image:
@@ -54,7 +54,7 @@ jobs:
           # list of Docker images to use as base name for tags
           images: |
             ${{ env.DOCKER_REPOSITORY }}
-            ${{ env.QUAY_IMAGE }}
+            ${{ env.QUAY_REPOSITORY }}
           # generate Docker tags based on the following events/attributes
           # we generate the latest tag off the beta branch
           tags: |
