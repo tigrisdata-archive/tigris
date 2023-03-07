@@ -22,6 +22,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/test/config"
@@ -143,6 +144,8 @@ func TestGoTrueAuthProvider(t *testing.T) {
 }
 
 func TestMultipleAppsCreation(t *testing.T) {
+	testStartTime := time.Now()
+
 	e2 := expectLow(t, config.GetBaseURL2())
 	testProject := "auth_test"
 	token := readToken(t)
@@ -171,6 +174,10 @@ func TestMultipleAppsCreation(t *testing.T) {
 		Object().Value("app_keys").Array()
 
 	require.Equal(t, 5, int(appKeys.Length().Raw()))
+	for _, value := range appKeys.Iter() {
+		createdAt := int64(value.Object().Value("created_at").Number().Raw())
+		require.True(t, createdAt >= testStartTime.UnixMilli())
+	}
 }
 
 func TestListAppKeys(t *testing.T) {
