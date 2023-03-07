@@ -291,7 +291,7 @@ func (g *gotrue) ListAppKeys(ctx context.Context, req *api.ListAppKeysRequest) (
 	}
 
 	// make external call
-	getUsersUrl := fmt.Sprintf("%s/admin/users?created_by=%s&tigris_namespace=%s&page=1&per_page=5000", g.AuthConfig.Gotrue.URL, currentSub, currentNamespace)
+	getUsersUrl := fmt.Sprintf("%s/admin/users?created_by=%s&tigris_namespace=%s&tigris_project=%s&page=1&per_page=5000", g.AuthConfig.Gotrue.URL, currentSub, currentNamespace, req.GetProject())
 	client := &http.Client{}
 	getUsersReq, err := http.NewRequestWithContext(ctx, http.MethodGet, getUsersUrl, nil)
 	if err != nil {

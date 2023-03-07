@@ -4269,7 +4269,8 @@ func TestImport(t *testing.T) {
 					JSON().
 					Object().
 					ValueEqual("collection", c.coll).Raw()
-
+				// set size of the collection in description 0 for test
+				sch["size"] = 0.0
 				b, err := jsoniter.Marshal(sch)
 				require.NoError(t, err)
 				require.JSONEq(t, c.exp, string(b))
