@@ -218,6 +218,23 @@ func TestListAppKeys(t *testing.T) {
 	require.Equal(t, 2, int(appKeysOdd.Length().Raw()))
 }
 
+func TestEmptyListAppKeys(t *testing.T) {
+	e2 := expectLow(t, config.GetBaseURL2())
+	testProject := "TestEmptyListAppKeys"
+	token := readToken(t)
+
+	_ = e2.POST(createProjectUrl(testProject)).WithHeader(Authorization, Bearer+token).Expect()
+
+	appKeys := e2.GET(appKeysOperation(testProject, "get")).
+		WithHeader(Authorization, Bearer+token).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().Value("app_keys").Array()
+
+	require.Equal(t, 0, int(appKeys.Length().Raw()))
+}
+
 func TestCreateAccessToken(t *testing.T) {
 	e2 := expectLow(t, config.GetBaseURL2())
 	testProject := "auth_test"
