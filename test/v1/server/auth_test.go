@@ -22,8 +22,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/test/config"
 	"gopkg.in/gavv/httpexpect.v1"
@@ -144,11 +144,11 @@ func TestGoTrueAuthProvider(t *testing.T) {
 }
 
 func TestMultipleAppsCreation(t *testing.T) {
+	testStartTime := time.Now()
+
 	e2 := expectLow(t, config.GetBaseURL2())
 	testProject := "auth_test"
 	token := readToken(t)
-	log.Info().Msgf("token=%s", token)
-
 	_ = e2.POST(createProjectUrl(testProject)).WithHeader(Authorization, Bearer+token).Expect()
 
 	for i := 0; i < 5; i++ {
@@ -174,6 +174,72 @@ func TestMultipleAppsCreation(t *testing.T) {
 		Object().Value("app_keys").Array()
 
 	require.Equal(t, 5, int(appKeys.Length().Raw()))
+	for _, value := range appKeys.Iter() {
+		createdAt := int64(value.Object().Value("created_at").Number().Raw())
+		require.True(t, createdAt >= testStartTime.UnixMilli())
+	}
+}
+
+func TestListAppKeys(t *testing.T) {
+	e2 := expectLow(t, config.GetBaseURL2())
+	testProject := "auth_test"
+	token := readToken(t)
+
+	_ = e2.POST(createProjectUrl(fmt.Sprintf("%s%d", testProject, 0))).WithHeader(Authorization, Bearer+token).Expect()
+	_ = e2.POST(createProjectUrl(fmt.Sprintf("%s%d", testProject, 1))).WithHeader(Authorization, Bearer+token).Expect()
+
+	for i := 0; i < 5; i++ {
+		var createAppKeyPayload = make(map[string]string)
+		projectForThisKey := fmt.Sprintf("%s%d", testProject, i%2)
+		createAppKeyPayload["name"] = fmt.Sprintf("test_key_%d", i)
+		createAppKeyPayload["description"] = "This key is used for integration test purpose."
+		createAppKeyPayload["project"] = projectForThisKey
+
+		createdAppKey := e2.POST(appKeysOperation(projectForThisKey, "create")).
+			WithHeader(Authorization, Bearer+token).WithJSON(createAppKeyPayload).
+			Expect().
+			Status(http.StatusOK).
+			JSON().
+			Object().Value("created_app_key")
+		require.NotNil(t, createdAppKey)
+	}
+
+	appKeysEven := e2.GET(appKeysOperation(testProject+"0", "get")).
+		WithHeader(Authorization, Bearer+token).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().Value("app_keys").Array()
+
+	// 3 even app keys should be retrieved
+	require.Equal(t, 3, int(appKeysEven.Length().Raw()))
+
+	appKeysOdd := e2.GET(appKeysOperation(testProject+"1", "get")).
+		WithHeader(Authorization, Bearer+token).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().Value("app_keys").Array()
+
+	// 2 odd app keys should be retrieved
+	require.Equal(t, 2, int(appKeysOdd.Length().Raw()))
+}
+
+func TestEmptyListAppKeys(t *testing.T) {
+	e2 := expectLow(t, config.GetBaseURL2())
+	testProject := "TestEmptyListAppKeys"
+	token := readToken(t)
+
+	_ = e2.POST(createProjectUrl(testProject)).WithHeader(Authorization, Bearer+token).Expect()
+
+	appKeys := e2.GET(appKeysOperation(testProject, "get")).
+		WithHeader(Authorization, Bearer+token).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().Value("app_keys").Array()
+
+	require.Equal(t, 0, int(appKeys.Length().Raw()))
 }
 
 func TestCreateAccessToken(t *testing.T) {
@@ -209,9 +275,19 @@ func TestCreateAccessToken(t *testing.T) {
 	require.NotNil(t, getAccessTokenResponse.JSON().Object().Value("expires_in"))
 
 	// use access token
-	log.Info().Str("token", accessToken).Msg(createProjectUrl("new-project"))
-
 	_ = e2.POST(createProjectUrl("new-project")).WithHeader(Authorization, Bearer+accessToken).Expect().Status(http.StatusOK)
+}
+
+func TestCreateAccessTokenUsingInvalidCreds(t *testing.T) {
+	e2 := expectLow(t, config.GetBaseURL2())
+	getAccessTokenResponse := e2.POST(getAuthToken()).
+		WithFormField("client_id", "invalid-id").
+		WithFormField("client_secret", "invalid-password").
+		WithFormField("grant_type", "client_credentials").
+		Expect()
+	getAccessTokenResponse.Status(http.StatusUnauthorized)
+	errorMessage := getAccessTokenResponse.JSON().Object().Value("error").Object().Value("message").String().Raw()
+	require.Equal(t, "Invalid credentials", errorMessage)
 }
 
 func TestAuthFailure(t *testing.T) {
