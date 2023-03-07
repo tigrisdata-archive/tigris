@@ -323,14 +323,14 @@ func (g *gotrue) ListAppKeys(ctx context.Context, req *api.ListAppKeysRequest) (
 	err = jsoniter.Unmarshal(getUsersRespBytes, &getUsersRespJSON)
 	if err != nil {
 		log.Err(err).Msg("Failed to parse getUsersResp")
-		return nil, errors.Internal("Failed to parse getUsersResp")
+		return nil, errors.Internal("Failed to parse getUsers response")
 	}
 
 	var users []map[string]jsoniter.RawMessage
 	err = jsoniter.Unmarshal(getUsersRespJSON["users"], &users)
 	if err != nil {
 		log.Err(err).Msg("Failed to parse getUsersResp - users")
-		return nil, errors.Internal("Failed to parse getUsersResp - users")
+		return nil, errors.Internal("Failed to parse getUsers response")
 	}
 
 	appKeys := make([]*api.AppKey, len(users))
@@ -339,21 +339,33 @@ func (g *gotrue) ListAppKeys(ctx context.Context, req *api.ListAppKeysRequest) (
 		err := jsoniter.Unmarshal(user["email"], &email)
 		if err != nil {
 			log.Err(err).Msg("Failed to parse getUsersResp - email")
-			return nil, errors.Internal("Failed to parse getUsersResp - email")
+			return nil, errors.Internal("Failed to parse getUsers response")
 		}
 		clientId := strings.Split(email, "@")[0]
 
 		err = jsoniter.Unmarshal(user["encrypted_password"], &clientSecret)
 		if err != nil {
 			log.Err(err).Msg("Failed to parse getUsersResp - clientSecret")
-			return nil, errors.Internal("Failed to parse getUsersResp - clientSecret")
+			return nil, errors.Internal("Failed to parse getUsers response")
 		}
 
 		var appMetadata UserAppData
 		err = jsoniter.Unmarshal(user["app_metadata"], &appMetadata)
 		if err != nil {
 			log.Err(err).Msg("Failed to parse getUsersResp - appMetadata")
-			return nil, errors.Internal("Failed to parse getUsersResp - appMetadata")
+			return nil, errors.Internal("Failed to parse getUsers response")
+		}
+
+		var createdAtStr string
+		var createdAtMillis int64
+		err = jsoniter.Unmarshal(user["created_at"], &createdAtStr)
+		if err != nil {
+			log.Err(err).Msg("Failed to parse getUsersResp - createAt")
+			return nil, errors.Internal("Failed to parse getUsers response")
+		}
+		if createdAtStr != "" {
+			// parse string time to millis using rfc3339 format
+			createdAtMillis = readDate(createdAtStr)
 		}
 
 		appKey := api.AppKey{
@@ -362,6 +374,7 @@ func (g *gotrue) ListAppKeys(ctx context.Context, req *api.ListAppKeysRequest) (
 			Description: appMetadata.Description,
 			Secret:      clientSecret,
 			CreatedBy:   appMetadata.CreatedBy,
+			CreatedAt:   createdAtMillis,
 			Project:     appMetadata.Project,
 		}
 		appKeys[i] = &appKey
