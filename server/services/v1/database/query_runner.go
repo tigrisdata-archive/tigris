@@ -201,7 +201,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	if fieldOperator, ok := factory.FieldOperators[string(update.Set)]; ok {
 		// Set operation needs schema validation as well as mutation if we need to convert numeric fields from string to int64
-		fieldOperator.Input, err = runner.mutateAndValidatePayload(coll, newUpdatePayloadMutator(coll, ts.ToRFC3339()), fieldOperator.Input)
+		fieldOperator.Input, err = runner.mutateAndValidatePayload(ctx, coll, newUpdatePayloadMutator(coll, ts.ToRFC3339()), fieldOperator.Input)
 		if err != nil {
 			return Response{}, ctx, err
 		}

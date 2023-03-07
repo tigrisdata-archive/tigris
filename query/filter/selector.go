@@ -82,7 +82,7 @@ func (s *Selector) MatchesDoc(doc map[string]interface{}) bool {
 // To note around the order of checking for not exist and error logging
 // An error is returned if the field does not exist
 // and that is an acceptable error, so return false
-// Only log an error that is unexpected
+// Only log an error that is unexpected.
 func (s *Selector) Matches(doc []byte) bool {
 	docValue, dtp, _, err := jsonparser.Get(doc, s.Field.KeyPath()...)
 	if dtp == jsonparser.NotExist {

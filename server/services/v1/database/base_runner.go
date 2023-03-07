@@ -28,6 +28,7 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/server/types"
 	"github.com/tigrisdata/tigris/store/search"
@@ -125,7 +126,7 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 	indexer := NewSecondaryIndexer(coll)
 	for _, doc := range documents {
 		// reset it back to doc
-		doc, err = runner.mutateAndValidatePayload(coll, newInsertPayloadMutator(coll, ts.ToRFC3339()), doc)
+		doc, err = runner.mutateAndValidatePayload(ctx, coll, newInsertPayloadMutator(coll, ts.ToRFC3339()), doc)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -168,7 +169,7 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 	return ts, allKeys, err
 }
 
-func (runner *BaseQueryRunner) mutateAndValidatePayload(coll *schema.DefaultCollection, mutator mutator, doc []byte) ([]byte, error) {
+func (runner *BaseQueryRunner) mutateAndValidatePayload(ctx context.Context, coll *schema.DefaultCollection, mutator mutator, doc []byte) ([]byte, error) {
 	deserializedDoc, err := util.JSONToMap(doc)
 	if ulog.E(err) {
 		return doc, err
@@ -183,9 +184,11 @@ func (runner *BaseQueryRunner) mutateAndValidatePayload(coll *schema.DefaultColl
 		return doc, err
 	}
 
-	if err = coll.Validate(deserializedDoc); err != nil {
-		// schema validation failed
-		return doc, err
+	if request.NeedSchemaValidation(ctx) {
+		if err = coll.Validate(deserializedDoc); err != nil {
+			// schema validation failed
+			return doc, err
+		}
 	}
 
 	if mutator.isMutated() {

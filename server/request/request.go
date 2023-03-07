@@ -372,7 +372,7 @@ func GetMetadataFromHeader(ctx context.Context) (string, bool, string) {
 	if !config.DefaultConfig.Auth.EnableNamespaceIsolation {
 		return defaults.DefaultNamespaceName, false, ""
 	}
-	header := api.GetHeader(ctx, "authorization")
+	header := api.GetHeader(ctx, api.HeaderAuthorization)
 	token, err := getTokenFromHeader(header)
 	if err != nil {
 		return defaults.DefaultNamespaceName, false, ""
@@ -415,4 +415,8 @@ func IsRead(ctx context.Context) bool {
 func IsWrite(ctx context.Context) bool {
 	m, _ := grpc.Method(ctx)
 	return isWrite(m)
+}
+
+func NeedSchemaValidation(ctx context.Context) bool {
+	return api.GetHeader(ctx, api.HeaderSchemaSignOff) != "true"
 }

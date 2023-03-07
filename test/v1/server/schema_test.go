@@ -17,10 +17,11 @@
 package server
 
 import (
-	api "github.com/tigrisdata/tigris/api/server/v1"
+	"fmt"
 	"net/http"
 	"testing"
 
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/config"
 )
 
@@ -341,4 +342,54 @@ func TestInsert_SchemaValidationError(t *testing.T) {
 
 		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, c.expMessage)
 	}
+}
+
+func TestInsert_SchemaSignOff(t *testing.T) {
+	dbName := fmt.Sprintf("db_test_%s", t.Name())
+
+	deleteProject(t, dbName)
+	createProject(t, dbName)
+	defer deleteProject(t, dbName)
+
+	collectionName := fmt.Sprintf("test_collection_%s", t.Name())
+	createCollection(t, dbName, collectionName,
+		Map{
+			"schema": Map{
+				"title": collectionName,
+				"properties": Map{
+					"int_value": Map{
+						"type": "integer",
+					},
+					"string_value": Map{
+						"type": "string",
+					},
+				},
+			},
+		}).Status(http.StatusOK)
+
+	inputDoc := []Doc{{"int_value": 1, "string_value": "foo"}}
+	insertDocuments(t, dbName, collectionName, inputDoc, true).
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("status", "inserted")
+
+	e := expect(t)
+
+	inputDoc = []Doc{{"int_value": 1, "string_value": "foo", "extra_field": "bar"}}
+	e.POST(getDocumentURL(dbName, collectionName, "insert")).
+		WithJSON(Map{
+			"documents": inputDoc,
+		}).Expect().
+		Status(http.StatusBadRequest).
+		JSON().
+		Path("$.error").Object().
+		ValueEqual("code", api.CodeToString(api.Code_INVALID_ARGUMENT))
+
+	e.POST(getDocumentURL(dbName, collectionName, "insert")).
+		WithHeader(api.HeaderSchemaSignOff, "true").
+		WithJSON(Map{
+			"documents": inputDoc,
+		}).Expect().
+		Status(http.StatusOK)
 }
