@@ -677,19 +677,6 @@ func (x *UpdateUserMetadataRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (x *ListAppKeysResponse) MarshalJSON() ([]byte, error) {
-	if x.AppKeys == nil {
-		x.AppKeys = make([]*AppKey, 0)
-	}
-
-	resp := struct {
-		AppKeys []*AppKey `json:"app_keys"`
-	}{
-		AppKeys: x.AppKeys,
-	}
-	return jsoniter.Marshal(resp)
-}
-
 func (x *GetUserMetadataResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
 		MetadataKey string              `json:"metadataKey,omitempty"`
