@@ -236,10 +236,9 @@ func TestEmptyListAppKeys(t *testing.T) {
 		WithHeader(Authorization, Bearer+token).
 		Expect().
 		Status(http.StatusOK).
-		JSON().
-		Object().Value("app_keys").Array()
-
-	require.Equal(t, 0, int(appKeys.Length().Raw()))
+		JSON().Object().Raw()
+	var emptyMap = make(map[string]interface{})
+	require.Equal(t, emptyMap, appKeys)
 }
 
 func TestCreateAccessToken(t *testing.T) {

@@ -30,14 +30,17 @@ const (
 	HeaderRequestTimeout = "Request-Timeout"
 
 	HeaderAccessControlAllowOrigin = "Access-Control-Allow-Origin"
+	HeaderAuthorization            = "authorization"
+
+	SetCookie = "Set-Cookie"
+	Cookie    = "Cookie"
 
 	HeaderPrefix = "Tigris-"
 
-	HeaderTxID        = "Tigris-Tx-Id"
-	HeaderTxOrigin    = "Tigris-Tx-Origin"
-	SetCookie         = "Set-Cookie"
-	Cookie            = "Cookie"
-	grpcGatewayPrefix = "Grpc-Gateway-"
+	HeaderTxID          = "Tigris-Tx-Id"
+	HeaderTxOrigin      = "Tigris-Tx-Origin"
+	grpcGatewayPrefix   = "Grpc-Gateway-"
+	HeaderSchemaSignOff = "Tigris-Schema-Sign-Off"
 )
 
 func CustomMatcher(key string) (string, bool) {
