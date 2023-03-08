@@ -36,6 +36,7 @@ type SecondaryIndexReader struct {
 	err       error
 	queryPlan *filter.QueryPlan
 	kvIter    Iterator
+	readSize  int
 }
 
 func NewSecondaryIndexReader(ctx context.Context, tx transaction.Tx, coll *schema.DefaultCollection, filter *filter.WrappedFilter, queryPlan *filter.QueryPlan) (*SecondaryIndexReader, error) {
@@ -143,6 +144,8 @@ func (it *SecondaryIndexReader) Next(row *Row) bool {
 
 	var indexRow Row
 	if it.kvIter.Next(&indexRow) {
+		it.readSize += len(indexRow.Data.RawData)
+
 		indexKey, err := keys.FromBinary(it.coll.EncodedTableIndexName, indexRow.Key)
 		if err != nil {
 			it.err = err
@@ -162,6 +165,7 @@ func (it *SecondaryIndexReader) Next(row *Row) bool {
 		if docIter.Next(&keyValue) {
 			row.Data = keyValue.Data
 			row.Key = keyValue.FDBKey
+			it.readSize += len(row.Data.RawData)
 			return true
 		}
 	}
@@ -169,6 +173,7 @@ func (it *SecondaryIndexReader) Next(row *Row) bool {
 }
 
 func (it *SecondaryIndexReader) Interrupted() error { return it.err }
+func (it *SecondaryIndexReader) ReadSize() int      { return it.readSize }
 
 // For local debugging and testing.
 //

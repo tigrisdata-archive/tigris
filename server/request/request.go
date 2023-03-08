@@ -67,6 +67,9 @@ type Metadata struct {
 
 	// Current user/application
 	Sub string
+
+	WrittenBytes int
+	ReadBytes    int
 }
 
 func Init(tg metadata.TenantGetter) {
@@ -251,13 +254,12 @@ type AccessTokenNamespaceExtractor struct{}
 var ErrNamespaceNotFound = errors.NotFound("namespace not found")
 
 func GetRequestMetadataFromContext(ctx context.Context) (*Metadata, error) {
-	// read token
-	value := ctx.Value(MetadataCtxKey{})
-	if value != nil {
+	if value := ctx.Value(MetadataCtxKey{}); value != nil {
 		if requestMetadata, ok := value.(*Metadata); ok {
 			return requestMetadata, nil
 		}
 	}
+
 	return nil, errors.NotFound("Metadata not found")
 }
 
@@ -268,6 +270,7 @@ func GetAccessToken(ctx context.Context) (*types.AccessToken, error) {
 			return requestMetadata.accessToken, nil
 		}
 	}
+
 	return nil, errors.NotFound("Access token not found")
 }
 
@@ -419,4 +422,20 @@ func IsWrite(ctx context.Context) bool {
 
 func NeedSchemaValidation(ctx context.Context) bool {
 	return api.GetHeader(ctx, api.HeaderSchemaSignOff) != "true"
+}
+
+func IncrementWrittenBytes(ctx context.Context, size int) {
+	md, err := GetRequestMetadataFromContext(ctx)
+	ulog.E(err)
+	if md != nil {
+		md.WrittenBytes += size
+	}
+}
+
+func IncrementReadBytes(ctx context.Context, size int) {
+	md, err := GetRequestMetadataFromContext(ctx)
+	ulog.E(err)
+	if md != nil {
+		md.ReadBytes += size
+	}
 }

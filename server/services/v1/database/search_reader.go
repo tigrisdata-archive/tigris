@@ -197,6 +197,7 @@ type FilterableSearchIterator struct {
 	filter     *filter.WrappedFilter
 	pageReader *pageReader
 	collection *schema.DefaultCollection
+	readSize   int
 }
 
 func NewFilterableSearchIterator(collection *schema.DefaultCollection, reader *pageReader, filter *filter.WrappedFilter, singlePage bool) *FilterableSearchIterator {
@@ -238,6 +239,7 @@ func (it *FilterableSearchIterator) Next(row *Row) bool {
 				return false
 			}
 			row.Data.RawData = rawData
+			it.readSize += len(rawData)
 			return true
 		}
 
@@ -255,6 +257,10 @@ func (it *FilterableSearchIterator) getFacets() map[string]*api.SearchFacet {
 
 func (it *FilterableSearchIterator) Interrupted() error {
 	return it.err
+}
+
+func (it *FilterableSearchIterator) ReadSize() int {
+	return it.readSize
 }
 
 func (it *FilterableSearchIterator) getTotalFound() int64 {

@@ -170,3 +170,7 @@ func Wait(ctx context.Context, namespace string, size int, isWrite bool) error {
 
 	return nil
 }
+
+func UpdateQuotaUsage(namespace string, size int, isWrite bool) {
+	metrics.UpdateQuotaUsage(namespace, toUnits(size, isWrite), isWrite)
+}

@@ -31,7 +31,7 @@ type quotaStream struct {
 }
 
 func quotaUnaryServerInterceptor() grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		ns, _ := request.GetNamespace(ctx)
 
 		if m := info.FullMethod; m != api.HealthMethodName && !request.IsAdminApi(m) {
@@ -40,7 +40,14 @@ func quotaUnaryServerInterceptor() grpc.UnaryServerInterceptor {
 			}
 		}
 
-		return handler(ctx, req)
+		res, err := handler(ctx, req)
+
+		if md, _ := request.GetRequestMetadataFromContext(ctx); md != nil {
+			quota.UpdateQuotaUsage(ns, md.WrittenBytes, true)
+			quota.UpdateQuotaUsage(ns, md.ReadBytes, false)
+		}
+
+		return res, err
 	}
 }
 
@@ -52,6 +59,7 @@ func quotaStreamServerInterceptor() grpc.StreamServerInterceptor {
 				WrappedServerStream: middleware.WrapServerStream(stream),
 				namespace:           ns,
 			}
+
 			return handler(srv, wrapped)
 		}
 

@@ -30,6 +30,7 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/util"
@@ -219,6 +220,8 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return Response{}, ctx, err
 	}
 
+	writeSize := 0
+
 	for ; (limit == 0 || modifiedCount < limit) && iterator.Next(&row); modifiedCount++ {
 		key, err := keys.FromBinary(coll.EncodedName, row.Key)
 		if err != nil {
@@ -247,7 +250,8 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 		newData := internal.NewTableDataWithTS(row.Data.CreatedAt, ts, merged)
 		newData.SetVersion(coll.GetVersion())
-		// as we have merged the data, it is safe to call replace
+
+		writeSize += len(merged)
 
 		isUpdate := true
 		newKey := key
@@ -277,10 +281,15 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 				return Response{}, ctx, err
 			}
 		}
+
+		// as we have merged the data, it is safe to call replace
 		if err = tx.Replace(ctx, newKey, newData, isUpdate); ulog.E(err) {
 			return Response{}, ctx, err
 		}
 	}
+
+	request.IncrementWrittenBytes(ctx, writeSize)
+	request.IncrementReadBytes(ctx, iterator.ReadSize())
 
 	ctx = metrics.UpdateSpanTags(ctx, runner.queryMetrics)
 	return Response{
@@ -336,6 +345,7 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		limit = int32(runner.req.Options.Limit)
 	}
 
+	writeSize := 0
 	modifiedCount := int32(0)
 	var row Row
 	for iterator.Next(&row) {
@@ -351,6 +361,8 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			}
 		}
 
+		writeSize += len(row.Data.RawData)
+
 		if err = tx.Delete(ctx, key); ulog.E(err) {
 			return Response{}, ctx, err
 		}
@@ -360,6 +372,9 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			break
 		}
 	}
+
+	request.IncrementWrittenBytes(ctx, writeSize)
+	request.IncrementReadBytes(ctx, iterator.ReadSize())
 
 	ctx = metrics.UpdateSpanTags(ctx, runner.queryMetrics)
 	return Response{

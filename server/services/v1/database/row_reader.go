@@ -36,11 +36,14 @@ type Iterator interface {
 	Next(*Row) bool
 	// Interrupted returns an error if iterator encounters any error.
 	Interrupted() error
+	// ReadSize returns number of bytes read while iterating documents
+	ReadSize() int
 }
 
 type ScanIterator struct {
-	it  kv.Iterator
-	err error
+	it       kv.Iterator
+	err      error
+	readSize int
 }
 
 func NewScanIterator(ctx context.Context, tx transaction.Tx, from keys.Key, to keys.Key) (*ScanIterator, error) {
@@ -63,6 +66,7 @@ func (s *ScanIterator) Next(row *Row) bool {
 	if s.it.Next(&keyValue) {
 		row.Key = keyValue.FDBKey
 		row.Data = keyValue.Data
+		s.readSize += len(row.Data.RawData)
 		return true
 	}
 	s.err = s.it.Err()
@@ -71,14 +75,16 @@ func (s *ScanIterator) Next(row *Row) bool {
 }
 
 func (s *ScanIterator) Interrupted() error { return s.err }
+func (s *ScanIterator) ReadSize() int      { return s.readSize }
 
 type KeyIterator struct {
-	it    kv.Iterator
-	tx    transaction.Tx
-	ctx   context.Context
-	keys  []keys.Key
-	err   error
-	keyId int
+	it       kv.Iterator
+	tx       transaction.Tx
+	ctx      context.Context
+	keys     []keys.Key
+	err      error
+	keyId    int
+	readSize int
 }
 
 func NewKeyIterator(ctx context.Context, tx transaction.Tx, keys []keys.Key) (*KeyIterator, error) {
@@ -107,6 +113,7 @@ func (k *KeyIterator) Next(row *Row) bool {
 		if k.it.Next(&keyValue) {
 			row.Key = keyValue.FDBKey
 			row.Data = keyValue.Data
+			k.readSize += len(row.Data.RawData)
 			return true
 		}
 
@@ -124,6 +131,7 @@ func (k *KeyIterator) Next(row *Row) bool {
 }
 
 func (k *KeyIterator) Interrupted() error { return k.err }
+func (k *KeyIterator) ReadSize() int      { return k.readSize }
 
 // FilterIterator only returns elements that match the given predicate.
 type FilterIterator struct {
@@ -140,6 +148,10 @@ func NewFilterIterator(iterator Iterator, filter *filter.WrappedFilter) *FilterI
 
 func (it *FilterIterator) Interrupted() error {
 	return it.iterator.Interrupted()
+}
+
+func (it *FilterIterator) ReadSize() int {
+	return it.iterator.ReadSize()
 }
 
 // Next advances the iterator till the matching row found and then only fill the row object. In contrast
