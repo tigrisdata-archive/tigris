@@ -133,6 +133,142 @@ func TestIndex_Management(t *testing.T) {
 		resp := createSearchIndex(t, project, testIndex, nil)
 		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "schema is a required during index creation")
 	})
+	t.Run("status_400_unsupported_sort_obj_level", func(t *testing.T) {
+		deleteSearchIndex(t, project, testIndex)
+
+		schema := Map{
+			"schema": Map{
+				"title": testIndex,
+				"properties": Map{
+					"obj": Map{"type": "object", "sort": true},
+				},
+			},
+		}
+
+		resp := createSearchIndex(t, project, testIndex, schema)
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot have search attributes on object 'obj', set it on object fields")
+	})
+	t.Run("status_400_unsupported_facet_obj_level", func(t *testing.T) {
+		deleteSearchIndex(t, project, testIndex)
+
+		schema := Map{
+			"schema": Map{
+				"title": testIndex,
+				"properties": Map{
+					"obj": Map{"type": "object", "facet": true},
+				},
+			},
+		}
+
+		resp := createSearchIndex(t, project, testIndex, schema)
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot have search attributes on object 'obj', set it on object fields")
+	})
+	t.Run("status_400_unsupported_sort_arr", func(t *testing.T) {
+		deleteSearchIndex(t, project, testIndex)
+
+		schema := Map{
+			"schema": Map{
+				"title": testIndex,
+				"properties": Map{
+					"arr": Map{"type": "array", "items": Map{"type": "string"}, "sort": true},
+				},
+			},
+		}
+
+		resp := createSearchIndex(t, project, testIndex, schema)
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot enable sorting on field 'arr' of type 'array'")
+	})
+	t.Run("status_400_unsupported_facet_object_arr", func(t *testing.T) {
+		deleteSearchIndex(t, project, testIndex)
+
+		schema := Map{
+			"schema": Map{
+				"title": testIndex,
+				"properties": Map{
+					"arr": Map{"type": "array", "items": Map{"type": "object", "properties": Map{"name": Map{"type": "string", "facet": true}}}},
+				},
+			},
+		}
+
+		resp := createSearchIndex(t, project, testIndex, schema)
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot enable index or search on an array of objects 'arr'")
+	})
+	t.Run("status_200_sort_facet_index", func(t *testing.T) {
+		deleteSearchIndex(t, project, testIndex)
+
+		schema := Map{
+			"schema": Map{
+				"title": testIndex,
+				"properties": Map{
+					"addr":    Map{"type": "string"},
+					"name":    Map{"type": "string", "sort": true, "facet": true},
+					"numeric": Map{"type": "integer", "sort": true, "facet": true},
+					"number":  Map{"type": "number", "sort": true, "facet": true},
+					"arr":     Map{"type": "array", "items": Map{"type": "string"}, "facet": true},
+					"arr_num": Map{"type": "array", "items": Map{"type": "number"}, "facet": true},
+					"record":  Map{"type": "object", "properties": Map{"record_name": Map{"type": "string", "sort": true, "facet": true}, "record_arr": Map{"type": "array", "items": Map{"type": "string"}, "facet": true}, "record_obj": Map{"type": "object", "properties": Map{"name": Map{"type": "string", "sort": true, "facet": true}}}}},
+				},
+			},
+		}
+
+		createSearchIndex(t, project, testIndex, schema).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status", "created")
+	})
+	t.Run("status_200_sort_facet_nested_obj", func(t *testing.T) {
+		deleteSearchIndex(t, project, testIndex)
+
+		schema := Map{
+			"schema": Map{
+				"title": testIndex,
+				"properties": Map{
+					"obj_1level":     Map{"type": "object", "properties": Map{"name": Map{"type": "string", "sort": true}}},
+					"obj_2level":     Map{"type": "object", "properties": Map{"level2": Map{"type": "object", "properties": Map{"name": Map{"type": "string", "sort": true, "facet": true}}}}},
+					"obj_2level_arr": Map{"type": "object", "properties": Map{"level2": Map{"type": "object", "properties": Map{"arr": Map{"type": "array", "items": Map{"type": "string"}, "facet": true}}}}},
+				},
+			},
+		}
+
+		createSearchIndex(t, project, testIndex, schema).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status", "created")
+	})
+	t.Run("status_200_facet_nested_obj", func(t *testing.T) {
+		deleteSearchIndex(t, project, testIndex)
+
+		schema := Map{
+			"schema": Map{
+				"title": testIndex,
+				"properties": Map{
+					"arr": Map{"type": "object", "properties": Map{"name": Map{"type": "string", "facet": true}}},
+				},
+			},
+		}
+
+		createSearchIndex(t, project, testIndex, schema).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status", "created")
+	})
+	t.Run("status_200_facet_arr", func(t *testing.T) {
+		deleteSearchIndex(t, project, testIndex)
+
+		schema := Map{
+			"schema": Map{
+				"title": testIndex,
+				"properties": Map{
+					"arr": Map{"type": "array", "items": Map{"type": "string"}, "facet": true},
+				},
+			},
+		}
+
+		createSearchIndex(t, project, testIndex, schema).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status", "created")
+	})
 	t.Run("status_success", func(t *testing.T) {
 		deleteSearchIndex(t, project, testIndex)
 

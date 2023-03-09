@@ -357,7 +357,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 	"primary_key": ["id"]
 }`)
 		_, err := NewFactoryBuilder(true).Build("t1", schema)
-		require.Equal(t, "properties only allowed for object type", err.Error())
+		require.Equal(t, "Properties only allowed for object type", err.Error())
 	})
 
 	t.Run("test_object_missing_properties_error", func(t *testing.T) {
