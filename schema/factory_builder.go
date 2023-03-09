@@ -52,7 +52,7 @@ func (fb *FactoryBuilder) deserializeArray(items *FieldBuilder, current *[]*Fiel
 	// object array type
 	if len(items.Properties) > 0 {
 		if items.Type != jsonSpecObject {
-			return errors.InvalidArgument("properties only allowed for object type")
+			return errors.InvalidArgument("Properties only allowed for object type")
 		}
 
 		nestedFields, err := fb.deserializeProperties(items.Properties, nil)
@@ -112,7 +112,7 @@ func (fb *FactoryBuilder) deserializeProperties(properties jsoniter.RawMessage, 
 		// nested fields
 		if len(builder.Properties) > 0 {
 			if builder.Type != jsonSpecObject {
-				return errors.InvalidArgument("properties only allowed for object type")
+				return errors.InvalidArgument("Properties only allowed for object type")
 			}
 
 			if builder.Fields, err = fb.deserializeProperties(builder.Properties, nil); err != nil {
