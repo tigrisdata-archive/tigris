@@ -55,10 +55,6 @@ func TestFieldBuilder_Build(t *testing.T) {
 				expError: nil,
 			},
 			{
-				builder:  &FieldBuilder{FieldName: "test", Type: "number", Primary: &boolTrue},
-				expError: errors.InvalidArgument("unsupported primary key type detected 'number'"),
-			},
-			{
 				builder:  &FieldBuilder{FieldName: "test", Type: "integer", Primary: &boolTrue},
 				expError: nil,
 			},
@@ -68,8 +64,7 @@ func TestFieldBuilder_Build(t *testing.T) {
 			},
 		}
 		for _, c := range cases {
-			_, err := c.builder.Build(false)
-			require.Equal(t, c.expError, err)
+			require.Equal(t, c.expError, ValidateFieldBuilder(*c.builder))
 		}
 	})
 	t.Run("test supported properties", func(t *testing.T) {
@@ -99,29 +94,11 @@ func TestFieldBuilder_Build(t *testing.T) {
 			},
 		}
 		for _, c := range cases {
-			var f FieldBuilder
 			if c.expError != nil {
-				require.Equal(t, c.expError, f.Validate(c.propertySchema))
+				require.Equal(t, c.expError, ValidateSupportedProperties(c.propertySchema))
 			} else {
-				require.NoError(t, f.Validate(c.propertySchema))
+				require.NoError(t, ValidateSupportedProperties(c.propertySchema))
 			}
-		}
-	})
-	t.Run("test reserved fields", func(t *testing.T) {
-		builder := &FieldBuilder{FieldName: "created_at", Type: "date-time"}
-		_, err := builder.Build(false)
-		require.Error(t, err)
-	})
-
-	t.Run("test invalid field name pattern", func(t *testing.T) {
-		invalidFieldNames := []string{"0id", "0ID", "("}
-		for _, invalidFieldName := range invalidFieldNames {
-			_, err := (&FieldBuilder{FieldName: invalidFieldName, Type: "string"}).Build(false) // one time builder, thrown away after test concluded
-			require.Equal(t, err,
-				errors.InvalidArgument(
-					"Invalid collection field name, field name can only contain [a-zA-Z0-9_$] and it can only start"+
-						" with [a-zA-Z_$] for fieldName = '%s'",
-					invalidFieldName))
 		}
 	})
 
@@ -142,32 +119,32 @@ func TestIndexableFieldsAreChecked(t *testing.T) {
 		{
 			// cannot set a byte field as indexable
 			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string", "index": true}, "b": {"type": "string", "format":"byte", "index": true}}}`),
-			errors.InvalidArgument("'b' has been configured to be indexed but it is not a supported indexable type. Only top level non-byte fields can be indexed."),
+			errors.InvalidArgument("Cannot enable index on field 'b' of type 'byte'. Only top level non-byte fields can be indexed."),
 		},
 		{
 			// cannot index an array
 			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string", "index": true}, "arr": {"type": "array", "items":{"type": "string"}, "index": true}}}`),
-			errors.InvalidArgument("'arr' has been configured to be indexed but it is not a supported indexable type. Only top level non-byte fields can be indexed."),
+			errors.InvalidArgument("Cannot enable index on field 'arr' of type 'array'. Only top level non-byte fields can be indexed."),
 		},
 		{
 			// cannot index an object
 			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string", "index": true}, "obj": {"type": "object", "index": true, "properties":{"name": {"type": "string"}}}}}`),
-			errors.InvalidArgument("'obj' has been configured to be indexed but it is not a supported indexable type. Only top level non-byte fields can be indexed."),
+			errors.InvalidArgument("Cannot enable index on object 'obj' or object fields"),
 		},
 		{
 			// cannot index a subfield on an object
-			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string", "index": true}, "obj": {"type": "object", "properties":{"name": {"type": "string", "index": true}}}}}`),
-			errors.InvalidArgument("Cannot index nested field 'name'"),
+			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string", "index": true}, "obj_fail": {"type": "object", "properties":{"name": {"type": "string", "index": true}}}}}`),
+			errors.InvalidArgument("Cannot enable index on nested field 'name'"),
 		},
 		{
 			// cannot index a subfield on an array
-			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string", "index": true},"arr": {"type": "array", "items":{"type": "string", "index": true}}}}`),
-			errors.InvalidArgument("Cannot index nested field in array"),
+			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string", "index": true},"arr": {"type": "array", "items":{"type": "string"}, "index": true}}}`),
+			errors.InvalidArgument("Cannot enable index on field 'arr' of type 'array'. Only top level non-byte fields can be indexed."),
 		},
 	}
 
 	for _, c := range cases {
-		_, err := Build("t1", c.schema)
+		_, err := NewFactoryBuilder(true).Build("t1", c.schema)
 		require.Equal(t, c.expErr, err)
 	}
 }

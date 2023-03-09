@@ -258,7 +258,7 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string) (*T
 	}
 
 	// this will never create new namespace
-	// when the authn/authz is setup correctly
+	// when the authn/authz is set up correctly
 	// this is for reading namespaces from storage into cache
 	tx, err := m.txMgr.StartTx(ctx)
 	if err != nil {
@@ -626,6 +626,8 @@ func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbN
 			log.Error().Str("search_collection", searchCollectionName).Msg("fields are not present in search")
 		}
 
+		// Note: Skipping the error here as during create collection the online flow guarantees that schema is properly
+		// validated.
 		collection, err := createCollection(meta.ID, coll, schemas, idxMeta, searchCollectionName, fieldsInSearch)
 		if err != nil {
 			database.needFixingCollections[coll] = struct{}{}
@@ -667,7 +669,7 @@ func (tenant *Tenant) reloadSearch(ctx context.Context, tx transaction.Tx, proje
 			return nil, err
 		}
 
-		searchFactory, err := schema.BuildSearch(searchMD.Name, schV.Schema)
+		searchFactory, err := schema.NewFactoryBuilder(false).BuildSearch(searchMD.Name, schV.Schema)
 		if err != nil {
 			log.Err(err).Msgf("seeing rebuilding failure for search index %s", searchMD.Name)
 			continue
@@ -746,7 +748,7 @@ func (tenant *Tenant) createSearchIndex(ctx context.Context, tx transaction.Tx, 
 
 func (tenant *Tenant) updateSearchIndex(ctx context.Context, tx transaction.Tx, project *Project, factory *schema.SearchFactory, index *schema.SearchIndex) error {
 	// first apply schema change whether it conforms to the backward compatibility rules.
-	if err := schema.ApplySearchIndexSchemaRules(index, factory); err != nil {
+	if err := schema.ApplySearchIndexBackwardCompatibilityRules(index, factory); err != nil {
 		return err
 	}
 
@@ -763,7 +765,7 @@ func (tenant *Tenant) updateSearchIndex(ctx context.Context, tx transaction.Tx, 
 	updatedIndex := schema.NewSearchIndex(version, index.StoreIndexName(), factory, previousIndexInStore.Fields)
 
 	// update indexing store schema if there is a change
-	if deltaFields := schema.GetSearchDeltaFields(true, index.QueryableFields, updatedIndex.Fields, previousIndexInStore.Fields); len(deltaFields) > 0 {
+	if deltaFields := updatedIndex.GetSearchDeltaFields(index.QueryableFields, previousIndexInStore.Fields); len(deltaFields) > 0 {
 		if err := tenant.searchStore.UpdateCollection(ctx, updatedIndex.StoreIndexName(), &tsApi.CollectionUpdateSchema{
 			Fields: deltaFields,
 		}); err != nil {
@@ -1070,7 +1072,7 @@ func (tenant *Tenant) CreateBranch(ctx context.Context, tx transaction.Tx, projN
 	// Create collections inside the new database branch
 	branch := NewDatabase(branchMeta.ID, dbName.Name())
 	for _, coll := range proj.database.ListCollection() {
-		schFactory, err := schema.Build(coll.Name, coll.Schema)
+		schFactory, err := schema.NewFactoryBuilder(true).Build(coll.Name, coll.Schema)
 		if err != nil {
 			return err
 		}
@@ -1265,7 +1267,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 	existingCollection := c.collection
 
 	// now validate if the new collection(schema) conforms to the backward compatibility rules.
-	if err := schema.ApplySchemaRules(existingCollection, schFactory); err != nil {
+	if err := schema.ApplyBackwardCompatibilityRules(existingCollection, schFactory); err != nil {
 		return err
 	}
 
@@ -1325,7 +1327,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 
 	if config.DefaultConfig.Search.WriteEnabled {
 		// update indexing store schema if there is a change
-		if deltaFields := schema.GetSearchDeltaFields(false, existingCollection.ImplicitSearchIndex.QueryableFields, schFactory.Fields, existingSearch.Fields); len(deltaFields) > 0 {
+		if deltaFields := collection.ImplicitSearchIndex.GetSearchDeltaFields(existingCollection.ImplicitSearchIndex.QueryableFields, schFactory.Fields); len(deltaFields) > 0 {
 			if err := tenant.searchStore.UpdateCollection(ctx, collection.ImplicitSearchIndex.StoreIndexName(), &tsApi.CollectionUpdateSchema{
 				Fields: deltaFields,
 			}); err != nil {
@@ -1689,7 +1691,7 @@ func (c *collectionHolder) get() *schema.DefaultCollection {
 func createCollection(id uint32, name string, schemas schema.Versions, idxMeta map[string]*IndexMetadata,
 	searchCollectionName string, fieldsInSearch []tsApi.Field,
 ) (*schema.DefaultCollection, error) {
-	schFactory, err := schema.Build(name, schemas.Latest().Schema)
+	schFactory, err := schema.NewFactoryBuilder(false).Build(name, schemas.Latest().Schema)
 	if err != nil {
 		return nil, err
 	}

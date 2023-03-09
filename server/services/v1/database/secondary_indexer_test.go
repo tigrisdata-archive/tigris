@@ -693,7 +693,7 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 }
 
 func setupTest(t *testing.T, reqSchema []byte) *SecondaryIndexer {
-	schFactory, err := schema.Build("t1", reqSchema)
+	schFactory, err := schema.NewFactoryBuilder(true).Build("t1", reqSchema)
 	assert.NoError(t, err)
 	coll, err := schema.NewDefaultCollection(1, 1, schFactory, nil, nil)
 	assert.NoError(t, err)

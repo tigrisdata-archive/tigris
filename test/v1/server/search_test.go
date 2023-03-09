@@ -54,11 +54,6 @@ var testSearchIndexSchema = Map{
 				"description": "simple double field",
 				"type":        "number",
 			},
-			"bytes_value": Map{
-				"description": "simple bytes field",
-				"type":        "string",
-				"format":      "byte",
-			},
 			"uuid_value": Map{
 				"description": "uuid field",
 				"type":        "string",
@@ -224,7 +219,6 @@ func TestCreate_ById(t *testing.T) {
 			"string_value":       "simple_insert",
 			"bool_value":         true,
 			"double_value":       10.01,
-			"bytes_value":        []byte(`"simple_insert"`),
 			"array_simple_value": []string{"a", "b"},
 			"array_obj_value":    []any{map[string]any{"integer_value": 10}},
 			"object_value":       map[string]any{"string_value": "a"},
@@ -676,13 +670,12 @@ type res struct {
 }
 
 func getSearchResults(t *testing.T, project string, index string, query Map) *res {
-	req := expect(t).POST(fmt.Sprintf("/v1/projects/%s/search/indexes/%s/documents/search", project, index)).
+	var req = expect(t).POST(fmt.Sprintf("/v1/projects/%s/search/indexes/%s/documents/search", project, index)).
 		WithJSON(query).
 		Expect().
 		Status(http.StatusOK).
 		Body().
 		Raw()
-
 	dec := jsoniter.NewDecoder(bytes.NewReader([]byte(req)))
 
 	var res *res

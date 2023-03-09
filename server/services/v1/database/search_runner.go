@@ -192,7 +192,7 @@ func (runner *SearchQueryRunner) getSearchFields(coll *schema.DefaultCollection)
 	if len(searchFields) == 0 {
 		// this is to include all searchable fields if not present in the query
 		for _, cf := range coll.GetQueryableFields() {
-			if cf.DataType == schema.StringType {
+			if cf.DataType == schema.StringType && cf.SearchIndexed {
 				searchFields = append(searchFields, cf.InMemoryName())
 			}
 		}
@@ -203,7 +203,7 @@ func (runner *SearchQueryRunner) getSearchFields(coll *schema.DefaultCollection)
 				return nil, err
 			}
 			if !cf.SearchIndexed {
-				return nil, errors.InvalidArgument("`%s` is not a searchable field. Only indexed fields can be queried", sf)
+				return nil, errors.InvalidArgument("`%s` is not a searchable field. Enable search indexing on this field", sf)
 			}
 			if cf.InMemoryName() != cf.Name() {
 				searchFields[i] = cf.InMemoryName()
@@ -226,7 +226,7 @@ func (runner *SearchQueryRunner) getFacetFields(coll *schema.DefaultCollection) 
 		}
 		if !cf.Faceted {
 			return qsearch.Facets{}, errors.InvalidArgument(
-				"Cannot generate facets for `%s`. Faceting is only supported for numeric and text fields", ff.Name)
+				"Cannot generate facets for `%s`. Enable faceting on this field", ff.Name)
 		}
 		if cf.InMemoryName() != cf.Name() {
 			facets.Fields[i].Name = cf.InMemoryName()

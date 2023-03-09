@@ -432,7 +432,7 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 		"primary_key": ["K1", "K2"]
 	}`)
 
-		factory, err := schema.Build("test_collection", jsSchema)
+		factory, err := schema.NewFactoryBuilder(true).Build("test_collection", jsSchema)
 		require.NoError(t, err)
 		require.NoError(t, tenant.CreateCollection(ctx, tx, db2, factory))
 
@@ -497,7 +497,7 @@ func TestTenantManager_DropCollection(t *testing.T) {
 		"primary_key": ["K1"]
 	}`)
 
-		factory, err := schema.Build("test_collection", jsSchema)
+		factory, err := schema.NewFactoryBuilder(true).Build("test_collection", jsSchema)
 		require.NoError(t, err)
 		require.NoError(t, tenant.CreateCollection(ctx, tx, db2, factory))
 		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
@@ -563,7 +563,7 @@ func TestTenantManager_SearchIndexes(t *testing.T) {
 		}
 	}`)
 
-	factory, err := schema.BuildSearch("test_index", jsSchema)
+	factory, err := schema.NewFactoryBuilder(true).BuildSearch("test_index", jsSchema)
 	require.NoError(t, err)
 	require.NoError(t, tenant.CreateSearchIndex(ctx, tx, proj1, factory))
 

@@ -25,7 +25,7 @@ import (
 func TestCreateCollectionFromSchema(t *testing.T) {
 	t.Run("test_create_success", func(t *testing.T) {
 		reqSchema := []byte(`{"title":"t1", "description":"This document records the details of an order","properties":{"order_id":{"description":"A unique identifier for an order","type":"integer"},"cust_id":{"description":"A unique identifier for a customer","type":"integer"},"product":{"description":"name of the product","type":"string","maxLength":100},"quantity":{"description":"number of products ordered","type":"integer"},"price":{"description":"price of the product","type":"number"}},"primary_key":["cust_id","order_id"]}`)
-		schF, err := Build("t1", reqSchema)
+		schF, err := NewFactoryBuilder(true).Build("t1", reqSchema)
 		require.NoError(t, err)
 
 		c, err := NewDefaultCollection(1, 1, schF, nil, nil)
@@ -37,7 +37,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 	})
 	t.Run("test_create_failure", func(t *testing.T) {
 		reqSchema := []byte(`{"title":"Record of an order","properties":{"order_id":{"description":"A unique identifier for an order","type":"integer"},"cust_id":{"description":"A unique identifier for a customer","type":"integer"},"product":{"description":"name of the product","type":"string","maxLength":100},"quantity":{"description":"number of products ordered","type":"integer"},"price":{"description":"price of the product","type":"number"}},"primary_key":["cust_id","order_id"]}`)
-		_, err := Build("t1", reqSchema)
+		_, err := NewFactoryBuilder(true).Build("t1", reqSchema)
 		require.Equal(t, "collection name is not same as schema name 't1' 'Record of an order'", err.(*api.TigrisError).Error())
 	})
 	t.Run("test_supported_types", func(t *testing.T) {
@@ -71,7 +71,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 	},
 	"primary_key": ["K1", "K2"]
 }`)
-		sch, err := Build("t1", schema)
+		sch, err := NewFactoryBuilder(true).Build("t1", schema)
 		require.NoError(t, err)
 		c, err := NewDefaultCollection(1, 1, sch, nil, nil)
 		require.NoError(t, err)
@@ -109,7 +109,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 	},
 	"primary_key": ["K1", "K2", "K3", "K4", "K5"]
 }`)
-		sch, err := Build("t1", schema)
+		sch, err := NewFactoryBuilder(true).Build("t1", schema)
 		require.NoError(t, err)
 		c, err := NewDefaultCollection(1, 1, sch, nil, nil)
 		require.NoError(t, err)
@@ -127,13 +127,13 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 				"type": "number"
 			},
 			"K2": {
-				"type": "int"
+				"type": "integer"
 			}
 		},
 		"primary_key": ["K1"]
 	}`)
-		_, err := Build("t1", schema)
-		require.Equal(t, "unsupported primary key type detected 'number'", err.(*api.TigrisError).Error())
+		_, err := NewFactoryBuilder(true).Build("t1", schema)
+		require.Equal(t, "unsupported primary key type detected 'double'", err.(*api.TigrisError).Error())
 	})
 
 	t.Run("test_complex_types", func(t *testing.T) {
@@ -216,7 +216,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 	},
 	"primary_key": ["id"]
 }`)
-		sch, err := Build("t1", schema)
+		sch, err := NewFactoryBuilder(true).Build("t1", schema)
 		require.NoError(t, err)
 
 		coll, err := NewDefaultCollection(1, 1, sch, nil, nil)
@@ -331,7 +331,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 	},
 	"primary_key": ["id"]
 }`)
-		_, err := Build("t1", schema)
+		_, err := NewFactoryBuilder(true).Build("t1", schema)
 		require.Equal(t, errors.InvalidArgument("missing items for array field"), err)
 	})
 
@@ -356,7 +356,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 	},
 	"primary_key": ["id"]
 }`)
-		_, err := Build("t1", schema)
+		_, err := NewFactoryBuilder(true).Build("t1", schema)
 		require.Equal(t, "properties only allowed for object type", err.Error())
 	})
 
@@ -373,7 +373,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 	},
 	"primary_key": ["id"]
 }`)
-		sch, err := Build("t1", schema)
+		sch, err := NewFactoryBuilder(true).Build("t1", schema)
 		require.NoError(t, err)
 		c, err := NewDefaultCollection(1, 1, sch, nil, nil)
 		require.NoError(t, err)
@@ -403,7 +403,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 	},
 	"primary_key": ["K1", "K2"]
 }`)
-		sch, err := Build("t1", schema)
+		sch, err := NewFactoryBuilder(true).Build("t1", schema)
 		require.NoError(t, err)
 		c, err := NewDefaultCollection(1, 1, sch, nil, nil)
 		require.NoError(t, err)
@@ -439,7 +439,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 	},
 	"primary_key": ["K1"]
 }`)
-		sch, err := Build("t1", schema)
+		sch, err := NewFactoryBuilder(true).Build("t1", schema)
 		require.NoError(t, err)
 		c, err := NewDefaultCollection(1, 1, sch, nil, nil)
 		require.NoError(t, err)
@@ -468,7 +468,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 	},
 	"primary_key": ["K1"]
 }`)
-		_, err := Build("t1", schema)
+		_, err := NewFactoryBuilder(true).Build("t1", schema)
 		require.Equal(t, "now() is only supported for date-time type", err.Error())
 
 		schema = []byte(`{
@@ -484,7 +484,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 	},
 	"primary_key": ["K1"]
 }`)
-		_, err = Build("t1", schema)
+		_, err = NewFactoryBuilder(true).Build("t1", schema)
 		require.Equal(t, "'random()' function is not supported", err.Error())
 	})
 	t.Run("test_no-primary-key-default-id", func(t *testing.T) {
@@ -500,7 +500,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		}
 	}
 }`)
-		sch, err := Build("t1", schema)
+		sch, err := NewFactoryBuilder(true).Build("t1", schema)
 		require.NoError(t, err)
 		c, err := NewDefaultCollection(1, 1, sch, nil, nil)
 		require.NoError(t, err)
@@ -532,7 +532,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		}
 	}
 }`)
-		sch, err := Build("t1", schema)
+		sch, err := NewFactoryBuilder(true).Build("t1", schema)
 		require.NoError(t, err)
 		c, err := NewDefaultCollection(1, 1, sch, nil, nil)
 		require.NoError(t, err)

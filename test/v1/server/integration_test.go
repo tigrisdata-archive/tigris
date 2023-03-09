@@ -44,6 +44,8 @@ var testCreateSchema = Map{
 			"pkey_int": Map{
 				"description": "primary key field",
 				"type":        "integer",
+				"searchIndex": true,
+				"sort": true,
 			},
 			"int_value": Map{
 				"description": "simple int field",
