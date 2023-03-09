@@ -654,7 +654,7 @@ func (runner *SearchRunner) getSearchFields(index *schema.SearchIndex) ([]string
 	if len(searchFields) == 0 {
 		// this is to include all searchable fields if not present in the query
 		for _, cf := range index.QueryableFields {
-			if cf.DataType == schema.StringType {
+			if cf.DataType == schema.StringType && cf.SearchIndexed {
 				searchFields = append(searchFields, cf.InMemoryName())
 			}
 		}
@@ -814,11 +814,9 @@ func (runner *IndexRunner) Run(ctx context.Context, tx transaction.Tx, tenant *m
 
 	switch {
 	case runner.create != nil:
-		factory, err := schema.BuildSearch(runner.create.GetName(), runner.create.GetSchema())
+		fb := schema.NewFactoryBuilder(true)
+		factory, err := fb.BuildSearch(runner.create.GetName(), runner.create.GetSchema())
 		if err != nil {
-			return Response{}, err
-		}
-		if err := schema.ValidateSearchSchema(factory); err != nil {
 			return Response{}, err
 		}
 

@@ -3917,9 +3917,9 @@ func TestRead_Sorted(t *testing.T) {
 			"schema": Map{
 				"title": coll,
 				"properties": Map{
-					"id":           Map{"type": "integer"},
+					"id":           Map{"type": "integer", "searchIndex": true, "sort": true},
 					"int_value":    Map{"type": "integer"},
-					"string_value": Map{"type": "string", "sort": true},
+					"string_value": Map{"type": "string", "searchIndex": true, "sort": true},
 				},
 			},
 		}).Status(http.StatusOK)

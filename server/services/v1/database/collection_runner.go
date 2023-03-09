@@ -102,7 +102,7 @@ func (runner *CollectionQueryRunner) createOrUpdate(ctx context.Context, tx tran
 		return Response{}, ctx, errors.AlreadyExists("collection already exist")
 	}
 
-	schFactory, err := schema.Build(req.GetCollection(), req.GetSchema())
+	schFactory, err := schema.NewFactoryBuilder(true).Build(req.GetCollection(), req.GetSchema())
 	if err != nil {
 		return Response{}, ctx, err
 	}

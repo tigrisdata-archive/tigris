@@ -81,15 +81,15 @@ func TestApplySchemaRules(t *testing.T) {
 	config.DefaultConfig.Schema.AllowIncompatible = false
 
 	for _, c := range cases {
-		f1, err := Build("t1", c.existing)
+		f1, err := NewFactoryBuilder(true).Build("t1", c.existing)
 		require.NoError(t, err)
-		f2, err := Build("t1", c.incoming)
+		f2, err := NewFactoryBuilder(true).Build("t1", c.incoming)
 		require.NoError(t, err)
 
 		existingC, err := NewDefaultCollection(1, 1, f1, nil, nil)
 		require.NoError(t, err)
 
-		err = ApplySchemaRules(existingC, f2)
+		err = ApplyBackwardCompatibilityRules(existingC, f2)
 		require.Equal(t, c.expErr, err)
 	}
 }
@@ -147,15 +147,15 @@ func TestApplySchemaRulesIncompatible(t *testing.T) {
 	config.DefaultConfig.Schema.AllowIncompatible = true
 
 	for _, c := range cases {
-		f1, err := Build("t1", c.existing)
+		f1, err := NewFactoryBuilder(true).Build("t1", c.existing)
 		require.NoError(t, err)
-		f2, err := Build("t1", c.incoming)
+		f2, err := NewFactoryBuilder(true).Build("t1", c.incoming)
 		require.NoError(t, err)
 
 		existingC, err := NewDefaultCollection(1, 1, f1, nil, nil)
 		require.NoError(t, err)
 
-		err = ApplySchemaRules(existingC, f2)
+		err = ApplyBackwardCompatibilityRules(existingC, f2)
 		require.Equal(t, c.expErr, err)
 	}
 }
@@ -168,51 +168,138 @@ func TestApplySearchIndexSchemaRules(t *testing.T) {
 	}{
 		{
 			// field added
-			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}}}`),
-			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}, "b": { "type": "string", "format": "byte"}}}`),
+			[]byte(`{ "title": "t1", "properties": { "id": { "type": "string"}, "s": { "type": "string"}}}`),
+			[]byte(`{ "title": "t1", "properties": { "id": { "type": "string"}, "s": { "type": "string"}, "b": { "type": "string"}}}`),
 			nil,
 		},
 		{
 			// field removed
-			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}},"primary_key": ["id"]}`),
-			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}},"primary_key": ["id"]}`),
+			[]byte(`{ "title": "t1", "properties": { "id": { "type": "string"}, "s": { "type": "string"}},"primary_key": ["id"]}`),
+			[]byte(`{ "title": "t1", "properties": { "id": { "type": "string"}},"primary_key": ["id"]}`),
 			nil,
 		},
 		{
 			// type changed
-			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}}}`),
-			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string", "format":"byte"}}}`),
+			[]byte(`{ "title": "t1", "properties": { "id": { "type": "string"}, "s": { "type": "string"}}}`),
+			[]byte(`{ "title": "t1", "properties": { "id": { "type": "string"}, "s": { "type": "string", "format":"date-time"}}}`),
 			errors.InvalidArgument("data type mismatch for field 's'"),
-		},
-		{
-			// source changed
-			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}}, "source": {"type": "external"}}`),
-			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}}, "source": {"type": "tigris", "collection": "foo"}}`),
-			errors.InvalidArgument("changing index source type is not allowed from: 'external', to: 'tigris'"),
-		},
-		{
-			// collection changed
-			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}}, "source": {"type": "tigris", "collection": "foo"}}`),
-			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}}, "source": {"type": "tigris", "collection": "bar"}}`),
-			errors.InvalidArgument("changing index source collection is not allowed from: 'foo', to: 'bar'"),
-		},
-		{
-			// branch changed
-			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}}, "source": {"type": "tigris", "collection": "foo", "branch": "featA"}}`),
-			[]byte(`{"title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}}, "source": {"type": "tigris", "collection": "foo", "branch": "featB"}}`),
-			errors.InvalidArgument("changing index source database branch is not allowed from: 'featA', to: 'featB'"),
 		},
 	}
 
 	for _, c := range cases {
-		f1, err := BuildSearch("t1", c.existing)
+		f1, err := NewFactoryBuilder(true).BuildSearch("t1", c.existing)
 		require.NoError(t, err)
-		f2, err := BuildSearch("t1", c.incoming)
+		f2, err := NewFactoryBuilder(true).BuildSearch("t1", c.incoming)
 		require.NoError(t, err)
 
 		existingC := NewSearchIndex(1, "1.1.t1", f1, nil)
 
-		err = ApplySearchIndexSchemaRules(existingC, f2)
+		err = ApplySearchIndexBackwardCompatibilityRules(existingC, f2)
 		require.Equal(t, c.expErr, err)
+	}
+}
+
+func TestAttributesOnFields(t *testing.T) {
+	t.Run("test reserved fields", func(t *testing.T) {
+		ptrTrue := true
+		f := &Field{FieldName: "test", DataType: DoubleType, PrimaryKeyField: &ptrTrue}
+		require.Equal(t, errors.InvalidArgument("unsupported primary key type detected 'double'"), ValidateFieldAttributes(false, f))
+	})
+	t.Run("test reserved fields", func(t *testing.T) {
+		f := &Field{FieldName: "_tigris_created_at", DataType: DateTimeType}
+		require.Error(t, ValidateFieldAttributes(false, f))
+	})
+	t.Run("test invalid field name pattern", func(t *testing.T) {
+		invalidFieldNames := []string{"0id", "0ID", "("}
+		for _, invalidFieldName := range invalidFieldNames {
+			err := ValidateFieldAttributes(false, &Field{FieldName: invalidFieldName, DataType: StringType})
+			require.Equal(t, err,
+				errors.InvalidArgument(
+					"Invalid collection field name, field name can only contain [a-zA-Z0-9_$] and it can only start"+
+						" with [a-zA-Z_$] for fieldName = '%s'",
+					invalidFieldName))
+		}
+	})
+}
+
+func TestSearchAttributesOnFields(t *testing.T) {
+	cases := []struct {
+		schema      []byte
+		expErrorMsg string
+	}{
+		{
+			[]byte(`{"title":"test","properties":{"id":{"type":"string","searchIndex":true,"facet":true,"sort":true}}}`),
+			"",
+		}, {
+			[]byte(`{"title":"test","properties":{"name":{"type":"string","searchIndex":true,"facet":true,"sort":true}}}`),
+			"",
+		}, {
+			[]byte(`{"title":"test","properties":{"name":{"type":"string","index":true,"facet":true,"sort":true}}}`),
+			"Enable search index first to use faceting or sorting on field 'name'",
+		}, {
+			[]byte(`{"title":"test","properties":{"arr":{"type":"array","items":{"type":"string"},"searchIndex":true,"facet":true}}}`),
+			"",
+		}, {
+			[]byte(`{"title":"test","properties":{"arr":{"type":"array","items":{"type":"string"},"searchIndex":true,"facet":true,"sort":true}}}`),
+			"Cannot enable sorting on field 'arr' of type 'array'",
+		}, {
+			[]byte(`{"title":"test","properties":{"obj":{"type":"object","searchIndex":true,"facet":true,"sort":true}}}`),
+			"Cannot have search attributes on object 'obj', set it on object fields",
+		}, {
+			[]byte(`{"title":"test","properties":{"obj":{"type":"object","properties":{"id":{"type":"integer","searchIndex":true}}}}}`),
+			"",
+		}, {
+			[]byte(`{"title":"test","properties":{"obj":{"type":"object","properties":{"id":{"type":"integer","searchIndex":true}, "nested": {"type":"object","properties":{"str":{"type":"string","searchIndex":true}}}}}}}`),
+			"",
+		}, {
+			[]byte(`{"title":"test","properties":{"obj_fail":{"type":"object","properties":{"nested_arr":{"type":"array","items":{"type":"string"},"searchIndex":true,"facet":true},"nested_arr_obj":{"type":"array","items":{"type":"object","properties":{"n_id":{"type":"integer"}}}}}}}}`),
+			"",
+		}, {
+			[]byte(`{"title":"test","properties":{"obj_last":{"type":"object","properties":{"nested_arr_obj":{"type":"array","items":{"type":"object","properties":{"n_id":{"type":"integer","searchIndex":true}}}}}}}}`),
+			"Cannot enable index or search on an array of objects",
+		},
+	}
+	for _, c := range cases {
+		_, err := NewFactoryBuilder(true).Build("test", c.schema)
+		if len(c.expErrorMsg) > 0 {
+			require.Contains(t, err.Error(), c.expErrorMsg)
+		} else {
+			require.NoError(t, err)
+		}
+	}
+}
+
+func TestIndexAttributeOnFields(t *testing.T) {
+	cases := []struct {
+		schema      []byte
+		expErrorMsg string
+	}{
+		{
+			[]byte(`{"title":"test","properties":{"id":{"type":"string","index":true}}}`),
+			"",
+		}, {
+			[]byte(`{"title":"test","properties":{"name":{"type":"string","index":true}}}`),
+			"",
+		}, {
+			[]byte(`{"title":"test","properties":{"arr":{"type":"array","items":{"type":"string"},"index":true}}}`),
+			"Cannot enable index on field 'arr' of type 'array'",
+		}, {
+			[]byte(`{"title":"test","properties":{"obj":{"type":"object","index":true}}}`),
+			"Cannot enable index on object 'obj' or object fields",
+		}, {
+			[]byte(`{"title":"test","properties":{"obj":{"type":"object","properties":{"nested_arr":{"type":"array","items":{"type":"string"},"index":true},"nested_arr_obj":{"type":"array","items":{"type":"object","properties":{"n_id":{"type":"integer"}}}}}}}}`),
+			"Cannot enable index on nested field 'nested_arr'",
+		}, {
+			[]byte(`{"title":"test","properties":{"obj_last":{"type":"object","properties":{"nested_arr_obj":{"type":"array","items":{"type":"object","properties":{"n_id":{"type":"integer","index":true}}}}}}}}`),
+			"Cannot enable index on nested field 'n_id'",
+		},
+	}
+	for _, c := range cases {
+		_, err := NewFactoryBuilder(true).Build("test", c.schema)
+		if len(c.expErrorMsg) > 0 {
+			require.Contains(t, err.Error(), c.expErrorMsg)
+		} else {
+			require.NoError(t, err)
+		}
 	}
 }

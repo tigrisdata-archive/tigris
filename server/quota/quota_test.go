@@ -67,7 +67,7 @@ func TestQuota(t *testing.T) {
 		  "primary_key": ["K1", "K2"]
 	    }`)
 
-	factory, err := schema.Build("test_collection", jsSchema)
+	factory, err := schema.NewFactoryBuilder(true).Build("test_collection", jsSchema)
 	require.NoError(t, err)
 
 	err = tenant.Reload(ctx, tx, []byte("aaa"))

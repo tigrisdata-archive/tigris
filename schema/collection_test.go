@@ -223,7 +223,7 @@ func TestCollection_SchemaValidate(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		schFactory, err := Build("t1", reqSchema)
+		schFactory, err := NewFactoryBuilder(true).Build("t1", reqSchema)
 		require.NoError(t, err)
 
 		coll, err := NewDefaultCollection(1, 1, schFactory, nil, nil)
@@ -286,7 +286,7 @@ func TestCollection_AdditionalProperties(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		schFactory, err := Build("t1", reqSchema)
+		schFactory, err := NewFactoryBuilder(true).Build("t1", reqSchema)
 		require.NoError(t, err)
 
 		coll, err := NewDefaultCollection(1, 1, schFactory, nil, nil)
@@ -324,7 +324,7 @@ func TestCollection_Object(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		schFactory, err := Build("t1", reqSchema)
+		schFactory, err := NewFactoryBuilder(true).Build("t1", reqSchema)
 		require.NoError(t, err)
 
 		coll, err := NewDefaultCollection(1, 1, schFactory, nil, nil)
@@ -384,7 +384,7 @@ func TestCollection_Int64(t *testing.T) {
 		"primary_key": ["id"]
 	}`)
 
-	schFactory, err := Build("t1", reqSchema)
+	schFactory, err := NewFactoryBuilder(true).Build("t1", reqSchema)
 	require.NoError(t, err)
 	coll, err := NewDefaultCollection(1, 1, schFactory, nil, nil)
 	require.NoError(t, err)

@@ -119,11 +119,12 @@ func buildSchemaDelta(schema1 Version, schema2 Version) (*VersionDelta, error) {
 		err           error
 	)
 
-	if first, err = Build("", schema1.Schema); err != nil {
+	fb := NewFactoryBuilder(false)
+	if first, err = fb.Build("", schema1.Schema); err != nil {
 		return nil, err
 	}
 
-	if second, err = Build("", schema2.Schema); err != nil {
+	if second, err = fb.Build("", schema2.Schema); err != nil {
 		return nil, err
 	}
 

@@ -24,12 +24,13 @@ import (
 )
 
 func TestSearchQueryRunner_getFacetFields(t *testing.T) {
+	ptrTrue := true
 	collection := &schema.DefaultCollection{
 		QueryableFields: []*schema.QueryableField{
-			schema.NewQueryableFieldsBuilder(false).NewQueryableField("field_1", &schema.Field{DataType: schema.StringType}, nil),
-			schema.NewQueryableFieldsBuilder(false).NewQueryableField("parent.field_2", &schema.Field{DataType: schema.StringType}, nil),
-			schema.NewQueryableFieldsBuilder(false).NewQueryableField("field_3", &schema.Field{DataType: schema.ByteType}, nil),
-			schema.NewQueryableFieldsBuilder(false).NewQueryableField("field_4", &schema.Field{DataType: schema.StringType}, nil),
+			schema.NewQueryableFieldsBuilder().NewQueryableField("field_1", &schema.Field{DataType: schema.StringType, Faceted: &ptrTrue, SearchIndexed: &ptrTrue}, nil),
+			schema.NewQueryableFieldsBuilder().NewQueryableField("parent.field_2", &schema.Field{DataType: schema.StringType, Faceted: &ptrTrue, SearchIndexed: &ptrTrue}, nil),
+			schema.NewQueryableFieldsBuilder().NewQueryableField("field_3", &schema.Field{DataType: schema.ByteType}, nil),
+			schema.NewQueryableFieldsBuilder().NewQueryableField("field_4", &schema.Field{DataType: schema.StringType}, nil),
 		},
 	}
 	runner := &SearchQueryRunner{req: &api.SearchRequest{}}
@@ -55,7 +56,7 @@ func TestSearchQueryRunner_getFacetFields(t *testing.T) {
 	t.Run("requested facet field is not faceted in collection", func(t *testing.T) {
 		runner.req.Facet = []byte(`{"parent.field_2":{"size":10},"field_3":{"size":10}}`)
 		facets, err := runner.getFacetFields(collection)
-		assert.ErrorContains(t, err, "only supported for numeric and text fields")
+		assert.ErrorContains(t, err, "Cannot generate facets for `field_3`. Enable faceting on this field")
 		assert.NotNil(t, facets)
 		assert.Empty(t, facets.Fields)
 	})
@@ -83,8 +84,8 @@ func TestSearchQueryRunner_getFacetFields(t *testing.T) {
 func TestSearchQueryRunner_getFieldSelection(t *testing.T) {
 	collection := &schema.DefaultCollection{
 		QueryableFields: []*schema.QueryableField{
-			schema.NewQueryableFieldsBuilder(false).NewQueryableField("field_1", &schema.Field{DataType: schema.StringType}, nil),
-			schema.NewQueryableFieldsBuilder(false).NewQueryableField("parent.field_2", &schema.Field{DataType: schema.StringType}, nil),
+			schema.NewQueryableFieldsBuilder().NewQueryableField("field_1", &schema.Field{DataType: schema.StringType}, nil),
+			schema.NewQueryableFieldsBuilder().NewQueryableField("parent.field_2", &schema.Field{DataType: schema.StringType}, nil),
 		},
 	}
 
@@ -159,9 +160,9 @@ func TestSearchQueryRunner_getFieldSelection(t *testing.T) {
 func TestSearchQueryRunner_getSortOrdering(t *testing.T) {
 	collection := &schema.DefaultCollection{
 		QueryableFields: []*schema.QueryableField{
-			schema.NewQueryableFieldsBuilder(false).NewQueryableField("field_1", &schema.Field{DataType: schema.StringType}, nil),
-			schema.NewQueryableFieldsBuilder(false).NewQueryableField("parent.field_2", &schema.Field{DataType: schema.StringType}, nil),
-			schema.NewQueryableFieldsBuilder(false).NewQueryableField("field_3", &schema.Field{DataType: schema.ByteType}, nil),
+			schema.NewQueryableFieldsBuilder().NewQueryableField("field_1", &schema.Field{DataType: schema.StringType}, nil),
+			schema.NewQueryableFieldsBuilder().NewQueryableField("parent.field_2", &schema.Field{DataType: schema.StringType}, nil),
+			schema.NewQueryableFieldsBuilder().NewQueryableField("field_3", &schema.Field{DataType: schema.ByteType}, nil),
 		},
 	}
 	collection.QueryableFields[0].Sortable = true
@@ -187,7 +188,7 @@ func TestSearchQueryRunner_getSortOrdering(t *testing.T) {
 	t.Run("requested sort field is not sortable in collection", func(t *testing.T) {
 		runner.req.Sort = []byte(`[{"field_1":"$desc"},{"field_3":"$asc"}]`)
 		sortOrder, err := runner.getSortOrdering(collection, runner.req.Sort)
-		assert.ErrorContains(t, err, "Cannot sort on `field_3` field")
+		assert.ErrorContains(t, err, "Search results can't be sorted on `field_3` field. Enable sorting on this field")
 		assert.Nil(t, sortOrder)
 	})
 
