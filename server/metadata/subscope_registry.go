@@ -47,6 +47,7 @@ type NameRegistry struct {
 	NamespaceSB string
 	ClusterSB   string
 	VersionKey  string
+	QueueSB     string
 
 	BaseCounterValue uint32
 }
@@ -59,6 +60,7 @@ var DefaultNameRegistry = &NameRegistry{
 	UserSB:      "user",
 	NamespaceSB: "namespace",
 	ClusterSB:   "cluster",
+	QueueSB:     "queue",
 
 	BaseCounterValue: reservedBaseValue,
 }
@@ -91,6 +93,10 @@ func (d *NameRegistry) ClusterSubspaceName() []byte {
 	return []byte(d.ClusterSB)
 }
 
+func (d *NameRegistry) QueueSubspaceName() []byte {
+	return []byte(d.QueueSB)
+}
+
 func (d *NameRegistry) GetVersionKey() []byte {
 	return []byte(d.VersionKey)
 }
@@ -107,6 +113,7 @@ func newTestNameRegistry(t *testing.T) *NameRegistry {
 		UserSB:      "test_user_" + s,
 		NamespaceSB: "test_namespace_" + s,
 		ClusterSB:   "test_cluster_" + s,
+		QueueSB:     "test_queue_" + s,
 		VersionKey:  "test_version_key" + s,
 
 		BaseCounterValue: r.Uint32(),
