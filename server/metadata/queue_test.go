@@ -41,8 +41,8 @@ func initQueueTest(t *testing.T) (*QueueSubspace, transaction.Tx, func()) {
 	}
 }
 
-func TestEnqueueAndPeak(t *testing.T) {
-	t.Run("insert 1 and peak", func(t *testing.T) {
+func TestEnqueueAndpeek(t *testing.T) {
+	t.Run("insert 1 and peek", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
@@ -57,12 +57,12 @@ func TestEnqueueAndPeak(t *testing.T) {
 		checkQueueEmpty(t, queue, ctx, tx)
 		time.Sleep(500 * time.Millisecond)
 
-		items, err := queue.Peak(ctx, tx, 10)
+		items, err := queue.Peek(ctx, tx, 10)
 		assert.NoError(t, err)
 		assert.Equal(t, item.Data, items[0].Data)
 	})
 
-	t.Run("insert many and peak", func(t *testing.T) {
+	t.Run("insert many and peek", func(t *testing.T) {
 		toEnQueue := []string{"one", "two", "three", "four", "five"}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -77,7 +77,7 @@ func TestEnqueueAndPeak(t *testing.T) {
 
 		// Assert items only appear after certain times
 		for i := 1; i < 6; i++ {
-			items, err := queue.Peak(ctx, tx, 5)
+			items, err := queue.Peek(ctx, tx, 5)
 			assert.NoError(t, err)
 			assert.Len(t, items, i)
 			time.Sleep(101 * time.Millisecond)
@@ -87,7 +87,7 @@ func TestEnqueueAndPeak(t *testing.T) {
 		}
 	})
 
-	t.Run("peak limits work", func(t *testing.T) {
+	t.Run("peek limits work", func(t *testing.T) {
 		toEnQueue := []string{"one", "two", "three", "four", "five"}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -108,7 +108,7 @@ func TestEnqueueAndPeak(t *testing.T) {
 	})
 }
 
-func TestPriorityInPeak(t *testing.T) {
+func TestPriorityInPeek(t *testing.T) {
 	t.Run("orderd by different time and priority", func(t *testing.T) {
 		item1 := NewQueueItem(0, []byte("one-item"))
 		item2 := NewQueueItem(1, []byte("two-item"))
@@ -172,7 +172,7 @@ func TestEnqueueObtainComplete(t *testing.T) {
 	assert.NoError(t, queue.Enqueue(ctx, tx, item, 10*time.Millisecond))
 	time.Sleep(11 * time.Millisecond)
 
-	items, err := queue.Peak(ctx, tx, 5)
+	items, err := queue.Peek(ctx, tx, 5)
 	assert.NoError(t, err)
 	assert.Len(t, items, 1)
 
@@ -200,10 +200,12 @@ func TestErrors(t *testing.T) {
 	defer cleanup()
 
 	_, err := queue.ObtainLease(ctx, tx, item, 100*time.Millisecond)
-	assert.Error(t, err, "QueueItem \"%s\" was not found", item.Id)
+	assert.Error(t, err)
+	assert.Equal(t, err, ErrNotFound)
 
 	err = queue.Complete(ctx, tx, item)
-	assert.Error(t, err, "QueueItem \"%s\" was not found", item.Id)
+	assert.Error(t, err)
+	assert.Equal(t, err, ErrNotFound)
 }
 
 func TestWorkProcessFlow(t *testing.T) {
@@ -249,7 +251,7 @@ func TestWorkProcessFlow(t *testing.T) {
 }
 
 func checkQueueLength(t *testing.T, queue *QueueSubspace, ctx context.Context, tx transaction.Tx, length int) []QueueItem {
-	items, err := queue.Peak(ctx, tx, length)
+	items, err := queue.Peek(ctx, tx, length)
 	assert.NoError(t, err)
 	assert.Len(t, items, length)
 	return items

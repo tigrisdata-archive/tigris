@@ -16,11 +16,11 @@ package metadata
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
-	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/lib/uuid"
@@ -36,17 +36,25 @@ const (
 	maxPriority                  = 10
 )
 
+var (
+	ErrMissingId       = fmt.Errorf("cannot enqueue without an id")
+	ErrNotFound        = fmt.Errorf("QueueItem was not found")
+	ErrClaimed         = fmt.Errorf("another worker has claimed this item")
+	ErrJsonDeSerialize = fmt.Errorf("failed to unmarshal queue item")
+	ErrJsonSerialize   = fmt.Errorf("failed to marshal queue item")
+)
+
 type QueueSubspace struct {
 	metadataSubspace
 }
 
 type QueueItem struct {
-	Id          string `json:"id"`
-	Priority    int64  `json:"priority"`
-	ErrorCount  uint8  `json:"error_count"`
-	LeaseId     string `json:"lease_id,omitempty"`
-	Data        []byte `json:"data"`
-	VestingTime int64  `json:"vesting_time"`
+	Id         string    `json:"id"`
+	Priority   int64     `json:"priority"`
+	ErrorCount uint8     `json:"error_count"`
+	LeaseId    string    `json:"lease_id,omitempty"`
+	Data       []byte    `json:"data"`
+	Vesting    time.Time `json:"vesting_time"`
 }
 
 func NewQueueItem(priority int64, data []byte) *QueueItem {
@@ -67,20 +75,20 @@ func newQueueStore(nameRegistry *NameRegistry) *QueueSubspace {
 	}
 }
 
-func (q *QueueSubspace) getKey(vestingTime int64, priority int64, id string) keys.Key {
+func (q *QueueSubspace) getKey(vestingTime time.Time, priority int64, id string) keys.Key {
 	if id == maxId {
-		return keys.NewKey(q.SubspaceName, q.KeyVersion, itemsSpace, vestingTime, priority, 0xFF)
+		return keys.NewKey(q.SubspaceName, q.KeyVersion, itemsSpace, vestingTime.UnixMilli(), priority, 0xFF)
 	}
 
-	return keys.NewKey(q.SubspaceName, q.KeyVersion, itemsSpace, vestingTime, priority, id)
+	return keys.NewKey(q.SubspaceName, q.KeyVersion, itemsSpace, vestingTime.UnixMilli(), priority, id)
 }
 
 func (q *QueueSubspace) Enqueue(ctx context.Context, tx transaction.Tx, item *QueueItem, delay time.Duration) error {
 	if len(item.Id) == 0 {
-		return errors.Internal("cannot enqueue without an id")
+		return ErrMissingId
 	}
-	item.VestingTime = time.Now().Add(delay).UnixMilli()
-	key := q.getKey(item.VestingTime, item.Priority, item.Id)
+	item.Vesting = time.Now().Add(delay)
+	key := q.getKey(item.Vesting, item.Priority, item.Id)
 	tableData, err := q.encodeItem(item)
 	if err != nil {
 		return err
@@ -88,10 +96,10 @@ func (q *QueueSubspace) Enqueue(ctx context.Context, tx transaction.Tx, item *Qu
 	return tx.Replace(ctx, key, tableData, false)
 }
 
-func (q *QueueSubspace) Peak(ctx context.Context, tx transaction.Tx, max int) ([]QueueItem, error) {
+func (q *QueueSubspace) Peek(ctx context.Context, tx transaction.Tx, max int) ([]QueueItem, error) {
 	var items []QueueItem
 	count := 0
-	currentTime := time.Now().UnixMilli()
+	currentTime := time.Now()
 	endKey := q.getKey(currentTime, maxPriority, maxId)
 	iter, err := tx.ReadRange(ctx, nil, endKey, false)
 	if err != nil {
@@ -111,8 +119,8 @@ func (q *QueueSubspace) Peak(ctx context.Context, tx transaction.Tx, max int) ([
 }
 
 func (q *QueueSubspace) Find(ctx context.Context, tx transaction.Tx, item *QueueItem) (*QueueItem, error) {
-	startKey := q.getKey(item.VestingTime, 0, item.Id)
-	endKey := q.getKey(item.VestingTime, maxPriority, item.Id)
+	startKey := q.getKey(item.Vesting, 0, item.Id)
+	endKey := q.getKey(item.Vesting, maxPriority, item.Id)
 
 	iter, err := tx.ReadRange(ctx, startKey, endKey, false)
 	if err != nil {
@@ -133,11 +141,11 @@ func (q *QueueSubspace) Find(ctx context.Context, tx transaction.Tx, item *Queue
 	if iter.Err() != nil {
 		return nil, iter.Err()
 	}
-	return nil, errors.Internal("QueueItem \"%s\" was not found", item.Id)
+	return nil, ErrNotFound
 }
 
 func (q *QueueSubspace) Dequeue(ctx context.Context, tx transaction.Tx, item *QueueItem) error {
-	itemKey := q.getKey(item.VestingTime, item.Priority, item.Id)
+	itemKey := q.getKey(item.Vesting, item.Priority, item.Id)
 	return tx.Delete(ctx, itemKey)
 }
 
@@ -147,7 +155,7 @@ func (q *QueueSubspace) ObtainLease(ctx context.Context, tx transaction.Tx, item
 		return nil, err
 	}
 	if item == nil {
-		return nil, errors.Internal("Queue Item was not found")
+		return nil, ErrNotFound
 	}
 
 	if err = q.Dequeue(ctx, tx, item); err != nil {
@@ -169,7 +177,7 @@ func (q *QueueSubspace) Complete(ctx context.Context, tx transaction.Tx, item *Q
 	}
 
 	if found.LeaseId != item.LeaseId {
-		return errors.Internal("another worker has claimed this item")
+		return ErrClaimed
 	}
 
 	return q.Dequeue(ctx, tx, item)
@@ -182,7 +190,7 @@ func (q *QueueSubspace) RenewLease(ctx context.Context, tx transaction.Tx, item 
 	}
 
 	if found.LeaseId != item.LeaseId {
-		return errors.Internal("another worker has claimed this item")
+		return ErrClaimed
 	}
 
 	if err := q.Dequeue(ctx, tx, item); err != nil {
@@ -199,9 +207,9 @@ func (q *QueueSubspace) RenewLease(ctx context.Context, tx transaction.Tx, item 
 //nolint:unused
 func (q *QueueSubspace) scanTable(ctx context.Context, tx transaction.Tx) error {
 	//nolint:unused
-	minVestingTime := int64(1678281734380) // 8 March 2023 - No queue item will be before this
-	currentTime := time.Now().Add(2 * time.Hour).UnixMilli()
-	t := time.Now().UnixMilli()
+	minVestingTime := time.UnixMilli(int64(1678281734380)) // 8 March 2023 - No queue item will be before this
+	currentTime := time.Now().Add(2 * time.Hour)
+	t := time.Now()
 	startKey := q.getKey(minVestingTime, 0, "")
 	endKey := q.getKey(currentTime, maxPriority, maxId)
 
@@ -216,7 +224,7 @@ func (q *QueueSubspace) scanTable(ctx context.Context, tx transaction.Tx) error 
 		if err != nil {
 			return err
 		}
-		log.Debug().Msgf("scan key: %s id: %s time: %d Greater: %t", v.Key, item.Id, item.VestingTime, item.VestingTime > t)
+		log.Debug().Msgf("scan key: %s id: %s time: %d Greater: %t", v.Key, item.Id, item.Vesting.UnixMilli(), item.Vesting.After(t))
 	}
 
 	return iter.Err()
@@ -224,8 +232,8 @@ func (q *QueueSubspace) scanTable(ctx context.Context, tx transaction.Tx) error 
 
 func (q *QueueSubspace) decodeItem(data *internal.TableData) (*QueueItem, error) {
 	var item QueueItem
-	if err := jsoniter.Unmarshal(data.RawData, &item); err != nil {
-		return nil, errors.Internal("failed to unmarshal queue item")
+	if err := jsoniter.Unmarshal(data.RawData, &item); ulog.E(err) {
+		return nil, ErrJsonDeSerialize
 	}
 
 	return &item, nil
@@ -234,7 +242,7 @@ func (q *QueueSubspace) decodeItem(data *internal.TableData) (*QueueItem, error)
 func (q *QueueSubspace) encodeItem(item *QueueItem) (*internal.TableData, error) {
 	jsonItem, err := jsoniter.Marshal(item)
 	if ulog.E(err) {
-		return nil, errors.Internal("failed to marshal queue item")
+		return nil, ErrJsonSerialize
 	}
 	data := internal.NewTableDataWithVersion(jsonItem, queueMetaValueVersion)
 	return data, nil
