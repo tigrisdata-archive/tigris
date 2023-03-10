@@ -29,6 +29,25 @@ import (
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
+// The queue api for use with background workers.
+// The api allows a worker to:
+//
+// 1. enqueue an item,
+// 2. peek to see items in the list that are ready to be processed
+// 3. Claim an item in the queue and set how long the worker will work on it
+// 4. Extend the lease
+// 5. Mark the item as complete
+//
+// The FDB structure for the queue is:
+// ["queue subspace", "version", "vesting time", "priority", "item id"] = queue item
+//
+// The vesting time creates an ordering in the queue. The peek api only returns items that are less or equal to
+// the current time. So when an item is claimed and worked on, the vesting time is used to keep the item in the queue
+// but push its vesting time into the future so that no other workers can claim it. The worker can contiue to increase
+// the vesting time so that no other workers can claim the item. If the worker fails to complete the item, the vesting time
+// will eventually reach the current time and be visible to other workers to claim and work on.
+//
+
 const (
 	queueMetaValueVersion int32  = 1
 	itemsSpace            int64  = 1
