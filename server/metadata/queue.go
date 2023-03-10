@@ -33,7 +33,7 @@ import (
 // The api allows a worker to:
 //
 // 1. enqueue an item,
-// 2. peek to see items in the list that are ready to be processed
+// 2. peek to see items in the list that are ready to be processed. Vesting time < current time
 // 3. Claim an item in the queue and set how long the worker will work on it
 // 4. Extend the lease
 // 5. Mark the item as complete
@@ -94,12 +94,12 @@ func newQueueStore(nameRegistry *NameRegistry) *QueueSubspace {
 	}
 }
 
-func (q *QueueSubspace) getKey(vestingTime time.Time, priority int64, id string) keys.Key {
+func (q *QueueSubspace) getKey(vesting time.Time, priority int64, id string) keys.Key {
 	if id == maxId {
-		return keys.NewKey(q.SubspaceName, q.KeyVersion, itemsSpace, vestingTime.UnixMilli(), priority, 0xFF)
+		return keys.NewKey(q.SubspaceName, q.KeyVersion, itemsSpace, vesting.UnixMilli(), priority, 0xFF)
 	}
 
-	return keys.NewKey(q.SubspaceName, q.KeyVersion, itemsSpace, vestingTime.UnixMilli(), priority, id)
+	return keys.NewKey(q.SubspaceName, q.KeyVersion, itemsSpace, vesting.UnixMilli(), priority, id)
 }
 
 func (q *QueueSubspace) Enqueue(ctx context.Context, tx transaction.Tx, item *QueueItem, delay time.Duration) error {
@@ -226,10 +226,10 @@ func (q *QueueSubspace) RenewLease(ctx context.Context, tx transaction.Tx, item 
 //nolint:unused
 func (q *QueueSubspace) scanTable(ctx context.Context, tx transaction.Tx) error {
 	//nolint:unused
-	minVestingTime := time.UnixMilli(int64(1678281734380)) // 8 March 2023 - No queue item will be before this
+	minVesting := time.UnixMilli(int64(1678281734380)) // 8 March 2023 - No queue item will be before this
 	currentTime := time.Now().Add(2 * time.Hour)
 	t := time.Now()
-	startKey := q.getKey(minVestingTime, 0, "")
+	startKey := q.getKey(minVesting, 0, "")
 	endKey := q.getKey(currentTime, maxPriority, maxId)
 
 	iter, err := tx.ReadRange(ctx, startKey, endKey, false)
