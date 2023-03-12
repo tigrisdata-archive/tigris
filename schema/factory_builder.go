@@ -40,7 +40,7 @@ func (fb *FactoryBuilder) setBuilderForSearch() {
 
 func (fb *FactoryBuilder) deserializeArray(items *FieldBuilder, current *[]*Field) error {
 	for ; items.Items != nil; items = items.Items {
-		it, err := items.Build(fb.forSearch)
+		it, err := items.Build(false)
 		if err != nil {
 			return err
 		}
@@ -55,7 +55,8 @@ func (fb *FactoryBuilder) deserializeArray(items *FieldBuilder, current *[]*Fiel
 			return errors.InvalidArgument("Properties only allowed for object type")
 		}
 
-		nestedFields, err := fb.deserializeProperties(items.Properties, nil)
+		ptrFalse := false
+		nestedFields, err := fb.deserializeProperties(items.Properties, nil, &ptrFalse)
 		if err != nil {
 			return err
 		}
@@ -63,7 +64,7 @@ func (fb *FactoryBuilder) deserializeArray(items *FieldBuilder, current *[]*Fiel
 		*current = []*Field{{DataType: ObjectType, Fields: nestedFields}}
 	} else {
 		// primitive array type
-		it, err := items.Build(fb.forSearch)
+		it, err := items.Build(false)
 		if err != nil {
 			return err
 		}
@@ -74,7 +75,7 @@ func (fb *FactoryBuilder) deserializeArray(items *FieldBuilder, current *[]*Fiel
 	return nil
 }
 
-func (fb *FactoryBuilder) deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet *container.HashSet) ([]*Field, error) {
+func (fb *FactoryBuilder) deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet *container.HashSet, setSearchDefaults *bool) ([]*Field, error) {
 	var fields []*Field
 
 	err := jsonparser.ObjectEach(properties, func(key []byte, v []byte, dataType jsonparser.ValueType, offset int) error {
@@ -115,7 +116,7 @@ func (fb *FactoryBuilder) deserializeProperties(properties jsoniter.RawMessage, 
 				return errors.InvalidArgument("Properties only allowed for object type")
 			}
 
-			if builder.Fields, err = fb.deserializeProperties(builder.Properties, nil); err != nil {
+			if builder.Fields, err = fb.deserializeProperties(builder.Properties, nil, setSearchDefaults); err != nil {
 				return err
 			}
 		}
@@ -131,7 +132,20 @@ func (fb *FactoryBuilder) deserializeProperties(properties jsoniter.RawMessage, 
 			}
 		}
 
-		f, err := builder.Build(fb.forSearch)
+		setSearchDefaultsC := false
+		if setSearchDefaults != nil {
+			setSearchDefaultsC = *setSearchDefaults
+		}
+
+		if fb.forSearch && setSearchDefaults == nil {
+			setSearchDefaultsC = true
+			ty := ToFieldType(builder.Type, builder.Encoding, builder.Format)
+			if ty == ObjectType && len(builder.Fields) > 0 {
+				setSearchDefaultsC = false
+			}
+		}
+
+		f, err := builder.Build(setSearchDefaultsC)
 		if err != nil {
 			return err
 		}

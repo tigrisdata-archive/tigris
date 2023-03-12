@@ -97,7 +97,7 @@ func TestCreateCollection(t *testing.T) {
 		}
 
 		resp := createCollection(t, db, coll, schema)
-		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot have search attributes on object 'obj', set it on object fields")
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot have sort or facet attribute on an object 'obj'")
 	})
 	t.Run("status_400_unsupported_facet_obj_level", func(t *testing.T) {
 		dropCollection(t, db, coll)
@@ -112,7 +112,7 @@ func TestCreateCollection(t *testing.T) {
 		}
 
 		resp := createCollection(t, db, coll, schema)
-		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot have search attributes on object 'obj', set it on object fields")
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot have sort or facet attribute on an object 'obj'")
 	})
 	t.Run("status_400_unsupported_index_arr", func(t *testing.T) {
 		dropCollection(t, db, coll)
@@ -157,7 +157,7 @@ func TestCreateCollection(t *testing.T) {
 		}
 
 		resp := createCollection(t, db, coll, schema)
-		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot enable index or search on an array of objects")
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot enable index or search on an array of objects 'name'")
 	})
 	t.Run("status_200_sort_facet_index", func(t *testing.T) {
 		dropCollection(t, db, coll)

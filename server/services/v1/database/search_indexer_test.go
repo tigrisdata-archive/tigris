@@ -27,6 +27,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/internal"
+	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/util"
 )
@@ -36,12 +37,12 @@ func TestFlattenObj(t *testing.T) {
 	var UnFlattenMap map[string]any
 	require.NoError(t, jsoniter.Unmarshal(rawData, &UnFlattenMap))
 
-	flattened := FlattenObjects(UnFlattenMap)
+	flattened := util.FlatMap(UnFlattenMap, container.NewHashSet())
 	require.Equal(t, "foo", flattened["b.c.d"])
 	require.Equal(t, float64(3), flattened["b.e"])
 	require.Equal(t, []interface{}{float64(1), float64(2), float64(3)}, flattened["b.f"])
 
-	require.True(t, reflect.DeepEqual(UnFlattenMap, UnFlattenObjects(flattened)))
+	require.True(t, reflect.DeepEqual(UnFlattenMap, util.UnFlatMap(flattened)))
 }
 
 func TestPackSearchFields(t *testing.T) {
