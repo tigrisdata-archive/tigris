@@ -130,7 +130,7 @@ func TestSearchIndex_Schema(t *testing.T) {
 		},
 		{
 			[]byte(`{"title": "t1", "properties": { "simple_items": {"type": "object", "facet": true}}}`),
-			"Cannot have search attributes on object 'simple_items', set it on object fields",
+			"Cannot have sort or facet attribute on an object 'simple_items'",
 		},
 		{
 			[]byte(`{"title": "t1", "properties": { "a": {"type": "string", "format": "byte", "facet": true}}}`),

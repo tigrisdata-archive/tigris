@@ -244,7 +244,7 @@ func TestSearchAttributesOnFields(t *testing.T) {
 			"Cannot enable sorting on field 'arr' of type 'array'",
 		}, {
 			[]byte(`{"title":"test","properties":{"obj":{"type":"object","searchIndex":true,"facet":true,"sort":true}}}`),
-			"Cannot have search attributes on object 'obj', set it on object fields",
+			"Cannot have sort or facet attribute on an object 'obj'",
 		}, {
 			[]byte(`{"title":"test","properties":{"obj":{"type":"object","properties":{"id":{"type":"integer","searchIndex":true}}}}}`),
 			"",

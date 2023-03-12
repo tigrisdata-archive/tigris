@@ -204,7 +204,7 @@ func (fb *FactoryBuilder) Build(collection string, reqSchema jsoniter.RawMessage
 	}
 
 	primaryKeysSet := container.NewHashSet(schema.PrimaryKeys...)
-	fields, err := fb.deserializeProperties(schema.Properties, &primaryKeysSet)
+	fields, err := fb.deserializeProperties(schema.Properties, &primaryKeysSet, nil)
 	if err != nil {
 		return nil, err
 	}

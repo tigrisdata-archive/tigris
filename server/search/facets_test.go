@@ -134,8 +134,14 @@ func TestSortedFacets(t *testing.T) {
 		}
 
 		assert.Equal(t, &api.FacetStats{Count: 130}, facets.GetStats("field_1"))
-		f2Avg, f2Min := float64(float32(10.56)), -30.5
-		assert.Equal(t, &api.FacetStats{Avg: &f2Avg, Min: &f2Min, Count: 64}, facets.GetStats("field_2"))
+		f2Avg, f2Min := 10.56, -30.5
+		exp := &api.FacetStats{Avg: &f2Avg, Min: &f2Min, Count: 64}
+		actual := facets.GetStats("field_2")
+		assert.Equal(t, *exp.Avg, *actual.Avg)
+		assert.Equal(t, *exp.Min, *actual.Min)
+		assert.Equal(t, exp.Count, actual.Count)
+		assert.Nil(t, actual.Sum)
+		assert.Nil(t, actual.Max)
 		assert.Equal(t, &api.FacetStats{Count: 0}, facets.GetStats("field_3"))
 	})
 

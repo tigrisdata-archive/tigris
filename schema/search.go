@@ -76,7 +76,7 @@ func (fb *FactoryBuilder) BuildSearch(index string, reqSchema jsoniter.RawMessag
 	if len(schema.Properties) == 0 {
 		return nil, errors.InvalidArgument("missing properties field in schema")
 	}
-	fields, err := fb.deserializeProperties(schema.Properties, nil)
+	fields, err := fb.deserializeProperties(schema.Properties, nil, nil)
 	if err != nil {
 		return nil, err
 	}

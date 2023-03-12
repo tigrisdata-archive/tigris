@@ -253,7 +253,12 @@ func ValidateFieldAttributes(isSearch bool, field *Field) error {
 			if field.IsIndexed() {
 				return errors.InvalidArgument("Cannot enable index on object '%s' or object fields", field.Name())
 			} else {
-				return errors.InvalidArgument("Cannot have search attributes on object '%s', set it on object fields", field.Name())
+				if len(field.Fields) > 0 {
+					// either index an object or the flattened form i.e. object with fields
+					return errors.InvalidArgument("Cannot have search attributes on object '%s', set it on object fields", field.Name())
+				} else if field.IsSorted() || field.IsFaceted() {
+					return errors.InvalidArgument("Cannot have sort or facet attribute on an object '%s'", field.Name())
+				}
 			}
 		}
 		return validateObjectFields(field, false)
@@ -269,8 +274,13 @@ func validateObjectFields(f *Field, notSupported bool) error {
 				if nested.IsIndexed() {
 					return errors.InvalidArgument("Cannot enable index on object '%s' or object fields", nested.Name())
 				} else {
+					// it needs to be on field level.
 					return errors.InvalidArgument("Cannot have search attributes on object '%s', set it on object fields", nested.Name())
 				}
+			}
+			if hasIndexingAttributes(nested) && len(nested.Fields) == 0 {
+				// it needs to be on field level.
+				return errors.InvalidArgument("Cannot have search attributes on nested object '%s' that has no fields", nested.Name())
 			}
 
 			if err := validateObjectFields(nested, notSupported); err != nil {
@@ -279,6 +289,10 @@ func validateObjectFields(f *Field, notSupported bool) error {
 		} else {
 			if nested.IsIndexed() {
 				return errors.InvalidArgument("Cannot enable index on nested field '%s'", nested.Name())
+			}
+			if nested.DataType == ArrayType && nested.Fields[0].DataType == ObjectType && hasIndexingAttributes(nested) {
+				return errors.InvalidArgument("Cannot enable search attributes on nested array of objects '%s'. "+
+					"Only top level array of objects can have search index", nested.Name())
 			}
 			if err := validateFields(nested, notSupported); err != nil {
 				return err
@@ -295,8 +309,8 @@ func validateFields(f *Field, notSupported bool) error {
 			return validateFieldAttribute(f, notSupported)
 		}
 
-		if hasIndexingAttributes(f) || hasIndexingAttributes(f.Fields[0]) {
-			return errors.InvalidArgument("Cannot enable index or search on an array of objects '%s'", f.FieldName)
+		if f.IsIndexed() || f.Fields[0].IsIndexed() {
+			return errors.InvalidArgument("Cannot enable index on an array of objects '%s'", f.FieldName)
 		}
 
 		// for arrays, we are validating that there are no attribute set on any nested objects
@@ -314,7 +328,7 @@ func validateFieldAttribute(f *Field, notSupported bool) error {
 	}
 
 	if notSupported && hasIndexingAttributes(f) {
-		return errors.InvalidArgument("Cannot enable index or search on an array of objects")
+		return errors.InvalidArgument("Cannot enable index or search on an array of objects '%s'", f.FieldName)
 	}
 
 	subType := UnknownType

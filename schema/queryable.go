@@ -20,6 +20,9 @@ import (
 	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
+// QueryableField is internal structure used after flattening the fields i.e. the representation of the queryable field
+// is of the following form "field" OR "parent.field". This allows us to perform look faster by just checking in this
+// structure. Object that doesn't have any nested fields will be same as any other top level field.
 type QueryableField struct {
 	FieldName     string
 	Indexed       bool // Secondary Index
@@ -31,6 +34,7 @@ type QueryableField struct {
 	SubType       FieldType
 	SearchType    string
 	packThis      bool
+	DoNotFlatten  bool
 }
 
 // InMemoryName returns key name that is used to index this field in the indexing store. For example, an "id" key is indexed with
@@ -55,7 +59,7 @@ func (q *QueryableField) ShouldPack() bool {
 		return true
 	}
 
-	if q.DataType == ArrayType && (q.SubType == ArrayType || q.SubType == ObjectType || q.SubType == UnknownType) {
+	if q.DataType == ArrayType && (q.SubType == ArrayType || q.SubType == UnknownType) {
 		return true
 	}
 	return !q.IsReserved() && q.DataType == DateTimeType
@@ -90,7 +94,7 @@ func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, 
 	}
 
 	packThis := false
-	if f.DataType == ArrayType {
+	if f.DataType == ArrayType || f.DataType == ObjectType {
 		for _, fieldInSearch := range fieldsInSearch {
 			if fieldInSearch.Name == name {
 				searchType = fieldInSearch.Type
@@ -143,6 +147,12 @@ func (builder *QueryableFieldsBuilder) BuildQueryableFields(fields []*Field, fie
 
 	for _, f := range fields {
 		if f.DataType == ObjectType {
+			if len(f.Fields) == 0 {
+				ff := builder.buildQueryableField("", f, fieldsInSearch)
+				ff.DoNotFlatten = true
+				queryableFields = append(queryableFields, ff)
+				continue
+			}
 			queryableFields = append(queryableFields, builder.buildQueryableForObject(f.FieldName, f.Fields, fieldsInSearch)...)
 		} else {
 			queryableFields = append(queryableFields, builder.buildQueryableField("", f, fieldsInSearch))
@@ -173,10 +183,14 @@ func (builder *QueryableFieldsBuilder) BuildQueryableFields(fields []*Field, fie
 func (builder *QueryableFieldsBuilder) buildQueryableForObject(parent string, fields []*Field, fieldsInSearch []tsApi.Field) []*QueryableField {
 	var queryable []*QueryableField
 	for _, nested := range fields {
-		if nested.DataType != ObjectType {
-			queryable = append(queryable, builder.buildQueryableField(parent, nested, fieldsInSearch))
-		} else {
+		if nested.DataType == ObjectType {
+			if len(nested.Fields) == 0 {
+				queryable = append(queryable, builder.buildQueryableField(parent, nested, fieldsInSearch))
+				continue
+			}
 			queryable = append(queryable, builder.buildQueryableForObject(parent+ObjFlattenDelimiter+nested.FieldName, nested.Fields, fieldsInSearch)...)
+		} else {
+			queryable = append(queryable, builder.buildQueryableField(parent, nested, fieldsInSearch))
 		}
 	}
 

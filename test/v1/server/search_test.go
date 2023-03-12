@@ -146,7 +146,7 @@ func TestIndex_Management(t *testing.T) {
 		}
 
 		resp := createSearchIndex(t, project, testIndex, schema)
-		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot have search attributes on object 'obj', set it on object fields")
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot have sort or facet attribute on an object 'obj'")
 	})
 	t.Run("status_400_unsupported_facet_obj_level", func(t *testing.T) {
 		deleteSearchIndex(t, project, testIndex)
@@ -161,7 +161,7 @@ func TestIndex_Management(t *testing.T) {
 		}
 
 		resp := createSearchIndex(t, project, testIndex, schema)
-		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot have search attributes on object 'obj', set it on object fields")
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot have sort or facet attribute on an object 'obj'")
 	})
 	t.Run("status_400_unsupported_sort_arr", func(t *testing.T) {
 		deleteSearchIndex(t, project, testIndex)
@@ -191,7 +191,7 @@ func TestIndex_Management(t *testing.T) {
 		}
 
 		resp := createSearchIndex(t, project, testIndex, schema)
-		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot enable index or search on an array of objects 'arr'")
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot enable index or search on an array of objects 'name'")
 	})
 	t.Run("status_200_sort_facet_index", func(t *testing.T) {
 		deleteSearchIndex(t, project, testIndex)
@@ -772,12 +772,12 @@ func TestSearch(t *testing.T) {
 			},
 		)
 
-	res := getSearchResults(t, project, index, Map{"q": "data", "sort": []Doc{{"created_at": "$asc"}}})
+	res := getSearchResults(t, project, index, Map{"q": "data", "sort": []Doc{{"created_at": "$asc"}}}, false)
 	require.Equal(t, 2, len(res.Result.Hits))
 	compareDocs(t, docs[1], res.Result.Hits[0]["data"])
 	compareDocs(t, docs[0], res.Result.Hits[1]["data"])
 
-	res = getSearchResults(t, project, index, Map{"q": "*", "group_by": Doc{"fields": []string{"object_value.string_value"}}, "sort": []Doc{{"created_at": "$asc"}}})
+	res = getSearchResults(t, project, index, Map{"q": "*", "group_by": Doc{"fields": []string{"object_value.string_value"}}, "sort": []Doc{{"created_at": "$asc"}}}, false)
 	require.Equal(t, 2, len(res.Result.Groups))
 	require.Equal(t, []interface{}{"san francisco"}, res.Result.Groups[0]["group_keys"])
 	require.Equal(t, []interface{}{"san diego"}, res.Result.Groups[1]["group_keys"])
@@ -786,6 +786,182 @@ func TestSearch(t *testing.T) {
 	compareDocs(t, docs[0], res.Result.Groups[0]["hits"].([]any)[1].(map[string]any)["data"].(map[string]any))
 
 	compareDocs(t, docs[1], res.Result.Groups[1]["hits"].([]any)[0].(map[string]any)["data"].(map[string]any))
+}
+
+func TestComplexObjects(t *testing.T) {
+	project := setupTestsOnlyProject(t)
+	defer cleanupTests(t, project)
+
+	indexName := "t1"
+	schema := []byte(`{
+  "schema": {
+    "title": "t1",
+    "properties": {
+      "a": {
+        "type": "integer"
+      },
+      "b": {
+        "type": "string"
+      },
+      "c": {
+        "type": "object",
+        "properties": {
+          "a": {
+            "type": "integer"
+          },
+          "b": {
+            "type": "string"
+          },
+          "c": {
+            "type": "object",
+            "properties": {
+              "a": {
+                "type": "string"
+              },
+              "b": {
+                "searchIndex": false,
+                "type": "object",
+                "properties": {}
+              },
+              "c": {
+                "type": "array",
+                "searchIndex": false,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "a": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "d": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "d": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "e": {
+            "searchIndex": false,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "a": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "d": {
+        "type": "object",
+        "properties": {}
+      },
+      "e": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      "f": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "a": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "g": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}`)
+	var schemaObj map[string]any
+	require.NoError(t, jsoniter.Unmarshal(schema, &schemaObj))
+	createSearchIndex(t, project, indexName, schemaObj).Status(http.StatusOK)
+
+	docA := Doc{
+		"id": "1",
+		"a":  1,
+		"b":  "first document",
+		"c": Map{
+			"a": 10,
+			"b": "nested object under c",
+			"c": Map{
+				"a": "foo",
+				"b": Map{"name": "this is free flow object but not indexed"},
+				"c": []Map{Map{"a": "car"}, Map{"a": "bike"}},
+				"d": []string{"PARIS", "LONDON", "ENGLAND"},
+			},
+			"d": []string{"SANTA CLARA", "SAN JOSE"},
+			"e": []Map{{"a": "football"}, {"a": "basketball"}},
+		},
+		"d": Map{"agent": "free flow object top level"},
+		"e": []Map{{"random": "array of free flow object"}},
+		"f": []Map{{"a": "array of object with a field"}},
+		"g": []string{"NEW YORK", "MIAMI"},
+	}
+
+	expect(t).PUT(getIndexDocumentURL(project, indexName, "")).
+		WithJSON(Map{
+			"documents": []Doc{docA},
+		}).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("status",
+			[]map[string]any{
+				{"id": "1", "error": nil},
+			},
+		)
+
+	cases := []struct {
+		query    Map
+		expError string
+	}{
+		{query: Map{"q": "nested object under c", "search_fields": []string{"c.b"}}, expError: ""},
+		{query: Map{"q": "foo", "search_fields": []string{"c.c.a"}}, expError: ""},
+		{query: Map{"q": "foo", "search_fields": []string{"c.c.a"}}, expError: ""},
+		{query: Map{"q": "foo", "search_fields": []string{"c.c.b"}}, expError: "`c.c.b` is not a searchable field. Only indexed fields can be queried"},
+		{query: Map{"q": "paris", "search_fields": []string{"c.c.d"}}, expError: ""},
+		{query: Map{"q": "santa", "search_fields": []string{"c.d"}}, expError: ""},
+		{query:  Map{ "q": "santa", "search_fields": []string{"c.e"}}, expError: "`c.e` is not a searchable field. Only indexed fields can be queried"},
+		{query: Map{"q": "free flow object top level", "search_fields": []string{"d"}}, expError: ""},
+		{query: Map{"q": "array of free flow object", "search_fields": []string{"e"}}, expError: ""},
+		{query: Map{"q": "array of object with a field", "search_fields": []string{"f"}}, expError: ""},
+		{query: Map{"q": "NEW YORK", "search_fields": []string{"g"}}, expError: ""},
+	}
+	for _, c := range cases {
+		if len(c.expError) > 0 {
+			expect(t).POST(fmt.Sprintf("/v1/projects/%s/search/indexes/%s/documents/search", project, indexName)).
+				WithJSON(c.expError).
+				Expect().
+				Status(http.StatusBadRequest)
+
+			continue
+		}
+		res := getSearchResults(t, project, indexName, c.query, false)
+		require.Equal(t, 1, len(res.Result.Hits))
+	}
 }
 
 func compareDocs(t *testing.T, docA Doc, docB Doc) {
@@ -805,8 +981,13 @@ type res struct {
 	} `json:"result"`
 }
 
-func getSearchResults(t *testing.T, project string, index string, query Map) *res {
-	var req = expect(t).POST(fmt.Sprintf("/v1/projects/%s/search/indexes/%s/documents/search", project, index)).
+func getSearchResults(t *testing.T, project string, index string, query Map, isCollectionSearch bool) *res {
+	url := fmt.Sprintf("/v1/projects/%s/search/indexes/%s/documents/search", project, index)
+	if isCollectionSearch {
+		url = fmt.Sprintf("/v1/projects/%s/database/collections/%s/documents/search", project, index)
+	}
+
+	var req = expect(t).POST(url).
 		WithJSON(query).
 		Expect().
 		Status(http.StatusOK).

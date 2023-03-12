@@ -157,19 +157,19 @@ func (fa *FacetAttrs) addStats(counts *tsApi.FacetCounts) {
 	} else {
 		// build stats
 		if counts.Stats.Avg != nil {
-			avg := float64(*counts.Stats.Avg)
+			avg := *counts.Stats.Avg
 			fa.stats.Avg = &avg
 		}
 		if counts.Stats.Max != nil {
-			max := float64(*counts.Stats.Max)
+			max := *counts.Stats.Max
 			fa.stats.Max = &max
 		}
 		if counts.Stats.Min != nil {
-			min := float64(*counts.Stats.Min)
+			min := *counts.Stats.Min
 			fa.stats.Min = &min
 		}
 		if counts.Stats.Sum != nil {
-			sum := float64(*counts.Stats.Sum)
+			sum := *counts.Stats.Sum
 			fa.stats.Sum = &sum
 		}
 		fa.statsBuiltOnce = true

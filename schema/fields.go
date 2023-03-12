@@ -171,10 +171,10 @@ func SupportedIndexableType(fieldType FieldType) bool {
 
 func SupportedSearchIndexableType(fieldType FieldType, subType FieldType) bool {
 	switch fieldType {
-	case BoolType, Int32Type, Int64Type, UUIDType, StringType, DateTimeType, DoubleType:
+	case BoolType, Int32Type, Int64Type, UUIDType, StringType, DateTimeType, DoubleType, ArrayType:
 		return true
-	case ArrayType:
-		return IsPrimitiveType(subType)
+	case ObjectType:
+		return subType == UnknownType
 	default:
 		return false
 	}
@@ -223,6 +223,8 @@ func toSearchFieldType(fieldType FieldType, subType FieldType) string {
 		return FieldNames[Int64Type]
 	case DoubleType:
 		return searchDoubleType
+	case ObjectType:
+		return FieldNames[ObjectType]
 	case ArrayType:
 		switch subType {
 		case BoolType:
@@ -235,6 +237,8 @@ func toSearchFieldType(fieldType FieldType, subType FieldType) string {
 			return FieldNames[Int64Type] + "[]"
 		case DoubleType:
 			return searchDoubleType + "[]"
+		case ObjectType:
+			return FieldNames[ObjectType] + "[]"
 		default:
 			// pack it
 			return FieldNames[StringType]
@@ -337,12 +341,12 @@ type FieldBuilder struct {
 	Fields      []*Field
 }
 
-func (f *FieldBuilder) Build(forSearchIndex bool) (*Field, error) {
+func (f *FieldBuilder) Build(setSearchDefaults bool) (*Field, error) {
 	fieldType := ToFieldType(f.Type, f.Encoding, f.Format)
-	if forSearchIndex {
+	if setSearchDefaults {
 		// for search indexes, any field in schema is search indexable if it is not set explicitly.
 		// Similarly, we also tag it with sort if it is numeric.
-		if len(f.FieldName) > 0 && fieldType != ObjectType {
+		if f.supportableFieldForSearchAttributes(fieldType) {
 			ptrTrue := true
 			if f.SearchIndex == nil {
 				f.SearchIndex = &ptrTrue
@@ -376,6 +380,10 @@ func (f *FieldBuilder) Build(forSearchIndex bool) (*Field, error) {
 	}
 
 	return field, nil
+}
+
+func (f *FieldBuilder) supportableFieldForSearchAttributes(fieldType FieldType) bool {
+	return len(f.FieldName) > 0 && (fieldType != ObjectType || (fieldType == ObjectType && len(f.Fields) == 0))
 }
 
 type Field struct {
