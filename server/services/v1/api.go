@@ -294,7 +294,8 @@ func (s *apiService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.Del
 	}
 
 	return &api.DeleteResponse{
-		Status: resp.Status,
+		DeletedCount: resp.ModifiedCount,
+		Status:       resp.Status,
 		Metadata: &api.ResponseMetadata{
 			DeletedAt: resp.DeletedAt.GetProtoTS(),
 		},
