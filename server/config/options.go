@@ -199,7 +199,7 @@ type ObservabilityConfig struct {
 }
 
 var (
-	WriteUnitSize = 1024
+	WriteUnitSize = 4096
 	ReadUnitSize  = 4096
 )
 

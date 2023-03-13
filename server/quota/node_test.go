@@ -40,7 +40,7 @@ func TestNodeQuota(t *testing.T) {
 	})
 
 	require.NoError(t, m.Allow(ctx, ns, 6000, false)) // 2 units: 4096 + something
-	require.NoError(t, m.Allow(ctx, ns, 1500, true))  // 2 units: 1024 + something
+	require.NoError(t, m.Allow(ctx, ns, 6000, true))  // 2 units: 4096 + something
 
 	var err error
 
@@ -52,7 +52,7 @@ func TestNodeQuota(t *testing.T) {
 
 	i = 0
 	for ; err != ErrWriteUnitsExceeded && 1 < 50; i++ {
-		err = m.Allow(ctx, ns, 512, true) // < 1024 = 1 unit
+		err = m.Allow(ctx, ns, 2048, true) // < 4096 = 1 unit
 	}
 	assert.Equal(t, 9, i)
 
