@@ -20,5 +20,6 @@ jobs:
           node-version: 18
       - name: release
         env:
+          # This should be a personal access token to be able to trigger on-release-published event
           GITHUB_TOKEN: ${{ secrets.GH_BOT_ACCESS_TOKEN }}
         run: npx semantic-release --debug

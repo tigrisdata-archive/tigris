@@ -41,11 +41,11 @@ jobs:
           password: ${{ secrets.GH_DOCKER_ACCESS_TOKEN }}
 
       - name: Login to Quay.io
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           registry: quay.io
-          username: ${{ secrets.QUAY_REGISTRY_USER }}
-          password: ${{ secrets.QUAY_REGISTRY_PASSWORD }}
+          username: ${{ secrets.QUAY_USER }}
+          password: ${{ secrets.QUAY_TOKEN }}
 
       - name: Docker meta
         id: meta
