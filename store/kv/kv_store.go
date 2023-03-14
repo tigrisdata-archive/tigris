@@ -26,6 +26,10 @@ type KeyValueTxStore struct {
 }
 
 func NewTxStore(cfg *config.FoundationDBConfig) (TxStore, error) {
+	return newTxStore(cfg)
+}
+
+func newTxStore(cfg *config.FoundationDBConfig) (*KeyValueTxStore, error) {
 	kv, err := newFoundationDB(cfg)
 	if err != nil {
 		return nil, err

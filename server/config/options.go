@@ -404,6 +404,7 @@ type SchemaConfig struct {
 // FoundationDBConfig keeps FoundationDB configuration parameters.
 type FoundationDBConfig struct {
 	ClusterFile string `mapstructure:"cluster_file" json:"cluster_file" yaml:"cluster_file"`
+	Chunking    bool   `mapstructure:"chunking" json:"chunking" yaml:"chunking"`
 }
 
 type SearchConfig struct {
