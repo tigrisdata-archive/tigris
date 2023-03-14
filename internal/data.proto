@@ -34,6 +34,7 @@ message TableData {
   Timestamp updated_at = 4;
   // raw_data is the raw bytes stored, caller controls how they want to store these raw bytes in database.
   bytes raw_data = 5;
+  optional int32 total_chunks = 6;
 }
 
 // StreamData is used to store a serialized data that has user data, some Tigris metadata in Cache Stream. Some options

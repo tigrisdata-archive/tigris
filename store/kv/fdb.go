@@ -416,6 +416,9 @@ func (t *ftx) Read(_ context.Context, table []byte, key Key) (baseIterator, erro
 		return nil, err
 	}
 
+	// It is possible that caller may be chunking the payload. Therefore, the "iterator" returned by this API is only
+	// applicable for ascending order. Once we add support to do reverse reads then we should return a different iterator
+	// or some other signal to the caller.
 	r := t.tx.GetRange(k, fdb.RangeOptions{})
 
 	return &fdbIterator{it: r.Iterator(), subspace: subspace.FromBytes(table)}, nil

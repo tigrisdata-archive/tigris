@@ -192,7 +192,7 @@ func (q *SecondaryIndexer) Update(ctx context.Context, tx transaction.Tx, newTd 
 	}
 
 	for _, indexKey := range updateSet.addKeys {
-		if err := tx.Replace(ctx, indexKey, nil, false); err != nil {
+		if err := tx.Replace(ctx, indexKey, internal.EmptyData, false); err != nil {
 			return err
 		}
 	}
