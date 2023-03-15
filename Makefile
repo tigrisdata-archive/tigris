@@ -119,4 +119,5 @@ build_and_push_base_docker:
 dump_integration_coverage:
 	pkill -SIGTERM -f "/server/service" --exact
 	sleep 5
+	go version
 	go tool covdata textfmt -i=/tmp/tigris_coverdata/ -o coverage1.out
