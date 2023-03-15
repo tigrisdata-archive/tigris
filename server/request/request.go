@@ -223,6 +223,12 @@ func (m *Metadata) SetNamespace(ctx context.Context, namespace string) {
 		m.namespaceName = defaults.DefaultNamespaceName
 		return
 	}
+	if namespace == defaults.UnknownValue {
+		// The namespace is unknown for reporting purposes, no need to get the tenant metadata for further
+		// metadata for that.
+		m.namespaceName = "unknown"
+		return
+	}
 	tenant, err := tenantGetter.GetTenant(ctx, namespace)
 	if err != nil {
 		m.namespaceName = defaults.DefaultNamespaceName
