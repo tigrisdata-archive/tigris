@@ -41,6 +41,8 @@ import (
 
 const (
 	GotrueAudHeaderKey = "X-JWT-AUD"
+	ClientIdPrefix     = "tid_"
+	ClientSecretPrefix = "tsec_"
 )
 
 type gotrue struct {
@@ -554,7 +556,7 @@ func getGotrueAdminAccessToken(ctx context.Context, g *gotrue) (string, int32, e
 
 var (
 	idChars     = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-	secretChars = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=~<>;':")
+	secretChars = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-+")
 )
 
 func generateClientId(g *gotrue) string {
@@ -563,7 +565,7 @@ func generateClientId(g *gotrue) string {
 	for i := range b {
 		b[i] = idChars[generateRandomInt(len(idChars))]
 	}
-	return string(b)
+	return fmt.Sprintf("%s%s", ClientIdPrefix, string(b))
 }
 
 func generateClientSecret(g *gotrue) string {
@@ -572,7 +574,7 @@ func generateClientSecret(g *gotrue) string {
 	for i := range b {
 		b[i] = secretChars[generateRandomInt(len(secretChars))]
 	}
-	return string(b)
+	return fmt.Sprintf("%s%s", ClientSecretPrefix, string(b))
 }
 
 func generateRandomInt(max int) int {

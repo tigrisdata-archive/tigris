@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/tigrisdata/tigris/server/services/v1/auth"
 	"github.com/tigrisdata/tigris/test/config"
 	"gopkg.in/gavv/httpexpect.v1"
 )
@@ -84,8 +85,8 @@ func TestGoTrueAuthProvider(t *testing.T) {
 	require.Equal(t, "test_key", name.Raw())
 	require.Equal(t, "This key is used for integration test purpose.", description.Raw())
 	require.Equal(t, testProject, project.Raw())
-	require.True(t, int(id.Length().Raw()) == 30)
-	require.True(t, int(secret.Length().Raw()) == 50)
+	require.True(t, int(id.Length().Raw()) == 30+len(auth.ClientIdPrefix))         // length + prefix
+	require.True(t, int(secret.Length().Raw()) == 50+len(auth.ClientSecretPrefix)) // length + prefix
 
 	// update
 	var updateAppKeyPayload = make(map[string]string)
@@ -112,7 +113,7 @@ func TestGoTrueAuthProvider(t *testing.T) {
 		Object().Value("app_key")
 	require.Equal(t, id.Raw(), rotatedKey.Object().Value("id").Raw())
 	require.NotEqual(t, secret.Raw(), rotatedKey.Object().Value("secret").Raw())
-	require.True(t, len(rotatedKey.Object().Value("secret").String().Raw()) == 50)
+	require.True(t, len(rotatedKey.Object().Value("secret").String().Raw()) == 50+len(auth.ClientSecretPrefix))
 
 	// list
 	appKeys := e2.GET(appKeysOperation("auth_test", "get")).
@@ -164,6 +165,11 @@ func TestMultipleAppsCreation(t *testing.T) {
 			JSON().
 			Object().Value("created_app_key")
 		require.NotNil(t, createdAppKey)
+		generatedClientId := createdAppKey.Object().Value("id").String().Raw()
+		generatedClientSecret := createdAppKey.Object().Value("secret").String().Raw()
+
+		require.True(t, strings.HasPrefix(generatedClientId, auth.ClientIdPrefix))
+		require.True(t, strings.HasPrefix(generatedClientSecret, auth.ClientSecretPrefix))
 	}
 
 	appKeys := e2.GET(appKeysOperation("auth_test", "get")).
