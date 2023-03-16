@@ -163,6 +163,7 @@ func authFunction(ctx context.Context, jwtValidators []*validator.Validator, con
 	}
 
 	validatedToken, found := cache.Get(tkn)
+	log.Debug().Bool("validated token found", found).Interface("token", validatedToken)
 	if !found {
 		for i, jwtValidator := range jwtValidators {
 			validatedToken, err = jwtValidator.ValidateToken(ctx, tkn)
@@ -175,9 +176,9 @@ func authFunction(ctx context.Context, jwtValidators []*validator.Validator, con
 				if reqMetadata != nil {
 					log.Debug().Str("error", err.Error()).Str("unauthenticated_namespace", reqMetadata.GetNamespace()).Str("unauthenticated_namespace_name", reqMetadata.GetNamespaceName()).Err(err).Msg("Failed to validate access token")
 				} else {
-					log.Debug().Str("error", err.Error()).Err(err).Msg("Failed to validate access token")
+					log.Debug().Str("error", err.Error()).Err(err).Msg("Failed to validate access token, was not validated")
 				}
-				return ctx, errors.Unauthenticated("Failed to validate access token")
+				return ctx, errors.Unauthenticated("Failed to validate access token, could not be validated")
 			}
 		}
 	}
@@ -186,7 +187,7 @@ func authFunction(ctx context.Context, jwtValidators []*validator.Validator, con
 	if validatedClaims, ok := validatedToken.(*validator.ValidatedClaims); ok {
 		// validate expiration
 		if validatedClaims.RegisteredClaims.Expiry+int64(config.Auth.TokenClockSkewDurationSec) < time.Now().Unix() {
-			return nil, errors.Unauthenticated("Failed to validate access token")
+			return nil, errors.Unauthenticated("Failed to validate access token. Claim is expired")
 		}
 
 		if customClaims, ok := validatedClaims.CustomClaims.(*CustomClaim); ok {
