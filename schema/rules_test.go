@@ -24,54 +24,67 @@ import (
 
 func TestApplySchemaRules(t *testing.T) {
 	cases := []struct {
+		name     string
 		existing []byte
 		incoming []byte
 		expErr   error
 	}{
 		{
-			// field added
+			"field added",
 			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}},"primary_key": ["id"]}`),
 			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}, "b": { "type": "string", "format": "byte"}},"primary_key": ["id"]}`),
 			nil,
 		},
 		{
-			// field removed
+			"field removed",
 			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}},"primary_key": ["id"]}`),
 			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}},"primary_key": ["id"]}`),
 			ErrMissingField,
 		},
 		{
-			// primary key added
+			"nested field removed",
+			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "object", "properties" : { "nested1" : { "type" : "integer" }, "nested2" : { "type" : "integer" } }}},"primary_key": ["id"]}`),
+			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "object", "properties" : { "nested1" : { "type" : "integer" } }}},"primary_key": ["id"]}`),
+			ErrMissingField,
+		},
+		{
+			"nested field type change",
+			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "object", "properties" : { "nested1" : { "type" : "integer" }, "nested2" : { "type" : "integer" } }}},"primary_key": ["id"]}`),
+			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "object", "properties" : { "nested1" : { "type" : "integer" }, "nested2" : { "type" : "string" } }}},"primary_key": ["id"]}`),
+			errors.InvalidArgument("data type mismatch for field \"nested2\""),
+		},
+		{
+			"primary key added",
 			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}},"primary_key": ["id"]}`),
 			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}, "b": { "type": "string", "format": "byte"}},"primary_key": ["id", "s"]}`),
 			errors.InvalidArgument("number of index fields changed"),
 		},
 		{
-			// primary key order changed
+			"primary key order changed",
 			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}},"primary_key": ["id", "s"]}`),
 			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}},"primary_key": ["s", "id"]}`),
 			errors.InvalidArgument("index fields modified expected \"id\", found \"s\""),
 		},
 		{
-			// type changed
+			"type changed",
 			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}},"primary_key": ["id"]}`),
 			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string", "format":"byte"}},"primary_key": ["id"]}`),
 			errors.InvalidArgument("data type mismatch for field \"s\""),
 		},
 		{
-			// primary key missing in existing collection, in update it is present, this shouldn't be an error if it is id
+			"primary key missing in existing collection, in update it is present, this shouldn't be an error if it is id",
 			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}}}`),
 			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}},"primary_key": ["id"]}`),
 			nil,
 		},
 		{
-			// primary key missing in existing collection, in update it is present, but it is not id
+			"primary key missing in existing collection, in update it is present, but it is not id",
 			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string"}}}`),
 			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "id1": { "type": "integer"}, "s": { "type": "string"}},"primary_key": ["id1"]}`),
 			errors.InvalidArgument("index fields modified expected \"id\", found \"id1\""),
 		},
 		{
-			// reducing max length
+			"reducing max length",
 			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string", "maxLength" : 100 }},"primary_key": ["id"]}`),
 			[]byte(`{ "title": "t1", "properties": { "id": { "type": "integer"}, "s": { "type": "string", "maxLength" : 99 }},"primary_key": ["id"]}`),
 			errors.InvalidArgument("reducing length of an existing field is not allowed \"s\""),
@@ -81,16 +94,18 @@ func TestApplySchemaRules(t *testing.T) {
 	config.DefaultConfig.Schema.AllowIncompatible = false
 
 	for _, c := range cases {
-		f1, err := NewFactoryBuilder(true).Build("t1", c.existing)
-		require.NoError(t, err)
-		f2, err := NewFactoryBuilder(true).Build("t1", c.incoming)
-		require.NoError(t, err)
+		t.Run(c.name, func(t *testing.T) {
+			f1, err := NewFactoryBuilder(true).Build("t1", c.existing)
+			require.NoError(t, err)
+			f2, err := NewFactoryBuilder(true).Build("t1", c.incoming)
+			require.NoError(t, err)
 
-		existingC, err := NewDefaultCollection(1, 1, f1, nil, nil)
-		require.NoError(t, err)
+			existingC, err := NewDefaultCollection(1, 1, f1, nil, nil)
+			require.NoError(t, err)
 
-		err = ApplyBackwardCompatibilityRules(existingC, f2)
-		require.Equal(t, c.expErr, err)
+			err = ApplyBackwardCompatibilityRules(existingC, f2)
+			require.Equal(t, c.expErr, err)
+		})
 	}
 }
 

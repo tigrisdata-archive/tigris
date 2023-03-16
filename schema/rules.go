@@ -60,19 +60,14 @@ func (v *PrimaryIndexSchemaValidator) Validate(existing *DefaultCollection, curr
 
 type FieldSchemaValidator struct{}
 
-func (v *FieldSchemaValidator) Validate(existing *DefaultCollection, current *Factory) error {
-	existingFields := make(map[string]*Field)
-	for _, e := range existing.Fields {
-		existingFields[e.FieldName] = e
+func (v *FieldSchemaValidator) validateLow(existing []*Field, current []*Field) error {
+	currentMap := make(map[string]*Field)
+	for _, e := range current {
+		currentMap[e.FieldName] = e
 	}
 
-	currentFields := make(map[string]*Field)
-	for _, e := range current.Fields {
-		currentFields[e.FieldName] = e
-	}
-
-	for name, f := range existingFields {
-		c, ok := currentFields[name]
+	for _, f := range existing {
+		c, ok := currentMap[f.FieldName]
 		if !ok {
 			if config.DefaultConfig.Schema.AllowIncompatible {
 				continue
@@ -84,9 +79,22 @@ func (v *FieldSchemaValidator) Validate(existing *DefaultCollection, current *Fa
 		if err := f.IsCompatible(c); err != nil {
 			return err
 		}
+
+		if len(f.Fields) == 0 {
+			continue // primitive field
+		}
+
+		// Validate nested fields
+		if err := v.validateLow(f.Fields, c.Fields); err != nil {
+			return err
+		}
 	}
 
 	return nil
+}
+
+func (v *FieldSchemaValidator) Validate(existing *DefaultCollection, current *Factory) error {
+	return v.validateLow(existing.Fields, current.Fields)
 }
 
 func (v *FieldSchemaValidator) ValidateIndex(existing *SearchIndex, current *SearchFactory) error {
