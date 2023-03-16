@@ -225,7 +225,6 @@ func (q *QueueSubspace) RenewLease(ctx context.Context, tx transaction.Tx, item 
 //
 //nolint:unused
 func (q *QueueSubspace) scanTable(ctx context.Context, tx transaction.Tx) error {
-	//nolint:unused
 	minVesting := time.UnixMilli(int64(1678281734380)) // 8 March 2023 - No queue item will be before this
 	currentTime := time.Now().Add(2 * time.Hour)
 	t := time.Now()

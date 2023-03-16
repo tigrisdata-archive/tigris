@@ -25,6 +25,7 @@ import (
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
+	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	ulog "github.com/tigrisdata/tigris/util/log"
@@ -253,7 +254,8 @@ type Dictionary struct {
 	clusterStore *ClusterSubspace
 	collStore    *CollectionSubspace
 	dbStore      *DatabaseSubspace
-	idxStore     *IndexSubspace
+	idxManager   *IndexManager
+	// idxStore     *IndexSubspace
 
 	schemaStore       *SchemaSubspace
 	searchSchemaStore *SearchSchemaSubspace
@@ -267,7 +269,7 @@ func NewMetadataDictionary(mdNameRegistry *NameRegistry) *Dictionary {
 		nsStore:           NewNamespaceStore(mdNameRegistry),
 		clusterStore:      NewClusterStore(mdNameRegistry),
 		collStore:         newCollectionStore(mdNameRegistry),
-		idxStore:          newIndexStore(mdNameRegistry),
+		idxManager:        newIndexManager(mdNameRegistry),
 		dbStore:           newDatabaseStore(mdNameRegistry),
 		schemaStore:       NewSchemaStore(mdNameRegistry),
 		searchSchemaStore: NewSearchSchemaStore(mdNameRegistry),
@@ -286,8 +288,8 @@ func (k *Dictionary) Database() *DatabaseSubspace {
 	return k.dbStore
 }
 
-func (k *Dictionary) Index() *IndexSubspace {
-	return k.idxStore
+func (k *Dictionary) Index() *IndexManager {
+	return k.idxManager
 }
 
 func (k *Dictionary) Schema() *SchemaSubspace {
@@ -366,7 +368,8 @@ func (k *Dictionary) DropCollection(ctx context.Context, tx transaction.Tx, coll
 	return k.Collection().softDelete(ctx, tx, namespaceId, dbId, collection)
 }
 
-func (k *Dictionary) CreateIndex(ctx context.Context, tx transaction.Tx, name string, namespaceId uint32,
+// Active indexes are created on a new collection and no background work is required to build an index.
+func (k *Dictionary) CreateActiveIndex(ctx context.Context, tx transaction.Tx, idx *schema.Index, namespaceId uint32,
 	dbId uint32, collId uint32,
 ) (*IndexMetadata, error) {
 	id, err := k.allocate(ctx, tx)
@@ -374,20 +377,24 @@ func (k *Dictionary) CreateIndex(ctx context.Context, tx transaction.Tx, name st
 		return nil, err
 	}
 
-	meta := &IndexMetadata{ID: id}
+	return k.idxManager.InsertActiveIndex(ctx, tx, namespaceId, dbId, collId, idx, id)
+}
 
-	err = k.Index().insert(ctx, tx, namespaceId, dbId, collId, name, meta)
+func (k *Dictionary) CreateIndex(ctx context.Context, tx transaction.Tx, idx *schema.Index, namespaceId uint32,
+	dbId uint32, collId uint32,
+) (*IndexMetadata, error) {
+	id, err := k.allocate(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
 
-	return meta, nil
+	return k.idxManager.InsertIndex(ctx, tx, namespaceId, dbId, collId, idx, id)
 }
 
-func (k *Dictionary) DropIndex(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32,
+func (k *Dictionary) DropIndex(ctx context.Context, tx transaction.Tx, idxMeta *IndexMetadata, namespaceId uint32,
 	dbId uint32, collId uint32,
 ) error {
-	return k.Index().softDelete(ctx, tx, namespaceId, dbId, collId, indexName)
+	return k.idxManager.SoftDelete(ctx, tx, namespaceId, dbId, collId, idxMeta)
 }
 
 func (k *Dictionary) allocate(ctx context.Context, tx transaction.Tx) (uint32, error) {
@@ -408,7 +415,7 @@ func (k *Dictionary) GetCollections(ctx context.Context, tx transaction.Tx, name
 func (k *Dictionary) GetIndexes(ctx context.Context, tx transaction.Tx, namespaceId uint32, databaseId uint32,
 	collId uint32,
 ) (map[string]*IndexMetadata, error) {
-	return k.Index().list(ctx, tx, namespaceId, databaseId, collId)
+	return k.Index().GetIndexes(ctx, tx, namespaceId, databaseId, collId)
 }
 
 func (k *Dictionary) GetDatabase(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32,

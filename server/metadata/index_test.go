@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/keys"
+	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/transaction"
 )
 
@@ -81,7 +82,9 @@ func TestIndexSubspace(t *testing.T) {
 		defer cleanupTx()
 
 		appPayload := &IndexMetadata{
-			Name: "name111",
+			Name:    "name111",
+			State:   schema.INDEX_WRITE_MODE,
+			IdxType: schema.SECONDARY_INDEX,
 		}
 
 		require.NoError(t, c.insert(ctx, tx, 1, 1, 1, "name2", appPayload))
@@ -127,15 +130,34 @@ func TestIndexSubspace(t *testing.T) {
 		tx, cleanupTx := initTx(t, ctx, tm)
 		defer cleanupTx()
 
-		require.NoError(t, c.insert(ctx, tx, 1, 1, 1, "name8", testIndexMetadata))
-		require.NoError(t, c.insert(ctx, tx, 1, 1, 1, "name9", testIndexMetadata))
+		idx8 := &IndexMetadata{
+			Name:    "name8",
+			State:   schema.INDEX_WRITE_MODE,
+			IdxType: schema.SECONDARY_INDEX,
+		}
+
+		idx9 := &IndexMetadata{
+			Name:    "name9",
+			State:   schema.INDEX_ACTIVE,
+			IdxType: schema.SECONDARY_INDEX,
+		}
+
+		idx10 := &IndexMetadata{
+			Name:    "name10",
+			State:   schema.INDEX_ACTIVE,
+			IdxType: schema.PRIMARY_INDEX,
+		}
+		require.NoError(t, c.insert(ctx, tx, 1, 1, 1, idx8.Name, idx8))
+		require.NoError(t, c.insert(ctx, tx, 1, 1, 1, idx9.Name, idx9))
+		require.NoError(t, c.insert(ctx, tx, 1, 1, 1, idx10.Name, idx10))
 
 		colls, err := c.list(ctx, tx, 1, 1, 1)
 		require.NoError(t, err)
 
 		require.Equal(t, map[string]*IndexMetadata{
-			"name8": {},
-			"name9": {},
+			"name8":  idx8,
+			"name9":  idx9,
+			"name10": idx10,
 		}, colls)
 	})
 }

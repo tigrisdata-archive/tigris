@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 )
@@ -63,7 +64,7 @@ func TestDictionaryEncoding(t *testing.T) {
 
 	tx, err = tm.StartTx(ctx)
 	require.NoError(t, err)
-	indexMeta, err := k.CreateIndex(ctx, tx, "pkey", 1234, startId, startId+1)
+	indexMeta, err := k.CreateIndex(ctx, tx, createMockIndex("pkey"), 1234, startId, startId+1)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit(ctx))
 
@@ -208,7 +209,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		idxMeta, err := k.CreateIndex(ctx, tx, "idx-1", 1234, dbMeta.ID, collMeta.ID)
+		idxMeta, err := k.CreateIndex(ctx, tx, createMockIndex("idx-1"), 1234, dbMeta.ID, collMeta.ID)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 		require.NotEqual(t, 0, idxMeta.ID)
@@ -222,7 +223,8 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		err = k.DropIndex(ctx, tx, "idx-1", 1234, dbMeta.ID, collMeta.ID)
+		idxMeta = &IndexMetadata{Name: "idx-1", IdxType: schema.PRIMARY_INDEX, State: schema.INDEX_ACTIVE}
+		err = k.DropIndex(ctx, tx, idxMeta, 1234, dbMeta.ID, collMeta.ID)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
@@ -311,7 +313,7 @@ func TestDictionaryEncoding_Error(t *testing.T) {
 	_, err = k.CreateCollection(ctx, tx, "coll-1", 1234, 0)
 	require.Error(t, errors.InvalidArgument("invalid database id"), err)
 
-	_, err = k.CreateIndex(ctx, tx, "pkey", 1234, 1, 0)
+	_, err = k.CreateIndex(ctx, tx, createMockIndex("pkey"), 1234, 1, 0)
 	require.Error(t, errors.InvalidArgument("invalid collection id"), err)
 
 	require.NoError(t, tx.Rollback(context.TODO()))
@@ -382,7 +384,7 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 		cid1, err := k.CreateCollection(ctx, tx, "coll-1", 1, dbMeta.ID)
 		require.NoError(t, err)
 
-		pkID, err := k.CreateIndex(ctx, tx, "pkey", 1, dbMeta.ID, cid1.ID)
+		pkID, err := k.CreateIndex(ctx, tx, createMockIndex("pkey"), 1, dbMeta.ID, cid1.ID)
 		require.NoError(t, err)
 		idxToId, err := k.GetIndexes(ctx, tx, 1, dbMeta.ID, cid1.ID)
 		require.NoError(t, err)
@@ -429,4 +431,13 @@ func TestDecode(t *testing.T) {
 	mp, err := NewMetadataDictionary(newTestNameRegistry(t)).decode(context.TODO(), k)
 	require.NoError(t, err)
 	require.Equal(t, mp[dbKey], "db-1")
+}
+
+func createMockIndex(name string) *schema.Index {
+	return &schema.Index{
+		Name:    name,
+		Id:      1234,
+		State:   schema.INDEX_ACTIVE,
+		IdxType: schema.PRIMARY_INDEX,
+	}
 }

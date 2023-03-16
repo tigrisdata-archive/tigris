@@ -228,7 +228,7 @@ func (runner *BaseQueryRunner) buildSecondaryIndexKeysUsingFilter(coll *schema.D
 		return nil, errors.InvalidArgument("secondary indexes do not support case insensitive collation")
 	}
 
-	filterFactory := filter.NewFactoryForSecondaryIndex(coll.GetIndexedFields())
+	filterFactory := filter.NewFactoryForSecondaryIndex(coll.GetActiveIndexedFields())
 	filters, err := filterFactory.Factorize(reqFilter)
 	if err != nil {
 		return nil, err
@@ -313,7 +313,7 @@ func (runner *BaseQueryRunner) getSecondaryWriterIterator(ctx context.Context, t
 		return nil, err
 	}
 
-	filterFactory := filter.NewFactoryForSecondaryIndex(coll.GetIndexedFields())
+	filterFactory := filter.NewFactoryForSecondaryIndex(coll.GetActiveIndexedFields())
 	filters, err := filterFactory.Factorize(reqFilter)
 	if err != nil {
 		return nil, err

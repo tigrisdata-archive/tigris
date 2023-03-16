@@ -452,6 +452,7 @@ type Tenant struct {
 
 	kvStore           kv.KeyValueStore
 	searchStore       search.Store
+	SIndexStore       *IndexSubspace
 	schemaStore       *SchemaSubspace
 	searchSchemaStore *SearchSchemaSubspace
 	namespaceStore    *NamespaceSubspace
@@ -603,7 +604,7 @@ func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbN
 	}
 
 	for coll, meta := range colls {
-		idxMeta, err := tenant.metaStore.GetIndexes(ctx, tx, tenant.namespace.Id(), database.id, meta.ID)
+		idxMeta, err := tenant.metaStore.idxManager.GetIndexes(ctx, tx, tenant.namespace.Id(), database.id, meta.ID)
 		if err != nil {
 			database.needFixingCollections[coll] = struct{}{}
 			log.Debug().Err(err).Str("collection", coll).Msg("skipping loading collection")
@@ -1187,14 +1188,15 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 	// encode indexes and add this back in the collection
 	indexes := schFactory.Indexes.GetIndexes()
 	idxMeta := make(map[string]*IndexMetadata)
-	for _, i := range indexes {
-		imeta, err := tenant.metaStore.CreateIndex(ctx, tx, i.Name, tenant.namespace.Id(), database.id, collMeta.ID)
+	for _, idx := range indexes {
+		imeta, err := tenant.metaStore.CreateActiveIndex(ctx, tx, idx, tenant.namespace.Id(), database.id, collMeta.ID)
 		if err != nil {
 			return err
 		}
 
-		idxMeta[i.Name] = imeta
-		i.Id = imeta.ID
+		idxMeta[idx.Name] = imeta
+		idx.Id = imeta.ID
+		idx.State = schema.INDEX_ACTIVE
 	}
 
 	// all good now persist the schema
@@ -1254,7 +1256,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 		meta, ok := c.idxMeta[idx.Name]
 		if !ok {
 			// these are the new indexes present in the new collection
-			meta, err = tenant.metaStore.CreateIndex(ctx, tx, idx.Name, tenant.namespace.Id(), database.id, c.id)
+			meta, err = tenant.metaStore.CreateIndex(ctx, tx, idx, tenant.namespace.Id(), database.id, c.id)
 			if err != nil {
 				return err
 			}
@@ -1371,8 +1373,8 @@ func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db 
 		return err
 	}
 
-	for idxName := range cHolder.idxMeta {
-		if err := tenant.metaStore.DropIndex(ctx, tx, idxName, tenant.namespace.Id(), db.id, cHolder.id); err != nil {
+	for _, idxMeta := range cHolder.idxMeta {
+		if err := tenant.metaStore.DropIndex(ctx, tx, idxMeta, tenant.namespace.Id(), db.id, cHolder.id); err != nil {
 			return err
 		}
 	}
@@ -1704,6 +1706,7 @@ func createCollection(id uint32, name string, schemas schema.Versions, idxMeta m
 		}
 
 		index.Id = idx.ID
+		index.State = idx.State
 	}
 
 	schFactory.Schema = schemas.Latest().Schema

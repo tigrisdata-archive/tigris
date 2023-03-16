@@ -275,14 +275,46 @@ var SupportedFieldProperties = container.NewHashSet(
 // Indexes is to wrap different index that a collection can have.
 type Indexes struct {
 	PrimaryKey     *Index
-	SecondaryIndex *Index
+	SecondaryIndex []*Index
 }
 
 func (i *Indexes) GetIndexes() []*Index {
 	var indexes []*Index
 	indexes = append(indexes, i.PrimaryKey)
+	indexes = append(indexes, i.SecondaryIndex...)
 	return indexes
 }
+
+func (i *Indexes) IsActiveIndex(name string) bool {
+	for _, idx := range i.SecondaryIndex {
+		if idx.Name == name {
+			if idx.State == INDEX_ACTIVE {
+				return true
+			} else {
+				return false
+			}
+		}
+	}
+
+	return false
+}
+
+type IndexType uint8
+
+const (
+	PRIMARY_INDEX IndexType = iota
+	SECONDARY_INDEX
+)
+
+type IndexState uint8
+
+const (
+	UNKNOWN IndexState = iota
+	NOT_INDEXED
+	INDEX_DELETED
+	INDEX_WRITE_MODE
+	INDEX_ACTIVE
+)
 
 // Index can be composite, so it has a list of fields, each index has name and encoded id. The encoded is used for key
 // building.
@@ -293,6 +325,27 @@ type Index struct {
 	Name string
 	// Id is assigned to this index by the dictionary encoder.
 	Id uint32
+	// Secondary indexes can be in 4 states:
+	// 1. UNKNOWN = Have not fetched the index metadata yet so the state is unknown
+	// 2. NOT_INDEXED = field is not indexed
+	// 3. INDEX_WRITE_MODE = index is being built in the background and cannot be used for queries
+	// 4. INDEX_ACTIVE = index can be used for queries
+	// Note: this is not used for primary key indexes
+	State IndexState
+	// Either a PrimaryKey index or a Secondary Key index
+	IdxType IndexType
+}
+
+func (i *Index) IsPrimaryKeyIndex() bool {
+	return !i.IsSecondaryIndex()
+}
+
+func (i *Index) IsSecondaryIndex() bool {
+	return i.IdxType == SECONDARY_INDEX
+}
+
+func (i *Index) IndexType() IndexType {
+	return i.IdxType
 }
 
 func (i *Index) IsCompatible(i1 *Index) error {

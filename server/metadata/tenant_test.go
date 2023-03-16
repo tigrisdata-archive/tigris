@@ -422,10 +422,12 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 				"type": "string"
 			},
 			"K2": {
-				"type": "integer"
+				"type": "integer",
+				"index": true
 			},
 			"D1": {
 				"type": "string",
+				"index": true,
 				"maxLength": 128
 			}
 		},
@@ -444,7 +446,6 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 		collection := db2.GetCollection("test_collection")
 		require.Equal(t, "test_collection", collection.Name)
 		require.Equal(t, "test_collection", db2.idToCollectionMap[collection.Id])
-		require.Equal(t, 1, len(db2.idToCollectionMap))
 
 		require.NoError(t, tx.Commit(ctx))
 
@@ -589,6 +590,84 @@ func TestTenantManager_SearchIndexes(t *testing.T) {
 	require.NoError(t, tx.Commit(ctx))
 
 	testClearDictionary(ctx, m.metaStore, m.kvStore)
+}
+
+func TestTenantManager_SecondaryIndexes(t *testing.T) {
+	tm := transaction.NewManager(kvStore)
+	t.Run("create_collections", func(t *testing.T) {
+		m, ctx, cancel := NewTestTenantMgr(t, kvStore)
+		defer cancel()
+
+		_, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
+		require.NoError(t, err)
+
+		tenant := m.tenants["ns-test1"]
+		tx, err := tm.StartTx(ctx)
+		require.NoError(t, err)
+		err = tenant.CreateProject(ctx, tx, tenantProj1, nil)
+		require.NoError(t, err)
+		err = tenant.CreateProject(ctx, tx, tenantProj2, nil)
+		require.NoError(t, err)
+
+		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
+
+		proj1, err := tenant.GetProject(tenantProj1)
+		require.NoError(t, err)
+		require.Equal(t, tenantProj1, proj1.Name())
+		db1 := proj1.database
+		require.NoError(t, err)
+		require.Equal(t, tenantDb1.Name(), db1.Name())
+		require.Equal(t, tenantDb1.Name(), tenant.idToDatabaseMap[db1.id].Name())
+
+		proj2, err := tenant.GetProject(tenantProj2)
+		require.NoError(t, err)
+		require.Equal(t, tenantProj2, proj2.Name())
+		db2 := proj2.database
+		require.Equal(t, tenantDb2.Name(), db2.Name())
+		require.Equal(t, tenantDb2.Name(), tenant.idToDatabaseMap[db2.id].Name())
+		require.Equal(t, 2, len(tenant.idToDatabaseMap))
+		require.Equal(t, 2, len(tenant.projects))
+
+		jsSchema := []byte(`{
+        "title": "test_collection",
+		"properties": {
+			"K1": {
+				"type": "string",
+				"index": true
+			},
+			"K2": {
+				"type": "integer",
+				"index": true
+			},
+			"D1": {
+				"type": "string",
+				"maxLength": 128
+			}
+		},
+		"primary_key": ["K1", "K2"]
+	}`)
+
+		factory, err := schema.NewFactoryBuilder(true).Build("test_collection", jsSchema)
+		require.NoError(t, err)
+		require.NoError(t, tenant.CreateCollection(ctx, tx, db2, factory))
+
+		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
+
+		proj2, err = tenant.GetProject(tenantProj2)
+		require.NoError(t, err)
+		db2 = proj2.database
+		collection := db2.GetCollection("test_collection")
+		require.Equal(t, "test_collection", collection.Name)
+		require.Equal(t, "test_collection", db2.idToCollectionMap[collection.Id])
+		require.Len(t, db2.idToCollectionMap, 1)
+		// K1, K2, _tigris_created_at, _tigris_updated_at
+		require.Len(t, collection.GetActiveIndexedFields(), 4)
+		require.Len(t, collection.GetIndexedFields(), 4)
+
+		require.NoError(t, tx.Commit(ctx))
+
+		testClearDictionary(ctx, m.metaStore, m.kvStore)
+	})
 }
 
 func TestTenantManager_DataSize(t *testing.T) {

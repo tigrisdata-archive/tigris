@@ -79,13 +79,13 @@ func BuildSecondaryIndexKeys(coll *schema.DefaultCollection, queryFilters []filt
 		return nil, errors.InvalidArgument("Cannot index with an empty filter")
 	}
 
-	indexeableFields := coll.GetIndexedFields()
+	indexeableFields := coll.GetActiveIndexedFields()
 	if len(indexeableFields) == 0 {
 		return nil, errors.InvalidArgument("No indexable fields")
 	}
 
 	encoder := func(indexParts ...interface{}) (keys.Key, error) {
-		return newKeyWithPrimaryKey(indexParts, coll.EncodedTableIndexName, coll.Indexes.SecondaryIndex.Name, "kvs"), nil
+		return newKeyWithPrimaryKey(indexParts, coll.EncodedTableIndexName, coll.SecondaryIndexName(), "kvs"), nil
 	}
 
 	buildIndexParts := func(fieldName string, datatype schema.FieldType, value interface{}) []interface{} {

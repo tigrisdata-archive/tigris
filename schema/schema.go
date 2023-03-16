@@ -224,6 +224,26 @@ func (fb *FactoryBuilder) Build(collection string, reqSchema jsoniter.RawMessage
 		}
 	}
 
+	// Create the secondary indexes with an unknown state
+	// to determine the state, tigris will need to read from the index metadata
+	secondaryIndex := []*Index{
+		{
+			Name:    ReservedFields[CreatedAt],
+			IdxType: SECONDARY_INDEX,
+			State:   UNKNOWN,
+		},
+		{
+			Name:    ReservedFields[UpdatedAt],
+			IdxType: SECONDARY_INDEX,
+			State:   UNKNOWN,
+		},
+	}
+	for _, field := range fields {
+		if field.Indexed != nil && *field.Indexed {
+			secondaryIndex = append(secondaryIndex, &Index{Name: field.Name(), IdxType: SECONDARY_INDEX, State: UNKNOWN, Fields: []*Field{field}})
+		}
+	}
+
 	factory := &Factory{
 		Fields: fields,
 		Indexes: &Indexes{
@@ -231,10 +251,7 @@ func (fb *FactoryBuilder) Build(collection string, reqSchema jsoniter.RawMessage
 				Name:   PrimaryKeyIndexName,
 				Fields: primaryKeyFields,
 			},
-			SecondaryIndex: &Index{
-				Name:   SecondaryKeyIndexName,
-				Fields: []*Field{},
-			},
+			SecondaryIndex: secondaryIndex,
 		},
 		Name:            collection,
 		Schema:          reqSchema,

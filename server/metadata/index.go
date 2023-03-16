@@ -22,6 +22,7 @@ import (
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
+	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/transaction"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
@@ -33,8 +34,10 @@ type IndexSubspace struct {
 
 // IndexMetadata contains index wide metadata.
 type IndexMetadata struct {
-	ID   uint32 `json:"id"`
-	Name string `json:"name"`
+	ID      uint32            `json:"id"`
+	Name    string            `json:"name"`
+	State   schema.IndexState `json:"state"`
+	IdxType schema.IndexType  `json:"index_type"`
 }
 
 const indexMetaValueVersion int32 = 1
@@ -42,6 +45,8 @@ const indexMetaValueVersion int32 = 1
 func newIndexStore(nameRegistry *NameRegistry) *IndexSubspace {
 	return &IndexSubspace{
 		metadataSubspace{
+			// TODO:Should this be encoding subspace or its own one?
+			// IF we do change to secondary index what about existing Primary Keys stored here?
 			SubspaceName: nameRegistry.EncodingSubspaceName(),
 			KeyVersion:   []byte{encKeyVersion},
 		},
