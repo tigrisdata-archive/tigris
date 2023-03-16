@@ -37,10 +37,11 @@ const (
 
 	HeaderPrefix = "Tigris-"
 
-	HeaderTxID          = "Tigris-Tx-Id"
-	HeaderTxOrigin      = "Tigris-Tx-Origin"
-	grpcGatewayPrefix   = "Grpc-Gateway-"
-	HeaderSchemaSignOff = "Tigris-Schema-Sign-Off"
+	HeaderTxID            = "Tigris-Tx-Id"
+	HeaderTxOrigin        = "Tigris-Tx-Origin"
+	grpcGatewayPrefix     = "Grpc-Gateway-"
+	HeaderSchemaSignOff   = "Tigris-Schema-Sign-Off"
+	HeaderBypassAuthCache = "Tigris-Bypass-Auth-Cache" // #nosec G101
 )
 
 func CustomMatcher(key string) (string, bool) {
