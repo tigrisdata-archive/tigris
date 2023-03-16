@@ -264,7 +264,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		newKey := key
 		if primaryKeyMutation {
 			// we need to deleteReq old key and build new key from new data
-			keyGen := newKeyGenerator(newData.RawData, tenant.TableKeyGenerator, coll.Indexes.PrimaryKey)
+			keyGen := newKeyGenerator(newData.RawData, tenant.TableKeyGenerator, coll.GetPrimaryKey())
 			if newKey, err = keyGen.generate(ctx, runner.txMgr, runner.encoder, coll.EncodedName); err != nil {
 				return Response{}, nil, err
 			}
