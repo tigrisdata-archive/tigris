@@ -72,7 +72,7 @@ func TestAuth(t *testing.T) {
 		incomingCtx := metadata.NewIncomingContext(context.TODO(), metadata.Pairs("authorization", "bearer somebadtoken"))
 		_, err := authFunction(incomingCtx, []*validator.Validator{{}}, &enforcedAuthConfig, cache)
 		require.NotNil(t, err)
-		require.Equal(t, err, errors.Unauthenticated("Failed to validate access token"))
+		require.Equal(t, err, errors.Unauthenticated("Failed to validate access token, could not be validated"))
 	})
 
 	t.Run("enforcing mode: Bad token 2", func(t *testing.T) {
