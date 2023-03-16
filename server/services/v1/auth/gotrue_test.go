@@ -31,8 +31,6 @@ func TestClientCredentialsCharacters(t *testing.T) {
 				ClientSecretLength: 1000,
 			},
 		},
-		userStore: nil,
-		txMgr:     nil,
 	}
 	idCharSet := container.NewHashSet()
 	for _, v := range idChars {

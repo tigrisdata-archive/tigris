@@ -78,8 +78,6 @@ func NewProvider(userstore *metadata.UserSubspace, txMgr *transaction.Manager) P
 	} else if config.DefaultConfig.Auth.OAuthProvider == gotrueName {
 		authProvider = &gotrue{
 			AuthConfig: config.DefaultConfig.Auth,
-			userStore:  userstore,
-			txMgr:      txMgr,
 		}
 	}
 

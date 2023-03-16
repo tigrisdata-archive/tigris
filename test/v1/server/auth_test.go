@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/services/v1/auth"
 	"github.com/tigrisdata/tigris/test/config"
 	"gopkg.in/gavv/httpexpect.v1"
@@ -280,7 +281,18 @@ func TestCreateAccessToken(t *testing.T) {
 	require.NotNil(t, getAccessTokenResponse.JSON().Object().Value("expires_in"))
 
 	// use access token
-	_ = e2.POST(createProjectUrl("new-project")).WithHeader(Authorization, Bearer+accessToken).Expect().Status(http.StatusOK)
+	_ = e2.POST(createProjectUrl("new-project-1")).WithHeader(Authorization, Bearer+accessToken).Expect().Status(http.StatusOK)
+
+	// use access token bypassing auth caches
+	_ = e2.POST(createProjectUrl("new-project-2")).
+		WithHeader(Authorization, Bearer+accessToken).
+		WithHeader(api.HeaderBypassAuthCache, "true").
+		Expect().
+		Status(http.StatusOK)
+
+	// use access token with cache
+	_ = e2.POST(createProjectUrl("new-project-3")).WithHeader(Authorization, Bearer+accessToken).Expect().Status(http.StatusOK)
+
 }
 
 func TestCreateAccessTokenUsingInvalidCreds(t *testing.T) {

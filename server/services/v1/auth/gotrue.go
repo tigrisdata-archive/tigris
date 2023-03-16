@@ -33,9 +33,7 @@ import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
-	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/request"
-	"github.com/tigrisdata/tigris/server/transaction"
 	"golang.org/x/net/context/ctxhttp"
 )
 
@@ -47,8 +45,6 @@ const (
 
 type gotrue struct {
 	AuthConfig config.AuthConfig
-	userStore  *metadata.UserSubspace
-	txMgr      *transaction.Manager
 }
 
 type CreateUserPayload struct {
@@ -263,13 +259,6 @@ func (g *gotrue) DeleteAppKey(ctx context.Context, req *api.DeleteAppKeyRequest)
 		return nil, errors.Internal("Received non OK status code to delete user")
 	}
 
-	// remove it from metadata cache
-	err = deleteApplication(ctx, req.GetId(), g.userStore, g.txMgr)
-	if err != nil {
-		log.Error().Msg("Failed to delete appKey from metadata")
-		return nil, err
-	}
-
 	return &api.DeleteAppKeyResponse{
 		Deleted: true,
 	}, nil
@@ -469,38 +458,6 @@ func createUser(ctx context.Context, username string, password string, currentSu
 }
 
 func getAccessTokenUsingClientCredentialsGotrue(ctx context.Context, clientId string, clientSecret string, g *gotrue) (string, int32, error) {
-	// lookup the internal namespace
-	tx, err := g.txMgr.StartTx(ctx)
-	if err != nil {
-		return "", 0, tokenError("Failed to get access token: reason = could not start tx for internal lookup", err)
-	}
-	defer func() {
-		_ = tx.Commit(ctx)
-	}()
-
-	metadataKey := createAccessTokenMetadataKey(clientSecret)
-	cachedToken, err := g.userStore.GetUserMetadata(ctx, tx, defaultNamespaceId, metadata.Application, clientId, metadataKey)
-	if err != nil && err != errors.ErrNotFound {
-		return "", 0, tokenError("Failed to get access token: reason = could not process cache", err)
-	}
-
-	if cachedToken != nil {
-		tokenMetadataEntry := &tokenMetadataEntry{}
-		err := jsoniter.Unmarshal(cachedToken, tokenMetadataEntry)
-		if err != nil {
-			return "", 0, tokenError("Failed to get access token: reason = could not internally lookup", err)
-		}
-		// invalidate cache before 10min of expiry
-		if tokenMetadataEntry.ExpireAt > time.Now().Unix()+600 {
-			return tokenMetadataEntry.AccessToken, int32(tokenMetadataEntry.ExpireAt - time.Now().Unix()), nil
-		} else {
-			// expired entry, delete it
-			err := deleteApplicationMetadata(ctx, defaultNamespaceId, clientId, metadataKey, g.userStore, g.txMgr)
-			if err != nil {
-				return "", 0, err
-			}
-		}
-	}
 	// make external call
 	getTokenUrl := fmt.Sprintf("%s/token?grant_type=password", g.AuthConfig.Gotrue.URL)
 
