@@ -71,7 +71,7 @@ func mainWithCode() int {
 	log.Info().Str("version", util.Version).Msgf("Starting server")
 
 	var searchStore search.Store
-	if defaultConfig.Tracing.Enabled {
+	if defaultConfig.Metrics.Search.Enabled {
 		searchStore, err = search.NewStoreWithMetrics(&defaultConfig.Search)
 	} else {
 		searchStore, err = search.NewStore(&defaultConfig.Search)

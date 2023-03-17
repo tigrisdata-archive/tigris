@@ -324,9 +324,18 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	ts := internal.NewTimestamp()
 
+	reqStatus, reqStatusFound := metrics.RequestStatusFromContext(ctx)
+
 	var iterator Iterator
 	if filter.None(runner.req.Filter) {
 		iterator, err = NewDatabaseReader(ctx, tx).ScanTable(coll.EncodedName)
+		// For a delete without filter, do not count the read operations
+		if reqStatusFound {
+			reqStatus.AddDDLDropUnit()
+			reqStatus.SetReadBytes(int64(0))
+			reqStatus.SetWriteBytes(int64(0))
+			ctx = reqStatus.SaveRequestStatusToContext(ctx)
+		}
 		runner.queryMetrics.SetWriteType("full_scan")
 	} else {
 		var collation *value.Collation
@@ -353,6 +362,9 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		key, err := keys.FromBinary(coll.EncodedName, row.Key)
 		if err != nil {
 			return Response{}, ctx, err
+		}
+		if reqStatusFound {
+			reqStatus.AddWriteBytes(int64(len(row.Data.RawData)))
 		}
 
 		if config.DefaultConfig.SecondaryIndex.WriteEnabled {

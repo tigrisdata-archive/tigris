@@ -70,7 +70,6 @@ func (tx *KeyValueTx) Replace(ctx context.Context, table []byte, key Key, data *
 	if err != nil {
 		return err
 	}
-
 	return tx.ftx.Replace(ctx, table, key, enc, isUpdate)
 }
 
@@ -79,9 +78,12 @@ func (tx *KeyValueTx) Read(ctx context.Context, table []byte, key Key) (Iterator
 	if err != nil {
 		return nil, err
 	}
-	return &KeyValueIterator{
-		baseIterator: iter,
-	}, nil
+	// TODO: move this to TxImplWithMetrics to kv/measure.go
+	if config.DefaultConfig.Metrics.Fdb.Enabled {
+		return NewKeyValueIteratorWithMetrics(ctx, iter), nil
+	} else {
+		return NewKeyValueIterator(ctx, iter), nil
+	}
 }
 
 func (tx *KeyValueTx) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (Iterator, error) {
@@ -89,14 +91,22 @@ func (tx *KeyValueTx) ReadRange(ctx context.Context, table []byte, lkey Key, rke
 	if err != nil {
 		return nil, err
 	}
-	return &KeyValueIterator{
-		baseIterator: iter,
-	}, nil
+	// TODO: move this to TxImplWithMetrics to kv/measure.go
+	if config.DefaultConfig.Metrics.Fdb.Enabled {
+		return NewKeyValueIteratorWithMetrics(ctx, iter), nil
+	} else {
+		return NewKeyValueIterator(ctx, iter), nil
+	}
 }
 
 type KeyValueIterator struct {
+	ctx context.Context
 	baseIterator
 	err error
+}
+
+func NewKeyValueIterator(ctx context.Context, iter baseIterator) *KeyValueIterator {
+	return &KeyValueIterator{ctx: ctx, baseIterator: iter}
 }
 
 func (i *KeyValueIterator) Next(value *KeyValue) bool {
@@ -123,6 +133,7 @@ func (i *KeyValueIterator) Err() error {
 }
 
 type AtomicIteratorImpl struct {
+	ctx context.Context
 	baseIterator
 	err error
 }

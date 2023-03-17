@@ -83,13 +83,17 @@ func (runner *CollectionQueryRunner) drop(ctx context.Context, tx transaction.Tx
 			if err = tenant.DeleteSearchIndex(ctx, tx, project, searchIndex.Name); err != nil {
 				return Response{}, ctx, err
 			}
+			countDDLDropUnit(ctx)
 		}
 	}
+
+	countDDLDropUnit(ctx)
 
 	return Response{Status: DroppedStatus}, ctx, nil
 }
 
 func (runner *CollectionQueryRunner) createOrUpdate(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
+	var collectionExists bool
 	req := runner.createOrUpdateReq
 
 	db, err := runner.getDatabase(ctx, tx, tenant, req.GetProject(), req.GetBranch())
@@ -97,7 +101,11 @@ func (runner *CollectionQueryRunner) createOrUpdate(ctx context.Context, tx tran
 		return Response{}, ctx, err
 	}
 
-	if db.GetCollection(req.GetCollection()) != nil && req.OnlyCreate {
+	if db.GetCollection(req.GetCollection()) == nil {
+		collectionExists = true
+	}
+
+	if !collectionExists && req.OnlyCreate {
 		// check if onlyCreate is set and if set then return an error if collection already exist
 		return Response{}, ctx, errors.AlreadyExists("collection already exist")
 	}
@@ -118,9 +126,19 @@ func (runner *CollectionQueryRunner) createOrUpdate(ctx context.Context, tx tran
 			// this simply means, concurrently CreateCollection is called,
 			return Response{}, ctx, errors.Aborted("concurrent createReq collection request, aborting")
 		}
+
+		if collectionExists {
+			countDDLCreateUnit(ctx)
+		} else {
+			countDDLUpdateUnit(ctx, true)
+		}
 		return Response{}, ctx, err
 	}
-
+	if collectionExists {
+		countDDLCreateUnit(ctx)
+	} else {
+		countDDLUpdateUnit(ctx, true)
+	}
 	return Response{Status: CreatedStatus}, ctx, nil
 }
 

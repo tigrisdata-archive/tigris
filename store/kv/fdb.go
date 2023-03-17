@@ -52,6 +52,7 @@ type fdbIterator struct {
 }
 
 type fdbIteratorTxCloser struct {
+	ctx context.Context
 	baseIterator
 	tx baseTx
 }
@@ -83,7 +84,7 @@ func (d *fdbkv) Read(ctx context.Context, table []byte, key Key) (baseIterator, 
 	if err != nil {
 		return nil, err
 	}
-	return &fdbIteratorTxCloser{it, tx}, nil
+	return &fdbIteratorTxCloser{ctx, it, tx}, nil
 }
 
 func (d *fdbkv) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key, isSnapshot bool) (baseIterator, error) {
@@ -95,7 +96,7 @@ func (d *fdbkv) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key,
 	if err != nil {
 		return nil, err
 	}
-	return &fdbIteratorTxCloser{it, tx}, nil
+	return &fdbIteratorTxCloser{ctx, it, tx}, nil
 }
 
 func (d *fdbkv) txWithRetry(ctx context.Context, fn func(fdb.Transaction) (interface{}, error)) (interface{}, error) {
@@ -199,7 +200,7 @@ func (d *fdbkv) AtomicReadRange(ctx context.Context, table []byte, lKey Key, rKe
 	if err != nil {
 		return nil, err
 	}
-	return &AtomicIteratorImpl{it, nil}, nil
+	return &AtomicIteratorImpl{ctx, it, nil}, nil
 }
 
 func (d *fdbkv) Get(ctx context.Context, key []byte, isSnapshot bool) (Future, error) {
@@ -400,7 +401,7 @@ func (t *ftx) AtomicReadRange(ctx context.Context, table []byte, lkey Key, rkey 
 		return nil, err
 	}
 
-	return &AtomicIteratorImpl{iter, nil}, nil
+	return &AtomicIteratorImpl{ctx, iter, nil}, nil
 }
 
 func (t *ftx) Get(_ context.Context, key []byte, isSnapshot bool) (Future, error) {
