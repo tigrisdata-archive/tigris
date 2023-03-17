@@ -387,6 +387,7 @@ func testTxClient(t *testing.T, c driver.Driver) {
 	testRead(t, db1, driver.Filter("{}"), nil)
 
 	tx, err := c.UseDatabase(projectName).BeginTx(ctx, &driver.TxOptions{})
+	require.NoError(t, err)
 
 	_, err = tx.Insert(ctx, "c1", []driver.Document{doc1})
 	require.NoError(t, err)

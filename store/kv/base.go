@@ -51,10 +51,3 @@ type baseTx interface {
 	Rollback(context.Context) error
 	IsRetriable() bool
 }
-
-type baseKVStore interface {
-	baseKV
-	BeginTx(ctx context.Context) (baseTx, error)
-	CreateTable(ctx context.Context, name []byte) error
-	DropTable(ctx context.Context, name []byte) error
-}

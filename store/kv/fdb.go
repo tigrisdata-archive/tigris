@@ -51,11 +51,6 @@ type fdbIterator struct {
 	err      error
 }
 
-type fdbIteratorTxCloser struct {
-	baseIterator
-	tx baseTx
-}
-
 // newFoundationDB initializes instance of FoundationDB KV interface implementation.
 func newFoundationDB(cfg *config.FoundationDBConfig) (*fdbkv, error) {
 	d := &fdbkv{}
@@ -74,30 +69,6 @@ func (d *fdbkv) init(cfg *config.FoundationDBConfig) (err error) {
 }
 
 // Read returns all the keys which has prefix equal to "key" parameter.
-func (d *fdbkv) Read(ctx context.Context, table []byte, key Key) (baseIterator, error) {
-	tx, err := d.BeginTx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	it, err := tx.Read(ctx, table, key)
-	if err != nil {
-		return nil, err
-	}
-	return &fdbIteratorTxCloser{it, tx}, nil
-}
-
-func (d *fdbkv) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key, isSnapshot bool) (baseIterator, error) {
-	tx, err := d.BeginTx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	it, err := tx.ReadRange(ctx, table, lKey, rKey, isSnapshot)
-	if err != nil {
-		return nil, err
-	}
-	return &fdbIteratorTxCloser{it, tx}, nil
-}
-
 func (d *fdbkv) txWithRetry(ctx context.Context, fn func(fdb.Transaction) (interface{}, error)) (interface{}, error) {
 	for {
 		retry, res, err := d.txWithRetryLow(ctx, fn)
@@ -139,95 +110,6 @@ func (d *fdbkv) txWithRetryLow(ctx context.Context, fn func(fdb.Transaction) (in
 	}
 
 	return true, nil, nil
-}
-
-func (d *fdbkv) Insert(ctx context.Context, table []byte, key Key, data []byte) error {
-	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return nil, (&ftx{d: d, tx: &tr}).Insert(ctx, table, key, data)
-	})
-	return err
-}
-
-func (d *fdbkv) Replace(ctx context.Context, table []byte, key Key, data []byte, isUpdate bool) error {
-	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return nil, (&ftx{d: d, tx: &tr}).Replace(ctx, table, key, data, isUpdate)
-	})
-	return err
-}
-
-func (d *fdbkv) Delete(ctx context.Context, table []byte, key Key) error {
-	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return nil, (&ftx{d: d, tx: &tr}).Delete(ctx, table, key)
-	})
-	return err
-}
-
-func (d *fdbkv) DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key) error {
-	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return nil, (&ftx{d: d, tx: &tr}).DeleteRange(ctx, table, lKey, rKey)
-	})
-	return err
-}
-
-func (d *fdbkv) Update(ctx context.Context, table []byte, key Key, apply func([]byte) ([]byte, error)) (int32, error) {
-	count, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return (&ftx{d: d, tx: &tr}).Update(ctx, table, key, apply)
-	})
-	return count.(int32), err
-}
-
-func (d *fdbkv) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) (int32, error) {
-	count, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return (&ftx{d: d, tx: &tr}).UpdateRange(ctx, table, lKey, rKey, apply)
-	})
-	return count.(int32), err
-}
-
-func (d *fdbkv) SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error {
-	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return nil, (&ftx{d: d, tx: &tr}).SetVersionstampedValue(ctx, key, value)
-	})
-	return err
-}
-
-func (d *fdbkv) SetVersionstampedKey(ctx context.Context, key []byte, value []byte) error {
-	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return nil, (&ftx{d: d, tx: &tr}).SetVersionstampedKey(ctx, key, value)
-	})
-	return err
-}
-
-func (d *fdbkv) AtomicAdd(ctx context.Context, table []byte, key Key, value int64) error {
-	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return nil, (&ftx{d: d, tx: &tr}).AtomicAdd(ctx, table, key, value)
-	})
-	return err
-}
-
-func (d *fdbkv) AtomicRead(ctx context.Context, table []byte, key Key) (int64, error) {
-	val, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return (&ftx{d: d, tx: &tr}).AtomicRead(ctx, table, key)
-	})
-	return val.(int64), err
-}
-
-func (d *fdbkv) AtomicReadRange(ctx context.Context, table []byte, lKey Key, rKey Key, isSnapshot bool) (AtomicIterator, error) {
-	tx, err := d.BeginTx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	it, err := tx.ReadRange(ctx, table, lKey, rKey, isSnapshot)
-	if err != nil {
-		return nil, err
-	}
-	return &AtomicIteratorImpl{it, nil}, nil
-}
-
-func (d *fdbkv) Get(ctx context.Context, key []byte, isSnapshot bool) (Future, error) {
-	val, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return (&ftx{d: d, tx: &tr}).Get(ctx, key, isSnapshot)
-	})
-	return val.(fdb.FutureByteSlice), err
 }
 
 func (d *fdbkv) CreateTable(_ context.Context, name []byte) error {
@@ -504,7 +386,7 @@ func (t *ftx) Get(_ context.Context, key []byte, isSnapshot bool) (Future, error
 
 // RangeSize calculates approximate range table size in bytes - this is an estimate
 // and a range smaller than 3mb will not be that accurate.
-func (t *ftx) RangeSize(ctx context.Context, table []byte, lKey Key, rKey Key) (int64, error) {
+func (t *ftx) RangeSize(_ context.Context, table []byte, lKey Key, rKey Key) (int64, error) {
 	lk := getFDBKey(table, lKey)
 	var rk fdb.Key
 	if rKey == nil {
@@ -607,21 +489,6 @@ func (i *fdbIterator) Next(kv *baseKeyValue) bool {
 
 func (i *fdbIterator) Err() error {
 	return i.err
-}
-
-func (i *fdbIteratorTxCloser) Next(kv *baseKeyValue) bool {
-	if i.tx == nil {
-		return false
-	}
-	if !i.baseIterator.Next(kv) {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		err := i.tx.Rollback(ctx)
-		ulog.E(err)
-		i.tx = nil
-		return false
-	}
-	return true
 }
 
 func getFDBKey(table []byte, key Key) fdb.Key {
