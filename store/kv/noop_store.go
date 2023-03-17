@@ -22,13 +22,15 @@ import (
 
 type NoopIterator struct{}
 
-func (n *NoopIterator) Next(value *KeyValue) bool { return false }
-func (n *NoopIterator) Err() error                { return nil }
+func (n *NoopIterator) Next(ctx context.Context, value *KeyValue) bool { return false }
+func (n *NoopIterator) Err() error                                     { return nil }
 
 type NoopFDBTypeIterator struct{}
 
-func (n *NoopFDBTypeIterator) Next(value *FdbBaseKeyValue[int64]) bool { return false }
-func (n *NoopFDBTypeIterator) Err() error                              { return nil }
+func (n *NoopFDBTypeIterator) Next(ctx context.Context, value *FdbBaseKeyValue[int64]) bool {
+	return false
+}
+func (n *NoopFDBTypeIterator) Err() error { return nil }
 
 type NoopTx struct {
 	*NoopKV

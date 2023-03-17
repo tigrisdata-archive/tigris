@@ -153,7 +153,7 @@ func schemaGet(ctx context.Context, tx transaction.Tx, key keys.Key) (schema.Ver
 		row      kv.KeyValue
 	)
 
-	for it.Next(&row) {
+	for it.Next(ctx, &row) {
 		ver, ok := row.Key[len(row.Key)-1].([]byte)
 		if !ok {
 			return nil, errors.Internal("not able to extract revision from schema %v", row.Key)

@@ -19,6 +19,7 @@ import (
 	"unsafe"
 
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
+	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metrics"
@@ -78,12 +79,12 @@ type KeyValueStore interface {
 }
 
 type Iterator interface {
-	Next(value *KeyValue) bool
+	Next(ctx context.Context, value *KeyValue) bool
 	Err() error
 }
 
 type AtomicIterator interface {
-	Next(value *FdbBaseKeyValue[int64]) bool
+	Next(ctx context.Context, value *FdbBaseKeyValue[int64]) bool
 	Err() error
 }
 
@@ -636,9 +637,14 @@ type IteratorImpl struct {
 	err error
 }
 
-func (i *IteratorImpl) Next(value *KeyValue) bool {
+func (i *IteratorImpl) Next(ctx context.Context, value *KeyValue) bool {
 	var v baseKeyValue
-	hasNext := i.baseIterator.Next(&v)
+	reqStatus, ok := metrics.RequestStatusFromContext(ctx)
+	readBytes := 0
+	if !ok {
+		log.Info().Msg("Iterator did not get request status")
+	}
+	hasNext := i.baseIterator.Next(ctx, &v)
 	if hasNext {
 		value.Key = v.Key
 		value.FDBKey = v.FDBKey
@@ -648,6 +654,12 @@ func (i *IteratorImpl) Next(value *KeyValue) bool {
 			return false
 		}
 		value.Data = decoded
+		readBytes += len(v.Value)
+	}
+	if reqStatus != nil {
+		reqStatus.AddBytes(int64(readBytes))
+		log.Info().Int64("Added bytes", int64(readBytes)).Msg("Read bytes in this iteration")
+		log.Info().Int64("Total bytes", reqStatus.ReadBytes).Msg("Total read bytes")
 	}
 	return hasNext
 }
@@ -664,9 +676,9 @@ type AtomicIteratorImpl struct {
 	err error
 }
 
-func (i *AtomicIteratorImpl) Next(value *FdbBaseKeyValue[int64]) bool {
+func (i *AtomicIteratorImpl) Next(ctx context.Context, value *FdbBaseKeyValue[int64]) bool {
 	var v baseKeyValue
-	hasNext := i.baseIterator.Next(&v)
+	hasNext := i.baseIterator.Next(ctx, &v)
 	if hasNext {
 		value.Key = v.Key
 		value.FDBKey = v.FDBKey

@@ -575,7 +575,7 @@ func tupleToKey(t *tuple.Tuple) Key {
 	return *(*Key)(p)
 }
 
-func (i *fdbIterator) Next(kv *baseKeyValue) bool {
+func (i *fdbIterator) Next(ctx context.Context, kv *baseKeyValue) bool {
 	if i.err != nil {
 		return false
 	}
@@ -609,11 +609,11 @@ func (i *fdbIterator) Err() error {
 	return i.err
 }
 
-func (i *fdbIteratorTxCloser) Next(kv *baseKeyValue) bool {
+func (i *fdbIteratorTxCloser) Next(ctx context.Context, kv *baseKeyValue) bool {
 	if i.tx == nil {
 		return false
 	}
-	if !i.baseIterator.Next(kv) {
+	if !i.baseIterator.Next(ctx, kv) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		err := i.tx.Rollback(ctx)

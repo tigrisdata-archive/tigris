@@ -37,9 +37,10 @@ import (
 
 func readAllUsingIterator(t *testing.T, it Iterator) []KeyValue {
 	res := make([]KeyValue, 0)
+	ctx := context.Background()
 
 	var kv KeyValue
-	for it.Next(&kv) {
+	for it.Next(ctx, &kv) {
 		res = append(res, kv)
 	}
 
@@ -50,9 +51,10 @@ func readAllUsingIterator(t *testing.T, it Iterator) []KeyValue {
 
 func readAll(t *testing.T, it baseIterator) []baseKeyValue {
 	res := make([]baseKeyValue, 0)
+	ctx := context.Background()
 
 	var kv baseKeyValue
-	for it.Next(&kv) {
+	for it.Next(ctx, &kv) {
 		res = append(res, kv)
 	}
 
@@ -490,10 +492,10 @@ func testKVInsert(t *testing.T, kv baseKVStore) {
 				it, err := kv.Read(context.Background(), table, i.Key)
 				require.NoError(t, err)
 				var res baseKeyValue
-				require.True(t, it.Next(&res))
+				require.True(t, it.Next(ctx, &res))
 				require.NoError(t, it.Err())
 				require.Equal(t, i, res)
-				require.True(t, !it.Next(&res))
+				require.True(t, !it.Next(ctx, &res))
 				require.NoError(t, it.Err())
 			}
 		})
@@ -570,16 +572,16 @@ func testFDBKVIterator(t *testing.T, kv baseKVStore) {
 	require.True(t, ok)
 
 	var v baseKeyValue
-	assert.True(t, it.Next(nil))
-	assert.True(t, it.Next(&v))
+	assert.True(t, it.Next(ctx, nil))
+	assert.True(t, it.Next(ctx, &v))
 	assert.NotNil(t, ic.tx)
 
 	fi.subspace = subspace.FromBytes([]byte("invalid"))
 
-	assert.False(t, it.Next(&v))
+	assert.False(t, it.Next(ctx, &v))
 	assert.Nil(t, ic.tx)
 	// Next should not fail after error
-	assert.False(t, it.Next(&v))
+	assert.False(t, it.Next(ctx, &v))
 	assert.Error(t, it.Err())
 
 	err = kv.DropTable(ctx, table)
@@ -659,7 +661,7 @@ func testKVAddAtomicValue(t *testing.T, kv baseKVStore) {
 	var rangeVal FdbBaseKeyValue[int64]
 	count := 0
 	expected := []int64{11, 5}
-	for iter.Next(&rangeVal) {
+	for iter.Next(ctx, &rangeVal) {
 		require.Equal(t, expected[count], rangeVal.Data)
 		count += 1
 	}

@@ -66,7 +66,8 @@ type Metadata struct {
 	collection string
 
 	// Current user/application
-	Sub string
+	Sub       string
+	readUnits int64
 }
 
 func Init(tg metadata.TenantGetter) {
@@ -167,6 +168,14 @@ func (m *Metadata) GetServiceName() string {
 
 func (m *Metadata) GetMethodInfo() grpc.MethodInfo {
 	return m.methodInfo
+}
+
+func (m *Metadata) AddReadUnits(v int64) {
+	m.readUnits += v
+}
+
+func (m *Metadata) GetReadUnits() int64 {
+	return m.readUnits
 }
 
 func (m *Metadata) GetInitialTags() map[string]string {

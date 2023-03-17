@@ -43,6 +43,24 @@ const (
 	AuthSpanType              string = "auth"
 )
 
+type GlobalStatus struct {
+	Tenant map[string]TenantStatus
+}
+
+type TenantStatus struct {
+	ReadUnites int64
+	Collection map[string]CollectionStatus
+}
+
+type CollectionStatus struct {
+	ReadUnits int64
+}
+
+type RequestStatus struct {
+	ReadUnits int64
+	ReadBytes int64
+}
+
 type Measurement struct {
 	serviceName     string
 	resourceName    string
@@ -58,7 +76,36 @@ type Measurement struct {
 	projectCollTags map[string]string
 }
 
-type MeasurementCtxKey struct{}
+type (
+	MeasurementCtxKey   struct{}
+	RequestStatusCtxKey struct{}
+)
+
+func NewRequestStatus() *RequestStatus {
+	return &RequestStatus{}
+}
+
+func RequestStatusFromContext(ctx context.Context) (*RequestStatus, bool) {
+	r, ok := ctx.Value(RequestStatusCtxKey{}).(*RequestStatus)
+	return r, ok
+}
+
+func (r *RequestStatus) SaveRequestStatusToContext(ctx context.Context) context.Context {
+	ctx = context.WithValue(ctx, RequestStatusCtxKey{}, r)
+	return ctx
+}
+
+func (r *RequestStatus) ClearRequestStatusFromContext(ctx context.Context) context.Context {
+	return context.WithValue(ctx, RequestStatusCtxKey{}, nil)
+}
+
+func (r *RequestStatus) AddBytes(value int64) {
+	r.ReadBytes += value
+}
+
+func (r *RequestStatus) AddReadUnits(v int64) {
+	r.ReadUnits += v
+}
 
 func NewMeasurement(serviceName string, resourceName string, spanType string, tags map[string]string) *Measurement {
 	return &Measurement{serviceName: serviceName, resourceName: resourceName, spanType: spanType, tags: tags}

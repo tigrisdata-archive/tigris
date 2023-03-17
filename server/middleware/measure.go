@@ -33,6 +33,7 @@ import (
 type wrappedStream struct {
 	*middleware.WrappedServerStream
 	measurement *metrics.Measurement
+	reqStatus   *metrics.RequestStatus
 }
 
 func getNoMeasurementMethods() []string {
@@ -57,6 +58,7 @@ func measureUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryS
 			return resp, err
 		}
 		reqMetadata, err := request.GetRequestMetadataFromContext(ctx)
+		requestStatus := metrics.NewRequestStatus()
 		ulog.E(err)
 		tags := reqMetadata.GetInitialTags()
 		measurement := metrics.NewMeasurement(util.Service, info.FullMethod, metrics.GrpcSpanType, tags)
@@ -66,6 +68,7 @@ func measureUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryS
 			"human": strconv.FormatBool(reqMetadata.IsHuman),
 		})
 		ctx = measurement.StartTracing(ctx, false)
+		ctx = requestStatus.SaveRequestStatusToContext(ctx)
 		resp, err := handler(ctx, req)
 		if err != nil {
 			// Request had an error
@@ -80,6 +83,7 @@ func measureUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryS
 		measurement.CountSentBytes(metrics.BytesSent, measurement.GetNetworkTags(), proto.Size(resp.(proto.Message)))
 		_ = measurement.FinishTracing(ctx)
 		measurement.RecordDuration(metrics.RequestsRespTime, measurement.GetRequestOkTags())
+		log.Debug().Int64("Read units in request status", requestStatus.ReadUnits)
 		return resp, err
 	}
 }
@@ -96,10 +100,13 @@ func measureStream() grpc.StreamServerInterceptor {
 		if err != nil {
 			ulog.E(err)
 		}
+		reqStatus := metrics.NewRequestStatus()
 		tags := reqMetadata.GetInitialTags()
 		measurement := metrics.NewMeasurement(util.Service, info.FullMethod, metrics.GrpcSpanType, tags)
 		wrapped.measurement = measurement
+		wrapped.reqStatus = reqStatus
 		wrapped.WrappedContext = measurement.StartTracing(wrapped.WrappedContext, false)
+		wrapped.WrappedContext = reqStatus.SaveRequestStatusToContext(wrapped.WrappedContext)
 		err = handler(srv, wrapped)
 		if err != nil {
 			measurement.CountErrorForScope(metrics.RequestsErrorCount, measurement.GetRequestErrorTags(err))
@@ -111,6 +118,7 @@ func measureStream() grpc.StreamServerInterceptor {
 		measurement.CountOkForScope(metrics.RequestsOkCount, measurement.GetRequestOkTags())
 		_ = measurement.FinishTracing(wrapped.WrappedContext)
 		measurement.RecordDuration(metrics.RequestsRespTime, measurement.GetRequestOkTags())
+		log.Info().Int64("bytes", reqStatus.ReadBytes).Msg("TOTAL BYTES READ IN REQ")
 		return nil
 	}
 }
@@ -177,5 +185,6 @@ func (w *wrappedStream) SendMsg(m interface{}) error {
 	}
 
 	w.measurement.CountSentBytes(metrics.BytesSent, w.measurement.GetNetworkTags(), proto.Size(m.(proto.Message)))
+	log.Info().Int64("Read units", w.reqStatus.ReadUnits).Msg("Total read units")
 	return nil
 }

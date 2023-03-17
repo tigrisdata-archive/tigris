@@ -131,7 +131,7 @@ func indexedDataType(queryPlan filter.QueryPlan) bool {
 	}
 }
 
-func (it *SecondaryIndexReader) Next(row *Row) bool {
+func (it *SecondaryIndexReader) Next(ctx context.Context, row *Row) bool {
 	if it.err != nil {
 		return false
 	}
@@ -142,7 +142,7 @@ func (it *SecondaryIndexReader) Next(row *Row) bool {
 	}
 
 	var indexRow Row
-	if it.kvIter.Next(&indexRow) {
+	if it.kvIter.Next(ctx, &indexRow) {
 		indexKey, err := keys.FromBinary(it.coll.EncodedTableIndexName, indexRow.Key)
 		if err != nil {
 			it.err = err
@@ -159,7 +159,7 @@ func (it *SecondaryIndexReader) Next(row *Row) bool {
 		}
 
 		var keyValue kv.KeyValue
-		if docIter.Next(&keyValue) {
+		if docIter.Next(ctx, &keyValue) {
 			row.Data = keyValue.Data
 			row.Key = keyValue.FDBKey
 			return true
@@ -173,14 +173,14 @@ func (it *SecondaryIndexReader) Interrupted() error { return it.err }
 // For local debugging and testing.
 //
 //nolint:unused
-func (it *SecondaryIndexReader) dbgPrintIndex() {
+func (it *SecondaryIndexReader) dbgPrintIndex(ctx context.Context) {
 	indexer := NewSecondaryIndexer(it.coll)
 	tableIter, err := indexer.scanIndex(it.ctx, it.tx)
 	if err != nil {
 		panic(err)
 	}
 	var val kv.KeyValue
-	for tableIter.Next(&val) {
+	for tableIter.Next(ctx, &val) {
 		log.Debug().Msgf("%v", val.Key)
 	}
 }

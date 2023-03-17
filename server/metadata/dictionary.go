@@ -136,7 +136,7 @@ func (r *reservedSubspace) reload(ctx context.Context, tx transaction.Tx) error 
 	}
 
 	var row kv.KeyValue
-	for it.Next(&row) {
+	for it.Next(ctx, &row) {
 		if len(row.Key) < 3 {
 			return errors.Internal("not a valid key %v", row.Key)
 		}
@@ -223,7 +223,7 @@ func (r *reservedSubspace) allocateToken(ctx context.Context, tx transaction.Tx,
 	newValue := r.BaseCounterValue
 
 	var row kv.KeyValue
-	if it.Next(&row) {
+	if it.Next(ctx, &row) {
 		newValue = ByteToUInt32(row.Data.RawData) + 1
 	}
 

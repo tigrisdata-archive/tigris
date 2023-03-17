@@ -41,7 +41,7 @@ type baseKV interface {
 }
 
 type baseIterator interface {
-	Next(*baseKeyValue) bool
+	Next(context.Context, *baseKeyValue) bool
 	Err() error
 }
 

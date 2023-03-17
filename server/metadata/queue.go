@@ -125,7 +125,7 @@ func (q *QueueSubspace) Peek(ctx context.Context, tx transaction.Tx, max int) ([
 		return items, err
 	}
 	var v kv.KeyValue
-	for iter.Next(&v) && count < max {
+	for iter.Next(ctx, &v) && count < max {
 		count += 1
 		item, err := q.decodeItem(v.Data)
 		if err != nil {
@@ -146,7 +146,7 @@ func (q *QueueSubspace) Find(ctx context.Context, tx transaction.Tx, item *Queue
 		return nil, err
 	}
 	var v kv.KeyValue
-	for iter.Next(&v) {
+	for iter.Next(ctx, &v) {
 		found, err := q.decodeItem(v.Data)
 		if err != nil {
 			return nil, err
@@ -238,7 +238,7 @@ func (q *QueueSubspace) scanTable(ctx context.Context, tx transaction.Tx) error 
 	}
 	log.Debug().Msg("Queue Table Scan")
 	var v kv.KeyValue
-	for iter.Next(&v) {
+	for iter.Next(ctx, &v) {
 		item, err := q.decodeItem(v.Data)
 		if err != nil {
 			return err

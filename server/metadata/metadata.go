@@ -77,7 +77,7 @@ func (m *metadataSubspace) getPayload(ctx context.Context, tx transaction.Tx, in
 	}
 
 	var row kv.KeyValue
-	if !it.Next(&row) {
+	if !it.Next(ctx, &row) {
 		if it.Err() != nil {
 			return nil, it.Err()
 		}
@@ -176,7 +176,7 @@ func (m *metadataSubspace) softDeleteMetadata(ctx context.Context, tx transactio
 	}
 
 	var row kv.KeyValue
-	if !it.Next(&row) {
+	if !it.Next(ctx, &row) {
 		return it.Err()
 	}
 
@@ -197,7 +197,7 @@ func (m *metadataSubspace) listMetadata(ctx context.Context, tx transaction.Tx, 
 
 	var v kv.KeyValue
 
-	for it.Next(&v) {
+	for it.Next(ctx, &v) {
 		if len(v.Key) != keyLen {
 			log.Error().Interface("key", v.Key).Str("subspace", string(m.SubspaceName)).Msg("invalid key")
 			return errors.Internal("not a valid key %v", v.Key)

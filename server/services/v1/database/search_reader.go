@@ -208,7 +208,7 @@ func NewFilterableSearchIterator(collection *schema.DefaultCollection, reader *p
 	}
 }
 
-func (it *FilterableSearchIterator) Next(row *Row) bool {
+func (it *FilterableSearchIterator) Next(ctx context.Context, row *Row) bool {
 	if it.err != nil {
 		return false
 	}

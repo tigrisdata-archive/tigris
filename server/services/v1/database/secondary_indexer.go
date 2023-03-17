@@ -135,7 +135,7 @@ func (q *SecondaryIndexer) IndexInfo(ctx context.Context, tx transaction.Tx) (*S
 	}
 
 	var val kv.KeyValue
-	for iter.Next(&val) {
+	for iter.Next(ctx, &val) {
 		rows += 1
 	}
 	if iter.Err() != nil {
@@ -154,7 +154,7 @@ func (q *SecondaryIndexer) ReadDocAndDelete(ctx context.Context, tx transaction.
 		return err
 	}
 	var oldDoc kv.KeyValue
-	if iter.Next(&oldDoc) {
+	if iter.Next(ctx, &oldDoc) {
 		err := q.Delete(ctx, tx, oldDoc.Data, key.IndexParts())
 		if err != nil {
 			return err

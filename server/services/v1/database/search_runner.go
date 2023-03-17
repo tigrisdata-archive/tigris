@@ -127,7 +127,7 @@ func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.
 	for {
 		resp := &api.SearchResponse{}
 		var row Row
-		for iterator.Next(&row) {
+		for iterator.Next(ctx, &row) {
 			if searchQ.ReadFields != nil {
 				// apply field selection
 				newValue, err := searchQ.ReadFields.Apply(row.Data.RawData)

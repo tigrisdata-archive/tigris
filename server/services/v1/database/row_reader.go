@@ -33,7 +33,7 @@ type Row struct {
 // Iterator is to iterate over a single collection.
 type Iterator interface {
 	// Next fills the next element in the iteration. Returns true if the Iterator has more element.
-	Next(*Row) bool
+	Next(context.Context, *Row) bool
 	// Interrupted returns an error if iterator encounters any error.
 	Interrupted() error
 }
@@ -54,13 +54,13 @@ func NewScanIterator(ctx context.Context, tx transaction.Tx, from keys.Key, to k
 	}, nil
 }
 
-func (s *ScanIterator) Next(row *Row) bool {
+func (s *ScanIterator) Next(ctx context.Context, row *Row) bool {
 	if s.err != nil {
 		return false
 	}
 
 	var keyValue kv.KeyValue
-	if s.it.Next(&keyValue) {
+	if s.it.Next(ctx, &keyValue) {
 		row.Key = keyValue.FDBKey
 		row.Data = keyValue.Data
 		return true
@@ -97,14 +97,14 @@ func NewKeyIterator(ctx context.Context, tx transaction.Tx, keys []keys.Key) (*K
 	}, nil
 }
 
-func (k *KeyIterator) Next(row *Row) bool {
+func (k *KeyIterator) Next(ctx context.Context, row *Row) bool {
 	if k.err != nil {
 		return false
 	}
 
 	for {
 		var keyValue kv.KeyValue
-		if k.it.Next(&keyValue) {
+		if k.it.Next(ctx, &keyValue) {
 			row.Key = keyValue.FDBKey
 			row.Data = keyValue.Data
 			return true
@@ -145,9 +145,9 @@ func (it *FilterIterator) Interrupted() error {
 // Next advances the iterator till the matching row found and then only fill the row object. In contrast
 // to Iterator, filterable allows filtering during iterating of document. Underneath it is just using Iterator
 // to iterate over rows to apply filter.
-func (it *FilterIterator) Next(row *Row) bool {
+func (it *FilterIterator) Next(ctx context.Context, row *Row) bool {
 	for {
-		if !it.iterator.Next(row) {
+		if !it.iterator.Next(ctx, row) {
 			return false
 		}
 

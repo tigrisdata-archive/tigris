@@ -73,7 +73,7 @@ func (g *TableKeyGenerator) generateCounter(ctx context.Context, tx transaction.
 
 	id := uint32(1)
 	var row kv.KeyValue
-	if it.Next(&row) {
+	if it.Next(ctx, &row) {
 		id = ByteToUInt32(row.Data.RawData) + uint32(1)
 	}
 	if err := it.Err(); err != nil {

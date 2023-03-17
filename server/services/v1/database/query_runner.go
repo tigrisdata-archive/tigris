@@ -219,7 +219,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return Response{}, ctx, err
 	}
 
-	for ; (limit == 0 || modifiedCount < limit) && iterator.Next(&row); modifiedCount++ {
+	for ; (limit == 0 || modifiedCount < limit) && iterator.Next(ctx, &row); modifiedCount++ {
 		key, err := keys.FromBinary(coll.EncodedName, row.Key)
 		if err != nil {
 			return Response{}, ctx, err
@@ -338,7 +338,7 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	modifiedCount := int32(0)
 	var row Row
-	for iterator.Next(&row) {
+	for iterator.Next(ctx, &row) {
 		key, err := keys.FromBinary(coll.EncodedName, row.Key)
 		if err != nil {
 			return Response{}, ctx, err
@@ -579,7 +579,7 @@ func (runner *StreamingQueryRunner) iterateOnKvStore(ctx context.Context, tx tra
 		return nil, err
 	}
 
-	return runner.iterate(coll, iter, options.fieldFactory)
+	return runner.iterate(ctx, coll, iter, options.fieldFactory)
 }
 
 func (runner *StreamingQueryRunner) iterateOnSecondaryIndexStore(ctx context.Context, tx transaction.Tx, coll *schema.DefaultCollection, options readerOptions) ([]byte, error) {
@@ -588,7 +588,7 @@ func (runner *StreamingQueryRunner) iterateOnSecondaryIndexStore(ctx context.Con
 		return nil, err
 	}
 
-	return runner.iterate(coll, NewFilterIterator(iter, options.filter), options.fieldFactory)
+	return runner.iterate(ctx, coll, NewFilterIterator(iter, options.filter), options.fieldFactory)
 }
 
 func (runner *StreamingQueryRunner) iterateOnSearchStore(ctx context.Context, coll *schema.DefaultCollection, options readerOptions) error {
@@ -598,14 +598,14 @@ func (runner *StreamingQueryRunner) iterateOnSearchStore(ctx context.Context, co
 		PageSize(defaultPerPage).
 		Build())
 
-	if _, err := runner.iterate(coll, rowReader.Iterator(coll, options.filter), options.fieldFactory); err != nil {
+	if _, err := runner.iterate(ctx, coll, rowReader.Iterator(coll, options.filter), options.fieldFactory); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (runner *StreamingQueryRunner) iterate(coll *schema.DefaultCollection, iterator Iterator, fieldFactory *read.FieldFactory) ([]byte, error) {
+func (runner *StreamingQueryRunner) iterate(ctx context.Context, coll *schema.DefaultCollection, iterator Iterator, fieldFactory *read.FieldFactory) ([]byte, error) {
 	limit := int64(0)
 	if runner.req.GetOptions() != nil {
 		limit = runner.req.GetOptions().Limit
@@ -623,7 +623,7 @@ func (runner *StreamingQueryRunner) iterate(coll *schema.DefaultCollection, iter
 	}
 
 	limit += skip
-	for i := int64(0); (limit == 0 || i < limit) && iterator.Next(&row); i++ {
+	for i := int64(0); (limit == 0 || i < limit) && iterator.Next(ctx, &row); i++ {
 		if skip > 0 {
 			skip -= 1
 			continue

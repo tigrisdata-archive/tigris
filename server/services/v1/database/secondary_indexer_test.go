@@ -577,7 +577,7 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 
 		count := 0
 		var row kv.KeyValue
-		for iter.Next(&row) {
+		for iter.Next(ctx, &row) {
 			count += 1
 		}
 		assert.NoError(t, err)
@@ -607,7 +607,7 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 
 		count := 0
 		var row kv.KeyValue
-		for iter.Next(&row) {
+		for iter.Next(ctx, &row) {
 			count += 1
 		}
 		assert.NoError(t, err)
@@ -630,7 +630,7 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 		assert.NoError(t, err)
 
 		count = 0
-		for iter.Next(&row) {
+		for iter.Next(ctx, &row) {
 			count += 1
 		}
 		assert.NoError(t, err)
@@ -679,7 +679,7 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 
 		count := 0
 		var row kv.KeyValue
-		for iter.Next(&row) {
+		for iter.Next(ctx, &row) {
 			id := row.Key[len(row.Key)-1]
 
 			assert.Equal(t, int64(2), id)
