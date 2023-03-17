@@ -97,19 +97,14 @@ func (v *FieldSchemaValidator) Validate(existing *DefaultCollection, current *Fa
 	return v.validateLow(existing.Fields, current.Fields)
 }
 
-func (v *FieldSchemaValidator) ValidateIndex(existing *SearchIndex, current *SearchFactory) error {
-	existingFields := make(map[string]*Field)
-	for _, e := range existing.Fields {
-		existingFields[e.FieldName] = e
+func (v *FieldSchemaValidator) validateIndexLow(existing []*Field, current []*Field) error {
+	currentMap := make(map[string]*Field)
+	for _, e := range current {
+		currentMap[e.FieldName] = e
 	}
 
-	currentFields := make(map[string]*Field)
-	for _, e := range current.Fields {
-		currentFields[e.FieldName] = e
-	}
-
-	for name, f := range existingFields {
-		f1, ok := currentFields[name]
+	for _, f := range existing {
+		f1, ok := currentMap[f.FieldName]
 		if !ok {
 			// dropping a field is allowed
 			continue
@@ -118,9 +113,18 @@ func (v *FieldSchemaValidator) ValidateIndex(existing *SearchIndex, current *Sea
 		if f.DataType != f1.DataType {
 			return errors.InvalidArgument("data type mismatch for field '%s'", f.FieldName)
 		}
+
+		// Validate nested fields
+		if err := v.validateIndexLow(f.Fields, f1.Fields); err != nil {
+			return err
+		}
 	}
 
 	return nil
+}
+
+func (v *FieldSchemaValidator) ValidateIndex(existing *SearchIndex, current *SearchFactory) error {
+	return v.validateIndexLow(existing.Fields, current.Fields)
 }
 
 type IndexSourceValidator struct{}
