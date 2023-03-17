@@ -32,7 +32,7 @@ import (
 )
 
 var (
-	kvStore     kv.KeyValueStore
+	kvStore     kv.TxStore
 	tenantProj1 = "tenant_db1"
 	tenantProj2 = "tenant_db2"
 	tenantDb1   = NewDatabaseName("tenant_db1")
@@ -622,10 +622,13 @@ func TestTenantManager_DataSize(t *testing.T) {
 	err = kvStore.DropTable(ctx, table)
 	require.NoError(t, err)
 
+	tx, err := kvStore.BeginTx(ctx)
+	require.NoError(t, err)
 	for i := 0; i < 100; i++ {
-		err = kvStore.Insert(ctx, table, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+		err = tx.Insert(ctx, table, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
 		require.NoError(t, err)
 	}
+	_ = tx.Commit(ctx)
 
 	coll2 := &schema.DefaultCollection{Id: 512}
 	table2, err := m.encoder.EncodeTableName(ns1, db1, coll2)
@@ -634,10 +637,13 @@ func TestTenantManager_DataSize(t *testing.T) {
 	err = kvStore.DropTable(ctx, table2)
 	require.NoError(t, err)
 
+	tx, err = kvStore.BeginTx(ctx)
+	require.NoError(t, err)
 	for i := 0; i < 200; i++ {
-		err = kvStore.Insert(ctx, table2, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+		err = tx.Insert(ctx, table2, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
 		require.NoError(t, err)
 	}
+	_ = tx.Commit(ctx)
 
 	db21 := &Database{id: 20}
 	coll21 := &schema.DefaultCollection{Id: 1024}
@@ -648,10 +654,13 @@ func TestTenantManager_DataSize(t *testing.T) {
 	err = kvStore.DropTable(ctx, table21)
 	require.NoError(t, err)
 
+	tx, err = kvStore.BeginTx(ctx)
+	require.NoError(t, err)
 	for i := 0; i < 110; i++ {
-		err = kvStore.Insert(ctx, table21, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+		err = tx.Insert(ctx, table21, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
 		require.NoError(t, err)
 	}
+	_ = tx.Commit(ctx)
 
 	db22 := &Database{id: 30}
 	coll22 := &schema.DefaultCollection{Id: 1024}
@@ -661,10 +670,13 @@ func TestTenantManager_DataSize(t *testing.T) {
 	err = kvStore.DropTable(ctx, table22)
 	require.NoError(t, err)
 
+	tx, err = kvStore.BeginTx(ctx)
+	require.NoError(t, err)
 	for i := 0; i < 150; i++ {
-		err = kvStore.Insert(ctx, table22, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+		err = tx.Insert(ctx, table22, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
 		require.NoError(t, err)
 	}
+	_ = tx.Commit(ctx)
 
 	// Tenant 1
 	// db1
@@ -742,7 +754,7 @@ func TestMain(m *testing.M) {
 		panic(fmt.Sprintf("failed to init FDB config: %v", err))
 	}
 
-	kvStore, err = kv.NewKeyValueStore(fdbCfg)
+	kvStore, err = kv.NewTxStore(fdbCfg)
 	if err != nil {
 		panic(fmt.Sprintf("failed to init FDB KV %v", err))
 	}

@@ -79,10 +79,10 @@ func (c *SessionCtx) GetStagedDatabase() interface{} {
 // this will create a session tracker for tracking the sessions.
 
 type Manager struct {
-	kvStore kv.KeyValueStore
+	kvStore kv.TxStore
 }
 
-func NewManager(kvStore kv.KeyValueStore) *Manager {
+func NewManager(kvStore kv.TxStore) *Manager {
 	return &Manager{
 		kvStore: kvStore,
 	}
@@ -117,13 +117,13 @@ type TxSession struct {
 	sync.RWMutex
 
 	context *SessionCtx
-	kvStore kv.KeyValueStore
+	kvStore kv.TxStore
 	kTx     kv.Tx
 	state   sessionState
 	txCtx   *api.TransactionCtx
 }
 
-func newTxSession(kv kv.KeyValueStore) (*TxSession, error) {
+func newTxSession(kv kv.TxStore) (*TxSession, error) {
 	if kv == nil {
 		return nil, errors.Internal("session needs non-nil kv object")
 	}

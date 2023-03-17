@@ -61,7 +61,14 @@ func readAll(t *testing.T, it baseIterator) []baseKeyValue {
 	return res
 }
 
-func testKeyValueStoreBasic(t *testing.T, kv KeyValueStore) {
+func getTx(t *testing.T, ctx context.Context, txStore TxStore) Tx {
+	tx, err := txStore.BeginTx(ctx)
+	require.NoError(t, err)
+
+	return tx
+}
+
+func testKeyValueStoreBasic(t *testing.T, kv TxStore) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -82,33 +89,41 @@ func testKeyValueStoreBasic(t *testing.T, kv KeyValueStore) {
 	}
 
 	// insert records with two prefixes p1 and p2
+	tx := getTx(t, ctx, kv)
 	for i := 0; i < nRecs; i++ {
-		err = kv.Insert(ctx, table, BuildKey("p1", i+1), tableDataP1[i])
+		err = tx.Insert(ctx, table, BuildKey("p1", i+1), tableDataP1[i])
 		require.NoError(t, err)
-		err = kv.Insert(ctx, table, BuildKey("p2", i+1), tableDataP2[i])
+		err = tx.Insert(ctx, table, BuildKey("p2", i+1), tableDataP2[i])
 		require.NoError(t, err)
 	}
-
+	_ = tx.Commit(ctx)
 	// read individual record
-	it, err := kv.Read(ctx, table, BuildKey("p1", 2))
+	tx = getTx(t, ctx, kv)
+	it, err := tx.Read(ctx, table, BuildKey("p1", 2))
 	require.NoError(t, err)
 
 	v := readAllUsingIterator(t, it)
 	require.Equal(t, []KeyValue{{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2))), Data: tableDataP1[1]}}, v)
+	_ = tx.Commit(ctx)
 
 	// replace individual record
+	tx = getTx(t, ctx, kv)
 	replacedValue2 := internal.NewTableData([]byte("value2+2"))
-	err = kv.Replace(ctx, table, BuildKey("p1", 2), replacedValue2, false)
+	err = tx.Replace(ctx, table, BuildKey("p1", 2), replacedValue2, false)
 	require.NoError(t, err)
+	_ = tx.Commit(ctx)
 
-	it, err = kv.Read(ctx, table, BuildKey("p1", 2))
+	tx = getTx(t, ctx, kv)
+	it, err = tx.Read(ctx, table, BuildKey("p1", 2))
 	require.NoError(t, err)
 
 	v = readAllUsingIterator(t, it)
 	require.Equal(t, []KeyValue{{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2))), Data: replacedValue2}}, v)
+	_ = tx.Commit(ctx)
 
 	// read range
-	it, err = kv.ReadRange(ctx, table, BuildKey("p1", 2), BuildKey("p1", 4), false)
+	tx = getTx(t, ctx, kv)
+	it, err = tx.ReadRange(ctx, table, BuildKey("p1", 2), BuildKey("p1", 4), false)
 	require.NoError(t, err)
 
 	v = readAllUsingIterator(t, it)
@@ -116,12 +131,14 @@ func testKeyValueStoreBasic(t *testing.T, kv KeyValueStore) {
 		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2))), Data: replacedValue2},
 		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey(table, BuildKey("p1", int64(3))), Data: tableDataP1[2]},
 	}, v)
+	_ = tx.Commit(ctx)
 
 	// update range
 	i := 3
 	var updatedData []*internal.TableData
 	modifiedCount := int32(0)
-	modifiedCount, err = kv.UpdateRange(ctx, table, BuildKey("p1", 3), BuildKey("p1", 6), func(orig *internal.TableData) (*internal.TableData, error) {
+	tx = getTx(t, ctx, kv)
+	modifiedCount, err = tx.UpdateRange(ctx, table, BuildKey("p1", 3), BuildKey("p1", 6), func(orig *internal.TableData) (*internal.TableData, error) {
 		require.Equal(t, fmt.Sprintf("value%d", i), string(orig.RawData))
 		res := internal.NewTableData([]byte(fmt.Sprintf("value%d+%d", i, i)))
 		i++
@@ -130,8 +147,10 @@ func testKeyValueStoreBasic(t *testing.T, kv KeyValueStore) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, int32(3), modifiedCount)
+	_ = tx.Commit(ctx)
 
-	it, err = kv.ReadRange(ctx, table, BuildKey("p1", 3), BuildKey("p1", 6), false)
+	tx = getTx(t, ctx, kv)
+	it, err = tx.ReadRange(ctx, table, BuildKey("p1", 3), BuildKey("p1", 6), false)
 	require.NoError(t, err)
 
 	v = readAllUsingIterator(t, it)
@@ -140,9 +159,11 @@ func testKeyValueStoreBasic(t *testing.T, kv KeyValueStore) {
 		{Key: BuildKey("p1", int64(4)), FDBKey: getFDBKey(table, BuildKey("p1", int64(4))), Data: updatedData[1]},
 		{Key: BuildKey("p1", int64(5)), FDBKey: getFDBKey(table, BuildKey("p1", int64(5))), Data: updatedData[2]},
 	}, v)
+	_ = tx.Commit(ctx)
 
 	// prefix read
-	it, err = kv.Read(ctx, table, BuildKey("p1"))
+	tx = getTx(t, ctx, kv)
+	it, err = tx.Read(ctx, table, BuildKey("p1"))
 	require.NoError(t, err)
 
 	v = readAllUsingIterator(t, it)
@@ -153,27 +174,34 @@ func testKeyValueStoreBasic(t *testing.T, kv KeyValueStore) {
 		{Key: BuildKey("p1", int64(4)), FDBKey: getFDBKey(table, BuildKey("p1", int64(4))), Data: updatedData[1]},
 		{Key: BuildKey("p1", int64(5)), FDBKey: getFDBKey(table, BuildKey("p1", int64(5))), Data: updatedData[2]},
 	}, v)
+	_ = tx.Commit(ctx)
 
 	// delete and delete range
-	err = kv.Delete(ctx, table, BuildKey("p1", 1))
+	tx = getTx(t, ctx, kv)
+	err = tx.Delete(ctx, table, BuildKey("p1", 1))
 	require.NoError(t, err)
+	_ = tx.Commit(ctx)
 
-	err = kv.DeleteRange(ctx, table, BuildKey("p1", 3), BuildKey("p2", 6))
+	tx = getTx(t, ctx, kv)
+	err = tx.DeleteRange(ctx, table, BuildKey("p1", 3), BuildKey("p2", 6))
 	require.NoError(t, err)
+	_ = tx.Commit(ctx)
 
-	it, err = kv.ReadRange(ctx, table, BuildKey("p1", 1), BuildKey("p1", 6), false)
+	tx = getTx(t, ctx, kv)
+	it, err = tx.ReadRange(ctx, table, BuildKey("p1", 1), BuildKey("p1", 6), false)
 	require.NoError(t, err)
 
 	v = readAllUsingIterator(t, it)
 	require.Equal(t, []KeyValue{
 		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2))), Data: replacedValue2},
 	}, v)
+	_ = tx.Commit(ctx)
 
 	err = kv.DropTable(ctx, table)
 	require.NoError(t, err)
 }
 
-func testKeyValueStoreFullScan(t *testing.T, kv KeyValueStore) {
+func testKeyValueStoreFullScan(t *testing.T, kv TxStore) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -193,16 +221,19 @@ func testKeyValueStoreFullScan(t *testing.T, kv KeyValueStore) {
 		tableDataP2 = append(tableDataP2, internal.NewTableData([]byte(fmt.Sprintf("value%d", i+1))))
 	}
 
+	tx := getTx(t, ctx, kv)
 	// insert records with two prefixes p1 and p2
 	for i := 0; i < nRecs; i++ {
-		err = kv.Insert(ctx, table, BuildKey("p1", i+1), tableDataP1[i])
+		err = tx.Insert(ctx, table, BuildKey("p1", i+1), tableDataP1[i])
 		require.NoError(t, err)
-		err = kv.Insert(ctx, table, BuildKey("p2", i+1), tableDataP2[i])
+		err = tx.Insert(ctx, table, BuildKey("p2", i+1), tableDataP2[i])
 		require.NoError(t, err)
 	}
+	_ = tx.Commit(ctx)
 
 	// prefix read
-	it, err := kv.Read(ctx, table, nil)
+	tx = getTx(t, ctx, kv)
+	it, err := tx.Read(ctx, table, nil)
 	require.NoError(t, err)
 
 	v := readAllUsingIterator(t, it)
@@ -218,6 +249,7 @@ func testKeyValueStoreFullScan(t *testing.T, kv KeyValueStore) {
 		{Key: BuildKey("p2", int64(4)), FDBKey: getFDBKey(table, BuildKey("p2", int64(4))), Data: tableDataP2[3]},
 		{Key: BuildKey("p2", int64(5)), FDBKey: getFDBKey(table, BuildKey("p2", int64(5))), Data: tableDataP2[4]},
 	}, v)
+	_ = tx.Commit(ctx)
 
 	err = kv.DropTable(ctx, table)
 	require.NoError(t, err)
@@ -673,7 +705,7 @@ func TestKVFDB(t *testing.T) {
 	cfg, err := config.GetTestFDBConfig("../..")
 	require.NoError(t, err)
 
-	kvStore, err := NewKeyValueStore(cfg)
+	kvStore, err := NewTxStore(cfg)
 	require.NoError(t, err)
 
 	kv, err := newFoundationDB(cfg)

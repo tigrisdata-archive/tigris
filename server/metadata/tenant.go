@@ -82,7 +82,7 @@ type TenantManager struct {
 	sync.RWMutex
 
 	metaStore         *Dictionary
-	kvStore           kv.KeyValueStore
+	kvStore           kv.TxStore
 	searchStore       search.Store
 	tenants           map[string]*Tenant
 	idToTenantMap     map[uint32]string
@@ -102,11 +102,11 @@ func (m *TenantManager) GetVersionHandler() *VersionHandler {
 	return m.versionH
 }
 
-func NewTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, txMgr *transaction.Manager) *TenantManager {
+func NewTenantManager(kvStore kv.TxStore, searchStore search.Store, txMgr *transaction.Manager) *TenantManager {
 	return newTenantManager(kvStore, searchStore, DefaultNameRegistry, txMgr)
 }
 
-func newTenantManager(kvStore kv.KeyValueStore, searchStore search.Store, mdNameRegistry *NameRegistry, txMgr *transaction.Manager) *TenantManager {
+func newTenantManager(kvStore kv.TxStore, searchStore search.Store, mdNameRegistry *NameRegistry, txMgr *transaction.Manager) *TenantManager {
 	return &TenantManager{
 		kvStore:           kvStore,
 		searchStore:       searchStore,
@@ -450,7 +450,7 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVe
 type Tenant struct {
 	sync.RWMutex
 
-	kvStore           kv.KeyValueStore
+	kvStore           kv.TxStore
 	searchStore       search.Store
 	schemaStore       *SchemaSubspace
 	searchSchemaStore *SearchSchemaSubspace
@@ -469,7 +469,7 @@ type Tenant struct {
 	idToDatabaseMap map[uint32]*Database
 }
 
-func NewTenant(namespace Namespace, kvStore kv.KeyValueStore, searchStore search.Store, dict *Dictionary,
+func NewTenant(namespace Namespace, kvStore kv.TxStore, searchStore search.Store, dict *Dictionary,
 	encoder Encoder, versionH *VersionHandler, currentVersion Version, _ *TableKeyGenerator,
 ) *Tenant {
 	return &Tenant{
@@ -1775,7 +1775,7 @@ func isSchemaEq(s1, s2 []byte) (bool, error) {
 }
 
 // NewTestTenantMgr creates new TenantManager for tests.
-func NewTestTenantMgr(t *testing.T, kvStore kv.KeyValueStore) (*TenantManager, context.Context, context.CancelFunc) {
+func NewTestTenantMgr(t *testing.T, kvStore kv.TxStore) (*TenantManager, context.Context, context.CancelFunc) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Second)
 
 	m := newTenantManager(kvStore, &search.NoopStore{}, newTestNameRegistry(t), transaction.NewManager(kvStore))

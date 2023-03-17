@@ -41,7 +41,7 @@ func NewMuxer(cfg *config.Config) *Muxer {
 	return &Muxer{servers: []Server{NewHTTPServer(cfg), NewGRPCServer(cfg)}}
 }
 
-func (m *Muxer) RegisterServices(cfg *config.ServerConfig, kvStore kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) {
+func (m *Muxer) RegisterServices(cfg *config.ServerConfig, kvStore kv.TxStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) {
 	var services []v1.Service
 	if cfg.Type == config.RealtimeServerType {
 		services = v1.GetRegisteredServicesRealtime(kvStore, searchStore, tenantMgr, txMgr)

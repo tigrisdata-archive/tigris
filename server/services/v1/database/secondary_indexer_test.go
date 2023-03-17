@@ -33,7 +33,7 @@ import (
 	"golang.org/x/text/language"
 )
 
-var kvStore kv.KeyValueStore
+var kvStore kv.TxStore
 
 func TestIndexingCreateSimpleKVsforDoc(t *testing.T) {
 	reqSchema := []byte(`{
@@ -757,7 +757,7 @@ func TestMain(m *testing.M) {
 		panic(fmt.Sprintf("failed to init FDB config: %v", err))
 	}
 
-	kvStore, err = kv.NewKeyValueStore(fdbCfg)
+	kvStore, err = kv.NewTxStore(fdbCfg)
 	if err != nil {
 		panic(fmt.Sprintf("failed to init FDB KV %v", err))
 	}
