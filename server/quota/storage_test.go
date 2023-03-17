@@ -88,11 +88,14 @@ func TestStorageQuota(t *testing.T) {
 	require.NoError(t, m.Allow(ctx, ns, 10, false))
 	require.NoError(t, m.Allow(ctx, ns, 20, false))
 
+	tx1, err := kvStore.BeginTx(ctx)
+	require.NoError(t, err)
 	docSize := 10 * 1024
 	for i := 0; i < 10; i++ {
-		err = kvStore.Insert(ctx, table, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+		err = tx1.Insert(ctx, table, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
 		require.NoError(t, err)
 	}
+	_ = tx1.Commit(ctx)
 
 	time.Sleep(100 * time.Millisecond)
 

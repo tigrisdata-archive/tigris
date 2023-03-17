@@ -69,11 +69,11 @@ func mainWithCode() int {
 
 	log.Info().Str("version", util.Version).Msgf("Starting server")
 
-	var kvStore kv.KeyValueStore
+	var kvStore kv.TxStore
 	if config.DefaultConfig.Tracing.Enabled {
 		kvStore, err = kv.NewKeyValueStoreWithMetrics(&config.DefaultConfig.FoundationDB)
 	} else {
-		kvStore, err = kv.NewKeyValueStore(&config.DefaultConfig.FoundationDB)
+		kvStore, err = kv.NewTxStore(&config.DefaultConfig.FoundationDB)
 	}
 
 	if err != nil {

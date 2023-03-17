@@ -63,7 +63,7 @@ func NewPublisher(dbName string) *Publisher {
 	}
 }
 
-func (p *Publisher) NewStreamer(kvStore kv.KeyValueStore) (*Streamer, error) {
+func (p *Publisher) NewStreamer(kvStore kv.TxStore) (*Streamer, error) {
 	intDb, err := kvStore.GetInternalDatabase()
 	if ulog.E(err) {
 		return nil, err
