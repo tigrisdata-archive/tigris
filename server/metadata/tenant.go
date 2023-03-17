@@ -829,6 +829,10 @@ func (tenant *Tenant) deleteSearchIndex(ctx context.Context, tx transaction.Tx, 
 		return errors.Internal(err.Error())
 	}
 
+	if err = tenant.kvStore.DropTable(ctx, tenant.Encoder.EncodeFDBSearchTableName(index.StoreIndexName())); err != nil {
+		return errors.Internal(err.Error())
+	}
+
 	// clean up from the underlying search store
 	if err := tenant.searchStore.DropCollection(ctx, index.StoreIndexName()); err != nil && !search.IsErrNotFound(err) {
 		return err
