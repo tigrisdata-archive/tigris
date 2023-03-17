@@ -18,7 +18,6 @@ import (
 	"context"
 
 	"github.com/tigrisdata/tigris/internal"
-	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metrics"
 )
 
@@ -26,15 +25,9 @@ type TxStoreWithMetrics struct {
 	kv TxStore
 }
 
-func NewKeyValueStoreWithMetrics(cfg *config.FoundationDBConfig) (TxStore, error) {
-	kv, err := newFoundationDB(cfg)
-	if err != nil {
-		return nil, err
-	}
+func NewKeyValueStoreWithMetrics(txStore TxStore) (TxStore, error) {
 	return &TxStoreWithMetrics{
-		kv: &KeyValueTxStore{
-			fdbkv: kv,
-		},
+		kv: txStore,
 	}, nil
 }
 

@@ -27,7 +27,7 @@ const (
 	KB   = 1000
 	KB99 = 99 * KB
 
-	chunkIdentifier = "__"
+	chunkIdentifier = "_C_"
 )
 
 var chunkSize = KB99
@@ -43,7 +43,7 @@ type ChunkTxStore struct {
 	*KeyValueTxStore
 }
 
-func NewChunkStore(cfg *config.FoundationDBConfig) (*ChunkTxStore, error) {
+func NewChunkStore(cfg *config.FoundationDBConfig) (TxStore, error) {
 	kvStore, err := newTxStore(cfg)
 	if err != nil {
 		return nil, err

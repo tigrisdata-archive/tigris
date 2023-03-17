@@ -33,6 +33,10 @@ type SearchEncoder interface {
 	// DecodeSearchTableName will decode the information from encoded search index Name. This method returns tenant id,
 	// project id, index name.
 	DecodeSearchTableName(name string) (uint32, uint32, string, bool)
+	// EncodeFDBSearchTableName is the search index table in FDB
+	EncodeFDBSearchTableName(searchTable string) []byte
+	// EncodeFDBSearchKey is the search row-key in FDB
+	EncodeFDBSearchKey(searchTable string, id string) (keys.Key, error)
 }
 
 type CacheEncoder interface {
@@ -195,4 +199,20 @@ func (d *DictKeyEncoder) DecodeSearchTableName(name string) (uint32, uint32, str
 	pid, _ := strconv.ParseInt(allParts[1], 10, 64)
 
 	return uint32(nsId), uint32(pid), allParts[2], true
+}
+
+func (d *DictKeyEncoder) EncodeFDBSearchTableName(searchTable string) []byte {
+	var appendTo []byte
+	appendTo = append(appendTo, internal.SearchTableKeyPrefix...)
+	appendTo = append(appendTo, []byte(searchTable)...)
+
+	return appendTo
+}
+
+func (d *DictKeyEncoder) EncodeFDBSearchKey(searchTable string, id string) (keys.Key, error) {
+	if len(id) == 0 {
+		return nil, fmt.Errorf("expected 'id' to be non-nil")
+	}
+
+	return keys.NewKey(d.EncodeFDBSearchTableName(searchTable), id), nil
 }

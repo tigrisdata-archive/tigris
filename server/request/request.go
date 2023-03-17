@@ -426,3 +426,7 @@ func IsWrite(ctx context.Context) bool {
 func NeedSchemaValidation(ctx context.Context) bool {
 	return api.GetHeader(ctx, api.HeaderSchemaSignOff) != "true"
 }
+
+func ReadSearchDataFromStorage(ctx context.Context) bool {
+	return api.GetHeader(ctx, api.HeaderReadSearchDataFromStorage) == "true"
+}

@@ -88,6 +88,21 @@ var testSearchIndexSchema = Map{
 					},
 				},
 			},
+			"array_obj_value": Map{
+				"description": "array field",
+				"type":        "array",
+				"items": Map{
+					"type": "object",
+					"properties": Map{
+						"integer_value": Map{
+							"type": "integer",
+						},
+						"string_value": Map{
+							"type": "string",
+						},
+					},
+				},
+			},
 		},
 	},
 }
@@ -324,27 +339,6 @@ func TestIndex_Management(t *testing.T) {
 	})
 }
 
-/*
-*
-
-	"array_obj_value": Map{
-		"description": "array field",
-		"type":        "array",
-		"items": Map{
-			"type": "object",
-			"properties": Map{
-				"integer_value": Map{
-					"type": "integer",
-				},
-				"string_value": Map{
-					"type": "string",
-				},
-			},
-		},
-	},
-
-Array of objects need fixing
-*/
 func TestCreate_ById(t *testing.T) {
 	project, index := setupTestsProjectAndSearchIndex(t)
 	defer cleanupTests(t, project)
@@ -370,13 +364,19 @@ func TestCreate_ById(t *testing.T) {
 			Object().
 			ValueEqual("id", "1")
 
-		docs := getDocuments(t, project, index, "1")
-		encResp, err := util.MapToJSON(docs[0]["data"].(map[string]any))
-		require.NoError(t, err)
+		for _, source := range []bool{false, true} {
+			docs := getDocuments(t, project, index, source, "1")
+			encResp, err := util.MapToJSON(docs[0]["data"].(map[string]any))
+			require.NoError(t, err)
 
-		encInp, err := util.MapToJSON(doc)
-		require.NoError(t, err)
-		require.JSONEq(t, string(encInp), string(encResp))
+			encInp, err := util.MapToJSON(doc)
+			require.NoError(t, err)
+			require.JSONEq(t, string(encInp), string(encResp))
+		}
+
+		res := getSearchResults(t, project, index, Map{"q": "a", "search_fields": []string{"object_value.string_value"}}, false)
+		require.Equal(t, 1, len(res.Result.Hits))
+		compareDocs(t, doc, res.Result.Hits[0]["data"])
 	})
 }
 
@@ -413,15 +413,17 @@ func TestCreate(t *testing.T) {
 			},
 		)
 
-	output := getDocuments(t, project, index, "1", "2")
-	require.Equal(t, 2, len(output))
-	for i, out := range output {
-		encResp, err := util.MapToJSON(out["data"].(map[string]any))
-		require.NoError(t, err)
+	for _, source := range []bool{false, true} {
+		output := getDocuments(t, project, index, source, "1", "2")
+		require.Equal(t, 2, len(output))
+		for i, out := range output {
+			encResp, err := util.MapToJSON(out["data"].(map[string]any))
+			require.NoError(t, err)
 
-		encInp, err := util.MapToJSON(docs[i])
-		require.NoError(t, err)
-		require.JSONEq(t, string(encInp), string(encResp))
+			encInp, err := util.MapToJSON(docs[i])
+			require.NoError(t, err)
+			require.JSONEq(t, string(encInp), string(encResp))
+		}
 	}
 
 	docsNext := []Doc{
@@ -453,13 +455,15 @@ func TestCreate(t *testing.T) {
 			},
 		)
 
-	output = getDocuments(t, project, index, "3")
-	encResp, err := util.MapToJSON(output[0]["data"].(map[string]any))
-	require.NoError(t, err)
+	for _, source := range []bool{false, true} {
+		output := getDocuments(t, project, index, source, "3")
+		encResp, err := util.MapToJSON(output[0]["data"].(map[string]any))
+		require.NoError(t, err)
 
-	encInp, err := util.MapToJSON(docsNext[1])
-	require.NoError(t, err)
-	require.JSONEq(t, string(encInp), string(encResp))
+		encInp, err := util.MapToJSON(docsNext[1])
+		require.NoError(t, err)
+		require.JSONEq(t, string(encInp), string(encResp))
+	}
 
 	// Invalid id type. Expected string.
 	docs[0]["id"] = 4
@@ -505,15 +509,17 @@ func TestCreateOrReplace(t *testing.T) {
 			},
 		)
 
-	output := getDocuments(t, project, index, "1", "2")
-	require.Equal(t, 2, len(output))
-	for i, out := range output {
-		encResp, err := util.MapToJSON(out["data"].(map[string]any))
-		require.NoError(t, err)
+	for _, source := range []bool{false, true} {
+		output := getDocuments(t, project, index, source, "1", "2")
+		require.Equal(t, 2, len(output))
+		for i, out := range output {
+			encResp, err := util.MapToJSON(out["data"].(map[string]any))
+			require.NoError(t, err)
 
-		encInp, err := util.MapToJSON(docs[i])
-		require.NoError(t, err)
-		require.JSONEq(t, string(encInp), string(encResp))
+			encInp, err := util.MapToJSON(docs[i])
+			require.NoError(t, err)
+			require.JSONEq(t, string(encInp), string(encResp))
+		}
 	}
 
 	docsNext := []Doc{
@@ -545,15 +551,17 @@ func TestCreateOrReplace(t *testing.T) {
 			},
 		)
 
-	output = getDocuments(t, project, index, "1", "3")
-	require.Equal(t, 2, len(output))
-	for i, out := range output {
-		encResp, err := util.MapToJSON(out["data"].(map[string]any))
-		require.NoError(t, err)
+	for _, source := range []bool{false, true} {
+		output := getDocuments(t, project, index, source, "1", "3")
+		require.Equal(t, 2, len(output))
+		for i, out := range output {
+			encResp, err := util.MapToJSON(out["data"].(map[string]any))
+			require.NoError(t, err)
 
-		encInp, err := util.MapToJSON(docsNext[i])
-		require.NoError(t, err)
-		require.JSONEq(t, string(encInp), string(encResp))
+			encInp, err := util.MapToJSON(docsNext[i])
+			require.NoError(t, err)
+			require.JSONEq(t, string(encInp), string(encResp))
+		}
 	}
 }
 
@@ -626,20 +634,22 @@ func TestUpdate(t *testing.T) {
 			},
 		)
 
-	output := getDocuments(t, project, index, "1", "2", "3")
-	require.Equal(t, 3, len(output))
-	for i, out := range output {
-		if i == 2 {
-			// last is nil
-			require.Nil(t, out)
-			continue
-		}
-		encResp, err := util.MapToJSON(out["data"].(map[string]any))
-		require.NoError(t, err)
+	for _, source := range []bool{false, true} {
+		output := getDocuments(t, project, index, source, "1", "2", "3")
+		require.Equal(t, 3, len(output))
+		for i, out := range output {
+			if i == 2 {
+				// last is nil
+				require.Nil(t, out)
+				continue
+			}
+			encResp, err := util.MapToJSON(out["data"].(map[string]any))
+			require.NoError(t, err)
 
-		encInp, err := util.MapToJSON(docsUpdated[i])
-		require.NoError(t, err)
-		require.JSONEq(t, string(encInp), string(encResp))
+			encInp, err := util.MapToJSON(docsUpdated[i])
+			require.NoError(t, err)
+			require.JSONEq(t, string(encInp), string(encResp))
+		}
 	}
 }
 
@@ -697,21 +707,23 @@ func TestDelete(t *testing.T) {
 			},
 		)
 
-	output := getDocuments(t, project, index, "1", "2", "3")
-	require.Equal(t, 3, len(output))
-	for i, out := range output {
-		if i == 0 || i == 2 {
-			// 1 and 3 are deleted
-			require.Nil(t, out)
-			continue
+	for _, source := range []bool{false, true} {
+		output := getDocuments(t, project, index, source, "1", "2", "3")
+		require.Equal(t, 3, len(output))
+		for i, out := range output {
+			if i == 0 || i == 2 {
+				// 1 and 3 are deleted
+				require.Nil(t, out)
+				continue
+			}
+
+			encResp, err := util.MapToJSON(out["data"].(map[string]any))
+			require.NoError(t, err)
+
+			encInp, err := util.MapToJSON(docs[i])
+			require.NoError(t, err)
+			require.JSONEq(t, string(encInp), string(encResp))
 		}
-
-		encResp, err := util.MapToJSON(out["data"].(map[string]any))
-		require.NoError(t, err)
-
-		encInp, err := util.MapToJSON(docs[i])
-		require.NoError(t, err)
-		require.JSONEq(t, string(encInp), string(encResp))
 	}
 }
 
@@ -944,7 +956,7 @@ func TestComplexObjects(t *testing.T) {
 		{query: Map{"q": "foo", "search_fields": []string{"c.c.b"}}, expError: "`c.c.b` is not a searchable field. Only indexed fields can be queried"},
 		{query: Map{"q": "paris", "search_fields": []string{"c.c.d"}}, expError: ""},
 		{query: Map{"q": "santa", "search_fields": []string{"c.d"}}, expError: ""},
-		{query:  Map{ "q": "santa", "search_fields": []string{"c.e"}}, expError: "`c.e` is not a searchable field. Only indexed fields can be queried"},
+		{query: Map{"q": "santa", "search_fields": []string{"c.e"}}, expError: "`c.e` is not a searchable field. Only indexed fields can be queried"},
 		{query: Map{"q": "free flow object top level", "search_fields": []string{"d"}}, expError: ""},
 		{query: Map{"q": "array of free flow object", "search_fields": []string{"e"}}, expError: ""},
 		{query: Map{"q": "array of object with a field", "search_fields": []string{"f"}}, expError: ""},
@@ -962,6 +974,162 @@ func TestComplexObjects(t *testing.T) {
 		res := getSearchResults(t, project, indexName, c.query, false)
 		require.Equal(t, 1, len(res.Result.Hits))
 	}
+}
+
+func TestChunking(t *testing.T) {
+	project := setupTestsOnlyProject(t)
+	defer cleanupTests(t, project)
+
+	indexName := "fake_index"
+	var schemaObj map[string]any
+	require.NoError(t, jsoniter.Unmarshal(FakeDocumentSchema, &schemaObj))
+
+	t.Run("create_read_search", func(t *testing.T) {
+		createSearchIndex(t, project, indexName, schemaObj).Status(http.StatusOK)
+		defer deleteSearchIndex(t, project, indexName)
+
+		fakes, serialized := GenerateFakes(t, []string{"1", "2", "3"}, []string{"first_create", "second_create", "third_create"})
+		writeDocuments(t, project, indexName, fakes, "create")
+
+		for _, source := range []bool{false, true} {
+			output := getDocuments(t, project, indexName, source, "1", "2", "3")
+			require.Equal(t, 3, len(output))
+			for i, out := range output {
+				encResp, err := util.MapToJSON(out["data"].(map[string]any))
+				require.NoError(t, err)
+				require.JSONEq(t, string(serialized[i]), string(encResp))
+			}
+		}
+
+		res := getSearchResults(t, project, indexName, Map{"q": "second_create", "search_fields": []string{"placeholder"}}, false)
+		require.Equal(t, 1, len(res.Result.Hits))
+		jsonA, err := jsoniter.Marshal(res.Result.Hits[0]["data"])
+		require.NoError(t, err)
+		require.JSONEq(t, string(serialized[1]), string(jsonA))
+	})
+	t.Run("replace_read_search", func(t *testing.T) {
+		createSearchIndex(t, project, indexName, schemaObj).Status(http.StatusOK)
+		defer deleteSearchIndex(t, project, indexName)
+
+		fakes, serialized := GenerateFakes(t, []string{"1", "2", "3"}, []string{"first_create", "second_create", "third_create"})
+		writeDocuments(t, project, indexName, fakes, "create")
+
+		replaceFakes, replaceSerialized := GenerateFakes(t, []string{"1", "random", "3"}, []string{"first_replaced", "random_replaced", "third_replaced"})
+		writeDocuments(t, project, indexName, replaceFakes, "replace")
+
+		for _, source := range []bool{false, true} {
+			output := getDocuments(t, project, indexName, source, "1", "2", "3")
+			require.Equal(t, 3, len(output))
+			for i, out := range output {
+				encResp, err := util.MapToJSON(out["data"].(map[string]any))
+				require.NoError(t, err)
+
+				if i == 1 {
+					require.JSONEq(t, string(serialized[i]), string(encResp))
+				} else {
+					require.JSONEq(t, string(replaceSerialized[i]), string(encResp))
+				}
+			}
+		}
+
+		res := getSearchResults(t, project, indexName, Map{"q": "second_create", "search_fields": []string{"placeholder"}}, false)
+		require.Equal(t, 1, len(res.Result.Hits))
+		jsonA, err := jsoniter.Marshal(res.Result.Hits[0]["data"])
+		require.NoError(t, err)
+		require.JSONEq(t, string(serialized[1]), string(jsonA))
+
+		res = getSearchResults(t, project, indexName, Map{"q": "third_replaced", "search_fields": []string{"placeholder"}}, false)
+		require.Equal(t, 1, len(res.Result.Hits))
+		jsonA, err = jsoniter.Marshal(res.Result.Hits[0]["data"])
+		require.NoError(t, err)
+		require.JSONEq(t, string(replaceSerialized[2]), string(jsonA))
+	})
+	t.Run("update_read_search", func(t *testing.T) {
+		createSearchIndex(t, project, indexName, schemaObj).Status(http.StatusOK)
+		defer deleteSearchIndex(t, project, indexName)
+
+		fakes, _ := GenerateFakes(t, []string{"1", "2", "3"}, []string{"first_create", "second_create", "third_create"})
+		writeDocuments(t, project, indexName, fakes, "create")
+
+		updatedFakes, updatedSerialized := GenerateFakes(t, []string{"1"}, []string{"updated_first_document"})
+		writeDocuments(t, project, indexName, updatedFakes, "update")
+
+		for _, source := range []bool{false, true} {
+			output := getDocuments(t, project, indexName, source, "1")
+			require.Equal(t, 1, len(output))
+			encResp, err := util.MapToJSON(output[0]["data"].(map[string]any))
+			require.NoError(t, err)
+			require.JSONEq(t, string(updatedSerialized[0]), string(encResp))
+		}
+
+		res := getSearchResults(t, project, indexName, Map{"q": "updated_first_document", "search_fields": []string{"placeholder"}}, false)
+		require.Equal(t, 1, len(res.Result.Hits))
+		jsonA, err := jsoniter.Marshal(res.Result.Hits[0]["data"])
+		require.NoError(t, err)
+		require.JSONEq(t, string(updatedSerialized[0]), string(jsonA))
+	})
+	t.Run("delete", func(t *testing.T) {
+		createSearchIndex(t, project, indexName, schemaObj).Status(http.StatusOK)
+		defer deleteSearchIndex(t, project, indexName)
+
+		fakes, serialized := GenerateFakes(t, []string{"1", "2", "3"}, []string{"first_create", "second_create", "third_create"})
+		writeDocuments(t, project, indexName, fakes, "create")
+
+		expect(t).DELETE(getIndexDocumentURL(project, indexName, "")).
+			WithJSON(Map{
+				"ids": []string{"1", "3"},
+			}).
+			Expect().
+			Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status",
+				[]map[string]any{
+					{"id": "1", "error": nil},
+					{"id": "3", "error": nil},
+				},
+			)
+
+		for _, source := range []bool{false, true} {
+			output := getDocuments(t, project, indexName, source, "1", "2", "3")
+			require.Equal(t, 3, len(output))
+			require.Nil(t, output[0])
+			require.Nil(t, output[2])
+
+			encResp, err := util.MapToJSON(output[1]["data"].(map[string]any))
+			require.NoError(t, err)
+			require.JSONEq(t, string(serialized[1]), string(encResp))
+		}
+	})
+}
+
+func writeDocuments(t *testing.T, project string, indexName string, fakes []FakeDocument, opType string) {
+	var expResponse []map[string]any
+	for _, f := range fakes {
+		expResponse = append(expResponse, map[string]any{
+			"id":    f.Id,
+			"error": nil,
+		})
+	}
+
+	var req *httpexpect.Request
+	if opType == "create" {
+		req = expect(t).POST(getIndexDocumentURL(project, indexName, ""))
+	} else if opType == "replace" {
+		req = expect(t).PUT(getIndexDocumentURL(project, indexName, ""))
+	} else {
+		req = expect(t).PATCH(getIndexDocumentURL(project, indexName, ""))
+	}
+
+	req.
+		WithJSON(Map{
+			"documents": fakes,
+		}).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("status", expResponse)
 }
 
 func compareDocs(t *testing.T, docA Doc, docB Doc) {
@@ -1000,10 +1168,13 @@ func getSearchResults(t *testing.T, project string, index string, query Map, isC
 	return res
 }
 
-func getDocuments(t *testing.T, project string, index string, ids ...string) []Doc {
+func getDocuments(t *testing.T, project string, index string, backendStorage bool, ids ...string) []Doc {
 	req := expect(t).GET(fmt.Sprintf("/v1/projects/%s/search/indexes/%s/documents", project, index))
 	for _, id := range ids {
 		req.WithQuery("ids", id)
+	}
+	if backendStorage {
+		req.WithHeader("Tigris-Search-Read-From-Storage", "true")
 	}
 
 	str := req.

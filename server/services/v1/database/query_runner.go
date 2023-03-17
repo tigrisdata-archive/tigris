@@ -484,7 +484,7 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 	}
 	if options.inMemoryStore {
 		if err = runner.iterateOnSearchStore(ctx, collection, options); err != nil {
-			return Response{}, ctx, err
+			return Response{}, ctx, createApiError(err)
 		}
 		return Response{}, ctx, nil
 	}
@@ -514,7 +514,7 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 		}
 
 		if err != nil {
-			return Response{}, ctx, err
+			return Response{}, ctx, createApiError(err)
 		}
 
 		ctx = runner.instrumentRunner(ctx, options)
@@ -543,18 +543,18 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 	ctx = runner.instrumentRunner(ctx, options)
 	if options.inMemoryStore {
 		if err = runner.iterateOnSearchStore(ctx, coll, options); err != nil {
-			return Response{}, ctx, err
+			return Response{}, ctx, createApiError(err)
 		}
 		return Response{}, ctx, nil
 	} else {
 		if options.plan != nil {
 			if _, err = runner.iterateOnSecondaryIndexStore(ctx, tx, coll, options); err != nil {
-				return Response{}, ctx, err
+				return Response{}, ctx, createApiError(err)
 			}
 			return Response{}, ctx, nil
 		}
 		if _, err = runner.iterateOnKvStore(ctx, tx, coll, options); err != nil {
-			return Response{}, ctx, err
+			return Response{}, ctx, createApiError(err)
 		}
 		return Response{}, ctx, nil
 	}
@@ -658,5 +658,5 @@ func (runner *StreamingQueryRunner) iterate(coll *schema.DefaultCollection, iter
 		}
 	}
 
-	return row.Key, createApiError(iterator.Interrupted())
+	return row.Key, iterator.Interrupted()
 }

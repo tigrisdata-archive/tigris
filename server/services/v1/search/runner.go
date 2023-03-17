@@ -17,12 +17,16 @@ package search
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"math"
+	"strings"
 
+	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
+	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/lib/uuid"
 	"github.com/tigrisdata/tigris/query/filter"
@@ -36,6 +40,7 @@ import (
 	"github.com/tigrisdata/tigris/server/services/v1/database"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/server/types"
+	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
 	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
@@ -53,32 +58,34 @@ type TxRunner interface {
 type RunnerFactory struct {
 	store   search.Store
 	encoder metadata.Encoder
+	txMgr   *transaction.Manager
 }
 
 // NewRunnerFactory returns RunnerFactory object.
-func NewRunnerFactory(store search.Store, encoder metadata.Encoder) *RunnerFactory {
+func NewRunnerFactory(store search.Store, encoder metadata.Encoder, txMgr *transaction.Manager) *RunnerFactory {
 	return &RunnerFactory{
 		store:   store,
 		encoder: encoder,
+		txMgr:   txMgr,
 	}
 }
 
 func (f *RunnerFactory) GetIndexRunner(accessToken *types.AccessToken) *IndexRunner {
 	return &IndexRunner{
-		baseRunner: newBaseRunner(f.store, f.encoder, accessToken),
+		baseRunner: newBaseRunner(f.store, f.encoder, f.txMgr, accessToken),
 	}
 }
 
 func (f *RunnerFactory) GetReadRunner(r *api.GetDocumentRequest, accessToken *types.AccessToken) *ReadRunner {
 	return &ReadRunner{
-		baseRunner: newBaseRunner(f.store, f.encoder, accessToken),
+		baseRunner: newBaseRunner(f.store, f.encoder, f.txMgr, accessToken),
 		req:        r,
 	}
 }
 
 func (f *RunnerFactory) GetSearchRunner(r *api.SearchIndexRequest, streaming Streaming, accessToken *types.AccessToken) *SearchRunner {
 	return &SearchRunner{
-		baseRunner: newBaseRunner(f.store, f.encoder, accessToken),
+		baseRunner: newBaseRunner(f.store, f.encoder, f.txMgr, accessToken),
 		req:        r,
 		streaming:  streaming,
 	}
@@ -86,28 +93,27 @@ func (f *RunnerFactory) GetSearchRunner(r *api.SearchIndexRequest, streaming Str
 
 func (f *RunnerFactory) GetCreateRunner(accessToken *types.AccessToken) *CreateRunner {
 	return &CreateRunner{
-		baseRunner: newBaseRunner(f.store, f.encoder, accessToken),
+		baseRunner: newBaseRunner(f.store, f.encoder, f.txMgr, accessToken),
 	}
 }
 
 func (f *RunnerFactory) GetCreateOrReplaceRunner(r *api.CreateOrReplaceDocumentRequest, accessToken *types.AccessToken) *CreateOrReplaceRunner {
 	return &CreateOrReplaceRunner{
-		baseRunner: newBaseRunner(f.store, f.encoder, accessToken),
+		baseRunner: newBaseRunner(f.store, f.encoder, f.txMgr, accessToken),
 		req:        r,
 	}
 }
 
 func (f *RunnerFactory) GetUpdateQueryRunner(r *api.UpdateDocumentRequest, accessToken *types.AccessToken) *UpdateRunner {
 	return &UpdateRunner{
-		baseRunner: newBaseRunner(f.store, f.encoder, accessToken),
-
-		req: r,
+		baseRunner: newBaseRunner(f.store, f.encoder, f.txMgr, accessToken),
+		req:        r,
 	}
 }
 
 func (f *RunnerFactory) GetDeleteQueryRunner(accessToken *types.AccessToken) *DeleteRunner {
 	return &DeleteRunner{
-		baseRunner: newBaseRunner(f.store, f.encoder, accessToken),
+		baseRunner: newBaseRunner(f.store, f.encoder, f.txMgr, accessToken),
 	}
 }
 
@@ -115,13 +121,15 @@ type baseRunner struct {
 	store       search.Store
 	encoder     metadata.Encoder
 	accessToken *types.AccessToken
+	txMgr       *transaction.Manager
 }
 
-func newBaseRunner(store search.Store, encoder metadata.Encoder, accessToken *types.AccessToken) *baseRunner {
+func newBaseRunner(store search.Store, encoder metadata.Encoder, txMgr *transaction.Manager, accessToken *types.AccessToken) *baseRunner {
 	return &baseRunner{
 		store:       store,
 		encoder:     encoder,
 		accessToken: accessToken,
+		txMgr:       txMgr,
 	}
 }
 
@@ -139,40 +147,90 @@ func (runner *baseRunner) getIndex(tenant *metadata.Tenant, projName string, ind
 	return index, nil
 }
 
-func (runner *baseRunner) encodeDocuments(index *schema.SearchIndex, documents [][]byte, buffer *bytes.Buffer, isUpdate bool) ([]string, error) {
+func (runner *baseRunner) encodeDocuments(index *schema.SearchIndex, documents [][]byte, buffer *bytes.Buffer, isUpdate bool) ([]string, [][]byte, error) {
 	ids := make([]string, len(documents))
-	encoder := jsoniter.NewEncoder(buffer)
 	ts := internal.NewTimestamp()
 
+	serializedDocs := make([][]byte, len(documents))
 	for i, doc := range documents {
 		decDoc, err := util.JSONToMap(doc)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		if id, ok := decDoc[schema.SearchId]; !ok {
 			if isUpdate {
-				return nil, errors.InvalidArgument("doc missing 'id' field")
+				return nil, nil, errors.InvalidArgument("doc missing 'id' field")
 			}
 
 			ids[i] = uuid.New().String()
 			decDoc[schema.SearchId] = ids[i]
 		} else if ids[i], ok = id.(string); !ok {
-			return nil, errors.InvalidArgument("wrong type of 'id' field")
+			return nil, nil, errors.InvalidArgument("wrong type of 'id' field")
+		}
+		if len(ids[i]) == 0 {
+			return nil, nil, errors.InvalidArgument("Empty 'id' is not allowed")
+		}
+
+		if serializedDocs[i], err = util.MapToJSON(decDoc); err != nil {
+			return nil, nil, err
 		}
 
 		packed, err := MutateSearchDocument(index, ts, decDoc, isUpdate)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
-		if err := encoder.Encode(packed); err != nil {
-			return nil, err
+		var forSearch []byte
+		if forSearch, err = util.MapToJSON(packed); err != nil {
+			return nil, nil, err
 		}
+
+		buffer.Write(forSearch)
 		buffer.WriteByte('\n')
 	}
 
-	return ids, nil
+	return ids, serializedDocs, nil
+}
+
+func (runner *baseRunner) execInStorage(ctx context.Context, tableName string, ids []string, fn func(index int, tx transaction.Tx, key keys.Key) error) error {
+	if !config.DefaultConfig.Search.StorageEnabled {
+		return nil
+	}
+
+	tx, err := runner.txMgr.StartTx(ctx)
+	if err != nil {
+		return err
+	}
+
+	for i, id := range ids {
+		var key keys.Key
+		if key, err = runner.encoder.EncodeFDBSearchKey(tableName, id); err != nil {
+			_ = tx.Rollback(ctx)
+			return err
+		}
+
+		if err = fn(i, tx, key); err != nil {
+			_ = tx.Rollback(ctx)
+			return err
+		}
+	}
+
+	return tx.Commit(ctx)
+}
+
+func (runner *baseRunner) readRow(ctx context.Context, tx transaction.Tx, key keys.Key) (*kv.KeyValue, bool, error) {
+	it, err := tx.Read(ctx, key)
+	if ulog.E(err) {
+		return nil, false, err
+	}
+
+	var value kv.KeyValue
+	if it.Next(&value) {
+		return &value, true, nil
+	}
+
+	return nil, false, it.Err()
 }
 
 type ReadRunner struct {
@@ -185,6 +243,9 @@ func (runner *ReadRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Res
 	index, err := runner.getIndex(tenant, runner.req.Project, runner.req.Index)
 	if err != nil {
 		return Response{}, err
+	}
+	if request.ReadSearchDataFromStorage(ctx) {
+		return runner.fromStorage(ctx, index)
 	}
 
 	result, err := runner.store.GetDocuments(ctx, index.StoreIndexName(), runner.req.Ids)
@@ -237,6 +298,53 @@ func (runner *ReadRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Res
 	}, nil
 }
 
+func (runner *ReadRunner) fromStorage(ctx context.Context, index *schema.SearchIndex) (Response, error) {
+	tx, err := runner.txMgr.StartTx(ctx)
+	if err != nil {
+		return Response{}, err
+	}
+
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	documents := make([]*api.SearchHit, len(runner.req.Ids))
+	for i, id := range runner.req.Ids {
+		var key keys.Key
+		if key, err = runner.encoder.EncodeFDBSearchKey(index.StoreIndexName(), id); err != nil {
+			return Response{}, err
+		}
+
+		keyValue, found, err := runner.readRow(ctx, tx, key)
+		if err != nil {
+			return Response{}, err
+		}
+		if !found {
+			documents[i] = nil
+			continue
+		}
+
+		meta := &api.SearchHitMeta{}
+		if keyValue.Data.CreatedAt != nil {
+			meta.CreatedAt = keyValue.Data.CreatedAt.GetProtoTS()
+		}
+		if keyValue.Data.UpdatedAt != nil {
+			meta.UpdatedAt = keyValue.Data.UpdatedAt.GetProtoTS()
+		}
+
+		documents[i] = &api.SearchHit{
+			Data:     keyValue.Data.RawData,
+			Metadata: meta,
+		}
+	}
+
+	return Response{
+		Response: &api.GetDocumentResponse{
+			Documents: documents,
+		},
+	}, nil
+}
+
 type CreateRunner struct {
 	*baseRunner
 
@@ -252,8 +360,6 @@ func (runner *CreateRunner) SetCreateByIdReq(req *api.CreateByIdRequest) {
 	runner.reqById = req
 }
 
-// Run ...
-// ToDo: Test batch documents failure on duplicates.
 func (runner *CreateRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Response, error) {
 	if runner.reqById != nil {
 		return runner.createDocumentById(ctx, tenant, runner.reqById)
@@ -281,8 +387,22 @@ func (runner *CreateRunner) createDocumentById(ctx context.Context, tenant *meta
 	if id != req.Id {
 		return Response{}, errors.InvalidArgument("id passed in request '%s', is not matching id '%s' in body", req.Id, id)
 	}
+	if len(req.Id) == 0 {
+		return Response{}, errors.InvalidArgument("Empty 'id' is not allowed")
+	}
 
-	if err = runner.store.CreateDocument(ctx, index.StoreIndexName(), decDoc); err != nil {
+	packed, err := MutateSearchDocument(index, internal.NewTimestamp(), decDoc, false)
+	if err != nil {
+		return Response{}, err
+	}
+
+	if err := runner.execInStorage(ctx, index.StoreIndexName(), []string{id}, func(_ int, tx transaction.Tx, key keys.Key) error {
+		return tx.Insert(ctx, key, internal.NewTableData(req.Document))
+	}); err != nil && err != kv.ErrDuplicateKey {
+		return Response{}, createApiError(err)
+	}
+
+	if err = runner.store.CreateDocument(ctx, index.StoreIndexName(), packed); err != nil {
 		return Response{}, createApiError(err)
 	}
 
@@ -300,10 +420,11 @@ func (runner *CreateRunner) createDocuments(ctx context.Context, tenant *metadat
 	}
 
 	var (
-		ids    []string
-		buffer bytes.Buffer
+		ids        []string
+		serialized [][]byte
+		buffer     bytes.Buffer
 	)
-	if ids, err = runner.encodeDocuments(index, req.Documents, &buffer, false); err != nil {
+	if ids, serialized, err = runner.encodeDocuments(index, req.Documents, &buffer, false); err != nil {
 		return Response{}, err
 	}
 
@@ -312,7 +433,7 @@ func (runner *CreateRunner) createDocuments(ctx context.Context, tenant *metadat
 		Action:    search.Create,
 		BatchSize: len(req.Documents),
 	}); err != nil {
-		return Response{}, err
+		return Response{}, createApiError(err)
 	}
 
 	resp := &api.CreateDocumentResponse{}
@@ -321,6 +442,15 @@ func (runner *CreateRunner) createDocuments(ctx context.Context, tenant *metadat
 			Id:    id,
 			Error: convertStoreErrToApiErr(id, storeResponses[i].Code, storeResponses[i].Error),
 		})
+	}
+
+	if err := runner.execInStorage(ctx, index.StoreIndexName(), ids, func(index int, tx transaction.Tx, key keys.Key) error {
+		if resp.Status[index].Error == nil {
+			return tx.Insert(ctx, key, internal.NewTableData(serialized[index]))
+		}
+		return nil
+	}); err != nil && err != kv.ErrDuplicateKey {
+		return Response{}, createApiError(err)
 	}
 
 	return Response{
@@ -341,11 +471,12 @@ func (runner *CreateOrReplaceRunner) Run(ctx context.Context, tenant *metadata.T
 	}
 
 	var (
-		ids    []string
-		buffer bytes.Buffer
+		ids        []string
+		serialized [][]byte
+		buffer     bytes.Buffer
 	)
 
-	if ids, err = runner.encodeDocuments(index, runner.req.Documents, &buffer, false); err != nil {
+	if ids, serialized, err = runner.encodeDocuments(index, runner.req.Documents, &buffer, false); err != nil {
 		return Response{}, err
 	}
 
@@ -354,7 +485,7 @@ func (runner *CreateOrReplaceRunner) Run(ctx context.Context, tenant *metadata.T
 		Action:    search.Replace,
 		BatchSize: len(runner.req.Documents),
 	}); err != nil {
-		return Response{}, err
+		return Response{}, createApiError(err)
 	}
 
 	resp := &api.CreateOrReplaceDocumentResponse{}
@@ -363,6 +494,15 @@ func (runner *CreateOrReplaceRunner) Run(ctx context.Context, tenant *metadata.T
 			Id:    id,
 			Error: convertStoreErrToApiErr(id, storeResponses[i].Code, storeResponses[i].Error),
 		})
+	}
+
+	if err := runner.execInStorage(ctx, index.StoreIndexName(), ids, func(index int, tx transaction.Tx, key keys.Key) error {
+		if resp.Status[index].Error == nil {
+			return tx.Replace(ctx, key, internal.NewTableData(serialized[index]), false)
+		}
+		return nil
+	}); err != nil {
+		return Response{}, createApiError(err)
 	}
 
 	return Response{
@@ -386,7 +526,7 @@ func (runner *UpdateRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 		ids    []string
 		buffer bytes.Buffer
 	)
-	if ids, err = runner.encodeDocuments(index, runner.req.Documents, &buffer, true); err != nil {
+	if ids, _, err = runner.encodeDocuments(index, runner.req.Documents, &buffer, true); err != nil {
 		return Response{}, err
 	}
 
@@ -395,7 +535,7 @@ func (runner *UpdateRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 		Action:    search.Update,
 		BatchSize: len(runner.req.Documents),
 	}); err != nil {
-		return Response{}, err
+		return Response{}, createApiError(err)
 	}
 
 	resp := &api.UpdateDocumentResponse{}
@@ -406,9 +546,55 @@ func (runner *UpdateRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 		})
 	}
 
+	if err := runner.execInStorage(ctx, index.StoreIndexName(), ids, func(index int, tx transaction.Tx, key keys.Key) error {
+		if resp.Status[index].Error != nil {
+			return nil
+		}
+
+		value, found, err := runner.readRow(ctx, tx, key)
+		if err != nil {
+			return err
+		}
+		if !found {
+			return nil
+		}
+
+		newData, err := runner.getMergedData(runner.req.Documents[index], value.Data.RawData)
+		if err != nil {
+			return err
+		}
+
+		return tx.Replace(ctx, key, internal.NewTableDataWithTS(value.Data.CreatedAt, internal.NewTimestamp(), newData), false)
+	}); err != nil {
+		// if execution in storage fails then return a full error so that user can retry
+		return Response{}, createApiError(err)
+	}
+
 	return Response{
 		Response: resp,
 	}, nil
+}
+
+func (runner *UpdateRunner) getMergedData(input jsoniter.RawMessage, existing jsoniter.RawMessage) (jsoniter.RawMessage, error) {
+	var err error
+	output := existing
+	err = jsonparser.ObjectEach(input, func(key []byte, value []byte, dataType jsonparser.ValueType, offset int) error {
+		if err != nil {
+			return err
+		}
+		if dataType == jsonparser.String {
+			value = []byte(fmt.Sprintf(`"%s"`, value))
+		}
+
+		keys := strings.Split(string(key), ".")
+		output, err = jsonparser.Set(output, value, keys...)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+
+	return output, err
 }
 
 type DeleteRunner struct {
@@ -453,6 +639,15 @@ func (runner *DeleteRunner) deleteDocumentsById(ctx context.Context, tenant *met
 		}
 
 		resp.Status = append(resp.Status, wr)
+	}
+
+	if err := runner.execInStorage(ctx, index.StoreIndexName(), req.Ids, func(index int, tx transaction.Tx, key keys.Key) error {
+		if resp.Status[index].Error == nil {
+			return tx.Delete(ctx, key)
+		}
+		return nil
+	}); err != nil {
+		return Response{}, err
 	}
 
 	return Response{
