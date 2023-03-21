@@ -149,6 +149,11 @@ func (x *CreateDocumentRequest) UnmarshalJSON(data []byte) error {
 		case "index":
 			v = &x.Index
 		case "documents":
+			if value == nil {
+				// validator will trigger an error in this case
+				x.Documents = nil
+				continue
+			}
 			var docs []jsoniter.RawMessage
 			if err := jsoniter.Unmarshal(value, &docs); err != nil {
 				return err
@@ -187,6 +192,12 @@ func (x *CreateOrReplaceDocumentRequest) UnmarshalJSON(data []byte) error {
 		case "index":
 			v = &x.Index
 		case "documents":
+			if value == nil {
+				// validator will trigger an error in this case
+				x.Documents = nil
+				continue
+			}
+
 			var docs []jsoniter.RawMessage
 			if err := jsoniter.Unmarshal(value, &docs); err != nil {
 				return err
@@ -223,6 +234,12 @@ func (x *UpdateDocumentRequest) UnmarshalJSON(data []byte) error {
 		case "index":
 			v = &x.Index
 		case "documents":
+			if value == nil {
+				// validator will trigger an error in this case
+				x.Documents = nil
+				continue
+			}
+
 			var docs []jsoniter.RawMessage
 			if err := jsoniter.Unmarshal(value, &docs); err != nil {
 				return err

@@ -210,6 +210,77 @@ func (x *CreateOrUpdateIndexRequest) Validate() error {
 	return nil
 }
 
+func (x *DeleteIndexRequest) Validate() error {
+	if err := isValidProjectAndSearchIndex(x.Project, x.Name); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (x *GetIndexRequest) Validate() error {
+	if err := isValidProjectAndSearchIndex(x.Project, x.Name); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (x *CreateDocumentRequest) Validate() error {
+	if err := isValidProjectAndSearchIndex(x.Project, x.Index); err != nil {
+		return err
+	}
+
+	if len(x.GetDocuments()) == 0 {
+		return Errorf(Code_INVALID_ARGUMENT, "empty documents received")
+	}
+	return nil
+}
+
+func (x *CreateOrReplaceDocumentRequest) Validate() error {
+	if err := isValidProjectAndSearchIndex(x.Project, x.Index); err != nil {
+		return err
+	}
+
+	if len(x.GetDocuments()) == 0 {
+		return Errorf(Code_INVALID_ARGUMENT, "empty documents received")
+	}
+	return nil
+}
+
+func (x *UpdateDocumentRequest) Validate() error {
+	if err := isValidProjectAndSearchIndex(x.Project, x.Index); err != nil {
+		return err
+	}
+
+	if len(x.GetDocuments()) == 0 {
+		return Errorf(Code_INVALID_ARGUMENT, "received no documents to update")
+	}
+	return nil
+}
+
+func (x *DeleteDocumentRequest) Validate() error {
+	if err := isValidProjectAndSearchIndex(x.Project, x.Index); err != nil {
+		return err
+	}
+
+	if len(x.Ids) == 0 {
+		return Errorf(Code_INVALID_ARGUMENT, "no 'ids' to delete")
+	}
+	return nil
+}
+
+func (x *GetDocumentRequest) Validate() error {
+	if err := isValidProjectAndSearchIndex(x.Project, x.Index); err != nil {
+		return err
+	}
+
+	if len(x.Ids) == 0 {
+		return Errorf(Code_INVALID_ARGUMENT, "'ids' is a required field")
+	}
+	return nil
+}
+
 func isValidCollection(name string) error {
 	if len(name) == 0 {
 		return Errorf(Code_INVALID_ARGUMENT, "invalid collection name")
@@ -232,10 +303,10 @@ func isValidDatabase(name string) error {
 
 func isValidSearchIndexName(name string) error {
 	if len(name) == 0 {
-		return Errorf(Code_INVALID_ARGUMENT, "invalid index name")
+		return Errorf(Code_INVALID_ARGUMENT, "invalid search index name")
 	}
 	if !validNamePattern.MatchString(name) {
-		return Errorf(Code_INVALID_ARGUMENT, "invalid index name")
+		return Errorf(Code_INVALID_ARGUMENT, "invalid search index name")
 	}
 	return nil
 }
