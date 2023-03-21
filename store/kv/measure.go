@@ -111,14 +111,6 @@ func (m *TxImplWithMetrics) Delete(ctx context.Context, table []byte, key Key) (
 	return
 }
 
-func (m *TxImplWithMetrics) DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key) (err error) {
-	m.measure(ctx, "DeleteRange", func() error {
-		err = m.tx.DeleteRange(ctx, table, lKey, rKey)
-		return err
-	})
-	return
-}
-
 func (m *TxImplWithMetrics) SetVersionstampedValue(ctx context.Context, key []byte, value []byte) (err error) {
 	m.measure(ctx, "SetVersionstampedValue", func() error {
 		err = m.tx.SetVersionstampedValue(ctx, key, value)
@@ -222,22 +214,6 @@ func (m *TxImplWithMetrics) Read(ctx context.Context, table []byte, key Key) (it
 func (m *TxImplWithMetrics) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (it Iterator, err error) {
 	m.measure(ctx, "ReadRange", func() error {
 		it, err = m.tx.ReadRange(ctx, table, lkey, rkey, isSnapshot)
-		return err
-	})
-	return
-}
-
-func (m *TxImplWithMetrics) Update(ctx context.Context, table []byte, key Key, apply func(*internal.TableData) (*internal.TableData, error)) (encoded int32, err error) {
-	m.measure(ctx, "Update", func() error {
-		encoded, err = m.tx.Update(ctx, table, key, apply)
-		return err
-	})
-	return
-}
-
-func (m *TxImplWithMetrics) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func(*internal.TableData) (*internal.TableData, error)) (encoded int32, err error) {
-	m.measure(ctx, "UpdateRange", func() error {
-		encoded, err = m.tx.UpdateRange(ctx, table, lKey, rKey, apply)
 		return err
 	})
 	return

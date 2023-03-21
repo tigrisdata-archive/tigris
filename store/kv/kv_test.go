@@ -133,34 +133,6 @@ func testKeyValueStoreBasic(t *testing.T, kv TxStore) {
 	}, v)
 	_ = tx.Commit(ctx)
 
-	// update range
-	i := 3
-	var updatedData []*internal.TableData
-	modifiedCount := int32(0)
-	tx = getTx(t, ctx, kv)
-	modifiedCount, err = tx.UpdateRange(ctx, table, BuildKey("p1", 3), BuildKey("p1", 6), func(orig *internal.TableData) (*internal.TableData, error) {
-		require.Equal(t, fmt.Sprintf("value%d", i), string(orig.RawData))
-		res := internal.NewTableData([]byte(fmt.Sprintf("value%d+%d", i, i)))
-		i++
-		updatedData = append(updatedData, res)
-		return res, nil
-	})
-	require.NoError(t, err)
-	require.Equal(t, int32(3), modifiedCount)
-	_ = tx.Commit(ctx)
-
-	tx = getTx(t, ctx, kv)
-	it, err = tx.ReadRange(ctx, table, BuildKey("p1", 3), BuildKey("p1", 6), false)
-	require.NoError(t, err)
-
-	v = readAllUsingIterator(t, it)
-	require.Equal(t, []KeyValue{
-		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey(table, BuildKey("p1", int64(3))), Data: updatedData[0]},
-		{Key: BuildKey("p1", int64(4)), FDBKey: getFDBKey(table, BuildKey("p1", int64(4))), Data: updatedData[1]},
-		{Key: BuildKey("p1", int64(5)), FDBKey: getFDBKey(table, BuildKey("p1", int64(5))), Data: updatedData[2]},
-	}, v)
-	_ = tx.Commit(ctx)
-
 	// prefix read
 	tx = getTx(t, ctx, kv)
 	it, err = tx.Read(ctx, table, BuildKey("p1"))
@@ -170,20 +142,20 @@ func testKeyValueStoreBasic(t *testing.T, kv TxStore) {
 	require.Equal(t, []KeyValue{
 		{Key: BuildKey("p1", int64(1)), FDBKey: getFDBKey(table, BuildKey("p1", int64(1))), Data: tableDataP1[0]},
 		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2))), Data: replacedValue2},
-		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey(table, BuildKey("p1", int64(3))), Data: updatedData[0]},
-		{Key: BuildKey("p1", int64(4)), FDBKey: getFDBKey(table, BuildKey("p1", int64(4))), Data: updatedData[1]},
-		{Key: BuildKey("p1", int64(5)), FDBKey: getFDBKey(table, BuildKey("p1", int64(5))), Data: updatedData[2]},
+		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey(table, BuildKey("p1", int64(3))), Data: tableDataP1[2]},
+		{Key: BuildKey("p1", int64(4)), FDBKey: getFDBKey(table, BuildKey("p1", int64(4))), Data: tableDataP1[3]},
+		{Key: BuildKey("p1", int64(5)), FDBKey: getFDBKey(table, BuildKey("p1", int64(5))), Data: tableDataP1[4]},
 	}, v)
 	_ = tx.Commit(ctx)
 
-	// delete and delete range
+	// delete
 	tx = getTx(t, ctx, kv)
+	// replacing previous delete range test
+	for i := 3; i <= 6; i++ {
+		err = tx.Delete(ctx, table, BuildKey("p1", i))
+		require.NoError(t, err)
+	}
 	err = tx.Delete(ctx, table, BuildKey("p1", 1))
-	require.NoError(t, err)
-	_ = tx.Commit(ctx)
-
-	tx = getTx(t, ctx, kv)
-	err = tx.DeleteRange(ctx, table, BuildKey("p1", 3), BuildKey("p2", 6))
 	require.NoError(t, err)
 	_ = tx.Commit(ctx)
 
@@ -373,28 +345,6 @@ func testKVBasic(t *testing.T, kv baseKVStore) {
 		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey(table, BuildKey("p1", int64(3))), Value: []byte("value3")},
 	}, v)
 
-	// update range
-	i := 3
-	modifiedCount := int32(0)
-	modifiedCount, err = kv.UpdateRange(ctx, table, BuildKey("p1", 3), BuildKey("p1", 6), func(orig []byte) ([]byte, error) {
-		require.Equal(t, fmt.Sprintf("value%d", i), string(orig))
-		res := []byte(fmt.Sprintf("value%d+%d", i, i))
-		i++
-		return res, nil
-	})
-	require.NoError(t, err)
-	require.Equal(t, int32(3), modifiedCount)
-
-	it, err = kv.ReadRange(ctx, table, BuildKey("p1", 3), BuildKey("p1", 6), false)
-	require.NoError(t, err)
-
-	v = readAll(t, it)
-	require.Equal(t, []baseKeyValue{
-		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey(table, BuildKey("p1", int64(3))), Value: []byte("value3+3")},
-		{Key: BuildKey("p1", int64(4)), FDBKey: getFDBKey(table, BuildKey("p1", int64(4))), Value: []byte("value4+4")},
-		{Key: BuildKey("p1", int64(5)), FDBKey: getFDBKey(table, BuildKey("p1", int64(5))), Value: []byte("value5+5")},
-	}, v)
-
 	// prefix read
 	it, err = kv.Read(ctx, table, BuildKey("p1"))
 	require.NoError(t, err)
@@ -403,17 +353,18 @@ func testKVBasic(t *testing.T, kv baseKVStore) {
 	require.Equal(t, []baseKeyValue{
 		{Key: BuildKey("p1", int64(1)), FDBKey: getFDBKey(table, BuildKey("p1", int64(1))), Value: []byte("value1")},
 		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2))), Value: []byte("value2+2")},
-		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey(table, BuildKey("p1", int64(3))), Value: []byte("value3+3")},
-		{Key: BuildKey("p1", int64(4)), FDBKey: getFDBKey(table, BuildKey("p1", int64(4))), Value: []byte("value4+4")},
-		{Key: BuildKey("p1", int64(5)), FDBKey: getFDBKey(table, BuildKey("p1", int64(5))), Value: []byte("value5+5")},
+		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey(table, BuildKey("p1", int64(3))), Value: []byte("value3")},
+		{Key: BuildKey("p1", int64(4)), FDBKey: getFDBKey(table, BuildKey("p1", int64(4))), Value: []byte("value4")},
+		{Key: BuildKey("p1", int64(5)), FDBKey: getFDBKey(table, BuildKey("p1", int64(5))), Value: []byte("value5")},
 	}, v)
 
 	// delete and delete range
 	err = kv.Delete(ctx, table, BuildKey("p1", 1))
 	require.NoError(t, err)
-
-	err = kv.DeleteRange(ctx, table, BuildKey("p1", 3), BuildKey("p2", 6))
-	require.NoError(t, err)
+	for i := 3; i <= 6; i++ {
+		err = kv.Delete(ctx, table, BuildKey("p1", i))
+		require.NoError(t, err)
+	}
 
 	it, err = kv.ReadRange(ctx, table, BuildKey("p1", 1), BuildKey("p1", 6), false)
 	require.NoError(t, err)
