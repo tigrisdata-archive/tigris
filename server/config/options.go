@@ -244,10 +244,12 @@ var DefaultConfig = Config{
 		StreamBuffer:   200,
 	},
 	Search: SearchConfig{
-		Host:         "localhost",
-		Port:         8108,
-		ReadEnabled:  true,
-		WriteEnabled: true,
+		Host:           "localhost",
+		Port:           8108,
+		ReadEnabled:    true,
+		WriteEnabled:   true,
+		StorageEnabled: true,
+		Chunking:       true,
 	},
 	SecondaryIndex: SecondaryIndexConfig{
 		ReadEnabled:   false,
@@ -411,7 +413,6 @@ type SchemaConfig struct {
 // FoundationDBConfig keeps FoundationDB configuration parameters.
 type FoundationDBConfig struct {
 	ClusterFile string `mapstructure:"cluster_file" json:"cluster_file" yaml:"cluster_file"`
-	Chunking    bool   `mapstructure:"chunking" json:"chunking" yaml:"chunking"`
 }
 
 type SearchConfig struct {
@@ -420,6 +421,10 @@ type SearchConfig struct {
 	AuthKey      string `mapstructure:"auth_key" json:"auth_key" yaml:"auth_key"`
 	ReadEnabled  bool   `mapstructure:"read_enabled" yaml:"read_enabled" json:"read_enabled"`
 	WriteEnabled bool   `mapstructure:"write_enabled" yaml:"write_enabled" json:"write_enabled"`
+	// StorageEnabled only applies to standalone search indexes. This is to enable persisting search indexes to storage.
+	StorageEnabled bool `mapstructure:"storage_enabled" yaml:"storage_enabled" json:"storage_enabled"`
+	// Chunking allows us to persist bigger search indexes payload in storage.
+	Chunking bool `mapstructure:"chunking" yaml:"chunking" json:"chunking"`
 }
 
 type SecondaryIndexConfig struct {

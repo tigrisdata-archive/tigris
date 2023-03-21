@@ -70,14 +70,14 @@ func mainWithCode() int {
 	log.Info().Str("version", util.Version).Msgf("Starting server")
 
 	var kvStore kv.TxStore
-	if config.DefaultConfig.Tracing.Enabled {
-		kvStore, err = kv.NewKeyValueStoreWithMetrics(&config.DefaultConfig.FoundationDB)
-	} else {
-		kvStore, err = kv.NewTxStore(&config.DefaultConfig.FoundationDB)
+	if kvStore, err = createKVStore(false); err != nil {
+		log.Error().Err(err).Msg("error initializing kv store")
+		return 1
 	}
 
-	if err != nil {
-		log.Error().Err(err).Msg("error initializing kv store")
+	var kvStoreWithChunking kv.TxStore
+	if kvStoreWithChunking, err = createKVStore(true); err != nil {
+		log.Error().Err(err).Msg("error initializing kv chunking store")
 		return 1
 	}
 
@@ -95,6 +95,9 @@ func mainWithCode() int {
 	txMgr := transaction.NewManager(kvStore)
 	log.Info().Msg("initialized transaction manager")
 
+	chunkTxMgr := transaction.NewManager(kvStoreWithChunking)
+	log.Info().Msg("initialized transaction manager")
+
 	tenantMgr := metadata.NewTenantManager(kvStore, searchStore, txMgr)
 	log.Info().Msg("initialized tenant manager")
 
@@ -110,7 +113,7 @@ func mainWithCode() int {
 	defer quota.Cleanup()
 
 	mx := muxer.NewMuxer(cfg)
-	mx.RegisterServices(&cfg.Server, kvStore, searchStore, tenantMgr, txMgr)
+	mx.RegisterServices(&cfg.Server, kvStore, searchStore, tenantMgr, txMgr, chunkTxMgr)
 	port := cfg.Server.Port
 	if cfg.Server.Type == config.RealtimeServerType {
 		port = cfg.Server.RealtimePort
@@ -122,4 +125,28 @@ func mainWithCode() int {
 
 	log.Info().Msg("Shutdown")
 	return 0
+}
+
+func createKVStore(isChunking bool) (kv.TxStore, error) {
+	if isChunking {
+		kvStoreWithChunking, err := kv.NewChunkStore(&config.DefaultConfig.FoundationDB)
+		if err != nil {
+			return nil, err
+		}
+		if !config.DefaultConfig.Metrics.Fdb.Enabled {
+			return kvStoreWithChunking, nil
+		}
+
+		return kv.NewKeyValueStoreWithMetrics(kvStoreWithChunking)
+	}
+
+	kvStore, err := kv.NewTxStore(&config.DefaultConfig.FoundationDB)
+	if err != nil {
+		return nil, err
+	}
+	if !config.DefaultConfig.Metrics.Fdb.Enabled {
+		return kvStore, nil
+	}
+
+	return kv.NewKeyValueStoreWithMetrics(kvStore)
 }

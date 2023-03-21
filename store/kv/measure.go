@@ -18,7 +18,6 @@ import (
 	"context"
 
 	"github.com/tigrisdata/tigris/internal"
-	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metrics"
 )
 
@@ -26,15 +25,9 @@ type TxStoreWithMetrics struct {
 	kv TxStore
 }
 
-func NewKeyValueStoreWithMetrics(cfg *config.FoundationDBConfig) (TxStore, error) {
-	kv, err := newFoundationDB(cfg)
-	if err != nil {
-		return nil, err
-	}
+func NewKeyValueStoreWithMetrics(txStore TxStore) (TxStore, error) {
 	return &TxStoreWithMetrics{
-		kv: &KeyValueTxStore{
-			fdbkv: kv,
-		},
+		kv: txStore,
 	}, nil
 }
 
@@ -113,14 +106,6 @@ func (m *TxImplWithMetrics) measure(ctx context.Context, name string, f func() e
 func (m *TxImplWithMetrics) Delete(ctx context.Context, table []byte, key Key) (err error) {
 	m.measure(ctx, "Delete", func() error {
 		err = m.tx.Delete(ctx, table, key)
-		return err
-	})
-	return
-}
-
-func (m *TxImplWithMetrics) DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key) (err error) {
-	m.measure(ctx, "DeleteRange", func() error {
-		err = m.tx.DeleteRange(ctx, table, lKey, rKey)
 		return err
 	})
 	return
@@ -229,22 +214,6 @@ func (m *TxImplWithMetrics) Read(ctx context.Context, table []byte, key Key) (it
 func (m *TxImplWithMetrics) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (it Iterator, err error) {
 	m.measure(ctx, "ReadRange", func() error {
 		it, err = m.tx.ReadRange(ctx, table, lkey, rkey, isSnapshot)
-		return err
-	})
-	return
-}
-
-func (m *TxImplWithMetrics) Update(ctx context.Context, table []byte, key Key, apply func(*internal.TableData) (*internal.TableData, error)) (encoded int32, err error) {
-	m.measure(ctx, "Update", func() error {
-		encoded, err = m.tx.Update(ctx, table, key, apply)
-		return err
-	})
-	return
-}
-
-func (m *TxImplWithMetrics) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func(*internal.TableData) (*internal.TableData, error)) (encoded int32, err error) {
-	m.measure(ctx, "UpdateRange", func() error {
-		encoded, err = m.tx.UpdateRange(ctx, table, lKey, rKey, apply)
 		return err
 	})
 	return

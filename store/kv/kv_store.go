@@ -94,48 +94,6 @@ func (tx *KeyValueTx) ReadRange(ctx context.Context, table []byte, lkey Key, rke
 	}, nil
 }
 
-func (tx *KeyValueTx) Update(ctx context.Context, table []byte, key Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error) {
-	return tx.ftx.Update(ctx, table, key, func(existing []byte) ([]byte, error) {
-		decoded, err := internal.Decode(existing)
-		if err != nil {
-			return nil, err
-		}
-
-		newData, err := apply(decoded)
-		if err != nil {
-			return nil, err
-		}
-
-		encoded, err := internal.Encode(newData)
-		if err != nil {
-			return nil, err
-		}
-
-		return encoded, nil
-	})
-}
-
-func (tx *KeyValueTx) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error) {
-	return tx.ftx.UpdateRange(ctx, table, lKey, rKey, func(existing []byte) ([]byte, error) {
-		decoded, err := internal.Decode(existing)
-		if err != nil {
-			return nil, err
-		}
-
-		newData, err := apply(decoded)
-		if err != nil {
-			return nil, err
-		}
-
-		encoded, err := internal.Encode(newData)
-		if err != nil {
-			return nil, err
-		}
-
-		return encoded, nil
-	})
-}
-
 type KeyValueIterator struct {
 	baseIterator
 	err error

@@ -50,7 +50,7 @@ func newSearchService(store searchStore.Store, tenantMgr *metadata.TenantManager
 		tenantMgr:     tenantMgr,
 		versionH:      tenantMgr.GetVersionHandler(),
 		sessions:      search.NewSessionManager(txMgr, tenantMgr, metadata.NewCacheTracker(tenantMgr, txMgr)),
-		runnerFactory: search.NewRunnerFactory(store, tenantMgr.GetEncoder()),
+		runnerFactory: search.NewRunnerFactory(store, tenantMgr.GetEncoder(), txMgr),
 	}
 }
 

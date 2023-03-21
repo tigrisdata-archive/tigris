@@ -207,7 +207,7 @@ func TestChunkStoreIterator(t *testing.T) {
 		}, {
 			[]*KeyValue{
 				{Key: BuildKey("k6"), Data: &internal.TableData{RawData: []byte(`{}`), TotalChunks: &ptr2}},
-				{Key: BuildKey("k6", "__", "random"), Data: &internal.TableData{RawData: []byte(`{}`)}},
+				{Key: BuildKey("k6", "_C_", "random"), Data: &internal.TableData{RawData: []byte(`{}`)}},
 			},
 			fmt.Errorf("chunk number mismatch found: 'random' exp: '1'"),
 			0,

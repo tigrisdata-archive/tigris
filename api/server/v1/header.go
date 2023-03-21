@@ -37,11 +37,12 @@ const (
 
 	HeaderPrefix = "Tigris-"
 
-	HeaderTxID            = "Tigris-Tx-Id"
-	HeaderTxOrigin        = "Tigris-Tx-Origin"
-	grpcGatewayPrefix     = "Grpc-Gateway-"
-	HeaderSchemaSignOff   = "Tigris-Schema-Sign-Off"
-	HeaderBypassAuthCache = "Tigris-Bypass-Auth-Cache" // #nosec G101
+	HeaderTxID                      = "Tigris-Tx-Id"
+	HeaderTxOrigin                  = "Tigris-Tx-Origin"
+	grpcGatewayPrefix               = "Grpc-Gateway-"
+	HeaderSchemaSignOff             = "Tigris-Schema-Sign-Off"
+	HeaderBypassAuthCache           = "Tigris-Bypass-Auth-Cache" // #nosec G101
+	HeaderReadSearchDataFromStorage = "Tigris-Search-Read-From-Storage"
 )
 
 func CustomMatcher(key string) (string, bool) {
