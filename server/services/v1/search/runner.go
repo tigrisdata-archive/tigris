@@ -141,7 +141,8 @@ func (runner *baseRunner) getIndex(tenant *metadata.Tenant, projName string, ind
 
 	index, found := project.GetSearch().GetIndex(indexName)
 	if !found {
-		return nil, errors.NotFound("index '%s' is missing", indexName)
+		// this allows to trigger version check to reload if index already exists
+		return nil, metadata.NewSearchIndexNotFoundErr(indexName)
 	}
 
 	return index, nil

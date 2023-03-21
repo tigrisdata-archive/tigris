@@ -140,7 +140,7 @@ func TestIndex_Management(t *testing.T) {
 		deleteSearchIndex(t, project, testIndex)
 
 		resp := createSearchIndex(t, project, "", nil)
-		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "invalid search index name")
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "empty search index name is not allowed")
 	})
 	t.Run("status_400_schema_nil", func(t *testing.T) {
 		deleteSearchIndex(t, project, testIndex)

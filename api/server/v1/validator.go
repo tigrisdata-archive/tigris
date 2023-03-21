@@ -303,10 +303,10 @@ func isValidDatabase(name string) error {
 
 func isValidSearchIndexName(name string) error {
 	if len(name) == 0 {
-		return Errorf(Code_INVALID_ARGUMENT, "invalid search index name")
+		return Errorf(Code_INVALID_ARGUMENT, "empty search index name is not allowed")
 	}
 	if !validNamePattern.MatchString(name) {
-		return Errorf(Code_INVALID_ARGUMENT, "invalid search index name")
+		return Errorf(Code_INVALID_ARGUMENT, "invalid search index name '%s'", name)
 	}
 	return nil
 }
