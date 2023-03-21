@@ -484,7 +484,7 @@ func testCollection(t *testing.T) *schema.DefaultCollection {
 	"primary_key": ["id"]
 }`)
 
-	schFactory, err := schema.Build("test_update", reqSchema)
+	schFactory, err := schema.NewFactoryBuilder(true).Build("test_update", reqSchema)
 	require.NoError(t, err)
 
 	c, err := schema.NewDefaultCollection(1, 1, schFactory, nil, nil)
@@ -539,7 +539,7 @@ func testCollection2(t *testing.T) *schema.DefaultCollection {
 	"primary_key": ["id", "a", "c"]
 }`)
 
-	schFactory, err := schema.Build("test_update", reqSchema)
+	schFactory, err := schema.NewFactoryBuilder(true).Build("test_update", reqSchema)
 	require.NoError(t, err)
 
 	c, err := schema.NewDefaultCollection(1, 1, schFactory, nil, nil)

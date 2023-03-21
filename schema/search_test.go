@@ -103,7 +103,7 @@ func TestSearchIndex_CollectionSchema(t *testing.T) {
 	"primary_key": ["id"]
 }`)
 
-	schFactory, err := Build("t1", reqSchema)
+	schFactory, err := NewFactoryBuilder(true).Build("t1", reqSchema)
 	require.NoError(t, err)
 
 	expFlattenedFields := []string{
@@ -125,24 +125,20 @@ func TestSearchIndex_Schema(t *testing.T) {
 		expErrorMsg string
 	}{
 		{
-			[]byte(`{"title": "t1", "properties": { "simple_items": {"type": "array", "items": {"type": "integer"}, "sort": true}}}`),
-			"sort is not allowed",
-		},
-		{
 			[]byte(`{"title": "t1", "properties": { "simple_items": {"type": "array", "items": {"type": "integer"}, "facet": true}}}`),
-			"facet is not allowed",
+			"",
 		},
 		{
 			[]byte(`{"title": "t1", "properties": { "simple_items": {"type": "object", "facet": true}}}`),
-			"facet is not allowed",
+			"Cannot have sort or facet attribute on an object 'simple_items'",
 		},
 		{
 			[]byte(`{"title": "t1", "properties": { "a": {"type": "string", "format": "byte", "facet": true}}}`),
-			"facet is not allowed",
+			"Cannot enable search index on field 'a' of type 'byte'",
 		},
 		{
 			[]byte(`{"title": "t1", "properties": { "a": {"type": "string", "format": "byte", "sort": true}}}`),
-			"sort is not allowed",
+			"Cannot enable search index on field 'a' of type 'byte'",
 		},
 		{
 			[]byte(`{"title": "t1", "properties": { "a": {"type": "integer", "sort": true, "facet": true}, "b": {"type": "string", "sort": true, "facet": true}, "c": {"type": "number", "sort": true, "facet": true}}}`),
@@ -150,9 +146,7 @@ func TestSearchIndex_Schema(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		schFactory, err := BuildSearch("t1", c.schema)
-		require.NoError(t, err)
-		err = ValidateSearchSchema(schFactory)
+		_, err := NewFactoryBuilder(true).BuildSearch("t1", c.schema)
 		if len(c.expErrorMsg) > 0 {
 			require.Contains(t, err.Error(), c.expErrorMsg)
 		} else {

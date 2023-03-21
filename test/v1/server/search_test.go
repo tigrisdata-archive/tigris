@@ -54,11 +54,6 @@ var testSearchIndexSchema = Map{
 				"description": "simple double field",
 				"type":        "number",
 			},
-			"bytes_value": Map{
-				"description": "simple bytes field",
-				"type":        "string",
-				"format":      "byte",
-			},
 			"uuid_value": Map{
 				"description": "uuid field",
 				"type":        "string",
@@ -90,6 +85,21 @@ var testSearchIndexSchema = Map{
 						"type":  "integer",
 						"sort":  true,
 						"facet": true,
+					},
+				},
+			},
+			"array_obj_value": Map{
+				"description": "array field",
+				"type":        "array",
+				"items": Map{
+					"type": "object",
+					"properties": Map{
+						"integer_value": Map{
+							"type": "integer",
+						},
+						"string_value": Map{
+							"type": "string",
+						},
 					},
 				},
 			},
@@ -137,6 +147,142 @@ func TestIndex_Management(t *testing.T) {
 
 		resp := createSearchIndex(t, project, testIndex, nil)
 		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "schema is a required during index creation")
+	})
+	t.Run("status_400_unsupported_sort_obj_level", func(t *testing.T) {
+		deleteSearchIndex(t, project, testIndex)
+
+		schema := Map{
+			"schema": Map{
+				"title": testIndex,
+				"properties": Map{
+					"obj": Map{"type": "object", "sort": true},
+				},
+			},
+		}
+
+		resp := createSearchIndex(t, project, testIndex, schema)
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot have sort or facet attribute on an object 'obj'")
+	})
+	t.Run("status_400_unsupported_facet_obj_level", func(t *testing.T) {
+		deleteSearchIndex(t, project, testIndex)
+
+		schema := Map{
+			"schema": Map{
+				"title": testIndex,
+				"properties": Map{
+					"obj": Map{"type": "object", "facet": true},
+				},
+			},
+		}
+
+		resp := createSearchIndex(t, project, testIndex, schema)
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot have sort or facet attribute on an object 'obj'")
+	})
+	t.Run("status_400_unsupported_sort_arr", func(t *testing.T) {
+		deleteSearchIndex(t, project, testIndex)
+
+		schema := Map{
+			"schema": Map{
+				"title": testIndex,
+				"properties": Map{
+					"arr": Map{"type": "array", "items": Map{"type": "string"}, "sort": true},
+				},
+			},
+		}
+
+		resp := createSearchIndex(t, project, testIndex, schema)
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot enable sorting on field 'arr' of type 'array'")
+	})
+	t.Run("status_400_unsupported_facet_object_arr", func(t *testing.T) {
+		deleteSearchIndex(t, project, testIndex)
+
+		schema := Map{
+			"schema": Map{
+				"title": testIndex,
+				"properties": Map{
+					"arr": Map{"type": "array", "items": Map{"type": "object", "properties": Map{"name": Map{"type": "string", "facet": true}}}},
+				},
+			},
+		}
+
+		resp := createSearchIndex(t, project, testIndex, schema)
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot enable index or search on an array of objects 'name'")
+	})
+	t.Run("status_200_sort_facet_index", func(t *testing.T) {
+		deleteSearchIndex(t, project, testIndex)
+
+		schema := Map{
+			"schema": Map{
+				"title": testIndex,
+				"properties": Map{
+					"addr":    Map{"type": "string"},
+					"name":    Map{"type": "string", "sort": true, "facet": true},
+					"numeric": Map{"type": "integer", "sort": true, "facet": true},
+					"number":  Map{"type": "number", "sort": true, "facet": true},
+					"arr":     Map{"type": "array", "items": Map{"type": "string"}, "facet": true},
+					"arr_num": Map{"type": "array", "items": Map{"type": "number"}, "facet": true},
+					"record":  Map{"type": "object", "properties": Map{"record_name": Map{"type": "string", "sort": true, "facet": true}, "record_arr": Map{"type": "array", "items": Map{"type": "string"}, "facet": true}, "record_obj": Map{"type": "object", "properties": Map{"name": Map{"type": "string", "sort": true, "facet": true}}}}},
+				},
+			},
+		}
+
+		createSearchIndex(t, project, testIndex, schema).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status", "created")
+	})
+	t.Run("status_200_sort_facet_nested_obj", func(t *testing.T) {
+		deleteSearchIndex(t, project, testIndex)
+
+		schema := Map{
+			"schema": Map{
+				"title": testIndex,
+				"properties": Map{
+					"obj_1level":     Map{"type": "object", "properties": Map{"name": Map{"type": "string", "sort": true}}},
+					"obj_2level":     Map{"type": "object", "properties": Map{"level2": Map{"type": "object", "properties": Map{"name": Map{"type": "string", "sort": true, "facet": true}}}}},
+					"obj_2level_arr": Map{"type": "object", "properties": Map{"level2": Map{"type": "object", "properties": Map{"arr": Map{"type": "array", "items": Map{"type": "string"}, "facet": true}}}}},
+				},
+			},
+		}
+
+		createSearchIndex(t, project, testIndex, schema).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status", "created")
+	})
+	t.Run("status_200_facet_nested_obj", func(t *testing.T) {
+		deleteSearchIndex(t, project, testIndex)
+
+		schema := Map{
+			"schema": Map{
+				"title": testIndex,
+				"properties": Map{
+					"arr": Map{"type": "object", "properties": Map{"name": Map{"type": "string", "facet": true}}},
+				},
+			},
+		}
+
+		createSearchIndex(t, project, testIndex, schema).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status", "created")
+	})
+	t.Run("status_200_facet_arr", func(t *testing.T) {
+		deleteSearchIndex(t, project, testIndex)
+
+		schema := Map{
+			"schema": Map{
+				"title": testIndex,
+				"properties": Map{
+					"arr": Map{"type": "array", "items": Map{"type": "string"}, "facet": true},
+				},
+			},
+		}
+
+		createSearchIndex(t, project, testIndex, schema).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status", "created")
 	})
 	t.Run("status_success", func(t *testing.T) {
 		deleteSearchIndex(t, project, testIndex)
@@ -193,27 +339,6 @@ func TestIndex_Management(t *testing.T) {
 	})
 }
 
-/*
-*
-
-	"array_obj_value": Map{
-		"description": "array field",
-		"type":        "array",
-		"items": Map{
-			"type": "object",
-			"properties": Map{
-				"integer_value": Map{
-					"type": "integer",
-				},
-				"string_value": Map{
-					"type": "string",
-				},
-			},
-		},
-	},
-
-Array of objects need fixing
-*/
 func TestCreate_ById(t *testing.T) {
 	project, index := setupTestsProjectAndSearchIndex(t)
 	defer cleanupTests(t, project)
@@ -224,7 +349,6 @@ func TestCreate_ById(t *testing.T) {
 			"string_value":       "simple_insert",
 			"bool_value":         true,
 			"double_value":       10.01,
-			"bytes_value":        []byte(`"simple_insert"`),
 			"array_simple_value": []string{"a", "b"},
 			"array_obj_value":    []any{map[string]any{"integer_value": 10}},
 			"object_value":       map[string]any{"string_value": "a"},
@@ -240,13 +364,19 @@ func TestCreate_ById(t *testing.T) {
 			Object().
 			ValueEqual("id", "1")
 
-		docs := getDocuments(t, project, index, "1")
-		encResp, err := util.MapToJSON(docs[0]["data"].(map[string]any))
-		require.NoError(t, err)
+		for _, source := range []bool{false, true} {
+			docs := getDocuments(t, project, index, source, "1")
+			encResp, err := util.MapToJSON(docs[0]["data"].(map[string]any))
+			require.NoError(t, err)
 
-		encInp, err := util.MapToJSON(doc)
-		require.NoError(t, err)
-		require.JSONEq(t, string(encInp), string(encResp))
+			encInp, err := util.MapToJSON(doc)
+			require.NoError(t, err)
+			require.JSONEq(t, string(encInp), string(encResp))
+		}
+
+		res := getSearchResults(t, project, index, Map{"q": "a", "search_fields": []string{"object_value.string_value"}}, false)
+		require.Equal(t, 1, len(res.Result.Hits))
+		compareDocs(t, doc, res.Result.Hits[0]["data"])
 	})
 }
 
@@ -283,15 +413,17 @@ func TestCreate(t *testing.T) {
 			},
 		)
 
-	output := getDocuments(t, project, index, "1", "2")
-	require.Equal(t, 2, len(output))
-	for i, out := range output {
-		encResp, err := util.MapToJSON(out["data"].(map[string]any))
-		require.NoError(t, err)
+	for _, source := range []bool{false, true} {
+		output := getDocuments(t, project, index, source, "1", "2")
+		require.Equal(t, 2, len(output))
+		for i, out := range output {
+			encResp, err := util.MapToJSON(out["data"].(map[string]any))
+			require.NoError(t, err)
 
-		encInp, err := util.MapToJSON(docs[i])
-		require.NoError(t, err)
-		require.JSONEq(t, string(encInp), string(encResp))
+			encInp, err := util.MapToJSON(docs[i])
+			require.NoError(t, err)
+			require.JSONEq(t, string(encInp), string(encResp))
+		}
 	}
 
 	docsNext := []Doc{
@@ -323,13 +455,15 @@ func TestCreate(t *testing.T) {
 			},
 		)
 
-	output = getDocuments(t, project, index, "3")
-	encResp, err := util.MapToJSON(output[0]["data"].(map[string]any))
-	require.NoError(t, err)
+	for _, source := range []bool{false, true} {
+		output := getDocuments(t, project, index, source, "3")
+		encResp, err := util.MapToJSON(output[0]["data"].(map[string]any))
+		require.NoError(t, err)
 
-	encInp, err := util.MapToJSON(docsNext[1])
-	require.NoError(t, err)
-	require.JSONEq(t, string(encInp), string(encResp))
+		encInp, err := util.MapToJSON(docsNext[1])
+		require.NoError(t, err)
+		require.JSONEq(t, string(encInp), string(encResp))
+	}
 
 	// Invalid id type. Expected string.
 	docs[0]["id"] = 4
@@ -375,15 +509,17 @@ func TestCreateOrReplace(t *testing.T) {
 			},
 		)
 
-	output := getDocuments(t, project, index, "1", "2")
-	require.Equal(t, 2, len(output))
-	for i, out := range output {
-		encResp, err := util.MapToJSON(out["data"].(map[string]any))
-		require.NoError(t, err)
+	for _, source := range []bool{false, true} {
+		output := getDocuments(t, project, index, source, "1", "2")
+		require.Equal(t, 2, len(output))
+		for i, out := range output {
+			encResp, err := util.MapToJSON(out["data"].(map[string]any))
+			require.NoError(t, err)
 
-		encInp, err := util.MapToJSON(docs[i])
-		require.NoError(t, err)
-		require.JSONEq(t, string(encInp), string(encResp))
+			encInp, err := util.MapToJSON(docs[i])
+			require.NoError(t, err)
+			require.JSONEq(t, string(encInp), string(encResp))
+		}
 	}
 
 	docsNext := []Doc{
@@ -415,15 +551,17 @@ func TestCreateOrReplace(t *testing.T) {
 			},
 		)
 
-	output = getDocuments(t, project, index, "1", "3")
-	require.Equal(t, 2, len(output))
-	for i, out := range output {
-		encResp, err := util.MapToJSON(out["data"].(map[string]any))
-		require.NoError(t, err)
+	for _, source := range []bool{false, true} {
+		output := getDocuments(t, project, index, source, "1", "3")
+		require.Equal(t, 2, len(output))
+		for i, out := range output {
+			encResp, err := util.MapToJSON(out["data"].(map[string]any))
+			require.NoError(t, err)
 
-		encInp, err := util.MapToJSON(docsNext[i])
-		require.NoError(t, err)
-		require.JSONEq(t, string(encInp), string(encResp))
+			encInp, err := util.MapToJSON(docsNext[i])
+			require.NoError(t, err)
+			require.JSONEq(t, string(encInp), string(encResp))
+		}
 	}
 }
 
@@ -496,20 +634,22 @@ func TestUpdate(t *testing.T) {
 			},
 		)
 
-	output := getDocuments(t, project, index, "1", "2", "3")
-	require.Equal(t, 3, len(output))
-	for i, out := range output {
-		if i == 2 {
-			// last is nil
-			require.Nil(t, out)
-			continue
-		}
-		encResp, err := util.MapToJSON(out["data"].(map[string]any))
-		require.NoError(t, err)
+	for _, source := range []bool{false, true} {
+		output := getDocuments(t, project, index, source, "1", "2", "3")
+		require.Equal(t, 3, len(output))
+		for i, out := range output {
+			if i == 2 {
+				// last is nil
+				require.Nil(t, out)
+				continue
+			}
+			encResp, err := util.MapToJSON(out["data"].(map[string]any))
+			require.NoError(t, err)
 
-		encInp, err := util.MapToJSON(docsUpdated[i])
-		require.NoError(t, err)
-		require.JSONEq(t, string(encInp), string(encResp))
+			encInp, err := util.MapToJSON(docsUpdated[i])
+			require.NoError(t, err)
+			require.JSONEq(t, string(encInp), string(encResp))
+		}
 	}
 }
 
@@ -567,21 +707,23 @@ func TestDelete(t *testing.T) {
 			},
 		)
 
-	output := getDocuments(t, project, index, "1", "2", "3")
-	require.Equal(t, 3, len(output))
-	for i, out := range output {
-		if i == 0 || i == 2 {
-			// 1 and 3 are deleted
-			require.Nil(t, out)
-			continue
+	for _, source := range []bool{false, true} {
+		output := getDocuments(t, project, index, source, "1", "2", "3")
+		require.Equal(t, 3, len(output))
+		for i, out := range output {
+			if i == 0 || i == 2 {
+				// 1 and 3 are deleted
+				require.Nil(t, out)
+				continue
+			}
+
+			encResp, err := util.MapToJSON(out["data"].(map[string]any))
+			require.NoError(t, err)
+
+			encInp, err := util.MapToJSON(docs[i])
+			require.NoError(t, err)
+			require.JSONEq(t, string(encInp), string(encResp))
 		}
-
-		encResp, err := util.MapToJSON(out["data"].(map[string]any))
-		require.NoError(t, err)
-
-		encInp, err := util.MapToJSON(docs[i])
-		require.NoError(t, err)
-		require.JSONEq(t, string(encInp), string(encResp))
 	}
 }
 
@@ -642,12 +784,12 @@ func TestSearch(t *testing.T) {
 			},
 		)
 
-	res := getSearchResults(t, project, index, Map{"q": "data", "sort": []Doc{{"created_at": "$asc"}}})
+	res := getSearchResults(t, project, index, Map{"q": "data", "sort": []Doc{{"created_at": "$asc"}}}, false)
 	require.Equal(t, 2, len(res.Result.Hits))
 	compareDocs(t, docs[1], res.Result.Hits[0]["data"])
 	compareDocs(t, docs[0], res.Result.Hits[1]["data"])
 
-	res = getSearchResults(t, project, index, Map{"q": "*", "group_by": Doc{"fields": []string{"object_value.string_value"}}, "sort": []Doc{{"created_at": "$asc"}}})
+	res = getSearchResults(t, project, index, Map{"q": "*", "group_by": Doc{"fields": []string{"object_value.string_value"}}, "sort": []Doc{{"created_at": "$asc"}}}, false)
 	require.Equal(t, 2, len(res.Result.Groups))
 	require.Equal(t, []interface{}{"san francisco"}, res.Result.Groups[0]["group_keys"])
 	require.Equal(t, []interface{}{"san diego"}, res.Result.Groups[1]["group_keys"])
@@ -656,6 +798,338 @@ func TestSearch(t *testing.T) {
 	compareDocs(t, docs[0], res.Result.Groups[0]["hits"].([]any)[1].(map[string]any)["data"].(map[string]any))
 
 	compareDocs(t, docs[1], res.Result.Groups[1]["hits"].([]any)[0].(map[string]any)["data"].(map[string]any))
+}
+
+func TestComplexObjects(t *testing.T) {
+	project := setupTestsOnlyProject(t)
+	defer cleanupTests(t, project)
+
+	indexName := "t1"
+	schema := []byte(`{
+  "schema": {
+    "title": "t1",
+    "properties": {
+      "a": {
+        "type": "integer"
+      },
+      "b": {
+        "type": "string"
+      },
+      "c": {
+        "type": "object",
+        "properties": {
+          "a": {
+            "type": "integer"
+          },
+          "b": {
+            "type": "string"
+          },
+          "c": {
+            "type": "object",
+            "properties": {
+              "a": {
+                "type": "string"
+              },
+              "b": {
+                "searchIndex": false,
+                "type": "object",
+                "properties": {}
+              },
+              "c": {
+                "type": "array",
+                "searchIndex": false,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "a": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "d": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "d": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "e": {
+            "searchIndex": false,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "a": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "d": {
+        "type": "object",
+        "properties": {}
+      },
+      "e": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      "f": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "a": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "g": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}`)
+	var schemaObj map[string]any
+	require.NoError(t, jsoniter.Unmarshal(schema, &schemaObj))
+	createSearchIndex(t, project, indexName, schemaObj).Status(http.StatusOK)
+
+	docA := Doc{
+		"id": "1",
+		"a":  1,
+		"b":  "first document",
+		"c": Map{
+			"a": 10,
+			"b": "nested object under c",
+			"c": Map{
+				"a": "foo",
+				"b": Map{"name": "this is free flow object but not indexed"},
+				"c": []Map{Map{"a": "car"}, Map{"a": "bike"}},
+				"d": []string{"PARIS", "LONDON", "ENGLAND"},
+			},
+			"d": []string{"SANTA CLARA", "SAN JOSE"},
+			"e": []Map{{"a": "football"}, {"a": "basketball"}},
+		},
+		"d": Map{"agent": "free flow object top level"},
+		"e": []Map{{"random": "array of free flow object"}},
+		"f": []Map{{"a": "array of object with a field"}},
+		"g": []string{"NEW YORK", "MIAMI"},
+	}
+
+	expect(t).PUT(getIndexDocumentURL(project, indexName, "")).
+		WithJSON(Map{
+			"documents": []Doc{docA},
+		}).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("status",
+			[]map[string]any{
+				{"id": "1", "error": nil},
+			},
+		)
+
+	cases := []struct {
+		query    Map
+		expError string
+	}{
+		{query: Map{"q": "nested object under c", "search_fields": []string{"c.b"}}, expError: ""},
+		{query: Map{"q": "foo", "search_fields": []string{"c.c.a"}}, expError: ""},
+		{query: Map{"q": "foo", "search_fields": []string{"c.c.a"}}, expError: ""},
+		{query: Map{"q": "foo", "search_fields": []string{"c.c.b"}}, expError: "`c.c.b` is not a searchable field. Only indexed fields can be queried"},
+		{query: Map{"q": "paris", "search_fields": []string{"c.c.d"}}, expError: ""},
+		{query: Map{"q": "santa", "search_fields": []string{"c.d"}}, expError: ""},
+		{query: Map{"q": "santa", "search_fields": []string{"c.e"}}, expError: "`c.e` is not a searchable field. Only indexed fields can be queried"},
+		{query: Map{"q": "free flow object top level", "search_fields": []string{"d"}}, expError: ""},
+		{query: Map{"q": "array of free flow object", "search_fields": []string{"e"}}, expError: ""},
+		{query: Map{"q": "array of object with a field", "search_fields": []string{"f"}}, expError: ""},
+		{query: Map{"q": "NEW YORK", "search_fields": []string{"g"}}, expError: ""},
+	}
+	for _, c := range cases {
+		if len(c.expError) > 0 {
+			expect(t).POST(fmt.Sprintf("/v1/projects/%s/search/indexes/%s/documents/search", project, indexName)).
+				WithJSON(c.expError).
+				Expect().
+				Status(http.StatusBadRequest)
+
+			continue
+		}
+		res := getSearchResults(t, project, indexName, c.query, false)
+		require.Equal(t, 1, len(res.Result.Hits))
+	}
+}
+
+func TestChunking(t *testing.T) {
+	project := setupTestsOnlyProject(t)
+	defer cleanupTests(t, project)
+
+	indexName := "fake_index"
+	var schemaObj map[string]any
+	require.NoError(t, jsoniter.Unmarshal(FakeDocumentSchema, &schemaObj))
+
+	t.Run("create_read_search", func(t *testing.T) {
+		createSearchIndex(t, project, indexName, schemaObj).Status(http.StatusOK)
+		defer deleteSearchIndex(t, project, indexName)
+
+		fakes, serialized := GenerateFakes(t, []string{"1", "2", "3"}, []string{"first_create", "second_create", "third_create"})
+		writeDocuments(t, project, indexName, fakes, "create")
+
+		for _, source := range []bool{false, true} {
+			output := getDocuments(t, project, indexName, source, "1", "2", "3")
+			require.Equal(t, 3, len(output))
+			for i, out := range output {
+				encResp, err := util.MapToJSON(out["data"].(map[string]any))
+				require.NoError(t, err)
+				require.JSONEq(t, string(serialized[i]), string(encResp))
+			}
+		}
+
+		res := getSearchResults(t, project, indexName, Map{"q": "second_create", "search_fields": []string{"placeholder"}}, false)
+		require.Equal(t, 1, len(res.Result.Hits))
+		jsonA, err := jsoniter.Marshal(res.Result.Hits[0]["data"])
+		require.NoError(t, err)
+		require.JSONEq(t, string(serialized[1]), string(jsonA))
+	})
+	t.Run("replace_read_search", func(t *testing.T) {
+		createSearchIndex(t, project, indexName, schemaObj).Status(http.StatusOK)
+		defer deleteSearchIndex(t, project, indexName)
+
+		fakes, serialized := GenerateFakes(t, []string{"1", "2", "3"}, []string{"first_create", "second_create", "third_create"})
+		writeDocuments(t, project, indexName, fakes, "create")
+
+		replaceFakes, replaceSerialized := GenerateFakes(t, []string{"1", "random", "3"}, []string{"first_replaced", "random_replaced", "third_replaced"})
+		writeDocuments(t, project, indexName, replaceFakes, "replace")
+
+		for _, source := range []bool{false, true} {
+			output := getDocuments(t, project, indexName, source, "1", "2", "3")
+			require.Equal(t, 3, len(output))
+			for i, out := range output {
+				encResp, err := util.MapToJSON(out["data"].(map[string]any))
+				require.NoError(t, err)
+
+				if i == 1 {
+					require.JSONEq(t, string(serialized[i]), string(encResp))
+				} else {
+					require.JSONEq(t, string(replaceSerialized[i]), string(encResp))
+				}
+			}
+		}
+
+		res := getSearchResults(t, project, indexName, Map{"q": "second_create", "search_fields": []string{"placeholder"}}, false)
+		require.Equal(t, 1, len(res.Result.Hits))
+		jsonA, err := jsoniter.Marshal(res.Result.Hits[0]["data"])
+		require.NoError(t, err)
+		require.JSONEq(t, string(serialized[1]), string(jsonA))
+
+		res = getSearchResults(t, project, indexName, Map{"q": "third_replaced", "search_fields": []string{"placeholder"}}, false)
+		require.Equal(t, 1, len(res.Result.Hits))
+		jsonA, err = jsoniter.Marshal(res.Result.Hits[0]["data"])
+		require.NoError(t, err)
+		require.JSONEq(t, string(replaceSerialized[2]), string(jsonA))
+	})
+	t.Run("update_read_search", func(t *testing.T) {
+		createSearchIndex(t, project, indexName, schemaObj).Status(http.StatusOK)
+		defer deleteSearchIndex(t, project, indexName)
+
+		fakes, _ := GenerateFakes(t, []string{"1", "2", "3"}, []string{"first_create", "second_create", "third_create"})
+		writeDocuments(t, project, indexName, fakes, "create")
+
+		updatedFakes, updatedSerialized := GenerateFakes(t, []string{"1"}, []string{"updated_first_document"})
+		writeDocuments(t, project, indexName, updatedFakes, "update")
+
+		for _, source := range []bool{false, true} {
+			output := getDocuments(t, project, indexName, source, "1")
+			require.Equal(t, 1, len(output))
+			encResp, err := util.MapToJSON(output[0]["data"].(map[string]any))
+			require.NoError(t, err)
+			require.JSONEq(t, string(updatedSerialized[0]), string(encResp))
+		}
+
+		res := getSearchResults(t, project, indexName, Map{"q": "updated_first_document", "search_fields": []string{"placeholder"}}, false)
+		require.Equal(t, 1, len(res.Result.Hits))
+		jsonA, err := jsoniter.Marshal(res.Result.Hits[0]["data"])
+		require.NoError(t, err)
+		require.JSONEq(t, string(updatedSerialized[0]), string(jsonA))
+	})
+	t.Run("delete", func(t *testing.T) {
+		createSearchIndex(t, project, indexName, schemaObj).Status(http.StatusOK)
+		defer deleteSearchIndex(t, project, indexName)
+
+		fakes, serialized := GenerateFakes(t, []string{"1", "2", "3"}, []string{"first_create", "second_create", "third_create"})
+		writeDocuments(t, project, indexName, fakes, "create")
+
+		expect(t).DELETE(getIndexDocumentURL(project, indexName, "")).
+			WithJSON(Map{
+				"ids": []string{"1", "3"},
+			}).
+			Expect().
+			Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status",
+				[]map[string]any{
+					{"id": "1", "error": nil},
+					{"id": "3", "error": nil},
+				},
+			)
+
+		for _, source := range []bool{false, true} {
+			output := getDocuments(t, project, indexName, source, "1", "2", "3")
+			require.Equal(t, 3, len(output))
+			require.Nil(t, output[0])
+			require.Nil(t, output[2])
+
+			encResp, err := util.MapToJSON(output[1]["data"].(map[string]any))
+			require.NoError(t, err)
+			require.JSONEq(t, string(serialized[1]), string(encResp))
+		}
+	})
+}
+
+func writeDocuments(t *testing.T, project string, indexName string, fakes []FakeDocument, opType string) {
+	var expResponse []map[string]any
+	for _, f := range fakes {
+		expResponse = append(expResponse, map[string]any{
+			"id":    f.Id,
+			"error": nil,
+		})
+	}
+
+	var req *httpexpect.Request
+	if opType == "create" {
+		req = expect(t).POST(getIndexDocumentURL(project, indexName, ""))
+	} else if opType == "replace" {
+		req = expect(t).PUT(getIndexDocumentURL(project, indexName, ""))
+	} else {
+		req = expect(t).PATCH(getIndexDocumentURL(project, indexName, ""))
+	}
+
+	req.
+		WithJSON(Map{
+			"documents": fakes,
+		}).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("status", expResponse)
 }
 
 func compareDocs(t *testing.T, docA Doc, docB Doc) {
@@ -675,14 +1149,18 @@ type res struct {
 	} `json:"result"`
 }
 
-func getSearchResults(t *testing.T, project string, index string, query Map) *res {
-	req := expect(t).POST(fmt.Sprintf("/v1/projects/%s/search/indexes/%s/documents/search", project, index)).
+func getSearchResults(t *testing.T, project string, index string, query Map, isCollectionSearch bool) *res {
+	url := fmt.Sprintf("/v1/projects/%s/search/indexes/%s/documents/search", project, index)
+	if isCollectionSearch {
+		url = fmt.Sprintf("/v1/projects/%s/database/collections/%s/documents/search", project, index)
+	}
+
+	var req = expect(t).POST(url).
 		WithJSON(query).
 		Expect().
 		Status(http.StatusOK).
 		Body().
 		Raw()
-
 	dec := jsoniter.NewDecoder(bytes.NewReader([]byte(req)))
 
 	var res *res
@@ -690,10 +1168,13 @@ func getSearchResults(t *testing.T, project string, index string, query Map) *re
 	return res
 }
 
-func getDocuments(t *testing.T, project string, index string, ids ...string) []Doc {
+func getDocuments(t *testing.T, project string, index string, backendStorage bool, ids ...string) []Doc {
 	req := expect(t).GET(fmt.Sprintf("/v1/projects/%s/search/indexes/%s/documents", project, index))
 	for _, id := range ids {
 		req.WithQuery("ids", id)
+	}
+	if backendStorage {
+		req.WithHeader("Tigris-Search-Read-From-Storage", "true")
 	}
 
 	str := req.

@@ -25,7 +25,7 @@ import (
 	"github.com/tigrisdata/tigris/store/kv"
 )
 
-func testClearDictionary(ctx context.Context, k *Dictionary, kvStore kv.KeyValueStore) {
+func testClearDictionary(ctx context.Context, k *Dictionary, kvStore kv.TxStore) {
 	_ = kvStore.DropTable(ctx, k.EncodingSubspaceName())
 	_ = kvStore.DropTable(ctx, k.ReservedSubspaceName())
 	_ = kvStore.DropTable(ctx, k.NamespaceSubspaceName())

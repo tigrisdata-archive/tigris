@@ -61,23 +61,24 @@ type Gotrue struct {
 }
 
 type AuthConfig struct {
-	Enabled                   bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	Audience                  string        `mapstructure:"audience" yaml:"audience" json:"audience"`
-	Issuers                   []string      `mapstructure:"issuer_urls" yaml:"issuer_urls" json:"issuer_urls"`
-	JWKSCacheTimeout          time.Duration `mapstructure:"jwks_cache_timeout" yaml:"jwks_cache_timeout" json:"jwks_cache_timeout"`
-	LogOnly                   bool          `mapstructure:"log_only" yaml:"log_only" json:"log_only"`
-	EnableNamespaceIsolation  bool          `mapstructure:"enable_namespace_isolation" yaml:"enable_namespace_isolation" json:"enable_namespace_isolation"`
-	AdminNamespaces           []string      `mapstructure:"admin_namespaces" yaml:"admin_namespaces" json:"admin_namespaces"`
-	OAuthProvider             string        `mapstructure:"oauth_provider" yaml:"oauth_provider" json:"oauth_provider"`
-	ClientId                  string        `mapstructure:"client_id" yaml:"client_id" json:"client_id"`
-	ExternalTokenURL          string        `mapstructure:"external_token_url" yaml:"external_token_url" json:"external_token_url"`
-	EnableOauth               bool          `mapstructure:"enable_oauth" yaml:"enable_oauth" json:"enable_oauth"`
-	TokenCacheSize            int           `mapstructure:"token_cache_size" yaml:"token_cache_size" json:"token_cache_size"`
-	ExternalDomain            string        `mapstructure:"external_domain" yaml:"external_domain" json:"external_domain"`
-	ManagementClientId        string        `mapstructure:"management_client_id" yaml:"management_client_id" json:"management_client_id"`
-	ManagementClientSecret    string        `mapstructure:"management_client_secret" yaml:"management_client_secret" json:"management_client_secret"`
-	TokenClockSkewDurationSec int           `mapstructure:"token_clock_skew_duration_sec" yaml:"token_clock_skew_duration_sec" json:"token_clock_skew_duration_sec"`
-	Gotrue                    Gotrue        `mapstructure:"gotrue" yaml:"gotrue" json:"gotrue"`
+	Enabled                    bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Audience                   string        `mapstructure:"audience" yaml:"audience" json:"audience"`
+	Issuers                    []string      `mapstructure:"issuer_urls" yaml:"issuer_urls" json:"issuer_urls"`
+	JWKSCacheTimeout           time.Duration `mapstructure:"jwks_cache_timeout" yaml:"jwks_cache_timeout" json:"jwks_cache_timeout"`
+	LogOnly                    bool          `mapstructure:"log_only" yaml:"log_only" json:"log_only"`
+	EnableNamespaceIsolation   bool          `mapstructure:"enable_namespace_isolation" yaml:"enable_namespace_isolation" json:"enable_namespace_isolation"`
+	AdminNamespaces            []string      `mapstructure:"admin_namespaces" yaml:"admin_namespaces" json:"admin_namespaces"`
+	OAuthProvider              string        `mapstructure:"oauth_provider" yaml:"oauth_provider" json:"oauth_provider"`
+	ClientId                   string        `mapstructure:"client_id" yaml:"client_id" json:"client_id"`
+	ExternalTokenURL           string        `mapstructure:"external_token_url" yaml:"external_token_url" json:"external_token_url"`
+	EnableOauth                bool          `mapstructure:"enable_oauth" yaml:"enable_oauth" json:"enable_oauth"`
+	TokenValidationCacheSize   int           `mapstructure:"token_cache_size" yaml:"token_cache_size" json:"token_cache_size"`
+	TokenValidationCacheTTLSec int           `mapstructure:"token_cache_ttl_sec" yaml:"token_cache_ttl_sec" json:"token_cache_ttl_sec"`
+	ExternalDomain             string        `mapstructure:"external_domain" yaml:"external_domain" json:"external_domain"`
+	ManagementClientId         string        `mapstructure:"management_client_id" yaml:"management_client_id" json:"management_client_id"`
+	ManagementClientSecret     string        `mapstructure:"management_client_secret" yaml:"management_client_secret" json:"management_client_secret"`
+	TokenClockSkewDurationSec  int           `mapstructure:"token_clock_skew_duration_sec" yaml:"token_clock_skew_duration_sec" json:"token_clock_skew_duration_sec"`
+	Gotrue                     Gotrue        `mapstructure:"gotrue" yaml:"gotrue" json:"gotrue"`
 }
 
 type CdcConfig struct {
@@ -199,7 +200,7 @@ type ObservabilityConfig struct {
 }
 
 var (
-	WriteUnitSize = 1024
+	WriteUnitSize = 4096
 	ReadUnitSize  = 4096
 )
 
@@ -216,12 +217,14 @@ var DefaultConfig = Config{
 		FDBHardDrop:  true,
 	},
 	Auth: AuthConfig{
-		Enabled:          false,
-		Issuers:          []string{"https://tigrisdata-dev.us.auth0.com/"},
-		Audience:         "https://tigris-api",
-		JWKSCacheTimeout: 5 * time.Minute,
-		LogOnly:          true,
-		AdminNamespaces:  []string{"tigris-admin"},
+		Enabled:                    false,
+		Issuers:                    []string{"https://tigrisdata-dev.us.auth0.com/"},
+		Audience:                   "https://tigris-api",
+		JWKSCacheTimeout:           5 * time.Minute,
+		TokenValidationCacheSize:   1000,
+		TokenValidationCacheTTLSec: 7200, // 2hr
+		LogOnly:                    true,
+		AdminNamespaces:            []string{"tigris-admin"},
 		Gotrue: Gotrue{
 			ClientIdLength:     30,
 			ClientSecretLength: 50,
@@ -234,10 +237,12 @@ var DefaultConfig = Config{
 		StreamBuffer:   200,
 	},
 	Search: SearchConfig{
-		Host:         "localhost",
-		Port:         8108,
-		ReadEnabled:  true,
-		WriteEnabled: true,
+		Host:           "localhost",
+		Port:           8108,
+		ReadEnabled:    true,
+		WriteEnabled:   true,
+		StorageEnabled: true,
+		Chunking:       true,
 	},
 	SecondaryIndex: SecondaryIndexConfig{
 		ReadEnabled:   false,
@@ -409,6 +414,10 @@ type SearchConfig struct {
 	AuthKey      string `mapstructure:"auth_key" json:"auth_key" yaml:"auth_key"`
 	ReadEnabled  bool   `mapstructure:"read_enabled" yaml:"read_enabled" json:"read_enabled"`
 	WriteEnabled bool   `mapstructure:"write_enabled" yaml:"write_enabled" json:"write_enabled"`
+	// StorageEnabled only applies to standalone search indexes. This is to enable persisting search indexes to storage.
+	StorageEnabled bool `mapstructure:"storage_enabled" yaml:"storage_enabled" json:"storage_enabled"`
+	// Chunking allows us to persist bigger search indexes payload in storage.
+	Chunking bool `mapstructure:"chunking" yaml:"chunking" json:"chunking"`
 }
 
 type SecondaryIndexConfig struct {

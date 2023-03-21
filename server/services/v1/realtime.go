@@ -48,7 +48,7 @@ type realtimeService struct {
 	rtmRunner *realtime.RTMRunnerFactory
 }
 
-func newRealtimeService(_ kv.KeyValueStore, _ search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) *realtimeService {
+func newRealtimeService(_ kv.TxStore, _ search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) *realtimeService {
 	cacheS := cache.NewCache(&config.DefaultConfig.Cache)
 	encoder := metadata.NewCacheEncoder()
 	heartbeatF := realtime.NewHeartbeatFactory(cacheS, encoder)

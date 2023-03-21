@@ -18,10 +18,12 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/auth0/go-jwt-middleware/v2/validator"
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/bluele/gcache"
 	"github.com/stretchr/testify/require"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/util/log"
@@ -44,11 +46,7 @@ func TestAuth(t *testing.T) {
 		},
 		FoundationDB: config.FoundationDBConfig{},
 	}
-
-	cache, err := lru.New(5)
-	if err != nil {
-		panic("Failed to setup cache")
-	}
+	cache := gcache.New(10).Expiration(time.Duration(5) * time.Minute).Build()
 	t.Run("log_only mode: no token", func(t *testing.T) {
 		ctx, err := authFunction(context.TODO(), []*validator.Validator{{}}, &config.DefaultConfig, cache)
 		require.NotNil(t, ctx)
@@ -72,7 +70,7 @@ func TestAuth(t *testing.T) {
 		incomingCtx := metadata.NewIncomingContext(context.TODO(), metadata.Pairs("authorization", "bearer somebadtoken"))
 		_, err := authFunction(incomingCtx, []*validator.Validator{{}}, &enforcedAuthConfig, cache)
 		require.NotNil(t, err)
-		require.Equal(t, err, errors.Unauthenticated("Failed to validate access token"))
+		require.Equal(t, err, errors.Unauthenticated("Failed to validate access token, could not be validated"))
 	})
 
 	t.Run("enforcing mode: Bad token 2", func(t *testing.T) {
@@ -85,6 +83,22 @@ func TestAuth(t *testing.T) {
 	t.Run("isAdminNamespace", func(t *testing.T) {
 		require.False(t, isAdminNamespace("test-name", &enforcedAuthConfig))
 		require.True(t, isAdminNamespace("tigris-admin", &enforcedAuthConfig))
+	})
+
+	t.Run("bypassCache", func(t *testing.T) {
+		cache := gcache.New(2).Expiration(time.Duration(5) * time.Minute).Build()
+		_ = cache.Set("token1", "token-value-1")
+		ctx := context.Background()
+		ctx = metadata.NewIncomingContext(ctx, metadata.New(map[string]string{
+			api.HeaderBypassAuthCache: "true",
+		}))
+
+		cachedValue := getCachedToken(ctx, "token1", cache)
+		require.Nil(t, cachedValue)
+
+		ctx = context.Background()
+		cachedValue = getCachedToken(ctx, "token1", cache)
+		require.NotNil(t, cachedValue)
 	})
 }
 

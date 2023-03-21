@@ -162,27 +162,6 @@ func (d *fdbkv) Delete(ctx context.Context, table []byte, key Key) error {
 	return err
 }
 
-func (d *fdbkv) DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key) error {
-	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return nil, (&ftx{d: d, tx: &tr}).DeleteRange(ctx, table, lKey, rKey)
-	})
-	return err
-}
-
-func (d *fdbkv) Update(ctx context.Context, table []byte, key Key, apply func([]byte) ([]byte, error)) (int32, error) {
-	count, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return (&ftx{d: d, tx: &tr}).Update(ctx, table, key, apply)
-	})
-	return count.(int32), err
-}
-
-func (d *fdbkv) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) (int32, error) {
-	count, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return (&ftx{d: d, tx: &tr}).UpdateRange(ctx, table, lKey, rKey, apply)
-	})
-	return count.(int32), err
-}
-
 func (d *fdbkv) SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error {
 	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
 		return nil, (&ftx{d: d, tx: &tr}).SetVersionstampedValue(ctx, key, value)
@@ -348,74 +327,15 @@ func (t *ftx) DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key)
 	return nil
 }
 
-func (t *ftx) Update(ctx context.Context, table []byte, key Key, apply func([]byte) ([]byte, error)) (int32, error) {
-	listener := GetEventListener(ctx)
-	k, err := fdb.PrefixRange(getFDBKey(table, key))
-	if ulog.E(err) {
-		return -1, convertFDBToStoreErr(err)
-	}
-
-	r := t.tx.GetRange(k, fdb.RangeOptions{})
-	it := r.Iterator()
-
-	modifiedCount := int32(0)
-	for it.Advance() {
-		kv, err := it.Get()
-		if ulog.E(err) {
-			return -1, err
-		}
-		v, err := apply(kv.Value)
-		if ulog.E(err) {
-			return -1, err
-		}
-
-		t.tx.Set(kv.Key, v)
-		listener.OnSet(UpdateEvent, table, kv.Key, v)
-
-		modifiedCount++
-	}
-
-	log.Debug().Str("table", string(table)).Interface("Key", key).Msg("tx update")
-
-	return modifiedCount, nil
-}
-
-func (t *ftx) UpdateRange(ctx context.Context, table []byte, lKey Key, rKey Key, apply func([]byte) ([]byte, error)) (int32, error) {
-	listener := GetEventListener(ctx)
-	lk := getFDBKey(table, lKey)
-	rk := getFDBKey(table, rKey)
-
-	r := t.tx.GetRange(fdb.KeyRange{Begin: lk, End: rk}, fdb.RangeOptions{})
-
-	modifiedCount := int32(0)
-	it := r.Iterator()
-	for it.Advance() {
-		kv, err := it.Get()
-		if ulog.E(err) {
-			return -1, err
-		}
-		v, err := apply(kv.Value)
-		if ulog.E(err) {
-			return -1, err
-		}
-
-		t.tx.Set(kv.Key, v)
-		listener.OnSet(UpdateRangeEvent, table, kv.Key, v)
-
-		modifiedCount++
-	}
-
-	log.Debug().Str("table", string(table)).Interface("lKey", lKey).Interface("rKey", rKey).Msg("tx update range")
-
-	return modifiedCount, nil
-}
-
 func (t *ftx) Read(_ context.Context, table []byte, key Key) (baseIterator, error) {
 	k, err := fdb.PrefixRange(getFDBKey(table, key))
 	if ulog.E(err) {
 		return nil, err
 	}
 
+	// It is possible that caller may be chunking the payload. Therefore, the "iterator" returned by this API is only
+	// applicable for ascending order. Once we add support to do reverse reads then we should return a different iterator
+	// or some other signal to the caller.
 	r := t.tx.GetRange(k, fdb.RangeOptions{})
 
 	return &fdbIterator{it: r.Iterator(), subspace: subspace.FromBytes(table)}, nil

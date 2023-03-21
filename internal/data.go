@@ -28,6 +28,7 @@ import (
 var (
 	UserTableKeyPrefix      = []byte("data")
 	SecondaryTableKeyPrefix = []byte("idx")
+	SearchTableKeyPrefix    = []byte("sea")
 	PartitionKeyPrefix      = []byte("part")
 	CacheKeyPrefix          = "cache"
 )
@@ -52,6 +53,8 @@ const (
 	MsgpackEncoding UserDataEncType = 1
 	JsonEncoding    UserDataEncType = 2
 )
+
+var EmptyData = &TableData{}
 
 // CreateNewTimestamp is a method used to construct timestamp from unixNano. In search backend we store internal
 // timestamps as unixNano.
@@ -112,6 +115,21 @@ func NewTableDataWithVersion(data []byte, version int32) *TableData {
 	}
 }
 
+func (x *TableData) CloneWithAttributesOnly(newRawData []byte) *TableData {
+	return &TableData{
+		Ver:         x.Ver,
+		Encoding:    x.Encoding,
+		CreatedAt:   x.CreatedAt,
+		UpdatedAt:   x.UpdatedAt,
+		TotalChunks: x.TotalChunks,
+		RawData:     newRawData,
+	}
+}
+
+func (x *TableData) IsChunkedData() bool {
+	return x.TotalChunks != nil && *x.TotalChunks > 1
+}
+
 func (x *TableData) SetVersion(ver int32) {
 	x.Ver = ver
 }
@@ -147,6 +165,17 @@ func (x *TableData) TimestampsToJSON() ([]byte, error) {
 	return jsoniter.Marshal(data)
 }
 
+// ActualUserPayloadSize returns size of the user data. This is used by splitter to split the value if it is
+// greater than the maximum allowed by the underlying storage.
+func (x *TableData) ActualUserPayloadSize() int32 {
+	return int32(len(x.RawData))
+}
+
+func (x *TableData) SetTotalChunks(chunkSize int32) {
+	totalChunks := (x.ActualUserPayloadSize() + chunkSize - 1) / chunkSize
+	x.TotalChunks = &totalChunks
+}
+
 // Encode is used to encode data to the raw bytes which is used to store in storage as value. The first byte is storing
 // the type corresponding to this Data. This is important and used by the decoder later to decode back.
 func Encode(data *TableData) ([]byte, error) {
@@ -174,6 +203,7 @@ func Decode(b []byte) (*TableData, error) {
 	if len(b) == 0 {
 		return nil, errors.Internal("unable to decode table data is empty")
 	}
+
 	dataType := DataType(b[0])
 	return decodeInternal(dataType, b[1:])
 }

@@ -34,7 +34,7 @@ import (
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
-var kvStore kv.KeyValueStore
+var kvStore kv.TxStore
 
 func TestQuota(t *testing.T) {
 	tenants, ctx, cancel := metadata.NewTestTenantMgr(t, kvStore)
@@ -67,7 +67,7 @@ func TestQuota(t *testing.T) {
 		  "primary_key": ["K1", "K2"]
 	    }`)
 
-	factory, err := schema.Build("test_collection", jsSchema)
+	factory, err := schema.NewFactoryBuilder(true).Build("test_collection", jsSchema)
 	require.NoError(t, err)
 
 	err = tenant.Reload(ctx, tx, []byte("aaa"))
@@ -118,11 +118,14 @@ func TestQuota(t *testing.T) {
 	require.NoError(t, Allow(ctx, ns, 10, false))
 	require.NoError(t, Allow(ctx, ns, 20, false))
 
+	tx1, err := kvStore.BeginTx(ctx)
+	require.NoError(t, err)
 	docSize := 10 * 1024
 	for i := 0; i < 10; i++ {
-		err = kvStore.Insert(ctx, table, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+		err = tx1.Insert(ctx, table, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
 		require.NoError(t, err)
 	}
+	_ = tx1.Commit(ctx)
 
 	time.Sleep(100 * time.Millisecond)
 
@@ -159,7 +162,7 @@ func TestMain(m *testing.M) {
 		panic(fmt.Sprintf("failed to init FDB config: %v", err))
 	}
 
-	kvStore, err = kv.NewKeyValueStore(fdbCfg)
+	kvStore, err = kv.NewTxStore(fdbCfg)
 	if err != nil {
 		panic(fmt.Sprintf("failed to init FDB KV %v", err))
 	}

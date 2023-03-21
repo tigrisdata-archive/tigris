@@ -70,7 +70,7 @@ type DefaultCollection struct {
 	QueryableFields []*QueryableField
 	// CollectionType is the type of the collection. Only two types of collections are supported "messages" and "documents"
 	CollectionType CollectionType
-	// Track all the int64 paths in the collection. For example, if top level object has a int64 field then key would be
+	// Track all the int64 paths in the collection. For example, if top level object has an int64 field then key would be
 	// obj.fieldName so that caller can easily navigate to this field.
 	int64FieldsPath map[string]struct{}
 	// This is the existing fields in search
@@ -145,11 +145,11 @@ func NewDefaultCollection(id uint32, schVer int, factory *Factory, schemas Versi
 	validator.AdditionalProperties = false
 	disableAdditionalPropertiesAndAllowNullable(validator.Required, validator.Properties)
 
-	var fieldsInSearch []tsApi.Field
+	var prevVersionInSearch []tsApi.Field
 	if implicitSearchIndex != nil {
-		fieldsInSearch = implicitSearchIndex.fieldsInSearch
+		prevVersionInSearch = implicitSearchIndex.prevVersionInSearch
 	}
-	queryableFields := NewQueryableFieldsBuilder(false).BuildQueryableFields(factory.Fields, fieldsInSearch)
+	queryableFields := NewQueryableFieldsBuilder().BuildQueryableFields(factory.Fields, prevVersionInSearch)
 
 	schemaDeltas, err := buildSchemaDeltas(schemas)
 	if err != nil {

@@ -20,13 +20,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	"github.com/apple/foundationdb/bindings/go/src/fdb/subspace"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
+	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/lib/date"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/metadata"
@@ -103,11 +103,15 @@ func (i *SearchIndexer) OnPostCommit(ctx context.Context, tenant *metadata.Tenan
 			}
 
 			reader := bytes.NewReader(searchData)
-			if _, err = i.searchStore.IndexDocuments(ctx, searchIndex.StoreIndexName(), reader, search.IndexDocumentsOptions{
+			var resp []search.IndexResp
+			if resp, err = i.searchStore.IndexDocuments(ctx, searchIndex.StoreIndexName(), reader, search.IndexDocumentsOptions{
 				Action:    action,
 				BatchSize: 1,
 			}); err != nil {
 				return err
+			}
+			if len(resp) == 1 && !resp[0].Success {
+				return search.NewSearchError(resp[0].Code, search.ErrCodeUnhandled, resp[0].Error)
 			}
 		}
 	}
@@ -172,7 +176,14 @@ func PackSearchFields(ctx context.Context, data *internal.TableData, collection 
 		decData[schema.ReservedFields[schema.IdToSearchKey]] = value
 	}
 
-	decData = FlattenObjects(decData)
+	doNotFlatten := container.NewHashSet()
+	for _, f := range collection.QueryableFields {
+		if f.DoNotFlatten {
+			doNotFlatten.Insert(f.Name())
+		}
+	}
+
+	decData = util.FlatMap(decData, doNotFlatten)
 
 	keysToRemove := ctx.Value(TentativeSearchKeysToRemove{})
 	if keysToRemove != nil {
@@ -187,12 +198,19 @@ func PackSearchFields(ctx context.Context, data *internal.TableData, collection 
 		}
 	}
 
+	var nullKeys []string
 	// pack any date time or array fields here
 	for _, f := range collection.QueryableFields {
 		key, value := f.Name(), decData[f.Name()]
 		if value == nil {
+			if f.DataType == schema.ArrayType || f.DataType == schema.ObjectType {
+				nullKeys = append(nullKeys, f.Name())
+				delete(decData, f.Name())
+			}
+
 			continue
 		}
+
 		if f.SearchType == "string[]" {
 			// if string array has null set then replace it with our null marker
 			if valueArr, ok := value.([]interface{}); ok {
@@ -203,6 +221,7 @@ func PackSearchFields(ctx context.Context, data *internal.TableData, collection 
 				}
 			}
 		}
+
 		if f.ShouldPack() {
 			switch f.DataType {
 			case schema.DateTimeType:
@@ -221,6 +240,10 @@ func PackSearchFields(ctx context.Context, data *internal.TableData, collection 
 				}
 			}
 		}
+	}
+
+	if len(nullKeys) > 0 {
+		decData[schema.ReservedFields[schema.SearchNullKeys]] = nullKeys
 	}
 
 	decData[schema.SearchId] = id
@@ -312,9 +335,17 @@ func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCo
 			}
 		}
 	}
+	if v, found := doc[schema.ReservedFields[schema.SearchNullKeys]]; found {
+		if vArr, ok := v.([]string); ok {
+			for _, k := range vArr {
+				doc[k] = nil
+			}
+		}
+		delete(doc, schema.ReservedFields[schema.SearchNullKeys])
+	}
 
 	// unFlatten the map now
-	doc = UnFlattenObjects(doc)
+	doc = util.UnFlatMap(doc)
 
 	searchKey := doc[schema.SearchId].(string)
 	if value, ok := doc[schema.ReservedFields[schema.IdToSearchKey]]; ok {
@@ -341,45 +372,4 @@ func getInternalTS(doc map[string]any, keyName string) *internal.Timestamp {
 	}
 
 	return nil
-}
-
-func FlattenObjects(data map[string]any) map[string]any {
-	resp := make(map[string]any)
-	flattenObjects("", data, resp)
-	return resp
-}
-
-func flattenObjects(key string, obj map[string]any, resp map[string]any) {
-	if key != "" {
-		key += schema.ObjFlattenDelimiter
-	}
-
-	for k, v := range obj {
-		switch vMap := v.(type) {
-		case map[string]any:
-			flattenObjects(key+k, vMap, resp)
-		default:
-			resp[key+k] = v
-		}
-	}
-}
-
-func UnFlattenObjects(flat map[string]any) map[string]any {
-	result := make(map[string]any)
-	for k, v := range flat {
-		keys := strings.Split(k, schema.ObjFlattenDelimiter)
-		m := result
-		for i := 1; i < len(keys); i++ {
-			if _, ok := m[keys[i-1]]; !ok {
-				m[keys[i-1]] = make(map[string]any)
-			}
-			// Updating an object, because it is indexed with dot notation so we need to cleanup
-			if m[keys[i-1]] != nil {
-				m = m[keys[i-1]].(map[string]any)
-			}
-		}
-		m[keys[len(keys)-1]] = v
-	}
-
-	return result
 }

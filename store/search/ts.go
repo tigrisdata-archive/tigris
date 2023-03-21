@@ -327,6 +327,9 @@ func (s *storeImpl) DescribeCollection(_ context.Context, name string) (*tsApi.C
 }
 
 func (s *storeImpl) CreateCollection(_ context.Context, schema *tsApi.CollectionSchema) error {
+	ptrTrue := true
+	schema.EnableNestedFields = &ptrTrue
+
 	_, err := s.client.Collections().Create(schema)
 	return s.convertToInternalError(err)
 }

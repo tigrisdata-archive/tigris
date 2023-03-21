@@ -3917,9 +3917,9 @@ func TestRead_Sorted(t *testing.T) {
 			"schema": Map{
 				"title": coll,
 				"properties": Map{
-					"id":           Map{"type": "integer"},
+					"id":           Map{"type": "integer", "searchIndex": true, "sort": true},
 					"int_value":    Map{"type": "integer"},
-					"string_value": Map{"type": "string", "sort": true},
+					"string_value": Map{"type": "string", "searchIndex": true, "sort": true},
 				},
 			},
 		}).Status(http.StatusOK)
@@ -4278,6 +4278,182 @@ func TestImport(t *testing.T) {
 				resp.Status(c.err)
 			}
 		})
+	}
+}
+
+func TestComplexObjectsCollectionSearch(t *testing.T) {
+	project := setupTestsOnlyProject(t)
+	defer cleanupTests(t, project)
+
+	collectionName := "c1"
+	schema := []byte(`{
+  "schema": {
+    "title": "c1",
+    "properties": {
+      "a": {
+        "searchIndex": true,
+        "type": "integer"
+      },
+      "b": {
+        "searchIndex": true,
+        "type": "string"
+      },
+      "c": {
+        "type": "object",
+        "properties": {
+          "a": {
+            "searchIndex": true,
+            "type": "integer"
+          },
+          "b": {
+            "searchIndex": true,
+            "type": "string"
+          },
+          "c": {
+            "type": "object",
+            "properties": {
+              "a": {
+                "searchIndex": true,
+                "type": "string"
+              },
+              "b": {
+                "searchIndex": false,
+                "type": "object",
+                "properties": {}
+              },
+              "c": {
+                "type": "array",
+                "searchIndex": false,
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "a": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "d": {
+                "searchIndex": true,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "d": {
+            "searchIndex": true,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "e": {
+            "searchIndex": false,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "a": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "d": {
+        "searchIndex": true,
+        "type": "object",
+        "properties": {}
+      },
+      "e": {
+        "searchIndex": true,
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      "f": {
+        "searchIndex": true,
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "a": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "g": {
+        "searchIndex": true,
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}`)
+	var schemaObj map[string]any
+	require.NoError(t, jsoniter.Unmarshal(schema, &schemaObj))
+
+	createCollection(t, project, collectionName, schemaObj).Status(http.StatusOK)
+
+	docA := Doc{
+		"a": 1,
+		"b": "first document",
+		"c": Map{
+			"a": 10,
+			"b": "nested object under c",
+			"c": Map{
+				"a": "foo",
+				"b": Map{"name": "this is free flow object but not indexed"},
+				"c": []Map{Map{"a": "car"}, Map{"a": "bike"}},
+				"d": []string{"PARIS", "LONDON", "ENGLAND"},
+			},
+			"d": []string{"SANTA CLARA", "SAN JOSE"},
+			"e": []Map{{"a": "football"}, {"a": "basketball"}},
+		},
+		"d": Map{"agent": "free flow object top level"},
+		"e": []Map{{"random": "array of free flow object"}},
+		"f": []Map{{"a": "array of object with a field"}},
+		"g": []string{"NEW YORK", "MIAMI"},
+	}
+
+	insertDocuments(t, project, collectionName, []Doc{docA}, false).
+		Status(http.StatusOK)
+
+	cases := []struct {
+		query    Map
+		expError string
+	}{
+		{query: Map{"q": "nested object under c", "search_fields": []string{"c.b"}}, expError: ""},
+		{query: Map{"q": "foo", "search_fields": []string{"c.c.a"}}, expError: ""},
+		{query: Map{"q": "foo", "search_fields": []string{"c.c.a"}}, expError: ""},
+		{query: Map{"q": "foo", "search_fields": []string{"c.c.b"}}, expError: "`c.c.b` is not a searchable field. Only indexed fields can be queried"},
+		{query: Map{"q": "paris", "search_fields": []string{"c.c.d"}}, expError: ""},
+		{query: Map{"q": "santa", "search_fields": []string{"c.d"}}, expError: ""},
+		{query: Map{"q": "santa", "search_fields": []string{"c.e"}}, expError: "`c.e` is not a searchable field. Only indexed fields can be queried"},
+		{query: Map{"q": "free flow object top level", "search_fields": []string{"d"}}, expError: ""},
+		{query: Map{"q": "array of free flow object", "search_fields": []string{"e"}}, expError: ""},
+		{query: Map{"q": "array of object with a field", "search_fields": []string{"f"}}, expError: ""},
+		{query: Map{"q": "NEW YORK", "search_fields": []string{"g"}}, expError: ""},
+	}
+	for _, c := range cases {
+		if len(c.expError) > 0 {
+			expect(t).POST(fmt.Sprintf("/v1/projects/%s/database/collections/%s/documents/search", project, collectionName)).
+				WithJSON(c.expError).
+				Expect().
+				Status(http.StatusBadRequest)
+
+			continue
+		}
+		res := getSearchResults(t, project, collectionName, c.query, true)
+		require.Equal(t, 1, len(res.Result.Hits))
 	}
 }
 

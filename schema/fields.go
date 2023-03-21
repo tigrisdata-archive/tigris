@@ -19,10 +19,10 @@ import (
 	"strings"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/server/config"
-	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
 type FieldType int
@@ -65,9 +65,8 @@ var FieldNames = [...]string{
 }
 
 var (
-	MsgFieldNameAsLanguageKeyword = "Invalid collection field name, It contains language keyword for fieldName = '%s'"
-	MsgFieldNameInvalidPattern    = "Invalid collection field name, field name can only contain [a-zA-Z0-9_$] and it can only start with [a-zA-Z_$] for fieldName = '%s'"
-	ValidFieldNamePattern         = regexp.MustCompile(`^[a-zA-Z_$][a-zA-Z0-9_$]*$`)
+	MsgFieldNameInvalidPattern = "Invalid collection field name, field name can only contain [a-zA-Z0-9_$] and it can only start with [a-zA-Z_$] for fieldName = '%s'"
+	ValidFieldNamePattern      = regexp.MustCompile(`^[a-zA-Z_$][a-zA-Z0-9_$]*$`)
 )
 
 const (
@@ -161,7 +160,7 @@ func IsPrimitiveType(fieldType FieldType) bool {
 	return false
 }
 
-func IndexableField(fieldType FieldType) bool {
+func SupportedIndexableType(fieldType FieldType) bool {
 	switch fieldType {
 	case BoolType, Int32Type, Int64Type, UUIDType, StringType, DateTimeType, DoubleType:
 		return true
@@ -170,27 +169,40 @@ func IndexableField(fieldType FieldType) bool {
 	}
 }
 
-func SearchIndexableField(fieldType FieldType, subType FieldType) bool {
+func SupportedSearchIndexableType(fieldType FieldType, subType FieldType) bool {
 	switch fieldType {
-	case BoolType, Int32Type, Int64Type, UUIDType, StringType, DateTimeType, DoubleType:
+	case BoolType, Int32Type, Int64Type, UUIDType, StringType, DateTimeType, DoubleType, ArrayType:
 		return true
-	case ArrayType:
-		return IsPrimitiveType(subType)
+	case ObjectType:
+		return subType == UnknownType
 	default:
 		return false
 	}
 }
 
-func FacetableField(fieldType FieldType) bool {
+func SupportedFacetableType(fieldType FieldType, subType FieldType) bool {
 	switch fieldType {
 	case Int32Type, Int64Type, StringType, DoubleType:
 		return true
+	case ArrayType:
+		return subType == Int32Type || subType == Int64Type || subType == StringType || subType == DoubleType
 	default:
 		return false
 	}
 }
 
-func DefaultSortableField(fieldType FieldType) bool {
+// DefaultFacetableType are the types for which faceting is automatically enabled for database collections.
+func DefaultFacetableType(fieldType FieldType) bool {
+	switch fieldType {
+	case Int32Type, Int64Type, DoubleType:
+		return true
+	default:
+		return false
+	}
+}
+
+// DefaultSortableType are the types for which sorting is automatically enabled.
+func DefaultSortableType(fieldType FieldType) bool {
 	switch fieldType {
 	case Int32Type, Int64Type, DoubleType, DateTimeType, BoolType:
 		return true
@@ -211,6 +223,8 @@ func toSearchFieldType(fieldType FieldType, subType FieldType) string {
 		return FieldNames[Int64Type]
 	case DoubleType:
 		return searchDoubleType
+	case ObjectType:
+		return FieldNames[ObjectType]
 	case ArrayType:
 		switch subType {
 		case BoolType:
@@ -223,6 +237,8 @@ func toSearchFieldType(fieldType FieldType, subType FieldType) string {
 			return FieldNames[Int64Type] + "[]"
 		case DoubleType:
 			return searchDoubleType + "[]"
+		case ObjectType:
+			return FieldNames[ObjectType] + "[]"
 		default:
 			// pack it
 			return FieldNames[StringType]
@@ -325,110 +341,49 @@ type FieldBuilder struct {
 	Fields      []*Field
 }
 
-func (f *FieldBuilder) Validate(v []byte) error {
-	var fieldProperties map[string]jsoniter.RawMessage
-	if err := jsoniter.Unmarshal(v, &fieldProperties); err != nil {
-		return err
-	}
-
-	for key := range fieldProperties {
-		if !SupportedFieldProperties.Contains(key) {
-			return errors.InvalidArgument("unsupported property found '%s'", key)
-		}
-	}
-
-	return nil
-}
-
-func (f *FieldBuilder) Build(isArrayElement bool) (*Field, error) {
-	if IsReservedField(f.FieldName) {
-		return nil, errors.InvalidArgument("following reserved fields are not allowed %q", ReservedFields)
-	}
-
-	// for array elements, items will have field name empty so skip the test for that.
-	// make sure they start with [a-z], [A-Z], $, _ and can only contain [a-z], [A-Z], $, _, [0-9]
-	if !isArrayElement && !ValidFieldNamePattern.MatchString(f.FieldName) {
-		return nil, errors.InvalidArgument(MsgFieldNameInvalidPattern, f.FieldName)
-	}
-
+func (f *FieldBuilder) Build(setSearchDefaults bool) (*Field, error) {
 	fieldType := ToFieldType(f.Type, f.Encoding, f.Format)
-	if fieldType == UnknownType {
-		if len(f.Encoding) > 0 {
-			return nil, errors.InvalidArgument("unsupported encoding '%s'", f.Encoding)
+	if setSearchDefaults {
+		// for search indexes, any field in schema is search indexable if it is not set explicitly.
+		// Similarly, we also tag it with sort if it is numeric.
+		if f.supportableFieldForSearchAttributes(fieldType) {
+			ptrTrue := true
+			if f.SearchIndex == nil {
+				f.SearchIndex = &ptrTrue
+			}
+			if f.Sorted == nil && DefaultSortableType(fieldType) {
+				// enable it by default for numeric fields
+				f.Sorted = &ptrTrue
+			}
 		}
-		if len(f.Format) > 0 {
-			return nil, errors.InvalidArgument("unsupported format '%s'", f.Format)
-		}
-
-		return nil, errors.InvalidArgument("unsupported type detected '%s'", f.Type)
-	}
-	if f.Primary != nil && *f.Primary {
-		// validate the primary key types
-		if !IsValidKeyType(fieldType) {
-			return nil, errors.InvalidArgument("unsupported primary key type detected '%s'", f.Type)
-		}
-	}
-
-	if f.Primary == nil && f.Auto != nil && *f.Auto {
-		return nil, errors.InvalidArgument("only primary fields can be set as auto-generated '%s'", f.FieldName)
 	}
 
 	field := &Field{
 		FieldName:       f.FieldName,
 		MaxLength:       f.MaxLength,
 		DataType:        fieldType,
-		PrimaryKeyField: f.Primary,
 		Fields:          f.Fields,
-		AutoGenerated:   f.Auto,
 		Sorted:          f.Sorted,
 		Indexed:         f.Index,
 		Faceted:         f.Facet,
 		SearchIndexed:   f.SearchIndex,
-	}
-
-	if err := f.ValidateIndexOnField(field); err != nil {
-		return nil, err
+		PrimaryKeyField: f.Primary,
+		AutoGenerated:   f.Auto,
 	}
 
 	if f.CreatedAt != nil || f.UpdatedAt != nil || f.Default != nil {
 		var err error
 		if field.Defaulter, err = newDefaulter(f.CreatedAt, f.UpdatedAt, field.FieldName, field.DataType, f.Default); err != nil {
-			return nil, err
+			// just log, as this should not happen and during incoming request the field builder should have already caught this.
+			log.Err(err).Msgf("defaulter creation failed for field '%s'", field.FieldName)
 		}
 	}
 
 	return field, nil
 }
 
-func (f *FieldBuilder) ValidateIndexOnField(field *Field) error {
-	if err := checkFieldIndex(field, false); err != nil {
-		return err
-	}
-
-	for _, sub := range field.Fields {
-		if err := checkFieldIndex(sub, true); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func checkFieldIndex(field *Field, isSubField bool) error {
-	indexed := false
-	if field.Indexed != nil {
-		indexed = *field.Indexed
-	}
-	if indexed && isSubField && len(field.Name()) > 0 {
-		return errors.InvalidArgument("Cannot index nested field '%s'", field.Name())
-	}
-
-	if indexed && isSubField {
-		return errors.InvalidArgument("Cannot index nested field in array")
-	}
-	if indexed && !field.IsIndexable() {
-		return errors.InvalidArgument("'%s' has been configured to be indexed but it is not a supported indexable type. Only top level non-byte fields can be indexed.", field.Name())
-	}
-	return nil
+func (f *FieldBuilder) supportableFieldForSearchAttributes(fieldType FieldType) bool {
+	return len(f.FieldName) > 0 && (fieldType != ObjectType || (fieldType == ObjectType && len(f.Fields) == 0))
 }
 
 type Field struct {
@@ -469,6 +424,18 @@ func (f *Field) IsSorted() bool {
 	return f.Sorted != nil && *f.Sorted
 }
 
+func (f *Field) IsIndexed() bool {
+	return f.Indexed != nil && *f.Indexed
+}
+
+func (f *Field) IsSearchIndexed() bool {
+	return f.SearchIndexed != nil && *f.SearchIndexed
+}
+
+func (f *Field) IsFaceted() bool {
+	return f.Faceted != nil && *f.Faceted
+}
+
 func (f *Field) IsCompatible(f1 *Field) error {
 	if f.DataType != f1.DataType && !config.DefaultConfig.Schema.AllowIncompatible {
 		return errors.InvalidArgument("data type mismatch for field %q", f.FieldName)
@@ -502,216 +469,9 @@ func (f *Field) GetDefaulter() *FieldDefaulter {
 }
 
 func (f *Field) IsIndexable() bool {
-	if f.Indexed != nil && *f.Indexed && IndexableField(f.DataType) {
+	if f.Indexed != nil && *f.Indexed && SupportedIndexableType(f.DataType) {
 		return true
 	}
 
 	return false
-}
-
-type QueryableField struct {
-	FieldName     string
-	Indexed       bool // Secondary Index
-	InMemoryAlias string
-	Faceted       bool
-	SearchIndexed bool
-	Sortable      bool
-	DataType      FieldType
-	SubType       FieldType
-	SearchType    string
-	packThis      bool
-}
-
-func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, fieldsInSearch []tsApi.Field) *QueryableField {
-	var (
-		searchType    string
-		searchIndexed *bool
-		faceted       *bool
-		sortable      = f.Sorted
-	)
-
-	subType := UnknownType
-	if f.DataType == ArrayType && len(f.Fields) > 0 {
-		subType = f.Fields[0].DataType
-	}
-
-	packThis := false
-	if f.DataType == ArrayType {
-		for _, fieldInSearch := range fieldsInSearch {
-			if fieldInSearch.Name == name {
-				searchType = fieldInSearch.Type
-				if searchType == FieldNames[StringType] {
-					packThis = true
-				}
-
-				searchIndexed = fieldInSearch.Index
-				faceted = fieldInSearch.Facet
-				sortable = fieldInSearch.Sort
-			}
-		}
-	}
-
-	if len(searchType) == 0 {
-		searchType = toSearchFieldType(f.DataType, subType)
-	}
-
-	if builder.ForSearchIndex {
-		searchIndexed = f.SearchIndexed
-		if searchIndexed == nil {
-			shouldIndex := SearchIndexableField(f.DataType, subType)
-			searchIndexed = &shouldIndex
-		}
-
-		ptrTrue := true
-		if f.DataType == ByteType && searchIndexed == nil {
-			searchIndexed = &ptrTrue
-		}
-
-		faceted = f.Faceted
-
-		if sortable == nil && (f.DataType == Int32Type || f.DataType == Int64Type || f.DataType == DoubleType || f.DataType == DateTimeType) {
-			// enable it by default for numeric fields
-			sortable = &ptrTrue
-		}
-	} else {
-		if searchIndexed == nil {
-			shouldIndex := SearchIndexableField(f.DataType, subType)
-			searchIndexed = &shouldIndex
-		}
-		if faceted == nil {
-			shouldFacet := FacetableField(f.DataType)
-			faceted = &shouldFacet
-		}
-		if sortable == nil {
-			shouldSort := DefaultSortableField(f.DataType)
-			sortable = &shouldSort
-		}
-	}
-
-	q := &QueryableField{
-		FieldName:  name,
-		SearchType: searchType,
-		DataType:   f.DataType,
-		SubType:    subType,
-		packThis:   packThis,
-		Indexed:    f.IsIndexable(),
-	}
-
-	if searchIndexed != nil && *searchIndexed {
-		q.SearchIndexed = true
-	}
-	if sortable != nil && *sortable {
-		q.Sortable = true
-	}
-	if faceted != nil && *faceted {
-		q.Faceted = true
-	}
-
-	if IsSearchID(name) {
-		q.InMemoryAlias = ReservedFields[IdToSearchKey]
-	} else {
-		q.InMemoryAlias = name
-	}
-	return q
-}
-
-// InMemoryName returns key name that is used to index this field in the indexing store. For example, an "id" key is indexed with
-// "_tigris_id" name.
-func (q *QueryableField) InMemoryName() string {
-	return q.InMemoryAlias
-}
-
-// Name returns the name of this field as defined in the schema.
-func (q *QueryableField) Name() string {
-	return q.FieldName
-}
-
-// Type returns the data type of this field.
-func (q *QueryableField) Type() FieldType {
-	return q.DataType
-}
-
-// ShouldPack returns true if we need to pack this field before sending to indexing store.
-func (q *QueryableField) ShouldPack() bool {
-	if q.packThis {
-		return true
-	}
-
-	if q.DataType == ArrayType && (q.SubType == ArrayType || q.SubType == ObjectType || q.SubType == UnknownType) {
-		return true
-	}
-	return !q.IsReserved() && q.DataType == DateTimeType
-}
-
-// IsReserved returns true if the queryable field is internal field.
-func (q *QueryableField) IsReserved() bool {
-	return IsReservedField(q.Name())
-}
-
-func (q *QueryableField) KeyPath() []string {
-	return strings.Split(q.FieldName, ".")
-}
-
-type QueryableFieldsBuilder struct {
-	ForSearchIndex bool
-}
-
-func NewQueryableFieldsBuilder(forSearchIndex bool) *QueryableFieldsBuilder {
-	return &QueryableFieldsBuilder{
-		ForSearchIndex: forSearchIndex,
-	}
-}
-
-func (builder *QueryableFieldsBuilder) BuildQueryableFields(fields []*Field, fieldsInSearch []tsApi.Field) []*QueryableField {
-	var queryableFields []*QueryableField
-
-	for _, f := range fields {
-		if f.DataType == ObjectType {
-			queryableFields = append(queryableFields, builder.buildQueryableForObject(f.FieldName, f.Fields, fieldsInSearch)...)
-		} else {
-			queryableFields = append(queryableFields, builder.buildQueryableField("", f, fieldsInSearch))
-		}
-	}
-
-	ptrTrue := true
-	// Allowing metadata fields to be queryable. User provided reserved fields are rejected by FieldBuilder.
-	queryableFields = append(queryableFields, builder.NewQueryableField(ReservedFields[CreatedAt], &Field{
-		FieldName:     ReservedFields[CreatedAt],
-		DataType:      DateTimeType,
-		Sorted:        &ptrTrue,
-		SearchIndexed: &ptrTrue,
-		Indexed:       &ptrTrue,
-	}, fieldsInSearch))
-
-	queryableFields = append(queryableFields, builder.NewQueryableField(ReservedFields[UpdatedAt], &Field{
-		FieldName:     ReservedFields[UpdatedAt],
-		DataType:      DateTimeType,
-		Sorted:        &ptrTrue,
-		SearchIndexed: &ptrTrue,
-		Indexed:       &ptrTrue,
-	}, fieldsInSearch))
-
-	return queryableFields
-}
-
-func (builder *QueryableFieldsBuilder) buildQueryableForObject(parent string, fields []*Field, fieldsInSearch []tsApi.Field) []*QueryableField {
-	var queryable []*QueryableField
-	for _, nested := range fields {
-		if nested.DataType != ObjectType {
-			queryable = append(queryable, builder.buildQueryableField(parent, nested, fieldsInSearch))
-		} else {
-			queryable = append(queryable, builder.buildQueryableForObject(parent+ObjFlattenDelimiter+nested.FieldName, nested.Fields, fieldsInSearch)...)
-		}
-	}
-
-	return queryable
-}
-
-func (builder *QueryableFieldsBuilder) buildQueryableField(parent string, f *Field, fieldsInSearch []tsApi.Field) *QueryableField {
-	name := f.FieldName
-	if len(parent) > 0 {
-		name = parent + ObjFlattenDelimiter + f.FieldName
-	}
-
-	return builder.NewQueryableField(name, f, fieldsInSearch)
 }

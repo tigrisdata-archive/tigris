@@ -58,7 +58,7 @@ func TestMutateSetDefaults(t *testing.T) {
 		"primary_key": ["id"]
 	}`)
 
-	schFactory, err := schema.Build("t1", reqSchema)
+	schFactory, err := schema.NewFactoryBuilder(true).Build("t1", reqSchema)
 	require.NoError(t, err)
 	coll, err := schema.NewDefaultCollection(1, 1, schFactory, nil, nil)
 	require.NoError(t, err)
@@ -156,7 +156,7 @@ func TestMutateSetDefaultsComplexSchema(t *testing.T) {
 		"primary_key": ["id"]
 	}`)
 
-	schFactory, err := schema.Build("t1", reqSchema)
+	schFactory, err := schema.NewFactoryBuilder(true).Build("t1", reqSchema)
 	require.NoError(t, err)
 	coll, err := schema.NewDefaultCollection(1, 1, schFactory, nil, nil)
 	require.NoError(t, err)
@@ -249,7 +249,7 @@ func TestMutatePayload(t *testing.T) {
 		"primary_key": ["id"]
 	}`)
 
-	schFactory, err := schema.Build("t1", reqSchema)
+	schFactory, err := schema.NewFactoryBuilder(true).Build("t1", reqSchema)
 	require.NoError(t, err)
 	coll, err := schema.NewDefaultCollection(1, 1, schFactory, nil, nil)
 	require.NoError(t, err)
@@ -365,7 +365,7 @@ func BenchmarkStringToInteger(b *testing.B) {
 		"primary_key": ["id"]
 	}`)
 
-	schFactory, err := schema.Build("t1", reqSchema)
+	schFactory, err := schema.NewFactoryBuilder(true).Build("t1", reqSchema)
 	require.NoError(b, err)
 	coll, err := schema.NewDefaultCollection(1, 1, schFactory, nil, nil)
 	require.NoError(b, err)

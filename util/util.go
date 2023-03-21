@@ -21,7 +21,12 @@ import (
 	"text/template"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/tigrisdata/tigris/lib/container"
 	ulog "github.com/tigrisdata/tigris/util/log"
+)
+
+const (
+	ObjFlattenDelimiter = "."
 )
 
 // Version of this build.
@@ -66,4 +71,46 @@ func JSONToMap(data []byte) (map[string]any, error) {
 	}
 
 	return decoded, nil
+}
+
+func FlatMap(data map[string]any, notFlat container.HashSet) map[string]any {
+	resp := make(map[string]any)
+	flatMap("", data, resp, notFlat)
+	return resp
+}
+
+func flatMap(key string, obj map[string]any, resp map[string]any, notFlat container.HashSet) {
+	if key != "" {
+		key += ObjFlattenDelimiter
+	}
+
+	for k, v := range obj {
+		switch vMap := v.(type) {
+		case map[string]any:
+			if notFlat.Contains(key + k) {
+				resp[key+k] = v
+			} else {
+				flatMap(key+k, vMap, resp, notFlat)
+			}
+		default:
+			resp[key+k] = v
+		}
+	}
+}
+
+func UnFlatMap(flat map[string]any) map[string]any {
+	result := make(map[string]any)
+	for k, v := range flat {
+		keys := strings.Split(k, ObjFlattenDelimiter)
+		m := result
+		for i := 1; i < len(keys); i++ {
+			if _, ok := m[keys[i-1]]; !ok {
+				m[keys[i-1]] = make(map[string]any)
+			}
+			m = m[keys[i-1]].(map[string]any)
+		}
+		m[keys[len(keys)-1]] = v
+	}
+
+	return result
 }

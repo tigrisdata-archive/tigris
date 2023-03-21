@@ -15,7 +15,6 @@
 package schema
 
 import (
-	"bytes"
 	"fmt"
 	"strings"
 	"time"
@@ -171,7 +170,7 @@ func GetCollectionType(_ jsoniter.RawMessage) (CollectionType, error) {
 }
 
 // Build is used to deserialize the user json schema into a schema factory.
-func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
+func (fb *FactoryBuilder) Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 	cType, err := GetCollectionType(reqSchema)
 	if err != nil {
 		return nil, api.Errorf(api.Code_INTERNAL, err.Error()).WithDetails(&api.ErrorDetails{
@@ -205,7 +204,7 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 	}
 
 	primaryKeysSet := container.NewHashSet(schema.PrimaryKeys...)
-	fields, err := deserializeProperties(schema.Properties, &primaryKeysSet)
+	fields, err := fb.deserializeProperties(schema.Properties, &primaryKeysSet, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +224,7 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 		}
 	}
 
-	return &Factory{
+	factory := &Factory{
 		Fields: fields,
 		Indexes: &Indexes{
 			PrimaryKey: &Index{
@@ -242,7 +241,25 @@ func Build(collection string, reqSchema jsoniter.RawMessage) (*Factory, error) {
 		CollectionType:  cType,
 		IndexingVersion: schema.IndexingVersion,
 		Version:         schema.Version,
-	}, nil
+	}
+
+	if fb.onUserRequest {
+		if err = fb.validateSchema(factory); err != nil {
+			return nil, err
+		}
+	}
+
+	return factory, nil
+}
+
+func (fb *FactoryBuilder) validateSchema(factory *Factory) error {
+	for _, f := range factory.Fields {
+		if err := ValidateFieldAttributes(false, f); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func setPrimaryKey(reqSchema jsoniter.RawMessage, format string, ifMissing bool) (jsoniter.RawMessage, error) {
@@ -273,106 +290,6 @@ func setPrimaryKey(reqSchema jsoniter.RawMessage, format string, ifMissing bool)
 	}
 
 	return jsoniter.Marshal(schema)
-}
-
-func deserializeArray(items *FieldBuilder, current *[]*Field) error {
-	for ; items.Items != nil; items = items.Items {
-		it, err := items.Build(true)
-		if err != nil {
-			return err
-		}
-
-		*current = []*Field{it}
-		current = &it.Fields
-	}
-
-	// object array type
-	if len(items.Properties) > 0 {
-		if items.Type != jsonSpecObject {
-			return errors.InvalidArgument("properties only allowed for object type")
-		}
-
-		nestedFields, err := deserializeProperties(items.Properties, nil)
-		if err != nil {
-			return err
-		}
-
-		*current = []*Field{{DataType: ObjectType, Fields: nestedFields}}
-	} else {
-		// primitive array type
-		it, err := items.Build(true)
-		if err != nil {
-			return err
-		}
-
-		*current = []*Field{it}
-	}
-
-	return nil
-}
-
-func deserializeProperties(properties jsoniter.RawMessage, primaryKeysSet *container.HashSet) ([]*Field, error) {
-	var fields []*Field
-
-	err := jsonparser.ObjectEach(properties, func(key []byte, v []byte, dataType jsonparser.ValueType, offset int) error {
-		var err error
-		var builder FieldBuilder
-
-		if err = builder.Validate(v); err != nil {
-			// builder validates against the supported schema attributes on properties
-			return err
-		}
-
-		// set field name and try to unmarshal the value into field builder
-		builder.FieldName = string(key)
-
-		dec := jsoniter.NewDecoder(bytes.NewReader(v))
-		dec.UseNumber()
-		if err = dec.Decode(&builder); err != nil {
-			return errors.Internal(err.Error())
-		}
-
-		if builder.Type == jsonSpecArray {
-			if builder.Items == nil {
-				return errors.InvalidArgument("missing items for array field")
-			}
-
-			if err = deserializeArray(builder.Items, &builder.Fields); err != nil {
-				return err
-			}
-		}
-
-		// for objects, properties are part of the field definitions in that case deserialize those
-		// nested fields
-		if len(builder.Properties) > 0 {
-			if builder.Type != jsonSpecObject {
-				return errors.InvalidArgument("properties only allowed for object type")
-			}
-
-			if builder.Fields, err = deserializeProperties(builder.Properties, nil); err != nil {
-				return err
-			}
-		}
-
-		if primaryKeysSet != nil && primaryKeysSet.Contains(builder.FieldName) {
-			boolTrue := true
-			builder.Primary = &boolTrue
-		}
-
-		f, err := builder.Build(false)
-		if err != nil {
-			return err
-		}
-
-		fields = append(fields, f)
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return fields, nil
 }
 
 // Generate schema in the requested format.

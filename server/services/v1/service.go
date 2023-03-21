@@ -33,7 +33,7 @@ type Service interface {
 	RegisterGRPC(grpc *grpc.Server) error
 }
 
-func GetRegisteredServicesRealtime(kvStore kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) []Service {
+func GetRegisteredServicesRealtime(kvStore kv.TxStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) []Service {
 	var v1Services []Service
 	v1Services = append(v1Services, newRealtimeService(kvStore, searchStore, tenantMgr, txMgr))
 	v1Services = append(v1Services, newHealthService(txMgr))
@@ -41,7 +41,7 @@ func GetRegisteredServicesRealtime(kvStore kv.KeyValueStore, searchStore search.
 	return v1Services
 }
 
-func GetRegisteredServices(kvStore kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager) []Service {
+func GetRegisteredServices(kvStore kv.TxStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager, chunkTxMgr *transaction.Manager) []Service {
 	var v1Services []Service
 	v1Services = append(v1Services, newHealthService(txMgr))
 
@@ -59,6 +59,11 @@ func GetRegisteredServices(kvStore kv.KeyValueStore, searchStore search.Store, t
 
 	v1Services = append(v1Services, newObservabilityService(tenantMgr))
 	v1Services = append(v1Services, newCacheService(tenantMgr, txMgr))
-	v1Services = append(v1Services, newSearchService(searchStore, tenantMgr, txMgr))
+
+	if config.DefaultConfig.Search.Chunking {
+		v1Services = append(v1Services, newSearchService(searchStore, tenantMgr, chunkTxMgr))
+	} else {
+		v1Services = append(v1Services, newSearchService(searchStore, tenantMgr, txMgr))
+	}
 	return v1Services
 }

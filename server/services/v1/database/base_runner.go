@@ -260,7 +260,7 @@ func (runner *BaseQueryRunner) getSortOrdering(coll *schema.DefaultCollection, s
 		}
 
 		if !cf.Sortable {
-			return nil, errors.InvalidArgument("Cannot sort on `%s` field", sf.Name)
+			return nil, errors.InvalidArgument("Search results can't be sorted on `%s` field. Enable sorting on this field", sf.Name)
 		}
 	}
 	return ordering, nil

@@ -39,6 +39,202 @@ func TestCreateCollection(t *testing.T) {
 		resp := createCollection(t, db, coll, nil)
 		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "schema is a required during collection creation")
 	})
+	t.Run("status_400_required_search_index_attribute", func(t *testing.T) {
+		dropCollection(t, db, coll)
+
+		schema := Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"addr": Map{"type": "string", "sort": true},
+				},
+			},
+		}
+
+		resp := createCollection(t, db, coll, schema)
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Enable search index first to use faceting or sorting on field 'addr' of type 'string'")
+	})
+	t.Run("status_400_required_search_index_attribute_1", func(t *testing.T) {
+		dropCollection(t, db, coll)
+
+		schema := Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"addr": Map{"type": "string", "facet": true},
+				},
+			},
+		}
+
+		resp := createCollection(t, db, coll, schema)
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Enable search index first to use faceting or sorting on field 'addr' of type 'string'")
+	})
+	t.Run("status_400_unsupported_index_obj_level", func(t *testing.T) {
+		dropCollection(t, db, coll)
+
+		schema := Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"obj": Map{"type": "object", "index": true},
+				},
+			},
+		}
+
+		resp := createCollection(t, db, coll, schema)
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot enable index on object 'obj' or object fields")
+	})
+	t.Run("status_400_unsupported_sort_obj_level", func(t *testing.T) {
+		dropCollection(t, db, coll)
+
+		schema := Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"obj": Map{"type": "object", "searchIndex": true, "sort": true},
+				},
+			},
+		}
+
+		resp := createCollection(t, db, coll, schema)
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot have sort or facet attribute on an object 'obj'")
+	})
+	t.Run("status_400_unsupported_facet_obj_level", func(t *testing.T) {
+		dropCollection(t, db, coll)
+
+		schema := Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"obj": Map{"type": "object", "searchIndex": true, "facet": true},
+				},
+			},
+		}
+
+		resp := createCollection(t, db, coll, schema)
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot have sort or facet attribute on an object 'obj'")
+	})
+	t.Run("status_400_unsupported_index_arr", func(t *testing.T) {
+		dropCollection(t, db, coll)
+
+		schema := Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"arr": Map{"type": "array", "items": Map{"type": "string"}, "index": true},
+				},
+			},
+		}
+
+		resp := createCollection(t, db, coll, schema)
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot enable index on field 'arr' of type 'array'. Only top level non-byte fields can be indexed.")
+	})
+	t.Run("status_400_unsupported_sort_arr", func(t *testing.T) {
+		dropCollection(t, db, coll)
+
+		schema := Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"arr": Map{"type": "array", "items": Map{"type": "string"}, "searchIndex": true, "sort": true},
+				},
+			},
+		}
+
+		resp := createCollection(t, db, coll, schema)
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot enable sorting on field 'arr' of type 'array'")
+	})
+	t.Run("status_400_unsupported_facet_object_arr", func(t *testing.T) {
+		dropCollection(t, db, coll)
+
+		schema := Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"arr": Map{"type": "array", "items": Map{"type": "object", "properties": Map{"name": Map{"type": "string", "searchIndex": true, "facet": true}}}},
+				},
+			},
+		}
+
+		resp := createCollection(t, db, coll, schema)
+		testError(resp, http.StatusBadRequest, api.Code_INVALID_ARGUMENT, "Cannot enable index or search on an array of objects 'name'")
+	})
+	t.Run("status_200_sort_facet_index", func(t *testing.T) {
+		dropCollection(t, db, coll)
+
+		schema := Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"addr":    Map{"type": "string"},
+					"name":    Map{"type": "string", "index": true, "searchIndex": true, "sort": true, "facet": true},
+					"numeric": Map{"type": "integer", "index": true, "searchIndex": true, "sort": true, "facet": true},
+					"number":  Map{"type": "number", "index": true, "searchIndex": true, "sort": true, "facet": true},
+					"arr":     Map{"type": "array", "items": Map{"type": "string"}, "searchIndex": true, "facet": true},
+					"arr_num": Map{"type": "array", "items": Map{"type": "number"}, "searchIndex": true, "facet": true},
+					"record":  Map{"type": "object", "properties": Map{"record_name": Map{"type": "string", "searchIndex": true, "sort": true, "facet": true}, "record_arr": Map{"type": "array", "items": Map{"type": "string"}, "searchIndex": true, "facet": true}, "record_obj": Map{"type": "object", "properties": Map{"name": Map{"type": "string", "searchIndex": true, "sort": true, "facet": true}}}}},
+				},
+			},
+		}
+
+		createCollection(t, db, coll, schema).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status", "created")
+	})
+	t.Run("status_200_sort_facet_nested_obj", func(t *testing.T) {
+		dropCollection(t, db, coll)
+
+		schema := Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"obj_1level":     Map{"type": "object", "properties": Map{"name": Map{"type": "string", "searchIndex": true, "sort": true}}},
+					"obj_2level":     Map{"type": "object", "properties": Map{"level2": Map{"type": "object", "properties": Map{"name": Map{"type": "string", "searchIndex": true, "sort": true, "facet": true}}}}},
+					"obj_2level_arr": Map{"type": "object", "properties": Map{"level2": Map{"type": "object", "properties": Map{"arr": Map{"type": "array", "items": Map{"type": "string"}, "searchIndex": true, "facet": true}}}}},
+				},
+			},
+		}
+
+		createCollection(t, db, coll, schema).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status", "created")
+	})
+	t.Run("status_200_facet_nested_obj", func(t *testing.T) {
+		dropCollection(t, db, coll)
+
+		schema := Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"arr": Map{"type": "object", "properties": Map{"name": Map{"type": "string", "searchIndex": true, "facet": true}}},
+				},
+			},
+		}
+
+		createCollection(t, db, coll, schema).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status", "created")
+	})
+	t.Run("status_200_facet_arr", func(t *testing.T) {
+		dropCollection(t, db, coll)
+
+		schema := Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"arr": Map{"type": "array", "items": Map{"type": "string"}, "searchIndex": true, "facet": true},
+				},
+			},
+		}
+
+		createCollection(t, db, coll, schema).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status", "created")
+	})
 	t.Run("status_success", func(t *testing.T) {
 		dropCollection(t, db, coll)
 

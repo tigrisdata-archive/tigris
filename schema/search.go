@@ -60,29 +60,9 @@ type SearchFactory struct {
 	Source SearchSource
 }
 
-func ValidateSearchSchema(factory *SearchFactory) error {
-	if factory.Source.Type != SearchSourceExternal {
-		return errors.InvalidArgument("unsupported index source '%s'", factory.Source.Type)
-	}
+func (fb *FactoryBuilder) BuildSearch(index string, reqSchema jsoniter.RawMessage) (*SearchFactory, error) {
+	fb.setBuilderForSearch()
 
-	for _, f := range factory.Fields {
-		if f.Faceted != nil && *f.Faceted && !FacetableField(f.DataType) {
-			return errors.InvalidArgument("facet is not allowed for field type '%s'", FieldNames[f.DataType])
-		}
-
-		if f.Sorted != nil && *f.Sorted {
-			switch f.DataType {
-			case Int32Type, Int64Type, DoubleType, DateTimeType, BoolType, StringType:
-			default:
-				return errors.InvalidArgument("sort is not allowed for field type '%s'", FieldNames[f.DataType])
-			}
-		}
-	}
-
-	return nil
-}
-
-func BuildSearch(index string, reqSchema jsoniter.RawMessage) (*SearchFactory, error) {
 	searchSchema := make([]byte, len(reqSchema))
 	copy(searchSchema, reqSchema)
 
@@ -96,7 +76,7 @@ func BuildSearch(index string, reqSchema jsoniter.RawMessage) (*SearchFactory, e
 	if len(schema.Properties) == 0 {
 		return nil, errors.InvalidArgument("missing properties field in schema")
 	}
-	fields, err := deserializeProperties(schema.Properties, nil)
+	fields, err := fb.deserializeProperties(schema.Properties, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +124,41 @@ func BuildSearch(index string, reqSchema jsoniter.RawMessage) (*SearchFactory, e
 		Source: source,
 	}
 
+	idFound := false
+	for _, f := range factory.Fields {
+		if f.FieldName == SearchId {
+			idFound = true
+			break
+		}
+	}
+	if !idFound {
+		factory.Fields = append(factory.Fields, &Field{
+			FieldName: SearchId,
+			DataType:  StringType,
+		})
+	}
+
+	if fb.onUserRequest {
+		if err = fb.validateSearchSchema(factory); err != nil {
+			return nil, err
+		}
+	}
+
 	return factory, nil
+}
+
+func (fb *FactoryBuilder) validateSearchSchema(factory *SearchFactory) error {
+	if factory.Source.Type != SearchSourceExternal {
+		return errors.InvalidArgument("unsupported index source '%s'", factory.Source.Type)
+	}
+
+	for _, f := range factory.Fields {
+		if err := ValidateFieldAttributes(true, f); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // SearchIndex is to manage search index created by the user.
@@ -168,17 +182,19 @@ type SearchIndex struct {
 }
 
 func NewSearchIndex(ver int, searchStoreName string, factory *SearchFactory, fieldsInSearch []tsApi.Field) *SearchIndex {
-	queryableFields := NewQueryableFieldsBuilder(true).BuildQueryableFields(factory.Fields, fieldsInSearch)
+	queryableFields := NewQueryableFieldsBuilder().BuildQueryableFields(factory.Fields, fieldsInSearch)
 
-	return &SearchIndex{
+	index := &SearchIndex{
 		Version:         ver,
 		Name:            factory.Name,
 		Fields:          factory.Fields,
 		Schema:          factory.Schema,
 		QueryableFields: queryableFields,
-		StoreSchema:     buildSearchSchema(searchStoreName, queryableFields),
 		Source:          factory.Source,
 	}
+	index.buildSearchSchema(searchStoreName)
+
+	return index
 }
 
 func (s *SearchIndex) StoreIndexName() string {
@@ -194,10 +210,10 @@ func (s *SearchIndex) GetQueryableField(name string) (*QueryableField, error) {
 	return nil, errors.InvalidArgument("Field `%s` is not present in collection", name)
 }
 
-func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.CollectionSchema {
+func (s *SearchIndex) buildSearchSchema(name string) {
 	ptrTrue, ptrFalse := true, false
-	tsFields := make([]tsApi.Field, 0, len(queryableFields))
-	for _, s := range queryableFields {
+	tsFields := make([]tsApi.Field, 0, len(s.QueryableFields))
+	for _, s := range s.QueryableFields {
 		tsFields = append(tsFields, tsApi.Field{
 			Name:     s.Name(),
 			Type:     s.SearchType,
@@ -206,6 +222,7 @@ func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.Co
 			Sort:     &s.Sortable,
 			Optional: &ptrTrue,
 		})
+
 		if s.InMemoryName() != s.Name() {
 			// we are storing this field differently in in-memory store
 			tsFields = append(tsFields, tsApi.Field{
@@ -217,6 +234,7 @@ func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.Co
 				Optional: &ptrTrue,
 			})
 		}
+
 		// Save original date as string to disk
 		if !s.IsReserved() && s.DataType == DateTimeType {
 			tsFields = append(tsFields, tsApi.Field{
@@ -230,16 +248,16 @@ func buildSearchSchema(name string, queryableFields []*QueryableField) *tsApi.Co
 		}
 	}
 
-	return &tsApi.CollectionSchema{
+	s.StoreSchema = &tsApi.CollectionSchema{
 		Name:   name,
 		Fields: tsFields,
 	}
 }
 
-func GetSearchDeltaFields(forSearchIndex bool, existingFields []*QueryableField, incomingFields []*Field, fieldsInSearch []tsApi.Field) []tsApi.Field {
+func (s *SearchIndex) GetSearchDeltaFields(existingFields []*QueryableField, fieldsInSearch []tsApi.Field) []tsApi.Field {
 	ptrTrue := true
 
-	incomingQueryable := NewQueryableFieldsBuilder(forSearchIndex).BuildQueryableFields(incomingFields, fieldsInSearch)
+	incomingQueryable := NewQueryableFieldsBuilder().BuildQueryableFields(s.Fields, fieldsInSearch)
 
 	existingFieldMap := make(map[string]*QueryableField)
 	for _, f := range existingFields {
@@ -256,26 +274,18 @@ func GetSearchDeltaFields(forSearchIndex bool, existingFields []*QueryableField,
 		e := existingFieldMap[f.FieldName]
 		delete(existingFieldMap, f.FieldName)
 
-		if e != nil && f.SearchType == e.SearchType {
+		if e != nil && f.SearchType == e.SearchType && f.SearchIndexed == e.SearchIndexed && f.Faceted == e.Faceted && f.Sortable == e.Sortable {
 			continue
 		}
 
-		tsField := tsApi.Field{
-			Name:     f.FieldName,
-			Type:     f.SearchType,
-			Facet:    &f.Faceted,
-			Index:    &f.SearchIndexed,
-			Optional: &ptrTrue,
-		}
-
-		// type changed. drop the field first
+		// attribute changed, drop the field first
 		if e != nil {
 			tsFields = append(tsFields, tsApi.Field{
 				Name: f.FieldName,
 				Drop: &ptrTrue,
 			})
-		} else if f.FieldName == "created_at" || f.FieldName == "updated_at" {
-			// if we have our internal old "created_at"/"updated_at" then drop it first
+		} else {
+			// this can happen if update request is timed out on Tigris side but succeed on search
 			if _, found := fieldsInSearchMap[f.FieldName]; found {
 				tsFields = append(tsFields, tsApi.Field{
 					Name: f.FieldName,
@@ -285,7 +295,14 @@ func GetSearchDeltaFields(forSearchIndex bool, existingFields []*QueryableField,
 		}
 
 		// add new field
-		tsFields = append(tsFields, tsField)
+		tsFields = append(tsFields, tsApi.Field{
+			Name:     f.FieldName,
+			Type:     f.SearchType,
+			Facet:    &f.Faceted,
+			Index:    &f.SearchIndexed,
+			Sort:     &f.Sortable,
+			Optional: &ptrTrue,
+		})
 	}
 
 	// drop fields non existing in new schema
@@ -313,20 +330,168 @@ type ImplicitSearchIndex struct {
 	// one queryableFields. As queryableFields represent a flattened state these can be used as-is to index in memory.
 	QueryableFields []*QueryableField
 
-	fieldsInSearch []tsApi.Field
+	prevVersionInSearch []tsApi.Field
 }
 
-func NewImplicitSearchIndex(name string, searchStoreName string, fields []*Field, fieldsInSearch []tsApi.Field) *ImplicitSearchIndex {
+func NewImplicitSearchIndex(name string, searchStoreName string, fields []*Field, prevVersionInSearch []tsApi.Field) *ImplicitSearchIndex {
 	// this is created by collection so the forSearchIndex is false.
-	queryableFields := NewQueryableFieldsBuilder(false).BuildQueryableFields(fields, fieldsInSearch)
-	return &ImplicitSearchIndex{
-		Name:            name,
-		QueryableFields: queryableFields,
-		StoreSchema:     buildSearchSchema(searchStoreName, queryableFields),
-		fieldsInSearch:  fieldsInSearch,
+	queryableFields := NewQueryableFieldsBuilder().BuildQueryableFields(fields, prevVersionInSearch)
+	index := &ImplicitSearchIndex{
+		Name:                name,
+		QueryableFields:     queryableFields,
+		prevVersionInSearch: prevVersionInSearch,
 	}
+
+	index.buildSearchSchema(searchStoreName)
+
+	return index
 }
 
 func (s *ImplicitSearchIndex) StoreIndexName() string {
 	return s.StoreSchema.Name
+}
+
+func (s *ImplicitSearchIndex) buildSearchSchema(searchStoreName string) {
+	ptrTrue, ptrFalse := true, false
+	tsFields := make([]tsApi.Field, 0, len(s.QueryableFields))
+
+	for _, f := range s.QueryableFields {
+		// the implicit search index by default index all the fields that are indexable and same applies to facet/sort.
+		shouldIndex := SupportedSearchIndexableType(f.DataType, f.SubType)
+		shouldFacet := DefaultFacetableType(f.DataType)
+		shouldSort := DefaultSortableType(f.DataType)
+
+		if !shouldSort && f.Sortable {
+			// honor schema i.e. in case of strings user can explicitly enable sorting.
+			shouldSort = true
+		}
+		if !shouldFacet && f.Faceted {
+			shouldFacet = true
+		}
+
+		tsFields = append(tsFields, tsApi.Field{
+			Name:     f.Name(),
+			Type:     f.SearchType,
+			Facet:    &shouldFacet,
+			Index:    &shouldIndex,
+			Sort:     &shouldSort,
+			Optional: &ptrTrue,
+		})
+
+		if f.InMemoryName() != f.Name() {
+			// we are storing this field differently in in-memory store
+			tsFields = append(tsFields, tsApi.Field{
+				Name:     f.InMemoryName(),
+				Type:     f.SearchType,
+				Facet:    &shouldFacet,
+				Index:    &shouldIndex,
+				Sort:     &shouldSort,
+				Optional: &ptrTrue,
+			})
+		}
+		// Save original date as string to disk
+		if !f.IsReserved() && f.DataType == DateTimeType {
+			tsFields = append(tsFields, tsApi.Field{
+				Name:     ToSearchDateKey(f.Name()),
+				Type:     toSearchFieldType(StringType, UnknownType),
+				Facet:    &ptrFalse,
+				Index:    &ptrFalse,
+				Sort:     &ptrFalse,
+				Optional: &ptrTrue,
+			})
+		}
+	}
+
+	s.StoreSchema = &tsApi.CollectionSchema{
+		Name:   searchStoreName,
+		Fields: tsFields,
+	}
+}
+
+func (s *ImplicitSearchIndex) GetSearchDeltaFields(existingFields []*QueryableField, incomingFields []*Field) []tsApi.Field {
+	ptrTrue := true
+
+	incomingQueryable := NewQueryableFieldsBuilder().BuildQueryableFields(incomingFields, s.prevVersionInSearch)
+
+	existingFieldMap := make(map[string]*QueryableField)
+	for _, f := range existingFields {
+		existingFieldMap[f.FieldName] = f
+	}
+
+	fieldsInSearchMap := make(map[string]tsApi.Field)
+	for _, f := range s.prevVersionInSearch {
+		fieldsInSearchMap[f.Name] = f
+	}
+
+	tsFields := make([]tsApi.Field, 0, len(incomingQueryable))
+	for _, f := range incomingQueryable {
+		e := existingFieldMap[f.FieldName]
+		delete(existingFieldMap, f.FieldName)
+
+		shouldIndex := SupportedSearchIndexableType(f.DataType, f.SubType)
+		shouldFacet := DefaultFacetableType(f.DataType)
+		shouldSort := DefaultSortableType(f.DataType)
+		if !shouldSort && f.Sortable {
+			shouldSort = true
+		}
+		if !shouldFacet && f.Faceted {
+			shouldFacet = true
+		}
+
+		stateChanged := false
+		if e != nil {
+			inSearchState, found := fieldsInSearchMap[f.FieldName]
+			if found && inSearchState.Index != nil && *inSearchState.Index != shouldIndex {
+				stateChanged = true
+			}
+			if found && inSearchState.Facet != nil && *inSearchState.Facet != shouldFacet {
+				stateChanged = true
+			}
+			if found && inSearchState.Sort != nil && *inSearchState.Sort != shouldSort {
+				stateChanged = true
+			}
+
+			if !stateChanged {
+				continue
+			}
+		}
+
+		// attribute changed, drop the field first
+		if e != nil && stateChanged {
+			tsFields = append(tsFields, tsApi.Field{
+				Name: f.FieldName,
+				Drop: &ptrTrue,
+			})
+		} else {
+			// this can happen if update request is timed out on Tigris side but succeed on search
+			if _, found := fieldsInSearchMap[f.FieldName]; found {
+				tsFields = append(tsFields, tsApi.Field{
+					Name: f.FieldName,
+					Drop: &ptrTrue,
+				})
+			}
+		}
+
+		// add new field
+		tsFields = append(tsFields, tsApi.Field{
+			Name:     f.FieldName,
+			Type:     f.SearchType,
+			Facet:    &shouldFacet,
+			Index:    &shouldIndex,
+			Sort:     &shouldSort,
+			Optional: &ptrTrue,
+		})
+	}
+
+	// drop fields non existing in new schema
+	for _, f := range existingFieldMap {
+		tsField := tsApi.Field{
+			Name: f.FieldName,
+			Drop: &ptrTrue,
+		}
+
+		tsFields = append(tsFields, tsField)
+	}
+
+	return tsFields
 }

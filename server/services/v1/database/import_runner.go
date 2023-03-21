@@ -60,7 +60,7 @@ func (runner *ImportQueryRunner) evolveSchema(ctx context.Context, tenant *metad
 
 	log.Debug().Str("from", string(rawSchema)).Str("to", string(b)).Msg("evolving schema on import")
 
-	schFactory, err := schema.Build(req.GetCollection(), b)
+	schFactory, err := schema.NewFactoryBuilder(true).Build(req.GetCollection(), b)
 	if err != nil {
 		return err
 	}

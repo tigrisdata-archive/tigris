@@ -28,7 +28,7 @@ func TestMetaVersion(t *testing.T) {
 	fdbCfg, err := config.GetTestFDBConfig("../..")
 	require.NoError(t, err)
 
-	kv, err := kv.NewKeyValueStore(fdbCfg)
+	kv, err := kv.NewTxStore(fdbCfg)
 	require.NoError(t, err)
 
 	t.Run("read versions", func(t *testing.T) {

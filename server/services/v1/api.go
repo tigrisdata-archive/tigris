@@ -53,7 +53,7 @@ const (
 type apiService struct {
 	api.UnimplementedTigrisServer
 
-	kvStore       kv.KeyValueStore
+	kvStore       kv.TxStore
 	txMgr         *transaction.Manager
 	tenantMgr     *metadata.TenantManager
 	cdcMgr        *cdc.Manager
@@ -64,7 +64,7 @@ type apiService struct {
 	authProvider  auth.Provider
 }
 
-func newApiService(kv kv.KeyValueStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager, authProvider auth.Provider) *apiService {
+func newApiService(kv kv.TxStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager, authProvider auth.Provider) *apiService {
 	u := &apiService{
 		kvStore:      kv,
 		txMgr:        txMgr,
@@ -294,7 +294,8 @@ func (s *apiService) Delete(ctx context.Context, r *api.DeleteRequest) (*api.Del
 	}
 
 	return &api.DeleteResponse{
-		Status: resp.Status,
+		DeletedCount: resp.ModifiedCount,
+		Status:       resp.Status,
 		Metadata: &api.ResponseMetadata{
 			DeletedAt: resp.DeletedAt.GetProtoTS(),
 		},

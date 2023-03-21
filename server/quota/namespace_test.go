@@ -88,7 +88,7 @@ func TestNamespaceQuota(t *testing.T) {
 	assert.Equal(t, int64(5), is.setWriteLimit.Load())
 
 	require.NoError(t, m.Allow(ctx, ns, 6000, false)) // 2 units: 4096 + something
-	require.NoError(t, m.Allow(ctx, ns, 1500, true))  // 2 units: 1024 + something
+	require.NoError(t, m.Allow(ctx, ns, 6000, true))  // 2 units: 4096 + something
 
 	i := 0
 	for ; err == nil && i < 15; i++ {
@@ -106,13 +106,13 @@ func TestNamespaceQuota(t *testing.T) {
 	i = 0
 	err = nil
 	for ; err == nil && i < 15; i++ {
-		err = m.Allow(ctx, ns, 512, true) // < 1024 = 1 unit
+		err = m.Allow(ctx, ns, 2048, true) // < 4096 = 1 unit
 	}
 	assert.Equal(t, ErrWriteUnitsExceeded, err)
 	assert.Equal(t, 4, i)
 
 	// human user allowed to go 5% above the limit
-	err = m.Allow(ctxOp, ns, 512, true)
+	err = m.Allow(ctxOp, ns, 2048, true)
 	assert.NoError(t, err)
 
 	log.Debug().Msg("simulate rate surge")
@@ -267,33 +267,33 @@ func TestQuotaConfigLimits(t *testing.T) {
 	defer m.Cleanup()
 
 	// Limited by default namespace limits
-	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, ns, 4096*101, false))
-	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, ns, 1024*51, true))
+	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, ns, config.ReadUnitSize*101, false))
+	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, ns, config.WriteUnitSize*51, true))
 
 	// "Default namespace" is unlimited by default
-	require.NoError(t, m.Allow(ctx, defaults.DefaultNamespaceName, 4096*101, false))
-	require.NoError(t, m.Allow(ctx, defaults.DefaultNamespaceName, 1024*51, true))
+	require.NoError(t, m.Allow(ctx, defaults.DefaultNamespaceName, config.ReadUnitSize*101, false))
+	require.NoError(t, m.Allow(ctx, defaults.DefaultNamespaceName, config.WriteUnitSize*51, true))
 
 	cfg.Namespace.Default = config.LimitsConfig{ReadUnits: 20000, WriteUnits: 10000}
 
 	// should be allowed so as we increased default namespace limits
-	require.NoError(t, m.Allow(ctx, ns, 4096*101, false))
-	require.NoError(t, m.Allow(ctx, ns, 1024*51, true))
+	require.NoError(t, m.Allow(ctx, ns, config.ReadUnitSize*101, false))
+	require.NoError(t, m.Allow(ctx, ns, config.WriteUnitSize*51, true))
 
 	// should be limited by node limits
-	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, ns, 4096*10001, false))
-	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, ns, 1024*5001, true))
+	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, ns, config.ReadUnitSize*10001, false))
+	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, ns, config.WriteUnitSize*5001, true))
 
 	cfg.Namespace.Namespaces = map[string]config.LimitsConfig{ns + "_other": {ReadUnits: 100, WriteUnits: 50}}
 
-	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, ns+"_other", 4096*101, false))
-	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, ns+"_other", 1024*51, true))
+	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, ns+"_other", config.ReadUnitSize*101, false))
+	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, ns+"_other", config.WriteUnitSize*51, true))
 
 	// Test that we optionally can limit "default namespace" too
 	cfg.Namespace.Namespaces = map[string]config.LimitsConfig{defaults.DefaultNamespaceName: {ReadUnits: 100, WriteUnits: 50}}
 
-	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, defaults.DefaultNamespaceName, 4096*101, false))
-	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, defaults.DefaultNamespaceName, 1024*51, true))
+	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, defaults.DefaultNamespaceName, config.ReadUnitSize*101, false))
+	require.Equal(t, ErrMaxRequestSizeExceeded, m.Allow(ctx, defaults.DefaultNamespaceName, config.WriteUnitSize*51, true))
 
 	// Test blacklisting
 	cfg.Namespace.Namespaces = map[string]config.LimitsConfig{defaults.DefaultNamespaceName: {ReadUnits: -1, WriteUnits: -1}}

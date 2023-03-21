@@ -41,7 +41,6 @@ type BaseTx interface {
 	GetTxCtx() *api.TransactionCtx
 	Insert(ctx context.Context, key keys.Key, data *internal.TableData) error
 	Replace(ctx context.Context, key keys.Key, data *internal.TableData, isUpdate bool) error
-	Update(ctx context.Context, key keys.Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error)
 	Delete(ctx context.Context, key keys.Key) error
 	Read(ctx context.Context, key keys.Key) (kv.Iterator, error)
 	ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key, isSnapshot bool) (kv.Iterator, error)
@@ -50,7 +49,6 @@ type BaseTx interface {
 	SetVersionstampedKey(ctx context.Context, key []byte, value []byte) error
 	AtomicAdd(ctx context.Context, key keys.Key, value int64) error
 	AtomicRead(ctx context.Context, key keys.Key) (int64, error)
-	AtomicReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key, isSnapshot bool) (kv.AtomicIterator, error)
 	RangeSize(ctx context.Context, table []byte, lKey keys.Key, rKey keys.Key) (size int64, err error)
 }
 
@@ -79,10 +77,10 @@ func (c *SessionCtx) GetStagedDatabase() interface{} {
 // this will create a session tracker for tracking the sessions.
 
 type Manager struct {
-	kvStore kv.KeyValueStore
+	kvStore kv.TxStore
 }
 
-func NewManager(kvStore kv.KeyValueStore) *Manager {
+func NewManager(kvStore kv.TxStore) *Manager {
 	return &Manager{
 		kvStore: kvStore,
 	}
@@ -117,13 +115,13 @@ type TxSession struct {
 	sync.RWMutex
 
 	context *SessionCtx
-	kvStore kv.KeyValueStore
+	kvStore kv.TxStore
 	kTx     kv.Tx
 	state   sessionState
 	txCtx   *api.TransactionCtx
 }
 
-func newTxSession(kv kv.KeyValueStore) (*TxSession, error) {
+func newTxSession(kv kv.TxStore) (*TxSession, error) {
 	if kv == nil {
 		return nil, errors.Internal("session needs non-nil kv object")
 	}
@@ -151,6 +149,7 @@ func (s *TxSession) start(ctx context.Context) error {
 	if s.kTx, err = s.kvStore.BeginTx(ctx); err != nil {
 		return err
 	}
+
 	s.state = sessionActive
 
 	return nil
@@ -187,17 +186,6 @@ func (s *TxSession) Replace(ctx context.Context, key keys.Key, data *internal.Ta
 	}
 
 	return s.kTx.Replace(ctx, key.Table(), kv.BuildKey(key.IndexParts()...), data, isUpdate)
-}
-
-func (s *TxSession) Update(ctx context.Context, key keys.Key, apply func(*internal.TableData) (*internal.TableData, error)) (int32, error) {
-	s.Lock()
-	defer s.Unlock()
-
-	if err := s.validateSession(); err != nil {
-		return -1, err
-	}
-
-	return s.kTx.Update(ctx, key.Table(), kv.BuildKey(key.IndexParts()...), apply)
 }
 
 func (s *TxSession) Delete(ctx context.Context, key keys.Key) error {
@@ -281,23 +269,6 @@ func (s *TxSession) AtomicRead(ctx context.Context, key keys.Key) (int64, error)
 	}
 
 	return s.kTx.AtomicRead(ctx, key.Table(), kv.BuildKey(key.IndexParts()...))
-}
-
-func (s *TxSession) AtomicReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key, isSnapshot bool) (kv.AtomicIterator, error) {
-	s.Lock()
-	defer s.Unlock()
-
-	if err := s.validateSession(); err != nil {
-		return nil, err
-	}
-
-	if rKey != nil && lKey != nil {
-		return s.kTx.AtomicReadRange(ctx, lKey.Table(), kv.BuildKey(lKey.IndexParts()...), kv.BuildKey(rKey.IndexParts()...), isSnapshot)
-	} else if lKey != nil {
-		return s.kTx.AtomicReadRange(ctx, lKey.Table(), kv.BuildKey(lKey.IndexParts()...), nil, isSnapshot)
-	}
-
-	return s.kTx.AtomicReadRange(ctx, rKey.Table(), nil, kv.BuildKey(rKey.IndexParts()...), isSnapshot)
 }
 
 func (s *TxSession) Get(ctx context.Context, key []byte, isSnapshot bool) (kv.Future, error) {
