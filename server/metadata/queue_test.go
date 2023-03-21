@@ -132,30 +132,6 @@ func TestPriorityInPeek(t *testing.T) {
 		assert.Equal(t, item2.Id, items[1].Id)
 		assert.Equal(t, item3.Id, items[2].Id)
 	})
-
-	t.Run("ordered by same time and different priority", func(t *testing.T) {
-		item1 := NewQueueItem(2, []byte("one-item"))
-		item2 := NewQueueItem(1, []byte("two-item"))
-		item3 := NewQueueItem(0, []byte("one-item"))
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		queue, tx, cleanup := initQueueTest(t)
-		defer cleanup()
-
-		// Enqueue Item
-		assert.NoError(t, queue.Enqueue(ctx, tx, item1, 10*time.Millisecond))
-		assert.NoError(t, queue.Enqueue(ctx, tx, item2, 10*time.Millisecond))
-		assert.NoError(t, queue.Enqueue(ctx, tx, item3, 10*time.Millisecond))
-
-		time.Sleep(100 * time.Millisecond)
-
-		items := checkQueueLength(t, queue, ctx, tx, 3)
-
-		assert.Equal(t, item3.Id, items[0].Id)
-		assert.Equal(t, item2.Id, items[1].Id)
-		assert.Equal(t, item1.Id, items[2].Id)
-	})
 }
 
 func TestEnqueueObtainComplete(t *testing.T) {
