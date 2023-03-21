@@ -32,13 +32,14 @@ import (
 )
 
 const (
-	Authorization = "Authorization"
-	Bearer        = "bearer "
-	tokenFilePath = "/etc/test-token.jwt"
+	Authorization    = "Authorization"
+	Bearer           = "bearer "
+	RSATokenFilePath = "/etc/test-token-rsa.jwt"
+	HSTokenFilePath  = "/etc/test-token-hs.jwt"
 )
 
-func readToken(t *testing.T) string {
-	tokenBytes, err := os.ReadFile(tokenFilePath)
+func readToken(t *testing.T, file string) string {
+	tokenBytes, err := os.ReadFile(file)
 	require.NoError(t, err)
 	return string(tokenBytes)
 }
@@ -54,10 +55,20 @@ func createTestNamespace(e2 *httpexpect.Expect, token string) {
 		Expect().
 		Status(http.StatusOK)
 }
+
+func TestHS256TokenValidation(t *testing.T) {
+	e2 := expectLow(t, config.GetBaseURL2())
+	token := readToken(t, HSTokenFilePath)
+	createTestNamespace(e2, token)
+
+	// create project
+	testProject := "TestHS256TokenValidation"
+	_ = e2.POST(createProjectUrl(testProject)).WithHeader(Authorization, Bearer+token).Expect().Status(http.StatusOK)
+}
+
 func TestGoTrueAuthProvider(t *testing.T) {
 	e2 := expectLow(t, config.GetBaseURL2())
-	token := readToken(t)
-	createTestNamespace(e2, token)
+	token := readToken(t, RSATokenFilePath)
 
 	// create project
 	testProject := "auth_test"
@@ -150,7 +161,7 @@ func TestMultipleAppsCreation(t *testing.T) {
 
 	e2 := expectLow(t, config.GetBaseURL2())
 	testProject := "auth_test"
-	token := readToken(t)
+	token := readToken(t, RSATokenFilePath)
 	_ = e2.POST(createProjectUrl(testProject)).WithHeader(Authorization, Bearer+token).Expect()
 
 	for i := 0; i < 5; i++ {
@@ -190,7 +201,7 @@ func TestMultipleAppsCreation(t *testing.T) {
 func TestListAppKeys(t *testing.T) {
 	e2 := expectLow(t, config.GetBaseURL2())
 	testProject := "auth_test"
-	token := readToken(t)
+	token := readToken(t, RSATokenFilePath)
 
 	_ = e2.POST(createProjectUrl(fmt.Sprintf("%s%d", testProject, 0))).WithHeader(Authorization, Bearer+token).Expect()
 	_ = e2.POST(createProjectUrl(fmt.Sprintf("%s%d", testProject, 1))).WithHeader(Authorization, Bearer+token).Expect()
@@ -235,7 +246,7 @@ func TestListAppKeys(t *testing.T) {
 func TestEmptyListAppKeys(t *testing.T) {
 	e2 := expectLow(t, config.GetBaseURL2())
 	testProject := "TestEmptyListAppKeys"
-	token := readToken(t)
+	token := readToken(t, RSATokenFilePath)
 
 	_ = e2.POST(createProjectUrl(testProject)).WithHeader(Authorization, Bearer+token).Expect()
 
@@ -251,7 +262,7 @@ func TestEmptyListAppKeys(t *testing.T) {
 func TestCreateAccessToken(t *testing.T) {
 	e2 := expectLow(t, config.GetBaseURL2())
 	testProject := "auth_test"
-	token := readToken(t)
+	token := readToken(t, RSATokenFilePath)
 
 	var createAppKeyPayload = make(map[string]string)
 	createAppKeyPayload["name"] = "test_key"

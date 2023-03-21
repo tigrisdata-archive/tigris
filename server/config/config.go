@@ -51,11 +51,12 @@ var (
 )
 
 const (
-	EnvDevelopment = "dev"
-	EnvProduction  = "prod"
-	EnvSandbox     = "sbx"
-	EnvTest        = "test"
-	EnvLocal       = "local"
+	EnvDevelopment      = "dev"
+	EnvProduction       = "prod"
+	EnvSandbox          = "sbx"
+	EnvTest             = "test"
+	EnvLocal            = "local"
+	EnvTigrisConfigFile = "TIGRIS_CONFIG_FILE"
 )
 
 func GetEnvironment() string {
@@ -86,6 +87,10 @@ func LoadConfig(config interface{}) {
 
 	// Deactivates lookup process for default server.yaml if
 	// configuration file is specified via the command line
+	if configFile == "" {
+		configFile = os.Getenv(EnvTigrisConfigFile)
+	}
+
 	if configFile != "" {
 		viper.SetConfigFile(configFile)
 	} else {
