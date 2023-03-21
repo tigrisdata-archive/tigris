@@ -76,6 +76,8 @@ services:
       - type: bind
         source: /tmp/tigris_coverdata
         target: /tmp/tigris_coverdata
+        bind:
+          create_host_path: true
     ports:
       - "8081:8081"
     command: >

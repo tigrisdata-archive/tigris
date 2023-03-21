@@ -7,7 +7,7 @@ V=v1
 GEN_DIR=${API_DIR}/server/${V}
 PROTO_DIR=${API_DIR}/proto/server/${V}
 DATA_PROTO_DIR=internal
-LINT_TIMEOUT=5m
+LINT_TIMEOUT=15m
 
 # Needed to be able to build amd64 binaries on MacOS M1
 DOCKER_DIR=test/docker
@@ -97,6 +97,7 @@ ${DATA_PROTO_DIR}/%.pb.go: ${DATA_PROTO_DIR}/%.proto
 
 coverdir:
 	mkdir -p /tmp/tigris_coverdata && chmod a+w /tmp/tigris_coverdata; rm -f /tmp/tigris_coverdata/*
+	ls -la /tmp/tigris_coverdata
 
 generate: ${GEN_DIR}/api.pb.go ${GEN_DIR}/api.pb.gw.go ${GEN_DIR}/health.pb.go ${GEN_DIR}/health.pb.gw.go ${GEN_DIR}/admin.pb.go ${GEN_DIR}/admin.pb.gw.go ${DATA_PROTO_DIR}/data.pb.go
 
@@ -120,3 +121,4 @@ dump_integration_coverage:
 	pkill -SIGTERM -f "/server/service" --exact
 	sleep 5
 	/usr/local/go/bin/go tool covdata textfmt -i=/tmp/tigris_coverdata/ -o coverage1.out
+
