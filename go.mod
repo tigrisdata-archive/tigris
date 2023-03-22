@@ -1,6 +1,6 @@
 module github.com/tigrisdata/tigris
 
-go 1.18
+go 1.20
 
 require (
 	github.com/DataDog/datadog-api-client-go v1.16.0
