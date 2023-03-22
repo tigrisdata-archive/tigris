@@ -88,36 +88,15 @@ services:
 
   tigris_server2:
     container_name: tigris_server2
-    image: tigris_server
+    image: tigris_server2
     environment:
-      - TIGRIS_SERVER_SERVER_PORT=8081
-      - TIGRIS_ENVIRONMENT=test
-      - TIGRIS_SERVER_SEARCH_AUTH_KEY=ts_test_key
-      - TIGRIS_SERVER_SEARCH_HOST=tigris_search
-      - TIGRIS_SERVER_LOG_FORMAT=console
-      - TIGRIS_SERVER_CDC_ENABLED=true
-      - TIGRIS_SERVER_SECONDARY_INDEX_WRITE_ENABLED=true
-      - TIGRIS_SERVER_AUTH_ENABLED=true
-      - TIGRIS_SERVER_AUTH_ENABLE_NAMESPACE_ISOLATION=true
-      - TIGRIS_SERVER_AUTH_ENABLE_OAUTH=true
-      - TIGRIS_SERVER_AUTH_LOG_ONLY=false
-      - TIGRIS_SERVER_AUTH_ADMIN_NAMESPACES=tigris_test
-      - TIGRIS_SERVER_AUTH_GOTRUE_SECRET=gotrue_test_secret
-      - TIGRIS_SERVER_AUTH_ISSUER_URLS=http://tigris_gotrue:8086,https://tigrisdata-dev.us.auth0.com
-      - TIGRIS_SERVER_AUTH_TOKEN_CACHE_SIZE=100
-      - TIGRIS_SERVER_AUTH_AUDIENCE=https://tigris-test
-      - TIGRIS_SERVER_AUTH_OAUTH_PROVIDER=gotrue
-      - TIGRIS_SERVER_AUTH_GOTRUE_USERNAME_SUFFIX=@m2m.tigrisdata.com
-      - TIGRIS_SERVER_AUTH_GOTRUE_URL=http://tigris_gotrue:8086
-      - TIGRIS_SERVER_AUTH_GOTRUE_ADMIN_USERNAME=test
-      - TIGRIS_SERVER_AUTH_GOTRUE_ADMIN_PASSWORD=test
-      - TIGRIS_SERVER_SECONDARY_INDEX_READ_ENABLED=true
-      - TIGRIS_SERVER_SECONDARY_INDEX_MUTATE_ENABLED=true
+      - TIGRIS_CONFIG_FILE=/etc/tigrisdata/tigris/server.test.yaml
     build:
       context: ../../
       dockerfile: docker/Dockerfile
       args:
         - BUILD_PARAM_ARG="-cover"
+        - BUILD_PROFILE=.test
     volumes:
       - type: volume
         source: dbdata

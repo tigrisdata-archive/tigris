@@ -97,14 +97,25 @@ func BypassAuthCaches(ctx context.Context) bool {
 
 func GetJWTValidators(config *config.Config) []*validator.Validator {
 	jwtValidators := make([]*validator.Validator, len(config.Auth.Issuers))
-	for i, issuer := range config.Auth.Issuers {
-		log.Info().Msg(issuer)
-		issuerURL, _ := url.Parse(issuer)
-		provider := jwks.NewCachingProvider(issuerURL, config.Auth.JWKSCacheTimeout)
+	for i, issuerCfg := range config.Auth.Issuers {
+		log.Info().Msg(issuerCfg.Issuer)
+		issuerURL, _ := url.Parse(issuerCfg.Issuer)
+		var keyFunc func(ctx context.Context) (interface{}, error)
+		switch issuerCfg.Algorithm {
+		case validator.RS256:
+			provider := jwks.NewCachingProvider(issuerURL, config.Auth.JWKSCacheTimeout)
+			keyFunc = provider.KeyFunc
+		case validator.HS256:
+			keyFunc = func(ctx context.Context) (interface{}, error) {
+				return []byte(issuerCfg.SharedSecret), nil
+			}
+		default:
+			panic("Unsupported Token signature algorithm")
+		}
 
 		jwtValidator, err := validator.New(
-			provider.KeyFunc,
-			validator.RS256,
+			keyFunc,
+			issuerCfg.Algorithm,
 			issuerURL.String(),
 			[]string{config.Auth.Audience},
 			validator.WithAllowedClockSkew(time.Duration(config.Auth.TokenClockSkewDurationSec)*time.Second),

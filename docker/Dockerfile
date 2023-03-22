@@ -20,7 +20,7 @@ RUN go mod download
 COPY . /build
 
 # This is used to compile with integration coverage enabled
-ARG BUILD_PARAM_ARG
+ARG BUILD_PARAM_ARG=""
 
 RUN --mount=type=cache,target=/root/.cache/go-build rm -f server/service && BUILD_PARAM=${BUILD_PARAM_ARG} make bins
 
@@ -36,8 +36,10 @@ RUN groupadd -r tigris && useradd -r -s /bin/false -g tigris tigris
 
 RUN mkdir -p /server /etc/tigrisdata/tigris /etc/foundationdb/
 
+ARG BUILD_PROFILE=""
+
 COPY --from=build /build/server/service /server/service
-COPY --from=build /build/config/server.yaml /etc/tigrisdata/tigris
+COPY --from=build /build/config/server${BUILD_PROFILE}.yaml /etc/tigrisdata/tigris
 COPY --from=build /usr/lib/libfdb_c.so /usr/lib/libfdb_c.so
 COPY --from=build /usr/bin/fdbcli /usr/bin/fdbcli
 

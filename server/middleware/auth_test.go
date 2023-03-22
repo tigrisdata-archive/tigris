@@ -37,7 +37,7 @@ func TestAuth(t *testing.T) {
 			Level: "error",
 		},
 		Auth: config.AuthConfig{
-			Issuers:                  []string{""},
+			Issuers:                  []config.IssuerConfig{},
 			Audience:                 "",
 			JWKSCacheTimeout:         0,
 			LogOnly:                  false,
