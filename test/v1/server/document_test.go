@@ -113,6 +113,67 @@ func TestInsert_AlreadyExists(t *testing.T) {
 	testError(resp, http.StatusConflict, api.Code_ALREADY_EXISTS, "duplicate key value, violates key constraint")
 }
 
+func TestInsert_EmptyArray(t *testing.T) {
+	db, _ := setupTests(t)
+	defer cleanupTests(t, db)
+
+	collectionName := "test_empty_array"
+	cases := []struct {
+		schema           Map
+		inputDoc         []Doc
+		primaryKeyLookup Map
+	}{
+		{
+			schema: Map{
+				"schema": Map{
+					"title": collectionName,
+					"properties": Map{
+						"int_value": Map{
+							"type": "integer",
+						},
+						"empty_array": Map{
+							"type":     "array",
+							"maxItems": 0,
+						},
+					},
+					"primary_key": []string{"int_value"},
+				},
+			},
+			inputDoc: []Doc{
+				{
+					"int_value":   10,
+					"empty_array": []string{},
+				},
+			},
+		},
+	}
+
+	createCollection(t, db, collectionName, cases[0].schema).Status(http.StatusOK)
+
+	insertDocuments(t, db, collectionName, cases[0].inputDoc, true).
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("status", "inserted")
+
+	readResp := readByFilter(t, db, collectionName, Map{}, nil, nil, nil)
+
+	var doc map[string]jsoniter.RawMessage
+	require.Equal(t, 1, len(readResp))
+	require.NoError(t, jsoniter.Unmarshal(readResp[0]["result"], &doc))
+
+	actualDoc := []byte(doc["data"])
+	expDoc, err := jsoniter.Marshal(cases[0].inputDoc[0])
+	require.NoError(t, err)
+	require.JSONEq(t, string(expDoc), string(actualDoc))
+
+	insertDocuments(t, db, collectionName, []Doc{{
+		"int_value":   11,
+		"empty_array": []interface{}{1, 1},
+	}}, true).
+		Status(http.StatusBadRequest)
+}
+
 func TestInsert_SupportedPrimaryKeys(t *testing.T) {
 	db, _ := setupTests(t)
 	defer cleanupTests(t, db)
@@ -318,10 +379,11 @@ func TestInsert_SingleRow(t *testing.T) {
 
 func TestInsert_CreatedUpdatedAt(t *testing.T) {
 	dbName := fmt.Sprintf("db_test_%s", t.Name())
+	defer deleteProject(t, dbName)
+
 	for _, index := range []bool{false, true} {
 		deleteProject(t, dbName)
 		createProject(t, dbName)
-		defer deleteProject(t, dbName)
 
 		collectionName := fmt.Sprintf("test_collection_%s", t.Name())
 		createCollection(t, dbName, collectionName,
@@ -4412,7 +4474,7 @@ func TestComplexObjectsCollectionSearch(t *testing.T) {
 			"c": Map{
 				"a": "foo",
 				"b": Map{"name": "this is free flow object but not indexed"},
-				"c": []Map{Map{"a": "car"}, Map{"a": "bike"}},
+				"c": []Map{{"a": "car"}, {"a": "bike"}},
 				"d": []string{"PARIS", "LONDON", "ENGLAND"},
 			},
 			"d": []string{"SANTA CLARA", "SAN JOSE"},

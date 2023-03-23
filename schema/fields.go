@@ -270,6 +270,7 @@ var SupportedFieldProperties = container.NewHashSet(
 	"index",
 	"facet",
 	"searchIndex",
+	"maxItems",
 )
 
 // Indexes is to wrap different index that a collection can have.
@@ -330,6 +331,7 @@ type FieldBuilder struct {
 	CreatedAt   *bool               `json:"createdAt,omitempty"`
 	UpdatedAt   *bool               `json:"updatedAt,omitempty"`
 	MaxLength   *int32              `json:"maxLength,omitempty"`
+	MaxItems    *int32              `json:"maxItems,omitempty"`
 	Auto        *bool               `json:"autoGenerate,omitempty"`
 	Sorted      *bool               `json:"sort,omitempty"`
 	Index       *bool               `json:"index,omitempty"`

@@ -100,12 +100,12 @@ func (fb *FactoryBuilder) deserializeProperties(properties jsoniter.RawMessage, 
 		}
 
 		if builder.Type == jsonSpecArray {
-			if builder.Items == nil {
+			if builder.Items != nil {
+				if err = fb.deserializeArray(builder.Items, &builder.Fields); err != nil {
+					return err
+				}
+			} else if builder.MaxItems == nil || *builder.MaxItems != 0 {
 				return errors.InvalidArgument("missing items for array field")
-			}
-
-			if err = fb.deserializeArray(builder.Items, &builder.Fields); err != nil {
-				return err
 			}
 		}
 
