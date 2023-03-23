@@ -159,26 +159,36 @@ func TestValue(t *testing.T) {
 }
 
 func TestFloatingPoint(t *testing.T) {
-	v1, err := NewDoubleValue(`9999999.1234567`)
-	require.NoError(t, err)
+	cases := []struct {
+		v1  []byte
+		v2  []byte
+		exp int
+	}{
+		{[]byte(`0`), []byte(`1`), -1},
+		{[]byte(`1`), []byte(`0`), 1},
+		{[]byte(`0`), []byte(`-1`), 1},
+		{[]byte(`-1`), []byte(`0`), -1},
+		{[]byte(`9999999.1234567`), []byte(`9999999.1234567`), 0},
+		{[]byte(`9999999.1234567`), []byte(`9999999.1234568`), -1},
+		{[]byte(`9999999.1234567`), []byte(`9999999.1234566`), 1},
+		{[]byte(`9999999.1234567`), []byte(`9999999.1234567`), 0},
+		{[]byte(`5e39`), []byte(`5e40`), -1},
+		{[]byte(`5e-39`), []byte(`5e-40`), 1},
+		{[]byte(`5e-40`), []byte(`5e-39`), -1},
+		{[]byte(`-9223372036854775807.000000000000000000001`), []byte(`-9223372036854775807`), -1},
+		{[]byte(fmt.Sprintf(`%f`, math.MaxFloat64)), []byte(fmt.Sprintf(`-%f`, math.MaxFloat64-1)), 1},
+	}
+	for _, c := range cases {
+		v1, err := NewDoubleValue(string(c.v1))
+		require.NoError(t, err)
 
-	v2, err := NewDoubleValue(`9999999.1234567`)
-	require.NoError(t, err)
+		v2, err := NewDoubleValue(string(c.v2))
+		require.NoError(t, err)
 
-	r, _ := v1.CompareTo(v2)
-	require.Equal(t, 0, r)
-
-	v2, err = NewDoubleValue(`9999999.1234568`)
-	require.NoError(t, err)
-
-	r, _ = v1.CompareTo(v2)
-	require.Equal(t, -1, r)
-
-	v2, err = NewDoubleValue(`9999999.1234566`)
-	require.NoError(t, err)
-
-	r, _ = v1.CompareTo(v2)
-	require.Equal(t, 1, r)
+		r, err := v1.CompareTo(v2)
+		require.NoError(t, err)
+		require.Equal(t, c.exp, r)
+	}
 }
 
 func TestStringCollation(t *testing.T) {

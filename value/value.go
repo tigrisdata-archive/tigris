@@ -19,6 +19,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"math"
+	"math/big"
 	"strconv"
 
 	jsoniter "github.com/json-iterator/go"
@@ -204,14 +205,14 @@ func (i *IntValue) String() string {
 type DoubleValue struct {
 	Double   float64
 	asString string
-	bin64Enc uint64
+	Float    *big.Float
 }
 
 func NewDoubleUsingFloat(v float64) *DoubleValue {
 	return &DoubleValue{
 		Double:   v,
-		bin64Enc: math.Float64bits(v),
 		asString: strconv.FormatFloat(v, 'f', -1, 64),
+		Float:    big.NewFloat(v),
 	}
 }
 
@@ -221,15 +222,15 @@ func NewDoubleValue(raw string) (*DoubleValue, error) {
 		return nil, errors.InvalidArgument(fmt.Errorf("unsupported value type: %w ", err).Error())
 	}
 
-	f, err := strconv.ParseFloat(raw, 64)
+	float, _, err := big.ParseFloat(raw, 0, 1000, big.ToNearestEven)
 	if err != nil {
 		return nil, errors.InvalidArgument(fmt.Errorf("unsupported value type: %w ", err).Error())
 	}
 
 	i := &DoubleValue{
 		Double:   val,
-		asString: strconv.FormatFloat(f, 'f', -1, 64),
-		bin64Enc: math.Float64bits(val),
+		Float:    float,
+		asString: strconv.FormatFloat(val, 'f', -1, 64),
 	}
 	return i, nil
 }
@@ -244,13 +245,7 @@ func (d *DoubleValue) CompareTo(v Value) (int, error) {
 		return -2, fmt.Errorf("wrong type compared ")
 	}
 
-	if d.bin64Enc == converted.bin64Enc {
-		return 0, nil
-	} else if d.bin64Enc < converted.bin64Enc {
-		return -1, nil
-	}
-
-	return 1, nil
+	return d.Float.Cmp(converted.Float), nil
 }
 
 func (d *DoubleValue) AsInterface() interface{} {
