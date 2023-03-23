@@ -59,6 +59,8 @@ type Gotrue struct {
 	AdminPassword      string `mapstructure:"admin_password" yaml:"admin_password" json:"admin_password"`
 	ClientIdLength     int    `mapstructure:"client_id_length" yaml:"client_id_length" json:"client_id_length"`
 	ClientSecretLength int    `mapstructure:"client_secret_length" yaml:"client_secret_length" json:"client_secret_length"`
+	// this is used to sign tokens with symmetric key signature algorithm
+	SharedSecret string `mapstructure:"shared_secret" yaml:"shared_secret" json:"shared_secret"`
 }
 
 type AuthConfig struct {
@@ -83,9 +85,8 @@ type AuthConfig struct {
 }
 
 type IssuerConfig struct {
-	Issuer       string                       `mapstructure:"issuer" yaml:"issuer" json:"issuer"`
-	Algorithm    validator.SignatureAlgorithm `mapstructure:"algorithm" yaml:"algorithm" json:"algorithm"`
-	SharedSecret string                       `mapstructure:"shared_secret" yaml:"shared_secret" json:"shared_secret"`
+	Issuer    string                       `mapstructure:"issuer" yaml:"issuer" json:"issuer"`
+	Algorithm validator.SignatureAlgorithm `mapstructure:"algorithm" yaml:"algorithm" json:"algorithm"`
 }
 
 type CdcConfig struct {
