@@ -17,7 +17,6 @@ package middleware
 import (
 	"context"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -108,7 +107,7 @@ func GetJWTValidators(config *config.Config) []*validator.Validator {
 			keyFunc = provider.KeyFunc
 		case validator.HS256:
 			keyFunc = func(ctx context.Context) (interface{}, error) {
-				return []byte(os.Getenv(issuerCfg.SharedSecretEnvKey)), nil
+				return []byte(config.Auth.Gotrue.SharedSecret), nil
 			}
 		default:
 			panic("Unsupported Token signature algorithm")
