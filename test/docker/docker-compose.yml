@@ -91,6 +91,7 @@ services:
     image: tigris_server2
     environment:
       - TIGRIS_CONFIG_FILE=/etc/tigrisdata/tigris/server.test.yaml
+      - HS256_SIGNATURE_KEY=test_shared_secret
     build:
       context: ../../
       dockerfile: docker/Dockerfile

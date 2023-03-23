@@ -83,9 +83,9 @@ type AuthConfig struct {
 }
 
 type IssuerConfig struct {
-	Issuer       string                       `mapstructure:"issuer" yaml:"issuer" json:"issuer"`
-	Algorithm    validator.SignatureAlgorithm `mapstructure:"algorithm" yaml:"algorithm" json:"algorithm"`
-	SharedSecret string                       `mapstructure:"shared_secret" yaml:"shared_secret" json:"shared_secret"`
+	Issuer             string                       `mapstructure:"issuer" yaml:"issuer" json:"issuer"`
+	Algorithm          validator.SignatureAlgorithm `mapstructure:"algorithm" yaml:"algorithm" json:"algorithm"`
+	SharedSecretEnvKey string                       `mapstructure:"shared_secret_env_key" yaml:"shared_secret_env_key" json:"shared_secret_env_key"`
 }
 
 type CdcConfig struct {

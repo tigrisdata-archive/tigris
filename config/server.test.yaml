@@ -40,7 +40,7 @@ auth:
       algorithm: RS256
     - issuer: http://tigris_gotrue:8086
       algorithm: HS256
-      shared_secret: test_shared_secret
+      shared_secret_env_key: HS256_SIGNATURE_KEY
   token_cache_size: 100
   audience: https://tigris-test
   oauth_provider: gotrue
