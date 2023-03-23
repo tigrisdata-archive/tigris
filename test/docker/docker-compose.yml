@@ -91,6 +91,7 @@ services:
     image: tigris_server2
     environment:
       - TIGRIS_CONFIG_FILE=/etc/tigrisdata/tigris/server.test.yaml
+      - TIGRIS_SERVER_AUTH_GOTRUE_SHARED_SECRET=test_shared_secret
     build:
       context: ../../
       dockerfile: docker/Dockerfile
