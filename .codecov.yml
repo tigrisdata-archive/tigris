@@ -1,0 +1,7 @@
+codecov:
+  require_ci_to_pass: true
+  notify:
+    after_n_builds: 3 # integration tests + cli tests + reviewpad
+    wait_for_ci: true
+coverage:
+  range: "50...60"

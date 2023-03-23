@@ -64,8 +64,23 @@ func (sessions *SessionManager) Execute(ctx context.Context, runner Runner) (Res
 		return Response{}, errors.NotFound("tenant '%s' not found", namespace)
 	}
 
-	resp, err := runner.Run(ctx, tenant)
+	resp, err := sessions.execute(ctx, tenant, runner)
+	if err != nil && shouldRecheckTenantVersion(err) {
+		_ = sessions.TrackVersion(ctx, tenant)
+
+		resp, err = sessions.execute(ctx, tenant, runner)
+	}
+
 	return resp, createApiError(err)
+}
+
+func (sessions *SessionManager) execute(ctx context.Context, tenant *metadata.Tenant, runner Runner) (Response, error) {
+	return runner.Run(ctx, tenant)
+}
+
+func (sessions *SessionManager) TrackVersion(ctx context.Context, tenant *metadata.Tenant) error {
+	_, err := sessions.tenantTracker.InstantTracking(ctx, nil, tenant)
+	return err
 }
 
 func (sessions *SessionManager) TxExecute(ctx context.Context, runner TxRunner) (Response, error) {
@@ -78,7 +93,7 @@ func (sessions *SessionManager) TxExecute(ctx context.Context, runner TxRunner) 
 		return Response{}, errors.NotFound("tenant '%s' not found", namespace)
 	}
 
-	if _, err = sessions.tenantTracker.InstantTracking(ctx, nil, tenant); err != nil {
+	if err = sessions.TrackVersion(ctx, tenant); err != nil {
 		return Response{}, err
 	}
 

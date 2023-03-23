@@ -100,16 +100,22 @@ func flatMap(key string, obj map[string]any, resp map[string]any, notFlat contai
 
 func UnFlatMap(flat map[string]any) map[string]any {
 	result := make(map[string]any)
+
 	for k, v := range flat {
 		keys := strings.Split(k, ObjFlattenDelimiter)
 		m := result
-		for i := 1; i < len(keys); i++ {
-			if _, ok := m[keys[i-1]]; !ok {
-				m[keys[i-1]] = make(map[string]any)
+
+		for i := 0; i < len(keys)-1; i++ {
+			if m[keys[i]] == nil {
+				m[keys[i]] = make(map[string]any)
 			}
-			m = m[keys[i-1]].(map[string]any)
+
+			m = m[keys[i]].(map[string]any)
 		}
-		m[keys[len(keys)-1]] = v
+
+		if v != nil {
+			m[keys[len(keys)-1]] = v
+		}
 	}
 
 	return result

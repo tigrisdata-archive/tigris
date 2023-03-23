@@ -57,6 +57,14 @@ func createApiError(err error) error {
 	return err
 }
 
+func shouldRecheckTenantVersion(err error) bool {
+	if e, ok := err.(metadata.Error); ok {
+		return e.Code() == metadata.ErrCodeProjectNotFound || e.Code() == metadata.ErrCodeSearchIndexNotFound
+	}
+
+	return false
+}
+
 func convertStoreErrToApiErr(id string, code int, msg string) *api.Error {
 	if len(msg) == 0 || code == 0 {
 		return nil

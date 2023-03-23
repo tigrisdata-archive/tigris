@@ -18,16 +18,16 @@
 
 set -e
 
-VERSION=1.20
+VERSION=1.20.2
 ARCH=$(dpkg --print-architecture)
 FN="go${VERSION}.linux-${ARCH}.tar.gz"
 
 case "$ARCH" in
 "amd64")
-  SHA256="5a9ebcc65c1cce56e0d2dc616aff4c4cedcfbda8cc6f0288cc08cda3b18dcbf1"
+  SHA256="4eaea32f59cde4dc635fbc42161031d13e1c780b87097f4b4234cfce671f1768"
   ;;
 "arm64")
-  SHA256="17700b6e5108e2a2c3b1a43cd865d3f9c66b7f1c5f0cec26d3672cc131cc0994"
+  SHA256="78d632915bb75e9a6356a47a42625fd1a785c83a64a643fedd8f61e31b1b3bef"
   ;;
 *)
   echo "No supported architecture."

@@ -15,7 +15,9 @@
 FROM tigrisdata/tigris-build-base:latest
 
 COPY go.mod /go/src/tigris/
-COPY test/docker/test-token.jwt /etc/test-token.jwt
+COPY test/docker/test-token-rsa.jwt /etc/test-token-rsa.jwt
+COPY test/docker/test-token-hs.jwt /etc/test-token-hs.jwt
+
 WORKDIR /go/src/tigris
 
 RUN GO111MODULE=on go mod download

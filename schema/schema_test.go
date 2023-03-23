@@ -67,6 +67,10 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		"K7": {
 			"type": "string",
 			"format": "date-time"
+		},
+		"K8": {
+			"type": "array",
+			"maxItems": 0
 		}
 	},
 	"primary_key": ["K1", "K2"]
@@ -83,6 +87,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		require.Equal(t, ByteType, fields[4].DataType)
 		require.Equal(t, UUIDType, fields[5].DataType)
 		require.Equal(t, DateTimeType, fields[6].DataType)
+		require.Equal(t, ArrayType, fields[7].DataType)
 	})
 	t.Run("test_supported_primary_keys", func(t *testing.T) {
 		schema := []byte(`{

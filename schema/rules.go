@@ -317,6 +317,10 @@ func validateObjectFields(f *Field, notSupported bool) error {
 
 func validateFields(f *Field, notSupported bool) error {
 	if f.DataType == ArrayType {
+		if len(f.Fields) == 0 {
+			return nil
+		}
+
 		if f.Fields[0].DataType != ObjectType {
 			return validateFieldAttribute(f, notSupported)
 		}
