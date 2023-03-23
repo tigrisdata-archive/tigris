@@ -106,6 +106,8 @@ func UnFlatMap(flat map[string]any) map[string]any {
 		for i := 1; i < len(keys); i++ {
 			if _, ok := m[keys[i-1]]; !ok {
 				m[keys[i-1]] = make(map[string]any)
+			} else if m[keys[i-1]] == nil {
+				m[keys[i-1]] = make(map[string]any)
 			}
 			m = m[keys[i-1]].(map[string]any)
 		}
