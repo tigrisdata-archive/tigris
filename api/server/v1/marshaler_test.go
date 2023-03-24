@@ -76,3 +76,53 @@ func TestJSONEncoding(t *testing.T) {
 		require.JSONEq(t, `{"hits":[],"facets":{"myField":{"counts":[{"count":32,"value":"adidas"}],"stats":{"avg":40,"count":50}}},"meta":{"found":1234, "matched_fields":null, "total_pages":0,"page":{"current":2,"size":10}}}`, string(r))
 	})
 }
+
+func TestQueryMetricsRequest(t *testing.T) {
+	exp := `{
+    "db": "db1",
+    "branch": "br1",
+    "collection": "coll1",
+    "from": 123,
+    "to": 234,
+    "metric_name": "metric1",
+    "quantile": 0.99,
+    "tigris_operation": "ALL",
+    "space_aggregation": "SUM",
+    "space_aggregated_by": [ "field1", "field2" ],
+    "function": "RATE",
+    "additional_functions": [{
+            "rollup": {
+				"aggregator": "SUM",
+                "interval": 12
+            }
+        }]
+	}`
+
+	var r1 QueryTimeSeriesMetricsRequest
+	err := jsoniter.Unmarshal([]byte(exp), &r1)
+	require.NoError(t, err)
+
+	expReq := QueryTimeSeriesMetricsRequest{
+		Db:                "db1",
+		Branch:            "br1",
+		Collection:        "coll1",
+		From:              123,
+		To:                234,
+		MetricName:        "metric1",
+		TigrisOperation:   TigrisOperation_ALL,
+		SpaceAggregation:  MetricQuerySpaceAggregation_SUM,
+		SpaceAggregatedBy: []string{"field1", "field2"},
+		Function:          MetricQueryFunction_RATE,
+		Quantile:          0.99,
+		AdditionalFunctions: []*AdditionalFunction{
+			{
+				Rollup: &RollupFunction{
+					Aggregator: RollupAggregator_ROLLUP_AGGREGATOR_SUM,
+					Interval:   12,
+				},
+			},
+		},
+	}
+
+	require.Equal(t, &expReq, &r1)
+}

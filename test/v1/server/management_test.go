@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build integration
+
 package server
 
 import (
@@ -26,8 +28,6 @@ import (
 	"github.com/tigrisdata/tigris/test/config"
 	"gopkg.in/gavv/httpexpect.v1"
 )
-
-type AdminTestMap map[string]interface{}
 
 func TestCreateNamespace(t *testing.T) {
 	listResp := listNamespaces(t)
@@ -65,13 +65,6 @@ func TestCreateNamespace(t *testing.T) {
 	assert.Equal(t, previousMaxId+1, createdNamespaceMap["code"])
 }
 
-func adminExpect(s httpexpect.LoggerReporter) *httpexpect.Expect {
-	return httpexpect.WithConfig(httpexpect.Config{
-		BaseURL:  config.GetBaseURL(),
-		Reporter: httpexpect.NewAssertReporter(s),
-	})
-}
-
 func TestListNamespaces(t *testing.T) {
 	name := fmt.Sprintf("namespace-b-%x", rand.Int63()) //nolint:gosec
 	_ = createNamespace(t, name)
@@ -96,7 +89,7 @@ func TestListNamespaces(t *testing.T) {
 func TestApplications(t *testing.T) {
 	errMsg := "{\"error\":{\"code\":\"INTERNAL\",\"message\":\"authentication not enabled on this server\"}}"
 
-	e := adminExpect(t)
+	e := expect(t)
 	for _, api := range []string{
 		"/v1/projects/p1/apps/keys/create",
 		"/v1/projects/p1/apps/keys/update",
@@ -117,16 +110,16 @@ func TestApplications(t *testing.T) {
 }
 
 func createNamespace(t *testing.T, name string) *httpexpect.Response {
-	e := adminExpect(t)
+	e := expect(t)
 	return e.POST(getCreateNamespaceURL()).
-		WithJSON(AdminTestMap{"name": name}).
+		WithJSON(Map{"name": name}).
 		Expect()
 }
 
 func listNamespaces(t *testing.T) *httpexpect.Response {
-	e := adminExpect(t)
+	e := expect(t)
 	return e.POST(listNamespaceUrl()).
-		WithJSON(AdminTestMap{}).
+		WithJSON(Map{}).
 		Expect()
 }
 
@@ -136,4 +129,96 @@ func getCreateNamespaceURL() string {
 
 func listNamespaceUrl() string {
 	return "/v1/management/namespaces/list"
+}
+
+func userMetaRequest(t *testing.T, token string, op string, key string, m Map) *httpexpect.Response {
+	e2 := expectLow(t, config.GetBaseURL2())
+	return e2.POST(getUserMetaURL(op, key)).
+		WithHeader(Authorization, Bearer+token).
+		WithJSON(m).
+		Expect()
+}
+
+func nsMetaRequest(t *testing.T, token string, op string, key string, m Map) *httpexpect.Response {
+	e2 := expectLow(t, config.GetBaseURL2())
+	return e2.POST(getNSMetaURL(op, key)).
+		WithHeader(Authorization, Bearer+token).
+		WithJSON(m).
+		Expect()
+}
+
+func getUserMetaURL(op string, key string) string {
+	return fmt.Sprintf("/v1/management/users/metadata/%s/%s", key, op)
+}
+
+func getNSMetaURL(op string, key string) string {
+	return fmt.Sprintf("/v1/management/namespace/metadata/%s/%s", key, op)
+}
+
+func TestUserMetadata(t *testing.T) {
+	token := readToken(t, RSATokenFilePath)
+
+	e2 := expectLow(t, config.GetBaseURL2())
+	_ = e2.POST(getCreateNamespaceURL()).
+		WithHeader(Authorization, Bearer+token).
+		WithJSON(Map{"name": "tigris_test", "id": "tigris_test"}).
+		Expect() // 200 or 409
+
+	testKey := fmt.Sprintf("test_key_%x", rand.Int63()) //nolint:gosec
+
+	resp := userMetaRequest(t, token, "insert", testKey, Map{"value": "value1"})
+	resp.Status(http.StatusOK)
+
+	resp = userMetaRequest(t, token, "insert", testKey, Map{"value": "value2"})
+	resp.Status(http.StatusInternalServerError)
+
+	resp = userMetaRequest(t, token, "get", testKey, nil)
+	resp.Status(http.StatusOK)
+	resp.JSON().Object().Value("metadataKey").Equal(testKey)
+	resp.JSON().Object().Value("value").Equal("value1")
+
+	resp = userMetaRequest(t, token, "update", testKey, Map{"value": "value3"})
+	resp.Status(http.StatusOK)
+
+	resp = userMetaRequest(t, token, "get", testKey, nil)
+	resp.Status(http.StatusOK)
+	resp.JSON().Object().Value("metadataKey").Equal(testKey)
+	resp.JSON().Object().Value("value").Equal("value3")
+
+	resp = userMetaRequest(t, token, "get", "non_existent_key", nil)
+	resp.Status(http.StatusOK)
+}
+
+func TestNamespaceMetadata(t *testing.T) {
+	token := readToken(t, RSATokenFilePath)
+
+	e2 := expectLow(t, config.GetBaseURL2())
+	_ = e2.POST(getCreateNamespaceURL()).
+		WithHeader(Authorization, Bearer+token).
+		WithJSON(Map{"name": "tigris_test", "id": "tigris_test"}).
+		Expect() // 200 or 409
+
+	testKey := fmt.Sprintf("test_key_%x", rand.Int63()) //nolint:gosec
+
+	resp := nsMetaRequest(t, token, "insert", testKey, Map{"value": "value1"})
+	resp.Status(http.StatusOK)
+
+	resp = nsMetaRequest(t, token, "insert", testKey, Map{"value": "value2"})
+	resp.Status(http.StatusInternalServerError)
+
+	resp = nsMetaRequest(t, token, "get", testKey, nil)
+	resp.Status(http.StatusOK)
+	resp.JSON().Object().Value("metadataKey").Equal(testKey)
+	resp.JSON().Object().Value("value").Equal("value1")
+
+	resp = nsMetaRequest(t, token, "update", testKey, Map{"value": "value3"})
+	resp.Status(http.StatusOK)
+
+	resp = nsMetaRequest(t, token, "get", testKey, nil)
+	resp.Status(http.StatusOK)
+	resp.JSON().Object().Value("metadataKey").Equal(testKey)
+	resp.JSON().Object().Value("value").Equal("value3")
+
+	resp = nsMetaRequest(t, token, "get", "non_existent_key", nil)
+	resp.Status(http.StatusOK)
 }

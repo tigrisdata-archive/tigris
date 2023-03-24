@@ -52,6 +52,8 @@ func (m *metadataSubspace) insertPayload(ctx context.Context, tx transaction.Tx,
 	ver int32, payload []byte,
 ) error {
 	if invalidArgs != nil {
+		log.Debug().Err(invalidArgs).Str("type", string(m.SubspaceName)).Str("key", key.String()).
+			Str("value", string(payload)).Msg("storing metadata")
 		return invalidArgs
 	}
 
@@ -60,7 +62,7 @@ func (m *metadataSubspace) insertPayload(ctx context.Context, tx transaction.Tx,
 	err := tx.Insert(ctx, key, data)
 
 	log.Debug().Err(err).Str("type", string(m.SubspaceName)).Str("key", key.String()).
-		Str("value", string(payload)).Msg("storing metadata succeed")
+		Str("value", string(payload)).Msg("storing metadata")
 
 	return err
 }

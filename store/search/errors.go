@@ -29,9 +29,7 @@ const (
 	ErrCodeUnhandled         ErrCode = 0x04
 )
 
-var (
-	errDuplicateFields = "There are duplicate field names in the schema."
-)
+var errDuplicateFields = "There are duplicate field names in the schema."
 
 type Error struct {
 	HttpCode int

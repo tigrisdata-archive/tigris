@@ -34,10 +34,10 @@ import (
 const (
 	Authorization    = "Authorization"
 	Bearer           = "bearer "
-	RSATokenFilePath = "/etc/test-token-rsa.jwt"
-	HSTokenFilePath  = "/etc/test-token-hs.jwt"
-	HSTokenAFilePath = "/etc/test-token-A-hs.jwt"
-	HSTokenBFilePath = "/etc/test-token-B-hs.jwt"
+	RSATokenFilePath = "../../docker/test-token-rsa.jwt"  //nolint:gosec
+	HSTokenFilePath  = "../../docker/test-token-hs.jwt"   //nolint:gosec
+	HSTokenAFilePath = "../../docker/test-token-A-hs.jwt" //nolint:gosec
+	HSTokenBFilePath = "../../docker/test-token-B-hs.jwt" //nolint:gosec
 )
 
 func readToken(t *testing.T, file string) string {
@@ -46,53 +46,60 @@ func readToken(t *testing.T, file string) string {
 	return string(tokenBytes)
 }
 
-func createTestNamespace(e2 *httpexpect.Expect, token string) {
-	// create namespace
-	var createNamespacePayload = make(map[string]string)
-	createNamespacePayload["name"] = "tigris_test"
-	createNamespacePayload["id"] = "tigris_test"
+func createTestNamespace(t *testing.T, token string) {
+	e2 := expectLow(t, config.GetBaseURL2())
+	createNamespacePayload := Map{
+		"name": "tigris_test",
+		"id":   "tigris_test",
+	}
 	_ = e2.POST(namespaceOperation("create")).
 		WithHeader(Authorization, Bearer+token).
-		WithJSON(createNamespacePayload).
-		Expect().
-		Status(http.StatusOK)
+		WithJSON(createNamespacePayload).Expect()
 }
 
 func TestHS256TokenValidation(t *testing.T) {
-	e2 := expectLow(t, config.GetBaseURL2())
 	token := readToken(t, HSTokenFilePath)
-	createTestNamespace(e2, token)
+	createTestNamespace(t, token)
 
 	// create project
 	testProject := "TestHS256TokenValidation"
-	_ = e2.POST(createProjectUrl(testProject)).WithHeader(Authorization, Bearer+token).Expect().Status(http.StatusOK)
+	deleteProject2(t, testProject, token)
+	createProject2(t, testProject, token).Status(http.StatusOK)
 }
 
 func TestMultipleAudienceSupport(t *testing.T) {
-	e2 := expectLow(t, config.GetBaseURL2())
 	tokenA := readToken(t, HSTokenAFilePath)
 	tokenB := readToken(t, HSTokenBFilePath)
+
+	createTestNamespace(t, tokenA)
 
 	// create project and test the successful response
 	testProjectA := "TestMultipleAudienceSupportA"
 	testProjectB := "TestMultipleAudienceSupportB"
-	_ = e2.POST(createProjectUrl(testProjectA)).WithHeader(Authorization, Bearer+tokenA).Expect().Status(http.StatusOK)
-	_ = e2.POST(createProjectUrl(testProjectB)).WithHeader(Authorization, Bearer+tokenB).Expect().Status(http.StatusOK)
+
+	deleteProject2(t, testProjectA, tokenA)
+	deleteProject2(t, testProjectB, tokenB)
+	createProject2(t, testProjectA, tokenA).Status(http.StatusOK)
+	createProject2(t, testProjectB, tokenB).Status(http.StatusOK)
 }
 
 func TestGoTrueAuthProvider(t *testing.T) {
 	e2 := expectLow(t, config.GetBaseURL2())
 	token := readToken(t, RSATokenFilePath)
 
+	createTestNamespace(t, token)
+
 	// create project
 	testProject := "auth_test"
-	_ = e2.POST(createProjectUrl(testProject)).WithHeader(Authorization, Bearer+token).Expect().Status(http.StatusOK)
+	deleteProject2(t, testProject, token)
+	createProject2(t, testProject, token).Status(http.StatusOK)
 
 	// create app key
-	var createAppKeyPayload = make(map[string]string)
-	createAppKeyPayload["name"] = "test_key"
-	createAppKeyPayload["description"] = "This key is used for integration test purpose."
-	createAppKeyPayload["project"] = testProject
+	createAppKeyPayload := Map{
+		"name":        "test_key",
+		"description": "This key is used for integration test purpose.",
+		"project":     testProject,
+	}
 
 	createdAppKey := e2.POST(appKeysOperation("auth_test", "create")).
 		WithHeader(Authorization, Bearer+token).WithJSON(createAppKeyPayload).
@@ -115,9 +122,10 @@ func TestGoTrueAuthProvider(t *testing.T) {
 	require.True(t, int(secret.Length().Raw()) == 50+len(auth.ClientSecretPrefix)) // length + prefix
 
 	// update
-	var updateAppKeyPayload = make(map[string]string)
-	updateAppKeyPayload["id"] = id.Raw()
-	updateAppKeyPayload["description"] = "[updated]This key is used for integration test purpose."
+	updateAppKeyPayload := Map{
+		"id":          id.Raw(),
+		"description": "[updated]This key is used for integration test purpose.",
+	}
 	updatedAppKey := e2.POST(appKeysOperation("auth_test", "update")).
 		WithHeader(Authorization, Bearer+token).WithJSON(updateAppKeyPayload).
 		Expect().
@@ -129,8 +137,6 @@ func TestGoTrueAuthProvider(t *testing.T) {
 	require.Equal(t, "[updated]This key is used for integration test purpose.", updatedAppKey.Object().Value("description").Raw())
 
 	// rotate
-	var rotateAppKeyPayload = make(map[string]string)
-	rotateAppKeyPayload["id"] = id.Raw()
 	rotatedKey := e2.POST(appKeysOperation("auth_test", "rotate")).
 		WithHeader(Authorization, Bearer+token).WithJSON(updateAppKeyPayload).
 		Expect().
@@ -148,7 +154,17 @@ func TestGoTrueAuthProvider(t *testing.T) {
 		Status(http.StatusOK).
 		JSON().
 		Object().Value("app_keys").Array()
-	require.Equal(t, 1, int(appKeys.Length().Raw()))
+
+	found := false
+	for i := 0; i < int(appKeys.Length().Raw()); i++ {
+		k := appKeys.Element(i)
+		if k.Object().Value("id").Raw() == id.Raw() {
+			found = true
+			require.NotEqual(t, secret.Raw(), rotatedKey.Object().Value("secret").Raw())
+		}
+	}
+
+	require.True(t, found)
 
 	retrievedAppKey := appKeys.Element(0)
 	require.Equal(t, id.Raw(), retrievedAppKey.Object().Value("id").String().Raw())
@@ -176,13 +192,16 @@ func TestMultipleAppsCreation(t *testing.T) {
 	e2 := expectLow(t, config.GetBaseURL2())
 	testProject := "auth_test"
 	token := readToken(t, RSATokenFilePath)
-	_ = e2.POST(createProjectUrl(testProject)).WithHeader(Authorization, Bearer+token).Expect()
+	createTestNamespace(t, token)
+	deleteProject2(t, testProject, token)
+	createProject2(t, testProject, token).Status(http.StatusOK)
 
 	for i := 0; i < 5; i++ {
-		var createAppKeyPayload = make(map[string]string)
-		createAppKeyPayload["name"] = fmt.Sprintf("test_key_%d", i)
-		createAppKeyPayload["description"] = "This key is used for integration test purpose."
-		createAppKeyPayload["project"] = testProject
+		createAppKeyPayload := Map{
+			"name":        fmt.Sprintf("test_key_%d", i),
+			"description": "This key is used for integration test purpose.",
+			"project":     testProject,
+		}
 
 		createdAppKey := e2.POST(appKeysOperation("auth_test", "create")).
 			WithHeader(Authorization, Bearer+token).WithJSON(createAppKeyPayload).
@@ -216,16 +235,20 @@ func TestListAppKeys(t *testing.T) {
 	e2 := expectLow(t, config.GetBaseURL2())
 	testProject := "auth_test"
 	token := readToken(t, RSATokenFilePath)
+	createTestNamespace(t, token)
 
-	_ = e2.POST(createProjectUrl(fmt.Sprintf("%s%d", testProject, 0))).WithHeader(Authorization, Bearer+token).Expect()
-	_ = e2.POST(createProjectUrl(fmt.Sprintf("%s%d", testProject, 1))).WithHeader(Authorization, Bearer+token).Expect()
+	deleteProject2(t, fmt.Sprintf("%s%d", testProject, 0), token)
+	deleteProject2(t, fmt.Sprintf("%s%d", testProject, 1), token)
+	createProject2(t, fmt.Sprintf("%s%d", testProject, 0), token).Status(http.StatusOK)
+	createProject2(t, fmt.Sprintf("%s%d", testProject, 1), token).Status(http.StatusOK)
 
 	for i := 0; i < 5; i++ {
-		var createAppKeyPayload = make(map[string]string)
 		projectForThisKey := fmt.Sprintf("%s%d", testProject, i%2)
-		createAppKeyPayload["name"] = fmt.Sprintf("test_key_%d", i)
-		createAppKeyPayload["description"] = "This key is used for integration test purpose."
-		createAppKeyPayload["project"] = projectForThisKey
+		createAppKeyPayload := Map{
+			"name":        fmt.Sprintf("test_key_%d", i),
+			"description": "This key is used for integration test purpose.",
+			"project":     projectForThisKey,
+		}
 
 		createdAppKey := e2.POST(appKeysOperation(projectForThisKey, "create")).
 			WithHeader(Authorization, Bearer+token).WithJSON(createAppKeyPayload).
@@ -261,27 +284,30 @@ func TestEmptyListAppKeys(t *testing.T) {
 	e2 := expectLow(t, config.GetBaseURL2())
 	testProject := "TestEmptyListAppKeys"
 	token := readToken(t, RSATokenFilePath)
+	createTestNamespace(t, token)
 
-	_ = e2.POST(createProjectUrl(testProject)).WithHeader(Authorization, Bearer+token).Expect()
+	deleteProject2(t, testProject, token)
+	createProject2(t, testProject, token).Status(http.StatusOK)
 
 	appKeys := e2.GET(appKeysOperation(testProject, "get")).
 		WithHeader(Authorization, Bearer+token).
 		Expect().
 		Status(http.StatusOK).
 		JSON().Object().Raw()
-	var emptyMap = make(map[string]interface{})
-	require.Equal(t, emptyMap, appKeys)
+	require.Equal(t, make(map[string]any), appKeys)
 }
 
 func TestCreateAccessToken(t *testing.T) {
 	e2 := expectLow(t, config.GetBaseURL2())
 	testProject := "auth_test"
 	token := readToken(t, RSATokenFilePath)
+	createTestNamespace(t, token)
 
-	var createAppKeyPayload = make(map[string]string)
-	createAppKeyPayload["name"] = "test_key"
-	createAppKeyPayload["description"] = "This key is used for integration test purpose."
-	createAppKeyPayload["project"] = testProject
+	createAppKeyPayload := Map{
+		"name":        "test_key",
+		"description": "This key is used for integration test purpose.",
+		"project":     testProject,
+	}
 
 	createdAppKey := e2.POST(appKeysOperation("auth_test", "create")).
 		WithHeader(Authorization, Bearer+token).WithJSON(createAppKeyPayload).
@@ -306,18 +332,20 @@ func TestCreateAccessToken(t *testing.T) {
 	require.NotNil(t, getAccessTokenResponse.JSON().Object().Value("expires_in"))
 
 	// use access token
-	_ = e2.POST(createProjectUrl("new-project-1")).WithHeader(Authorization, Bearer+accessToken).Expect().Status(http.StatusOK)
+	deleteProject2(t, "new-project-1", token)
+	createProject2(t, "new-project-1", accessToken).Status(http.StatusOK)
 
+	deleteProject2(t, "new-project-2", token)
 	// use access token bypassing auth caches
-	_ = e2.POST(createProjectUrl("new-project-2")).
+	_ = e2.POST(getProjectURL("new-project-2", "create")).
 		WithHeader(Authorization, Bearer+accessToken).
 		WithHeader(api.HeaderBypassAuthCache, "true").
 		Expect().
 		Status(http.StatusOK)
 
+	deleteProject2(t, "new-project-3", token)
 	// use access token with cache
-	_ = e2.POST(createProjectUrl("new-project-3")).WithHeader(Authorization, Bearer+accessToken).Expect().Status(http.StatusOK)
-
+	createProject2(t, "new-project-3", accessToken).Status(http.StatusOK)
 }
 
 func TestCreateAccessTokenUsingInvalidCreds(t *testing.T) {
@@ -333,9 +361,9 @@ func TestCreateAccessTokenUsingInvalidCreds(t *testing.T) {
 }
 
 func TestAuthFailure(t *testing.T) {
-	e2 := expectLow(t, config.GetBaseURL2())
-	testProject := "auth_test"
-	authFailureErrorResponse := e2.POST(createProjectUrl(testProject)).Expect().
+	token := readToken(t, RSATokenFilePath)
+	createTestNamespace(t, token)
+	authFailureErrorResponse := createProject2(t, "auth_test", "").
 		Status(http.StatusUnauthorized).
 		JSON().
 		Object().
@@ -343,4 +371,32 @@ func TestAuthFailure(t *testing.T) {
 		Object()
 	require.Equal(t, "UNAUTHENTICATED", authFailureErrorResponse.Value("code").String().Raw())
 	require.Equal(t, "request unauthenticated with bearer", authFailureErrorResponse.Value("message").String().Raw())
+
+	authFailureErrorResponse = createProject2(t, "auth_test", "aaa").
+		Status(http.StatusUnauthorized).
+		JSON().
+		Object().
+		Value("error").
+		Object()
+	require.Equal(t, "UNAUTHENTICATED", authFailureErrorResponse.Value("code").String().Raw())
+	require.Equal(t, "Failed to validate access token, could not be validated", authFailureErrorResponse.Value("message").String().Raw())
+}
+
+func createProject2(t *testing.T, projectName string, token string) *httpexpect.Response {
+	e2 := expectLow(t, config.GetBaseURL2())
+
+	if token != "" {
+		return e2.POST(getProjectURL(projectName, "create")).
+			WithHeader(Authorization, Bearer+token).
+			Expect()
+	}
+
+	return e2.POST(getProjectURL(projectName, "create")).Expect()
+}
+
+func deleteProject2(t *testing.T, projectName string, token string) {
+	e2 := expectLow(t, config.GetBaseURL2())
+	_ = e2.DELETE(getProjectURL(projectName, "delete")).
+		WithHeader(Authorization, Bearer+token).
+		Expect()
 }

@@ -15,10 +15,6 @@
 FROM tigrisdata/tigris-build-base:latest
 
 COPY go.mod /go/src/tigris/
-COPY test/docker/test-token-rsa.jwt /etc/test-token-rsa.jwt
-COPY test/docker/test-token-hs.jwt /etc/test-token-hs.jwt
-COPY test/docker/test-token-A-hs.jwt /etc/test-token-A-hs.jwt
-COPY test/docker/test-token-B-hs.jwt /etc/test-token-B-hs.jwt
 
 WORKDIR /go/src/tigris
 

@@ -97,6 +97,7 @@ ${DATA_PROTO_DIR}/%.pb.go: ${DATA_PROTO_DIR}/%.proto
 
 coverdir:
 	mkdir -p /tmp/tigris_coverdata && chmod a+w /tmp/tigris_coverdata; rm -f /tmp/tigris_coverdata/*
+	mkdir -p /tmp/tigris_coverdata2 && chmod a+w /tmp/tigris_coverdata2; rm -f /tmp/tigris_coverdata2/*
 
 generate: ${GEN_DIR}/api.pb.go ${GEN_DIR}/api.pb.gw.go ${GEN_DIR}/health.pb.go ${GEN_DIR}/health.pb.gw.go ${GEN_DIR}/admin.pb.go ${GEN_DIR}/admin.pb.gw.go ${DATA_PROTO_DIR}/data.pb.go
 
@@ -119,4 +120,5 @@ build_and_push_base_docker:
 dump_integration_coverage:
 	pkill -SIGTERM -f "/server/service" --exact
 	sleep 5
-	/usr/local/go/bin/go tool covdata textfmt -i=/tmp/tigris_coverdata/ -o coverage1.out
+	/usr/local/go/bin/go tool covdata textfmt -i=/tmp/tigris_coverdata/ -o coverage1.out # from tigris_server
+	/usr/local/go/bin/go tool covdata textfmt -i=/tmp/tigris_coverdata2/ -o coverage2.out # from tigris_server2
