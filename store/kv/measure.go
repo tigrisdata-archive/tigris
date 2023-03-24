@@ -25,10 +25,10 @@ type TxStoreWithMetrics struct {
 	kv TxStore
 }
 
-func NewKeyValueStoreWithMetrics(txStore TxStore) (TxStore, error) {
+func NewKeyValueStoreWithMetrics(txStore TxStore) TxStore {
 	return &TxStoreWithMetrics{
 		kv: txStore,
-	}, nil
+	}
 }
 
 func measureLow(ctx context.Context, name string, f func() error) {

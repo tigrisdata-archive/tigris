@@ -41,7 +41,7 @@ func GetRegisteredServicesRealtime(kvStore kv.TxStore, searchStore search.Store,
 	return v1Services
 }
 
-func GetRegisteredServices(kvStore kv.TxStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager, chunkTxMgr *transaction.Manager) []Service {
+func GetRegisteredServices(kvStore kv.TxStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager, forSearchTxMgr *transaction.Manager) []Service {
 	var v1Services []Service
 	v1Services = append(v1Services, newHealthService(txMgr))
 
@@ -59,11 +59,7 @@ func GetRegisteredServices(kvStore kv.TxStore, searchStore search.Store, tenantM
 
 	v1Services = append(v1Services, newObservabilityService(tenantMgr))
 	v1Services = append(v1Services, newCacheService(tenantMgr, txMgr))
+	v1Services = append(v1Services, newSearchService(searchStore, tenantMgr, forSearchTxMgr))
 
-	if config.DefaultConfig.Search.Chunking {
-		v1Services = append(v1Services, newSearchService(searchStore, tenantMgr, chunkTxMgr))
-	} else {
-		v1Services = append(v1Services, newSearchService(searchStore, tenantMgr, txMgr))
-	}
 	return v1Services
 }

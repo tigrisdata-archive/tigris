@@ -262,7 +262,6 @@ func (d *fdbkv) BeginTx(ctx context.Context) (baseTx, error) {
 }
 
 func (t *ftx) Insert(ctx context.Context, table []byte, key Key, data []byte) error {
-	listener := GetEventListener(ctx)
 	k := getFDBKey(table, key)
 
 	// Read the value and if exists reject the request.
@@ -276,23 +275,16 @@ func (t *ftx) Insert(ctx context.Context, table []byte, key Key, data []byte) er
 	}
 
 	t.tx.Set(k, data)
-	listener.OnSet(InsertEvent, table, k, data)
 
 	log.Debug().Str("table", string(table)).Interface("key", key).Msg("Insert")
 
 	return nil
 }
 
-func (t *ftx) Replace(ctx context.Context, table []byte, key Key, data []byte, isUpdate bool) error {
-	listener := GetEventListener(ctx)
+func (t *ftx) Replace(ctx context.Context, table []byte, key Key, data []byte, _ bool) error {
 	k := getFDBKey(table, key)
 
 	t.tx.Set(k, data)
-	if isUpdate {
-		listener.OnSet(UpdateEvent, table, k, data)
-	} else {
-		listener.OnSet(ReplaceEvent, table, k, data)
-	}
 
 	log.Debug().Str("table", string(table)).Interface("key", key).Msg("tx Replace")
 
@@ -300,14 +292,12 @@ func (t *ftx) Replace(ctx context.Context, table []byte, key Key, data []byte, i
 }
 
 func (t *ftx) Delete(ctx context.Context, table []byte, key Key) error {
-	listener := GetEventListener(ctx)
 	kr, err := fdb.PrefixRange(getFDBKey(table, key))
 	if ulog.E(err) {
 		return convertFDBToStoreErr(err)
 	}
 
 	t.tx.ClearRange(kr)
-	listener.OnClearRange(DeleteEvent, table, kr.Begin.FDBKey(), kr.End.FDBKey())
 
 	log.Debug().Str("table", string(table)).Interface("key", key).Msg("tx delete")
 
@@ -315,12 +305,10 @@ func (t *ftx) Delete(ctx context.Context, table []byte, key Key) error {
 }
 
 func (t *ftx) DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key) error {
-	listener := GetEventListener(ctx)
 	lk := getFDBKey(table, lKey)
 	rk := getFDBKey(table, rKey)
 
 	t.tx.ClearRange(fdb.KeyRange{Begin: lk, End: rk})
-	listener.OnClearRange(DeleteRangeEvent, table, lk, rk)
 
 	log.Debug().Str("table", string(table)).Interface("lKey", lKey).Interface("rKey", rKey).Msg("tx delete range")
 

@@ -57,7 +57,8 @@ func mainWithCode() int {
 	log.Info().Msgf("Number of CPUs: %v", runtime.NumCPU())
 	log.Info().Msgf("Server Type: '%v'", config.DefaultConfig.Server.Type)
 
-	closerFunc, err := tracing.InitTracer(&config.DefaultConfig)
+	defaultConfig := &config.DefaultConfig
+	closerFunc, err := tracing.InitTracer(defaultConfig)
 	if err != nil {
 		ulog.E(err)
 	}
@@ -69,36 +70,37 @@ func mainWithCode() int {
 
 	log.Info().Str("version", util.Version).Msgf("Starting server")
 
-	var kvStore kv.TxStore
-	if kvStore, err = createKVStore(false); err != nil {
-		log.Error().Err(err).Msg("error initializing kv store")
-		return 1
-	}
-
-	var kvStoreWithChunking kv.TxStore
-	if kvStoreWithChunking, err = createKVStore(true); err != nil {
-		log.Error().Err(err).Msg("error initializing kv chunking store")
-		return 1
-	}
-
 	var searchStore search.Store
-	if config.DefaultConfig.Tracing.Enabled {
-		searchStore, err = search.NewStoreWithMetrics(&config.DefaultConfig.Search)
+	if defaultConfig.Tracing.Enabled {
+		searchStore, err = search.NewStoreWithMetrics(&defaultConfig.Search)
 	} else {
-		searchStore, err = search.NewStore(&config.DefaultConfig.Search)
+		searchStore, err = search.NewStore(&defaultConfig.Search)
 	}
 	if err != nil {
 		log.Error().Err(err).Msg("error initializing search store")
 		return 1
 	}
 
-	txMgr := transaction.NewManager(kvStore)
+	// creating kv store for search and database independently allows us to enable functionality slowly. This is
+	// temporary as once we have functionality tested then
+	kvStoreForSearch, err := kvStoreForSearch(defaultConfig)
+	if err != nil {
+		log.Error().Err(err).Msg("error initializing kv store for search")
+		return 1
+	}
+	kvStoreForDatabase, err := kvStoreForDatabase(defaultConfig)
+	if err != nil {
+		log.Error().Err(err).Msg("error initializing kv store for database")
+		return 1
+	}
+
+	txMgr := transaction.NewManager(kvStoreForDatabase)
 	log.Info().Msg("initialized transaction manager")
 
-	chunkTxMgr := transaction.NewManager(kvStoreWithChunking)
-	log.Info().Msg("initialized transaction manager")
+	forSearchTxMgr := transaction.NewManager(kvStoreForSearch)
+	log.Info().Msg("initialized transaction manager for search")
 
-	tenantMgr := metadata.NewTenantManager(kvStore, searchStore, txMgr)
+	tenantMgr := metadata.NewTenantManager(kvStoreForDatabase, searchStore, txMgr)
 	log.Info().Msg("initialized tenant manager")
 
 	if err = tenantMgr.EnsureDefaultNamespace(); err != nil {
@@ -113,7 +115,7 @@ func mainWithCode() int {
 	defer quota.Cleanup()
 
 	mx := muxer.NewMuxer(cfg)
-	mx.RegisterServices(&cfg.Server, kvStore, searchStore, tenantMgr, txMgr, chunkTxMgr)
+	mx.RegisterServices(&cfg.Server, kvStoreForDatabase, searchStore, tenantMgr, txMgr, forSearchTxMgr)
 	port := cfg.Server.Port
 	if cfg.Server.Type == config.RealtimeServerType {
 		port = cfg.Server.RealtimePort
@@ -127,26 +129,22 @@ func mainWithCode() int {
 	return 0
 }
 
-func createKVStore(isChunking bool) (kv.TxStore, error) {
-	if isChunking {
-		kvStoreWithChunking, err := kv.NewChunkStore(&config.DefaultConfig.FoundationDB)
-		if err != nil {
-			return nil, err
-		}
-		if !config.DefaultConfig.Metrics.Fdb.Enabled {
-			return kvStoreWithChunking, nil
-		}
-
-		return kv.NewKeyValueStoreWithMetrics(kvStoreWithChunking)
+func kvStoreForDatabase(cfg *config.Config) (kv.TxStore, error) {
+	builder := kv.NewBuilder()
+	builder.WithListener() // database has a listener attached to it
+	if config.DefaultConfig.Metrics.Fdb.Enabled {
+		builder.WithMeasure()
 	}
+	return builder.Build(&cfg.FoundationDB)
+}
 
-	kvStore, err := kv.NewTxStore(&config.DefaultConfig.FoundationDB)
-	if err != nil {
-		return nil, err
+func kvStoreForSearch(cfg *config.Config) (kv.TxStore, error) {
+	builder := kv.NewBuilder()
+	if config.DefaultConfig.Search.Chunking {
+		builder.WithChunking()
 	}
-	if !config.DefaultConfig.Metrics.Fdb.Enabled {
-		return kvStore, nil
+	if config.DefaultConfig.Metrics.Fdb.Enabled {
+		builder.WithMeasure()
 	}
-
-	return kv.NewKeyValueStoreWithMetrics(kvStore)
+	return builder.Build(&cfg.FoundationDB)
 }
