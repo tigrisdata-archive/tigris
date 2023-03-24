@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/tigrisdata/tigris/internal"
-	"github.com/tigrisdata/tigris/server/config"
 )
 
 const (
@@ -40,20 +39,15 @@ type chunkCB func(chunkNo int32, chunkData []byte) error
 // remaining chunks only have body. The chunk number is appended at the end in the format "__<chunk number>". This number
 // is used during merging from the key so there is no information apart from total chunk is persisted in the value.
 type ChunkTxStore struct {
-	*KeyValueTxStore
+	TxStore
 }
 
-func NewChunkStore(cfg *config.FoundationDBConfig) (TxStore, error) {
-	kvStore, err := newTxStore(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ChunkTxStore{KeyValueTxStore: kvStore}, nil
+func NewChunkStore(store TxStore) TxStore {
+	return &ChunkTxStore{TxStore: store}
 }
 
-func (txStore *ChunkTxStore) BeginTx(ctx context.Context) (Tx, error) {
-	btx, err := txStore.KeyValueTxStore.BeginTx(ctx)
+func (store *ChunkTxStore) BeginTx(ctx context.Context) (Tx, error) {
+	btx, err := store.TxStore.BeginTx(ctx)
 	if err != nil {
 		return nil, err
 	}
