@@ -6,13 +6,14 @@ fi
 
 test_backup() {
   # Settings
-  TESTDIR=testdir
+  TESTDIR=/tmp/testdir
   TESTDB=backup_test
   TESTCOLL=backup_test
   SCHEMAFILE="${TESTDIR}/${TESTDB}.schema"
   DATAFILE="${TESTDIR}/${TESTDB}.${TESTCOLL}.backup"
 
   # Initialize test database
+  rm -rf "${TESTDIR}"
   $cli delete-project -f "${TESTDB}" || true
   $cli create project "${TESTDB}"
 

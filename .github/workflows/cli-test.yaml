@@ -34,7 +34,7 @@ jobs:
           TIGRIS_URL=localhost:8081 ./tigris ping --timeout 20s
 
       - name: Run CLI tests
-        run: noup=1 /bin/bash test/v1/cli/main.sh
+        run: TIGRIS_TEST_PORT=8081 TIGRIS_CLI_TEST_FAST=1 noup=1 /bin/bash test/v1/cli/main.sh
 
       - name: Dump integration tests coverage
         run: sudo make dump_integration_coverage
