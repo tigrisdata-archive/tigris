@@ -96,12 +96,12 @@ func BypassAuthCaches(ctx context.Context) bool {
 }
 
 func GetJWTValidators(config *config.Config) []*validator.Validator {
-	jwtValidators := make([]*validator.Validator, len(config.Auth.Issuers))
-	for i, issuerCfg := range config.Auth.Issuers {
-		log.Info().Msg(issuerCfg.Issuer)
-		issuerURL, _ := url.Parse(issuerCfg.Issuer)
+	jwtValidators := make([]*validator.Validator, len(config.Auth.Validators))
+	for i, validatorCfg := range config.Auth.Validators {
+		log.Info().Msg(validatorCfg.Issuer)
+		issuerURL, _ := url.Parse(validatorCfg.Issuer)
 		var keyFunc func(ctx context.Context) (interface{}, error)
-		switch issuerCfg.Algorithm {
+		switch validatorCfg.Algorithm {
 		case validator.RS256:
 			provider := jwks.NewCachingProvider(issuerURL, config.Auth.JWKSCacheTimeout)
 			keyFunc = provider.KeyFunc
@@ -115,9 +115,9 @@ func GetJWTValidators(config *config.Config) []*validator.Validator {
 
 		jwtValidator, err := validator.New(
 			keyFunc,
-			issuerCfg.Algorithm,
+			validatorCfg.Algorithm,
 			issuerURL.String(),
-			[]string{config.Auth.Audience},
+			[]string{validatorCfg.Audience},
 			validator.WithAllowedClockSkew(time.Duration(config.Auth.TokenClockSkewDurationSec)*time.Second),
 			validator.WithCustomClaims(
 				func() validator.CustomClaims {
