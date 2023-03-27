@@ -30,7 +30,7 @@ import (
 	"github.com/tigrisdata/tigris-client-go/tigris"
 )
 
-func TestClientCollectionBasic(t *testing.T) {
+func testClientCollectionBasic(t *testing.T, protocol string) {
 	ctx := context.TODO()
 
 	type Coll1 struct {
@@ -47,11 +47,9 @@ func TestClientCollectionBasic(t *testing.T) {
 	h, p := getTestServerHostPort()
 	var db *tigris.Database
 	var err error
-	var cfg *tigris.Config
+	cfg := &tigris.Config{URL: net.JoinHostPort(h, p), Project: projectName, Protocol: protocol}
 	for {
-		cfg = &tigris.Config{URL: net.JoinHostPort(h, p), Project: projectName}
-
-		drv, err := driver.NewDriver(ctx, &config.Driver{URL: cfg.URL})
+		drv, err := driver.NewDriver(ctx, &config.Driver{URL: cfg.URL, Protocol: protocol})
 		require.NoError(t, err)
 
 		deleteIfExists(ctx, drv, projectName)
@@ -120,7 +118,7 @@ func TestClientCollectionBasic(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestClientCollectionTx(t *testing.T) {
+func testClientCollectionTx(t *testing.T, protocol string) {
 	ctx := context.TODO()
 
 	type Coll1 struct {
@@ -131,9 +129,9 @@ func TestClientCollectionTx(t *testing.T) {
 	h, p := getTestServerHostPort()
 	var err error
 	var db *tigris.Database
-	cfg := &tigris.Config{URL: net.JoinHostPort(h, p), Project: projectName}
+	cfg := &tigris.Config{URL: net.JoinHostPort(h, p), Project: projectName, Protocol: protocol}
 	for {
-		drv, err := driver.NewDriver(ctx, &config.Driver{URL: cfg.URL})
+		drv, err := driver.NewDriver(ctx, &config.Driver{URL: cfg.URL, Protocol: protocol})
 		require.NoError(t, err)
 
 		deleteIfExists(ctx, drv, projectName)
@@ -221,6 +219,13 @@ func TestClientCollectionTx(t *testing.T) {
 
 	err = c.Drop(ctx)
 	require.NoError(t, err)
+}
+
+func TestClient(t *testing.T) {
+	for _, p := range []string{driver.GRPC, driver.HTTP} {
+		testClientCollectionBasic(t, p)
+		testClientCollectionTx(t, p)
+	}
 }
 
 func deleteIfExists(ctx context.Context, drv driver.Driver, project string) error {

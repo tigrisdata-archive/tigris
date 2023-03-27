@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"gopkg.in/gavv/httpexpect.v1"
+	"github.com/tigrisdata/tigris/schema"
 )
 
 func TestInsert_Bad_NotFoundRequest(t *testing.T) {
@@ -3625,6 +3626,109 @@ func TestRead_NestedFields(t *testing.T) {
 	require.JSONEq(t, string(expDoc), string(actualDoc))
 }
 
+func TestRead_AcceptApplicationJSON(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	inputDocument := []Doc{
+		{
+			"pkey_int":     210,
+			"int_value":    1000,
+			"string_value": "simple_insert110",
+			"bool_value":   true,
+			"double_value": 1000.000001,
+			"bytes_value":  []byte(`"simple_insert110"`),
+		},
+		{
+			"pkey_int":     220,
+			"int_value":    2000,
+			"string_value": "simple_insert120",
+			"bool_value":   false,
+			"double_value": 2000.22221,
+			"bytes_value":  []byte(`"simple_insert120"`),
+		},
+		{
+			"pkey_int":     230,
+			"string_value": "simple_insert130",
+			"bytes_value":  []byte(`"simple_insert130"`),
+		},
+		{
+			"pkey_int":     240,
+			"string_value": "simple_insert140",
+			"bytes_value":  []byte(`"simple_insert140"`),
+		},
+		{
+			"pkey_int":     250,
+			"string_value": "simple_insert150",
+			"bytes_value":  []byte(`"simple_insert150"`),
+		},
+	}
+
+	// should always succeed with mustNotExists as false
+	insertDocuments(t, db, coll, inputDocument, false).
+		Status(http.StatusOK)
+
+	cases := []struct {
+		filter       Map
+		limitAndSkip Map
+		expDocuments []int
+	}{
+		{
+			Map{
+				"$or": []Doc{
+					{"pkey_int": 210},
+					{"pkey_int": 220},
+					{"pkey_int": 230},
+				},
+			},
+			Map{
+				"limit": 2,
+			},
+			[]int{0, 1},
+		}, {
+			Map{},
+			Map{
+				"limit": 2,
+			},
+			[]int{0, 1},
+		}, {
+			Map{},
+			Map{
+				"limit": 2,
+				"skip": 2,
+			},
+			[]int{2, 3},
+		}, {
+			Map{},
+			Map{
+				"limit": 10,
+			},
+			[]int{0, 1, 2, 3, 4},
+		}, {
+			Map{},
+			Map{
+				"limit": 5,
+				"skip": 5,
+			},
+			nil,
+		},
+	}
+	for _, c := range cases {
+		var expDocuments []Doc
+		for _, idx := range c.expDocuments {
+			expDocuments = append(expDocuments, inputDocument[idx])
+		}
+		readAndValidateAcceptApplicationJSON(t,
+			db,
+			coll,
+			c.filter,
+			nil,
+			c.limitAndSkip,
+			nil,
+			expDocuments)
+	}
+}
+
 func TestTransaction_BadID(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)
@@ -4639,6 +4743,54 @@ func readAndValidatePkeyOrder(t *testing.T, db string, collection string, filter
 		actualDoc, err := jsoniter.Marshal(outputKeyToValue[p])
 		require.NoError(t, err)
 		require.JSONEqf(t, string(expDoc), string(actualDoc), "exp '%s' actual '%s'", string(expDoc), string(actualDoc))
+	}
+}
+
+func readAndValidateAcceptApplicationJSON(t *testing.T, db string, collection string, filter Map, fields Map, options Map, order []Map, inputDocument []Doc) {
+	payload := make(Map)
+	payload["fields"] = fields
+	if filter == nil {
+		payload["filter"] = json.RawMessage(`{}`)
+	} else {
+		payload["filter"] = filter
+	}
+	if len(order) > 0 {
+		payload["sort"] = order
+	}
+	if options != nil {
+		payload["options"] = options
+	}
+
+	e := expect(t)
+	str := e.POST(getDocumentURL(db, collection, "read")).
+		WithJSON(payload).
+		WithHeader("accept", "application/json").
+		Expect().
+		Status(http.StatusOK).
+		Body().
+		Raw()
+
+	type result struct {
+		Result struct {
+			Data []jsoniter.RawMessage `json:"data"`
+		} `json:"result"`
+	}
+
+	var res result
+	require.NoError(t, jsoniter.Unmarshal([]byte(str), &res))
+	require.Equal(t, len(inputDocument), len(res.Result.Data))
+	for i, element := range res.Result.Data {
+		var data map[string]jsoniter.RawMessage
+		require.NoError(t, jsoniter.Unmarshal(element, &data))
+		delete(data, schema.ReservedFields[schema.CreatedAt])
+		delete(data, schema.ReservedFields[schema.UpdatedAt])
+
+		out, err := jsoniter.Marshal(data)
+		require.NoError(t, err)
+
+		expDoc, err := jsoniter.Marshal(inputDocument[i])
+		require.NoError(t, err)
+		require.JSONEq(t, string(expDoc), string(out))
 	}
 }
 
