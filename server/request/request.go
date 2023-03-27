@@ -41,6 +41,10 @@ const (
 	Subject             = "sub"
 )
 
+const (
+	AcceptTypeApplicationJSON = "application/json"
+)
+
 var (
 	adminMethods = container.NewHashSet(api.CreateNamespaceMethodName, api.ListNamespaceMethodName, api.DescribeNamespacesMethodName)
 	tenantGetter metadata.TenantGetter
@@ -429,4 +433,9 @@ func NeedSchemaValidation(ctx context.Context) bool {
 
 func ReadSearchDataFromStorage(ctx context.Context) bool {
 	return api.GetHeader(ctx, api.HeaderReadSearchDataFromStorage) == "true"
+}
+
+func IsAcceptApplicationJSON(ctx context.Context) bool {
+	// we need to only check non grpc gateway prefix
+	return api.GetNonGRPCGatewayHeader(ctx, api.HeaderAccept) == AcceptTypeApplicationJSON
 }

@@ -836,13 +836,19 @@ func (x *UpdateResponse) MarshalJSON() ([]byte, error) {
 // Note: This also means any changes in ReadResponse proto needs to make sure that we add that here and similarly
 // the openAPI specs needs to be specified Data as object instead of bytes.
 func (x *ReadResponse) MarshalJSON() ([]byte, error) {
+	var md *Metadata
+	if x.Metadata != nil {
+		md1 := CreateMDFromResponseMD(x.Metadata)
+		md = &md1
+	}
+
 	resp := struct {
 		Data        jsoniter.RawMessage `json:"data,omitempty"`
-		Metadata    Metadata            `json:"metadata,omitempty"`
+		Metadata    *Metadata           `json:"metadata,omitempty"`
 		ResumeToken []byte              `json:"resume_token,omitempty"`
 	}{
 		Data:        x.Data,
-		Metadata:    CreateMDFromResponseMD(x.Metadata),
+		Metadata:    md,
 		ResumeToken: x.ResumeToken,
 	}
 	return jsoniter.Marshal(resp)

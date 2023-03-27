@@ -15,8 +15,11 @@
 package database
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 
+	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
@@ -30,11 +33,19 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/tigrisdata/tigris/value"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+const (
+	// defaultReadLimit is only applicable for non-streaming reads i.e. read when the content type is set
+	// as application/json.
+	defaultReadLimit = 256
 )
 
 // QueryRunner is responsible for executing the current query and return the response.
@@ -579,7 +590,7 @@ func (runner *StreamingQueryRunner) iterateOnKvStore(ctx context.Context, tx tra
 		return nil, err
 	}
 
-	return runner.iterate(coll, iter, options.fieldFactory)
+	return runner.iterate(ctx, coll, iter, options.fieldFactory)
 }
 
 func (runner *StreamingQueryRunner) iterateOnSecondaryIndexStore(ctx context.Context, tx transaction.Tx, coll *schema.DefaultCollection, options readerOptions) ([]byte, error) {
@@ -588,7 +599,7 @@ func (runner *StreamingQueryRunner) iterateOnSecondaryIndexStore(ctx context.Con
 		return nil, err
 	}
 
-	return runner.iterate(coll, NewFilterIterator(iter, options.filter), options.fieldFactory)
+	return runner.iterate(ctx, coll, NewFilterIterator(iter, options.filter), options.fieldFactory)
 }
 
 func (runner *StreamingQueryRunner) iterateOnSearchStore(ctx context.Context, coll *schema.DefaultCollection, options readerOptions) error {
@@ -598,28 +609,35 @@ func (runner *StreamingQueryRunner) iterateOnSearchStore(ctx context.Context, co
 		PageSize(defaultPerPage).
 		Build())
 
-	if _, err := runner.iterate(coll, rowReader.Iterator(coll, options.filter), options.fieldFactory); err != nil {
+	if _, err := runner.iterate(ctx, coll, rowReader.Iterator(coll, options.filter), options.fieldFactory); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (runner *StreamingQueryRunner) iterate(coll *schema.DefaultCollection, iterator Iterator, fieldFactory *read.FieldFactory) ([]byte, error) {
-	limit := int64(0)
+func (runner *StreamingQueryRunner) iterate(ctx context.Context, coll *schema.DefaultCollection, iterator Iterator, fieldFactory *read.FieldFactory) ([]byte, error) {
+	var (
+		row          Row
+		branch       = metadata.MainBranch
+		limit        int64
+		skip         int64
+		buffResponse []jsoniter.RawMessage
+	)
+
+	if runner.req.GetBranch() != "" {
+		branch = runner.req.GetBranch()
+	}
 	if runner.req.GetOptions() != nil {
 		limit = runner.req.GetOptions().Limit
 	}
-
-	skip := int64(0)
 	if runner.req.GetOptions() != nil {
 		skip = runner.req.GetOptions().Skip
 	}
 
-	var row Row
-	branch := "main"
-	if runner.req.GetBranch() != "" {
-		branch = runner.req.GetBranch()
+	isAcceptApplicationJSON := request.IsAcceptApplicationJSON(ctx)
+	if isAcceptApplicationJSON && limit == 0 {
+		limit = defaultReadLimit
 	}
 
 	limit += skip
@@ -646,17 +664,78 @@ func (runner *StreamingQueryRunner) iterate(coll *schema.DefaultCollection, iter
 			return row.Key, err
 		}
 
+		if isAcceptApplicationJSON {
+			if newValue, err = runner.injectMDInsideBody(newValue, row.Data.CreateToProtoTS(), row.Data.UpdatedToProtoTS()); err != nil {
+				return row.Key, err
+			}
+
+			// metadata will be injected inside the payload to simply unmarshaling for user
+			buffResponse = append(buffResponse, newValue)
+		} else {
+			if err := runner.streaming.Send(&api.ReadResponse{
+				Data: newValue,
+				Metadata: &api.ResponseMetadata{
+					CreatedAt: row.Data.CreateToProtoTS(),
+					UpdatedAt: row.Data.UpdatedToProtoTS(),
+				},
+				ResumeToken: row.Key,
+			}); ulog.E(err) {
+				return row.Key, err
+			}
+		}
+	}
+
+	if isAcceptApplicationJSON {
+		marshaled, err := jsoniter.Marshal(buffResponse)
+		if err != nil {
+			return nil, err
+		}
+
 		if err := runner.streaming.Send(&api.ReadResponse{
-			Data: newValue,
-			Metadata: &api.ResponseMetadata{
-				CreatedAt: row.Data.CreateToProtoTS(),
-				UpdatedAt: row.Data.UpdatedToProtoTS(),
-			},
-			ResumeToken: row.Key,
+			// no need to set resume token in this case.
+			Data: marshaled,
 		}); ulog.E(err) {
 			return row.Key, err
 		}
 	}
 
 	return row.Key, iterator.Interrupted()
+}
+
+func (runner *StreamingQueryRunner) injectMDInsideBody(raw []byte, createdAt *timestamppb.Timestamp, updatedAt *timestamppb.Timestamp) ([]byte, error) {
+	if len(raw) == 0 || (createdAt == nil && updatedAt == nil) {
+		return raw, nil
+	}
+
+	lastByte := raw[len(raw)-1]
+	raw = raw[0 : len(raw)-1]
+
+	var buf bytes.Buffer
+	_, _ = buf.Write(raw)
+
+	if createdAt != nil {
+		if err := runner.writeTimestamp(&buf, schema.ReservedFields[schema.CreatedAt], createdAt); err != nil {
+			return nil, err
+		}
+	}
+	if updatedAt != nil {
+		if err := runner.writeTimestamp(&buf, schema.ReservedFields[schema.UpdatedAt], updatedAt); err != nil {
+			return nil, err
+		}
+	}
+	buf.WriteByte(lastByte)
+
+	return buf.Bytes(), nil
+}
+
+func (runner *StreamingQueryRunner) writeTimestamp(buf *bytes.Buffer, key string, timestamp *timestamppb.Timestamp) error {
+	ts, err := jsoniter.Marshal(timestamp.AsTime())
+	if err != nil {
+		return err
+	}
+
+	// append comma first and write the pair
+	_, _ = buf.Write([]byte(fmt.Sprintf(`, "%s":%s`, key, ts)))
+
+	return nil
 }
