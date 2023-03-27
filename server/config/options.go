@@ -64,29 +64,30 @@ type Gotrue struct {
 }
 
 type AuthConfig struct {
-	Enabled                    bool           `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	Audience                   string         `mapstructure:"audience" yaml:"audience" json:"audience"`
-	Issuers                    []IssuerConfig `mapstructure:"issuers" yaml:"issuers" json:"issuers"`
-	JWKSCacheTimeout           time.Duration  `mapstructure:"jwks_cache_timeout" yaml:"jwks_cache_timeout" json:"jwks_cache_timeout"`
-	LogOnly                    bool           `mapstructure:"log_only" yaml:"log_only" json:"log_only"`
-	EnableNamespaceIsolation   bool           `mapstructure:"enable_namespace_isolation" yaml:"enable_namespace_isolation" json:"enable_namespace_isolation"`
-	AdminNamespaces            []string       `mapstructure:"admin_namespaces" yaml:"admin_namespaces" json:"admin_namespaces"`
-	OAuthProvider              string         `mapstructure:"oauth_provider" yaml:"oauth_provider" json:"oauth_provider"`
-	ClientId                   string         `mapstructure:"client_id" yaml:"client_id" json:"client_id"`
-	ExternalTokenURL           string         `mapstructure:"external_token_url" yaml:"external_token_url" json:"external_token_url"`
-	EnableOauth                bool           `mapstructure:"enable_oauth" yaml:"enable_oauth" json:"enable_oauth"`
-	TokenValidationCacheSize   int            `mapstructure:"token_cache_size" yaml:"token_cache_size" json:"token_cache_size"`
-	TokenValidationCacheTTLSec int            `mapstructure:"token_cache_ttl_sec" yaml:"token_cache_ttl_sec" json:"token_cache_ttl_sec"`
-	ExternalDomain             string         `mapstructure:"external_domain" yaml:"external_domain" json:"external_domain"`
-	ManagementClientId         string         `mapstructure:"management_client_id" yaml:"management_client_id" json:"management_client_id"`
-	ManagementClientSecret     string         `mapstructure:"management_client_secret" yaml:"management_client_secret" json:"management_client_secret"`
-	TokenClockSkewDurationSec  int            `mapstructure:"token_clock_skew_duration_sec" yaml:"token_clock_skew_duration_sec" json:"token_clock_skew_duration_sec"`
-	Gotrue                     Gotrue         `mapstructure:"gotrue" yaml:"gotrue" json:"gotrue"`
+	Enabled                    bool              `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Validators                 []ValidatorConfig `mapstructure:"validators" yaml:"validators" json:"validators"`
+	PrimaryAudience            string            `mapstructure:"primary_audience" yaml:"primary_audience" json:"primary_audience"`
+	JWKSCacheTimeout           time.Duration     `mapstructure:"jwks_cache_timeout" yaml:"jwks_cache_timeout" json:"jwks_cache_timeout"`
+	LogOnly                    bool              `mapstructure:"log_only" yaml:"log_only" json:"log_only"`
+	EnableNamespaceIsolation   bool              `mapstructure:"enable_namespace_isolation" yaml:"enable_namespace_isolation" json:"enable_namespace_isolation"`
+	AdminNamespaces            []string          `mapstructure:"admin_namespaces" yaml:"admin_namespaces" json:"admin_namespaces"`
+	OAuthProvider              string            `mapstructure:"oauth_provider" yaml:"oauth_provider" json:"oauth_provider"`
+	ClientId                   string            `mapstructure:"client_id" yaml:"client_id" json:"client_id"`
+	ExternalTokenURL           string            `mapstructure:"external_token_url" yaml:"external_token_url" json:"external_token_url"`
+	EnableOauth                bool              `mapstructure:"enable_oauth" yaml:"enable_oauth" json:"enable_oauth"`
+	TokenValidationCacheSize   int               `mapstructure:"token_cache_size" yaml:"token_cache_size" json:"token_cache_size"`
+	TokenValidationCacheTTLSec int               `mapstructure:"token_cache_ttl_sec" yaml:"token_cache_ttl_sec" json:"token_cache_ttl_sec"`
+	ExternalDomain             string            `mapstructure:"external_domain" yaml:"external_domain" json:"external_domain"`
+	ManagementClientId         string            `mapstructure:"management_client_id" yaml:"management_client_id" json:"management_client_id"`
+	ManagementClientSecret     string            `mapstructure:"management_client_secret" yaml:"management_client_secret" json:"management_client_secret"`
+	TokenClockSkewDurationSec  int               `mapstructure:"token_clock_skew_duration_sec" yaml:"token_clock_skew_duration_sec" json:"token_clock_skew_duration_sec"`
+	Gotrue                     Gotrue            `mapstructure:"gotrue" yaml:"gotrue" json:"gotrue"`
 }
 
-type IssuerConfig struct {
+type ValidatorConfig struct {
 	Issuer    string                       `mapstructure:"issuer" yaml:"issuer" json:"issuer"`
 	Algorithm validator.SignatureAlgorithm `mapstructure:"algorithm" yaml:"algorithm" json:"algorithm"`
+	Audience  string                       `mapstructure:"audience" yaml:"audience" json:"audience"`
 }
 
 type CdcConfig struct {
@@ -225,9 +226,13 @@ var DefaultConfig = Config{
 		FDBHardDrop:  true,
 	},
 	Auth: AuthConfig{
-		Enabled:                    false,
-		Issuers:                    []IssuerConfig{},
-		Audience:                   "https://tigris-api",
+		Enabled: false,
+		Validators: []ValidatorConfig{
+			{
+				Audience: "https://tigris-api",
+			},
+		},
+		PrimaryAudience:            "https://tigris-api",
 		JWKSCacheTimeout:           5 * time.Minute,
 		TokenValidationCacheSize:   1000,
 		TokenValidationCacheTTLSec: 7200, // 2hr
