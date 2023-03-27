@@ -253,7 +253,6 @@ type Dictionary struct {
 	clusterStore *ClusterSubspace
 	collStore    *CollectionSubspace
 	dbStore      *DatabaseSubspace
-	idxStore     *IndexSubspace
 
 	schemaStore       *SchemaSubspace
 	searchSchemaStore *SearchSchemaSubspace
@@ -267,7 +266,6 @@ func NewMetadataDictionary(mdNameRegistry *NameRegistry) *Dictionary {
 		nsStore:           NewNamespaceStore(mdNameRegistry),
 		clusterStore:      NewClusterStore(mdNameRegistry),
 		collStore:         newCollectionStore(mdNameRegistry),
-		idxStore:          newIndexStore(mdNameRegistry),
 		dbStore:           newDatabaseStore(mdNameRegistry),
 		schemaStore:       NewSchemaStore(mdNameRegistry),
 		searchSchemaStore: NewSearchSchemaStore(mdNameRegistry),
@@ -284,10 +282,6 @@ func (k *Dictionary) Collection() *CollectionSubspace {
 
 func (k *Dictionary) Database() *DatabaseSubspace {
 	return k.dbStore
-}
-
-func (k *Dictionary) Index() *IndexSubspace {
-	return k.idxStore
 }
 
 func (k *Dictionary) Schema() *SchemaSubspace {
@@ -366,30 +360,6 @@ func (k *Dictionary) DropCollection(ctx context.Context, tx transaction.Tx, coll
 	return k.Collection().softDelete(ctx, tx, namespaceId, dbId, collection)
 }
 
-func (k *Dictionary) CreateIndex(ctx context.Context, tx transaction.Tx, name string, namespaceId uint32,
-	dbId uint32, collId uint32,
-) (*IndexMetadata, error) {
-	id, err := k.allocate(ctx, tx)
-	if err != nil {
-		return nil, err
-	}
-
-	meta := &IndexMetadata{ID: id}
-
-	err = k.Index().insert(ctx, tx, namespaceId, dbId, collId, name, meta)
-	if err != nil {
-		return nil, err
-	}
-
-	return meta, nil
-}
-
-func (k *Dictionary) DropIndex(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32,
-	dbId uint32, collId uint32,
-) error {
-	return k.Index().softDelete(ctx, tx, namespaceId, dbId, collId, indexName)
-}
-
 func (k *Dictionary) allocate(ctx context.Context, tx transaction.Tx) (uint32, error) {
 	return k.reservedSb.allocateToken(ctx, tx, string(k.EncodingSubspaceName()))
 }
@@ -405,12 +375,6 @@ func (k *Dictionary) GetCollections(ctx context.Context, tx transaction.Tx, name
 	return k.Collection().list(ctx, tx, namespaceId, databaseId)
 }
 
-func (k *Dictionary) GetIndexes(ctx context.Context, tx transaction.Tx, namespaceId uint32, databaseId uint32,
-	collId uint32,
-) (map[string]*IndexMetadata, error) {
-	return k.Index().list(ctx, tx, namespaceId, databaseId, collId)
-}
-
 func (k *Dictionary) GetDatabase(ctx context.Context, tx transaction.Tx, dbName string, namespaceId uint32,
 ) (*DatabaseMetadata, error) {
 	return k.Database().Get(ctx, tx, namespaceId, dbName)
@@ -420,12 +384,6 @@ func (k *Dictionary) GetCollection(ctx context.Context, tx transaction.Tx, collN
 	namespaceId uint32, dbId uint32,
 ) (*CollectionMetadata, error) {
 	return k.Collection().Get(ctx, tx, namespaceId, dbId, collName)
-}
-
-func (k *Dictionary) GetIndex(ctx context.Context, tx transaction.Tx, indexName string, namespaceId uint32,
-	dbId uint32, collId uint32,
-) (*IndexMetadata, error) {
-	return k.Index().Get(ctx, tx, namespaceId, dbId, collId, indexName)
 }
 
 // decode is currently only use for debugging purpose, once we have a layer on top of this encoding then

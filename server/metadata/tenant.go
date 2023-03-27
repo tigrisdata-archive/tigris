@@ -603,13 +603,6 @@ func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbN
 	}
 
 	for coll, meta := range colls {
-		idxMeta, err := tenant.metaStore.GetIndexes(ctx, tx, tenant.namespace.Id(), database.id, meta.ID)
-		if err != nil {
-			database.needFixingCollections[coll] = struct{}{}
-			log.Debug().Err(err).Str("collection", coll).Msg("skipping loading collection")
-			continue
-		}
-
 		schemas, err := tenant.schemaStore.Get(ctx, tx, tenant.namespace.Id(), database.id, meta.ID)
 		if err != nil {
 			database.needFixingCollections[coll] = struct{}{}
@@ -628,7 +621,7 @@ func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbN
 
 		// Note: Skipping the error here as during create collection the online flow guarantees that schema is properly
 		// validated.
-		collection, err := createCollection(meta.ID, coll, schemas, idxMeta, searchCollectionName, fieldsInSearch)
+		collection, err := createCollection(meta.ID, coll, schemas, searchCollectionName, fieldsInSearch)
 		if err != nil {
 			database.needFixingCollections[coll] = struct{}{}
 			log.Debug().Err(err).Str("collection", coll).Msg("skipping loading collection")
@@ -647,7 +640,7 @@ func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbN
 		}
 		collection.EncodedTableIndexName = encIdxName
 
-		database.collections[coll] = newCollectionHolder(meta.ID, coll, collection, idxMeta)
+		database.collections[coll] = newCollectionHolder(meta.ID, coll, collection)
 		database.idToCollectionMap[meta.ID] = coll
 	}
 
@@ -1188,19 +1181,6 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 		return err
 	}
 
-	// encode indexes and add this back in the collection
-	indexes := schFactory.Indexes.GetIndexes()
-	idxMeta := make(map[string]*IndexMetadata)
-	for _, i := range indexes {
-		imeta, err := tenant.metaStore.CreateIndex(ctx, tx, i.Name, tenant.namespace.Id(), database.id, collMeta.ID)
-		if err != nil {
-			return err
-		}
-
-		idxMeta[i.Name] = imeta
-		i.Id = imeta.ID
-	}
-
 	// all good now persist the schema
 	if err = tenant.schemaStore.Put(ctx, tx, tenant.namespace.Id(), database.id, collMeta.ID, schFactory.Schema, baseSchemaVersion); err != nil {
 		return err
@@ -1239,7 +1219,7 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 	}
 	collection.EncodedTableIndexName = encIdxName
 
-	database.collections[schFactory.Name] = newCollectionHolder(collMeta.ID, schFactory.Name, collection, idxMeta)
+	database.collections[schFactory.Name] = newCollectionHolder(collMeta.ID, schFactory.Name, collection)
 	if config.DefaultConfig.Search.WriteEnabled {
 		// only creating implicit index here
 		if err := tenant.searchStore.CreateCollection(ctx, implicitSearchIndex.StoreSchema); err != nil {
@@ -1253,20 +1233,6 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 
 func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, database *Database, c *collectionHolder, schFactory *schema.Factory) error {
 	var err error
-
-	for _, idx := range schFactory.Indexes.GetIndexes() {
-		meta, ok := c.idxMeta[idx.Name]
-		if !ok {
-			// these are the new indexes present in the new collection
-			meta, err = tenant.metaStore.CreateIndex(ctx, tx, idx.Name, tenant.namespace.Id(), database.id, c.id)
-			if err != nil {
-				return err
-			}
-			c.addIndex(idx.Name, meta)
-		}
-
-		idx.Id = meta.ID
-	}
 
 	existingCollection := c.collection
 
@@ -1327,7 +1293,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 	collection.EncodedTableIndexName = encIdxName
 
 	// recreating collection holder is fine because we are working on databaseClone and also has a lock on the tenant
-	database.collections[schFactory.Name] = newCollectionHolder(c.id, schFactory.Name, collection, c.idxMeta)
+	database.collections[schFactory.Name] = newCollectionHolder(c.id, schFactory.Name, collection)
 
 	if config.DefaultConfig.Search.WriteEnabled {
 		// update indexing store schema if there is a change
@@ -1375,11 +1341,6 @@ func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db 
 		return err
 	}
 
-	for idxName := range cHolder.idxMeta {
-		if err := tenant.metaStore.DropIndex(ctx, tx, idxName, tenant.namespace.Id(), db.id, cHolder.id); err != nil {
-			return err
-		}
-	}
 	if err := tenant.schemaStore.Delete(ctx, tx, tenant.namespace.Id(), db.id, cHolder.id); err != nil {
 		return err
 	}
@@ -1621,16 +1582,13 @@ type collectionHolder struct {
 	name string
 	// collection
 	collection *schema.DefaultCollection
-	// idxMeta is a map storing metadata of all the indexes that are part of this collection.
-	idxMeta map[string]*IndexMetadata
 }
 
-func newCollectionHolder(id uint32, name string, collection *schema.DefaultCollection, idxMeta map[string]*IndexMetadata) *collectionHolder {
+func newCollectionHolder(id uint32, name string, collection *schema.DefaultCollection) *collectionHolder {
 	return &collectionHolder{
 		id:         id,
 		name:       name,
 		collection: collection,
-		idxMeta:    idxMeta,
 	}
 }
 
@@ -1649,7 +1607,6 @@ func (c *collectionHolder) clone() *collectionHolder {
 		c.id,
 		c.name,
 		schema.Versions{{Version: c.collection.SchVer, Schema: c.collection.Schema}},
-		c.idxMeta,
 		implicitIndex.StoreIndexName(),
 		implicitIndex.StoreSchema.Fields,
 	)
@@ -1661,25 +1618,12 @@ func (c *collectionHolder) clone() *collectionHolder {
 	copyC.collection.EncodedName = c.collection.EncodedName
 	copyC.collection.EncodedTableIndexName = c.collection.EncodedTableIndexName
 
-	copyC.idxMeta = make(map[string]*IndexMetadata)
-	for k, v := range c.idxMeta {
-		m := *v
-		copyC.idxMeta[k] = &m
-	}
-
 	copyC.collection.SearchIndexes = make(map[string]*schema.SearchIndex)
 	for _, index := range c.collection.SearchIndexes {
 		copyC.collection.AddSearchIndex(index)
 	}
 
 	return &copyC
-}
-
-func (c *collectionHolder) addIndex(name string, idx *IndexMetadata) {
-	c.Lock()
-	defer c.Unlock()
-
-	c.idxMeta[name] = idx
 }
 
 // get returns the collection managed by this holder. At this point, a Collection object is safely constructed
@@ -1692,22 +1636,10 @@ func (c *collectionHolder) get() *schema.DefaultCollection {
 	return c.collection
 }
 
-func createCollection(id uint32, name string, schemas schema.Versions, idxMeta map[string]*IndexMetadata,
-	searchCollectionName string, fieldsInSearch []tsApi.Field,
-) (*schema.DefaultCollection, error) {
+func createCollection(id uint32, name string, schemas schema.Versions, searchCollectionName string, fieldsInSearch []tsApi.Field) (*schema.DefaultCollection, error) {
 	schFactory, err := schema.NewFactoryBuilder(false).Build(name, schemas.Latest().Schema)
 	if err != nil {
 		return nil, err
-	}
-
-	indexes := schFactory.Indexes.GetIndexes()
-	for _, index := range indexes {
-		idx, ok := idxMeta[index.Name]
-		if !ok {
-			return nil, errors.NotFound("dictionary encoding is missing for index '%s'", index.Name)
-		}
-
-		index.Id = idx.ID
 	}
 
 	schFactory.Schema = schemas.Latest().Schema

@@ -32,8 +32,8 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Equal(t, c.Name, "t1")
-		require.Equal(t, c.Indexes.PrimaryKey.Fields[0].FieldName, "cust_id")
-		require.Equal(t, c.Indexes.PrimaryKey.Fields[1].FieldName, "order_id")
+		require.Equal(t, c.PrimaryKey.Fields[0].FieldName, "cust_id")
+		require.Equal(t, c.PrimaryKey.Fields[1].FieldName, "order_id")
 	})
 	t.Run("test_create_failure", func(t *testing.T) {
 		reqSchema := []byte(`{"title":"Record of an order","properties":{"order_id":{"description":"A unique identifier for an order","type":"integer"},"cust_id":{"description":"A unique identifier for a customer","type":"integer"},"product":{"description":"name of the product","type":"string","maxLength":100},"quantity":{"description":"number of products ordered","type":"integer"},"price":{"description":"price of the product","type":"number"}},"primary_key":["cust_id","order_id"]}`)
@@ -118,11 +118,11 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 		require.NoError(t, err)
 		c, err := NewDefaultCollection(1, 1, sch, nil, nil)
 		require.NoError(t, err)
-		require.Equal(t, StringType, c.Indexes.PrimaryKey.Fields[0].DataType)
-		require.Equal(t, Int64Type, c.Indexes.PrimaryKey.Fields[1].DataType)
-		require.Equal(t, ByteType, c.Indexes.PrimaryKey.Fields[2].DataType)
-		require.Equal(t, UUIDType, c.Indexes.PrimaryKey.Fields[3].DataType)
-		require.Equal(t, DateTimeType, c.Indexes.PrimaryKey.Fields[4].DataType)
+		require.Equal(t, StringType, c.PrimaryKey.Fields[0].DataType)
+		require.Equal(t, Int64Type, c.PrimaryKey.Fields[1].DataType)
+		require.Equal(t, ByteType, c.PrimaryKey.Fields[2].DataType)
+		require.Equal(t, UUIDType, c.PrimaryKey.Fields[3].DataType)
+		require.Equal(t, DateTimeType, c.PrimaryKey.Fields[4].DataType)
 	})
 	t.Run("test_unsupported_primary_key", func(t *testing.T) {
 		schema := []byte(`{
@@ -243,15 +243,9 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 			Id:             1,
 			SchVer:         1,
 			Name:           "t1",
-			Indexes: &Indexes{
-				PrimaryKey: &Index{
-					Fields: []*Field{{FieldName: "id", DataType: Int64Type, PrimaryKeyField: &b}},
-					Name:   "pkey",
-				},
-				SecondaryIndex: &Index{
-					Fields: []*Field{},
-					Name:   "skey",
-				},
+			PrimaryKey: &Index{
+				Fields: []*Field{{FieldName: "id", DataType: Int64Type, PrimaryKeyField: &b}},
+				Name:   "pkey",
 			},
 			Fields: []*Field{
 				{FieldName: "id", DataType: Int64Type, PrimaryKeyField: &b},
@@ -523,7 +517,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 			}
 		}
 		require.True(t, primaryKeyPresent)
-		require.Equal(t, UUIDType, c.Indexes.PrimaryKey.Fields[0].DataType)
+		require.Equal(t, UUIDType, c.PrimaryKey.Fields[0].DataType)
 	})
 	t.Run("test_no-primary-key-user-id", func(t *testing.T) {
 		schema := []byte(`{
@@ -554,7 +548,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 			}
 		}
 		require.True(t, primaryKeyPresent)
-		require.Equal(t, Int64Type, c.Indexes.PrimaryKey.Fields[0].DataType)
+		require.Equal(t, Int64Type, c.PrimaryKey.Fields[0].DataType)
 	})
 }
 

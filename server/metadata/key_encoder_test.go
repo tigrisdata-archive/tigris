@@ -27,7 +27,6 @@ func TestEncodeDecodeKey(t *testing.T) {
 		Id:   5,
 		Name: "test_coll",
 	}
-	idx := &schema.Index{Id: 10}
 	ns := NewTenantNamespace("test_ns", NewNamespaceMetadata(1, "test_ns", "test_ns-display_name"))
 	db := &Database{
 		id:   3,
@@ -63,9 +62,6 @@ func TestEncodeDecodeKey(t *testing.T) {
 	require.Equal(t, uint32(1), ByteToUInt32(encodedTable[4:8]))
 	require.Equal(t, uint32(3), ByteToUInt32(encodedTable[8:12]))
 	require.Equal(t, uint32(5), ByteToUInt32(encodedTable[12:16]))
-
-	encodedIdx := k.EncodeIndexName(idx)
-	require.Equal(t, uint32(10), ByteToUInt32(encodedIdx))
 
 	tenantID, dbID, collID, ok := k.DecodeTableName(encodedTable)
 	require.True(t, ok)

@@ -129,7 +129,8 @@ type Factory struct {
 	Fields []*Field
 	// Indexes is a wrapper on the indexes part of this collection. At this point the dictionary encoded value is not
 	// set for these indexes which is set as part of collection creation.
-	Indexes *Indexes
+	PrimaryKey *Index
+	Indexes    *Indexes
 	// Schema is the raw JSON schema received as part of CreateOrUpdateCollection request. This is stored as-is in the
 	// schema subspace.
 	Schema jsoniter.RawMessage
@@ -137,6 +138,10 @@ type Factory struct {
 	CollectionType  CollectionType
 	IndexingVersion string
 	Version         int32
+}
+
+func (f *Factory) GetPrimaryKey() *Index {
+	return f.PrimaryKey
 }
 
 func RemoveIndexingVersion(schema jsoniter.RawMessage) jsoniter.RawMessage {
@@ -226,11 +231,11 @@ func (fb *FactoryBuilder) Build(collection string, reqSchema jsoniter.RawMessage
 
 	factory := &Factory{
 		Fields: fields,
+		PrimaryKey: &Index{
+			Name:   PrimaryKeyIndexName,
+			Fields: primaryKeyFields,
+		},
 		Indexes: &Indexes{
-			PrimaryKey: &Index{
-				Name:   PrimaryKeyIndexName,
-				Fields: primaryKeyFields,
-			},
 			SecondaryIndex: &Index{
 				Name:   SecondaryKeyIndexName,
 				Fields: []*Field{},

@@ -276,14 +276,7 @@ var SupportedFieldProperties = container.NewHashSet(
 
 // Indexes is to wrap different index that a collection can have.
 type Indexes struct {
-	PrimaryKey     *Index
 	SecondaryIndex *Index
-}
-
-func (i *Indexes) GetIndexes() []*Index {
-	var indexes []*Index
-	indexes = append(indexes, i.PrimaryKey)
-	return indexes
 }
 
 // Index can be composite, so it has a list of fields, each index has name and encoded id. The encoded is used for key

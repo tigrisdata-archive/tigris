@@ -47,8 +47,8 @@ type DefaultCollection struct {
 	EncodedTableIndexName []byte
 	// Fields are derived from the user schema.
 	Fields []*Field
-	// Indexes is a wrapper on the indexes part of this collection.
-	Indexes *Indexes
+	// Primary Key contains the fields used to make up the primary key
+	PrimaryKey *Index
 	// Validator is used to validate the JSON document. As it is expensive to create this, it is only created once
 	// during constructor of the collection.
 	Validator *jsonschema.Schema
@@ -168,7 +168,7 @@ func NewDefaultCollection(id uint32, schVer int, factory *Factory, schemas Versi
 		SchVer:                   schVer,
 		Name:                     factory.Name,
 		Fields:                   factory.Fields,
-		Indexes:                  factory.Indexes,
+		PrimaryKey:               factory.GetPrimaryKey(),
 		Validator:                validator,
 		Schema:                   factory.Schema,
 		QueryableFields:          queryableFields,
@@ -194,6 +194,10 @@ func (d *DefaultCollection) AddSearchIndex(index *SearchIndex) {
 	d.SearchIndexes[index.Name] = index
 }
 
+func (d *DefaultCollection) SecondaryIndexName() string {
+	return "skey"
+}
+
 func (d *DefaultCollection) GetName() string {
 	return d.Name
 }
@@ -210,8 +214,8 @@ func (d *DefaultCollection) GetFields() []*Field {
 	return d.Fields
 }
 
-func (d *DefaultCollection) GetIndexes() *Indexes {
-	return d.Indexes
+func (d *DefaultCollection) GetPrimaryKey() *Index {
+	return d.PrimaryKey
 }
 
 func (d *DefaultCollection) GetQueryableFields() []*QueryableField {

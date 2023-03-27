@@ -54,8 +54,6 @@ type Encoder interface {
 	// EncodeSecondaryIndexTableName returns encoded bytes for the table name of a collections secondary index.
 	EncodeSecondaryIndexTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) ([]byte, error)
 	EncodePartitionTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) ([]byte, error)
-	// EncodeIndexName returns encoded bytes for the index name
-	EncodeIndexName(idx *schema.Index) []byte
 	// EncodeKey returns encoded bytes of the key which will be used to store the values in fdb. The Key return by this
 	// method has two parts,
 	//   - tableName: This is set with an encoding of namespace, database and collection id.
@@ -95,10 +93,6 @@ func (d *DictKeyEncoder) EncodeSecondaryIndexTableName(ns Namespace, db *Databas
 
 func (d *DictKeyEncoder) EncodePartitionTableName(ns Namespace, db *Database, coll *schema.DefaultCollection) ([]byte, error) {
 	return d.encodedTableName(ns, db, coll, internal.PartitionKeyPrefix), nil
-}
-
-func (d *DictKeyEncoder) EncodeIndexName(idx *schema.Index) []byte {
-	return d.encodedIdxName(idx)
 }
 
 func (d *DictKeyEncoder) EncodeKey(encodedTable []byte, idx *schema.Index, idxParts []interface{}) (keys.Key, error) {

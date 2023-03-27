@@ -131,7 +131,7 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 			return nil, nil, err
 		}
 
-		keyGen := newKeyGenerator(doc, tenant.TableKeyGenerator, coll.Indexes.PrimaryKey)
+		keyGen := newKeyGenerator(doc, tenant.TableKeyGenerator, coll.GetPrimaryKey())
 		key, err := keyGen.generate(ctx, runner.txMgr, runner.encoder, coll.EncodedName)
 		if err != nil {
 			return nil, nil, err
@@ -208,9 +208,9 @@ func (runner *BaseQueryRunner) buildKeysUsingFilter(coll *schema.DefaultCollecti
 	}
 
 	kb := filter.NewPrimaryKeyEqBuilder(func(indexParts ...interface{}) (keys.Key, error) {
-		return runner.encoder.EncodeKey(coll.EncodedName, coll.Indexes.PrimaryKey, indexParts)
+		return runner.encoder.EncodeKey(coll.EncodedName, coll.GetPrimaryKey(), indexParts)
 	})
-	queryPlan, err := kb.Build(filters, coll.Indexes.PrimaryKey.Fields)
+	queryPlan, err := kb.Build(filters, coll.GetPrimaryKey().Fields)
 	if err != nil {
 		return nil, err
 	}

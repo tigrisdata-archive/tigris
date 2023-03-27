@@ -63,12 +63,6 @@ func TestDictionaryEncoding(t *testing.T) {
 
 	tx, err = tm.StartTx(ctx)
 	require.NoError(t, err)
-	indexMeta, err := k.CreateIndex(ctx, tx, "pkey", 1234, startId, startId+1)
-	require.NoError(t, err)
-	require.NoError(t, tx.Commit(ctx))
-
-	tx, err = tm.StartTx(ctx)
-	require.NoError(t, err)
 	d, err := k.GetDatabase(ctx, tx, "db-1", 1234)
 	require.NoError(t, err)
 	require.Equal(t, d.ID, dbMeta.ID)
@@ -76,11 +70,6 @@ func TestDictionaryEncoding(t *testing.T) {
 	c, err := k.GetCollection(ctx, tx, "coll-1", 1234, dbMeta.ID)
 	require.NoError(t, err)
 	require.Equal(t, c.ID, collMeta.ID)
-
-	i, err := k.GetIndex(ctx, tx, "pkey", 1234, dbMeta.ID, collMeta.ID)
-	require.NoError(t, err)
-	require.Equal(t, i.ID, indexMeta.ID)
-	require.NoError(t, tx.Commit(ctx))
 
 	// try assigning the same namespace id to some other namespace
 	tx, err = tm.StartTx(ctx)
@@ -178,61 +167,6 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 		require.NoError(t, tx.Commit(ctx))
 	})
 
-	t.Run("drop_index", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		tm := transaction.NewManager(kvStore)
-
-		k := NewMetadataDictionary(newTestNameRegistry(t))
-		testClearDictionary(ctx, k, kvStore)
-
-		tx, err := tm.StartTx(ctx)
-		require.NoError(t, err)
-		require.NoError(t, k.ReserveNamespace(ctx, tx, "proj1-org-1", NewNamespaceMetadata(1234, "proj1-org-1", "proj1-org-1-display_name")))
-		require.NoError(t, tx.Commit(ctx))
-
-		tx, err = tm.StartTx(ctx)
-		require.NoError(t, err)
-		dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1234)
-		require.NoError(t, err)
-		require.NoError(t, tx.Commit(ctx))
-		require.NotEqual(t, 0, dbMeta.ID)
-
-		tx, err = tm.StartTx(ctx)
-		require.NoError(t, err)
-		collMeta, err := k.CreateCollection(ctx, tx, "coll-1", 1234, dbMeta.ID)
-		require.NoError(t, err)
-		require.NoError(t, tx.Commit(ctx))
-		require.NotEqual(t, 0, collMeta.ID)
-
-		tx, err = tm.StartTx(ctx)
-		require.NoError(t, err)
-		idxMeta, err := k.CreateIndex(ctx, tx, "idx-1", 1234, dbMeta.ID, collMeta.ID)
-		require.NoError(t, err)
-		require.NoError(t, tx.Commit(ctx))
-		require.NotEqual(t, 0, idxMeta.ID)
-
-		tx, err = tm.StartTx(ctx)
-		require.NoError(t, err)
-		v, err := k.GetIndex(ctx, tx, "idx-1", 1234, dbMeta.ID, collMeta.ID)
-		require.NoError(t, err)
-		require.NoError(t, tx.Commit(ctx))
-		require.Equal(t, v.ID, idxMeta.ID)
-
-		tx, err = tm.StartTx(ctx)
-		require.NoError(t, err)
-		err = k.DropIndex(ctx, tx, "idx-1", 1234, dbMeta.ID, collMeta.ID)
-		require.NoError(t, err)
-		require.NoError(t, tx.Commit(ctx))
-
-		tx, err = tm.StartTx(ctx)
-		require.NoError(t, err)
-		_, err = k.GetIndex(ctx, tx, "idx-1", 1234, dbMeta.ID, collMeta.ID)
-		require.Equal(t, errors.ErrNotFound, err)
-		require.NoError(t, tx.Commit(ctx))
-	})
-
 	t.Run("drop_collection_multiple", func(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -311,9 +245,6 @@ func TestDictionaryEncoding_Error(t *testing.T) {
 	_, err = k.CreateCollection(ctx, tx, "coll-1", 1234, 0)
 	require.Error(t, errors.InvalidArgument("invalid database id"), err)
 
-	_, err = k.CreateIndex(ctx, tx, "pkey", 1234, 1, 0)
-	require.Error(t, errors.InvalidArgument("invalid collection id"), err)
-
 	require.NoError(t, tx.Rollback(context.TODO()))
 }
 
@@ -365,30 +296,6 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 		require.Len(t, collToId, 2)
 		require.Equal(t, collToId["coll-1"], cid1)
 		require.Equal(t, collToId["coll-2"], cid2)
-	})
-
-	t.Run("get_indexes", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		k := NewMetadataDictionary(newTestNameRegistry(t))
-		testClearDictionary(ctx, k, kvStore)
-
-		tx, err := tm.StartTx(ctx)
-		require.NoError(t, err)
-		dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1)
-		require.NoError(t, err)
-
-		cid1, err := k.CreateCollection(ctx, tx, "coll-1", 1, dbMeta.ID)
-		require.NoError(t, err)
-
-		pkID, err := k.CreateIndex(ctx, tx, "pkey", 1, dbMeta.ID, cid1.ID)
-		require.NoError(t, err)
-		idxToId, err := k.GetIndexes(ctx, tx, 1, dbMeta.ID, cid1.ID)
-		require.NoError(t, err)
-		require.Len(t, idxToId, 1)
-		require.Equal(t, idxToId["pkey"], pkID)
-		require.NoError(t, tx.Commit(ctx))
 	})
 }
 
