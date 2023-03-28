@@ -282,11 +282,7 @@ type Indexes struct {
 func (i *Indexes) IsActiveIndex(name string) bool {
 	for _, idx := range i.All {
 		if idx.Name == name {
-			if idx.State == INDEX_ACTIVE {
-				return true
-			} else {
-				return false
-			}
+			return idx.State == INDEX_ACTIVE
 		}
 	}
 
