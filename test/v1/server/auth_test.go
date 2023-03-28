@@ -36,6 +36,8 @@ const (
 	Bearer           = "bearer "
 	RSATokenFilePath = "/etc/test-token-rsa.jwt"
 	HSTokenFilePath  = "/etc/test-token-hs.jwt"
+	HSTokenAFilePath = "/etc/test-token-A-hs.jwt"
+	HSTokenBFilePath = "/etc/test-token-B-hs.jwt"
 )
 
 func readToken(t *testing.T, file string) string {
@@ -64,6 +66,18 @@ func TestHS256TokenValidation(t *testing.T) {
 	// create project
 	testProject := "TestHS256TokenValidation"
 	_ = e2.POST(createProjectUrl(testProject)).WithHeader(Authorization, Bearer+token).Expect().Status(http.StatusOK)
+}
+
+func TestMultipleAudienceSupport(t *testing.T) {
+	e2 := expectLow(t, config.GetBaseURL2())
+	tokenA := readToken(t, HSTokenAFilePath)
+	tokenB := readToken(t, HSTokenBFilePath)
+
+	// create project and test the successful response
+	testProjectA := "TestMultipleAudienceSupportA"
+	testProjectB := "TestMultipleAudienceSupportB"
+	_ = e2.POST(createProjectUrl(testProjectA)).WithHeader(Authorization, Bearer+tokenA).Expect().Status(http.StatusOK)
+	_ = e2.POST(createProjectUrl(testProjectB)).WithHeader(Authorization, Bearer+tokenB).Expect().Status(http.StatusOK)
 }
 
 func TestGoTrueAuthProvider(t *testing.T) {

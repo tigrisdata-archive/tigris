@@ -440,7 +440,7 @@ func createUser(ctx context.Context, username string, password string, currentSu
 		log.Err(err).Msg("Failed to create CreateAppKey request")
 		return err
 	}
-	createAppKeyReq.Header.Add("X-JWT-AUD", g.AuthConfig.Audience)
+	createAppKeyReq.Header.Add("X-JWT-AUD", g.AuthConfig.PrimaryAudience)
 	createAppKeyReq.Header.Add("Content-Type", "application/json")
 
 	createAppKeyRes, err := client.Do(createAppKeyReq)
@@ -472,7 +472,7 @@ func getAccessTokenUsingClientCredentialsGotrue(ctx context.Context, clientId st
 		log.Err(err).Msg("Failed to call to get token")
 		return "", 0, err
 	}
-	getTokenReq.Header.Add(GotrueAudHeaderKey, g.AuthConfig.Audience)
+	getTokenReq.Header.Add(GotrueAudHeaderKey, g.AuthConfig.PrimaryAudience)
 	getTokenReq.Header.Add("Content-Type", "application/x-www-form-urlencoded")
 
 	getTokenRes, err := ctxhttp.Do(ctx, client, getTokenReq)

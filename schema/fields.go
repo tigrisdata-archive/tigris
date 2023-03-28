@@ -271,6 +271,7 @@ var SupportedFieldProperties = container.NewHashSet(
 	"facet",
 	"searchIndex",
 	"maxItems",
+	"additionalProperties",
 )
 
 // Indexes is to wrap different index that a collection can have.

@@ -78,7 +78,7 @@ your changes.
 
 Alternatively, you can run `make run_full` to bring up monitoring tools as well.
 
-- Graphana: http://localhost:3000
+- Grafana: http://localhost:3000
 - Prometheus: http://localhost:9090
 
 ### Running tests

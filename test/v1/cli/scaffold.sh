@@ -15,8 +15,6 @@ fi
 $cli config show
 env|grep TIGRIS
 
-export TIGRIS_URL=localhost:8081
-
 #if [ -z "$noup" ]; then
 #  $cli local up
 #fi
@@ -71,12 +69,13 @@ test_crud_routes() {
 
 start_service() {
   TIGRIS_URL=tigris-local-server:8081 docker compose up -d tigris
-  TIGRIS_LOG_LEVEL=debug $cli ping --timeout=40s
-  $cli create project "$db"
+  TIGRIS_URL=localhost:8081 $cli ping --timeout=40s
+  TIGRIS_URL=localhost:8081 $cli create project "$db"
   TIGRIS_URL=tigris-local-server:8081 docker compose up --build -d service
 }
 
 db=eshop
+outdir=/tmp/cli-test
 
 clean() {
   $cli delete-project -f $db || true
@@ -84,19 +83,24 @@ clean() {
 }
 
 scaffold() {
-	$cli local up 8081
+  if [ -z "$noup" ]; then
+    $cli local up "$TIGRIS_TEST_PORT"
+  fi
 
   clean
 
+  #TIGRIS_LOG_LEVEL=debug $cli create project $db \
   $cli create project $db \
     --schema-template=ecommerce \
     --framework="$2" \
     --language "$1" \
     --package-name="$3" \
     --components="$4" \
-    --output-directory=/tmp/cli-test
+    --output-directory="$outdir"
 
-  $cli local down
+  if [ -z "$noup" ]; then
+    $cli local down
+  fi
 }
 
 test_gin_go() {
@@ -115,6 +119,11 @@ test_gin_go() {
 
   cd -
 
+  # instance was stopped by the 'task' target, bring it back
+  if [ -z "$noup" ]; then
+    $cli local up "$TIGRIS_TEST_PORT"
+  fi
+
   clean
 }
 
@@ -123,6 +132,8 @@ test_express_typescript() {
 
   tree /tmp/cli-test/$db
   cd /tmp/cli-test/$db
+
+  docker compose down
 
   npm i
 
@@ -145,10 +156,17 @@ test_nextjs_typescript() {
   tree /tmp/cli-test/$db
   cd /tmp/cli-test/$db
 
+  docker compose down
+
   npm i
 
   export PORT=3000
   export APP_ENV=development
+
+  # scaffold put current URL to the code, but we start service in the docker
+  # so we need to substitute with docker internal network URL for Tigris instance.
+  sed -i'' -e 's/localhost:8090/tigris-local-server:8081/g' \
+  "$outdir/$db/.env.development.local" "$outdir/$db/.env.development" "$outdir/$db/lib/tigris.ts"
 
   start_service
   npm run predev
@@ -167,12 +185,10 @@ test_spring_java() {
 
   scaffold java spring "com.tigrisdata.$db"
 
-  $cli local down
-
   tree /tmp/cli-test/$db
   cd /tmp/cli-test/$db
 
-  sed -i'' -e "s/localhost:8081/tigris-local-server:8081/" src/main/resources/application.yml
+  sed -i'' -e "s/localhost:8090/tigris-local-server:8081/" src/main/resources/application.yml
 
   export PORT=8080
 
@@ -193,8 +209,7 @@ test_scaffold() {
   test_spring_java
   test_nextjs_typescript
 
-  # Bring local instance back in case it was stopped by scaffold tests
   if [ -z "$noup" ]; then
-	  TIGRIS_LOG_LEVEL=debug $cli local up 8081
+    $cli local up "$TIGRIS_TEST_PORT"
   fi
 }

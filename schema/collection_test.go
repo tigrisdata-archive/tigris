@@ -265,6 +265,13 @@ func TestCollection_AdditionalProperties(t *testing.T) {
 						}
 					}
 				}
+			},
+			"map": {
+				"type": "object",
+				"properties": {
+					"name": { "type": "string" }
+				},
+				"additionalProperties":true
 			}
 		},
 		"primary_key": ["id"]
@@ -277,12 +284,18 @@ func TestCollection_AdditionalProperties(t *testing.T) {
 		{
 			document: []byte(`{"id": 1, "simple_object": {"name": "hello", "price": 1.01}}`),
 			expError: "json schema validation failed for field 'simple_object' reason 'additionalProperties 'price' not allowed'",
-		}, {
+		},
+		{
 			document: []byte(`{"id": 1, "complex_object": {"name": "hello", "price": 1.01}}`),
 			expError: "json schema validation failed for field 'complex_object' reason 'additionalProperties 'price' not allowed'",
-		}, {
+		},
+		{
 			document: []byte(`{"id": 1, "complex_object": {"name": "hello", "obj": {"name": "hello", "price": 1.01}}}`),
 			expError: "json schema validation failed for field 'complex_object/obj' reason 'additionalProperties 'price' not allowed'",
+		},
+		{
+			document: []byte(`{"id": 1, "map": {"name": "hello", "some_prop" : "value1"}}`),
+			expError: "",
 		},
 	}
 	for _, c := range cases {
@@ -296,7 +309,12 @@ func TestCollection_AdditionalProperties(t *testing.T) {
 		dec.UseNumber()
 		var v interface{}
 		require.NoError(t, dec.Decode(&v))
-		require.Equal(t, c.expError, coll.Validate(v).Error())
+
+		var resMsg string
+		if err = coll.Validate(v); err != nil {
+			resMsg = err.Error()
+		}
+		require.Equal(t, c.expError, resMsg)
 	}
 }
 

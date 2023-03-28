@@ -35,13 +35,21 @@ auth:
   enable_oauth: true
   log_only: false
   admin_namespaces: tigris_test
-  issuers:
+  validators:
     - issuer: http://tigris_gotrue:8086
       algorithm: RS256
+      audience: https://tigris-test
     - issuer: http://tigris_gotrue:8086
       algorithm: HS256
+      audience: https://tigris-test
+    - issuer: http://tigris_gotrue:8086
+      algorithm: HS256
+      audience: https://tigris-testA
+    - issuer: http://tigris_gotrue:8086
+      algorithm: HS256
+      audience: https://tigris-testB
   token_cache_size: 100
-  audience: https://tigris-test
+  primary_audience: https://tigris-test
   oauth_provider: gotrue
   gotrue:
     username_suffix: "@m2m.tigrisdata.com"

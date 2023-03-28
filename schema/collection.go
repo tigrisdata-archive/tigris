@@ -121,8 +121,11 @@ func disableAdditionalPropertiesAndAllowNullable(required []string, properties m
 			}
 		}
 
+		// Enforce object schema if properties are specified and no additionalProperties explicitly set
 		if len(p.Properties) > 0 {
-			p.AdditionalProperties = false
+			if p.AdditionalProperties == nil {
+				p.AdditionalProperties = false
+			}
 			disableAdditionalPropertiesAndAllowNullable(p.Required, p.Properties)
 		}
 	}
@@ -142,7 +145,9 @@ func NewDefaultCollection(id uint32, schVer int, factory *Factory, schemas Versi
 
 	// Tigris doesn't allow additional fields as part of the write requests. Setting it to false ensures strict
 	// schema validation.
-	validator.AdditionalProperties = false
+	if validator.AdditionalProperties == nil {
+		validator.AdditionalProperties = false
+	}
 	disableAdditionalPropertiesAndAllowNullable(validator.Required, validator.Properties)
 
 	var prevVersionInSearch []tsApi.Field

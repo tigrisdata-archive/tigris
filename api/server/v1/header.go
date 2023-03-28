@@ -29,6 +29,8 @@ const (
 	// values. For ex, 0.1 means 100milliseconds.
 	HeaderRequestTimeout = "Request-Timeout"
 
+	HeaderAccept = "Accept"
+
 	HeaderAccessControlAllowOrigin = "Access-Control-Allow-Origin"
 	HeaderAuthorization            = "authorization"
 
@@ -48,7 +50,7 @@ const (
 func CustomMatcher(key string) (string, bool) {
 	key = textproto.CanonicalMIMEHeaderKey(key)
 	switch key {
-	case HeaderRequestTimeout, HeaderAccessControlAllowOrigin, SetCookie, Cookie:
+	case HeaderRequestTimeout, HeaderAccessControlAllowOrigin, SetCookie, Cookie, HeaderAccept:
 		return key, true
 	default:
 		if strings.HasPrefix(key, HeaderPrefix) {
@@ -64,4 +66,8 @@ func GetHeader(ctx context.Context, header string) string {
 	}
 
 	return metautils.ExtractIncoming(ctx).Get(grpcGatewayPrefix + header)
+}
+
+func GetNonGRPCGatewayHeader(ctx context.Context, header string) string {
+	return metautils.ExtractIncoming(ctx).Get(header)
 }

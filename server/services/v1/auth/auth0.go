@@ -94,7 +94,7 @@ func (a *auth0) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest) 
 	// grant this client to access current service as audience
 	grant := &management.ClientGrant{
 		ClientID: c.ClientID,
-		Audience: &a.AuthConfig.Audience,
+		Audience: &a.AuthConfig.PrimaryAudience,
 		Scope:    []interface{}{},
 	}
 
@@ -401,7 +401,7 @@ func getAccessTokenUsingClientCredentialsAuth0(ctx context.Context, req *api.Get
 	payload := map[string]string{}
 	payload["client_id"] = req.ClientId
 	payload["client_secret"] = req.ClientSecret
-	payload["audience"] = a.AuthConfig.Audience
+	payload["audience"] = a.AuthConfig.PrimaryAudience
 	payload["grant_type"] = clientCredentials
 	jsonPayload, err := jsoniter.Marshal(payload)
 	if err != nil {

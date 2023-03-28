@@ -20,6 +20,10 @@ if [ -z "$cli" ]; then
 	cli="$(pwd)/tigris"
 fi
 
+if [ -z "$TIGRIS_TEST_PORT" ]; then
+	TIGRIS_TEST_PORT=8090
+fi
+
 unset TIGRIS_URL
 unset TIGRIS_TOKEN
 unset TIGRIS_CLIENT_SECRET
@@ -49,19 +53,19 @@ fi
 
 #shellcheck disable=SC2154
 if [ -z "$noup" ]; then
-	TIGRIS_LOG_LEVEL=debug $cli local up 8081
+	TIGRIS_LOG_LEVEL=debug $cli local up "$TIGRIS_TEST_PORT"
 	$cli local logs >/dev/null 2>&1
 fi
 
 
 OS=$(uname -s)
 
-export TIGRIS_URL=localhost:8081
+export TIGRIS_URL="localhost:$TIGRIS_TEST_PORT"
 $cli server info
 $cli server version
 
 if [ "$OS" == 'Darwin' ]; then
-  export TIGRIS_TIMEOUT=15s
+  export TIGRIS_TIMEOUT=25s
 fi
 
 test_config() {
@@ -261,12 +265,85 @@ EOF
 {"Key1": "vK300", "Field1": 30}'
 	diff -w -u <(echo "$exp_out") <(echo "$out")
 
+  db_branch_tests
+
 	db_negative_tests
 	db_errors_tests
 	db_generate_schema_test
 
 	$cli drop collection --project=db1 coll1 coll2 coll3 coll4 coll5 coll6 coll7 coll111
 	$cli delete-project -f db1
+}
+
+db_branch_tests() {
+  $cli drop collection --project=db1 coll_br1 || true
+
+	echo '[{ "title" : "coll_br1", "properties": { "Key1": { "type": "string" }, "Field1": { "type": "integer" } }, "primary_key": ["Key1"] }]' | $cli create collection --project=db1 -
+
+	main_exp_out='{"Key1": "vK1", "Field1": 1}
+{"Key1": "vK2", "Field1": 10}'
+	$cli insert --project=db1 coll_br1 '{"Key1": "vK1", "Field1": 1}' '{"Key1": "vK2", "Field1": 10}'
+
+	$cli branch list --project=db1 | grep br1 && exit 1
+
+  $cli branch --project=db1 create br1
+
+	$cli branch list --project=db1 | grep br1
+
+  # data exists outside of the branch
+	out=$($cli read --project=db1 coll_br1)
+	diff -w -u <(echo "$main_exp_out") <(echo "$out")
+
+	branch_exp_out='{"Key1": "vK1br1", "Field1": 1000}
+{"Key1": "vK2br1", "Field1": 10000}'
+
+  (
+    # shellcheck disable=SC2030,SC2031
+    export TIGRIS_BRANCH=br1
+    $cli config show|grep "branch: br1"
+
+    # no data in the branch
+    out=$($cli read --project=db1 coll_br1)
+	  exp_out=''
+    diff -w -u <(echo "$exp_out") <(echo "$out")
+
+	  $cli insert --project=db1 coll_br1 '{"Key1": "vK1br1", "Field1": 1000}' '{"Key1": "vK2br1", "Field1": 10000}'
+
+    # branch sees it's own data
+    out=$($cli read --project=db1 coll_br1)
+	  diff -w -u <(echo "$branch_exp_out") <(echo "$out")
+
+	  # test branch command line parameter
+    out=$($cli read --project=db1 --branch=br1 coll_br1)
+	  diff -w -u <(echo "$branch_exp_out") <(echo "$out")
+  )
+
+  # insert more data in the main
+	add_main_exp_out='{"Key1": "vK3", "Field1": 1}'
+	$cli insert --project=db1 coll_br1 "$add_main_exp_out"
+
+  (
+    # shellcheck disable=SC2030,SC2031
+    export TIGRIS_BRANCH=br1
+    $cli config show|grep "branch: br1"
+    [ "$($cli branch show)" == "br1" ]
+
+    # branch data intact after data insert in the main
+    out=$($cli read --project=db1 coll_br1)
+	  diff -w -u <(echo "$branch_exp_out") <(echo "$out")
+  )
+
+  # branch changes do not affect main branch
+	out=$($cli read --project=db1 coll_br1)
+	diff -w -u <(echo -e "$main_exp_out\n$add_main_exp_out") <(echo "$out")
+
+  $cli branch --project=db1 delete br1
+
+  # main branch data is intact after deleting the branch
+  out=$($cli read --project=db1 coll_br1)
+	diff -w -u <(echo -e "$main_exp_out\n$add_main_exp_out") <(echo "$out")
+
+  $cli drop collection --project=db1 coll_br1
 }
 
 db_negative_tests() {
@@ -337,8 +414,8 @@ db_errors_tests() {
 }
 
 db_generate_schema_test() {
-  $cli generate sample-schema --project sampledb --create
-  $cli delete-project -f sampledb
+	TIGRIS_LOG_LEVEL=debug $cli generate sample-schema --project sampledb --create
+	$cli delete-project -f sampledb
 }
 
 BASEDIR=$(dirname "$0")
@@ -348,47 +425,49 @@ source "$BASEDIR/import.sh"
 source "$BASEDIR/backup.sh"
 # shellcheck disable=SC1091,SC1090
 source "$BASEDIR/scaffold.sh"
+# shellcheck disable=SC1091,SC1090
+source "$BASEDIR/search/import.sh"
 
 main() { 
 	test_config
 
 	# Exercise tests via HTTP
 	unset TIGRIS_PROTOCOL
-	export TIGRIS_URL=localhost:8081
+	export TIGRIS_URL="localhost:$TIGRIS_TEST_PORT"
 	db_tests
-	# Scaffold tests require local instance to start/stop
-	# so skip these tests in Tigris server repo integration tests
-  if [ -z "$noup" ]; then
-	  test_scaffold
-	fi
 	test_import
+	test_search_import
 	test_backup
+
+	if [ -z "$TIGRIS_CLI_TEST_FAST" ]; then
+		test_scaffold
+	fi
 
 	# Exercise tests via GRPC
-	export TIGRIS_URL=localhost:8081
+	export TIGRIS_URL="localhost:$TIGRIS_TEST_PORT"
 	export TIGRIS_PROTOCOL=grpc
 	$cli config show | grep "protocol: grpc"
-	$cli config show | grep "url: localhost:8081"
+	$cli config show | grep "url: localhost:$TIGRIS_TEST_PORT"
 	db_tests
 	test_import
 	test_backup
 
-	export TIGRIS_URL=localhost:8081
+	export TIGRIS_URL="localhost:$TIGRIS_TEST_PORT"
 	export TIGRIS_PROTOCOL=http
 	$cli config show | grep "protocol: http"
-	$cli config show | grep "url: localhost:8081"
+	$cli config show | grep "url: localhost:$TIGRIS_TEST_PORT"
 	db_tests
 
 	export TIGRIS_PROTOCOL=grpc
-	export TIGRIS_URL=http://localhost:8081
+	export TIGRIS_URL="http://localhost:$TIGRIS_TEST_PORT"
 	$cli config show | grep "protocol: grpc"
-	$cli config show | grep "url: http://localhost:8081"
+	$cli config show | grep "url: http://localhost:$TIGRIS_TEST_PORT"
 	db_tests
 
 	export TIGRIS_PROTOCOL=http
-	export TIGRIS_URL=grpc://localhost:8081
+	export TIGRIS_URL="grpc://localhost:$TIGRIS_TEST_PORT"
 	$cli config show | grep "protocol: http"
-	$cli config show | grep "url: grpc://localhost:8081"
+	$cli config show | grep "url: grpc://localhost:$TIGRIS_TEST_PORT"
 	db_tests
 }
 
@@ -412,6 +491,6 @@ test_dev_alias() {
 }
 
 if [ -z "$noup" ]; then
-  test_dev_alias
+	test_dev_alias
 fi
 
