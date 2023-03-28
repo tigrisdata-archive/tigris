@@ -127,8 +127,10 @@ type Factory struct {
 	Name string
 	// Fields are derived from the user schema.
 	Fields []*Field
-	// Indexes is a wrapper on the indexes part of this collection. At this point the dictionary encoded value is not
+	// Primary Key points to the fields used for the primary index. At this point the dictionary encoded value is not
 	// set for these indexes which is set as part of collection creation.
+	PrimaryKey *Index
+	// Indexes is a wrapper on the secondary indexes part of this collection.
 	Indexes *Indexes
 	// Schema is the raw JSON schema received as part of CreateOrUpdateCollection request. This is stored as-is in the
 	// schema subspace.
@@ -137,6 +139,10 @@ type Factory struct {
 	CollectionType  CollectionType
 	IndexingVersion string
 	Version         int32
+}
+
+func (f *Factory) SecondaryIndexes() []*Index {
+	return f.Indexes.All
 }
 
 func RemoveIndexingVersion(schema jsoniter.RawMessage) jsoniter.RawMessage {
@@ -224,17 +230,36 @@ func (fb *FactoryBuilder) Build(collection string, reqSchema jsoniter.RawMessage
 		}
 	}
 
+	// Create the secondary indexes with an unknown state
+	// to determine the state, tigris will need to read from the index metadata
+	secondaryIndex := []*Index{
+		{
+			Name:    ReservedFields[CreatedAt],
+			IdxType: SECONDARY_INDEX,
+			State:   UNKNOWN,
+		},
+		{
+			Name:    ReservedFields[UpdatedAt],
+			IdxType: SECONDARY_INDEX,
+			State:   UNKNOWN,
+		},
+	}
+	for _, field := range fields {
+		if field.Indexed != nil && *field.Indexed {
+			secondaryIndex = append(secondaryIndex, &Index{Name: field.Name(), IdxType: SECONDARY_INDEX, State: UNKNOWN, Fields: []*Field{field}})
+		}
+	}
+
 	factory := &Factory{
 		Fields: fields,
+		PrimaryKey: &Index{
+			Name:    PrimaryKeyIndexName,
+			Fields:  primaryKeyFields,
+			IdxType: PRIMARY_INDEX,
+			State:   INDEX_ACTIVE,
+		},
 		Indexes: &Indexes{
-			PrimaryKey: &Index{
-				Name:   PrimaryKeyIndexName,
-				Fields: primaryKeyFields,
-			},
-			SecondaryIndex: &Index{
-				Name:   SecondaryKeyIndexName,
-				Fields: []*Field{},
-			},
+			All: secondaryIndex,
 		},
 		Name:            collection,
 		Schema:          reqSchema,

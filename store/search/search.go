@@ -90,7 +90,7 @@ func (n *NoopStore) AllCollections(context.Context) (map[string]*tsApi.Collectio
 }
 
 func (n *NoopStore) DescribeCollection(context.Context, string) (*tsApi.CollectionResponse, error) {
-	return nil, nil
+	return &tsApi.CollectionResponse{}, nil
 }
 func (n *NoopStore) CreateCollection(context.Context, *tsApi.CollectionSchema) error { return nil }
 func (n *NoopStore) UpdateCollection(context.Context, string, *tsApi.CollectionUpdateSchema) error {

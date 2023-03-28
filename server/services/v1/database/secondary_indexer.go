@@ -105,14 +105,14 @@ func NewSecondaryIndexer(coll *schema.DefaultCollection) *SecondaryIndexer {
 }
 
 func (q *SecondaryIndexer) scanIndex(ctx context.Context, tx transaction.Tx) (kv.Iterator, error) {
-	start := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.Indexes.SecondaryIndex.Name, KVSubspace)
-	end := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.Indexes.SecondaryIndex.Name, KVSubspace, 0xFF)
+	start := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.SecondaryIndexKeyword(), KVSubspace)
+	end := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.SecondaryIndexKeyword(), KVSubspace, 0xFF)
 	return tx.ReadRange(ctx, start, end, false)
 }
 
 func (q *SecondaryIndexer) IndexSize(ctx context.Context, tx transaction.Tx) (int64, error) {
-	lKey := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.Indexes.SecondaryIndex.Name, KVSubspace)
-	rKey := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.Indexes.SecondaryIndex.Name, KVSubspace, 0xFF)
+	lKey := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.SecondaryIndexKeyword(), KVSubspace)
+	rKey := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.SecondaryIndexKeyword(), KVSubspace, 0xFF)
 	return tx.RangeSize(ctx, q.coll.EncodedTableIndexName, lKey, rKey)
 }
 
@@ -318,7 +318,7 @@ func (q *SecondaryIndexer) buildTSRows(tableData *internal.TableData) ([]IndexRo
 
 func (q *SecondaryIndexer) buildIndexKey(row IndexRow, primaryKey []interface{}) keys.Key {
 	version := getFieldVersion(row.name, q.coll)
-	return newKeyWithPrimaryKey(primaryKey, q.coll.EncodedTableIndexName, q.coll.Indexes.SecondaryIndex.Name, KVSubspace, row.Name(), version, row.value.AsInterface(), row.pos)
+	return newKeyWithPrimaryKey(primaryKey, q.coll.EncodedTableIndexName, q.coll.SecondaryIndexKeyword(), KVSubspace, row.Name(), version, row.value.AsInterface(), row.pos)
 }
 
 func (q *SecondaryIndexer) createKeysAndIndexInfo(primaryKey []interface{}, rows []IndexRow) ([]keys.Key, map[string]int64, map[string]int64) {

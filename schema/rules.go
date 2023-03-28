@@ -55,7 +55,7 @@ type SearchIndexValidator interface {
 type PrimaryIndexSchemaValidator struct{}
 
 func (v *PrimaryIndexSchemaValidator) Validate(existing *DefaultCollection, current *Factory) error {
-	return existing.Indexes.PrimaryKey.IsCompatible(current.Indexes.PrimaryKey)
+	return existing.GetPrimaryKey().IsCompatible(current.PrimaryKey)
 }
 
 type FieldSchemaValidator struct{}

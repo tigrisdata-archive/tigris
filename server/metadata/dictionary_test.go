@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 )
@@ -57,13 +58,13 @@ func TestDictionaryEncoding(t *testing.T) {
 
 	tx, err = tm.StartTx(ctx)
 	require.NoError(t, err)
-	collMeta, err := k.CreateCollection(ctx, tx, "coll-1", 1234, startId)
+	collMeta, err := k.CreateCollection(ctx, tx, "coll-1", 1234, startId, createSecondaryIdxs())
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit(ctx))
 
 	tx, err = tm.StartTx(ctx)
 	require.NoError(t, err)
-	indexMeta, err := k.CreateIndex(ctx, tx, "pkey", 1234, startId, startId+1)
+	indexMeta, err := k.CreatePrimaryIndex(ctx, tx, "pkey", 1234, startId, startId+1)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit(ctx))
 
@@ -77,7 +78,7 @@ func TestDictionaryEncoding(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, c.ID, collMeta.ID)
 
-	i, err := k.GetIndex(ctx, tx, "pkey", 1234, dbMeta.ID, collMeta.ID)
+	i, err := k.GetPrimaryIndex(ctx, tx, "pkey", 1234, dbMeta.ID, collMeta.ID)
 	require.NoError(t, err)
 	require.Equal(t, i.ID, indexMeta.ID)
 	require.NoError(t, tx.Commit(ctx))
@@ -153,7 +154,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		collMeta, err := k.CreateCollection(ctx, tx, "coll-1", 1234, dbMeta.ID)
+		collMeta, err := k.CreateCollection(ctx, tx, "coll-1", 1234, dbMeta.ID, createSecondaryIdxs())
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
@@ -201,34 +202,34 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		collMeta, err := k.CreateCollection(ctx, tx, "coll-1", 1234, dbMeta.ID)
+		collMeta, err := k.CreateCollection(ctx, tx, "coll-1", 1234, dbMeta.ID, createSecondaryIdxs())
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 		require.NotEqual(t, 0, collMeta.ID)
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		idxMeta, err := k.CreateIndex(ctx, tx, "idx-1", 1234, dbMeta.ID, collMeta.ID)
+		idxMeta, err := k.CreatePrimaryIndex(ctx, tx, "idx-1", 1234, dbMeta.ID, collMeta.ID)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 		require.NotEqual(t, 0, idxMeta.ID)
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		v, err := k.GetIndex(ctx, tx, "idx-1", 1234, dbMeta.ID, collMeta.ID)
+		v, err := k.GetPrimaryIndex(ctx, tx, "idx-1", 1234, dbMeta.ID, collMeta.ID)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 		require.Equal(t, v.ID, idxMeta.ID)
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		err = k.DropIndex(ctx, tx, "idx-1", 1234, dbMeta.ID, collMeta.ID)
+		err = k.DropPrimaryIndex(ctx, tx, "idx-1", 1234, dbMeta.ID, collMeta.ID)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		_, err = k.GetIndex(ctx, tx, "idx-1", 1234, dbMeta.ID, collMeta.ID)
+		_, err = k.GetPrimaryIndex(ctx, tx, "idx-1", 1234, dbMeta.ID, collMeta.ID)
 		require.Equal(t, errors.ErrNotFound, err)
 		require.NoError(t, tx.Commit(ctx))
 	})
@@ -255,7 +256,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		collMeta, err := k.CreateCollection(ctx, tx, "coll-1", 1234, dbMeta.ID)
+		collMeta, err := k.CreateCollection(ctx, tx, "coll-1", 1234, dbMeta.ID, createSecondaryIdxs())
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
@@ -280,7 +281,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		newColl, err := k.CreateCollection(ctx, tx, "coll-1", 1234, dbMeta.ID)
+		newColl, err := k.CreateCollection(ctx, tx, "coll-1", 1234, dbMeta.ID, createSecondaryIdxs())
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
@@ -308,10 +309,10 @@ func TestDictionaryEncoding_Error(t *testing.T) {
 	_, err = k.CreateDatabase(ctx, tx, "db-1", 0)
 	require.Error(t, errors.InvalidArgument("invalid namespace id"), err)
 
-	_, err = k.CreateCollection(ctx, tx, "coll-1", 1234, 0)
+	_, err = k.CreateCollection(ctx, tx, "coll-1", 1234, 0, createSecondaryIdxs())
 	require.Error(t, errors.InvalidArgument("invalid database id"), err)
 
-	_, err = k.CreateIndex(ctx, tx, "pkey", 1234, 1, 0)
+	_, err = k.CreatePrimaryIndex(ctx, tx, "pkey", 1234, 1, 0)
 	require.Error(t, errors.InvalidArgument("invalid collection id"), err)
 
 	require.NoError(t, tx.Rollback(context.TODO()))
@@ -354,9 +355,9 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 		dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1)
 		require.NoError(t, err)
 
-		cid1, err := k.CreateCollection(ctx, tx, "coll-1", 1, dbMeta.ID)
+		cid1, err := k.CreateCollection(ctx, tx, "coll-1", 1, dbMeta.ID, createSecondaryIdxs())
 		require.NoError(t, err)
-		cid2, err := k.CreateCollection(ctx, tx, "coll-2", 1, dbMeta.ID)
+		cid2, err := k.CreateCollection(ctx, tx, "coll-2", 1, dbMeta.ID, createSecondaryIdxs())
 		require.NoError(t, err)
 
 		collToId, err := k.GetCollections(ctx, tx, 1, dbMeta.ID)
@@ -379,12 +380,12 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 		dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1)
 		require.NoError(t, err)
 
-		cid1, err := k.CreateCollection(ctx, tx, "coll-1", 1, dbMeta.ID)
+		cid1, err := k.CreateCollection(ctx, tx, "coll-1", 1, dbMeta.ID, createSecondaryIdxs())
 		require.NoError(t, err)
 
-		pkID, err := k.CreateIndex(ctx, tx, "pkey", 1, dbMeta.ID, cid1.ID)
+		pkID, err := k.CreatePrimaryIndex(ctx, tx, "pkey", 1, dbMeta.ID, cid1.ID)
 		require.NoError(t, err)
-		idxToId, err := k.GetIndexes(ctx, tx, 1, dbMeta.ID, cid1.ID)
+		idxToId, err := k.GetPrimaryIndexes(ctx, tx, 1, dbMeta.ID, cid1.ID)
 		require.NoError(t, err)
 		require.Len(t, idxToId, 1)
 		require.Equal(t, idxToId["pkey"], pkID)
@@ -429,4 +430,24 @@ func TestDecode(t *testing.T) {
 	mp, err := NewMetadataDictionary(newTestNameRegistry(t)).decode(context.TODO(), k)
 	require.NoError(t, err)
 	require.Equal(t, mp[dbKey], "db-1")
+}
+
+func createSecondaryIdxs() []*schema.Index {
+	return []*schema.Index{
+		{
+			Name:  "idx1",
+			Id:    uint32(1),
+			State: schema.UNKNOWN,
+		},
+		{
+			Name:  "idx2",
+			Id:    uint32(2),
+			State: schema.UNKNOWN,
+		},
+		{
+			Name:  "idx3",
+			Id:    uint32(3),
+			State: schema.UNKNOWN,
+		},
+	}
 }
