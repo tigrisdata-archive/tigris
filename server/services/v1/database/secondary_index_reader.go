@@ -85,7 +85,7 @@ func BuildSecondaryIndexKeys(coll *schema.DefaultCollection, queryFilters []filt
 	}
 
 	encoder := func(indexParts ...interface{}) (keys.Key, error) {
-		return newKeyWithPrimaryKey(indexParts, coll.EncodedTableIndexName, coll.SecondaryIndexName(), "kvs"), nil
+		return newKeyWithPrimaryKey(indexParts, coll.EncodedTableIndexName, coll.SecondaryIndexKeyword(), "kvs"), nil
 	}
 
 	buildIndexParts := func(fieldName string, datatype schema.FieldType, value interface{}) []interface{} {

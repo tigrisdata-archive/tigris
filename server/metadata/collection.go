@@ -60,8 +60,9 @@ func (c *CollectionSubspace) getKey(nsID uint32, dbID uint32, name string) keys.
 func (c *CollectionSubspace) Create(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, name string, id uint32, indexes []*schema.Index,
 ) (*CollectionMetadata, error) {
 	for _, index := range indexes {
+		// The indexes are created when the collection is created which means we do not need to
+		// do any background building, the index is already up to date and can be used for queries
 		index.State = schema.INDEX_ACTIVE
-		index.IdxType = schema.SECONDARY_INDEX
 	}
 
 	meta := &CollectionMetadata{

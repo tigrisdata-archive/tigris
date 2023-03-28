@@ -130,7 +130,7 @@ type Factory struct {
 	// Primary Key points to the fields used for the primary index. At this point the dictionary encoded value is not
 	// set for these indexes which is set as part of collection creation.
 	PrimaryKey *Index
-	// Indexes is a wrapper on the indexes part of this collection.
+	// Indexes is a wrapper on the secondary indexes part of this collection.
 	Indexes *Indexes
 	// Schema is the raw JSON schema received as part of CreateOrUpdateCollection request. This is stored as-is in the
 	// schema subspace.

@@ -1256,12 +1256,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 	primaryKeyIndex := schFactory.PrimaryKey
 	meta, ok := cHolder.primaryIdxMeta[primaryKeyIndex.Name]
 	if !ok {
-		// these are the new indexes present in the new collection
-		meta, err = tenant.metaStore.CreatePrimaryIndex(ctx, tx, primaryKeyIndex.Name, tenant.namespace.Id(), database.id, cHolder.id)
-		if err != nil {
-			return err
-		}
-		cHolder.addIndex(primaryKeyIndex.Name, meta)
+		return errors.InvalidArgument("cannot create a new primary key name")
 	}
 
 	primaryKeyIndex.Id = meta.ID
@@ -1679,13 +1674,6 @@ func (c *collectionHolder) clone() *collectionHolder {
 	}
 
 	return &copyC
-}
-
-func (c *collectionHolder) addIndex(name string, idx *PrimaryIndexMetadata) {
-	c.Lock()
-	defer c.Unlock()
-
-	c.primaryIdxMeta[name] = idx
 }
 
 // get returns the collection managed by this holder. At this point, a Collection object is safely constructed

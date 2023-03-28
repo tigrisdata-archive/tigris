@@ -208,7 +208,7 @@ func (d *DefaultCollection) GetName() string {
 
 // The subspace within a collection where the secondary index information
 // is stored.
-func (d *DefaultCollection) SecondaryIndexName() string {
+func (d *DefaultCollection) SecondaryIndexKeyword() string {
 	return "skey"
 }
 
