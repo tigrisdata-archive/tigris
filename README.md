@@ -3,9 +3,8 @@
 </p>
 
 <p align="center">
-Tigris is an open source developer data platform that provides an integrated 
-suite of database and data services, enabling you to build rich applications 
-that perform consistently at any scale.
+Tigris is a Serverless NoSQL Database and Search Platform that offers an open source alternative to MongoDB and DynamoDB.
+Tigris is built on FoundationDB and combines the consistency of ACID transactions with the scale and flexibility of NoSQL, at a fraction of the cost.
 </p>
 
 <p align="center">
@@ -35,7 +34,7 @@ that perform consistently at any scale.
 - [Databases and Collections](https://www.tigrisdata.com/docs/concepts/database/)
 - [Documents](https://www.tigrisdata.com/docs/concepts/database/documents/)
 - [Search](https://www.tigrisdata.com/docs/concepts/searching/)
-- [Observability](https://www.tigrisdata.com/docs/concepts/platform/metrics/)
+- [Observability](https://www.tigrisdata.com/docs/concepts/platform/cloud/metrics/)
 - [TypeScript Reference](https://www.tigrisdata.com/docs/sdkstools/typescript/)
 - [Go Reference](https://www.tigrisdata.com/docs/sdkstools/golang/)
 - [Java Reference](https://www.tigrisdata.com/docs/sdkstools/java/getting-started/)
