@@ -17,7 +17,7 @@ package schema
 import (
 	"strings"
 
-	tsApi "github.com/typesense/typesense-go/typesense/api"
+	"github.com/tigrisdata/tigris/internal"
 )
 
 // QueryableField is internal structure used after flattening the fields i.e. the representation of the queryable field
@@ -35,6 +35,7 @@ type QueryableField struct {
 	SearchType    string
 	packThis      bool
 	DoNotFlatten  bool
+	Dimensions    int32
 }
 
 // InMemoryName returns key name that is used to index this field in the indexing store. For example, an "id" key is indexed with
@@ -80,7 +81,7 @@ func NewQueryableFieldsBuilder() *QueryableFieldsBuilder {
 	return &QueryableFieldsBuilder{}
 }
 
-func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, fieldsInSearch []tsApi.Field) *QueryableField {
+func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, fieldsInSearch []internal.SearchField) *QueryableField {
 	var (
 		searchType    string
 		faceted       = f.Faceted
@@ -124,6 +125,9 @@ func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, 
 		Indexed:    f.IsIndexable(),
 	}
 
+	if f.Dimensions != nil {
+		q.Dimensions = *f.Dimensions
+	}
 	if searchIndexed != nil && *searchIndexed {
 		q.SearchIndexed = true
 	}
@@ -142,7 +146,7 @@ func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, 
 	return q
 }
 
-func (builder *QueryableFieldsBuilder) BuildQueryableFields(fields []*Field, fieldsInSearch []tsApi.Field) []*QueryableField {
+func (builder *QueryableFieldsBuilder) BuildQueryableFields(fields []*Field, fieldsInSearch []internal.SearchField) []*QueryableField {
 	var queryableFields []*QueryableField
 
 	for _, f := range fields {
@@ -180,7 +184,7 @@ func (builder *QueryableFieldsBuilder) BuildQueryableFields(fields []*Field, fie
 	return queryableFields
 }
 
-func (builder *QueryableFieldsBuilder) buildQueryableForObject(parent string, fields []*Field, fieldsInSearch []tsApi.Field) []*QueryableField {
+func (builder *QueryableFieldsBuilder) buildQueryableForObject(parent string, fields []*Field, fieldsInSearch []internal.SearchField) []*QueryableField {
 	var queryable []*QueryableField
 	for _, nested := range fields {
 		if nested.DataType == ObjectType {
@@ -197,7 +201,7 @@ func (builder *QueryableFieldsBuilder) buildQueryableForObject(parent string, fi
 	return queryable
 }
 
-func (builder *QueryableFieldsBuilder) buildQueryableField(parent string, f *Field, fieldsInSearch []tsApi.Field) *QueryableField {
+func (builder *QueryableFieldsBuilder) buildQueryableField(parent string, f *Field, fieldsInSearch []internal.SearchField) *QueryableField {
 	name := f.FieldName
 	if len(parent) > 0 {
 		name = parent + ObjFlattenDelimiter + f.FieldName

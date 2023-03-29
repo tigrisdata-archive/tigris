@@ -26,13 +26,13 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
 	ulog "github.com/tigrisdata/tigris/util/log"
-	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
 type NamespaceType string
@@ -401,7 +401,7 @@ func (m *TenantManager) DecodeTableName(tableName []byte) (string, *Database, st
 // As this is an expensive call, the reloading happens only during the start of the server. It is possible that reloading
 // fails during start time then we rely on each transaction to detect it and trigger reload. The consistency shouldn’t
 // be impacted if we fail to load the in-memory view.
-func (m *TenantManager) Reload(ctx context.Context, tx transaction.Tx, collectionsInSearch map[string]*tsApi.CollectionResponse) error {
+func (m *TenantManager) Reload(ctx context.Context, tx transaction.Tx, collectionsInSearch map[string]*internal.SearchIndexResponse) error {
 	log.Debug().Msg("reloading tenants")
 	m.Lock()
 	defer m.Unlock()
@@ -419,7 +419,7 @@ func (m *TenantManager) Reload(ctx context.Context, tx transaction.Tx, collectio
 	return err
 }
 
-func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVersion Version, collectionsInSearch map[string]*tsApi.CollectionResponse) error {
+func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVersion Version, collectionsInSearch map[string]*internal.SearchIndexResponse) error {
 	namespaces, err := m.metaStore.GetNamespaces(ctx, tx)
 	if err != nil {
 		return err
@@ -526,7 +526,7 @@ func (tenant *Tenant) shouldReload(currentVersion Version) bool {
 // loads all the databases, it loads the resources for each one. Once databases are reloaded then it performs the same
 // logic for search indexes. Once search indexes are loaded it links back the search indexes to the Tigris Collection
 // if the source for these search indexes is Tigris.
-func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVersion Version, indexesInSearchStore map[string]*tsApi.CollectionResponse) error {
+func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVersion Version, indexesInSearchStore map[string]*internal.SearchIndexResponse) error {
 	// reset
 	tenant.projects = make(map[string]*Project)
 	tenant.idToDatabaseMap = make(map[uint32]*Database)
@@ -594,7 +594,7 @@ func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVers
 // reloadDatabase is called by tenant to reload the database state. This also loads all the collections that are part of
 // this database and implicit search index for these collections.
 func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbName string, dbId uint32,
-	indexesInSearchStore map[string]*tsApi.CollectionResponse,
+	indexesInSearchStore map[string]*internal.SearchIndexResponse,
 ) (*Database, error) {
 	database := NewDatabase(dbId, dbName)
 
@@ -618,7 +618,7 @@ func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbN
 			continue
 		}
 
-		var fieldsInSearch []tsApi.Field
+		var fieldsInSearch []internal.SearchField
 		searchCollectionName := tenant.getSearchCollName(dbName, coll)
 		if searchSchema, ok := indexesInSearchStore[searchCollectionName]; ok {
 			fieldsInSearch = searchSchema.Fields
@@ -656,7 +656,7 @@ func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbN
 }
 
 // reloadSearch is responsible for reloading all the search indexes inside a single project.
-func (tenant *Tenant) reloadSearch(ctx context.Context, tx transaction.Tx, project *Project, indexesInSearchStore map[string]*tsApi.CollectionResponse) (*Search, error) {
+func (tenant *Tenant) reloadSearch(ctx context.Context, tx transaction.Tx, project *Project, indexesInSearchStore map[string]*internal.SearchIndexResponse) (*Search, error) {
 	projMetadata, err := tenant.namespaceStore.GetProjectMetadata(ctx, tx, tenant.namespace.Id(), project.Name())
 	if err != nil {
 		return nil, errors.Internal("failed to get project metadata for project %s", project.Name())
@@ -676,7 +676,7 @@ func (tenant *Tenant) reloadSearch(ctx context.Context, tx transaction.Tx, proje
 			continue
 		}
 
-		var fieldsInSearchStore []tsApi.Field
+		var fieldsInSearchStore []internal.SearchField
 		searchStoreIndexName := tenant.Encoder.EncodeSearchTableName(tenant.namespace.Id(), project.Id(), searchMD.Name)
 		if searchIndexInStore, ok := indexesInSearchStore[searchStoreIndexName]; ok {
 			fieldsInSearchStore = searchIndexInStore.Fields
@@ -767,7 +767,7 @@ func (tenant *Tenant) updateSearchIndex(ctx context.Context, tx transaction.Tx, 
 
 	// update indexing store schema if there is a change
 	if deltaFields := updatedIndex.GetSearchDeltaFields(index.QueryableFields, previousIndexInStore.Fields); len(deltaFields) > 0 {
-		if err := tenant.searchStore.UpdateCollection(ctx, updatedIndex.StoreIndexName(), &tsApi.CollectionUpdateSchema{
+		if err := tenant.searchStore.UpdateCollection(ctx, updatedIndex.StoreIndexName(), &internal.SearchIndexSchema{
 			Fields: deltaFields,
 		}); err != nil {
 			return err
@@ -1285,7 +1285,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 
 	schFactory.Indexes.All = collMeta.Indexes
 
-	existingSearch := &tsApi.CollectionResponse{}
+	existingSearch := &internal.SearchIndexResponse{}
 	if config.DefaultConfig.Search.WriteEnabled {
 		existingSearch, err = tenant.searchStore.DescribeCollection(ctx, existingCollection.ImplicitSearchIndex.StoreIndexName())
 		if err != nil {
@@ -1332,7 +1332,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 	if config.DefaultConfig.Search.WriteEnabled {
 		// update indexing store schema if there is a change
 		if deltaFields := collection.ImplicitSearchIndex.GetSearchDeltaFields(existingCollection.ImplicitSearchIndex.QueryableFields, schFactory.Fields); len(deltaFields) > 0 {
-			if err := tenant.searchStore.UpdateCollection(ctx, collection.ImplicitSearchIndex.StoreIndexName(), &tsApi.CollectionUpdateSchema{
+			if err := tenant.searchStore.UpdateCollection(ctx, collection.ImplicitSearchIndex.StoreIndexName(), &internal.SearchIndexSchema{
 				Fields: deltaFields,
 			}); err != nil {
 				return err
@@ -1687,7 +1687,7 @@ func (c *collectionHolder) get() *schema.DefaultCollection {
 }
 
 func createCollection(id uint32, name string, schemas schema.Versions, idxMeta map[string]*PrimaryIndexMetadata,
-	searchCollectionName string, fieldsInSearch []tsApi.Field, secondaryIndexes []*schema.Index,
+	searchCollectionName string, fieldsInSearch []internal.SearchField, secondaryIndexes []*schema.Index,
 ) (*schema.DefaultCollection, error) {
 	schFactory, err := schema.NewFactoryBuilder(false).Build(name, schemas.Latest().Schema)
 	if err != nil {

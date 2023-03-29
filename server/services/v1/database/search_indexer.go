@@ -97,7 +97,7 @@ func (i *SearchIndexer) OnPostCommit(ctx context.Context, tenant *metadata.Tenan
 			}
 
 			reader := bytes.NewReader(searchData)
-			var resp []search.IndexResp
+			var resp []search.IndexDocumentResp
 			if resp, err = i.searchStore.IndexDocuments(ctx, searchIndex.StoreIndexName(), reader, search.IndexDocumentsOptions{
 				Action:    action,
 				BatchSize: 1,

@@ -429,7 +429,7 @@ func (runner *CreateRunner) createDocuments(ctx context.Context, tenant *metadat
 		return Response{}, err
 	}
 
-	var storeResponses []search.IndexResp
+	var storeResponses []search.IndexDocumentResp
 	if storeResponses, err = runner.store.IndexDocuments(ctx, index.StoreIndexName(), &buffer, search.IndexDocumentsOptions{
 		Action:    search.Create,
 		BatchSize: len(req.Documents),
@@ -481,7 +481,7 @@ func (runner *CreateOrReplaceRunner) Run(ctx context.Context, tenant *metadata.T
 		return Response{}, err
 	}
 
-	var storeResponses []search.IndexResp
+	var storeResponses []search.IndexDocumentResp
 	if storeResponses, err = runner.store.IndexDocuments(ctx, index.StoreIndexName(), &buffer, search.IndexDocumentsOptions{
 		Action:    search.Replace,
 		BatchSize: len(runner.req.Documents),
@@ -531,7 +531,7 @@ func (runner *UpdateRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 		return Response{}, err
 	}
 
-	var storeResponses []search.IndexResp
+	var storeResponses []search.IndexDocumentResp
 	if storeResponses, err = runner.store.IndexDocuments(ctx, index.StoreIndexName(), &buffer, search.IndexDocumentsOptions{
 		Action:    search.Update,
 		BatchSize: len(runner.req.Documents),

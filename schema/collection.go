@@ -25,6 +25,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/internal"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
@@ -157,7 +158,7 @@ func NewDefaultCollection(id uint32, schVer int, factory *Factory, schemas Versi
 	}
 	disableAdditionalPropertiesAndAllowNullable(validator.Required, validator.Properties)
 
-	var prevVersionInSearch []tsApi.Field
+	var prevVersionInSearch []internal.SearchField
 	if implicitSearchIndex != nil {
 		prevVersionInSearch = implicitSearchIndex.prevVersionInSearch
 	}

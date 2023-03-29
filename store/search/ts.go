@@ -22,6 +22,7 @@ import (
 	"net/http"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/query/filter"
 	qsearch "github.com/tigrisdata/tigris/query/search"
 	"github.com/tigrisdata/tigris/server/metrics"
@@ -33,7 +34,7 @@ import (
 
 var maxCandidates = 100
 
-type IndexResp struct {
+type IndexDocumentResp struct {
 	Code     int
 	Document string
 	Error    string
@@ -41,7 +42,8 @@ type IndexResp struct {
 }
 
 type storeImpl struct {
-	client *typesense.Client
+	apiClient typesense.APIClientInterface
+	client    *typesense.Client
 }
 
 type storeImplWithMetrics struct {
@@ -68,7 +70,7 @@ func (m *storeImplWithMetrics) measure(ctx context.Context, name string, f func(
 	measurement.RecordDuration(metrics.SearchErrorRespTime, measurement.GetSearchErrorTags(err))
 }
 
-func (m *storeImplWithMetrics) AllCollections(ctx context.Context) (resp map[string]*tsApi.CollectionResponse, err error) {
+func (m *storeImplWithMetrics) AllCollections(ctx context.Context) (resp map[string]*internal.SearchIndexResponse, err error) {
 	m.measure(ctx, "AllCollections", func(ctx context.Context) error {
 		resp, err = m.s.AllCollections(ctx)
 		return err
@@ -76,7 +78,7 @@ func (m *storeImplWithMetrics) AllCollections(ctx context.Context) (resp map[str
 	return
 }
 
-func (m *storeImplWithMetrics) DescribeCollection(ctx context.Context, name string) (resp *tsApi.CollectionResponse, err error) {
+func (m *storeImplWithMetrics) DescribeCollection(ctx context.Context, name string) (resp *internal.SearchIndexResponse, err error) {
 	m.measure(ctx, "DescribeCollection", func(ctx context.Context) error {
 		resp, err = m.s.DescribeCollection(ctx, name)
 		return err
@@ -84,7 +86,7 @@ func (m *storeImplWithMetrics) DescribeCollection(ctx context.Context, name stri
 	return
 }
 
-func (m *storeImplWithMetrics) CreateCollection(ctx context.Context, schema *tsApi.CollectionSchema) (err error) {
+func (m *storeImplWithMetrics) CreateCollection(ctx context.Context, schema *internal.SearchIndexSchema) (err error) {
 	m.measure(ctx, "CreateCollection", func(ctx context.Context) error {
 		err = m.s.CreateCollection(ctx, schema)
 		return err
@@ -92,7 +94,7 @@ func (m *storeImplWithMetrics) CreateCollection(ctx context.Context, schema *tsA
 	return
 }
 
-func (m *storeImplWithMetrics) UpdateCollection(ctx context.Context, name string, schema *tsApi.CollectionUpdateSchema) (err error) {
+func (m *storeImplWithMetrics) UpdateCollection(ctx context.Context, name string, schema *internal.SearchIndexSchema) (err error) {
 	m.measure(ctx, "UpdateCollection", func(ctx context.Context) error {
 		err = m.s.UpdateCollection(ctx, name, schema)
 		return err
@@ -108,7 +110,7 @@ func (m *storeImplWithMetrics) DropCollection(ctx context.Context, table string)
 	return
 }
 
-func (m *storeImplWithMetrics) IndexDocuments(ctx context.Context, table string, documents io.Reader, options IndexDocumentsOptions) (resp []IndexResp, err error) {
+func (m *storeImplWithMetrics) IndexDocuments(ctx context.Context, table string, documents io.Reader, options IndexDocumentsOptions) (resp []IndexDocumentResp, err error) {
 	m.measure(ctx, "IndexDocuments", func(ctx context.Context) error {
 		resp, err = m.s.IndexDocuments(ctx, table, documents, options)
 		return err
@@ -195,7 +197,7 @@ func (s *storeImpl) CreateDocument(_ context.Context, table string, doc map[stri
 	return s.convertToInternalError(err)
 }
 
-func (s *storeImpl) IndexDocuments(_ context.Context, table string, reader io.Reader, options IndexDocumentsOptions) ([]IndexResp, error) {
+func (s *storeImpl) IndexDocuments(_ context.Context, table string, reader io.Reader, options IndexDocumentsOptions) ([]IndexDocumentResp, error) {
 	var err error
 	var closer io.ReadCloser
 	action := string(options.Action)
@@ -208,10 +210,10 @@ func (s *storeImpl) IndexDocuments(_ context.Context, table string, reader io.Re
 	}
 	defer closer.Close()
 
-	var responses []IndexResp
+	var responses []IndexDocumentResp
 	decoder := jsoniter.NewDecoder(closer)
 	for decoder.More() {
-		var single IndexResp
+		var single IndexDocumentResp
 		if err := decoder.Decode(&single); err != nil {
 			return nil, err
 		}
@@ -222,8 +224,8 @@ func (s *storeImpl) IndexDocuments(_ context.Context, table string, reader io.Re
 	return responses, nil
 }
 
-func (s *storeImpl) getBaseSearchParam(query *qsearch.Query, pageNo int) tsApi.MultiSearchParameters {
-	baseParam := tsApi.MultiSearchParameters{
+func (s *storeImpl) getBaseSearchParam(query *qsearch.Query, pageNo int) MultiSearchParameters {
+	baseParam := MultiSearchParameters{
 		Q:       &query.Q,
 		Page:    &pageNo,
 		PerPage: &query.PageSize,
@@ -247,33 +249,37 @@ func (s *storeImpl) getBaseSearchParam(query *qsearch.Query, pageNo int) tsApi.M
 	return baseParam
 }
 
-func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query, pageNo int) ([]tsApi.SearchResult, error) {
-	var params []tsApi.MultiSearchCollectionParameters
+func (s *storeImpl) Search(ctx context.Context, table string, query *qsearch.Query, pageNo int) ([]tsApi.SearchResult, error) {
+	var params []MultiSearchCollectionParameters
 	searchFilter := query.WrappedF.SearchFilter()
 	if len(searchFilter) > 0 {
 		for i := 0; i < len(searchFilter); i++ {
 			// ToDo: check all places
 			param := s.getBaseSearchParam(query, pageNo)
 			param.FilterBy = &searchFilter[i]
-			params = append(params, tsApi.MultiSearchCollectionParameters{
+			params = append(params, MultiSearchCollectionParameters{
 				Collection:            table,
 				MultiSearchParameters: param,
 			})
 		}
 	} else {
-		params = append(params, tsApi.MultiSearchCollectionParameters{
+		params = append(params, MultiSearchCollectionParameters{
 			Collection:            table,
 			MultiSearchParameters: s.getBaseSearchParam(query, pageNo),
 		})
 	}
 
-	res, err := s.client.MultiSearch.PerformWithContentType(&tsApi.MultiSearchParams{
-		MaxCandidates: &maxCandidates,
-	}, tsApi.MultiSearchSearchesParameter{
-		Searches: params,
-	}, StreamContentType)
+	buf, err := json.Marshal(MultiSearchSearchesParameter{Searches: params})
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := s.apiClient.MultiSearchWithBodyWithResponse(ctx, &tsApi.MultiSearchParams{MaxCandidates: &maxCandidates}, StreamContentType, bytes.NewReader(buf))
 	if err != nil {
 		return nil, s.convertToInternalError(err)
+	}
+	if res.Body == nil {
+		return nil, NewSearchError(res.StatusCode(), ErrCodeUnhandled, "")
 	}
 
 	reader := bytes.NewReader(res.Body)
@@ -305,38 +311,93 @@ func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query
 	return dest.Results, nil
 }
 
-func (s *storeImpl) AllCollections(_ context.Context) (map[string]*tsApi.CollectionResponse, error) {
-	resp, err := s.client.Collections().Retrieve()
+func (s *storeImpl) AllCollections(_ context.Context) (map[string]*internal.SearchIndexResponse, error) {
+	resp, err := s.apiClient.GetCollections(context.Background())
 	if err != nil {
-		return nil, s.convertToInternalError(err)
+		return nil, err
 	}
 
-	respMap := make(map[string]*tsApi.CollectionResponse)
-	for _, r := range resp {
+	bodyBytes, err := io.ReadAll(resp.Body)
+	defer func() { _ = resp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, NewSearchError(resp.StatusCode, ErrCodeUnhandled, string(bodyBytes))
+	}
+
+	var dest []*internal.SearchIndexResponse
+	if err := jsoniter.Unmarshal(bodyBytes, &dest); err != nil {
+		return nil, err
+	}
+
+	respMap := make(map[string]*internal.SearchIndexResponse)
+	for _, r := range dest {
 		respMap[r.Name] = r
 	}
+
 	return respMap, nil
 }
 
-func (s *storeImpl) DescribeCollection(_ context.Context, name string) (*tsApi.CollectionResponse, error) {
-	resp, err := s.client.Collection(name).Retrieve()
+func (s *storeImpl) DescribeCollection(_ context.Context, name string) (*internal.SearchIndexResponse, error) {
+	resp, err := s.apiClient.GetCollection(context.Background(), name)
 	if err != nil {
-		return nil, s.convertToInternalError(err)
+		return nil, err
 	}
-	return resp, nil
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	defer func() { _ = resp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, NewSearchError(resp.StatusCode, ErrCodeUnhandled, string(bodyBytes))
+	}
+
+	var dest internal.SearchIndexResponse
+	if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+		return nil, err
+	}
+	return &dest, nil
 }
 
-func (s *storeImpl) CreateCollection(_ context.Context, schema *tsApi.CollectionSchema) error {
+func (s *storeImpl) CreateCollection(_ context.Context, schema *internal.SearchIndexSchema) error {
 	ptrTrue := true
-	schema.EnableNestedFields = &ptrTrue
+	schema.EnableNested = &ptrTrue
 
-	_, err := s.client.Collections().Create(schema)
-	return s.convertToInternalError(err)
+	var bodyReader io.Reader
+	buf, err := json.Marshal(schema)
+	if err != nil {
+		return err
+	}
+	bodyReader = bytes.NewReader(buf)
+
+	resp, err := s.apiClient.CreateCollectionWithBodyWithResponse(context.Background(), "application/json", bodyReader)
+	if err != nil {
+		return err
+	}
+	if resp.JSON201 == nil {
+		return NewSearchError(resp.StatusCode(), ErrCodeUnhandled, string(resp.Body))
+	}
+	return nil
 }
 
-func (s *storeImpl) UpdateCollection(_ context.Context, name string, schema *tsApi.CollectionUpdateSchema) error {
-	_, err := s.client.Collection(name).Update(schema)
-	return s.convertToInternalError(err)
+func (s *storeImpl) UpdateCollection(_ context.Context, name string, schema *internal.SearchIndexSchema) error {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(schema)
+	if err != nil {
+		return err
+	}
+	bodyReader = bytes.NewReader(buf)
+
+	resp, err := s.apiClient.UpdateCollectionWithBodyWithResponse(context.Background(), name, "application/json", bodyReader)
+	if err != nil {
+		return err
+	}
+	if resp.JSON200 == nil {
+		return NewSearchError(resp.StatusCode(), ErrCodeUnhandled, string(resp.Body))
+	}
+	return nil
 }
 
 func (s *storeImpl) DropCollection(_ context.Context, table string) error {
