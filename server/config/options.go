@@ -38,6 +38,7 @@ type Config struct {
 	Log            log.LogConfig
 	Server         ServerConfig         `yaml:"server" json:"server"`
 	Auth           AuthConfig           `yaml:"auth" json:"auth"`
+	Billing        Billing              `yaml:"billing" json:"billing"`
 	Cdc            CdcConfig            `yaml:"cdc" json:"cdc"`
 	Search         SearchConfig         `yaml:"search" json:"search"`
 	SecondaryIndex SecondaryIndexConfig `mapstructure:"secondary_index" yaml:"secondary_index" json:"secondary_index"`
@@ -208,6 +209,17 @@ type ObservabilityConfig struct {
 	ProviderUrl string `mapstructure:"provider_url" yaml:"provider_url" json:"provider_url"`
 }
 
+type Billing struct {
+	Metronome Metronome `mapstructure:"metronome" yaml:"metronome" json:"metronome"`
+}
+
+type Metronome struct {
+	Enabled     bool   `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	URL         string `mapstructure:"url" yaml:"url" json:"url"`
+	ApiKey      string `mapstructure:"api_key" yaml:"api_key" json:"api_key"`
+	DefaultPlan string `mapstructure:"default_plan" yaml:"default_plan" json:"default_plan"`
+}
+
 var (
 	WriteUnitSize = 4096
 	ReadUnitSize  = 4096
@@ -241,6 +253,14 @@ var DefaultConfig = Config{
 		Gotrue: Gotrue{
 			ClientIdLength:     30,
 			ClientSecretLength: 50,
+		},
+	},
+	Billing: Billing{
+		Metronome: Metronome{
+			Enabled:     false,
+			URL:         "https://api.metronome.com/v1",
+			ApiKey:      "replace_me",
+			DefaultPlan: "placeholderPlan",
 		},
 	},
 	Cdc: CdcConfig{

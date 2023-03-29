@@ -31,6 +31,7 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/services/v1/auth"
+	"github.com/tigrisdata/tigris/server/services/v1/billing"
 	"github.com/tigrisdata/tigris/server/transaction"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc"
@@ -43,6 +44,7 @@ const (
 type managementService struct {
 	api.UnimplementedManagementServer
 	auth.Provider
+	BillingProvider billing.Provider
 	UserMetadataProvider
 	NamespaceMetadataProvider
 	*transaction.Manager
@@ -71,6 +73,7 @@ func newManagementService(authProvider auth.Provider, txMgr *transaction.Manager
 		Provider:                  authProvider,
 		UserMetadataProvider:      userMetadataProvider,
 		NamespaceMetadataProvider: namespaceMetadataProvider,
+		BillingProvider:           billing.NewProvider(),
 		Manager:                   txMgr,
 		TenantManager:             tenantMgr,
 	}
@@ -105,10 +108,27 @@ func (m *managementService) CreateNamespace(ctx context.Context, req *api.Create
 		}
 		code = maxId + 1
 	}
+
+	meta := metadata.NewNamespaceMetadata(code, id, req.GetName())
+
+	// Create a Billing account, if it fails metrics reporter will retry in a separate flow
+	// does not block namespace creation
+	billingId, err := m.BillingProvider.CreateAccount(ctx, id, req.GetName())
+	if !ulog.E(err) && len(billingId) > 0 {
+		// account creation succeeds, update namespace metadata
+		meta.Accounts.AddMetronome(billingId)
+		// add tenant to default plan
+		added, err := m.BillingProvider.AddDefaultPlan(ctx, billingId)
+
+		if err != nil || !added {
+			log.Error().Err(err).Msg("error adding default plan to customer")
+		}
+	}
+
 	// API id maps to internal strId
 	// API code maps to internal Id
 	// API name maps to internal name
-	namespace := metadata.NewTenantNamespace(id, metadata.NewNamespaceMetadata(code, id, req.GetName()))
+	namespace := metadata.NewTenantNamespace(id, meta)
 	_, err = m.TenantManager.CreateTenant(ctx, tx, namespace)
 	if err != nil {
 		_ = tx.Rollback(ctx)
