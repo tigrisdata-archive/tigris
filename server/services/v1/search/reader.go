@@ -117,17 +117,6 @@ func (p *pageReader) read() error {
 		return err
 	}
 
-	//sortedFacets := tsearch.NewSortedFacets()
-	//for _, r := range result {
-	//	if r.FacetCounts != nil {
-	//		for i := range *r.FacetCounts {
-	//			if ulog.E(sortedFacets.Add(&(*r.FacetCounts)[i])) {
-	//				continue
-	//			}
-	//		}
-	//	}
-	//}
-
 	p.pageNo++
 	pg := newPage(p.query.PageSize)
 
@@ -187,30 +176,6 @@ func (p *pageReader) next() (bool, *page, error) {
 	p.pages = p.pages[1:]
 	return false, pg, nil
 }
-
-//
-//func (p *pageReader) buildFacets(sf *tsearch.SortedFacets) {
-//	facetSizeRequested := map[string]int{}
-//	for _, f := range p.query.Facets.Fields {
-//		facetSizeRequested[f.Name] = f.Size
-//
-//		facet := &api.SearchFacet{
-//			Stats:  sf.GetStats(f.Name),
-//			Counts: []*api.FacetCount{},
-//		}
-//
-//		for i := 0; i < f.Size; i++ {
-//			if fc, ok := sf.GetFacetCount(f.Name); ok {
-//				facet.Counts = append(facet.Counts, &api.FacetCount{
-//					Count: fc.Count,
-//					Value: fc.Value,
-//				})
-//			}
-//		}
-//
-//		p.cachedFacets[f.Name] = facet
-//	}
-//}
 
 type FilterableSearchIterator struct {
 	err        error
