@@ -105,7 +105,10 @@ func (fb *FactoryBuilder) deserializeProperties(properties jsoniter.RawMessage, 
 					return err
 				}
 			} else if builder.MaxItems == nil || *builder.MaxItems != 0 {
-				return errors.InvalidArgument("missing items for array field")
+				if fb.onUserRequest {
+					// only return an error for online requests
+					return errors.InvalidArgument("missing items for array field")
+				}
 			}
 		}
 

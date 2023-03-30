@@ -707,8 +707,13 @@ func (runner *StreamingQueryRunner) injectMDInsideBody(raw []byte, createdAt *ti
 		return raw, nil
 	}
 
-	lastByte := raw[len(raw)-1]
-	raw = raw[0 : len(raw)-1]
+	lastIndex := bytes.LastIndex(raw, []byte(`}`))
+	if lastIndex <= 0 {
+		return raw, nil
+	}
+
+	lastByte := raw[lastIndex]
+	raw = raw[0:lastIndex]
 
 	var buf bytes.Buffer
 	_, _ = buf.Write(raw)
