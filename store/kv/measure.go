@@ -17,6 +17,7 @@ package kv
 import (
 	"context"
 
+	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/server/metrics"
 )
@@ -25,10 +26,18 @@ type TxStoreWithMetrics struct {
 	kv TxStore
 }
 
+type KeyValueIteratorWithMetrics struct {
+	KeyValueIterator
+}
+
 func NewKeyValueStoreWithMetrics(txStore TxStore) TxStore {
 	return &TxStoreWithMetrics{
 		kv: txStore,
 	}
+}
+
+func NewKeyValueIteratorWithMetrics(ctx context.Context, iter baseIterator) *KeyValueIteratorWithMetrics {
+	return &KeyValueIteratorWithMetrics{KeyValueIterator{ctx: ctx, baseIterator: iter}}
 }
 
 func measureLow(ctx context.Context, name string, f func() error) {
@@ -47,6 +56,23 @@ func measureLow(ctx context.Context, name string, f func() error) {
 	measurement.CountErrorForScope(metrics.FdbOkCount, measurement.GetFdbErrorTags(err))
 	_ = measurement.FinishWithError(ctx, err)
 	measurement.RecordDuration(metrics.FdbErrorRespTime, measurement.GetFdbErrorTags(err))
+}
+
+func (i *KeyValueIteratorWithMetrics) Next(value *KeyValue) bool {
+	hasNext := i.KeyValueIterator.Next(value)
+	reqStatus, ok := metrics.RequestStatusFromContext(i.KeyValueIterator.ctx)
+	if !ok {
+		log.Debug().Msg("Iterator did not get request status")
+	}
+
+	if reqStatus != nil && value.Data != nil {
+		reqStatus.AddReadBytes(int64(len(value.Data.RawData)))
+	}
+	return hasNext
+}
+
+func (i *KeyValueIteratorWithMetrics) Err() error {
+	return i.KeyValueIterator.Err()
 }
 
 func (m *TxStoreWithMetrics) measure(ctx context.Context, name string, f func() error) {
@@ -104,6 +130,8 @@ func (m *TxImplWithMetrics) measure(ctx context.Context, name string, f func() e
 }
 
 func (m *TxImplWithMetrics) Delete(ctx context.Context, table []byte, key Key) (err error) {
+	// The instrumentation of usage metrics for delete happens at the query runner level. Delete will consume
+	// read units for finding records matching the filter and write units for the data actually deleted.
 	m.measure(ctx, "Delete", func() error {
 		err = m.tx.Delete(ctx, table, key)
 		return err
@@ -200,6 +228,19 @@ func (m *TxImplWithMetrics) Replace(ctx context.Context, table []byte, key Key, 
 		err = m.tx.Replace(ctx, table, key, data, isUpdate)
 		return err
 	})
+	requestStatus, ok := metrics.RequestStatusFromContext(ctx)
+	if !ok {
+		log.Debug().Msg("No request status in context")
+	}
+	if requestStatus != nil {
+		fdbKey := getFDBKey(table, key)
+		if requestStatus.OnlyCountKeyLength(fdbKey) {
+			// Does not count _tigris_created_at and _tigris_updated_at
+			requestStatus.AddWriteBytes(int64(len(fdbKey)))
+		} else {
+			requestStatus.AddWriteBytes(int64(len(data.RawData)))
+		}
+	}
 	return
 }
 
@@ -208,6 +249,7 @@ func (m *TxImplWithMetrics) Read(ctx context.Context, table []byte, key Key) (it
 		it, err = m.tx.Read(ctx, table, key)
 		return err
 	})
+	// Read bytes are counted in the iterator
 	return
 }
 
@@ -216,5 +258,6 @@ func (m *TxImplWithMetrics) ReadRange(ctx context.Context, table []byte, lkey Ke
 		it, err = m.tx.ReadRange(ctx, table, lkey, rkey, isSnapshot)
 		return err
 	})
+	// Read bytes are counted in the iterator
 	return
 }

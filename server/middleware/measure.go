@@ -33,6 +33,7 @@ import (
 type wrappedStream struct {
 	*middleware.WrappedServerStream
 	measurement *metrics.Measurement
+	reqStatus   *metrics.RequestStatus
 }
 
 func getNoMeasurementMethods() []string {
@@ -52,12 +53,14 @@ func measureMethod(fullMethod string) bool {
 
 func measureUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+		var reqStatus *metrics.RequestStatus
 		if !measureMethod(info.FullMethod) {
 			resp, err := handler(ctx, req)
 			return resp, err
 		}
 		reqMetadata, err := request.GetRequestMetadataFromContext(ctx)
 		ulog.E(err)
+		reqStatus = metrics.NewRequestStatus(reqMetadata.GetNamespace())
 		tags := reqMetadata.GetInitialTags()
 		measurement := metrics.NewMeasurement(util.Service, info.FullMethod, metrics.GrpcSpanType, tags)
 		measurement.AddTags(metrics.GetProjectBranchCollTags(reqMetadata.GetProject(), reqMetadata.GetBranch(), reqMetadata.GetCollection()))
@@ -66,6 +69,7 @@ func measureUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryS
 			"human": strconv.FormatBool(reqMetadata.IsHuman),
 		})
 		ctx = measurement.StartTracing(ctx, false)
+		ctx = reqStatus.SaveRequestStatusToContext(ctx)
 		resp, err := handler(ctx, req)
 		if err != nil {
 			// Request had an error
@@ -80,12 +84,16 @@ func measureUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryS
 		measurement.CountSentBytes(metrics.BytesSent, measurement.GetNetworkTags(), proto.Size(resp.(proto.Message)))
 		_ = measurement.FinishTracing(ctx)
 		measurement.RecordDuration(metrics.RequestsRespTime, measurement.GetRequestOkTags())
+		// Global status and metrics related to them, config switches are handled inside these
+		metrics.GlobalSt.RecordRequestToActiveChunk(reqStatus, reqMetadata.GetNamespace())
+		measurement.CountUnits(reqStatus, measurement.GetRequestOkTags())
 		return resp, err
 	}
 }
 
 func measureStream() grpc.StreamServerInterceptor {
 	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		var reqStatus *metrics.RequestStatus
 		wrapped := &wrappedStream{WrappedServerStream: middleware.WrapServerStream(stream)}
 		wrapped.WrappedContext = stream.Context()
 		if !measureMethod(info.FullMethod) {
@@ -96,9 +104,12 @@ func measureStream() grpc.StreamServerInterceptor {
 		if err != nil {
 			ulog.E(err)
 		}
+		reqStatus = metrics.NewRequestStatus(reqMetadata.GetNamespace())
 		tags := reqMetadata.GetInitialTags()
 		measurement := metrics.NewMeasurement(util.Service, info.FullMethod, metrics.GrpcSpanType, tags)
 		wrapped.measurement = measurement
+		wrapped.reqStatus = reqStatus
+		wrapped.WrappedContext = reqStatus.SaveRequestStatusToContext(wrapped.WrappedContext)
 		wrapped.WrappedContext = measurement.StartTracing(wrapped.WrappedContext, false)
 		err = handler(srv, wrapped)
 		if err != nil {
@@ -106,12 +117,16 @@ func measureStream() grpc.StreamServerInterceptor {
 			_ = measurement.FinishWithError(wrapped.WrappedContext, err)
 			measurement.RecordDuration(metrics.RequestsErrorRespTime, measurement.GetRequestErrorTags(err))
 			ulog.E(err)
-			return err
+		} else {
+			measurement.CountOkForScope(metrics.RequestsOkCount, measurement.GetRequestOkTags())
+			_ = measurement.FinishTracing(wrapped.WrappedContext)
+			measurement.RecordDuration(metrics.RequestsRespTime, measurement.GetRequestOkTags())
 		}
-		measurement.CountOkForScope(metrics.RequestsOkCount, measurement.GetRequestOkTags())
-		_ = measurement.FinishTracing(wrapped.WrappedContext)
-		measurement.RecordDuration(metrics.RequestsRespTime, measurement.GetRequestOkTags())
-		return nil
+		// Global status and metrics related to them, config switches are handled inside these
+		metrics.GlobalSt.RecordRequestToActiveChunk(reqStatus, reqMetadata.GetNamespace())
+		measurement.CountUnits(reqStatus, measurement.GetRequestOkTags())
+		wrapped.WrappedContext = reqStatus.SaveRequestStatusToContext(wrapped.WrappedContext)
+		return err
 	}
 }
 
@@ -139,7 +154,6 @@ func (w *wrappedStream) RecvMsg(m interface{}) error {
 			"human": strconv.FormatBool(reqMetadata.IsHuman),
 		})
 		w.WrappedContext = reqMetadata.SaveToContext(w.WrappedContext)
-
 		w.measurement.AddProjectBranchCollTags(project, branch, coll)
 	}
 

@@ -23,9 +23,9 @@ import (
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
 	"golang.org/x/net/context/ctxhttp"
-	"github.com/tigrisdata/tigris/errors"
 )
 
 const (

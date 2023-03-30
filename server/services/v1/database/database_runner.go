@@ -204,6 +204,9 @@ func (runner *BranchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		if err != nil {
 			return Response{}, ctx, createApiError(err)
 		}
+
+		countDDLCreateUnit(ctx)
+
 		return Response{
 			Response: &api.CreateBranchResponse{
 				Status: CreatedStatus,
@@ -215,6 +218,9 @@ func (runner *BranchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		if err != nil {
 			return Response{}, ctx, createApiError(err)
 		}
+
+		countDDLDropUnit(ctx)
+
 		return Response{
 			Response: &api.DeleteBranchResponse{
 				Status: DeletedStatus,

@@ -50,6 +50,7 @@ type Config struct {
 	Quota          QuotaConfig
 	Observability  ObservabilityConfig `yaml:"observability" json:"observability"`
 	Management     ManagementConfig    `yaml:"management" json:"management"`
+	GlobalStatus   GlobalStatusConfig  `yaml:"global_status" json:"global_status"`
 	Schema         SchemaConfig
 }
 
@@ -207,6 +208,11 @@ type ObservabilityConfig struct {
 	ApiKey      string `mapstructure:"api_key" yaml:"api_key" json:"api_key"`
 	AppKey      string `mapstructure:"app_key" yaml:"app_key" json:"app_key"`
 	ProviderUrl string `mapstructure:"provider_url" yaml:"provider_url" json:"provider_url"`
+}
+
+type GlobalStatusConfig struct {
+	Enabled     bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	EmitMetrics bool `mapstructure:"emit_metrics" yaml:"emit_metrics" json:"emit_metrics"`
 }
 
 type Billing struct {
@@ -416,6 +422,10 @@ var DefaultConfig = Config{
 	},
 	Schema: SchemaConfig{
 		AllowIncompatible: false,
+	},
+	GlobalStatus: GlobalStatusConfig{
+		Enabled:     true,
+		EmitMetrics: true,
 	},
 }
 

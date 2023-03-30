@@ -94,7 +94,7 @@ func (l *DefaultListener) GetEvents() []*Event {
 type NoopEventListener struct{}
 
 func (l *NoopEventListener) OnSet(string, []byte, Key, *internal.TableData) {}
-func (l *NoopEventListener) OnClear(string, []byte, Key)               {}
+func (l *NoopEventListener) OnClear(string, []byte, Key)                    {}
 func (l *NoopEventListener) GetEvents() []*Event                            { return nil }
 
 func WrapEventListenerCtx(ctx context.Context) context.Context {

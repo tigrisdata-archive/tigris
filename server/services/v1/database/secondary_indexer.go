@@ -25,6 +25,7 @@ import (
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/value"
@@ -185,13 +186,21 @@ func (q *SecondaryIndexer) Update(ctx context.Context, tx transaction.Tx, newTd 
 		return err
 	}
 
+	reqStatus, reqStatusExists := metrics.RequestStatusFromContext(ctx)
+
 	for _, indexKey := range updateSet.removeKeys {
+		if reqStatus != nil && reqStatusExists {
+			reqStatus.AddWriteBytes(int64(len(indexKey.SerializeToBytes())))
+		}
 		if err := tx.Delete(ctx, indexKey); err != nil {
 			return err
 		}
 	}
 
 	for _, indexKey := range updateSet.addKeys {
+		if reqStatus != nil && reqStatusExists {
+			reqStatus.AddWriteBytes(int64(len(indexKey.SerializeToBytes())))
+		}
 		if err := tx.Replace(ctx, indexKey, internal.EmptyData, false); err != nil {
 			return err
 		}

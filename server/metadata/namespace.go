@@ -97,7 +97,7 @@ func NewDefaultNamespace() *DefaultNamespace {
 	return &DefaultNamespace{}
 }
 
-// AccountIntegrations represents the external accounts
+// AccountIntegrations represents the external accounts.
 type AccountIntegrations struct {
 	Metronome *Metronome
 }
