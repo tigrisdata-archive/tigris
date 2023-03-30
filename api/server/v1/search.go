@@ -360,6 +360,10 @@ func (x *SearchIndexRequest) UnmarshalJSON(data []byte) error {
 			// delaying the sort deserialization
 			x.GroupBy = value
 			continue
+		case "vector":
+			// delaying the vector deserialization
+			x.Vector = value
+			continue
 		default:
 			continue
 		}

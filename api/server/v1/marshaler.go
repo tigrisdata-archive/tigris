@@ -201,6 +201,10 @@ func (x *SearchRequest) UnmarshalJSON(data []byte) error {
 			// delaying the sort deserialization
 			x.Sort = value
 			continue
+		case "vector":
+			// delaying the vector deserialization
+			x.Vector = value
+			continue
 		case "include_fields":
 			v = &x.IncludeFields
 		case "exclude_fields":

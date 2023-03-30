@@ -16,13 +16,14 @@ package search
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/tigrisdata/tigris/lib/date"
-	tsApi "github.com/typesense/typesense-go/typesense/api"
+	tsApi "github.com/tigrisdata/typesense-go/typesense/api"
 )
 
 func TestNewSearchHit(t *testing.T) {
@@ -41,7 +42,7 @@ func TestNewSearchHit(t *testing.T) {
 		assert.Len(t, searchHits, len(tsHits))
 		for i, hit := range searchHits {
 			assert.NotNil(t, hit)
-			assert.Equal(t, *tsHits[i].TextMatch, hit.TextMatchScore)
+			assert.Equal(t, fmt.Sprintf("%d", *tsHits[i].TextMatch), hit.Match.Score)
 			assert.Equal(t, *tsHits[i].Document, hit.Document)
 		}
 	})
@@ -73,7 +74,7 @@ func TestNewSearchHit(t *testing.T) {
 			Document:  &d,
 			TextMatch: nil,
 		})
-		assert.Equal(t, int64(0), hit.TextMatchScore)
+		assert.Equal(t, "", hit.Match.Score)
 	})
 }
 

@@ -141,7 +141,6 @@ func (p *pageReader) read() error {
 
 	// check if we need to build facets
 	if len(p.cachedFacets) == 0 {
-
 		if len(result) > 0 {
 			builder := tsearch.NewFacetResponse(p.query.Facets)
 			for field, built := range builder.Build(result[0].FacetCounts) {

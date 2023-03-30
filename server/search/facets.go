@@ -17,7 +17,7 @@ package search
 import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/query/search"
-	tsApi "github.com/typesense/typesense-go/typesense/api"
+	tsApi "github.com/tigrisdata/typesense-go/typesense/api"
 )
 
 // FacetResponse is a builder utility to convert facets from search backend to tigris response.

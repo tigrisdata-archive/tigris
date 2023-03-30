@@ -364,6 +364,14 @@ func validateFieldAttribute(f *Field, notSupported bool) error {
 		subType = f.Fields[0].DataType
 	}
 
+	if f.DataType == VectorType {
+		if f.Dimensions == nil {
+			return errors.InvalidArgument("Field '%s' type 'vector' is missing dimensions ", f.FieldName)
+		}
+		if f.IsIndexed() || f.IsFaceted() || f.IsSorted() {
+			return errors.InvalidArgument("only search index attribute is supported on vector field '%s'", f.FieldName)
+		}
+	}
 	if f.IsIndexed() && !f.IsIndexable() {
 		return errors.InvalidArgument("Cannot enable index on field '%s' of type '%s'. Only top level non-byte fields can be indexed.", f.FieldName, FieldNames[f.DataType])
 	}

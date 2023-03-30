@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/tigrisdata/tigris/util"
 )
 
 func TestSearchIndex_CollectionSchema(t *testing.T) {
@@ -144,6 +145,14 @@ func TestSearchIndex_Schema(t *testing.T) {
 			[]byte(`{"title": "t1", "properties": { "a": {"type": "integer", "sort": true, "facet": true}, "b": {"type": "string", "sort": true, "facet": true}, "c": {"type": "number", "sort": true, "facet": true}}}`),
 			"",
 		},
+		{
+			[]byte(`{"title": "t1", "properties": { "a": {"type": "string"}, "b": {"type": "array", "format": "vector"}}}`),
+			"Field 'b' type 'vector' is missing dimensions",
+		},
+		{
+			[]byte(`{"title": "t1", "properties": { "a": {"type": "string"}, "b": {"type": "array", "format": "vector", "dimensions": 4}}}`),
+			"",
+		},
 	}
 	for _, c := range cases {
 		_, err := NewFactoryBuilder(true).BuildSearch("t1", c.schema)
@@ -151,6 +160,116 @@ func TestSearchIndex_Schema(t *testing.T) {
 			require.Contains(t, err.Error(), c.expErrorMsg)
 		} else {
 			require.NoError(t, err)
+		}
+	}
+}
+
+func TestSearchIndex_Validate(t *testing.T) {
+	reqSchema := []byte(`{
+  "title": "t1",
+  "properties": {
+    "a": {
+      "type": "integer",
+      "sort": true,
+      "facet": true
+    },
+    "b": {
+      "type": "string",
+      "sort": true,
+      "facet": true
+    },
+    "c": {
+      "type": "number",
+      "sort": true,
+      "facet": true
+    },
+    "d": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "e": {
+      "type": "object",
+      "properties": {
+        "a": {
+          "type": "integer"
+        },
+        "b": {
+          "type": "string"
+        },
+        "c": {
+          "type": "array",
+          "format": "vector",
+          "dimensions": 4
+        },
+        "d": {
+          "type": "object",
+          "properties": {
+            "a": {
+              "type": "array",
+              "format": "vector",
+              "dimensions": 4
+            }
+          }
+        }
+      }
+    },
+    "f": {
+      "type": "array",
+      "format": "vector",
+      "dimensions": 2
+    }
+  }
+}`)
+	f, err := NewFactoryBuilder(true).BuildSearch("t1", reqSchema)
+	require.NoError(t, err)
+
+	idx := NewSearchIndex(0, "test", f, nil)
+	cases := []struct {
+		document []byte
+		expError string
+	}{
+		{
+			document: []byte(`{"a": 1, "b": "foo", "c": 1.01}`),
+			expError: "",
+		},
+		{
+			document: []byte(`{"a": 1, "b": "foo", "c": 1.01, "d": ["foo", "bar"]}`),
+			expError: "",
+		},
+		{
+			document: []byte(`{"a": 1, "b": "foo", "c": 1.01, "d": ["foo", "bar"], "e": {"a": 1, "b": "foo"}}`),
+			expError: "",
+		},
+		{
+			document: []byte(`{"a": 1, "b": "foo", "c": 1.01, "d": ["foo", "bar"], "e": {"a": 1, "b": "foo", "c": [0.12, 0.99]}, "f": [1.21, 2.93]}`),
+			expError: "",
+		},
+		{
+			document: []byte(`{"a": 1, "b": "foo", "c": 1.01, "d": ["foo", "bar"], "e": {"a": 1, "b": "foo", "c": [0.12, 0.99], "d": {"a": [0.12, 0.99]}}, "f": [1.21, 2.93]}`),
+			expError: "",
+		},
+		{
+			document: []byte(`{"a": 1, "b": "foo", "c": 1.01, "d": ["foo", "bar"], "e": {"a": 1, "b": "foo", "c": [0.12, 0.99, 1, 2, 3]}, "f": [1.21, 2.93]}`),
+			expError: "field 'c' of vector type should not have dimensions greater than the defined in schema, defined: '4' found: '5'",
+		},
+		{
+			document: []byte(`{"a": 1, "b": "foo", "c": 1.01, "d": ["foo", "bar"], "e": {"a": 1, "b": "foo", "c": [0.12, 0.99], "d": {"a": [0.12, 0.99, 1, 2, 3]}}, "f": [1.21, 2.93]}`),
+			expError: "field 'a' of vector type should not have dimensions greater than the defined in schema, defined: '4' found: '5'",
+		},
+		{
+			document: []byte(`{"a": 1, "b": "foo", "c": 1.01, "d": ["foo", "bar"], "e": {"a": 1, "b": "foo", "c": [0.12, 0.99], "d": {"a": [0.12, 0.99]}}, "f": [1.21, 2.93, 1]}`),
+			expError: "field 'f' of vector type should not have dimensions greater than the defined in schema, defined: '2' found: '3'",
+		},
+	}
+	for _, c := range cases {
+		mp, err := util.JSONToMap(c.document)
+		require.NoError(t, err)
+		if len(c.expError) > 0 {
+			require.ErrorContains(t, idx.Validate(mp), c.expError)
+		} else {
+			require.NoError(t, idx.Validate(mp))
 		}
 	}
 }
