@@ -32,7 +32,7 @@ import (
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
 	ulog "github.com/tigrisdata/tigris/util/log"
-	tsApi "github.com/typesense/typesense-go/typesense/api"
+	tsApi "github.com/tigrisdata/typesense-go/typesense/api"
 )
 
 type NamespaceType string

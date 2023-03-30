@@ -35,6 +35,7 @@ type Query struct {
 	ReadFields   *read.FieldFactory
 	SortOrder    *sort.Ordering
 	GroupBy      GroupBy
+	VectorS      VectorSearch
 }
 
 func (q *Query) ToSearchFacetSize() int {
@@ -119,8 +120,27 @@ func (q *Query) ToSearchGroupBy() string {
 	return groupBy
 }
 
+func (q *Query) ToSearchVector() string {
+	if len(q.VectorS.VectorF) == 0 {
+		return ""
+	}
+
+	if q.VectorS.TopK > 0 {
+		return fmt.Sprintf("%s:(%s),k:%d", q.VectorS.VectorF, string(q.VectorS.RawVectorV), q.VectorS.TopK)
+	}
+	return fmt.Sprintf("%s:(%s)", q.VectorS.VectorF, string(q.VectorS.RawVectorV))
+}
+
 func (q *Query) IsGroupByQuery() bool {
 	return len(q.GroupBy.Fields) > 0
+}
+
+func (q *Query) IsVectorSearch() bool {
+	return len(q.VectorS.VectorF) > 0
+}
+
+func (q *Query) IsQAndVectorBoth() bool {
+	return len(q.VectorS.VectorF) > 0 && len(q.Q) > 0 && q.Q != all
 }
 
 type Builder struct {
@@ -172,6 +192,11 @@ func (b *Builder) SortOrder(o *sort.Ordering) *Builder {
 
 func (b *Builder) GroupBy(groupBy GroupBy) *Builder {
 	b.query.GroupBy = groupBy
+	return b
+}
+
+func (b *Builder) VectorSearch(vecSearch VectorSearch) *Builder {
+	b.query.VectorS = vecSearch
 	return b
 }
 

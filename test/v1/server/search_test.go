@@ -72,6 +72,11 @@ var testSearchIndexSchema = Map{
 					"type": "string",
 				},
 			},
+			"vector": Map{
+				"type":       "array",
+				"format":     "vector",
+				"dimensions": 4,
+			},
 			"object_value": Map{
 				"description": "object field",
 				"type":        "object",
@@ -798,6 +803,78 @@ func TestSearch(t *testing.T) {
 	compareDocs(t, docs[0], res.Result.Groups[0]["hits"].([]any)[1].(map[string]any)["data"].(map[string]any))
 
 	compareDocs(t, docs[1], res.Result.Groups[1]["hits"].([]any)[0].(map[string]any)["data"].(map[string]any))
+}
+
+func TestVectorSearch(t *testing.T) {
+	project, index := setupTestsProjectAndSearchIndex(t)
+	defer cleanupTests(t, project)
+
+	// vector length greater the defined dimensions
+	expect(t).PUT(getIndexDocumentURL(project, index, "")).
+		WithJSON(Map{
+			"documents": []Doc{
+				{
+					"id":           "1",
+					"string_value": "data platform",
+					"vector":       []float64{0.1, 1.1, 0.02, 93, 0.75},
+				},
+			},
+		}).
+		Expect().
+		Status(http.StatusBadRequest).
+		JSON().
+		Path("$.error").
+		Object().
+		ValueEqual("message", "field 'vector' of vector type should not have dimensions greater than the defined in schema, defined: '4' found: '5'")
+
+	docs := []Doc{
+		{
+			"id":           "1",
+			"string_value": "data platform",
+			"vector":       []float64{0.1, 1.1, 0.93, 0.75},
+		}, {
+			"id":           "2",
+			"string_value": "big data",
+			"vector":       []float64{-0.23, -0.57, 1.12, 0.98},
+		}, {
+			"id":           "3",
+			"string_value": "basedata",
+			"vector":       []float64{1.1, 2.22, 0.0875, 0.975},
+		}, {
+			"id":           "4",
+			"string_value": "random",
+			"vector":       []float64{2.1, 1.22, 0.7875, 0.175},
+		},
+	}
+
+	expect(t).PUT(getIndexDocumentURL(project, index, "")).
+		WithJSON(Map{
+			"documents": docs,
+		}).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("status",
+			[]map[string]any{
+				{"id": "1", "error": nil},
+				{"id": "2", "error": nil},
+				{"id": "3", "error": nil},
+				{"id": "4", "error": nil},
+			},
+		)
+
+	res := getSearchResults(t, project, index, Map{"vector": Map{"vector": []float64{1.1, 2.22, 0.0875, 0.975}}}, false)
+	require.Equal(t, 4, len(res.Result.Hits))
+
+	// closer to the query vector
+	compareDocs(t, docs[2], res.Result.Hits[0]["data"])
+	compareDocs(t, docs[0], res.Result.Hits[1]["data"])
+	compareDocs(t, docs[3], res.Result.Hits[2]["data"])
+	compareDocs(t, docs[1], res.Result.Hits[3]["data"])
+
+	require.Equal(t, float64(0), res.Result.Hits[0]["metadata"]["match"].(map[string]any)["vector_distance"])
+	require.Equal(t, 0.22375428676605225, res.Result.Hits[1]["metadata"]["match"].(map[string]any)["vector_distance"])
 }
 
 func TestComplexObjects(t *testing.T) {

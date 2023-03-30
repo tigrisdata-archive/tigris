@@ -292,6 +292,9 @@ func TestSearchAttributesOnFields(t *testing.T) {
 		}, {
 			[]byte(`{"title":"test","properties":{"obj_last":{"type":"object","properties":{"nested_arr_obj":{"type":"array","items":{"type":"object","properties":{"n_id":{"type":"integer","searchIndex":true}}}}}}}}`),
 			"Cannot enable index or search on an array of objects",
+		}, {
+			[]byte(`{"title":"test","properties":{"obj":{"type":"object","properties":{"nested_vector":{"type":"array","format":"vector","dimensions":4}}}}}`),
+			"",
 		},
 	}
 	for _, c := range cases {

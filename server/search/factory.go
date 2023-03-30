@@ -16,7 +16,7 @@ package search
 
 import (
 	"github.com/tigrisdata/tigris/query/search"
-	tsApi "github.com/typesense/typesense-go/typesense/api"
+	tsApi "github.com/tigrisdata/typesense-go/typesense/api"
 )
 
 // ResponseFactory is used to convert raw hits response to our Iterable that has final order of hits.

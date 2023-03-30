@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/query/search"
-	tsApi "github.com/typesense/typesense-go/typesense/api"
+	tsApi "github.com/tigrisdata/typesense-go/typesense/api"
 )
 
 func TestNewFacetResponse(t *testing.T) {

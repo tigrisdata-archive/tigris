@@ -24,8 +24,8 @@ import (
 	"github.com/tigrisdata/tigris/query/filter"
 	qsearch "github.com/tigrisdata/tigris/query/search"
 	"github.com/tigrisdata/tigris/server/config"
-	"github.com/typesense/typesense-go/typesense"
-	tsApi "github.com/typesense/typesense-go/typesense/api"
+	"github.com/tigrisdata/typesense-go/typesense"
+	tsApi "github.com/tigrisdata/typesense-go/typesense/api"
 )
 
 type IndexAction string

@@ -20,7 +20,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
-	tsApi "github.com/typesense/typesense-go/typesense/api"
+	tsApi "github.com/tigrisdata/typesense-go/typesense/api"
 )
 
 type SearchSourceType string
@@ -210,6 +210,52 @@ func (s *SearchIndex) GetQueryableField(name string) (*QueryableField, error) {
 	return nil, errors.InvalidArgument("Field `%s` is not present in collection", name)
 }
 
+func (s *SearchIndex) Validate(doc map[string]any) error {
+	for _, f := range s.QueryableFields {
+		if f.DataType == VectorType {
+			keys := f.KeyPath()
+			value, ok := doc[keys[0]]
+			if !ok {
+				continue
+			}
+
+			field := GetField(s.Fields, keys[0])
+			if field == nil {
+				continue
+			}
+
+			if err := s.validateLow(value, keys[1:], field); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (s *SearchIndex) validateLow(value any, keys []string, field *Field) error {
+	if len(keys) > 0 {
+		nested := field.GetNestedField(keys[0])
+		if conv, ok := value.(map[string]any); ok {
+			return s.validateLow(conv[nested.FieldName], keys[1:], nested)
+		}
+	}
+	if value == nil || field.DataType != VectorType {
+		return nil
+	}
+
+	v, ok := value.([]any)
+	if !ok {
+		return errors.InvalidArgument("unable to convert vector type field '%s' to []float64", field.FieldName)
+	}
+	if len(v) > field.GetDimensions() {
+		return errors.InvalidArgument("field '%s' of vector type should not have dimensions greater than the "+
+			"defined in schema, defined: '%d' found: '%d'", field.FieldName, field.GetDimensions(), len(v))
+	}
+
+	return nil
+}
+
 func (s *SearchIndex) buildSearchSchema(name string) {
 	ptrTrue, ptrFalse := true, false
 	tsFields := make([]tsApi.Field, 0, len(s.QueryableFields))
@@ -221,6 +267,7 @@ func (s *SearchIndex) buildSearchSchema(name string) {
 			Index:    &s.SearchIndexed,
 			Sort:     &s.Sortable,
 			Optional: &ptrTrue,
+			NumDim:   s.Dimensions,
 		})
 
 		if s.InMemoryName() != s.Name() {
@@ -302,6 +349,7 @@ func (s *SearchIndex) GetSearchDeltaFields(existingFields []*QueryableField, fie
 			Index:    &f.SearchIndexed,
 			Sort:     &f.Sortable,
 			Optional: &ptrTrue,
+			NumDim:   f.Dimensions,
 		})
 	}
 
@@ -376,6 +424,7 @@ func (s *ImplicitSearchIndex) buildSearchSchema(searchStoreName string) {
 			Index:    &shouldIndex,
 			Sort:     &shouldSort,
 			Optional: &ptrTrue,
+			NumDim:   f.Dimensions,
 		})
 
 		if f.InMemoryName() != f.Name() {
@@ -480,6 +529,7 @@ func (s *ImplicitSearchIndex) GetSearchDeltaFields(existingFields []*QueryableFi
 			Index:    &shouldIndex,
 			Sort:     &shouldSort,
 			Optional: &ptrTrue,
+			NumDim:   f.Dimensions,
 		})
 	}
 
