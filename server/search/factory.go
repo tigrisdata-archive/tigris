@@ -61,12 +61,7 @@ func (r *ResponseFactory) GetGroupedHitsIterator(response []tsApi.SearchResult) 
 
 // GetHitsIterator returns an IHits interface which contains hits results in an order that we need to stream out to the user.
 func (r *ResponseFactory) GetHitsIterator(response []tsApi.SearchResult) IHits {
-	var hits IHitsMutable
-	if r.inputQuery.SortOrder != nil && len(r.inputQuery.WrappedF.SearchFilter()) > 1 {
-		hits = NewSortedHits(r.inputQuery.SortOrder)
-	} else {
-		hits = NewHits()
-	}
+	var hits IHitsMutable = NewHits()
 
 	for _, r := range response {
 		if r.Hits != nil {

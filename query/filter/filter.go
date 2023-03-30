@@ -51,7 +51,7 @@ type Filter interface {
 	Matches(doc []byte) bool
 	// MatchesDoc similar to Matches but used when document is already parsed
 	MatchesDoc(doc map[string]interface{}) bool
-	ToSearchFilter() []string
+	ToSearchFilter() string
 	// IsSearchIndexed to let caller knows if there is any fields in the query not indexed in search. This
 	// will trigger full scan.
 	IsSearchIndexed() bool
@@ -61,13 +61,13 @@ type EmptyFilter struct{}
 
 func (f *EmptyFilter) Matches(_ []byte) bool                    { return true }
 func (f *EmptyFilter) MatchesDoc(_ map[string]interface{}) bool { return true }
-func (f *EmptyFilter) ToSearchFilter() []string                 { return nil }
+func (f *EmptyFilter) ToSearchFilter() string                   { return "" }
 func (f *EmptyFilter) IsSearchIndexed() bool                    { return false }
 
 type WrappedFilter struct {
 	Filter
 
-	searchFilter []string
+	searchFilter string
 }
 
 func NewWrappedFilter(filters []Filter) *WrappedFilter {
@@ -97,7 +97,7 @@ func (w *WrappedFilter) None() bool {
 	return w.Filter == emptyFilter
 }
 
-func (w *WrappedFilter) SearchFilter() []string {
+func (w *WrappedFilter) SearchFilter() string {
 	return w.searchFilter
 }
 

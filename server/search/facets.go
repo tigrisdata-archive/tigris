@@ -15,186 +15,84 @@
 package search
 
 import (
-	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-	"github.com/tigrisdata/tigris/lib/container"
+	"github.com/tigrisdata/tigris/query/search"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
-// SortedFacets is a Temporary workaround to merge facet values when aggregating results from
-// multi-search queries resulting from OR filters
-// this is not very efficient as of now.
-type SortedFacets struct {
-	counts     map[string]*container.PriorityQueue[FacetCount]
-	facetAttrs map[string]*FacetAttrs
-	closed     bool
+// FacetResponse is a builder utility to convert facets from search backend to tigris response
+type FacetResponse struct {
+	// count of facet values requested for each field
+	facetSizes map[string]int
 }
 
-func NewSortedFacets() *SortedFacets {
-	return &SortedFacets{
-		counts:     map[string]*container.PriorityQueue[FacetCount]{},
-		facetAttrs: map[string]*FacetAttrs{},
-		closed:     false,
+func NewFacetResponse(query search.Facets) *FacetResponse {
+	facetSizeRequested := map[string]int{}
+	for _, f := range query.Fields {
+		facetSizeRequested[f.Name] = f.Size
 	}
+	return &FacetResponse{facetSizes: facetSizeRequested}
 }
 
-// Add creates or merges the facet counts with existing for each field
-// new values cannot be added to this data structure once it has been sorted.
-func (f *SortedFacets) Add(tsCounts *tsApi.FacetCounts) error {
-	if tsCounts == nil || tsCounts.FieldName == nil {
-		return nil
-	}
-	if f.closed {
-		return errors.New("Already initialized and sorted. No more inserts.")
+// Build converts search backend response to api.SearchFacet
+func (fb *FacetResponse) Build(r *[]tsApi.FacetCounts) map[string]*api.SearchFacet {
+	result := map[string]*api.SearchFacet{}
+
+	// return empty map
+	if r == nil {
+		return result
 	}
 
-	if _, ok := f.facetAttrs[*tsCounts.FieldName]; !ok {
-		f.facetAttrs[*tsCounts.FieldName] = newFacetAttrs()
-	}
-	attrs := f.facetAttrs[*tsCounts.FieldName]
-
-	for i := 0; tsCounts.Counts != nil && i < len(*tsCounts.Counts); i++ {
-		c := (*tsCounts.Counts)[i]
-		if c.Value != nil {
-			attrs.addCount(*c.Value, c.Count)
+	for _, fc := range *r {
+		// skip if no field name
+		if fc.FieldName == nil {
+			continue
 		}
-	}
-
-	attrs.addStats(tsCounts)
-	return nil
-}
-
-// GetFacetCount removes from priority queue and returns the value with highest count for the field if present
-// else returns nil, False.
-func (f *SortedFacets) GetFacetCount(field string) (*FacetCount, bool) {
-	if !f.closed {
-		f.sort()
-	}
-	if f.hasMoreFacets(field) {
-		if fc, err := f.counts[field].Pop(); err == nil {
-			return fc, true
-		} else {
-			log.Err(err)
-			return nil, false
+		fieldName := *fc.FieldName
+		// skip if this facets for this field name were not requested, likely not to happen
+		if _, ok := fb.facetSizes[fieldName]; !ok {
+			continue
 		}
-	}
 
-	return nil, false
-}
-
-// GetStats returns the computed stats for the faceted field.
-func (f *SortedFacets) GetStats(field string) *api.FacetStats {
-	if attrs, ok := f.facetAttrs[field]; ok {
-		return attrs.stats
-	}
-	return nil
-}
-
-func (f *SortedFacets) hasMoreFacets(field string) bool {
-	if q, ok := f.counts[field]; ok {
-		return q.Len() > 0
-	}
-	return false
-}
-
-func (f *SortedFacets) initPriorityQueue(field string) {
-	if _, ok := f.counts[field]; !ok {
-		f.counts[field] = container.NewPriorityQueue[FacetCount](facetCountComparator)
-	}
-}
-
-// sort will queue up the collected unique facet counts in priority queue.
-func (f *SortedFacets) sort() {
-	if f.closed {
-		log.Err(errors.New("Facets should only be sorted once"))
-		return
-	}
-
-	for field, attrs := range f.facetAttrs {
-		f.initPriorityQueue(field)
-		for _, fc := range attrs.counts {
-			f.counts[field].Push(fc)
+		stats := &api.FacetStats{}
+		if fc.Stats != nil {
+			if fc.Stats.Avg != nil {
+				stats.Avg = fc.Stats.Avg
+			}
+			if fc.Stats.Max != nil {
+				stats.Max = fc.Stats.Max
+			}
+			if fc.Stats.Min != nil {
+				stats.Min = fc.Stats.Min
+			}
+			if fc.Stats.Sum != nil {
+				stats.Sum = fc.Stats.Sum
+			}
+			if fc.Stats.TotalValues != nil {
+				stats.Count = int64(*fc.Stats.TotalValues)
+			}
 		}
-	}
-	f.closed = true
-}
 
-type FacetAttrs struct {
-	counts         map[string]*FacetCount
-	stats          *api.FacetStats
-	statsBuiltOnce bool
-}
-
-func (fa *FacetAttrs) addCount(value string, count *int) {
-	if fc, ok := fa.counts[value]; ok {
-		fc.Count += int64(*count)
-	} else {
-		fa.counts[value] = &FacetCount{
-			Value: value,
-			Count: int64(*count),
+		facet := &api.SearchFacet{
+			Counts: []*api.FacetCount{},
+			Stats:  stats,
 		}
-	}
-}
 
-// adds stats to existing FacetAttrs.
-func (fa *FacetAttrs) addStats(counts *tsApi.FacetCounts) {
-	if counts == nil || counts.Stats == nil {
-		return
-	}
-
-	// always increment the facet counts, although the values could be incorrect
-	if counts.Stats.TotalValues != nil {
-		fa.stats.Count += int64(*counts.Stats.TotalValues)
-	}
-
-	// reset all stats to nil when using multi-queries, the values cannot be computed correctly
-	if fa.statsBuiltOnce {
-		fa.stats.Avg = nil
-		fa.stats.Min = nil
-		fa.stats.Max = nil
-		fa.stats.Sum = nil
-	} else {
-		// build stats
-		if counts.Stats.Avg != nil {
-			avg := *counts.Stats.Avg
-			fa.stats.Avg = &avg
+		if fc.Counts != nil {
+			for _, tsCount := range *fc.Counts {
+				// skip null 'value' for a faceted field
+				// skip if the user requested size for a facet field has been met
+				if tsCount.Value == nil || len(facet.Counts) >= fb.facetSizes[fieldName] {
+					continue
+				}
+				facet.Counts = append(facet.Counts, &api.FacetCount{
+					Count: int64(*tsCount.Count),
+					Value: *tsCount.Value,
+				})
+			}
 		}
-		if counts.Stats.Max != nil {
-			max := *counts.Stats.Max
-			fa.stats.Max = &max
-		}
-		if counts.Stats.Min != nil {
-			min := *counts.Stats.Min
-			fa.stats.Min = &min
-		}
-		if counts.Stats.Sum != nil {
-			sum := *counts.Stats.Sum
-			fa.stats.Sum = &sum
-		}
-		fa.statsBuiltOnce = true
-	}
-}
-
-func newFacetAttrs() *FacetAttrs {
-	return &FacetAttrs{
-		counts: map[string]*FacetCount{},
-		stats:  &api.FacetStats{},
-	}
-}
-
-type FacetCount struct {
-	Value string
-	Count int64
-}
-
-// facetCountComparator returns True if `this` needs to be sorted before `that`.
-func facetCountComparator(this, that *FacetCount) bool {
-	if this == nil {
-		return that == nil
-	} else if that == nil {
-		return this != nil
+		result[fieldName] = facet
 	}
 
-	return this.Count > that.Count
+	return result
 }

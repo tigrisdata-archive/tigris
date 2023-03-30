@@ -15,7 +15,11 @@
 package search
 
 import (
+	"fmt"
+
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
+	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
 type Hits struct {
@@ -51,4 +55,54 @@ func (h *Hits) Len() int {
 
 func (h *Hits) HasMoreHits() bool {
 	return h.index < len(h.hits)
+}
+
+type Hit struct {
+	Document       map[string]interface{}
+	TextMatchScore int64
+	Match          *api.Match
+}
+
+// True - field absent in document
+// True - field values is nil
+// False - field has non-nil value.
+func (sh *Hit) isFieldMissingOrNil(f string) bool {
+	if v, ok := sh.Document[f]; !ok {
+		return true
+	} else {
+		return v == nil
+	}
+}
+
+func NewSearchHit(tsHit *tsApi.SearchResultHit) *Hit {
+	if tsHit == nil || tsHit.Document == nil {
+		return nil
+	}
+
+	score := int64(0)
+	if tsHit.TextMatch != nil {
+		score = *tsHit.TextMatch
+	}
+
+	var fields []*api.MatchField
+	if tsHit.Highlights != nil {
+		for _, f := range *tsHit.Highlights {
+			name := ""
+			if f.Field != nil {
+				name = *f.Field
+			}
+			fields = append(fields, &api.MatchField{
+				Name: name,
+			})
+		}
+	}
+
+	return &Hit{
+		Document:       *tsHit.Document,
+		TextMatchScore: score,
+		Match: &api.Match{
+			Fields: fields,
+			Score:  fmt.Sprintf("%d", score),
+		},
+	}
 }
