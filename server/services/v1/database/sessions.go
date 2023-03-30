@@ -29,6 +29,7 @@ import (
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
+	"github.com/tigrisdata/tigris/store/search"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
@@ -285,7 +286,7 @@ func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, runner Quer
 
 		err = session.Commit(sessMgr.versionH, req.MetadataChange, err)
 		log.Debug().Err(err).Msg("session.commit after")
-		if err != kv.ErrConflictingTransaction {
+		if err != kv.ErrConflictingTransaction && !search.IsErrDuplicateFieldNames(err) {
 			return
 		}
 
