@@ -31,8 +31,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-	"gopkg.in/gavv/httpexpect.v1"
 	"github.com/tigrisdata/tigris/schema"
+	"gopkg.in/gavv/httpexpect.v1"
 )
 
 func TestInsert_Bad_NotFoundRequest(t *testing.T) {
@@ -3930,7 +3930,7 @@ func TestRead_AcceptApplicationJSON(t *testing.T) {
 			Map{},
 			Map{
 				"limit": 2,
-				"skip": 2,
+				"skip":  2,
 			},
 			[]int{2, 3},
 		}, {
@@ -3943,7 +3943,7 @@ func TestRead_AcceptApplicationJSON(t *testing.T) {
 			Map{},
 			Map{
 				"limit": 5,
-				"skip": 5,
+				"skip":  5,
 			},
 			nil,
 		},
@@ -4948,6 +4948,35 @@ func readByFilter(t *testing.T, db string, collection string, filter Map, fields
 	}
 
 	return resp
+}
+
+func explainQuery(t *testing.T, db string, collection string, filter Map, fields Map, options Map, order []Map) *api.ExplainResponse {
+	payload := make(Map)
+	payload["fields"] = fields
+	if filter == nil {
+		payload["filter"] = json.RawMessage(`{}`)
+	} else {
+		payload["filter"] = filter
+	}
+	if len(order) > 0 {
+		payload["sort"] = order
+	}
+	if options != nil {
+		payload["options"] = options
+	}
+
+	e := expect(t)
+	str := e.POST(getDocumentURL(db, collection, "explain")).
+		WithJSON(payload).
+		Expect().
+		Status(http.StatusOK).
+		Body().
+		Raw()
+
+	explain := &api.ExplainResponse{}
+	err := jsoniter.Unmarshal([]byte(str), explain)
+	require.NoError(t, err)
+	return explain
 }
 
 func readAndValidatePkeyOrder(t *testing.T, db string, collection string, filter Map, fields Map, inputDocument []Doc, collation Map) {

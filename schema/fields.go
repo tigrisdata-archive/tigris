@@ -339,6 +339,21 @@ func (i *Index) IsSecondaryIndex() bool {
 	return i.IdxType == SECONDARY_INDEX
 }
 
+func (i *Index) StateString() string {
+	switch i.State {
+	case NOT_INDEXED:
+		return "NOT INDEXED"
+	case INDEX_DELETED:
+		return "INDEX DELETED"
+	case INDEX_WRITE_MODE:
+		return "INDEX WRITE MODE"
+	case INDEX_ACTIVE:
+		return "INDEX ACTIVE"
+	default:
+		return "UNKNOWN"
+	}
+}
+
 func (i *Index) IndexType() IndexType {
 	return i.IdxType
 }

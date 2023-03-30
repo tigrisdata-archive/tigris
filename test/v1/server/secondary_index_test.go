@@ -164,6 +164,8 @@ func TestQuery_EQ(t *testing.T) {
 		ids := getIds(resp)
 		assert.Equal(t, len(query.ids), len(ids))
 		assert.Equal(t, query.ids, ids, query.filter)
+		explain := explainQuery(t, db, coll, query.filter, nil, nil, nil)
+		assert.Equal(t, explain.ReadType, "secondary index")
 	}
 }
 
@@ -300,6 +302,8 @@ func TestQuery_Range(t *testing.T) {
 		ids := getIds(resp)
 		assert.Equal(t, len(query.ids), len(ids), query.filter)
 		assert.Equal(t, query.ids, ids, query.filter)
+		explain := explainQuery(t, db, coll, query.filter, nil, nil, nil)
+		assert.Equal(t, explain.ReadType, "secondary index")
 	}
 }
 
@@ -390,6 +394,8 @@ func TestQuery_RangeWithNull(t *testing.T) {
 		ids := getIds(resp)
 		assert.Equal(t, len(query.ids), len(ids), query.filter)
 		assert.Equal(t, query.ids, ids, query.filter)
+		explain := explainQuery(t, db, coll, query.filter, nil, nil, nil)
+		assert.Equal(t, explain.ReadType, "secondary index")
 	}
 }
 
@@ -444,6 +450,8 @@ func TestQuery_LongStrings(t *testing.T) {
 		ids := getIds(resp)
 		assert.Equal(t, len(query.ids), len(ids), query.filter)
 		assert.Equal(t, query.ids, ids, query.filter)
+		explain := explainQuery(t, db, coll, query.filter, nil, nil, nil)
+		assert.Equal(t, explain.ReadType, "secondary index")
 	}
 }
 
@@ -512,6 +520,8 @@ func TestQuery_MaxValues(t *testing.T) {
 		ids := getIds(resp)
 		assert.Equal(t, len(query.ids), len(ids), query.filter)
 		assert.Equal(t, query.ids, ids, query.filter)
+		explain := explainQuery(t, db, coll, query.filter, nil, nil, nil)
+		assert.Equal(t, explain.ReadType, "secondary index")
 	}
 }
 
@@ -565,6 +575,8 @@ func TestQuery_AfterUpdates(t *testing.T) {
 		ids := getIds(resp)
 		assert.Equal(t, len(query.ids), len(ids), query.filter)
 		assert.Equal(t, query.ids, ids, query.filter)
+		explain := explainQuery(t, db, coll, query.filter, nil, nil, nil)
+		assert.Equal(t, explain.ReadType, "secondary index")
 	}
 }
 
@@ -604,5 +616,7 @@ func TestQuery_AfterDelete(t *testing.T) {
 		ids := getIds(resp)
 		assert.Equal(t, len(query.ids), len(ids), query.filter)
 		assert.Equal(t, query.ids, ids, query.filter)
+		explain := explainQuery(t, db, coll, query.filter, nil, nil, nil)
+		assert.Equal(t, explain.ReadType, "secondary index")
 	}
 }

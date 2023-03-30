@@ -318,6 +318,19 @@ func (s *apiService) Read(r *api.ReadRequest, stream api.Tigris_ReadServer) erro
 	return err
 }
 
+func (s *apiService) Explain(ctx context.Context, r *api.ReadRequest) (*api.ExplainResponse, error) {
+	queryMetrics := metrics.WriteQueryMetrics{}
+	accessToken, _ := request.GetAccessToken(ctx)
+	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetExplainQueryRunner(r, &queryMetrics, accessToken), database.ReqOptions{
+		TxCtx: api.GetTransaction(ctx),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.ExplainResponse), nil
+}
+
 func (s *apiService) Search(r *api.SearchRequest, stream api.Tigris_SearchServer) error {
 	queryMetrics := metrics.SearchQueryMetrics{}
 	accessToken, _ := request.GetAccessToken(stream.Context())
