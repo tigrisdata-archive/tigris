@@ -36,6 +36,102 @@ type (
 	Doc Map
 )
 
+var testCreateSchemaComposite = Map{
+	"schema": Map{
+		"title":       testCollection + "_composite",
+		"description": "this schema is for integration tests",
+		"properties": Map{
+			"pkey_int": Map{
+				"description": "primary key field",
+				"type":        "integer",
+				"searchIndex": true,
+				"sort": true,
+			},
+			"int_value": Map{
+				"description": "simple int field",
+				"type":        "integer",
+				"index":       true,
+			},
+			"string_value": Map{
+				"description": "simple string field",
+				"type":        "string",
+				"maxLength":   128,
+				"index":       true,
+			},
+			"added_string_value": Map{
+				"description": "simple string field",
+				"type":        "string",
+			},
+			"bool_value": Map{
+				"description": "simple boolean field",
+				"type":        "boolean",
+				"index":       true,
+			},
+			"double_value": Map{
+				"description": "simple double field",
+				"type":        "number",
+				"index":       true,
+			},
+			"added_value_double": Map{
+				"description": "simple double field",
+				"type":        "number",
+			},
+			"bytes_value": Map{
+				"description": "simple bytes field",
+				"type":        "string",
+				"format":      "byte",
+			},
+			"uuid_value": Map{
+				"description": "uuid field",
+				"type":        "string",
+				"format":      "uuid",
+				"index":       true,
+			},
+			"date_time_value": Map{
+				"description": "date time field",
+				"type":        "string",
+				"format":      "date-time",
+				"index":       true,
+			},
+			"simple_array_value": Map{
+				"description": "array field",
+				"type":        "array",
+				"items": Map{
+					"type": "string",
+				},
+			},
+			"array_value": Map{
+				"description": "array field",
+				"type":        "array",
+				"items": Map{
+					"type": "object",
+					"properties": Map{
+						"id": Map{
+							"type": "integer",
+						},
+						"product": Map{
+							"type": "string",
+						},
+					},
+				},
+			},
+			"object_value": Map{
+				"description": "object field",
+				"type":        "object",
+				"properties": Map{
+					"name": Map{
+						"type": "string",
+					},
+					"bignumber": Map{
+						"type": "integer",
+					},
+				},
+			},
+		},
+		"primary_key": []interface{}{"pkey_int", "string_value"},
+	},
+}
+
 var testCreateSchema = Map{
 	"schema": Map{
 		"title":       testCollection,

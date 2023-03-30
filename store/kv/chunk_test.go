@@ -37,8 +37,10 @@ func TestChunkStore(t *testing.T) {
 	require.NoError(t, kv.DropTable(ctx, table))
 	require.NoError(t, kv.CreateTable(ctx, table))
 
-	chunkStore, err := NewChunkStore(cfg)
+	store, err := NewTxStore(cfg)
 	require.NoError(t, err)
+
+	chunkStore := NewChunkStore(store)
 
 	doc := []byte(`{
     "a": 1,

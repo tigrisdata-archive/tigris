@@ -19,10 +19,17 @@ import (
 )
 
 var (
-	RequestsOkCount       tally.Scope
-	RequestsErrorCount    tally.Scope
-	RequestsRespTime      tally.Scope
-	RequestsErrorRespTime tally.Scope
+	RequestsOkCount        tally.Scope
+	RequestsErrorCount     tally.Scope
+	RequestsRespTime       tally.Scope
+	RequestsErrorRespTime  tally.Scope
+	RequestsReadBytes      tally.Scope
+	RequestsReadUnits      tally.Scope
+	RequestsWriteBytes     tally.Scope
+	RequestsWriteUnits     tally.Scope
+	RequestsDDLDropUnits   tally.Scope
+	RequestsDDLUpdateUnits tally.Scope
+	RequestsDDLCreateUnits tally.Scope
 )
 
 func getRequestOkTagKeys() []string {
@@ -70,4 +77,11 @@ func initializeRequestScopes() {
 	RequestsErrorCount = Requests.SubScope("count")
 	RequestsRespTime = Requests.SubScope("response")
 	RequestsErrorRespTime = Requests.SubScope("error_response")
+	RequestsReadBytes = Requests.SubScope("read")
+	RequestsReadUnits = Requests.SubScope("read")
+	RequestsWriteBytes = Requests.SubScope("write")
+	RequestsWriteUnits = Requests.SubScope("write")
+	RequestsDDLDropUnits = Requests.SubScope("ddl_drop")
+	RequestsDDLUpdateUnits = Requests.SubScope("ddl_update")
+	RequestsDDLCreateUnits = Requests.SubScope("ddl_create")
 }

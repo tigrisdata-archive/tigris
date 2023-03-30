@@ -21,7 +21,6 @@ import (
 )
 
 var (
-	ErrMissingField           = errors.InvalidArgument("removing a field is a backward incompatible change")
 	ErrCollectionNameMismatch = errors.InvalidArgument("mismatch in the collection name")
 	ErrIndexNameMismatch      = errors.InvalidArgument("mismatch in the index name")
 )
@@ -55,15 +54,19 @@ type SearchIndexValidator interface {
 type PrimaryIndexSchemaValidator struct{}
 
 func (v *PrimaryIndexSchemaValidator) Validate(existing *DefaultCollection, current *Factory) error {
-	return existing.Indexes.PrimaryKey.IsCompatible(current.Indexes.PrimaryKey)
+	return existing.GetPrimaryKey().IsCompatible(current.PrimaryKey)
 }
 
 type FieldSchemaValidator struct{}
 
-func (v *FieldSchemaValidator) validateLow(existing []*Field, current []*Field) error {
+func (v *FieldSchemaValidator) validateLow(keyPath string, existing []*Field, current []*Field, isMap bool) error {
 	currentMap := make(map[string]*Field)
 	for _, e := range current {
 		currentMap[e.FieldName] = e
+	}
+
+	if keyPath != "" {
+		keyPath += "."
 	}
 
 	for _, f := range existing {
@@ -73,10 +76,15 @@ func (v *FieldSchemaValidator) validateLow(existing []*Field, current []*Field) 
 				continue
 			}
 
-			return ErrMissingField
+			if isMap {
+				continue
+			}
+
+			return errors.InvalidArgument("removing a field is a backward incompatible change. missing: %s",
+				keyPath+f.FieldName)
 		}
 
-		if err := f.IsCompatible(c); err != nil {
+		if err := f.IsCompatible(keyPath, c); err != nil {
 			return err
 		}
 
@@ -85,7 +93,7 @@ func (v *FieldSchemaValidator) validateLow(existing []*Field, current []*Field) 
 		}
 
 		// Validate nested fields
-		if err := v.validateLow(f.Fields, c.Fields); err != nil {
+		if err := v.validateLow(keyPath+f.FieldName, f.Fields, c.Fields, c.IsMap()); err != nil {
 			return err
 		}
 	}
@@ -94,7 +102,7 @@ func (v *FieldSchemaValidator) validateLow(existing []*Field, current []*Field) 
 }
 
 func (v *FieldSchemaValidator) Validate(existing *DefaultCollection, current *Factory) error {
-	return v.validateLow(existing.Fields, current.Fields)
+	return v.validateLow("", existing.Fields, current.Fields, false)
 }
 
 func (v *FieldSchemaValidator) validateIndexLow(existing []*Field, current []*Field) error {

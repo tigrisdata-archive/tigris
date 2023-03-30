@@ -264,7 +264,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		newKey := key
 		if primaryKeyMutation {
 			// we need to deleteReq old key and build new key from new data
-			keyGen := newKeyGenerator(newData.RawData, tenant.TableKeyGenerator, coll.Indexes.PrimaryKey)
+			keyGen := newKeyGenerator(newData.RawData, tenant.TableKeyGenerator, coll.GetPrimaryKey())
 			if newKey, err = keyGen.generate(ctx, runner.txMgr, runner.encoder, coll.EncodedName); err != nil {
 				return Response{}, nil, err
 			}
@@ -324,9 +324,18 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	ts := internal.NewTimestamp()
 
+	reqStatus, reqStatusFound := metrics.RequestStatusFromContext(ctx)
+
 	var iterator Iterator
 	if filter.None(runner.req.Filter) {
 		iterator, err = NewDatabaseReader(ctx, tx).ScanTable(coll.EncodedName)
+		// For a delete without filter, do not count the read operations
+		if reqStatusFound {
+			reqStatus.AddDDLDropUnit()
+			reqStatus.SetReadBytes(int64(0))
+			reqStatus.SetWriteBytes(int64(0))
+			ctx = reqStatus.SaveRequestStatusToContext(ctx)
+		}
 		runner.queryMetrics.SetWriteType("full_scan")
 	} else {
 		var collation *value.Collation
@@ -353,6 +362,9 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		key, err := keys.FromBinary(coll.EncodedName, row.Key)
 		if err != nil {
 			return Response{}, ctx, err
+		}
+		if reqStatusFound {
+			reqStatus.AddWriteBytes(int64(len(row.Data.RawData)))
 		}
 
 		if config.DefaultConfig.SecondaryIndex.WriteEnabled {
@@ -707,8 +719,13 @@ func (runner *StreamingQueryRunner) injectMDInsideBody(raw []byte, createdAt *ti
 		return raw, nil
 	}
 
-	lastByte := raw[len(raw)-1]
-	raw = raw[0 : len(raw)-1]
+	lastIndex := bytes.LastIndex(raw, []byte(`}`))
+	if lastIndex <= 0 {
+		return raw, nil
+	}
+
+	lastByte := raw[lastIndex]
+	raw = raw[0:lastIndex]
 
 	var buf bytes.Buffer
 	_, _ = buf.Write(raw)

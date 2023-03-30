@@ -39,6 +39,7 @@ type Iterator interface {
 }
 
 type ScanIterator struct {
+	ctx context.Context
 	it  kv.Iterator
 	err error
 }
@@ -50,7 +51,8 @@ func NewScanIterator(ctx context.Context, tx transaction.Tx, from keys.Key, to k
 	}
 
 	return &ScanIterator{
-		it: it,
+		ctx: ctx,
+		it:  it,
 	}, nil
 }
 

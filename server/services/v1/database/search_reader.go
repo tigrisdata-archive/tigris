@@ -161,9 +161,9 @@ func (p *pageReader) next() (bool, *page, error) {
 		return true, nil, nil
 	}
 
-	pg, _ := p.pages[0], p.pages[0].hasCapacity()
+	pg, hasCapacity := p.pages[0], p.pages[0].hasCapacity()
 	p.pages = p.pages[1:]
-	return false, pg, nil
+	return hasCapacity, pg, nil
 }
 
 func (p *pageReader) buildFacets(sf *tsearch.SortedFacets) {

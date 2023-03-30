@@ -38,6 +38,7 @@ var (
 	NetworkMetrics tally.Scope
 	AuthMetrics    tally.Scope
 	SchemaMetrics  tally.Scope
+	GlobalSt       *GlobalStatus
 )
 
 func getVersion() string {
@@ -143,6 +144,7 @@ func InitializeMetrics() func() {
 		initializeQuotaScopes()
 
 		SchemaMetrics = root.SubScope("schema")
+		GlobalSt = NewGlobalStatus()
 	}
 
 	return func() {

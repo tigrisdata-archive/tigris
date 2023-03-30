@@ -22,13 +22,15 @@ import (
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
+	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/transaction"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 // CollectionMetadata contains collection wide metadata.
 type CollectionMetadata struct {
-	ID uint32 `json:"id,omitempty"`
+	ID      uint32          `json:"id,omitempty"`
+	Indexes []*schema.Index `json:"indexes"`
 }
 
 // CollectionSubspace is used to store metadata about Tigris collections.
@@ -53,6 +55,82 @@ func (c *CollectionSubspace) getKey(nsID uint32, dbID uint32, name string) keys.
 	}
 
 	return keys.NewKey(c.SubspaceName, c.KeyVersion, UInt32ToByte(nsID), UInt32ToByte(dbID), collectionKey, name, keyEnd)
+}
+
+func (c *CollectionSubspace) Create(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, name string, id uint32, indexes []*schema.Index,
+) (*CollectionMetadata, error) {
+	for _, index := range indexes {
+		// The indexes are created when the collection is created which means we do not need to
+		// do any background building, the index is already up to date and can be used for queries
+		index.State = schema.INDEX_ACTIVE
+	}
+
+	meta := &CollectionMetadata{
+		id,
+		indexes,
+	}
+
+	if err := c.insert(ctx, tx, nsID, dbID, name, meta); err != nil {
+		return nil, err
+	}
+	return meta, nil
+}
+
+func (c *CollectionSubspace) updateMetadataIndexes(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, name string, id uint32, metadata *CollectionMetadata, updatedIndexes []*schema.Index,
+) error {
+	for _, updateIdx := range updatedIndexes {
+		if !hasIndex(metadata.Indexes, updateIdx) {
+			updateIdx.State = schema.INDEX_WRITE_MODE
+			if err := c.createBuildIndexTask(ctx, tx, nsID, dbID, name, id, updateIdx); err != nil {
+				return err
+			}
+			metadata.Indexes = append(metadata.Indexes, updateIdx)
+		}
+	}
+
+	for _, existing := range metadata.Indexes {
+		if !hasIndex(updatedIndexes, existing) {
+			existing.State = schema.INDEX_DELETED
+			if err := c.createDeleteIndexTask(ctx, tx, nsID, dbID, name, id, existing); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (c *CollectionSubspace) Update(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, name string, id uint32, updatedIndexes []*schema.Index,
+) (*CollectionMetadata, error) {
+	metadata, err := c.Get(ctx, tx, nsID, dbID, name)
+	if err != nil {
+		return nil, err
+	}
+
+	if err = c.updateMetadataIndexes(ctx, tx, nsID, dbID, name, id, metadata, updatedIndexes); err != nil {
+		return nil, err
+	}
+
+	err = c.updateMetadata(ctx, tx,
+		c.validateArgs(nsID, dbID, name, &metadata),
+		c.getKey(nsID, dbID, name),
+		collMetaValueVersion,
+		metadata,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return metadata, nil
+}
+
+func (c *CollectionSubspace) createBuildIndexTask(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, name string, id uint32, index *schema.Index) error {
+	return nil
+}
+
+func (c *CollectionSubspace) createDeleteIndexTask(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, name string, id uint32, index *schema.Index) error {
+	return nil
 }
 
 func (c *CollectionSubspace) insert(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, name string,
@@ -96,17 +174,6 @@ func (c *CollectionSubspace) Get(ctx context.Context, tx transaction.Tx, nsID ui
 	return c.decodeMetadata(name, payload)
 }
 
-func (c *CollectionSubspace) Update(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, name string,
-	metadata *CollectionMetadata,
-) error {
-	return c.updateMetadata(ctx, tx,
-		c.validateArgs(nsID, dbID, name, &metadata),
-		c.getKey(nsID, dbID, name),
-		collMetaValueVersion,
-		metadata,
-	)
-}
-
 func (c *CollectionSubspace) delete(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, name string,
 ) error {
 	return c.deleteMetadata(ctx, tx,
@@ -127,7 +194,7 @@ func (c *CollectionSubspace) softDelete(ctx context.Context, tx transaction.Tx, 
 	)
 }
 
-func (_ *CollectionSubspace) validateArgs(nsID uint32, dbID uint32, name string, metadata **CollectionMetadata) error {
+func (*CollectionSubspace) validateArgs(nsID uint32, dbID uint32, name string, metadata **CollectionMetadata) error {
 	if nsID == 0 || dbID == 0 {
 		return errors.InvalidArgument("invalid id")
 	}
@@ -180,4 +247,14 @@ func (c *CollectionSubspace) list(ctx context.Context, tx transaction.Tx, namesp
 	}
 
 	return collections, nil
+}
+
+func hasIndex(indexes []*schema.Index, idx *schema.Index) bool {
+	for _, index := range indexes {
+		if index.Name == idx.Name {
+			return true
+		}
+	}
+
+	return false
 }

@@ -41,6 +41,8 @@ type NamespaceMetadata struct {
 	StrId string
 	// displayName for the namespace
 	Name string
+	// external accounts
+	Accounts AccountIntegrations
 }
 
 // DefaultNamespace is for "default" namespace in the cluster. This is useful when there is no need to logically group
@@ -93,6 +95,23 @@ func NewNamespaceMetadata(id uint32, name string, displayName string) NamespaceM
 
 func NewDefaultNamespace() *DefaultNamespace {
 	return &DefaultNamespace{}
+}
+
+// AccountIntegrations represents the external accounts.
+type AccountIntegrations struct {
+	Metronome *Metronome
+}
+
+type Metronome struct {
+	Enabled bool
+	Id      string
+}
+
+func (a *AccountIntegrations) AddMetronome(id string) {
+	a.Metronome = &Metronome{
+		Enabled: true,
+		Id:      id,
+	}
 }
 
 // NamespaceSubspace is used to store metadata about Tigris namespaces.

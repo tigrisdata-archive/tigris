@@ -83,6 +83,21 @@ func (m *Measurement) countOk(scope tally.Scope, tags map[string]string) {
 	scope.Tagged(tags).Counter("ok").Inc(1)
 }
 
+func (m *Measurement) CountUnits(reqStatus *RequestStatus, tags map[string]string) {
+	if !config.DefaultConfig.GlobalStatus.EmitMetrics {
+		return
+	}
+	readBytes := reqStatus.GetReadBytes()
+	writeBytes := reqStatus.GetWriteBytes()
+	RequestsReadBytes.Tagged(tags).Counter("bytes").Inc(readBytes)
+	RequestsWriteBytes.Tagged(tags).Counter("bytes").Inc(writeBytes)
+	RequestsReadUnits.Tagged(tags).Counter("units").Inc(getUnitsFromBytes(readBytes, config.ReadUnitSize))
+	RequestsWriteUnits.Tagged(tags).Counter("units").Inc(getUnitsFromBytes(writeBytes, config.WriteUnitSize))
+	RequestsDDLDropUnits.Tagged(tags).Counter("units").Inc(reqStatus.GetDDLDropUnits())
+	RequestsDDLUpdateUnits.Tagged(tags).Counter("units").Inc(reqStatus.GetDDLUpdateUnits())
+	RequestsDDLCreateUnits.Tagged(tags).Counter("units").Inc(reqStatus.GetDDLCreateUnits())
+}
+
 func (m *Measurement) CountErrorForScope(scope tally.Scope, tags map[string]string) {
 	if scope != nil {
 		m.countError(scope, tags)

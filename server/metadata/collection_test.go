@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/keys"
+	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/transaction"
 )
 
@@ -102,25 +103,6 @@ func TestCollectionSubspace(t *testing.T) {
 		require.Equal(t, appPayload, collection)
 	})
 
-	t.Run("put_get_update_get", func(t *testing.T) {
-		tx, cleanupTx := initTx(t, ctx, tm)
-		defer cleanupTx()
-
-		require.NoError(t, c.insert(ctx, tx, 1, 1, "name3", testCollectionMetadata))
-		collection, err := c.Get(ctx, tx, 1, 1, "name3")
-		require.NoError(t, err)
-		require.Equal(t, testCollectionMetadata, collection)
-
-		updatedCollectionPayload := &CollectionMetadata{
-			ID: 30,
-		}
-
-		require.NoError(t, c.Update(ctx, tx, 1, 1, "name3", updatedCollectionPayload))
-		collection, err = c.Get(ctx, tx, 1, 1, "name3")
-		require.NoError(t, err)
-		require.Equal(t, updatedCollectionPayload, collection)
-	})
-
 	t.Run("put_get_delete_get", func(t *testing.T) {
 		tx, cleanupTx := initTx(t, ctx, tm)
 		defer cleanupTx()
@@ -149,6 +131,170 @@ func TestCollectionSubspace(t *testing.T) {
 			"name8": {ID: 10},
 			"name9": {ID: 10},
 		}, colls)
+	})
+}
+
+func TestCollectionWithIndexes(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	c, tm, cleanup := initCollectionTest(t, ctx)
+	defer cleanup()
+
+	t.Run("Create New with indexes", func(t *testing.T) {
+		tx, cleanupTx := initTx(t, ctx, tm)
+		defer cleanupTx()
+
+		idxs := []*schema.Index{
+			{
+				Name:  "idx1",
+				Id:    uint32(1),
+				State: schema.UNKNOWN,
+			},
+			{
+				Name:  "idx2",
+				Id:    uint32(2),
+				State: schema.UNKNOWN,
+			},
+		}
+
+		meta, err := c.Create(ctx, tx, 1, 1, "coll1", 1, idxs)
+		require.NoError(t, err)
+
+		require.Len(t, meta.Indexes, 2)
+		require.Equal(t, meta.Indexes[0].State, schema.INDEX_ACTIVE)
+		require.Equal(t, meta.Indexes[1].State, schema.INDEX_ACTIVE)
+
+		collection, err := c.Get(ctx, tx, 1, 1, "coll1")
+		require.NoError(t, err)
+		require.Equal(t, meta, collection)
+	})
+
+	t.Run("put_get_update_get", func(t *testing.T) {
+		tx, cleanupTx := initTx(t, ctx, tm)
+		defer cleanupTx()
+		idxs := []*schema.Index{
+			{
+				Name:  "idx1",
+				Id:    uint32(1),
+				State: schema.UNKNOWN,
+			},
+			{
+				Name:  "idx2",
+				Id:    uint32(2),
+				State: schema.UNKNOWN,
+			},
+		}
+
+		meta, err := c.Create(ctx, tx, 1, 1, "name3", 1, idxs)
+		require.NoError(t, err)
+		collection, err := c.Get(ctx, tx, 1, 1, "name3")
+		require.NoError(t, err)
+		require.Equal(t, meta, collection)
+
+		idxs2 := []*schema.Index{
+			{
+				Name:  "idx1",
+				Id:    uint32(1),
+				State: schema.UNKNOWN,
+			},
+			{
+				Name:  "idx2",
+				Id:    uint32(2),
+				State: schema.UNKNOWN,
+			},
+			{
+				Name:  "idx3",
+				Id:    uint32(3),
+				State: schema.UNKNOWN,
+			},
+		}
+
+		updateMeta, err := c.Update(ctx, tx, 1, 1, "name3", 1, idxs2)
+		require.NoError(t, err)
+		require.Len(t, updateMeta.Indexes, 3)
+		require.Equal(t, updateMeta.Indexes[0].State, schema.INDEX_ACTIVE)
+		require.Equal(t, updateMeta.Indexes[1].State, schema.INDEX_ACTIVE)
+		require.Equal(t, updateMeta.Indexes[2].State, schema.INDEX_WRITE_MODE)
+
+		collection, err = c.Get(ctx, tx, 1, 1, "name3")
+		require.NoError(t, err)
+		require.Equal(t, updateMeta, collection)
+	})
+
+	t.Run("add and remove indexes", func(t *testing.T) {
+		tx, cleanupTx := initTx(t, ctx, tm)
+		defer cleanupTx()
+
+		idxs := []*schema.Index{
+			{
+				Name:  "idx1",
+				Id:    uint32(1),
+				State: schema.UNKNOWN,
+			},
+			{
+				Name:  "idx2",
+				Id:    uint32(2),
+				State: schema.UNKNOWN,
+			},
+		}
+
+		meta, err := c.Create(ctx, tx, 1, 1, "name5", 1, idxs)
+		require.NoError(t, err)
+		collection, err := c.Get(ctx, tx, 1, 1, "name5")
+		require.NoError(t, err)
+		require.Equal(t, meta, collection)
+
+		idxsUpdated := []*schema.Index{
+			{
+				Name:  "idx1",
+				Id:    uint32(1),
+				State: schema.UNKNOWN,
+			},
+		}
+
+		updatedMeta, err := c.Update(ctx, tx, 1, 1, "name5", 1, idxsUpdated)
+		require.NoError(t, err)
+		require.Len(t, updatedMeta.Indexes, 2)
+		require.Equal(t, updatedMeta.Indexes[1].State, schema.INDEX_DELETED)
+	})
+
+	t.Run("list", func(t *testing.T) {
+		tx, cleanupTx := initTx(t, ctx, tm)
+		defer cleanupTx()
+
+		idxs1 := []*schema.Index{
+			{
+				Name:  "idx1",
+				Id:    uint32(1),
+				State: schema.UNKNOWN,
+			},
+		}
+
+		idxs2 := []*schema.Index{
+			{
+				Name:  "idx2",
+				Id:    uint32(2),
+				State: schema.UNKNOWN,
+			},
+			{
+				Name:  "idx3",
+				Id:    uint32(3),
+				State: schema.UNKNOWN,
+			},
+		}
+
+		meta1, err := c.Create(ctx, tx, 1, 1, "name8", 1, idxs1)
+		require.NoError(t, err)
+		meta2, err := c.Create(ctx, tx, 1, 1, "name9", 2, idxs2)
+		require.NoError(t, err)
+
+		colls, err := c.list(ctx, tx, 1, 1)
+		require.NoError(t, err)
+
+		require.Len(t, colls, 2)
+		require.Equal(t, colls["name8"], meta1)
+		require.Equal(t, colls["name9"], meta2)
 	})
 }
 
@@ -219,12 +365,9 @@ func TestCollectionSubspaceMigrationV1(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, &CollectionMetadata{ID: 123}, collMeta)
 
-	updatedCollectionMetadata := &CollectionMetadata{
-		ID: 123,
-	}
-
 	// Updating should overwrite with new format
-	require.NoError(t, c.Update(ctx, tx, 1, 1, "name7", updatedCollectionMetadata))
+	_, err = c.Update(ctx, tx, 1, 1, "name7", 123, nil)
+	require.NoError(t, err)
 
 	// We are able to read in new format
 	collMeta, err = c.Get(ctx, tx, 1, 1, "name7")

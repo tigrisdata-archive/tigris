@@ -20,6 +20,7 @@ import (
 
 	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	"github.com/tigrisdata/tigris/internal"
+	"github.com/tigrisdata/tigris/server/config"
 )
 
 type KeyValue struct {
@@ -93,4 +94,56 @@ func BuildKey(parts ...interface{}) Key {
 
 func (k *Key) AddPart(part interface{}) {
 	*k = append(*k, KeyPart(part))
+}
+
+type Builder struct {
+	isCompression bool
+	isChunking    bool
+	isMeasure     bool
+	isListener    bool
+}
+
+func NewBuilder() *Builder {
+	return &Builder{}
+}
+
+// Build will create the TxStore in an order. For example, a simple kv is created first then chunk store is created
+// using this simple kv. Listener enabled will be added after chunking so that it is called before chunking. Finally,
+// the measure at the end.
+func (b *Builder) Build(cfg *config.FoundationDBConfig) (TxStore, error) {
+	store, err := NewTxStore(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if b.isChunking {
+		store = NewChunkStore(store)
+	}
+	if b.isListener {
+		store = NewListenerStore(store)
+	}
+	if b.isMeasure {
+		store = NewKeyValueStoreWithMetrics(store)
+	}
+
+	return store, nil
+}
+
+func (b *Builder) WithMeasure() *Builder {
+	b.isMeasure = true
+	return b
+}
+
+func (b *Builder) WithListener() *Builder {
+	b.isListener = true
+	return b
+}
+
+func (b *Builder) WithCompression() *Builder {
+	b.isCompression = true
+	return b
+}
+
+func (b *Builder) WithChunking() *Builder {
+	b.isChunking = true
+	return b
 }

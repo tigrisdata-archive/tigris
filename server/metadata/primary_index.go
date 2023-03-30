@@ -26,21 +26,21 @@ import (
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
-// IndexSubspace is used to store metadata about Tigris secondary indexes.
-type IndexSubspace struct {
+// PrimaryIndexSubspace is used to store metadata about Tigris primary key indexes.
+type PrimaryIndexSubspace struct {
 	metadataSubspace
 }
 
-// IndexMetadata contains index wide metadata.
-type IndexMetadata struct {
+// PrimaryIndexMetadata contains index wide metadata.
+type PrimaryIndexMetadata struct {
 	ID   uint32 `json:"id"`
 	Name string `json:"name"`
 }
 
 const indexMetaValueVersion int32 = 1
 
-func newIndexStore(nameRegistry *NameRegistry) *IndexSubspace {
-	return &IndexSubspace{
+func newPrimaryIndexStore(nameRegistry *NameRegistry) *PrimaryIndexSubspace {
+	return &PrimaryIndexSubspace{
 		metadataSubspace{
 			SubspaceName: nameRegistry.EncodingSubspaceName(),
 			KeyVersion:   []byte{encKeyVersion},
@@ -48,7 +48,7 @@ func newIndexStore(nameRegistry *NameRegistry) *IndexSubspace {
 	}
 }
 
-func (c *IndexSubspace) getKey(nsID uint32, dbID uint32, collID uint32, name string) keys.Key {
+func (c *PrimaryIndexSubspace) getKey(nsID uint32, dbID uint32, collID uint32, name string) keys.Key {
 	if name == "" {
 		return keys.NewKey(c.SubspaceName, c.KeyVersion, UInt32ToByte(nsID), UInt32ToByte(dbID), UInt32ToByte(collID), indexKey)
 	}
@@ -56,7 +56,7 @@ func (c *IndexSubspace) getKey(nsID uint32, dbID uint32, collID uint32, name str
 	return keys.NewKey(c.SubspaceName, c.KeyVersion, UInt32ToByte(nsID), UInt32ToByte(dbID), UInt32ToByte(collID), indexKey, name, keyEnd)
 }
 
-func (c *IndexSubspace) insert(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, collID uint32, name string, metadata *IndexMetadata) error {
+func (c *PrimaryIndexSubspace) insert(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, collID uint32, name string, metadata *PrimaryIndexMetadata) error {
 	return c.insertMetadata(ctx, tx,
 		c.validateArgs(nsID, dbID, collID, name, &metadata),
 		c.getKey(nsID, dbID, collID, name),
@@ -65,12 +65,12 @@ func (c *IndexSubspace) insert(ctx context.Context, tx transaction.Tx, nsID uint
 	)
 }
 
-func (c *IndexSubspace) decodeMetadata(_ string, payload *internal.TableData) (*IndexMetadata, error) {
+func (c *PrimaryIndexSubspace) decodeMetadata(_ string, payload *internal.TableData) (*PrimaryIndexMetadata, error) {
 	if payload.Ver == 0 {
-		return &IndexMetadata{ID: ByteToUInt32(payload.RawData)}, nil
+		return &PrimaryIndexMetadata{ID: ByteToUInt32(payload.RawData)}, nil
 	}
 
-	var metadata IndexMetadata
+	var metadata PrimaryIndexMetadata
 
 	if err := jsoniter.Unmarshal(payload.RawData, &metadata); ulog.E(err) {
 		return nil, errors.Internal("failed to unmarshal collection metadata")
@@ -79,7 +79,7 @@ func (c *IndexSubspace) decodeMetadata(_ string, payload *internal.TableData) (*
 	return &metadata, nil
 }
 
-func (c *IndexSubspace) Get(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, collID uint32, name string) (*IndexMetadata, error) {
+func (c *PrimaryIndexSubspace) Get(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, collID uint32, name string) (*PrimaryIndexMetadata, error) {
 	payload, err := c.getPayload(ctx, tx,
 		c.validateArgs(nsID, dbID, collID, name, nil),
 		c.getKey(nsID, dbID, collID, name),
@@ -95,7 +95,7 @@ func (c *IndexSubspace) Get(ctx context.Context, tx transaction.Tx, nsID uint32,
 	return c.decodeMetadata(name, payload)
 }
 
-func (c *IndexSubspace) Update(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, collID uint32, name string, metadata *IndexMetadata) error {
+func (c *PrimaryIndexSubspace) Update(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, collID uint32, name string, metadata *PrimaryIndexMetadata) error {
 	return c.updateMetadata(ctx, tx,
 		c.validateArgs(nsID, dbID, collID, name, &metadata),
 		c.getKey(nsID, dbID, collID, name),
@@ -104,14 +104,14 @@ func (c *IndexSubspace) Update(ctx context.Context, tx transaction.Tx, nsID uint
 	)
 }
 
-func (c *IndexSubspace) delete(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, collID uint32, name string) error {
+func (c *PrimaryIndexSubspace) delete(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, collID uint32, name string) error {
 	return c.deleteMetadata(ctx, tx,
 		c.validateArgs(nsID, dbID, collID, name, nil),
 		c.getKey(nsID, dbID, collID, name),
 	)
 }
 
-func (c *IndexSubspace) softDelete(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, collID uint32, name string) error {
+func (c *PrimaryIndexSubspace) softDelete(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, collID uint32, name string) error {
 	newKey := keys.NewKey(c.SubspaceName, c.KeyVersion, UInt32ToByte(nsID), UInt32ToByte(dbID), UInt32ToByte(collID), indexKey, name, keyDroppedEnd)
 
 	return c.softDeleteMetadata(ctx, tx,
@@ -121,7 +121,7 @@ func (c *IndexSubspace) softDelete(ctx context.Context, tx transaction.Tx, nsID 
 	)
 }
 
-func (_ *IndexSubspace) validateArgs(nsID uint32, dbID uint32, collID uint32, name string, metadata **IndexMetadata) error {
+func (_ *PrimaryIndexSubspace) validateArgs(nsID uint32, dbID uint32, collID uint32, name string, metadata **PrimaryIndexMetadata) error {
 	if nsID == 0 || dbID == 0 || collID == 0 {
 		return errors.InvalidArgument("invalid id")
 	}
@@ -137,9 +137,9 @@ func (_ *IndexSubspace) validateArgs(nsID uint32, dbID uint32, collID uint32, na
 	return nil
 }
 
-func (c *IndexSubspace) list(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbID uint32, collId uint32,
-) (map[string]*IndexMetadata, error) {
-	indexes := make(map[string]*IndexMetadata)
+func (c *PrimaryIndexSubspace) list(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbID uint32, collId uint32,
+) (map[string]*PrimaryIndexMetadata, error) {
+	indexes := make(map[string]*PrimaryIndexMetadata)
 	droppedIndexes := make(map[string]uint32)
 
 	if err := c.listMetadata(ctx, tx, c.getKey(namespaceId, dbID, collId, ""), 7,

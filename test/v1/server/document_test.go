@@ -2092,11 +2092,11 @@ func TestUpdate_OnAnyField(t *testing.T) {
 			ValueEqual("modified_count", c.modified)
 
 		// read all documents back
-		testUpdateOnAnyField(t, db, coll, readFilter, inputDocument, c.changed)
+		testUpdateValidate(t, db, coll, readFilter, inputDocument, c.changed)
 	}
 }
 
-func testUpdateOnAnyField(t *testing.T, db string, collection string, filter Map, input []Doc, changed []int) {
+func testUpdateValidate(t *testing.T, db string, collection string, filter Map, input []Doc, changed []int) {
 	out := readByFilter(t, db, collection, filter, nil, nil, []Map{{"pkey_int": "$asc"}})
 
 	var notChanged []int
@@ -2126,6 +2126,136 @@ func testUpdateOnAnyField(t *testing.T, db string, collection string, filter Map
 
 	for _, i := range notChanged {
 		validateInputDocToRes(t, out[i], input[i])
+	}
+}
+
+func TestUpdate_Range(t *testing.T) {
+	db, coll := setupTests(t)
+	compositeColl := coll + "_composite"
+	createCollection(t, db, compositeColl, testCreateSchemaComposite).Status(http.StatusOK)
+	defer cleanupTests(t, db)
+
+	inputDocument := []Doc{
+		{
+			"pkey_int":           110,
+			"int_value":          1000,
+			"string_value":       "simple_insert110",
+			"bool_value":         true,
+			"double_value":       1.234,
+			"bytes_value":        []byte(`"simple_insert110"`),
+			"added_string_value": "before",
+		},
+		{
+			"pkey_int":           120,
+			"int_value":          2000,
+			"string_value":       "simple_insert120",
+			"bool_value":         false,
+			"double_value":       7.3,
+			"bytes_value":        []byte(`"simple_insert120"`),
+			"added_string_value": "before",
+		},
+		{
+			"pkey_int":           130,
+			"int_value":          3000,
+			"string_value":       "simple_insert130",
+			"bool_value":         true,
+			"double_value":       3.34,
+			"bytes_value":        []byte(`"simple_insert130"`),
+			"added_string_value": "before",
+		},
+	}
+
+	cases := []struct {
+		filter   Map
+		modified int
+		changed  []int
+	}{
+		{
+			Map{
+				"filter": Map{
+					"$and": []Doc{
+						{"double_value": Map{"$gt": 1.23}},
+						{"double_value": Map{"$lte": 3.34}},
+					},
+				},
+			},
+			2,
+			[]int{0, 2},
+		}, {
+			Map{
+				"filter": Map{
+					"$and": []Doc{
+						{"string_value": Map{"$gt": "simple_insert110"}},
+						{"string_value": Map{"$lte": "simple_insert130"}},
+					},
+				},
+			},
+			2,
+			[]int{1, 2},
+		}, {
+			Map{
+				"filter": Map{
+					"$and": []Doc{
+						{"int_value": Map{"$gte": 1000}},
+						{"int_value": Map{"$lt": 3000}},
+					},
+				},
+			},
+			2,
+			[]int{0, 1},
+		}, {
+			Map{
+				"filter": Map{
+					"$and": []Doc{
+						{"pkey_int": Map{"$gt": 110}},
+						{"pkey_int": Map{"$lte": 130}},
+					},
+				},
+			},
+			2,
+			[]int{1, 2},
+		},
+	}
+	for _, c := range cases {
+		for _, collName := range []string{coll, compositeColl} {
+			// should always succeed with mustNotExists as false
+			insertDocuments(t, db, collName, inputDocument, false).
+				Status(http.StatusOK)
+
+			readFilter := Map{
+				"$and": []Doc{
+					{"pkey_int": Map{"$gte": 110}},
+					{"pkey_int": Map{"$lte": 130}},
+				},
+			}
+			readAndValidatePkeyOrder(t,
+				db,
+				collName,
+				readFilter,
+				nil,
+				inputDocument,
+				nil)
+
+			updateByFilter(t,
+				db,
+				collName,
+				c.filter,
+				Map{
+					"fields": Map{
+						"$set": Map{
+							"added_string_value": "after",
+						},
+					},
+				},
+				nil).Status(http.StatusOK).
+				JSON().
+				Object().
+				ValueEqual("status", "updated").
+				ValueEqual("modified_count", c.modified)
+
+			// read all documents back
+			testUpdateValidate(t, db, collName, readFilter, inputDocument, c.changed)
+		}
 	}
 }
 
@@ -3057,6 +3187,111 @@ func TestDelete_OnAnyField(t *testing.T) {
 			},
 		},
 	)
+}
+
+func TestDelete_Range(t *testing.T) {
+	db, coll := setupTests(t)
+	compositeColl := coll + "_composite"
+	createCollection(t, db, compositeColl, testCreateSchemaComposite).Status(http.StatusOK)
+
+	defer cleanupTests(t, db)
+
+	for _, collName := range []string{coll, compositeColl} {
+		inputDocument := []Doc{
+			{
+				"pkey_int":     50,
+				"int_value":    50,
+				"string_value": "simple_insert50",
+				"bytes_value":  []byte(`"simple_insert50"`),
+				"double_value": 1.734,
+			},
+			{
+				"pkey_int":     70,
+				"int_value":    70,
+				"string_value": "simple_insert70",
+				"double_value": 1.234,
+			},
+			{
+				"pkey_int":     60,
+				"int_value":    60,
+				"string_value": "simple_insert60",
+				"bytes_value":  []byte(`"simple_insert60"`),
+				"double_value": 2.3,
+			},
+			{
+				"pkey_int":     80,
+				"int_value":    80,
+				"string_value": "simple_insert80",
+				"bytes_value":  []byte(`"simple_insert80"`),
+				"double_value": 3.34,
+			},
+			{
+				"pkey_int":     90,
+				"int_value":    90,
+				"string_value": "simple_insert800",
+				"bytes_value":  []byte(`"simple_insert80"`),
+				"double_value": 3.12,
+			},
+		}
+
+		// should always succeed with mustNotExists as false
+		insertDocuments(t, db, collName, inputDocument, false).
+			Status(http.StatusOK)
+
+		readFilter := Map{
+			"$and": []Doc{
+				{"double_value": Map{"$gt": 1.23}},
+				{"double_value": Map{"$lte": 3.34}},
+			},
+		}
+
+		readAndValidatePkeyOrder(t,
+			db,
+			collName,
+			readFilter,
+			nil,
+			inputDocument,
+			nil)
+
+		deleteByFilter(t, db, collName, Map{
+			"filter": Map{
+				"$and": []Doc{
+					{"double_value": Map{"$gt": 1.73}},
+					{"double_value": Map{"$lte": 3.12}},
+				},
+			},
+		}).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status", "deleted")
+
+		readAndValidateOrder(t,
+			db,
+			collName,
+			readFilter,
+			nil,
+			[]Map{
+				{
+					"pkey_int": "$asc",
+				},
+			},
+			[]Doc{
+				{
+					"pkey_int":     70,
+					"int_value":    70,
+					"string_value": "simple_insert70",
+					"double_value": 1.234,
+				},
+				{
+					"pkey_int":     80,
+					"int_value":    80,
+					"string_value": "simple_insert80",
+					"bytes_value":  []byte(`"simple_insert80"`),
+					"double_value": 3.34,
+				},
+			},
+		)
+	}
 }
 
 func TestRead_Collation(t *testing.T) {

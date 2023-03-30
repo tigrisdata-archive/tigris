@@ -25,6 +25,7 @@ import (
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/value"
@@ -105,14 +106,14 @@ func NewSecondaryIndexer(coll *schema.DefaultCollection) *SecondaryIndexer {
 }
 
 func (q *SecondaryIndexer) scanIndex(ctx context.Context, tx transaction.Tx) (kv.Iterator, error) {
-	start := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.Indexes.SecondaryIndex.Name, KVSubspace)
-	end := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.Indexes.SecondaryIndex.Name, KVSubspace, 0xFF)
+	start := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.SecondaryIndexKeyword(), KVSubspace)
+	end := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.SecondaryIndexKeyword(), KVSubspace, 0xFF)
 	return tx.ReadRange(ctx, start, end, false)
 }
 
 func (q *SecondaryIndexer) IndexSize(ctx context.Context, tx transaction.Tx) (int64, error) {
-	lKey := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.Indexes.SecondaryIndex.Name, KVSubspace)
-	rKey := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.Indexes.SecondaryIndex.Name, KVSubspace, 0xFF)
+	lKey := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.SecondaryIndexKeyword(), KVSubspace)
+	rKey := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.SecondaryIndexKeyword(), KVSubspace, 0xFF)
 	return tx.RangeSize(ctx, q.coll.EncodedTableIndexName, lKey, rKey)
 }
 
@@ -185,13 +186,21 @@ func (q *SecondaryIndexer) Update(ctx context.Context, tx transaction.Tx, newTd 
 		return err
 	}
 
+	reqStatus, reqStatusExists := metrics.RequestStatusFromContext(ctx)
+
 	for _, indexKey := range updateSet.removeKeys {
+		if reqStatus != nil && reqStatusExists {
+			reqStatus.AddWriteBytes(int64(len(indexKey.SerializeToBytes())))
+		}
 		if err := tx.Delete(ctx, indexKey); err != nil {
 			return err
 		}
 	}
 
 	for _, indexKey := range updateSet.addKeys {
+		if reqStatus != nil && reqStatusExists {
+			reqStatus.AddWriteBytes(int64(len(indexKey.SerializeToBytes())))
+		}
 		if err := tx.Replace(ctx, indexKey, internal.EmptyData, false); err != nil {
 			return err
 		}
@@ -318,7 +327,7 @@ func (q *SecondaryIndexer) buildTSRows(tableData *internal.TableData) ([]IndexRo
 
 func (q *SecondaryIndexer) buildIndexKey(row IndexRow, primaryKey []interface{}) keys.Key {
 	version := getFieldVersion(row.name, q.coll)
-	return newKeyWithPrimaryKey(primaryKey, q.coll.EncodedTableIndexName, q.coll.Indexes.SecondaryIndex.Name, KVSubspace, row.Name(), version, row.value.AsInterface(), row.pos)
+	return newKeyWithPrimaryKey(primaryKey, q.coll.EncodedTableIndexName, q.coll.SecondaryIndexKeyword(), KVSubspace, row.Name(), version, row.value.AsInterface(), row.pos)
 }
 
 func (q *SecondaryIndexer) createKeysAndIndexInfo(primaryKey []interface{}, rows []IndexRow) ([]keys.Key, map[string]int64, map[string]int64) {

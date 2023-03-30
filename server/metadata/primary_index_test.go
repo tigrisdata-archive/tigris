@@ -25,10 +25,10 @@ import (
 	"github.com/tigrisdata/tigris/server/transaction"
 )
 
-var testIndexMetadata = &IndexMetadata{}
+var testIndexMetadata = &PrimaryIndexMetadata{}
 
-func initIndexTest(t *testing.T, ctx context.Context) (*IndexSubspace, *transaction.Manager) {
-	c := newIndexStore(newTestNameRegistry(t))
+func initIndexTest(t *testing.T, ctx context.Context) (*PrimaryIndexSubspace, *transaction.Manager) {
+	c := newPrimaryIndexStore(newTestNameRegistry(t))
 
 	_ = kvStore.DropTable(ctx, c.SubspaceName)
 
@@ -80,7 +80,7 @@ func TestIndexSubspace(t *testing.T) {
 		tx, cleanupTx := initTx(t, ctx, tm)
 		defer cleanupTx()
 
-		appPayload := &IndexMetadata{
+		appPayload := &PrimaryIndexMetadata{
 			Name: "name111",
 		}
 
@@ -99,7 +99,7 @@ func TestIndexSubspace(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, testIndexMetadata, index)
 
-		updatedPayload := &IndexMetadata{
+		updatedPayload := &PrimaryIndexMetadata{
 			Name: "name222",
 		}
 
@@ -127,15 +127,28 @@ func TestIndexSubspace(t *testing.T) {
 		tx, cleanupTx := initTx(t, ctx, tm)
 		defer cleanupTx()
 
-		require.NoError(t, c.insert(ctx, tx, 1, 1, 1, "name8", testIndexMetadata))
-		require.NoError(t, c.insert(ctx, tx, 1, 1, 1, "name9", testIndexMetadata))
+		idx8 := &PrimaryIndexMetadata{
+			Name: "name8",
+		}
+
+		idx9 := &PrimaryIndexMetadata{
+			Name: "name9",
+		}
+
+		idx10 := &PrimaryIndexMetadata{
+			Name: "name10",
+		}
+		require.NoError(t, c.insert(ctx, tx, 1, 1, 1, idx8.Name, idx8))
+		require.NoError(t, c.insert(ctx, tx, 1, 1, 1, idx9.Name, idx9))
+		require.NoError(t, c.insert(ctx, tx, 1, 1, 1, idx10.Name, idx10))
 
 		colls, err := c.list(ctx, tx, 1, 1, 1)
 		require.NoError(t, err)
 
-		require.Equal(t, map[string]*IndexMetadata{
-			"name8": {},
-			"name9": {},
+		require.Equal(t, map[string]*PrimaryIndexMetadata{
+			"name8":  idx8,
+			"name9":  idx9,
+			"name10": idx10,
 		}, colls)
 	})
 }
@@ -206,9 +219,9 @@ func TestIndexSubspaceMigrationV1(t *testing.T) {
 	// New code is able to read legacy version
 	meta, err := c.Get(ctx, tx, 1, 1, 1, "name7")
 	require.NoError(t, err)
-	require.Equal(t, &IndexMetadata{ID: 123}, meta)
+	require.Equal(t, &PrimaryIndexMetadata{ID: 123}, meta)
 
-	updatedMetadata := &IndexMetadata{
+	updatedMetadata := &PrimaryIndexMetadata{
 		ID:   123,
 		Name: "name333",
 	}
@@ -219,5 +232,5 @@ func TestIndexSubspaceMigrationV1(t *testing.T) {
 	// We are able to read in new format
 	meta, err = c.Get(ctx, tx, 1, 1, 1, "name7")
 	require.NoError(t, err)
-	require.Equal(t, &IndexMetadata{ID: 123, Name: "name333"}, meta)
+	require.Equal(t, &PrimaryIndexMetadata{ID: 123, Name: "name333"}, meta)
 }

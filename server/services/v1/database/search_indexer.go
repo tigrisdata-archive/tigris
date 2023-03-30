@@ -21,8 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/apple/foundationdb/bindings/go/src/fdb"
-	"github.com/apple/foundationdb/bindings/go/src/fdb/subspace"
+	"github.com/apple/foundationdb/bindings/go/src/fdb/tuple"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
@@ -65,7 +64,7 @@ func (i *SearchIndexer) OnPostCommit(ctx context.Context, tenant *metadata.Tenan
 			continue
 		}
 
-		searchKey, err := CreateSearchKey(event.Table, event.Key)
+		searchKey, err := CreateSearchKey(event.Key)
 		if err != nil {
 			return err
 		}
@@ -92,12 +91,7 @@ func (i *SearchIndexer) OnPostCommit(ctx context.Context, tenant *metadata.Tenan
 				action = search.Update
 			}
 
-			tableData, err := internal.Decode(event.Data)
-			if err != nil {
-				return err
-			}
-
-			searchData, err := PackSearchFields(ctx, tableData, collection, searchKey)
+			searchData, err := PackSearchFields(ctx, event.Data, collection, searchKey)
 			if err != nil {
 				return err
 			}
@@ -125,26 +119,17 @@ func (i *SearchIndexer) OnPreCommit(context.Context, *metadata.Tenant, transacti
 
 func (i *SearchIndexer) OnRollback(context.Context, *metadata.Tenant, kv.EventListener) {}
 
-func CreateSearchKey(table []byte, fdbKey []byte) (string, error) {
-	sb := subspace.FromBytes(table)
-	tp, err := sb.Unpack(fdb.Key(fdbKey))
-	if err != nil {
-		return "", err
+func CreateSearchKey(key kv.Key) (string, error) {
+	// the zeroth element is index key name i.e. pkey
+	key = key[1:]
+	if len(key) == 0 {
+		return "", fmt.Errorf("not able to create search key for indexing")
 	}
 
-	if bytes.Equal(table[0:4], internal.UserTableKeyPrefix) {
-		// TODO: add a pkey check here
-		// the zeroth entry represents index key name
-		tp = tp[1:]
-	} else {
-		// the zeroth entry represents index key name, the first entry represent partition key
-		tp = tp[2:]
-	}
-
-	if len(tp) == 1 {
+	if len(key) == 1 {
 		// simply marshal it if it is single primary key
 		var value string
-		switch t := tp[0].(type) {
+		switch t := key[0].(type) {
 		case int:
 			// we need to convert numeric to string
 			value = fmt.Sprintf("%d", t)
@@ -158,10 +143,14 @@ func CreateSearchKey(table []byte, fdbKey []byte) (string, error) {
 			value = base64.StdEncoding.EncodeToString(t)
 		}
 		return value, nil
-	} else {
-		// for composite there is no easy way, pack it and then base64 encode it
-		return base64.StdEncoding.EncodeToString(tp.Pack()), nil
 	}
+
+	var tp tuple.Tuple
+	for _, k := range key {
+		tp = append(tp, k)
+	}
+	// for composite there is no easy way, pack it and then base64 encode it
+	return base64.StdEncoding.EncodeToString(tp.Pack()), nil
 }
 
 func PackSearchFields(ctx context.Context, data *internal.TableData, collection *schema.DefaultCollection, id string) ([]byte, error) {

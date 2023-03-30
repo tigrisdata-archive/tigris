@@ -48,7 +48,10 @@ type DefaultCollection struct {
 	// Fields are derived from the user schema.
 	Fields []*Field
 	// Indexes is a wrapper on the indexes part of this collection.
-	Indexes *Indexes
+	// Primary Key contains the fields used to make up the primary key
+	PrimaryKey *Index
+	// Secondary SecondaryIndexes for this collection
+	SecondaryIndexes *Indexes
 	// Validator is used to validate the JSON document. As it is expensive to create this, it is only created once
 	// during constructor of the collection.
 	Validator *jsonschema.Schema
@@ -85,6 +88,10 @@ type CollectionType string
 const (
 	DocumentsType CollectionType = "documents"
 )
+
+func (d *DefaultCollection) GetPrimaryKey() *Index {
+	return d.PrimaryKey
+}
 
 func disableAdditionalPropertiesAndAllowNullable(required []string, properties map[string]*jsonschema.Schema) {
 	for name, p := range properties {
@@ -168,7 +175,8 @@ func NewDefaultCollection(id uint32, schVer int, factory *Factory, schemas Versi
 		SchVer:                   schVer,
 		Name:                     factory.Name,
 		Fields:                   factory.Fields,
-		Indexes:                  factory.Indexes,
+		PrimaryKey:               factory.PrimaryKey,
+		SecondaryIndexes:         factory.Indexes,
 		Validator:                validator,
 		Schema:                   factory.Schema,
 		QueryableFields:          queryableFields,
@@ -198,6 +206,12 @@ func (d *DefaultCollection) GetName() string {
 	return d.Name
 }
 
+// The subspace within a collection where the secondary index information
+// is stored.
+func (d *DefaultCollection) SecondaryIndexKeyword() string {
+	return "skey"
+}
+
 func (d *DefaultCollection) GetVersion() int32 {
 	return int32(d.SchVer)
 }
@@ -211,11 +225,22 @@ func (d *DefaultCollection) GetFields() []*Field {
 }
 
 func (d *DefaultCollection) GetIndexes() *Indexes {
-	return d.Indexes
+	return d.SecondaryIndexes
 }
 
 func (d *DefaultCollection) GetQueryableFields() []*QueryableField {
 	return d.QueryableFields
+}
+
+// Indexes that can be used for queries.
+func (d *DefaultCollection) GetActiveIndexedFields() []*QueryableField {
+	var indexed []*QueryableField
+	for _, q := range d.QueryableFields {
+		if q.Indexed && d.SecondaryIndexes.IsActiveIndex(q.FieldName) {
+			indexed = append(indexed, q)
+		}
+	}
+	return indexed
 }
 
 func (d *DefaultCollection) GetIndexedFields() []*QueryableField {

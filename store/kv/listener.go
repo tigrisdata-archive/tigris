@@ -22,12 +22,10 @@ import (
 )
 
 const (
-	InsertEvent      = "insert"
-	ReplaceEvent     = "replace"
-	UpdateEvent      = "update"
-	UpdateRangeEvent = "updateRange"
-	DeleteEvent      = "delete"
-	DeleteRangeEvent = "deleteRange"
+	InsertEvent  = "insert"
+	ReplaceEvent = "replace"
+	UpdateEvent  = "update"
+	DeleteEvent  = "delete"
 )
 
 type EventListenerCtxKey struct{}
@@ -38,9 +36,9 @@ type EventListenerCtxKey struct{}
 // listener is managed by QuerySession in server package.
 type EventListener interface {
 	// OnSet buffers insert/replace/update events
-	OnSet(op string, table []byte, key []byte, data []byte)
-	// OnClearRange buffers delete events
-	OnClearRange(op string, table []byte, lKey []byte, rKey []byte)
+	OnSet(op string, table []byte, key Key, data *internal.TableData)
+	// OnClear buffers delete events
+	OnClear(op string, table []byte, key Key)
 	// GetEvents is used to access buffered events. These events may be shared by different participants callers are
 	// strongly discourage to modify the event and if needed copy it to some other buffer. Once transaction completes
 	// session may discard all the buffered events.
@@ -50,10 +48,8 @@ type EventListener interface {
 type Event struct {
 	Op    string
 	Table []byte
-	Key   []byte `json:",omitempty"`
-	LKey  []byte `json:",omitempty"`
-	RKey  []byte `json:",omitempty"`
-	Data  []byte `json:",omitempty"`
+	Key   Key                 `json:",omitempty"`
+	Data  *internal.TableData `json:",omitempty"`
 	Last  bool
 }
 
@@ -66,7 +62,7 @@ func (l *DefaultListener) skip(table []byte) bool {
 		!bytes.Equal(table[0:4], internal.PartitionKeyPrefix)
 }
 
-func (l *DefaultListener) OnSet(op string, table []byte, key []byte, data []byte) {
+func (l *DefaultListener) OnSet(op string, table []byte, key Key, data *internal.TableData) {
 	if l.skip(table) {
 		return
 	}
@@ -79,7 +75,7 @@ func (l *DefaultListener) OnSet(op string, table []byte, key []byte, data []byte
 	})
 }
 
-func (l *DefaultListener) OnClearRange(op string, table []byte, lKey []byte, rKey []byte) {
+func (l *DefaultListener) OnClear(op string, table []byte, key Key) {
 	if l.skip(table) {
 		return
 	}
@@ -87,9 +83,7 @@ func (l *DefaultListener) OnClearRange(op string, table []byte, lKey []byte, rKe
 	l.Events = append(l.Events, &Event{
 		Op:    op,
 		Table: table,
-		Key:   lKey,
-		LKey:  lKey,
-		RKey:  rKey,
+		Key:   key,
 	})
 }
 
@@ -99,9 +93,9 @@ func (l *DefaultListener) GetEvents() []*Event {
 
 type NoopEventListener struct{}
 
-func (l *NoopEventListener) OnSet(op string, table []byte, key []byte, data []byte)         {}
-func (l *NoopEventListener) OnClearRange(op string, table []byte, lKey []byte, rKey []byte) {}
-func (l *NoopEventListener) GetEvents() []*Event                                            { return nil }
+func (l *NoopEventListener) OnSet(string, []byte, Key, *internal.TableData) {}
+func (l *NoopEventListener) OnClear(string, []byte, Key)                    {}
+func (l *NoopEventListener) GetEvents() []*Event                            { return nil }
 
 func WrapEventListenerCtx(ctx context.Context) context.Context {
 	return context.WithValue(ctx, EventListenerCtxKey{}, &DefaultListener{})

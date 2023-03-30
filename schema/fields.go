@@ -276,15 +276,35 @@ var SupportedFieldProperties = container.NewHashSet(
 
 // Indexes is to wrap different index that a collection can have.
 type Indexes struct {
-	PrimaryKey     *Index
-	SecondaryIndex *Index
+	All []*Index
 }
 
-func (i *Indexes) GetIndexes() []*Index {
-	var indexes []*Index
-	indexes = append(indexes, i.PrimaryKey)
-	return indexes
+func (i *Indexes) IsActiveIndex(name string) bool {
+	for _, idx := range i.All {
+		if idx.Name == name {
+			return idx.State == INDEX_ACTIVE
+		}
+	}
+
+	return false
 }
+
+type IndexType uint8
+
+const (
+	PRIMARY_INDEX IndexType = iota
+	SECONDARY_INDEX
+)
+
+type IndexState uint8
+
+const (
+	UNKNOWN IndexState = iota
+	NOT_INDEXED
+	INDEX_DELETED
+	INDEX_WRITE_MODE
+	INDEX_ACTIVE
+)
 
 // Index can be composite, so it has a list of fields, each index has name and encoded id. The encoded is used for key
 // building.
@@ -295,6 +315,23 @@ type Index struct {
 	Name string
 	// Id is assigned to this index by the dictionary encoder.
 	Id uint32
+	// Secondary indexes can be in 4 states:
+	// 1. UNKNOWN = Have not fetched the index metadata yet so the state is unknown
+	// 2. NOT_INDEXED = field is not indexed
+	// 3. INDEX_WRITE_MODE = index is being built in the background and cannot be used for queries
+	// 4. INDEX_ACTIVE = index can be used for queries
+	// Note: this is not used for primary key indexes
+	State IndexState
+	// Either a PrimaryKey index or a Secondary Key index
+	IdxType IndexType
+}
+
+func (i *Index) IsSecondaryIndex() bool {
+	return i.IdxType == SECONDARY_INDEX
+}
+
+func (i *Index) IndexType() IndexType {
+	return i.IdxType
 }
 
 func (i *Index) IsCompatible(i1 *Index) error {
@@ -314,7 +351,7 @@ func (i *Index) IsCompatible(i1 *Index) error {
 			return errors.InvalidArgument("index fields modified expected %q, found %q", i.Fields[j].FieldName, i1.Fields[j].FieldName)
 		}
 
-		if err := i.Fields[j].IsCompatible(i1.Fields[j]); err != nil {
+		if err := i.Fields[j].IsCompatible("", i1.Fields[j]); err != nil {
 			return err
 		}
 	}
@@ -323,25 +360,26 @@ func (i *Index) IsCompatible(i1 *Index) error {
 }
 
 type FieldBuilder struct {
-	FieldName   string
-	Description string              `json:"description,omitempty"`
-	Type        string              `json:"type,omitempty"`
-	Format      string              `json:"format,omitempty"`
-	Encoding    string              `json:"contentEncoding,omitempty"`
-	Default     interface{}         `json:"default,omitempty"`
-	CreatedAt   *bool               `json:"createdAt,omitempty"`
-	UpdatedAt   *bool               `json:"updatedAt,omitempty"`
-	MaxLength   *int32              `json:"maxLength,omitempty"`
-	MaxItems    *int32              `json:"maxItems,omitempty"`
-	Auto        *bool               `json:"autoGenerate,omitempty"`
-	Sorted      *bool               `json:"sort,omitempty"`
-	Index       *bool               `json:"index,omitempty"`
-	Facet       *bool               `json:"facet,omitempty"`
-	SearchIndex *bool               `json:"searchIndex,omitempty"`
-	Items       *FieldBuilder       `json:"items,omitempty"`
-	Properties  jsoniter.RawMessage `json:"properties,omitempty"`
-	Primary     *bool
-	Fields      []*Field
+	FieldName            string
+	Description          string              `json:"description,omitempty"`
+	Type                 string              `json:"type,omitempty"`
+	Format               string              `json:"format,omitempty"`
+	Encoding             string              `json:"contentEncoding,omitempty"`
+	Default              interface{}         `json:"default,omitempty"`
+	CreatedAt            *bool               `json:"createdAt,omitempty"`
+	UpdatedAt            *bool               `json:"updatedAt,omitempty"`
+	MaxLength            *int32              `json:"maxLength,omitempty"`
+	MaxItems             *int32              `json:"maxItems,omitempty"`
+	Auto                 *bool               `json:"autoGenerate,omitempty"`
+	Sorted               *bool               `json:"sort,omitempty"`
+	Index                *bool               `json:"index,omitempty"`
+	Facet                *bool               `json:"facet,omitempty"`
+	SearchIndex          *bool               `json:"searchIndex,omitempty"`
+	Items                *FieldBuilder       `json:"items,omitempty"`
+	Properties           jsoniter.RawMessage `json:"properties,omitempty"`
+	Primary              *bool
+	Fields               []*Field
+	AdditionalProperties *bool `json:"additionalProperties,omitempty"`
 }
 
 func (f *FieldBuilder) Build(setSearchDefaults bool) (*Field, error) {
@@ -362,16 +400,17 @@ func (f *FieldBuilder) Build(setSearchDefaults bool) (*Field, error) {
 	}
 
 	field := &Field{
-		FieldName:       f.FieldName,
-		MaxLength:       f.MaxLength,
-		DataType:        fieldType,
-		Fields:          f.Fields,
-		Sorted:          f.Sorted,
-		Indexed:         f.Index,
-		Faceted:         f.Facet,
-		SearchIndexed:   f.SearchIndex,
-		PrimaryKeyField: f.Primary,
-		AutoGenerated:   f.Auto,
+		FieldName:            f.FieldName,
+		MaxLength:            f.MaxLength,
+		DataType:             fieldType,
+		Fields:               f.Fields,
+		Sorted:               f.Sorted,
+		Indexed:              f.Index,
+		Faceted:              f.Facet,
+		SearchIndexed:        f.SearchIndex,
+		PrimaryKeyField:      f.Primary,
+		AutoGenerated:        f.Auto,
+		AdditionalProperties: f.AdditionalProperties,
 	}
 
 	if f.CreatedAt != nil || f.UpdatedAt != nil || f.Default != nil {
@@ -404,7 +443,8 @@ type Field struct {
 	Faceted         *bool
 	SearchIndexed   *bool
 	// Nested fields are the fields where we know the schema of nested attributes like if properties are
-	Fields []*Field
+	Fields               []*Field
+	AdditionalProperties *bool
 }
 
 func (f *Field) Name() string {
@@ -439,18 +479,22 @@ func (f *Field) IsFaceted() bool {
 	return f.Faceted != nil && *f.Faceted
 }
 
-func (f *Field) IsCompatible(f1 *Field) error {
+func (f *Field) IsMap() bool {
+	return f.AdditionalProperties != nil && *f.AdditionalProperties
+}
+
+func (f *Field) IsCompatible(keyPath string, f1 *Field) error {
 	if f.DataType != f1.DataType && !config.DefaultConfig.Schema.AllowIncompatible {
-		return errors.InvalidArgument("data type mismatch for field %q", f.FieldName)
+		return errors.InvalidArgument("data type mismatch for field %q", keyPath+f.FieldName)
 	}
 
 	if f.IsPrimaryKey() != f1.IsPrimaryKey() {
-		return errors.InvalidArgument("primary key changes are not allowed %q", f.FieldName)
+		return errors.InvalidArgument("primary key changes are not allowed %q", keyPath+f.FieldName)
 	}
 
 	if f.MaxLength != nil && f1.MaxLength != nil {
 		if *f.MaxLength > *f1.MaxLength && !config.DefaultConfig.Schema.AllowIncompatible {
-			return errors.InvalidArgument("reducing length of an existing field is not allowed %q", f.FieldName)
+			return errors.InvalidArgument("reducing length of an existing field is not allowed %q", keyPath+f.FieldName)
 		}
 	}
 
