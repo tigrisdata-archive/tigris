@@ -33,6 +33,7 @@ const (
 type LogicalFilter interface {
 	GetFilters() []Filter
 	Type() LogicalOP
+	Filter
 }
 
 // AndFilter performs a logical AND operation on an array of two or more expressions. The and filter looks like this,
@@ -40,6 +41,7 @@ type LogicalFilter interface {
 // It can be nested i.e. a top level $and can have multiple nested $and/$or.
 type AndFilter struct {
 	filter []Filter
+	searchSerializer
 }
 
 func NewAndFilter(filter []Filter) (*AndFilter, error) {
@@ -101,55 +103,8 @@ func (a *AndFilter) String() string {
 	return str + "}"
 }
 
-func (a *AndFilter) ToSearchFilter() []string {
-	var selectors []*Selector
-	var logical []Filter
-	for _, f := range a.filter {
-		if s, ok := f.(*Selector); ok {
-			selectors = append(selectors, s)
-		} else {
-			logical = append(logical, f)
-		}
-	}
-
-	var str string
-	for i, s := range selectors {
-		// first "&&" all selectors
-		if i != 0 {
-			str += "&&"
-		}
-		str += s.ToSearchFilter()[0]
-	}
-
-	var flattened []string
-	if len(logical) > 0 {
-		flattened = a.flattenAnd(str, logical)
-	}
-	if len(flattened) == 0 {
-		flattened = append(flattened, str)
-	}
-	return flattened
-}
-
-func (a *AndFilter) flattenAnd(soFar string, filters []Filter) []string {
-	var combs []string
-
-	for _, e := range filters[0].ToSearchFilter() {
-		temp := soFar
-		if len(temp) > 0 {
-			temp = temp + "&&" + e
-		} else {
-			temp = e
-		}
-
-		if len(filters) > 1 {
-			combs = append(combs, a.flattenAnd(temp, filters[1:])...)
-		} else {
-			combs = append(combs, temp)
-		}
-	}
-
-	return combs
+func (a *AndFilter) ToSearchFilter() string {
+	return a.serialize(" && ", a.filter)[0]
 }
 
 func (a *AndFilter) IsSearchIndexed() bool {
@@ -167,6 +122,7 @@ func (a *AndFilter) IsSearchIndexed() bool {
 // It can be nested i.e. a top level "$or" can have multiple nested $and/$or.
 type OrFilter struct {
 	filter []Filter
+	searchSerializer
 }
 
 func NewOrFilter(filter []Filter) (*OrFilter, error) {
@@ -219,12 +175,8 @@ func (o *OrFilter) GetFilters() []Filter {
 	return o.filter
 }
 
-func (o *OrFilter) ToSearchFilter() []string {
-	var ORs []string
-	for _, f := range o.filter {
-		ORs = append(ORs, f.ToSearchFilter()...)
-	}
-	return ORs
+func (o *OrFilter) ToSearchFilter() string {
+	return o.serialize(" || ", o.filter)[0]
 }
 
 func (o *OrFilter) IsSearchIndexed() bool {
@@ -244,4 +196,57 @@ func (o *OrFilter) String() string {
 		str += fmt.Sprintf("%s", f)
 	}
 	return str + "}"
+}
+
+type searchSerializer struct{}
+
+func (sz *searchSerializer) serialize(searchToken string, filters []Filter) []string {
+	var selectors []*Selector
+	var logical []LogicalFilter
+	for _, f := range filters {
+		if s, ok := f.(*Selector); ok {
+			selectors = append(selectors, s)
+		} else {
+			logical = append(logical, f.(LogicalFilter))
+		}
+	}
+
+	var str string
+	for i, s := range selectors {
+		// first "&&" all selectors
+		if i != 0 {
+			str += searchToken
+		}
+		str += s.ToSearchFilter()
+	}
+
+	var flattened []string
+	if len(logical) > 0 {
+		flattened = sz.flatten(searchToken, str, logical)
+
+	}
+	if len(flattened) == 0 {
+		flattened = append(flattened, str)
+	}
+	return flattened
+}
+
+func (sz *searchSerializer) flatten(token string, soFar string, filters []LogicalFilter) []string {
+	var combs []string
+
+	e := filters[0].ToSearchFilter()
+	temp := soFar
+	if len(temp) > 0 {
+		temp = temp + token + "(" + e + ")"
+	} else {
+		temp = e
+	}
+
+	if len(filters) > 1 {
+		combs = append(combs, sz.flatten(token, temp, filters[1:])...)
+	} else {
+		combs = append(combs, temp)
+	}
+
+	return combs
 }
