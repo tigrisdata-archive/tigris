@@ -70,8 +70,8 @@ func (a *DefaultUserMetadataProvider) InsertUserMetadata(ctx context.Context, re
 
 	err = a.userStore.InsertUserMetadata(ctx, tx, namespaceId, metadata.User, currentSub, req.GetMetadataKey(), req.GetValue())
 	if err != nil {
-		if err = tx.Rollback(ctx); err != nil {
-			log.Error().Err(err).Msg("Failed to rollback transaction.")
+		if err1 := tx.Rollback(ctx); err1 != nil {
+			log.Error().Err(err1).Msg("Failed to rollback transaction.")
 		}
 		return nil, errors.Internal("Failed to insert user metadata.")
 	}

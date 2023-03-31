@@ -108,7 +108,7 @@ func (s *Selector) Matches(doc []byte) bool {
 	return s.Matcher.Matches(val)
 }
 
-func (s *Selector) ToSearchFilter() []string {
+func (s *Selector) ToSearchFilter() string {
 	var op string
 	switch s.Matcher.Type() {
 	case EQ:
@@ -127,11 +127,11 @@ func (s *Selector) ToSearchFilter() []string {
 	switch s.Field.DataType {
 	case schema.DoubleType:
 		// for double, we pass string in the filter to search backend
-		return []string{fmt.Sprintf(op, s.Field.InMemoryName(), v.String())}
+		return fmt.Sprintf(op, s.Field.InMemoryName(), v.String())
 	case schema.DateTimeType:
 		// encode into int64
 		if nsec, err := date.ToUnixNano(schema.DateTimeFormat, v.String()); err == nil {
-			return []string{fmt.Sprintf(op, s.Field.InMemoryName(), nsec)}
+			return fmt.Sprintf(op, s.Field.InMemoryName(), nsec)
 		}
 	case schema.ArrayType:
 		if _, ok := v.(*value.ArrayValue); ok {
@@ -142,10 +142,10 @@ func (s *Selector) ToSearchFilter() []string {
 				}
 				filterString += fmt.Sprintf(op, s.Field.InMemoryName(), item)
 			}
-			return []string{filterString}
+			return filterString
 		}
 	}
-	return []string{fmt.Sprintf(op, s.Field.InMemoryName(), v.AsInterface())}
+	return fmt.Sprintf(op, s.Field.InMemoryName(), v.AsInterface())
 }
 
 func (s *Selector) IsSearchIndexed() bool {

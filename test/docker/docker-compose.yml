@@ -92,6 +92,7 @@ services:
     environment:
       - TIGRIS_CONFIG_FILE=/etc/tigrisdata/tigris/server.test.yaml
       - TIGRIS_SERVER_AUTH_GOTRUE_SHARED_SECRET=test_shared_secret
+      - GOCOVERDIR=/tmp/tigris_coverdata
     build:
       context: ../../
       dockerfile: docker/Dockerfile
@@ -102,6 +103,9 @@ services:
       - type: volume
         source: dbdata
         target: /etc/foundationdb/
+      - type: bind
+        source: /tmp/tigris_coverdata2
+        target: /tmp/tigris_coverdata
     ports:
       - "8082:8081"
     command: >

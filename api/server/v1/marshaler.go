@@ -127,37 +127,43 @@ func unmarshalInternal(data []byte, v interface{}) error {
 // the unmarshalling and will be avoiding any extra allocation/copying.
 func (x *ReadRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
+
 	if err := jsoniter.Unmarshal(data, &mp); err != nil {
 		return err
 	}
+
 	for key, value := range mp {
+		var v interface{}
+
 		switch key {
 		case "project":
-			if err := jsoniter.Unmarshal(value, &x.Project); err != nil {
-				return err
-			}
+			v = &x.Project
 		case "collection":
-			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
-				return err
-			}
+			v = &x.Collection
 		case "branch":
-			if err := jsoniter.Unmarshal(value, &x.Branch); err != nil {
-				return err
-			}
+			v = &x.Branch
 		case "filter":
 			// not decoding it here and let it decode during filter parsing
 			x.Filter = value
+			continue
 		case "fields":
 			// not decoding it here and let it decode during fields parsing
 			x.Fields = value
+			continue
 		case "sort":
 			x.Sort = value
+			continue
 		case "options":
-			if err := jsoniter.Unmarshal(value, &x.Options); err != nil {
-				return err
-			}
+			v = &x.Options
+		default:
+			continue
+		}
+
+		if err := jsoniter.Unmarshal(value, v); err != nil {
+			return err
 		}
 	}
+
 	return nil
 }
 
@@ -326,23 +332,21 @@ func (x *InsertRequest) UnmarshalJSON(data []byte) error {
 // the relevant keys from the user docs and should pass it as-is to the underlying engine.
 func (x *ReplaceRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
+
 	if err := jsoniter.Unmarshal(data, &mp); err != nil {
 		return err
 	}
+
 	for key, value := range mp {
+		var v interface{}
+
 		switch key {
 		case "project":
-			if err := jsoniter.Unmarshal(value, &x.Project); err != nil {
-				return err
-			}
+			v = &x.Project
 		case "collection":
-			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
-				return err
-			}
+			v = &x.Collection
 		case "branch":
-			if err := jsoniter.Unmarshal(value, &x.Branch); err != nil {
-				return err
-			}
+			v = &x.Branch
 		case "documents":
 			var docs []jsoniter.RawMessage
 			if err := jsoniter.Unmarshal(value, &docs); err != nil {
@@ -353,12 +357,18 @@ func (x *ReplaceRequest) UnmarshalJSON(data []byte) error {
 			for i := 0; i < len(docs); i++ {
 				x.Documents[i] = docs[i]
 			}
+			continue
 		case "options":
-			if err := jsoniter.Unmarshal(value, &x.Options); err != nil {
-				return err
-			}
+			v = &x.Options
+		default:
+			continue
+		}
+
+		if err := jsoniter.Unmarshal(value, v); err != nil {
+			return err
 		}
 	}
+
 	return nil
 }
 
@@ -366,35 +376,40 @@ func (x *ReplaceRequest) UnmarshalJSON(data []byte) error {
 // the unmarshalling and will be avoiding any extra allocation/copying.
 func (x *UpdateRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
+
 	if err := jsoniter.Unmarshal(data, &mp); err != nil {
 		return err
 	}
+
 	for key, value := range mp {
+		var v interface{}
+
 		switch key {
 		case "project":
-			if err := jsoniter.Unmarshal(value, &x.Project); err != nil {
-				return err
-			}
+			v = &x.Project
 		case "collection":
-			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
-				return err
-			}
+			v = &x.Collection
 		case "branch":
-			if err := jsoniter.Unmarshal(value, &x.Branch); err != nil {
-				return err
-			}
+			v = &x.Branch
 		case "fields":
 			// not decoding it here and let it decode during Fields parsing
 			x.Fields = value
+			continue
 		case "filter":
 			// not decoding it here and let it decode during filter parsing
 			x.Filter = value
+			continue
 		case "options":
-			if err := jsoniter.Unmarshal(value, &x.Options); err != nil {
-				return err
-			}
+			v = &x.Options
+		default:
+			continue
+		}
+
+		if err := jsoniter.Unmarshal(value, v); err != nil {
+			return err
 		}
 	}
+
 	return nil
 }
 
@@ -402,152 +417,164 @@ func (x *UpdateRequest) UnmarshalJSON(data []byte) error {
 // the unmarshalling and will be avoiding any extra allocation/copying.
 func (x *DeleteRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
+
 	if err := jsoniter.Unmarshal(data, &mp); err != nil {
 		return err
 	}
+
 	for key, value := range mp {
+		var v interface{}
+
 		switch key {
 		case "project":
-			if err := jsoniter.Unmarshal(value, &x.Project); err != nil {
-				return err
-			}
+			v = &x.Project
 		case "collection":
-			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
-				return err
-			}
+			v = &x.Collection
 		case "branch":
-			if err := jsoniter.Unmarshal(value, &x.Branch); err != nil {
-				return err
-			}
+			v = &x.Branch
 		case "filter":
 			// not decoding it here and let it decode during filter parsing
 			x.Filter = value
+			continue
 		case "options":
-			if err := jsoniter.Unmarshal(value, &x.Options); err != nil {
-				return err
-			}
+			v = &x.Options
+		default:
+			continue
+		}
+
+		if err := jsoniter.Unmarshal(value, v); err != nil {
+			return err
 		}
 	}
+
 	return nil
 }
 
 // UnmarshalJSON on CreateCollectionRequest avoids unmarshalling schema. The req handler deserializes the schema.
 func (x *CreateOrUpdateCollectionRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
+
 	if err := jsoniter.Unmarshal(data, &mp); err != nil {
 		return err
 	}
+
 	for key, value := range mp {
+		var v interface{}
+
 		switch key {
 		case "project":
-			if err := jsoniter.Unmarshal(value, &x.Project); err != nil {
-				return err
-			}
+			v = &x.Project
 		case "collection":
-			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
-				return err
-			}
+			v = &x.Collection
 		case "branch":
-			if err := jsoniter.Unmarshal(value, &x.Branch); err != nil {
-				return err
-			}
+			v = &x.Branch
 		case "only_create":
-			if err := jsoniter.Unmarshal(value, &x.OnlyCreate); err != nil {
-				return err
-			}
+			v = &x.OnlyCreate
 		case "schema":
 			x.Schema = value
+			continue
 		case "options":
-			if err := jsoniter.Unmarshal(value, &x.Options); err != nil {
-				return err
-			}
+			v = &x.Options
+		default:
+			continue
+		}
+
+		if err := jsoniter.Unmarshal(value, v); err != nil {
+			return err
 		}
 	}
 
 	return nil
 }
 
+var operations = map[string]TigrisOperation{
+	"ALL":      TigrisOperation_ALL,
+	"READ":     TigrisOperation_READ,
+	"WRITE":    TigrisOperation_WRITE,
+	"METADATA": TigrisOperation_METADATA,
+}
+
+var spaceAggregators = map[string]MetricQuerySpaceAggregation{
+	"AVG": MetricQuerySpaceAggregation_AVG,
+	"MIN": MetricQuerySpaceAggregation_MIN,
+	"MAX": MetricQuerySpaceAggregation_MAX,
+	"SUM": MetricQuerySpaceAggregation_SUM,
+}
+
+var rollupAggregators = map[string]RollupAggregator{
+	"SUM":   RollupAggregator_ROLLUP_AGGREGATOR_SUM,
+	"COUNT": RollupAggregator_ROLLUP_AGGREGATOR_COUNT,
+	"MIN":   RollupAggregator_ROLLUP_AGGREGATOR_MIN,
+	"MAX":   RollupAggregator_ROLLUP_AGGREGATOR_MAX,
+	"AVG":   RollupAggregator_ROLLUP_AGGREGATOR_AVG,
+}
+
+var metricFunctions = map[string]MetricQueryFunction{
+	"RATE":  MetricQueryFunction_RATE,
+	"COUNT": MetricQueryFunction_COUNT,
+	"NONE":  MetricQueryFunction_NONE,
+}
+
 // UnmarshalJSON on QueryTimeSeriesMetricsRequest. Handles enum.
 func (x *QueryTimeSeriesMetricsRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
+
 	if err := jsoniter.Unmarshal(data, &mp); err != nil {
 		return err
 	}
+
 	for key, value := range mp {
+		var v any
+
 		switch key {
 		case "db":
-			if err := jsoniter.Unmarshal(value, &x.Db); err != nil {
-				return err
-			}
+			v = &x.Db
+		case "branch":
+			v = &x.Branch
 		case "collection":
-			if err := jsoniter.Unmarshal(value, &x.Collection); err != nil {
-				return err
-			}
+			v = &x.Collection
 		case "from":
-			if err := jsoniter.Unmarshal(value, &x.From); err != nil {
-				return err
-			}
+			v = &x.From
 		case "to":
-			if err := jsoniter.Unmarshal(value, &x.To); err != nil {
-				return err
-			}
+			v = &x.To
 		case "metric_name":
-			if err := jsoniter.Unmarshal(value, &x.MetricName); err != nil {
-				return err
-			}
+			v = &x.MetricName
 		case "quantile":
-			if err := jsoniter.Unmarshal(value, &x.Quantile); err != nil {
-				return err
-			}
+			v = &x.Quantile
 		case "tigris_operation":
 			var t string
+
 			if err := jsoniter.Unmarshal(value, &t); err != nil {
 				return err
 			}
-			switch strings.ToUpper(t) {
-			case "ALL":
-				x.TigrisOperation = TigrisOperation_ALL
-			case "READ":
-				x.TigrisOperation = TigrisOperation_READ
-			case "WRITE":
-				x.TigrisOperation = TigrisOperation_WRITE
-			case "METADATA":
-				x.TigrisOperation = TigrisOperation_METADATA
-			}
+
+			x.TigrisOperation = operations[strings.ToUpper(t)]
+
+			continue
 		case "space_aggregation":
 			var t string
+
 			if err := jsoniter.Unmarshal(value, &t); err != nil {
 				return err
 			}
-			switch strings.ToUpper(t) {
-			case "AVG":
-				x.SpaceAggregation = MetricQuerySpaceAggregation_AVG
-			case "MIN":
-				x.SpaceAggregation = MetricQuerySpaceAggregation_MIN
-			case "MAX":
-				x.SpaceAggregation = MetricQuerySpaceAggregation_MAX
-			case "SUM":
-				x.SpaceAggregation = MetricQuerySpaceAggregation_SUM
-			}
+
+			x.SpaceAggregation = spaceAggregators[strings.ToUpper(t)]
+
+			continue
 		case "space_aggregated_by":
-			if err := jsoniter.Unmarshal(value, &x.SpaceAggregatedBy); err != nil {
-				return err
-			}
+			v = &x.SpaceAggregatedBy
 		case "function":
 			var t string
+
 			if err := jsoniter.Unmarshal(value, &t); err != nil {
 				return err
 			}
-			switch strings.ToUpper(t) {
-			case "RATE":
-				x.Function = MetricQueryFunction_RATE
-			case "COUNT":
-				x.Function = MetricQueryFunction_COUNT
-			case "NONE":
-				x.Function = MetricQueryFunction_NONE
-			}
+
+			x.Function = metricFunctions[strings.ToUpper(t)]
+			continue
 		case "additional_functions":
 			var additionalFunctionRaw []jsoniter.RawMessage
+
 			if err := jsoniter.Unmarshal(value, &additionalFunctionRaw); err != nil {
 				return err
 			}
@@ -560,18 +587,30 @@ func (x *QueryTimeSeriesMetricsRequest) UnmarshalJSON(data []byte) error {
 				}
 				x.AdditionalFunctions = append(x.AdditionalFunctions, additionalFunc)
 			}
+			continue
+		default:
+			continue
+		}
+
+		if err := jsoniter.Unmarshal(value, v); err != nil {
+			return err
 		}
 	}
+
 	return nil
 }
 
 // UnmarshalJSON on GetAccessTokenRequest. Handles enum.
 func (x *GetAccessTokenRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
+
 	if err := jsoniter.Unmarshal(data, &mp); err != nil {
 		return err
 	}
+
 	for key, value := range mp {
+		var v any
+
 		switch key {
 		case "grant_type":
 			var grant string
@@ -584,20 +623,22 @@ func (x *GetAccessTokenRequest) UnmarshalJSON(data []byte) error {
 			case "CLIENT_CREDENTIALS":
 				x.GrantType = GrantType_CLIENT_CREDENTIALS
 			}
+			continue
 		case "refresh_token":
-			if err := jsoniter.Unmarshal(value, &x.RefreshToken); err != nil {
-				return err
-			}
+			v = &x.RefreshToken
 		case "client_id":
-			if err := jsoniter.Unmarshal(value, &x.ClientId); err != nil {
-				return err
-			}
+			v = &x.ClientId
 		case "client_secret":
-			if err := jsoniter.Unmarshal(value, &x.ClientSecret); err != nil {
-				return err
-			}
+			v = &x.ClientSecret
+		default:
+			continue
+		}
+
+		if err := jsoniter.Unmarshal(value, v); err != nil {
+			return err
 		}
 	}
+
 	return nil
 }
 
@@ -643,9 +684,11 @@ func (x *DescribeDatabaseResponse) MarshalJSON() ([]byte, error) {
 
 func (x *InsertUserMetadataRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
+
 	if err := jsoniter.Unmarshal(data, &mp); err != nil {
 		return err
 	}
+
 	for key, value := range mp {
 		switch key {
 		case "metadataKey":
@@ -656,14 +699,17 @@ func (x *InsertUserMetadataRequest) UnmarshalJSON(data []byte) error {
 			x.Value = value
 		}
 	}
+
 	return nil
 }
 
 func (x *UpdateUserMetadataRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
+
 	if err := jsoniter.Unmarshal(data, &mp); err != nil {
 		return err
 	}
+
 	for key, value := range mp {
 		switch key {
 		case "metadataKey":
@@ -674,6 +720,7 @@ func (x *UpdateUserMetadataRequest) UnmarshalJSON(data []byte) error {
 			x.Value = value
 		}
 	}
+
 	return nil
 }
 
@@ -724,9 +771,11 @@ func (x *UpdateUserMetadataResponse) MarshalJSON() ([]byte, error) {
 
 func (x *InsertNamespaceMetadataRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
+
 	if err := jsoniter.Unmarshal(data, &mp); err != nil {
 		return err
 	}
+
 	for key, value := range mp {
 		switch key {
 		case "metadataKey":
@@ -737,6 +786,7 @@ func (x *InsertNamespaceMetadataRequest) UnmarshalJSON(data []byte) error {
 			x.Value = value
 		}
 	}
+
 	return nil
 }
 
@@ -993,9 +1043,11 @@ func CreateMDFromSearchMD(x *SearchHitMeta) *SearchHitMetadata {
 
 func unmarshalAdditionalFunction(data []byte) (*AdditionalFunction, error) {
 	var mp map[string]jsoniter.RawMessage
+
 	if err := jsoniter.Unmarshal(data, &mp); err != nil {
 		return nil, err
 	}
+
 	result := &AdditionalFunction{}
 	for key, value := range mp {
 		if key == "rollup" {
@@ -1006,11 +1058,13 @@ func unmarshalAdditionalFunction(data []byte) (*AdditionalFunction, error) {
 			result.Rollup = rollup
 		}
 	}
+
 	return result, nil
 }
 
 func unmarshalRollup(data []byte) (*RollupFunction, error) {
 	var mp map[string]jsoniter.RawMessage
+
 	if err := jsoniter.Unmarshal(data, &mp); err != nil {
 		return nil, err
 	}
@@ -1019,31 +1073,23 @@ func unmarshalRollup(data []byte) (*RollupFunction, error) {
 	for key, value := range mp {
 		switch key {
 		case "aggregator":
-			{
-				var t string
-				if err := jsoniter.Unmarshal(value, &t); err != nil {
-					return nil, err
-				}
-				switch strings.ToUpper(t) {
-				case "SUM":
-					result.Aggregator = RollupAggregator_ROLLUP_AGGREGATOR_SUM
-				case "COUNT":
-					result.Aggregator = RollupAggregator_ROLLUP_AGGREGATOR_COUNT
-				case "MIN":
-					result.Aggregator = RollupAggregator_ROLLUP_AGGREGATOR_MIN
-				case "MAX":
-					result.Aggregator = RollupAggregator_ROLLUP_AGGREGATOR_MAX
-				case "AVG":
-					result.Aggregator = RollupAggregator_ROLLUP_AGGREGATOR_AVG
-				}
-			}
-		case "interval":
-			var t int64
+			var t string
+
 			if err := jsoniter.Unmarshal(value, &t); err != nil {
 				return nil, err
 			}
+
+			result.Aggregator = rollupAggregators[strings.ToUpper(t)]
+		case "interval":
+			var t int64
+
+			if err := jsoniter.Unmarshal(value, &t); err != nil {
+				return nil, err
+			}
+
 			result.Interval = t
 		}
 	}
+
 	return result, nil
 }

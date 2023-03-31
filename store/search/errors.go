@@ -29,6 +29,8 @@ const (
 	ErrCodeUnhandled         ErrCode = 0x04
 )
 
+var errDuplicateFields = "There are duplicate field names in the schema."
+
 type Error struct {
 	HttpCode int
 	Code     ErrCode
@@ -54,6 +56,14 @@ func IsErrDuplicateEntity(err error) bool {
 func IsErrNotFound(err error) bool {
 	if e, ok := err.(Error); ok {
 		return e.HttpCode == http.StatusNotFound
+	}
+
+	return false
+}
+
+func IsErrDuplicateFieldNames(err error) bool {
+	if e, ok := err.(Error); ok {
+		return e.Msg == errDuplicateFields
 	}
 
 	return false

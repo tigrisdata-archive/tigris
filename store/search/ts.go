@@ -184,8 +184,10 @@ func (s *storeImpl) DeleteDocument(_ context.Context, table string, key string) 
 }
 
 func (s *storeImpl) DeleteDocuments(_ context.Context, table string, filter *filter.WrappedFilter) (int, error) {
-	var params *tsApi.DeleteDocumentsParams
-	params.FilterBy = &filter.SearchFilter()[0]
+	f := filter.SearchFilter()
+	params := &tsApi.DeleteDocumentsParams{
+		FilterBy: &f,
+	}
 	count, err := s.client.Collection(table).Documents().Delete(params)
 	return count, err
 }
@@ -243,28 +245,19 @@ func (s *storeImpl) getBaseSearchParam(query *qsearch.Query, pageNo int) tsApi.M
 	if groupBy := query.ToSearchGroupBy(); len(groupBy) > 0 {
 		baseParam.GroupBy = &groupBy
 	}
+	if searchFilter := query.WrappedF.SearchFilter(); len(searchFilter) > 1 {
+		baseParam.FilterBy = &searchFilter
+	}
 
 	return baseParam
 }
 
 func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query, pageNo int) ([]tsApi.SearchResult, error) {
-	var params []tsApi.MultiSearchCollectionParameters
-	searchFilter := query.WrappedF.SearchFilter()
-	if len(searchFilter) > 0 {
-		for i := 0; i < len(searchFilter); i++ {
-			// ToDo: check all places
-			param := s.getBaseSearchParam(query, pageNo)
-			param.FilterBy = &searchFilter[i]
-			params = append(params, tsApi.MultiSearchCollectionParameters{
-				Collection:            table,
-				MultiSearchParameters: param,
-			})
-		}
-	} else {
-		params = append(params, tsApi.MultiSearchCollectionParameters{
+	params := []tsApi.MultiSearchCollectionParameters{
+		{
 			Collection:            table,
 			MultiSearchParameters: s.getBaseSearchParam(query, pageNo),
-		})
+		},
 	}
 
 	res, err := s.client.MultiSearch.PerformWithContentType(&tsApi.MultiSearchParams{

@@ -45,7 +45,7 @@ var testCreateSchemaComposite = Map{
 				"description": "primary key field",
 				"type":        "integer",
 				"searchIndex": true,
-				"sort": true,
+				"sort":        true,
 			},
 			"int_value": Map{
 				"description": "simple int field",
@@ -141,7 +141,7 @@ var testCreateSchema = Map{
 				"description": "primary key field",
 				"type":        "integer",
 				"searchIndex": true,
-				"sort": true,
+				"sort":        true,
 			},
 			"int_value": Map{
 				"description": "simple int field",
@@ -271,10 +271,6 @@ func expect(t *testing.T) *httpexpect.Expect {
 
 func expectRealtime(t *testing.T) *httpexpect.Expect {
 	return expectLow(t, config.GetBaseRealtimeURL())
-}
-
-func createProjectUrl(project string) string {
-	return fmt.Sprintf("/v1/projects/%s/create", project)
 }
 
 func appKeysOperation(project string, operation string) string {

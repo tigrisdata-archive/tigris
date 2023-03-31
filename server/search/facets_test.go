@@ -19,144 +19,190 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/query/search"
 	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
-func TestFacetCountComparator(t *testing.T) {
-	testCases := []struct {
-		name     string
-		this     *FacetCount
-		that     *FacetCount
-		expected bool
-	}{
-		{
-			"both values nil", nil, nil, true,
-		},
-		{
-			"this is nil", nil, &FacetCount{"that", 20}, false,
-		},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.expected, facetCountComparator(tc.this, tc.that))
-		})
-	}
+func TestNewFacetResponse(t *testing.T) {
+	t.Run("query with empty facets", func(t *testing.T) {
+		query := search.Facets{}
+		fr := NewFacetResponse(query)
+		require.NotNil(t, fr)
+		require.Empty(t, fr.facetSizes)
+	})
+
+	t.Run("query with some facets", func(t *testing.T) {
+		query := search.Facets{
+			Fields: []search.FacetField{
+				{
+					Name: "a",
+					Size: 10,
+				},
+			},
+		}
+		fr := NewFacetResponse(query)
+		require.NotNil(t, fr)
+		require.Len(t, fr.facetSizes, 1)
+		require.Equal(t, fr.facetSizes["a"], 10)
+	})
 }
 
-func TestSortedFacets(t *testing.T) {
-	t.Run("Retrieves facet counts in a descending order", func(t *testing.T) {
-		var tsCounts tsApi.FacetCounts
-		facets := NewSortedFacets()
+func TestFacetResponse_Build(t *testing.T) {
+	inputData := [][]byte{
+		[]byte(`{"field_name":"a",
+				"counts":[
+      				{"count":20,"value":"value_1"},
+      				{"count":30,"value":"value_2"},
+      				{"count":10,"value":null}
+				]}`),
+		[]byte(`{"field_name":"b","counts":[
+					{"count":14,"value":"value_1"},
+					{"count":12,"value":"value_2"}
+				]}`),
+		[]byte(`{"field_name":null,
+				"counts":[
+					{"count":20,"value":"value_1"},
+					{"count":30,"value":"value_2"},
+					{"count":10,"value":null}
+				]}`),
+		[]byte(`{"field_name":"c",
+				"counts":[
+					{"count":20,"value":"value_1"},
+					{"count":30,"value":"value_2"},
+					{"count":10,"value":null},
+					{"count":10,"value":"value_3"}
+				],
+				"stats":{
+					"total_values":3,
+					"min":0,
+					"max":453.12,
+					"avg":23.254,
+					"sum":12345
+				}}`),
+		[]byte(`{"field_name":"d",
+				"counts":[
+					{"count":12,"value":"value_1"},
+					{"count":16,"value":"value_2"},
+					{"count":0,"value":"value_3"}
+				],
+				"stats":{
+					"total_values":3,
+					"sum": 0
+				}}`),
+	}
 
-		inputData := [][]byte{
-			[]byte(`{"field_name":"field_1","counts":[{"count":20,"value":"value_1"},{"count":30,"value":"value_2"},{"count":10,"value":null}]}`),
-			[]byte(`{"field_name":"field_2","counts":[{"count":14,"value":"value_1"},{"count":12,"value":"value_2"}]}`),
-			[]byte(`{"field_name":null,"counts":[{"count":20,"value":"value_1"},{"count":30,"value":"value_2"},{"count":10,"value":null}]}`),
-			[]byte(`{"field_name":"field_1","counts":[{"count":20,"value":"value_1"},{"count":30,"value":"value_2"},{"count":10,"value":null},{"count":10,"value":"value_3"}]}`),
-		}
+	tsCounts := make([]tsApi.FacetCounts, len(inputData))
+	for i, data := range inputData {
+		var tsCount tsApi.FacetCounts
+		err := jsoniter.Unmarshal(data, &tsCount)
+		assert.NoError(t, err)
+		tsCounts[i] = tsCount
+	}
 
-		for _, data := range inputData {
-			err := jsoniter.Unmarshal(data, &tsCounts)
-			assert.NoError(t, err)
-			_ = facets.Add(&tsCounts)
-		}
-
-		expectedField1Order := []FacetCount{
-			{"value_2", int64(60)},
-			{"value_1", int64(40)},
-			{"value_3", int64(10)},
-		}
-
-		for _, o := range expectedField1Order {
-			fc, _ := facets.GetFacetCount("field_1")
-			assert.Equal(t, o, *fc)
-		}
-
-		fc, hasMore := facets.GetFacetCount("field_1")
-		assert.Nil(t, fc)
-		assert.False(t, hasMore)
-
-		expectedField2Order := []FacetCount{
-			{"value_1", int64(14)},
-			{"value_2", int64(12)},
-		}
-		for _, o := range expectedField2Order {
-			fc, _ := facets.GetFacetCount("field_2")
-			assert.Equal(t, o, *fc)
-		}
-		fc, hasMore = facets.GetFacetCount("field_2")
-		assert.Nil(t, fc)
-		assert.False(t, hasMore)
+	t.Run("build with nil input", func(t *testing.T) {
+		fr := FacetResponse{facetSizes: map[string]int{
+			"a": 10,
+		}}
+		result := fr.Build(nil)
+		require.NotNil(t, result)
+		require.Empty(t, result)
 	})
 
-	t.Run("add nil facet counts", func(t *testing.T) {
-		facets := NewSortedFacets()
-		err := facets.Add(nil)
-		assert.NoError(t, err)
-		assert.Empty(t, facets.facetAttrs)
+	t.Run("build with empty facetSizes", func(t *testing.T) {
+		fr := FacetResponse{}
+		result := fr.Build(&tsCounts)
+		require.NotNil(t, result)
+		require.Empty(t, result)
 	})
 
-	t.Run("facet count with nil field name", func(t *testing.T) {
-		facets := NewSortedFacets()
-		tsCounts := &tsApi.FacetCounts{FieldName: nil}
-		err := facets.Add(tsCounts)
-		assert.NoError(t, err)
-		assert.Empty(t, facets.facetAttrs)
+	t.Run("query field is not included in ts response", func(t *testing.T) {
+		fr := FacetResponse{facetSizes: map[string]int{
+			"f": 10,
+		}}
+		result := fr.Build(&tsCounts)
+		require.NotNil(t, result)
+		require.Empty(t, result)
 	})
 
-	t.Run("facet count with nil values only", func(t *testing.T) {
-		field1 := "field_1"
-		tsCounts := &tsApi.FacetCounts{FieldName: &field1}
-		facets := NewSortedFacets()
-		err := facets.Add(tsCounts)
-		assert.NoError(t, err)
-		assert.Empty(t, facets.facetAttrs[field1].counts)
-	})
+	t.Run("requested facet size is lower than ts response", func(t *testing.T) {
+		fr := FacetResponse{facetSizes: map[string]int{
+			"a": 2,
+			"b": 1,
+			"c": 1,
+		}}
+		result := fr.Build(&tsCounts)
+		require.NotNil(t, result)
+		require.Len(t, result, len(fr.facetSizes))
 
-	t.Run("build facet stats", func(t *testing.T) {
-		facets := NewSortedFacets()
-
-		inputData := [][]byte{
-			[]byte(`{"field_name":"field_1", "stats": {"total_values": 2, "avg": 10, "max": 20.21, "min": -30, "sum": 50}}`),
-			[]byte(`{"field_name":"field_2", "stats": {"total_values": 64, "avg": 10.56, "min": -30.50}}`),
-			[]byte(`{"field_name":"field_3", "stats": null}`),
-			[]byte(`{"field_name":"field_1", "stats": {"total_values": 128, "avg": 10, "max": 20, "min": -10.34, "sum": 50}}`),
+		for field, size := range fr.facetSizes {
+			require.Contains(t, result, field)
+			require.LessOrEqual(t, len(result[field].GetCounts()), size)
 		}
-
-		for _, data := range inputData {
-			var tsCounts tsApi.FacetCounts
-			err := jsoniter.Unmarshal(data, &tsCounts)
-			assert.NoError(t, err)
-
-			err = facets.Add(&tsCounts)
-			assert.NoError(t, err)
-		}
-
-		assert.Equal(t, &api.FacetStats{Count: 130}, facets.GetStats("field_1"))
-		f2Avg, f2Min := 10.56, -30.5
-		exp := &api.FacetStats{Avg: &f2Avg, Min: &f2Min, Count: 64}
-		actual := facets.GetStats("field_2")
-		assert.Equal(t, *exp.Avg, *actual.Avg)
-		assert.Equal(t, *exp.Min, *actual.Min)
-		assert.Equal(t, exp.Count, actual.Count)
-		assert.Nil(t, actual.Sum)
-		assert.Nil(t, actual.Max)
-		assert.Equal(t, &api.FacetStats{Count: 0}, facets.GetStats("field_3"))
 	})
 
-	t.Run("Cannot insert once sorted", func(t *testing.T) {
-		var tsCounts tsApi.FacetCounts
-		data := []byte(`{"field_name":"field_2","counts":[{"count":14,"value":"value_1"},{"count":12,"value":"value_2"}]}`)
-		err := jsoniter.Unmarshal(data, &tsCounts)
-		assert.NoError(t, err)
+	t.Run("validate all built facets", func(t *testing.T) {
+		fr := FacetResponse{facetSizes: map[string]int{
+			"a": 10,
+			"b": 10,
+			"c": 10,
+			"d": 10,
+		}}
+		result := fr.Build(&tsCounts)
+		require.NotNil(t, result)
+		require.Len(t, result, len(fr.facetSizes))
 
-		facets := NewSortedFacets()
-		err = facets.Add(&tsCounts)
-		assert.NoError(t, err)
+		// field: 'a'
+		a := result["a"]
+		require.Len(t, a.Counts, 2)
+		require.Equal(t, a.GetCounts(), []*api.FacetCount{
+			{Count: 20, Value: "value_1"},
+			{Count: 30, Value: "value_2"},
+		})
+		require.Equal(t, a.GetStats(), &api.FacetStats{Count: 0})
 
-		_, _ = facets.GetFacetCount("field_2")
-		err = facets.Add(&tsCounts)
-		assert.ErrorContains(t, err, "Already initialized and sorted")
+		// field: 'b'
+		b := result["b"]
+		require.Len(t, b.Counts, 2)
+		require.Equal(t, b.GetCounts(), []*api.FacetCount{
+			{Count: 14, Value: "value_1"},
+			{Count: 12, Value: "value_2"},
+		})
+		require.Equal(t, b.GetStats(), &api.FacetStats{Count: 0})
+
+		// field: 'c'
+		c := result["c"]
+		require.Len(t, c.Counts, 3)
+		require.Equal(t, c.GetCounts(), []*api.FacetCount{
+			{Count: 20, Value: "value_1"},
+			{Count: 30, Value: "value_2"},
+			{Count: 10, Value: "value_3"},
+		})
+		avg, max, min, sum := 23.254, 453.12, float64(0), float64(12345)
+		require.Equal(t, c.GetStats(), &api.FacetStats{
+			Avg:   &avg,
+			Max:   &max,
+			Min:   &min,
+			Sum:   &sum,
+			Count: 3,
+		})
+
+		// field: 'd'
+		d := result["d"]
+		require.Len(t, d.Counts, 3)
+		require.Equal(t, d.GetCounts(), []*api.FacetCount{
+			{Count: 12, Value: "value_1"},
+			{Count: 16, Value: "value_2"},
+			{Count: 0, Value: "value_3"},
+		})
+		sum = float64(0)
+		require.Equal(t, d.GetStats(), &api.FacetStats{
+			Avg:   nil,
+			Max:   nil,
+			Min:   nil,
+			Sum:   &sum,
+			Count: 3,
+		})
 	})
 }

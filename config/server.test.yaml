@@ -22,6 +22,7 @@ search:
   host: tigris_search
 
 log:
+  level: debug
   format: console
 
 secondary_index:
