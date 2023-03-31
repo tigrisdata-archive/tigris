@@ -793,7 +793,7 @@ func (runner *ExplainQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 
 const (
 	SEARCH    = "search"
-	PRIMARY   = "primary index"
+	PRIMARY   = "scan"
 	SECONDARY = "secondary index"
 )
 
@@ -802,7 +802,6 @@ func buildExplainResp(options readerOptions, coll *schema.DefaultCollection, fil
 		Collection: coll.Name,
 		Filter:     string(filter),
 	}
-
 	if options.inMemoryStore {
 		explain.ReadType = SEARCH
 		sort, err := jsoniter.Marshal(options.sorting)
@@ -812,12 +811,10 @@ func buildExplainResp(options readerOptions, coll *schema.DefaultCollection, fil
 		explain.Sorting = string(sort)
 		return explain, nil
 	}
-
 	if options.plan != nil {
 		explain.ReadType = SECONDARY
 		return explain, nil
 	}
-
 	explain.ReadType = PRIMARY
 	return explain, nil
 }
