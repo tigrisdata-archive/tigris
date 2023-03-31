@@ -79,7 +79,7 @@ func TestMetronome_AddDefaultPlan(t *testing.T) {
 	t.Run("create new time", func(t *testing.T) {
 		metronomeId := "nsId_123"
 		yyyy, mm, dd := time.Now().UTC().Date()
-		expectedDate := time.Date(yyyy, mm, dd+1, 0, 0, 0, 0, time.UTC).Format(TimeFormat)
+		expectedDate := time.Date(yyyy, mm, dd, 0, 0, 0, 0, time.UTC).Format(TimeFormat)
 
 		gock.New(cfg.URL).
 			Post(fmt.Sprintf("customers/%s/plans/add", metronomeId)).

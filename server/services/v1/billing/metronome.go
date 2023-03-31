@@ -75,7 +75,7 @@ func (m *Metronome) AddPlan(ctx context.Context, metronomeId string, planId stri
 	payload := map[string]any{
 		"plan_id": planId,
 		// plans can only start at UTC midnight, so we either +1 or -1 from current day
-		"starting_on": nextMidnight().Format(TimeFormat),
+		"starting_on": pastMidnight().Format(TimeFormat),
 	}
 
 	req, err := m.createRequest(ctx, fmt.Sprintf("/customers/%s/plans/add", metronomeId), payload)
@@ -124,8 +124,8 @@ func (m *Metronome) executeRequest(ctx context.Context, req *http.Request) ([]by
 	return respBytes, nil
 }
 
-func nextMidnight() time.Time {
+func pastMidnight() time.Time {
 	now := time.Now().UTC()
 	yyyy, mm, dd := now.Date()
-	return time.Date(yyyy, mm, dd+1, 0, 0, 0, 0, time.UTC)
+	return time.Date(yyyy, mm, dd, 0, 0, 0, 0, time.UTC)
 }
