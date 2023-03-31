@@ -60,10 +60,22 @@ export class {{.Name}} {
       {{- if $def}}{{if $m}},{{end}} default: {{$def}} {{- $m = true}}{{end -}}
       {{- if $v.AutoGenerate}}{{if $m}},{{end}} autoGenerate: true {{- $m = true }}{{end -}}
       {{- if $v.UpdatedAt}}{{if $m}},{{end}} timestamp: "updatedAt" {{- $m = true }}{{end -}}
-      {{- if $v.CreatedAt}}{{if $m}},{{end}} timestamp: "createdAt" {{- end}}
-      {{- if $v.MaxLength}}{{if $m}},{{end}} maxLength: {{$v.MaxLength}} {{- end}} }
+      {{- if $v.CreatedAt}}{{if $m}},{{end}} timestamp: "createdAt" {{- $m = true }}{{- end}}
+      {{- if $v.MaxLength}}{{if $m}},{{end}} maxLength: {{$v.MaxLength}} {{- $m = true }}{{- end}} }
   {{- end -}}
   )
+
+  {{- $m = false -}}
+  {{if $v.SearchIndex }}
+  @SearchField(
+      {{- if or $v.Sort $v.Facet -}}
+        {
+          {{- if $v.Sort}}{{if $m}}, {{end}}sort: true {{- $m = true }}{{- end -}}
+          {{- if $v.Facet}}{{if $m}}, {{end}}facet: true {{- $m = true }}{{- end -}}
+        }
+      {{- end -}}
+    )
+  {{- end}}
   {{$v.NameJSON}}{{if $v.AutoGenerate}}?{{end}}: {{if $v.IsArray}}{{repeat "Array<" $v.ArrayDimensions}}{{end}}{{ $tsType }}{{if $v.IsArray}}{{repeat ">" $v.ArrayDimensions}}{{end}};
 {{end -}}
 }

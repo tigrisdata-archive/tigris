@@ -17,9 +17,9 @@ type {{ .Name }} struct {
         {{- $def = $v.DefaultStrSingleQuotes}}
     {{- end}}
 
-    {{- if or $jsonTag $v.PrimaryKeyIdx $def $v.AutoGenerate $v.UpdatedAt $v.CreatedAt $v.MaxLength $v.Required }} `
-         {{- if $jsonTag }}json:"{{$v.NameJSON}}"{{- if or $v.PrimaryKeyIdx $def $v.AutoGenerate $v.UpdatedAt $v.CreatedAt $v.MaxLength $v.Required}} {{end}}{{end -}}
-         {{- if or $v.PrimaryKeyIdx $def $v.AutoGenerate $v.UpdatedAt $v.CreatedAt $v.MaxLength $v.Required -}}
+    {{- if or $jsonTag $v.PrimaryKeyIdx $def $v.AutoGenerate $v.UpdatedAt $v.CreatedAt $v.MaxLength $v.Required $v.SearchIndex $v.Sort $v.Facet}} `
+         {{- if $jsonTag }}json:"{{$v.NameJSON}}"{{- if or $v.PrimaryKeyIdx $def $v.AutoGenerate $v.UpdatedAt $v.CreatedAt $v.MaxLength $v.Required $v.SearchIndex $v.Sort $v.Facet}} {{end}}{{end -}}
+         {{- if or $v.PrimaryKeyIdx $def $v.AutoGenerate $v.UpdatedAt $v.CreatedAt $v.MaxLength $v.Required $v.SearchIndex $v.Sort $v.Facet -}}
                     tigris:"
          {{- if $v.PrimaryKeyIdx }}primaryKey:{{$v.PrimaryKeyIdx}} {{- $m = true }}{{end -}}
          {{- if $def}}{{if $m}},{{end}}default:{{$def}}{{- $m = true}}{{end -}}
@@ -28,6 +28,9 @@ type {{ .Name }} struct {
          {{- if $v.CreatedAt}}{{if $m}},{{end}}createdAt{{- $m = true }}{{- end}}
          {{- if $v.MaxLength}}{{if $m}},{{end}}maxLength:{{$v.MaxLength}}{{- $m = true }}{{- end -}}
          {{- if $v.Required}}{{if $m}},{{end}}required{{- $m = true }}{{- end -}}
+         {{- if $v.SearchIndex}}{{if $m}},{{end}}searchIndex{{- $m = true }}{{- end -}}
+         {{- if $v.Sort}}{{if $m}},{{end}}sort{{- $m = true }}{{- end -}}
+         {{- if $v.Facet}}{{if $m}},{{end}}facet{{- $m = true }}{{- end -}}
                     "{{end}}`
     {{- end -}}
 {{- end}}

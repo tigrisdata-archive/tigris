@@ -67,6 +67,9 @@ type Product struct {
 	NameGen int32 ` + "`" + `json:"name_gen" tigris:"autoGenerate"` + "`" + `
 	NameGenKey int32 ` + "`" + `json:"name_gen_key" tigris:"primaryKey:4,autoGenerate"` + "`" + `
 	NameKey int32 ` + "`" + `json:"name_key" tigris:"primaryKey:3"` + "`" + `
+	NameSi string ` + "`" + `json:"name_si" tigris:"searchIndex"` + "`" + `
+	NameSif int32 ` + "`" + `json:"name_sif" tigris:"searchIndex,facet"` + "`" + `
+	NameSifs time.Time ` + "`" + `json:"name_sifs" tigris:"searchIndex,sort,facet"` + "`" + `
 	ReqField int32 ` + "`" + `json:"req_field" tigris:"required"` + "`" + `
 	TimeF time.Time ` + "`" + `json:"time_f" tigris:"default:'now()',updatedAt,createdAt,required"` + "`" + `
 	UserName int32 ` + "`" + `json:"user_name"` + "`" + `
