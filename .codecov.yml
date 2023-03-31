@@ -4,4 +4,8 @@ codecov:
     after_n_builds: 3 # integration tests + cli tests + reviewpad
     wait_for_ci: true
 coverage:
-  range: "50...60"
+  range: "50...65"
+
+flag_management:
+  default_rules:
+    carryforward: true

@@ -119,6 +119,6 @@ build_and_push_base_docker:
 # This is used in CI workflows
 dump_integration_coverage:
 	pkill -SIGTERM -f "/server/service" --exact
-	sleep 5
+	sleep 15
 	/usr/local/go/bin/go tool covdata textfmt -i=/tmp/tigris_coverdata/ -o coverage1.out # from tigris_server
 	/usr/local/go/bin/go tool covdata textfmt -i=/tmp/tigris_coverdata2/ -o coverage2.out # from tigris_server2

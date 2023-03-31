@@ -14,6 +14,9 @@ Tigris is built on FoundationDB and combines the consistency of ACID transaction
 <a href="">
 <img src="https://github.com/tigrisdata/tigris/workflows/Go/badge.svg" alt="Build Status">
 </a>
+<a href="https://codecov.io/gh/tigrisdata/tigris" >
+<img src="https://codecov.io/gh/tigrisdata/tigris/branch/main/graph/badge.svg?token=016J4ABMC3"/>
+</a>
 <a href="CODE_OF_CONDUCT.md">
 <img src="https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg" alt="Contributor Covenant">
 </a>
