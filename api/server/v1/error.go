@@ -149,86 +149,62 @@ func CodeToString(c Code) string {
 	return r
 }
 
+var fromHTTPCode = map[int]Code{
+	200: Code_OK,
+	499: Code_CANCELLED,
+	400: Code_INVALID_ARGUMENT,
+	504: Code_DEADLINE_EXCEEDED,
+	404: Code_NOT_FOUND,
+	409: Code_CONFLICT,
+	403: Code_PERMISSION_DENIED,
+	401: Code_UNAUTHENTICATED,
+	429: Code_RESOURCE_EXHAUSTED,
+	500: Code_INTERNAL,
+	503: Code_UNAVAILABLE,
+	413: Code_CONTENT_TOO_LARGE,
+}
+
 func FromHttpCode(httpCode int) Code {
-	switch httpCode {
-	case 200:
-		return Code_OK
-	case 499:
-		return Code_CANCELLED
-	case 400:
-		return Code_INVALID_ARGUMENT
-	case 504:
-		return Code_DEADLINE_EXCEEDED
-	case 404:
-		return Code_NOT_FOUND
-	case 409:
-		return Code_CONFLICT
-	case 403:
-		return Code_PERMISSION_DENIED
-	case 401:
-		return Code_UNAUTHENTICATED
-	case 429:
-		return Code_RESOURCE_EXHAUSTED
-	case 500:
-		return Code_INTERNAL
-	case 503:
-		return Code_UNAVAILABLE
-	case 413:
-		return Code_CONTENT_TOO_LARGE
-	default:
-		return Code_UNKNOWN
+	code, ok := fromHTTPCode[httpCode]
+	if !ok {
+		code = Code_UNKNOWN
 	}
+	return code
+}
+
+var toHTTPCode = map[Code]int{
+	Code_OK:                  200,
+	Code_CANCELLED:           499,
+	Code_UNKNOWN:             500,
+	Code_INVALID_ARGUMENT:    400,
+	Code_DEADLINE_EXCEEDED:   504,
+	Code_NOT_FOUND:           404,
+	Code_ALREADY_EXISTS:      409,
+	Code_PERMISSION_DENIED:   403,
+	Code_RESOURCE_EXHAUSTED:  429,
+	Code_FAILED_PRECONDITION: 412,
+	Code_ABORTED:             409,
+	Code_OUT_OF_RANGE:        400,
+	Code_UNIMPLEMENTED:       501,
+	Code_INTERNAL:            500,
+	Code_UNAVAILABLE:         503,
+	Code_DATA_LOSS:           500,
+	Code_UNAUTHENTICATED:     401,
+
+	// Extended codes
+	Code_CONFLICT:          409,
+	Code_BAD_GATEWAY:       502,
+	Code_CONTENT_TOO_LARGE: 413,
 }
 
 // ToHTTPCode converts Tigris' code to HTTP status code
 // Used to customize HTTP codes returned by GRPC-gateway.
 func ToHTTPCode(code Code) int {
-	switch code {
-	case Code_OK:
-		return 200
-	case Code_CANCELLED:
-		return 499
-	case Code_UNKNOWN:
-		return 500
-	case Code_INVALID_ARGUMENT:
-		return 400
-	case Code_DEADLINE_EXCEEDED:
-		return 504
-	case Code_NOT_FOUND:
-		return 404
-	case Code_ALREADY_EXISTS:
-		return 409
-	case Code_PERMISSION_DENIED:
-		return 403
-	case Code_RESOURCE_EXHAUSTED:
-		return 429
-	case Code_FAILED_PRECONDITION:
-		return 412
-	case Code_ABORTED:
-		return 409
-	case Code_OUT_OF_RANGE:
-		return 400
-	case Code_UNIMPLEMENTED:
-		return 501
-	case Code_INTERNAL:
-		return 500
-	case Code_UNAVAILABLE:
-		return 503
-	case Code_DATA_LOSS:
-		return 500
-	case Code_UNAUTHENTICATED:
-		return 401
-
-	// Extended codes
-	case Code_CONFLICT:
-		return 409
-	case Code_BAD_GATEWAY:
-		return 502
-	case Code_CONTENT_TOO_LARGE:
-		return 413
+	h, ok := toHTTPCode[code]
+	if !ok {
+		h = 500
 	}
-
-	return 500
+	return h
 }
 
 // As is used by runtime.DefaultHTTPErrorHandler to override HTTP status code.
@@ -308,6 +284,7 @@ func FromErrorDetails(e *ErrorDetails) *TigrisError {
 }
 
 // UnmarshalStatus reconstruct TigrisError from HTTP error JSON body.
+// This is used by the client.
 func UnmarshalStatus(b []byte) *TigrisError {
 	resp := struct {
 		Error ErrorDetails `json:"error"`
@@ -321,6 +298,7 @@ func UnmarshalStatus(b []byte) *TigrisError {
 }
 
 // FromStatusError parses GRPC status from error into TigrisError.
+// This is used by the client code.
 func FromStatusError(err error) *TigrisError {
 	st := status.Convert(err)
 	code := ToTigrisCode(st.Code())
@@ -339,6 +317,7 @@ func FromStatusError(err error) *TigrisError {
 }
 
 // Errorf constructs TigrisError.
+// This is the only error server code should return.
 func Errorf(c Code, format string, a ...interface{}) *TigrisError {
 	if c == Code_OK {
 		return nil

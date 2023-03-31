@@ -42,7 +42,7 @@ func TestLogicalToSearch(t *testing.T) {
 	js := []byte(`{"f1": 10}`)
 	testLogicalSearch(t, js, factory, "f1:=10")
 
-	//f1=10&&f2=10
+
 	js = []byte(`{"f1": 10, "f2": 10}`)
 	testLogicalSearch(t, js, factory, "f1:=10 && f2:=10")
 

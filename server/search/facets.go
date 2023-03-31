@@ -20,7 +20,7 @@ import (
 	tsApi "github.com/typesense/typesense-go/typesense/api"
 )
 
-// FacetResponse is a builder utility to convert facets from search backend to tigris response
+// FacetResponse is a builder utility to convert facets from search backend to tigris response.
 type FacetResponse struct {
 	// count of facet values requested for each field
 	facetSizes map[string]int
@@ -34,7 +34,7 @@ func NewFacetResponse(query search.Facets) *FacetResponse {
 	return &FacetResponse{facetSizes: facetSizeRequested}
 }
 
-// Build converts search backend response to api.SearchFacet
+// Build converts search backend response to api.SearchFacet.
 func (fb *FacetResponse) Build(r *[]tsApi.FacetCounts) map[string]*api.SearchFacet {
 	result := map[string]*api.SearchFacet{}
 

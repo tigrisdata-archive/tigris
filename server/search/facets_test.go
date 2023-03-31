@@ -35,10 +35,11 @@ func TestNewFacetResponse(t *testing.T) {
 
 	t.Run("query with some facets", func(t *testing.T) {
 		query := search.Facets{
-			Fields: []search.FacetField{{
-				Name: "a",
-				Size: 10,
-			},
+			Fields: []search.FacetField{
+				{
+					Name: "a",
+					Size: 10,
+				},
 			},
 		}
 		fr := NewFacetResponse(query)

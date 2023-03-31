@@ -223,7 +223,6 @@ func (sz *searchSerializer) serialize(searchToken string, filters []Filter) []st
 	var flattened []string
 	if len(logical) > 0 {
 		flattened = sz.flatten(searchToken, str, logical)
-
 	}
 	if len(flattened) == 0 {
 		flattened = append(flattened, str)
