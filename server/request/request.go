@@ -46,7 +46,7 @@ const (
 )
 
 var (
-	adminMethods = container.NewHashSet(api.CreateNamespaceMethodName, api.ListNamespaceMethodName, api.DescribeNamespacesMethodName)
+	adminMethods = container.NewHashSet(api.CreateNamespaceMethodName, api.ListNamespaceMethodName)
 	tenantGetter metadata.TenantGetter
 )
 
