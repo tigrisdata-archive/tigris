@@ -382,6 +382,64 @@ func TestAuthFailure(t *testing.T) {
 	require.Equal(t, "Failed to validate access token, could not be validated", authFailureErrorResponse.Value("message").String().Raw())
 }
 
+func TestUserInvitations(t *testing.T) {
+	token := readToken(t, RSATokenFilePath)
+	createTestNamespace(t, token)
+	createUserInvitation(t, "a@hello.com", "editor_a", "TestUserInvitations", token).
+		Status(http.StatusOK)
+	createUserInvitation(t, "b@hello.com", "editor_b", "TestUserInvitations", token).
+		Status(http.StatusOK)
+	createUserInvitation(t, "c@hello.com", "editor_c", "TestUserInvitations", token).
+		Status(http.StatusOK)
+	createUserInvitation(t, "a@hello.com", "editor_a", "TestUserInvitations", token).
+		Status(http.StatusOK)
+
+	listUserInvitations1 := listUserInvitations(t, token)
+	listUserInvitations1.Status(http.StatusOK)
+	invitations1 := listUserInvitations1.JSON().Object().Value("invitations").Array()
+	require.Equal(t, float64(4), invitations1.Length().Raw())
+
+	emailCountMap1 := make(map[string]int)
+	for _, value := range invitations1.Iter() {
+		emailCountMap1[value.Object().Value("email").String().Raw()]++
+	}
+
+	require.Equal(t, 3, len(emailCountMap1))
+	require.Equal(t, 2, emailCountMap1["a@hello.com"])
+	require.Equal(t, 1, emailCountMap1["b@hello.com"])
+	require.Equal(t, 1, emailCountMap1["c@hello.com"])
+
+	// delete invitation
+	deleteUserInvitations(t, "c@hello.com", "PENDING", token).
+		Status(http.StatusOK)
+
+	// list user invitations
+	listUserInvitations2 := listUserInvitations(t, token)
+	listUserInvitations2.Status(http.StatusOK)
+	invitations2 := listUserInvitations2.JSON().Object().Value("invitations").Array()
+	require.Equal(t, float64(3), invitations2.Length().Raw())
+
+	emailCountMap2 := make(map[string]int)
+	for _, value := range invitations2.Iter() {
+		emailCountMap2[value.Object().Value("email").String().Raw()]++
+	}
+	require.Equal(t, 2, len(emailCountMap2))
+	require.Equal(t, 2, emailCountMap2["a@hello.com"])
+	require.Equal(t, 1, emailCountMap2["b@hello.com"])
+
+	// call gotrue to get the code
+	invitationCode := getInvitationCode(t, "tigris_test", "b@hello.com")
+
+	// verify - valid code
+	verificationRes1 := verifyUserInvitations(t, "b@hello.com", invitationCode, token)
+	verificationRes1.Status(http.StatusOK)
+	require.Equal(t, "tigris_test", verificationRes1.JSON().Object().Value("tigris_namespace").String().Raw())
+
+	// verify - invalid code
+	verificationRes2 := verifyUserInvitations(t, "b@hello.com", "invalid-code", token)
+	verificationRes2.Status(http.StatusUnauthorized)
+}
+
 func createProject2(t *testing.T, projectName string, token string) *httpexpect.Response {
 	e2 := expectLow(t, config.GetBaseURL2())
 
@@ -399,4 +457,70 @@ func deleteProject2(t *testing.T, projectName string, token string) {
 	_ = e2.DELETE(getProjectURL(projectName, "delete")).
 		WithHeader(Authorization, Bearer+token).
 		Expect()
+}
+
+func getInvitationCode(t *testing.T, namespace string, email string) string {
+	e2 := expectLow(t, "http://tigris_gotrue:8086")
+	invitations := e2.GET("/invitations", namespace).WithQueryString(fmt.Sprintf("tigris_namespace=%s", namespace)).
+		Expect().JSON().Array()
+	for _, value := range invitations.Iter() {
+		status := value.Object().Value("status").String().Raw()
+		thisEmail := value.Object().Value("email").String().Raw()
+
+		if thisEmail == email && status == "PENDING" {
+			return value.Object().Value("code").String().Raw()
+		}
+	}
+	return ""
+}
+
+func createUserInvitation(t *testing.T, email string, role string, invitationCreatedByName string, token string) *httpexpect.Response {
+	e2 := expectLow(t, config.GetBaseURL2())
+
+	invitationInfos := make([]api.InvitationInfo, 1)
+	payload := make(map[string][]api.InvitationInfo)
+	invitationInfos[0] = api.InvitationInfo{
+		Email:                email,
+		Role:                 role,
+		InvitationSentByName: invitationCreatedByName,
+	}
+	payload["invitations"] = invitationInfos
+	return e2.POST(invitationUrl("create")).
+		WithJSON(payload).
+		WithHeader(Authorization, Bearer+token).
+		Expect()
+}
+
+func listUserInvitations(t *testing.T, token string) *httpexpect.Response {
+	e2 := expectLow(t, config.GetBaseURL2())
+
+	return e2.GET(invitationUrl("list")).
+		WithHeader(Authorization, Bearer+token).
+		Expect()
+}
+
+func verifyUserInvitations(t *testing.T, email string, code string, token string) *httpexpect.Response {
+	e2 := expectLow(t, config.GetBaseURL2())
+	payload := make(map[string]string)
+	payload["email"] = email
+	payload["code"] = code
+	return e2.POST(invitationUrl("verify")).
+		WithJSON(payload).
+		WithHeader(Authorization, Bearer+token).
+		Expect()
+}
+
+func deleteUserInvitations(t *testing.T, email string, status string, token string) *httpexpect.Response {
+	payload := make(map[string]string)
+	payload["email"] = email
+	payload["status"] = status
+	e2 := expectLow(t, config.GetBaseURL2())
+	return e2.DELETE(invitationUrl("delete")).
+		WithJSON(payload).
+		WithHeader(Authorization, Bearer+token).
+		Expect()
+}
+
+func invitationUrl(operation string) string {
+	return fmt.Sprintf("/v1/auth/namespace/invitations/%s", operation)
 }

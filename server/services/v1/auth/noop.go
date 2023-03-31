@@ -50,3 +50,19 @@ func (noop) ListAppKeys(_ context.Context, _ *api.ListAppKeysRequest) (*api.List
 func (noop) DeleteAppKeys(_ context.Context, _ string) error {
 	return errors.Internal("authentication not enabled on this server")
 }
+
+func (noop) CreateInvitations(_ context.Context, _ *api.CreateInvitationsRequest) (*api.CreateInvitationsResponse, error) {
+	return nil, errors.Internal("authentication not enabled on this server")
+}
+
+func (noop) DeleteInvitations(_ context.Context, _ *api.DeleteInvitationsRequest) (*api.DeleteInvitationsResponse, error) {
+	return nil, errors.Internal("authentication not enabled on this server")
+}
+
+func (noop) ListInvitations(_ context.Context, _ *api.ListInvitationsRequest) (*api.ListInvitationsResponse, error) {
+	return nil, errors.Internal("authentication not enabled on this server")
+}
+
+func (noop) VerifyInvitation(_ context.Context, _ *api.VerifyInvitationRequest) (*api.VerifyInvitationResponse, error) {
+	return nil, errors.Internal("authentication not enabled on this server")
+}

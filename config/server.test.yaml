@@ -52,6 +52,8 @@ auth:
   token_cache_size: 100
   primary_audience: https://tigris-test
   oauth_provider: gotrue
+  user_invitations:
+    expire_after_sec: 120
   gotrue:
     username_suffix: "@m2m.tigrisdata.com"
     url: http://tigris_gotrue:8086

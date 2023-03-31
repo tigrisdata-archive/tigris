@@ -51,6 +51,22 @@ func (a *authService) GetAccessToken(ctx context.Context, req *api.GetAccessToke
 	return a.Provider.GetAccessToken(ctx, req)
 }
 
+func (a *authService) CreateInvitations(ctx context.Context, req *api.CreateInvitationsRequest) (*api.CreateInvitationsResponse, error) {
+	return a.Provider.CreateInvitations(ctx, req)
+}
+
+func (a *authService) ListInvitations(ctx context.Context, req *api.ListInvitationsRequest) (*api.ListInvitationsResponse, error) {
+	return a.Provider.ListInvitations(ctx, req)
+}
+
+func (a *authService) DeleteInvitations(ctx context.Context, req *api.DeleteInvitationsRequest) (*api.DeleteInvitationsResponse, error) {
+	return a.Provider.DeleteInvitations(ctx, req)
+}
+
+func (a *authService) VerifyInvitation(ctx context.Context, req *api.VerifyInvitationRequest) (*api.VerifyInvitationResponse, error) {
+	return a.Provider.VerifyInvitation(ctx, req)
+}
+
 func (a *authService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {
 	mux := runtime.NewServeMux(
 		runtime.WithMarshalerOption(runtime.MIMEWildcard, &api.CustomMarshaler{JSONBuiltin: &runtime.JSONBuiltin{}}),
