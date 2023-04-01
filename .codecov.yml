@@ -4,7 +4,7 @@ codecov:
     after_n_builds: 3 # integration tests + cli tests + reviewpad
     wait_for_ci: true
 coverage:
-  range: "50...65"
+  range: "50...75"
 
 flag_management:
   default_rules:
