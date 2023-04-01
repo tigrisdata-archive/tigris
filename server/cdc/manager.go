@@ -47,7 +47,7 @@ func (m *Manager) GetPublisher(dbName string) *Publisher {
 	return m.pubs[dbName]
 }
 
-func (m *Manager) WrapContext(ctx context.Context, dbName string) context.Context {
+func (*Manager) WrapContext(ctx context.Context, dbName string) context.Context {
 	if len(dbName) == 0 {
 		return ctx
 	}
@@ -64,7 +64,7 @@ func (m *Manager) OnPreCommit(ctx context.Context, _ *metadata.Tenant, tx transa
 	return p.OnCommit(ctx, tx, events)
 }
 
-func (m *Manager) OnPostCommit(_ context.Context, _ *metadata.Tenant, _ kv.EventListener) error {
+func (*Manager) OnPostCommit(_ context.Context, _ *metadata.Tenant, _ kv.EventListener) error {
 	return nil
 }
 

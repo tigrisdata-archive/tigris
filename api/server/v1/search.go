@@ -81,7 +81,7 @@ func (x *CreateOrUpdateIndexRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	for key, value := range mp {
-		var v interface{}
+		var v any
 		switch strings.ToLower(key) {
 		case "project":
 			v = &x.Project
@@ -109,7 +109,7 @@ func (x *CreateByIdRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	for key, value := range mp {
-		var v interface{}
+		var v any
 
 		switch key {
 		case "project":
@@ -141,7 +141,7 @@ func (x *CreateDocumentRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	for key, value := range mp {
-		var v interface{}
+		var v any
 
 		switch key {
 		case "project":
@@ -184,7 +184,7 @@ func (x *CreateOrReplaceDocumentRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	for key, value := range mp {
-		var v interface{}
+		var v any
 
 		switch key {
 		case "project":
@@ -226,7 +226,7 @@ func (x *UpdateDocumentRequest) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	for key, value := range mp {
-		var v interface{}
+		var v any
 
 		switch key {
 		case "project":
@@ -267,7 +267,7 @@ func (x *DeleteDocumentRequest) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	for key, value := range mp {
-		var v interface{}
+		var v any
 
 		switch key {
 		case "project":
@@ -293,7 +293,7 @@ func (x *DeleteByQueryRequest) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	for key, value := range mp {
-		var v interface{}
+		var v any
 
 		switch key {
 		case "project":
@@ -323,7 +323,7 @@ func (x *SearchIndexRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	for key, value := range mp {
-		var v interface{}
+		var v any
 
 		switch key {
 		case "project":

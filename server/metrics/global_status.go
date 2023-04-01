@@ -178,7 +178,7 @@ func (r *RequestStatus) SaveRequestStatusToContext(ctx context.Context) context.
 	return ctx
 }
 
-func (r *RequestStatus) ClearRequestStatusFromContext(ctx context.Context) context.Context {
+func (*RequestStatus) ClearRequestStatusFromContext(ctx context.Context) context.Context {
 	return context.WithValue(ctx, RequestStatusCtxKey{}, nil)
 }
 
@@ -206,7 +206,7 @@ func (r *RequestStatus) AddDDLDropUnit() {
 	if !config.DefaultConfig.GlobalStatus.Enabled {
 		return
 	}
-	r.ddlDropUnits += 1
+	r.ddlDropUnits++
 	if config.DefaultConfig.GlobalStatus.DebugMessages {
 		log.Debug().Msg("Added drop unit")
 	}
@@ -216,7 +216,7 @@ func (r *RequestStatus) AddSearchCreateIndexUnit() {
 	if !config.DefaultConfig.GlobalStatus.Enabled {
 		return
 	}
-	r.searchCreateIndexUnits += 1
+	r.searchCreateIndexUnits++
 	if config.DefaultConfig.GlobalStatus.DebugMessages {
 		log.Debug().Msg("Added search create index unit")
 	}
@@ -230,7 +230,7 @@ func (r *RequestStatus) AddSearchDropIndexUnit() {
 	if !config.DefaultConfig.GlobalStatus.Enabled {
 		return
 	}
-	r.searchDropIndexUnits += 1
+	r.searchDropIndexUnits++
 	if config.DefaultConfig.GlobalStatus.DebugMessages {
 		log.Debug().Msg("Added search drop index unit")
 	}
@@ -258,7 +258,7 @@ func (r *RequestStatus) AddSearchUnit() {
 	if !config.DefaultConfig.GlobalStatus.Enabled {
 		return
 	}
-	r.searchUnits += 1
+	r.searchUnits++
 	if config.DefaultConfig.GlobalStatus.DebugMessages {
 		log.Debug().Msg("Added api search unit")
 	}
@@ -268,7 +268,7 @@ func (r *RequestStatus) AddCollectionSearchUnit() {
 	if !config.DefaultConfig.GlobalStatus.Enabled {
 		return
 	}
-	r.collectionSearchUnits += 1
+	r.collectionSearchUnits++
 	if config.DefaultConfig.GlobalStatus.DebugMessages {
 		log.Debug().Msg("Added collection search unit")
 	}
@@ -278,7 +278,7 @@ func (r *RequestStatus) AddDDLCreateUnit() {
 	if !config.DefaultConfig.GlobalStatus.Enabled {
 		return
 	}
-	r.ddlCreateUnits += 1
+	r.ddlCreateUnits++
 	if config.DefaultConfig.GlobalStatus.DebugMessages {
 		log.Debug().Msg("Add ddl create unit")
 	}
@@ -288,13 +288,13 @@ func (r *RequestStatus) AddDDLUpdateUnit() {
 	if !config.DefaultConfig.GlobalStatus.Enabled {
 		return
 	}
-	r.ddlUpdateUnits += 1
+	r.ddlUpdateUnits++
 	if config.DefaultConfig.GlobalStatus.DebugMessages {
 		log.Debug().Msg("Add ddl update unit")
 	}
 }
 
-func (r *RequestStatus) IsKeySecondaryIndex(fdbKey []byte) bool {
+func (*RequestStatus) IsKeySecondaryIndex(fdbKey []byte) bool {
 	if bytes.Contains(fdbKey, []byte("skey")) {
 		if config.DefaultConfig.GlobalStatus.DebugMessages {
 			log.Debug().Bytes("fdbKey", fdbKey).Msg("Is secondary index")
@@ -304,7 +304,7 @@ func (r *RequestStatus) IsKeySecondaryIndex(fdbKey []byte) bool {
 	return false
 }
 
-func (r *RequestStatus) IsSecondaryIndexFieldIgnored(fdbKey []byte) bool {
+func (*RequestStatus) IsSecondaryIndexFieldIgnored(fdbKey []byte) bool {
 	for _, ignoredField := range ignoredFieldsForWrites {
 		if bytes.Contains(fdbKey, ignoredField) {
 			if config.DefaultConfig.GlobalStatus.DebugMessages {

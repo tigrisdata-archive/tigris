@@ -16,11 +16,11 @@ package workload
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"sync"
 
 	"github.com/hashicorp/go-multierror"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris-client-go/driver"
 )
@@ -34,7 +34,7 @@ type InsertOnlyWorkload struct {
 	WorkloadData *Queue
 }
 
-func (w *InsertOnlyWorkload) Type() string {
+func (*InsertOnlyWorkload) Type() string {
 	return "insert_only_workload"
 }
 
@@ -55,12 +55,12 @@ func (w *InsertOnlyWorkload) Setup(client driver.Driver) error {
 
 	tx, err := client.UseDatabase(w.Database).BeginTx(ctx)
 	if err != nil {
-		return errors.Wrapf(err, "begin tx failed for db '%s'", w.Database)
+		return fmt.Errorf("%w begin tx failed for db '%s'", err, w.Database)
 	}
 
 	for i := 0; i < len(w.Schemas); i++ {
 		if err = tx.CreateOrUpdateCollection(ctx, w.Collections[i], w.Schemas[i]); err != nil {
-			return errors.Wrapf(err, "CreateOrUpdateCollection failed for db '%s' coll '%s'", w.Database, w.Collections[i])
+			return fmt.Errorf("%w CreateOrUpdateCollection failed for db '%s' coll '%s'", err, w.Database, w.Collections[i])
 		}
 	}
 
@@ -85,7 +85,7 @@ func (w *InsertOnlyWorkload) Start(client driver.Driver) (int64, error) {
 
 				for k := 0; k < len(w.Collections); k++ {
 					if _, err := client.UseDatabase(w.Database).Insert(context.TODO(), w.Collections[k], []driver.Document{serialized}); err != nil {
-						insertErr = multierror.Append(insertErr, errors.Wrapf(err, "insert to collection failed '%s' '%s'", w.Database, w.Collections[k]))
+						insertErr = multierror.Append(insertErr, fmt.Errorf("%w insert to collection failed '%s' '%s'", err, w.Database, w.Collections[k]))
 						return
 					}
 
@@ -106,7 +106,7 @@ func (w *InsertOnlyWorkload) Check(client driver.Driver) (bool, error) {
 	for _, collection := range w.Collections {
 		it, err := client.UseDatabase(w.Database).Read(context.TODO(), collection, driver.Filter(`{}`), nil)
 		if err != nil {
-			return false, errors.Wrapf(err, "read to collection failed '%s' '%s'", w.Database, collection)
+			return false, fmt.Errorf("%w read to collection failed '%s' '%s'", err, w.Database, collection)
 		}
 
 		queueDoc := NewQueueDocuments(collection)
@@ -115,7 +115,7 @@ func (w *InsertOnlyWorkload) Check(client driver.Driver) (bool, error) {
 			var document Document
 			err := Deserialize(doc, &document)
 			if err != nil {
-				return false, errors.Wrapf(err, "deserialzing document failed")
+				return false, fmt.Errorf("%w deserialzing document failed", err)
 			}
 			// log.Debug().Msgf("read document '%s' '%s' '%v'", w.Database, collection, document)
 			queueDoc.Add(&document)

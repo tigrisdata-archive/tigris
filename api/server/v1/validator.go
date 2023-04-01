@@ -25,27 +25,15 @@ type Validator interface {
 }
 
 func (x *BeginTransactionRequest) Validate() error {
-	if err := isValidDatabase(x.Project); err != nil {
-		return err
-	}
-
-	return nil
+	return isValidDatabase(x.Project)
 }
 
 func (x *CommitTransactionRequest) Validate() error {
-	if err := isValidDatabase(x.Project); err != nil {
-		return err
-	}
-
-	return nil
+	return isValidDatabase(x.Project)
 }
 
 func (x *RollbackTransactionRequest) Validate() error {
-	if err := isValidDatabase(x.Project); err != nil {
-		return err
-	}
-
-	return nil
+	return isValidDatabase(x.Project)
 }
 
 func (x *InsertRequest) Validate() error {
@@ -159,42 +147,30 @@ func (x *CreateOrUpdateCollectionRequest) Validate() error {
 }
 
 func (x *DropCollectionRequest) Validate() error {
-	if err := isValidCollectionAndDatabase(x.Collection, x.Project); err != nil {
-		return err
-	}
+	return isValidCollectionAndDatabase(x.Collection, x.Project)
+}
 
+func (*ListCollectionsRequest) Validate() error {
 	return nil
 }
 
-func (x *ListCollectionsRequest) Validate() error {
+func (*DescribeCollectionRequest) Validate() error {
 	return nil
 }
 
-func (x *DescribeCollectionRequest) Validate() error {
-	return nil
-}
-
-func (x *DescribeDatabaseRequest) Validate() error {
+func (*DescribeDatabaseRequest) Validate() error {
 	return nil
 }
 
 func (x *CreateProjectRequest) Validate() error {
-	if err := isValidDatabase(x.Project); err != nil {
-		return err
-	}
-
-	return nil
+	return isValidDatabase(x.Project)
 }
 
 func (x *DeleteProjectRequest) Validate() error {
-	if err := isValidDatabase(x.Project); err != nil {
-		return err
-	}
-
-	return nil
+	return isValidDatabase(x.Project)
 }
 
-func (x *ListProjectsRequest) Validate() error {
+func (*ListProjectsRequest) Validate() error {
 	return nil
 }
 
@@ -211,19 +187,11 @@ func (x *CreateOrUpdateIndexRequest) Validate() error {
 }
 
 func (x *DeleteIndexRequest) Validate() error {
-	if err := isValidProjectAndSearchIndex(x.Project, x.Name); err != nil {
-		return err
-	}
-
-	return nil
+	return isValidProjectAndSearchIndex(x.Project, x.Name)
 }
 
 func (x *GetIndexRequest) Validate() error {
-	if err := isValidProjectAndSearchIndex(x.Project, x.Name); err != nil {
-		return err
-	}
-
-	return nil
+	return isValidProjectAndSearchIndex(x.Project, x.Name)
 }
 
 func (x *CreateDocumentRequest) Validate() error {
@@ -316,11 +284,7 @@ func isValidCollectionAndDatabase(c string, db string) error {
 		return err
 	}
 
-	if err := isValidDatabase(db); err != nil {
-		return err
-	}
-
-	return nil
+	return isValidDatabase(db)
 }
 
 func isValidProjectAndSearchIndex(project string, index string) error {
@@ -328,11 +292,7 @@ func isValidProjectAndSearchIndex(project string, index string) error {
 		return err
 	}
 
-	if err := isValidSearchIndexName(index); err != nil {
-		return err
-	}
-
-	return nil
+	return isValidSearchIndexName(index)
 }
 
 func isValidPaginationParam(param string, value int) error {

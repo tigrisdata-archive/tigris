@@ -75,12 +75,12 @@ type SearchMetadata struct {
 }
 
 // StrId returns id assigned to the namespace.
-func (n *DefaultNamespace) StrId() string {
+func (*DefaultNamespace) StrId() string {
 	return defaults.DefaultNamespaceName
 }
 
 // Id returns id assigned to the namespace.
-func (n *DefaultNamespace) Id() uint32 {
+func (*DefaultNamespace) Id() uint32 {
 	return defaults.DefaultNamespaceId
 }
 
@@ -224,7 +224,7 @@ func (n *NamespaceSubspace) DeleteProjectMetadata(ctx context.Context, tx transa
 	)
 }
 
-func (n *NamespaceSubspace) validateProjectArgs(namespaceId uint32, projName string, metadata **ProjectMetadata) error {
+func (*NamespaceSubspace) validateProjectArgs(namespaceId uint32, projName string, metadata **ProjectMetadata) error {
 	if namespaceId < 1 {
 		return errors.InvalidArgument("invalid namespace, id must be greater than 0")
 	}
@@ -292,7 +292,7 @@ func (n *NamespaceSubspace) DeleteNamespace(ctx context.Context, tx transaction.
 	)
 }
 
-func (n *NamespaceSubspace) validateNSArgs(namespaceId uint32, metadataKey *string, value *[]byte) error {
+func (*NamespaceSubspace) validateNSArgs(namespaceId uint32, metadataKey *string, value *[]byte) error {
 	if namespaceId < 1 {
 		return errors.InvalidArgument("invalid namespace, id must be greater than 0")
 	}

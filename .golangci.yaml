@@ -24,7 +24,6 @@ linters:
     - lll
     - nlreturn
     - nosnakecase
-    - revive
     - stylecheck
     - wsl
     #- interfacebloat
@@ -74,3 +73,122 @@ linters-settings:
       limitations under the License.
   lll:
     line-length: 120
+
+  forbidigo:
+    forbid:
+      - '^errors\.Wrap$'
+      - '^errors\.Wrapf$'
+  revive:
+    enable-all-rules: true
+    rules:
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#add-constant
+      - name: add-constant
+        severity: warning
+        disabled: true
+        arguments:
+          - maxLitCount: "3"
+            allowStrs: '""'
+            allowInts: "0,1,2"
+            allowFloats: "0.0,0.,1.0,1.,2.0,2."
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#argument-limit
+      - name: argument-limit
+        arguments: [8]
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#banned-characters
+      - name: banned-characters
+        arguments: ["Ω"]
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#bare-return
+      - name: bare-return
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#cognitive-complexity
+      - name: cognitive-complexity
+        disabled: true
+        arguments: [22] # default 7
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#comment-spacings
+      - name: comment-spacings
+        disabled: true
+        arguments:
+          - nolint
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#confusing-naming
+      - name: confusing-naming
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#confusing-results
+      - name: confusing-results
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#context-as-argument
+      - name: context-as-argument
+        arguments:
+          - allowTypesBefore: "*testing.T"
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#cyclomatic
+      - name: cyclomatic
+        disabled: true
+        arguments: [25] # default 3
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#defer
+      - name: defer
+        arguments:
+          - ["call-chain", "loop"]
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#exported
+      - name: exported
+        disabled: true
+        arguments:
+          - "checkPrivateReceivers"
+          - "sayRepetitiveInsteadOfStutters"
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#file-header
+      - name: file-header
+        disabled: true
+        arguments:
+          - This is the text that must appear at the top of source files.
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#flag-parameter
+      - name: flag-parameter
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#function-result-limit
+      - name: function-result-limit
+        arguments: [4] # default 2
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#function-length
+      - name: function-length
+        disabled: true
+        arguments: [50, 0]
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#imports-blacklist
+      - name: imports-blacklist
+        arguments:
+          - "crypto/md5"
+          - "crypto/sha1"
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#import-shadowing
+      - name: import-shadowing
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#line-length-limit
+      - name: line-length-limit
+        disabled: true
+        arguments: [120]
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#max-public-structs
+      - name: max-public-structs
+        disabled: true
+        arguments: [3]
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#nested-structs
+      - name: nested-structs
+        disabled: true
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#string-format
+      - name: string-format
+        arguments:
+          - - 'core.WriteError[1].Message'
+            - '/^([^A-Z]|$)/'
+            - must not start with a capital letter
+          - - 'fmt.Errorf[0]'
+            - '/(^|[^\.!?])$/'
+            - must not end in punctuation
+          - - panic
+            - '/^[^\n]*$/'
+            - must not contain line breaks
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#struct-tag
+      - name: struct-tag
+        arguments:
+          - "json,inline"
+          - "bson,outline,gnu"
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#var-naming
+      - name: var-naming
+        disabled: true
+        arguments:
+          - ["ID", "JSON", "HTTP", "URL", "API"] # AllowList
+      # https://github.com/mgechev/revive/blob/master/RULES_DESCRIPTIONS.md#var-declaration
+      - name: unhandled-error
+        arguments:
+          - "fmt.Printf"

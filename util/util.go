@@ -38,9 +38,9 @@ const (
 var Version string
 
 // Service program name used in logging and monitoring.
-var Service string = "tigris-server"
+var Service = "tigris-server"
 
-func ExecTemplate(w io.Writer, tmpl string, vars interface{}) error {
+func ExecTemplate(w io.Writer, tmpl string, vars any) error {
 	t, err := template.New("exec_template").Funcs(template.FuncMap{"repeat": strings.Repeat}).Parse(tmpl)
 	if ulog.E(err) {
 		return err
@@ -144,7 +144,7 @@ func PrettyJSON(s any) error {
 	return nil
 }
 
-func Stdoutf(format string, args ...interface{}) {
+func Stdoutf(format string, args ...any) {
 	_, _ = fmt.Fprintf(os.Stdout, format, args...)
 }
 
@@ -152,7 +152,7 @@ func PrintError(err error) {
 	_, _ = fmt.Fprintf(os.Stderr, "%s\n", err.Error())
 }
 
-func Error(err error, msg string, args ...interface{}) error {
+func Error(err error, msg string, args ...any) error {
 	log.Err(err).CallerSkipFrame(3).Msgf(msg, args...)
 
 	if err == nil {
@@ -162,7 +162,7 @@ func Error(err error, msg string, args ...interface{}) error {
 	return err
 }
 
-func Fatal(err error, msg string, args ...interface{}) {
+func Fatal(err error, msg string, args ...any) {
 	if err == nil {
 		_ = Error(err, msg, args...)
 		return
@@ -172,7 +172,7 @@ func Fatal(err error, msg string, args ...interface{}) {
 
 	_ = Error(err, msg, args...)
 
-	os.Exit(1)
+	os.Exit(1) //nolint:revive
 }
 
 func RawMessageToByte(arr []jsoniter.RawMessage) [][]byte {

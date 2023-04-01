@@ -145,7 +145,7 @@ func (e *EqualityMatcher) ArrMatches(arr []any) bool {
 	return false
 }
 
-func (e *EqualityMatcher) Type() string {
+func (*EqualityMatcher) Type() string {
 	return "$eq"
 }
 
@@ -184,7 +184,7 @@ func (g *GreaterThanMatcher) ArrMatches(arr []any) bool {
 	return false
 }
 
-func (g *GreaterThanMatcher) Type() string {
+func (*GreaterThanMatcher) Type() string {
 	return "$gt"
 }
 
@@ -224,7 +224,7 @@ func (g *GreaterThanEqMatcher) ArrMatches(arr []any) bool {
 	return false
 }
 
-func (g *GreaterThanEqMatcher) Type() string {
+func (*GreaterThanEqMatcher) Type() string {
 	return "$gte"
 }
 
@@ -263,7 +263,7 @@ func (l *LessThanMatcher) ArrMatches(arr []any) bool {
 	return false
 }
 
-func (l *LessThanMatcher) Type() string {
+func (*LessThanMatcher) Type() string {
 	return "$lt"
 }
 
@@ -303,7 +303,7 @@ func (l *LessThanEqMatcher) ArrMatches(arr []any) bool {
 	return false
 }
 
-func (l *LessThanEqMatcher) Type() string {
+func (*LessThanEqMatcher) Type() string {
 	return "$lte"
 }
 
@@ -350,7 +350,7 @@ func (c *RegexMatcher) Matches(docValue any) bool {
 	return false
 }
 
-func (c *RegexMatcher) Type() string {
+func (*RegexMatcher) Type() string {
 	return "$regex"
 }
 
@@ -390,7 +390,7 @@ func (c *ContainsMatcher) Matches(docValue any) bool {
 	return false
 }
 
-func (c *ContainsMatcher) Type() string {
+func (*ContainsMatcher) Type() string {
 	return "$contains"
 }
 
@@ -431,7 +431,7 @@ func (n *NotMatcher) Matches(docValue any) bool {
 	return false
 }
 
-func (n *NotMatcher) Type() string {
+func (*NotMatcher) Type() string {
 	return "$not"
 }
 

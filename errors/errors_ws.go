@@ -44,7 +44,7 @@ func InternalWS(format string, args ...any) *api.ErrorEvent {
 	return Errorf(CloseInternalServerErr, format, args...)
 }
 
-func Errorf(c WSErrorCode, format string, a ...interface{}) *api.ErrorEvent {
+func Errorf(c WSErrorCode, format string, a ...any) *api.ErrorEvent {
 	if c == CodeOK {
 		return nil
 	}

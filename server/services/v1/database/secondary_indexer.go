@@ -45,11 +45,11 @@ type SecondaryIndexer interface {
 	// Read the document from the primary store and delete it from secondary indexes
 	ReadDocAndDelete(ctx context.Context, tx transaction.Tx, key keys.Key) (int32, error)
 	// Delete document from the secondary index
-	Delete(ctx context.Context, tx transaction.Tx, td *internal.TableData, primaryKey []interface{}) error
+	Delete(ctx context.Context, tx transaction.Tx, td *internal.TableData, primaryKey []any) error
 	// Index new document
-	Index(ctx context.Context, tx transaction.Tx, td *internal.TableData, primaryKey []interface{}) error
+	Index(ctx context.Context, tx transaction.Tx, td *internal.TableData, primaryKey []any) error
 	// Update an existing document in the secondary index
-	Update(ctx context.Context, tx transaction.Tx, newTd *internal.TableData, oldTd *internal.TableData, primaryKey []interface{}) error
+	Update(ctx context.Context, tx transaction.Tx, newTd *internal.TableData, oldTd *internal.TableData, primaryKey []any) error
 	// Delete the KVS for an index
 	DeleteIndex(ctx context.Context, tx transaction.Tx, index *schema.Index) error
 }
@@ -184,7 +184,7 @@ func (q *SecondaryIndexerImpl) BuildCollection(ctx context.Context, txMgr *trans
 			if err = q.Index(ctx, tx, row.Data, fdbKey.IndexParts()); err != nil {
 				return err
 			}
-			count += 1
+			count++
 		}
 
 		if err = tx.Commit(ctx); err != nil {
@@ -195,12 +195,11 @@ func (q *SecondaryIndexerImpl) BuildCollection(ctx context.Context, txMgr *trans
 			docFetch /= 2
 			count = 0
 			continue
-		} else {
-			// Clear first so that we will read from the last key in the index
-			first = nil
 		}
+		// Clear first so that we will read from the last key in the index
+		first = nil
 
-		batchCount += 1
+		batchCount++
 		// No more items to fetch
 		if count < docFetch {
 			log.Info().Msgf("Collection '%s' built in %d batches with %d docs per batch", q.coll.Name, batchCount, docFetch)
@@ -285,7 +284,7 @@ func (q *SecondaryIndexerImpl) IndexInfo(ctx context.Context, tx transaction.Tx)
 
 	var val kv.KeyValue
 	for iter.Next(&val) {
-		rows += 1
+		rows++
 	}
 	if iter.Err() != nil {
 		return nil, iter.Err()
@@ -315,15 +314,15 @@ func (q *SecondaryIndexerImpl) ReadDocAndDelete(ctx context.Context, tx transact
 	return 0, iter.Err()
 }
 
-func (q *SecondaryIndexerImpl) Delete(ctx context.Context, tx transaction.Tx, td *internal.TableData, primaryKey []interface{}) error {
+func (q *SecondaryIndexerImpl) Delete(ctx context.Context, tx transaction.Tx, td *internal.TableData, primaryKey []any) error {
 	return q.Update(ctx, tx, nil, td, primaryKey)
 }
 
-func (q *SecondaryIndexerImpl) Index(ctx context.Context, tx transaction.Tx, td *internal.TableData, primaryKey []interface{}) error {
+func (q *SecondaryIndexerImpl) Index(ctx context.Context, tx transaction.Tx, td *internal.TableData, primaryKey []any) error {
 	return q.Update(ctx, tx, td, nil, primaryKey)
 }
 
-func (q *SecondaryIndexerImpl) Update(ctx context.Context, tx transaction.Tx, newTd *internal.TableData, oldTd *internal.TableData, primaryKey []interface{}) error {
+func (q *SecondaryIndexerImpl) Update(ctx context.Context, tx transaction.Tx, newTd *internal.TableData, oldTd *internal.TableData, primaryKey []any) error {
 	if len(q.coll.EncodedTableIndexName) == 0 {
 		return fmt.Errorf("could not index collection %s, encoded table not set", q.coll.Name)
 	}
@@ -364,7 +363,7 @@ func (q *SecondaryIndexerImpl) Update(ctx context.Context, tx transaction.Tx, ne
 // 3. Remove keys from the new doc that are exactly the same as the old doc
 // 4. Create list of keys to remove and size and counts fields to be decremented
 // 5. Create list of keys to add to index along with size and count fields to be decremented.
-func (q *SecondaryIndexerImpl) buildAddAndRemoveKVs(newTableData *internal.TableData, oldTableData *internal.TableData, primaryKey []interface{}) (*IndexerUpdateSet, error) {
+func (q *SecondaryIndexerImpl) buildAddAndRemoveKVs(newTableData *internal.TableData, oldTableData *internal.TableData, primaryKey []any) (*IndexerUpdateSet, error) {
 	newRows, err := q.buildTableRows(newTableData)
 	if err != nil {
 		return nil, err
@@ -411,10 +410,9 @@ func (q *SecondaryIndexerImpl) buildTableRows(tableData *internal.TableData) ([]
 			if err != nil {
 				if isIgnoreableError(err) {
 					continue
-				} else {
-					log.Err(err).Msgf("Failed to index field name: %s", field.FieldName)
-					return nil, err
 				}
+				log.Err(err).Msgf("Failed to index field name: %s", field.FieldName)
+				return nil, err
 			}
 			rows = append(rows, newRows...)
 		} else {
@@ -422,10 +420,9 @@ func (q *SecondaryIndexerImpl) buildTableRows(tableData *internal.TableData) ([]
 			if err != nil {
 				if isIgnoreableError(err) {
 					continue
-				} else {
-					log.Err(err).Msgf("Failed to index field name: %s", field.FieldName)
-					return nil, err
 				}
+				log.Err(err).Msgf("Failed to index field name: %s", field.FieldName)
+				return nil, err
 			}
 			rows = append(rows, *row)
 		}
@@ -434,8 +431,6 @@ func (q *SecondaryIndexerImpl) buildTableRows(tableData *internal.TableData) ([]
 }
 
 func (q *SecondaryIndexerImpl) buildTSRows(tableData *internal.TableData) ([]IndexRow, error) {
-	var rows []IndexRow
-
 	timeStamps := []struct {
 		ts    *internal.Timestamp
 		field schema.ReservedField
@@ -450,6 +445,8 @@ func (q *SecondaryIndexerImpl) buildTSRows(tableData *internal.TableData) ([]Ind
 		},
 	}
 
+	rows := make([]IndexRow, 0, len(timeStamps))
+
 	for _, ts := range timeStamps {
 		val := []byte{}
 		dt := schema.NullType
@@ -460,22 +457,17 @@ func (q *SecondaryIndexerImpl) buildTSRows(tableData *internal.TableData) ([]Ind
 
 		row, err := newIndexRow(dt, q.collation, schema.ReservedFields[ts.field], val, 0, false)
 		if err != nil {
-			return nil, err
-		}
-		if err == nil {
-			rows = append(rows, *row)
-		} else {
 			if isIgnoreableError(err) {
 				continue
-			} else {
-				return nil, err
 			}
+			return nil, err
 		}
+		rows = append(rows, *row)
 	}
 	return rows, nil
 }
 
-func (q *SecondaryIndexerImpl) buildIndexKey(row IndexRow, primaryKey []interface{}) keys.Key {
+func (q *SecondaryIndexerImpl) buildIndexKey(row IndexRow, primaryKey []any) keys.Key {
 	if row.null {
 		return newKeyWithPrimaryKey(primaryKey, q.coll.EncodedTableIndexName, q.coll.SecondaryIndexKeyword(), KVSubspace, row.Name(), value.SecondaryNullOrder(), row.value.AsInterface(), row.pos)
 	}
@@ -484,7 +476,7 @@ func (q *SecondaryIndexerImpl) buildIndexKey(row IndexRow, primaryKey []interfac
 	return newKeyWithPrimaryKey(primaryKey, q.coll.EncodedTableIndexName, q.coll.SecondaryIndexKeyword(), KVSubspace, row.Name(), dataTypeOrder, row.value.AsInterface(), row.pos)
 }
 
-func (q *SecondaryIndexerImpl) createKeysAndIndexInfo(primaryKey []interface{}, rows []IndexRow) ([]keys.Key, map[string]int64, map[string]int64) {
+func (q *SecondaryIndexerImpl) createKeysAndIndexInfo(primaryKey []any, rows []IndexRow) ([]keys.Key, map[string]int64, map[string]int64) {
 	indexKeys := make([]keys.Key, 0, len(rows))
 	sizeIncrease := int64(0)
 	stubs := map[string]bool{}
@@ -494,9 +486,8 @@ func (q *SecondaryIndexerImpl) createKeysAndIndexInfo(primaryKey []interface{}, 
 		// Only add one stub per repeated nested field to indicate this document contains the nested field
 		if row.stub && stubs[row.Name()] {
 			continue
-		} else {
-			stubs[row.Name()] = true
 		}
+		stubs[row.Name()] = true
 
 		indexKey := q.buildIndexKey(row, primaryKey)
 		indexKeys = append(indexKeys, indexKey)
@@ -573,11 +564,10 @@ func (q *SecondaryIndexerImpl) indexNestedField(doc []byte, topField string, pos
 	}
 	err := jsonparser.ObjectEach(doc, processor)
 	if err != nil {
-		if isIgnoreableError(err) {
-			log.Err(err).Msgf("Failed to index field name: %s", topField)
-		} else {
+		if !isIgnoreableError(err) {
 			return nil, err
 		}
+		log.Err(err).Msgf("Failed to index field name: %s", topField)
 	}
 	return indexedFields, nil
 }
@@ -613,7 +603,7 @@ func (q *SecondaryIndexerImpl) indexArray(doc []byte, field *schema.QueryableFie
 			}
 			rows = append(rows, *indexedField)
 		}
-		pos += 1
+		pos++
 	}
 
 	if errProcessor != nil {
@@ -641,7 +631,7 @@ func (q *SecondaryIndexerImpl) getIndexedFields() []*schema.QueryableField {
 }
 
 // This is used to append the Primary key to the end of the key.
-func newKeyWithPrimaryKey(id []interface{}, table []byte, indexParts ...interface{}) keys.Key {
+func newKeyWithPrimaryKey(id []any, table []byte, indexParts ...any) keys.Key {
 	indexParts = append(indexParts, id...)
 	return keys.NewKey(table, indexParts...)
 }

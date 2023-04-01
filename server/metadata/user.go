@@ -111,7 +111,7 @@ func (u *UserSubspace) DeleteUser(ctx context.Context, tx transaction.Tx, namesp
 	)
 }
 
-func (u *UserSubspace) validateArgs(namespaceId uint32, userId string, metadataKey *string, payload *[]byte) error {
+func (*UserSubspace) validateArgs(namespaceId uint32, userId string, metadataKey *string, payload *[]byte) error {
 	if namespaceId < 1 {
 		return errors.InvalidArgument("invalid namespace, id must be greater than 0")
 	}

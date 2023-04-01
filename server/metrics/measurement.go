@@ -88,7 +88,7 @@ func (m *Measurement) countOk(scope tally.Scope, tags map[string]string) {
 	m.IncrementCount(scope, tags, "ok", 1)
 }
 
-func (m *Measurement) IncrementCount(scope tally.Scope, tags map[string]string, counterName string, count int64) {
+func (*Measurement) IncrementCount(scope tally.Scope, tags map[string]string, counterName string, count int64) {
 	scope.Tagged(tags).Counter(counterName).Inc(count)
 }
 
@@ -96,7 +96,7 @@ func (m *Measurement) SetNDocs(value int64) {
 	m.nDocs += value
 }
 
-func (m *Measurement) CountUnits(reqStatus *RequestStatus, tags map[string]string) {
+func (*Measurement) CountUnits(reqStatus *RequestStatus, tags map[string]string) {
 	if !config.DefaultConfig.GlobalStatus.EmitMetrics {
 		return
 	}
@@ -119,7 +119,7 @@ func (m *Measurement) CountErrorForScope(scope tally.Scope, tags map[string]stri
 	}
 }
 
-func (m *Measurement) countError(scope tally.Scope, tags map[string]string) {
+func (*Measurement) countError(scope tally.Scope, tags map[string]string) {
 	scope.Tagged(tags).Counter("error").Inc(1)
 }
 

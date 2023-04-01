@@ -84,7 +84,7 @@ func (ub *UsageEventBuilder) Build() *UsageEvent {
 		ub.timestamp = time.Now()
 	}
 	billingMetric.Timestamp = ub.timestamp.Format(TimeFormat)
-	props := make(map[string]interface{})
+	props := make(map[string]any)
 
 	// auto generate transaction id
 	if len(ub.transactionId) != 0 {
@@ -154,7 +154,7 @@ func (sb *StorageEventBuilder) Build() *StorageEvent {
 		sb.timestamp = time.Now()
 	}
 	billingMetric.Timestamp = sb.timestamp.Format(TimeFormat)
-	props := make(map[string]interface{})
+	props := make(map[string]any)
 
 	// auto generate transaction id
 	if len(sb.transactionId) != 0 {

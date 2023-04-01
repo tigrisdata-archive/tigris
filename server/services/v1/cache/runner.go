@@ -270,7 +270,7 @@ func (runner *GetSetRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 		return Response{}, errors.Internal("Failed to invoke set, reason %s", err.Error())
 	}
 
-	var result Response = Response{
+	result := Response{
 		Status: SetStatus,
 	}
 

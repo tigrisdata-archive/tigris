@@ -34,8 +34,8 @@ var (
 	namespaceExtractor = &request.AccessTokenNamespaceExtractor{}
 )
 
-func namespaceSetterUnaryServerInterceptor(enabled bool) func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func namespaceSetterUnaryServerInterceptor(enabled bool) func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		namespace := defaults.DefaultNamespaceName
 		reqMetadata, err := request.GetRequestMetadataFromContext(ctx)
 		if err != nil {
@@ -59,7 +59,7 @@ func namespaceSetterUnaryServerInterceptor(enabled bool) func(ctx context.Contex
 }
 
 func namespaceSetterStreamServerInterceptor(enabled bool) grpc.StreamServerInterceptor {
-	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	return func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		namespace := defaults.DefaultNamespaceName
 		if enabled {
 			var err error

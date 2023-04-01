@@ -51,7 +51,7 @@ type IndexDocumentsOptions struct {
 	BatchSize int
 }
 
-func (s *storeImpl) convertToInternalError(err error) error {
+func (*storeImpl) convertToInternalError(err error) error {
 	if e, ok := err.(*typesense.HTTPError); ok {
 		msgMap, decErr := util.JSONToMap(e.Body)
 		if decErr != nil {
@@ -114,7 +114,7 @@ func (s *storeImpl) IndexDocuments(_ context.Context, table string, reader io.Re
 	return responses, nil
 }
 
-func (s *storeImpl) getBaseSearchParam(table string, query *qsearch.Query, pageNo int) tsApi.MultiSearchCollectionParameters {
+func (*storeImpl) getBaseSearchParam(table string, query *qsearch.Query, pageNo int) tsApi.MultiSearchCollectionParameters {
 	baseParam := tsApi.MultiSearchCollectionParameters{
 		Q:          &query.Q,
 		Collection: table,
@@ -230,7 +230,7 @@ func (s *storeImpl) DropCollection(_ context.Context, table string) error {
 	return s.convertToInternalError(err)
 }
 
-func (s *storeImpl) GetDocuments(ctx context.Context, table string, ids []string) (*tsApi.SearchResult, error) {
+func (s *storeImpl) GetDocuments(_ context.Context, table string, ids []string) (*tsApi.SearchResult, error) {
 	filterBy := "id: ["
 	for i, id := range ids {
 		if i != 0 {

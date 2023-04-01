@@ -331,7 +331,7 @@ func FromStatusError(err error) *TigrisError {
 
 // Errorf constructs TigrisError.
 // This is the only error server code should return.
-func Errorf(c Code, format string, a ...interface{}) *TigrisError {
+func Errorf(c Code, format string, a ...any) *TigrisError {
 	if c == Code_OK {
 		return nil
 	}

@@ -252,7 +252,7 @@ func TestCreateCollection(t *testing.T) {
 	t.Run("status_conflict", func(t *testing.T) {
 		dropCollection(t, db, coll)
 
-		createOrUpdateOptions := map[string]interface{}{
+		createOrUpdateOptions := map[string]any{
 			"only_create": true,
 		}
 		for key, value := range testCreateSchema {

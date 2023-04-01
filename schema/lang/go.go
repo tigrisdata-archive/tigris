@@ -17,7 +17,6 @@ package schema
 import (
 	"fmt"
 
-	"github.com/pkg/errors"
 	"github.com/tigrisdata/tigris/templates"
 )
 
@@ -58,7 +57,7 @@ func (*JSONToGo) GetType(tp string, format string) (string, error) {
 	}
 
 	if resType == "" {
-		return "", errors.Wrapf(ErrUnsupportedType, "type=%s, format=%s", tp, format)
+		return "", fmt.Errorf("%w type=%s, format=%s", ErrUnsupportedType, tp, format)
 	}
 
 	return resType, nil

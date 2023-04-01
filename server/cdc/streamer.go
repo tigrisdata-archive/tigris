@@ -35,7 +35,7 @@ type Streamer struct {
 }
 
 func (s *Streamer) start() error {
-	key, err := s.db.ReadTransact(func(rtx fdb.ReadTransaction) (interface{}, error) {
+	key, err := s.db.ReadTransact(func(rtx fdb.ReadTransaction) (any, error) {
 		kr := fdb.KeyRange{Begin: s.keySpace.beginKey, End: s.keySpace.endKey}
 		r := rtx.GetRange(kr, fdb.RangeOptions{Limit: 1, Reverse: true})
 
@@ -46,9 +46,8 @@ func (s *Streamer) start() error {
 				return nil, err
 			}
 			return kv.Key, nil
-		} else {
-			return s.keySpace.beginKey, nil
 		}
+		return s.keySpace.beginKey, nil
 	})
 	if err != nil {
 		return err
@@ -70,7 +69,7 @@ func (s *Streamer) start() error {
 }
 
 func (s *Streamer) read() error {
-	_, err := s.db.ReadTransact(func(rtx fdb.ReadTransaction) (interface{}, error) {
+	_, err := s.db.ReadTransact(func(rtx fdb.ReadTransaction) (any, error) {
 		kr := fdb.KeyRange{Begin: s.lastKey, End: s.keySpace.endKey}
 		r := rtx.GetRange(kr, fdb.RangeOptions{Limit: s.cfg.StreamBatch})
 
@@ -98,14 +97,14 @@ func (s *Streamer) read() error {
 
 			tx.Id = kv.Key
 
-			if len(s.Txs) < cap(s.Txs) {
-				s.lastKey = kv.Key
-				s.Txs <- tx
-			} else {
+			if len(s.Txs) >= cap(s.Txs) {
 				// buffer overflow
 				close(s.Txs)
 				break
 			}
+
+			s.lastKey = kv.Key
+			s.Txs <- tx
 		}
 
 		return nil, nil

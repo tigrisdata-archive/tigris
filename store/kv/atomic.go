@@ -78,7 +78,7 @@ func (s *shardedAtomics) AtomicAddTx(ctx context.Context, tx Tx, table []byte, k
 }
 
 // AtomicReadTx calculates the value by summing all the shards in the transaction.
-func (s *shardedAtomics) AtomicReadTx(ctx context.Context, tx Tx, table []byte, key Key) (int64, error) {
+func (*shardedAtomics) AtomicReadTx(ctx context.Context, tx Tx, table []byte, key Key) (int64, error) {
 	it, err := tx.AtomicReadPrefix(ctx, table, key, true)
 	if err != nil {
 		return 0, err

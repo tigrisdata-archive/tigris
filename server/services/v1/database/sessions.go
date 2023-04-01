@@ -72,7 +72,7 @@ type SessionManagerWithMetrics struct {
 	s *SessionManager
 }
 
-func (m *SessionManagerWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
+func (*SessionManagerWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
 	measurement := metrics.NewMeasurement(metrics.SessionManagerServiceName, name, metrics.SessionSpanType, metrics.GetSessionTags(name))
 	ctx = measurement.StartTracing(ctx, true)
 	if err := f(ctx); err != nil {
@@ -423,7 +423,7 @@ func (s *QuerySession) Commit(versionMgr *metadata.VersionHandler, incVersion bo
 	return err
 }
 
-func (sessMgr *SessionManager) askMetadataCluster(ctx context.Context, namespaceId string) (*api.NamespaceInfo, error) {
+func (*SessionManager) askMetadataCluster(ctx context.Context, namespaceId string) (*api.NamespaceInfo, error) {
 	log.
 		Debug().
 		Str(Component, NamespaceLocalization).

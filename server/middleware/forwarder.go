@@ -90,6 +90,7 @@ func getClient(ctx context.Context, origin string) (*grpc.ClientConn, error) {
 	return conn, nil
 }
 
+//revive:disable:function-result-limit
 func proxyDirector(ctx context.Context, method string) (context.Context, *grpc.ClientConn, proto.Message, proto.Message, error) {
 	client, err := getClient(ctx, api.GetTransaction(ctx).GetOrigin())
 
@@ -100,7 +101,7 @@ func proxyDirector(ctx context.Context, method string) (context.Context, *grpc.C
 }
 
 func forwarderStreamServerInterceptor() grpc.StreamServerInterceptor {
-	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	return func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		txCtx := api.GetTransaction(stream.Context())
 
 		if txCtx != nil && txCtx.GetOrigin() != types.MyOrigin {
@@ -113,7 +114,7 @@ func forwarderStreamServerInterceptor() grpc.StreamServerInterceptor {
 	}
 }
 
-func forwardRequest(ctx context.Context, method string, req proto.Message) (interface{}, error) {
+func forwardRequest(ctx context.Context, method string, req proto.Message) (any, error) {
 	oCtx, client, _, resp, err := proxyDirector(ctx, method)
 	if err != nil {
 		return nil, err
@@ -127,7 +128,7 @@ func forwardRequest(ctx context.Context, method string, req proto.Message) (inte
 }
 
 func forwarderUnaryServerInterceptor() grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (iface interface{}, err error) {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (iface any, err error) {
 		txCtx := api.GetTransaction(ctx)
 
 		if txCtx != nil && txCtx.GetOrigin() != types.MyOrigin {
@@ -140,7 +141,7 @@ func forwarderUnaryServerInterceptor() grpc.UnaryServerInterceptor {
 	}
 }
 
-func proxyHandler(_ interface{}, serverStream grpc.ServerStream) error {
+func proxyHandler(_ any, serverStream grpc.ServerStream) error {
 	fullMethodName, ok := grpc.MethodFromServerStream(serverStream)
 	if !ok {
 		return errors.Internal("failed to determine method name")

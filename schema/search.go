@@ -132,7 +132,7 @@ func (fb *FactoryBuilder) BuildSearch(index string, reqSchema jsoniter.RawMessag
 	return factory, nil
 }
 
-func (fb *FactoryBuilder) validateSearchSchema(factory *SearchFactory) error {
+func (*FactoryBuilder) validateSearchSchema(factory *SearchFactory) error {
 	if factory.Source.Type != SearchSourceExternal {
 		return errors.InvalidArgument("unsupported index source '%s'", factory.Source.Type)
 	}

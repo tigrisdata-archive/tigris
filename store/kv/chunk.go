@@ -60,7 +60,7 @@ func (store *ChunkTxStore) BeginTx(ctx context.Context) (Tx, error) {
 	}, nil
 }
 
-func (tx *ChunkTx) executeChunks(data *internal.TableData, cb chunkCB) error {
+func (*ChunkTx) executeChunks(data *internal.TableData, cb chunkCB) error {
 	originalDoc := data.RawData
 	chunk := int32(0)
 	for start := 0; start < len(originalDoc); start += chunkSize {
@@ -178,7 +178,7 @@ func (it *ChunkIterator) Next(value *KeyValue) bool {
 	}
 
 	var buf bytes.Buffer
-	buf.Write(value.Data.RawData)
+	_, _ = buf.Write(value.Data.RawData)
 	hasNext := false
 	chunk := int32(1)
 	for ; chunk < *value.Data.TotalChunks; chunk++ {
@@ -191,7 +191,7 @@ func (it *ChunkIterator) Next(value *KeyValue) bool {
 			return false
 		}
 
-		buf.Write(chunked.Data.RawData)
+		_, _ = buf.Write(chunked.Data.RawData)
 	}
 	if it.Iterator.Err() != nil {
 		// there can be an error in between so we need to return that error

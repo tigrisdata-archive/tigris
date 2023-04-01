@@ -64,7 +64,7 @@ func (g *TableKeyGenerator) GenerateCounter(ctx context.Context, txMgr *transact
 // generateCounter as it is used to generate int32 value, we are simply maintaining a counter. There is a contention to
 // generate a counter if it is concurrently getting executed but the generation should be fast then it is best to start
 // with this approach.
-func (g *TableKeyGenerator) generateCounter(ctx context.Context, tx transaction.Tx, table []byte) (int32, error) {
+func (*TableKeyGenerator) generateCounter(ctx context.Context, tx transaction.Tx, table []byte) (int32, error) {
 	key := keys.NewKey([]byte(generatorSubspaceKey), table, int32IdKey)
 	it, err := tx.Read(ctx, key, false)
 	if err != nil {
@@ -87,11 +87,7 @@ func (g *TableKeyGenerator) generateCounter(ctx context.Context, tx transaction.
 	return int32(id), nil
 }
 
-func (g *TableKeyGenerator) removeCounter(ctx context.Context, tx transaction.Tx, table []byte) error {
+func (*TableKeyGenerator) removeCounter(ctx context.Context, tx transaction.Tx, table []byte) error {
 	key := keys.NewKey([]byte(generatorSubspaceKey), table, int32IdKey)
-	if err := tx.Delete(ctx, key); err != nil {
-		return err
-	}
-
-	return nil
+	return tx.Delete(ctx, key)
 }

@@ -56,7 +56,7 @@ type StoreError struct {
 	msg     string
 }
 
-func NewStoreError(fdbCode int, code StoreErrCode, msg string, args ...interface{}) error {
+func NewStoreError(fdbCode int, code StoreErrCode, msg string, args ...any) error {
 	return StoreError{fdbCode: fdbCode, code: code, msg: fmt.Sprintf(msg, args...)}
 }
 

@@ -94,10 +94,10 @@ func (w *DropCreateWriteWorkload) Start(client driver.Driver) (int64, error) {
 	return w.Records * int64(w.Threads), workloadErr
 }
 
-func (w *DropCreateWriteWorkload) Check(_ driver.Driver) (bool, error) {
+func (*DropCreateWriteWorkload) Check(_ driver.Driver) (bool, error) {
 	return true, nil
 }
 
-func (w *DropCreateWriteWorkload) Type() string {
+func (*DropCreateWriteWorkload) Type() string {
 	return "drop_create_write"
 }

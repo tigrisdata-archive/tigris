@@ -128,7 +128,7 @@ func (d *DatabaseSubspace) insert(ctx context.Context, tx transaction.Tx, nsID u
 	)
 }
 
-func (_ *DatabaseSubspace) decodeMetadata(_ string, payload *internal.TableData) (*DatabaseMetadata, error) {
+func (*DatabaseSubspace) decodeMetadata(_ string, payload *internal.TableData) (*DatabaseMetadata, error) {
 	if payload == nil {
 		return nil, errors.ErrNotFound
 	}
@@ -185,7 +185,7 @@ func (d *DatabaseSubspace) softDelete(ctx context.Context, tx transaction.Tx, ns
 	)
 }
 
-func (d *DatabaseSubspace) validateArgs(nsID uint32, name string, metadata **DatabaseMetadata) error {
+func (*DatabaseSubspace) validateArgs(nsID uint32, name string, metadata **DatabaseMetadata) error {
 	if nsID == 0 {
 		return errors.InvalidArgument("invalid id")
 	}
@@ -294,7 +294,7 @@ func UpdateSchemaVersion(ctx context.Context, metaStore *Dictionary, tx transact
 				// if db schema version already set, ensure it's sequential
 				return errors.InvalidArgument("next schema version should be %v", dbMeta.SchemaVersion+1)
 			case dbMeta.SchemaVersion+1 == schFactory.Version:
-				dbMeta.SchemaVersion += 1
+				dbMeta.SchemaVersion++
 			}
 
 			db.PendingSchemaVersion = dbMeta.SchemaVersion

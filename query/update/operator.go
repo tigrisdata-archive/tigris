@@ -126,7 +126,7 @@ func isPrimaryKeyMutation(collection *schema.DefaultCollection, mutationKey stri
 	return field != nil && field.IsPrimaryKey()
 }
 
-func (factory *FieldOperatorFactory) remove(collection *schema.DefaultCollection, out jsoniter.RawMessage, operator *FieldOperator) (jsoniter.RawMessage, bool, error) {
+func (*FieldOperatorFactory) remove(collection *schema.DefaultCollection, out jsoniter.RawMessage, operator *FieldOperator) (jsoniter.RawMessage, bool, error) {
 	var unsetArray []string
 	if err := jsoniter.Unmarshal(operator.Input, &unsetArray); err != nil {
 		return nil, false, err
@@ -218,7 +218,7 @@ func (factory *FieldOperatorFactory) buildKeysForObjectsInternal(parent string, 
 	return err
 }
 
-func (factory *FieldOperatorFactory) atomicOperations(collection *schema.DefaultCollection, existingDoc jsoniter.RawMessage, operator *FieldOperator) (jsoniter.RawMessage, bool, error) {
+func (*FieldOperatorFactory) atomicOperations(collection *schema.DefaultCollection, existingDoc jsoniter.RawMessage, operator *FieldOperator) (jsoniter.RawMessage, bool, error) {
 	var output []byte = existingDoc
 	var atomicInput map[string]float64
 	if err := jsoniter.Unmarshal(operator.Input, &atomicInput); err != nil {

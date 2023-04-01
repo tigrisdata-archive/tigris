@@ -53,7 +53,7 @@ func (c *node) Wait(ctx context.Context, namespace string, size int, isWrite boo
 	return c.getState(namespace).Wait(ctx, units, isWrite)
 }
 
-func (c *node) Cleanup() {}
+func (*node) Cleanup() {}
 
 func (c *node) getState(_ string) *State {
 	return c.state

@@ -24,7 +24,7 @@ import (
 
 type noop struct{}
 
-func (n *noop) CreateAccount(_ context.Context, _ string, _ string) (AccountId, error) {
+func (*noop) CreateAccount(_ context.Context, _ string, _ string) (AccountId, error) {
 	return uuid.Nil, errors.Unimplemented("billing not enabled on this server")
 }
 

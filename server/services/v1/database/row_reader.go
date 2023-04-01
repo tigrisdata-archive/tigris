@@ -169,30 +169,30 @@ func (it *FilterIterator) advanceToMatchingRow(row *Row) bool {
 	return it.filter.Matches(row.Data.RawData, tsJSON)
 }
 
-type DatabaseReader struct {
+type Reader struct {
 	tx  transaction.Tx
 	ctx context.Context
 }
 
-func NewDatabaseReader(ctx context.Context, tx transaction.Tx) *DatabaseReader {
-	return &DatabaseReader{
+func NewDatabaseReader(ctx context.Context, tx transaction.Tx) *Reader {
+	return &Reader{
 		ctx: ctx,
 		tx:  tx,
 	}
 }
 
 // ScanTable returns an iterator for all the rows in this table.
-func (reader *DatabaseReader) ScanTable(table []byte, reverse bool) (Iterator, error) {
+func (reader *Reader) ScanTable(table []byte, reverse bool) (Iterator, error) {
 	return NewKeyIterator(reader.ctx, reader.tx, []keys.Key{keys.NewKey(table)}, reverse)
 }
 
 // ScanIterator only returns an iterator that has elements starting from.
-func (reader *DatabaseReader) ScanIterator(from keys.Key, to keys.Key, reverse bool) (Iterator, error) {
+func (reader *Reader) ScanIterator(from keys.Key, to keys.Key, reverse bool) (Iterator, error) {
 	return NewScanIterator(reader.ctx, reader.tx, from, to, reverse)
 }
 
 // StrictlyKeysFrom is an optimized version that takes input keys and filter out keys that are lower than the "from".
-func (reader *DatabaseReader) StrictlyKeysFrom(ikeys []keys.Key, from []byte) (Iterator, error) {
+func (reader *Reader) StrictlyKeysFrom(ikeys []keys.Key, from []byte) (Iterator, error) {
 	// this means we have returned data to the user, and now we need to stream again but only from the last offset
 	// therefore we need to prune keys that are not needed, i.e. lower by this offset
 	var toReadKeys []keys.Key
@@ -206,11 +206,11 @@ func (reader *DatabaseReader) StrictlyKeysFrom(ikeys []keys.Key, from []byte) (I
 }
 
 // KeyIterator returns an iterator that iterates on a key or a set of keys.
-func (reader *DatabaseReader) KeyIterator(ikeys []keys.Key) (Iterator, error) {
+func (reader *Reader) KeyIterator(ikeys []keys.Key) (Iterator, error) {
 	return NewKeyIterator(reader.ctx, reader.tx, ikeys, false)
 }
 
 // FilteredRead returns an iterator that implicitly will be doing filtering on the iterator.
-func (reader *DatabaseReader) FilteredRead(iterator Iterator, filter *filter.WrappedFilter) (Iterator, error) {
+func (*Reader) FilteredRead(iterator Iterator, filter *filter.WrappedFilter) (Iterator, error) {
 	return NewFilterIterator(iterator, filter), nil
 }

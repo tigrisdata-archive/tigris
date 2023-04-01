@@ -137,7 +137,7 @@ func (runner *ReadRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Res
 		return Response{}, err
 	}
 
-	idToHits := make(map[string]*map[string]interface{})
+	idToHits := make(map[string]*map[string]any)
 	for _, hit := range *result.Hits {
 		// at this point we can safely rely on accessing "schema.SearchId" because we always inject it as top level key.
 		idToHits[(*hit.Document)[schema.SearchId].(string)] = hit.Document
@@ -459,7 +459,7 @@ func (runner *UpdateRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 	}, nil
 }
 
-func (runner *UpdateRunner) getMergedData(input jsoniter.RawMessage, existing jsoniter.RawMessage) (jsoniter.RawMessage, error) {
+func (*UpdateRunner) getMergedData(input jsoniter.RawMessage, existing jsoniter.RawMessage) (jsoniter.RawMessage, error) {
 	var err error
 	output := existing
 	err = jsonparser.ObjectEach(input, func(key []byte, value []byte, dataType jsonparser.ValueType, offset int) error {
@@ -502,9 +502,8 @@ func (runner *DeleteRunner) SetDeleteByQueryReq(req *api.DeleteByQueryRequest) {
 func (runner *DeleteRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Response, error) {
 	if runner.reqByQuery != nil {
 		return runner.deleteDocumentsByQuery(ctx, tenant, runner.reqByQuery)
-	} else {
-		return runner.deleteDocumentsById(ctx, tenant, runner.req)
 	}
+	return runner.deleteDocumentsById(ctx, tenant, runner.req)
 }
 
 func (runner *DeleteRunner) deleteDocumentsById(ctx context.Context, tenant *metadata.Tenant, req *api.DeleteDocumentRequest) (Response, error) {
@@ -639,7 +638,7 @@ func (runner *SearchRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 		return Response{}, errors.InvalidArgument("Currently either full text or vector search is supported")
 	}
 
-	searchReader := NewSearchReader(ctx, runner.store, index, searchQ)
+	searchReader := NewReader(ctx, runner.store, index, searchQ)
 	var iterator *FilterableSearchIterator
 	if runner.req.Page != 0 {
 		iterator = searchReader.SinglePageIterator(index, wrappedF, runner.req.Page)

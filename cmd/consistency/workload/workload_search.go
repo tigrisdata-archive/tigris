@@ -21,7 +21,6 @@ import (
 	"sync"
 
 	"github.com/hashicorp/go-multierror"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris-client-go/driver"
 )
@@ -35,7 +34,7 @@ type SearchOnlyWorkload struct {
 	WorkloadData *Queue
 }
 
-func (w *SearchOnlyWorkload) Type() string {
+func (*SearchOnlyWorkload) Type() string {
 	return "search_only_workload"
 }
 
@@ -54,7 +53,7 @@ func (w *SearchOnlyWorkload) Setup(client driver.Driver) error {
 	}
 
 	if err = client.UseSearch(w.Project).CreateOrUpdateIndex(context.TODO(), w.Index, w.Schema); err != nil {
-		return errors.Wrapf(err, "CreateOrUpdateIndex failure for ['%s'.'%s']", w.Project, w.Index)
+		return fmt.Errorf("%w CreateOrUpdateIndex failure for ['%s'.'%s']", err, w.Project, w.Index)
 	}
 
 	return nil
@@ -79,14 +78,14 @@ func (w *SearchOnlyWorkload) Start(client driver.Driver) (int64, error) {
 
 				resp, err := client.UseSearch(w.Project).CreateOrReplace(context.TODO(), w.Index, []driver.Document{serialized})
 				if err != nil {
-					insertErr = multierror.Append(insertErr, errors.Wrapf(err, "create document failure ['%s'.'%s']",
+					insertErr = multierror.Append(insertErr, fmt.Errorf("%w create document failure ['%s'.'%s']", err,
 						w.Project, w.Index))
 					return
 				}
 				for _, r := range resp {
 					if r.Error != nil {
-						insertErr = multierror.Append(insertErr, errors.New(fmt.Sprintf("create document failure "+
-							"['%s'.'%s'] message: ['%s']", w.Project, w.Index, r.Error.Message)))
+						insertErr = multierror.Append(insertErr, fmt.Errorf("create document failure "+
+							"['%s'.'%s'] message: ['%s']", w.Project, w.Index, r.Error.Message))
 						return
 					}
 				}
@@ -105,7 +104,7 @@ func (w *SearchOnlyWorkload) Check(client driver.Driver) (bool, error) {
 	isSuccess := false
 	it, err := client.UseSearch(w.Project).Search(context.TODO(), w.Index, &driver.SearchRequest{Q: "*"})
 	if err != nil {
-		return false, errors.Wrapf(err, "reading from search index failure ['%s'.'%s']", w.Project, w.Index)
+		return false, fmt.Errorf("%w reading from search index failure ['%s'.'%s']", err, w.Project, w.Index)
 	}
 
 	queueDoc := NewQueueDocuments(w.Index)
@@ -115,7 +114,7 @@ func (w *SearchOnlyWorkload) Check(client driver.Driver) (bool, error) {
 			var document DocumentV1
 			err := Deserialize(h.Data, &document)
 			if err != nil {
-				return false, errors.Wrapf(err, "deserialzing document failed")
+				return false, fmt.Errorf("%w deserialzing document failed", err)
 			}
 			queueDoc.Add(&document)
 		}

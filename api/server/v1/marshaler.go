@@ -36,7 +36,7 @@ type CustomDecoder struct {
 	reader      io.Reader
 }
 
-func (f CustomDecoder) Decode(dst interface{}) error {
+func (f CustomDecoder) Decode(dst any) error {
 	if _, ok := dst.(*GetAccessTokenRequest); ok {
 		byteArr, err := io.ReadAll(f.reader)
 		if err != nil {
@@ -53,7 +53,7 @@ type CustomMarshaler struct {
 	JSONBuiltin *runtime.JSONBuiltin
 }
 
-func (c *CustomMarshaler) NewDecoder(r io.Reader) runtime.Decoder {
+func (*CustomMarshaler) NewDecoder(r io.Reader) runtime.Decoder {
 	return CustomDecoder{
 		jsonDecoder: jsoniter.NewDecoder(r),
 		reader:      r,
@@ -64,11 +64,11 @@ func (c *CustomMarshaler) NewEncoder(w io.Writer) runtime.Encoder {
 	return c.JSONBuiltin.NewEncoder(w)
 }
 
-func (c *CustomMarshaler) ContentType(v interface{}) string {
+func (c *CustomMarshaler) ContentType(v any) string {
 	return c.JSONBuiltin.ContentType(v)
 }
 
-func (c *CustomMarshaler) Marshal(v interface{}) ([]byte, error) {
+func (c *CustomMarshaler) Marshal(v any) ([]byte, error) {
 	switch ty := v.(type) {
 	case map[string]proto.Message:
 		// this comes from GRPC-gateway streaming code
@@ -96,14 +96,14 @@ func (c *CustomMarshaler) Marshal(v interface{}) ([]byte, error) {
 	return c.JSONBuiltin.Marshal(v)
 }
 
-func (c *CustomMarshaler) Unmarshal(data []byte, v interface{}) error {
+func (c *CustomMarshaler) Unmarshal(data []byte, v any) error {
 	if _, ok := v.(*GetAccessTokenRequest); ok {
 		return unmarshalInternal(data, v)
 	}
 	return c.JSONBuiltin.Unmarshal(data, v)
 }
 
-func unmarshalInternal(data []byte, v interface{}) error {
+func unmarshalInternal(data []byte, v any) error {
 	if v, ok := v.(*GetAccessTokenRequest); ok {
 		values, err := url.ParseQuery(string(data))
 		if err != nil {
@@ -134,7 +134,7 @@ func (x *ReadRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	for key, value := range mp {
-		var v interface{}
+		var v any
 
 		switch key {
 		case "project":
@@ -177,7 +177,7 @@ func (x *SearchRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	for key, value := range mp {
-		var v interface{}
+		var v any
 
 		switch key {
 		case "project":
@@ -236,7 +236,7 @@ func (x *ImportRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	for key, value := range mp {
-		var v interface{}
+		var v any
 
 		switch key {
 		case "primary_key":
@@ -297,7 +297,7 @@ func (x *InsertRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	for key, value := range mp {
-		var v interface{}
+		var v any
 
 		switch key {
 		case "project":
@@ -343,7 +343,7 @@ func (x *ReplaceRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	for key, value := range mp {
-		var v interface{}
+		var v any
 
 		switch key {
 		case "project":
@@ -387,7 +387,7 @@ func (x *UpdateRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	for key, value := range mp {
-		var v interface{}
+		var v any
 
 		switch key {
 		case "project":
@@ -428,7 +428,7 @@ func (x *DeleteRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	for key, value := range mp {
-		var v interface{}
+		var v any
 
 		switch key {
 		case "project":
@@ -465,7 +465,7 @@ func (x *CountRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	for key, value := range mp {
-		var v interface{}
+		var v any
 
 		switch key {
 		case "project":
@@ -499,7 +499,7 @@ func (x *CreateOrUpdateCollectionRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	for key, value := range mp {
-		var v interface{}
+		var v any
 
 		switch key {
 		case "project":
@@ -536,7 +536,7 @@ func (x *CreateOrUpdateCollectionsRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	for key, value := range mp {
-		var v interface{}
+		var v any
 
 		switch key {
 		case "project":

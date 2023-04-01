@@ -93,7 +93,7 @@ func (u *ClusterSubspace) delete(ctx context.Context, tx transaction.Tx) error {
 	)
 }
 
-func (u *ClusterSubspace) validateArgs(clusterID string, metadataKey *string, metadata **ClusterMetadata) error {
+func (*ClusterSubspace) validateArgs(clusterID string, metadataKey *string, metadata **ClusterMetadata) error {
 	if clusterID == "" {
 		return errors.InvalidArgument("invalid empty clusterID")
 	}

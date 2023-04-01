@@ -115,6 +115,6 @@ func TestPrimaryIndexPlanner_IsPrefixQueryWithSuffixSort(t *testing.T) {
 	}
 }
 
-var noopEncFunc = func(indexParts ...interface{}) (keys.Key, error) {
+var noopEncFunc = func(indexParts ...any) (keys.Key, error) {
 	return nil, nil
 }

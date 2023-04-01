@@ -57,19 +57,19 @@ func newSecondaryIndexReaderImpl(ctx context.Context, tx transaction.Tx, coll *s
 	return reader.createIter()
 }
 
-func (reader *SecondaryIndexReaderImpl) createIter() (*SecondaryIndexReaderImpl, error) {
+func (r *SecondaryIndexReaderImpl) createIter() (*SecondaryIndexReaderImpl, error) {
 	var err error
 
-	log.Debug().Msgf("Query Plan Keys %v ascending: %v", reader.queryPlan.GetKeyInterfaceParts(), reader.queryPlan.Ascending)
+	log.Debug().Msgf("Query Plan Keys %v ascending: %v", r.queryPlan.GetKeyInterfaceParts(), r.queryPlan.Ascending)
 
-	switch reader.queryPlan.QueryType {
+	switch r.queryPlan.QueryType {
 	case filter.FULLRANGE, filter.RANGE:
-		reader.kvIter, err = NewScanIterator(reader.ctx, reader.tx, reader.queryPlan.Keys[0], reader.queryPlan.Keys[1], reader.queryPlan.Reverse())
+		r.kvIter, err = NewScanIterator(r.ctx, r.tx, r.queryPlan.Keys[0], r.queryPlan.Keys[1], r.queryPlan.Reverse())
 		if err != nil {
 			return nil, err
 		}
 	case filter.EQUAL:
-		reader.kvIter, err = NewKeyIterator(reader.ctx, reader.tx, reader.queryPlan.Keys, reader.queryPlan.Reverse())
+		r.kvIter, err = NewKeyIterator(r.ctx, r.tx, r.queryPlan.Keys, r.queryPlan.Reverse())
 		if err != nil {
 			return nil, err
 		}
@@ -77,7 +77,7 @@ func (reader *SecondaryIndexReaderImpl) createIter() (*SecondaryIndexReaderImpl,
 		return nil, errors.InvalidArgument("Incorrectly created query key range")
 	}
 
-	return reader, nil
+	return r, nil
 }
 
 func BuildSecondaryIndexKeys(coll *schema.DefaultCollection, queryFilters []filter.Filter, sortFields *sort.Ordering) (*filter.QueryPlan, error) {
@@ -90,13 +90,13 @@ func BuildSecondaryIndexKeys(coll *schema.DefaultCollection, queryFilters []filt
 		return nil, errors.InvalidArgument("No indexable fields")
 	}
 
-	encoder := func(indexParts ...interface{}) (keys.Key, error) {
+	encoder := func(indexParts ...any) (keys.Key, error) {
 		return newKeyWithPrimaryKey(indexParts, coll.EncodedTableIndexName, coll.SecondaryIndexKeyword(), "kvs"), nil
 	}
 
-	buildIndexParts := func(fieldName string, val value.Value) []interface{} {
+	buildIndexParts := func(fieldName string, val value.Value) []any {
 		typeOrder := value.ToSecondaryOrder(val.DataType(), val)
-		return []interface{}{fieldName, typeOrder, val.AsInterface()}
+		return []any{fieldName, typeOrder, val.AsInterface()}
 	}
 
 	sortQueryPlan, err := filter.QueryPlanFromSort(sortFields, indexeableFields, encoder, buildIndexParts, filter.SecondaryIndex)
@@ -122,9 +122,8 @@ func BuildSecondaryIndexKeys(coll *schema.DefaultCollection, queryFilters []filt
 	if err != nil {
 		if sortQueryPlan != nil {
 			return sortQueryPlan, nil
-		} else {
-			return nil, err
 		}
+		return nil, err
 	}
 
 	if len(rangePlans) == 0 && sortQueryPlan == nil {
@@ -176,30 +175,30 @@ func mergeWithSortPlan(plan filter.QueryPlan, sortPlan *filter.QueryPlan) *filte
 	return &plan
 }
 
-func (it *SecondaryIndexReaderImpl) Next(row *Row) bool {
-	if it.err != nil {
+func (r *SecondaryIndexReaderImpl) Next(row *Row) bool {
+	if r.err != nil {
 		return false
 	}
 
-	if it.kvIter.Interrupted() != nil {
-		it.err = it.kvIter.Interrupted()
+	if r.kvIter.Interrupted() != nil {
+		r.err = r.kvIter.Interrupted()
 		return false
 	}
 
 	var indexRow Row
-	if it.kvIter.Next(&indexRow) {
-		indexKey, err := keys.FromBinary(it.coll.EncodedTableIndexName, indexRow.Key)
+	if r.kvIter.Next(&indexRow) {
+		indexKey, err := keys.FromBinary(r.coll.EncodedTableIndexName, indexRow.Key)
 		if err != nil {
-			it.err = err
+			r.err = err
 			return false
 		}
 
 		pks := indexKey.IndexParts()[PrimaryKeyPos:]
-		pkIndexParts := keys.NewKey(it.coll.EncodedName, pks...)
+		pkIndexParts := keys.NewKey(r.coll.EncodedName, pks...)
 
-		docIter, err := it.tx.Read(it.ctx, pkIndexParts, false)
+		docIter, err := r.tx.Read(r.ctx, pkIndexParts, false)
 		if err != nil {
-			it.err = err
+			r.err = err
 			return false
 		}
 
@@ -213,18 +212,18 @@ func (it *SecondaryIndexReaderImpl) Next(row *Row) bool {
 	return false
 }
 
-func (it *SecondaryIndexReaderImpl) Interrupted() error { return it.err }
+func (r *SecondaryIndexReaderImpl) Interrupted() error { return r.err }
 
 // For local debugging and testing.
 //
 //nolint:unused
-func (it *SecondaryIndexReaderImpl) dbgPrintIndex() {
+func (r *SecondaryIndexReaderImpl) dbgPrintIndex() {
 	if config.GetEnvironment() != config.EnvLocal {
 		return
 	}
 
-	indexer := newSecondaryIndexerImpl(it.coll)
-	tableIter, err := indexer.scanIndex(it.ctx, it.tx)
+	indexer := newSecondaryIndexerImpl(r.coll)
+	tableIter, err := indexer.scanIndex(r.ctx, r.tx)
 	if err != nil {
 		panic(err)
 	}

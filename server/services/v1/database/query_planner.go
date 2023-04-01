@@ -39,7 +39,7 @@ func NewPrimaryIndexQueryPlanner(coll *schema.DefaultCollection, e metadata.Enco
 		idxFields: coll.GetPrimaryIndexedFields(),
 	}
 
-	planner.encFunc = func(indexParts ...interface{}) (keys.Key, error) {
+	planner.encFunc = func(indexParts ...any) (keys.Key, error) {
 		return e.EncodeKey(coll.EncodedName, coll.GetPrimaryKey(), indexParts)
 	}
 

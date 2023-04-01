@@ -50,12 +50,12 @@ func TestMetronome_CreateAccount(t *testing.T) {
 			MatchHeader("Authorization", cfg.ApiKey).
 			MatchHeader("Content-Type", "application/json").
 			MatchType("json").
-			JSON(map[string]interface{}{
+			JSON(map[string]any{
 				"name":           tenantName,
 				"ingest_aliases": []string{namespaceId},
 			}).
 			Reply(200).
-			JSON(map[string]interface{}{
+			JSON(map[string]any{
 				"data": map[string]string{
 					"id": "16d145ec-d18e-11ed-afa1-0242ac120002",
 				},
@@ -113,12 +113,12 @@ func TestMetronome_AddDefaultPlan(t *testing.T) {
 			MatchHeader("Authorization", cfg.ApiKey).
 			MatchHeader("Content-Type", "application/json").
 			MatchType("json").
-			JSON(map[string]interface{}{
+			JSON(map[string]any{
 				"plan_id":     cfg.DefaultPlan,
 				"starting_on": expectedDate,
 			}).
 			Reply(200).
-			JSON(map[string]interface{}{
+			JSON(map[string]any{
 				"data": map[string]string{
 					"id": "47eda90f-d2e8-4184-8955-cb3a64677821",
 				},
@@ -184,13 +184,13 @@ func TestMetronome_PushStorageEvents(t *testing.T) {
 			MatchHeader("Authorization", cfg.ApiKey).
 			MatchHeader("Content-Type", "application/json").
 			MatchType("json").
-			JSON([]map[string]interface{}{
+			JSON([]map[string]any{
 				{
 					"customer_id":    namespaceId,
 					"transaction_id": "t12354",
 					"timestamp":      "2023-01-01T00:00:00Z",
 					"event_type":     "storage",
-					"properties": map[string]interface{}{
+					"properties": map[string]any{
 						StorageDbBytes:    920_000_000,
 						StorageIndexBytes: 256000,
 					},
@@ -200,7 +200,7 @@ func TestMetronome_PushStorageEvents(t *testing.T) {
 					"transaction_id": "t12355",
 					"timestamp":      "2023-02-02T00:00:00Z",
 					"event_type":     "storage",
-					"properties": map[string]interface{}{
+					"properties": map[string]any{
 						StorageIndexBytes: 8_750_000_000,
 					},
 				},
@@ -290,13 +290,13 @@ func TestMetronome_PushUsageEvents(t *testing.T) {
 			MatchHeader("Authorization", cfg.ApiKey).
 			MatchHeader("Content-Type", "application/json").
 			MatchType("json").
-			JSON([]map[string]interface{}{
+			JSON([]map[string]any{
 				{
 					"customer_id":    namespaceId,
 					"transaction_id": "t12354",
 					"timestamp":      "2023-01-01T00:00:00Z",
 					"event_type":     "usage",
-					"properties": map[string]interface{}{
+					"properties": map[string]any{
 						UsageDbUnits:     920,
 						UsageSearchUnits: 256,
 					},
@@ -306,7 +306,7 @@ func TestMetronome_PushUsageEvents(t *testing.T) {
 					"transaction_id": "t12355",
 					"timestamp":      "2023-02-02T00:00:00Z",
 					"event_type":     "usage",
-					"properties": map[string]interface{}{
+					"properties": map[string]any{
 						UsageSearchUnits: 8_750,
 					},
 				},
@@ -379,12 +379,12 @@ func TestMetronome_FetchInvoices(t *testing.T) {
 			MatchParam("next_page", nextPage).
 			MatchParam("starting_on", "2022-12-10T00:00:00Z").
 			Reply(200).
-			JSON(map[string]interface{}{
-				"data": []map[string]interface{}{
+			JSON(map[string]any{
+				"data": []map[string]any{
 					{
 						"id":         "50670f17-ca2d-4f9b-82a7-dc0e7c1f6ed7",
 						"plan_name":  "Free Tier",
-						"line_items": []map[string]interface{}{},
+						"line_items": []map[string]any{},
 					},
 				},
 			})
@@ -409,8 +409,8 @@ func TestMetronome_FetchInvoices(t *testing.T) {
 		gock.New(cfg.URL).
 			Get(fmt.Sprintf("/customers/%s/invoices", accountId)).
 			Reply(200).
-			JSON(map[string]interface{}{
-				"data": []map[string]interface{}{},
+			JSON(map[string]any{
+				"data": []map[string]any{},
 			})
 
 		resp, err := metronome.GetInvoices(ctx, accountId, &api.ListInvoicesRequest{})
@@ -428,7 +428,7 @@ func TestMetronome_FetchInvoices(t *testing.T) {
 		gock.New(cfg.URL).
 			Get(fmt.Sprintf("/customers/%s/invoices", accountId)).
 			Reply(400).
-			JSON(map[string]interface{}{
+			JSON(map[string]any{
 				"message": "no customer exists",
 			})
 
@@ -455,17 +455,17 @@ func TestMetronome_GetInvoiceById(t *testing.T) {
 			Get(fmt.Sprintf("/customers/%s/invoices/%s", accountId, invoiceId)).
 			MatchHeader("Authorization", cfg.ApiKey).
 			Reply(200).
-			JSON(map[string]interface{}{
-				"data": map[string]interface{}{
+			JSON(map[string]any{
+				"data": map[string]any{
 					"id":        "50670f17-ca2d-4f9b-82a7-dc0e7c1f6ed7",
 					"plan_name": "Free Tier",
-					"line_items": []map[string]interface{}{
+					"line_items": []map[string]any{
 						{
 							"name":       "Monthly Platform Fee",
 							"quantity":   1,
 							"total":      0,
 							"product_id": "b8b2e361-7e31-4283-a6e7-9b4c04a8a7eb",
-							"sub_line_items": []map[string]interface{}{
+							"sub_line_items": []map[string]any{
 								{
 									"name":      "Monthly Platform Fee",
 									"price":     0,
@@ -497,8 +497,8 @@ func TestMetronome_GetInvoiceById(t *testing.T) {
 		gock.New(cfg.URL).
 			Get(fmt.Sprintf("/customers/%s/invoices/%s", accountId, invoiceId)).
 			Reply(200).
-			JSON(map[string]interface{}{
-				"data": map[string]interface{}{},
+			JSON(map[string]any{
+				"data": map[string]any{},
 			})
 
 		resp, err := metronome.GetInvoiceById(ctx, accountId, invoiceId)
@@ -517,7 +517,7 @@ func TestMetronome_GetInvoiceById(t *testing.T) {
 		gock.New(cfg.URL).
 			Get(fmt.Sprintf("/customers/%s/invoices/%s", accountId, invoiceId)).
 			Reply(404).
-			JSON(map[string]interface{}{
+			JSON(map[string]any{
 				"message": "no invoice found",
 			})
 
@@ -610,8 +610,8 @@ func TestMetronome_GetUsage(t *testing.T) {
 			MatchType("json").
 			SetMatcher(bodyMatcher).
 			Reply(200).
-			JSON(map[string]interface{}{
-				"data": []map[string]interface{}{{
+			JSON(map[string]any{
+				"data": []map[string]any{{
 					"billable_metric_id": "327e631d-e6dc-4c67-a2a8-dfd3621a907f", // search_units metric
 					"start_timestamp":    "2023-04-30T01:00:00+00:00",
 					"end_timestamp":      "2023-04-30T02:00:00+00:00",
@@ -686,9 +686,9 @@ func TestMetronome_GetUsage(t *testing.T) {
 			Post("usage").
 			MatchParam("next_page", nextPageToken).
 			MatchType("json").
-			JSON(map[string]interface{}{
+			JSON(map[string]any{
 				"customer_ids": []string{cid.String()},
-				"billable_metrics": []map[string]interface{}{
+				"billable_metrics": []map[string]any{
 					{"id": cfg.BilledMetrics[requestedMetric]},
 				},
 				"window_size":   "hour",
@@ -696,8 +696,8 @@ func TestMetronome_GetUsage(t *testing.T) {
 				"ending_before": "2023-05-01T00:00:00Z",
 			}).
 			Reply(200).
-			JSON(map[string]interface{}{
-				"data":      []map[string]interface{}{},
+			JSON(map[string]any{
+				"data":      []map[string]any{},
 				"next_page": "resp_next_page",
 			})
 
@@ -730,7 +730,7 @@ func TestMetronome_GetUsage(t *testing.T) {
 
 	t.Run("remote service failure", func(t *testing.T) {
 		rt := time.Date(2023, 5, 1, 0, 0, 0, 0, time.UTC)
-		gock.New(cfg.URL).Post("usage").Reply(500).JSON(map[string]interface{}{
+		gock.New(cfg.URL).Post("usage").Reply(500).JSON(map[string]any{
 			"message": "request failed",
 		})
 		resp, err := metronome.GetUsage(ctx, uuid.New(), &UsageRequest{

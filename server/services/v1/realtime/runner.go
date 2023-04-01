@@ -78,7 +78,7 @@ func newBaseRunner(cache cache.Cache, factory *ChannelFactory) *baseRunner {
 	}
 }
 
-func (runner *baseRunner) getProject(tenant *metadata.Tenant, project string) (*metadata.Project, error) {
+func (*baseRunner) getProject(tenant *metadata.Tenant, project string) (*metadata.Project, error) {
 	proj, err := tenant.GetProject(project)
 	if err != nil {
 		return nil, createApiError(err)

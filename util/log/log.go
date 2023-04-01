@@ -32,7 +32,7 @@ type LogConfig struct {
 }
 
 // trim full path. output in the form directory/file.go.
-func consoleFormatCaller(i interface{}) string {
+func consoleFormatCaller(i any) string {
 	var c string
 	if cc, ok := i.(string); ok {
 		c = cc
@@ -99,7 +99,7 @@ func E(err error) bool {
 // err := fmt.Errorf("msg, value %v", value)
 // log.Msgf("msg, value %v", value)
 // return err.
-func CE(format string, args ...interface{}) error {
+func CE(format string, args ...any) error {
 	err := fmt.Errorf(format, args...)
 
 	log.Error().CallerSkipFrame(1).Msg(err.Error())

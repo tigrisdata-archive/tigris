@@ -96,9 +96,8 @@ func NewValue(fieldType schema.FieldType, value []byte) (Value, error) {
 		if decoded, err := base64.StdEncoding.DecodeString(string(value)); err == nil {
 			// when we match the value or build the key we first decode the base64 data
 			return NewBytesValue(decoded), nil
-		} else {
-			return NewBytesValue(value), nil
 		}
+		return NewBytesValue(value), nil
 	case schema.ArrayType:
 		var arr []any
 		if err := jsoniter.Unmarshal(value, &arr); err != nil {
@@ -158,7 +157,7 @@ func (a *ArrayValue) AsInterface() any {
 	return a.decoded
 }
 
-func (a *ArrayValue) DataType() schema.FieldType {
+func (*ArrayValue) DataType() schema.FieldType {
 	return schema.ArrayType
 }
 
@@ -200,7 +199,7 @@ func (i *IntValue) AsInterface() any {
 	return int64(*i)
 }
 
-func (i *IntValue) DataType() schema.FieldType {
+func (*IntValue) DataType() schema.FieldType {
 	return schema.Int64Type
 }
 
@@ -262,7 +261,7 @@ func (d *DoubleValue) AsInterface() any {
 	return d.Double
 }
 
-func (d *DoubleValue) DataType() schema.FieldType {
+func (*DoubleValue) DataType() schema.FieldType {
 	return schema.DoubleType
 }
 
@@ -313,7 +312,7 @@ func (s *StringValue) AsInterface() any {
 	return s.Value
 }
 
-func (s *StringValue) DataType() schema.FieldType {
+func (*StringValue) DataType() schema.FieldType {
 	return schema.StringType
 }
 
@@ -358,7 +357,7 @@ func (d *DateTimeValue) AsInterface() any {
 	return d.Value
 }
 
-func (d *DateTimeValue) DataType() schema.FieldType {
+func (*DateTimeValue) DataType() schema.FieldType {
 	return schema.DateTimeType
 }
 
@@ -394,7 +393,7 @@ func (b *BytesValue) AsInterface() any {
 	return []byte(*b)
 }
 
-func (b *BytesValue) DataType() schema.FieldType {
+func (*BytesValue) DataType() schema.FieldType {
 	return schema.ByteType
 }
 
@@ -436,7 +435,7 @@ func (b *BoolValue) AsInterface() any {
 	return bool(*b)
 }
 
-func (b *BoolValue) DataType() schema.FieldType {
+func (*BoolValue) DataType() schema.FieldType {
 	return schema.BoolType
 }
 
@@ -454,22 +453,23 @@ func NewNullValue() *NullValue {
 	return &NullValue{}
 }
 
-func (n *NullValue) AsInterface() any {
+func (*NullValue) AsInterface() any {
 	return nil
 }
 
-func (n *NullValue) DataType() schema.FieldType {
+func (*NullValue) DataType() schema.FieldType {
 	return schema.NullType
 }
 
-func (n *NullValue) String() string {
+func (*NullValue) String() string {
 	return ""
 }
 
-func (n *NullValue) CompareTo(v Value) (int, error) {
+func (*NullValue) CompareTo(v Value) (int, error) {
 	if v == nil {
 		return 0, nil
 	}
+
 	if _, ok := v.(*NullValue); ok {
 		return 0, nil
 	}
@@ -483,19 +483,19 @@ func NewMaxValue() *MaxValue {
 	return &MaxValue{}
 }
 
-func (m *MaxValue) AsInterface() any {
+func (*MaxValue) AsInterface() any {
 	return 0xFF
 }
 
-func (m *MaxValue) DataType() schema.FieldType {
+func (*MaxValue) DataType() schema.FieldType {
 	return schema.MaxType
 }
 
-func (m *MaxValue) String() string {
+func (*MaxValue) String() string {
 	return "$MAX_VALUE"
 }
 
-func (m *MaxValue) CompareTo(v Value) (int, error) {
+func (*MaxValue) CompareTo(v Value) (int, error) {
 	if _, ok := v.(*MaxValue); ok {
 		return 0, nil
 	}

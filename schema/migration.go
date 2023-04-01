@@ -417,12 +417,12 @@ func convertType(change *VersionDeltaField, val any) any {
 	case bool:
 		return convertFromBool(change.To, v)
 	case string:
-		if change.From == ByteType {
-			if b, err := base64.StdEncoding.DecodeString(v); err == nil {
-				return convertFromBytes(change.To, b, change.MaxLength)
-			}
-		} else {
+		if change.From != ByteType {
 			return convertFromString(change.To, v, change.MaxLength)
+		}
+
+		if b, err := base64.StdEncoding.DecodeString(v); err == nil {
+			return convertFromBytes(change.To, b, change.MaxLength)
 		}
 	case json.Number: // comes from initial document unmarshal
 		switch change.From {
@@ -484,10 +484,10 @@ func applyPrimitiveFieldDelta(doc map[string]any, change *VersionDeltaField) boo
 	if v == nil {
 		delete(doc, key)
 		return false
-	} else {
-		doc[key] = v
-		return true
 	}
+
+	doc[key] = v
+	return true
 }
 
 func applyObjectFieldDelta(doc map[string]any, change *VersionDeltaField, start int) bool {

@@ -28,6 +28,7 @@ import (
 )
 
 /**
+
 A sample user JSON schema looks like below,
 {
 	"title": "Record of an order",
@@ -245,7 +246,7 @@ func (fb *FactoryBuilder) Build(collection string, reqSchema jsoniter.RawMessage
 	return factory, nil
 }
 
-func (fb *FactoryBuilder) validateSchema(factory *Factory) error {
+func (*FactoryBuilder) validateSchema(factory *Factory) error {
 	for _, f := range factory.Fields {
 		if err := ValidateFieldAttributes(false, f); err != nil {
 			return err
@@ -256,7 +257,7 @@ func (fb *FactoryBuilder) validateSchema(factory *Factory) error {
 }
 
 func setPrimaryKey(reqSchema jsoniter.RawMessage, format string, ifMissing bool) (jsoniter.RawMessage, error) {
-	var schema map[string]interface{}
+	var schema map[string]any
 	if err := jsoniter.Unmarshal(reqSchema, &schema); err != nil {
 		return nil, err
 	}
@@ -268,13 +269,13 @@ func setPrimaryKey(reqSchema jsoniter.RawMessage, format string, ifMissing bool)
 
 	schema[PrimaryKeySchemaK] = []string{AutoPrimaryKeyF}
 	if p, ok := schema["properties"]; ok {
-		propertiesMap, ok := p.(map[string]interface{})
+		propertiesMap, ok := p.(map[string]any)
 		if !ok {
 			return nil, errors.InvalidArgument("properties object is invalid")
 		}
 
 		if _, ok = propertiesMap[AutoPrimaryKeyF]; !ifMissing || !ok {
-			propertiesMap[AutoPrimaryKeyF] = map[string]interface{}{
+			propertiesMap[AutoPrimaryKeyF] = map[string]any{
 				"type":         jsonSpecString,
 				"format":       format,
 				"autoGenerate": true,

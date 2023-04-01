@@ -98,7 +98,7 @@ func (d *fdbkv) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key,
 	return &fdbIteratorTxCloser{ctx, it, tx}, nil
 }
 
-func (d *fdbkv) txWithRetry(ctx context.Context, fn func(fdb.Transaction) (interface{}, error)) (interface{}, error) {
+func (d *fdbkv) txWithRetry(ctx context.Context, fn func(fdb.Transaction) (any, error)) (any, error) {
 	for {
 		retry, res, err := d.txWithRetryLow(ctx, fn)
 		if !retry {
@@ -107,7 +107,7 @@ func (d *fdbkv) txWithRetry(ctx context.Context, fn func(fdb.Transaction) (inter
 	}
 }
 
-func (d *fdbkv) txWithRetryLow(ctx context.Context, fn func(fdb.Transaction) (interface{}, error)) (bool, interface{}, error) {
+func (d *fdbkv) txWithRetryLow(ctx context.Context, fn func(fdb.Transaction) (any, error)) (bool, any, error) {
 	tr, err := d.db.CreateTransaction()
 	defer tr.Cancel()
 
@@ -119,7 +119,7 @@ func (d *fdbkv) txWithRetryLow(ctx context.Context, fn func(fdb.Transaction) (in
 		return false, nil, err
 	}
 
-	var res interface{}
+	var res any
 	if res, err = fn(tr); err != nil {
 		return false, nil, err
 	}
@@ -142,49 +142,49 @@ func (d *fdbkv) txWithRetryLow(ctx context.Context, fn func(fdb.Transaction) (in
 }
 
 func (d *fdbkv) Insert(ctx context.Context, table []byte, key Key, data []byte) error {
-	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (any, error) {
 		return nil, (&ftx{d: d, tx: &tr}).Insert(ctx, table, key, data)
 	})
 	return err
 }
 
 func (d *fdbkv) Replace(ctx context.Context, table []byte, key Key, data []byte, isUpdate bool) error {
-	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (any, error) {
 		return nil, (&ftx{d: d, tx: &tr}).Replace(ctx, table, key, data, isUpdate)
 	})
 	return err
 }
 
 func (d *fdbkv) Delete(ctx context.Context, table []byte, key Key) error {
-	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (any, error) {
 		return nil, (&ftx{d: d, tx: &tr}).Delete(ctx, table, key)
 	})
 	return err
 }
 
 func (d *fdbkv) SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error {
-	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (any, error) {
 		return nil, (&ftx{d: d, tx: &tr}).SetVersionstampedValue(ctx, key, value)
 	})
 	return err
 }
 
 func (d *fdbkv) SetVersionstampedKey(ctx context.Context, key []byte, value []byte) error {
-	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (any, error) {
 		return nil, (&ftx{d: d, tx: &tr}).SetVersionstampedKey(ctx, key, value)
 	})
 	return err
 }
 
 func (d *fdbkv) AtomicAdd(ctx context.Context, table []byte, key Key, value int64) error {
-	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (any, error) {
 		return nil, (&ftx{d: d, tx: &tr}).AtomicAdd(ctx, table, key, value)
 	})
 	return err
 }
 
 func (d *fdbkv) AtomicRead(ctx context.Context, table []byte, key Key) (int64, error) {
-	val, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+	val, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (any, error) {
 		return (&ftx{d: d, tx: &tr}).AtomicRead(ctx, table, key)
 	})
 	return val.(int64), err
@@ -203,14 +203,14 @@ func (d *fdbkv) AtomicReadRange(ctx context.Context, table []byte, lKey Key, rKe
 }
 
 func (d *fdbkv) Get(ctx context.Context, key []byte, isSnapshot bool) Future {
-	val, _ := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+	val, _ := d.txWithRetry(ctx, func(tr fdb.Transaction) (any, error) {
 		return (&ftx{d: d, tx: &tr}).Get(ctx, key, isSnapshot), nil
 	})
 
 	return val.(Future)
 }
 
-func (d *fdbkv) CreateTable(_ context.Context, name []byte) error {
+func (*fdbkv) CreateTable(_ context.Context, name []byte) error {
 	log.Debug().Str("name", string(name)).Msg("table created")
 	return nil
 }
@@ -218,7 +218,7 @@ func (d *fdbkv) CreateTable(_ context.Context, name []byte) error {
 func (d *fdbkv) DropTable(ctx context.Context, name []byte) error {
 	s := subspace.FromBytes(name)
 
-	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (any, error) {
 		tr.ClearRange(s)
 		return nil, nil
 	})
@@ -235,7 +235,7 @@ func (d *fdbkv) TableSize(ctx context.Context, name []byte) (int64, error) {
 	s := subspace.FromBytes(name)
 
 	var sz int64
-	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+	_, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (any, error) {
 		var err error
 		sz, err = tr.GetEstimatedRangeSizeBytes(s).Get()
 		return nil, err
