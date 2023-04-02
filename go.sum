@@ -67,6 +67,8 @@ github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAE
 github.com/PuerkitoBio/rehttp v1.1.0 h1:JFZ7OeK+hbJpTxhNB0NDZT47AuXqCU0Smxfjtph7/Rs=
 github.com/PuerkitoBio/rehttp v1.1.0/go.mod h1:LUwKPoDbDIA2RL5wYZCNsQ90cx4OJ4AWBmq6KzWZL1s=
 github.com/RaveNoX/go-jsoncommentstrip v1.0.0/go.mod h1:78ihd09MekBnJnxpICcwzCMzGrKSKYe4AqU6PDYYpjk=
+github.com/adilansari/metronome-go-client v0.1.3 h1:oBPn+40RJXnUA0FnpW7dT0W5OnFj+bZ4UCpHuYh5foc=
+github.com/adilansari/metronome-go-client v0.1.3/go.mod h1:4B23bW3bCMTDTggkiRzP2yQe1+6dqzHXqu/GmWM56M4=
 github.com/ajg/form v1.5.1 h1:t9c7v8JUKu/XxOGBU0yjNpaMloxGEJhUkqFRq0ibGeU=
 github.com/ajg/form v1.5.1/go.mod h1:uL1WgH+h2mgNtvBq0339dVnzXdBETtL2LeUXaIv25UY=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=

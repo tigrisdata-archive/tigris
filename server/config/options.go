@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/auth0/go-jwt-middleware/v2/validator"
+
 	"github.com/tigrisdata/tigris/util/log"
 )
 
@@ -263,10 +264,11 @@ var DefaultConfig = Config{
 	},
 	Billing: Billing{
 		Metronome: Metronome{
-			Enabled:     false,
-			URL:         "https://api.metronome.com/v1",
-			ApiKey:      "replace_me",
-			DefaultPlan: "placeholderPlan",
+			Enabled: false,
+			URL:     "https://api.metronome.com/v1",
+			ApiKey:  "replace_me",
+			// random placeholder UUID and not an actual plan
+			DefaultPlan: "47eda90f-d2e8-4184-8955-cb3a6467782b",
 		},
 	},
 	Cdc: CdcConfig{
