@@ -86,6 +86,25 @@ func TestListNamespaces(t *testing.T) {
 	assert.True(t, found)
 }
 
+func TestGetSingleNamespace(t *testing.T) {
+	name := fmt.Sprintf("namespace-b-%x", rand.Int63())         //nolint:gosec
+	namespaceId := fmt.Sprintf("namespace-id-%x", rand.Int63()) //nolint:gosec
+
+	_ = createNamespaceWithId(t, namespaceId, name)
+	resp := getSingleNamespace(t, namespaceId)
+	namespaces := resp.Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("namespaces").
+		Array()
+	assert.Equal(t, float64(1), namespaces.Length().Raw())
+
+	namespace := namespaces.Element(0).Object()
+	assert.Equal(t, namespaceId, namespace.Value("id").String().Raw())
+	assert.Equal(t, name, namespace.Value("name").String().Raw())
+	assert.True(t, namespace.Value("code").Number().Raw() > 1)
+}
+
 func TestApplications(t *testing.T) {
 	errMsg := "{\"error\":{\"code\":\"INTERNAL\",\"message\":\"authentication not enabled on this server\"}}"
 
@@ -116,10 +135,23 @@ func createNamespace(t *testing.T, name string) *httpexpect.Response {
 		Expect()
 }
 
+func createNamespaceWithId(t *testing.T, id string, name string) *httpexpect.Response {
+	e := expect(t)
+	return e.POST(getCreateNamespaceURL()).
+		WithJSON(Map{"id": id, "name": name}).
+		Expect()
+}
+
 func listNamespaces(t *testing.T) *httpexpect.Response {
 	e := expect(t)
-	return e.POST(listNamespaceUrl()).
+	return e.GET(listNamespaceUrl()).
 		WithJSON(Map{}).
+		Expect()
+}
+
+func getSingleNamespace(t *testing.T, namespaceId string) *httpexpect.Response {
+	e := expect(t)
+	return e.GET(namespaceInfoUrl(namespaceId)).
 		Expect()
 }
 
@@ -128,9 +160,12 @@ func getCreateNamespaceURL() string {
 }
 
 func listNamespaceUrl() string {
-	return "/v1/management/namespaces/list"
+	return "/v1/management/namespaces"
 }
 
+func namespaceInfoUrl(namespaceId string) string {
+	return fmt.Sprintf("/v1/management/namespaces/%s", namespaceId)
+}
 func userMetaRequest(t *testing.T, token string, op string, key string, m Map) *httpexpect.Response {
 	e2 := expectLow(t, config.GetBaseURL2())
 	return e2.POST(getUserMetaURL(op, key)).

@@ -150,13 +150,35 @@ func (m *managementService) CreateNamespace(ctx context.Context, req *api.Create
 	}
 }
 
-func (m *managementService) ListNamespaces(ctx context.Context, _ *api.ListNamespacesRequest) (*api.ListNamespacesResponse, error) {
+func (m *managementService) ListNamespaces(ctx context.Context, req *api.ListNamespacesRequest) (*api.ListNamespacesResponse, error) {
+	if req.GetDescribe() {
+		return m.getNamespacesDetails(ctx, req.GetNamespaceId())
+	} else {
+		return m.listNamespaces(ctx, req.GetNamespaceId())
+	}
+}
+
+func (m *managementService) getNamespacesDetails(ctx context.Context, namespaceId string) (*api.ListNamespacesResponse, error) {
+	data, err := m.getNameSpaceDetails(ctx, namespaceId)
+	if ulog.E(err) {
+		return nil, err
+	}
+	jsonStr, err := jsoniter.Marshal(data)
+	if ulog.E(err) {
+		return nil, err
+	}
+	return &api.ListNamespacesResponse{Data: &api.DescribeNamespacesData{Details: string(jsonStr)}}, nil
+}
+
+func (m *managementService) listNamespaces(ctx context.Context, namespaceId string) (*api.ListNamespacesResponse, error) {
 	tx, err := m.Manager.StartTx(ctx)
 	if err != nil {
+		log.Error().Err(err).Msg("Could not begin transaction to list namespaces")
 		return nil, errors.Internal("Failed to begin transaction")
 	}
 	namespaces, err := m.TenantManager.ListNamespaces(ctx, tx)
 	if err != nil {
+		log.Error().Err(err).Msg("Could not list namespaces")
 		_ = tx.Rollback(ctx)
 		return nil, err
 	}
@@ -167,8 +189,17 @@ func (m *managementService) ListNamespaces(ctx context.Context, _ *api.ListNames
 		}, nil
 	}
 
-	namespacesInfo := make([]*api.NamespaceInfo, 0, len(namespaces))
+	outputArrayLen := len(namespaces)
+	if namespaceId != "" {
+		outputArrayLen = 1
+	}
+
+	namespacesInfo := make([]*api.NamespaceInfo, 0, outputArrayLen)
 	for _, namespace := range namespaces {
+		// if specific namespace is requested and if this is not that one - continue
+		if namespaceId != "" && namespaceId != namespace.StrId() {
+			continue
+		}
 		namespacesInfo = append(namespacesInfo, &api.NamespaceInfo{
 			Id:   namespace.StrId(),
 			Name: namespace.Metadata().Name,
@@ -180,7 +211,7 @@ func (m *managementService) ListNamespaces(ctx context.Context, _ *api.ListNames
 	}, nil
 }
 
-func (m *managementService) getNameSpaceDetails(ctx context.Context) (nsDetailsResp, error) {
+func (m *managementService) getNameSpaceDetails(ctx context.Context, namespaceId string) (nsDetailsResp, error) {
 	res := make(nsDetailsResp)
 	tx, err := m.Manager.StartTx(ctx)
 	if err != nil {
@@ -194,6 +225,10 @@ func (m *managementService) getNameSpaceDetails(ctx context.Context) (nsDetailsR
 	_ = tx.Commit(ctx)
 
 	for _, namespace := range namespaces {
+		// if specific namespace is requested and if this is not that one - continue
+		if namespaceId != "" && namespaceId != namespace.StrId() {
+			continue
+		}
 		nsName := namespace.Metadata().Name
 		tenant, err := m.TenantManager.GetTenant(ctx, nsName)
 		if err != nil {
@@ -222,24 +257,6 @@ func (m *managementService) getNameSpaceDetails(ctx context.Context) (nsDetailsR
 		}
 	}
 	return res, nil
-}
-
-func (m *managementService) DescribeNamespaces(ctx context.Context, _ *api.DescribeNamespacesRequest) (*api.DescribeNamespacesResponse, error) {
-	data, err := m.getNameSpaceDetails(ctx)
-	if ulog.E(err) {
-		return nil, err
-	}
-
-	jsonStr, err := jsoniter.Marshal(data)
-	if ulog.E(err) {
-		return nil, err
-	}
-
-	return &api.DescribeNamespacesResponse{
-		Data: &api.DescribeNamespacesData{
-			Details: string(jsonStr),
-		},
-	}, nil
 }
 
 func (m *managementService) GetUserMetadata(ctx context.Context, req *api.GetUserMetadataRequest) (*api.GetUserMetadataResponse, error) {
