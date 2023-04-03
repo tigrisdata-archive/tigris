@@ -48,6 +48,8 @@ const (
 	ArrayType
 	ObjectType
 	VectorType
+	// For internal querying usage.
+	MaxType
 )
 
 var FieldNames = [...]string{

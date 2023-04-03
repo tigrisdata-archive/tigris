@@ -249,14 +249,14 @@ func TestUUIDAndDateValues(t *testing.T) {
 
 		v2, _ := NewValue(schema.DateTimeType, []byte("6f64e028-2ff5-490a-b10a-7c44c4595a8b"))
 		r, _ := v1.CompareTo(v2)
-		require.Equal(t, 0, r)
+		require.Equal(t, -2, r)
 
 		v3, _ := NewValue(schema.DateTimeType, []byte("6f899990-2ff5-490a-b10a-7c44c4595a8b"))
 		r, _ = v1.CompareTo(v3)
-		require.Equal(t, -1, r)
+		require.Equal(t, -2, r)
 
 		v4, _ := NewValue(schema.DateTimeType, []byte("6f64e028-1111-490a-b10a-7c44c4595a8b"))
 		r, _ = v1.CompareTo(v4)
-		require.Equal(t, 1, r)
+		require.Equal(t, -2, r)
 	})
 }

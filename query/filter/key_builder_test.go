@@ -15,7 +15,6 @@
 package filter
 
 import (
-	"math"
 	"reflect"
 	"testing"
 
@@ -284,7 +283,7 @@ func TestKeyBuilderRangeKey(t *testing.T) {
 			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}},
 			[]byte(`{"a": {"$gt": 1}}`),
 			FULLRANGE,
-			[]keys.Key{keys.NewKey(nil, "a", int64(1), 0xFF), keys.NewKey(nil, "a", math.MaxInt64, 0xFF)},
+			[]keys.Key{keys.NewKey(nil, value.ToSecondaryOrder(schema.Int64Type, nil), "a", int64(1), 0xFF), keys.NewKey(nil, value.SecondaryMaxOrder(), "a", 0xFF)},
 		},
 		{
 			// single gte
@@ -292,7 +291,7 @@ func TestKeyBuilderRangeKey(t *testing.T) {
 			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}},
 			[]byte(`{"a": {"$gte": 1}}`),
 			FULLRANGE,
-			[]keys.Key{keys.NewKey(nil, "a", int64(1)), keys.NewKey(nil, "a", math.MaxInt64, 0xFF)},
+			[]keys.Key{keys.NewKey(nil, value.ToSecondaryOrder(schema.Int64Type, nil), "a", int64(1)), keys.NewKey(nil, value.SecondaryMaxOrder(), "a", 0xFF)},
 		},
 		{
 			// single lt
@@ -300,7 +299,7 @@ func TestKeyBuilderRangeKey(t *testing.T) {
 			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}},
 			[]byte(`{"a": {"$lt": 30}}`),
 			FULLRANGE,
-			[]keys.Key{keys.NewKey(nil, "a", nil), keys.NewKey(nil, "a", int64(30))},
+			[]keys.Key{keys.NewKey(nil, value.SecondaryNullOrder(), "a", nil), keys.NewKey(nil, value.ToSecondaryOrder(schema.Int64Type, nil), "a", int64(30))},
 		},
 		{
 			// single lte
@@ -308,7 +307,7 @@ func TestKeyBuilderRangeKey(t *testing.T) {
 			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}},
 			[]byte(`{"a": {"$lte": 30}}`),
 			FULLRANGE,
-			[]keys.Key{keys.NewKey(nil, "a", nil), keys.NewKey(nil, "a", int64(30), 0xFF)},
+			[]keys.Key{keys.NewKey(nil, value.SecondaryNullOrder(), "a", nil), keys.NewKey(nil, value.ToSecondaryOrder(schema.Int64Type, nil), "a", int64(30), 0xFF)},
 		},
 		{
 			// single range user defined key
@@ -316,7 +315,7 @@ func TestKeyBuilderRangeKey(t *testing.T) {
 			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}},
 			[]byte(`{"$and": [{"a": {"$gte": 1}}, {"a": {"$lt": 10}}]}`),
 			RANGE,
-			[]keys.Key{keys.NewKey(nil, "a", int64(1)), keys.NewKey(nil, "a", int64(10))},
+			[]keys.Key{keys.NewKey(nil, value.ToSecondaryOrder(schema.Int64Type, nil), "a", int64(1)), keys.NewKey(nil, value.ToSecondaryOrder(schema.Int64Type, nil), "a", int64(10))},
 		},
 		{
 			// single range user defined string key
@@ -324,7 +323,7 @@ func TestKeyBuilderRangeKey(t *testing.T) {
 			[]*schema.Field{{FieldName: "a", DataType: schema.StringType}},
 			[]byte(`{"$and": [{"a": {"$gte": "f"}}, {"a": {"$lt": "m"}}]}`),
 			RANGE,
-			[]keys.Key{keys.NewKey(nil, "a", encodeString("f")), keys.NewKey(nil, "a", encodeString("m"))},
+			[]keys.Key{keys.NewKey(nil, value.ToSecondaryOrder(schema.StringType, nil), "a", encodeString("f")), keys.NewKey(nil, value.ToSecondaryOrder(schema.StringType, nil), "a", encodeString("m"))},
 		},
 		// NOT SUPPORTED YET
 		// {
@@ -363,8 +362,8 @@ func TestKeyBuilderMultipleRangeKey(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Len(t, keyReads, 2)
-	assert.Equal(t, []keys.Key{keys.NewKey(nil, "a", int64(1)), keys.NewKey(nil, "a", int64(10))}, keyReads[0].Keys)
-	assert.Equal(t, []keys.Key{keys.NewKey(nil, "b", int64(3), 0xFF), keys.NewKey(nil, "b", int64(30), 0xFF)}, keyReads[1].Keys)
+	assert.Equal(t, []keys.Key{keys.NewKey(nil, value.ToSecondaryOrder(schema.Int64Type, nil), "a", int64(1)), keys.NewKey(nil, value.ToSecondaryOrder(schema.Int64Type, nil), "a", int64(10))}, keyReads[0].Keys)
+	assert.Equal(t, []keys.Key{keys.NewKey(nil, value.ToSecondaryOrder(schema.Int64Type, nil), "b", int64(3), 0xFF), keys.NewKey(nil, value.ToSecondaryOrder(schema.Int64Type, nil), "b", int64(30), 0xFF)}, keyReads[1].Keys)
 }
 
 func BenchmarkStrictEqKeyComposer_Compose(b *testing.B) {
@@ -381,8 +380,9 @@ func dummyEncodeFunc(indexParts ...interface{}) (keys.Key, error) {
 	return keys.NewKey(nil, indexParts...), nil
 }
 
-func dummyBuildIndexParts(fieldName string, datatype schema.FieldType, value interface{}) []interface{} {
-	return []interface{}{fieldName, value}
+func dummyBuildIndexParts(fieldName string, val value.Value) []interface{} {
+	typeOrder := value.ToSecondaryOrder(val.DataType(), nil)
+	return []interface{}{typeOrder, fieldName, val.AsInterface()}
 }
 
 func encodeString(val string) interface{} {
