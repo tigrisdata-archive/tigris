@@ -235,10 +235,8 @@ func (m *TxImplWithMetrics) Replace(ctx context.Context, table []byte, key Key, 
 	}
 	if requestStatus != nil {
 		fdbKey := getFDBKey(table, key)
-		if requestStatus.OnlyCountKeyLength(fdbKey) {
-			// Does not count _tigris_created_at and _tigris_updated_at
-			requestStatus.AddWriteBytes(int64(len(fdbKey)))
-		} else {
+		if !requestStatus.IsKeySecondaryIndex(fdbKey) {
+			// The secondary index keys are counted in query runner
 			requestStatus.AddWriteBytes(int64(len(data.RawData)))
 		}
 	}

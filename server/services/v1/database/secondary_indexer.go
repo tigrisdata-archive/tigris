@@ -190,7 +190,9 @@ func (q *SecondaryIndexer) Update(ctx context.Context, tx transaction.Tx, newTd 
 
 	for _, indexKey := range updateSet.removeKeys {
 		if reqStatus != nil && reqStatusExists {
-			reqStatus.AddWriteBytes(int64(len(indexKey.SerializeToBytes())))
+			if !reqStatus.IsSecondaryIndexFieldIgnored(indexKey.SerializeToBytes()) {
+				reqStatus.AddWriteBytes(int64(len(indexKey.SerializeToBytes())))
+			}
 		}
 		if err := tx.Delete(ctx, indexKey); err != nil {
 			return err
@@ -199,7 +201,9 @@ func (q *SecondaryIndexer) Update(ctx context.Context, tx transaction.Tx, newTd 
 
 	for _, indexKey := range updateSet.addKeys {
 		if reqStatus != nil && reqStatusExists {
-			reqStatus.AddWriteBytes(int64(len(indexKey.SerializeToBytes())))
+			if !reqStatus.IsSecondaryIndexFieldIgnored(indexKey.SerializeToBytes()) {
+				reqStatus.AddWriteBytes(int64(len(indexKey.SerializeToBytes())))
+			}
 		}
 		if err := tx.Replace(ctx, indexKey, internal.EmptyData, false); err != nil {
 			return err
