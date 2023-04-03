@@ -78,12 +78,7 @@ func (tx *KeyValueTx) Read(ctx context.Context, table []byte, key Key) (Iterator
 	if err != nil {
 		return nil, err
 	}
-	// TODO: move this to TxImplWithMetrics to kv/measure.go
-	if config.DefaultConfig.Metrics.Fdb.Enabled {
-		return NewKeyValueIteratorWithMetrics(ctx, iter), nil
-	} else {
-		return NewKeyValueIterator(ctx, iter), nil
-	}
+	return NewKeyValueIterator(ctx, iter), nil
 }
 
 func (tx *KeyValueTx) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (Iterator, error) {
@@ -91,12 +86,7 @@ func (tx *KeyValueTx) ReadRange(ctx context.Context, table []byte, lkey Key, rke
 	if err != nil {
 		return nil, err
 	}
-	// TODO: move this to TxImplWithMetrics to kv/measure.go
-	if config.DefaultConfig.Metrics.Fdb.Enabled {
-		return NewKeyValueIteratorWithMetrics(ctx, iter), nil
-	} else {
-		return NewKeyValueIterator(ctx, iter), nil
-	}
+	return NewKeyValueIterator(ctx, iter), nil
 }
 
 type KeyValueIterator struct {
