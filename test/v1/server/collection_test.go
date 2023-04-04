@@ -306,11 +306,77 @@ func TestDescribeCollection(t *testing.T) {
 	createCollection(t, db, coll, testCreateSchema).Status(http.StatusOK)
 	resp := describeCollection(t, db, coll, Map{})
 
+	indexes := []Map{
+		{
+			"name":  "_tigris_created_at",
+			"state": "INDEX ACTIVE",
+		},
+		{
+			"name":  "_tigris_updated_at",
+			"state": "INDEX ACTIVE",
+		},
+		{
+			"fields": []Map{
+				{
+					"name": "bool_value",
+				},
+			},
+			"name":  "bool_value",
+			"state": "INDEX ACTIVE",
+		},
+		{
+			"fields": []Map{
+				{
+					"name": "date_time_value",
+				},
+			},
+			"name":  "date_time_value",
+			"state": "INDEX ACTIVE",
+		},
+		{
+			"fields": []Map{
+				{
+					"name": "double_value",
+				},
+			},
+			"name":  "double_value",
+			"state": "INDEX ACTIVE",
+		},
+		{
+			"fields": []Map{
+				{
+					"name": "int_value",
+				},
+			},
+			"name":  "int_value",
+			"state": "INDEX ACTIVE",
+		},
+		{
+			"fields": []Map{
+				{
+					"name": "string_value",
+				},
+			},
+			"name":  "string_value",
+			"state": "INDEX ACTIVE",
+		},
+		{
+			"fields": []Map{
+				{
+					"name": "uuid_value",
+				},
+			},
+			"name":  "uuid_value",
+			"state": "INDEX ACTIVE",
+		},
+	}
+
 	resp.Status(http.StatusOK).
 		JSON().
 		Object().
 		ValueEqual("collection", coll).
-		ValueEqual("size", 0)
+		ValueEqual("size", 0).
+		ValueEqual("indexes", indexes)
 
 	// cleanup
 	dropCollection(t, db, coll)

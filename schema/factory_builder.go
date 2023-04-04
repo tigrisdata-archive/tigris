@@ -104,7 +104,7 @@ func (fb *FactoryBuilder) deserializeProperties(properties jsoniter.RawMessage, 
 				if err = fb.deserializeArray(builder.Items, &builder.Fields); err != nil {
 					return err
 				}
-			} else if builder.MaxItems == nil || *builder.MaxItems != 0 {
+			} else if (len(builder.Format) == 0) && (builder.MaxItems == nil || *builder.MaxItems != 0) {
 				if fb.onUserRequest {
 					// only return an error for online requests
 					return errors.InvalidArgument("missing items for array field")

@@ -75,6 +75,10 @@ type Field struct {
 
 	Required []string `json:"required,omitempty"`
 
+	SearchIndex bool `json:"searchIndex,omitempty"`
+	Facet       bool `json:"facet,omitempty"`
+	Sort        bool `json:"sort,omitempty"`
+
 	// RequiredTag is used during schema building only
 	RequiredTag bool `json:"-"`
 }
@@ -129,6 +133,10 @@ type FieldGen struct {
 	CreatedAt bool
 	Required  bool
 
+	SearchIndex bool
+	Facet       bool
+	Sort        bool
+
 	Description string
 }
 
@@ -171,6 +179,9 @@ func (s *schemaGenerator) genField(w io.Writer, n string, v *Field, pk []string,
 	f.CreatedAt = v.CreatedAt
 	f.MaxLength = v.MaxLength
 	f.Required = required
+	f.SearchIndex = v.SearchIndex
+	f.Facet = v.Facet
+	f.Sort = v.Sort
 
 	f.Default = v.Default
 	if s, ok := f.Default.(string); ok {

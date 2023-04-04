@@ -232,6 +232,9 @@ public class Product implements TigrisCollectionType {
     private int name_gen_key;
     @TigrisPrimaryKey(order = 3)
     private int name_key;
+    private String name_si;
+    private int name_sif;
+    private Date name_sifs;
     private int req_field;
     private Date time_f;
     private int user_name;
@@ -356,6 +359,30 @@ public class Product implements TigrisCollectionType {
         this.name_key = nameKey;
     }
 
+    public String getName_si() {
+        return name_si;
+    }
+
+    public void setName_si(String nameSi) {
+        this.name_si = nameSi;
+    }
+
+    public int getName_sif() {
+        return name_sif;
+    }
+
+    public void setName_sif(int nameSif) {
+        this.name_sif = nameSif;
+    }
+
+    public Date getName_sifs() {
+        return name_sifs;
+    }
+
+    public void setName_sifs(Date nameSifs) {
+        this.name_sifs = nameSifs;
+    }
+
     public int getReq_field() {
         return req_field;
     }
@@ -398,6 +425,9 @@ public class Product implements TigrisCollectionType {
         int nameGen,
         int nameGenKey,
         int nameKey,
+        String nameSi,
+        int nameSif,
+        Date nameSifs,
         int reqField,
         Date timeF,
         int userName
@@ -417,6 +447,9 @@ public class Product implements TigrisCollectionType {
         this.name_gen = nameGen;
         this.name_gen_key = nameGenKey;
         this.name_key = nameKey;
+        this.name_si = nameSi;
+        this.name_sif = nameSif;
+        this.name_sifs = nameSifs;
         this.req_field = reqField;
         this.time_f = timeF;
         this.user_name = userName;
@@ -448,6 +481,9 @@ public class Product implements TigrisCollectionType {
             name_gen == other.name_gen &&
             name_gen_key == other.name_gen_key &&
             name_key == other.name_key &&
+            name_si == other.name_si &&
+            name_sif == other.name_sif &&
+            name_sifs == other.name_sifs &&
             req_field == other.req_field &&
             time_f == other.time_f &&
             user_name == other.user_name;
@@ -471,6 +507,9 @@ public class Product implements TigrisCollectionType {
             name_gen,
             name_gen_key,
             name_key,
+            name_si,
+            name_sif,
+            name_sifs,
             req_field,
             time_f,
             user_name

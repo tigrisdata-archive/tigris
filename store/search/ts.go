@@ -27,8 +27,8 @@ import (
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
-	"github.com/typesense/typesense-go/typesense"
-	tsApi "github.com/typesense/typesense-go/typesense/api"
+	"github.com/tigrisdata/typesense-go/typesense"
+	tsApi "github.com/tigrisdata/typesense-go/typesense/api"
 )
 
 var maxCandidates = 100
@@ -224,11 +224,12 @@ func (s *storeImpl) IndexDocuments(_ context.Context, table string, reader io.Re
 	return responses, nil
 }
 
-func (s *storeImpl) getBaseSearchParam(query *qsearch.Query, pageNo int) tsApi.MultiSearchParameters {
-	baseParam := tsApi.MultiSearchParameters{
-		Q:       &query.Q,
-		Page:    &pageNo,
-		PerPage: &query.PageSize,
+func (s *storeImpl) getBaseSearchParam(table string, query *qsearch.Query, pageNo int) tsApi.MultiSearchCollectionParameters {
+	baseParam := tsApi.MultiSearchCollectionParameters{
+		Q:          &query.Q,
+		Collection: table,
+		Page:       &pageNo,
+		PerPage:    &query.PageSize,
 	}
 	if fields := query.ToSearchFields(); len(fields) > 0 {
 		baseParam.QueryBy = &fields
@@ -248,17 +249,16 @@ func (s *storeImpl) getBaseSearchParam(query *qsearch.Query, pageNo int) tsApi.M
 	if searchFilter := query.WrappedF.SearchFilter(); len(searchFilter) > 1 {
 		baseParam.FilterBy = &searchFilter
 	}
+	if vector := query.ToSearchVector(); len(vector) > 0 {
+		baseParam.VectorQuery = &vector
+	}
 
 	return baseParam
 }
 
 func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query, pageNo int) ([]tsApi.SearchResult, error) {
-	params := []tsApi.MultiSearchCollectionParameters{
-		{
-			Collection:            table,
-			MultiSearchParameters: s.getBaseSearchParam(query, pageNo),
-		},
-	}
+	var params []tsApi.MultiSearchCollectionParameters
+	params = append(params, s.getBaseSearchParam(table, query, pageNo))
 
 	res, err := s.client.MultiSearch.PerformWithContentType(&tsApi.MultiSearchParams{
 		MaxCandidates: &maxCandidates,

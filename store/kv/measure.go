@@ -27,7 +27,8 @@ type TxStoreWithMetrics struct {
 }
 
 type KeyValueIteratorWithMetrics struct {
-	KeyValueIterator
+	ctx context.Context
+	Iterator
 }
 
 func NewKeyValueStoreWithMetrics(txStore TxStore) TxStore {
@@ -36,8 +37,8 @@ func NewKeyValueStoreWithMetrics(txStore TxStore) TxStore {
 	}
 }
 
-func NewKeyValueIteratorWithMetrics(ctx context.Context, iter baseIterator) *KeyValueIteratorWithMetrics {
-	return &KeyValueIteratorWithMetrics{KeyValueIterator{ctx: ctx, baseIterator: iter}}
+func NewKeyValueIteratorWithMetrics(ctx context.Context, iter Iterator) *KeyValueIteratorWithMetrics {
+	return &KeyValueIteratorWithMetrics{ctx, iter}
 }
 
 func measureLow(ctx context.Context, name string, f func() error) {
@@ -59,8 +60,8 @@ func measureLow(ctx context.Context, name string, f func() error) {
 }
 
 func (i *KeyValueIteratorWithMetrics) Next(value *KeyValue) bool {
-	hasNext := i.KeyValueIterator.Next(value)
-	reqStatus, ok := metrics.RequestStatusFromContext(i.KeyValueIterator.ctx)
+	hasNext := i.Iterator.Next(value)
+	reqStatus, ok := metrics.RequestStatusFromContext(i.ctx)
 	if !ok {
 		log.Debug().Msg("Iterator did not get request status")
 	}
@@ -72,7 +73,7 @@ func (i *KeyValueIteratorWithMetrics) Next(value *KeyValue) bool {
 }
 
 func (i *KeyValueIteratorWithMetrics) Err() error {
-	return i.KeyValueIterator.Err()
+	return i.Iterator.Err()
 }
 
 func (m *TxStoreWithMetrics) measure(ctx context.Context, name string, f func() error) {
@@ -234,10 +235,8 @@ func (m *TxImplWithMetrics) Replace(ctx context.Context, table []byte, key Key, 
 	}
 	if requestStatus != nil {
 		fdbKey := getFDBKey(table, key)
-		if requestStatus.OnlyCountKeyLength(fdbKey) {
-			// Does not count _tigris_created_at and _tigris_updated_at
-			requestStatus.AddWriteBytes(int64(len(fdbKey)))
-		} else {
+		if !requestStatus.IsKeySecondaryIndex(fdbKey) {
+			// The secondary index keys are counted in query runner
 			requestStatus.AddWriteBytes(int64(len(data.RawData)))
 		}
 	}
@@ -246,7 +245,8 @@ func (m *TxImplWithMetrics) Replace(ctx context.Context, table []byte, key Key, 
 
 func (m *TxImplWithMetrics) Read(ctx context.Context, table []byte, key Key) (it Iterator, err error) {
 	m.measure(ctx, "Read", func() error {
-		it, err = m.tx.Read(ctx, table, key)
+		kvIt, err := m.tx.Read(ctx, table, key)
+		it = NewKeyValueIteratorWithMetrics(ctx, kvIt)
 		return err
 	})
 	// Read bytes are counted in the iterator
@@ -255,7 +255,8 @@ func (m *TxImplWithMetrics) Read(ctx context.Context, table []byte, key Key) (it
 
 func (m *TxImplWithMetrics) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (it Iterator, err error) {
 	m.measure(ctx, "ReadRange", func() error {
-		it, err = m.tx.ReadRange(ctx, table, lkey, rkey, isSnapshot)
+		kvIt, err := m.tx.ReadRange(ctx, table, lkey, rkey, isSnapshot)
+		it = NewKeyValueIteratorWithMetrics(ctx, kvIt)
 		return err
 	})
 	// Read bytes are counted in the iterator

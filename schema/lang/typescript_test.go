@@ -120,6 +120,18 @@ export class Product {
   @PrimaryKey(TigrisDataTypes.INT32, { order: 3 })
   name_key: number;
 
+  @Field()
+  @SearchField()
+  name_si: string;
+
+  @Field(TigrisDataTypes.INT32)
+  @SearchField({facet: true})
+  name_sif: number;
+
+  @Field(TigrisDataTypes.DATE_TIME)
+  @SearchField({sort: true, facet: true})
+  name_sifs: Date;
+
   @Field(TigrisDataTypes.INT32)
   req_field: number;
 

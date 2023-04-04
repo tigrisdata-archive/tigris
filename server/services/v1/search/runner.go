@@ -159,6 +159,11 @@ func (runner *baseRunner) encodeDocuments(index *schema.SearchIndex, documents [
 			return nil, nil, err
 		}
 
+		// perform any validation on this index
+		if err := index.Validate(decDoc); err != nil {
+			return nil, nil, err
+		}
+
 		if id, ok := decDoc[schema.SearchId]; !ok {
 			if isUpdate {
 				return nil, nil, errors.InvalidArgument("doc missing 'id' field")
@@ -722,6 +727,11 @@ func (runner *SearchRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 		return Response{}, err
 	}
 
+	vecSearch, err := runner.getVectorSearch(index)
+	if err != nil {
+		return Response{}, err
+	}
+
 	pageSize := int(runner.req.PageSize)
 	if pageSize == 0 {
 		pageSize = defaultPerPage
@@ -737,7 +747,11 @@ func (runner *SearchRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 		ReadFields(fieldSelection).
 		SortOrder(sortOrder).
 		GroupBy(groupBy).
+		VectorSearch(vecSearch).
 		Build()
+	if searchQ.IsQAndVectorBoth() {
+		return Response{}, errors.InvalidArgument("Currently either full text or vector search is supported")
+	}
 
 	searchReader := NewSearchReader(ctx, runner.store, index, searchQ)
 	var iterator *FilterableSearchIterator
@@ -975,6 +989,29 @@ func (runner *SearchRunner) getGroupBy(index *schema.SearchIndex) (qsearch.Group
 		}
 	}
 	return groupBy, nil
+}
+
+func (runner *SearchRunner) getVectorSearch(index *schema.SearchIndex) (qsearch.VectorSearch, error) {
+	vectorSearch, err := qsearch.UnmarshalVectorSearch(runner.req.Vector)
+	if err != nil {
+		return vectorSearch, err
+	}
+	if len(vectorSearch.VectorF) == 0 {
+		return vectorSearch, nil
+	}
+
+	f, err := index.GetQueryableField(vectorSearch.VectorF)
+	if err != nil {
+		return qsearch.VectorSearch{}, err
+	}
+	if f.DataType != schema.VectorType {
+		return qsearch.VectorSearch{}, errors.InvalidArgument("Cannot perform vector search on non-vector type, field `%s` is not a vector", f.FieldName)
+	}
+	if f.Dimensions != nil && *f.Dimensions != len(vectorSearch.VectorV) {
+		return qsearch.VectorSearch{}, errors.InvalidArgument("query vector is not same size as dimensions, expected size: %d", *f.Dimensions)
+	}
+
+	return vectorSearch, nil
 }
 
 type IndexRunner struct {

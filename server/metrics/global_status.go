@@ -152,15 +152,21 @@ func (r *RequestStatus) AddDDLUpdateUnit() {
 	log.Debug().Msg("Add ddl update unit")
 }
 
-func (r *RequestStatus) OnlyCountKeyLength(fdbKey []byte) bool {
+func (r *RequestStatus) IsKeySecondaryIndex(fdbKey []byte) bool {
+	if bytes.Contains(fdbKey, []byte("skey")) {
+		log.Debug().Bytes("fdbKey", fdbKey).Msg("Is secondary index")
+		return true
+	}
+	return false
+}
+
+func (r *RequestStatus) IsSecondaryIndexFieldIgnored(fdbKey []byte) bool {
 	for _, ignoredField := range ignoredFieldsForWrites {
-		// Do not count if it is an ignored secondary index or not a secondary index
-		if bytes.Contains(fdbKey, []byte("skey")) && !bytes.Contains(fdbKey, ignoredField) {
-			log.Debug().Bytes("field", fdbKey).Msg("Ignoring field")
+		if bytes.Contains(fdbKey, ignoredField) {
+			log.Debug().Bytes("fdbKey", fdbKey).Msg("Ignoring secondary index field")
 			return true
 		}
 	}
-	log.Debug().Bytes("field", fdbKey).Msg("Not ignoring field")
 	return false
 }
 

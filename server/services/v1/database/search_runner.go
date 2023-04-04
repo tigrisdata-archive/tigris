@@ -91,6 +91,11 @@ func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.
 		runner.queryMetrics.SetSort(false)
 	}
 
+	vecSearch, err := runner.getVectorSearch(collection)
+	if err != nil {
+		return Response{}, ctx, err
+	}
+
 	ctx = metrics.UpdateSpanTags(ctx, runner.queryMetrics)
 
 	pageSize := int(runner.req.PageSize)
@@ -107,7 +112,11 @@ func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.
 		Filter(wrappedF).
 		ReadFields(fieldSelection).
 		SortOrder(sortOrder).
+		VectorSearch(vecSearch).
 		Build()
+	if searchQ.IsQAndVectorBoth() {
+		return Response{}, ctx, errors.InvalidArgument("Currently either full text or vector search is supported")
+	}
 
 	searchReader := NewSearchReader(ctx, runner.searchStore, collection, searchQ)
 	var iterator *FilterableSearchIterator
@@ -267,4 +276,27 @@ func (runner *SearchQueryRunner) getFieldSelection(coll *schema.DefaultCollectio
 	}
 
 	return factory, nil
+}
+
+func (runner *SearchQueryRunner) getVectorSearch(coll *schema.DefaultCollection) (qsearch.VectorSearch, error) {
+	vectorSearch, err := qsearch.UnmarshalVectorSearch(runner.req.Vector)
+	if err != nil {
+		return vectorSearch, err
+	}
+	if len(vectorSearch.VectorF) == 0 {
+		return vectorSearch, nil
+	}
+
+	f, err := coll.GetQueryableField(vectorSearch.VectorF)
+	if err != nil {
+		return qsearch.VectorSearch{}, err
+	}
+	if f.DataType != schema.VectorType {
+		return qsearch.VectorSearch{}, errors.InvalidArgument("Cannot perform vector search on non-vector type, field `%s` is not a vector", f.FieldName)
+	}
+	if f.Dimensions != nil && *f.Dimensions != len(vectorSearch.VectorV) {
+		return qsearch.VectorSearch{}, errors.InvalidArgument("query vector is not same size as dimensions, expected size: %d", *f.Dimensions)
+	}
+
+	return vectorSearch, nil
 }

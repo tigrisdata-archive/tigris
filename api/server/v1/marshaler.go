@@ -201,6 +201,10 @@ func (x *SearchRequest) UnmarshalJSON(data []byte) error {
 			// delaying the sort deserialization
 			x.Sort = value
 			continue
+		case "vector":
+			// delaying the vector deserialization
+			x.Vector = value
+			continue
 		case "include_fields":
 			v = &x.IncludeFields
 		case "exclude_fields":
@@ -647,6 +651,7 @@ type collDesc struct {
 	Metadata   *CollectionMetadata `json:"metadata"`
 	Schema     jsoniter.RawMessage `json:"schema"`
 	Size       int64               `json:"size"`
+	Indexes    []*CollectionIndex  `json:"indexes"`
 }
 
 func (x *DescribeCollectionResponse) MarshalJSON() ([]byte, error) {
@@ -655,6 +660,7 @@ func (x *DescribeCollectionResponse) MarshalJSON() ([]byte, error) {
 		Metadata:   x.Metadata,
 		Schema:     x.Schema,
 		Size:       x.Size,
+		Indexes:    x.Indexes,
 	})
 }
 
@@ -676,6 +682,7 @@ func (x *DescribeDatabaseResponse) MarshalJSON() ([]byte, error) {
 			Metadata:   v.Metadata,
 			Schema:     v.Schema,
 			Size:       v.Size,
+			Indexes:    v.Indexes,
 		})
 	}
 

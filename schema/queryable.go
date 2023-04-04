@@ -17,7 +17,7 @@ package schema
 import (
 	"strings"
 
-	tsApi "github.com/typesense/typesense-go/typesense/api"
+	tsApi "github.com/tigrisdata/typesense-go/typesense/api"
 )
 
 // QueryableField is internal structure used after flattening the fields i.e. the representation of the queryable field
@@ -35,6 +35,7 @@ type QueryableField struct {
 	SearchType    string
 	packThis      bool
 	DoNotFlatten  bool
+	Dimensions    *int
 }
 
 // InMemoryName returns key name that is used to index this field in the indexing store. For example, an "id" key is indexed with
@@ -122,6 +123,7 @@ func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, 
 		SubType:    subType,
 		packThis:   packThis,
 		Indexed:    f.IsIndexable(),
+		Dimensions: f.Dimensions,
 	}
 
 	if searchIndexed != nil && *searchIndexed {

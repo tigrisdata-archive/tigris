@@ -92,6 +92,13 @@ func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streami
 	}
 }
 
+func (f *QueryRunnerFactory) GetExplainQueryRunner(r *api.ReadRequest, _ *metrics.WriteQueryMetrics, accessToken *types.AccessToken) *ExplainQueryRunner {
+	return &ExplainQueryRunner{
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
+		req:             r,
+	}
+}
+
 // GetSearchQueryRunner for executing Search.
 func (f *QueryRunnerFactory) GetSearchQueryRunner(r *api.SearchRequest, streaming SearchStreaming, qm *metrics.SearchQueryMetrics, accessToken *types.AccessToken) *SearchQueryRunner {
 	return &SearchQueryRunner{

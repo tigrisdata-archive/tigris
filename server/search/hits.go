@@ -19,7 +19,7 @@ import (
 
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
-	tsApi "github.com/typesense/typesense-go/typesense/api"
+	tsApi "github.com/tigrisdata/typesense-go/typesense/api"
 )
 
 type Hits struct {
@@ -58,9 +58,8 @@ func (h *Hits) HasMoreHits() bool {
 }
 
 type Hit struct {
-	Document       map[string]interface{}
-	TextMatchScore int64
-	Match          *api.Match
+	Document map[string]interface{}
+	Match    *api.Match
 }
 
 // True - field absent in document
@@ -79,9 +78,9 @@ func NewSearchHit(tsHit *tsApi.SearchResultHit) *Hit {
 		return nil
 	}
 
-	score := int64(0)
+	var score string
 	if tsHit.TextMatch != nil {
-		score = *tsHit.TextMatch
+		score = fmt.Sprintf("%d", *tsHit.TextMatch)
 	}
 
 	var fields []*api.MatchField
@@ -98,11 +97,11 @@ func NewSearchHit(tsHit *tsApi.SearchResultHit) *Hit {
 	}
 
 	return &Hit{
-		Document:       *tsHit.Document,
-		TextMatchScore: score,
+		Document: *tsHit.Document,
 		Match: &api.Match{
-			Fields: fields,
-			Score:  fmt.Sprintf("%d", score),
+			Fields:         fields,
+			Score:          score,
+			VectorDistance: tsHit.VectorDistance,
 		},
 	}
 }
