@@ -782,13 +782,8 @@ func (runner *ExplainQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 		return Response{}, ctx, err
 	}
 
-	explainResp, err := buildExplainResp(options, collection, runner.req.Filter)
-	if err != nil {
-		return Response{}, ctx, err
-	}
-
 	return Response{
-		Response: explainResp,
+		Response: buildExplainResp(options, collection, runner.req.Filter),
 	}, ctx, nil
 }
 
@@ -797,15 +792,15 @@ const (
 	SECONDARY = "secondary index"
 )
 
-func buildExplainResp(options readerOptions, coll *schema.DefaultCollection, filter []byte) (*api.ExplainResponse, error) {
+func buildExplainResp(options readerOptions, coll *schema.DefaultCollection, filter []byte) *api.ExplainResponse {
 	explain := &api.ExplainResponse{
 		Collection: coll.Name,
 		Filter:     string(filter),
 	}
 	if options.plan != nil {
 		explain.ReadType = SECONDARY
-		return explain, nil
+		return explain
 	}
 	explain.ReadType = PRIMARY
-	return explain, nil
+	return explain
 }
