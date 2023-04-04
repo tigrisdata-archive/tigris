@@ -17,18 +17,24 @@ package billing
 import (
 	"context"
 
+	"github.com/google/uuid"
+
 	"github.com/tigrisdata/tigris/server/config"
+	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 type Provider interface {
-	CreateAccount(ctx context.Context, namespaceId string, name string) (string, error)
-	AddDefaultPlan(ctx context.Context, metronomeId string) (bool, error)
-	AddPlan(ctx context.Context, metronomeId string, planId string) (bool, error)
+	CreateAccount(ctx context.Context, namespaceId string, name string) (MetronomeId, error)
+	AddDefaultPlan(ctx context.Context, accountId MetronomeId) (bool, error)
+	AddPlan(ctx context.Context, accountId MetronomeId, planId uuid.UUID) (bool, error)
 }
 
 func NewProvider() Provider {
 	if config.DefaultConfig.Billing.Metronome.Enabled {
-		return &Metronome{Config: config.DefaultConfig.Billing.Metronome}
+		svc, err := NewMetronomeProvider(config.DefaultConfig.Billing.Metronome)
+		if !ulog.E(err) {
+			return svc
+		}
 	}
 	return &noop{}
 }
