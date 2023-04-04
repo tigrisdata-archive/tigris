@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
@@ -413,32 +414,32 @@ type readerOptions struct {
 	fieldFactory *read.FieldFactory
 }
 
-func (runner *StreamingQueryRunner) buildReaderOptions(collection *schema.DefaultCollection) (readerOptions, error) {
+func (runner *BaseQueryRunner) buildReaderOptions(req *api.ReadRequest, collection *schema.DefaultCollection) (readerOptions, error) {
 	var err error
 	options := readerOptions{}
 	var collation *value.Collation
-	if runner.req.Options != nil {
-		collation = value.NewCollationFrom(runner.req.Options.Collation)
+	if req.Options != nil {
+		collation = value.NewCollationFrom(req.Options.Collation)
 	}
-	if options.sorting, err = runner.getSortOrdering(collection, runner.req.Sort); err != nil {
+	if options.sorting, err = runner.getSortOrdering(collection, req.Sort); err != nil {
 		return options, err
 	}
-	if options.filter, err = filter.NewFactory(collection.QueryableFields, collation).WrappedFilter(runner.req.Filter); err != nil {
+	if options.filter, err = filter.NewFactory(collection.QueryableFields, collation).WrappedFilter(req.Filter); err != nil {
 		return options, err
 	}
 
 	options.table = collection.EncodedName
-	if options.fieldFactory, err = read.BuildFields(runner.req.GetFields()); err != nil {
+	if options.fieldFactory, err = read.BuildFields(req.GetFields()); err != nil {
 		return options, err
 	}
-	if runner.req.Options != nil && len(runner.req.Options.Offset) > 0 {
-		if options.from, err = keys.FromBinary(options.table, runner.req.Options.Offset); err != nil {
+	if req.Options != nil && len(req.Options.Offset) > 0 {
+		if options.from, err = keys.FromBinary(options.table, req.Options.Offset); err != nil {
 			return options, err
 		}
 	}
 
 	if config.DefaultConfig.SecondaryIndex.ReadEnabled {
-		if queryPlan, err := runner.buildSecondaryIndexKeysUsingFilter(collection, runner.req.Filter, collation); err == nil {
+		if queryPlan, err := runner.buildSecondaryIndexKeysUsingFilter(collection, req.Filter, collation); err == nil {
 			options.plan = queryPlan
 			return options, nil
 		}
@@ -451,7 +452,7 @@ func (runner *StreamingQueryRunner) buildReaderOptions(collection *schema.Defaul
 		} else {
 			options.noFilter = true
 		}
-	} else if options.ikeys, err = runner.buildKeysUsingFilter(collection, runner.req.Filter, collation); err != nil {
+	} else if options.ikeys, err = runner.buildKeysUsingFilter(collection, req.Filter, collation); err != nil {
 		if !config.DefaultConfig.Search.IsReadEnabled() {
 			if options.from == nil {
 				// in this case, scan will happen from the beginning of the table.
@@ -500,10 +501,11 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 		return Response{}, ctx, err
 	}
 
-	options, err := runner.buildReaderOptions(collection)
+	options, err := runner.buildReaderOptions(runner.req, collection)
 	if err != nil {
 		return Response{}, ctx, err
 	}
+
 	if options.inMemoryStore {
 		if err = runner.iterateOnSearchStore(ctx, collection, options); err != nil {
 			return Response{}, ctx, createApiError(err)
@@ -557,7 +559,7 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
-	options, err := runner.buildReaderOptions(coll)
+	options, err := runner.buildReaderOptions(runner.req, coll)
 	if err != nil {
 		return Response{}, ctx, err
 	}
@@ -754,4 +756,51 @@ func (runner *StreamingQueryRunner) writeTimestamp(buf *bytes.Buffer, key string
 	_, _ = buf.Write([]byte(fmt.Sprintf(`, "%s":%s`, key, ts)))
 
 	return nil
+}
+
+type ExplainQueryRunner struct {
+	*BaseQueryRunner
+
+	req *api.ReadRequest
+}
+
+func (runner *ExplainQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
+	db, err := runner.getDatabase(ctx, nil, tenant, runner.req.GetProject(), runner.req.GetBranch())
+	if err != nil {
+		return Response{}, ctx, err
+	}
+
+	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
+
+	collection, err := runner.getCollection(db, runner.req.GetCollection())
+	if err != nil {
+		return Response{}, ctx, err
+	}
+
+	options, err := runner.buildReaderOptions(runner.req, collection)
+	if err != nil {
+		return Response{}, ctx, err
+	}
+
+	return Response{
+		Response: buildExplainResp(options, collection, runner.req.Filter),
+	}, ctx, nil
+}
+
+const (
+	PRIMARY   = "primary index"
+	SECONDARY = "secondary index"
+)
+
+func buildExplainResp(options readerOptions, coll *schema.DefaultCollection, filter []byte) *api.ExplainResponse {
+	explain := &api.ExplainResponse{
+		Collection: coll.Name,
+		Filter:     string(filter),
+	}
+	if options.plan != nil {
+		explain.ReadType = SECONDARY
+		return explain
+	}
+	explain.ReadType = PRIMARY
+	return explain
 }

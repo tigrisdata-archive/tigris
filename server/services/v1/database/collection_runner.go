@@ -195,12 +195,28 @@ func (runner *CollectionQueryRunner) describe(ctx context.Context, tx transactio
 		}
 	}
 
+	indexes := make([]*api.CollectionIndex, len(coll.SecondaryIndexes.All))
+	for i, index := range coll.SecondaryIndexes.All {
+		fields := make([]*api.Field, len(index.Fields))
+		for j, field := range index.Fields {
+			fields[j] = &api.Field{
+				Name: field.FieldName,
+			}
+		}
+		indexes[i] = &api.CollectionIndex{
+			Name:   index.Name,
+			State:  index.StateString(),
+			Fields: fields,
+		}
+	}
+
 	return Response{
 		Response: &api.DescribeCollectionResponse{
 			Collection: coll.Name,
 			Metadata:   &api.CollectionMetadata{},
 			Schema:     sch,
 			Size:       size,
+			Indexes:    indexes,
 		},
 	}, ctx, nil
 }

@@ -202,6 +202,7 @@ func TestDescribeDatabaseSchemaFormat(t *testing.T) {
 		ValueEqual("collections", []Map{
 			{
 				"size":       0,
+				"indexes":    nil,
 				"metadata":   Map{},
 				"collection": "test_collection",
 				"schema": Map{
