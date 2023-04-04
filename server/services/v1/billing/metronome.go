@@ -15,113 +15,122 @@
 package billing
 
 import (
-	"bytes"
 	"context"
-	"fmt"
-	"io"
 	"net/http"
 	"time"
 
-	jsoniter "github.com/json-iterator/go"
+	"github.com/deepmap/oapi-codegen/pkg/securityprovider"
+	"github.com/google/uuid"
+	biller "github.com/tigrisdata/metronome-go-client"
+
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
-	"golang.org/x/net/context/ctxhttp"
 )
 
 const (
-	ContentTypeJSON = "application/json"
-	TimeFormat      = time.RFC3339
+	TimeFormat = time.RFC3339
 )
+
+type MetronomeId = uuid.UUID
 
 type Metronome struct {
 	Config config.Metronome
+	client *biller.ClientWithResponses
 }
 
-func (m *Metronome) CreateAccount(ctx context.Context, namespaceId string, name string) (string, error) {
-	payload := map[string]interface{}{
-		"name":           name,
-		"ingest_aliases": []string{namespaceId},
-	}
-	req, err := m.createRequest(ctx, "/customers", payload)
+func NewMetronomeProvider(config config.Metronome) (*Metronome, error) {
+	bearerTokenProvider, err := securityprovider.NewSecurityProviderBearerToken(config.ApiKey)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-
-	respBytes, err := m.executeRequest(ctx, req)
+	client, err := biller.NewClientWithResponses(config.URL, biller.WithRequestEditorFn(bearerTokenProvider.Intercept))
 	if err != nil {
-		return "", err
+		return nil, err
+	}
+	return &Metronome{Config: config, client: client}, nil
+}
+
+func (m *Metronome) CreateAccount(ctx context.Context, namespaceId string, name string) (MetronomeId, error) {
+	body := biller.CreateCustomerJSONRequestBody{
+		IngestAliases: &[]string{namespaceId},
+		Name:          name,
 	}
 
-	var respBody CreateAccountResponse
-	err = jsoniter.Unmarshal(respBytes, &respBody)
+	resp, err := m.client.CreateCustomerWithResponse(ctx, body)
 	if err != nil {
-		return "", err
+		return uuid.Nil, err
+	}
+	if resp.JSON200 == nil {
+		return uuid.Nil, errors.Internal("metronome failure: %s", resp.Body)
 	}
 
-	return respBody.Data.Id, nil
+	return resp.JSON200.Data.Id, nil
 }
 
-type CreateAccountResponse struct {
-	Data struct {
-		Id string
+func (m *Metronome) AddDefaultPlan(ctx context.Context, accountId MetronomeId) (bool, error) {
+	planId, err := uuid.Parse(m.Config.DefaultPlan)
+	if err != nil {
+		return false, err
 	}
+	return m.AddPlan(ctx, accountId, planId)
 }
 
-func (m *Metronome) AddDefaultPlan(ctx context.Context, metronomeId string) (bool, error) {
-	return m.AddPlan(ctx, metronomeId, m.Config.DefaultPlan)
-}
-
-func (m *Metronome) AddPlan(ctx context.Context, metronomeId string, planId string) (bool, error) {
-	payload := map[string]any{
-		"plan_id": planId,
+func (m *Metronome) AddPlan(ctx context.Context, accountId MetronomeId, planId uuid.UUID) (bool, error) {
+	body := biller.AddPlanToCustomerJSONRequestBody{
+		PlanId: planId,
 		// plans can only start at UTC midnight, so we either +1 or -1 from current day
-		"starting_on": pastMidnight().Format(TimeFormat),
+		StartingOn: pastMidnight(),
 	}
 
-	req, err := m.createRequest(ctx, fmt.Sprintf("/customers/%s/plans/add", metronomeId), payload)
+	resp, err := m.client.AddPlanToCustomerWithResponse(ctx, accountId, body)
 	if err != nil {
 		return false, err
 	}
 
-	_, err = m.executeRequest(ctx, req)
-	if err != nil {
-		return false, err
+	if resp.JSON200 == nil {
+		return false, errors.Internal("metronome failure: %s", resp.Body)
 	}
+
 	return true, nil
 }
 
-func (m *Metronome) createRequest(ctx context.Context, path string, payload map[string]any) (*http.Request, error) {
-	jsonPayload, err := jsoniter.Marshal(payload)
-	if err != nil {
-		return nil, err
+func (m *Metronome) PushUsageEvents(ctx context.Context, events []*UsageEvent) error {
+	var billingEvents []biller.Event
+	for _, se := range events {
+		if se != nil && se.Properties != nil && len(*se.Properties) > 0 {
+			billingEvents = append(billingEvents, se.Event)
+		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, m.Config.URL+path, bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("Content-Type", ContentTypeJSON)
-	req.Header.Set("Authorization", "Bearer "+m.Config.ApiKey)
-	return req, nil
+	return m.pushBillingEvents(ctx, billingEvents)
 }
 
-func (m *Metronome) executeRequest(ctx context.Context, req *http.Request) ([]byte, error) {
-	resp, err := ctxhttp.Do(ctx, nil, req)
-	if err != nil {
-		return nil, err
+func (m *Metronome) PushStorageEvents(ctx context.Context, events []*StorageEvent) error {
+	var billingEvents []biller.Event
+	for _, se := range events {
+		if se != nil && se.Properties != nil && len(*se.Properties) > 0 {
+			billingEvents = append(billingEvents, se.Event)
+		}
 	}
-	defer resp.Body.Close()
-	respBytes, err := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		errStr := string(respBytes)
-		return nil, errors.Internal("metronome failure: '%s'", resp.Status+" - "+errStr)
+	return m.pushBillingEvents(ctx, billingEvents)
+}
+
+func (m *Metronome) pushBillingEvents(ctx context.Context, events []biller.Event) error {
+	if len(events) == 0 {
+		return nil
 	}
 
+	// content encoding - gzip?
+	body := events
+	resp, err := m.client.IngestWithResponse(ctx, body)
 	if err != nil {
-		return []byte{}, err
+		return err
 	}
-	return respBytes, nil
+	if resp.StatusCode() != http.StatusOK {
+		return errors.Internal("metronome failure: %s", resp.Body)
+	}
+
+	return nil
 }
 
 func pastMidnight() time.Time {

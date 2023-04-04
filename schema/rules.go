@@ -252,7 +252,7 @@ func ValidateFieldAttributes(isSearch bool, field *Field) error {
 		}
 
 		if field.FieldName == SearchId {
-			if field.DataType != StringType {
+			if field.DataType != StringType && field.DataType != UUIDType {
 				return errors.InvalidArgument("Only string type is supported as 'id' field")
 			}
 		}

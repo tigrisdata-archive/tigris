@@ -25,16 +25,17 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
+	"google.golang.org/grpc"
+
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
-	"github.com/tigrisdata/tigris/lib/uuid"
+	uuid2 "github.com/tigrisdata/tigris/lib/uuid"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/services/v1/auth"
 	"github.com/tigrisdata/tigris/server/services/v1/billing"
 	"github.com/tigrisdata/tigris/server/transaction"
 	ulog "github.com/tigrisdata/tigris/util/log"
-	"google.golang.org/grpc"
 )
 
 const (
@@ -85,7 +86,7 @@ func (m *managementService) CreateNamespace(ctx context.Context, req *api.Create
 	}
 	id := req.GetId()
 	if req.GetId() == "" {
-		id = uuid.New().String()
+		id = uuid2.New().String()
 	}
 
 	tx, err := m.Manager.StartTx(ctx)
@@ -114,9 +115,9 @@ func (m *managementService) CreateNamespace(ctx context.Context, req *api.Create
 	// Create a Billing account, if it fails metrics reporter will retry in a separate flow
 	// does not block namespace creation
 	billingId, err := m.BillingProvider.CreateAccount(ctx, id, req.GetName())
-	if !ulog.E(err) && len(billingId) > 0 {
+	if !ulog.E(err) && billingId != uuid2.NullUUID {
 		// account creation succeeds, update namespace metadata
-		meta.Accounts.AddMetronome(billingId)
+		meta.Accounts.AddMetronome(billingId.String())
 		// add tenant to default plan
 		added, err := m.BillingProvider.AddDefaultPlan(ctx, billingId)
 
