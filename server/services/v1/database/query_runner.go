@@ -793,7 +793,7 @@ func (runner *ExplainQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 }
 
 const (
-	PRIMARY   = "scan"
+	PRIMARY   = "primary index"
 	SECONDARY = "secondary index"
 )
 
