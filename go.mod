@@ -4,7 +4,6 @@ go 1.20
 
 require (
 	github.com/DataDog/datadog-api-client-go v1.16.0
-	github.com/adilansari/metronome-go-client v0.1.3
 	github.com/apple/foundationdb/bindings/go v0.0.0-20220521054011-a88e049b28d8
 	github.com/auth0/go-auth0 v0.9.3
 	github.com/auth0/go-jwt-middleware/v2 v2.1.0
@@ -40,6 +39,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.15.0
 	github.com/stretchr/testify v1.8.2
+	github.com/tigrisdata/metronome-go-client v0.1.0
 	github.com/tigrisdata/tigris-client-go v1.0.0-beta.25
 	github.com/tigrisdata/typesense-go v0.6.2-beta.6
 	github.com/uber-go/tally v3.5.3+incompatible

@@ -19,7 +19,7 @@ import (
 	"net/http"
 	"time"
 
-	biller "github.com/adilansari/metronome-go-client"
+	biller "github.com/tigrisdata/metronome-go-client"
 	"github.com/deepmap/oapi-codegen/pkg/securityprovider"
 	"github.com/google/uuid"
 
@@ -35,7 +35,7 @@ type MetronomeId = uuid.UUID
 
 type Metronome struct {
 	Config config.Metronome
-	client *biller.Client
+	client *biller.ClientWithResponses
 }
 
 func NewMetronomeProvider(config config.Metronome) (*Metronome, error) {
@@ -43,7 +43,7 @@ func NewMetronomeProvider(config config.Metronome) (*Metronome, error) {
 	if err != nil {
 		return nil, err
 	}
-	client, err := biller.NewClient(config.URL, biller.WithRequestEditorFn(bearerTokenProvider.Intercept))
+	client, err := biller.NewClientWithResponses(config.URL, biller.WithRequestEditorFn(bearerTokenProvider.Intercept))
 	if err != nil {
 		return nil, err
 	}
@@ -56,21 +56,15 @@ func (m *Metronome) CreateAccount(ctx context.Context, namespaceId string, name 
 		Name:          name,
 	}
 
-	resp, err := m.client.CreateCustomer(ctx, body)
-	defer func() { _ = resp.Body.Close() }()
+	resp, err := m.client.CreateCustomerWithResponse(ctx, body)
 	if err != nil {
 		return uuid.Nil, err
 	}
-
-	parsed, err := biller.ParseCreateCustomerResponse(resp)
-	if err != nil {
-		return uuid.Nil, err
-	}
-	if parsed.JSON200 == nil {
-		return uuid.Nil, errors.Internal("metronome failure: %s", parsed.Body)
+	if resp.JSON200 == nil {
+		return uuid.Nil, errors.Internal("metronome failure: %s", resp.Body)
 	}
 
-	return parsed.JSON200.Data.Id, nil
+	return resp.JSON200.Data.Id, nil
 }
 
 func (m *Metronome) AddDefaultPlan(ctx context.Context, accountId MetronomeId) (bool, error) {
@@ -88,18 +82,13 @@ func (m *Metronome) AddPlan(ctx context.Context, accountId MetronomeId, planId u
 		StartingOn: pastMidnight(),
 	}
 
-	resp, err := m.client.AddPlanToCustomer(ctx, accountId, body)
-	defer func() { _ = resp.Body.Close() }()
+	resp, err := m.client.AddPlanToCustomerWithResponse(ctx, accountId, body)
 	if err != nil {
 		return false, err
 	}
 
-	parsed, err := biller.ParseAddPlanToCustomerResponse(resp)
-	if err != nil {
-		return false, err
-	}
-	if parsed.JSON200 == nil {
-		return false, errors.Internal("metronome failure: %s", parsed.Body)
+	if resp.JSON200 == nil {
+		return false, errors.Internal("metronome failure: %s", resp.Body)
 	}
 
 	return true, nil
@@ -133,18 +122,12 @@ func (m *Metronome) pushBillingEvents(ctx context.Context, events []biller.Event
 
 	// content encoding - gzip?
 	body := events
-	resp, err := m.client.Ingest(ctx, body)
-	defer func() { _ = resp.Body.Close() }()
+	resp, err := m.client.IngestWithResponse(ctx, body)
 	if err != nil {
 		return err
 	}
-
-	parsed, err := biller.ParseIngestResponse(resp)
-	if err != nil {
-		return err
-	}
-	if parsed.StatusCode() != http.StatusOK {
-		return errors.Internal("metronome failure: %s", parsed.Body)
+	if resp.StatusCode() != http.StatusOK {
+		return errors.Internal("metronome failure: %s", resp.Body)
 	}
 
 	return nil

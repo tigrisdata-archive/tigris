@@ -17,7 +17,7 @@ package billing
 import (
 	"time"
 
-	biller "github.com/adilansari/metronome-go-client"
+	biller "github.com/tigrisdata/metronome-go-client"
 )
 
 type UsageEvent struct {

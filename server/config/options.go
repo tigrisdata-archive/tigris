@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/auth0/go-jwt-middleware/v2/validator"
-
 	"github.com/tigrisdata/tigris/util/log"
 )
 

@@ -22,7 +22,6 @@ import (
 
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
@@ -116,7 +115,7 @@ func (m *managementService) CreateNamespace(ctx context.Context, req *api.Create
 	// Create a Billing account, if it fails metrics reporter will retry in a separate flow
 	// does not block namespace creation
 	billingId, err := m.BillingProvider.CreateAccount(ctx, id, req.GetName())
-	if !ulog.E(err) && billingId != uuid.Nil {
+	if !ulog.E(err) && billingId != uuid2.NullUUID {
 		// account creation succeeds, update namespace metadata
 		meta.Accounts.AddMetronome(billingId.String())
 		// add tenant to default plan
