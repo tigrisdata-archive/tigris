@@ -177,21 +177,23 @@ func (p *pageReader) next() (bool, *page, error) {
 }
 
 type FilterableSearchIterator struct {
-	err        error
-	single     bool
-	last       bool
-	page       *page
-	filter     *filter.WrappedFilter
-	pageReader *pageReader
-	index      *schema.SearchIndex
+	err         error
+	single      bool
+	last        bool
+	page        *page
+	filter      *filter.WrappedFilter
+	pageReader  *pageReader
+	index       *schema.SearchIndex
+	transformer readTransformer
 }
 
 func NewFilterableSearchIterator(index *schema.SearchIndex, reader *pageReader, filter *filter.WrappedFilter, singlePage bool) *FilterableSearchIterator {
 	return &FilterableSearchIterator{
-		single:     singlePage,
-		pageReader: reader,
-		filter:     filter,
-		index:      index,
+		single:      singlePage,
+		pageReader:  reader,
+		filter:      filter,
+		index:       index,
+		transformer: newReadTransformer(index),
 	}
 }
 
@@ -226,7 +228,7 @@ func (it *FilterableSearchIterator) Next(row *ResultRow) bool {
 					rawData   []byte
 				)
 
-				if hits[i].Document, createdAt, updatedAt, it.err = UnpackSearchFields(it.index, hits[i].Document); it.err != nil {
+				if hits[i].Document, createdAt, updatedAt, it.err = it.transformer.fromSearch(hits[i].Document); it.err != nil {
 					return false
 				}
 

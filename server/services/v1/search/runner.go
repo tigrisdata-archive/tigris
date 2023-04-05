@@ -28,7 +28,6 @@ import (
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/lib/container"
-	"github.com/tigrisdata/tigris/lib/uuid"
 	"github.com/tigrisdata/tigris/query/filter"
 	"github.com/tigrisdata/tigris/query/read"
 	qsearch "github.com/tigrisdata/tigris/query/search"
@@ -153,47 +152,30 @@ func (runner *baseRunner) encodeDocuments(index *schema.SearchIndex, documents [
 	ids := make([]string, len(documents))
 	ts := internal.NewTimestamp()
 
+	transformer := newWriteTransformer(index, ts, isUpdate)
 	serializedDocs := make([][]byte, len(documents))
-	for i, doc := range documents {
-		decDoc, err := util.JSONToMap(doc)
+	for i, raw := range documents {
+		doc, err := util.JSONToMap(raw)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		// perform any validation on this index
-		if err := index.Validate(decDoc); err != nil {
+		// perform any validation on this document
+		if err := index.Validate(doc); err != nil {
 			return nil, nil, err
 		}
 
-		if id, ok := decDoc[schema.SearchId]; !ok {
-			if isUpdate {
-				return nil, nil, errors.InvalidArgument("doc missing 'id' field")
-			}
-
-			ids[i] = uuid.New().String()
-			decDoc[schema.SearchId] = ids[i]
-		} else if ids[i], ok = id.(string); !ok {
-			return nil, nil, errors.InvalidArgument("wrong type of 'id' field")
-		}
-		if len(ids[i]) == 0 {
-			return nil, nil, errors.InvalidArgument("Empty 'id' is not allowed")
-		}
-
-		if serializedDocs[i], err = util.MapToJSON(decDoc); err != nil {
-			return nil, nil, err
-		}
-
-		packed, err := MutateSearchDocument(index, ts, decDoc, isUpdate)
+		id, transformed, err := transformer.toSearch(raw, doc)
 		if err != nil {
 			return nil, nil, err
 		}
+		ids[i] = id
 
-		var forSearch []byte
-		if forSearch, err = util.MapToJSON(packed); err != nil {
+		if serializedDocs[i], err = util.MapToJSON(transformed); err != nil {
 			return nil, nil, err
 		}
 
-		buffer.Write(forSearch)
+		buffer.Write(serializedDocs[i])
 		buffer.WriteByte('\n')
 	}
 
@@ -262,9 +244,11 @@ func (runner *ReadRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Res
 
 	idToHits := make(map[string]*map[string]interface{})
 	for _, hit := range *result.Hits {
+		// at this point we can safely rely on accessing "schema.SearchId" because we always inject it as top level key.
 		idToHits[(*hit.Document)[schema.SearchId].(string)] = hit.Document
 	}
 
+	transformer := newReadTransformer(index)
 	documents := make([]*api.SearchHit, len(runner.req.Ids))
 	for i, id := range runner.req.Ids {
 		// Order of returning the id should be same in the order it is asked in the request.
@@ -274,7 +258,7 @@ func (runner *ReadRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Res
 			continue
 		}
 
-		doc, created, updated, err := UnpackSearchFields(index, *outDoc)
+		doc, created, updated, err := transformer.fromSearch(*outDoc)
 		if err != nil {
 			return Response{}, err
 		}
@@ -315,6 +299,7 @@ func (runner *ReadRunner) fromStorage(ctx context.Context, index *schema.SearchI
 		_ = tx.Rollback(ctx)
 	}()
 
+	transformer := newReadTransformer(index)
 	documents := make([]*api.SearchHit, len(runner.req.Ids))
 	for i, id := range runner.req.Ids {
 		var key keys.Key
@@ -331,6 +316,21 @@ func (runner *ReadRunner) fromStorage(ctx context.Context, index *schema.SearchI
 			continue
 		}
 
+		// ToDo: Allow consuming "raw" data as-is as well so that we can just that to backfill indexes.
+		decode, err := util.JSONToMap(keyValue.Data.RawData)
+		if err != nil {
+			return Response{}, err
+		}
+
+		reversed, _, _, err := transformer.fromSearch(decode)
+		if err != nil {
+			return Response{}, err
+		}
+
+		raw, err := util.MapToJSON(reversed)
+		if err != nil {
+			return Response{}, err
+		}
 		meta := &api.SearchHitMeta{}
 		if keyValue.Data.CreatedAt != nil {
 			meta.CreatedAt = keyValue.Data.CreatedAt.GetProtoTS()
@@ -340,7 +340,7 @@ func (runner *ReadRunner) fromStorage(ctx context.Context, index *schema.SearchI
 		}
 
 		documents[i] = &api.SearchHit{
-			Data:     keyValue.Data.RawData,
+			Data:     raw,
 			Metadata: meta,
 		}
 	}
@@ -376,6 +376,10 @@ func (runner *CreateRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 }
 
 func (runner *CreateRunner) createDocumentById(ctx context.Context, tenant *metadata.Tenant, req *api.CreateByIdRequest) (Response, error) {
+	if len(req.Id) == 0 {
+		return Response{}, errors.InvalidArgument("'id' is required when creating by id")
+	}
+
 	index, err := runner.getIndex(tenant, req.GetProject(), req.GetIndex())
 	if err != nil {
 		return Response{}, err
@@ -386,30 +390,27 @@ func (runner *CreateRunner) createDocumentById(ctx context.Context, tenant *meta
 		return Response{}, err
 	}
 
-	id, found := decDoc[schema.SearchId].(string)
-	if !found {
-		id = req.Id
-		decDoc[schema.SearchId] = req.Id
+	transformer := newWriteTransformer(index, internal.NewTimestamp(), false)
+	id, transformed, err := transformer.toSearch(req.Document, decDoc)
+	if err != nil {
+		return Response{}, err
 	}
 	if id != req.Id {
 		return Response{}, errors.InvalidArgument("id passed in request '%s', is not matching id '%s' in body", req.Id, id)
 	}
-	if len(req.Id) == 0 {
-		return Response{}, errors.InvalidArgument("Empty 'id' is not allowed")
-	}
-
-	packed, err := MutateSearchDocument(index, internal.NewTimestamp(), decDoc, false)
-	if err != nil {
-		return Response{}, err
-	}
 
 	if err := runner.execInStorage(ctx, index.StoreIndexName(), []string{id}, func(_ int, tx transaction.Tx, key keys.Key) error {
-		return tx.Insert(ctx, key, internal.NewTableData(req.Document))
+		serialized, err := util.MapToJSON(transformed)
+		if err != nil {
+			return err
+		}
+
+		return tx.Insert(ctx, key, internal.NewTableData(serialized))
 	}); err != nil && err != kv.ErrDuplicateKey {
 		return Response{}, createApiError(err)
 	}
 
-	if err = runner.store.CreateDocument(ctx, index.StoreIndexName(), packed); err != nil {
+	if err = runner.store.CreateDocument(ctx, index.StoreIndexName(), transformed); err != nil {
 		return Response{}, createApiError(err)
 	}
 
@@ -530,10 +531,11 @@ func (runner *UpdateRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 	}
 
 	var (
-		ids    []string
-		buffer bytes.Buffer
+		ids        []string
+		serialized [][]byte
+		buffer     bytes.Buffer
 	)
-	if ids, _, err = runner.encodeDocuments(index, runner.req.Documents, &buffer, true); err != nil {
+	if ids, serialized, err = runner.encodeDocuments(index, runner.req.Documents, &buffer, true); err != nil {
 		return Response{}, err
 	}
 
@@ -566,7 +568,8 @@ func (runner *UpdateRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 			return nil
 		}
 
-		newData, err := runner.getMergedData(runner.req.Documents[index], value.Data.RawData)
+		// merging with flattened form that should be present in storage.
+		newData, err := runner.getMergedData(serialized[index], value.Data.RawData)
 		if err != nil {
 			return err
 		}
@@ -593,8 +596,11 @@ func (runner *UpdateRunner) getMergedData(input jsoniter.RawMessage, existing js
 			value = []byte(fmt.Sprintf(`"%s"`, value))
 		}
 
-		keys := strings.Split(string(key), ".")
-		output, err = jsonparser.Set(output, value, keys...)
+		if dataType == jsonparser.Object {
+			output, err = jsonparser.Set(output, value, strings.Split(string(key), ".")...)
+		} else {
+			output, err = jsonparser.Set(output, value, string(key))
+		}
 		if err != nil {
 			return err
 		}
