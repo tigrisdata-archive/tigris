@@ -50,7 +50,7 @@ type Store interface {
 	// CreateDocument is to create and index a single document
 	CreateDocument(_ context.Context, table string, doc map[string]any) error
 	// IndexDocuments is to index batch of documents. It expects index action to decide whether it needs to create/upsert/update documents.
-	IndexDocuments(ctx context.Context, table string, documents io.Reader, options IndexDocumentsOptions) ([]IndexResp, error)
+	IndexDocuments(ctx context.Context, table string, documents io.Reader, options IndexDocumentsOptions) ([]IndexResp, error) // bytes written - bytes from io.Reader
 	// DeleteDocument is deleting a single document using id.
 	DeleteDocument(ctx context.Context, table string, key string) error
 	// DeleteDocuments is to delete multiple documents using filter.
@@ -68,18 +68,6 @@ func NewStore(config *config.SearchConfig) (Store, error) {
 	log.Info().Str("host", config.Host).Int16("port", config.Port).Msg("initialized search store")
 	return &storeImpl{
 		client: client,
-	}, nil
-}
-
-func NewStoreWithMetrics(config *config.SearchConfig) (Store, error) {
-	client := typesense.NewClient(
-		typesense.WithServer(fmt.Sprintf("http://%s", net.JoinHostPort(config.Host, fmt.Sprintf("%d", config.Port)))),
-		typesense.WithAPIKey(config.AuthKey))
-	log.Info().Str("host", config.Host).Int16("port", config.Port).Msg("initialized search store")
-	return &storeImplWithMetrics{
-		&storeImpl{
-			client: client,
-		},
 	}, nil
 }
 

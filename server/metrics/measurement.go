@@ -96,6 +96,8 @@ func (m *Measurement) CountUnits(reqStatus *RequestStatus, tags map[string]strin
 	RequestsDDLDropUnits.Tagged(tags).Counter("units").Inc(reqStatus.GetDDLDropUnits())
 	RequestsDDLUpdateUnits.Tagged(tags).Counter("units").Inc(reqStatus.GetDDLUpdateUnits())
 	RequestsDDLCreateUnits.Tagged(tags).Counter("units").Inc(reqStatus.GetDDLCreateUnits())
+	RequestsCollectionSearchUnits.Tagged(tags).Counter("units").Inc(reqStatus.GetCollectionSearchUnits())
+	RequestsApiSearchUnits.Tagged(tags).Counter("units").Inc(reqStatus.GetApiSearchUnits())
 }
 
 func (m *Measurement) CountErrorForScope(scope tally.Scope, tags map[string]string) {

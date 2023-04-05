@@ -40,18 +40,22 @@ func (ub *UsageEventBuilder) WithNamespaceId(id string) *UsageEventBuilder {
 	ub.namespaceId = id
 	return ub
 }
+
 func (ub *UsageEventBuilder) WithTransactionId(id string) *UsageEventBuilder {
 	ub.transactionId = id
 	return ub
 }
+
 func (ub *UsageEventBuilder) WithTimestamp(ts time.Time) *UsageEventBuilder {
 	ub.timestamp = ts.Format(TimeFormat)
 	return ub
 }
+
 func (ub *UsageEventBuilder) WithDatabaseUnits(value int64) *UsageEventBuilder {
 	ub.databaseUnits = &value
 	return ub
 }
+
 func (ub *UsageEventBuilder) WithSearchUnits(value int64) *UsageEventBuilder {
 	ub.searchUnits = &value
 	return ub
@@ -97,18 +101,22 @@ func (sb *StorageEventBuilder) WithNamespaceId(id string) *StorageEventBuilder {
 	sb.namespaceId = id
 	return sb
 }
+
 func (sb *StorageEventBuilder) WithTransactionId(id string) *StorageEventBuilder {
 	sb.transactionId = id
 	return sb
 }
+
 func (sb *StorageEventBuilder) WithTimestamp(ts time.Time) *StorageEventBuilder {
 	sb.timestamp = ts.Format(TimeFormat)
 	return sb
 }
+
 func (sb *StorageEventBuilder) WithDatabaseBytes(value int64) *StorageEventBuilder {
 	sb.databaseBytes = &value
 	return sb
 }
+
 func (sb *StorageEventBuilder) WithIndexBytes(value int64) *StorageEventBuilder {
 	sb.indexBytes = &value
 	return sb

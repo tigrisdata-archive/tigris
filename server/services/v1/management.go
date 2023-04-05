@@ -25,8 +25,6 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
-	"google.golang.org/grpc"
-
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	uuid2 "github.com/tigrisdata/tigris/lib/uuid"
@@ -36,6 +34,7 @@ import (
 	"github.com/tigrisdata/tigris/server/services/v1/billing"
 	"github.com/tigrisdata/tigris/server/transaction"
 	ulog "github.com/tigrisdata/tigris/util/log"
+	"google.golang.org/grpc"
 )
 
 const (

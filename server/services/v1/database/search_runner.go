@@ -42,6 +42,11 @@ type SearchQueryRunner struct {
 // ReadOnly on search query runner is implemented as search queries do not need to be inside a transaction; in fact,
 // there is no need to start any transaction for search queries as they are simply forwarded to the indexing store.
 func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.Tenant) (Response, context.Context, error) {
+	reqStatus, reqStatusExists := metrics.RequestStatusFromContext(ctx)
+	if reqStatus != nil && reqStatusExists {
+		reqStatus.SetCollectionSearchType()
+	}
+
 	db, err := runner.getDatabase(ctx, nil, tenant, runner.req.GetProject(), runner.req.GetBranch())
 	if err != nil {
 		return Response{}, ctx, err

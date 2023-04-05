@@ -23,7 +23,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/h2non/gock"
 	"github.com/stretchr/testify/require"
-
 	"github.com/tigrisdata/tigris/server/config"
 )
 
@@ -193,7 +192,8 @@ func TestMetronome_PushStorageEvents(t *testing.T) {
 					"properties": map[string]interface{}{
 						"index_bytes": 8_750_000_000,
 					},
-				}}).
+				},
+			}).
 			Reply(200).
 			JSON(nil)
 
@@ -297,7 +297,8 @@ func TestMetronome_PushUsageEvents(t *testing.T) {
 					"properties": map[string]interface{}{
 						"search_units": 8_750,
 					},
-				}}).
+				},
+			}).
 			Reply(200).
 			JSON(nil)
 

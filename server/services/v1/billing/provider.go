@@ -18,7 +18,6 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-
 	"github.com/tigrisdata/tigris/server/config"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
