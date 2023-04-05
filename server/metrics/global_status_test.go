@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/tigrisdata/tigris/server/config"
 )
 
 func TestRequestStatus(t *testing.T) {
@@ -39,6 +40,13 @@ func TestRequestStatus(t *testing.T) {
 		rs.AddDDLDropUnit()
 		rs.AddDDLUpdateUnit()
 		rs.AddDDLCreateUnit()
+		config.DefaultConfig.GlobalStatus.Enabled = false
+		rs.AddReadBytes(dataSize16K)
+		rs.AddWriteBytes(dataSize16K)
+		rs.AddDDLDropUnit()
+		rs.AddDDLUpdateUnit()
+		rs.AddDDLCreateUnit()
+		config.DefaultConfig.GlobalStatus.Enabled = true
 		assert.Equal(t, dataSize8K, rs.GetReadBytes())
 		assert.Equal(t, dataSize8K, rs.GetWriteBytes())
 		assert.Equal(t, int64(1), rs.GetDDLDropUnits())
@@ -54,6 +62,36 @@ func TestRequestStatus(t *testing.T) {
 		rs.SetWriteBytes(dataSize16K)
 		assert.Equal(t, dataSize16K, rs.GetReadBytes())
 		assert.Equal(t, dataSize16K, rs.GetWriteBytes())
+
+		rs.SetCollectionSearchType()
+		assert.True(t, rs.IsCollectionSearch())
+		assert.False(t, rs.IsApiSearch())
+		rs.SetApiSearchType()
+		assert.True(t, rs.IsApiSearch())
+		assert.False(t, rs.IsCollectionSearch())
+		rs.AddSearchUnit()
+		assert.Equal(t, int64(1), rs.GetApiSearchUnits())
+		rs.AddCollectionSearchUnit()
+		assert.Equal(t, int64(1), rs.GetCollectionSearchUnits())
+		rs.AddSearchCreateIndexUnit()
+		assert.Equal(t, int64(1), rs.GetSearchCreateIndexUnits())
+		rs.AddSearchDropIndexUnit()
+		assert.Equal(t, int64(1), rs.GetSearchDropIndexUnits())
+		rs.AddSearchDeleteDocumentUnit(2)
+		assert.Equal(t, int64(2), rs.GetSearchDeleteDocumentUnits())
+
+		config.DefaultConfig.GlobalStatus.Enabled = false
+		rs.AddSearchCreateIndexUnit()
+		assert.Equal(t, int64(1), rs.GetSearchCreateIndexUnits())
+		rs.AddSearchDropIndexUnit()
+		assert.Equal(t, int64(1), rs.GetSearchDropIndexUnits())
+		rs.AddSearchDeleteDocumentUnit(3)
+		assert.Equal(t, int64(2), rs.GetSearchDeleteDocumentUnits())
+		rs.AddSearchUnit()
+		assert.Equal(t, int64(1), rs.GetApiSearchUnits())
+		rs.AddCollectionSearchUnit()
+		assert.Equal(t, int64(1), rs.GetCollectionSearchUnits())
+		config.DefaultConfig.GlobalStatus.Enabled = true
 	})
 }
 
@@ -73,6 +111,9 @@ func TestGlobalStatus(t *testing.T) {
 		rs.AddDDLUpdateUnit()
 		rs.AddDDLCreateUnit()
 
+		config.DefaultConfig.GlobalStatus.Enabled = false
+		globalStatus.RecordRequestToActiveChunk(rs, "test_tenant")
+		config.DefaultConfig.GlobalStatus.Enabled = true
 		globalStatus.RecordRequestToActiveChunk(rs, "test_tenant")
 		assert.Equal(t, globalStatus.activeChunk.tenants["test_tenant"].readBytes, 2*dataSize16K)
 		assert.Equal(t, globalStatus.activeChunk.tenants["test_tenant"].writeBytes, dataSize16K)
@@ -89,5 +130,23 @@ func TestGlobalStatus(t *testing.T) {
 
 		_, ok := globalStatus.activeChunk.tenants["test_tenant"]
 		assert.False(t, ok)
+	})
+}
+
+func TestSecondaryIndexFields(t *testing.T) {
+	t.Run("Test determining secondary indexes", func(t *testing.T) {
+		rs := NewRequestStatus("test_tenant")
+		notSecondaryIndex := []byte("foobar")
+		secondaryIndex := []byte("skeysomething")
+		ignoredSecondaryIndexCreatedAt := []byte("skey_foobar_tigris_created_at_something")
+		ignoredSecondaryIndexUpdatedAt := []byte("skey_foobar_tigris_updated_at_something")
+		assert.False(t, rs.IsKeySecondaryIndex(notSecondaryIndex))
+		assert.True(t, rs.IsKeySecondaryIndex(secondaryIndex))
+		assert.True(t, rs.IsKeySecondaryIndex(ignoredSecondaryIndexCreatedAt))
+		assert.True(t, rs.IsKeySecondaryIndex(ignoredSecondaryIndexUpdatedAt))
+
+		assert.False(t, rs.IsSecondaryIndexFieldIgnored(secondaryIndex))
+		assert.True(t, rs.IsSecondaryIndexFieldIgnored(ignoredSecondaryIndexCreatedAt))
+		assert.True(t, rs.IsSecondaryIndexFieldIgnored(ignoredSecondaryIndexUpdatedAt))
 	})
 }
