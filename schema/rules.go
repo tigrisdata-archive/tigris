@@ -32,7 +32,8 @@ var validators = []Validator{
 
 var searchIndexValidators = []SearchIndexValidator{
 	&FieldSchemaValidator{},
-	&IndexSourceValidator{},
+	&SearchIndexSourceValidator{},
+	&SearchIdSchemaValidator{},
 }
 
 // Validator is a backward compatibility validator i.e. when an update request for a collection is received then a set
@@ -135,9 +136,45 @@ func (v *FieldSchemaValidator) ValidateIndex(existing *SearchIndex, current *Sea
 	return v.validateIndexLow(existing.Fields, current.Fields)
 }
 
-type IndexSourceValidator struct{}
+type SearchIdSchemaValidator struct{}
 
-func (v *IndexSourceValidator) ValidateIndex(existing *SearchIndex, current *SearchFactory) error {
+func (v *SearchIdSchemaValidator) IdField(current []*Field) *Field {
+	for _, f := range current {
+		if f.IsSearchId() {
+			return f
+		}
+
+		if f := v.IdField(f.Fields); f != nil {
+			return f
+		}
+	}
+
+	return nil
+}
+
+func (v *SearchIdSchemaValidator) ValidateIndex(existing *SearchIndex, current *SearchFactory) error {
+	idField := v.IdField(current.Fields)
+	if idField == nil && existing.SearchIDField == nil {
+		return nil
+	}
+
+	if idField == nil || existing.SearchIDField == nil {
+		return errors.InvalidArgument("changing the data type of 'id' field is not allowed")
+	}
+	if idField.DataType != existing.SearchIDField.DataType {
+		return errors.InvalidArgument("changing the data type of 'id' field is not allowed")
+	}
+	keys := existing.SearchIDField.KeyPath()
+	if keys[len(keys)-1] != idField.FieldName {
+		return errors.InvalidArgument("renaming 'id' field is not allowed")
+	}
+
+	return nil
+}
+
+type SearchIndexSourceValidator struct{}
+
+func (v *SearchIndexSourceValidator) ValidateIndex(existing *SearchIndex, current *SearchFactory) error {
 	if len(existing.Source.Type) > 0 && existing.Source.Type != current.Source.Type {
 		if existing.Source.Type == "user" && current.Source.Type == SearchSourceExternal {
 			return nil
@@ -251,9 +288,9 @@ func ValidateFieldAttributes(isSearch bool, field *Field) error {
 			return errors.InvalidArgument("setting primary key is not supported on search index '%s'", field.Name())
 		}
 
-		if field.FieldName == SearchId {
+		if field.FieldName == SearchId || field.IsSearchId() {
 			if field.DataType != StringType && field.DataType != UUIDType {
-				return errors.InvalidArgument("Only string type is supported as 'id' field")
+				return errors.InvalidArgument("Cannot have field '%s' as 'id'. Only string type is supported as 'id' field", field.FieldName)
 			}
 		}
 	} else {
@@ -302,6 +339,9 @@ func validateObjectFields(f *Field, notSupported bool) error {
 				// it needs to be on field level.
 				return errors.InvalidArgument("Cannot have search attributes on nested object '%s' that has no fields", nested.Name())
 			}
+			if nested.IsSearchId() {
+				return errors.InvalidArgument("Cannot have field '%s' as 'id'. Only string type is supported as 'id' field", nested.FieldName)
+			}
 
 			if err := validateObjectFields(nested, notSupported); err != nil {
 				return err
@@ -325,6 +365,10 @@ func validateObjectFields(f *Field, notSupported bool) error {
 
 func validateFields(f *Field, notSupported bool) error {
 	if f.DataType == ArrayType {
+		if f.IsSearchId() {
+			return errors.InvalidArgument("Cannot have field '%s' as 'id'. Only string type is supported as 'id' field", f.FieldName)
+		}
+
 		if len(f.Fields) == 0 {
 			return nil
 		}
@@ -364,6 +408,9 @@ func validateFieldAttribute(f *Field, notSupported bool) error {
 		subType = f.Fields[0].DataType
 	}
 
+	if f.IsSearchId() && f.DataType != StringType && f.DataType != UUIDType {
+		return errors.InvalidArgument("Cannot have field '%s' as 'id'. Only string type is supported as 'id' field", f.FieldName)
+	}
 	if f.DataType == VectorType {
 		if f.Dimensions == nil {
 			return errors.InvalidArgument("Field '%s' type 'vector' is missing dimensions ", f.FieldName)

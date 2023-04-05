@@ -102,21 +102,6 @@ func (fb *FactoryBuilder) BuildSearch(index string, reqSchema jsoniter.RawMessag
 		}
 	}
 
-	found := false
-	for _, f := range fields {
-		if f.FieldName == SearchId {
-			found = true
-			break
-		}
-	}
-	if !found {
-		// add id field if not in the schema
-		fields = append(fields, &Field{
-			FieldName: "id",
-			DataType:  StringType,
-		})
-	}
-
 	factory := &SearchFactory{
 		Name:   index,
 		Fields: fields,
@@ -178,19 +163,27 @@ type SearchIndex struct {
 	// one queryableFields. As queryableFields represent a flattened state these can be used as-is to index in memory.
 	QueryableFields []*QueryableField
 	// Source of this index
-	Source SearchSource
+	Source        SearchSource
+	SearchIDField *QueryableField
 }
 
 func NewSearchIndex(ver int, searchStoreName string, factory *SearchFactory, fieldsInSearch []tsApi.Field) *SearchIndex {
 	queryableFields := NewQueryableFieldsBuilder().BuildQueryableFields(factory.Fields, fieldsInSearch)
 
+	var searchIdField *QueryableField
+	for _, q := range queryableFields {
+		if q.SearchIdField {
+			searchIdField = q
+		}
+	}
 	index := &SearchIndex{
 		Version:         ver,
 		Name:            factory.Name,
 		Fields:          factory.Fields,
 		Schema:          factory.Schema,
-		QueryableFields: queryableFields,
 		Source:          factory.Source,
+		SearchIDField:   searchIdField,
+		QueryableFields: queryableFields,
 	}
 	index.buildSearchSchema(searchStoreName)
 
