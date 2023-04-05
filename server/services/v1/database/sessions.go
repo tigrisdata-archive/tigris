@@ -16,13 +16,18 @@ package database
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
 	"math/rand"
+	"net/http"
 	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/middleware"
@@ -31,6 +36,11 @@ import (
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
 	ulog "github.com/tigrisdata/tigris/util/log"
+)
+
+const (
+	NamespaceLocalization = "namespace_localization"
+	Component             = "component"
 )
 
 // SessionManager is used to manage all the explicit query sessions. The execute method is executing the query.
@@ -180,8 +190,27 @@ func (sessMgr *SessionManager) Create(ctx context.Context, trackVerInOwnTxn bool
 	}
 	tenant, err := sessMgr.tenantMgr.GetTenant(ctx, namespaceForThisSession)
 	if err != nil {
-		log.Warn().Err(err).Msgf("Could not find tenant, this must not happen with right authn/authz configured")
-		return nil, errors.NotFound("Tenant %s not found", namespaceForThisSession)
+		// localize the namespace from metadata cluster.
+		if config.DefaultConfig.Auth.NamespaceLocalization.Enabled {
+			namespaceToCreate, err := sessMgr.askMetadataCluster(ctx, namespaceForThisSession)
+			if err != nil {
+				log.Error().Err(err).Str(Component, NamespaceLocalization).Msg("Failed to localize namespace from metadata cluster")
+			}
+
+			// create the namespace on local cluster
+			tenant, err = sessMgr.tenantMgr.CreateOrGetTenant(ctx, metadata.NewTenantNamespace(namespaceToCreate.GetId(), metadata.NamespaceMetadata{
+				Id:    uint32(namespaceToCreate.GetCode()),
+				StrId: namespaceToCreate.GetId(),
+				Name:  namespaceToCreate.GetName(),
+			}))
+			if err != nil || tenant == nil {
+				log.Error().Err(err).Str(Component, NamespaceLocalization).Msg("Failed to create namespace on local cluster")
+			}
+		}
+		if tenant == nil {
+			log.Warn().Err(err).Msgf("Could not find tenant, this must not happen with right authn/authz configured")
+			return nil, errors.NotFound("Tenant %s not found", namespaceForThisSession)
+		}
 	}
 
 	tx, err := sessMgr.txMgr.StartTx(ctx)
@@ -393,6 +422,48 @@ func (s *QuerySession) Commit(versionMgr *metadata.VersionHandler, incVersion bo
 	}
 
 	return err
+}
+
+func (sessMgr *SessionManager) askMetadataCluster(ctx context.Context, namespaceId string) (*api.NamespaceInfo, error) {
+	log.
+		Debug().
+		Str(Component, NamespaceLocalization).
+		Msgf("Unable to find the namespace with id: %s in local cluster - checking on metadata cluster: %s", namespaceId, config.DefaultConfig.MetadataCluster.Url)
+
+	client := &http.Client{}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, config.DefaultConfig.MetadataCluster.Url+"/v1/management/namespaces/"+namespaceId, nil)
+	if err != nil {
+		log.Error().Err(err).Str(Component, NamespaceLocalization).Msg("Failed to form request to metadata cluster")
+		return nil, err
+	}
+
+	req.Header.Add("Authorization", fmt.Sprintf("bearer %s", config.DefaultConfig.MetadataCluster.Token))
+
+	res, err := client.Do(req)
+	if err != nil {
+		log.Error().Err(err).Str(Component, NamespaceLocalization).Msg("Failed to call metadata cluster")
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		log.Error().Err(err).Str(Component, NamespaceLocalization).Msg("Failed to read response from metadata cluster")
+		return nil, err
+	}
+
+	var listNamespaceResp api.ListNamespacesResponse
+	err = json.Unmarshal(body, &listNamespaceResp)
+	if err != nil {
+		log.Error().Err(err).Str(Component, NamespaceLocalization).Msg("Failed to parse response from metadata cluster")
+		return nil, err
+	}
+
+	if listNamespaceResp.GetNamespaces() == nil || len(listNamespaceResp.GetNamespaces()) == 0 {
+		log.Error().Err(err).Str(Component, NamespaceLocalization).Msg("Failed to find namespace")
+		return nil, err
+	}
+	return listNamespaceResp.Namespaces[0], nil
 }
 
 // sessionTracker is used to track sessions.
