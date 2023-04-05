@@ -236,7 +236,8 @@ type GlobalStatusConfig struct {
 }
 
 type Billing struct {
-	Metronome Metronome `mapstructure:"metronome" yaml:"metronome" json:"metronome"`
+	Metronome Metronome       `mapstructure:"metronome" yaml:"metronome" json:"metronome"`
+	Reporter  BillingReporter `mapstructure:"reporter" yaml:"reporter" json:"reporter"`
 }
 
 type Metronome struct {
@@ -244,6 +245,11 @@ type Metronome struct {
 	URL         string `mapstructure:"url" yaml:"url" json:"url"`
 	ApiKey      string `mapstructure:"api_key" yaml:"api_key" json:"api_key"`
 	DefaultPlan string `mapstructure:"default_plan" yaml:"default_plan" json:"default_plan"`
+}
+
+type BillingReporter struct {
+	Enabled         bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	RefreshInterval time.Duration `mapstructure:"refresh_interval" yaml:"refresh_interval" json:"refresh_interval"`
 }
 
 var (
@@ -291,6 +297,10 @@ var DefaultConfig = Config{
 			ApiKey:  "replace_me",
 			// random placeholder UUID and not an actual plan
 			DefaultPlan: "47eda90f-d2e8-4184-8955-cb3a6467782b",
+		},
+		Reporter: BillingReporter{
+			Enabled:         false,
+			RefreshInterval: time.Second * 60, // 60 seconds
 		},
 	},
 	Cdc: CdcConfig{

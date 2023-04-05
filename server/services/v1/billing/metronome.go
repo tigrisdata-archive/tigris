@@ -119,16 +119,31 @@ func (m *Metronome) pushBillingEvents(ctx context.Context, events []biller.Event
 		return nil
 	}
 
-	// content encoding - gzip?
-	body := events
-	resp, err := m.client.IngestWithResponse(ctx, body)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode() != http.StatusOK {
-		return errors.Internal("metronome failure: %s", resp.Body)
+	// todo: let page size be a const
+	pageSize := 100
+	pages := len(events) / pageSize
+	if len(events)%pageSize > 0 {
+		pages += 1
 	}
 
+	for p := 0; p < pages; p++ {
+		high := (p + 1) * pageSize
+		if high > len(events) {
+			high = len(events)
+		}
+
+		page := events[p*pageSize : high]
+
+		// content encoding - gzip?
+		resp, err := m.client.IngestWithResponse(ctx, page)
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode() != http.StatusOK {
+			return errors.Internal("metronome failure: %s", resp.Body)
+		}
+
+	}
 	return nil
 }
 

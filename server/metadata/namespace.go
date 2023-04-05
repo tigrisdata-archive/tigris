@@ -102,16 +102,24 @@ type AccountIntegrations struct {
 	Metronome *Metronome
 }
 
-type Metronome struct {
-	Enabled bool
-	Id      string
-}
-
 func (a *AccountIntegrations) AddMetronome(id string) {
 	a.Metronome = &Metronome{
 		Enabled: true,
 		Id:      id,
 	}
+}
+
+// GetMetronomeId returns the linked Metronome account id and a boolean to indicate if integration is enabled
+func (a *AccountIntegrations) GetMetronomeId() (string, bool) {
+	if a.Metronome == nil {
+		return "", false
+	}
+	return a.Metronome.Id, a.Metronome.Enabled
+}
+
+type Metronome struct {
+	Enabled bool
+	Id      string
 }
 
 // NamespaceSubspace is used to store metadata about Tigris namespaces.

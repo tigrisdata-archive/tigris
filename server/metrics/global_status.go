@@ -35,18 +35,18 @@ type GlobalStatus struct {
 }
 
 type TenantStatusTimeChunk struct {
-	startTime time.Time
+	StartTime time.Time
 	// Only filled when Flush is called in the returned copy
-	endTime time.Time
-	tenants map[string]*TenantStatus
+	EndTime time.Time
+	Tenants map[string]*TenantStatus
 }
 
 type TenantStatus struct {
 	// TODO: add support for collection level
 	// Counted from readBytes at the end of the request
-	readUnits int64
+	ReadUnits int64
 	// Counted from writeBytes at the end of the request
-	writeUnits int64
+	WriteUnits int64
 	// Bytes read, converted to write units
 	readBytes int64
 	// Bytes written, converted to write units
@@ -58,7 +58,7 @@ type TenantStatus struct {
 	// One schema update operation is one update unit
 	ddlUpdateUnits int64
 	// One search request or getting the next page from search is one search unit
-	searchUnits int64
+	SearchUnits int64
 	// One collection search request or getting the next page from search is one collection search unit
 	collectionSearchUnits int64
 	// One create search index is one create search index unit
@@ -114,8 +114,8 @@ func NewGlobalStatus() *GlobalStatus {
 	tenantMap := make(map[string]*TenantStatus)
 	g := &GlobalStatus{
 		activeChunk: &TenantStatusTimeChunk{
-			startTime: startTime,
-			tenants:   tenantMap,
+			StartTime: startTime,
+			Tenants:   tenantMap,
 		},
 	}
 	return g
@@ -123,7 +123,7 @@ func NewGlobalStatus() *GlobalStatus {
 
 func NewTenantStatusTimeChunk(startTime time.Time) *TenantStatusTimeChunk {
 	tenantMap := make(map[string]*TenantStatus)
-	return &TenantStatusTimeChunk{tenants: tenantMap, startTime: startTime}
+	return &TenantStatusTimeChunk{Tenants: tenantMap, StartTime: startTime}
 }
 
 func NewTenantStatus() *TenantStatus {
@@ -307,9 +307,9 @@ func (r *RequestStatus) GetDDLCreateUnits() int64 {
 }
 
 func (g *GlobalStatus) ensureTenantForActiveChunk(tenantName string) {
-	_, ok := g.activeChunk.tenants[tenantName]
+	_, ok := g.activeChunk.Tenants[tenantName]
 	if !ok {
-		g.activeChunk.tenants[tenantName] = NewTenantStatus()
+		g.activeChunk.Tenants[tenantName] = NewTenantStatus()
 	}
 }
 
@@ -323,48 +323,48 @@ func (g *GlobalStatus) RecordRequestToActiveChunk(r *RequestStatus, tenantName s
 	readUnits := getUnitsFromBytes(r.readBytes, config.ReadUnitSize)
 	g.ensureTenantForActiveChunk(tenantName)
 	log.Debug().Int64("writeBytes", r.writeBytes).Str("tenantName", tenantName).Msg("Recording write bytes")
-	g.activeChunk.tenants[tenantName].writeBytes += r.writeBytes
+	g.activeChunk.Tenants[tenantName].writeBytes += r.writeBytes
 	log.Debug().Int64("readBytes", r.readBytes).Str("tenantName", tenantName).Msg("Recording read bytes")
-	g.activeChunk.tenants[tenantName].readBytes += r.readBytes
+	g.activeChunk.Tenants[tenantName].readBytes += r.readBytes
 	log.Debug().Int64("writeUnits", writeUnits).Str("tenantName", tenantName).Msg("Recording write units")
-	g.activeChunk.tenants[tenantName].writeUnits += writeUnits
+	g.activeChunk.Tenants[tenantName].WriteUnits += writeUnits
 	log.Debug().Int64("readUnits", readUnits).Str("tenantName", tenantName).Msg("Recording read units")
-	g.activeChunk.tenants[tenantName].readUnits += readUnits
-	log.Debug().Int64("searchUnits", r.searchUnits).Str("tenantName", tenantName).Msg("Recording api search units")
-	g.activeChunk.tenants[tenantName].searchUnits += r.searchUnits
+	g.activeChunk.Tenants[tenantName].ReadUnits += readUnits
+	log.Debug().Int64("SearchUnits", r.searchUnits).Str("tenantName", tenantName).Msg("Recording api search units")
+	g.activeChunk.Tenants[tenantName].SearchUnits += r.searchUnits
 	log.Debug().Int64("collectionSearchUnits", r.collectionSearchUnits).Str("tenantName", tenantName).Msg("Recording collection search units")
-	g.activeChunk.tenants[tenantName].collectionSearchUnits += r.collectionSearchUnits
+	g.activeChunk.Tenants[tenantName].collectionSearchUnits += r.collectionSearchUnits
 	log.Debug().Int64("ddlDropUnits", r.ddlDropUnits).Str("tenantName", tenantName).Msg("Recording ddl drop units")
-	g.activeChunk.tenants[tenantName].ddlDropUnits += r.ddlDropUnits
+	g.activeChunk.Tenants[tenantName].ddlDropUnits += r.ddlDropUnits
 	log.Debug().Int64("ddlCreateUnits", r.ddlCreateUnits).Str("tenantName", tenantName).Msg("Recording ddl create units")
-	g.activeChunk.tenants[tenantName].ddlCreateUnits += r.ddlCreateUnits
+	g.activeChunk.Tenants[tenantName].ddlCreateUnits += r.ddlCreateUnits
 	log.Debug().Int64("ddlUpdateUnits", r.ddlUpdateUnits).Str("tenantName", tenantName).Msg("Recording ddl update units")
-	g.activeChunk.tenants[tenantName].ddlUpdateUnits += r.ddlUpdateUnits
+	g.activeChunk.Tenants[tenantName].ddlUpdateUnits += r.ddlUpdateUnits
 	log.Debug().Int64("searchCreateIndexUnits", r.searchCreateIndexUnits).Str("tenantName", tenantName).Msg("Recording search create index units")
-	g.activeChunk.tenants[tenantName].searchCreateIndexUnits += r.searchCreateIndexUnits
+	g.activeChunk.Tenants[tenantName].searchCreateIndexUnits += r.searchCreateIndexUnits
 	log.Debug().Int64("searchDropIndexUnits", r.searchDropIndexUnits).Str("tenantName", tenantName).Msg("Recording search drop index units")
-	g.activeChunk.tenants[tenantName].searchDropIndexUnits += r.searchDropIndexUnits
+	g.activeChunk.Tenants[tenantName].searchDropIndexUnits += r.searchDropIndexUnits
 	log.Debug().Int64("searchDeleteDocumentUnits", r.searchDeleteDocumentUnits).Str("tenantName", tenantName).Msg("Recording search delete documents units")
-	g.activeChunk.tenants[tenantName].searchDeleteDocumentUnits += r.searchDeleteDocumentUnits
+	g.activeChunk.Tenants[tenantName].searchDeleteDocumentUnits += r.searchDeleteDocumentUnits
 	g.mu.Unlock()
 }
 
 func (g *GlobalStatus) Flush() TenantStatusTimeChunk {
 	g.mu.Lock()
 	startTime := time.Now()
-	g.activeChunk.endTime = startTime
+	g.activeChunk.EndTime = startTime
 	res := *g.activeChunk
 	g.activeChunk = NewTenantStatusTimeChunk(startTime)
 	g.mu.Unlock()
-	log.Debug().Int("number of tenants", len(res.tenants)).Msg("Flushing global status")
-	for _, status := range res.tenants {
-		status.writeUnits = getUnitsFromBytes(status.writeBytes, config.WriteUnitSize)
-		status.readUnits = getUnitsFromBytes(status.readBytes, config.ReadUnitSize)
+	log.Debug().Int("number of tenants", len(res.Tenants)).Msg("Flushing global status")
+	for _, status := range res.Tenants {
+		status.WriteUnits = getUnitsFromBytes(status.writeBytes, config.WriteUnitSize)
+		status.ReadUnits = getUnitsFromBytes(status.readBytes, config.ReadUnitSize)
 	}
-	log.Debug().Time("start time", res.startTime).Time("end time", res.endTime).Msg("flush results")
-	for tenantName, status := range res.tenants {
-		log.Debug().Int64("read units", status.readUnits).Int64("write units", status.writeUnits).Str("tenant name", tenantName).Msg("db units flushed")
-		log.Debug().Int64("search units", status.searchUnits).Int64("collection search units", status.collectionSearchUnits).Str("tenant name", tenantName).Msg("flushed search units")
+	log.Debug().Time("start time", res.StartTime).Time("end time", res.EndTime).Msg("flush results")
+	for tenantName, status := range res.Tenants {
+		log.Debug().Int64("read units", status.ReadUnits).Int64("write units", status.WriteUnits).Str("tenant name", tenantName).Msg("db units flushed")
+		log.Debug().Int64("search units", status.SearchUnits).Int64("collection search units", status.collectionSearchUnits).Str("tenant name", tenantName).Msg("flushed search units")
 	}
 	return res
 }

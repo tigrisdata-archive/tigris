@@ -33,6 +33,7 @@ import (
 	"github.com/tigrisdata/tigris/store/search"
 	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
+	"github.com/tigrisdata/tigris/server/services/v1/billing"
 )
 
 func main() {
@@ -122,6 +123,13 @@ func mainWithCode() int {
 
 	mx := muxer.NewMuxer(cfg)
 	mx.RegisterServices(&cfg.Server, kvStoreForDatabase, searchStore, tenantMgr, txMgr, forSearchTxMgr)
+
+	// metrics is already initialized, we can start reporting usage data
+	ur, err := billing.NewUsageReporter(metrics.GlobalSt, tenantMgr)
+	if !ulog.E(err) {
+		ur.Start()
+	}
+
 	port := cfg.Server.Port
 	if cfg.Server.Type == config.RealtimeServerType {
 		port = cfg.Server.RealtimePort
