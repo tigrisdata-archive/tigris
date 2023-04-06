@@ -1499,13 +1499,15 @@ func (p *Project) Id() uint32 {
 
 // GetDatabaseWithBranches returns main database and all the corresponding database branches.
 func (p *Project) GetDatabaseWithBranches() []*Database {
-	databases := make([]*Database, len(p.databaseBranches)+1)
-	databases[0] = p.database
+	if p.database == nil {
+		return nil
+	}
 
-	i := 1
+	databases := make([]*Database, 0, len(p.databaseBranches)+1)
+	databases = append(databases, p.database)
+
 	for _, database := range p.databaseBranches {
-		databases[i] = database
-		i++
+		databases = append(databases, database)
 	}
 
 	return databases

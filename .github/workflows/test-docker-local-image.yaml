@@ -20,10 +20,10 @@ jobs:
           submodules: true
 
       - name: Build local image
-        run: DOCKER_BUILDKIT=1 docker build -f docker/Dockerfile.local -t tigrisdata/tigris-local-test .
+        run: make docker-local
 
       - name: Run local image
-        run: docker run -d -p 8081:8081 tigrisdata/tigris-local-test
+        run: docker run -d -p 8081:8081 tigris_local
 
       - name: Run CLI tests
         run: |

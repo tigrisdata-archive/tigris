@@ -122,3 +122,7 @@ dump_integration_coverage:
 	sleep 15
 	/usr/local/go/bin/go tool covdata textfmt -i=/tmp/tigris_coverdata/ -o coverage1.out # from tigris_server
 	/usr/local/go/bin/go tool covdata textfmt -i=/tmp/tigris_coverdata2/ -o coverage2.out # from tigris_server2
+
+# Build local all-in-one package
+docker-local:
+	DOCKER_BUILDKIT=1 docker build -t tigris_local -f docker/Dockerfile.local .
