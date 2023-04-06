@@ -134,6 +134,105 @@ func NewSecondaryIndexer(coll *schema.DefaultCollection) *SecondaryIndexer {
 	}
 }
 
+func (q *SecondaryIndexer) BuildCollection(ctx context.Context, txMgr *transaction.Manager) error {
+	docFetch := 500
+	var last []byte
+	var first []byte
+	count := 0
+	batchCount := 0
+
+	for {
+		tx, err := txMgr.StartTx(ctx)
+		if err != nil {
+			return err
+		}
+
+		iter, err := createBulkDocsReader(ctx, tx, q.coll.EncodedName, first, last)
+		if err != nil {
+			return err
+		}
+
+		var row Row
+		for iter.Next(&row) && count <= docFetch {
+			// Record first key so that if this batch fails
+			// we know which key to restart from
+			if count == 0 {
+				first = row.Key
+			}
+
+			last = row.Key
+			fdbKey, err := keys.FromBinary(q.coll.EncodedName, row.Key)
+			if err != nil {
+				return err
+			}
+
+			if err = q.Index(ctx, tx, row.Data, fdbKey.IndexParts()); err != nil {
+				return err
+			}
+			count += 1
+		}
+
+		err = tx.Commit(ctx)
+		if err != nil {
+			if shouldRetryBulkIndex(err) {
+				// decrease doc batch count in an attempt to make this work next time around
+				docFetch /= 2
+				count = 0
+				continue
+			} else {
+				return err
+			}
+		} else {
+			first = nil
+		}
+
+		batchCount += 1
+		// No more items to fetch
+		if count < docFetch {
+			log.Info().Msgf("Collection '%s' built in %d batches with %d docs per batch", q.coll.Name, batchCount, docFetch)
+			return nil
+		}
+		count = 0
+	}
+}
+
+func createBulkDocsReader(ctx context.Context, tx transaction.Tx, table []byte, first []byte, last []byte) (Iterator, error) {
+	reader := NewDatabaseReader(ctx, tx)
+	if first != nil {
+		from, err := keys.FromBinary(table, first)
+		if err != nil {
+			return nil, err
+		}
+		return reader.ScanIterator(from, nil)
+	}
+
+	if last != nil {
+		from, err := keys.FromBinary(table, last)
+		if err != nil {
+			return nil, err
+		}
+		return reader.ScanIterator(from, nil)
+	}
+
+	return reader.ScanTable(table)
+}
+
+var RETRY_ERRORS = []error{
+	kv.ErrConflictingTransaction,
+	kv.ErrTransactionMaxDurationReached,
+	kv.ErrTransactionSizeExceeded,
+	kv.ErrTransactionTimedOut,
+}
+
+func shouldRetryBulkIndex(err error) bool {
+	for _, kvErr := range RETRY_ERRORS {
+		if kvErr == err {
+			return true
+		}
+	}
+	return false
+}
+
 func (q *SecondaryIndexer) scanIndex(ctx context.Context, tx transaction.Tx) (kv.Iterator, error) {
 	start := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.SecondaryIndexKeyword(), KVSubspace)
 	end := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.SecondaryIndexKeyword(), KVSubspace, 0xFF)

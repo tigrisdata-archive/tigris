@@ -18,6 +18,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"net/http"
 	"testing"
@@ -25,6 +26,7 @@ import (
 	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 )
 
 func insertDocs(t *testing.T, db string, coll string, extra ...Doc) {
@@ -618,5 +620,160 @@ func TestQuery_AfterDelete(t *testing.T) {
 		assert.Equal(t, query.ids, ids, query.filter)
 		explain := explainQuery(t, db, coll, query.filter, nil, nil, nil)
 		assert.Equal(t, explain.ReadType, "secondary index")
+	}
+}
+
+var testBuildIndexSchema = Map{
+	"schema": Map{
+		"title":       testCollection,
+		"description": "this schema is for integration tests",
+		"properties": Map{
+			"pkey_int": Map{
+				"description": "primary key field",
+				"type":        "integer",
+			},
+			"int_value": Map{
+				"description": "simple int field",
+				"type":        "integer",
+				"index":       true,
+			},
+			"string_value": Map{
+				"description": "simple string field",
+				"type":        "string",
+				"maxLength":   128,
+			},
+			"bool_value": Map{
+				"description": "simple boolean field",
+				"type":        "boolean",
+			},
+			"double_value": Map{
+				"description": "simple double field",
+				"type":        "number",
+			},
+			"uuid_value": Map{
+				"description": "uuid field",
+				"type":        "string",
+				"format":      "uuid",
+			},
+			"date_time_value": Map{
+				"description": "date time field",
+				"type":        "string",
+				"format":      "date-time",
+				"index":       true,
+			},
+		},
+		"primary_key": []interface{}{"pkey_int"},
+	},
+}
+
+func setupIndexBuildTest(t *testing.T, schema Map) (string, string) {
+	db := fmt.Sprintf("integration_%s", t.Name())
+	deleteProject(t, db)
+	createProject(t, db).Status(http.StatusOK)
+	createCollection(t, db, testCollection, schema).Status(http.StatusOK)
+	return db, testCollection
+}
+
+func TestQuery_BuildIndex(t *testing.T) {
+	db, coll := setupIndexBuildTest(t, testBuildIndexSchema)
+	defer cleanupTests(t, db)
+
+	for i := 0; i < 20; i++ {
+		writeDocs(t, db, coll, i*50, 50)
+	}
+
+	for _, val := range testBuildIndexSchema["schema"].(Map)["properties"].(Map) {
+		prop := val.(Map)
+		prop["index"] = true
+	}
+
+	createCollection(t, db, coll, testBuildIndexSchema).Status(http.StatusOK)
+	str := buildCollectionIndexes(t, db, coll).Body().Raw()
+	resp := &api.IndexCollectionResponse{}
+	err := jsoniter.Unmarshal([]byte(str), resp)
+	assert.NoError(t, err)
+
+	checkIndexesActive(t, resp.Indexes)
+
+	str = describeCollection(t, db, coll, Map{}).Status(http.StatusOK).Body().Raw()
+	desc := Map{}
+	err = jsoniter.Unmarshal([]byte(str), &desc)
+	assert.NoError(t, err)
+	i, _ := desc["indexes"]
+	raw, err := jsoniter.Marshal(i)
+	assert.NoError(t, err)
+	var descIndexes []*api.CollectionIndex
+	err = jsoniter.Unmarshal(raw, &descIndexes)
+	assert.NoError(t, err)
+	checkIndexesActive(t, descIndexes)
+
+	cases := []struct {
+		filter Map
+		count  int
+	}{
+		{
+			Map{"int_value": Map{"$gt": nil}},
+			1000,
+		},
+		{
+			Map{"string_value": Map{"$gt": nil}},
+			1000,
+		},
+		{
+			Map{"bool_value": Map{"$gt": nil}},
+			1000,
+		},
+		{
+			Map{"double_value": Map{"$gt": nil}},
+			1000,
+		},
+		{
+			Map{"date_time_value": Map{"$gt": nil}},
+			1000,
+		},
+	}
+
+	for _, query := range cases {
+		resp := readByFilter(t, db, coll, query.filter, nil, nil, nil)
+		ids := getIds(resp)
+		assert.Equal(t, query.count, len(ids), query.filter)
+		explain := explainQuery(t, db, coll, query.filter, nil, nil, nil)
+		assert.Equal(t, explain.ReadType, "secondary index")
+	}
+}
+
+func writeDocs(t *testing.T, db string, coll string, startId int, count int) {
+
+	for i := 0; i < count; i++ {
+		inputDocument := []Doc{
+
+			{
+				"pkey_int":        startId + i,
+				"int_value":       i,
+				"string_value":    fmt.Sprintf("a-%v", i),
+				"bool_value":      true,
+				"double_value":    10.01 + float64(i),
+				"uuid_value":      uuid.New().String(),
+				"date_time_value": "2015-12-21T17:42:34Z",
+			},
+		}
+		e := expect(t)
+		e.POST(getDocumentURL(db, coll, "insert")).
+			WithJSON(Map{
+
+				"documents": inputDocument,
+			}).
+			Expect().
+			Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status", "inserted")
+	}
+}
+
+func checkIndexesActive(t *testing.T, indexes []*api.CollectionIndex) {
+	assert.Len(t, indexes, 9)
+	for _, idx := range indexes {
+		assert.Equal(t, "INDEX ACTIVE", idx.State)
 	}
 }
