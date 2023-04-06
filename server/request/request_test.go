@@ -71,6 +71,7 @@ func TestRequestMetadata(t *testing.T) {
 	t.Run("isAdmin test", func(t *testing.T) {
 		require.True(t, IsAdminApi("/tigrisdata.management.v1.Management/CreateNamespace"))
 		require.True(t, IsAdminApi("/tigrisdata.management.v1.Management/ListNamespaces"))
+		require.True(t, IsAdminApi("/tigrisdata.management.v1.Management/DeleteNamespace"))
 		require.False(t, IsAdminApi("/.HealthAPI/Health"))
 		require.False(t, IsAdminApi("some-random"))
 	})

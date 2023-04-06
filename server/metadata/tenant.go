@@ -234,13 +234,13 @@ func (m *TenantManager) GetNamespaceId(namespaceName string) (uint32, error) {
 
 // GetTenant is responsible for returning the tenant from the cache. If the tenant is not available in the cache then
 // this method will attempt to load it from the database and will update the tenant manager cache accordingly.
-func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string) (*Tenant, error) {
+func (m *TenantManager) GetTenant(ctx context.Context, namespaceId string) (*Tenant, error) {
 	var (
 		tenant *Tenant
 		err    error
 	)
 
-	if tenant = m.getTenantFromCache(namespaceName); tenant != nil {
+	if tenant = m.getTenantFromCache(namespaceId); tenant != nil {
 		return tenant, nil
 	}
 
@@ -248,7 +248,7 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string) (*T
 	defer m.Unlock()
 	var found bool
 
-	if tenant, found = m.tenants[namespaceName]; found {
+	if tenant, found = m.tenants[namespaceId]; found {
 		return tenant, nil
 	}
 
@@ -272,7 +272,7 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string) (*T
 				m.idToTenantMap[tenant.namespace.Id()] = tenant.namespace.StrId()
 			}
 		} else {
-			log.Err(err).Str("ns", namespaceName).Msg("Could not get namespace")
+			log.Err(err).Str("ns", namespaceId).Msg("Could not get namespace")
 			_ = tx.Rollback(ctx)
 		}
 	}()
@@ -281,9 +281,9 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string) (*T
 	if namespaces, err = m.metaStore.GetNamespaces(ctx, tx); err != nil {
 		return nil, err
 	}
-	metadata, ok := namespaces[namespaceName]
+	metadata, ok := namespaces[namespaceId]
 	if !ok {
-		return nil, fmt.Errorf("namespace not found: %s", namespaceName)
+		return nil, fmt.Errorf("namespace not found: %s", namespaceId)
 	}
 
 	currentVersion, err := m.versionH.Read(ctx, tx, false)
@@ -291,7 +291,7 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceName string) (*T
 		return nil, err
 	}
 
-	namespace := NewTenantNamespace(namespaceName, metadata)
+	namespace := NewTenantNamespace(namespaceId, metadata)
 	tenant = NewTenant(namespace, m.kvStore, m.searchStore,
 		m.metaStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
 	if err = tenant.reload(ctx, tx, currentVersion, collectionsInSearch); err != nil {
@@ -1049,6 +1049,22 @@ func (tenant *Tenant) ListProjects(_ context.Context) []string {
 	}
 
 	return projects
+}
+
+// DeleteTenant is used to delete tenant and all the content within it.
+// This needs to be followed up with a "restart" of server to clear memory state.
+// Be careful calling this.
+func (m *TenantManager) DeleteTenant(ctx context.Context, tx transaction.Tx, tenantToDelete *Tenant) error {
+	projects := tenantToDelete.ListProjects(ctx)
+
+	for _, project := range projects {
+		_, err := tenantToDelete.DeleteProject(ctx, tx, project)
+		if err != nil {
+			log.Error().Err(err).Msgf("Failed to delete project named %s", project)
+			return errors.Internal("Failed to delete projects for namespace")
+		}
+	}
+	return m.metaStore.UnReserveNamespace(ctx, tx, tenantToDelete.namespace.StrId())
 }
 
 // CreateBranch is used to create a database branch. A database branch is essentially a schema-only copy of a database.
