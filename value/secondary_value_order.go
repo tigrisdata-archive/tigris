@@ -56,20 +56,20 @@ func ToSecondaryOrder(dataType schema.FieldType, val Value) int {
 	case schema.DoubleType, schema.Int32Type, schema.Int64Type:
 		return 10
 	case schema.StringType, schema.UUIDType:
-		return 20
+		return 15
 	case schema.ObjectType:
-		return 30
+		return 20
 	case schema.BoolType:
 		if val != nil && val.String() == "true" {
-			return 36
+			return 26
 		}
-		return 35
+		return 25
 	case schema.DateTimeType:
-		return 40
+		return 30
 	case schema.MaxType:
 		return SecondaryMaxOrder()
 	}
 
 	log.Info().Msgf("Count not order type for index %d", dataType)
-	return 50
+	return 35
 }
