@@ -23,6 +23,16 @@ import (
 	"github.com/tigrisdata/tigris/value"
 )
 
+// KeyComposer needs to be implemented to have a custom Compose method with different constraints.
+type KeyComposer[F fieldable] interface {
+	Compose(level []*Selector, userDefinedKeys []F, parent LogicalOP) ([]QueryPlan, error)
+}
+
+type (
+	KeyEncodingFunc     func(indexParts ...interface{}) (keys.Key, error)
+	BuildIndexPartsFunc func(fieldName string, val value.Value) []interface{}
+)
+
 type QueryPlanType uint8
 
 const (
@@ -173,19 +183,9 @@ func (k *KeyBuilder[F]) Build(filters []Filter, userDefinedKeys []F) ([]QueryPla
 	return allKeys, nil
 }
 
-func PKBuildIndexPartsFunc(name string, datatype schema.FieldType, value interface{}) []interface{} {
-	return []interface{}{value}
+func PKBuildIndexPartsFunc(name string, value value.Value) []interface{} {
+	return []interface{}{value.AsInterface()}
 }
-
-// KeyComposer needs to be implemented to have a custom Compose method with different constraints.
-type KeyComposer[F fieldable] interface {
-	Compose(level []*Selector, userDefinedKeys []F, parent LogicalOP) ([]QueryPlan, error)
-}
-
-type (
-	KeyEncodingFunc     func(indexParts ...interface{}) (keys.Key, error)
-	BuildIndexPartsFunc func(fieldName string, datatype schema.FieldType, value interface{}) []interface{}
-)
 
 // StrictEqKeyComposer works in to ways to generate internal keys if the condition is equality.
 //  1. When `matchAll=true`, it will generate internal keys of equality on the fields of the schema if all these fields
@@ -263,7 +263,7 @@ func (s *StrictEqKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys 
 		case AndOP:
 			var keyParts []interface{}
 			for _, sel := range k {
-				newParts := s.buildIndexPartsFunc(sel.Field.Name(), sel.Field.DataType, sel.Matcher.GetValue().AsInterface())
+				newParts := s.buildIndexPartsFunc(sel.Field.Name(), sel.Matcher.GetValue())
 				keyParts = append(keyParts, newParts...)
 			}
 
@@ -283,7 +283,7 @@ func (s *StrictEqKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys 
 					return nil, errors.InvalidArgument("OR is not supported with composite primary keys")
 				}
 
-				primaryKeyParts := s.buildIndexPartsFunc(sel.Field.Name(), sel.Field.DataType, sel.Matcher.GetValue().AsInterface())
+				primaryKeyParts := s.buildIndexPartsFunc(sel.Field.Name(), sel.Matcher.GetValue())
 
 				key, err := s.keyEncodingFunc(primaryKeyParts...)
 				if err != nil {
@@ -322,7 +322,7 @@ func (s *RangeKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys []F
 		rangeType := FULLRANGE
 		for _, sel := range selectors {
 			if k.Name() == sel.Field.Name() && s.isRange(sel) {
-				indexParts := s.buildIndexPartsFunc(sel.Field.Name(), sel.Field.DataType, sel.Matcher.GetValue().AsInterface())
+				indexParts := s.buildIndexPartsFunc(sel.Field.Name(), sel.Matcher.GetValue())
 				if s.isGreater(sel) {
 					if sel.Matcher.Type() == GT {
 						indexParts = append(indexParts, 0xFF)
@@ -334,9 +334,7 @@ func (s *RangeKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys []F
 					}
 
 					if end == nil {
-						lessIndexParts := s.buildIndexPartsFunc(sel.Field.Name(), sel.Field.DataType, value.Max(sel.Field.DataType, sel.Matcher.GetValue()))
-						// Add in `0xFF` so that a query includes the largest possible value in a range
-						lessIndexParts = append(lessIndexParts, 0xFF)
+						lessIndexParts := s.buildIndexPartsFunc(sel.Field.Name(), value.MaxOrderValue())
 						end, err = s.keyEncodingFunc(lessIndexParts...)
 						if err != nil {
 							return nil, err
@@ -355,7 +353,7 @@ func (s *RangeKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys []F
 					}
 
 					if begin == nil {
-						greaterIndexParts := s.buildIndexPartsFunc(sel.Field.Name(), sel.Field.DataType, value.Min(sel.Field.DataType, sel.Matcher.GetValue()))
+						greaterIndexParts := s.buildIndexPartsFunc(sel.Field.Name(), value.MinOrderValue())
 						begin, err = s.keyEncodingFunc(greaterIndexParts...)
 						if err != nil {
 							return nil, err

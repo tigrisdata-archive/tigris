@@ -29,6 +29,7 @@ import (
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	ulog "github.com/tigrisdata/tigris/util/log"
+	"github.com/tigrisdata/tigris/value"
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
 )
@@ -77,14 +78,14 @@ func TestIndexingCreateSimpleKVsforDoc(t *testing.T) {
 		updateSet, err := indexStore.buildAddAndRemoveKVs(td, nil, primaryKey)
 		assert.NoError(t, err)
 		expected := [][]interface{}{
-			{"skey", KVSubspace, "_tigris_created_at", 1, td.CreatedAt.ToRFC3339(), 0, 1},
-			{"skey", KVSubspace, "_tigris_updated_at", 1, td.UpdatedAt.ToRFC3339(), 0, 1},
-			{"skey", KVSubspace, "id", 1, int64(1), 0, 1},
-			{"skey", KVSubspace, "double_f", 1, float64(2), 0, 1},
-			{"skey", KVSubspace, "created", 1, "2023-01-16T12:55:17.304154Z", 0, 1},
-			{"skey", KVSubspace, "updated", 1, "2023-01-16T12:55:17.304154Z", 0, 1},
-			{"skey", KVSubspace, "arr", 1, int64(1), 0, 1},
-			{"skey", KVSubspace, "arr", 1, int64(2), 1, 1},
+			{"skey", KVSubspace, "_tigris_created_at", value.ToSecondaryOrder(schema.DateTimeType, nil), td.CreatedAt.ToRFC3339(), 0, 1},
+			{"skey", KVSubspace, "_tigris_updated_at", value.ToSecondaryOrder(schema.DateTimeType, nil), td.UpdatedAt.ToRFC3339(), 0, 1},
+			{"skey", KVSubspace, "id", value.ToSecondaryOrder(schema.Int64Type, nil), int64(1), 0, 1},
+			{"skey", KVSubspace, "double_f", value.ToSecondaryOrder(schema.DoubleType, nil), float64(2), 0, 1},
+			{"skey", KVSubspace, "created", value.ToSecondaryOrder(schema.DateTimeType, nil), "2023-01-16T12:55:17.304154Z", 0, 1},
+			{"skey", KVSubspace, "updated", value.ToSecondaryOrder(schema.DateTimeType, nil), "2023-01-16T12:55:17.304154Z", 0, 1},
+			{"skey", KVSubspace, "arr", value.ToSecondaryOrder(schema.Int64Type, nil), int64(1), 0, 1},
+			{"skey", KVSubspace, "arr", value.ToSecondaryOrder(schema.Int64Type, nil), int64(2), 1, 1},
 		}
 		assertKVs(t, expected, updateSet.addKeys, updateSet.addCounts)
 	})
@@ -95,19 +96,19 @@ func TestIndexingCreateSimpleKVsforDoc(t *testing.T) {
 		assert.NoError(t, err)
 
 		expectedAdd := [][]interface{}{
-			{"skey", KVSubspace, "_tigris_updated_at", 1, updateTD.UpdatedAt.ToRFC3339(), 0, 1},
-			{"skey", KVSubspace, "double_f", 1, float64(3), 0, 1},
-			{"skey", KVSubspace, "created", 1, "2023-01-17T12:55:17.304154Z", 0, 1},
-			{"skey", KVSubspace, "updated", 1, "2023-01-17T12:55:17.304154Z", 0, 1},
-			{"skey", KVSubspace, "arr", 1, int64(3), 1, 1},
+			{"skey", KVSubspace, "_tigris_updated_at", value.ToSecondaryOrder(schema.DateTimeType, nil), updateTD.UpdatedAt.ToRFC3339(), 0, 1},
+			{"skey", KVSubspace, "double_f", value.ToSecondaryOrder(schema.DoubleType, nil), float64(3), 0, 1},
+			{"skey", KVSubspace, "created", value.ToSecondaryOrder(schema.DateTimeType, nil), "2023-01-17T12:55:17.304154Z", 0, 1},
+			{"skey", KVSubspace, "updated", value.ToSecondaryOrder(schema.DateTimeType, nil), "2023-01-17T12:55:17.304154Z", 0, 1},
+			{"skey", KVSubspace, "arr", value.ToSecondaryOrder(schema.Int64Type, nil), int64(3), 1, 1},
 		}
 
 		expectedRemove := [][]interface{}{
-			{"skey", KVSubspace, "_tigris_updated_at", 1, td.UpdatedAt.ToRFC3339(), 0, 1},
-			{"skey", KVSubspace, "double_f", 1, float64(2), 0, 1},
-			{"skey", KVSubspace, "created", 1, "2023-01-16T12:55:17.304154Z", 0, 1},
-			{"skey", KVSubspace, "updated", 1, "2023-01-16T12:55:17.304154Z", 0, 1},
-			{"skey", KVSubspace, "arr", 1, int64(2), 1, 1},
+			{"skey", KVSubspace, "_tigris_updated_at", value.ToSecondaryOrder(schema.DateTimeType, nil), td.UpdatedAt.ToRFC3339(), 0, 1},
+			{"skey", KVSubspace, "double_f", value.ToSecondaryOrder(schema.DoubleType, nil), float64(2), 0, 1},
+			{"skey", KVSubspace, "created", value.ToSecondaryOrder(schema.DateTimeType, nil), "2023-01-16T12:55:17.304154Z", 0, 1},
+			{"skey", KVSubspace, "updated", value.ToSecondaryOrder(schema.DateTimeType, nil), "2023-01-16T12:55:17.304154Z", 0, 1},
+			{"skey", KVSubspace, "arr", value.ToSecondaryOrder(schema.Int64Type, nil), int64(2), 1, 1},
 		}
 		assertKVs(t, expectedAdd, updateSet.addKeys, nil)
 		assertKVs(t, expectedRemove, updateSet.removeKeys, nil)
@@ -117,21 +118,21 @@ func TestIndexingCreateSimpleKVsforDoc(t *testing.T) {
 		updateSet, err := indexStore.buildAddAndRemoveKVs(nil, td, primaryKey)
 		assert.NoError(t, err)
 		expected := [][]interface{}{
-			{"skey", KVSubspace, "_tigris_created_at", 1, td.CreatedAt.ToRFC3339(), 0, 1},
-			{"skey", KVSubspace, "_tigris_updated_at", 1, td.UpdatedAt.ToRFC3339(), 0, 1},
-			{"skey", KVSubspace, "id", 1, int64(1), 0, 1},
-			{"skey", KVSubspace, "double_f", 1, float64(2), 0, 1},
-			{"skey", KVSubspace, "created", 1, "2023-01-16T12:55:17.304154Z", 0, 1},
-			{"skey", KVSubspace, "updated", 1, "2023-01-16T12:55:17.304154Z", 0, 1},
-			{"skey", KVSubspace, "arr", 1, int64(1), 0, 1},
-			{"skey", KVSubspace, "arr", 1, int64(2), 1, 1},
+			{"skey", KVSubspace, "_tigris_created_at", value.ToSecondaryOrder(schema.DateTimeType, nil), td.CreatedAt.ToRFC3339(), 0, 1},
+			{"skey", KVSubspace, "_tigris_updated_at", value.ToSecondaryOrder(schema.DateTimeType, nil), td.UpdatedAt.ToRFC3339(), 0, 1},
+			{"skey", KVSubspace, "id", value.ToSecondaryOrder(schema.Int64Type, nil), int64(1), 0, 1},
+			{"skey", KVSubspace, "double_f", value.ToSecondaryOrder(schema.DoubleType, nil), float64(2), 0, 1},
+			{"skey", KVSubspace, "created", value.ToSecondaryOrder(schema.DateTimeType, nil), "2023-01-16T12:55:17.304154Z", 0, 1},
+			{"skey", KVSubspace, "updated", value.ToSecondaryOrder(schema.DateTimeType, nil), "2023-01-16T12:55:17.304154Z", 0, 1},
+			{"skey", KVSubspace, "arr", value.ToSecondaryOrder(schema.Int64Type, nil), int64(1), 0, 1},
+			{"skey", KVSubspace, "arr", value.ToSecondaryOrder(schema.Int64Type, nil), int64(2), 1, 1},
 		}
 		assert.Len(t, updateSet.addKeys, 0)
 		assertKVs(t, expected, updateSet.removeKeys, updateSet.removeCounts)
 	})
 }
 
-func TestIndexingMissing(t *testing.T) {
+func TestIndexingMissingAndUndefined(t *testing.T) {
 	reqSchema := []byte(`{
 		"title": "t1",
 		"properties": {
@@ -162,19 +163,38 @@ func TestIndexingMissing(t *testing.T) {
 						"nested": { "type": "boolean" }
 					}
 				}
+			},
+			"obj1": {
+				"type": "object",
+				"properties": {
+					"nested": { "type": "boolean" }
+				}
+			},
+			"obj2": {
+				"type": "object",
+				"properties": {
+					"nested": { "type": "boolean" }
+				}
 			}
 		},
 		"primary_key": ["id"]
 	}`)
 
 	indexStore := setupTest(t, reqSchema)
-	td, primaryKey := createDoc(`{"id":1`)
+	td, primaryKey := createDoc(`{"id":1, "obj2":{}}`)
 	updateSet, err := indexStore.buildAddAndRemoveKVs(td, nil, primaryKey)
 	assert.NoError(t, err)
 	expected := [][]interface{}{
-		{"skey", KVSubspace, "_tigris_created_at", 1, td.CreatedAt.ToRFC3339(), 0, 1},
-		{"skey", KVSubspace, "_tigris_updated_at", 1, td.UpdatedAt.ToRFC3339(), 0, 1},
-		{"skey", KVSubspace, "id", 1, int64(1), 0, 1},
+		{"skey", KVSubspace, "_tigris_created_at", value.ToSecondaryOrder(schema.DateTimeType, nil), td.CreatedAt.ToRFC3339(), 0, 1},
+		{"skey", KVSubspace, "_tigris_updated_at", value.ToSecondaryOrder(schema.DateTimeType, nil), td.UpdatedAt.ToRFC3339(), 0, 1},
+		{"skey", KVSubspace, "id", value.ToSecondaryOrder(schema.Int64Type, nil), int64(1), 0, 1},
+		{"skey", KVSubspace, "double_f", value.SecondaryNullOrder(), nil, 0, 1},
+		{"skey", KVSubspace, "a_string", value.SecondaryNullOrder(), nil, 0, 1},
+		{"skey", KVSubspace, "updated", value.SecondaryNullOrder(), nil, 0, 1},
+		{"skey", KVSubspace, "arr", value.SecondaryNullOrder(), nil, 0, 1},
+		{"skey", KVSubspace, "arr2", value.SecondaryNullOrder(), nil, 0, 1},
+		{"skey", KVSubspace, "obj1.nested", value.SecondaryNullOrder(), nil, 0, 1},
+		{"skey", KVSubspace, "obj2.nested", value.SecondaryNullOrder(), nil, 0, 1},
 	}
 	assertKVs(t, expected, updateSet.addKeys, updateSet.addCounts)
 }
@@ -217,14 +237,14 @@ func TestIndexingNull(t *testing.T) {
 		updateSet, err := indexStore.buildAddAndRemoveKVs(td, nil, primaryKey)
 		assert.NoError(t, err)
 		expected := [][]interface{}{
-			{"skey", KVSubspace, "_tigris_created_at", 1, nil, 0, 1},
-			{"skey", KVSubspace, "_tigris_updated_at", 1, nil, 0, 1},
-			{"skey", KVSubspace, "id", 1, int64(1), 0, 1},
-			{"skey", KVSubspace, "double_f", 1, nil, 0, 1},
-			{"skey", KVSubspace, "created", 1, nil, 0, 1},
-			{"skey", KVSubspace, "updated", 1, nil, 0, 1},
-			{"skey", KVSubspace, "arr", 1, nil, 0, 1},
-			{"skey", KVSubspace, "arr", 1, nil, 1, 1},
+			{"skey", KVSubspace, "_tigris_created_at", value.SecondaryNullOrder(), nil, 0, 1},
+			{"skey", KVSubspace, "_tigris_updated_at", value.SecondaryNullOrder(), nil, 0, 1},
+			{"skey", KVSubspace, "id", value.ToSecondaryOrder(schema.Int64Type, nil), int64(1), 0, 1},
+			{"skey", KVSubspace, "double_f", value.SecondaryNullOrder(), nil, 0, 1},
+			{"skey", KVSubspace, "created", value.SecondaryNullOrder(), nil, 0, 1},
+			{"skey", KVSubspace, "updated", value.SecondaryNullOrder(), nil, 0, 1},
+			{"skey", KVSubspace, "arr", value.SecondaryNullOrder(), nil, 0, 1},
+			{"skey", KVSubspace, "arr", value.SecondaryNullOrder(), nil, 1, 1},
 		}
 		assertKVs(t, expected, updateSet.addKeys, updateSet.addCounts)
 	})
@@ -234,19 +254,19 @@ func TestIndexingNull(t *testing.T) {
 		updateSet, err := indexStore.buildAddAndRemoveKVs(updatedTd, td, primaryKey)
 		assert.NoError(t, err)
 		expectedAdded := [][]interface{}{
-			{"skey", KVSubspace, "_tigris_created_at", 1, updatedTd.CreatedAt.ToRFC3339(), 0, 1},
-			{"skey", KVSubspace, "_tigris_updated_at", 1, updatedTd.UpdatedAt.ToRFC3339(), 0, 1},
-			{"skey", KVSubspace, "double_f", 1, float64(5), 0, 1},
-			{"skey", KVSubspace, "updated", 1, "2023-01-16T12:55:17.304154Z", 0, 1},
-			{"skey", KVSubspace, "arr", 1, int64(1), 1, 1},
+			{"skey", KVSubspace, "_tigris_created_at", value.ToSecondaryOrder(schema.DateTimeType, nil), updatedTd.CreatedAt.ToRFC3339(), 0, 1},
+			{"skey", KVSubspace, "_tigris_updated_at", value.ToSecondaryOrder(schema.DateTimeType, nil), updatedTd.UpdatedAt.ToRFC3339(), 0, 1},
+			{"skey", KVSubspace, "double_f", value.ToSecondaryOrder(schema.DoubleType, nil), float64(5), 0, 1},
+			{"skey", KVSubspace, "updated", value.ToSecondaryOrder(schema.DateTimeType, nil), "2023-01-16T12:55:17.304154Z", 0, 1},
+			{"skey", KVSubspace, "arr", value.ToSecondaryOrder(schema.Int64Type, nil), int64(1), 1, 1},
 		}
 		assertKVs(t, expectedAdded, updateSet.addKeys, nil)
 		expectedRemoved := [][]interface{}{
-			{"skey", KVSubspace, "_tigris_created_at", 1, nil, 0, 1},
-			{"skey", KVSubspace, "_tigris_updated_at", 1, nil, 0, 1},
-			{"skey", KVSubspace, "double_f", 1, nil, 0, 1},
-			{"skey", KVSubspace, "updated", 1, nil, 0, 1},
-			{"skey", KVSubspace, "arr", 1, nil, 1, 1},
+			{"skey", KVSubspace, "_tigris_created_at", value.SecondaryNullOrder(), nil, 0, 1},
+			{"skey", KVSubspace, "_tigris_updated_at", value.SecondaryNullOrder(), nil, 0, 1},
+			{"skey", KVSubspace, "double_f", value.SecondaryNullOrder(), nil, 0, 1},
+			{"skey", KVSubspace, "updated", value.SecondaryNullOrder(), nil, 0, 1},
+			{"skey", KVSubspace, "arr", value.SecondaryNullOrder(), nil, 1, 1},
 		}
 		assertKVs(t, expectedRemoved, updateSet.removeKeys, nil)
 	})
@@ -284,13 +304,13 @@ func TestIndexingStringEncoding(t *testing.T) {
 		updateSet, err := indexStore.buildAddAndRemoveKVs(td, nil, primaryKey)
 		assert.NoError(t, err)
 		expected := [][]interface{}{
-			{"skey", KVSubspace, "_tigris_created_at", 1, td.CreatedAt.ToRFC3339(), 0, 1},
-			{"skey", KVSubspace, "_tigris_updated_at", 1, td.UpdatedAt.ToRFC3339(), 0, 1},
-			{"skey", KVSubspace, "id", 1, int64(1), 0, 1},
-			{"skey", KVSubspace, "string_val", 1, stringEncoder("a simple string value"), 0, 1},
-			{"skey", KVSubspace, "created", 1, "2023-01-16T12:55:17.304154Z", 0, 1},
-			{"skey", KVSubspace, "arr", 1, stringEncoder("one"), 0, 1},
-			{"skey", KVSubspace, "arr", 1, stringEncoder("two"), 1, 1},
+			{"skey", KVSubspace, "_tigris_created_at", value.ToSecondaryOrder(schema.DateTimeType, nil), td.CreatedAt.ToRFC3339(), 0, 1},
+			{"skey", KVSubspace, "_tigris_updated_at", value.ToSecondaryOrder(schema.DateTimeType, nil), td.UpdatedAt.ToRFC3339(), 0, 1},
+			{"skey", KVSubspace, "id", value.ToSecondaryOrder(schema.Int64Type, nil), int64(1), 0, 1},
+			{"skey", KVSubspace, "string_val", value.ToSecondaryOrder(schema.StringType, nil), stringEncoder("a simple string value"), 0, 1},
+			{"skey", KVSubspace, "created", value.ToSecondaryOrder(schema.DateTimeType, nil), "2023-01-16T12:55:17.304154Z", 0, 1},
+			{"skey", KVSubspace, "arr", value.ToSecondaryOrder(schema.StringType, nil), stringEncoder("one"), 0, 1},
+			{"skey", KVSubspace, "arr", value.ToSecondaryOrder(schema.StringType, nil), stringEncoder("two"), 1, 1},
 		}
 		assertKVs(t, expected, updateSet.addKeys, updateSet.addCounts)
 	})
@@ -300,7 +320,7 @@ func TestIndexingStringEncoding(t *testing.T) {
 		td, primaryKey := createDoc(`{"id":1, "string_val":"this is a very long string that will be larger than 64 bytes so that we concaternate it correctly","created":"2023-01-16T12:55:17.304154Z","arr":["one", "two"]}`)
 		updateSet, err := indexStore.buildAddAndRemoveKVs(td, nil, primaryKey)
 		assert.NoError(t, err)
-		assert.Equal(t, []interface{}{"skey", KVSubspace, "string_val", 1, longStr, 0, 1}, updateSet.addKeys[3].IndexParts())
+		assert.Equal(t, []interface{}{"skey", KVSubspace, "string_val", value.ToSecondaryOrder(schema.StringType, nil), longStr, 0, 1}, updateSet.addKeys[3].IndexParts())
 	})
 }
 
@@ -375,22 +395,22 @@ func TestIndexingObjectArrayKVGen(t *testing.T) {
 	assert.NoError(t, err)
 
 	expected := [][]interface{}{
-		{"skey", KVSubspace, "_tigris_created_at", 1, td.CreatedAt.ToRFC3339(), 0, 1},
-		{"skey", KVSubspace, "_tigris_updated_at", 1, td.UpdatedAt.ToRFC3339(), 0, 1},
-		{"skey", KVSubspace, "id", 1, int64(1), 0, 1},
-		{"skey", KVSubspace, "object1.val1", 1, stringEncoder("one"), 0, 1},
-		{"skey", KVSubspace, "object1.val2", 1, float64(2), 0, 1},
-		{"skey", KVSubspace, "object1.val3.nested", 1, true, 0, 1},
-		{"skey", KVSubspace, "object1.val3.another", 1, float64(100), 0, 1},
-		{"skey", KVSubspace, "object1.val3.arrayval.val1", 1, stringEncoder("one"), 0, 1},
-		{"skey", KVSubspace, "object1.val3.arrayval.val2", 1, false, 0, 1},
-		{"skey", KVSubspace, "object1.val3.arrayval.val3._tigris_array_stub", 1, interface{}(nil), 0, 1},
-		{"skey", KVSubspace, "object1.val3.arrayval.val1", 1, stringEncoder("one"), 1, 1},
-		{"skey", KVSubspace, "object1.val3.arrayval.val2", 1, false, 1, 1},
-		{"skey", KVSubspace, "arr.val1", 1, float64(1), 0, 1},
-		{"skey", KVSubspace, "arr.val2", 1, float64(2.0), 0, 1},
-		{"skey", KVSubspace, "arr.val1", 1, float64(1), 1, 1},
-		{"skey", KVSubspace, "arr.val2", 1, float64(5.0), 1, 1},
+		{"skey", KVSubspace, "_tigris_created_at", value.ToSecondaryOrder(schema.DateTimeType, nil), td.CreatedAt.ToRFC3339(), 0, 1},
+		{"skey", KVSubspace, "_tigris_updated_at", value.ToSecondaryOrder(schema.DateTimeType, nil), td.UpdatedAt.ToRFC3339(), 0, 1},
+		{"skey", KVSubspace, "id", value.ToSecondaryOrder(schema.Int64Type, nil), int64(1), 0, 1},
+		{"skey", KVSubspace, "object1.val1", value.ToSecondaryOrder(schema.StringType, nil), stringEncoder("one"), 0, 1},
+		{"skey", KVSubspace, "object1.val2", value.ToSecondaryOrder(schema.DoubleType, nil), float64(2), 0, 1},
+		{"skey", KVSubspace, "object1.val3.nested", value.ToSecondaryOrder(schema.BoolType, value.NewBoolValue(true)), true, 0, 1},
+		{"skey", KVSubspace, "object1.val3.another", value.ToSecondaryOrder(schema.DoubleType, nil), float64(100), 0, 1},
+		{"skey", KVSubspace, "object1.val3.arrayval.val1", value.ToSecondaryOrder(schema.StringType, nil), stringEncoder("one"), 0, 1},
+		{"skey", KVSubspace, "object1.val3.arrayval.val2", value.ToSecondaryOrder(schema.BoolType, value.NewBoolValue(false)), false, 0, 1},
+		{"skey", KVSubspace, "object1.val3.arrayval.val3._tigris_array_stub", value.ToSecondaryOrder(schema.ArrayType, nil), interface{}(nil), 0, 1},
+		{"skey", KVSubspace, "object1.val3.arrayval.val1", value.ToSecondaryOrder(schema.StringType, nil), stringEncoder("one"), 1, 1},
+		{"skey", KVSubspace, "object1.val3.arrayval.val2", value.ToSecondaryOrder(schema.BoolType, value.NewBoolValue(false)), false, 1, 1},
+		{"skey", KVSubspace, "arr.val1", value.ToSecondaryOrder(schema.DoubleType, nil), float64(1), 0, 1},
+		{"skey", KVSubspace, "arr.val2", value.ToSecondaryOrder(schema.DoubleType, nil), float64(2.0), 0, 1},
+		{"skey", KVSubspace, "arr.val1", value.ToSecondaryOrder(schema.DoubleType, nil), float64(1), 1, 1},
+		{"skey", KVSubspace, "arr.val2", value.ToSecondaryOrder(schema.DoubleType, nil), float64(5.0), 1, 1},
 	}
 	assertKVs(t, expected, updateSet.addKeys, updateSet.addCounts)
 }
@@ -463,16 +483,16 @@ func TestIndexingArrayWithObjectAndNestedArrayKeyGen(t *testing.T) {
 	assert.NoError(t, err)
 
 	expected := [][]interface{}{
-		{"skey", KVSubspace, "_tigris_created_at", 1, td.CreatedAt.ToRFC3339(), 0, 1},
-		{"skey", KVSubspace, "_tigris_updated_at", 1, td.UpdatedAt.ToRFC3339(), 0, 1},
-		{"skey", KVSubspace, "id", 1, int64(1), 0, 1},
-		{"skey", KVSubspace, "arr.val1", 1, float64(1), 0, 1},
-		{"skey", KVSubspace, "arr.val2", 1, float64(2.0), 0, 1},
-		{"skey", KVSubspace, "arr.val3._tigris_array_stub", 1, interface{}(nil), 0, 1},
+		{"skey", KVSubspace, "_tigris_created_at", value.ToSecondaryOrder(schema.DateTimeType, nil), td.CreatedAt.ToRFC3339(), 0, 1},
+		{"skey", KVSubspace, "_tigris_updated_at", value.ToSecondaryOrder(schema.DateTimeType, nil), td.UpdatedAt.ToRFC3339(), 0, 1},
+		{"skey", KVSubspace, "id", value.ToSecondaryOrder(schema.Int64Type, nil), int64(1), 0, 1},
+		{"skey", KVSubspace, "arr.val1", value.ToSecondaryOrder(schema.DoubleType, nil), float64(1), 0, 1},
+		{"skey", KVSubspace, "arr.val2", value.ToSecondaryOrder(schema.DoubleType, nil), float64(2.0), 0, 1},
+		{"skey", KVSubspace, "arr.val3._tigris_array_stub", value.ToSecondaryOrder(schema.ArrayType, nil), interface{}(nil), 0, 1},
 
-		{"skey", KVSubspace, "arr.val1", 1, float64(1), 1, 1},
-		{"skey", KVSubspace, "arr.val2", 1, float64(5.0), 1, 1},
-		{"skey", KVSubspace, "arr2._tigris_array_stub", 1, interface{}(nil), 0, 1},
+		{"skey", KVSubspace, "arr.val1", value.ToSecondaryOrder(schema.DoubleType, nil), float64(1), 1, 1},
+		{"skey", KVSubspace, "arr.val2", value.ToSecondaryOrder(schema.DoubleType, nil), float64(5.0), 1, 1},
+		{"skey", KVSubspace, "arr2._tigris_array_stub", value.ToSecondaryOrder(schema.ArrayType, nil), interface{}(nil), 0, 1},
 	}
 
 	assertKVs(t, expected, updateSet.addKeys, updateSet.addCounts)
@@ -624,7 +644,7 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 		assert.NoError(t, err)
 		info, err = indexStore.IndexInfo(ctx, tx)
 		assert.NoError(t, err)
-		assert.Equal(t, int64(7), info.Rows)
+		assert.Equal(t, int64(8), info.Rows)
 
 		iter, err = indexStore.scanIndex(ctx, tx)
 		assert.NoError(t, err)
@@ -635,7 +655,7 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 		}
 		assert.NoError(t, err)
 		assert.Nil(t, iter.Err())
-		assert.Equal(t, 7, count)
+		assert.Equal(t, 8, count)
 		assert.NoError(t, tx.Commit(ctx))
 	})
 
