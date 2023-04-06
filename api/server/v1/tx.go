@@ -55,6 +55,7 @@ const (
 	ManagementMethodPrefix    = "/tigrisdata.management.v1.Management/"
 	CreateNamespaceMethodName = ManagementMethodPrefix + "CreateNamespace"
 	ListNamespaceMethodName   = ManagementMethodPrefix + "ListNamespaces"
+	DeleteNamespaceMethodName = ManagementMethodPrefix + "DeleteNamespace"
 
 	AuthMethodPrefix         = "/tigrisdata.auth.v1.Auth/"
 	GetAccessTokenMethodName = AuthMethodPrefix + "GetAccessToken"

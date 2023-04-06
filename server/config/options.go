@@ -35,23 +35,24 @@ type ServerConfig struct {
 }
 
 type Config struct {
-	Log            log.LogConfig
-	Server         ServerConfig         `yaml:"server" json:"server"`
-	Auth           AuthConfig           `yaml:"auth" json:"auth"`
-	Billing        Billing              `yaml:"billing" json:"billing"`
-	Cdc            CdcConfig            `yaml:"cdc" json:"cdc"`
-	Search         SearchConfig         `yaml:"search" json:"search"`
-	SecondaryIndex SecondaryIndexConfig `mapstructure:"secondary_index" yaml:"secondary_index" json:"secondary_index"`
-	Cache          CacheConfig          `yaml:"cache" json:"cache"`
-	Tracing        TracingConfig        `yaml:"tracing" json:"tracing"`
-	Metrics        MetricsConfig        `yaml:"metrics" json:"metrics"`
-	Profiling      ProfilingConfig      `yaml:"profiling" json:"profiling"`
-	FoundationDB   FoundationDBConfig
-	Quota          QuotaConfig
-	Observability  ObservabilityConfig `yaml:"observability" json:"observability"`
-	Management     ManagementConfig    `yaml:"management" json:"management"`
-	GlobalStatus   GlobalStatusConfig  `yaml:"global_status" json:"global_status"`
-	Schema         SchemaConfig
+	Log             log.LogConfig
+	Server          ServerConfig         `yaml:"server" json:"server"`
+	Auth            AuthConfig           `yaml:"auth" json:"auth"`
+	MetadataCluster ClusterConfig        `mapstructure:"metadata_cluster" yaml:"metadata_cluster" json:"metadata_cluster"`
+	Billing         Billing              `yaml:"billing" json:"billing"`
+	Cdc             CdcConfig            `yaml:"cdc" json:"cdc"`
+	Search          SearchConfig         `yaml:"search" json:"search"`
+	SecondaryIndex  SecondaryIndexConfig `mapstructure:"secondary_index" yaml:"secondary_index" json:"secondary_index"`
+	Cache           CacheConfig          `yaml:"cache" json:"cache"`
+	Tracing         TracingConfig        `yaml:"tracing" json:"tracing"`
+	Metrics         MetricsConfig        `yaml:"metrics" json:"metrics"`
+	Profiling       ProfilingConfig      `yaml:"profiling" json:"profiling"`
+	FoundationDB    FoundationDBConfig
+	Quota           QuotaConfig
+	Observability   ObservabilityConfig `yaml:"observability" json:"observability"`
+	Management      ManagementConfig    `yaml:"management" json:"management"`
+	GlobalStatus    GlobalStatusConfig  `yaml:"global_status" json:"global_status"`
+	Schema          SchemaConfig
 }
 
 type Gotrue struct {
@@ -66,26 +67,36 @@ type Gotrue struct {
 }
 
 type AuthConfig struct {
-	Enabled                    bool              `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	Validators                 []ValidatorConfig `mapstructure:"validators" yaml:"validators" json:"validators"`
-	PrimaryAudience            string            `mapstructure:"primary_audience" yaml:"primary_audience" json:"primary_audience"`
-	JWKSCacheTimeout           time.Duration     `mapstructure:"jwks_cache_timeout" yaml:"jwks_cache_timeout" json:"jwks_cache_timeout"`
-	LogOnly                    bool              `mapstructure:"log_only" yaml:"log_only" json:"log_only"`
-	EnableNamespaceIsolation   bool              `mapstructure:"enable_namespace_isolation" yaml:"enable_namespace_isolation" json:"enable_namespace_isolation"`
-	AdminNamespaces            []string          `mapstructure:"admin_namespaces" yaml:"admin_namespaces" json:"admin_namespaces"`
-	OAuthProvider              string            `mapstructure:"oauth_provider" yaml:"oauth_provider" json:"oauth_provider"`
-	ClientId                   string            `mapstructure:"client_id" yaml:"client_id" json:"client_id"`
-	ExternalTokenURL           string            `mapstructure:"external_token_url" yaml:"external_token_url" json:"external_token_url"`
-	EnableOauth                bool              `mapstructure:"enable_oauth" yaml:"enable_oauth" json:"enable_oauth"`
-	TokenValidationCacheSize   int               `mapstructure:"token_cache_size" yaml:"token_cache_size" json:"token_cache_size"`
-	TokenValidationCacheTTLSec int               `mapstructure:"token_cache_ttl_sec" yaml:"token_cache_ttl_sec" json:"token_cache_ttl_sec"`
-	ExternalDomain             string            `mapstructure:"external_domain" yaml:"external_domain" json:"external_domain"`
-	ManagementClientId         string            `mapstructure:"management_client_id" yaml:"management_client_id" json:"management_client_id"`
-	ManagementClientSecret     string            `mapstructure:"management_client_secret" yaml:"management_client_secret" json:"management_client_secret"`
-	TokenClockSkewDurationSec  int               `mapstructure:"token_clock_skew_duration_sec" yaml:"token_clock_skew_duration_sec" json:"token_clock_skew_duration_sec"`
-	Gotrue                     Gotrue            `mapstructure:"gotrue" yaml:"gotrue" json:"gotrue"`
+	Enabled                    bool                  `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Validators                 []ValidatorConfig     `mapstructure:"validators" yaml:"validators" json:"validators"`
+	PrimaryAudience            string                `mapstructure:"primary_audience" yaml:"primary_audience" json:"primary_audience"`
+	JWKSCacheTimeout           time.Duration         `mapstructure:"jwks_cache_timeout" yaml:"jwks_cache_timeout" json:"jwks_cache_timeout"`
+	LogOnly                    bool                  `mapstructure:"log_only" yaml:"log_only" json:"log_only"`
+	EnableNamespaceIsolation   bool                  `mapstructure:"enable_namespace_isolation" yaml:"enable_namespace_isolation" json:"enable_namespace_isolation"`
+	AdminNamespaces            []string              `mapstructure:"admin_namespaces" yaml:"admin_namespaces" json:"admin_namespaces"`
+	OAuthProvider              string                `mapstructure:"oauth_provider" yaml:"oauth_provider" json:"oauth_provider"`
+	ClientId                   string                `mapstructure:"client_id" yaml:"client_id" json:"client_id"`
+	ExternalTokenURL           string                `mapstructure:"external_token_url" yaml:"external_token_url" json:"external_token_url"`
+	EnableOauth                bool                  `mapstructure:"enable_oauth" yaml:"enable_oauth" json:"enable_oauth"`
+	TokenValidationCacheSize   int                   `mapstructure:"token_cache_size" yaml:"token_cache_size" json:"token_cache_size"`
+	TokenValidationCacheTTLSec int                   `mapstructure:"token_cache_ttl_sec" yaml:"token_cache_ttl_sec" json:"token_cache_ttl_sec"`
+	ExternalDomain             string                `mapstructure:"external_domain" yaml:"external_domain" json:"external_domain"`
+	ManagementClientId         string                `mapstructure:"management_client_id" yaml:"management_client_id" json:"management_client_id"`
+	ManagementClientSecret     string                `mapstructure:"management_client_secret" yaml:"management_client_secret" json:"management_client_secret"`
+	TokenClockSkewDurationSec  int                   `mapstructure:"token_clock_skew_duration_sec" yaml:"token_clock_skew_duration_sec" json:"token_clock_skew_duration_sec"`
+	Gotrue                     Gotrue                `mapstructure:"gotrue" yaml:"gotrue" json:"gotrue"`
+	NamespaceLocalization      NamespaceLocalization `mapstructure:"namespace_localization" yaml:"namespace_localization" json:"namespace_localization"`
+	EnableNamespaceDeletion    bool                  `mapstructure:"enable_namespace_deletion" yaml:"enable_namespace_deletion" json:"enable_namespace_deletion"`
 }
 
+type ClusterConfig struct {
+	Url   string `mapstructure:"url" yaml:"url" json:"url"`
+	Token string `mapstructure:"token" yaml:"token" json:"token"`
+}
+
+type NamespaceLocalization struct {
+	Enabled bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+}
 type ValidatorConfig struct {
 	Issuer    string                       `mapstructure:"issuer" yaml:"issuer" json:"issuer"`
 	Algorithm validator.SignatureAlgorithm `mapstructure:"algorithm" yaml:"algorithm" json:"algorithm"`
@@ -260,13 +271,16 @@ var DefaultConfig = Config{
 			ClientIdLength:     30,
 			ClientSecretLength: 50,
 		},
+		NamespaceLocalization:   NamespaceLocalization{Enabled: false},
+		EnableNamespaceDeletion: false,
 	},
 	Billing: Billing{
 		Metronome: Metronome{
-			Enabled:     false,
-			URL:         "https://api.metronome.com/v1",
-			ApiKey:      "replace_me",
-			DefaultPlan: "placeholderPlan",
+			Enabled: false,
+			URL:     "https://api.metronome.com/v1",
+			ApiKey:  "replace_me",
+			// random placeholder UUID and not an actual plan
+			DefaultPlan: "47eda90f-d2e8-4184-8955-cb3a6467782b",
 		},
 	},
 	Cdc: CdcConfig{
@@ -426,6 +440,9 @@ var DefaultConfig = Config{
 	GlobalStatus: GlobalStatusConfig{
 		Enabled:     true,
 		EmitMetrics: true,
+	},
+	MetadataCluster: ClusterConfig{
+		Url: "https://api.global.tigrisdata.cloud",
 	},
 }
 

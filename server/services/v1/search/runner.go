@@ -36,6 +36,7 @@ import (
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/services/v1/database"
 	"github.com/tigrisdata/tigris/server/transaction"
@@ -692,6 +693,11 @@ type SearchRunner struct {
 }
 
 func (runner *SearchRunner) Run(ctx context.Context, tenant *metadata.Tenant) (Response, error) {
+	reqStatus, reqStatusExists := metrics.RequestStatusFromContext(ctx)
+	if reqStatus != nil && reqStatusExists {
+		reqStatus.SetApiSearchType()
+	}
+
 	index, err := runner.getIndex(tenant, runner.req.GetProject(), runner.req.GetIndex())
 	if err != nil {
 		return Response{}, err

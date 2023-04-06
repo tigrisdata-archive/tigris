@@ -17,19 +17,20 @@ package billing
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/tigrisdata/tigris/errors"
 )
 
 type noop struct{}
 
-func (n *noop) CreateAccount(_ context.Context, _ string, _ string) (string, error) {
-	return "", errors.Unimplemented("billing not enabled on this server")
+func (n *noop) CreateAccount(_ context.Context, _ string, _ string) (MetronomeId, error) {
+	return uuid.Nil, errors.Unimplemented("billing not enabled on this server")
 }
 
-func (n *noop) AddDefaultPlan(ctx context.Context, id string) (bool, error) {
-	return n.AddPlan(ctx, id, "")
+func (n *noop) AddDefaultPlan(ctx context.Context, accountId MetronomeId) (bool, error) {
+	return n.AddPlan(ctx, accountId, uuid.New())
 }
 
-func (*noop) AddPlan(ctx context.Context, metronomeId string, planId string) (bool, error) {
+func (*noop) AddPlan(_ context.Context, _ MetronomeId, _ uuid.UUID) (bool, error) {
 	return false, errors.Unimplemented("billing not enabled on this server")
 }

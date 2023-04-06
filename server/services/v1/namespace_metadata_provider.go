@@ -29,6 +29,7 @@ type NamespaceMetadataProvider interface {
 	GetNamespaceMetadata(ctx context.Context, req *api.GetNamespaceMetadataRequest) (*api.GetNamespaceMetadataResponse, error)
 	InsertNamespaceMetadata(ctx context.Context, req *api.InsertNamespaceMetadataRequest) (*api.InsertNamespaceMetadataResponse, error)
 	UpdateNamespaceMetadata(ctx context.Context, req *api.UpdateNamespaceMetadataRequest) (*api.UpdateNamespaceMetadataResponse, error)
+	DeleteNamespace(ctx context.Context, tx transaction.Tx, namespaceId uint32) error
 }
 
 type DefaultNamespaceMetadataProvider struct {
@@ -57,6 +58,10 @@ func (a *DefaultNamespaceMetadataProvider) GetNamespaceMetadata(ctx context.Cont
 		NamespaceId: namespaceId,
 		Value:       val,
 	}, nil
+}
+
+func (a *DefaultNamespaceMetadataProvider) DeleteNamespace(ctx context.Context, tx transaction.Tx, namespaceId uint32) error {
+	return a.namespaceStore.DeleteNamespace(ctx, tx, namespaceId)
 }
 
 func (a *DefaultNamespaceMetadataProvider) InsertNamespaceMetadata(ctx context.Context, req *api.InsertNamespaceMetadataRequest) (*api.InsertNamespaceMetadataResponse, error) {
