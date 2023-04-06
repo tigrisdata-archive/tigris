@@ -38,7 +38,8 @@ import (
 )
 
 const (
-	userPattern = "/" + version + "/management/*"
+	userPattern   = "/" + version + "/management/*"
+	DeletedStatus = "deleted"
 )
 
 type managementService struct {
@@ -156,6 +157,58 @@ func (m *managementService) ListNamespaces(ctx context.Context, req *api.ListNam
 	} else {
 		return m.listNamespaces(ctx, req.GetNamespaceId())
 	}
+}
+
+func (m *managementService) DeleteNamespace(ctx context.Context, req *api.DeleteNamespaceRequest) (*api.DeleteNamespaceResponse, error) {
+	// putting this behind safety switch.
+	// The deletion of namespace isn't fully automated yet
+	if !config.DefaultConfig.Auth.EnableNamespaceDeletion {
+		return nil, errors.Unimplemented("Deletion is not enabled on this cluster")
+	}
+
+	tenantToDelete, err := m.TenantManager.GetTenant(ctx, req.GetNamespaceId())
+	if err != nil || tenantToDelete == nil {
+		log.Error().Err(err).Msgf("Failed to get tenant for the namespaceId: %s", req.GetNamespaceId())
+		return nil, errors.NotFound("Unable to find the namespace: %s", req.GetNamespaceId())
+	}
+
+	tx, err := m.StartTx(ctx)
+	if err != nil {
+		log.Error().Err(err).Msgf("Failed to start tx to delete projects")
+		return nil, errors.Internal("Failed to delete namespace")
+	}
+
+	err = m.TenantManager.DeleteTenant(ctx, tx, tenantToDelete)
+	if err != nil {
+		log.Error().Err(err).Msgf("Failed to delete tenant")
+		err = tx.Rollback(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to rollback transaction")
+		}
+		return nil, errors.Internal("Failed to delete namespace")
+	}
+
+	// delete namespace metadata
+	err = m.NamespaceMetadataProvider.DeleteNamespace(ctx, tx, tenantToDelete.GetNamespace().Id())
+	if err != nil {
+		log.Error().Err(err).Msgf("Failed to delete namespace metadata")
+		err = tx.Rollback(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to rollback transaction")
+		}
+		return nil, errors.Internal("Failed to delete namespace")
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		log.Error().Err(err).Msgf("Failed to commit tx to delete namespace")
+		return nil, errors.Internal("Failed to delete namespace")
+	}
+
+	return &api.DeleteNamespaceResponse{
+		Message: fmt.Sprintf("Namespace: %s deleted successfully", req.GetNamespaceId()),
+		Status:  DeletedStatus,
+	}, nil
 }
 
 func (m *managementService) getNamespacesDetails(ctx context.Context, namespaceId string) (*api.ListNamespacesResponse, error) {

@@ -86,6 +86,7 @@ type AuthConfig struct {
 	TokenClockSkewDurationSec  int                   `mapstructure:"token_clock_skew_duration_sec" yaml:"token_clock_skew_duration_sec" json:"token_clock_skew_duration_sec"`
 	Gotrue                     Gotrue                `mapstructure:"gotrue" yaml:"gotrue" json:"gotrue"`
 	NamespaceLocalization      NamespaceLocalization `mapstructure:"namespace_localization" yaml:"namespace_localization" json:"namespace_localization"`
+	EnableNamespaceDeletion    bool                  `mapstructure:"enable_namespace_deletion" yaml:"enable_namespace_deletion" json:"enable_namespace_deletion"`
 }
 
 type ClusterConfig struct {
@@ -270,7 +271,8 @@ var DefaultConfig = Config{
 			ClientIdLength:     30,
 			ClientSecretLength: 50,
 		},
-		NamespaceLocalization: NamespaceLocalization{Enabled: false},
+		NamespaceLocalization:   NamespaceLocalization{Enabled: false},
+		EnableNamespaceDeletion: false,
 	},
 	Billing: Billing{
 		Metronome: Metronome{

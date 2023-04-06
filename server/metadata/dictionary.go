@@ -172,6 +172,21 @@ func (r *reservedSubspace) reload(ctx context.Context, tx transaction.Tx) error 
 	return it.Err()
 }
 
+func (r *reservedSubspace) unReserveNamespace(ctx context.Context, tx transaction.Tx, namespaceId string) error {
+	if len(namespaceId) == 0 {
+		return errors.InvalidArgument("namespaceId is empty")
+	}
+
+	key := keys.NewKey(r.ReservedSubspaceName(), namespaceKey, namespaceId, keyEnd)
+
+	err := tx.Delete(ctx, key)
+
+	log.Debug().Err(err).Str("key", key.String()).Str("value", namespaceId).
+		Msg("un-reserving namespace")
+
+	return err
+}
+
 func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.Tx, namespaceId string,
 	namespaceMetadata NamespaceMetadata,
 ) error {
@@ -309,6 +324,11 @@ func (k *Dictionary) ReserveNamespace(ctx context.Context, tx transaction.Tx, na
 	namespaceMetadata NamespaceMetadata,
 ) error {
 	return k.reservedSb.reserveNamespace(ctx, tx, namespaceId, namespaceMetadata)
+}
+
+// UnReserveNamespace deletes the namespace.
+func (k *Dictionary) UnReserveNamespace(ctx context.Context, tx transaction.Tx, namespaceId string) error {
+	return k.reservedSb.unReserveNamespace(ctx, tx, namespaceId)
 }
 
 func (k *Dictionary) GetNamespaces(ctx context.Context, tx transaction.Tx,
