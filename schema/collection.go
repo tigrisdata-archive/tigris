@@ -93,10 +93,6 @@ func (d *DefaultCollection) GetPrimaryKey() *Index {
 	return d.PrimaryKey
 }
 
-func (d *DefaultCollection) GetPrimaryQueryableFields() []*QueryableField {
-	return NewQueryableFieldsBuilder().BuildQueryableFields(d.PrimaryKey.Fields, nil)
-}
-
 func disableAdditionalPropertiesAndAllowNullable(required []string, properties map[string]*jsonschema.Schema) {
 	for name, p := range properties {
 		isRequired := false
