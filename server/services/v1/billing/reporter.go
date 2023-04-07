@@ -105,6 +105,7 @@ func (r *UsageReporter) push() error {
 			WithTransactionId(nsMeta.StrId + "_" + trxnSuffix).
 			WithTimestamp(chunk.EndTime).
 			WithDatabaseUnits(stats.ReadUnits + stats.WriteUnits).
+			WithSearchUnits(stats.SearchUnits).
 			Build()
 		events = append(events, event)
 
