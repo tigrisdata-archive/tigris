@@ -123,7 +123,12 @@ func (x *TableData) CloneWithAttributesOnly(newRawData []byte) *TableData {
 		UpdatedAt:   x.UpdatedAt,
 		TotalChunks: x.TotalChunks,
 		RawData:     newRawData,
+		ValueSize:   x.ValueSize,
 	}
+}
+
+func (x *TableData) Size() int32 {
+	return int32(len(x.RawData))
 }
 
 func (x *TableData) IsChunkedData() bool {

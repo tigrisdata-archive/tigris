@@ -17,6 +17,8 @@ package database
 import (
 	"context"
 
+	"github.com/tigrisdata/tigris/store/kv"
+
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
@@ -146,13 +148,15 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 			// as Int64 or timestamp to ensure uniqueness if multiple workers end up generating same timestamp.
 			err = tx.Insert(ctx, key, tableData)
 		} else {
+			szCtx := ctx
 			if config.DefaultConfig.SecondaryIndex.WriteEnabled {
-				err := indexer.ReadDocAndDelete(ctx, tx, key)
+				sz, err := indexer.ReadDocAndDelete(ctx, tx, key)
 				if err != nil {
 					return nil, nil, err
 				}
+				szCtx = context.WithValue(ctx, &kv.CtxValueSize{}, sz)
 			}
-			err = tx.Replace(ctx, key, tableData, false)
+			err = tx.Replace(szCtx, key, tableData, false)
 		}
 		if err != nil {
 			return nil, nil, err

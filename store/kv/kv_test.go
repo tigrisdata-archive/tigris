@@ -656,10 +656,10 @@ func TestKVFDB(t *testing.T) {
 	cfg, err := config.GetTestFDBConfig("../..")
 	require.NoError(t, err)
 
-	kvStore, err := NewTxStore(cfg)
+	kv, err := newFoundationDB(cfg)
 	require.NoError(t, err)
 
-	kv, err := newFoundationDB(cfg)
+	kvStore, err := NewTxStore(kv)
 	require.NoError(t, err)
 
 	t.Run("TestKVFBench", func(t *testing.T) {

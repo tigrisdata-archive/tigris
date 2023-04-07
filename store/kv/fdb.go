@@ -203,11 +203,12 @@ func (d *fdbkv) AtomicReadRange(ctx context.Context, table []byte, lKey Key, rKe
 	return &AtomicIteratorImpl{ctx, it, nil}, nil
 }
 
-func (d *fdbkv) Get(ctx context.Context, key []byte, isSnapshot bool) (Future, error) {
-	val, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return (&ftx{d: d, tx: &tr}).Get(ctx, key, isSnapshot)
+func (d *fdbkv) Get(ctx context.Context, key []byte, isSnapshot bool) Future {
+	val, _ := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+		return (&ftx{d: d, tx: &tr}).Get(ctx, key, isSnapshot), nil
 	})
-	return val.(fdb.FutureByteSlice), err
+
+	return val.(Future)
 }
 
 func (d *fdbkv) CreateTable(_ context.Context, name []byte) error {
@@ -404,11 +405,40 @@ func (t *ftx) AtomicReadRange(ctx context.Context, table []byte, lkey Key, rkey 
 	return &AtomicIteratorImpl{ctx, iter, nil}, nil
 }
 
-func (t *ftx) Get(_ context.Context, key []byte, isSnapshot bool) (Future, error) {
-	if isSnapshot {
-		return t.tx.Snapshot().Get(fdb.Key(key)), nil
+type AtomicIteratorImpl struct {
+	ctx context.Context
+	baseIterator
+	err error
+}
+
+func (i *AtomicIteratorImpl) Next(value *FdbBaseKeyValue[int64]) bool {
+	var v baseKeyValue
+	hasNext := i.baseIterator.Next(&v)
+	if hasNext {
+		value.Key = v.Key
+		value.FDBKey = v.FDBKey
+		num, err := fdbByteToInt64(v.Value)
+		if err != nil {
+			i.err = err
+			return false
+		}
+		value.Data = num
 	}
-	return t.tx.Get(fdb.Key(key)), nil
+	return hasNext
+}
+
+func (i *AtomicIteratorImpl) Err() error {
+	if i.err != nil {
+		return i.err
+	}
+	return i.baseIterator.Err()
+}
+
+func (t *ftx) Get(_ context.Context, key []byte, isSnapshot bool) Future {
+	if isSnapshot {
+		return t.tx.Snapshot().Get(fdb.Key(key))
+	}
+	return t.tx.Get(fdb.Key(key))
 }
 
 // RangeSize calculates approximate range table size in bytes - this is an estimate

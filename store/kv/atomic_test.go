@@ -42,16 +42,40 @@ func TestShardedAtomics(t *testing.T) {
 	err = kv.Delete(ctx, testTable, testKey)
 	require.NoError(t, err)
 
-	err = sa.AtomicAdd(ctx, testTable, testKey, 10)
+	tx, err := kv.BeginTx(ctx)
 	require.NoError(t, err)
 
-	err = sa.AtomicAdd(ctx, testTable, testKey, 100)
+	err = sa.AtomicAdd(ctx, tx, testTable, testKey, 10)
 	require.NoError(t, err)
 
-	err = sa.AtomicAdd(ctx, testTable, testKey, -20)
+	err = tx.Commit(ctx)
 	require.NoError(t, err)
 
-	val, err := sa.AtomicRead(ctx, testTable, testKey)
+	tx, err = kv.BeginTx(ctx)
+	require.NoError(t, err)
+
+	err = sa.AtomicAdd(ctx, tx, testTable, testKey, 100)
+	require.NoError(t, err)
+
+	err = tx.Commit(ctx)
+	require.NoError(t, err)
+
+	tx, err = kv.BeginTx(ctx)
+	require.NoError(t, err)
+
+	err = sa.AtomicAdd(ctx, tx, testTable, testKey, -20)
+	require.NoError(t, err)
+
+	err = tx.Commit(ctx)
+	require.NoError(t, err)
+
+	tx, err = kv.BeginTx(ctx)
+	require.NoError(t, err)
+
+	val, err := sa.AtomicRead(ctx, tx, testTable, testKey)
 	require.NoError(t, err)
 	assert.Equal(t, int64(90), val)
+
+	err = tx.Rollback(ctx)
+	require.NoError(t, err)
 }

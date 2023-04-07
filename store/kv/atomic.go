@@ -22,8 +22,8 @@ import (
 const AtomicSuffixSeparator = "__A__"
 
 type ShardedAtomics interface {
-	AtomicAdd(ctx context.Context, table []byte, key Key, value int64) error
-	AtomicRead(ctx context.Context, table []byte, key Key) (int64, error)
+	AtomicAdd(ctx context.Context, tx baseTx, table []byte, key Key, value int64) error
+	AtomicRead(ctx context.Context, tx baseTx, table []byte, key Key) (int64, error)
 }
 
 type shardedAtomics struct {
@@ -40,18 +40,18 @@ func NewShardedAtomics(kv baseKV) ShardedAtomics {
 }
 
 // AtomicAdd applies increment to random shard.
-func (s *shardedAtomics) AtomicAdd(ctx context.Context, table []byte, key Key, inc int64) error {
+func (s *shardedAtomics) AtomicAdd(ctx context.Context, tx baseTx, table []byte, key Key, inc int64) error {
 	n := rand.Intn(s.numShards) //nolint:gosec
 
 	key = append(key, AtomicSuffixSeparator)
 	key = append(key, n)
 
-	return s.kv.AtomicAdd(ctx, table, key, inc)
+	return tx.AtomicAdd(ctx, table, key, inc)
 }
 
 // AtomicRead calculates the value by summing all the shards.
-func (s *shardedAtomics) AtomicRead(ctx context.Context, table []byte, key Key) (int64, error) {
-	it, err := s.kv.Read(ctx, table, key)
+func (s *shardedAtomics) AtomicRead(ctx context.Context, tx baseTx, table []byte, key Key) (int64, error) {
+	it, err := tx.Read(ctx, table, key)
 	if err != nil {
 		return 0, err
 	}

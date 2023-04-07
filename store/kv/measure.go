@@ -96,9 +96,9 @@ func (m *TxStoreWithMetrics) DropTable(ctx context.Context, name []byte) (err er
 	return
 }
 
-func (m *TxStoreWithMetrics) TableSize(ctx context.Context, name []byte) (size int64, err error) {
-	m.measure(ctx, "TableSize", func() error {
-		size, err = m.kv.TableSize(ctx, name)
+func (m *TxStoreWithMetrics) GetTableStats(ctx context.Context, name []byte) (stats *TableStats, err error) {
+	m.measure(ctx, "GetTableStats", func() error {
+		stats, err = m.kv.GetTableStats(ctx, name)
 		return err
 	})
 	return
@@ -140,6 +140,14 @@ func (m *TxImplWithMetrics) Delete(ctx context.Context, table []byte, key Key) (
 	return
 }
 
+func (m *TxImplWithMetrics) GetMetadata(ctx context.Context, table []byte, key Key) (data *internal.TableData, err error) {
+	m.measure(ctx, "GetMetadata", func() error {
+		data, err = m.tx.GetMetadata(ctx, table, key)
+		return err
+	})
+	return
+}
+
 func (m *TxImplWithMetrics) SetVersionstampedValue(ctx context.Context, key []byte, value []byte) (err error) {
 	m.measure(ctx, "SetVersionstampedValue", func() error {
 		err = m.tx.SetVersionstampedValue(ctx, key, value)
@@ -172,6 +180,7 @@ func (m *TxImplWithMetrics) AtomicRead(ctx context.Context, table []byte, key Ke
 	return
 }
 
+/*
 func (m *TxImplWithMetrics) AtomicReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (iter AtomicIterator, err error) {
 	m.measure(ctx, "AtomicReadRange", func() error {
 		iter, err = m.tx.AtomicReadRange(ctx, table, lkey, rkey, isSnapshot)
@@ -179,11 +188,12 @@ func (m *TxImplWithMetrics) AtomicReadRange(ctx context.Context, table []byte, l
 	})
 	return
 }
+*/
 
-func (m *TxImplWithMetrics) Get(ctx context.Context, key []byte, isSnapshot bool) (val Future, err error) {
+func (m *TxImplWithMetrics) Get(ctx context.Context, key []byte, isSnapshot bool) (val Future) {
 	m.measure(ctx, "Get", func() error {
-		val, err = m.tx.Get(ctx, key, isSnapshot)
-		return err
+		val = m.tx.Get(ctx, key, isSnapshot)
+		return nil
 	})
 	return
 }

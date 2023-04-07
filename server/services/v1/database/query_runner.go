@@ -260,6 +260,8 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		newData.SetVersion(coll.GetVersion())
 		// as we have merged the data, it is safe to call replace
 
+		szCtx := context.WithValue(ctx, &kv.CtxValueSize{}, row.Data.Size())
+
 		isUpdate := true
 		newKey := key
 		if primaryKeyMutation {
@@ -270,10 +272,15 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			}
 
 			// deleteReq old key
-			if err = tx.Delete(ctx, key); ulog.E(err) {
+			if err = tx.Delete(szCtx, key); ulog.E(err) {
 				return Response{}, ctx, err
 			}
 			isUpdate = false
+
+			// clear size from the context, so as we subtracted the size
+			// in the delete above.
+			// if new key exist its value size will be subtracted in the replace below
+			szCtx = ctx
 
 			if config.DefaultConfig.SecondaryIndex.WriteEnabled {
 				if err := indexer.Delete(ctx, tx, row.Data, key.IndexParts()); ulog.E(err) {
@@ -284,11 +291,13 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 				}
 			}
 		} else if config.DefaultConfig.SecondaryIndex.WriteEnabled {
+			szCtx = ctx // clear size
 			if err = indexer.Update(ctx, tx, newData, row.Data, key.IndexParts()); ulog.E(err) {
 				return Response{}, ctx, err
 			}
 		}
-		if err = tx.Replace(ctx, newKey, newData, isUpdate); ulog.E(err) {
+
+		if err = tx.Replace(szCtx, newKey, newData, isUpdate); ulog.E(err) {
 			return Response{}, ctx, err
 		}
 	}
@@ -364,7 +373,7 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			return Response{}, ctx, err
 		}
 		if reqStatusFound {
-			reqStatus.AddWriteBytes(int64(len(row.Data.RawData)))
+			reqStatus.AddWriteBytes(int64(row.Data.Size()))
 		}
 
 		if config.DefaultConfig.SecondaryIndex.WriteEnabled {
@@ -373,6 +382,8 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 				return Response{}, ctx, err
 			}
 		}
+
+		ctx = context.WithValue(ctx, &kv.CtxValueSize{}, row.Data.Size())
 
 		if err = tx.Delete(ctx, key); ulog.E(err) {
 			return Response{}, ctx, err
@@ -764,7 +775,7 @@ type ExplainQueryRunner struct {
 	req *api.ReadRequest
 }
 
-func (runner *ExplainQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
+func (runner *ExplainQueryRunner) Run(ctx context.Context, _ transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
 	db, err := runner.getDatabase(ctx, nil, tenant, runner.req.GetProject(), runner.req.GetBranch())
 	if err != nil {
 		return Response{}, ctx, err

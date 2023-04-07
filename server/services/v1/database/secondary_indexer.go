@@ -178,24 +178,24 @@ func (q *SecondaryIndexer) IndexInfo(ctx context.Context, tx transaction.Tx) (*S
 	}, nil
 }
 
-func (q *SecondaryIndexer) ReadDocAndDelete(ctx context.Context, tx transaction.Tx, key keys.Key) error {
+func (q *SecondaryIndexer) ReadDocAndDelete(ctx context.Context, tx transaction.Tx, key keys.Key) (int32, error) {
 	iter, err := tx.Read(ctx, key)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	var oldDoc kv.KeyValue
 	if iter.Next(&oldDoc) {
 		err := q.Delete(ctx, tx, oldDoc.Data, key.IndexParts())
 		if err != nil {
-			return err
+			return 0, err
 		}
 	}
 
 	if iter.Err() != nil {
-		return iter.Err()
+		return 0, iter.Err()
 	}
 
-	return nil
+	return oldDoc.Data.Size(), nil
 }
 
 func (q *SecondaryIndexer) Delete(ctx context.Context, tx transaction.Tx, td *internal.TableData, primaryKey []interface{}) error {

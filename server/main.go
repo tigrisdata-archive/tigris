@@ -132,6 +132,7 @@ func mainWithCode() int {
 func kvStoreForDatabase(cfg *config.Config) (kv.TxStore, error) {
 	builder := kv.NewBuilder()
 	builder.WithListener() // database has a listener attached to it
+	builder.WithStats()
 	if config.DefaultConfig.Metrics.Fdb.Enabled {
 		builder.WithMeasure()
 	}
@@ -140,6 +141,7 @@ func kvStoreForDatabase(cfg *config.Config) (kv.TxStore, error) {
 
 func kvStoreForSearch(cfg *config.Config) (kv.TxStore, error) {
 	builder := kv.NewBuilder()
+	builder.WithStats()
 	if config.DefaultConfig.Search.Chunking {
 		builder.WithChunking()
 	}

@@ -15,25 +15,23 @@
 package kv
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 
 	"github.com/tigrisdata/tigris/internal"
-	"github.com/tigrisdata/tigris/server/config"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 type KeyValueTxStore struct {
 	*fdbkv
 }
 
-func NewTxStore(cfg *config.FoundationDBConfig) (TxStore, error) {
-	return newTxStore(cfg)
+func NewTxStore(kv *fdbkv) (TxStore, error) {
+	return newTxStore(kv)
 }
 
-func newTxStore(cfg *config.FoundationDBConfig) (*KeyValueTxStore, error) {
-	kv, err := newFoundationDB(cfg)
-	if err != nil {
-		return nil, err
-	}
+func newTxStore(kv *fdbkv) (*KeyValueTxStore, error) {
 	return &KeyValueTxStore{fdbkv: kv}, nil
 }
 
@@ -50,6 +48,15 @@ func (k *KeyValueTxStore) BeginTx(ctx context.Context) (Tx, error) {
 
 func (k *KeyValueTxStore) GetInternalDatabase() (interface{}, error) {
 	return k.db, nil
+}
+
+func (k *KeyValueTxStore) GetTableStats(ctx context.Context, table []byte) (*TableStats, error) {
+	sz, err := k.TableSize(ctx, table)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TableStats{OnDiskSize: sz}, nil
 }
 
 type KeyValueTx struct {
@@ -70,6 +77,7 @@ func (tx *KeyValueTx) Replace(ctx context.Context, table []byte, key Key, data *
 	if err != nil {
 		return err
 	}
+
 	return tx.ftx.Replace(ctx, table, key, enc, isUpdate)
 }
 
@@ -78,6 +86,7 @@ func (tx *KeyValueTx) Read(ctx context.Context, table []byte, key Key) (Iterator
 	if err != nil {
 		return nil, err
 	}
+
 	return NewKeyValueIterator(ctx, iter), nil
 }
 
@@ -86,7 +95,70 @@ func (tx *KeyValueTx) ReadRange(ctx context.Context, table []byte, lkey Key, rke
 	if err != nil {
 		return nil, err
 	}
+
 	return NewKeyValueIterator(ctx, iter), nil
+}
+
+func customMetadataDecoder(d *msgpack.Decoder) (any, error) {
+	n, err := d.DecodeMapLen()
+	if err != nil {
+		return nil, err
+	}
+
+	m := internal.TableData{}
+	for i := 0; i < n; i++ {
+		mk, err := d.DecodeString()
+		if err != nil {
+			return nil, err
+		}
+
+		switch mk {
+		case "Ver":
+			m.Ver, err = d.DecodeInt32()
+		case "Encoding":
+			m.Encoding, err = d.DecodeInt32()
+		case "ValueSize":
+			m.ValueSize, err = d.DecodeInt32()
+		case "RawData":
+			err = d.Skip()
+		case "CreatedAt":
+			err = d.Skip()
+		case "UpdatedAt":
+			err = d.Skip()
+		case "TotalChunks":
+			var i int32
+			i, err = d.DecodeInt32()
+			m.TotalChunks = &i
+		}
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &m, nil
+}
+
+func (tx *KeyValueTx) GetMetadata(ctx context.Context, table []byte, key Key) (*internal.TableData, error) {
+	b, err := tx.ftx.Get(ctx, getFDBKey(table, key), true).Get()
+	if err != nil {
+		return nil, err
+	}
+
+	dec := msgpack.NewDecoder(bytes.NewBuffer(b))
+	dec.SetMapDecoder(customMetadataDecoder)
+
+	i, err := dec.DecodeInterface()
+	if err != nil {
+		return nil, err
+	}
+
+	md, ok := i.(*internal.TableData)
+	if !ok {
+		return nil, fmt.Errorf("unknown type returned by msgpack decoder")
+	}
+
+	return md, nil
 }
 
 type KeyValueIterator struct {
@@ -101,52 +173,23 @@ func NewKeyValueIterator(ctx context.Context, iter baseIterator) *KeyValueIterat
 
 func (i *KeyValueIterator) Next(value *KeyValue) bool {
 	var v baseKeyValue
-	hasNext := i.baseIterator.Next(&v)
-	if hasNext {
-		value.Key = v.Key
-		value.FDBKey = v.FDBKey
-		decoded, err := internal.Decode(v.Value)
-		if err != nil {
-			i.err = err
-			return false
-		}
-		value.Data = decoded
+
+	if !i.baseIterator.Next(&v) {
+		i.err = i.baseIterator.Err()
+		return false
 	}
-	return hasNext
+
+	value.Key = v.Key
+	value.FDBKey = v.FDBKey
+	value.Data, i.err = internal.Decode(v.Value)
+
+	return i.err == nil
 }
 
 func (i *KeyValueIterator) Err() error {
 	if i.err != nil {
 		return i.err
 	}
-	return i.baseIterator.Err()
-}
 
-type AtomicIteratorImpl struct {
-	ctx context.Context
-	baseIterator
-	err error
-}
-
-func (i *AtomicIteratorImpl) Next(value *FdbBaseKeyValue[int64]) bool {
-	var v baseKeyValue
-	hasNext := i.baseIterator.Next(&v)
-	if hasNext {
-		value.Key = v.Key
-		value.FDBKey = v.FDBKey
-		num, err := fdbByteToInt64(v.Value)
-		if err != nil {
-			i.err = err
-			return false
-		}
-		value.Data = num
-	}
-	return hasNext
-}
-
-func (i *AtomicIteratorImpl) Err() error {
-	if i.err != nil {
-		return i.err
-	}
 	return i.baseIterator.Err()
 }

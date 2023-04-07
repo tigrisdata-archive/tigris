@@ -303,7 +303,7 @@ func (m *managementService) getNameSpaceDetails(ctx context.Context, namespaceId
 					}
 					res[nsName][db.Name()][coll.Name] = map[string]string{
 						"schema": string(coll.Schema),
-						"size":   strconv.FormatInt(size, 10),
+						"size":   strconv.FormatInt(size.StoredBytes, 10),
 					}
 				}
 			}

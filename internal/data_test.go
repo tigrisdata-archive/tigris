@@ -31,6 +31,7 @@ func TestEncode_Decode(t *testing.T) {
 		data, err := Decode(encoded)
 		require.NoError(t, err)
 		require.Equal(t, d, data)
+		require.Equal(t, 20, data.Size())
 	})
 	t.Run("not_implemented", func(t *testing.T) {
 		data, err := Decode([]byte(`{"a": 1, "b": "foo"}`))

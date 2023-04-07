@@ -1439,31 +1439,71 @@ func (tenant *Tenant) String() string {
 	return fmt.Sprintf("id: %d, name: %s", tenant.namespace.Id(), tenant.namespace.StrId())
 }
 
-// Size returns approximate data size on disk for all the collections, databases for this tenant.
-func (tenant *Tenant) Size(ctx context.Context) (int64, error) {
+func (tenant *Tenant) listEncCollName(db *Database) [][]byte {
+	colls := make([][]byte, len(db.collections))
+	for _, v := range db.collections {
+		name, _ := tenant.Encoder.EncodeTableName(tenant.namespace, db, v.collection)
+		colls = append(colls, name)
+	}
+
+	return colls
+}
+
+func (tenant *Tenant) sumCollsSize(ctx context.Context, colls [][]byte) (*kv.TableStats, error) {
+	var sumStats kv.TableStats
+
+	for _, coll := range colls {
+		stats, err := tenant.kvStore.GetTableStats(ctx, coll)
+		if err != nil {
+			return nil, err
+		}
+
+		sumStats.StoredBytes += stats.StoredBytes
+		sumStats.OnDiskSize += stats.OnDiskSize
+		sumStats.RowCount += stats.RowCount
+	}
+
+	return &sumStats, nil
+}
+
+// Size returns exact data size on disk for all the collections, databases for this tenant.
+func (tenant *Tenant) Size(ctx context.Context) (*kv.TableStats, error) {
+	colls := make([][]byte, 0)
+
 	tenant.Lock()
-	nsName, _ := tenant.Encoder.EncodeTableName(tenant.namespace, nil, nil)
+	for _, v := range tenant.projects {
+		if v.database != nil {
+			colls = append(colls, tenant.listEncCollName(v.database)...)
+		}
+	}
 	tenant.Unlock()
 
-	return tenant.kvStore.TableSize(ctx, nsName)
+	return tenant.sumCollsSize(ctx, colls)
 }
 
 // DatabaseSize returns approximate data size on disk for all the database for this tenant.
-func (tenant *Tenant) DatabaseSize(ctx context.Context, db *Database) (int64, error) {
+func (tenant *Tenant) DatabaseSize(ctx context.Context, db *Database) (*kv.TableStats, error) {
+	var colls [][]byte
+
 	tenant.Lock()
-	nsName, _ := tenant.Encoder.EncodeTableName(tenant.namespace, db, nil)
+	colls = tenant.listEncCollName(db)
 	tenant.Unlock()
 
-	return tenant.kvStore.TableSize(ctx, nsName)
+	return tenant.sumCollsSize(ctx, colls)
 }
 
 // CollectionSize returns approximate data size on disk for all the collections for the database provided by the caller.
-func (tenant *Tenant) CollectionSize(ctx context.Context, db *Database, coll *schema.DefaultCollection) (int64, error) {
+func (tenant *Tenant) CollectionSize(ctx context.Context, db *Database, coll *schema.DefaultCollection) (*kv.TableStats, error) {
 	tenant.Lock()
 	nsName, _ := tenant.Encoder.EncodeTableName(tenant.namespace, db, coll)
 	tenant.Unlock()
 
-	return tenant.kvStore.TableSize(ctx, nsName)
+	stats, err := tenant.kvStore.GetTableStats(ctx, nsName)
+	if err != nil {
+		return nil, err
+	}
+
+	return stats, nil
 }
 
 type Project struct {

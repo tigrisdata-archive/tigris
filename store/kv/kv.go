@@ -18,7 +18,6 @@ import (
 	"context"
 	"unsafe"
 
-	"github.com/apple/foundationdb/bindings/go/src/fdb"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/server/config"
 )
@@ -40,7 +39,12 @@ type FdbBaseKeyValue[T fdbBaseType] struct {
 	Data   T
 }
 
-type Future fdb.FutureByteSlice
+type TableStats struct {
+	StoredBytes     int64
+	OnDiskSize      int64
+	RowCount        int64
+	SearchIndexSize int64
+}
 
 type KV interface {
 	Insert(ctx context.Context, table []byte, key Key, data *internal.TableData) error
@@ -48,12 +52,14 @@ type KV interface {
 	Delete(ctx context.Context, table []byte, key Key) error
 	Read(ctx context.Context, table []byte, key Key) (Iterator, error)
 	ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (Iterator, error)
+
+	GetMetadata(ctx context.Context, table []byte, key Key) (*internal.TableData, error)
+
+	SetVersionstampedKey(_ context.Context, key []byte, value []byte) error
 	SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error
-	SetVersionstampedKey(ctx context.Context, key []byte, value []byte) error
-	Get(ctx context.Context, key []byte, isSnapshot bool) (Future, error)
+	Get(ctx context.Context, key []byte, isSnapshot bool) Future
 	AtomicAdd(ctx context.Context, table []byte, key Key, value int64) error
 	AtomicRead(ctx context.Context, table []byte, key Key) (int64, error)
-	AtomicReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (AtomicIterator, error)
 }
 
 type Tx interface {
@@ -69,7 +75,7 @@ type TxStore interface {
 	CreateTable(ctx context.Context, name []byte) error
 	DropTable(ctx context.Context, name []byte) error
 	GetInternalDatabase() (interface{}, error) // TODO: CDC remove workaround
-	TableSize(ctx context.Context, name []byte) (int64, error)
+	GetTableStats(ctx context.Context, name []byte) (*TableStats, error)
 }
 
 type Iterator interface {
@@ -101,6 +107,7 @@ type Builder struct {
 	isChunking    bool
 	isMeasure     bool
 	isListener    bool
+	isStats       bool
 }
 
 func NewBuilder() *Builder {
@@ -111,7 +118,12 @@ func NewBuilder() *Builder {
 // using this simple kv. Listener enabled will be added after chunking so that it is called before chunking. Finally,
 // the measure at the end.
 func (b *Builder) Build(cfg *config.FoundationDBConfig) (TxStore, error) {
-	store, err := NewTxStore(cfg)
+	kv, err := newFoundationDB(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	store, err := NewTxStore(kv)
 	if err != nil {
 		return nil, err
 	}
@@ -120,6 +132,9 @@ func (b *Builder) Build(cfg *config.FoundationDBConfig) (TxStore, error) {
 	}
 	if b.isListener {
 		store = NewListenerStore(store)
+	}
+	if b.isStats {
+		store = NewStatsStore(store, kv)
 	}
 	if b.isMeasure {
 		store = NewKeyValueStoreWithMetrics(store)
@@ -145,5 +160,10 @@ func (b *Builder) WithCompression() *Builder {
 
 func (b *Builder) WithChunking() *Builder {
 	b.isChunking = true
+	return b
+}
+
+func (b *Builder) WithStats() *Builder {
+	b.isStats = true
 	return b
 }

@@ -16,7 +16,11 @@ package kv
 
 import (
 	"context"
+
+	"github.com/apple/foundationdb/bindings/go/src/fdb"
 )
+
+type Future = fdb.FutureByteSlice
 
 type baseKeyValue struct {
 	Key    Key
@@ -30,8 +34,9 @@ type baseKV interface {
 	Delete(ctx context.Context, table []byte, key Key) error
 	Read(ctx context.Context, table []byte, key Key) (baseIterator, error)
 	ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (baseIterator, error)
+	SetVersionstampedKey(_ context.Context, key []byte, value []byte) error
 	SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error
-	Get(ctx context.Context, key []byte, isSnapshot bool) (Future, error)
+	Get(ctx context.Context, key []byte, isSnapshot bool) Future
 	AtomicAdd(ctx context.Context, table []byte, key Key, value int64) error
 	AtomicRead(ctx context.Context, table []byte, key Key) (int64, error)
 	AtomicReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (AtomicIterator, error)
@@ -54,4 +59,5 @@ type baseKVStore interface {
 	BeginTx(ctx context.Context) (baseTx, error)
 	CreateTable(ctx context.Context, name []byte) error
 	DropTable(ctx context.Context, name []byte) error
+	TableSize(ctx context.Context, name []byte) (int64, error)
 }

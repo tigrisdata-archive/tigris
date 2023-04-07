@@ -50,6 +50,10 @@ func (n *NoopKVStore) DropTable(_ context.Context, _ []byte) error          { re
 func (n *NoopKVStore) GetInternalDatabase() (interface{}, error)            { return nil, nil }
 func (n *NoopKVStore) TableSize(_ context.Context, _ []byte) (int64, error) { return 0, nil }
 
+func (n *NoopKVStore) GetTableStats(ctx context.Context, table []byte) (*TableStats, error) {
+	return &TableStats{}, nil
+}
+
 type NoopKV struct{}
 
 func (n *NoopKV) Insert(ctx context.Context, table []byte, key Key, data *internal.TableData) error {
@@ -88,8 +92,12 @@ func (n *NoopKV) AtomicReadRange(ctx context.Context, table []byte, lkey Key, rk
 	return &NoopFDBTypeIterator{}, nil
 }
 
-func (n *NoopKV) Get(ctx context.Context, key []byte, isSnapshot bool) (Future, error) {
-	return nil, nil
+func (n *NoopKV) Get(ctx context.Context, key []byte, isSnapshot bool) Future {
+	return nil
+}
+
+func (n *NoopKV) GetMetadata(ctx context.Context, table []byte, key Key) (*internal.TableData, error) {
+	return &internal.TableData{}, nil
 }
 
 func (n *NoopKV) RangeSize(ctx context.Context, table []byte, lkey Key, rkey Key) (int64, error) {
