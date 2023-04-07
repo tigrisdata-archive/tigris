@@ -134,7 +134,7 @@ func (i *AtomicIteratorImpl) Next(value *FdbBaseKeyValue[int64]) bool {
 	if hasNext {
 		value.Key = v.Key
 		value.FDBKey = v.FDBKey
-		num, err := fdbByteToInt64(&v.Value)
+		num, err := fdbByteToInt64(v.Value)
 		if err != nil {
 			i.err = err
 			return false
