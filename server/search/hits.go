@@ -84,7 +84,14 @@ func NewSearchHit(tsHit *tsApi.SearchResultHit) *Hit {
 	}
 
 	var fields []*api.MatchField
-	if tsHit.Highlights != nil {
+	if tsHit.Highlight != nil {
+		// check first in highlight
+		for name := range *tsHit.Highlight {
+			fields = append(fields, &api.MatchField{
+				Name: name,
+			})
+		}
+	} else if tsHit.Highlights != nil  {
 		for _, f := range *tsHit.Highlights {
 			name := ""
 			if f.Field != nil {
