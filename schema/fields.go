@@ -241,10 +241,9 @@ func toSearchFieldType(fieldType FieldType, subType FieldType) string {
 			return FieldNames[subType] + "[]"
 		case Int32Type, Int64Type:
 			return FieldNames[subType] + "[]"
-		case StringType, ByteType, UUIDType:
+		case StringType, ByteType, UUIDType, DateTimeType:
+			// for array, we don't need to convert to int64
 			return FieldNames[StringType] + "[]"
-		case DateTimeType:
-			return FieldNames[Int64Type] + "[]"
 		case DoubleType:
 			return searchDoubleType + "[]"
 		case ObjectType:
