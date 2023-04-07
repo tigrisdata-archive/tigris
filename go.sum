@@ -529,8 +529,8 @@ github.com/tigrisdata/metronome-go-client v0.1.0 h1:EEsNCUakxhKbM0xZ+GSnUcCFngBy
 github.com/tigrisdata/metronome-go-client v0.1.0/go.mod h1:R5eSI50uoj2e2Qi0dpa51vf3RV92YZKNtRIWyG/DOno=
 github.com/tigrisdata/tigris-client-go v1.0.0-beta.25 h1:ifJlt67uoyprSJYWaOvd1aTkOL/FxpEBXcxv7n8ASOs=
 github.com/tigrisdata/tigris-client-go v1.0.0-beta.25/go.mod h1:sT5YZVA9AwI31vIKv0WHqOQYE9pi41HDQ2GDHBo4i3s=
-github.com/tigrisdata/typesense-go v0.6.2-beta.6 h1:9XuSvGN0BZDPXV9dEquH6PuwmwYlhAX6w+h+9T1ngRo=
-github.com/tigrisdata/typesense-go v0.6.2-beta.6/go.mod h1:z/JGTvrZjYHqDxKB2fGHTbt47bXyVM4lo5Nzk5vNBD4=
+github.com/tigrisdata/typesense-go v0.6.2-beta.7 h1:uJex8/oHL+m5Rcw8SBt8s6lsEXNIu9Gp0RJLtK0RHtw=
+github.com/tigrisdata/typesense-go v0.6.2-beta.7/go.mod h1:z/JGTvrZjYHqDxKB2fGHTbt47bXyVM4lo5Nzk5vNBD4=
 github.com/tinylib/msgp v1.1.8 h1:FCXC1xanKO4I8plpHGH2P7koL/RzZs12l/+r7vakfm0=
 github.com/tinylib/msgp v1.1.8/go.mod h1:qkpG+2ldGg4xRFmx+jfTvZPxfGFhi64BcnL9vkCm/Tw=
 github.com/twmb/murmur3 v1.1.6 h1:mqrRot1BRxm+Yct+vavLMou2/iJt0tNVTTC0QoIjaZg=
