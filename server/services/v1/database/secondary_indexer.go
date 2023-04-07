@@ -40,10 +40,12 @@ var (
 )
 
 type IndexRow struct {
-	value value.Value
-	name  string
-	pos   int
-	stub  bool
+	value    value.Value
+	name     string
+	pos      int
+	stub     bool
+	dataType schema.FieldType
+	null     bool
 }
 
 func newIndexRow(dataType schema.FieldType, collation *value.Collation, name string, rawValue []byte, pos int, stub bool) (*IndexRow, error) {
@@ -56,7 +58,31 @@ func newIndexRow(dataType schema.FieldType, collation *value.Collation, name str
 		name,
 		pos,
 		stub,
+		dataType,
+		false,
 	}, nil
+}
+
+func newMissingRow(name string) *IndexRow {
+	return &IndexRow{
+		value:    value.NewNullValue(),
+		name:     name,
+		pos:      0,
+		dataType: schema.NullType,
+		stub:     false,
+		null:     true,
+	}
+}
+
+func newNullRow(name string, pos int) *IndexRow {
+	return &IndexRow{
+		value:    value.NewNullValue(),
+		name:     name,
+		pos:      pos,
+		dataType: schema.NullType,
+		stub:     false,
+		null:     true,
+	}
 }
 
 func (f IndexRow) Name() string {
@@ -95,6 +121,8 @@ type SecondaryIndexer struct {
 	// Used for unit tests because it can index deeper into a schema than we currently expose to the user
 	// This can be removed once indexing into arrays and objects is exposed to the user
 	indexAll bool
+	// Spare indexes do not index missing fields
+	sparse bool
 }
 
 func NewSecondaryIndexer(coll *schema.DefaultCollection) *SecondaryIndexer {
@@ -102,6 +130,7 @@ func NewSecondaryIndexer(coll *schema.DefaultCollection) *SecondaryIndexer {
 		collation: value.NewCollationFrom(&api.Collation{Case: "csk"}),
 		coll:      coll,
 		indexAll:  false,
+		sparse:    false, // For now indexes are only non-sparse
 	}
 }
 
@@ -179,7 +208,7 @@ func (q *SecondaryIndexer) Index(ctx context.Context, tx transaction.Tx, td *int
 
 func (q *SecondaryIndexer) Update(ctx context.Context, tx transaction.Tx, newTd *internal.TableData, oldTd *internal.TableData, primaryKey []interface{}) error {
 	if len(q.coll.EncodedTableIndexName) == 0 {
-		return fmt.Errorf("Could not index collection %s, encoded table not set", q.coll.Name)
+		return fmt.Errorf("could not index collection %s, encoded table not set", q.coll.Name)
 	}
 	updateSet, err := q.buildAddAndRemoveKVs(newTd, oldTd, primaryKey)
 	if err != nil {
@@ -330,8 +359,12 @@ func (q *SecondaryIndexer) buildTSRows(tableData *internal.TableData) ([]IndexRo
 }
 
 func (q *SecondaryIndexer) buildIndexKey(row IndexRow, primaryKey []interface{}) keys.Key {
-	version := getFieldVersion(row.name, q.coll)
-	return newKeyWithPrimaryKey(primaryKey, q.coll.EncodedTableIndexName, q.coll.SecondaryIndexKeyword(), KVSubspace, row.Name(), version, row.value.AsInterface(), row.pos)
+	if row.null {
+		return newKeyWithPrimaryKey(primaryKey, q.coll.EncodedTableIndexName, q.coll.SecondaryIndexKeyword(), KVSubspace, row.Name(), value.SecondaryNullOrder(), row.value.AsInterface(), row.pos)
+	}
+
+	dataTypeOrder := value.ToSecondaryOrder(row.dataType, row.value)
+	return newKeyWithPrimaryKey(primaryKey, q.coll.EncodedTableIndexName, q.coll.SecondaryIndexKeyword(), KVSubspace, row.Name(), dataTypeOrder, row.value.AsInterface(), row.pos)
 }
 
 func (q *SecondaryIndexer) createKeysAndIndexInfo(primaryKey []interface{}, rows []IndexRow) ([]keys.Key, map[string]int64, map[string]int64) {
@@ -372,8 +405,16 @@ func (q *SecondaryIndexer) indexField(doc []byte, fieldName string, dataType sch
 		return nil, fmt.Errorf("do not index byte field %s", fieldName)
 	}
 	val, dt, _, err := jsonparser.Get(doc, keyPath...)
-	if dt == jsonparser.NotExist {
+	if dt == jsonparser.NotExist && !q.sparse {
+		return newMissingRow(fieldName), nil
+	}
+
+	if err != nil {
 		return nil, err
+	}
+
+	if dt == jsonparser.Null {
+		return newNullRow(fieldName, 0), nil
 	}
 
 	row, err := newIndexRow(dataType, q.collation, fieldName, val, pos, false)
@@ -401,6 +442,8 @@ func (q *SecondaryIndexer) indexNestedField(doc []byte, topField string, pos int
 		case schema.ObjectType:
 			// nested objects
 			return nil
+		case schema.NullType:
+			indexedFields = append(indexedFields, *newNullRow(fieldName, pos))
 		default:
 			row, err := newIndexRow(fieldType, q.collation, fieldName, value, pos, false)
 			if err != nil {
@@ -429,6 +472,8 @@ func (q *SecondaryIndexer) indexArray(doc []byte, field *schema.QueryableField, 
 	processor := func(value []byte, dt jsonparser.ValueType, offset int, err error) {
 		toFieldType := schema.ToFieldType(dt.String(), "", "")
 		switch toFieldType {
+		case schema.NullType:
+			rows = append(rows, *newNullRow(field.FieldName, pos))
 		case schema.ObjectType:
 			indexedFields, err := q.indexNestedField(value, field.FieldName, pos)
 			if err != nil && !isIgnoreableError(err) {
@@ -460,6 +505,10 @@ func (q *SecondaryIndexer) indexArray(doc []byte, field *schema.QueryableField, 
 
 	_, err := jsonparser.ArrayEach(doc, processor, keyPath...)
 	if err != nil {
+		if isKeyPathNotFound(err) {
+			return []IndexRow{*newMissingRow(field.FieldName)}, nil
+		}
+
 		log.Err(err).Msgf("Failed to index field name: %s", field.FieldName)
 		return nil, err
 	}
@@ -478,14 +527,6 @@ func (q *SecondaryIndexer) getIndexedFields() []*schema.QueryableField {
 func newKeyWithPrimaryKey(id []interface{}, table []byte, indexParts ...interface{}) keys.Key {
 	indexParts = append(indexParts, id...)
 	return keys.NewKey(table, indexParts...)
-}
-
-func getFieldVersion(fieldName string, coll *schema.DefaultCollection) int {
-	fieldVersions := coll.LookupFieldVersion(strings.Split(fieldName, (".")))
-	if len(fieldVersions) > 0 {
-		return fieldVersions[len(fieldVersions)-1].Version
-	}
-	return 1
 }
 
 func containsIndexRow(rows []IndexRow, field IndexRow) bool {
@@ -517,10 +558,14 @@ func removeDuplicateRows(rows []IndexRow, removes []IndexRow) []IndexRow {
 	return final
 }
 
+func isKeyPathNotFound(err error) bool {
+	return err.Error() == "Key path not found"
+}
+
 // These are acceptable errors during indexing. A field could be missing from the index or
 // the field could be of type binary.
 func isIgnoreableError(err error) bool {
-	if err.Error() == "Key path not found" || strings.Contains(err.Error(), "do not index byte field") {
+	if isKeyPathNotFound(err) || strings.Contains(err.Error(), "do not index byte field") {
 		return true
 	}
 	return false

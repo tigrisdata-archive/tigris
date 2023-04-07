@@ -268,6 +268,9 @@ func TestTenantManager_DatabaseBranches(t *testing.T) {
 	err = tenant.CreateProject(ctx, tx, tenantProj2, nil)
 	require.NoError(t, err)
 
+	databases := (&Project{}).GetDatabaseWithBranches()
+	require.Len(t, databases, 0)
+
 	require.NoError(t, tenant.reload(ctx, tx, nil, nil))
 
 	require.NoError(t, tenant.CreateBranch(ctx, tx, tenantProj1, NewDatabaseNameWithBranch(tenantProj1, "branch1")))
@@ -302,7 +305,7 @@ func TestTenantManager_DatabaseBranches(t *testing.T) {
 	require.True(t, branch3.IsBranch())
 	require.Equal(t, tenantProj1+BranchNameSeparator+"branch3", branch3.Name())
 
-	databases := proj1.GetDatabaseWithBranches()
+	databases = proj1.GetDatabaseWithBranches()
 	require.Len(t, databases, 4)
 	require.Equal(t, proj1.database, databases[0])
 

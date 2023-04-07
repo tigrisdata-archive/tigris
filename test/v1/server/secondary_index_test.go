@@ -243,7 +243,7 @@ func TestQuery_Range(t *testing.T) {
 			Map{
 				"bool_value": Map{"$gte": false},
 			},
-			[]int{2, 3, 30},
+			[]int{2, 3, 30, 1, 4},
 		},
 		{
 			Map{

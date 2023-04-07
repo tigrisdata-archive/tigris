@@ -24,6 +24,7 @@ import (
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
+	"github.com/tigrisdata/tigris/value"
 )
 
 var PrimaryKeyPos = 6
@@ -88,9 +89,9 @@ func BuildSecondaryIndexKeys(coll *schema.DefaultCollection, queryFilters []filt
 		return newKeyWithPrimaryKey(indexParts, coll.EncodedTableIndexName, coll.SecondaryIndexKeyword(), "kvs"), nil
 	}
 
-	buildIndexParts := func(fieldName string, datatype schema.FieldType, value interface{}) []interface{} {
-		version := getFieldVersion(fieldName, coll)
-		return []interface{}{fieldName, version, value}
+	buildIndexParts := func(fieldName string, val value.Value) []interface{} {
+		typeOrder := value.ToSecondaryOrder(val.DataType(), val)
+		return []interface{}{fieldName, typeOrder, val.AsInterface()}
 	}
 
 	eqKeyBuilder := filter.NewSecondaryKeyEqBuilder[*schema.QueryableField](encoder, buildIndexParts)

@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"math"
 	"math/big"
 	"strconv"
 
@@ -52,6 +51,7 @@ type Value interface {
 
 	// AsInterface to return the value as interface
 	AsInterface() interface{}
+	DataType() schema.FieldType
 }
 
 func NewValueUsingCollation(fieldType schema.FieldType, value []byte, collation *Collation) (Value, error) {
@@ -88,8 +88,10 @@ func NewValue(fieldType schema.FieldType, value []byte) (Value, error) {
 		}
 
 		return NewIntValue(val), nil
-	case schema.StringType, schema.UUIDType, schema.DateTimeType:
+	case schema.StringType, schema.UUIDType:
 		return NewStringValue(string(value), nil), nil
+	case schema.DateTimeType:
+		return NewDateTimeValue(string(value)), nil
 	case schema.ByteType:
 		if decoded, err := base64.StdEncoding.DecodeString(string(value)); err == nil {
 			// when we match the value or build the key we first decode the base64 data
@@ -156,6 +158,10 @@ func (a *ArrayValue) AsInterface() interface{} {
 	return a.decoded
 }
 
+func (a *ArrayValue) DataType() schema.FieldType {
+	return schema.ArrayType
+}
+
 func (a *ArrayValue) String() string {
 	if a == nil {
 		return ""
@@ -192,6 +198,10 @@ func (i *IntValue) CompareTo(v Value) (int, error) {
 
 func (i *IntValue) AsInterface() interface{} {
 	return int64(*i)
+}
+
+func (i *IntValue) DataType() schema.FieldType {
+	return schema.Int64Type
 }
 
 func (i *IntValue) String() string {
@@ -252,6 +262,10 @@ func (d *DoubleValue) AsInterface() interface{} {
 	return d.Double
 }
 
+func (d *DoubleValue) DataType() schema.FieldType {
+	return schema.DoubleType
+}
+
 func (d *DoubleValue) String() string {
 	if d == nil {
 		return ""
@@ -299,12 +313,61 @@ func (s *StringValue) AsInterface() interface{} {
 	return s.Value
 }
 
+func (s *StringValue) DataType() schema.FieldType {
+	return schema.StringType
+}
+
 func (s *StringValue) String() string {
 	if s == nil {
 		return ""
 	}
 
 	return s.Value
+}
+
+type DateTimeValue struct {
+	Value string
+}
+
+func NewDateTimeValue(v string) *DateTimeValue {
+	return &DateTimeValue{
+		Value: v,
+	}
+}
+
+func (d *DateTimeValue) CompareTo(v Value) (int, error) {
+	if isNullValue(v) {
+		return 1, nil
+	}
+
+	converted, ok := v.(*DateTimeValue)
+	if !ok {
+		return -2, fmt.Errorf("wrong type compared ")
+	}
+
+	if d.Value == converted.Value {
+		return 0, nil
+	} else if d.Value < converted.Value {
+		return -1, nil
+	}
+
+	return 1, nil
+}
+
+func (d *DateTimeValue) AsInterface() interface{} {
+	return d.Value
+}
+
+func (d *DateTimeValue) DataType() schema.FieldType {
+	return schema.DateTimeType
+}
+
+func (d *DateTimeValue) String() string {
+	if d == nil {
+		return ""
+	}
+
+	return d.Value
 }
 
 type BytesValue []byte
@@ -329,6 +392,10 @@ func (b *BytesValue) CompareTo(v Value) (int, error) {
 
 func (b *BytesValue) AsInterface() interface{} {
 	return []byte(*b)
+}
+
+func (b *BytesValue) DataType() schema.FieldType {
+	return schema.ByteType
 }
 
 func (b *BytesValue) String() string {
@@ -369,6 +436,10 @@ func (b *BoolValue) AsInterface() interface{} {
 	return bool(*b)
 }
 
+func (b *BoolValue) DataType() schema.FieldType {
+	return schema.BoolType
+}
+
 func (b *BoolValue) String() string {
 	if b == nil {
 		return ""
@@ -387,6 +458,10 @@ func (n *NullValue) AsInterface() interface{} {
 	return nil
 }
 
+func (n *NullValue) DataType() schema.FieldType {
+	return schema.NullType
+}
+
 func (n *NullValue) String() string {
 	return ""
 }
@@ -402,19 +477,36 @@ func (n *NullValue) CompareTo(v Value) (int, error) {
 	return -1, nil
 }
 
-func Min(datatype schema.FieldType, val Value) any {
-	return nil
+type MaxValue struct{}
+
+func NewMaxValue() *MaxValue {
+	return &MaxValue{}
 }
 
-func Max(datatype schema.FieldType, val Value) any {
-	switch datatype {
-	case schema.Int32Type, schema.Int64Type:
-		return math.MaxInt64
-	case schema.DoubleType:
-		return math.MaxFloat64
-	case schema.BoolType:
-		return val.AsInterface()
-	default:
-		return 0xFF
+func (m *MaxValue) AsInterface() interface{} {
+	return 0xFF
+}
+
+func (m *MaxValue) DataType() schema.FieldType {
+	return schema.MaxType
+}
+
+func (m *MaxValue) String() string {
+	return "$MAX_VALUE"
+}
+
+func (m *MaxValue) CompareTo(v Value) (int, error) {
+	if _, ok := v.(*MaxValue); ok {
+		return 0, nil
 	}
+
+	return 1, nil
+}
+
+func MinOrderValue() Value {
+	return NewNullValue()
+}
+
+func MaxOrderValue() Value {
+	return NewMaxValue()
 }
