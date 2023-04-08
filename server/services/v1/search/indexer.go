@@ -25,6 +25,7 @@ import (
 	"github.com/tigrisdata/tigris/lib/date"
 	"github.com/tigrisdata/tigris/lib/uuid"
 	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/server/services/v1/common"
 	"github.com/tigrisdata/tigris/util"
 	"github.com/tigrisdata/tigris/util/log"
 )
@@ -43,9 +44,10 @@ type readTransformer interface {
 // transformer is used to transform the document and then inverse when we read it from search. The writeTransformer
 // is used when writing to search backend. The readTransformer is used when reading data from search backend.
 type transformer struct {
-	ts       *internal.Timestamp
-	index    *schema.SearchIndex
-	isUpdate bool
+	ts        *internal.Timestamp
+	index     *schema.SearchIndex
+	isUpdate  bool
+	converter *common.StringToInt64Converter
 }
 
 func newReadTransformer(index *schema.SearchIndex) readTransformer {
@@ -56,9 +58,10 @@ func newReadTransformer(index *schema.SearchIndex) readTransformer {
 
 func newWriteTransformer(index *schema.SearchIndex, ts *internal.Timestamp, isUpdate bool) writeTransformer {
 	return &transformer{
-		ts:       ts,
-		index:    index,
-		isUpdate: isUpdate,
+		ts:        ts,
+		index:     index,
+		isUpdate:  isUpdate,
+		converter: common.NewStringToInt64Converter(index.GetField),
 	}
 }
 
@@ -104,6 +107,10 @@ func (transformer *transformer) transformEnd(doc map[string]any) (map[string]any
 		if f.DoNotFlatten {
 			doNotFlatten.Insert(f.FieldName)
 		}
+	}
+
+	if _, err := transformer.converter.Convert(doc, transformer.index.GetInt64FieldsPath()); err != nil {
+		return nil, err
 	}
 
 	doc = util.FlatMap(doc, doNotFlatten)

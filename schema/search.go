@@ -165,6 +165,9 @@ type SearchIndex struct {
 	// Source of this index
 	Source        SearchSource
 	SearchIDField *QueryableField
+	// Track all the int64 paths in the collection. For example, if top level object has an int64 field then key would be
+	// obj.fieldName so that caller can easily navigate to this field.
+	int64FieldsPath *int64PathBuilder
 }
 
 func NewSearchIndex(ver int, searchStoreName string, factory *SearchFactory, fieldsInSearch []tsApi.Field) *SearchIndex {
@@ -184,6 +187,7 @@ func NewSearchIndex(ver int, searchStoreName string, factory *SearchFactory, fie
 		Source:          factory.Source,
 		SearchIDField:   searchIdField,
 		QueryableFields: queryableFields,
+		int64FieldsPath: buildInt64Path(factory.Fields),
 	}
 	index.buildSearchSchema(searchStoreName)
 
@@ -192,6 +196,16 @@ func NewSearchIndex(ver int, searchStoreName string, factory *SearchFactory, fie
 
 func (s *SearchIndex) StoreIndexName() string {
 	return s.StoreSchema.Name
+}
+
+func (s *SearchIndex) GetField(name string) *Field {
+	for _, r := range s.Fields {
+		if r.FieldName == name {
+			return r
+		}
+	}
+
+	return nil
 }
 
 func (s *SearchIndex) GetQueryableField(name string) (*QueryableField, error) {
@@ -357,6 +371,10 @@ func (s *SearchIndex) GetSearchDeltaFields(existingFields []*QueryableField, fie
 	}
 
 	return tsFields
+}
+
+func (s *SearchIndex) GetInt64FieldsPath() map[string]struct{} {
+	return s.int64FieldsPath.get()
 }
 
 // ImplicitSearchIndex is a search index that is automatically created by Tigris when a collection is created. Lifecycle

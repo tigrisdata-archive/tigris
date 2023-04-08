@@ -15,11 +15,10 @@
 package database
 
 import (
-	"strconv"
 	"strings"
 
-	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/server/services/v1/common"
 )
 
 type mutator interface {
@@ -32,6 +31,7 @@ type mutator interface {
 type baseMutator struct {
 	mutated    bool
 	collection *schema.DefaultCollection
+	converter  *common.StringToInt64Converter
 }
 
 type insertPayloadMutator struct {
@@ -45,6 +45,7 @@ func newInsertPayloadMutator(collection *schema.DefaultCollection, createdAt str
 		baseMutator: &baseMutator{
 			mutated:    false,
 			collection: collection,
+			converter:  common.NewStringToInt64Converter(collection.GetField),
 		},
 
 		createdAt: createdAt,
@@ -85,6 +86,7 @@ func newUpdatePayloadMutator(collection *schema.DefaultCollection, updatedAt str
 		baseMutator: &baseMutator{
 			mutated:    false,
 			collection: collection,
+			converter:  common.NewStringToInt64Converter(collection.GetField),
 		},
 
 		updatedAt: updatedAt,
@@ -197,69 +199,7 @@ func (p *baseMutator) traverseDefaults(parentMap map[string]any, keys []string, 
 }
 
 func (p *baseMutator) stringToInt64(doc map[string]any) error {
-	for key := range p.collection.GetInt64FieldsPath() {
-		keys := strings.Split(key, ".")
-		value, ok := doc[keys[0]]
-		if !ok {
-			continue
-		}
-
-		field := p.collection.GetField(keys[0])
-		if field == nil {
-			continue
-		}
-
-		if err := p.traverse(doc, value, keys[1:], field); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (p *baseMutator) traverse(parentMap map[string]any, value any, keys []string, parentField *schema.Field) error {
 	var err error
-	if parentField.Type() == schema.Int64Type {
-		if conv, ok := value.(string); ok {
-			if parentMap[parentField.FieldName], err = strconv.ParseInt(conv, 10, 64); err != nil {
-				return errors.InvalidArgument("json schema validation failed for field '%s' reason 'expected integer, but got string'", parentField.FieldName)
-			}
-
-			p.mutated = true
-			return nil
-		}
-		return nil
-	}
-
-	switch converted := value.(type) {
-	case map[string]any:
-		value, ok := converted[keys[0]]
-		if !ok {
-			return nil
-		}
-
-		return p.traverse(converted, value, keys[1:], parentField.GetNestedField(keys[0]))
-	case []any:
-		// array should have a single nested field either as object or primitive type
-		field := parentField.Fields[0]
-		if field.DataType == schema.ObjectType {
-			// is object or simple type
-			for _, va := range converted {
-				if err := p.traverse(va.(map[string]any), va, keys, field); err != nil {
-					return err
-				}
-			}
-		} else if field.DataType == schema.Int64Type {
-			for idx := range converted {
-				if conv, ok := converted[idx].(string); ok {
-					if converted[idx], err = strconv.ParseInt(conv, 10, 64); err != nil {
-						return errors.InvalidArgument("json schema validation failed for field '%s' reason 'expected integer, but got string'", field.FieldName)
-					}
-					p.mutated = true
-				}
-			}
-		}
-	}
-
-	return nil
+	p.mutated, err = p.converter.Convert(doc, p.collection.GetInt64FieldsPath())
+	return err
 }
