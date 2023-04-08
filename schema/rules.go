@@ -288,7 +288,7 @@ func ValidateFieldAttributes(isSearch bool, field *Field) error {
 			return errors.InvalidArgument("setting primary key is not supported on search index '%s'", field.Name())
 		}
 
-		if field.FieldName == SearchId || field.IsSearchId() {
+		if field.IsSearchId() {
 			if field.DataType != StringType && field.DataType != UUIDType {
 				return errors.InvalidArgument("Cannot have field '%s' as 'id'. Only string type is supported as 'id' field", field.FieldName)
 			}

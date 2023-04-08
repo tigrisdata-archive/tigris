@@ -75,7 +75,7 @@ type DefaultCollection struct {
 	CollectionType CollectionType
 	// Track all the int64 paths in the collection. For example, if top level object has an int64 field then key would be
 	// obj.fieldName so that caller can easily navigate to this field.
-	int64FieldsPath map[string]struct{}
+	int64FieldsPath *int64PathBuilder
 	// This is the existing fields in search
 	FieldsInSearch []tsApi.Field
 
@@ -182,16 +182,14 @@ func NewDefaultCollection(id uint32, schVer int, factory *Factory, schemas Versi
 		QueryableFields:          queryableFields,
 		CollectionType:           factory.CollectionType,
 		ImplicitSearchIndex:      implicitSearchIndex,
-		int64FieldsPath:          make(map[string]struct{}),
 		fieldsWithInsertDefaults: make(map[string]struct{}),
 		fieldsWithUpdateDefaults: make(map[string]struct{}),
 		SearchIndexes:            make(map[string]*SearchIndex),
 		SchemaDeltas:             schemaDeltas,
 		FieldVersions:            fieldVersions,
+		int64FieldsPath:          buildInt64Path(factory.Fields),
 	}
 
-	// set paths for int64 fields
-	d.setInt64Fields("", d.Fields)
 	// set fieldDefaulter for default fields
 	d.setFieldsForDefaults("", d.Fields)
 
@@ -297,7 +295,7 @@ func (d *DefaultCollection) GetImplicitSearchIndex() *ImplicitSearchIndex {
 }
 
 func (d *DefaultCollection) GetInt64FieldsPath() map[string]struct{} {
-	return d.int64FieldsPath
+	return d.int64FieldsPath.get()
 }
 
 func (d *DefaultCollection) TaggedDefaultsForInsert() map[string]struct{} {
@@ -320,18 +318,6 @@ func (d *DefaultCollection) setFieldsForDefaults(parent string, fields []*Field)
 			} else {
 				d.fieldsWithInsertDefaults[buildPath(parent, f.FieldName)] = struct{}{}
 			}
-		}
-	}
-}
-
-func (d *DefaultCollection) setInt64Fields(parent string, fields []*Field) {
-	for _, f := range fields {
-		if len(f.Fields) > 0 {
-			d.setInt64Fields(buildPath(parent, f.FieldName), f.Fields)
-		}
-
-		if f.DataType == Int64Type {
-			d.int64FieldsPath[buildPath(parent, f.FieldName)] = struct{}{}
 		}
 	}
 }
@@ -391,4 +377,33 @@ func parseInt(i interface{}) (int64, error) {
 		return n, nil
 	}
 	return 0, errors.InvalidArgument("expected integer but found %T", i)
+}
+
+type int64PathBuilder struct {
+	int64FieldsPath map[string]struct{}
+}
+
+func buildInt64Path(fields []*Field) *int64PathBuilder {
+	i := &int64PathBuilder{
+		int64FieldsPath: make(map[string]struct{}),
+	}
+	i.buildInt64PathLow("", fields)
+
+	return i
+}
+
+func (builder *int64PathBuilder) buildInt64PathLow(parent string, fields []*Field) {
+	for _, f := range fields {
+		if len(f.Fields) > 0 {
+			builder.buildInt64PathLow(buildPath(parent, f.FieldName), f.Fields)
+		}
+
+		if f.DataType == Int64Type {
+			builder.int64FieldsPath[buildPath(parent, f.FieldName)] = struct{}{}
+		}
+	}
+}
+
+func (builder *int64PathBuilder) get() map[string]struct{} {
+	return builder.int64FieldsPath
 }

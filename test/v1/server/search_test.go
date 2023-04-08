@@ -76,6 +76,13 @@ var testSearchIndexSchema = Map{
 					"type": "string",
 				},
 			},
+			"array_integer_value": Map{
+				"description": "array field",
+				"type":        "array",
+				"items": Map{
+					"type": "integer",
+				},
+			},
 			"vector": Map{
 				"type":       "array",
 				"format":     "vector",
@@ -1393,6 +1400,51 @@ func TestSearchIndexExplicitIdB(t *testing.T) {
 		}
 		expTopLevelFailureWriteDocuments(t, project, testIndexExplicitIdSchemaB, Map{"documents": docs}, "index has explicitly marked 'objectV.id' field as 'id' but document is missing that field", "update")
 	})
+}
+
+func TestSearch_StringInt64(t *testing.T) {
+	project, index := setupTestsProjectAndSearchIndex(t)
+	defer cleanupTests(t, project)
+
+	docs := []Doc{
+		{
+			"id":                 "1",
+			"int_value":          "9223372036854775799",
+			"string_value":       "data platform",
+			"array_integer_value": []string{"9223372036854775807", "9223372036854775806"},
+			"array_simple_value": []string{"abc", "def"},
+			"object_value": Doc{
+				"string_value":  "san francisco",
+				"integer_value": "9223372036854775804",
+			},
+			"created_at": "2023-02-02T05:50:19+00:00",
+		},
+	}
+
+	expect(t).PUT(getIndexDocumentURL(project, index, "")).
+		WithJSON(Map{
+			"documents": docs,
+		}).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("status",
+			[]map[string]any{
+				{"id": "1", "error": nil},
+			},
+		)
+
+	res := getSearchResults(t, project, index, Map{"q": "data", "sort": []Doc{{"created_at": "$asc"}}}, false)
+	require.Equal(t, 1, len(res.Result.Hits))
+
+	docs[0]["int_value"] = 9223372036854775799
+	docs[0]["array_integer_value"] = []int64{9223372036854775807, 9223372036854775806}
+	docs[0]["object_value"] = Doc{
+		"string_value":  "san francisco",
+		"integer_value": 9223372036854775804,
+	}
+	compareDocs(t, docs[0], res.Result.Hits[0]["data"])
 }
 
 func validateReadOut(t *testing.T, project string, index string, ids []string, expReadOut [][]byte) {
