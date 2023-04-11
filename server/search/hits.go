@@ -91,7 +91,7 @@ func NewSearchHit(tsHit *tsApi.SearchResultHit) *Hit {
 				Name: name,
 			})
 		}
-	} else if tsHit.Highlights != nil  {
+	} else if tsHit.Highlights != nil {
 		for _, f := range *tsHit.Highlights {
 			name := ""
 			if f.Field != nil {

@@ -209,8 +209,8 @@ func TestApplySearchIndexSchemaRules(t *testing.T) {
 		},
 		{
 			// field removed
-			[]byte(`{ "title": "t1", "properties": { "id": { "type": "string"}, "s": { "type": "string"}},"primary_key": ["id"]}`),
-			[]byte(`{ "title": "t1", "properties": { "id": { "type": "string"}},"primary_key": ["id"]}`),
+			[]byte(`{ "title": "t1", "properties": { "id": { "type": "string"}, "s": { "type": "string"}}}`),
+			[]byte(`{ "title": "t1", "properties": { "id": { "type": "string"}}}`),
 			nil,
 		},
 		{

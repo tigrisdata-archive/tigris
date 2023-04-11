@@ -36,6 +36,7 @@ type QueryableField struct {
 	packThis      bool
 	DoNotFlatten  bool
 	Dimensions    *int
+	SearchIdField bool
 }
 
 // InMemoryName returns key name that is used to index this field in the indexing store. For example, an "id" key is indexed with
@@ -117,13 +118,14 @@ func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, 
 	}
 
 	q := &QueryableField{
-		FieldName:  name,
-		SearchType: searchType,
-		DataType:   f.DataType,
-		SubType:    subType,
-		packThis:   packThis,
-		Indexed:    f.IsIndexable(),
-		Dimensions: f.Dimensions,
+		FieldName:     name,
+		SearchType:    searchType,
+		DataType:      f.DataType,
+		SubType:       subType,
+		packThis:      packThis,
+		Indexed:       f.IsIndexable(),
+		Dimensions:    f.Dimensions,
+		SearchIdField: f.IsSearchId(),
 	}
 
 	if searchIndexed != nil && *searchIndexed {

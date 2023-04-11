@@ -29,7 +29,11 @@ import (
 	"gopkg.in/gavv/httpexpect.v1"
 )
 
-var testIndex = "test_index"
+var (
+	testIndex                  = "test_index"
+	testIndexExplicitIdSchemaA = "test_index_explicit_id_a"
+	testIndexExplicitIdSchemaB = "test_index_explicit_id_b"
+)
 
 var testSearchIndexSchema = Map{
 	"schema": Map{
@@ -72,6 +76,13 @@ var testSearchIndexSchema = Map{
 					"type": "string",
 				},
 			},
+			"array_integer_value": Map{
+				"description": "array field",
+				"type":        "array",
+				"items": Map{
+					"type": "integer",
+				},
+			},
 			"vector": Map{
 				"type":       "array",
 				"format":     "vector",
@@ -105,6 +116,98 @@ var testSearchIndexSchema = Map{
 						"string_value": Map{
 							"type": "string",
 						},
+					},
+				},
+			},
+		},
+	},
+}
+
+var testSearchIndexExplicitIdSchemaA = Map{
+	"schema": Map{
+		"title": testIndexExplicitIdSchemaA,
+		"properties": Map{
+			"id": Map{
+				// not an id
+				"type":  "string",
+				"sort":  true,
+				"facet": true,
+			},
+			"stringV": Map{
+				"id":    true,
+				"type":  "string",
+				"sort":  true,
+				"facet": true,
+			},
+			"doubleV": Map{
+				"description": "simple double field",
+				"type":        "number",
+			},
+			"arrayV": Map{
+				"description": "array field",
+				"type":        "array",
+				"items": Map{
+					"type": "string",
+				},
+			},
+			"objectV": Map{
+				"type": "object",
+				"properties": Map{
+					"id": Map{
+						"type":  "string",
+						"sort":  true,
+						"facet": true,
+					},
+					"stringV": Map{
+						"type":  "string",
+						"sort":  true,
+						"facet": true,
+					},
+				},
+			},
+		},
+	},
+}
+
+var testSearchIndexExplicitIdSchemaB = Map{
+	"schema": Map{
+		"title": testIndexExplicitIdSchemaA,
+		"properties": Map{
+			"id": Map{
+				// not an id
+				"type":  "string",
+				"sort":  true,
+				"facet": true,
+			},
+			"stringV": Map{
+				"type":  "string",
+				"sort":  true,
+				"facet": true,
+			},
+			"doubleV": Map{
+				"description": "simple double field",
+				"type":        "number",
+			},
+			"arrayV": Map{
+				"description": "array field",
+				"type":        "array",
+				"items": Map{
+					"type": "string",
+				},
+			},
+			"objectV": Map{
+				"type": "object",
+				"properties": Map{
+					"id": Map{
+						"id":    true,
+						"type":  "string",
+						"sort":  true,
+						"facet": true,
+					},
+					"stringV": Map{
+						"type":  "string",
+						"sort":  true,
+						"facet": true,
 					},
 				},
 			},
@@ -1066,91 +1169,51 @@ func TestChunking(t *testing.T) {
 		defer deleteSearchIndex(t, project, indexName)
 
 		fakes, serialized := GenerateFakes(t, []string{"1", "2", "3"}, []string{"first_create", "second_create", "third_create"})
-		writeDocuments(t, project, indexName, fakes, "create")
+		writeDocuments(t, project, indexName, Map{"documents": fakes}, expResponseForFakes(fakes), "create")
 
-		for _, source := range []bool{false, true} {
-			output := getDocuments(t, project, indexName, source, "1", "2", "3")
-			require.Equal(t, 3, len(output))
-			for i, out := range output {
-				encResp, err := util.MapToJSON(out["data"].(map[string]any))
-				require.NoError(t, err)
-				require.JSONEq(t, string(serialized[i]), string(encResp))
-			}
-		}
+		validateReadOut(t, project, indexName, []string{"1", "2", "3"}, serialized)
 
-		res := getSearchResults(t, project, indexName, Map{"q": "second_create", "search_fields": []string{"placeholder"}}, false)
-		require.Equal(t, 1, len(res.Result.Hits))
-		jsonA, err := jsoniter.Marshal(res.Result.Hits[0]["data"])
-		require.NoError(t, err)
-		require.JSONEq(t, string(serialized[1]), string(jsonA))
+		validateSearchOut(t, project, indexName, Map{"q": "second_create", "search_fields": []string{"placeholder"}}, serialized[1:2])
 	})
 	t.Run("replace_read_search", func(t *testing.T) {
 		createSearchIndex(t, project, indexName, schemaObj).Status(http.StatusOK)
 		defer deleteSearchIndex(t, project, indexName)
 
 		fakes, serialized := GenerateFakes(t, []string{"1", "2", "3"}, []string{"first_create", "second_create", "third_create"})
-		writeDocuments(t, project, indexName, fakes, "create")
+		writeDocuments(t, project, indexName, Map{"documents": fakes}, expResponseForFakes(fakes), "create")
 
 		replaceFakes, replaceSerialized := GenerateFakes(t, []string{"1", "random", "3"}, []string{"first_replaced", "random_replaced", "third_replaced"})
-		writeDocuments(t, project, indexName, replaceFakes, "replace")
+		writeDocuments(t, project, indexName, Map{"documents": replaceFakes}, expResponseForFakes(replaceFakes), "replace")
 
-		for _, source := range []bool{false, true} {
-			output := getDocuments(t, project, indexName, source, "1", "2", "3")
-			require.Equal(t, 3, len(output))
-			for i, out := range output {
-				encResp, err := util.MapToJSON(out["data"].(map[string]any))
-				require.NoError(t, err)
+		var finalSerialized [][]byte
+		finalSerialized = append(finalSerialized, replaceSerialized[0])
+		finalSerialized = append(finalSerialized, serialized[1])
+		finalSerialized = append(finalSerialized, replaceSerialized[2])
 
-				if i == 1 {
-					require.JSONEq(t, string(serialized[i]), string(encResp))
-				} else {
-					require.JSONEq(t, string(replaceSerialized[i]), string(encResp))
-				}
-			}
-		}
+		validateReadOut(t, project, indexName, []string{"1", "2", "3"}, finalSerialized)
 
-		res := getSearchResults(t, project, indexName, Map{"q": "second_create", "search_fields": []string{"placeholder"}}, false)
-		require.Equal(t, 1, len(res.Result.Hits))
-		jsonA, err := jsoniter.Marshal(res.Result.Hits[0]["data"])
-		require.NoError(t, err)
-		require.JSONEq(t, string(serialized[1]), string(jsonA))
-
-		res = getSearchResults(t, project, indexName, Map{"q": "third_replaced", "search_fields": []string{"placeholder"}}, false)
-		require.Equal(t, 1, len(res.Result.Hits))
-		jsonA, err = jsoniter.Marshal(res.Result.Hits[0]["data"])
-		require.NoError(t, err)
-		require.JSONEq(t, string(replaceSerialized[2]), string(jsonA))
+		validateSearchOut(t, project, indexName, Map{"q": "second_create", "search_fields": []string{"placeholder"}}, serialized[1:2])
+		validateSearchOut(t, project, indexName, Map{"q": "third_replaced", "search_fields": []string{"placeholder"}}, replaceSerialized[2:3])
 	})
 	t.Run("update_read_search", func(t *testing.T) {
 		createSearchIndex(t, project, indexName, schemaObj).Status(http.StatusOK)
 		defer deleteSearchIndex(t, project, indexName)
 
 		fakes, _ := GenerateFakes(t, []string{"1", "2", "3"}, []string{"first_create", "second_create", "third_create"})
-		writeDocuments(t, project, indexName, fakes, "create")
+		writeDocuments(t, project, indexName, Map{"documents": fakes}, expResponseForFakes(fakes), "create")
 
 		updatedFakes, updatedSerialized := GenerateFakes(t, []string{"1"}, []string{"updated_first_document"})
-		writeDocuments(t, project, indexName, updatedFakes, "update")
+		writeDocuments(t, project, indexName, Map{"documents": updatedFakes}, expResponseForFakes(updatedFakes), "update")
+		validateReadOut(t, project, indexName, []string{"1"}, updatedSerialized[:1])
 
-		for _, source := range []bool{false, true} {
-			output := getDocuments(t, project, indexName, source, "1")
-			require.Equal(t, 1, len(output))
-			encResp, err := util.MapToJSON(output[0]["data"].(map[string]any))
-			require.NoError(t, err)
-			require.JSONEq(t, string(updatedSerialized[0]), string(encResp))
-		}
-
-		res := getSearchResults(t, project, indexName, Map{"q": "updated_first_document", "search_fields": []string{"placeholder"}}, false)
-		require.Equal(t, 1, len(res.Result.Hits))
-		jsonA, err := jsoniter.Marshal(res.Result.Hits[0]["data"])
-		require.NoError(t, err)
-		require.JSONEq(t, string(updatedSerialized[0]), string(jsonA))
+		validateSearchOut(t, project, indexName, Map{"q": "updated_first_document", "search_fields": []string{"placeholder"}}, updatedSerialized[:1])
 	})
 	t.Run("delete", func(t *testing.T) {
 		createSearchIndex(t, project, indexName, schemaObj).Status(http.StatusOK)
 		defer deleteSearchIndex(t, project, indexName)
 
 		fakes, serialized := GenerateFakes(t, []string{"1", "2", "3"}, []string{"first_create", "second_create", "third_create"})
-		writeDocuments(t, project, indexName, fakes, "create")
+		writeDocuments(t, project, indexName, Map{"documents": fakes}, expResponseForFakes(fakes), "create")
 
 		expect(t).DELETE(getIndexDocumentURL(project, indexName, "")).
 			WithJSON(Map{
@@ -1180,7 +1243,256 @@ func TestChunking(t *testing.T) {
 	})
 }
 
-func writeDocuments(t *testing.T, project string, indexName string, fakes []FakeDocument, opType string) {
+func TestSearchIndexExplicitIdA(t *testing.T) {
+	project := setupTestsOnlyProject(t)
+	defer cleanupTests(t, project)
+
+	t.Run("create_read_search", func(t *testing.T) {
+		createSearchIndex(t, project, testIndexExplicitIdSchemaA, testSearchIndexExplicitIdSchemaA).Status(http.StatusOK)
+		defer deleteSearchIndex(t, project, testIndexExplicitIdSchemaA)
+
+		docs := []Doc{
+			{"id": "1", "stringV": "foo", "arrayV": []string{"foo", "bar"}, "doubleV": 10.01, "objectV": Map{"id": "nested1", "stringV": "foo"}},
+			{"id": "2", "stringV": "bar", "arrayV": []string{"bar", "foo"}, "doubleV": 20.01, "objectV": Map{"id": "nested2", "stringV": "bar"}},
+		}
+		serialized := getSerializedData(t, docs)
+
+		writeDocuments(t, project, testIndexExplicitIdSchemaA, Map{"documents": docs}, expResponseFromIds([]string{"foo", "bar"}, []error{nil, nil}), "create")
+
+		validateReadOut(t, project, testIndexExplicitIdSchemaA, []string{"foo", "bar"}, serialized)
+
+		validateSearchOut(t, project, testIndexExplicitIdSchemaA, Map{"q": "foo", "search_fields": []string{"stringV"}}, serialized[:1])
+	})
+	t.Run("replace_read_search", func(t *testing.T) {
+		createSearchIndex(t, project, testIndexExplicitIdSchemaA, testSearchIndexExplicitIdSchemaA).Status(http.StatusOK)
+		defer deleteSearchIndex(t, project, testIndexExplicitIdSchemaA)
+
+		docs := []Doc{
+			{"id": "1", "stringV": "foo", "arrayV": []string{"foo", "bar"}, "doubleV": 10.01, "objectV": Map{"id": "nested1", "stringV": "foo"}},
+			{"id": "2", "stringV": "bar", "arrayV": []string{"bar", "foo"}, "doubleV": 20.01, "objectV": Map{"id": "nested2", "stringV": "bar"}},
+		}
+		serialized := getSerializedData(t, docs)
+		writeDocuments(t, project, testIndexExplicitIdSchemaA, Map{"documents": docs}, expResponseFromIds([]string{"foo", "bar"}, []error{nil, nil}), "create")
+
+		replaceDocs := []Doc{
+			{"stringV": "foo", "arrayV": []string{"foo_bar", "bar_foo"}, "doubleV": 30.01, "objectV": Map{"id": "nested3", "stringV": "foo_bar"}},
+			{"stringV": "foo_bar", "id": "random", "arrayV": []string{"a", "b"}, "doubleV": 40.01, "objectV": Map{"id": "nested4", "stringV": "c"}},
+		}
+		replaceSerialized := getSerializedData(t, replaceDocs)
+		writeDocuments(t, project, testIndexExplicitIdSchemaA, Map{"documents": replaceDocs}, expResponseFromIds([]string{"foo", "foo_bar"}, []error{nil, nil}), "replace")
+
+		var finalSerialized [][]byte
+		finalSerialized = append(finalSerialized, replaceSerialized[0])
+		finalSerialized = append(finalSerialized, serialized[1])
+		finalSerialized = append(finalSerialized, replaceSerialized[1])
+
+		validateReadOut(t, project, testIndexExplicitIdSchemaA, []string{"foo", "bar", "foo_bar"}, finalSerialized)
+
+		validateSearchOut(t, project, testIndexExplicitIdSchemaA, Map{"q": "random", "search_fields": []string{"id"}}, finalSerialized[2:3])
+	})
+	t.Run("missing_id_create", func(t *testing.T) {
+		createSearchIndex(t, project, testIndexExplicitIdSchemaA, testSearchIndexExplicitIdSchemaA).Status(http.StatusOK)
+		defer deleteSearchIndex(t, project, testIndexExplicitIdSchemaA)
+
+		docs := []Doc{
+			{"stringV": "foo", "arrayV": []string{"foo", "bar"}, "doubleV": 10.01, "objectV": Map{"id": "nested1", "stringV": "foo"}},
+			{"id": "2", "arrayV": []string{"bar", "foo"}, "doubleV": 20.01, "objectV": Map{"id": "nested2", "stringV": "bar"}},
+		}
+		expTopLevelFailureWriteDocuments(t, project, testIndexExplicitIdSchemaA, Map{"documents": docs}, "index has explicitly marked 'stringV' field as 'id' but document is missing that field", "create")
+	})
+	t.Run("missing_id_replace", func(t *testing.T) {
+		createSearchIndex(t, project, testIndexExplicitIdSchemaA, testSearchIndexExplicitIdSchemaA).Status(http.StatusOK)
+		defer deleteSearchIndex(t, project, testIndexExplicitIdSchemaA)
+
+		docs := []Doc{
+			{"stringV": "foo", "arrayV": []string{"foo", "bar"}, "doubleV": 10.01, "objectV": Map{"id": "nested1", "stringV": "foo"}},
+			{"id": "2", "arrayV": []string{"bar", "foo"}, "doubleV": 20.01, "objectV": Map{"id": "nested2", "stringV": "bar"}},
+		}
+		expTopLevelFailureWriteDocuments(t, project, testIndexExplicitIdSchemaA, Map{"documents": docs}, "index has explicitly marked 'stringV' field as 'id' but document is missing that field", "replace")
+	})
+	t.Run("missing_id_update", func(t *testing.T) {
+		createSearchIndex(t, project, testIndexExplicitIdSchemaA, testSearchIndexExplicitIdSchemaA).Status(http.StatusOK)
+		defer deleteSearchIndex(t, project, testIndexExplicitIdSchemaA)
+
+		docs := []Doc{
+			{"stringV": "foo", "arrayV": []string{"foo", "bar"}, "doubleV": 10.01, "objectV": Map{"id": "nested1", "stringV": "foo"}},
+			{"id": "2", "arrayV": []string{"bar", "foo"}, "doubleV": 20.01, "objectV": Map{"id": "nested2", "stringV": "bar"}},
+		}
+		expTopLevelFailureWriteDocuments(t, project, testIndexExplicitIdSchemaA, Map{"documents": docs}, "index has explicitly marked 'stringV' field as 'id' but document is missing that field", "update")
+	})
+}
+
+// this test is testing explicit setting "id" a nested field
+func TestSearchIndexExplicitIdB(t *testing.T) {
+	project := setupTestsOnlyProject(t)
+	defer cleanupTests(t, project)
+
+	t.Run("create_read_search", func(t *testing.T) {
+		createSearchIndex(t, project, testIndexExplicitIdSchemaB, testSearchIndexExplicitIdSchemaB).Status(http.StatusOK)
+		defer deleteSearchIndex(t, project, testIndexExplicitIdSchemaB)
+
+		docs := []Doc{
+			{"id": "1", "arrayV": []string{"foo", "bar"}, "doubleV": 10.01, "objectV": Map{"id": "nested1", "stringV": "foo"}},
+			{"stringV": "bar", "arrayV": []string{"bar", "foo"}, "doubleV": 20.01, "objectV": Map{"id": "nested2", "stringV": "bar"}},
+		}
+		serialized := getSerializedData(t, docs)
+
+		writeDocuments(t, project, testIndexExplicitIdSchemaB, Map{"documents": docs}, expResponseFromIds([]string{"nested1", "nested2"}, []error{nil, nil}), "create")
+
+		validateReadOut(t, project, testIndexExplicitIdSchemaB, []string{"nested1", "nested2"}, serialized)
+
+		validateSearchOut(t, project, testIndexExplicitIdSchemaB, Map{"q": "bar", "search_fields": []string{"stringV"}}, serialized[1:2])
+	})
+	t.Run("replace_read_search", func(t *testing.T) {
+		createSearchIndex(t, project, testIndexExplicitIdSchemaB, testSearchIndexExplicitIdSchemaB).Status(http.StatusOK)
+		defer deleteSearchIndex(t, project, testIndexExplicitIdSchemaB)
+
+		docs := []Doc{
+			{"stringV": "foo", "arrayV": []string{"foo", "bar"}, "doubleV": 10.01, "objectV": Map{"id": "nested1", "stringV": "foo"}},
+			{"id": "2", "stringV": "bar", "arrayV": []string{"bar", "foo"}, "doubleV": 20.01, "objectV": Map{"id": "nested2", "stringV": "bar"}},
+		}
+		serialized := getSerializedData(t, docs)
+		writeDocuments(t, project, testIndexExplicitIdSchemaB, Map{"documents": docs}, expResponseFromIds([]string{"nested1", "nested2"}, []error{nil, nil}), "create")
+
+		replaceDocs := []Doc{
+			{"arrayV": []string{"foo_bar", "bar_foo"}, "doubleV": 30.01, "objectV": Map{"id": "nested2", "stringV": "foo_bar"}},
+			{"stringV": "foo_bar", "id": "random", "arrayV": []string{"a", "b"}, "doubleV": 40.01, "objectV": Map{"id": "nested3", "stringV": "c"}},
+		}
+		replaceSerialized := getSerializedData(t, replaceDocs)
+		writeDocuments(t, project, testIndexExplicitIdSchemaB, Map{"documents": replaceDocs}, expResponseFromIds([]string{"nested2", "nested3"}, []error{nil, nil}), "replace")
+
+		var finalSerialized [][]byte
+		finalSerialized = append(finalSerialized, serialized[0])
+		finalSerialized = append(finalSerialized, replaceSerialized[0])
+		finalSerialized = append(finalSerialized, replaceSerialized[1])
+
+		validateReadOut(t, project, testIndexExplicitIdSchemaB, []string{"nested1", "nested2", "nested3"}, finalSerialized)
+
+		validateSearchOut(t, project, testIndexExplicitIdSchemaB, Map{"q": "random", "search_fields": []string{"id"}}, finalSerialized[2:3])
+	})
+	t.Run("missing_id_create", func(t *testing.T) {
+		createSearchIndex(t, project, testIndexExplicitIdSchemaB, testSearchIndexExplicitIdSchemaB).Status(http.StatusOK)
+		defer deleteSearchIndex(t, project, testIndexExplicitIdSchemaB)
+
+		docs := []Doc{
+			{"stringV": "foo", "arrayV": []string{"foo", "bar"}, "doubleV": 10.01, "objectV": Map{"stringV": "foo"}},
+			{"id": "2", "arrayV": []string{"bar", "foo"}, "doubleV": 20.01, "objectV": Map{"id": "nested2", "stringV": "bar"}},
+		}
+		expTopLevelFailureWriteDocuments(t, project, testIndexExplicitIdSchemaB, Map{"documents": docs}, "index has explicitly marked 'objectV.id' field as 'id' but document is missing that field", "create")
+	})
+	t.Run("missing_id_replace", func(t *testing.T) {
+		createSearchIndex(t, project, testIndexExplicitIdSchemaB, testSearchIndexExplicitIdSchemaB).Status(http.StatusOK)
+		defer deleteSearchIndex(t, project, testIndexExplicitIdSchemaB)
+
+		docs := []Doc{
+			{"stringV": "foo", "arrayV": []string{"foo", "bar"}, "doubleV": 10.01, "objectV": Map{"stringV": "foo"}},
+			{"id": "2", "arrayV": []string{"bar", "foo"}, "doubleV": 20.01, "objectV": Map{"id": "nested2", "stringV": "bar"}},
+		}
+		expTopLevelFailureWriteDocuments(t, project, testIndexExplicitIdSchemaB, Map{"documents": docs}, "index has explicitly marked 'objectV.id' field as 'id' but document is missing that field", "replace")
+	})
+	t.Run("missing_id_update", func(t *testing.T) {
+		createSearchIndex(t, project, testIndexExplicitIdSchemaB, testSearchIndexExplicitIdSchemaB).Status(http.StatusOK)
+		defer deleteSearchIndex(t, project, testIndexExplicitIdSchemaB)
+
+		docs := []Doc{
+			{"stringV": "foo", "arrayV": []string{"foo", "bar"}, "doubleV": 10.01, "objectV": Map{"id": "nested1", "stringV": "foo"}},
+			{"id": "2", "arrayV": []string{"bar", "foo"}, "doubleV": 20.01, "objectV": Map{"stringV": "bar"}},
+		}
+		expTopLevelFailureWriteDocuments(t, project, testIndexExplicitIdSchemaB, Map{"documents": docs}, "index has explicitly marked 'objectV.id' field as 'id' but document is missing that field", "update")
+	})
+}
+
+func TestSearch_StringInt64(t *testing.T) {
+	project, index := setupTestsProjectAndSearchIndex(t)
+	defer cleanupTests(t, project)
+
+	docs := []Doc{
+		{
+			"id":                 "1",
+			"int_value":          "9223372036854775799",
+			"string_value":       "data platform",
+			"array_integer_value": []string{"9223372036854775807", "9223372036854775806"},
+			"array_simple_value": []string{"abc", "def"},
+			"object_value": Doc{
+				"string_value":  "san francisco",
+				"integer_value": "9223372036854775804",
+			},
+			"created_at": "2023-02-02T05:50:19+00:00",
+		},
+	}
+
+	expect(t).PUT(getIndexDocumentURL(project, index, "")).
+		WithJSON(Map{
+			"documents": docs,
+		}).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("status",
+			[]map[string]any{
+				{"id": "1", "error": nil},
+			},
+		)
+
+	res := getSearchResults(t, project, index, Map{"q": "data", "sort": []Doc{{"created_at": "$asc"}}}, false)
+	require.Equal(t, 1, len(res.Result.Hits))
+
+	docs[0]["int_value"] = 9223372036854775799
+	docs[0]["array_integer_value"] = []int64{9223372036854775807, 9223372036854775806}
+	docs[0]["object_value"] = Doc{
+		"string_value":  "san francisco",
+		"integer_value": 9223372036854775804,
+	}
+	compareDocs(t, docs[0], res.Result.Hits[0]["data"])
+}
+
+func validateReadOut(t *testing.T, project string, index string, ids []string, expReadOut [][]byte) {
+	for _, source := range []bool{false, true} {
+		output := getDocuments(t, project, index, source, ids...)
+		require.Equal(t, len(expReadOut), len(output))
+		for i, out := range output {
+			encResp, err := util.MapToJSON(out["data"].(map[string]any))
+			require.NoError(t, err)
+			require.JSONEq(t, string(expReadOut[i]), string(encResp))
+		}
+	}
+}
+
+func validateSearchOut(t *testing.T, project string, index string, inputSearchQuery Map, expSearchOut [][]byte) {
+	res := getSearchResults(t, project, index, inputSearchQuery, false)
+	require.Equal(t, len(expSearchOut), len(res.Result.Hits))
+	for _, expSearchOut := range expSearchOut {
+		jsonA, err := jsoniter.Marshal(res.Result.Hits[0]["data"])
+		require.NoError(t, err)
+		require.JSONEq(t, string(expSearchOut), string(jsonA))
+	}
+}
+
+func getSerializedData(t *testing.T, docs []Doc) [][]byte {
+	var serialized [][]byte
+	for _, d := range docs {
+		js, err := util.MapToJSON(d)
+		require.NoError(t, err)
+		serialized = append(serialized, js)
+	}
+
+	return serialized
+}
+
+func expResponseFromIds(ids []string, expError []error) []map[string]any {
+	var expResponse []map[string]any
+	for i, id := range ids {
+		expResponse = append(expResponse, map[string]any{
+			"id":    id,
+			"error": expError[i],
+		})
+	}
+
+	return expResponse
+}
+
+func expResponseForFakes(fakes []FakeDocument) []map[string]any {
 	var expResponse []map[string]any
 	for _, f := range fakes {
 		expResponse = append(expResponse, map[string]any{
@@ -1189,6 +1501,10 @@ func writeDocuments(t *testing.T, project string, indexName string, fakes []Fake
 		})
 	}
 
+	return expResponse
+}
+
+func expTopLevelFailureWriteDocuments(t *testing.T, project string, indexName string, docs Map, expErrorMsg string, opType string) {
 	var req *httpexpect.Request
 	if opType == "create" {
 		req = expect(t).POST(getIndexDocumentURL(project, indexName, ""))
@@ -1199,9 +1515,27 @@ func writeDocuments(t *testing.T, project string, indexName string, fakes []Fake
 	}
 
 	req.
-		WithJSON(Map{
-			"documents": fakes,
-		}).
+		WithJSON(docs).
+		Expect().
+		Status(http.StatusBadRequest).
+		JSON().
+		Path("$.error").
+		Object().
+		ValueEqual("message", expErrorMsg)
+}
+
+func writeDocuments(t *testing.T, project string, indexName string, docs Map, expResponse []map[string]any, opType string) {
+	var req *httpexpect.Request
+	if opType == "create" {
+		req = expect(t).POST(getIndexDocumentURL(project, indexName, ""))
+	} else if opType == "replace" {
+		req = expect(t).PUT(getIndexDocumentURL(project, indexName, ""))
+	} else {
+		req = expect(t).PATCH(getIndexDocumentURL(project, indexName, ""))
+	}
+
+	req.
+		WithJSON(docs).
 		Expect().
 		Status(http.StatusOK).
 		JSON().

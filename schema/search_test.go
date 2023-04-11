@@ -153,6 +153,37 @@ func TestSearchIndex_Schema(t *testing.T) {
 			[]byte(`{"title": "t1", "properties": { "a": {"type": "string"}, "b": {"type": "array", "format": "vector", "dimensions": 4}}}`),
 			"",
 		},
+		{
+			[]byte(`{"title": "t1", "properties": { "a": {"type": "string", "id": true}, "b": {"type": "array", "items": {"type": "integer"}}}}`),
+			"",
+		},
+		{
+			[]byte(`{"title": "t1", "properties": { "a": {"type": "string", "format": "uuid", "id": true}, "b": {"type": "array", "items": {"type": "integer"}}}}`),
+			"",
+		},
+		{
+			[]byte(`{"title": "t1", "properties": { "a": {"type": "string", "id": true}, "b": {"type": "object", "properties": { "a": {"type": "string", "id": true}}}}}`),
+			"",
+		},
+		{
+			[]byte(`{"title": "t1", "properties": { "a": {"type": "string", "id": true}, "b": {"type": "object", "properties": { "a": {"type": "object", "properties": {"a": {"type": "string", "id": true}}}}}}}`),
+			"",
+		},
+		{
+			// top level non string field
+			[]byte(`{"title": "t1", "properties": { "a": {"type": "string", "id": true}, "b": {"type": "object", "properties": { "a": {"type": "integer", "id": true}}}}}`),
+			"Cannot have field 'a' as 'id'. Only string type is supported as 'id' field",
+		},
+		{
+			// marking object as an id field
+			[]byte(`{"title": "t1", "properties": { "a": {"type": "string", "id": true}, "b": {"type": "object", "properties": { "a": {"type": "object", "id": true, "properties": {"a": {"type": "string", "id": true}}}}}}}`),
+			"Cannot have field 'a' as 'id'. Only string type is supported as 'id' field",
+		},
+		{
+			// marking array as an id field
+			[]byte(`{"title": "t1", "properties": { "a": {"type": "string"}, "b": {"type": "array", "items": {"type": "integer"}, "id": true}}}`),
+			"Cannot have field 'b' as 'id'. Only string type is supported as 'id' field",
+		},
 	}
 	for _, c := range cases {
 		_, err := NewFactoryBuilder(true).BuildSearch("t1", c.schema)

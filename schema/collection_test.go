@@ -406,13 +406,15 @@ func TestCollection_Int64(t *testing.T) {
 	require.NoError(t, err)
 	coll, err := NewDefaultCollection(1, 1, schFactory, nil, nil)
 	require.NoError(t, err)
-	require.Equal(t, 4, len(coll.int64FieldsPath))
-	_, ok := coll.int64FieldsPath["id"]
+
+	int64Paths := coll.int64FieldsPath.get()
+	require.Equal(t, 4, len(int64Paths))
+	_, ok := int64Paths["id"]
 	require.True(t, ok)
-	_, ok = coll.int64FieldsPath["nested_object.obj.intField"]
+	_, ok = int64Paths["nested_object.obj.intField"]
 	require.True(t, ok)
-	_, ok = coll.int64FieldsPath["array_items.id"]
+	_, ok = int64Paths["array_items.id"]
 	require.True(t, ok)
-	_, ok = coll.int64FieldsPath["array_simple_items"]
+	_, ok = int64Paths["array_simple_items"]
 	require.True(t, ok)
 }

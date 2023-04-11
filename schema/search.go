@@ -102,21 +102,6 @@ func (fb *FactoryBuilder) BuildSearch(index string, reqSchema jsoniter.RawMessag
 		}
 	}
 
-	found := false
-	for _, f := range fields {
-		if f.FieldName == SearchId {
-			found = true
-			break
-		}
-	}
-	if !found {
-		// add id field if not in the schema
-		fields = append(fields, &Field{
-			FieldName: "id",
-			DataType:  StringType,
-		})
-	}
-
 	factory := &SearchFactory{
 		Name:   index,
 		Fields: fields,
@@ -178,19 +163,31 @@ type SearchIndex struct {
 	// one queryableFields. As queryableFields represent a flattened state these can be used as-is to index in memory.
 	QueryableFields []*QueryableField
 	// Source of this index
-	Source SearchSource
+	Source        SearchSource
+	SearchIDField *QueryableField
+	// Track all the int64 paths in the collection. For example, if top level object has an int64 field then key would be
+	// obj.fieldName so that caller can easily navigate to this field.
+	int64FieldsPath *int64PathBuilder
 }
 
 func NewSearchIndex(ver int, searchStoreName string, factory *SearchFactory, fieldsInSearch []tsApi.Field) *SearchIndex {
 	queryableFields := NewQueryableFieldsBuilder().BuildQueryableFields(factory.Fields, fieldsInSearch)
 
+	var searchIdField *QueryableField
+	for _, q := range queryableFields {
+		if q.SearchIdField {
+			searchIdField = q
+		}
+	}
 	index := &SearchIndex{
 		Version:         ver,
 		Name:            factory.Name,
 		Fields:          factory.Fields,
 		Schema:          factory.Schema,
-		QueryableFields: queryableFields,
 		Source:          factory.Source,
+		SearchIDField:   searchIdField,
+		QueryableFields: queryableFields,
+		int64FieldsPath: buildInt64Path(factory.Fields),
 	}
 	index.buildSearchSchema(searchStoreName)
 
@@ -199,6 +196,16 @@ func NewSearchIndex(ver int, searchStoreName string, factory *SearchFactory, fie
 
 func (s *SearchIndex) StoreIndexName() string {
 	return s.StoreSchema.Name
+}
+
+func (s *SearchIndex) GetField(name string) *Field {
+	for _, r := range s.Fields {
+		if r.FieldName == name {
+			return r
+		}
+	}
+
+	return nil
 }
 
 func (s *SearchIndex) GetQueryableField(name string) (*QueryableField, error) {
@@ -364,6 +371,10 @@ func (s *SearchIndex) GetSearchDeltaFields(existingFields []*QueryableField, fie
 	}
 
 	return tsFields
+}
+
+func (s *SearchIndex) GetInt64FieldsPath() map[string]struct{} {
+	return s.int64FieldsPath.get()
 }
 
 // ImplicitSearchIndex is a search index that is automatically created by Tigris when a collection is created. Lifecycle
