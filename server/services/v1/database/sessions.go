@@ -315,7 +315,7 @@ func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, runner Quer
 
 		err = session.Commit(sessMgr.versionH, req.MetadataChange, err)
 		log.Debug().Err(err).Msg("session.commit after")
-		if err != kv.ErrConflictingTransaction && !search.IsErrDuplicateFieldNames(err) {
+		if !IsErrConflictingTransaction(err) && !search.IsErrDuplicateFieldNames(err) {
 			return
 		}
 

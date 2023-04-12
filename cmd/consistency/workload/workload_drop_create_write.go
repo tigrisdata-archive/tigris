@@ -42,7 +42,10 @@ func (w *DropCreateWriteWorkload) Setup(client driver.Driver) error {
 }
 
 func (w *DropCreateWriteWorkload) Start(client driver.Driver) (int64, error) {
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for i := 0; i < 32; i++ {
 			_, err := client.CreateProject(context.TODO(), w.Database)
 			if err != nil {
@@ -53,7 +56,7 @@ func (w *DropCreateWriteWorkload) Start(client driver.Driver) (int64, error) {
 				panic(err)
 			}
 
-			time.Sleep(4 * time.Second)
+			time.Sleep(1 * time.Second)
 
 			if err = db.DropCollection(context.TODO(), w.Collections[0]); err != nil {
 				panic(err)
@@ -61,10 +64,10 @@ func (w *DropCreateWriteWorkload) Start(client driver.Driver) (int64, error) {
 			time.Sleep(1 * time.Second)
 		}
 	}()
+	wg.Wait()
 
 	var workloadErr error
 	db := client.UseDatabase(w.Database)
-	var wg sync.WaitGroup
 	for i := int16(0); i < w.Threads; i++ {
 		wg.Add(1)
 		go func() {
