@@ -81,6 +81,10 @@ func newManagementService(authProvider auth.Provider, txMgr *transaction.Manager
 }
 
 func (m *managementService) CreateNamespace(ctx context.Context, req *api.CreateNamespaceRequest) (*api.CreateNamespaceResponse, error) {
+	if !config.DefaultConfig.Auth.EnableNamespaceCreation {
+		return nil, errors.Unimplemented("Namespace creation is disabled on this cluster")
+	}
+	
 	if req.GetName() == "" {
 		return nil, errors.InvalidArgument("Empty namespace name is not allowed")
 	}
