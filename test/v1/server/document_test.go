@@ -4890,6 +4890,10 @@ func insertDocuments(t *testing.T, db string, collection string, documents []Doc
 	}
 }
 
+func buildCollectionIndexes(t *testing.T, db string, collection string) *httpexpect.Response {
+	return expect(t).POST(getDocumentURL(db, collection, "index")).Expect().Status(http.StatusOK)
+}
+
 func updateByFilter(t *testing.T, db string, collection string, filter Map, fields Map, collation Map) *httpexpect.Response {
 	payload := make(Map)
 	for key, value := range filter {

@@ -291,9 +291,17 @@ type Indexes struct {
 }
 
 func (i *Indexes) IsActiveIndex(name string) bool {
+	return i.indexesHasStateState(name, INDEX_ACTIVE)
+}
+
+func (i *Indexes) IsWriteModeIndex(name string) bool {
+	return i.indexesHasStateState(name, INDEX_WRITE_MODE)
+}
+
+func (i *Indexes) indexesHasStateState(name string, state IndexState) bool {
 	for _, idx := range i.All {
 		if idx.Name == name {
-			return idx.State == INDEX_ACTIVE
+			return idx.State == state
 		}
 	}
 

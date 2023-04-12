@@ -245,6 +245,21 @@ func (s *apiService) Import(ctx context.Context, r *api.ImportRequest) (*api.Imp
 	}, nil
 }
 
+func (s *apiService) BuildCollectionIndex(ctx context.Context, r *api.BuildCollectionIndexRequest) (*api.BuildCollectionIndexResponse, error) {
+	qm := metrics.WriteQueryMetrics{}
+	accessToken, _ := request.GetAccessToken(ctx)
+
+	resp, err := s.sessions.ReadOnlyExecute(ctx, s.runnerFactory.GetIndexRunner(r, &qm, accessToken), database.ReqOptions{
+		MetadataChange:     true,
+		InstantVerTracking: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.BuildCollectionIndexResponse), nil
+}
+
 func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.ReplaceResponse, error) {
 	qm := metrics.WriteQueryMetrics{}
 	accessToken, _ := request.GetAccessToken(ctx)

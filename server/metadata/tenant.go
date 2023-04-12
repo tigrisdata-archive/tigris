@@ -1359,6 +1359,23 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 	return nil
 }
 
+// Update the indexes for a collection.
+func (tenant *Tenant) UpdateCollectionIndexes(ctx context.Context, tx transaction.Tx, db *Database, collectionName string, indexes []*schema.Index) error {
+	tenant.Lock()
+	defer tenant.Unlock()
+
+	cHolder, ok := db.collections[collectionName]
+	if !ok {
+		return errors.NotFound("collection doesn't exists '%s'", collectionName)
+	}
+	_, err := tenant.metaStore.Collection().Update(ctx, tx, tenant.namespace.Id(), db.id, collectionName, cHolder.id, indexes)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // DropCollection is to drop a collection and its associated indexes. It removes the "created" entry from the encoding
 // subspace and adds a "dropped" entry for the same collection key.
 func (tenant *Tenant) DropCollection(ctx context.Context, tx transaction.Tx, db *Database, collectionName string) error {

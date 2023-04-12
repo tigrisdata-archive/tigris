@@ -126,3 +126,11 @@ func (f *QueryRunnerFactory) GetBranchQueryRunner(accessToken *types.AccessToken
 		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
 	}
 }
+
+func (f *QueryRunnerFactory) GetIndexRunner(req *api.BuildCollectionIndexRequest, queryMetrics *metrics.WriteQueryMetrics, accessToken *types.AccessToken) *IndexerRunner {
+	return &IndexerRunner{
+		req:             req,
+		queryMetrics:    queryMetrics,
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
+	}
+}

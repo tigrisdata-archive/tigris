@@ -31,6 +31,8 @@ const (
 	DeleteMethodName  = apiMethodPrefix + "Delete"
 	ReadMethodName    = apiMethodPrefix + "Read"
 
+	IndexCollection = apiMethodPrefix + "IndexCollection"
+
 	SearchMethodName = apiMethodPrefix + "Search"
 
 	SubscribeMethodName = apiMethodPrefix + "Subscribe"

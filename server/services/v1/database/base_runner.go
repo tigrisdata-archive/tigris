@@ -18,6 +18,7 @@ import (
 	"context"
 
 	jsoniter "github.com/json-iterator/go"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
@@ -319,4 +320,23 @@ func (runner *BaseQueryRunner) getSecondaryWriterIterator(ctx context.Context, t
 		return nil, err
 	}
 	return NewSecondaryIndexReader(ctx, tx, coll, filter.NewWrappedFilter(filters), queryPlan)
+}
+
+func (runner *BaseQueryRunner) indexToCollectionIndex(all []*schema.Index) []*api.CollectionIndex {
+	indexes := make([]*api.CollectionIndex, len(all))
+	for i, index := range all {
+		fields := make([]*api.Field, len(index.Fields))
+		for j, field := range index.Fields {
+			fields[j] = &api.Field{
+				Name: field.FieldName,
+			}
+		}
+		indexes[i] = &api.CollectionIndex{
+			Name:   index.Name,
+			State:  index.StateString(),
+			Fields: fields,
+		}
+	}
+
+	return indexes
 }
