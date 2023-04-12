@@ -28,7 +28,7 @@ import (
 type IndexerRunner struct {
 	*BaseQueryRunner
 
-	req          *api.IndexCollectionRequest
+	req          *api.BuildCollectionIndexRequest
 	queryMetrics *metrics.WriteQueryMetrics
 }
 
@@ -72,11 +72,11 @@ func (runner *IndexerRunner) ReadOnly(ctx context.Context, tenant *metadata.Tena
 		return Response{}, ctx, err
 	}
 
-	runner.queryMetrics.SetWriteType("replace")
+	runner.queryMetrics.SetWriteType("build_index")
 	metrics.UpdateSpanTags(ctx, runner.queryMetrics)
 
 	return Response{
-		Response: &api.IndexCollectionResponse{
+		Response: &api.BuildCollectionIndexResponse{
 			Indexes: runner.indexToCollectionIndex(coll.SecondaryIndexes.All),
 		},
 	}, ctx, nil

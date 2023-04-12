@@ -127,7 +127,7 @@ func (f *QueryRunnerFactory) GetBranchQueryRunner(accessToken *types.AccessToken
 	}
 }
 
-func (f *QueryRunnerFactory) GetIndexRunner(req *api.IndexCollectionRequest, queryMetrics *metrics.WriteQueryMetrics, accessToken *types.AccessToken) *IndexerRunner {
+func (f *QueryRunnerFactory) GetIndexRunner(req *api.BuildCollectionIndexRequest, queryMetrics *metrics.WriteQueryMetrics, accessToken *types.AccessToken) *IndexerRunner {
 	return &IndexerRunner{
 		req:             req,
 		queryMetrics:    queryMetrics,

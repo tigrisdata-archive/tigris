@@ -245,7 +245,7 @@ func (s *apiService) Import(ctx context.Context, r *api.ImportRequest) (*api.Imp
 	}, nil
 }
 
-func (s *apiService) IndexCollection(ctx context.Context, r *api.IndexCollectionRequest) (*api.IndexCollectionResponse, error) {
+func (s *apiService) BuildCollectionIndex(ctx context.Context, r *api.BuildCollectionIndexRequest) (*api.BuildCollectionIndexResponse, error) {
 	qm := metrics.WriteQueryMetrics{}
 	accessToken, _ := request.GetAccessToken(ctx)
 
@@ -257,7 +257,7 @@ func (s *apiService) IndexCollection(ctx context.Context, r *api.IndexCollection
 		return nil, err
 	}
 
-	return resp.Response.(*api.IndexCollectionResponse), nil
+	return resp.Response.(*api.BuildCollectionIndexResponse), nil
 }
 
 func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.ReplaceResponse, error) {

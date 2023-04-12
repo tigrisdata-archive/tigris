@@ -172,17 +172,16 @@ func (q *SecondaryIndexer) BuildCollection(ctx context.Context, txMgr *transacti
 			count += 1
 		}
 
-		err = tx.Commit(ctx)
-		if err != nil {
-			if shouldRetryBulkIndex(err) {
-				// decrease doc batch count in an attempt to make this work next time around
-				docFetch /= 2
-				count = 0
-				continue
-			} else {
+		if err = tx.Commit(ctx); err != nil {
+			if !shouldRetryBulkIndex(err) {
 				return err
 			}
+			// decrease doc batch count in an attempt to make this work next time around
+			docFetch /= 2
+			count = 0
+			continue
 		} else {
+			// Clear first so that we will read from the last key in the index
 			first = nil
 		}
 
@@ -217,7 +216,7 @@ func createBulkDocsReader(ctx context.Context, tx transaction.Tx, table []byte, 
 	return reader.ScanTable(table)
 }
 
-var RETRY_ERRORS = []error{
+var retryErrors = []error{
 	kv.ErrConflictingTransaction,
 	kv.ErrTransactionMaxDurationReached,
 	kv.ErrTransactionSizeExceeded,
@@ -225,7 +224,7 @@ var RETRY_ERRORS = []error{
 }
 
 func shouldRetryBulkIndex(err error) bool {
-	for _, kvErr := range RETRY_ERRORS {
+	for _, kvErr := range retryErrors {
 		if kvErr == err {
 			return true
 		}

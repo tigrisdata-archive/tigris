@@ -689,7 +689,7 @@ func TestQuery_BuildIndex(t *testing.T) {
 
 	createCollection(t, db, coll, testBuildIndexSchema).Status(http.StatusOK)
 	str := buildCollectionIndexes(t, db, coll).Body().Raw()
-	resp := &api.IndexCollectionResponse{}
+	resp := &api.BuildCollectionIndexResponse{}
 	err := jsoniter.Unmarshal([]byte(str), resp)
 	assert.NoError(t, err)
 
