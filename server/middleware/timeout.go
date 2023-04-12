@@ -25,8 +25,9 @@ import (
 )
 
 var (
-	DefaultTimeout = 10 * time.Second
-	MaximumTimeout = 30 * time.Second
+	DefaultTimeout     = 10 * time.Second
+	MaximumTimeout     = 30 * time.Second
+	LongRunningTimeout = 1 * time.Hour
 )
 
 // timeoutUnaryServerInterceptor returns a new unary server interceptor
@@ -38,9 +39,13 @@ func timeoutUnaryServerInterceptor(timeout time.Duration) grpc.UnaryServerInterc
 		ctx, cancel = setDeadlineUsingHeader(ctx)
 
 		d, ok := ctx.Deadline()
-		if ok && time.Until(d) > MaximumTimeout {
+		if ok && info.FullMethod != api.IndexCollection && time.Until(d) > MaximumTimeout {
 			timeout = MaximumTimeout
 			ok = false
+		}
+
+		if !ok && info.FullMethod == api.IndexCollection {
+			timeout = LongRunningTimeout
 		}
 
 		if !ok {

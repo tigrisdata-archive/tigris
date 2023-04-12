@@ -241,6 +241,16 @@ func (d *DefaultCollection) GetActiveIndexedFields() []*QueryableField {
 	return indexed
 }
 
+func (d *DefaultCollection) GetWriteModeIndexes() []*QueryableField {
+	var indexed []*QueryableField
+	for _, q := range d.QueryableFields {
+		if q.Indexed && !d.SecondaryIndexes.IsWriteModeIndex(q.FieldName) {
+			indexed = append(indexed, q)
+		}
+	}
+	return indexed
+}
+
 func (d *DefaultCollection) GetIndexedFields() []*QueryableField {
 	var indexed []*QueryableField
 	for _, q := range d.QueryableFields {

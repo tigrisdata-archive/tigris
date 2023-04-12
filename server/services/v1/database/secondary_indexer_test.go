@@ -712,6 +712,68 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 	})
 }
 
+func TestBulkIndexing(t *testing.T) {
+	reqSchema := []byte(`{
+		"title": "t1",
+		"properties": {
+			"id": {
+				"type": "integer"
+			},
+			"double_f": {
+				"type": "number",
+				"index": true
+			},
+			"my_string": {
+				"index": true,
+				"type": "string"
+			},
+			"number": {
+				"type": "integer",
+				"index": true
+			}
+		},
+		"primary_key": ["id"]
+	}`)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	assert.NoError(t, kvStore.DropTable(ctx, []byte("t1")))
+	assert.NoError(t, kvStore.CreateTable(ctx, []byte("t1")))
+	assert.NoError(t, kvStore.DropTable(ctx, []byte("sidx1")))
+	assert.NoError(t, kvStore.CreateTable(ctx, []byte("sidx1")))
+	indexStore := setupTest(t, reqSchema)
+	tm := transaction.NewManager(kvStore)
+	coll := indexStore.coll
+	indexStore.indexAll = false
+
+	totalDocs := 120
+	tx, err := tm.StartTx(ctx)
+	for i := 0; i < totalDocs; i++ {
+		assert.NoError(t, err)
+		td, pk := createDoc(`{"id":1, "double_f":2,"my_string":"a string","number": 3}`, []interface{}{i}...)
+		k := keys.NewKey(coll.EncodedName, pk...)
+		err = tx.Insert(ctx, k, td)
+		assert.NoError(t, err)
+	}
+	assert.NoError(t, tx.Commit(ctx))
+
+	err = indexStore.BuildCollection(ctx, tm)
+	assert.NoError(t, err)
+
+	tx, err = tm.StartTx(ctx)
+	assert.NoError(t, err)
+	iter, err := indexStore.scanIndex(ctx, tx)
+	assert.NoError(t, err)
+
+	count := 0
+	var row kv.KeyValue
+	for iter.Next(&row) {
+		count += 1
+	}
+	assert.Equal(t, count, totalDocs*5)
+}
+
 func setupTest(t *testing.T, reqSchema []byte) *SecondaryIndexer {
 	schFactory, err := schema.NewFactoryBuilder(true).Build("t1", reqSchema)
 	assert.NoError(t, err)
