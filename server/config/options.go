@@ -87,6 +87,7 @@ type AuthConfig struct {
 	Gotrue                     Gotrue                `mapstructure:"gotrue" yaml:"gotrue" json:"gotrue"`
 	NamespaceLocalization      NamespaceLocalization `mapstructure:"namespace_localization" yaml:"namespace_localization" json:"namespace_localization"`
 	EnableNamespaceDeletion    bool                  `mapstructure:"enable_namespace_deletion" yaml:"enable_namespace_deletion" json:"enable_namespace_deletion"`
+	EnableNamespaceCreation    bool                  `mapstructure:"enable_namespace_creation" yaml:"enable_namespace_creation" json:"enable_namespace_creation"`
 }
 
 type ClusterConfig struct {
@@ -273,6 +274,7 @@ var DefaultConfig = Config{
 		},
 		NamespaceLocalization:   NamespaceLocalization{Enabled: false},
 		EnableNamespaceDeletion: false,
+		EnableNamespaceCreation: true,
 	},
 	Billing: Billing{
 		Metronome: Metronome{
