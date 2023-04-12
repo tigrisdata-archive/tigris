@@ -41,29 +41,30 @@ func (w *InsertOnlyWorkload) Type() string {
 func (w *InsertOnlyWorkload) Setup(client driver.Driver) error {
 	w.WorkloadData = NewQueue(w.Collections)
 
+	ctx := context.TODO()
 	// cleanup first
-	_, err := client.DeleteProject(context.TODO(), w.Database)
+	_, err := client.DeleteProject(ctx, w.Database)
 	if err != nil {
 		log.Err(err).Msgf("delete project failed, ignoring error '%s'", w.Database)
 	}
 
-	_, err = client.CreateProject(context.TODO(), w.Database)
+	_, err = client.CreateProject(ctx, w.Database)
 	if err != nil {
 		log.Err(err).Msgf("create project failed ignoring error '%s'", w.Database)
 	}
 
-	tx, err := client.UseDatabase(w.Database).BeginTx(context.TODO())
+	tx, err := client.UseDatabase(w.Database).BeginTx(ctx)
 	if err != nil {
 		return errors.Wrapf(err, "begin tx failed for db '%s'", w.Database)
 	}
 
 	for i := 0; i < len(w.Schemas); i++ {
-		if err = tx.CreateOrUpdateCollection(context.TODO(), w.Collections[i], w.Schemas[i]); err != nil {
+		if err = tx.CreateOrUpdateCollection(ctx, w.Collections[i], w.Schemas[i]); err != nil {
 			return errors.Wrapf(err, "CreateOrUpdateCollection failed for db '%s' coll '%s'", w.Database, w.Collections[i])
 		}
 	}
 
-	return tx.Commit(context.TODO())
+	return tx.Commit(ctx)
 }
 
 func (w *InsertOnlyWorkload) Start(client driver.Driver) (int64, error) {
@@ -111,12 +112,13 @@ func (w *InsertOnlyWorkload) Check(client driver.Driver) (bool, error) {
 		queueDoc := NewQueueDocuments(collection)
 		var doc driver.Document
 		for it.Next(&doc) {
-			document, err := Deserialize(doc)
+			var document Document
+			err := Deserialize(doc, &document)
 			if err != nil {
 				return false, errors.Wrapf(err, "deserialzing document failed")
 			}
 			// log.Debug().Msgf("read document '%s' '%s' '%v'", w.Database, collection, document)
-			queueDoc.Add(document)
+			queueDoc.Add(&document)
 		}
 
 		if it.Err() != nil {

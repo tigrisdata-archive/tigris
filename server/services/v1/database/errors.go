@@ -64,3 +64,7 @@ func createApiError(err error) error {
 	}
 	return err
 }
+
+func IsErrConflictingTransaction(err error) bool {
+	return err == kv.ErrConflictingTransaction
+}
