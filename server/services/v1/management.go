@@ -84,7 +84,7 @@ func (m *managementService) CreateNamespace(ctx context.Context, req *api.Create
 	if !config.DefaultConfig.Auth.EnableNamespaceCreation {
 		return nil, errors.Unimplemented("Namespace creation is disabled on this cluster")
 	}
-	
+
 	if req.GetName() == "" {
 		return nil, errors.InvalidArgument("Empty namespace name is not allowed")
 	}
