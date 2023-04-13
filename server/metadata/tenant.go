@@ -48,6 +48,7 @@ type TenantGetter interface {
 type NamespaceMetadataMgr interface {
 	GetNamespaceMetadata(ctx context.Context, namespaceId string) *NamespaceMetadata
 	UpdateNamespaceMetadata(ctx context.Context, meta NamespaceMetadata) error
+	RefreshNamespaceAccounts(ctx context.Context) error
 }
 
 // TenantNamespace is used when there is a finer isolation of databases is needed. The caller provides a unique
@@ -237,6 +238,36 @@ func (m *TenantManager) GetNamespaceId(namespaceName string) (uint32, error) {
 	return tenant.namespace.Id(), nil
 }
 
+func (m *TenantManager) RefreshNamespaceAccounts(ctx context.Context) error {
+	// lock tenant manager
+	m.Lock()
+	defer m.Unlock()
+
+	tx, err := m.txMgr.StartTx(ctx)
+	if err != nil {
+		return err
+	}
+	// load namespaces from disk
+	namespaces, err := m.metaStore.GetNamespaces(ctx, tx)
+	log.Debug().Interface("ns", namespaces).Msg("reloaded namespaces")
+
+	for namespaceId, metadata := range namespaces {
+		// getTenant
+		tenant, err := m.GetTenant(ctx, namespaceId)
+		if err != nil {
+			log.Error().Err(err).Msgf("cannot find tenant with id %s", namespaceId)
+			continue
+		}
+		// update accounts if tenant does not have it
+		if tenant.namespace.Metadata().Accounts.Metronome == nil {
+			tenant.Lock()
+			tenant.namespace = NewTenantNamespace(namespaceId, metadata)
+			tenant.Unlock()
+		}
+	}
+	return nil
+}
+
 func (m *TenantManager) GetNamespaceMetadata(ctx context.Context, namespaceId string) *NamespaceMetadata {
 	tenant, err := m.GetTenant(ctx, namespaceId)
 	if err != nil {
@@ -338,7 +369,9 @@ func (m *TenantManager) UpdateNamespaceMetadata(ctx context.Context, meta Namesp
 		if err == nil {
 			tenant := m.tenants[meta.StrId]
 			if err = tx.Commit(ctx); err == nil && tenant != nil {
+				tenant.Lock()
 				tenant.namespace = NewTenantNamespace(meta.StrId, meta)
+				tenant.Unlock()
 			}
 		} else {
 			log.Err(err).Str("ns", meta.StrId).Msg("Could not update namespace")
@@ -1407,7 +1440,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 	return nil
 }
 
-// Update the indexes for a collection.
+// UpdateCollectionIndexes Updates the indexes for a collection.
 func (tenant *Tenant) UpdateCollectionIndexes(ctx context.Context, tx transaction.Tx, db *Database, collectionName string, indexes []*schema.Index) error {
 	tenant.Lock()
 	defer tenant.Unlock()

@@ -76,6 +76,18 @@ func (r *UsageReporter) push() error {
 	trxnSuffix := strconv.FormatInt(chunk.EndTime.Unix(), 10)
 	events := make([]*UsageEvent, 0, len(chunk.Tenants))
 
+	// refresh and get metadata for all tenants if anyone is missing metronome integration
+	for namespaceId, _ := range chunk.Tenants {
+		nsMeta := r.tenantMgr.GetNamespaceMetadata(r.ctx, namespaceId)
+		if nsMeta == nil || nsMeta.Accounts.Metronome == nil {
+			err := r.tenantMgr.RefreshNamespaceAccounts(r.ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to refresh namespace metadata")
+			}
+			break
+		}
+	}
+
 	for namespaceId, stats := range chunk.Tenants {
 		nsMeta := r.tenantMgr.GetNamespaceMetadata(r.ctx, namespaceId)
 		if nsMeta == nil {

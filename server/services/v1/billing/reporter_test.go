@@ -100,6 +100,9 @@ func TestUsageReporter_Push(t *testing.T) {
 		err := reporter.push()
 		require.NoError(t, err)
 
+		// refreshNamespaceAccounts is only called once
+		require.Equal(t, 1, tenantMgr.refreshNamespaceCalls)
+
 		// CreateAccount call only for "ns1" and "ns3"
 		require.Len(t, billing.createAccountCalls, 2)
 		require.Equal(t, billing.createAccountCalls["ns1"], 1)
@@ -149,6 +152,9 @@ func TestUsageReporter_Push(t *testing.T) {
 		err := reporter.push()
 		require.NoError(t, err)
 
+		// refreshNamespaceAccounts is never called
+		require.Equal(t, 0, tenantMgr.refreshNamespaceCalls)
+
 		// no calls should be made to metronome service
 		require.Empty(t, metronome.createAccountCalls)
 		require.Empty(t, metronome.defaultPlanCalls)
@@ -184,6 +190,9 @@ func TestUsageReporter_Push(t *testing.T) {
 		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, metronome)
 		err := reporter.push()
 		require.NoError(t, err)
+
+		// refreshNamespaceAccounts is only called once
+		require.Equal(t, 1, tenantMgr.refreshNamespaceCalls)
 
 		require.Equal(t, 1, metronome.createAccountCalls[createAccountFailure])
 		require.Empty(t, metronome.defaultPlanCalls)
@@ -221,15 +230,50 @@ func TestUsageReporter_Push(t *testing.T) {
 		err := reporter.push()
 		require.NoError(t, err)
 
+		// refreshNamespaceAccounts is only called once
+		require.Equal(t, 1, tenantMgr.refreshNamespaceCalls)
+
 		require.Equal(t, 1, metronome.createAccountCalls[addDefaultPlanFailure])
 		require.Equal(t, 1, metronome.defaultPlanCalls[addDefaultPlanFailure])
 		// should still publish events
 		require.Contains(t, metronome.pushUsageEventCalls, addDefaultPlanFailure)
 	})
+
+	t.Run("fails to push events", func(t *testing.T) {
+		namespaces := map[string]metadata.NamespaceMetadata{
+			pushUsageFailure: {
+				Id:    5,
+				StrId: pushUsageFailure,
+				Name:  "Failure to push events for this namespace",
+			},
+		}
+		tenantMgr := &MockTenantManager{data: namespaces}
+		glbStatus := &MockGlobalStatus{data: metrics.TenantStatusTimeChunk{
+			StartTime: time.Time{},
+			EndTime:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
+			Tenants: map[string]*metrics.TenantStatus{
+				pushUsageFailure: {
+					ReadUnits:   4,
+					WriteUnits:  5,
+					SearchUnits: 6,
+				},
+			},
+		}}
+		metronome := &MockBillingSvc{
+			createAccountCalls:  map[string]int{},
+			defaultPlanCalls:    map[string]int{},
+			pushUsageEventCalls: map[string][]*UsageEvent{},
+		}
+
+		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, metronome)
+		err := reporter.push()
+		require.Error(t, err)
+	})
 }
 
 type MockTenantManager struct {
-	data map[string]metadata.NamespaceMetadata
+	data                  map[string]metadata.NamespaceMetadata
+	refreshNamespaceCalls int
 }
 
 func (mock *MockTenantManager) GetTenant(_ context.Context, id string) (*metadata.Tenant, error) {
@@ -245,6 +289,11 @@ func (mock *MockTenantManager) GetNamespaceMetadata(_ context.Context, namespace
 
 func (mock *MockTenantManager) UpdateNamespaceMetadata(_ context.Context, meta metadata.NamespaceMetadata) error {
 	mock.data[meta.StrId] = meta
+	return nil
+}
+
+func (mock *MockTenantManager) RefreshNamespaceAccounts(_ context.Context) error {
+	mock.refreshNamespaceCalls += 1
 	return nil
 }
 
@@ -306,6 +355,10 @@ func (mock *MockBillingSvc) PushUsageEvents(_ context.Context, events []*UsageEv
 			mock.pushUsageEventCalls[e.CustomerId] = []*UsageEvent{e}
 		} else {
 			mock.pushUsageEventCalls[e.CustomerId] = append(mock.pushUsageEventCalls[e.CustomerId], e)
+		}
+
+		if e.CustomerId == pushUsageFailure {
+			return fmt.Errorf("metronome failure")
 		}
 	}
 

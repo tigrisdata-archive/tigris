@@ -251,7 +251,6 @@ func (r *reservedSubspace) updateNamespace(ctx context.Context, tx transaction.T
 	err = tx.Replace(ctx, key, internal.NewTableDataWithVersion(payload, nsMetaValueVersion), true)
 	log.Debug().Err(err).Str("key", key.String()).Uint32("value", namespaceMetadata.Id).Msg("updated namespace metadata")
 
-	// todo: Check for race condition
 	return r.reload(ctx, tx)
 }
 
