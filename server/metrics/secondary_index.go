@@ -57,8 +57,8 @@ func getSecondaryIndexErrorTagKeys() []string {
 func initializeSecondaryIndexScopes() {
 	SecondaryIndexOkCount = SecondaryIndexMetrics.SubScope("count_ok")
 	SecondaryIndexErrorCount = SecondaryIndexMetrics.SubScope("count_error")
-	SecondaryIndexRespTime = SecondaryIndexMetrics.SubScope("response")
-	SecondaryIndexErrorRespTime = SecondaryIndexMetrics.SubScope("error_response")
+	SecondaryIndexRespTime = SecondaryIndexMetrics.SubScope("response_time")
+	SecondaryIndexErrorRespTime = SecondaryIndexMetrics.SubScope("error_response_time")
 }
 
 func GetSecondaryIndexTags(reqMethodName string) map[string]string {
