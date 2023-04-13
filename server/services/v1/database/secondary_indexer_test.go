@@ -774,14 +774,14 @@ func TestBulkIndexing(t *testing.T) {
 	assert.Equal(t, count, totalDocs*5)
 }
 
-func setupTest(t *testing.T, reqSchema []byte) *SecondaryIndexer {
+func setupTest(t *testing.T, reqSchema []byte) *SecondaryIndexerImpl {
 	schFactory, err := schema.NewFactoryBuilder(true).Build("t1", reqSchema)
 	assert.NoError(t, err)
 	coll, err := schema.NewDefaultCollection(1, 1, schFactory, nil, nil)
 	assert.NoError(t, err)
 	coll.EncodedName = []byte("t1")
 	coll.EncodedTableIndexName = []byte("sidx1")
-	indexer := NewSecondaryIndexer(coll)
+	indexer := newSecondaryIndexerImpl(coll)
 	indexer.indexAll = true
 
 	return indexer
