@@ -76,14 +76,14 @@ type Nested struct {
 	Domain    string   `json:"domain"  fake:"{domainname}"`
 	Sentence  string   `json:"sentence" fake:"{sentence:3}"`
 	Company   string   `json:"company"  fake:"{company}"`
-	Labels    []string `json:"labels"  fakesize:"200"`
+	Labels    []string `json:"labels"  fakesize:"2"`
 	Address   Address  `json:"address"`
 	NestedId  string   `json:"nested_id"  fake:"{uuid}"`
 }
 
 type DocumentV1 struct {
 	Id        int64     `json:"id"`
-	Cars      []string  `json:"cars" fake:"{carmaker}" fakesize:"10000"`
+	Cars      []string  `json:"cars" fake:"{carmaker}" fakesize:"2"`
 	CreatedAt time.Time `json:"created_at"  fake:"{date}"`
 	UpdatedAt time.Time `json:"updated_at"  fake:"{date}"`
 	Nested    *Nested   `json:"nested"`
@@ -99,6 +99,7 @@ func NewDocumentV1(id int64) *DocumentV1 {
 	if err := gofakeit.Struct(&document); err != nil {
 		log.Panic().Err(err).Msgf("failed in generating fake document")
 	}
+
 	document.Id = id
 	document.Nested = &nested
 

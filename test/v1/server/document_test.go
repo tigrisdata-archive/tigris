@@ -4298,13 +4298,14 @@ func TestFilteringOnArrays_Primitives(t *testing.T) {
 		nil,
 		inputDocument[2:3])
 
-	readExpError(t,
+	readAndValidate(t,
 		db,
 		collection,
 		Map{
 			"arr_obj.name": "classic",
 		},
-		http.StatusBadRequest,
+		nil,
+		inputDocument[0:1],
 	)
 }
 

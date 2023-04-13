@@ -250,6 +250,14 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 	for _, f := range factory.fields {
 		if f.Name() == string(k) {
 			field = f
+			break
+		}
+
+		for _, nested := range f.AllowedNestedQFields {
+			if nested.Name() == string(k) {
+				field = nested
+				break
+			}
 		}
 	}
 	if field == nil {
