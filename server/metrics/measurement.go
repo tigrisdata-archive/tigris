@@ -36,6 +36,7 @@ const (
 	KvTracingServiceName      string = "kv"
 	TraceServiceName          string = "tigris.grpc.server"
 	SessionManagerServiceName string = "session"
+	SecondaryIndexServiceName string = "secondaryindex"
 	GrpcSpanType              string = "grpc"
 	FdbSpanType               string = "fdb"
 	SearchSpanType            string = "search"

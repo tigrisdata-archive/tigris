@@ -33,6 +33,7 @@ func getSecondaryIndexOkTagKeys() []string {
 		"env",
 		"project",
 		"db",
+		"branch",
 		"collection",
 		"secondary_index_method",
 	}
@@ -54,8 +55,8 @@ func getSecondaryIndexErrorTagKeys() []string {
 }
 
 func initializeSecondaryIndexScopes() {
-	SecondaryIndexOkCount = SecondaryIndexMetrics.SubScope("count")
-	SecondaryIndexErrorCount = SecondaryIndexMetrics.SubScope("count")
+	SecondaryIndexOkCount = SecondaryIndexMetrics.SubScope("count_ok")
+	SecondaryIndexErrorCount = SecondaryIndexMetrics.SubScope("count_error")
 	SecondaryIndexRespTime = SecondaryIndexMetrics.SubScope("response")
 	SecondaryIndexErrorRespTime = SecondaryIndexMetrics.SubScope("error_response")
 }

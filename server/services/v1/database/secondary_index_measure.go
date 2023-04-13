@@ -47,7 +47,7 @@ func NewSecondaryIndexerWithMetrics(coll *schema.DefaultCollection) SecondaryInd
 
 func (m *secondaryIndexerWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
 	// Low level measurement wrapper that is called by the measure functions on the appropriate receiver
-	measurement := metrics.NewMeasurement("tigris.secondaryindexer", name, metrics.SecondaryIndexSpanType, metrics.GetSecondaryIndexTags(name))
+	measurement := metrics.NewMeasurement(metrics.SecondaryIndexServiceName, name, metrics.SecondaryIndexSpanType, metrics.GetSecondaryIndexTags(name))
 	ctx = measurement.StartTracing(ctx, true)
 	err := f(ctx)
 	if err != nil {
@@ -128,7 +128,7 @@ func newSecondaryIndexReaderWithMetrics(ctx context.Context, tx transaction.Tx, 
 
 func (m *secondaryIndexReaderWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
 	// Low level measurement wrapper that is called by the measure functions on the appropriate receiver
-	measurement := metrics.NewMeasurement("tigris.secondaryreader", name, metrics.SecondaryIndexSpanType, metrics.GetSecondaryIndexTags(name))
+	measurement := metrics.NewMeasurement(metrics.SecondaryIndexServiceName, name, metrics.SecondaryIndexSpanType, metrics.GetSecondaryIndexTags(name))
 	ctx = measurement.StartTracing(ctx, true)
 	err := f(ctx)
 	if err != nil {
