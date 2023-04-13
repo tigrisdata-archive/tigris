@@ -30,7 +30,7 @@ func randomCollection(collectionName string) (string, []byte) {
 	return collectionName, []byte(fmt.Sprintf(`{
 	"title": "%s",
 	"properties": {
-		"F1": {
+		"id": {
 			"type": "integer"
 		},
 		"F2": {
@@ -49,7 +49,7 @@ func randomCollection(collectionName string) (string, []byte) {
 			"format": "date-time"
 		}
 	},
-	"primary_key": ["F1"]
+	"primary_key": ["id"]
 }`, collectionName))
 }
 
@@ -68,55 +68,6 @@ func (w *SmallConciseWorkload) Type() string {
 
 func (w *SmallConciseWorkload) Setup(client driver.Driver) error {
 	return nil
-}
-
-func (w *SmallConciseWorkload) Start1(client driver.Driver) (int64, error) {
-	var replaceErr error
-	var wg sync.WaitGroup
-	for i := int16(0); i < w.Threads; i++ {
-		wg.Add(1)
-
-		uniqueIdentifier := w.Records + int64(i)*w.Records
-		go func(id int64) {
-			defer wg.Done()
-
-			randomDatabaseName := fmt.Sprintf("%s_%d", w.Database, id)
-			_, _ = client.DeleteProject(context.TODO(), randomDatabaseName)
-
-			_, err := client.CreateProject(context.TODO(), randomDatabaseName)
-			if err != nil {
-				log.Err(err).Msgf("create project failed ignoring error '%s'", randomDatabaseName)
-			}
-
-			db := client.UseDatabase(randomDatabaseName)
-			err = db.CreateOrUpdateCollection(context.TODO(), w.Collections[0], w.Schemas[0])
-			if err != nil {
-				replaceErr = multierror.Append(replaceErr, err)
-				return
-			}
-
-			for j := int64(0); j < w.Records; j++ {
-				doc := NewDocument(id)
-				serialized, err := Serialize(doc)
-				if err != nil {
-					replaceErr = multierror.Append(replaceErr, err)
-					return
-				}
-
-				if _, err := client.UseDatabase(w.Database).Replace(context.TODO(), w.Collections[0], []driver.Document{serialized}); err != nil {
-					replaceErr = multierror.Append(replaceErr, errors.Wrapf(err, "replace to collection failed '%s' '%s'", w.Database, w.Collections[j]))
-					return
-				}
-
-				w.WorkloadData.Add(w.Collections[0], doc)
-				id++
-			}
-		}(uniqueIdentifier)
-	}
-
-	wg.Wait()
-
-	return w.Records * int64(w.Threads), replaceErr
 }
 
 func (w *SmallConciseWorkload) Start(client driver.Driver) (int64, error) {

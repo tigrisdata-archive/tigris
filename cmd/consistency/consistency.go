@@ -33,13 +33,96 @@ type Workload interface {
 	Type() string
 }
 
+func indexesForLoadTest() (string, []byte) {
+	return "t1", []byte(`{
+  "title": "t1",
+  "properties": {
+    "cars": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "sort": true
+    },
+    "id": {
+      "type": "integer"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "sort": true
+    },
+    "nested": {
+      "type": "object",
+      "properties": {
+        "random": {
+          "type": "string",
+          "facet": true
+        },
+        "nested_id": {
+          "type": "string",
+          "format": "uuid",
+          "id": true
+        },
+        "address": {
+          "type": "object",
+          "properties": {
+            "city": {
+              "type": "string",
+              "facet": true
+            },
+            "state": {
+              "type": "string",
+              "facet": true
+            },
+            "country": {
+              "type": "string",
+              "facet": true
+            }
+          }
+        },
+        "name": {
+          "type": "string",
+          "facet": true
+        },
+        "url": {
+          "type": "string",
+          "facet": true
+        },
+        "domain": {
+          "type": "string"
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+        	"type": "string"
+          }
+        },
+        "company": {
+          "type": "string",
+          "facet": true
+        },
+        "timestamp": {
+          "type": "integer",
+          "sort": true
+        }
+      }
+    }
+  }
+}`)
+}
+
 func collectionsForLoadTest() ([]string, [][]byte) {
 	// first is integer primary key, second is string primary key
 	return []string{"c1", "c2"}, [][]byte{
 		[]byte(`{
 	"title": "c1",
 	"properties": {
-		"F1": {
+		"id": {
 			"type": "integer"
 		},
 		"F2": {
@@ -58,12 +141,12 @@ func collectionsForLoadTest() ([]string, [][]byte) {
 			"format": "date-time"
 		}
 	},
-	"primary_key": ["F1"]
+	"primary_key": ["id"]
 }`),
 		[]byte(`{
 	"title": "c2",
 	"properties": {
-		"F1": {
+		"id": {
 			"type": "integer"
 		},
 		"F2": {
@@ -87,11 +170,25 @@ func collectionsForLoadTest() ([]string, [][]byte) {
 	}
 }
 
+func CreateSearchWorkload() []Workload {
+	index, schema := indexesForLoadTest()
+	var workload []Workload
+	workload = append(workload, &workload2.SearchOnlyWorkload{
+		Threads: 16,
+		Records: 128,
+		Project: "test1",
+		Index:   index,
+		Schema:  schema,
+	})
+
+	return workload
+}
+
 func CreateWorkloads() []Workload {
 	collections, schemas := collectionsForLoadTest()
 	var workload []Workload
 	workload = append(workload, &workload2.DropCreateWriteWorkload{
-		Threads:     96,
+		Threads:     8,
 		Records:     1024,
 		Database:    "test1",
 		Collections: collections,
@@ -100,7 +197,7 @@ func CreateWorkloads() []Workload {
 	})
 
 	workload = append(workload, &workload2.DDLWorkload{
-		Threads:     1,
+		Threads:     2,
 		Database:    "test1",
 		Collections: []string{collections[0]},
 		Schemas:     [][]byte{schemas[0]},
@@ -117,7 +214,7 @@ func CreateWorkloads() []Workload {
 
 	workload = append(workload, &workload2.ReplaceOnlyWorkload{
 		Threads:     32,
-		Records:     32,
+		Records:     64,
 		Database:    "test1",
 		Collections: collections,
 		// first is integer primary key, second is string primary key
@@ -146,6 +243,7 @@ func main() {
 	}
 
 	workloads := CreateWorkloads()
+	workloads = append(workloads, CreateSearchWorkload()...)
 	for _, w := range workloads {
 		log.Debug().Msgf("running workload type %s", w.Type())
 		if err = w.Setup(client); err != nil {

@@ -37,18 +37,18 @@ func DecodeStreamData(b []byte) (*StreamData, error) {
 	if len(b) == 0 {
 		return nil, errors.Internal("unable to decode event data is empty")
 	}
-	dataType := DataType(b[0])
-	dec := codec.NewDecoderBytes(b[1:], &bh)
 
-	if dataType == StreamDataType {
-		var v *StreamData
-		if err := dec.Decode(&v); err != nil {
-			return nil, err
-		}
-		return v, nil
+	if b[0] != StreamDataType {
+		return nil, errors.Internal("unable to decode '%v'", b[0])
 	}
 
-	return nil, errors.Internal("unable to decode '%v'", dataType)
+	var v *StreamData
+	dec := codec.NewDecoderBytes(b[1:], &bh)
+	if err := dec.Decode(&v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
 }
 
 func NewCacheData(data []byte) *CacheData {
@@ -66,16 +66,16 @@ func DecodeCacheData(b []byte) (*CacheData, error) {
 	if len(b) == 0 {
 		return nil, errors.Internal("unable to decode event data is empty")
 	}
-	dataType := DataType(b[0])
-	dec := codec.NewDecoderBytes(b[1:], &bh)
 
-	if dataType == CacheDataType {
-		var v *CacheData
-		if err := dec.Decode(&v); err != nil {
-			return nil, err
-		}
-		return v, nil
+	if b[0] != CacheDataType {
+		return nil, errors.Internal("unable to decode '%v'", b[0])
 	}
 
-	return nil, errors.Internal("unable to decode '%v'", dataType)
+	var v *CacheData
+	dec := codec.NewDecoderBytes(b[1:], &bh)
+	if err := dec.Decode(&v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
 }

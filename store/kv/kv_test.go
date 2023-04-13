@@ -33,6 +33,7 @@ import (
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/server/config"
 	ulog "github.com/tigrisdata/tigris/util/log"
+	"google.golang.org/protobuf/proto"
 )
 
 func readAllUsingIterator(t *testing.T, it Iterator) []KeyValue {
@@ -103,7 +104,9 @@ func testKeyValueStoreBasic(t *testing.T, kv TxStore) {
 	require.NoError(t, err)
 
 	v := readAllUsingIterator(t, it)
-	require.Equal(t, []KeyValue{{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2))), Data: tableDataP1[1]}}, v)
+	require.True(t, proto.Equal(v[0].Data, tableDataP1[1]))
+	v[0].Data = nil
+	require.Equal(t, []KeyValue{{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2)))}}, v)
 	_ = tx.Commit(ctx)
 
 	// replace individual record
@@ -118,7 +121,9 @@ func testKeyValueStoreBasic(t *testing.T, kv TxStore) {
 	require.NoError(t, err)
 
 	v = readAllUsingIterator(t, it)
-	require.Equal(t, []KeyValue{{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2))), Data: replacedValue2}}, v)
+	require.True(t, proto.Equal(v[0].Data, replacedValue2))
+	v[0].Data = nil
+	require.Equal(t, []KeyValue{{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2)))}}, v)
 	_ = tx.Commit(ctx)
 
 	// read range
@@ -127,9 +132,13 @@ func testKeyValueStoreBasic(t *testing.T, kv TxStore) {
 	require.NoError(t, err)
 
 	v = readAllUsingIterator(t, it)
+	require.True(t, proto.Equal(v[0].Data, replacedValue2))
+	v[0].Data = nil
+	require.True(t, proto.Equal(v[1].Data, tableDataP1[2]))
+	v[1].Data = nil
 	require.Equal(t, []KeyValue{
-		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2))), Data: replacedValue2},
-		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey(table, BuildKey("p1", int64(3))), Data: tableDataP1[2]},
+		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2)))},
+		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey(table, BuildKey("p1", int64(3)))},
 	}, v)
 	_ = tx.Commit(ctx)
 
@@ -139,13 +148,15 @@ func testKeyValueStoreBasic(t *testing.T, kv TxStore) {
 	require.NoError(t, err)
 
 	v = readAllUsingIterator(t, it)
-	require.Equal(t, []KeyValue{
-		{Key: BuildKey("p1", int64(1)), FDBKey: getFDBKey(table, BuildKey("p1", int64(1))), Data: tableDataP1[0]},
-		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2))), Data: replacedValue2},
-		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey(table, BuildKey("p1", int64(3))), Data: tableDataP1[2]},
-		{Key: BuildKey("p1", int64(4)), FDBKey: getFDBKey(table, BuildKey("p1", int64(4))), Data: tableDataP1[3]},
-		{Key: BuildKey("p1", int64(5)), FDBKey: getFDBKey(table, BuildKey("p1", int64(5))), Data: tableDataP1[4]},
-	}, v)
+	for i := 0; i < 5; i++ {
+		if i != 1 {
+			require.True(t, proto.Equal(v[i].Data, tableDataP1[i]))
+		} else {
+			require.True(t, proto.Equal(v[i].Data, replacedValue2))
+		}
+		v[i].Data = nil
+		require.Equal(t, KeyValue{Key: BuildKey("p1", int64(i+1)), FDBKey: getFDBKey(table, BuildKey("p1", int64(i+1)))}, v[i])
+	}
 	_ = tx.Commit(ctx)
 
 	// delete
@@ -164,8 +175,10 @@ func testKeyValueStoreBasic(t *testing.T, kv TxStore) {
 	require.NoError(t, err)
 
 	v = readAllUsingIterator(t, it)
+	require.True(t, proto.Equal(v[0].Data, replacedValue2))
+	v[0].Data = nil
 	require.Equal(t, []KeyValue{
-		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2))), Data: replacedValue2},
+		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2)))},
 	}, v)
 	_ = tx.Commit(ctx)
 
@@ -209,18 +222,18 @@ func testKeyValueStoreFullScan(t *testing.T, kv TxStore) {
 	require.NoError(t, err)
 
 	v := readAllUsingIterator(t, it)
-	require.Equal(t, []KeyValue{
-		{Key: BuildKey("p1", int64(1)), FDBKey: getFDBKey(table, BuildKey("p1", int64(1))), Data: tableDataP1[0]},
-		{Key: BuildKey("p1", int64(2)), FDBKey: getFDBKey(table, BuildKey("p1", int64(2))), Data: tableDataP1[1]},
-		{Key: BuildKey("p1", int64(3)), FDBKey: getFDBKey(table, BuildKey("p1", int64(3))), Data: tableDataP1[2]},
-		{Key: BuildKey("p1", int64(4)), FDBKey: getFDBKey(table, BuildKey("p1", int64(4))), Data: tableDataP1[3]},
-		{Key: BuildKey("p1", int64(5)), FDBKey: getFDBKey(table, BuildKey("p1", int64(5))), Data: tableDataP1[4]},
-		{Key: BuildKey("p2", int64(1)), FDBKey: getFDBKey(table, BuildKey("p2", int64(1))), Data: tableDataP2[0]},
-		{Key: BuildKey("p2", int64(2)), FDBKey: getFDBKey(table, BuildKey("p2", int64(2))), Data: tableDataP2[1]},
-		{Key: BuildKey("p2", int64(3)), FDBKey: getFDBKey(table, BuildKey("p2", int64(3))), Data: tableDataP2[2]},
-		{Key: BuildKey("p2", int64(4)), FDBKey: getFDBKey(table, BuildKey("p2", int64(4))), Data: tableDataP2[3]},
-		{Key: BuildKey("p2", int64(5)), FDBKey: getFDBKey(table, BuildKey("p2", int64(5))), Data: tableDataP2[4]},
-	}, v)
+	for i := 0; i < 5; i++ {
+		require.True(t, proto.Equal(tableDataP1[i], v[i].Data))
+
+		v[i].Data = nil
+		require.Equal(t, KeyValue{Key: BuildKey("p1", int64(i+1)), FDBKey: getFDBKey(table, BuildKey("p1", int64(i+1)))}, v[i])
+	}
+	for i := 0; i < 5; i++ {
+		require.True(t, proto.Equal(tableDataP2[i], v[i+5].Data))
+
+		v[i+5].Data = nil
+		require.Equal(t, KeyValue{Key: BuildKey("p2", int64(i+1)), FDBKey: getFDBKey(table, BuildKey("p2", int64(i+1)))}, v[i+5])
+	}
 	_ = tx.Commit(ctx)
 
 	err = kv.DropTable(ctx, table)

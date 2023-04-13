@@ -40,7 +40,7 @@ func (q *Queue) Get(collectionName string) *QueueDocuments {
 	return q.collectionToDocument[collectionName]
 }
 
-func (q *Queue) Add(collectionName string, doc *Document) {
+func (q *Queue) Add(collectionName string, doc IDocument) {
 	q.Lock()
 	defer q.Unlock()
 
@@ -52,19 +52,19 @@ type QueueDocuments struct {
 	sync.Mutex
 
 	Collection string
-	Documents  map[int64]*Document
+	Documents  map[int64]IDocument
 }
 
 func NewQueueDocuments(collection string) *QueueDocuments {
 	return &QueueDocuments{
 		Collection: collection,
-		Documents:  make(map[int64]*Document),
+		Documents:  make(map[int64]IDocument),
 	}
 }
 
-func (q *QueueDocuments) Add(doc *Document) {
+func (q *QueueDocuments) Add(doc IDocument) {
 	q.Lock()
 	defer q.Unlock()
 
-	q.Documents[doc.F1] = doc
+	q.Documents[doc.ID()] = doc
 }

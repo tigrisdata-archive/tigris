@@ -87,6 +87,7 @@ type AuthConfig struct {
 	Gotrue                     Gotrue                `mapstructure:"gotrue" yaml:"gotrue" json:"gotrue"`
 	NamespaceLocalization      NamespaceLocalization `mapstructure:"namespace_localization" yaml:"namespace_localization" json:"namespace_localization"`
 	EnableNamespaceDeletion    bool                  `mapstructure:"enable_namespace_deletion" yaml:"enable_namespace_deletion" json:"enable_namespace_deletion"`
+	EnableNamespaceCreation    bool                  `mapstructure:"enable_namespace_creation" yaml:"enable_namespace_creation" json:"enable_namespace_creation"`
 }
 
 type ClusterConfig struct {
@@ -133,15 +134,16 @@ type JaegerTracingConfig struct {
 }
 
 type MetricsConfig struct {
-	Enabled        bool                      `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	TimerQuantiles []float64                 `mapstructure:"quantiles" yaml:"quantiles" json:"quantiles"`
-	Requests       RequestsMetricGroupConfig `mapstructure:"requests" yaml:"requests" json:"requests"`
-	Fdb            FdbMetricGroupConfig      `mapstructure:"fdb" yaml:"fdb" json:"fdb"`
-	Search         SearchMetricGroupConfig   `mapstructure:"search" yaml:"search" json:"search"`
-	Session        SessionMetricGroupConfig  `mapstructure:"session" yaml:"session" json:"session"`
-	Size           SizeMetricGroupConfig     `mapstructure:"size" yaml:"size" json:"size"`
-	Network        NetworkMetricGroupConfig  `mapstructure:"network" yaml:"network" json:"network"`
-	Auth           AuthMetricsConfig         `mapstructure:"auth" yaml:"auth" json:"auth"`
+	Enabled        bool                        `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	TimerQuantiles []float64                   `mapstructure:"quantiles" yaml:"quantiles" json:"quantiles"`
+	Requests       RequestsMetricGroupConfig   `mapstructure:"requests" yaml:"requests" json:"requests"`
+	Fdb            FdbMetricGroupConfig        `mapstructure:"fdb" yaml:"fdb" json:"fdb"`
+	Search         SearchMetricGroupConfig     `mapstructure:"search" yaml:"search" json:"search"`
+	Session        SessionMetricGroupConfig    `mapstructure:"session" yaml:"session" json:"session"`
+	Size           SizeMetricGroupConfig       `mapstructure:"size" yaml:"size" json:"size"`
+	Network        NetworkMetricGroupConfig    `mapstructure:"network" yaml:"network" json:"network"`
+	Auth           AuthMetricsConfig           `mapstructure:"auth" yaml:"auth" json:"auth"`
+	SecondaryIndex SecondaryIndexMetricsConfig `mapstructure:"secondary_index" yaml:"secondary_index" json:"secondary_index"`
 }
 
 type TimerConfig struct {
@@ -198,6 +200,13 @@ type NetworkMetricGroupConfig struct {
 type AuthMetricsConfig struct {
 	Enabled      bool     `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 	FilteredTags []string `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
+}
+
+type SecondaryIndexMetricsConfig struct {
+	Enabled      bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Counter      CounterConfig `mapstructure:"counter" yaml:"counter" json:"counter"`
+	Timer        TimerConfig   `mapstructure:"timer" yaml:"timer" json:"timer"`
+	FilteredTags []string      `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
 }
 
 type ProfilingConfig struct {
@@ -273,6 +282,7 @@ var DefaultConfig = Config{
 		},
 		NamespaceLocalization:   NamespaceLocalization{Enabled: false},
 		EnableNamespaceDeletion: false,
+		EnableNamespaceCreation: true,
 	},
 	Billing: Billing{
 		Metronome: Metronome{
@@ -349,6 +359,18 @@ var DefaultConfig = Config{
 			FilteredTags: nil,
 		},
 		Search: SearchMetricGroupConfig{
+			Enabled: true,
+			Counter: CounterConfig{
+				OkEnabled:    true,
+				ErrorEnabled: true,
+			},
+			Timer: TimerConfig{
+				TimerEnabled:     true,
+				HistogramEnabled: false,
+			},
+			FilteredTags: nil,
+		},
+		SecondaryIndex: SecondaryIndexMetricsConfig{
 			Enabled: true,
 			Counter: CounterConfig{
 				OkEnabled:    true,

@@ -36,9 +36,11 @@ const (
 	KvTracingServiceName      string = "kv"
 	TraceServiceName          string = "tigris.grpc.server"
 	SessionManagerServiceName string = "session"
+	SecondaryIndexServiceName string = "secondaryindex"
 	GrpcSpanType              string = "grpc"
 	FdbSpanType               string = "fdb"
 	SearchSpanType            string = "search"
+	SecondaryIndexSpanType    string = "secondary_index"
 	SessionSpanType           string = "session"
 	AuthSpanType              string = "auth"
 )
@@ -154,6 +156,14 @@ func (m *Measurement) GetSearchOkTags() map[string]string {
 
 func (m *Measurement) GetSearchErrorTags(err error) map[string]string {
 	return filterTags(standardizeTags(mergeTags(m.tags, getTagsForError(err)), getSearchErrorTagKeys()), config.DefaultConfig.Metrics.Search.FilteredTags)
+}
+
+func (m *Measurement) GetSecondaryIndexOkTags() map[string]string {
+	return filterTags(standardizeTags(m.tags, getSecondaryIndexOkTagKeys()), config.DefaultConfig.Metrics.SecondaryIndex.FilteredTags)
+}
+
+func (m *Measurement) GetSecondaryIndexErrorTags(err error) map[string]string {
+	return filterTags(standardizeTags(mergeTags(m.tags, getTagsForError(err)), getSecondaryIndexErrorTagKeys()), config.DefaultConfig.Metrics.SecondaryIndex.FilteredTags)
 }
 
 func (m *Measurement) GetSessionOkTags() map[string]string {

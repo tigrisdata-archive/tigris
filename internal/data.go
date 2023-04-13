@@ -16,12 +16,14 @@ package internal
 
 import (
 	"bytes"
+	"encoding/binary"
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tigrisdata/tigris/errors"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/ugorji/go/codec"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -35,16 +37,14 @@ var (
 
 var bh codec.BincHandle
 
-// DataType is to define the different data types for the data stored in the storage engine.
-type DataType byte
-
 // Note: Do not change the order. Order is important because encoder is adding the type as the first byte. Check the
 // Encode/Decode method to see how it is getting used.
 const (
-	Unknown DataType = iota
+	_ byte = iota
 	TableDataType
 	CacheDataType
 	StreamDataType
+	TableDataProtoType
 )
 
 type UserDataEncType int8
@@ -179,22 +179,59 @@ func (x *TableData) SetTotalChunks(chunkSize int32) {
 // Encode is used to encode data to the raw bytes which is used to store in storage as value. The first byte is storing
 // the type corresponding to this Data. This is important and used by the decoder later to decode back.
 func Encode(data *TableData) ([]byte, error) {
-	return encodeInternal(data, TableDataType)
+	return encodeInternalProto(data)
 }
 
-func encodeInternal(data interface{}, typ DataType) ([]byte, error) {
+func encodeInternal(data any, dataType byte) ([]byte, error) {
 	var buf bytes.Buffer
+
 	// this is added so that we can evolve the DataTypes and have more dataTypes in future
-	err := buf.WriteByte(byte(typ))
-	if err != nil {
+	if err := buf.WriteByte(dataType); err != nil {
 		return nil, err
 	}
+
 	enc := codec.NewEncoder(&buf, &bh)
 	if err := enc.Encode(data); ulog.E(err) {
 		return nil, err
 	}
 
 	return buf.Bytes(), nil
+}
+
+func encodeInternalProto(data *TableData) ([]byte, error) {
+	var buf bytes.Buffer
+
+	// one byte of data type and two bytes is proto length placeholder
+	// which is used to calculate payload of offset in the buffer.
+	if _, err := buf.Write([]byte{TableDataProtoType, 0x00, 0x00}); err != nil {
+		return nil, err
+	}
+
+	// remember and clear payload field in the input
+	payload := data.RawData
+	data.RawData = nil
+
+	md, err := proto.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+
+	data.RawData = payload // restore the payload
+
+	if _, err = buf.Write(md); err != nil {
+		return nil, err
+	}
+
+	if _, err = buf.Write(payload); err != nil {
+		return nil, err
+	}
+
+	b := buf.Bytes()
+
+	// fill the marshalled proto message size
+	binary.BigEndian.PutUint16(b[1:], uint16(len(md)))
+
+	return b, nil
 }
 
 // Decode is used to decode the raw bytes to TableData. The raw bytes are returned from the storage and the kvStore is
@@ -204,20 +241,38 @@ func Decode(b []byte) (*TableData, error) {
 		return nil, errors.Internal("unable to decode table data is empty")
 	}
 
-	dataType := DataType(b[0])
-	return decodeInternal(dataType, b[1:])
-}
-
-func decodeInternal(dataType DataType, encoded []byte) (*TableData, error) {
-	dec := codec.NewDecoderBytes(encoded, &bh)
-
-	if dataType == TableDataType {
-		var v *TableData
-		if err := dec.Decode(&v); err != nil {
-			return nil, err
-		}
-		return v, nil
+	switch b[0] {
+	case TableDataType:
+		return decodeInternal(b[1:])
+	case TableDataProtoType:
+		return decodeInternalProto(b[1:])
 	}
 
-	return nil, errors.Internal("unable to decode '%v'", dataType)
+	return nil, errors.Internal("unable to decode '%v'", b[0])
+}
+
+func decodeInternal(encoded []byte) (*TableData, error) {
+	dec := codec.NewDecoderBytes(encoded, &bh)
+
+	var v *TableData
+
+	if err := dec.Decode(&v); err != nil {
+		return nil, err
+	}
+
+	return v, nil
+}
+
+func decodeInternalProto(encoded []byte) (*TableData, error) {
+	length := binary.BigEndian.Uint16(encoded) // get the length of the proto message
+
+	var v TableData
+
+	if err := proto.Unmarshal(encoded[2:length+2], &v); err != nil {
+		return nil, err
+	}
+
+	v.RawData = encoded[length+2:] // put a pointer to the payload in the buffer
+
+	return &v, nil
 }

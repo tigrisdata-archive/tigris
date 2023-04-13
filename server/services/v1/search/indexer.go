@@ -86,6 +86,12 @@ func (transformer *transformer) transformStart(rawDoc []byte, doc map[string]any
 		return "", errors.InvalidArgument("empty 'id' is not allowed")
 	}
 
+	if _, err := transformer.converter.Convert(doc, transformer.index.GetInt64FieldsPath()); err != nil {
+		// User may have an explicit "id" field in the schema which is integer, but it is not a document "id" field
+		// so we need to first do any conversion before we change it to "_tigris_id".
+		return "", err
+	}
+
 	if transformer.index.SearchIDField != nil && transformer.index.SearchIDField.FieldName != schema.SearchId {
 		// if user has "id" field as value then change it to _tigris_id field so that it doesn't clash with search "id"
 		// This is only done in case explicitly "@id" tag is set in the schema.
@@ -107,10 +113,6 @@ func (transformer *transformer) transformEnd(doc map[string]any) (map[string]any
 		if f.DoNotFlatten {
 			doNotFlatten.Insert(f.FieldName)
 		}
-	}
-
-	if _, err := transformer.converter.Convert(doc, transformer.index.GetInt64FieldsPath()); err != nil {
-		return nil, err
 	}
 
 	doc = util.FlatMap(doc, doNotFlatten)

@@ -37,6 +37,10 @@ type QueryableField struct {
 	DoNotFlatten  bool
 	Dimensions    *int
 	SearchIdField bool
+	// This is not stored in flattened form in search
+	// but will allow filtering on array of objects.
+	// ToDo: With secondary indexes on array of objects we need to revisit this.
+	AllowedNestedQFields []*QueryableField
 }
 
 // InMemoryName returns key name that is used to index this field in the indexing store. For example, an "id" key is indexed with
@@ -126,6 +130,30 @@ func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, 
 		Indexed:       f.IsIndexable(),
 		Dimensions:    f.Dimensions,
 		SearchIdField: f.IsSearchId(),
+	}
+	if !packThis && f.DataType == ArrayType && len(f.Fields) > 0 && f.Fields[0].DataType == ObjectType {
+		// An array of objects stored in search, we need to allow filtering on nested fields inside this object
+		// but we are not flattening this array so we are just filling the parent with nested fields.
+		for _, nested := range f.Fields[0].Fields {
+			subType := UnknownType
+			if nested.DataType == ArrayType && len(nested.Fields) > 0 && (nested.Fields[0].DataType == ObjectType || nested.Fields[0].DataType == ArrayType) {
+				// ignoring: array of objects with a nested object OR array of array
+				continue
+			}
+			if nested.DataType == ArrayType && len(nested.Fields) > 0 {
+				subType = nested.Fields[0].DataType
+			}
+
+			name := f.Name() + "." + nested.FieldName
+			q.AllowedNestedQFields = append(q.AllowedNestedQFields, &QueryableField{
+				FieldName:     name,
+				InMemoryAlias: name,
+				SearchIndexed: true,
+				DataType:      nested.DataType,
+				SubType:       subType,
+				SearchType:    toSearchFieldType(nested.DataType, UnknownType),
+			})
+		}
 	}
 
 	if searchIndexed != nil && *searchIndexed {

@@ -213,6 +213,11 @@ func (s *SearchIndex) GetQueryableField(name string) (*QueryableField, error) {
 		if qf.Name() == name {
 			return qf, nil
 		}
+		for _, nested := range qf.AllowedNestedQFields {
+			if nested.Name() == name {
+				return nested, nil
+			}
+		}
 	}
 	return nil, errors.InvalidArgument("Field `%s` is not present in collection", name)
 }

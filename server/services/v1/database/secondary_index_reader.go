@@ -29,7 +29,7 @@ import (
 
 var PrimaryKeyPos = 6
 
-type SecondaryIndexReader struct {
+type SecondaryIndexReaderImpl struct {
 	ctx       context.Context
 	coll      *schema.DefaultCollection
 	filter    *filter.WrappedFilter
@@ -39,8 +39,8 @@ type SecondaryIndexReader struct {
 	kvIter    Iterator
 }
 
-func NewSecondaryIndexReader(ctx context.Context, tx transaction.Tx, coll *schema.DefaultCollection, filter *filter.WrappedFilter, queryPlan *filter.QueryPlan) (*SecondaryIndexReader, error) {
-	reader := &SecondaryIndexReader{
+func newSecondaryIndexReaderImpl(ctx context.Context, tx transaction.Tx, coll *schema.DefaultCollection, filter *filter.WrappedFilter, queryPlan *filter.QueryPlan) (*SecondaryIndexReaderImpl, error) {
+	reader := &SecondaryIndexReaderImpl{
 		ctx:       ctx,
 		tx:        tx,
 		coll:      coll,
@@ -52,7 +52,7 @@ func NewSecondaryIndexReader(ctx context.Context, tx transaction.Tx, coll *schem
 	return reader.createIter()
 }
 
-func (reader *SecondaryIndexReader) createIter() (*SecondaryIndexReader, error) {
+func (reader *SecondaryIndexReaderImpl) createIter() (*SecondaryIndexReaderImpl, error) {
 	var err error
 
 	log.Debug().Msgf("Query Plan Keys %v", reader.queryPlan.GetKeyInterfaceParts())
@@ -132,7 +132,7 @@ func indexedDataType(queryPlan filter.QueryPlan) bool {
 	}
 }
 
-func (it *SecondaryIndexReader) Next(row *Row) bool {
+func (it *SecondaryIndexReaderImpl) Next(row *Row) bool {
 	if it.err != nil {
 		return false
 	}
@@ -169,13 +169,13 @@ func (it *SecondaryIndexReader) Next(row *Row) bool {
 	return false
 }
 
-func (it *SecondaryIndexReader) Interrupted() error { return it.err }
+func (it *SecondaryIndexReaderImpl) Interrupted() error { return it.err }
 
 // For local debugging and testing.
 //
 //nolint:unused
-func (it *SecondaryIndexReader) dbgPrintIndex() {
-	indexer := NewSecondaryIndexer(it.coll)
+func (it *SecondaryIndexReaderImpl) dbgPrintIndex() {
+	indexer := newSecondaryIndexerImpl(it.coll)
 	tableIter, err := indexer.scanIndex(it.ctx, it.tx)
 	if err != nil {
 		panic(err)
