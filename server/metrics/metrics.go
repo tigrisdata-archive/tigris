@@ -27,18 +27,19 @@ import (
 )
 
 var (
-	root           tally.Scope
-	Reporter       promreporter.Reporter
-	Requests       tally.Scope
-	FdbMetrics     tally.Scope
-	SearchMetrics  tally.Scope
-	SessionMetrics tally.Scope
-	SizeMetrics    tally.Scope
-	QuotaMetrics   tally.Scope
-	NetworkMetrics tally.Scope
-	AuthMetrics    tally.Scope
-	SchemaMetrics  tally.Scope
-	GlobalSt       *GlobalStatus
+	root                  tally.Scope
+	Reporter              promreporter.Reporter
+	Requests              tally.Scope
+	FdbMetrics            tally.Scope
+	SearchMetrics         tally.Scope
+	SecondaryIndexMetrics tally.Scope
+	SessionMetrics        tally.Scope
+	SizeMetrics           tally.Scope
+	QuotaMetrics          tally.Scope
+	NetworkMetrics        tally.Scope
+	AuthMetrics           tally.Scope
+	SchemaMetrics         tally.Scope
+	GlobalSt              *GlobalStatus
 )
 
 func getVersion() string {
@@ -139,6 +140,12 @@ func InitializeMetrics() func() {
 			// Auth metrics
 			AuthMetrics = root.SubScope("auth")
 			initializeAuthScopes()
+		}
+
+		if cfg.SecondaryIndex.Enabled {
+			// Secondary Index metrics
+			SecondaryIndexMetrics = root.SubScope("secondary_index")
+			initializeSecondaryIndexScopes()
 		}
 
 		initializeQuotaScopes()
