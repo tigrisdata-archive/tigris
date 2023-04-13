@@ -22,7 +22,7 @@ import (
 
 const (
 	EventTypeUsage   string = "usage"
-	EventTypeStorage        = "storage"
+	EventTypeStorage string = "storage"
 )
 
 type UsageEvent struct {

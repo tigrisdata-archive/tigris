@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//       http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -34,7 +34,6 @@ type UsageReporter struct {
 	interval   time.Duration
 	tenantMgr  metadata.NamespaceMetadataMgr
 	ctx        context.Context
-	cancel     context.CancelFunc
 }
 
 func NewUsageReporter(gs metrics.UsageProvider, tm metadata.NamespaceMetadataMgr, billing Provider) (*UsageReporter, error) {
@@ -61,7 +60,7 @@ func (r *UsageReporter) refreshLoop() {
 	log.Info().Dur("refresh_interval", r.interval).Msg("Starting usage reporter")
 	t := time.NewTicker(r.interval)
 	defer t.Stop()
-	for _ = range t.C {
+	for range t.C {
 		ulog.E(r.push())
 	}
 }
@@ -75,7 +74,7 @@ func (r *UsageReporter) push() error {
 	}
 
 	trxnSuffix := strconv.FormatInt(chunk.EndTime.Unix(), 10)
-	var events []*UsageEvent
+	events := make([]*UsageEvent, 0, len(chunk.Tenants))
 
 	for namespaceId, stats := range chunk.Tenants {
 		nsMeta := r.tenantMgr.GetNamespaceMetadata(r.ctx, namespaceId)

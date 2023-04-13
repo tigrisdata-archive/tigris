@@ -27,13 +27,13 @@ import (
 	"github.com/tigrisdata/tigris/server/muxer"
 	"github.com/tigrisdata/tigris/server/quota"
 	"github.com/tigrisdata/tigris/server/request"
+	"github.com/tigrisdata/tigris/server/services/v1/billing"
 	"github.com/tigrisdata/tigris/server/tracing"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
 	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
-	"github.com/tigrisdata/tigris/server/services/v1/billing"
 )
 
 func main() {

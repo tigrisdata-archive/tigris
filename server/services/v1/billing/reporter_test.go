@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//       http://www.apache.org/licenses/LICENSE-2.0
+//      http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -302,10 +302,10 @@ func (mock *MockBillingSvc) AddPlan(_ context.Context, _ MetronomeId, _ uuid.UUI
 
 func (mock *MockBillingSvc) PushUsageEvents(_ context.Context, events []*UsageEvent) error {
 	for _, e := range events {
-		if seen, ok := mock.pushUsageEventCalls[e.CustomerId]; !ok {
+		if _, ok := mock.pushUsageEventCalls[e.CustomerId]; !ok {
 			mock.pushUsageEventCalls[e.CustomerId] = []*UsageEvent{e}
 		} else {
-			seen = append(seen, e)
+			mock.pushUsageEventCalls[e.CustomerId] = append(mock.pushUsageEventCalls[e.CustomerId], e)
 		}
 	}
 
