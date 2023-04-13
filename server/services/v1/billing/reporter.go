@@ -15,37 +15,38 @@
 package billing
 
 import (
-	"github.com/tigrisdata/tigris/server/metrics"
-	"github.com/tigrisdata/tigris/server/config"
-	"github.com/rs/zerolog/log"
-	"time"
-	ulog "github.com/tigrisdata/tigris/util/log"
-	"github.com/tigrisdata/tigris/server/metadata"
 	"context"
 	"strconv"
+	"time"
+
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/metrics"
+	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 type UsageReporter struct {
-	glbState   *metrics.GlobalStatus
+	glbState   metrics.UsageProvider
 	billingSvc Provider
 	interval   time.Duration
-	tm         *metadata.TenantManager
+	tenantMgr  metadata.NamespaceMetadataMgr
 	ctx        context.Context
 	cancel     context.CancelFunc
 }
 
-func NewUsageReporter(gs *metrics.GlobalStatus, tm *metadata.TenantManager) (*UsageReporter, error) {
+func NewUsageReporter(gs metrics.UsageProvider, tm metadata.NamespaceMetadataMgr, billing Provider) (*UsageReporter, error) {
 	if gs == nil || tm == nil {
 		return nil, errors.Internal("usage reporter cannot be initialized")
 	}
 
 	return &UsageReporter{
 		glbState:   gs,
-		billingSvc: NewProvider(),
+		billingSvc: billing,
 		interval:   config.DefaultConfig.Billing.Reporter.RefreshInterval,
-		tm:         tm,
+		tenantMgr:  tm,
 		ctx:        context.Background(),
 	}, nil
 }
@@ -76,25 +77,32 @@ func (r *UsageReporter) push() error {
 	trxnSuffix := strconv.FormatInt(chunk.EndTime.Unix(), 10)
 	var events []*UsageEvent
 
-	for tenantName, stats := range chunk.Tenants {
-		tenant, err := r.tm.GetTenant(r.ctx, tenantName)
-		if err != nil {
-			return err
+	for namespaceId, stats := range chunk.Tenants {
+		nsMeta := r.tenantMgr.GetNamespaceMetadata(r.ctx, namespaceId)
+		if nsMeta == nil {
+			log.Error().Msgf("invalid namespace id %s", namespaceId)
+			continue
 		}
-		nsMeta := tenant.GetNamespace().Metadata()
 
 		// create account if not yet
 		_, enabled := nsMeta.Accounts.GetMetronomeId()
 		if !enabled {
-			log.Info().Msg("creating Metronome account")
+			log.Info().Msgf("creating Metronome account for %s", namespaceId)
+
 			billingId, err := r.billingSvc.CreateAccount(r.ctx, nsMeta.StrId, nsMeta.Name)
 			if !ulog.E(err) && billingId != uuid.Nil {
 				nsMeta.Accounts.AddMetronome(billingId.String())
-				// todo: save namespace metadata
 
+				// add default plan to the user
 				added, err := r.billingSvc.AddDefaultPlan(r.ctx, billingId)
 				if err != nil || !added {
-					log.Error().Err(err).Msg("error adding default plan to customer")
+					log.Error().Err(err).Msgf("error adding default plan to user id %s", namespaceId)
+				}
+
+				// save updated namespace metadata
+				err = r.tenantMgr.UpdateNamespaceMetadata(r.ctx, *nsMeta)
+				if err != nil {
+					log.Error().Err(err).Msgf("error saving metadata for user %s", namespaceId)
 				}
 				// continue to send event, metronome will disregard it if account does not exist
 			}
@@ -109,10 +117,7 @@ func (r *UsageReporter) push() error {
 			Build()
 		events = append(events, event)
 
-		if err != nil {
-			return err
-		}
-		log.Debug().Msgf("reporting usage for %s -> %+v", tenantName, event)
+		log.Debug().Msgf("reporting usage for %s -> %+v", namespaceId, event)
 	}
 
 	err := r.billingSvc.PushUsageEvents(r.ctx, events)

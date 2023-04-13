@@ -45,6 +45,11 @@ type TenantGetter interface {
 	GetTenant(ctx context.Context, id string) (*Tenant, error)
 }
 
+type NamespaceMetadataMgr interface {
+	GetNamespaceMetadata(ctx context.Context, namespaceId string) *NamespaceMetadata
+	UpdateNamespaceMetadata(ctx context.Context, meta NamespaceMetadata) error
+}
+
 // TenantNamespace is used when there is a finer isolation of databases is needed. The caller provides a unique
 // id and strId to this namespace which is used by the cluster to create a namespace.
 type TenantNamespace struct {
@@ -232,6 +237,16 @@ func (m *TenantManager) GetNamespaceId(namespaceName string) (uint32, error) {
 	return tenant.namespace.Id(), nil
 }
 
+func (m *TenantManager) GetNamespaceMetadata(ctx context.Context, namespaceId string) *NamespaceMetadata {
+	tenant, err := m.GetTenant(ctx, namespaceId)
+	if err != nil {
+		return nil
+	}
+
+	meta := tenant.GetNamespace().Metadata()
+	return &meta
+}
+
 // GetTenant is responsible for returning the tenant from the cache. If the tenant is not available in the cache then
 // this method will attempt to load it from the database and will update the tenant manager cache accordingly.
 func (m *TenantManager) GetTenant(ctx context.Context, namespaceId string) (*Tenant, error) {
@@ -299,6 +314,39 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceId string) (*Ten
 	}
 
 	return tenant, nil
+}
+
+// UpdateNamespaceMetadata updates a namespace metadata for a tenant
+func (m *TenantManager) UpdateNamespaceMetadata(ctx context.Context, meta NamespaceMetadata) error {
+	var (
+		err error
+	)
+
+	m.Lock()
+	defer m.Unlock()
+
+	tx, err := m.txMgr.StartTx(ctx)
+	if err != nil {
+		return err
+	}
+
+	if _, found := m.tenants[meta.StrId]; !found {
+		return errors.NotFound("no tenant found with id %s", meta.StrId)
+	}
+
+	defer func() {
+		if err == nil {
+			tenant := m.tenants[meta.StrId]
+			if err = tx.Commit(ctx); err == nil && tenant != nil {
+				tenant.namespace = NewTenantNamespace(meta.StrId, meta)
+			}
+		} else {
+			log.Err(err).Str("ns", meta.StrId).Msg("Could not update namespace")
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	return m.metaStore.UpdateNamespace(ctx, tx, meta)
 }
 
 // ListNamespaces returns all the namespaces(tenants) exist in this cluster.

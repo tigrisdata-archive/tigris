@@ -29,6 +29,10 @@ var ignoredFieldsForWrites = [][]byte{
 	[]byte("_tigris_updated_at"),
 }
 
+type UsageProvider interface {
+	Flush() TenantStatusTimeChunk
+}
+
 type GlobalStatus struct {
 	mu          sync.Mutex
 	activeChunk *TenantStatusTimeChunk
