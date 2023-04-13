@@ -797,8 +797,32 @@ func buildExplainResp(options readerOptions, coll *schema.DefaultCollection, fil
 		Collection: coll.Name,
 		Filter:     string(filter),
 	}
+
 	if options.plan != nil {
 		explain.ReadType = SECONDARY
+		var keyRange []string
+		for _, key := range options.plan.Keys {
+			if len(key.IndexParts()) > 4 {
+				var friendlyVal string
+				val := key.IndexParts()[4]
+				switch val {
+				case nil:
+					friendlyVal = "null"
+				case 0xFF:
+					friendlyVal = "$TIGRIS_MAX"
+				default:
+					if encodedString, ok := val.([]byte); ok {
+						friendlyVal = string(encodedString)
+					} else {
+						friendlyVal = fmt.Sprint(val)
+					}
+				}
+				keyRange = append(keyRange, friendlyVal)
+			}
+		}
+
+		explain.KeyRange = keyRange
+		explain.Field = fmt.Sprint(options.plan.Keys[0].IndexParts()[2])
 		return explain
 	}
 	explain.ReadType = PRIMARY

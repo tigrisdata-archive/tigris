@@ -27,6 +27,8 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"golang.org/x/text/collate"
+	"golang.org/x/text/language"
 )
 
 func insertDocs(t *testing.T, db string, coll string, extra ...Doc) {
@@ -121,24 +123,29 @@ func TestQuery_EQ(t *testing.T) {
 	defer cleanupTests(t, db)
 
 	cases := []struct {
-		filter Map
-		ids    []int
+		filter   Map
+		ids      []int
+		keyRange []string
 	}{
 		{
 			Map{"int_value": 10},
 			[]int{1},
+			[]string{"10"},
 		},
 		{
 			Map{"bool_value": false},
 			[]int{2, 3, 30},
+			[]string{"false"},
 		},
 		{
 			Map{"bool_value": false, "int_value": 3},
 			[]int(nil),
+			[]string{"false"},
 		},
 		{
 			Map{"bool_value": false, "int_value": 30},
 			[]int{30},
+			[]string{"false"},
 		},
 		{
 			Map{
@@ -148,6 +155,7 @@ func TestQuery_EQ(t *testing.T) {
 				},
 			},
 			[]int{2},
+			[]string{"false"},
 		},
 		// {
 		// 	Map{
@@ -167,7 +175,8 @@ func TestQuery_EQ(t *testing.T) {
 		assert.Equal(t, len(query.ids), len(ids))
 		assert.Equal(t, query.ids, ids, query.filter)
 		explain := explainQuery(t, db, coll, query.filter, nil, nil, nil)
-		assert.Equal(t, explain.ReadType, "secondary index")
+		assert.Equal(t, query.keyRange, explain.KeyRange)
+		assert.Equal(t, "secondary index", explain.ReadType)
 	}
 }
 
@@ -175,18 +184,22 @@ func TestQuery_Range(t *testing.T) {
 	db, coll := setupTests(t)
 	insertDocs(t, db, coll)
 	defer cleanupTests(t, db)
+	max := "$TIGRIS_MAX"
 
 	cases := []struct {
-		filter Map
-		ids    []int
+		filter   Map
+		ids      []int
+		keyRange []string
 	}{
 		{
 			Map{"int_value": Map{"$gt": 0}},
 			[]int{2, 4, 1, 30, 3},
+			[]string{"0", max},
 		},
 		{
 			Map{"int_value": Map{"$lt": 30}},
 			[]int{2, 4, 1},
+			[]string{"null", "30"},
 		},
 		{
 			Map{
@@ -196,14 +209,17 @@ func TestQuery_Range(t *testing.T) {
 				},
 			},
 			[]int{30, 3},
+			[]string{"30", "100"},
 		},
 		{
 			Map{"string_value": Map{"$gt": "B"}},
 			[]int{2, 30, 4},
+			nil,
 		},
 		{
 			Map{"string_value": Map{"$lt": "G"}},
 			[]int{1, 3},
+			nil,
 		},
 		{
 			Map{
@@ -213,6 +229,7 @@ func TestQuery_Range(t *testing.T) {
 				},
 			},
 			[]int{2, 30},
+			nil,
 		},
 		{
 			Map{
@@ -222,50 +239,59 @@ func TestQuery_Range(t *testing.T) {
 				},
 			},
 			[]int{1, 4},
+			[]string{"true", "true"},
 		},
 		{
 			Map{
 				"bool_value": Map{"$gte": true},
 			},
 			[]int{1, 4},
+			[]string{"true", max},
 		},
 		{
 			Map{
 				"bool_value": Map{"$lte": true},
 			},
 			[]int{2, 3, 30, 1, 4},
+			[]string{"null", "true"},
 		},
 		{
 			Map{
 				"bool_value": Map{"$lt": true},
 			},
 			[]int{2, 3, 30},
+			[]string{"null", "true"},
 		},
 		{
 			Map{
 				"bool_value": Map{"$gte": false},
 			},
 			[]int{2, 3, 30, 1, 4},
+			[]string{"false", max},
 		},
 		{
 			Map{
 				"bool_value": Map{"$lte": false},
 			},
 			[]int{2, 3, 30},
+			[]string{"null", "false"},
 		},
 		{
 			Map{
 				"bool_value": Map{"$lt": true},
 			},
 			[]int{2, 3, 30},
+			[]string{"null", "true"},
 		},
 		{
 			Map{"double_value": Map{"$gt": 10}},
 			[]int{1, 4, 3},
+			[]string{"10", max},
 		},
 		{
 			Map{"double_value": Map{"$lt": 26}},
 			[]int{2, 30, 1, 4},
+			[]string{"null", "26"},
 		},
 		{
 			Map{
@@ -275,18 +301,22 @@ func TestQuery_Range(t *testing.T) {
 				},
 			},
 			[]int{1, 4},
+			[]string{"10.01", "1000"},
 		},
 		{
 			Map{"date_time_value": Map{"$gt": "2015-12.22T17:42:34Z"}},
 			[]int{2, 4},
+			[]string{"2015-12.22T17:42:34Z", max},
 		},
 		{
 			Map{"date_time_value": Map{"$lt": "2015-12.22T17:42:34Z"}},
 			[]int{3, 30, 1},
+			[]string{"null", "2015-12.22T17:42:34Z"},
 		},
 		{
 			Map{"_tigris_created_at": Map{"$gt": "2022-12.22T17:42:34Z"}},
 			[]int{1, 2, 3, 4, 30},
+			[]string{"2022-12.22T17:42:34Z", max},
 		},
 		{
 			Map{
@@ -296,6 +326,7 @@ func TestQuery_Range(t *testing.T) {
 				},
 			},
 			[]int{3, 30, 1},
+			[]string{"2013-11-01T17:42:34Z", "2015-12.22T17:42:34Z"},
 		},
 	}
 
@@ -305,8 +336,30 @@ func TestQuery_Range(t *testing.T) {
 		assert.Equal(t, len(query.ids), len(ids), query.filter)
 		assert.Equal(t, query.ids, ids, query.filter)
 		explain := explainQuery(t, db, coll, query.filter, nil, nil, nil)
-		assert.Equal(t, explain.ReadType, "secondary index")
+		if query.keyRange != nil {
+			assert.Equal(t, query.keyRange, explain.KeyRange)
+		}
+
+		fieldName := firstFilterName(query.filter)
+		if fieldName != "" {
+			assert.Equal(t, fieldName, explain.Field, query.filter)
+		}
+		assert.Equal(t, "secondary index", explain.ReadType)
 	}
+}
+
+func firstFilterName(filter Map) string {
+	fieldName := ""
+	for k := range filter {
+		if k == "$and" {
+			return ""
+		} else {
+			fieldName = k
+		}
+		break
+	}
+
+	return fieldName
 }
 
 func TestQuery_RangeWithNull(t *testing.T) {
@@ -776,4 +829,17 @@ func checkIndexesActive(t *testing.T, indexes []*api.CollectionIndex) {
 	for _, idx := range indexes {
 		assert.Equal(t, "INDEX ACTIVE", idx.State)
 	}
+}
+
+func stringEncoder(input string) string {
+	inputBytes := []byte(input)
+
+	if len(inputBytes) > 64 {
+		inputBytes = inputBytes[:64]
+	}
+
+	collator := collate.New(language.English)
+	var buf collate.Buffer
+
+	return string(collator.Key(&buf, inputBytes))
 }
