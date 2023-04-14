@@ -22,6 +22,7 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/lib/date"
 	tsApi "github.com/tigrisdata/typesense-go/typesense/api"
 )
@@ -104,6 +105,122 @@ func TestSearchHit_isFieldMissingOrNil(t *testing.T) {
 			assert.False(t, searchHit.isFieldMissingOrNil(f))
 		}
 	})
+}
+
+func TestMatchedFields(t *testing.T) {
+	cases := []struct {
+		resp       []byte
+		expMatched []string
+	}{
+		{
+			[]byte(`{
+"results": [{
+		"hits": [{
+            "document": {},
+			"highlight": {
+				"arr_obj": [{
+					"domain": { "matched_tokens": [], "snippet": "regional24-7.com"},
+					"arr": [{"matched_tokens": [], "snippet": "Daihatsu"}, {"matched_tokens": [],"snippet": "Chrysler"}]
+				}, {
+					"domain": { "matched_tokens": [], "snippet": "internalorchestrate.name"},
+					"arr": [{"matched_tokens": ["Dino"],"snippet": "<mark>Dino</mark>"}, {"matched_tokens": [],"snippet": "Skoda"}, {"matched_tokens": ["Dino"],"snippet": "<mark>Dino</mark>"}]
+				}, {
+					"domain": {"matched_tokens": [],"snippet": "nationalincubate.net"},
+					"arr": [{"matched_tokens": [],"snippet": "Daewoo"}, {"matched_tokens": [],"snippet": "Cadillac"}]
+				}]
+			}
+		}, {
+            "document": {},
+			"highlight": {
+				"arr_obj": [{
+					"domain": {"matched_tokens": [],"snippet": "internalorchestrate.name"},
+					"arr": [{"matched_tokens": ["Dino"],"snippet": "<mark>Dino</mark>"}, {"matched_tokens": [],"snippet": "Skoda"}, {"matched_tokens": ["Dino"],"snippet": "<mark>Dino</mark>"}]
+				}, {
+					"domain": {	"matched_tokens": [],"snippet": "globalstrategic.net"},
+					"arr": [{"matched_tokens": [],"snippet": "Skoda"}, {"matched_tokens": [],"snippet": "Volkswagen"}, {"matched_tokens": ["Dino"],"snippet": "<mark>Dino</mark>"}]
+				}]
+			}
+		}]
+	}]
+}`),
+			[]string{"arr_obj.arr", "arr_obj.arr", "arr_obj.arr"},
+		}, {
+			[]byte(`{
+	"results": [{
+		"hits": [{
+            "document": {},
+ 			"highlight": {
+ 				"nested.address.city": {
+ 					"matched_tokens": ["Omaha"],
+ 					"snippet": "<mark>Omaha</mark>"
+ 				}
+ 			}
+		}]
+	}]
+}`),
+			[]string{"nested.address.city"},
+		}, {
+			[]byte(`{
+	"results": [{
+		"hits": [{
+            "document": {},
+            "highlight": {
+				"arr_obj": [{
+					"domain": {"matched_tokens": ["regional24-7.com"], "snippet": "<mark>regional24-7.com</mark>"},
+					"arr": [{"matched_tokens": [], "snippet": "Chrysler"}]
+				}, {
+					"domain": {"matched_tokens": [],"snippet": "internalorchestrate.name"},
+					"arr": [{"matched_tokens": [],"snippet": "Dino"}]
+				}] 
+			}
+		}]
+	}]
+}`),
+			[]string{"arr_obj.domain"},
+		},
+		{
+			[]byte(`{
+	"results": [{
+		"hits": [{
+            "document": {},
+            "highlight": {
+				"arr_obj": [{
+					"domain": { "matched_tokens": [], "snippet": "regional24-7.com"},
+					"arr": [{"matched_tokens": [], "snippet": "Daihatsu"}]
+				}, {
+					"domain": { "matched_tokens": [], "snippet": "internalorchestrate.name"},
+					"arr": [{"matched_tokens": ["Dino"],"snippet": "<mark>Dino</mark>"}]
+				}],
+				"commands_obj.name": {
+					"matched_tokens": ["dino"],
+					"snippet": "<mark>dino</mark>"
+				},
+				"name": {
+					"matched_tokens": ["dino"],
+					"snippet": "<mark>dino</mark>"
+				}
+			}
+		}]
+	}]
+}`),
+			[]string{"arr_obj.arr", "commands_obj.name", "name"},
+		},
+	}
+	for _, c := range cases {
+		var actualMatched []string
+		var dest tsApi.MultiSearchResult
+		require.NoError(t, jsoniter.Unmarshal(c.resp, &dest))
+		for _, d := range dest.Results {
+			for i := range *d.Hits {
+				h := NewSearchHit(&(*d.Hits)[i])
+				for _, m := range h.Match.Fields {
+					actualMatched = append(actualMatched, m.Name)
+				}
+			}
+		}
+
+		require.Equal(t, c.expMatched, actualMatched)
+	}
 }
 
 func dateFrom(dateStr string) int64 {
