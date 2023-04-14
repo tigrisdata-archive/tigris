@@ -20,6 +20,11 @@ import (
 	biller "github.com/tigrisdata/metronome-go-client"
 )
 
+const (
+	EventTypeUsage   string = "usage"
+	EventTypeStorage string = "storage"
+)
+
 type UsageEvent struct {
 	biller.Event
 }
@@ -63,7 +68,7 @@ func (ub *UsageEventBuilder) WithSearchUnits(value int64) *UsageEventBuilder {
 
 func (ub *UsageEventBuilder) Build() *UsageEvent {
 	billingMetric := &UsageEvent{}
-	billingMetric.EventType = "usage"
+	billingMetric.EventType = EventTypeUsage
 	billingMetric.CustomerId = ub.namespaceId
 	billingMetric.TransactionId = ub.transactionId
 	billingMetric.Timestamp = ub.timestamp
@@ -124,7 +129,7 @@ func (sb *StorageEventBuilder) WithIndexBytes(value int64) *StorageEventBuilder 
 
 func (sb *StorageEventBuilder) Build() *StorageEvent {
 	billingMetric := &StorageEvent{}
-	billingMetric.EventType = "storage"
+	billingMetric.EventType = EventTypeStorage
 	billingMetric.CustomerId = sb.namespaceId
 	billingMetric.TransactionId = sb.transactionId
 	billingMetric.Timestamp = sb.timestamp

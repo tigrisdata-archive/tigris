@@ -19,6 +19,8 @@ import (
 	"net/http"
 	"time"
 
+	"fmt"
+
 	"github.com/deepmap/oapi-codegen/pkg/securityprovider"
 	"github.com/google/uuid"
 	biller "github.com/tigrisdata/metronome-go-client"
@@ -119,16 +121,31 @@ func (m *Metronome) pushBillingEvents(ctx context.Context, events []biller.Event
 		return nil
 	}
 
-	// content encoding - gzip?
-	body := events
-	resp, err := m.client.IngestWithResponse(ctx, body)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode() != http.StatusOK {
-		return errors.Internal("metronome failure: %s", resp.Body)
+	// todo: let page size be a const
+	pageSize := 100
+	pages := len(events) / pageSize
+	if len(events)%pageSize > 0 {
+		pages += 1
 	}
 
+	for p := 0; p < pages; p++ {
+		high := (p + 1) * pageSize
+		if high > len(events) {
+			high = len(events)
+		}
+
+		page := events[p*pageSize : high]
+
+		// content encoding - gzip?
+		resp, err := m.client.IngestWithResponse(ctx, page)
+		if err != nil {
+			return err
+		}
+		if resp.StatusCode() != http.StatusOK {
+			return NewMetronomeError(resp.StatusCode(), string(resp.Body))
+		}
+
+	}
 	return nil
 }
 
@@ -136,4 +153,20 @@ func pastMidnight() time.Time {
 	now := time.Now().UTC()
 	yyyy, mm, dd := now.Date()
 	return time.Date(yyyy, mm, dd, 0, 0, 0, 0, time.UTC)
+}
+
+type MetronomeError struct {
+	HttpCode int
+	Message  string
+}
+
+func (e *MetronomeError) Error() string {
+	return fmt.Sprintf("HTTP %d: %s", e.HttpCode, e.Message)
+}
+
+func NewMetronomeError(code int, message string) *MetronomeError {
+	return &MetronomeError{
+		HttpCode: code,
+		Message:  message,
+	}
 }

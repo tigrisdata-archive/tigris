@@ -34,3 +34,11 @@ func (n *noop) AddDefaultPlan(ctx context.Context, accountId MetronomeId) (bool,
 func (*noop) AddPlan(_ context.Context, _ MetronomeId, _ uuid.UUID) (bool, error) {
 	return false, errors.Unimplemented("billing not enabled on this server")
 }
+
+func (*noop) PushUsageEvents(_ context.Context, _ []*UsageEvent) error {
+	return errors.Unimplemented("billing not enabled on this server")
+}
+
+func (*noop) PushStorageEvents(_ context.Context, _ []*StorageEvent) error {
+	return errors.Unimplemented("billing not enabled on this server")
+}

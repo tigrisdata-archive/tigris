@@ -229,6 +229,31 @@ func (r *reservedSubspace) reserveNamespace(ctx context.Context, tx transaction.
 	return err
 }
 
+func (r *reservedSubspace) updateNamespace(ctx context.Context, tx transaction.Tx, namespaceMetadata NamespaceMetadata) error {
+	if len(namespaceMetadata.StrId) == 0 {
+		return errors.InvalidArgument("namespaceId is empty")
+	}
+	if namespaceMetadata.Id < 1 {
+		return errors.InvalidArgument("id should be greater than 0, received %d", namespaceMetadata.Id)
+	}
+	if err := r.reload(ctx, tx); ulog.E(err) {
+		return err
+	}
+	if _, ok := r.idToNamespaceStruct[namespaceMetadata.Id]; !ok {
+		return errors.NotFound("no namespace exists for id %s", namespaceMetadata.StrId)
+	}
+
+	key := keys.NewKey(r.ReservedSubspaceName(), namespaceKey, namespaceMetadata.StrId, keyEnd)
+	payload, err := jsoniter.Marshal(namespaceMetadata)
+	if err != nil {
+		return err
+	}
+	err = tx.Replace(ctx, key, internal.NewTableDataWithVersion(payload, nsMetaValueVersion), true)
+	log.Debug().Err(err).Str("key", key.String()).Uint32("value", namespaceMetadata.Id).Msg("updated namespace metadata")
+
+	return r.reload(ctx, tx)
+}
+
 func (r *reservedSubspace) allocateToken(ctx context.Context, tx transaction.Tx, keyName string) (uint32, error) {
 	key := keys.NewKey(r.ReservedSubspaceName(), keyName, counterKey, keyEnd)
 	it, err := tx.Read(ctx, key)
@@ -338,6 +363,10 @@ func (k *Dictionary) GetNamespaces(ctx context.Context, tx transaction.Tx,
 	}
 
 	return k.reservedSb.getNamespaces(), nil
+}
+
+func (k *Dictionary) UpdateNamespace(ctx context.Context, tx transaction.Tx, namespaceMetadata NamespaceMetadata) error {
+	return k.reservedSb.updateNamespace(ctx, tx, namespaceMetadata)
 }
 
 func (k *Dictionary) CreateDatabase(ctx context.Context, tx transaction.Tx, name string, namespaceId uint32,

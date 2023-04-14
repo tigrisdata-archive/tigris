@@ -31,6 +31,8 @@ type Namespace interface {
 	StrId() string
 	// Metadata for the namespace
 	Metadata() NamespaceMetadata
+	// SetMetadata updates namespace metadata
+	SetMetadata(update NamespaceMetadata)
 }
 
 // NamespaceMetadata - This structure is persisted as the namespace in DB.
@@ -48,7 +50,9 @@ type NamespaceMetadata struct {
 // DefaultNamespace is for "default" namespace in the cluster. This is useful when there is no need to logically group
 // databases. All databases will be created under a single namespace. It is totally fine for a deployment to choose this
 // and just have one namespace. The default assigned value for this namespace is 1.
-type DefaultNamespace struct{}
+type DefaultNamespace struct {
+	metadata NamespaceMetadata
+}
 
 type ProjectMetadata struct {
 	ID             uint32
@@ -82,7 +86,12 @@ func (n *DefaultNamespace) Id() uint32 {
 
 // Metadata returns metadata assigned to the namespace.
 func (n *DefaultNamespace) Metadata() NamespaceMetadata {
-	return NewNamespaceMetadata(defaults.DefaultNamespaceId, defaults.DefaultNamespaceName, defaults.DefaultNamespaceName)
+	return n.metadata
+}
+
+// SetMetadata updates namespace metadata
+func (n *DefaultNamespace) SetMetadata(update NamespaceMetadata) {
+	n.metadata = update
 }
 
 func NewNamespaceMetadata(id uint32, name string, displayName string) NamespaceMetadata {
@@ -94,7 +103,9 @@ func NewNamespaceMetadata(id uint32, name string, displayName string) NamespaceM
 }
 
 func NewDefaultNamespace() *DefaultNamespace {
-	return &DefaultNamespace{}
+	return &DefaultNamespace{
+		metadata: NewNamespaceMetadata(defaults.DefaultNamespaceId, defaults.DefaultNamespaceName, defaults.DefaultNamespaceName),
+	}
 }
 
 // AccountIntegrations represents the external accounts.
@@ -102,16 +113,24 @@ type AccountIntegrations struct {
 	Metronome *Metronome
 }
 
-type Metronome struct {
-	Enabled bool
-	Id      string
-}
-
 func (a *AccountIntegrations) AddMetronome(id string) {
 	a.Metronome = &Metronome{
 		Enabled: true,
 		Id:      id,
 	}
+}
+
+// GetMetronomeId returns the linked Metronome account id and a boolean to indicate if integration is enabled
+func (a *AccountIntegrations) GetMetronomeId() (string, bool) {
+	if a.Metronome == nil {
+		return "", false
+	}
+	return a.Metronome.Id, a.Metronome.Enabled
+}
+
+type Metronome struct {
+	Enabled bool
+	Id      string
 }
 
 // NamespaceSubspace is used to store metadata about Tigris namespaces.

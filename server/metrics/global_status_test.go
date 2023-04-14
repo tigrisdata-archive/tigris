@@ -115,20 +115,20 @@ func TestGlobalStatus(t *testing.T) {
 		globalStatus.RecordRequestToActiveChunk(rs, "test_tenant")
 		config.DefaultConfig.GlobalStatus.Enabled = true
 		globalStatus.RecordRequestToActiveChunk(rs, "test_tenant")
-		assert.Equal(t, globalStatus.activeChunk.tenants["test_tenant"].readBytes, 2*dataSize16K)
-		assert.Equal(t, globalStatus.activeChunk.tenants["test_tenant"].writeBytes, dataSize16K)
-		assert.Equal(t, globalStatus.activeChunk.tenants["test_tenant"].ddlDropUnits, int64(1))
-		assert.Equal(t, globalStatus.activeChunk.tenants["test_tenant"].ddlCreateUnits, int64(1))
-		assert.Equal(t, globalStatus.activeChunk.tenants["test_tenant"].ddlUpdateUnits, int64(1))
+		assert.Equal(t, globalStatus.activeChunk.Tenants["test_tenant"].readBytes, 2*dataSize16K)
+		assert.Equal(t, globalStatus.activeChunk.Tenants["test_tenant"].writeBytes, dataSize16K)
+		assert.Equal(t, globalStatus.activeChunk.Tenants["test_tenant"].ddlDropUnits, int64(1))
+		assert.Equal(t, globalStatus.activeChunk.Tenants["test_tenant"].ddlCreateUnits, int64(1))
+		assert.Equal(t, globalStatus.activeChunk.Tenants["test_tenant"].ddlUpdateUnits, int64(1))
 
 		oldChunk := globalStatus.Flush()
-		assert.Equal(t, oldChunk.tenants["test_tenant"].readBytes, 2*dataSize16K)
-		assert.Equal(t, oldChunk.tenants["test_tenant"].writeBytes, dataSize16K)
-		assert.Equal(t, oldChunk.tenants["test_tenant"].ddlDropUnits, int64(1))
-		assert.Equal(t, oldChunk.tenants["test_tenant"].ddlUpdateUnits, int64(1))
-		assert.Equal(t, oldChunk.tenants["test_tenant"].ddlCreateUnits, int64(1))
+		assert.Equal(t, oldChunk.Tenants["test_tenant"].readBytes, 2*dataSize16K)
+		assert.Equal(t, oldChunk.Tenants["test_tenant"].writeBytes, dataSize16K)
+		assert.Equal(t, oldChunk.Tenants["test_tenant"].ddlDropUnits, int64(1))
+		assert.Equal(t, oldChunk.Tenants["test_tenant"].ddlUpdateUnits, int64(1))
+		assert.Equal(t, oldChunk.Tenants["test_tenant"].ddlCreateUnits, int64(1))
 
-		_, ok := globalStatus.activeChunk.tenants["test_tenant"]
+		_, ok := globalStatus.activeChunk.Tenants["test_tenant"]
 		assert.False(t, ok)
 	})
 }
