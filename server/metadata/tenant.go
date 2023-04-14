@@ -249,6 +249,9 @@ func (m *TenantManager) RefreshNamespaceAccounts(ctx context.Context) error {
 	}
 	// load namespaces from disk
 	namespaces, err := m.metaStore.GetNamespaces(ctx, tx)
+	if err != nil {
+		return err
+	}
 	log.Debug().Interface("ns", namespaces).Msg("reloaded namespaces")
 
 	for namespaceId, metadata := range namespaces {

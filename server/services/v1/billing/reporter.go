@@ -77,7 +77,7 @@ func (r *UsageReporter) push() error {
 	events := make([]*UsageEvent, 0, len(chunk.Tenants))
 
 	// refresh and get metadata for all tenants if anyone is missing metronome integration
-	for namespaceId, _ := range chunk.Tenants {
+	for namespaceId := range chunk.Tenants {
 		nsMeta := r.tenantMgr.GetNamespaceMetadata(r.ctx, namespaceId)
 		if nsMeta == nil || nsMeta.Accounts.Metronome == nil {
 			err := r.tenantMgr.RefreshNamespaceAccounts(r.ctx)
