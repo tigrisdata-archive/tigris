@@ -89,7 +89,7 @@ func (n *DefaultNamespace) Metadata() NamespaceMetadata {
 	return n.metadata
 }
 
-// SetMetadata updates namespace metadata
+// SetMetadata updates namespace metadata.
 func (n *DefaultNamespace) SetMetadata(update NamespaceMetadata) {
 	n.metadata = update
 }
@@ -120,7 +120,7 @@ func (a *AccountIntegrations) AddMetronome(id string) {
 	}
 }
 
-// GetMetronomeId returns the linked Metronome account id and a boolean to indicate if integration is enabled
+// GetMetronomeId returns the linked Metronome account id and a boolean to indicate if integration is enabled.
 func (a *AccountIntegrations) GetMetronomeId() (string, bool) {
 	if a.Metronome == nil {
 		return "", false
