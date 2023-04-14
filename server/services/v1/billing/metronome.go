@@ -16,10 +16,9 @@ package billing
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
-
-	"fmt"
 
 	"github.com/deepmap/oapi-codegen/pkg/securityprovider"
 	"github.com/google/uuid"
@@ -144,7 +143,6 @@ func (m *Metronome) pushBillingEvents(ctx context.Context, events []biller.Event
 		if resp.StatusCode() != http.StatusOK {
 			return NewMetronomeError(resp.StatusCode(), string(resp.Body))
 		}
-
 	}
 	return nil
 }

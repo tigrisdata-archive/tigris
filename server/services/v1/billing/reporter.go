@@ -67,6 +67,7 @@ func (r *UsageReporter) refreshLoop() {
 
 func (r *UsageReporter) push() error {
 	chunk := r.glbState.Flush()
+	log.Info().Msgf("reporting data for %d tenants", len(chunk.Tenants))
 
 	if len(chunk.Tenants) == 0 {
 		log.Info().Msg("no tenant data to report")
@@ -129,6 +130,7 @@ func (r *UsageReporter) push() error {
 		events = append(events, event)
 
 		log.Debug().Msgf("reporting usage for %s -> %+v", namespaceId, event)
+		log.Info().Msgf("done reporting %d events", len(events))
 	}
 
 	err := r.billingSvc.PushUsageEvents(r.ctx, events)
