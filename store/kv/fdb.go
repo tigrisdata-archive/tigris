@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	fdbAPIVersion = 710
+	fdbAPIVersion = 720
 )
 
 // fdbkv is an implementation of kv on top of FoundationDB.

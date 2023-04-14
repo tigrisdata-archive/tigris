@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/DataDog/datadog-api-client-go v1.16.0
-	github.com/apple/foundationdb/bindings/go v0.0.0-20220521054011-a88e049b28d8
+	github.com/apple/foundationdb/bindings/go v0.0.0-20230414144255-2959d0779703
 	github.com/auth0/go-auth0 v0.9.3
 	github.com/auth0/go-jwt-middleware/v2 v2.1.0
 	github.com/bluele/gcache v0.0.2

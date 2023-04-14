@@ -116,9 +116,10 @@ case "${OS}" in
   rm -f "$FDB_PACKAGE_PATH"
   ;;
 "Linux")
-  FDB_PACKAGE_NAME="foundationdb-clients_${FDB_VERSION}-1_${ARCH}.deb"
+#  FDB_PACKAGE_NAME="foundationdb-clients_${FDB_VERSION}-1_${ARCH}.deb"
   FDB_PACKAGE_PATH="$(mktemp -p /tmp/ -u)/${FDB_PACKAGE_NAME}"
-  curl --create-dirs -Lo "$FDB_PACKAGE_PATH" "https://tigrisdata-pub.s3.us-west-2.amazonaws.com/ubuntu/focal/${FDB_PACKAGE_NAME}"
+#  curl --create-dirs -Lo "$FDB_PACKAGE_PATH" "https://tigrisdata-pub.s3.us-west-2.amazonaws.com/ubuntu/focal/${FDB_PACKAGE_NAME}"
+  curl --create-dirs -Lo "$FDB_PACKAGE_PATH" "https://github.com/apple/foundationdb/releases/download/7.2.5/foundationdb-clients_7.2.5-1_amd64.deb"
   echo "$FDB_SHA $FDB_PACKAGE_PATH" | sha256sum -c
   sudo dpkg -i "$FDB_PACKAGE_PATH" # provides /lib/libfdb_c.so shared library in the docker for CGO
   rm -f "$FDB_PACKAGE_PATH"

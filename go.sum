@@ -81,6 +81,8 @@ github.com/apapsch/go-jsonmerge/v2 v2.0.0 h1:axGnT1gRIfimI7gJifB699GoE/oq+F2MU7D
 github.com/apapsch/go-jsonmerge/v2 v2.0.0/go.mod h1:lvDnEdqiQrp0O42VQGgmlKpxL1AP2+08jFMw88y4klk=
 github.com/apple/foundationdb/bindings/go v0.0.0-20220521054011-a88e049b28d8 h1:B1KM1sz2bMjLThSQZSg+2kE2OBFMbtGdDcekqj0t2z0=
 github.com/apple/foundationdb/bindings/go v0.0.0-20220521054011-a88e049b28d8/go.mod h1:w63jdZTFCtvdjsUj5yrdKgjxaAD5uXQX6hJ7EaiLFRs=
+github.com/apple/foundationdb/bindings/go v0.0.0-20230414144255-2959d0779703 h1:w6dURSJLnrGDE10BnsjJZ9c+wegjreFQX8vSv6Gaf7s=
+github.com/apple/foundationdb/bindings/go v0.0.0-20230414144255-2959d0779703/go.mod h1:OMVSB21p9+xQUIqlGizHPZfjK+SHws1ht+ZytVDoz9U=
 github.com/auth0/go-auth0 v0.9.3 h1:Nw9dJQtpxfR2BI5/qqgOmJ1PBzSVLkgjgNOz2IgXA5g=
 github.com/auth0/go-auth0 v0.9.3/go.mod h1:kxxGNgF592VPvWSNPVWNbmWHs+R9c0MZCTuW+T3NgZw=
 github.com/auth0/go-jwt-middleware/v2 v2.1.0 h1:VU4LsC3aFPoqXVyEp8EixU6FNM+ZNIjECszRTvtGQI8=
