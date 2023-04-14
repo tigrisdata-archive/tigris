@@ -19,12 +19,13 @@ import (
 	"net/http"
 	"time"
 
+	"fmt"
+
 	"github.com/deepmap/oapi-codegen/pkg/securityprovider"
 	"github.com/google/uuid"
 	biller "github.com/tigrisdata/metronome-go-client"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
-	"fmt"
 )
 
 const (
