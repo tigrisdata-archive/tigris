@@ -425,6 +425,46 @@ func TestReservedNamespace(t *testing.T) {
 	require.NoError(t, tx.Rollback(ctx))
 }
 
+func TestUpdateNamespace(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	r := newReservedSubspace(newTestNameRegistry(t))
+
+	_ = kvStore.DropTable(ctx, r.EncodingSubspaceName())
+	_ = kvStore.DropTable(ctx, r.ReservedSubspaceName())
+	_ = kvStore.DropTable(ctx, r.NamespaceSubspaceName())
+
+	tm := transaction.NewManager(kvStore)
+
+	meta := NewNamespaceMetadata(123, "p1-o1", "p1-o1-display_name")
+	tx, err := tm.StartTx(ctx)
+	require.NoError(t, err)
+	require.NoError(t, r.reserveNamespace(ctx, tx, meta.StrId, meta))
+	require.NoError(t, tx.Commit(ctx))
+
+	// check in the allocated id is assigned
+	tx, err = tm.StartTx(ctx)
+	require.NoError(t, err)
+	require.NoError(t, r.reload(ctx, tx))
+	require.Equal(t, meta, r.idToNamespaceStruct[meta.Id])
+	require.NoError(t, tx.Commit(ctx))
+
+	// update the namespace metadata
+	tx, err = tm.StartTx(context.TODO())
+	require.NoError(t, err)
+	update := NewNamespaceMetadata(123, "p1-o1", "p1-o1-display_name")
+	update.Accounts.AddMetronome("met_123")
+	err = r.updateNamespace(context.TODO(), tx, update)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit(ctx))
+
+	// validate
+	require.NoError(t, err)
+	require.Equal(t, update, r.strIdToNamespaceStruct[meta.StrId])
+	require.Equal(t, update, r.idToNamespaceStruct[meta.Id])
+}
+
 func TestDecode(t *testing.T) {
 	k := kv.BuildKey(encKeyVersion, UInt32ToByte(1234), dbKey, "db-1", keyEnd)
 	mp, err := NewMetadataDictionary(newTestNameRegistry(t)).decode(context.TODO(), k)

@@ -27,6 +27,7 @@ import (
 	"github.com/tigrisdata/tigris/server/muxer"
 	"github.com/tigrisdata/tigris/server/quota"
 	"github.com/tigrisdata/tigris/server/request"
+	"github.com/tigrisdata/tigris/server/services/v1/billing"
 	"github.com/tigrisdata/tigris/server/tracing"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
@@ -122,6 +123,13 @@ func mainWithCode() int {
 
 	mx := muxer.NewMuxer(cfg)
 	mx.RegisterServices(&cfg.Server, kvStoreForDatabase, searchStore, tenantMgr, txMgr, forSearchTxMgr)
+
+	// metrics is already initialized, we can start reporting usage data
+	ur, err := billing.NewUsageReporter(metrics.GlobalSt, tenantMgr, billing.NewProvider())
+	if !ulog.E(err) {
+		ur.Start()
+	}
+
 	port := cfg.Server.Port
 	if cfg.Server.Type == config.RealtimeServerType {
 		port = cfg.Server.RealtimePort

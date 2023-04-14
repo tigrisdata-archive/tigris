@@ -290,7 +290,7 @@ func (i *namespace) Cleanup() {
 func (i *namespace) refreshLoop() {
 	defer i.wg.Done()
 
-	log.Debug().Dur("refresh_interval", i.cfg.RefreshInterval).Msg("Initializing storage refresh loop")
+	log.Debug().Dur("refresh_interval", i.cfg.RefreshInterval).Msg("Initializing namespace refresh loop")
 
 	t := time.NewTicker(i.cfg.RefreshInterval)
 	defer t.Stop()
