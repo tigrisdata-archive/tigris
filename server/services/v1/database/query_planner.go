@@ -86,7 +86,7 @@ func (planner *PrimaryIndexPlanner) GenerateTablePlan(sortPlan *filter.QueryPlan
 
 func (planner *PrimaryIndexPlanner) GeneratePlan(sortPlan *filter.QueryPlan, from keys.Key) (*filter.QueryPlan, error) {
 	kb := filter.NewPrimaryKeyEqBuilder(planner.encFunc)
-	plans, err := kb.Build(planner.filter, planner.coll.GetPrimaryKey().Fields)
+	plans, err := kb.Build(planner.filter, planner.coll.GetPrimaryIndexedFields())
 	if err != nil {
 		return nil, err
 	}

@@ -192,7 +192,7 @@ func (*QueryableFieldsBuilder) NewQueryableField(name string, f *Field, fieldsIn
 	return q
 }
 
-func (builder *QueryableFieldsBuilder) BuildQueryableFields(fields []*Field, fieldsInSearch []tsApi.Field) []*QueryableField {
+func (builder *QueryableFieldsBuilder) BuildQueryableFields(fields []*Field, fieldsInSearch []tsApi.Field, includeMetadata bool) []*QueryableField {
 	var queryableFields []*QueryableField
 
 	for _, f := range fields {
@@ -209,23 +209,25 @@ func (builder *QueryableFieldsBuilder) BuildQueryableFields(fields []*Field, fie
 		}
 	}
 
-	ptrTrue := true
-	// Allowing metadata fields to be queryable. User provided reserved fields are rejected by FieldBuilder.
-	queryableFields = append(queryableFields, builder.NewQueryableField(ReservedFields[CreatedAt], &Field{
-		FieldName:     ReservedFields[CreatedAt],
-		DataType:      DateTimeType,
-		Sorted:        &ptrTrue,
-		SearchIndexed: &ptrTrue,
-		Indexed:       &ptrTrue,
-	}, fieldsInSearch))
+	if includeMetadata {
+		ptrTrue := true
+		// Allowing metadata fields to be queryable. User provided reserved fields are rejected by FieldBuilder.
+		queryableFields = append(queryableFields, builder.NewQueryableField(ReservedFields[CreatedAt], &Field{
+			FieldName:     ReservedFields[CreatedAt],
+			DataType:      DateTimeType,
+			Sorted:        &ptrTrue,
+			SearchIndexed: &ptrTrue,
+			Indexed:       &ptrTrue,
+		}, fieldsInSearch))
 
-	queryableFields = append(queryableFields, builder.NewQueryableField(ReservedFields[UpdatedAt], &Field{
-		FieldName:     ReservedFields[UpdatedAt],
-		DataType:      DateTimeType,
-		Sorted:        &ptrTrue,
-		SearchIndexed: &ptrTrue,
-		Indexed:       &ptrTrue,
-	}, fieldsInSearch))
+		queryableFields = append(queryableFields, builder.NewQueryableField(ReservedFields[UpdatedAt], &Field{
+			FieldName:     ReservedFields[UpdatedAt],
+			DataType:      DateTimeType,
+			Sorted:        &ptrTrue,
+			SearchIndexed: &ptrTrue,
+			Indexed:       &ptrTrue,
+		}, fieldsInSearch))
+	}
 
 	return queryableFields
 }
