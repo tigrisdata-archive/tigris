@@ -24,6 +24,7 @@ import (
 	biller "github.com/tigrisdata/metronome-go-client"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
+	"fmt"
 )
 
 const (
@@ -140,7 +141,7 @@ func (m *Metronome) pushBillingEvents(ctx context.Context, events []biller.Event
 			return err
 		}
 		if resp.StatusCode() != http.StatusOK {
-			return errors.Internal("metronome failure: %s", resp.Body)
+			return NewMetronomeError(resp.StatusCode(), string(resp.Body))
 		}
 
 	}
@@ -151,4 +152,20 @@ func pastMidnight() time.Time {
 	now := time.Now().UTC()
 	yyyy, mm, dd := now.Date()
 	return time.Date(yyyy, mm, dd, 0, 0, 0, 0, time.UTC)
+}
+
+type MetronomeError struct {
+	HttpCode int
+	Message  string
+}
+
+func (e *MetronomeError) Error() string {
+	return fmt.Sprintf("HTTP %d: %s", e.HttpCode, e.Message)
+}
+
+func NewMetronomeError(code int, message string) *MetronomeError {
+	return &MetronomeError{
+		HttpCode: code,
+		Message:  message,
+	}
 }

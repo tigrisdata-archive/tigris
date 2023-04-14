@@ -82,6 +82,11 @@ func (n *TenantNamespace) Metadata() NamespaceMetadata {
 	return n.metadata
 }
 
+// SetMetadata updates namespace metadata
+func (n *TenantNamespace) SetMetadata(update NamespaceMetadata) {
+	n.metadata = update
+}
+
 // TenantManager is to manage all the tenants
 // ToDo: start a background thread to reload the mapping.
 type TenantManager struct {
@@ -264,7 +269,8 @@ func (m *TenantManager) RefreshNamespaceAccounts(ctx context.Context) error {
 		// update accounts if tenant does not have it
 		if tenant.namespace.Metadata().Accounts.Metronome == nil {
 			tenant.Lock()
-			tenant.namespace = NewTenantNamespace(namespaceId, metadata)
+			tenantMeta := tenant.namespace.Metadata()
+			tenantMeta.Accounts = metadata.Accounts
 			tenant.Unlock()
 		}
 	}
@@ -373,7 +379,7 @@ func (m *TenantManager) UpdateNamespaceMetadata(ctx context.Context, meta Namesp
 			tenant := m.tenants[meta.StrId]
 			if err = tx.Commit(ctx); err == nil && tenant != nil {
 				tenant.Lock()
-				tenant.namespace = NewTenantNamespace(meta.StrId, meta)
+				tenant.namespace.SetMetadata(meta)
 				tenant.Unlock()
 			}
 		} else {
