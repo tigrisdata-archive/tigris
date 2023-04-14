@@ -24,9 +24,12 @@ import (
 	"github.com/h2non/gock"
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/uber-go/tally"
 )
 
 func TestMetronome_CreateAccount(t *testing.T) {
+	initializeMetricsForTest()
 	defer gock.Off()
 	cfg := config.DefaultConfig.Billing.Metronome
 	metronome, err := NewMetronomeProvider(cfg)
@@ -87,6 +90,7 @@ func TestMetronome_CreateAccount(t *testing.T) {
 }
 
 func TestMetronome_AddDefaultPlan(t *testing.T) {
+	initializeMetricsForTest()
 	defer gock.Off()
 	cfg := config.DefaultConfig.Billing.Metronome
 	metronome, err := NewMetronomeProvider(cfg)
@@ -138,6 +142,7 @@ func TestMetronome_AddDefaultPlan(t *testing.T) {
 }
 
 func TestMetronome_PushStorageEvents(t *testing.T) {
+	initializeMetricsForTest()
 	defer gock.Off()
 	cfg := config.DefaultConfig.Billing.Metronome
 	metronome, err := NewMetronomeProvider(cfg)
@@ -243,6 +248,7 @@ func TestMetronome_PushStorageEvents(t *testing.T) {
 }
 
 func TestMetronome_PushUsageEvents(t *testing.T) {
+	initializeMetricsForTest()
 	defer gock.Off()
 	cfg := config.DefaultConfig.Billing.Metronome
 	metronome, err := NewMetronomeProvider(cfg)
@@ -345,4 +351,9 @@ func TestMetronome_PushUsageEvents(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, gock.IsDone())
 	})
+}
+
+func initializeMetricsForTest() {
+	metrics.MetronomeResponseCode = tally.NewTestScope("resp", map[string]string{})
+	metrics.MetronomeLatency = tally.NewTestScope("latency", map[string]string{})
 }

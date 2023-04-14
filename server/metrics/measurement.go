@@ -37,12 +37,14 @@ const (
 	TraceServiceName          string = "tigris.grpc.server"
 	SessionManagerServiceName string = "session"
 	SecondaryIndexServiceName string = "secondaryindex"
+	MetronomeServiceName      string = "metronome"
 	GrpcSpanType              string = "grpc"
 	FdbSpanType               string = "fdb"
 	SearchSpanType            string = "search"
 	SecondaryIndexSpanType    string = "secondary_index"
 	SessionSpanType           string = "session"
 	AuthSpanType              string = "auth"
+	MetronomeSpanType         string = "metronome"
 )
 
 type Measurement struct {
@@ -82,7 +84,11 @@ func (m *Measurement) CountOkForScope(scope tally.Scope, tags map[string]string)
 }
 
 func (m *Measurement) countOk(scope tally.Scope, tags map[string]string) {
-	scope.Tagged(tags).Counter("ok").Inc(1)
+	m.IncrementCount(scope, tags, "ok", 1)
+}
+
+func (m *Measurement) IncrementCount(scope tally.Scope, tags map[string]string, counterName string, count int64) {
+	scope.Tagged(tags).Counter(counterName).Inc(count)
 }
 
 func (m *Measurement) CountUnits(reqStatus *RequestStatus, tags map[string]string) {
