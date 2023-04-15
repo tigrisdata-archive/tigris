@@ -51,14 +51,8 @@ func main() {
 }
 
 func mainWithCode() int {
-	l := ulog.LogConfig{
-		Level:      "info",
-		SampleRate: 0.01,
-		Format:     "console",
-	}
 	config.LoadConfig(&config.DefaultConfig)
-	// ulog.Configure(config.DefaultConfig.Log)
-	ulog.Configure(l)
+	ulog.Configure(config.DefaultConfig.Log)
 
 	log.Info().Msgf("Environment: '%v'", config.GetEnvironment())
 	log.Info().Msgf("Number of CPUs: %v", runtime.NumCPU())
