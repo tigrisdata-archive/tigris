@@ -119,6 +119,9 @@ func newReservedSubspace(mdNameRegistry *NameRegistry) *reservedSubspace {
 func (r *reservedSubspace) getNamespaces() map[string]NamespaceMetadata {
 	result := make(map[string]NamespaceMetadata)
 
+	r.RLock()
+	defer r.RUnlock()
+
 	for name, metadata := range r.strIdToNamespaceStruct {
 		result[name] = metadata
 	}
