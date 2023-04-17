@@ -147,3 +147,23 @@ func (b *Builder) WithChunking() *Builder {
 	b.isChunking = true
 	return b
 }
+
+func StoreForDatabase(cfg *config.Config) (TxStore, error) {
+	builder := NewBuilder()
+	builder.WithListener() // database has a listener attached to it
+	if config.DefaultConfig.Metrics.Fdb.Enabled {
+		builder.WithMeasure()
+	}
+	return builder.Build(&cfg.FoundationDB)
+}
+
+func StoreForSearch(cfg *config.Config) (TxStore, error) {
+	builder := NewBuilder()
+	if config.DefaultConfig.Search.Chunking {
+		builder.WithChunking()
+	}
+	if config.DefaultConfig.Metrics.Fdb.Enabled {
+		builder.WithMeasure()
+	}
+	return builder.Build(&cfg.FoundationDB)
+}
