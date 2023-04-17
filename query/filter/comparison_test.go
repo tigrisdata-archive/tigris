@@ -33,3 +33,133 @@ func TestNewMatcher(t *testing.T) {
 	require.Equal(t, errors.InvalidArgument("unsupported operand 'foo'"), err)
 	require.Nil(t, matcher)
 }
+
+func TestLikeMatcher(t *testing.T) {
+	t.Run("regex", func(t *testing.T) {
+		cases := []struct {
+			input    any
+			regex    string
+			expMatch bool
+			expError string
+		}{
+			{
+				"foo bar",
+				"foo",
+				true,
+				"",
+			}, {
+				"foo bar",
+				"FOO",
+				false,
+				"",
+			}, {
+				"foo bar",
+				"(?i)FOO",
+				true,
+				"",
+			}, {
+				[]string{"foo", "bar"},
+				"bar",
+				true,
+				"",
+			}, {
+				[]string{"foo", "bar"},
+				"bbr",
+				false,
+				"",
+			}, {
+				[]string{"foo", "bar"},
+				"(?ci)FOO",
+				false,
+				"invalid or unsupported Perl syntax",
+			},
+		}
+		for _, c := range cases {
+			r, err := NewRegexMatcher(c.regex, value.NewCollation())
+			if len(c.expError) > 0 {
+				require.ErrorContains(t, err, c.expError)
+				continue
+			}
+			require.NoError(t, err)
+			require.Equal(t, c.expMatch, r.Matches(c.input))
+		}
+	})
+	t.Run("contains", func(t *testing.T) {
+		cases := []struct {
+			input    any
+			substr   string
+			expMatch bool
+			expError string
+		}{
+			{
+				"foo bar",
+				"foo",
+				true,
+				"",
+			}, {
+				"foo bar",
+				"FOO",
+				false,
+				"",
+			}, {
+				[]string{"foo", "bar"},
+				"bar",
+				true,
+				"",
+			}, {
+				[]string{"foo", "bar"},
+				"bbr",
+				false,
+				"",
+			},
+		}
+		for _, c := range cases {
+			r, err := NewContainsMatcher(c.substr, value.NewCollation())
+			if len(c.expError) > 0 {
+				require.ErrorContains(t, err, c.expError)
+				continue
+			}
+			require.NoError(t, err)
+			require.Equal(t, c.expMatch, r.Matches(c.input))
+		}
+	})
+	t.Run("not", func(t *testing.T) {
+		cases := []struct {
+			input    any
+			substr   string
+			expMatch bool
+			expError string
+		}{
+			{
+				"foo bar",
+				"foo",
+				false,
+				"",
+			}, {
+				"foo bar",
+				"FOO",
+				true,
+				"",
+			}, {
+				[]string{"foo", "bar"},
+				"bar",
+				false,
+				"",
+			}, {
+				[]string{"foo", "bar"},
+				"bbr",
+				true,
+				"",
+			},
+		}
+		for _, c := range cases {
+			r, err := NewNotMatcher(c.substr, value.NewCollation())
+			if len(c.expError) > 0 {
+				require.ErrorContains(t, err, c.expError)
+				continue
+			}
+			require.NoError(t, err)
+			require.Equal(t, c.expMatch, r.Matches(c.input))
+		}
+	})
+}

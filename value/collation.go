@@ -33,8 +33,8 @@ func NewCollation() *Collation {
 	return NewCollationFrom(nil)
 }
 
-// The collation sort key is used for with the secondary index.
-// We generate a sortkey when storing a string in the index and
+// NewSortKeyCollation is used for with the secondary index.
+// We generate a sort key when storing a string in the index and
 // also use it when comparing strings when filtering.
 func NewSortKeyCollation() *Collation {
 	return NewCollationFrom(&api.Collation{Case: "csk"})

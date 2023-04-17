@@ -17,9 +17,8 @@ package main
 import (
 	"os"
 
-	"github.com/spf13/pflag"
-
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/pflag"
 	"github.com/tigrisdata/tigris/cmd/admin/cmd"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"

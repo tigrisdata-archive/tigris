@@ -37,6 +37,44 @@ func TestFilterUsingJSON(t *testing.T) {
 			require.True(t, f.(*Selector).Field.Name() == "f1" || f.(*Selector).Field.Name() == "f2")
 		}
 	})
+	t.Run("like_filter", func(t *testing.T) {
+		js := []byte(`{"f1": 10, "f2": 10, "f3": {"$contains": "foo"}, "f4": {"$not": "bar"}}`)
+		factory := Factory{
+			fields: []*schema.QueryableField{
+				{FieldName: "f1", DataType: schema.Int64Type},
+				{FieldName: "f2", DataType: schema.Int64Type},
+				{FieldName: "f3", DataType: schema.StringType},
+				{FieldName: "f4", DataType: schema.StringType},
+			},
+		}
+		filters, err := factory.Factorize(js)
+		require.NoError(t, err)
+		require.Len(t, filters, 4)
+		selectorLen := 0
+		likeLen := 0
+		for _, f := range filters {
+			switch conv := f.(type) {
+			case *Selector:
+				selectorLen++
+				require.True(t, conv.Field.Name() == "f1" || conv.Field.Name() == "f2")
+			case *LikeFilter:
+				likeLen++
+				require.True(t, conv.Field.Name() == "f3" || conv.Field.Name() == "f4")
+			}
+		}
+		require.Equal(t, 2, selectorLen)
+		require.Equal(t, 2, likeLen)
+
+		js = []byte(`{"f1": 10, "f2": 10, "f3": {"$contains": "foo"}, "f4": {"$not": 1}}`)
+		filters, err = factory.Factorize(js)
+		require.ErrorContains(t, err, "string is only supported type for 'regex/contains/not' filters")
+		require.Nil(t, filters)
+
+		js = []byte(`{"f1": 10, "f2": 10, "f3": {"$contains": [1, 2]]}, "f4": {"$not": "1"}}`)
+		filters, err = factory.Factorize(js)
+		require.ErrorContains(t, err, "string is only supported type for 'regex/contains/not' filters")
+		require.Nil(t, filters)
+	})
 	t.Run("filter_or_nested_and", func(t *testing.T) {
 		js := []byte(`{"$or": [{"f1": 20}, {"$and": [{"f2":5}, {"f3": 6}]}]}`)
 		factory := Factory{
