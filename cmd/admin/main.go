@@ -16,62 +16,33 @@ package main
 
 import (
 	"os"
-	"os/signal"
-	"runtime"
-	"syscall"
+
+	"github.com/spf13/pflag"
 
 	"github.com/rs/zerolog/log"
+	"github.com/tigrisdata/tigris/cmd/admin/cmd"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
-	"github.com/tigrisdata/tigris/server/metrics"
-	"github.com/tigrisdata/tigris/server/muxer"
-	"github.com/tigrisdata/tigris/server/quota"
-	"github.com/tigrisdata/tigris/server/request"
-	"github.com/tigrisdata/tigris/server/services/v1/billing"
-	"github.com/tigrisdata/tigris/server/tracing"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
-	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 func main() {
-	sigs := make(chan os.Signal, 1)
+	ulog.Configure(ulog.LogConfig{Level: "error"})
 
-	signal.Notify(sigs, syscall.SIGTERM)
+	pflag.CommandLine = pflag.NewFlagSet("", pflag.ContinueOnError)
 
-	go func() {
-		<-sigs
-
-		os.Exit(0)
-	}()
-
-	os.Exit(mainWithCode())
-}
-
-func mainWithCode() int {
 	config.LoadConfig(&config.DefaultConfig)
+	config.DefaultConfig.Log.Level = "error"
+
 	ulog.Configure(config.DefaultConfig.Log)
 
-	log.Info().Msgf("Environment: '%v'", config.GetEnvironment())
-	log.Info().Msgf("Number of CPUs: %v", runtime.NumCPU())
-	log.Info().Msgf("Server Type: '%v'", config.DefaultConfig.Server.Type)
-
 	defaultConfig := &config.DefaultConfig
-	closerFunc, err := tracing.InitTracer(defaultConfig)
-	if err != nil {
-		ulog.E(err)
-	}
-	defer closerFunc()
-
-	// Initialize metrics once
-	cleanup := metrics.InitializeMetrics()
-	defer cleanup()
-
-	log.Info().Str("version", util.Version).Msgf("Starting server")
 
 	var searchStore search.Store
+	var err error
 	if defaultConfig.Metrics.Search.Enabled {
 		searchStore, err = search.NewStoreWithMetrics(&defaultConfig.Search)
 	} else {
@@ -79,7 +50,7 @@ func mainWithCode() int {
 	}
 	if err != nil {
 		log.Error().Err(err).Msg("error initializing search store")
-		return 1
+		os.Exit(1)
 	}
 
 	// creating kv store for search and database independently allows us to enable functionality slowly. This is
@@ -87,12 +58,12 @@ func mainWithCode() int {
 	kvStoreForSearch, err := kv.StoreForSearch(defaultConfig)
 	if err != nil {
 		log.Error().Err(err).Msg("error initializing kv store for search")
-		return 1
+		os.Exit(1)
 	}
 	kvStoreForDatabase, err := kv.StoreForDatabase(defaultConfig)
 	if err != nil {
 		log.Error().Err(err).Msg("error initializing kv store for database")
-		return 1
+		os.Exit(1)
 	}
 
 	txMgr := transaction.NewManager(kvStoreForDatabase)
@@ -104,35 +75,14 @@ func mainWithCode() int {
 	tenantMgr := metadata.NewTenantManager(kvStoreForDatabase, searchStore, txMgr)
 	log.Info().Msg("initialized tenant manager")
 
-	if err = tenantMgr.EnsureDefaultNamespace(); err != nil {
-		// ToDo: do not load collections for realtime deployment
-		log.Error().Err(err).Msg("error initializing default namespace")
-		return 1
+	cmd.Mgr = cmd.Managers{
+		Tx:        txMgr,
+		SearchTx:  forSearchTxMgr,
+		Tenant:    tenantMgr,
+		KVDB:      kvStoreForDatabase,
+		KVSearch:  kvStoreForSearch,
+		MetaStore: metadata.NewMetadataDictionary(metadata.DefaultNameRegistry),
 	}
 
-	cfg := &config.DefaultConfig
-	request.Init(tenantMgr)
-	_ = quota.Init(tenantMgr, cfg)
-	defer quota.Cleanup()
-
-	mx := muxer.NewMuxer(cfg)
-	mx.RegisterServices(&cfg.Server, kvStoreForDatabase, searchStore, tenantMgr, txMgr, forSearchTxMgr)
-
-	// metrics is already initialized, we can start reporting usage data
-	ur, err := billing.NewUsageReporter(metrics.GlobalSt, tenantMgr, billing.NewProvider())
-	if !ulog.E(err) {
-		ur.Start()
-	}
-
-	port := cfg.Server.Port
-	if cfg.Server.Type == config.RealtimeServerType {
-		port = cfg.Server.RealtimePort
-	}
-	if err := mx.Start(cfg.Server.Host, port); err != nil {
-		log.Error().Err(err).Msgf("error starting realtime server")
-		return 1
-	}
-
-	log.Info().Msg("Shutdown")
-	return 0
+	cmd.Execute()
 }

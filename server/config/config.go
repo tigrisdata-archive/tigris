@@ -28,6 +28,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -109,7 +110,9 @@ func LoadConfig(config interface{}) {
 	err = viper.MergeConfig(br)
 	log.Err(err).Msg("merge config")
 
-	spew.Dump(viper.AllKeys())
+	if !util.IsTTY(os.Stdout) {
+		spew.Dump(viper.AllKeys())
+	}
 
 	// This is needed to replace periods with underscores when mapping environment variables to multi-level
 	// config keys. For example, this will allow foundationdb.cluster_file to be mapped to FOUNDATIONDB_CLUSTER_FILE
@@ -134,8 +137,10 @@ func LoadConfig(config interface{}) {
 	}
 
 	log.Debug().Interface("config", &config).Msg("final")
-	spew.Dump(viper.AllKeys())
-	spew.Dump(&config)
+	if !util.IsTTY(os.Stdout) {
+		spew.Dump(viper.AllKeys())
+		spew.Dump(&config)
+	}
 
 	viper.OnConfigChange(func(e fsnotify.Event) {
 		log.Debug().Str("notify", e.Name).Msg("Config file changed")

@@ -150,6 +150,7 @@ func fromHighlight(highlight map[string]interface{}, fields *[]*api.MatchField) 
 		}
 	}
 }
+
 func buildMatchedForArrObjects(parent string, obj map[string]any, fields *[]*api.MatchField) {
 	for k, v := range obj {
 		if mpNested, ok := v.(map[string]any); ok {

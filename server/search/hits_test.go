@@ -17,6 +17,7 @@ package search
 import (
 	"bytes"
 	"fmt"
+	"sort"
 	"testing"
 	"time"
 
@@ -144,7 +145,8 @@ func TestMatchedFields(t *testing.T) {
 	}]
 }`),
 			[]string{"arr_obj.arr", "arr_obj.arr", "arr_obj.arr"},
-		}, {
+		},
+		{
 			[]byte(`{
 	"results": [{
 		"hits": [{
@@ -159,7 +161,8 @@ func TestMatchedFields(t *testing.T) {
 	}]
 }`),
 			[]string{"nested.address.city"},
-		}, {
+		},
+		{
 			[]byte(`{
 	"results": [{
 		"hits": [{
@@ -219,6 +222,8 @@ func TestMatchedFields(t *testing.T) {
 			}
 		}
 
+		sort.Strings(c.expMatched)
+		sort.Strings(actualMatched)
 		require.Equal(t, c.expMatched, actualMatched)
 	}
 }

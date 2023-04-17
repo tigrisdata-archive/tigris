@@ -82,7 +82,7 @@ func (n *TenantNamespace) Metadata() NamespaceMetadata {
 	return n.metadata
 }
 
-// SetMetadata updates namespace metadata
+// SetMetadata updates namespace metadata.
 func (n *TenantNamespace) SetMetadata(update NamespaceMetadata) {
 	n.metadata = update
 }
@@ -245,8 +245,6 @@ func (m *TenantManager) GetNamespaceId(namespaceName string) (uint32, error) {
 
 func (m *TenantManager) RefreshNamespaceAccounts(ctx context.Context) error {
 	// lock tenant manager
-	m.Lock()
-	defer m.Unlock()
 
 	tx, err := m.txMgr.StartTx(ctx)
 	if err != nil {
@@ -356,11 +354,9 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceId string) (*Ten
 	return tenant, nil
 }
 
-// UpdateNamespaceMetadata updates a namespace metadata for a tenant
+// UpdateNamespaceMetadata updates a namespace metadata for a tenant.
 func (m *TenantManager) UpdateNamespaceMetadata(ctx context.Context, meta NamespaceMetadata) error {
-	var (
-		err error
-	)
+	var err error
 
 	m.Lock()
 	defer m.Unlock()

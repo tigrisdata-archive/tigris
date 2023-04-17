@@ -33,7 +33,6 @@ const (
 )
 
 func TestUsageReporter_Push(t *testing.T) {
-
 	t.Run("pushes all valid events", func(t *testing.T) {
 		namespaces := map[string]metadata.NamespaceMetadata{
 			"ns1": {
@@ -49,7 +48,8 @@ func TestUsageReporter_Push(t *testing.T) {
 					Metronome: &metadata.Metronome{
 						Enabled: true,
 						Id:      "m2",
-					}},
+					},
+				},
 			},
 			"ns3": {
 				Id:    3,
@@ -132,7 +132,6 @@ func TestUsageReporter_Push(t *testing.T) {
 				"database_units": stats.ReadUnits + stats.WriteUnits,
 			}, event.Properties)
 		}
-
 	})
 
 	t.Run("push empty events", func(t *testing.T) {
@@ -366,6 +365,5 @@ func (mock *MockBillingSvc) PushUsageEvents(_ context.Context, events []*UsageEv
 }
 
 func (mock *MockBillingSvc) PushStorageEvents(_ context.Context, events []*StorageEvent) error {
-	//TODO implement me
 	panic("implement me")
 }

@@ -16,11 +16,15 @@ package util
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"io"
+	"os"
 	"strings"
 	"text/template"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/lib/container"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
@@ -76,6 +80,7 @@ func JSONToMap(data []byte) (map[string]any, error) {
 func FlatMap(data map[string]any, notFlat container.HashSet) map[string]any {
 	resp := make(map[string]any)
 	flatMap("", data, resp, notFlat)
+
 	return resp
 }
 
@@ -119,4 +124,52 @@ func UnFlatMap(flat map[string]any) map[string]any {
 	}
 
 	return result
+}
+
+func IsTTY(f *os.File) bool {
+	fileInfo, _ := f.Stat()
+
+	return (fileInfo.Mode() & os.ModeCharDevice) != 0
+}
+
+func PrettyJSON(s any) error {
+	b, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	Stdoutf("%s\n", string(b))
+
+	return nil
+}
+
+func Stdoutf(format string, args ...interface{}) {
+	_, _ = fmt.Fprintf(os.Stdout, format, args...)
+}
+
+func PrintError(err error) {
+	_, _ = fmt.Fprintf(os.Stderr, "%s\n", err.Error())
+}
+
+func Error(err error, msg string, args ...interface{}) error {
+	log.Err(err).CallerSkipFrame(3).Msgf(msg, args...)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+
+func Fatal(err error, msg string, args ...interface{}) {
+	if err == nil {
+		_ = Error(err, msg, args...)
+		return
+	}
+
+	PrintError(err)
+
+	_ = Error(err, msg, args...)
+
+	os.Exit(1)
 }
