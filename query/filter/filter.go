@@ -289,9 +289,12 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 
 		return NewSelector(field, NewEqualityMatcher(val), factory.collation), nil
 	case jsonparser.Object:
-		valueMatcher, collation, err := buildValueMatcher(v, field, factory.collation, factory.buildForSecondaryIndex)
+		valueMatcher, likeMatcher, collation, err := buildValueMatcher(v, field, factory.collation, factory.buildForSecondaryIndex)
 		if err != nil {
 			return nil, err
+		}
+		if likeMatcher != nil {
+			return NewLikeFilter(field, likeMatcher), nil
 		}
 
 		if collation != nil {
@@ -307,33 +310,21 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 // instead of a simple JSON value. Apart from comparison operators, this object can have its own collation, which
 // needs to be honored at the field level. Therefore, the caller needs to check if the collation returned by the
 // method is not nil and if yes, use this collation..
-func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField, factoryCollation *value.Collation, buildForSecondaryIndex bool) (ValueMatcher, *value.Collation, error) {
+func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField, factoryCollation *value.Collation, buildForSecondaryIndex bool) (ValueMatcher, LikeMatcher, *value.Collation, error) {
 	if len(input) == 0 {
-		return nil, nil, errors.InvalidArgument("empty object")
+		return nil, nil, nil, errors.InvalidArgument("empty object")
 	}
 
-	var collation *value.Collation
-	c, dt, _, e := jsonparser.Get(input, api.CollationKey)
-	if e == nil && dt != jsonparser.NotExist {
-		var apiCollation *api.Collation
-		// this will override the default collation
-		if e = jsoniter.Unmarshal(c, &apiCollation); e != nil {
-			return nil, nil, e
-		}
-		if err := apiCollation.IsValid(); err != nil {
-			return nil, nil, err
-		}
-		collation = value.NewCollationFrom(apiCollation)
-
-		if buildForSecondaryIndex && collation.IsCaseInsensitive() {
-			return nil, nil, errors.InvalidArgument("found case insensitive collation")
-		}
-	} else {
-		collation = factoryCollation
+	var (
+		valueMatcher ValueMatcher
+		LikeMatcher  LikeMatcher
+		collation    *value.Collation
+		err          error
+	)
+	if collation, err = buildCollation(input, factoryCollation, buildForSecondaryIndex); err != nil {
+		return nil, nil, nil, err
 	}
 
-	var err error
-	var valueMatcher ValueMatcher
 	err = jsonparser.ObjectEach(input, func(key []byte, v []byte, dataType jsonparser.ValueType, offset int) error {
 		if err != nil {
 			return err
@@ -365,6 +356,16 @@ func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField, 
 				valueMatcher, err = NewMatcher(string(key), val)
 				return err
 			}
+		case REGEX, CONTAINS, NOT:
+			if dataType != jsonparser.String {
+				return errors.InvalidArgument("string is only supported type for 'regex/contains/not' filters")
+			}
+			if !(field.DataType == schema.StringType || (field.DataType == schema.ArrayType && field.SubType == schema.StringType)) {
+				return errors.InvalidArgument("field '%s' of type '%s' is not supported for 'regex/contains/not' filters. Only 'string' or an 'array of string' is supported", field.FieldName, schema.FieldNames[field.DataType])
+			}
+
+			LikeMatcher, err = NewLikeMatcher(string(key), string(v), collation)
+			return err
 		case api.CollationKey:
 		default:
 			return errors.InvalidArgument("expression is not supported inside comparison operator %s", string(key))
@@ -372,5 +373,31 @@ func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField, 
 		return nil
 	})
 
-	return valueMatcher, collation, err
+	return valueMatcher, LikeMatcher, collation, err
+}
+
+func buildCollation(input jsoniter.RawMessage, factoryCollation *value.Collation, buildForSecondaryIndex bool) (*value.Collation, error) {
+	c, dt, _, _ := jsonparser.Get(input, api.CollationKey)
+	if dt == jsonparser.NotExist {
+		return factoryCollation, nil
+	}
+
+	var (
+		err          error
+		apiCollation *api.Collation
+	)
+	// this will override the default collation
+	if err = jsoniter.Unmarshal(c, &apiCollation); err != nil {
+		return nil, err
+	}
+	if err = apiCollation.IsValid(); err != nil {
+		return nil, err
+	}
+
+	collation := value.NewCollationFrom(apiCollation)
+	if buildForSecondaryIndex && collation.IsCaseInsensitive() {
+		return nil, errors.InvalidArgument("found case insensitive collation")
+	}
+
+	return collation, nil
 }

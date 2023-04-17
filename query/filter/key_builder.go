@@ -129,9 +129,10 @@ func (k *KeyBuilder[F]) Build(filters []Filter, userDefinedKeys []F) ([]QueryPla
 	var singleLevel []*Selector
 	var allKeys []QueryPlan
 	for _, f := range filters {
-		if ss, ok := f.(*Selector); ok {
+		switch ss := f.(type) {
+		case *Selector:
 			singleLevel = append(singleLevel, ss)
-		} else {
+		case LogicalFilter:
 			queue = append(queue, f)
 		}
 	}

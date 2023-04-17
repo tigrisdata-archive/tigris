@@ -37,9 +37,10 @@ import (
 //	{f:20} (default is "$eq" so we automatically append EqualityMatcher for this case in parser)
 //	{f:<Expr>}
 type Selector struct {
-	Field     *schema.QueryableField
-	Matcher   ValueMatcher
-	Collation *value.Collation
+	Field       *schema.QueryableField
+	Matcher     ValueMatcher
+	Collation   *value.Collation
+	LikeMatcher LikeMatcher
 }
 
 // NewSelector returns Selector object.
@@ -51,7 +52,7 @@ func NewSelector(field *schema.QueryableField, matcher ValueMatcher, collation *
 	}
 }
 
-func (s *Selector) MatchesDoc(doc map[string]interface{}) bool {
+func (s *Selector) MatchesDoc(doc map[string]any) bool {
 	v, ok := doc[s.Field.Name()]
 	if !ok {
 		return true

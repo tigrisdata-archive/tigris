@@ -904,7 +904,6 @@ func TestSearch(t *testing.T) {
 
 	compareDocs(t, docs[2], res.Result.Groups[0]["hits"].([]any)[0].(map[string]any)["data"].(map[string]any))
 	compareDocs(t, docs[0], res.Result.Groups[0]["hits"].([]any)[1].(map[string]any)["data"].(map[string]any))
-
 	compareDocs(t, docs[1], res.Result.Groups[1]["hits"].([]any)[0].(map[string]any)["data"].(map[string]any))
 }
 
@@ -937,7 +936,7 @@ func TestVectorSearch(t *testing.T) {
 			"vector":       []float64{0.1, 1.1, 0.93, 0.75},
 		}, {
 			"id":           "2",
-			"string_value": "big data",
+			"string_value": "big data platform",
 			"vector":       []float64{-0.23, -0.57, 1.12, 0.98},
 		}, {
 			"id":           "3",
@@ -978,6 +977,21 @@ func TestVectorSearch(t *testing.T) {
 
 	require.Equal(t, float64(0), res.Result.Hits[0]["metadata"]["match"].(map[string]any)["vector_distance"])
 	require.Equal(t, 0.22375428676605225, res.Result.Hits[1]["metadata"]["match"].(map[string]any)["vector_distance"])
+
+	res = getSearchResults(t, project, index, Map{"vector": Map{"vector": []float64{1.1, 2.22, 0.0875, 0.975}}, "filter": Map{"string_value": Map{"$contains": "platform"}}}, false)
+	require.Equal(t, 2, len(res.Result.Hits))
+
+	// contains will filter out other rows
+	compareDocs(t, docs[0], res.Result.Hits[0]["data"])
+	compareDocs(t, docs[1], res.Result.Hits[1]["data"])
+
+	res = getSearchResults(t, project, index, Map{"vector": Map{"vector": []float64{1.1, 2.22, 0.0875, 0.975}}, "filter": Map{"string_value": Map{"$not": "platform"}}}, false)
+	require.Equal(t, 2, len(res.Result.Hits))
+
+	// contains will filter out other rows
+	compareDocs(t, docs[2], res.Result.Hits[0]["data"])
+	compareDocs(t, docs[3], res.Result.Hits[1]["data"])
+
 }
 
 func TestComplexObjects(t *testing.T) {
