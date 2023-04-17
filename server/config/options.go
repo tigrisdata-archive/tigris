@@ -88,6 +88,11 @@ type AuthConfig struct {
 	NamespaceLocalization      NamespaceLocalization `mapstructure:"namespace_localization" yaml:"namespace_localization" json:"namespace_localization"`
 	EnableNamespaceDeletion    bool                  `mapstructure:"enable_namespace_deletion" yaml:"enable_namespace_deletion" json:"enable_namespace_deletion"`
 	EnableNamespaceCreation    bool                  `mapstructure:"enable_namespace_creation" yaml:"enable_namespace_creation" json:"enable_namespace_creation"`
+	UserInvitations            Invitation            `mapstructure:"user_invitations" yaml:"user_invitations" json:"user_invitations"`
+}
+
+type Invitation struct {
+	ExpireAfterSec int64 `mapstructure:"expire_after_sec" yaml:"expire_after_sec" json:"expire_after_sec"`
 }
 
 type ClusterConfig struct {
@@ -289,6 +294,9 @@ var DefaultConfig = Config{
 		NamespaceLocalization:   NamespaceLocalization{Enabled: false},
 		EnableNamespaceDeletion: false,
 		EnableNamespaceCreation: true,
+		UserInvitations: Invitation{
+			ExpireAfterSec: 259200, //3days
+		},
 	},
 	Billing: Billing{
 		Metronome: Metronome{

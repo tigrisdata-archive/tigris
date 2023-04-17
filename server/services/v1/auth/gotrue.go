@@ -41,7 +41,15 @@ const (
 	GotrueAudHeaderKey = "X-JWT-AUD"
 	ClientIdPrefix     = "tid_"
 	ClientSecretPrefix = "tsec_"
+
+	AppKeyUser = "app key"
+
+	InvitationStatusPending  = "PENDING"
+	InvitationStatusAccepted = "ACCEPTED"
+	InvitationStatusExpired  = "EXPIRED"
 )
+
+var InvalidInvitationCodeErr = errors.Unauthenticated("Failed to verify invitation code")
 
 type gotrue struct {
 	AuthConfig config.AuthConfig
@@ -51,6 +59,28 @@ type CreateUserPayload struct {
 	Email    string      `json:"email"`
 	Password string      `json:"password"`
 	AppData  UserAppData `json:"app_data"`
+}
+
+type CreateInvitationPayload struct {
+	Email string `json:"email"`
+	Role  string `json:"role"`
+
+	TigrisNamespace string `json:"tigris_namespace"`
+	CreatedBy       string `json:"created_by"`
+	CreatedByName   string `json:"created_by_name"`
+	ExpirationTime  int64  `json:"expiration_time"`
+}
+
+type DeleteInvitationsPayload struct {
+	Email           string `json:"email"`
+	CreatedBy       string `json:"created_by"`
+	TigrisNamespace string `json:"tigris_namespace"`
+	Status          string `json:"status"`
+}
+
+type VerifyInvitationPayload struct {
+	Email string `json:"email"`
+	Code  string `json:"code"`
 }
 
 type UserAppData struct {
@@ -70,17 +100,35 @@ func (g *gotrue) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest)
 
 	currentSub, err := GetCurrentSub(ctx)
 	if err != nil {
-		return nil, errors.Internal("Failed to list applications: reason = %s", err.Error())
+		log.Err(err).Msg("Failed to create application: reason - unable to extract current sub")
+		return nil, errors.Internal("Failed to create application: reason = %s", err.Error())
 	}
 
 	currentNamespace, err := request.GetNamespace(ctx)
 	if err != nil {
-		return nil, errors.Internal("Failed to list applications: reason = %s", err.Error())
+		log.Err(err).Msg("Failed to create application: reason - unable to extract current namespace")
+		return nil, errors.Internal("Failed to create applications: reason = %s", err.Error())
 	}
 
 	// make gotrue call
 	creationTime := time.Now().UnixMilli()
-	err = createUser(ctx, clientId, clientSecret, currentSub, currentNamespace, req.GetName(), req.GetDescription(), req.GetProject(), creationTime, g)
+	payloadBytes, err := jsoniter.Marshal(CreateUserPayload{
+		Email:    fmt.Sprintf("%s%s", clientId, g.AuthConfig.Gotrue.UsernameSuffix),
+		Password: clientSecret,
+		AppData: UserAppData{
+			CreatedAt:       creationTime,
+			CreatedBy:       currentSub,
+			TigrisNamespace: currentNamespace,
+			Name:            req.GetName(),
+			Description:     req.GetDescription(),
+			Project:         req.GetProject(),
+		},
+	})
+	if err != nil {
+		log.Err(err).Msg("Failed to create user")
+		return nil, errors.Internal("Failed to create user")
+	}
+	err = createUser(ctx, payloadBytes, g.AuthConfig.PrimaryAudience, AppKeyUser, g)
 	if err != nil {
 		return nil, err
 	}
@@ -415,44 +463,245 @@ func (g *gotrue) GetAccessToken(ctx context.Context, req *api.GetAccessTokenRequ
 	return nil, errors.InvalidArgument("Failed to GetAccessToken: reason = unsupported grant_type, it has to be one of [refresh_token, client_credentials]")
 }
 
-func createUser(ctx context.Context, username string, password string, currentSub string, currentNamespace string, appName string, appDescription string, project string, createdAt int64, g *gotrue) error {
-	payloadBytes, err := jsoniter.Marshal(CreateUserPayload{
-		Email:    fmt.Sprintf("%s%s", username, g.AuthConfig.Gotrue.UsernameSuffix),
-		Password: password,
-		AppData: UserAppData{
-			CreatedAt:       createdAt,
-			CreatedBy:       currentSub,
-			TigrisNamespace: currentNamespace,
-			Name:            appName,
-			Description:     appDescription,
-			Project:         project,
-		},
-	})
-	if err != nil {
-		log.Err(err).Msg("Failed to create user")
-		return errors.Internal("Failed to create user")
+func (g *gotrue) CreateInvitations(ctx context.Context, req *api.CreateInvitationsRequest) (*api.CreateInvitationsResponse, error) {
+	for _, invitation := range req.Invitations {
+		err := createInvitation(ctx, invitation.GetEmail(), invitation.GetRole(), invitation.GetInvitationSentByName(), g)
+		if err != nil {
+			return nil, err
+		}
 	}
-	payloadReader := bytes.NewReader(payloadBytes)
+	return &api.CreateInvitationsResponse{}, nil
+}
+
+func createInvitation(ctx context.Context, email string, role string, invitationSentByName string, g *gotrue) error {
+	if email == "" {
+		return errors.InvalidArgument("Email must be specified")
+	}
+	if role == "" {
+		return errors.InvalidArgument("Role must be specified")
+	}
+
+	namespace, err := request.GetNamespace(ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to get namespace while creating invitation")
+		return errors.Internal("Could not create user invitation")
+	}
+
+	currentSub, err := request.GetCurrentSub(ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to get current sub while creating invitation")
+		return errors.Internal("Could not create user invitation")
+	}
+
+	expirationTime := time.Now().UnixMilli() + (g.AuthConfig.UserInvitations.ExpireAfterSec * 1000)
+	createInvitationPayload := CreateInvitationPayload{
+		Email:           email,
+		Role:            role,
+		TigrisNamespace: namespace,
+		CreatedBy:       currentSub,
+		CreatedByName:   invitationSentByName,
+		ExpirationTime:  expirationTime,
+	}
+	createInvitationPayloadBytes, err := jsoniter.Marshal(createInvitationPayload)
+	if err != nil {
+		log.Err(err).Msg("Failed to marshal CreateUserInvitationPayload struct to json bytes")
+		return errors.Internal("Could not create user invitation")
+	}
+
+	_, err = invitationsCall(ctx, createInvitationPayloadBytes, "/invitations", http.MethodPost, g)
+	if err != nil {
+		log.Err(err).Msg("Failed to create user invitation")
+		return errors.Internal("Could not create user invitation")
+	}
+	log.Debug().Str("email", email).Int64("expiration_time", expirationTime).Msg("Created user invitation")
+	return nil
+}
+
+func (g *gotrue) DeleteInvitations(ctx context.Context, req *api.DeleteInvitationsRequest) (*api.DeleteInvitationsResponse, error) {
+	if req.GetEmail() == "" {
+		return nil, errors.InvalidArgument("Email must be specified")
+	}
+
+	if req.GetStatus() != "" {
+		err := validateInvitationStatusInput(req.GetStatus())
+		if err != nil {
+			return nil, err
+		}
+	}
+	namespace, err := request.GetNamespace(ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to get namespace while deleting invitation")
+		return nil, errors.Internal("Could not delete user invitation")
+	}
+
+	currentSub, err := request.GetCurrentSub(ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to get current sub while deleting invitation")
+		return nil, errors.Internal("Could not delete user invitation")
+	}
+
+	deleteInvitationsPayload := DeleteInvitationsPayload{
+		Email:           req.GetEmail(),
+		CreatedBy:       currentSub,
+		TigrisNamespace: namespace,
+		Status:          req.GetStatus(),
+	}
+	deleteInvitationsPayloadBytes, err := json.Marshal(deleteInvitationsPayload)
+	if err != nil {
+		log.Err(err).Msg("Failed to marshal delete invitation payload to json bytes")
+		return nil, errors.Internal("Could not delete user invitation")
+	}
+
+	_, err = invitationsCall(ctx, deleteInvitationsPayloadBytes, "/invitations", http.MethodDelete, g)
+	if err != nil {
+		log.Err(err).Msg("Failed to create user invitation")
+		return nil, errors.Internal("Could not create user invitation")
+	}
+
+	log.Debug().Str("email", req.GetEmail()).Str("status", req.GetStatus()).Msg("Deleted user invitation(s)")
+	return &api.DeleteInvitationsResponse{}, nil
+}
+
+func (g *gotrue) ListInvitations(ctx context.Context, req *api.ListInvitationsRequest) (*api.ListInvitationsResponse, error) {
+	if req.GetStatus() != "" {
+		err := validateInvitationStatusInput(req.GetStatus())
+		if err != nil {
+			return nil, err
+		}
+	}
+	namespace, err := request.GetNamespace(ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to get namespace while listing invitations")
+		return nil, errors.Internal("Could not list user invitations")
+	}
+
+	currentSub, err := request.GetCurrentSub(ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to get current sub while listing invitations")
+		return nil, errors.Internal("Could not list user invitations")
+	}
+	var path string
+	if req.GetStatus() == "" {
+		path = fmt.Sprintf("/invitations?created_by=%s&tigris_namespace=%s", currentSub, namespace)
+	} else {
+		path = fmt.Sprintf("/invitations?created_by=%s&tigris_namespace=%s&status=%s", currentSub, namespace, req.GetStatus())
+	}
+
+	listInvitationsRes, err := invitationsCall(ctx, nil, path, http.MethodGet, g)
+	if err != nil {
+		log.Err(err).Msg("Failed to create list invitations")
+		return nil, errors.Internal("Could not list user invitations")
+	}
+
+	// parse JSON response
+	var invitations []*api.Invitation
+	err = json.Unmarshal(listInvitationsRes, &invitations)
+	if err != nil {
+		log.Err(err).Msg("Failed to deserialize list user invitations response into JSON")
+		return nil, errors.Internal("Could not list user invitations")
+	}
+
+	return &api.ListInvitationsResponse{Invitations: invitations}, nil
+}
+
+func (g *gotrue) VerifyInvitation(ctx context.Context, req *api.VerifyInvitationRequest) (*api.VerifyInvitationResponse, error) {
+	if req.GetEmail() == "" {
+		return nil, errors.InvalidArgument("Email must be specified")
+	}
+	if req.GetCode() == "" {
+		return nil, errors.InvalidArgument("Code must be specified")
+	}
+
+	verifyInvitationPayload := VerifyInvitationPayload{
+		Email: req.GetEmail(),
+		Code:  req.GetCode(),
+	}
+	verifyInvitationPayloadBytes, err := json.Marshal(verifyInvitationPayload)
+	if err != nil {
+		log.Err(err).Msg("Failed to marshal verify invitation payload to json bytes")
+		return nil, errors.Internal("Could not verify user invitation")
+	}
+	verifyInvitationResBytes, err := invitationsCall(ctx, verifyInvitationPayloadBytes, "/invitations/verify", http.MethodPost, g)
+	if err == InvalidInvitationCodeErr {
+		return nil, err
+	}
+	if err != nil {
+		log.Err(err).Msg("Failed to verify invitation")
+		return nil, errors.Internal("Could not verify user invitation")
+	}
+
+	var verifyUserInvitationResponse api.VerifyInvitationResponse
+	err = jsoniter.Unmarshal(verifyInvitationResBytes, &verifyUserInvitationResponse)
+	if err != nil {
+		log.Err(err).Msg("Failed to JSON deserialize gotrue's verify user response")
+		return nil, errors.Internal("Could not verify user invitation")
+	}
+	return &api.VerifyInvitationResponse{
+		TigrisNamespace: verifyUserInvitationResponse.GetTigrisNamespace(),
+		Role:            verifyUserInvitationResponse.GetRole(),
+	}, nil
+}
+
+func invitationsCall(ctx context.Context, payload []byte, path string, method string, g *gotrue) ([]byte, error) {
+	payloadReader := bytes.NewReader(payload)
+
+	client := &http.Client{}
+	invitationReq, err := http.NewRequestWithContext(ctx, method, fmt.Sprintf("%s%s", g.AuthConfig.Gotrue.URL, path), payloadReader)
+	if err != nil {
+		log.Err(err).Msgf("Failed to create invitation request for path: %s", path)
+		return nil, err
+	}
+	invitationReq.Header.Add("X-JWT-AUD", g.AuthConfig.PrimaryAudience)
+	invitationReq.Header.Add("Content-Type", "application/json")
+
+	invitationRes, err := client.Do(invitationReq)
+	if err != nil {
+		log.Err(err).Msgf("Failed to create invitation request for path: %s", path)
+		return nil, err
+	}
+	defer invitationRes.Body.Close()
+
+	if invitationRes.StatusCode != http.StatusOK {
+		if invitationRes.StatusCode == http.StatusUnauthorized {
+			return nil, InvalidInvitationCodeErr
+		} else {
+			log.Error().Int("status", invitationRes.StatusCode).Msgf("Received non OK status from gotrue while performing invitation operation at path: %s", path)
+			return nil, errors.Internal("Received non OK status")
+		}
+	}
+
+	invitationResBody, err := io.ReadAll(invitationRes.Body)
+	if err != nil {
+		log.Err(err).Msgf("Failed to read invitationResBody body for operation at path: %s", path)
+		return nil, errors.Internal("Failed to read invitationResBody body for operation at path: %s", path)
+	}
+	defer invitationRes.Body.Close()
+
+	return invitationResBody, nil
+}
+
+func createUser(ctx context.Context, createUserPayload []byte, aud string, userType string, g *gotrue) error {
+	payloadReader := bytes.NewReader(createUserPayload)
 
 	client := &http.Client{}
 	createAppKeyReq, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("%s/signup", g.AuthConfig.Gotrue.URL), payloadReader)
 	if err != nil {
-		log.Err(err).Msg("Failed to create CreateAppKey request")
+		log.Err(err).Msgf("Failed to create %s request", userType)
 		return err
 	}
-	createAppKeyReq.Header.Add("X-JWT-AUD", g.AuthConfig.PrimaryAudience)
+	createAppKeyReq.Header.Add("X-JWT-AUD", aud)
 	createAppKeyReq.Header.Add("Content-Type", "application/json")
 
 	createAppKeyRes, err := client.Do(createAppKeyReq)
 	if err != nil {
-		log.Err(err).Msg("Failed to make CreateAppKey call")
+		log.Err(err).Msgf("Failed to make %s call", userType)
 		return err
 	}
 	defer createAppKeyRes.Body.Close()
 
 	if createAppKeyRes.StatusCode != http.StatusOK {
-		log.Error().Int("status", createAppKeyRes.StatusCode).Msg("Received non OK status from gotrue while creating appkey")
-		return errors.Internal("Received non OK status from gotrue while creating appkey")
+		log.Error().Int("status", createAppKeyRes.StatusCode).Msgf("Received non OK status from gotrue while creating %s", userType)
+		return errors.Internal("Received non OK status from gotrue while creating %s", userType)
 	}
 	return nil
 }
@@ -541,4 +790,12 @@ func generateRandomInt(max int) int {
 		log.Err(err).Msgf("Failed to generate random int of length: %d", max)
 	}
 	return int(binary.BigEndian.Uint32(bytes[:])) % max
+}
+
+func validateInvitationStatusInput(inputStatus string) error {
+	val := strings.ToUpper(inputStatus)
+	if !(val == InvitationStatusPending || val == InvitationStatusExpired || val == InvitationStatusAccepted) {
+		return errors.InvalidArgument("Status can be one of these [%s, %s, %s]", InvitationStatusPending, InvitationStatusAccepted, InvitationStatusExpired)
+	}
+	return nil
 }
