@@ -20,12 +20,13 @@ import (
 	"net/http"
 	"time"
 
+	"strconv"
+
 	"github.com/deepmap/oapi-codegen/pkg/securityprovider"
 	"github.com/google/uuid"
 	biller "github.com/tigrisdata/metronome-go-client"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metrics"
-	"strconv"
 )
 
 const (
@@ -61,6 +62,7 @@ func (m *Metronome) measure(ctx context.Context, operation string, f func(ctx co
 	resp, err := f(ctx)
 	me.RecordDuration(metrics.MetronomeLatency, me.GetTags())
 	if resp != nil {
+		defer resp.Body.Close()
 		me.IncrementCount(metrics.MetronomeResponseCode, me.GetTags(), strconv.Itoa(resp.StatusCode), 1)
 	}
 
