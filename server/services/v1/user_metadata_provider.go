@@ -27,6 +27,10 @@ import (
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
+const (
+	UserMetadataType = "user"
+)
+
 type UserMetadataProvider interface {
 	GetUserMetadata(ctx context.Context, req *api.GetUserMetadataRequest) (*api.GetUserMetadataResponse, error)
 	InsertUserMetadata(ctx context.Context, req *api.InsertUserMetadataRequest) (*api.InsertUserMetadataResponse, error)
@@ -40,16 +44,19 @@ type DefaultUserMetadataProvider struct {
 }
 
 func (a *DefaultUserMetadataProvider) GetUserMetadata(ctx context.Context, req *api.GetUserMetadataRequest) (*api.GetUserMetadataResponse, error) {
-	namespaceId, currentSub, tx, err := metadataPrepareOperation("read", ctx, a.txMgr, a.tenantMgr)
+	namespaceId, currentSub, tx, err := metadataPrepareOperation(UserMetadataType, "read", ctx, a.txMgr, a.tenantMgr)
 	if err != nil {
+		log.Err(err).Msg("Failed to get user metadata")
 		return nil, err
 	}
 
 	val, err := a.userStore.GetUserMetadata(ctx, tx, namespaceId, metadata.User, currentSub, req.GetMetadataKey())
 	if err != nil {
+		log.Err(err).Msg("Failed to get user metadata")
 		ulog.E(tx.Rollback(ctx))
 
 		if err != errors.ErrNotFound {
+			log.Err(err).Msg("Failed to get user metadata")
 			return nil, errors.Internal("Failed to read user metadata.")
 		}
 	}
@@ -63,13 +70,15 @@ func (a *DefaultUserMetadataProvider) GetUserMetadata(ctx context.Context, req *
 }
 
 func (a *DefaultUserMetadataProvider) InsertUserMetadata(ctx context.Context, req *api.InsertUserMetadataRequest) (*api.InsertUserMetadataResponse, error) {
-	namespaceId, currentSub, tx, err := metadataPrepareOperation("insert", ctx, a.txMgr, a.tenantMgr)
+	namespaceId, currentSub, tx, err := metadataPrepareOperation(UserMetadataType, "insert", ctx, a.txMgr, a.tenantMgr)
 	if err != nil {
+		log.Err(err).Msg("Failed to insert user metadata")
 		return nil, err
 	}
 
 	err = a.userStore.InsertUserMetadata(ctx, tx, namespaceId, metadata.User, currentSub, req.GetMetadataKey(), req.GetValue())
 	if err != nil {
+		log.Err(err).Msg("Failed to insert user metadata")
 		if err1 := tx.Rollback(ctx); err1 != nil {
 			log.Error().Err(err1).Msg("Failed to rollback transaction.")
 		}
@@ -87,37 +96,43 @@ func (a *DefaultUserMetadataProvider) InsertUserMetadata(ctx context.Context, re
 	}, nil
 }
 
-func metadataPrepareOperation(operationName string, ctx context.Context, txMgr *transaction.Manager, tenantMgr *metadata.TenantManager) (uint32, string, transaction.Tx, error) {
+func metadataPrepareOperation(metadataType string, operationName string, ctx context.Context, txMgr *transaction.Manager, tenantMgr *metadata.TenantManager) (uint32, string, transaction.Tx, error) {
 	namespace, err := request.GetNamespace(ctx)
 	if err != nil {
-		return 0, "", nil, errors.Internal("Failed to %s user metadata. reason: failed to read user namespace.", operationName)
+		log.Err(err).Msgf("Failed to %s %s metadata. reason: failed to read user namespace.", operationName, metadataType)
+		return 0, "", nil, errors.Internal("Failed to %s %s metadata. reason: failed to read user namespace.", operationName, metadataType)
 	}
 
 	currentSub, err := auth.GetCurrentSub(ctx)
 	if err != nil {
-		return 0, "", nil, errors.Internal("Failed to %s user metadata. reason: failed to read user.", operationName)
+		log.Err(err).Msgf("Failed to %s %s metadata. reason: failed to read current user.", operationName, metadataType)
+		return 0, "", nil, errors.Internal("Failed to %s %s metadata. reason: failed to current user.", operationName, metadataType)
 	}
 
 	tenant, err := tenantMgr.GetTenant(ctx, namespace)
 	if err != nil {
-		return 0, "", nil, errors.Internal("Failed to %s user metadata. reason: failed to read namespace id.", operationName)
+		log.Err(err).Msgf("Failed to %s %s metadata. reason: failed to read namespace id.", operationName, metadataType)
+		return 0, "", nil, errors.Internal("Failed to %s %s metadata. reason: failed to read namespace id.", operationName, metadataType)
 	}
 
 	tx, err := txMgr.StartTx(ctx)
 	if err != nil {
-		return 0, "", nil, errors.Internal("Failed to %s user metadata. reason: failed to create internal transaction.", operationName)
+		log.Err(err).Msgf("Failed to %s %s metadata. reason: failed to create internal transaction.", operationName, metadataType)
+		return 0, "", nil, errors.Internal("Failed to %s %s metadata. reason: failed to create internal transaction.", operationName, metadataType)
 	}
 	return tenant.GetNamespace().Id(), currentSub, tx, nil
 }
 
 func (a *DefaultUserMetadataProvider) UpdateUserMetadata(ctx context.Context, req *api.UpdateUserMetadataRequest) (*api.UpdateUserMetadataResponse, error) {
-	namespaceId, currentSub, tx, err := metadataPrepareOperation("update", ctx, a.txMgr, a.tenantMgr)
+	namespaceId, currentSub, tx, err := metadataPrepareOperation(UserMetadataType, "update", ctx, a.txMgr, a.tenantMgr)
 	if err != nil {
+		log.Err(err).Msg("Failed to update user metadata")
 		return nil, err
 	}
 
 	err = a.userStore.UpdateUserMetadata(ctx, tx, namespaceId, metadata.User, currentSub, req.GetMetadataKey(), req.GetValue())
 	if err != nil {
+		log.Err(err).Msg("Failed to update user metadata")
 		if err = tx.Rollback(ctx); err != nil {
 			log.Error().Err(err).Msg("Failed to rollback transaction.")
 		}
