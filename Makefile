@@ -106,6 +106,10 @@ server: server/service
 server/service: $(GO_SRC) generate
 	CGO_ENABLED=$(CGO_ENABLED) go build $(BUILD_PARAM) -o server/service ./server
 
+admin: cmd/admin/admin
+cmd/admin/admin: cmd/admin/*.go cmd/admin/cmd/*.go
+	CGO_ENABLED=$(CGO_ENABLED) go build $(BUILD_PARAM) -o cmd/admin/admin ./cmd/admin
+
 bins: $(BINS)
 
 # Pull the API submodule changes.

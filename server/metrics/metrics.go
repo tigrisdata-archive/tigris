@@ -39,6 +39,7 @@ var (
 	NetworkMetrics        tally.Scope
 	AuthMetrics           tally.Scope
 	SchemaMetrics         tally.Scope
+	MetronomeMetrics      tally.Scope
 	GlobalSt              *GlobalStatus
 )
 
@@ -147,6 +148,10 @@ func InitializeMetrics() func() {
 			SecondaryIndexMetrics = root.SubScope("secondary_index")
 			initializeSecondaryIndexScopes()
 		}
+
+		// Metrics for Metronome - external billing service
+		MetronomeMetrics = root.SubScope("metronome")
+		initializeMetronomeScopes()
 
 		initializeQuotaScopes()
 

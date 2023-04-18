@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# This config file is used by tigris_server2 to run auth tests
+
 server:
   port: 8081
 
@@ -52,6 +54,8 @@ auth:
   token_cache_size: 100
   primary_audience: https://tigris-test
   oauth_provider: gotrue
+  user_invitations:
+    expire_after_sec: 120
   gotrue:
     username_suffix: "@m2m.tigrisdata.com"
     url: http://tigris_gotrue:8086

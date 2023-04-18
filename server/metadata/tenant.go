@@ -244,8 +244,6 @@ func (m *TenantManager) GetNamespaceId(namespaceName string) (uint32, error) {
 }
 
 func (m *TenantManager) RefreshNamespaceAccounts(ctx context.Context) error {
-	// lock tenant manager
-
 	tx, err := m.txMgr.StartTx(ctx)
 	if err != nil {
 		return err

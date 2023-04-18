@@ -225,7 +225,7 @@ func (r *RequestStatus) AddSearchDeleteDocumentUnit(count int) {
 		return
 	}
 	r.searchDeleteDocumentUnits += int64(count)
-	log.Debug().Msg("Added search delete index unit")
+	log.Trace().Msg("Added search delete index unit")
 }
 
 func (r *RequestStatus) GetSearchDeleteDocumentUnits() int64 {
@@ -237,7 +237,7 @@ func (r *RequestStatus) AddSearchUnit() {
 		return
 	}
 	r.searchUnits += 1
-	log.Debug().Msg("Added api search unit")
+	log.Trace().Msg("Added api search unit")
 }
 
 func (r *RequestStatus) AddCollectionSearchUnit() {
@@ -245,7 +245,7 @@ func (r *RequestStatus) AddCollectionSearchUnit() {
 		return
 	}
 	r.collectionSearchUnits += 1
-	log.Debug().Msg("Added collection search unit")
+	log.Trace().Msg("Added collection search unit")
 }
 
 func (r *RequestStatus) AddDDLCreateUnit() {
@@ -253,7 +253,7 @@ func (r *RequestStatus) AddDDLCreateUnit() {
 		return
 	}
 	r.ddlCreateUnits += 1
-	log.Debug().Msg("Add ddl create unit")
+	log.Trace().Msg("Add ddl create unit")
 }
 
 func (r *RequestStatus) AddDDLUpdateUnit() {
@@ -261,12 +261,12 @@ func (r *RequestStatus) AddDDLUpdateUnit() {
 		return
 	}
 	r.ddlUpdateUnits += 1
-	log.Debug().Msg("Add ddl update unit")
+	log.Trace().Msg("Add ddl update unit")
 }
 
 func (r *RequestStatus) IsKeySecondaryIndex(fdbKey []byte) bool {
 	if bytes.Contains(fdbKey, []byte("skey")) {
-		log.Debug().Bytes("fdbKey", fdbKey).Msg("Is secondary index")
+		log.Trace().Bytes("fdbKey", fdbKey).Msg("Is secondary index")
 		return true
 	}
 	return false
@@ -275,7 +275,7 @@ func (r *RequestStatus) IsKeySecondaryIndex(fdbKey []byte) bool {
 func (r *RequestStatus) IsSecondaryIndexFieldIgnored(fdbKey []byte) bool {
 	for _, ignoredField := range ignoredFieldsForWrites {
 		if bytes.Contains(fdbKey, ignoredField) {
-			log.Debug().Bytes("fdbKey", fdbKey).Msg("Ignoring secondary index field")
+			log.Trace().Bytes("fdbKey", fdbKey).Msg("Ignoring secondary index field")
 			return true
 		}
 	}

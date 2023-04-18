@@ -16,6 +16,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"strings"
 	"time"
@@ -110,7 +111,7 @@ func GetJWTValidators(config *config.Config) []*validator.Validator {
 				return []byte(config.Auth.Gotrue.SharedSecret), nil
 			}
 		default:
-			panic("Unsupported Token signature algorithm")
+			panic(fmt.Sprintf("Unsupported Token signature algorithm: %s", validatorCfg.Algorithm))
 		}
 
 		jwtValidator, err := validator.New(
