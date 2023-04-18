@@ -20,12 +20,14 @@ var (
 	MetronomeResponseCode tally.Scope
 	MetronomeLatency      tally.Scope
 	MetronomeErrors       tally.Scope
+	MetronomeEvents       tally.Scope
 )
 
 func initializeMetronomeScopes() {
 	MetronomeResponseCode = MetronomeMetrics.SubScope("response_code")
 	MetronomeLatency = MetronomeMetrics.SubScope("latency")
 	MetronomeErrors = MetronomeMetrics.SubScope("errors")
+	MetronomeEvents = MetronomeMetrics.SubScope("events")
 }
 
 func GetMetronomeTags(operation string) map[string]string {
