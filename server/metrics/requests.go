@@ -53,6 +53,14 @@ func getRequestOkTagKeys() []string {
 	}
 }
 
+func getGlobalStatusTagKeys() []string {
+	return []string{
+		"tigris_tenant",
+		"tigris_tenant_name",
+		"env",
+	}
+}
+
 func getRequestErrorTagKeys() []string {
 	return []string{
 		"grpc_method",

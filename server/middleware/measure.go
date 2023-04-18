@@ -86,7 +86,7 @@ func measureUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryS
 		measurement.RecordDuration(metrics.RequestsRespTime, measurement.GetRequestOkTags())
 		// Global status and metrics related to them, config switches are handled inside these
 		metrics.GlobalSt.RecordRequestToActiveChunk(reqStatus, reqMetadata.GetNamespace())
-		measurement.CountUnits(reqStatus, measurement.GetRequestOkTags())
+		measurement.CountUnits(reqStatus, measurement.GetGlobalStatusTags())
 		return resp, err
 	}
 }
@@ -124,7 +124,7 @@ func measureStream() grpc.StreamServerInterceptor {
 		}
 		// Global status and metrics related to them, config switches are handled inside these
 		metrics.GlobalSt.RecordRequestToActiveChunk(reqStatus, reqMetadata.GetNamespace())
-		measurement.CountUnits(reqStatus, measurement.GetRequestOkTags())
+		measurement.CountUnits(reqStatus, measurement.GetGlobalStatusTags())
 		wrapped.WrappedContext = reqStatus.SaveRequestStatusToContext(wrapped.WrappedContext)
 		return err
 	}
