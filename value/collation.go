@@ -29,6 +29,8 @@ type Collation struct {
 	apiCollation *api.Collation
 }
 
+var EmptyCollation = NewCollation()
+
 func NewCollation() *Collation {
 	return NewCollationFrom(nil)
 }
