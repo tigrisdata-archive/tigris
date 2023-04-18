@@ -18,9 +18,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"time"
-
 	"strconv"
+	"time"
 
 	"github.com/deepmap/oapi-codegen/pkg/securityprovider"
 	"github.com/google/uuid"
@@ -195,7 +194,6 @@ func (m *Metronome) pushBillingEvents(ctx context.Context, events []biller.Event
 				return nil, err
 			}
 			return resp.HTTPResponse, err
-
 		})
 		if err != nil {
 			return err
