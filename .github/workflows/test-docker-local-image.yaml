@@ -6,6 +6,11 @@ on:
       - docker/Dockerfile.local
       - scripts/install_local_deps.sh
       - .github/workflows/test-docker-local-image.yaml
+  merge_group:
+    paths:
+      - docker/Dockerfile.local
+      - scripts/install_local_deps.sh
+      - .github/workflows/test-docker-local-image.yaml
   push:
     branches:
       - main
