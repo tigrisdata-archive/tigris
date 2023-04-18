@@ -357,4 +357,5 @@ func initializeMetricsForTest() {
 	metrics.MetronomeResponseCode = tally.NewTestScope("resp", map[string]string{})
 	metrics.MetronomeErrors = tally.NewTestScope("errors", map[string]string{})
 	metrics.MetronomeLatency = tally.NewTestScope("latency", map[string]string{})
+	metrics.MetronomeEvents = tally.NewTestScope("latency", map[string]string{})
 }

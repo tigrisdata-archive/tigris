@@ -334,6 +334,8 @@ func (m *Measurement) RecordDuration(scope tally.Scope, tags map[string]string) 
 	case SearchRespTime, SearchErrorRespTime:
 		timerEnabled = cfg.Search.Timer.TimerEnabled
 		histogramEnabled = cfg.Search.Timer.HistogramEnabled
+	case MetronomeLatency:
+		timerEnabled = true
 	}
 	if scope != nil && timerEnabled {
 		m.recordTimerDuration(scope, tags)
