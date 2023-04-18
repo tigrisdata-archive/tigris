@@ -96,7 +96,7 @@ func (r *UsageReporter) push() error {
 			continue
 		}
 		// todo: remove this extraneous logging
-		log.Info().Msgf("received usage for id %s - %d, %d, %d", namespaceId, stats.ReadUnits, stats.WriteUnits, stats.SearchUnits)
+		log.Error().Msgf("received usage for id %s - %d, %d, %d", namespaceId, stats.ReadUnits, stats.WriteUnits, stats.SearchUnits)
 
 		// create account if not yet
 		_, enabled := nsMeta.Accounts.GetMetronomeId()
