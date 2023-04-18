@@ -85,6 +85,10 @@ func NewMatcher(key string, v value.Value) (ValueMatcher, error) {
 }
 
 func NewLikeMatcher(key string, input string, collation *value.Collation) (LikeMatcher, error) {
+	if collation == nil {
+		collation = value.EmptyCollation
+	}
+
 	switch key {
 	case REGEX:
 		return NewRegexMatcher(input, collation)
