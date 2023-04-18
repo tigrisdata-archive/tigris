@@ -95,6 +95,8 @@ func (r *UsageReporter) push() error {
 			log.Error().Msgf("invalid namespace id %s", namespaceId)
 			continue
 		}
+		// todo: remove this extraneous logging
+		log.Info().Msgf("received usage for id %s - %d, %d, %d", namespaceId, stats.ReadUnits, stats.WriteUnits, stats.SearchUnits)
 
 		// create account if not yet
 		_, enabled := nsMeta.Accounts.GetMetronomeId()
