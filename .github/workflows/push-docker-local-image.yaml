@@ -6,6 +6,11 @@ on:
       - docker/Dockerfile*
       - scripts/install_*.sh
       - .github/workflows/push-docker-*.yaml
+  merge_group:
+    paths:
+      - docker/Dockerfile*
+      - scripts/install_*.sh
+      - .github/workflows/push-docker-*.yaml
   push:
     branches:
       - main
