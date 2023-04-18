@@ -177,7 +177,7 @@ func (r *RequestStatus) AddReadBytes(value int64) {
 		return
 	}
 	r.readBytes += value
-	log.Debug().Int64("Bytes read", value).Int64("Total bytes read", r.readBytes).Msg("Added read bytes")
+	log.Trace().Int64("Bytes read", value).Int64("Total bytes read", r.readBytes).Msg("Added read bytes")
 }
 
 func (r *RequestStatus) AddWriteBytes(value int64) {
@@ -360,15 +360,15 @@ func (g *GlobalStatus) Flush() TenantStatusTimeChunk {
 	res := *g.activeChunk
 	g.activeChunk = NewTenantStatusTimeChunk(startTime)
 	g.mu.Unlock()
-	log.Debug().Int("number of tenants", len(res.Tenants)).Msg("Flushing global status")
+	log.Error().Int("number of tenants", len(res.Tenants)).Msg("Flushing global status")
 	for _, status := range res.Tenants {
 		status.WriteUnits = getUnitsFromBytes(status.writeBytes, config.WriteUnitSize)
 		status.ReadUnits = getUnitsFromBytes(status.readBytes, config.ReadUnitSize)
 	}
-	log.Debug().Time("start time", res.StartTime).Time("end time", res.EndTime).Msg("flush results")
+	log.Error().Time("start time", res.StartTime).Time("end time", res.EndTime).Msg("flush results")
 	for tenantName, status := range res.Tenants {
-		log.Debug().Int64("read units", status.ReadUnits).Int64("write units", status.WriteUnits).Str("tenant name", tenantName).Msg("db units flushed")
-		log.Debug().Int64("search units", status.SearchUnits).Int64("collection search units", status.collectionSearchUnits).Str("tenant name", tenantName).Msg("flushed search units")
+		log.Error().Int64("read units", status.ReadUnits).Int64("write units", status.WriteUnits).Str("tenant name", tenantName).Msg("db units flushed")
+		log.Error().Int64("search units", status.SearchUnits).Int64("collection search units", status.collectionSearchUnits).Str("tenant name", tenantName).Msg("flushed search units")
 	}
 	return res
 }
