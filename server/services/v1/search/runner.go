@@ -117,111 +117,6 @@ func (f *RunnerFactory) GetDeleteQueryRunner(accessToken *types.AccessToken) *De
 	}
 }
 
-type baseRunner struct {
-	store       search.Store
-	encoder     metadata.Encoder
-	accessToken *types.AccessToken
-	txMgr       *transaction.Manager
-}
-
-func newBaseRunner(store search.Store, encoder metadata.Encoder, txMgr *transaction.Manager, accessToken *types.AccessToken) *baseRunner {
-	return &baseRunner{
-		store:       store,
-		encoder:     encoder,
-		accessToken: accessToken,
-		txMgr:       txMgr,
-	}
-}
-
-func (runner *baseRunner) getIndex(tenant *metadata.Tenant, projName string, indexName string) (*schema.SearchIndex, error) {
-	project, err := tenant.GetProject(projName)
-	if err != nil {
-		return nil, err
-	}
-
-	index, found := project.GetSearch().GetIndex(indexName)
-	if !found {
-		// this allows to trigger version check to reload if index already exists
-		return nil, metadata.NewSearchIndexNotFoundErr(indexName)
-	}
-
-	return index, nil
-}
-
-func (runner *baseRunner) encodeDocuments(index *schema.SearchIndex, documents [][]byte, buffer *bytes.Buffer, isUpdate bool) ([]string, [][]byte, error) {
-	ids := make([]string, len(documents))
-	ts := internal.NewTimestamp()
-
-	transformer := newWriteTransformer(index, ts, isUpdate)
-	serializedDocs := make([][]byte, len(documents))
-	for i, raw := range documents {
-		doc, err := util.JSONToMap(raw)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		// perform any validation on this document
-		if err := index.Validate(doc); err != nil {
-			return nil, nil, err
-		}
-
-		id, transformed, err := transformer.toSearch(raw, doc)
-		if err != nil {
-			return nil, nil, err
-		}
-		ids[i] = id
-
-		if serializedDocs[i], err = util.MapToJSON(transformed); err != nil {
-			return nil, nil, err
-		}
-
-		buffer.Write(serializedDocs[i])
-		buffer.WriteByte('\n')
-	}
-
-	return ids, serializedDocs, nil
-}
-
-func (runner *baseRunner) execInStorage(ctx context.Context, tableName string, ids []string, fn func(index int, tx transaction.Tx, key keys.Key) error) error {
-	if !config.DefaultConfig.Search.StorageEnabled {
-		return nil
-	}
-
-	tx, err := runner.txMgr.StartTx(ctx)
-	if err != nil {
-		return err
-	}
-
-	for i, id := range ids {
-		var key keys.Key
-		if key, err = runner.encoder.EncodeFDBSearchKey(tableName, id); err != nil {
-			_ = tx.Rollback(ctx)
-			return err
-		}
-
-		if err = fn(i, tx, key); err != nil {
-			_ = tx.Rollback(ctx)
-			return err
-		}
-	}
-
-	return tx.Commit(ctx)
-}
-
-func (runner *baseRunner) readRow(ctx context.Context, tx transaction.Tx, key keys.Key) (*kv.KeyValue, bool, error) {
-	it, err := tx.Read(ctx, key, false)
-	if ulog.E(err) {
-		return nil, false, err
-	}
-
-	var value kv.KeyValue
-	if it.Next(&value) {
-		return &value, true, nil
-	}
-
-	return nil, false, it.Err()
-}
-
 type ReadRunner struct {
 	*baseRunner
 
@@ -391,16 +286,19 @@ func (runner *CreateRunner) createDocumentById(ctx context.Context, tenant *meta
 	}
 
 	transformer := newWriteTransformer(index, internal.NewTimestamp(), false)
-	id, transformed, err := transformer.toSearch(req.Document, decDoc)
+	id, err := transformer.getOrGenerateId(req.Document, decDoc)
 	if err != nil {
 		return Response{}, err
 	}
 	if id != req.Id {
 		return Response{}, errors.InvalidArgument("id passed in request '%s', is not matching id '%s' in body", req.Id, id)
 	}
+	if decDoc, err = transformer.toSearch(id, decDoc); err != nil {
+		return Response{}, err
+	}
 
 	if err := runner.execInStorage(ctx, index.StoreIndexName(), []string{id}, func(_ int, tx transaction.Tx, key keys.Key) error {
-		serialized, err := util.MapToJSON(transformed)
+		serialized, err := util.MapToJSON(decDoc)
 		if err != nil {
 			return err
 		}
@@ -410,7 +308,7 @@ func (runner *CreateRunner) createDocumentById(ctx context.Context, tenant *meta
 		return Response{}, createApiError(err)
 	}
 
-	if err = runner.store.CreateDocument(ctx, index.StoreIndexName(), transformed); err != nil {
+	if err = runner.store.CreateDocument(ctx, index.StoreIndexName(), decDoc); err != nil {
 		return Response{}, createApiError(err)
 	}
 
@@ -427,29 +325,21 @@ func (runner *CreateRunner) createDocuments(ctx context.Context, tenant *metadat
 		return Response{}, err
 	}
 
-	var (
-		ids        []string
-		serialized [][]byte
-		buffer     bytes.Buffer
-	)
-	if ids, serialized, err = runner.encodeDocuments(index, req.Documents, &buffer, false); err != nil {
-		return Response{}, err
-	}
+	var buffer bytes.Buffer
+	ids, serialized, batchErrors, validDocs := runner.encodeDocuments(index, req.Documents, &buffer, false)
 
 	var storeResponses []search.IndexResp
-	if storeResponses, err = runner.store.IndexDocuments(ctx, index.StoreIndexName(), &buffer, search.IndexDocumentsOptions{
-		Action:    search.Create,
-		BatchSize: len(req.Documents),
-	}); err != nil {
-		return Response{}, createApiError(err)
+	if validDocs > 0 {
+		if storeResponses, err = runner.store.IndexDocuments(ctx, index.StoreIndexName(), &buffer, search.IndexDocumentsOptions{
+			Action:    search.Create,
+			BatchSize: validDocs,
+		}); err != nil {
+			return Response{}, createApiError(err)
+		}
 	}
 
-	resp := &api.CreateDocumentResponse{}
-	for i, id := range ids {
-		resp.Status = append(resp.Status, &api.DocStatus{
-			Id:    id,
-			Error: convertStoreErrToApiErr(id, storeResponses[i].Code, storeResponses[i].Error),
-		})
+	resp := &api.CreateDocumentResponse{
+		Status: runner.buildDocStatusResp(ids, batchErrors, storeResponses),
 	}
 
 	if err := runner.execInStorage(ctx, index.StoreIndexName(), ids, func(index int, tx transaction.Tx, key keys.Key) error {
@@ -478,30 +368,22 @@ func (runner *CreateOrReplaceRunner) Run(ctx context.Context, tenant *metadata.T
 		return Response{}, err
 	}
 
-	var (
-		ids        []string
-		serialized [][]byte
-		buffer     bytes.Buffer
-	)
-
-	if ids, serialized, err = runner.encodeDocuments(index, runner.req.Documents, &buffer, false); err != nil {
-		return Response{}, err
-	}
+	var buffer bytes.Buffer
+	ids, serialized, batchErrors, validDocs := runner.encodeDocuments(index, runner.req.Documents, &buffer, false)
 
 	var storeResponses []search.IndexResp
-	if storeResponses, err = runner.store.IndexDocuments(ctx, index.StoreIndexName(), &buffer, search.IndexDocumentsOptions{
-		Action:    search.Replace,
-		BatchSize: len(runner.req.Documents),
-	}); err != nil {
-		return Response{}, createApiError(err)
+
+	if validDocs > 0 {
+		if storeResponses, err = runner.store.IndexDocuments(ctx, index.StoreIndexName(), &buffer, search.IndexDocumentsOptions{
+			Action:    search.Replace,
+			BatchSize: validDocs,
+		}); err != nil {
+			return Response{}, createApiError(err)
+		}
 	}
 
-	resp := &api.CreateOrReplaceDocumentResponse{}
-	for i, id := range ids {
-		resp.Status = append(resp.Status, &api.DocStatus{
-			Id:    id,
-			Error: convertStoreErrToApiErr(id, storeResponses[i].Code, storeResponses[i].Error),
-		})
+	resp := &api.CreateOrReplaceDocumentResponse{
+		Status: runner.buildDocStatusResp(ids, batchErrors, storeResponses),
 	}
 
 	if err := runner.execInStorage(ctx, index.StoreIndexName(), ids, func(index int, tx transaction.Tx, key keys.Key) error {
@@ -530,29 +412,21 @@ func (runner *UpdateRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 		return Response{}, err
 	}
 
-	var (
-		ids        []string
-		serialized [][]byte
-		buffer     bytes.Buffer
-	)
-	if ids, serialized, err = runner.encodeDocuments(index, runner.req.Documents, &buffer, true); err != nil {
-		return Response{}, err
-	}
+	var buffer bytes.Buffer
+	ids, serialized, batchErrors, validDocs := runner.encodeDocuments(index, runner.req.Documents, &buffer, true)
 
 	var storeResponses []search.IndexResp
-	if storeResponses, err = runner.store.IndexDocuments(ctx, index.StoreIndexName(), &buffer, search.IndexDocumentsOptions{
-		Action:    search.Update,
-		BatchSize: len(runner.req.Documents),
-	}); err != nil {
-		return Response{}, createApiError(err)
+	if validDocs > 0 {
+		if storeResponses, err = runner.store.IndexDocuments(ctx, index.StoreIndexName(), &buffer, search.IndexDocumentsOptions{
+			Action:    search.Update,
+			BatchSize: validDocs,
+		}); err != nil {
+			return Response{}, createApiError(err)
+		}
 	}
 
-	resp := &api.UpdateDocumentResponse{}
-	for i, id := range ids {
-		resp.Status = append(resp.Status, &api.DocStatus{
-			Id:    id,
-			Error: convertStoreErrToApiErr(id, storeResponses[i].Code, storeResponses[i].Error),
-		})
+	resp := &api.UpdateDocumentResponse{
+		Status: runner.buildDocStatusResp(ids, batchErrors, storeResponses),
 	}
 
 	if err := runner.execInStorage(ctx, index.StoreIndexName(), ids, func(index int, tx transaction.Tx, key keys.Key) error {

@@ -145,7 +145,6 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 		require.Equal(t, 0, tenantMgr.refreshNamespaceCalls)
 		// no calls should be made to metronome provider
 		require.Empty(t, mockProvider.Calls)
-
 	})
 
 	t.Run("fails to create metronome account", func(t *testing.T) {

@@ -143,7 +143,7 @@ func (r *UsageReporter) pushStorage() error {
 			dbBytes += secondaryIndexStats.StoredBytes
 		}
 
-		//todo: add search index sizes
+		// todo: add search index sizes
 		event := NewStorageEventBuilder().
 			WithNamespaceId(nsMeta.StrId).
 			WithTimestamp(time.Now()).

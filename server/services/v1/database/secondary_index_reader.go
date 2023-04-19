@@ -216,7 +216,8 @@ func (it *SecondaryIndexReaderImpl) Next(row *Row) bool {
 func (it *SecondaryIndexReaderImpl) Interrupted() error { return it.err }
 
 // For local debugging and testing.
-// nolint:unused
+//
+//nolint:unused
 func (it *SecondaryIndexReaderImpl) dbgPrintIndex() {
 	if config.GetEnvironment() != config.EnvLocal {
 		return
