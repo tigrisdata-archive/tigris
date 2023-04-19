@@ -48,6 +48,7 @@ func createChannel(t *testing.T, projectName string, channelName string) *httpex
 }
 
 func TestGetChannel(t *testing.T) {
+	t.Skip("Skip and enable when we add back the realtime offering")
 	project := setupTestsOnlyProject(t)
 	defer cleanupTests(t, project)
 
@@ -64,6 +65,7 @@ func TestGetChannel(t *testing.T) {
 }
 
 func TestMessages(t *testing.T) {
+	t.Skip("Skip and enable when we add back the realtime offering")
 	project := setupTestsOnlyProject(t)
 	defer cleanupTests(t, project)
 
