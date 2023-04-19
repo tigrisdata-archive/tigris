@@ -18,9 +18,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"time"
-
 	"strconv"
+	"time"
 
 	"github.com/deepmap/oapi-codegen/pkg/securityprovider"
 	"github.com/google/uuid"
@@ -84,7 +83,7 @@ func (m *Metronome) CreateAccount(ctx context.Context, namespaceId string, name 
 		Name:          name,
 	}
 
-	m.measure(ctx, "createAccount", func(ctx context.Context) (*http.Response, error) {
+	m.measure(ctx, "create_account", func(ctx context.Context) (*http.Response, error) {
 		resp, err = m.client.CreateCustomerWithResponse(ctx, body)
 		if resp == nil {
 			return nil, err
@@ -122,7 +121,7 @@ func (m *Metronome) AddPlan(ctx context.Context, accountId MetronomeId, planId u
 		StartingOn: pastMidnight(),
 	}
 
-	m.measure(ctx, "addPlan", func(ctx context.Context) (*http.Response, error) {
+	m.measure(ctx, "add_plan", func(ctx context.Context) (*http.Response, error) {
 		resp, err = m.client.AddPlanToCustomerWithResponse(ctx, accountId, body)
 		if resp == nil {
 			return nil, err
@@ -149,6 +148,13 @@ func (m *Metronome) PushUsageEvents(ctx context.Context, events []*UsageEvent) e
 		}
 	}
 
+	me := metrics.NewMeasurement(
+		metrics.MetronomeServiceName,
+		"ingest",
+		metrics.MetronomeSpanType,
+		metrics.GetMetronomeTags("ingest"))
+	me.IncrementCount(metrics.MetronomeEvents, me.GetTags(), "usage", int64(len(billingEvents)))
+
 	return m.pushBillingEvents(ctx, billingEvents)
 }
 
@@ -159,6 +165,13 @@ func (m *Metronome) PushStorageEvents(ctx context.Context, events []*StorageEven
 			billingEvents = append(billingEvents, se.Event)
 		}
 	}
+	me := metrics.NewMeasurement(
+		metrics.MetronomeServiceName,
+		"ingest",
+		metrics.MetronomeSpanType,
+		metrics.GetMetronomeTags("ingest"))
+	me.IncrementCount(metrics.MetronomeEvents, me.GetTags(), "storage", int64(len(billingEvents)))
+
 	return m.pushBillingEvents(ctx, billingEvents)
 }
 
@@ -189,13 +202,12 @@ func (m *Metronome) pushBillingEvents(ctx context.Context, events []biller.Event
 		page := events[p*pageSize : high]
 
 		// content encoding - gzip?
-		m.measure(ctx, "ingestBillingMetric", func(ctx context.Context) (*http.Response, error) {
+		m.measure(ctx, "ingest", func(ctx context.Context) (*http.Response, error) {
 			resp, err = m.client.IngestWithResponse(ctx, page)
 			if resp == nil {
 				return nil, err
 			}
 			return resp.HTTPResponse, err
-
 		})
 		if err != nil {
 			return err

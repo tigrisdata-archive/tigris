@@ -314,8 +314,8 @@ func TestQuery_Range(t *testing.T) {
 			[]string{"null", "2015-12.22T17:42:34Z"},
 		},
 		{
-			Map{"_tigris_created_at": Map{"$gt": "2022-12.22T17:42:34Z"}},
-			[]int{1, 2, 3, 4, 30},
+			Map{"_tigris_created_at": Map{"$gt": "2022-12.22T17:42:34Z"}, "bool_value": true},
+			[]int{1, 4},
 			[]string{"2022-12.22T17:42:34Z", max},
 		},
 		{

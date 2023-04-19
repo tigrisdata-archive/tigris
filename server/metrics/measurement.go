@@ -144,6 +144,10 @@ func (m *Measurement) GetRequestOkTags() map[string]string {
 	return filterTags(standardizeTags(m.tags, getRequestOkTagKeys()), config.DefaultConfig.Metrics.Requests.FilteredTags)
 }
 
+func (m *Measurement) GetGlobalStatusTags() map[string]string {
+	return filterTags(standardizeTags(m.tags, getGlobalStatusTagKeys()), config.DefaultConfig.Metrics.Requests.FilteredTags)
+}
+
 func (m *Measurement) GetRequestErrorTags(err error) map[string]string {
 	return filterTags(standardizeTags(mergeTags(m.tags, getTagsForError(err)), getRequestErrorTagKeys()), config.DefaultConfig.Metrics.Requests.FilteredTags)
 }
@@ -334,6 +338,8 @@ func (m *Measurement) RecordDuration(scope tally.Scope, tags map[string]string) 
 	case SearchRespTime, SearchErrorRespTime:
 		timerEnabled = cfg.Search.Timer.TimerEnabled
 		histogramEnabled = cfg.Search.Timer.HistogramEnabled
+	case MetronomeLatency:
+		timerEnabled = true
 	}
 	if scope != nil && timerEnabled {
 		m.recordTimerDuration(scope, tags)

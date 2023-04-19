@@ -25,6 +25,10 @@ import (
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
+const (
+	NamespaceMetadataType = "namespace"
+)
+
 type NamespaceMetadataProvider interface {
 	GetNamespaceMetadata(ctx context.Context, req *api.GetNamespaceMetadataRequest) (*api.GetNamespaceMetadataResponse, error)
 	InsertNamespaceMetadata(ctx context.Context, req *api.InsertNamespaceMetadataRequest) (*api.InsertNamespaceMetadataResponse, error)
@@ -39,7 +43,7 @@ type DefaultNamespaceMetadataProvider struct {
 }
 
 func (a *DefaultNamespaceMetadataProvider) GetNamespaceMetadata(ctx context.Context, req *api.GetNamespaceMetadataRequest) (*api.GetNamespaceMetadataResponse, error) {
-	namespaceId, _, tx, err := metadataPrepareOperation("read", ctx, a.txMgr, a.tenantMgr)
+	namespaceId, _, tx, err := metadataPrepareOperation(NamespaceMetadataType, "read", ctx, a.txMgr, a.tenantMgr)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +69,7 @@ func (a *DefaultNamespaceMetadataProvider) DeleteNamespace(ctx context.Context, 
 }
 
 func (a *DefaultNamespaceMetadataProvider) InsertNamespaceMetadata(ctx context.Context, req *api.InsertNamespaceMetadataRequest) (*api.InsertNamespaceMetadataResponse, error) {
-	namespaceId, _, tx, err := metadataPrepareOperation("insert", ctx, a.txMgr, a.tenantMgr)
+	namespaceId, _, tx, err := metadataPrepareOperation(NamespaceMetadataType, "insert", ctx, a.txMgr, a.tenantMgr)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +93,7 @@ func (a *DefaultNamespaceMetadataProvider) InsertNamespaceMetadata(ctx context.C
 }
 
 func (a *DefaultNamespaceMetadataProvider) UpdateNamespaceMetadata(ctx context.Context, req *api.UpdateNamespaceMetadataRequest) (*api.UpdateNamespaceMetadataResponse, error) {
-	namespaceId, _, tx, err := metadataPrepareOperation("update", ctx, a.txMgr, a.tenantMgr)
+	namespaceId, _, tx, err := metadataPrepareOperation(NamespaceMetadataType, "update", ctx, a.txMgr, a.tenantMgr)
 	if err != nil {
 		return nil, err
 	}

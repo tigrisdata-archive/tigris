@@ -15,28 +15,43 @@
 package filter
 
 import (
+	"bytes"
 	"fmt"
+	"regexp"
+	"strings"
 
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/value"
 )
 
 const (
-	EQ  = "$eq"
-	GT  = "$gt"
-	LT  = "$lt"
-	GTE = "$gte"
-	LTE = "$lte"
+	EQ       = "$eq"
+	GT       = "$gt"
+	LT       = "$lt"
+	GTE      = "$gte"
+	LTE      = "$lte"
+	NOT      = "$not"
+	REGEX    = "$regex"
+	CONTAINS = "$contains"
 )
+
+type Matcher interface {
+	// Type return the type of the value matcher, syntactic sugar for logging, etc
+	Type() string
+}
+
+type LikeMatcher interface {
+	Matcher
+
+	Matches(docValue any) bool
+}
 
 // ValueMatcher is an interface that has method like Matches.
 type ValueMatcher interface {
+	Matcher
+
 	// Matches returns true if the receiver has the value object that has the same value as input
 	Matches(input value.Value) bool
-
-	// Type return the type of the value matcher, syntactic sugar for logging, etc
-	Type() string
-
 	// GetValue returns the value on which the Matcher is operating
 	GetValue() value.Value
 }
@@ -64,6 +79,23 @@ func NewMatcher(key string, v value.Value) (ValueMatcher, error) {
 		return &LessThanEqMatcher{
 			Value: v,
 		}, nil
+	default:
+		return nil, errors.InvalidArgument("unsupported operand '%s'", key)
+	}
+}
+
+func NewLikeMatcher(key string, input string, collation *value.Collation) (LikeMatcher, error) {
+	if collation == nil {
+		collation = value.EmptyCollation
+	}
+
+	switch key {
+	case REGEX:
+		return NewRegexMatcher(input, collation)
+	case CONTAINS:
+		return NewContainsMatcher(input, collation)
+	case NOT:
+		return NewNotMatcher(input, collation)
 	default:
 		return nil, errors.InvalidArgument("unsupported operand '%s'", key)
 	}
@@ -184,4 +216,139 @@ func (l *LessThanEqMatcher) Type() string {
 
 func (l *LessThanEqMatcher) String() string {
 	return fmt.Sprintf("{$lte:%v}", l.Value)
+}
+
+// RegexMatcher implements "$regex" operand.
+// When matching against text, the regexp returns a match that
+// begins as early as possible in the input (leftmost), and among those
+// it chooses the one that a backtracking search would have found first.
+// This so-called leftmost-first matching is the same semantics
+// that Perl, Python, and other implementations use.
+type RegexMatcher struct {
+	regex     *regexp.Regexp
+	collation *value.Collation
+}
+
+func NewRegexMatcher(value string, collation *value.Collation) (LikeMatcher, error) {
+	regexp, err := regexp.Compile(value)
+	if err != nil {
+		return nil, err
+	}
+
+	return &RegexMatcher{
+		regex:     regexp,
+		collation: collation,
+	}, nil
+}
+
+func (c *RegexMatcher) Matches(docValue any) bool {
+	switch dv := docValue.(type) {
+	case string:
+		return c.regex.MatchString(dv)
+	case []string:
+		for _, e := range dv {
+			if c.regex.MatchString(e) {
+				return true
+			}
+		}
+	case []byte:
+		return c.regex.Match(dv)
+	}
+	return false
+}
+
+func (c *RegexMatcher) Type() string {
+	return "$regex"
+}
+
+func (c *RegexMatcher) String() string {
+	return fmt.Sprintf("{regex:%v}", c.regex.String())
+}
+
+// ContainsMatcher implements "$contains" operand.
+type ContainsMatcher struct {
+	value     string
+	collation *value.Collation
+}
+
+func NewContainsMatcher(value string, collation *value.Collation) (LikeMatcher, error) {
+	return &ContainsMatcher{
+		value:     value,
+		collation: collation,
+	}, nil
+}
+
+func (c *ContainsMatcher) Matches(docValue any) bool {
+	switch dv := docValue.(type) {
+	case string:
+		return StringContains(dv, c.value, c.collation)
+	case []string:
+		for _, e := range dv {
+			if StringContains(e, c.value, c.collation) {
+				return true
+			}
+		}
+	case []byte:
+		if c.collation.IsCaseInsensitive() {
+			return bytes.Contains(bytes.ToLower(dv), bytes.ToLower([]byte(c.value)))
+		}
+		return bytes.Contains(dv, []byte(c.value))
+	}
+	return false
+}
+
+func (c *ContainsMatcher) Type() string {
+	return "$contains"
+}
+
+func (c *ContainsMatcher) String() string {
+	return fmt.Sprintf("{$contains:%v}", c.value)
+}
+
+// NotMatcher implements "$not" operand.
+type NotMatcher struct {
+	value     string
+	collation *value.Collation
+}
+
+func NewNotMatcher(value string, collation *value.Collation) (LikeMatcher, error) {
+	return &NotMatcher{
+		value:     value,
+		collation: collation,
+	}, nil
+}
+
+func (n *NotMatcher) Matches(docValue any) bool {
+	switch dv := docValue.(type) {
+	case string:
+		return !StringContains(dv, n.value, n.collation)
+	case []string:
+		for _, e := range dv {
+			if StringContains(e, n.value, n.collation) {
+				return false
+			}
+		}
+		return true
+	case []byte:
+		if n.collation.IsCaseInsensitive() {
+			return !bytes.Contains(bytes.ToLower(dv), bytes.ToLower([]byte(n.value)))
+		}
+		return !bytes.Contains(dv, []byte(n.value))
+	}
+	return false
+}
+
+func (n *NotMatcher) Type() string {
+	return "$not"
+}
+
+func (n *NotMatcher) String() string {
+	return fmt.Sprintf("{$not:%v}", n.value)
+}
+
+func StringContains(s string, substr string, collation *value.Collation) bool {
+	if collation.IsCaseInsensitive() {
+		return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
+	}
+	return strings.Contains(s, substr)
 }

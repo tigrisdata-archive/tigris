@@ -204,9 +204,10 @@ func (sz *searchSerializer) serialize(searchToken string, filters []Filter) []st
 	var selectors []*Selector
 	var logical []LogicalFilter
 	for _, f := range filters {
-		if s, ok := f.(*Selector); ok {
-			selectors = append(selectors, s)
-		} else {
+		switch conv := f.(type) {
+		case *Selector:
+			selectors = append(selectors, conv)
+		case LogicalFilter:
 			logical = append(logical, f.(LogicalFilter))
 		}
 	}
