@@ -183,7 +183,7 @@ func (runner *CollectionQueryRunner) describe(ctx context.Context, tx transactio
 		namespace = "unknown"
 	}
 
-	metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.DbName(), db.BranchName(), coll.GetName(), size)
+	metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.DbName(), db.BranchName(), coll.GetName(), size.StoredBytes)
 	// remove indexing version from the schema before returning the response
 	sch := schema.RemoveIndexingVersion(coll.Schema)
 
@@ -200,7 +200,7 @@ func (runner *CollectionQueryRunner) describe(ctx context.Context, tx transactio
 			Collection: coll.Name,
 			Metadata:   &api.CollectionMetadata{},
 			Schema:     sch,
-			Size:       size,
+			Size:       size.StoredBytes,
 			Indexes:    runner.indexToCollectionIndex(coll.SecondaryIndexes.All),
 		},
 	}, ctx, nil

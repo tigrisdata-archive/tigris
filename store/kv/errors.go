@@ -32,6 +32,7 @@ const (
 	ErrCodeTransactionNotCommitted StoreErrCode = 0x05
 	ErrCodeValueSizeExceeded       StoreErrCode = 0x06
 	ErrCodeTransactionSizeExceeded StoreErrCode = 0x07
+	ErrCodeNotFound                StoreErrCode = 0x08
 )
 
 var (
@@ -46,6 +47,7 @@ var (
 	ErrTransactionNotCommitted = NewStoreError(1021, ErrCodeTransactionNotCommitted, "transaction may or may not have committed")
 	ErrValueSizeExceeded       = NewStoreError(2103, ErrCodeValueSizeExceeded, "document exceeds limit")
 	ErrTransactionSizeExceeded = NewStoreError(2101, ErrCodeTransactionSizeExceeded, "transaction exceeds limit")
+	ErrNotFound                = NewStoreError(0, ErrCodeNotFound, "not found")
 )
 
 type StoreError struct {

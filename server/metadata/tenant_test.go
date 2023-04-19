@@ -785,9 +785,15 @@ func TestTenantManager_DataSize(t *testing.T) {
 
 	docSize := 10 * 1024
 
-	db1 := &Database{id: 10}
+	db1 := &Database{id: 10, collections: make(map[string]*collectionHolder)}
 	db2 := &Database{id: 11}
+
+	tenant.projects = make(map[string]*Project)
+	tenant.projects["db1"] = &Project{database: db1}
+	tenant.projects["db2"] = &Project{database: db2}
+
 	coll1 := &schema.DefaultCollection{Id: 256}
+	db1.collections["coll1"] = &collectionHolder{collection: coll1}
 
 	table, err := m.encoder.EncodeTableName(ns1, db1, coll1)
 	require.NoError(t, err)
@@ -797,6 +803,7 @@ func TestTenantManager_DataSize(t *testing.T) {
 
 	tx, err := kvStore.BeginTx(ctx)
 	require.NoError(t, err)
+
 	for i := 0; i < 100; i++ {
 		err = tx.Insert(ctx, table, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
 		require.NoError(t, err)
@@ -806,6 +813,7 @@ func TestTenantManager_DataSize(t *testing.T) {
 	coll2 := &schema.DefaultCollection{Id: 512}
 	table2, err := m.encoder.EncodeTableName(ns1, db1, coll2)
 	require.NoError(t, err)
+	db1.collections["coll2"] = &collectionHolder{collection: coll2}
 
 	err = kvStore.DropTable(ctx, table2)
 	require.NoError(t, err)
@@ -818,11 +826,13 @@ func TestTenantManager_DataSize(t *testing.T) {
 	}
 	_ = tx.Commit(ctx)
 
-	db21 := &Database{id: 20}
+	db21 := &Database{id: 20, collections: make(map[string]*collectionHolder)}
 	coll21 := &schema.DefaultCollection{Id: 1024}
 	// for second namespace insert 150 in one project and 50 record in to other
 	table21, err := m.encoder.EncodeTableName(ns2, db21, coll21)
 	require.NoError(t, err)
+	tenant2.projects["db21"] = &Project{database: db21}
+	db21.collections["coll21"] = &collectionHolder{collection: coll21}
 
 	err = kvStore.DropTable(ctx, table21)
 	require.NoError(t, err)
@@ -835,10 +845,12 @@ func TestTenantManager_DataSize(t *testing.T) {
 	}
 	_ = tx.Commit(ctx)
 
-	db22 := &Database{id: 30}
+	db22 := &Database{id: 30, collections: make(map[string]*collectionHolder)}
 	coll22 := &schema.DefaultCollection{Id: 1024}
 	table22, err := m.encoder.EncodeTableName(ns2, db22, coll22)
 	require.NoError(t, err)
+	tenant2.projects["db22"] = &Project{database: db22}
+	db22.collections["coll22"] = &collectionHolder{collection: coll22}
 
 	err = kvStore.DropTable(ctx, table22)
 	require.NoError(t, err)
@@ -855,57 +867,47 @@ func TestTenantManager_DataSize(t *testing.T) {
 	// db1
 	sz, err := tenant.Size(ctx)
 	require.NoError(t, err)
-	// Size is an estimate from FoundationDB, should be between 1 and 10M
-	assert.Greater(t, sz, int64(1048576))
-	assert.Less(t, sz, int64(10485760))
+	assert.Equal(t, int64(3072000), sz.StoredBytes)
 
 	sz, err = tenant.DatabaseSize(ctx, db1)
 	require.NoError(t, err)
-	assert.Greater(t, sz, int64(1048576))
-	assert.Less(t, sz, int64(10485760))
+	assert.Equal(t, int64(3072000), sz.StoredBytes)
 
 	sz, err = tenant.CollectionSize(ctx, db1, coll1)
 	require.NoError(t, err)
-	assert.Greater(t, sz, int64(1048576))
-	assert.Less(t, sz, int64(10485760))
+	assert.Equal(t, int64(1024000), sz.StoredBytes)
 
 	sz, err = tenant.CollectionSize(ctx, db1, coll2)
 	require.NoError(t, err)
-	assert.Greater(t, sz, int64(1048576))
-	assert.Less(t, sz, int64(10485760))
+	assert.Equal(t, int64(2048000), sz.StoredBytes)
 
 	// db2 is empty
 	sz, err = tenant.DatabaseSize(ctx, db2)
 	require.NoError(t, err)
-	assert.Equal(t, int64(0), sz)
+	assert.Equal(t, int64(0), sz.StoredBytes)
 
 	// Tenant 2
 	// db21
 	sz, err = tenant2.Size(ctx)
 	require.NoError(t, err)
-	assert.Greater(t, sz, int64(1048576))
-	assert.Less(t, sz, int64(10485760)) // sum of db21 and db22: 2710000
+	assert.Equal(t, int64(2662400), sz.StoredBytes)
 
 	sz, err = tenant2.DatabaseSize(ctx, db21)
 	require.NoError(t, err)
-	assert.Greater(t, sz, int64(1048576))
-	assert.Less(t, sz, int64(10485760))
+	assert.Equal(t, int64(1126400), sz.StoredBytes)
 
 	sz, err = tenant2.CollectionSize(ctx, db21, coll21)
 	require.NoError(t, err)
-	assert.Greater(t, sz, int64(1048576))
-	assert.Less(t, sz, int64(10485760))
+	assert.Equal(t, int64(1126400), sz.StoredBytes)
 
 	// db22
 	sz, err = tenant2.DatabaseSize(ctx, db22)
 	require.NoError(t, err)
-	assert.Greater(t, sz, int64(1048576))
-	assert.Less(t, sz, int64(10485760))
+	assert.Equal(t, int64(1536000), sz.StoredBytes)
 
 	sz, err = tenant2.CollectionSize(ctx, db22, coll22)
 	require.NoError(t, err)
-	assert.Greater(t, sz, int64(1048576))
-	assert.Less(t, sz, int64(10485760))
+	assert.Equal(t, int64(1536000), sz.StoredBytes)
 
 	// cleanup
 	tns1, err := m.encoder.EncodeTableName(tenant.GetNamespace(), nil, nil)
@@ -920,11 +922,11 @@ func TestTenantManager_DataSize(t *testing.T) {
 
 	sz, err = tenant.Size(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, int64(0), sz)
+	assert.Equal(t, int64(0), sz.StoredBytes)
 
 	sz, err = tenant2.Size(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, int64(0), sz)
+	assert.Equal(t, int64(0), sz.StoredBytes)
 
 	testClearDictionary(ctx, m.metaStore, m.kvStore)
 }
@@ -937,7 +939,7 @@ func TestMain(m *testing.M) {
 		panic(fmt.Sprintf("failed to init FDB config: %v", err))
 	}
 
-	kvStore, err = kv.NewTxStore(fdbCfg)
+	kvStore, err = kv.NewBuilder().WithStats().Build(fdbCfg)
 	if err != nil {
 		panic(fmt.Sprintf("failed to init FDB KV %v", err))
 	}

@@ -60,7 +60,8 @@ func (i *SearchIndexer) OnPostCommit(ctx context.Context, tenant *metadata.Tenan
 		}
 
 		collection := db.GetCollection(collName)
-		if collection == nil {
+		if collection == nil || event.Key == nil {
+			// event.Key == nil if event comes from drop table
 			continue
 		}
 

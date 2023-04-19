@@ -162,7 +162,7 @@ func TestMain(m *testing.M) {
 		panic(fmt.Sprintf("failed to init FDB config: %v", err))
 	}
 
-	kvStore, err = kv.NewTxStore(fdbCfg)
+	kvStore, err = kv.NewBuilder().WithStats().Build(fdbCfg)
 	if err != nil {
 		panic(fmt.Sprintf("failed to init FDB KV %v", err))
 	}

@@ -295,7 +295,7 @@ var DefaultConfig = Config{
 		EnableNamespaceDeletion: false,
 		EnableNamespaceCreation: true,
 		UserInvitations: Invitation{
-			ExpireAfterSec: 259200, //3days
+			ExpireAfterSec: 259200, // 3days
 		},
 	},
 	Billing: Billing{

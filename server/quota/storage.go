@@ -131,7 +131,7 @@ func getDbSize(ctx context.Context, tenant *metadata.Tenant, db *metadata.Databa
 	if err != nil {
 		ulog.E(err)
 	}
-	return dbSize
+	return dbSize.StoredBytes
 }
 
 func getCollSize(ctx context.Context, tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection) int64 {
@@ -139,7 +139,7 @@ func getCollSize(ctx context.Context, tenant *metadata.Tenant, db *metadata.Data
 	if err != nil {
 		ulog.E(err)
 	}
-	return collSize
+	return collSize.StoredBytes
 }
 
 func (s *storage) getTenantSize(ctx context.Context, namespace string) int64 {
@@ -147,9 +147,13 @@ func (s *storage) getTenantSize(ctx context.Context, namespace string) int64 {
 	if ulog.E(err) {
 		return 0
 	}
+
 	size, err := tenant.Size(ctx)
-	ulog.E(err)
-	return size
+	if ulog.E(err) {
+		return 0
+	}
+
+	return size.StoredBytes
 }
 
 func (s *storage) updateMetricsForNamespace(ctx context.Context, namespace string) {

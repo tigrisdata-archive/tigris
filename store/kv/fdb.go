@@ -15,7 +15,6 @@
 package kv
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -75,12 +74,12 @@ func (d *fdbkv) init(cfg *config.FoundationDBConfig) (err error) {
 }
 
 // Read returns all the keys which has prefix equal to "key" parameter.
-func (d *fdbkv) Read(ctx context.Context, table []byte, key Key) (baseIterator, error) {
+func (d *fdbkv) Read(ctx context.Context, table []byte, key Key, isSnapshot bool) (baseIterator, error) {
 	tx, err := d.BeginTx(ctx)
 	if err != nil {
 		return nil, err
 	}
-	it, err := tx.Read(ctx, table, key)
+	it, err := tx.Read(ctx, table, key, isSnapshot)
 	if err != nil {
 		return nil, err
 	}
@@ -203,11 +202,12 @@ func (d *fdbkv) AtomicReadRange(ctx context.Context, table []byte, lKey Key, rKe
 	return &AtomicIteratorImpl{ctx, it, nil}, nil
 }
 
-func (d *fdbkv) Get(ctx context.Context, key []byte, isSnapshot bool) (Future, error) {
-	val, err := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
-		return (&ftx{d: d, tx: &tr}).Get(ctx, key, isSnapshot)
+func (d *fdbkv) Get(ctx context.Context, key []byte, isSnapshot bool) Future {
+	val, _ := d.txWithRetry(ctx, func(tr fdb.Transaction) (interface{}, error) {
+		return (&ftx{d: d, tx: &tr}).Get(ctx, key, isSnapshot), nil
 	})
-	return val.(fdb.FutureByteSlice), err
+
+	return val.(Future)
 }
 
 func (d *fdbkv) CreateTable(_ context.Context, name []byte) error {
@@ -262,7 +262,7 @@ func (d *fdbkv) BeginTx(ctx context.Context) (baseTx, error) {
 	return &ftx{d: d, tx: &tx}, nil
 }
 
-func (t *ftx) Insert(ctx context.Context, table []byte, key Key, data []byte) error {
+func (t *ftx) Insert(_ context.Context, table []byte, key Key, data []byte) error {
 	k := getFDBKey(table, key)
 
 	// Read the value and if exists reject the request.
@@ -282,7 +282,7 @@ func (t *ftx) Insert(ctx context.Context, table []byte, key Key, data []byte) er
 	return nil
 }
 
-func (t *ftx) Replace(ctx context.Context, table []byte, key Key, data []byte, _ bool) error {
+func (t *ftx) Replace(_ context.Context, table []byte, key Key, data []byte, _ bool) error {
 	k := getFDBKey(table, key)
 
 	t.tx.Set(k, data)
@@ -292,7 +292,7 @@ func (t *ftx) Replace(ctx context.Context, table []byte, key Key, data []byte, _
 	return nil
 }
 
-func (t *ftx) Delete(ctx context.Context, table []byte, key Key) error {
+func (t *ftx) Delete(_ context.Context, table []byte, key Key) error {
 	kr, err := fdb.PrefixRange(getFDBKey(table, key))
 	if ulog.E(err) {
 		return convertFDBToStoreErr(err)
@@ -305,7 +305,7 @@ func (t *ftx) Delete(ctx context.Context, table []byte, key Key) error {
 	return nil
 }
 
-func (t *ftx) DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key) error {
+func (t *ftx) DeleteRange(_ context.Context, table []byte, lKey Key, rKey Key) error {
 	lk := getFDBKey(table, lKey)
 	rk := getFDBKey(table, rKey)
 
@@ -316,16 +316,22 @@ func (t *ftx) DeleteRange(ctx context.Context, table []byte, lKey Key, rKey Key)
 	return nil
 }
 
-func (t *ftx) Read(_ context.Context, table []byte, key Key) (baseIterator, error) {
-	k, err := fdb.PrefixRange(getFDBKey(table, key))
+func (t *ftx) Read(_ context.Context, table []byte, key Key, isSnapshot bool) (baseIterator, error) {
+	kr, err := fdb.PrefixRange(getFDBKey(table, key))
 	if ulog.E(err) {
 		return nil, err
 	}
 
+	ro := fdb.RangeOptions{}
+	var r fdb.RangeResult
 	// It is possible that caller may be chunking the payload. Therefore, the "iterator" returned by this API is only
 	// applicable for ascending order. Once we add support to do reverse reads then we should return a different iterator
 	// or some other signal to the caller.
-	r := t.tx.GetRange(k, fdb.RangeOptions{})
+	if isSnapshot {
+		r = t.tx.Snapshot().GetRange(kr, ro)
+	} else {
+		r = t.tx.GetRange(kr, ro)
+	}
 
 	return &fdbIterator{it: r.Iterator(), subspace: subspace.FromBytes(table)}, nil
 }
@@ -371,16 +377,11 @@ func (t *ftx) SetVersionstampedKey(_ context.Context, key []byte, value []byte) 
 }
 
 func (t *ftx) AtomicAdd(_ context.Context, table []byte, key Key, value int64) error {
-	fdbKey := getFDBKey(table, key)
+	var buf [8]byte
 
-	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.LittleEndian, value)
-	if err != nil {
-		return err
-	}
-	encVal := buf.Bytes()
+	binary.LittleEndian.PutUint64(buf[:], uint64(value))
 
-	t.tx.Add(fdbKey, encVal)
+	t.tx.Add(getFDBKey(table, key), buf[:])
 
 	return nil
 }
@@ -392,7 +393,16 @@ func (t *ftx) AtomicRead(_ context.Context, table []byte, key Key) (int64, error
 		return 0, err
 	}
 
-	return fdbByteToInt64(&raw)
+	return fdbByteToInt64(raw)
+}
+
+func (t *ftx) AtomicReadPrefix(ctx context.Context, table []byte, key Key, isSnapshot bool) (AtomicIterator, error) {
+	iter, err := t.Read(ctx, table, key, isSnapshot)
+	if err != nil {
+		return nil, err
+	}
+
+	return &AtomicIteratorImpl{ctx, iter, nil}, nil
 }
 
 func (t *ftx) AtomicReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (AtomicIterator, error) {
@@ -404,16 +414,45 @@ func (t *ftx) AtomicReadRange(ctx context.Context, table []byte, lkey Key, rkey 
 	return &AtomicIteratorImpl{ctx, iter, nil}, nil
 }
 
-func (t *ftx) Get(_ context.Context, key []byte, isSnapshot bool) (Future, error) {
-	if isSnapshot {
-		return t.tx.Snapshot().Get(fdb.Key(key)), nil
+type AtomicIteratorImpl struct {
+	ctx context.Context
+	baseIterator
+	err error
+}
+
+func (i *AtomicIteratorImpl) Next(value *FdbBaseKeyValue[int64]) bool {
+	var v baseKeyValue
+	hasNext := i.baseIterator.Next(&v)
+	if hasNext {
+		value.Key = v.Key
+		value.FDBKey = v.FDBKey
+		num, err := fdbByteToInt64(v.Value)
+		if err != nil {
+			i.err = err
+			return false
+		}
+		value.Data = num
 	}
-	return t.tx.Get(fdb.Key(key)), nil
+	return hasNext
+}
+
+func (i *AtomicIteratorImpl) Err() error {
+	if i.err != nil {
+		return i.err
+	}
+	return i.baseIterator.Err()
+}
+
+func (t *ftx) Get(_ context.Context, key []byte, isSnapshot bool) Future {
+	if isSnapshot {
+		return t.tx.Snapshot().Get(fdb.Key(key))
+	}
+	return t.tx.Get(fdb.Key(key))
 }
 
 // RangeSize calculates approximate range table size in bytes - this is an estimate
 // and a range smaller than 3mb will not be that accurate.
-func (t *ftx) RangeSize(ctx context.Context, table []byte, lKey Key, rKey Key) (int64, error) {
+func (t *ftx) RangeSize(_ context.Context, table []byte, lKey Key, rKey Key) (int64, error) {
 	lk := getFDBKey(table, lKey)
 	var rk fdb.Key
 	if rKey == nil {
@@ -567,8 +606,6 @@ func setTxTimeout(tx *fdb.Transaction, ms int64) error {
 	return tx.Options().SetTimeout(ms)
 }
 
-func fdbByteToInt64(value *[]byte) (int64, error) {
-	var numVal int64
-	err := binary.Read(bytes.NewReader(*value), binary.LittleEndian, &numVal)
-	return numVal, err
+func fdbByteToInt64(value []byte) (int64, error) {
+	return int64(binary.LittleEndian.Uint64(value)), nil
 }
