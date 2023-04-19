@@ -107,11 +107,12 @@ func TestMutateSearchDocument(t *testing.T) {
 		require.NoError(t, err)
 
 		wt := newWriteTransformer(index, internal.NewTimestamp(), false)
-		id, transformed, err := wt.toSearch(c.doc, mp)
+		id, err := wt.getOrGenerateId(c.doc, mp)
 		if len(c.expError) > 0 {
 			require.ErrorContains(t, err, c.expError)
 			continue
 		}
+		transformed, err := wt.toSearch(id, mp)
 		require.NoError(t, err)
 		require.NotEmpty(t, id)
 

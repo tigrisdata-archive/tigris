@@ -32,7 +32,7 @@ func (x *GetDocumentResponse) MarshalJSON() ([]byte, error) {
 
 func (x *DocStatus) MarshalJSON() ([]byte, error) {
 	resp := struct {
-		ID    string `json:"id,omitempty"`
+		ID    string `json:"id"`
 		Error *Error `json:"error"`
 	}{
 		ID:    x.Id,

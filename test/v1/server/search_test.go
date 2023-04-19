@@ -581,7 +581,15 @@ func TestCreate(t *testing.T) {
 			"documents": docs,
 		}).
 		Expect().
-		Status(http.StatusBadRequest)
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("status",
+			[]map[string]any{
+				{"id": "", "error": map[string]any{"code": 400, "message": "wrong type of 'id' field"}},
+				{"id": "", "error": map[string]any{"code": 400, "message": "wrong type of 'id' field"}},
+			},
+		)
 }
 
 func TestCreateOrReplace(t *testing.T) {
@@ -923,11 +931,19 @@ func TestVectorSearch(t *testing.T) {
 			},
 		}).
 		Expect().
-		Status(http.StatusBadRequest).
+		Status(http.StatusOK).
 		JSON().
-		Path("$.error").
 		Object().
-		ValueEqual("message", "field 'vector' of vector type should not have dimensions greater than the defined in schema, defined: '4' found: '5'")
+		ValueEqual("status",
+			[]map[string]any{
+				{
+					"id": "1",
+					"error": map[string]any{
+						"code":    400,
+						"message": "field 'vector' of vector type should not have dimensions greater than the defined in schema, defined: '4' found: '5'"},
+				},
+			},
+		)
 
 	docs := []Doc{
 		{
@@ -1312,7 +1328,17 @@ func TestSearchIndexExplicitIdA(t *testing.T) {
 			{"stringV": "foo", "arrayV": []string{"foo", "bar"}, "doubleV": 10.01, "objectV": Map{"id": "nested1", "stringV": "foo"}},
 			{"id": "2", "arrayV": []string{"bar", "foo"}, "doubleV": 20.01, "objectV": Map{"id": "nested2", "stringV": "bar"}},
 		}
-		expTopLevelFailureWriteDocuments(t, project, testIndexExplicitIdSchemaA, Map{"documents": docs}, "index has explicitly marked 'stringV' field as 'id' but document is missing that field", "create")
+		writeDocuments(t,
+			project,
+			testIndexExplicitIdSchemaA,
+			Map{"documents": docs},
+			expResponseFromIds(
+				[]string{"foo", ""},
+				[]error{
+					nil,
+					&api.TigrisError{Code: 400, Message: "index has explicitly marked 'stringV' field as 'id' but document is missing that field"},
+				}),
+			"create")
 	})
 	t.Run("missing_id_replace", func(t *testing.T) {
 		createSearchIndex(t, project, testIndexExplicitIdSchemaA, testSearchIndexExplicitIdSchemaA).Status(http.StatusOK)
@@ -1322,7 +1348,17 @@ func TestSearchIndexExplicitIdA(t *testing.T) {
 			{"stringV": "foo", "arrayV": []string{"foo", "bar"}, "doubleV": 10.01, "objectV": Map{"id": "nested1", "stringV": "foo"}},
 			{"id": "2", "arrayV": []string{"bar", "foo"}, "doubleV": 20.01, "objectV": Map{"id": "nested2", "stringV": "bar"}},
 		}
-		expTopLevelFailureWriteDocuments(t, project, testIndexExplicitIdSchemaA, Map{"documents": docs}, "index has explicitly marked 'stringV' field as 'id' but document is missing that field", "replace")
+		writeDocuments(t,
+			project,
+			testIndexExplicitIdSchemaA,
+			Map{"documents": docs},
+			expResponseFromIds(
+				[]string{"foo", ""},
+				[]error{
+					nil,
+					&api.TigrisError{Code: 400, Message: "index has explicitly marked 'stringV' field as 'id' but document is missing that field"},
+				}),
+			"replace")
 	})
 	t.Run("missing_id_update", func(t *testing.T) {
 		createSearchIndex(t, project, testIndexExplicitIdSchemaA, testSearchIndexExplicitIdSchemaA).Status(http.StatusOK)
@@ -1332,7 +1368,17 @@ func TestSearchIndexExplicitIdA(t *testing.T) {
 			{"stringV": "foo", "arrayV": []string{"foo", "bar"}, "doubleV": 10.01, "objectV": Map{"id": "nested1", "stringV": "foo"}},
 			{"id": "2", "arrayV": []string{"bar", "foo"}, "doubleV": 20.01, "objectV": Map{"id": "nested2", "stringV": "bar"}},
 		}
-		expTopLevelFailureWriteDocuments(t, project, testIndexExplicitIdSchemaA, Map{"documents": docs}, "index has explicitly marked 'stringV' field as 'id' but document is missing that field", "update")
+		writeDocuments(t,
+			project,
+			testIndexExplicitIdSchemaA,
+			Map{"documents": docs},
+			expResponseFromIds(
+				[]string{"foo", ""},
+				[]error{
+					&api.TigrisError{Code: 404, Message: "Could not find a document with id: foo"},
+					&api.TigrisError{Code: 400, Message: "index has explicitly marked 'stringV' field as 'id' but document is missing that field"},
+				}),
+			"update")
 	})
 }
 
@@ -1392,7 +1438,18 @@ func TestSearchIndexExplicitIdB(t *testing.T) {
 			{"stringV": "foo", "arrayV": []string{"foo", "bar"}, "doubleV": 10.01, "objectV": Map{"stringV": "foo"}},
 			{"id": "2", "arrayV": []string{"bar", "foo"}, "doubleV": 20.01, "objectV": Map{"id": "nested2", "stringV": "bar"}},
 		}
-		expTopLevelFailureWriteDocuments(t, project, testIndexExplicitIdSchemaB, Map{"documents": docs}, "index has explicitly marked 'objectV.id' field as 'id' but document is missing that field", "create")
+
+		writeDocuments(t,
+			project,
+			testIndexExplicitIdSchemaB,
+			Map{"documents": docs},
+			expResponseFromIds(
+				[]string{"", "nested2"},
+				[]error{
+					&api.TigrisError{Code: 400, Message: "index has explicitly marked 'objectV.id' field as 'id' but document is missing that field"},
+					nil,
+				}),
+			"create")
 	})
 	t.Run("missing_id_replace", func(t *testing.T) {
 		createSearchIndex(t, project, testIndexExplicitIdSchemaB, testSearchIndexExplicitIdSchemaB).Status(http.StatusOK)
@@ -1402,7 +1459,17 @@ func TestSearchIndexExplicitIdB(t *testing.T) {
 			{"stringV": "foo", "arrayV": []string{"foo", "bar"}, "doubleV": 10.01, "objectV": Map{"stringV": "foo"}},
 			{"id": "2", "arrayV": []string{"bar", "foo"}, "doubleV": 20.01, "objectV": Map{"id": "nested2", "stringV": "bar"}},
 		}
-		expTopLevelFailureWriteDocuments(t, project, testIndexExplicitIdSchemaB, Map{"documents": docs}, "index has explicitly marked 'objectV.id' field as 'id' but document is missing that field", "replace")
+		writeDocuments(t,
+			project,
+			testIndexExplicitIdSchemaB,
+			Map{"documents": docs},
+			expResponseFromIds(
+				[]string{"", "nested2"},
+				[]error{
+					&api.TigrisError{Code: 400, Message: "index has explicitly marked 'objectV.id' field as 'id' but document is missing that field"},
+					nil,
+				}),
+			"replace")
 	})
 	t.Run("missing_id_update", func(t *testing.T) {
 		createSearchIndex(t, project, testIndexExplicitIdSchemaB, testSearchIndexExplicitIdSchemaB).Status(http.StatusOK)
@@ -1412,7 +1479,17 @@ func TestSearchIndexExplicitIdB(t *testing.T) {
 			{"stringV": "foo", "arrayV": []string{"foo", "bar"}, "doubleV": 10.01, "objectV": Map{"id": "nested1", "stringV": "foo"}},
 			{"id": "2", "arrayV": []string{"bar", "foo"}, "doubleV": 20.01, "objectV": Map{"stringV": "bar"}},
 		}
-		expTopLevelFailureWriteDocuments(t, project, testIndexExplicitIdSchemaB, Map{"documents": docs}, "index has explicitly marked 'objectV.id' field as 'id' but document is missing that field", "update")
+		writeDocuments(t,
+			project,
+			testIndexExplicitIdSchemaB,
+			Map{"documents": docs},
+			expResponseFromIds(
+				[]string{"nested1", ""},
+				[]error{
+					&api.TigrisError{Code: 404, Message: "Could not find a document with id: nested1"},
+					&api.TigrisError{Code: 400, Message: "index has explicitly marked 'objectV.id' field as 'id' but document is missing that field"},
+				}),
+			"update")
 	})
 }
 
@@ -1422,11 +1499,11 @@ func TestSearch_StringInt64(t *testing.T) {
 
 	docs := []Doc{
 		{
-			"id":                 "1",
-			"int_value":          "9223372036854775799",
-			"string_value":       "data platform",
+			"id":                  "1",
+			"int_value":           "9223372036854775799",
+			"string_value":        "data platform",
 			"array_integer_value": []string{"9223372036854775807", "9223372036854775806"},
-			"array_simple_value": []string{"abc", "def"},
+			"array_simple_value":  []string{"abc", "def"},
 			"object_value": Doc{
 				"string_value":  "san francisco",
 				"integer_value": "9223372036854775804",
@@ -1516,26 +1593,6 @@ func expResponseForFakes(fakes []FakeDocument) []map[string]any {
 	}
 
 	return expResponse
-}
-
-func expTopLevelFailureWriteDocuments(t *testing.T, project string, indexName string, docs Map, expErrorMsg string, opType string) {
-	var req *httpexpect.Request
-	if opType == "create" {
-		req = expect(t).POST(getIndexDocumentURL(project, indexName, ""))
-	} else if opType == "replace" {
-		req = expect(t).PUT(getIndexDocumentURL(project, indexName, ""))
-	} else {
-		req = expect(t).PATCH(getIndexDocumentURL(project, indexName, ""))
-	}
-
-	req.
-		WithJSON(docs).
-		Expect().
-		Status(http.StatusBadRequest).
-		JSON().
-		Path("$.error").
-		Object().
-		ValueEqual("message", expErrorMsg)
 }
 
 func writeDocuments(t *testing.T, project string, indexName string, docs Map, expResponse []map[string]any, opType string) {

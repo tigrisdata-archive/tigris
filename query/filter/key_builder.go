@@ -66,13 +66,13 @@ type TableScanPlan struct {
 
 // QueryPlan is returned by KeyBuilder that contains the keys and type of query against fdb.
 type QueryPlan struct {
-	QueryType           QueryPlanType
-	FieldName           string
-	DataType            schema.FieldType
-	Keys                []keys.Key
-	Ascending           bool
-	IndexType           IndexType
-	From                keys.Key
+	QueryType QueryPlanType
+	FieldName string
+	DataType  schema.FieldType
+	Keys      []keys.Key
+	Ascending bool
+	IndexType IndexType
+	From      keys.Key
 }
 
 func NewQueryPlan(queryType QueryPlanType, fieldName string, dataType schema.FieldType, keys []keys.Key, indexType IndexType) QueryPlan {
@@ -476,12 +476,12 @@ func QueryPlanFromSort(sortFields *[]tsort.SortField, indexableFields []*schema.
 	}
 
 	plan := &QueryPlan{
-		FieldName:           field.FieldName,
-		QueryType:           FULLRANGE,
-		DataType:            field.DataType,
-		Ascending:           (*sortFields)[0].Ascending,
-		Keys:                []keys.Key{min, max},
-		IndexType:           indexType,
+		FieldName: field.FieldName,
+		QueryType: FULLRANGE,
+		DataType:  field.DataType,
+		Ascending: (*sortFields)[0].Ascending,
+		Keys:      []keys.Key{min, max},
+		IndexType: indexType,
 	}
 
 	return plan, nil
