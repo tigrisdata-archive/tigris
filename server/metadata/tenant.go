@@ -103,6 +103,13 @@ type TenantManager struct {
 	encoder           Encoder
 	tableKeyGenerator *TableKeyGenerator
 	txMgr             *transaction.Manager
+	// searchSchemasSnapshot loads all the collection from search during startup. This is
+	// mainly needed as for some very old collections some functionality are restricted/not-enabled
+	// when the collections were created. This allows us to check those collection and if there is
+	// type mismatch then "pack" those values during indexing. For all new collections reloaded there
+	// shouldn't be any mismatch. Also, this logic only triggers during reloading of tenants or
+	// restart where we don't know when the collection was created.
+	searchSchemasSnapshot map[string]*tsApi.CollectionResponse
 }
 
 func (m *TenantManager) GetNamespaceStore() *NamespaceSubspace {
@@ -118,17 +125,23 @@ func NewTenantManager(kvStore kv.TxStore, searchStore search.Store, txMgr *trans
 }
 
 func newTenantManager(kvStore kv.TxStore, searchStore search.Store, mdNameRegistry *NameRegistry, txMgr *transaction.Manager) *TenantManager {
+	collectionsInSearch, err := searchStore.AllCollections(context.TODO())
+	if err != nil {
+		log.Fatal().Err(err).Msgf("error starting server: loading schemas from search failed")
+	}
+
 	return &TenantManager{
-		kvStore:           kvStore,
-		searchStore:       searchStore,
-		encoder:           NewEncoder(),
-		metaStore:         NewMetadataDictionary(mdNameRegistry),
-		tenants:           make(map[string]*Tenant),
-		idToTenantMap:     make(map[uint32]string),
-		versionH:          newVersionHandler(mdNameRegistry.GetVersionKey()),
-		mdNameRegistry:    mdNameRegistry,
-		tableKeyGenerator: NewTableKeyGenerator(),
-		txMgr:             txMgr,
+		kvStore:               kvStore,
+		searchStore:           searchStore,
+		encoder:               NewEncoder(),
+		metaStore:             NewMetadataDictionary(mdNameRegistry),
+		tenants:               make(map[string]*Tenant),
+		idToTenantMap:         make(map[uint32]string),
+		versionH:              newVersionHandler(mdNameRegistry.GetVersionKey()),
+		mdNameRegistry:        mdNameRegistry,
+		tableKeyGenerator:     NewTableKeyGenerator(),
+		txMgr:                 txMgr,
+		searchSchemasSnapshot: collectionsInSearch,
 	}
 }
 
@@ -303,11 +316,6 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceId string) (*Ten
 		return tenant, nil
 	}
 
-	collectionsInSearch, err := m.searchStore.AllCollections(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	// this will never create new namespace
 	// when the authn/authz is set up correctly
 	// this is for reading namespaces from storage into cache
@@ -345,7 +353,7 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceId string) (*Ten
 	namespace := NewTenantNamespace(namespaceId, metadata)
 	tenant = NewTenant(namespace, m.kvStore, m.searchStore,
 		m.metaStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
-	if err = tenant.reload(ctx, tx, currentVersion, collectionsInSearch); err != nil {
+	if err = tenant.reload(ctx, tx, currentVersion, m.searchSchemasSnapshot); err != nil {
 		return nil, err
 	}
 
@@ -415,13 +423,9 @@ func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transa
 			return nil, err
 		}
 
-		collectionsInSearch, err := m.searchStore.AllCollections(ctx)
-		if err != nil {
-			return nil, err
-		}
 		tenant := NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
 		tenant.Lock()
-		err = tenant.reload(ctx, tx, currentVersion, collectionsInSearch)
+		err = tenant.reload(ctx, tx, currentVersion, m.searchSchemasSnapshot)
 		tenant.Unlock()
 		return tenant, err
 	}
@@ -485,7 +489,7 @@ func (m *TenantManager) DecodeTableName(tableName []byte) (string, *Database, st
 // As this is an expensive call, the reloading happens only during the start of the server. It is possible that reloading
 // fails during start time then we rely on each transaction to detect it and trigger reload. The consistency shouldn’t
 // be impacted if we fail to load the in-memory view.
-func (m *TenantManager) Reload(ctx context.Context, tx transaction.Tx, collectionsInSearch map[string]*tsApi.CollectionResponse) error {
+func (m *TenantManager) Reload(ctx context.Context, tx transaction.Tx) error {
 	log.Debug().Msg("reloading tenants")
 	m.Lock()
 	defer m.Unlock()
@@ -495,7 +499,7 @@ func (m *TenantManager) Reload(ctx context.Context, tx transaction.Tx, collectio
 		return err
 	}
 
-	if err = m.reload(ctx, tx, currentVersion, collectionsInSearch); ulog.E(err) {
+	if err = m.reload(ctx, tx, currentVersion); ulog.E(err) {
 		return err
 	}
 	m.version = currentVersion
@@ -503,7 +507,7 @@ func (m *TenantManager) Reload(ctx context.Context, tx transaction.Tx, collectio
 	return err
 }
 
-func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVersion Version, collectionsInSearch map[string]*tsApi.CollectionResponse) error {
+func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVersion Version) error {
 	namespaces, err := m.metaStore.GetNamespaces(ctx, tx)
 	if err != nil {
 		return err
@@ -520,7 +524,7 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVe
 	for _, tenant := range m.tenants {
 		log.Debug().Interface("tenant", tenant.String()).Msg("reloading tenant")
 		tenant.Lock()
-		err := tenant.reload(ctx, tx, currentVersion, collectionsInSearch)
+		err := tenant.reload(ctx, tx, currentVersion, m.searchSchemasSnapshot)
 		tenant.Unlock()
 		if err != nil {
 			return err
@@ -578,7 +582,7 @@ func NewTenant(namespace Namespace, kvStore kv.TxStore, searchStore search.Store
 // thread will actually perform reload. This is a blocking API which means if most of the requests detected that the
 // tenant state is stale then they all will block till one of them will reload the tenant state from the database. All
 // the blocking transactions will be restarted to ensure they see the latest view of the tenant.
-func (tenant *Tenant) Reload(ctx context.Context, tx transaction.Tx, version Version) error {
+func (tenant *Tenant) Reload(ctx context.Context, tx transaction.Tx, version Version, searchSchemasSnapshot map[string]*tsApi.CollectionResponse) error {
 	if !tenant.shouldReload(version) {
 		return nil
 	}
@@ -590,11 +594,7 @@ func (tenant *Tenant) Reload(ctx context.Context, tx transaction.Tx, version Ver
 		return nil
 	}
 
-	indexesInSearchStore, err := tenant.searchStore.AllCollections(ctx)
-	if err != nil {
-		return err
-	}
-	return tenant.reload(ctx, tx, version, indexesInSearchStore)
+	return tenant.reload(ctx, tx, version, searchSchemasSnapshot)
 }
 
 func (tenant *Tenant) shouldReload(currentVersion Version) bool {
@@ -610,7 +610,7 @@ func (tenant *Tenant) shouldReload(currentVersion Version) bool {
 // loads all the databases, it loads the resources for each one. Once databases are reloaded then it performs the same
 // logic for search indexes. Once search indexes are loaded it links back the search indexes to the Tigris Collection
 // if the source for these search indexes is Tigris.
-func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVersion Version, indexesInSearchStore map[string]*tsApi.CollectionResponse) error {
+func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVersion Version, searchSchemasSnapshot map[string]*tsApi.CollectionResponse) error {
 	// reset
 	tenant.projects = make(map[string]*Project)
 	tenant.idToDatabaseMap = make(map[uint32]*Database)
@@ -631,7 +631,7 @@ func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVers
 
 	// Iterate one more time on all the databases and now add branches and main database to the Project object
 	for name, meta := range dbs {
-		database, err := tenant.reloadDatabase(ctx, tx, name, meta.ID, indexesInSearchStore)
+		database, err := tenant.reloadDatabase(ctx, tx, name, meta.ID, searchSchemasSnapshot)
 		if ulog.E(err) {
 			return err
 		}
@@ -650,7 +650,7 @@ func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVers
 	// the project object.
 	for _, p := range tenant.projects {
 		var err error
-		if p.search, err = tenant.reloadSearch(ctx, tx, p, indexesInSearchStore); err != nil {
+		if p.search, err = tenant.reloadSearch(ctx, tx, p, searchSchemasSnapshot); err != nil {
 			return err
 		}
 		for _, index := range p.search.indexes {
@@ -678,7 +678,7 @@ func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVers
 // reloadDatabase is called by tenant to reload the database state. This also loads all the collections that are part of
 // this database and implicit search index for these collections.
 func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbName string, dbId uint32,
-	indexesInSearchStore map[string]*tsApi.CollectionResponse,
+	searchSchemasSnapshot map[string]*tsApi.CollectionResponse,
 ) (*Database, error) {
 	database := NewDatabase(dbId, dbName)
 
@@ -704,11 +704,8 @@ func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbN
 
 		var fieldsInSearch []tsApi.Field
 		searchCollectionName := tenant.getSearchCollName(dbName, coll)
-		if searchSchema, ok := indexesInSearchStore[searchCollectionName]; ok {
+		if searchSchema, ok := searchSchemasSnapshot[searchCollectionName]; ok {
 			fieldsInSearch = searchSchema.Fields
-		}
-		if len(fieldsInSearch) == 0 {
-			log.Error().Str("search_collection", searchCollectionName).Msg("fields are not present in search")
 		}
 
 		// Note: Skipping the error here as during create collection the online flow guarantees that schema is properly
@@ -740,7 +737,7 @@ func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbN
 }
 
 // reloadSearch is responsible for reloading all the search indexes inside a single project.
-func (tenant *Tenant) reloadSearch(ctx context.Context, tx transaction.Tx, project *Project, indexesInSearchStore map[string]*tsApi.CollectionResponse) (*Search, error) {
+func (tenant *Tenant) reloadSearch(ctx context.Context, tx transaction.Tx, project *Project, searchSchemasSnapshot map[string]*tsApi.CollectionResponse) (*Search, error) {
 	projMetadata, err := tenant.namespaceStore.GetProjectMetadata(ctx, tx, tenant.namespace.Id(), project.Name())
 	if err != nil {
 		return nil, errors.Internal("failed to get project metadata for project %s", project.Name())
@@ -762,11 +759,8 @@ func (tenant *Tenant) reloadSearch(ctx context.Context, tx transaction.Tx, proje
 
 		var fieldsInSearchStore []tsApi.Field
 		searchStoreIndexName := tenant.Encoder.EncodeSearchTableName(tenant.namespace.Id(), project.Id(), searchMD.Name)
-		if searchIndexInStore, ok := indexesInSearchStore[searchStoreIndexName]; ok {
+		if searchIndexInStore, ok := searchSchemasSnapshot[searchStoreIndexName]; ok {
 			fieldsInSearchStore = searchIndexInStore.Fields
-		}
-		if len(fieldsInSearchStore) == 0 {
-			log.Error().Str("search_collection", searchStoreIndexName).Msg("fields are not present in search")
 		}
 		searchObj.indexes[searchMD.Name] = schema.NewSearchIndex(schV.Version, searchStoreIndexName, searchFactory, fieldsInSearchStore)
 	}
@@ -842,6 +836,8 @@ func (tenant *Tenant) updateSearchIndex(ctx context.Context, tx transaction.Tx, 
 		return err
 	}
 
+	// Note: during update we are loading the previous version from search store, not using the search schemas
+	// snapshot cached in tenant manager
 	previousIndexInStore, err := tenant.searchStore.DescribeCollection(ctx, index.StoreIndexName())
 	if err != nil {
 		return err
