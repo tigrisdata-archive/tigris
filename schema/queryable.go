@@ -102,6 +102,8 @@ func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, 
 	packThis := false
 	if f.DataType == ArrayType || f.DataType == ObjectType {
 		for _, fieldInSearch := range fieldsInSearch {
+			// Queryable field only use the "fieldInSearch" schema to understand if any field needs packing i.e. the
+			// schema in search is string but the data type is an array or an object.
 			if fieldInSearch.Name == name {
 				searchType = fieldInSearch.Type
 				if searchType == FieldNames[StringType] {

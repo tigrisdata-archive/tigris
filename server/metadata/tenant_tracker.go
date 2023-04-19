@@ -54,6 +54,7 @@ type CacheTracker struct {
 	txMgr          *transaction.Manager
 	versionH       *VersionHandler
 	tenantVersions map[string]Version
+	tenantMgr      *TenantManager
 }
 
 // NewCacheTracker creates and returns the cache tracker. It uses tenant manager state to populate in-memory
@@ -68,6 +69,7 @@ func NewCacheTracker(tenantMgr *TenantManager, txMgr *transaction.Manager) *Cach
 		txMgr:          txMgr,
 		tenantVersions: tenantVersionMap,
 		versionH:       tenantMgr.versionH,
+		tenantMgr:      tenantMgr,
 	}
 }
 
@@ -200,7 +202,7 @@ func (cacheTracker *CacheTracker) stopTracking(ctx context.Context, tenant *Tena
 		return err
 	}
 
-	if err = tenant.Reload(ctx, tx, version); err != nil {
+	if err = tenant.Reload(ctx, tx, version, cacheTracker.tenantMgr.searchSchemasSnapshot); err != nil {
 		return err
 	}
 
