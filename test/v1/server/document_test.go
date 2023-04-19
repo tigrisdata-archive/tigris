@@ -3294,6 +3294,63 @@ func TestDelete_Range(t *testing.T) {
 	}
 }
 
+func TestCountDocuments(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	inputDocument := []Doc{
+		{
+			"pkey_int":     50,
+			"string_value": "simple_insert50",
+		},
+		{
+			"pkey_int":     60,
+			"string_value": "simple_insert60",
+		},
+		{
+			"pkey_int":     70,
+			"string_value": "simple_insert70",
+		},
+	}
+
+	// should always succeed with mustNotExists as false
+	insertDocuments(t, db, coll, inputDocument, false).
+		Status(http.StatusOK)
+
+	e := expect(t)
+	e.POST(getDocumentURL(db, coll, "count")).
+		WithJSON(Map{
+			"filter": Map{
+				"pkey_int": 50,
+			}}).
+		Expect().Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("count", 1)
+
+	e.POST(getDocumentURL(db, coll, "count")).
+		WithJSON(Map{
+			"filter": Map{
+				"$or": []Doc{
+					{"pkey_int": 50},
+					{"pkey_int": 70},
+				},
+			}}).
+		Expect().Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("count", 2)
+
+	e.POST(getDocumentURL(db, coll, "count")).
+		WithJSON(Map{
+			"filter": Map{},
+		}).
+		Expect().Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("count", 3)
+}
+
 func TestRead_Collation(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)

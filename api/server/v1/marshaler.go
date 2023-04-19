@@ -454,6 +454,41 @@ func (x *DeleteRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// UnmarshalJSON on CountRequest avoids unmarshalling filter and instead this way we can write a custom struct to do
+// the unmarshalling and will be avoiding any extra allocation/copying.
+func (x *CountRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+
+	for key, value := range mp {
+		var v interface{}
+
+		switch key {
+		case "project":
+			v = &x.Project
+		case "collection":
+			v = &x.Collection
+		case "branch":
+			v = &x.Branch
+		case "filter":
+			// not decoding it here and let it decode during filter parsing
+			x.Filter = value
+			continue
+		default:
+			continue
+		}
+
+		if err := jsoniter.Unmarshal(value, v); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // UnmarshalJSON on CreateCollectionRequest avoids unmarshalling schema. The req handler deserializes the schema.
 func (x *CreateOrUpdateCollectionRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage

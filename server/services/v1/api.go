@@ -328,6 +328,19 @@ func (s *apiService) Read(r *api.ReadRequest, stream api.Tigris_ReadServer) erro
 	return err
 }
 
+func (s *apiService) Count(ctx context.Context, r *api.CountRequest) (*api.CountResponse, error) {
+	queryMetrics := metrics.StreamingQueryMetrics{}
+	accessToken, _ := request.GetAccessToken(ctx)
+	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetCountQueryRunner(r, &queryMetrics, accessToken), database.ReqOptions{
+		TxCtx: api.GetTransaction(ctx),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.CountResponse), nil
+}
+
 func (s *apiService) Explain(ctx context.Context, r *api.ReadRequest) (*api.ExplainResponse, error) {
 	queryMetrics := metrics.WriteQueryMetrics{}
 	accessToken, _ := request.GetAccessToken(ctx)
