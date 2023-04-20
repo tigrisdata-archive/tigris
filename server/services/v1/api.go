@@ -75,18 +75,13 @@ func newApiService(kv kv.TxStore, searchStore search.Store, tenantMgr *metadata.
 		authProvider: authProvider,
 	}
 
-	collectionsInSearch, err := u.searchStore.AllCollections(context.TODO())
-	if err != nil {
-		log.Fatal().Err(err).Msgf("error starting server: loading schemas from search failed")
-	}
-
 	ctx := context.TODO()
 	tx, err := u.txMgr.StartTx(ctx)
 	if ulog.E(err) {
 		log.Fatal().Err(err).Msgf("error starting server: starting transaction failed")
 	}
 
-	if err := tenantMgr.Reload(ctx, tx, collectionsInSearch); ulog.E(err) {
+	if err := tenantMgr.Reload(ctx, tx); ulog.E(err) {
 		// ToDo: no need to panic, probably handle through async thread.
 		log.Fatal().Err(err).Msgf("error starting server: reloading tenants failed")
 	}
@@ -331,6 +326,19 @@ func (s *apiService) Read(r *api.ReadRequest, stream api.Tigris_ReadServer) erro
 		_, err = s.sessions.ReadOnlyExecute(stream.Context(), s.runnerFactory.GetStreamingQueryRunner(r, stream, &queryMetrics, accessToken), database.ReqOptions{})
 	}
 	return err
+}
+
+func (s *apiService) Count(ctx context.Context, r *api.CountRequest) (*api.CountResponse, error) {
+	queryMetrics := metrics.StreamingQueryMetrics{}
+	accessToken, _ := request.GetAccessToken(ctx)
+	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetCountQueryRunner(r, &queryMetrics, accessToken), database.ReqOptions{
+		TxCtx: api.GetTransaction(ctx),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.CountResponse), nil
 }
 
 func (s *apiService) Explain(ctx context.Context, r *api.ReadRequest) (*api.ExplainResponse, error) {

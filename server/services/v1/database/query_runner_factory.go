@@ -82,6 +82,14 @@ func (f *QueryRunnerFactory) GetDeleteQueryRunner(r *api.DeleteRequest, qm *metr
 	}
 }
 
+func (f *QueryRunnerFactory) GetCountQueryRunner(r *api.CountRequest, qm *metrics.StreamingQueryMetrics, accessToken *types.AccessToken) *CountQueryRunner {
+	return &CountQueryRunner{
+		BaseQueryRunner: NewBaseQueryRunner(f.encoder, f.cdcMgr, f.txMgr, f.searchStore, accessToken),
+		req:             r,
+		queryMetrics:    qm,
+	}
+}
+
 // GetStreamingQueryRunner returns StreamingQueryRunner.
 func (f *QueryRunnerFactory) GetStreamingQueryRunner(r *api.ReadRequest, streaming Streaming, qm *metrics.StreamingQueryMetrics, accessToken *types.AccessToken) *StreamingQueryRunner {
 	return &StreamingQueryRunner{

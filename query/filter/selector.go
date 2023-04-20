@@ -84,8 +84,9 @@ func (s *Selector) MatchesDoc(doc map[string]any) bool {
 // An error is returned if the field does not exist
 // and that is an acceptable error, so return false
 // Only log an error that is unexpected.
-func (s *Selector) Matches(doc []byte) bool {
-	docValue, dtp, _, err := jsonparser.Get(doc, s.Field.KeyPath()...)
+func (s *Selector) Matches(doc []byte, metadata []byte) bool {
+	docValue, dtp, err := getJSONField(doc, metadata, s.Field.FieldName, s.Field.KeyPath())
+
 	if dtp == jsonparser.NotExist {
 		return false
 	}
@@ -170,4 +171,18 @@ func (s *Selector) IsSearchIndexed() bool {
 // String a helpful method for logging.
 func (s *Selector) String() string {
 	return fmt.Sprintf("{%v:%v}", s.Field.Name(), s.Matcher)
+}
+
+func getJSONField(doc []byte, metadata []byte, fieldName string, keyPath []string) ([]byte, jsonparser.ValueType, error) {
+	var docValue []byte
+	var dtp jsonparser.ValueType
+	var err error
+
+	if schema.IsReservedField(fieldName) {
+		docValue, dtp, _, err = jsonparser.Get(metadata, keyPath...)
+	} else {
+		docValue, dtp, _, err = jsonparser.Get(doc, keyPath...)
+	}
+
+	return docValue, dtp, err
 }

@@ -392,6 +392,56 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}, ctx, nil
 }
 
+type CountQueryRunner struct {
+	*BaseQueryRunner
+
+	req          *api.CountRequest
+	queryMetrics *metrics.StreamingQueryMetrics
+}
+
+func (runner *CountQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
+	_, coll, err := runner.getDBAndCollection(ctx, tx, tenant, runner.req.GetProject(), runner.req.GetCollection(), runner.req.GetBranch())
+	if err != nil {
+		return Response{}, ctx, err
+	}
+
+	if err = runner.mustBeDocumentsCollection(coll, "countReq"); err != nil {
+		return Response{}, ctx, err
+	}
+
+	reader := NewDatabaseReader(ctx, tx)
+	var iterator Iterator
+	if iterator, err = reader.ScanTable(coll.EncodedName); err != nil {
+		return Response{}, ctx, err
+	}
+	if !filter.None(runner.req.Filter) {
+		filterFactory := filter.NewFactory(coll.QueryableFields, nil)
+		var filters []filter.Filter
+		if filters, err = filterFactory.Factorize(runner.req.Filter); err != nil {
+			return Response{}, ctx, err
+		}
+
+		if iterator, err = reader.FilteredRead(iterator, filter.NewWrappedFilter(filters)); err != nil {
+			return Response{}, ctx, err
+		}
+	}
+
+	var count int64
+	var row Row
+	for iterator.Next(&row) {
+		count++
+	}
+
+	runner.queryMetrics.SetReadType("count")
+	ctx = metrics.UpdateSpanTags(ctx, runner.queryMetrics)
+
+	return Response{
+		Response: &api.CountResponse{
+			Count: count,
+		},
+	}, ctx, nil
+}
+
 // StreamingQueryRunner is a runner used for Queries that are reads and needs to return result in streaming fashion.
 type StreamingQueryRunner struct {
 	*BaseQueryRunner

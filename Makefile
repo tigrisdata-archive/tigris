@@ -124,8 +124,8 @@ build_and_push_base_docker:
 dump_integration_coverage:
 	pkill -SIGTERM -f "/server/service" --exact
 	sleep 15
-	/usr/local/go/bin/go tool covdata textfmt -i=/tmp/tigris_coverdata/ -o coverage1.out # from tigris_server
-	/usr/local/go/bin/go tool covdata textfmt -i=/tmp/tigris_coverdata2/ -o coverage2.out # from tigris_server2
+	go tool covdata textfmt -i=/tmp/tigris_coverdata/ -o coverage1.out # from tigris_server
+	go tool covdata textfmt -i=/tmp/tigris_coverdata2/ -o coverage2.out # from tigris_server2
 
 # Build local all-in-one package
 docker-local:
