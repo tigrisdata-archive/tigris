@@ -19,7 +19,6 @@ import (
 	"encoding/binary"
 	"time"
 
-	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tigrisdata/tigris/errors"
 	ulog "github.com/tigrisdata/tigris/util/log"
@@ -149,10 +148,7 @@ func (x *TableData) UpdatedToProtoTS() *timestamppb.Timestamp {
 	return nil
 }
 
-// Adds created_at and updated_at to the raw data
-// this allows them to be processed by our filter and check if the query
-// matches those fields.
-func (x *TableData) DataWithTimeStamps() ([]byte, error) {
+func (x *TableData) TimeStampsToJSON() ([]byte, error) {
 	data := map[string]jsoniter.RawMessage{
 		"_tigris_created_at": nil,
 		"_tigris_updated_at": nil,
@@ -166,16 +162,7 @@ func (x *TableData) DataWithTimeStamps() ([]byte, error) {
 		data["_tigris_updated_at"] = jsoniter.RawMessage(x.CreatedAt.ToRFC3339())
 	}
 
-	fullDoc := x.RawData
-	var err error
-	for k, v := range data {
-		fullDoc, err = jsonparser.Set(fullDoc, v, k)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return fullDoc, nil
+	return jsoniter.Marshal(data)
 }
 
 // ActualUserPayloadSize returns size of the user data. This is used by splitter to split the value if it is
