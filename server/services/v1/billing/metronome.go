@@ -272,7 +272,7 @@ func (m *Metronome) GetInvoiceById(ctx context.Context, accountId MetronomeId, i
 
 	invoiceUUID, err := uuid.Parse(invoiceId)
 	if err != nil {
-		return nil, err
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "invoiceId is not valid - %s", err.Error())
 	}
 	m.measure(ctx, "get_invoice", func(ctx context.Context) (*http.Response, error) {
 		resp, err = m.client.GetInvoiceWithResponse(ctx, accountId, invoiceUUID)

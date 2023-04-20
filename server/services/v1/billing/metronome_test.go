@@ -532,6 +532,15 @@ func TestMetronome_GetInvoiceById(t *testing.T) {
 		require.Nil(t, resp)
 		require.True(t, gock.IsDone())
 	})
+
+	t.Run("bad invoice id", func(t *testing.T) {
+		accountId, err := uuid.Parse("b2108db4-6768-469b-93bb-23e49a4311d6")
+		require.NoError(t, err)
+
+		resp, err := metronome.GetInvoiceById(ctx, accountId, "invalid-id")
+		require.ErrorContains(t, err, "invoiceId is not valid")
+		require.Nil(t, resp)
+	})
 }
 
 func TestMetronome_buildInvoice(t *testing.T) {
