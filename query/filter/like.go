@@ -46,8 +46,9 @@ func (s *LikeFilter) MatchesDoc(doc map[string]any) bool {
 }
 
 // Matches returns true if the doc value matches this filter.
-func (s *LikeFilter) Matches(doc []byte) bool {
-	docValue, dtp, _, err := jsonparser.Get(doc, s.Field.KeyPath()...)
+func (s *LikeFilter) Matches(doc []byte, metadata []byte) bool {
+	docValue, dtp, err := getJSONField(doc, metadata, s.Field.FieldName, s.Field.KeyPath())
+
 	if dtp == jsonparser.NotExist {
 		return false
 	}

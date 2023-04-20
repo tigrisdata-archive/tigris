@@ -69,9 +69,9 @@ func (a *AndFilter) Type() LogicalOP {
 }
 
 // Matches returns true if the input doc matches this filter.
-func (a *AndFilter) Matches(doc []byte) bool {
+func (a *AndFilter) Matches(doc []byte, metadata []byte) bool {
 	for _, f := range a.filter {
-		if !f.Matches(doc) {
+		if !f.Matches(doc, metadata) {
 			return false
 		}
 	}
@@ -150,9 +150,9 @@ func (o *OrFilter) Type() LogicalOP {
 }
 
 // Matches returns true if the input doc matches this filter.
-func (o *OrFilter) Matches(doc []byte) bool {
+func (o *OrFilter) Matches(doc []byte, metadata []byte) bool {
 	for _, f := range o.filter {
-		if f.Matches(doc) {
+		if f.Matches(doc, metadata) {
 			return true
 		}
 	}

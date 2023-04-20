@@ -160,11 +160,11 @@ func (it *FilterIterator) Next(row *Row) bool {
 }
 
 func (it *FilterIterator) advanceToMatchingRow(row *Row) bool {
-	dataWithTS, err := row.Data.DataWithTimeStamps()
+	tsJSON, err := row.Data.TimeStampsToJSON()
 	if err != nil {
 		return false
 	}
-	return it.filter.Matches(dataWithTS)
+	return it.filter.Matches(row.Data.RawData, tsJSON)
 }
 
 type DatabaseReader struct {
