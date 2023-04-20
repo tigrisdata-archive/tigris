@@ -24,6 +24,7 @@ import (
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
 	"google.golang.org/grpc"
+	"github.com/tigrisdata/tigris/server/services/v1/billing"
 )
 
 type ContentType string
@@ -41,7 +42,7 @@ func GetRegisteredServicesRealtime(kvStore kv.TxStore, searchStore search.Store,
 	return v1Services
 }
 
-func GetRegisteredServices(kvStore kv.TxStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager, forSearchTxMgr *transaction.Manager) []Service {
+func GetRegisteredServices(kvStore kv.TxStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager, forSearchTxMgr *transaction.Manager, bProvider billing.Provider) []Service {
 	var v1Services []Service
 	v1Services = append(v1Services, newHealthService(txMgr))
 
@@ -60,6 +61,7 @@ func GetRegisteredServices(kvStore kv.TxStore, searchStore search.Store, tenantM
 	v1Services = append(v1Services, newObservabilityService(tenantMgr))
 	v1Services = append(v1Services, newCacheService(tenantMgr, txMgr))
 	v1Services = append(v1Services, newSearchService(searchStore, tenantMgr, forSearchTxMgr))
+	v1Services = append(v1Services, newBillingService(bProvider))
 
 	return v1Services
 }
