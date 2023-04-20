@@ -54,7 +54,7 @@ type managementService struct {
 
 type nsDetailsResp = map[string]map[string]map[string]map[string]string
 
-func newManagementService(authProvider auth.Provider, txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, userStore *metadata.UserSubspace, namespaceStore *metadata.NamespaceSubspace) *managementService {
+func newManagementService(authProvider auth.Provider, txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, userStore *metadata.UserSubspace, namespaceStore *metadata.NamespaceSubspace, bProvider billing.Provider) *managementService {
 	if authProvider == nil && config.DefaultConfig.Auth.EnableOauth {
 		log.Error().Str("Provider", config.DefaultConfig.Auth.OAuthProvider).Msg("Unable to configure external auth provider")
 		panic("Unable to configure external auth provider")
@@ -74,7 +74,7 @@ func newManagementService(authProvider auth.Provider, txMgr *transaction.Manager
 		Provider:                  authProvider,
 		UserMetadataProvider:      userMetadataProvider,
 		NamespaceMetadataProvider: namespaceMetadataProvider,
-		BillingProvider:           billing.NewProvider(),
+		BillingProvider:           bProvider,
 		Manager:                   txMgr,
 		TenantManager:             tenantMgr,
 	}

@@ -55,7 +55,7 @@ func GetRegisteredServices(kvStore kv.TxStore, searchStore search.Store, tenantM
 		v1Services = append(v1Services, newAuthService(authProvider))
 	}
 	if config.DefaultConfig.Management.Enabled {
-		v1Services = append(v1Services, newManagementService(authProvider, txMgr, tenantMgr, userStore, tenantMgr.GetNamespaceStore()))
+		v1Services = append(v1Services, newManagementService(authProvider, txMgr, tenantMgr, userStore, tenantMgr.GetNamespaceStore(), bProvider))
 	}
 
 	v1Services = append(v1Services, newObservabilityService(tenantMgr))
