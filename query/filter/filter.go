@@ -48,7 +48,7 @@ var (
 // The default rule applied between filters are "$and and the default selector is "$eq".
 type Filter interface {
 	// Matches returns true if the input doc passes the filter, otherwise false
-	Matches(doc []byte) bool
+	Matches(doc []byte, metadata []byte) bool
 	// MatchesDoc similar to Matches but used when document is already parsed
 	MatchesDoc(doc map[string]interface{}) bool
 	ToSearchFilter() string
@@ -59,7 +59,7 @@ type Filter interface {
 
 type EmptyFilter struct{}
 
-func (f *EmptyFilter) Matches(_ []byte) bool                    { return true }
+func (f *EmptyFilter) Matches(_ []byte, _ []byte) bool          { return true }
 func (f *EmptyFilter) MatchesDoc(_ map[string]interface{}) bool { return true }
 func (f *EmptyFilter) ToSearchFilter() string                   { return "" }
 func (f *EmptyFilter) IsSearchIndexed() bool                    { return false }
