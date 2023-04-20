@@ -23,6 +23,7 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	v1 "github.com/tigrisdata/tigris/server/services/v1"
+	"github.com/tigrisdata/tigris/server/services/v1/billing"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
@@ -41,12 +42,12 @@ func NewMuxer(cfg *config.Config) *Muxer {
 	return &Muxer{servers: []Server{NewHTTPServer(cfg), NewGRPCServer(cfg)}}
 }
 
-func (m *Muxer) RegisterServices(cfg *config.ServerConfig, kvStore kv.TxStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager, forSearchTxMgr *transaction.Manager) {
+func (m *Muxer) RegisterServices(cfg *config.ServerConfig, kvStore kv.TxStore, searchStore search.Store, tenantMgr *metadata.TenantManager, txMgr *transaction.Manager, forSearchTxMgr *transaction.Manager, biller billing.Provider) {
 	var services []v1.Service
 	if cfg.Type == config.RealtimeServerType {
 		services = v1.GetRegisteredServicesRealtime(kvStore, searchStore, tenantMgr, txMgr)
 	} else {
-		services = v1.GetRegisteredServices(kvStore, searchStore, tenantMgr, txMgr, forSearchTxMgr)
+		services = v1.GetRegisteredServices(kvStore, searchStore, tenantMgr, txMgr, forSearchTxMgr, biller)
 	}
 	for _, r := range services {
 		for _, v := range m.servers {

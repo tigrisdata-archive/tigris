@@ -22,7 +22,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/h2non/gock"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
+	biller "github.com/tigrisdata/metronome-go-client"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/uber-go/tally"
@@ -69,7 +71,7 @@ func TestMetronome_CreateAccount(t *testing.T) {
 			})
 
 		createdId, err := metronome.CreateAccount(ctx, "nsId1", "foo_tenant")
-		require.ErrorContains(t, err, "Unauthorized")
+		require.Equal(t, err, NewMetronomeError(401, []byte(`{"message":"Unauthorized"}`+"\n")))
 		require.Empty(t, createdId)
 		require.True(t, gock.IsDone())
 	})
@@ -83,7 +85,7 @@ func TestMetronome_CreateAccount(t *testing.T) {
 			})
 
 		createdId, err := metronome.CreateAccount(ctx, "nsId1", "foo_tenant")
-		require.ErrorContains(t, err, "ingest alias conflict")
+		require.Equal(t, err, NewMetronomeError(409, []byte(`{"message":"ingest alias conflict"}`+"\n")))
 		require.Empty(t, createdId)
 		require.True(t, gock.IsDone())
 	})
@@ -135,7 +137,7 @@ func TestMetronome_AddDefaultPlan(t *testing.T) {
 			})
 
 		added, err := metronome.AddDefaultPlan(ctx, metronomeId)
-		require.ErrorContains(t, err, "No such plan")
+		require.Equal(t, err, NewMetronomeError(400, []byte(`{"message":"No such plan"}`+"\n")))
 		require.False(t, added)
 		require.True(t, gock.IsDone())
 	})
@@ -224,7 +226,7 @@ func TestMetronome_PushStorageEvents(t *testing.T) {
 				WithDatabaseBytes(920_000_000).
 				Build(),
 		})
-		require.ErrorContains(t, err, "Bad request")
+		require.Equal(t, err, NewMetronomeError(400, []byte(`{"message":"Bad request"}`+"\n")))
 		require.True(t, gock.IsDone())
 	})
 
@@ -330,7 +332,7 @@ func TestMetronome_PushUsageEvents(t *testing.T) {
 				WithDatabaseUnits(920).
 				Build(),
 		})
-		require.ErrorContains(t, err, "Bad request")
+		require.Equal(t, err, NewMetronomeError(400, []byte(`{"message":"Bad request"}`+"\n")))
 		require.True(t, gock.IsDone())
 	})
 
@@ -350,6 +352,360 @@ func TestMetronome_PushUsageEvents(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.False(t, gock.IsDone())
+	})
+}
+
+func TestMetronome_FetchInvoices(t *testing.T) {
+	initializeMetricsForTest()
+	defer gock.Off()
+	cfg := config.DefaultConfig.Billing.Metronome
+	metronome, err := NewMetronomeProvider(cfg)
+	require.NoError(t, err)
+	ctx := context.TODO()
+
+	t.Run("fetches valid invoices", func(t *testing.T) {
+		accountId, err := uuid.Parse("b2108db4-6768-469b-93bb-23e49a4311d6")
+		require.NoError(t, err)
+		gock.New(cfg.URL).
+			Get(fmt.Sprintf("/customers/%s/invoices", accountId)).
+			MatchHeader("Authorization", cfg.ApiKey).
+			MatchParam("limit", "20").
+			Reply(200).
+			JSON(map[string]interface{}{
+				"data": []map[string]interface{}{
+					{
+						"id":        "50670f17-ca2d-4f9b-82a7-dc0e7c1f6ed7",
+						"plan_name": "Free Tier",
+						"line_items": []map[string]interface{}{
+							{
+								"name":       "Monthly Platform Fee",
+								"quantity":   1,
+								"total":      0,
+								"product_id": "b8b2e361-7e31-4283-a6e7-9b4c04a8a7eb",
+								"sub_line_items": []map[string]interface{}{
+									{
+										"name":      "Monthly Platform Fee",
+										"price":     0,
+										"quantity":  1,
+										"subtotal":  0,
+										"charge_id": "fc7e4e9d-2ce3-4850-87bc-4b972679aaab",
+									},
+								},
+							},
+						},
+					},
+				},
+			})
+
+		resp, err := metronome.GetInvoices(ctx, accountId)
+		require.NoError(t, err)
+
+		require.NotNil(t, resp)
+		require.Nil(t, resp.NextPage)
+		require.Len(t, resp.Data, 1)
+		require.Equal(t, "50670f17-ca2d-4f9b-82a7-dc0e7c1f6ed7", resp.GetData()[0].GetId())
+		require.Equal(t, "Free Tier", resp.GetData()[0].GetPlanName())
+		require.True(t, gock.IsDone())
+	})
+
+	t.Run("fetches empty invoices", func(t *testing.T) {
+		accountId, err := uuid.Parse("b2108db4-6768-469b-93bb-23e49a4311d6")
+		require.NoError(t, err)
+		gock.New(cfg.URL).
+			Get(fmt.Sprintf("/customers/%s/invoices", accountId)).
+			Reply(200).
+			JSON(map[string]interface{}{
+				"data": []map[string]interface{}{},
+			})
+
+		resp, err := metronome.GetInvoices(ctx, accountId)
+		require.NoError(t, err)
+
+		require.NotNil(t, resp)
+		require.Nil(t, resp.NextPage)
+		require.Empty(t, resp.Data)
+		require.True(t, gock.IsDone())
+	})
+
+	t.Run("bad request no customer", func(t *testing.T) {
+		accountId, err := uuid.Parse("b2108db4-6768-469b-93bb-23e49a4311d6")
+		require.NoError(t, err)
+		gock.New(cfg.URL).
+			Get(fmt.Sprintf("/customers/%s/invoices", accountId)).
+			Reply(400).
+			JSON(map[string]interface{}{
+				"message": "no customer exists",
+			})
+
+		resp, err := metronome.GetInvoices(ctx, accountId)
+		require.Equal(t, err, NewMetronomeError(400, []byte(`{"message":"no customer exists"}`+"\n")))
+		require.Nil(t, resp)
+		require.True(t, gock.IsDone())
+	})
+}
+
+func TestMetronome_GetInvoiceById(t *testing.T) {
+	initializeMetricsForTest()
+	defer gock.Off()
+	cfg := config.DefaultConfig.Billing.Metronome
+	metronome, err := NewMetronomeProvider(cfg)
+	require.NoError(t, err)
+	ctx := context.TODO()
+
+	t.Run("fetches valid invoices", func(t *testing.T) {
+		accountId, err := uuid.Parse("b2108db4-6768-469b-93bb-23e49a4311d6")
+		require.NoError(t, err)
+		invoiceId := "50670f17-ca2d-4f9b-82a7-dc0e7c1f6ed7"
+		gock.New(cfg.URL).
+			Get(fmt.Sprintf("/customers/%s/invoices/%s", accountId, invoiceId)).
+			MatchHeader("Authorization", cfg.ApiKey).
+			Reply(200).
+			JSON(map[string]interface{}{
+				"data": map[string]interface{}{
+
+					"id":        "50670f17-ca2d-4f9b-82a7-dc0e7c1f6ed7",
+					"plan_name": "Free Tier",
+					"line_items": []map[string]interface{}{
+						{
+							"name":       "Monthly Platform Fee",
+							"quantity":   1,
+							"total":      0,
+							"product_id": "b8b2e361-7e31-4283-a6e7-9b4c04a8a7eb",
+							"sub_line_items": []map[string]interface{}{
+								{
+									"name":      "Monthly Platform Fee",
+									"price":     0,
+									"quantity":  1,
+									"subtotal":  0,
+									"charge_id": "fc7e4e9d-2ce3-4850-87bc-4b972679aaab",
+								},
+							},
+						},
+					},
+				},
+			})
+
+		resp, err := metronome.GetInvoiceById(ctx, accountId, invoiceId)
+		require.NoError(t, err)
+
+		require.NotNil(t, resp)
+		require.Nil(t, resp.NextPage)
+		require.Len(t, resp.Data, 1)
+		require.Equal(t, "50670f17-ca2d-4f9b-82a7-dc0e7c1f6ed7", resp.GetData()[0].GetId())
+		require.Equal(t, "Free Tier", resp.GetData()[0].GetPlanName())
+		require.True(t, gock.IsDone())
+	})
+
+	t.Run("fetches empty invoices", func(t *testing.T) {
+		accountId, err := uuid.Parse("b2108db4-6768-469b-93bb-23e49a4311d6")
+		require.NoError(t, err)
+		invoiceId := "50670f17-ca2d-4f9b-82a7-dc0e7c1f6ed7"
+		gock.New(cfg.URL).
+			Get(fmt.Sprintf("/customers/%s/invoices/%s", accountId, invoiceId)).
+			Reply(200).
+			JSON(map[string]interface{}{
+				"data": map[string]interface{}{},
+			})
+
+		resp, err := metronome.GetInvoiceById(ctx, accountId, invoiceId)
+		require.NoError(t, err)
+
+		require.NotNil(t, resp)
+		require.Nil(t, resp.NextPage)
+		require.Empty(t, resp.Data)
+		require.True(t, gock.IsDone())
+	})
+
+	t.Run("no invoice found", func(t *testing.T) {
+		accountId, err := uuid.Parse("b2108db4-6768-469b-93bb-23e49a4311d6")
+		require.NoError(t, err)
+		invoiceId := "50670f17-ca2d-4f9b-82a7-dc0e7c1f6ed7"
+		gock.New(cfg.URL).
+			Get(fmt.Sprintf("/customers/%s/invoices/%s", accountId, invoiceId)).
+			Reply(404).
+			JSON(map[string]interface{}{
+				"message": "no invoice found",
+			})
+
+		resp, err := metronome.GetInvoiceById(ctx, accountId, invoiceId)
+		require.Equal(t, err, NewMetronomeError(404, []byte(`{"message":"no invoice found"}`+"\n")))
+		require.Nil(t, resp)
+		require.True(t, gock.IsDone())
+	})
+}
+
+func TestMetronome_buildInvoice(t *testing.T) {
+	t.Run("deserializes complete invoice", func(t *testing.T) {
+
+		payload := `
+		{
+            "id": "f9f8168c-dab6-4fd6-9008-e41dabda7bd5",
+            "customer_id": "b2108db4-6768-469b-93bb-23e49a4311d6",
+            "credit_type": {
+                "id": "2714e483-4ff1-48e4-9e25-ac732e8f24f2",
+                "name": "USD (cents)"
+            },
+            "invoice_adjustments": [],
+            "plan_id": "433b615b-523d-4515-80af-88cdfc3b213d",
+            "plan_name": "Free Tier",
+            "line_items": [
+                {
+                    "custom_fields": {},
+                    "name": "Monthly Platform Fee",
+                    "quantity": 1,
+                    "total": 0,
+                    "credit_type": {
+                        "id": "2714e483-4ff1-48e4-9e25-ac732e8f24f2",
+                        "name": "USD (cents)"
+                    },
+                    "product_id": "b8b2e361-7e31-4283-a6e7-9b4c04a8a7eb",
+                    "sub_line_items": [
+                        {
+                            "name": "Monthly Platform Fee",
+                            "price": 0,
+                            "quantity": 1,
+                            "subtotal": 0,
+                            "charge_id": "fc7e4e9d-2ce3-4850-87bc-4b972679aaab",
+                            "custom_fields": {}
+                        }
+                    ]
+                },
+                {
+                    "custom_fields": {},
+                    "name": "Search",
+                    "quantity": 1,
+                    "total": 16190,
+                    "credit_type": {
+                        "id": "2714e483-4ff1-48e4-9e25-ac732e8f24f2",
+                        "name": "USD (cents)"
+                    },
+                    "product_id": "7054b561-327f-4dc5-a673-e8b07aecb7ad",
+                    "sub_line_items": [
+                        {
+                            "name": "Max Search Index size (MB)",
+                            "quantity": 8345,
+                            "subtotal": 16190,
+                            "charge_id": "65a9ca10-7a90-478a-9b07-45eeee2a6df1",
+                            "custom_fields": {},
+                            "tiers": [
+                                {
+                                    "starting_at": 0,
+                                    "quantity": 250,
+                                    "price": 0,
+                                    "subtotal": 0
+                                },
+                                {
+                                    "starting_at": 250,
+                                    "quantity": 8095,
+                                    "price": 2,
+                                    "subtotal": 16190
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Total Search Request Units ( x 1000)",
+                            "quantity": 0,
+                            "subtotal": 0,
+                            "charge_id": "ed8c01e2-96b5-4b3f-b7cb-14ab7d7cd9f4",
+                            "custom_fields": {}
+                        }
+                    ]
+                },
+                {
+                    "custom_fields": {},
+                    "name": "Database",
+                    "quantity": 1,
+                    "total": 5700,
+                    "credit_type": {
+                        "id": "2714e483-4ff1-48e4-9e25-ac732e8f24f2",
+                        "name": "USD (cents)"
+                    },
+                    "product_id": "cdd6ae4e-560d-4270-bafd-ee842ff88bf7",
+                    "sub_line_items": [
+                        {
+                            "name": "Max DB size (GB)",
+                            "quantity": 62,
+                            "subtotal": 5700,
+                            "charge_id": "ceb4e1d8-02f5-4c89-a878-4ee04a0312da",
+                            "custom_fields": {},
+                            "tiers": [
+                                {
+                                    "starting_at": 0,
+                                    "quantity": 5,
+                                    "price": 0,
+                                    "subtotal": 0
+                                },
+                                {
+                                    "starting_at": 5,
+                                    "quantity": 57,
+                                    "price": 100,
+                                    "subtotal": 5700
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Total Database Request Units ( x 1,000,000)",
+                            "quantity": 0,
+                            "subtotal": 0,
+                            "charge_id": "23ab4655-9d9f-49e9-8fd5-9c60d8c6490a",
+                            "custom_fields": {}
+                        }
+                    ]
+                }
+            ],
+            "start_timestamp": "2023-04-01T00:00:00+00:00",
+            "end_timestamp": "2023-05-01T00:00:00+00:00",
+            "status": "DRAFT",
+            "subtotal": 21890,
+            "total": 21890,
+            "external_invoice": null
+        }`
+		var mInvoice biller.Invoice
+		err := jsoniter.Unmarshal([]byte(payload), &mInvoice)
+
+		require.NoError(t, err)
+
+		built := buildInvoice(mInvoice)
+		require.NotNil(t, built)
+
+		require.Equal(t, mInvoice.Id.String(), built.GetId())
+		require.Equal(t, mInvoice.StartTimestamp.Unix(), built.GetStartTime().GetSeconds())
+		require.Equal(t, mInvoice.EndTimestamp.Unix(), built.GetEndTime().GetSeconds())
+		require.Equal(t, mInvoice.Subtotal, built.GetSubtotal())
+		require.Equal(t, mInvoice.Total, built.GetTotal())
+		require.Equal(t, *mInvoice.PlanName, built.GetPlanName())
+
+		// entries
+		require.Len(t, built.GetEntries(), len(mInvoice.LineItems))
+		for i, b := range built.Entries {
+			line := mInvoice.LineItems[i]
+			require.Equal(t, line.Name, b.GetName())
+			require.Equal(t, line.Quantity, b.GetQuantity())
+			require.Equal(t, line.Total, b.GetTotal())
+
+			// charges
+			require.Len(t, b.GetCharges(), len(line.SubLineItems))
+			for j, charge := range b.GetCharges() {
+				sub := line.SubLineItems[j]
+				require.Equal(t, sub.Name, charge.GetName())
+				require.Equal(t, sub.Quantity, charge.GetQuantity())
+				require.Equal(t, sub.Subtotal, charge.GetSubtotal())
+
+				// tiers
+				if sub.Tiers == nil {
+					require.Len(t, charge.GetTiers(), 0)
+				} else {
+					require.Len(t, charge.GetTiers(), len(*sub.Tiers))
+					for k, tier := range charge.GetTiers() {
+						mTier := (*sub.Tiers)[k]
+						require.Equal(t, mTier.StartingAt, tier.GetStartingAt())
+						require.Equal(t, mTier.Quantity, tier.GetQuantity())
+						require.Equal(t, mTier.Subtotal, tier.GetSubtotal())
+						require.Equal(t, mTier.Price, tier.GetPrice())
+					}
+				}
+			}
+		}
 	})
 }
 

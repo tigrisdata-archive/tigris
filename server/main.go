@@ -115,11 +115,13 @@ func mainWithCode() int {
 	_ = quota.Init(tenantMgr, cfg)
 	defer quota.Cleanup()
 
+	bProvider := billing.NewProvider()
+
 	mx := muxer.NewMuxer(cfg)
-	mx.RegisterServices(&cfg.Server, kvStoreForDatabase, searchStore, tenantMgr, txMgr, forSearchTxMgr)
+	mx.RegisterServices(&cfg.Server, kvStoreForDatabase, searchStore, tenantMgr, txMgr, forSearchTxMgr, bProvider)
 
 	// metrics is already initialized, we can start reporting usage data
-	ur, err := billing.NewUsageReporter(metrics.GlobalSt, tenantMgr, billing.NewProvider())
+	ur, err := billing.NewUsageReporter(metrics.GlobalSt, tenantMgr, bProvider)
 	if !ulog.E(err) {
 		ur.Start()
 	}
