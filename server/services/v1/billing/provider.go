@@ -20,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tigrisdata/tigris/server/config"
 	ulog "github.com/tigrisdata/tigris/util/log"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 )
 
 type Provider interface {
@@ -28,6 +29,8 @@ type Provider interface {
 	AddPlan(ctx context.Context, accountId MetronomeId, planId uuid.UUID) (bool, error)
 	PushUsageEvents(ctx context.Context, events []*UsageEvent) error
 	PushStorageEvents(ctx context.Context, events []*StorageEvent) error
+	GetInvoices(ctx context.Context, accountId MetronomeId, r *api.ListInvoicesRequest) (*api.ListInvoicesResponse, error)
+	GetInvoiceById(ctx context.Context, accountId MetronomeId, invoiceId string) (*api.ListInvoicesResponse, error)
 }
 
 func NewProvider() Provider {

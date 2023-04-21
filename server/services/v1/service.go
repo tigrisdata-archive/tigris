@@ -61,7 +61,7 @@ func GetRegisteredServices(kvStore kv.TxStore, searchStore search.Store, tenantM
 	v1Services = append(v1Services, newObservabilityService(tenantMgr))
 	v1Services = append(v1Services, newCacheService(tenantMgr, txMgr))
 	v1Services = append(v1Services, newSearchService(searchStore, tenantMgr, forSearchTxMgr))
-	v1Services = append(v1Services, newBillingService(bProvider))
+	v1Services = append(v1Services, newBillingService(bProvider, tenantMgr))
 
 	return v1Services
 }
