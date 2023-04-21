@@ -793,142 +793,283 @@ func TestTenantManager_DataSize(t *testing.T) {
 	tenant.projects["db2"] = &Project{database: db2}
 
 	coll1 := &schema.DefaultCollection{Id: 256}
-	db1.collections["coll1"] = &collectionHolder{collection: coll1}
-
-	table, err := m.encoder.EncodeTableName(ns1, db1, coll1)
-	require.NoError(t, err)
-
-	err = kvStore.DropTable(ctx, table)
-	require.NoError(t, err)
-
-	tx, err := kvStore.BeginTx(ctx)
-	require.NoError(t, err)
-
-	for i := 0; i < 100; i++ {
-		err = tx.Insert(ctx, table, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
-		require.NoError(t, err)
-	}
-	_ = tx.Commit(ctx)
-
 	coll2 := &schema.DefaultCollection{Id: 512}
-	table2, err := m.encoder.EncodeTableName(ns1, db1, coll2)
-	require.NoError(t, err)
+	db1.collections["coll1"] = &collectionHolder{collection: coll1}
 	db1.collections["coll2"] = &collectionHolder{collection: coll2}
 
-	err = kvStore.DropTable(ctx, table2)
-	require.NoError(t, err)
-
-	tx, err = kvStore.BeginTx(ctx)
-	require.NoError(t, err)
-	for i := 0; i < 200; i++ {
-		err = tx.Insert(ctx, table2, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
-		require.NoError(t, err)
-	}
-	_ = tx.Commit(ctx)
-
-	db21 := &Database{id: 20, collections: make(map[string]*collectionHolder)}
 	coll21 := &schema.DefaultCollection{Id: 1024}
-	// for second namespace insert 150 in one project and 50 record in to other
-	table21, err := m.encoder.EncodeTableName(ns2, db21, coll21)
-	require.NoError(t, err)
-	tenant2.projects["db21"] = &Project{database: db21}
-	db21.collections["coll21"] = &collectionHolder{collection: coll21}
-
-	err = kvStore.DropTable(ctx, table21)
-	require.NoError(t, err)
-
-	tx, err = kvStore.BeginTx(ctx)
-	require.NoError(t, err)
-	for i := 0; i < 110; i++ {
-		err = tx.Insert(ctx, table21, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
-		require.NoError(t, err)
-	}
-	_ = tx.Commit(ctx)
-
+	coll22 := &schema.DefaultCollection{Id: 2048}
+	db21 := &Database{id: 20, collections: make(map[string]*collectionHolder)}
 	db22 := &Database{id: 30, collections: make(map[string]*collectionHolder)}
-	coll22 := &schema.DefaultCollection{Id: 1024}
-	table22, err := m.encoder.EncodeTableName(ns2, db22, coll22)
-	require.NoError(t, err)
+
+	tenant2.projects = make(map[string]*Project)
+	tenant2.projects["db21"] = &Project{database: db21}
 	tenant2.projects["db22"] = &Project{database: db22}
+
+	db21.collections["coll21"] = &collectionHolder{collection: coll21}
 	db22.collections["coll22"] = &collectionHolder{collection: coll22}
 
-	err = kvStore.DropTable(ctx, table22)
-	require.NoError(t, err)
-
-	tx, err = kvStore.BeginTx(ctx)
-	require.NoError(t, err)
-	for i := 0; i < 150; i++ {
-		err = tx.Insert(ctx, table22, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+	t.Run("coll_size", func(t *testing.T) {
+		table, err := m.encoder.EncodeTableName(ns1, db1, coll1)
 		require.NoError(t, err)
-	}
-	_ = tx.Commit(ctx)
+		coll1.EncodedName = table
 
-	// Tenant 1
-	// db1
-	sz, err := tenant.Size(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, int64(3072000), sz.StoredBytes)
+		err = kvStore.DropTable(ctx, table)
+		require.NoError(t, err)
 
-	sz, err = tenant.DatabaseSize(ctx, db1)
-	require.NoError(t, err)
-	assert.Equal(t, int64(3072000), sz.StoredBytes)
+		tx, err := kvStore.BeginTx(ctx)
+		require.NoError(t, err)
 
-	sz, err = tenant.CollectionSize(ctx, db1, coll1)
-	require.NoError(t, err)
-	assert.Equal(t, int64(1024000), sz.StoredBytes)
+		for i := 0; i < 100; i++ {
+			err = tx.Insert(ctx, table, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+			require.NoError(t, err)
+		}
+		_ = tx.Commit(ctx)
 
-	sz, err = tenant.CollectionSize(ctx, db1, coll2)
-	require.NoError(t, err)
-	assert.Equal(t, int64(2048000), sz.StoredBytes)
+		table2, err := m.encoder.EncodeTableName(ns1, db1, coll2)
+		require.NoError(t, err)
+		coll2.EncodedName = table2
 
-	// db2 is empty
-	sz, err = tenant.DatabaseSize(ctx, db2)
-	require.NoError(t, err)
-	assert.Equal(t, int64(0), sz.StoredBytes)
+		err = kvStore.DropTable(ctx, table2)
+		require.NoError(t, err)
 
-	// Tenant 2
-	// db21
-	sz, err = tenant2.Size(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, int64(2662400), sz.StoredBytes)
+		tx, err = kvStore.BeginTx(ctx)
+		require.NoError(t, err)
+		for i := 0; i < 200; i++ {
+			err = tx.Insert(ctx, table2, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+			require.NoError(t, err)
+		}
+		_ = tx.Commit(ctx)
 
-	sz, err = tenant2.DatabaseSize(ctx, db21)
-	require.NoError(t, err)
-	assert.Equal(t, int64(1126400), sz.StoredBytes)
+		// for second namespace insert 150 in one project and 50 record in to other
+		table21, err := m.encoder.EncodeTableName(ns2, db21, coll21)
+		require.NoError(t, err)
+		coll21.EncodedName = table21
 
-	sz, err = tenant2.CollectionSize(ctx, db21, coll21)
-	require.NoError(t, err)
-	assert.Equal(t, int64(1126400), sz.StoredBytes)
+		err = kvStore.DropTable(ctx, table21)
+		require.NoError(t, err)
 
-	// db22
-	sz, err = tenant2.DatabaseSize(ctx, db22)
-	require.NoError(t, err)
-	assert.Equal(t, int64(1536000), sz.StoredBytes)
+		tx, err = kvStore.BeginTx(ctx)
+		require.NoError(t, err)
+		for i := 0; i < 110; i++ {
+			err = tx.Insert(ctx, table21, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+			require.NoError(t, err)
+		}
+		_ = tx.Commit(ctx)
 
-	sz, err = tenant2.CollectionSize(ctx, db22, coll22)
-	require.NoError(t, err)
-	assert.Equal(t, int64(1536000), sz.StoredBytes)
+		table22, err := m.encoder.EncodeTableName(ns2, db22, coll22)
+		require.NoError(t, err)
+		coll22.EncodedName = table22
 
-	// cleanup
-	tns1, err := m.encoder.EncodeTableName(tenant.GetNamespace(), nil, nil)
-	require.NoError(t, err)
-	err = tenant2.kvStore.DropTable(ctx, tns1)
-	require.NoError(t, err)
+		err = kvStore.DropTable(ctx, table22)
+		require.NoError(t, err)
 
-	tns2, err := m.encoder.EncodeTableName(tenant2.GetNamespace(), nil, nil)
-	require.NoError(t, err)
-	err = tenant2.kvStore.DropTable(ctx, tns2)
-	require.NoError(t, err)
+		tx, err = kvStore.BeginTx(ctx)
+		require.NoError(t, err)
+		for i := 0; i < 150; i++ {
+			err = tx.Insert(ctx, table22, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+			require.NoError(t, err)
+		}
+		_ = tx.Commit(ctx)
 
-	sz, err = tenant.Size(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, int64(0), sz.StoredBytes)
+		// Tenant 1
+		// db1
+		sz, err := tenant.Size(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, int64(3072000), sz.StoredBytes)
 
-	sz, err = tenant2.Size(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, int64(0), sz.StoredBytes)
+		sz, err = tenant.DatabaseSize(ctx, db1)
+		require.NoError(t, err)
+		assert.Equal(t, int64(3072000), sz.StoredBytes)
 
-	testClearDictionary(ctx, m.metaStore, m.kvStore)
+		sz, err = tenant.CollectionSize(ctx, db1, coll1)
+		require.NoError(t, err)
+		assert.Equal(t, int64(1024000), sz.StoredBytes)
+
+		sz, err = tenant.CollectionSize(ctx, db1, coll2)
+		require.NoError(t, err)
+		assert.Equal(t, int64(2048000), sz.StoredBytes)
+
+		// db2 is empty
+		sz, err = tenant.DatabaseSize(ctx, db2)
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), sz.StoredBytes)
+
+		// Tenant 2
+		// db21
+		sz, err = tenant2.Size(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, int64(2662400), sz.StoredBytes)
+
+		sz, err = tenant2.DatabaseSize(ctx, db21)
+		require.NoError(t, err)
+		assert.Equal(t, int64(1126400), sz.StoredBytes)
+
+		sz, err = tenant2.CollectionSize(ctx, db21, coll21)
+		require.NoError(t, err)
+		assert.Equal(t, int64(1126400), sz.StoredBytes)
+
+		// db22
+		sz, err = tenant2.DatabaseSize(ctx, db22)
+		require.NoError(t, err)
+		assert.Equal(t, int64(1536000), sz.StoredBytes)
+
+		sz, err = tenant2.CollectionSize(ctx, db22, coll22)
+		require.NoError(t, err)
+		assert.Equal(t, int64(1536000), sz.StoredBytes)
+
+		// cleanup
+		tns1, err := m.encoder.EncodeTableName(tenant.GetNamespace(), nil, nil)
+		require.NoError(t, err)
+		err = tenant2.kvStore.DropTable(ctx, tns1)
+		require.NoError(t, err)
+
+		tns2, err := m.encoder.EncodeTableName(tenant2.GetNamespace(), nil, nil)
+		require.NoError(t, err)
+		err = tenant2.kvStore.DropTable(ctx, tns2)
+		require.NoError(t, err)
+
+		sz, err = tenant.Size(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), sz.StoredBytes)
+
+		sz, err = tenant2.Size(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), sz.StoredBytes)
+
+		testClearDictionary(ctx, m.metaStore, m.kvStore)
+	})
+
+	t.Run("index_size", func(t *testing.T) {
+		index, err := m.encoder.EncodeSecondaryIndexTableName(ns1, db1, coll1)
+		require.NoError(t, err)
+		coll1.EncodedTableIndexName = index
+
+		err = kvStore.DropTable(ctx, index)
+		require.NoError(t, err)
+
+		tx, err := kvStore.BeginTx(ctx)
+		require.NoError(t, err)
+
+		for i := 0; i < 300; i++ {
+			err = tx.Insert(ctx, index, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+			require.NoError(t, err)
+		}
+		_ = tx.Commit(ctx)
+
+		index2, err := m.encoder.EncodeSecondaryIndexTableName(ns1, db1, coll2)
+		require.NoError(t, err)
+		coll2.EncodedTableIndexName = index2
+
+		err = kvStore.DropTable(ctx, index2)
+		require.NoError(t, err)
+
+		tx, err = kvStore.BeginTx(ctx)
+		require.NoError(t, err)
+		for i := 0; i < 600; i++ {
+			err = tx.Insert(ctx, index2, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+			require.NoError(t, err)
+		}
+		_ = tx.Commit(ctx)
+
+		// for second namespace insert 150 in one project and 50 record in to other
+		index21, err := m.encoder.EncodeSecondaryIndexTableName(ns2, db21, coll21)
+		require.NoError(t, err)
+		coll21.EncodedTableIndexName = index21
+
+		err = kvStore.DropTable(ctx, index21)
+		require.NoError(t, err)
+
+		tx, err = kvStore.BeginTx(ctx)
+		require.NoError(t, err)
+		for i := 0; i < 330; i++ {
+			err = tx.Insert(ctx, index21, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+			require.NoError(t, err)
+		}
+		_ = tx.Commit(ctx)
+
+		index22, err := m.encoder.EncodeSecondaryIndexTableName(ns2, db22, coll22)
+		require.NoError(t, err)
+		coll22.EncodedTableIndexName = index22
+
+		err = kvStore.DropTable(ctx, index22)
+		require.NoError(t, err)
+
+		tx, err = kvStore.BeginTx(ctx)
+		require.NoError(t, err)
+		for i := 0; i < 450; i++ {
+			err = tx.Insert(ctx, index22, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+			require.NoError(t, err)
+		}
+		_ = tx.Commit(ctx)
+
+		// Tenant 1
+		// db1
+		sz, err := tenant.IndexSize(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, int64(9216000), sz.StoredBytes)
+
+		sz, err = tenant.DatabaseIndexSize(ctx, db1)
+		require.NoError(t, err)
+		assert.Equal(t, int64(9216000), sz.StoredBytes)
+
+		sz, err = tenant.CollectionIndexSize(ctx, db1, coll1)
+		require.NoError(t, err)
+		assert.Equal(t, int64(3072000), sz.StoredBytes)
+
+		sz, err = tenant.CollectionIndexSize(ctx, db1, coll2)
+		require.NoError(t, err)
+		assert.Equal(t, int64(6144000), sz.StoredBytes)
+
+		// db2 is empty
+		sz, err = tenant.DatabaseIndexSize(ctx, db2)
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), sz.StoredBytes)
+
+		// Tenant 2
+		// db21
+		sz, err = tenant2.IndexSize(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, int64(7987200), sz.StoredBytes)
+
+		sz, err = tenant2.DatabaseIndexSize(ctx, db21)
+		require.NoError(t, err)
+		assert.Equal(t, int64(3379200), sz.StoredBytes)
+
+		sz, err = tenant2.CollectionIndexSize(ctx, db21, coll21)
+		require.NoError(t, err)
+		assert.Equal(t, int64(3379200), sz.StoredBytes)
+
+		// db22
+		sz, err = tenant2.DatabaseIndexSize(ctx, db22)
+		require.NoError(t, err)
+		assert.Equal(t, int64(4608000), sz.StoredBytes)
+
+		sz, err = tenant2.CollectionIndexSize(ctx, db22, coll22)
+		require.NoError(t, err)
+		assert.Equal(t, int64(4608000), sz.StoredBytes)
+
+		// cleanup
+		tns1, err := m.encoder.EncodeSecondaryIndexTableName(tenant.GetNamespace(), nil, nil)
+		require.NoError(t, err)
+		err = tenant2.kvStore.DropTable(ctx, tns1)
+		require.NoError(t, err)
+
+		tns2, err := m.encoder.EncodeSecondaryIndexTableName(tenant2.GetNamespace(), nil, nil)
+		require.NoError(t, err)
+		err = tenant2.kvStore.DropTable(ctx, tns2)
+		require.NoError(t, err)
+
+		sz, err = tenant.IndexSize(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), sz.StoredBytes)
+
+		sz, err = tenant2.IndexSize(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), sz.StoredBytes)
+
+		testClearDictionary(ctx, m.metaStore, m.kvStore)
+	})
 }
 
 func TestMain(m *testing.M) {

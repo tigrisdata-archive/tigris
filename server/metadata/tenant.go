@@ -1539,18 +1539,26 @@ func (tenant *Tenant) String() string {
 func (tenant *Tenant) listEncCollName(db *Database) [][]byte {
 	colls := make([][]byte, 0, len(db.collections))
 	for _, v := range db.collections {
-		name, _ := tenant.Encoder.EncodeTableName(tenant.namespace, db, v.collection)
-		colls = append(colls, name)
+		colls = append(colls, v.collection.EncodedName)
 	}
 
 	return colls
 }
 
-func (tenant *Tenant) sumCollsSize(ctx context.Context, colls [][]byte) (*kv.TableStats, error) {
+func (tenant *Tenant) listEncIndexName(db *Database) [][]byte {
+	colls := make([][]byte, 0, len(db.collections))
+	for _, v := range db.collections {
+		colls = append(colls, v.collection.EncodedTableIndexName)
+	}
+
+	return colls
+}
+
+func (tenant *Tenant) sumSizes(ctx context.Context, tables [][]byte) (*kv.TableStats, error) {
 	var sumStats kv.TableStats
 
-	for _, coll := range colls {
-		stats, err := tenant.kvStore.GetTableStats(ctx, coll)
+	for _, t := range tables {
+		stats, err := tenant.kvStore.GetTableStats(ctx, t)
 		if err != nil {
 			return nil, err
 		}
@@ -1579,7 +1587,25 @@ func (tenant *Tenant) Size(ctx context.Context) (*kv.TableStats, error) {
 	}
 	tenant.Unlock()
 
-	return tenant.sumCollsSize(ctx, colls)
+	return tenant.sumSizes(ctx, colls)
+}
+
+func (tenant *Tenant) IndexSize(ctx context.Context) (*kv.TableStats, error) {
+	colls := make([][]byte, 0)
+
+	tenant.Lock()
+	for _, v := range tenant.projects {
+		if v.database != nil {
+			colls = append(colls, tenant.listEncIndexName(v.database)...)
+		}
+
+		for _, br := range v.databaseBranches {
+			colls = append(colls, tenant.listEncIndexName(br)...)
+		}
+	}
+	tenant.Unlock()
+
+	return tenant.sumSizes(ctx, colls)
 }
 
 // DatabaseSize returns approximate data size on disk for all the database for this tenant.
@@ -1590,13 +1616,36 @@ func (tenant *Tenant) DatabaseSize(ctx context.Context, db *Database) (*kv.Table
 	colls = tenant.listEncCollName(db)
 	tenant.Unlock()
 
-	return tenant.sumCollsSize(ctx, colls)
+	return tenant.sumSizes(ctx, colls)
+}
+
+func (tenant *Tenant) DatabaseIndexSize(ctx context.Context, db *Database) (*kv.TableStats, error) {
+	var colls [][]byte
+
+	tenant.Lock()
+	colls = tenant.listEncIndexName(db)
+	tenant.Unlock()
+
+	return tenant.sumSizes(ctx, colls)
 }
 
 // CollectionSize returns approximate data size on disk for all the collections for the database provided by the caller.
 func (tenant *Tenant) CollectionSize(ctx context.Context, db *Database, coll *schema.DefaultCollection) (*kv.TableStats, error) {
 	tenant.Lock()
 	nsName, _ := tenant.Encoder.EncodeTableName(tenant.namespace, db, coll)
+	tenant.Unlock()
+
+	stats, err := tenant.kvStore.GetTableStats(ctx, nsName)
+	if err != nil {
+		return nil, err
+	}
+
+	return stats, nil
+}
+
+func (tenant *Tenant) CollectionIndexSize(ctx context.Context, db *Database, coll *schema.DefaultCollection) (*kv.TableStats, error) {
+	tenant.Lock()
+	nsName, _ := tenant.Encoder.EncodeSecondaryIndexTableName(tenant.namespace, db, coll)
 	tenant.Unlock()
 
 	stats, err := tenant.kvStore.GetTableStats(ctx, nsName)
