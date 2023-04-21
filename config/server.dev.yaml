@@ -19,7 +19,7 @@ server:
   port: 8081
 
 cdc:
-  enabled: true
+  enabled: false
 
 search:
   host: localhost

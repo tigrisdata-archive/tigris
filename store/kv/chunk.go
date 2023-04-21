@@ -40,10 +40,12 @@ type chunkCB func(chunkNo int32, chunkData []byte) error
 // is used during merging from the key so there is no information apart from total chunk is persisted in the value.
 type ChunkTxStore struct {
 	TxStore
+
+	enabled bool
 }
 
-func NewChunkStore(store TxStore) TxStore {
-	return &ChunkTxStore{TxStore: store}
+func NewChunkStore(store TxStore, enabled bool) TxStore {
+	return &ChunkTxStore{TxStore: store, enabled: enabled}
 }
 
 func (store *ChunkTxStore) BeginTx(ctx context.Context) (Tx, error) {
@@ -54,6 +56,7 @@ func (store *ChunkTxStore) BeginTx(ctx context.Context) (Tx, error) {
 
 	return &ChunkTx{
 		KeyValueTx: btx.(*KeyValueTx),
+		enabled:    store.enabled,
 	}, nil
 }
 
@@ -76,11 +79,13 @@ func (tx *ChunkTx) executeChunks(data *internal.TableData, cb chunkCB) error {
 }
 
 func (tx *ChunkTx) isChunkingNeeded(data *internal.TableData) bool {
-	return data.ActualUserPayloadSize() > int32(chunkSize)
+	// if the payload size is greater than chunk size and chunking is enabled
+	return data.ActualUserPayloadSize() > int32(chunkSize) && tx.enabled
 }
 
 type ChunkTx struct {
 	*KeyValueTx
+	enabled bool
 }
 
 func (tx *ChunkTx) Insert(ctx context.Context, table []byte, key Key, data *internal.TableData) error {
@@ -188,6 +193,12 @@ func (it *ChunkIterator) Next(value *KeyValue) bool {
 
 		buf.Write(chunked.Data.RawData)
 	}
+	if it.Iterator.Err() != nil {
+		// there can be an error in between so we need to return that error
+		it.err = it.Iterator.Err()
+		return false
+	}
+
 	if chunk != *value.Data.TotalChunks {
 		it.err = fmt.Errorf("mismatch in total chunk read '%d' versus total chunks expected '%d'",
 			chunk, *value.Data.TotalChunks)
