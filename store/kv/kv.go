@@ -126,18 +126,25 @@ func (b *Builder) Build(cfg *config.FoundationDBConfig) (TxStore, error) {
 		return nil, err
 	}
 
+	store := NewTxStore(kv)
 	// chunking store is always enabled but whether we need to chunk or not is dependent
 	// on the flag b.isChunking which is honored by ChunkStore.
-	store := NewTxStore(kv)
 	store = NewChunkStore(store, b.isChunking)
+	// similar to chunking, compression store is always enabled but whether we compress or not is
+	// dependent on the flag b.isChunking which is honored by ChunkStore.
+	store = NewCompressionStore(store, b.isCompression)
 
 	if b.isListener {
+		// listener is before chunking or compression. This should only be created if needed. This is only used
+		// by database events.
 		store = NewListenerStore(store)
 	}
 	if b.isStats {
+		// Only create stats store if needed.
 		store = NewStatsStore(store)
 	}
 	if b.isMeasure {
+		// measure is first in the call if enabled.
 		store = NewKeyValueStoreWithMetrics(store)
 	}
 
@@ -174,6 +181,9 @@ func StoreForDatabase(cfg *config.Config) (TxStore, error) {
 	if config.DefaultConfig.KV.Chunking {
 		builder.WithChunking()
 	}
+	if config.DefaultConfig.KV.Compression {
+		builder.WithCompression()
+	}
 	builder.WithListener() // database has always a listener attached to it
 	builder.WithStats()
 	if config.DefaultConfig.Metrics.Fdb.Enabled {
@@ -186,6 +196,9 @@ func StoreForSearch(cfg *config.Config) (TxStore, error) {
 	builder := NewBuilder()
 	if config.DefaultConfig.Search.Chunking {
 		builder.WithChunking()
+	}
+	if config.DefaultConfig.Search.Compression {
+		builder.WithCompression()
 	}
 	if config.DefaultConfig.Metrics.Fdb.Enabled {
 		builder.WithMeasure()

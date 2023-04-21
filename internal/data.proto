@@ -37,6 +37,7 @@ message TableData {
   optional int32 total_chunks = 6;
   int32 raw_size = 7;
   optional int32 search_fields_size = 8;
+  optional int32 compression = 9;
 }
 
 // StreamData is used to store a serialized data that has user data, some Tigris metadata in Cache Stream. Some options
