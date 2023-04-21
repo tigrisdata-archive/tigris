@@ -308,22 +308,6 @@ func (a *auth0) DeleteAppKeys(ctx context.Context, project string) error {
 	return nil
 }
 
-func (a *auth0) CreateInvitations(_ context.Context, _ *api.CreateInvitationsRequest) (*api.CreateInvitationsResponse, error) {
-	return nil, errors.Internal("auth0 implementation doesn't support user invitations")
-}
-
-func (a *auth0) DeleteInvitations(_ context.Context, _ *api.DeleteInvitationsRequest) (*api.DeleteInvitationsResponse, error) {
-	return nil, errors.Internal("auth0 implementation doesn't support user invitations")
-}
-
-func (a *auth0) ListInvitations(_ context.Context, _ *api.ListInvitationsRequest) (*api.ListInvitationsResponse, error) {
-	return nil, errors.Internal("auth0 implementation doesn't support user invitations")
-}
-
-func (a *auth0) VerifyInvitation(_ context.Context, _ *api.VerifyInvitationRequest) (*api.VerifyInvitationResponse, error) {
-	return nil, errors.Internal("auth0 implementation doesn't support user invitations")
-}
-
 func validateOwnershipAuth0(ctx context.Context, operationName string, appId string, a *auth0) (*management.Client, string, error) {
 	client, err := a.Management.Client.Read(appId)
 	if err != nil {

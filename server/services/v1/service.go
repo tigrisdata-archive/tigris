@@ -52,7 +52,7 @@ func GetRegisteredServices(kvStore kv.TxStore, searchStore search.Store, tenantM
 	v1Services = append(v1Services, newApiService(kvStore, searchStore, tenantMgr, txMgr, authProvider))
 
 	if config.DefaultConfig.Auth.EnableOauth {
-		v1Services = append(v1Services, newAuthService(authProvider))
+		v1Services = append(v1Services, newAuthService(authProvider, auth.NewDefaultUsersManager()))
 	}
 	if config.DefaultConfig.Management.Enabled {
 		v1Services = append(v1Services, newManagementService(authProvider, txMgr, tenantMgr, userStore, tenantMgr.GetNamespaceStore(), bProvider))

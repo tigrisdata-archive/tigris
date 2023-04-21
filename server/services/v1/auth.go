@@ -35,15 +35,17 @@ const (
 type authService struct {
 	api.UnimplementedAuthServer
 	auth.Provider
+	auth.UsersManager
 }
 
-func newAuthService(authProvider auth.Provider) *authService {
+func newAuthService(authProvider auth.Provider, userManager auth.UsersManager) *authService {
 	if authProvider == nil {
 		log.Error().Str("Provider", config.DefaultConfig.Auth.OAuthProvider).Msg("Unable to configure external oauth provider")
 		panic("Unable to configure external oauth provider")
 	}
 	return &authService{
-		Provider: authProvider,
+		Provider:     authProvider,
+		UsersManager: userManager,
 	}
 }
 
@@ -52,19 +54,23 @@ func (a *authService) GetAccessToken(ctx context.Context, req *api.GetAccessToke
 }
 
 func (a *authService) CreateInvitations(ctx context.Context, req *api.CreateInvitationsRequest) (*api.CreateInvitationsResponse, error) {
-	return a.Provider.CreateInvitations(ctx, req)
+	return a.UsersManager.CreateInvitations(ctx, req)
 }
 
 func (a *authService) ListInvitations(ctx context.Context, req *api.ListInvitationsRequest) (*api.ListInvitationsResponse, error) {
-	return a.Provider.ListInvitations(ctx, req)
+	return a.UsersManager.ListInvitations(ctx, req)
 }
 
 func (a *authService) DeleteInvitations(ctx context.Context, req *api.DeleteInvitationsRequest) (*api.DeleteInvitationsResponse, error) {
-	return a.Provider.DeleteInvitations(ctx, req)
+	return a.UsersManager.DeleteInvitations(ctx, req)
 }
 
 func (a *authService) VerifyInvitation(ctx context.Context, req *api.VerifyInvitationRequest) (*api.VerifyInvitationResponse, error) {
-	return a.Provider.VerifyInvitation(ctx, req)
+	return a.UsersManager.VerifyInvitation(ctx, req)
+}
+
+func (a *authService) ListUsers(ctx context.Context, req *api.ListUsersRequest) (*api.ListUsersResponse, error) {
+	return a.UsersManager.ListUsers(ctx, req)
 }
 
 func (a *authService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {
