@@ -25,6 +25,10 @@ import (
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/services/v1/billing"
 	"google.golang.org/grpc"
+	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/request"
+	"github.com/rs/zerolog/log"
+	"github.com/google/uuid"
 )
 
 const (
@@ -34,14 +38,54 @@ const (
 type billingService struct {
 	api.UnimplementedBillingServer
 	billing.Provider
+	tenantMgr *metadata.TenantManager
 }
 
-func newBillingService(b billing.Provider) *billingService {
-	return &billingService{Provider: b}
+func newBillingService(b billing.Provider, tenantMgr *metadata.TenantManager) *billingService {
+	return &billingService{
+		Provider:  b,
+		tenantMgr: tenantMgr,
+	}
 }
 
-func (b *billingService) ListInvoices(_ context.Context, _ *api.ListInvoicesRequest) (*api.ListInvoicesResponse, error) {
-	return nil, errors.Unimplemented("list invoices is not yet implemented on the server")
+func (b *billingService) ListInvoices(ctx context.Context, req *api.ListInvoicesRequest) (*api.ListInvoicesResponse, error) {
+	mId, err := b.getMetronomeId(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if inv := req.GetInvoiceId(); len(inv) > 0 {
+		return b.Provider.GetInvoiceById(ctx, mId, req.GetInvoiceId())
+	}
+
+	return b.GetInvoices(ctx, mId, req)
+}
+
+func (b *billingService) getMetronomeId(ctx context.Context) (billing.MetronomeId, error) {
+	namespace, err := request.GetNamespace(ctx)
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	tenant, err := b.tenantMgr.GetTenant(ctx, namespace)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if tenant == nil {
+		log.Warn().Err(err).Msgf("Could not find tenant, this must not happen with right authn/authz configured")
+		return uuid.Nil, errors.NotFound("Tenant %s not found", namespace)
+	}
+	accounts := tenant.GetNamespace().Metadata().Accounts
+	mIdStr, enabled := accounts.GetMetronomeId()
+	if !enabled {
+		log.Error().Msgf("No metronome account for the namespace: %s", namespace)
+		return uuid.Nil, errors.Internal("No account linked for the user")
+	}
+	mId, err := uuid.Parse(mIdStr)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return mId, nil
 }
 
 func (b *billingService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {

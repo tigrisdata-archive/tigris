@@ -25,9 +25,11 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
 	biller "github.com/tigrisdata/metronome-go-client"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/uber-go/tally"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func TestMetronome_CreateAccount(t *testing.T) {
@@ -366,38 +368,29 @@ func TestMetronome_FetchInvoices(t *testing.T) {
 	t.Run("fetches valid invoices", func(t *testing.T) {
 		accountId, err := uuid.Parse("b2108db4-6768-469b-93bb-23e49a4311d6")
 		require.NoError(t, err)
+		nextPage := "nextPage"
+		startingTime := time.Date(2022, 12, 10, 0, 0, 0, 0, time.UTC)
 		gock.New(cfg.URL).
 			Get(fmt.Sprintf("/customers/%s/invoices", accountId)).
 			MatchHeader("Authorization", cfg.ApiKey).
 			MatchParam("limit", "20").
+			MatchParam("next_page", nextPage).
+			MatchParam("starting_on", "2022-12-10T00:00:00Z").
 			Reply(200).
 			JSON(map[string]interface{}{
 				"data": []map[string]interface{}{
 					{
-						"id":        "50670f17-ca2d-4f9b-82a7-dc0e7c1f6ed7",
-						"plan_name": "Free Tier",
-						"line_items": []map[string]interface{}{
-							{
-								"name":       "Monthly Platform Fee",
-								"quantity":   1,
-								"total":      0,
-								"product_id": "b8b2e361-7e31-4283-a6e7-9b4c04a8a7eb",
-								"sub_line_items": []map[string]interface{}{
-									{
-										"name":      "Monthly Platform Fee",
-										"price":     0,
-										"quantity":  1,
-										"subtotal":  0,
-										"charge_id": "fc7e4e9d-2ce3-4850-87bc-4b972679aaab",
-									},
-								},
-							},
-						},
+						"id":         "50670f17-ca2d-4f9b-82a7-dc0e7c1f6ed7",
+						"plan_name":  "Free Tier",
+						"line_items": []map[string]interface{}{},
 					},
 				},
 			})
 
-		resp, err := metronome.GetInvoices(ctx, accountId)
+		resp, err := metronome.GetInvoices(ctx, accountId, &api.ListInvoicesRequest{
+			NextPage:   &nextPage,
+			StartingOn: &timestamppb.Timestamp{Seconds: startingTime.Unix()},
+		})
 		require.NoError(t, err)
 
 		require.NotNil(t, resp)
@@ -418,7 +411,7 @@ func TestMetronome_FetchInvoices(t *testing.T) {
 				"data": []map[string]interface{}{},
 			})
 
-		resp, err := metronome.GetInvoices(ctx, accountId)
+		resp, err := metronome.GetInvoices(ctx, accountId, &api.ListInvoicesRequest{})
 		require.NoError(t, err)
 
 		require.NotNil(t, resp)
@@ -437,7 +430,7 @@ func TestMetronome_FetchInvoices(t *testing.T) {
 				"message": "no customer exists",
 			})
 
-		resp, err := metronome.GetInvoices(ctx, accountId)
+		resp, err := metronome.GetInvoices(ctx, accountId, &api.ListInvoicesRequest{})
 		require.Equal(t, err, NewMetronomeError(400, []byte(`{"message":"no customer exists"}`+"\n")))
 		require.Nil(t, resp)
 		require.True(t, gock.IsDone())

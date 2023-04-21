@@ -223,19 +223,31 @@ func (m *Metronome) pushBillingEvents(ctx context.Context, events []biller.Event
 	return nil
 }
 
-func (m *Metronome) GetInvoices(ctx context.Context, accountId MetronomeId) (*api.ListInvoicesResponse, error) {
+func (m *Metronome) GetInvoices(ctx context.Context, accountId MetronomeId, r *api.ListInvoicesRequest) (*api.ListInvoicesResponse, error) {
 	var (
 		resp *biller.ListInvoicesResponse
 		err  error
 	)
-	pageLimit := 20
+	pageLimit := 20 // default
+	if r.GetPageSize() != 0 {
+		pageLimit = int(r.GetPageSize())
+	}
 	params := &biller.ListInvoicesParams{
-		Limit:              &pageLimit, // optional from upstream, default: 20
-		NextPage:           nil,        // optional from upstream,
-		InvoiceStatusParam: nil,        // remove
-		CreditTypeId:       nil,        // remove
-		StartingOn:         nil,        // optional from upstream
-		EndingBefore:       nil,        // optional from upstream
+		Limit: &pageLimit,
+	}
+	if len(r.GetNextPage()) > 0 {
+		np := r.GetNextPage()
+		params.NextPage = &np
+	}
+
+	if r.GetStartingOn() != nil {
+		t := r.GetStartingOn().AsTime()
+		params.StartingOn = &t
+	}
+
+	if r.GetEndingBefore() != nil {
+		t := r.GetEndingBefore().AsTime()
+		params.EndingBefore = &t
 	}
 
 	m.measure(ctx, "list_invoices", func(ctx context.Context) (*http.Response, error) {
