@@ -16,7 +16,6 @@ package v1
 
 import (
 	"context"
-
 	"net/http"
 
 	"github.com/fullstorydev/grpchan/inprocgrpc"

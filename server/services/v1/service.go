@@ -20,11 +20,11 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/services/v1/auth"
+	"github.com/tigrisdata/tigris/server/services/v1/billing"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
 	"google.golang.org/grpc"
-	"github.com/tigrisdata/tigris/server/services/v1/billing"
 )
 
 type ContentType string

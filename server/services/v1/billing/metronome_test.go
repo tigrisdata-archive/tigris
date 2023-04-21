@@ -462,7 +462,6 @@ func TestMetronome_GetInvoiceById(t *testing.T) {
 			Reply(200).
 			JSON(map[string]interface{}{
 				"data": map[string]interface{}{
-
 					"id":        "50670f17-ca2d-4f9b-82a7-dc0e7c1f6ed7",
 					"plan_name": "Free Tier",
 					"line_items": []map[string]interface{}{
@@ -545,7 +544,6 @@ func TestMetronome_GetInvoiceById(t *testing.T) {
 
 func TestMetronome_buildInvoice(t *testing.T) {
 	t.Run("deserializes complete invoice", func(t *testing.T) {
-
 		payload := `
 		{
             "id": "f9f8168c-dab6-4fd6-9008-e41dabda7bd5",

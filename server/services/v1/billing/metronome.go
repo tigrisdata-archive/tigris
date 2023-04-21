@@ -303,7 +303,7 @@ func buildInvoice(input biller.Invoice) *api.Invoice {
 	if input.Id == uuid.Nil {
 		return nil
 	}
-	var built = &api.Invoice{
+	built := &api.Invoice{
 		Id:        input.Id.String(),
 		Entries:   make([]*api.InvoiceLineItem, len(input.LineItems)),
 		StartTime: timestamppb.New(input.StartTimestamp),
