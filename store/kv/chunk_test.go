@@ -39,7 +39,7 @@ func TestChunkStore(t *testing.T) {
 
 	store := NewTxStore(kv)
 
-	chunkStore := NewChunkStore(store)
+	chunkStore := NewChunkStore(store, true)
 
 	doc := []byte(`{
     "a": 1,

@@ -42,6 +42,7 @@ type Config struct {
 	Billing         Billing              `yaml:"billing" json:"billing"`
 	Cdc             CdcConfig            `yaml:"cdc" json:"cdc"`
 	Search          SearchConfig         `yaml:"search" json:"search"`
+	KV              KVConfig             `yaml:"kv" json:"kv"`
 	SecondaryIndex  SecondaryIndexConfig `mapstructure:"secondary_index" yaml:"secondary_index" json:"secondary_index"`
 	Cache           CacheConfig          `yaml:"cache" json:"cache"`
 	Tracing         TracingConfig        `yaml:"tracing" json:"tracing"`
@@ -325,6 +326,9 @@ var DefaultConfig = Config{
 		StorageEnabled: true,
 		Chunking:       true,
 	},
+	KV: KVConfig{
+		Chunking: false,
+	},
 	SecondaryIndex: SecondaryIndexConfig{
 		ReadEnabled:   false,
 		WriteEnabled:  false,
@@ -501,6 +505,12 @@ type SchemaConfig struct {
 	//  * reducing max_length of the string fields
 	//  * setting "required" property
 	AllowIncompatible bool `mapstructure:"allow_incompatible" json:"allow_incompatible" yaml:"allow_incompatible"`
+}
+
+// KVConfig keeps KV store configuration parameters.
+type KVConfig struct {
+	// Chunking allows us to persist bigger payload in storage.
+	Chunking bool `mapstructure:"chunking" yaml:"chunking" json:"chunking"`
 }
 
 // FoundationDBConfig keeps FoundationDB configuration parameters.

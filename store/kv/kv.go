@@ -126,11 +126,11 @@ func (b *Builder) Build(cfg *config.FoundationDBConfig) (TxStore, error) {
 		return nil, err
 	}
 
+	// chunking store is always enabled but whether we need to chunk or not is dependent
+	// on the flag b.isChunking which is honored by ChunkStore.
 	store := NewTxStore(kv)
+	store = NewChunkStore(store, b.isChunking)
 
-	if b.isChunking {
-		store = NewChunkStore(store)
-	}
 	if b.isListener {
 		store = NewListenerStore(store)
 	}
@@ -171,7 +171,10 @@ func (b *Builder) WithStats() *Builder {
 
 func StoreForDatabase(cfg *config.Config) (TxStore, error) {
 	builder := NewBuilder()
-	builder.WithListener() // database has a listener attached to it
+	if config.DefaultConfig.KV.Chunking {
+		builder.WithChunking()
+	}
+	builder.WithListener() // database has always a listener attached to it
 	builder.WithStats()
 	if config.DefaultConfig.Metrics.Fdb.Enabled {
 		builder.WithMeasure()
