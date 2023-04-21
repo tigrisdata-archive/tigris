@@ -18,7 +18,7 @@ test_backup() {
   $cli create project "${TESTDB}"
 
   # Add test data
-  cat <<EOF | TIGRIS_LOG_LEVEL=debug $cli import "--project=${TESTDB}" "${TESTCOLL}" --create-collection --primary-key=uuid_field --autogenerate=uuid_field
+  cat <<EOF | TIGRIS_LOG_LEVEL=debug $cli import "--project=${TESTDB}" "${TESTCOLL}" --primary-key=uuid_field --autogenerate=uuid_field
 {
 	"str_field" : "str_value",
 	"int_field" : 1,
