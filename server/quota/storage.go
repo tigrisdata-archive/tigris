@@ -128,16 +128,16 @@ func (s *storage) Cleanup() {
 
 func getDbSize(ctx context.Context, tenant *metadata.Tenant, db *metadata.Database) int64 {
 	dbSize, err := tenant.DatabaseSize(ctx, db)
-	if err != nil {
-		ulog.E(err)
+	if ulog.E(err) {
+		return 0
 	}
 	return dbSize.StoredBytes
 }
 
 func getCollSize(ctx context.Context, tenant *metadata.Tenant, db *metadata.Database, coll *schema.DefaultCollection) int64 {
 	collSize, err := tenant.CollectionSize(ctx, db, coll)
-	if err != nil {
-		ulog.E(err)
+	if ulog.E(err) {
+		return 0
 	}
 	return collSize.StoredBytes
 }
