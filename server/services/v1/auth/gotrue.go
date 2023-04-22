@@ -64,10 +64,12 @@ type CreateInvitationPayload struct {
 	Email string `json:"email"`
 	Role  string `json:"role"`
 
-	TigrisNamespace string `json:"tigris_namespace"`
-	CreatedBy       string `json:"created_by"`
-	CreatedByName   string `json:"created_by_name"`
-	ExpirationTime  int64  `json:"expiration_time"`
+	TigrisNamespace     string `json:"tigris_namespace"`
+	TigrisNamespaceName string `json:"tigris_namespace_name"`
+
+	CreatedBy      string `json:"created_by"`
+	CreatedByName  string `json:"created_by_name"`
+	ExpirationTime int64  `json:"expiration_time"`
 }
 
 type DeleteInvitationsPayload struct {
