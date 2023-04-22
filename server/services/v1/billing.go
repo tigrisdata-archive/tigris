@@ -22,13 +22,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/services/v1/billing"
 	"google.golang.org/grpc"
 	"github.com/tigrisdata/tigris/server/metadata"
-	"github.com/tigrisdata/tigris/server/request"
-	"github.com/rs/zerolog/log"
 	"github.com/google/uuid"
+	"github.com/tigrisdata/tigris/errors"
+	"github.com/rs/zerolog/log"
+	"github.com/tigrisdata/tigris/server/request"
 )
 
 const (
@@ -38,18 +38,22 @@ const (
 type billingService struct {
 	api.UnimplementedBillingServer
 	billing.Provider
-	tenantMgr *metadata.TenantManager
+	nsMgr metadata.NamespaceMetadataMgr
 }
 
-func newBillingService(b billing.Provider, tenantMgr *metadata.TenantManager) *billingService {
+func newBillingService(b billing.Provider, nsMgr metadata.NamespaceMetadataMgr) *billingService {
 	return &billingService{
-		Provider:  b,
-		tenantMgr: tenantMgr,
+		Provider: b,
+		nsMgr:    nsMgr,
 	}
 }
 
 func (b *billingService) ListInvoices(ctx context.Context, req *api.ListInvoicesRequest) (*api.ListInvoicesResponse, error) {
-	mId, err := b.getMetronomeId(ctx)
+	namespace, err := request.GetNamespace(ctx)
+	if err != nil {
+		return nil, err
+	}
+	mId, err := b.getMetronomeId(ctx, namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -61,26 +65,19 @@ func (b *billingService) ListInvoices(ctx context.Context, req *api.ListInvoices
 	return b.GetInvoices(ctx, mId, req)
 }
 
-func (b *billingService) getMetronomeId(ctx context.Context) (billing.MetronomeId, error) {
-	namespace, err := request.GetNamespace(ctx)
-	if err != nil {
-		return uuid.Nil, err
+func (b *billingService) getMetronomeId(ctx context.Context, namespaceId string) (billing.MetronomeId, error) {
+	nsMeta := b.nsMgr.GetNamespaceMetadata(ctx, namespaceId)
+	if nsMeta == nil {
+		log.Warn().Msgf("Could not find namespace, this must not happen with right authn/authz configured")
+		return uuid.Nil, errors.NotFound("Namespace %s not found", namespaceId)
 	}
 
-	tenant, err := b.tenantMgr.GetTenant(ctx, namespace)
-	if err != nil {
-		return uuid.Nil, err
-	}
-	if tenant == nil {
-		log.Warn().Err(err).Msgf("Could not find tenant, this must not happen with right authn/authz configured")
-		return uuid.Nil, errors.NotFound("Tenant %s not found", namespace)
-	}
-	accounts := tenant.GetNamespace().Metadata().Accounts
-	mIdStr, enabled := accounts.GetMetronomeId()
+	mIdStr, enabled := nsMeta.Accounts.GetMetronomeId()
 	if !enabled {
-		log.Error().Msgf("No metronome account for the namespace: %s", namespace)
+		log.Error().Msgf("No metronome account for the namespace: %s", namespaceId)
 		return uuid.Nil, errors.Internal("No account linked for the user")
 	}
+
 	mId, err := uuid.Parse(mIdStr)
 	if err != nil {
 		return uuid.Nil, err

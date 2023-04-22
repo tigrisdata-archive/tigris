@@ -23,6 +23,7 @@ import (
 const (
 	EventTypeUsage   string = "usage"
 	EventTypeStorage string = "storage"
+	TimeFormat              = time.RFC3339
 )
 
 type UsageEvent struct {
