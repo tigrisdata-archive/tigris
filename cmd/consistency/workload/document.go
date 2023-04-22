@@ -74,16 +74,17 @@ type Nested struct {
 	Name      string   `json:"name"  fake:"{firstname}"`
 	URL       string   `json:"url" fake:"{url}"`
 	Domain    string   `json:"domain"  fake:"{domainname}"`
-	Sentence  string   `json:"sentence" fake:"{sentence:3}"`
+	Sentence  string   `json:"sentence" fake:"{sentence:10}"`
 	Company   string   `json:"company"  fake:"{company}"`
-	Labels    []string `json:"labels"  fakesize:"2"`
+	Labels    []string `json:"labels"  fakesize:"20000"`
 	Address   Address  `json:"address"`
 	NestedId  string   `json:"nested_id"  fake:"{uuid}"`
 }
 
 type DocumentV1 struct {
 	Id        int64     `json:"id"`
-	Cars      []string  `json:"cars" fake:"{carmaker}" fakesize:"2"`
+	Cars      []string  `json:"cars" fake:"{carmaker}" fakesize:"20000"`
+	Food      []string  `json:"food" fake:"{food}" fakesize:"20000"`
 	CreatedAt time.Time `json:"created_at"  fake:"{date}"`
 	UpdatedAt time.Time `json:"updated_at"  fake:"{date}"`
 	Nested    *Nested   `json:"nested"`

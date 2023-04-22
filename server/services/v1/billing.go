@@ -20,9 +20,13 @@ import (
 
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/services/v1/billing"
 	"google.golang.org/grpc"
 )
@@ -34,14 +38,51 @@ const (
 type billingService struct {
 	api.UnimplementedBillingServer
 	billing.Provider
+	nsMgr metadata.NamespaceMetadataMgr
 }
 
-func newBillingService(b billing.Provider) *billingService {
-	return &billingService{Provider: b}
+func newBillingService(b billing.Provider, nsMgr metadata.NamespaceMetadataMgr) *billingService {
+	return &billingService{
+		Provider: b,
+		nsMgr:    nsMgr,
+	}
 }
 
-func (b *billingService) ListInvoices(_ context.Context, _ *api.ListInvoicesRequest) (*api.ListInvoicesResponse, error) {
-	return nil, errors.Unimplemented("list invoices is not yet implemented on the server")
+func (b *billingService) ListInvoices(ctx context.Context, req *api.ListInvoicesRequest) (*api.ListInvoicesResponse, error) {
+	namespace, err := request.GetNamespace(ctx)
+	if err != nil {
+		return nil, err
+	}
+	mId, err := b.getMetronomeId(ctx, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	if inv := req.GetInvoiceId(); len(inv) > 0 {
+		return b.Provider.GetInvoiceById(ctx, mId, req.GetInvoiceId())
+	}
+
+	return b.GetInvoices(ctx, mId, req)
+}
+
+func (b *billingService) getMetronomeId(ctx context.Context, namespaceId string) (billing.MetronomeId, error) {
+	nsMeta := b.nsMgr.GetNamespaceMetadata(ctx, namespaceId)
+	if nsMeta == nil {
+		log.Warn().Msgf("Could not find namespace, this must not happen with right authn/authz configured")
+		return uuid.Nil, errors.NotFound("Namespace %s not found", namespaceId)
+	}
+
+	mIdStr, enabled := nsMeta.Accounts.GetMetronomeId()
+	if !enabled {
+		log.Error().Msgf("No metronome account for the namespace: %s", namespaceId)
+		return uuid.Nil, errors.Internal("No account linked for the user")
+	}
+
+	mId, err := uuid.Parse(mIdStr)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return mId, nil
 }
 
 func (b *billingService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {

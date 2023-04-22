@@ -116,6 +116,92 @@ func indexesForLoadTest() (string, []byte) {
 }`)
 }
 
+func collectionsForBigPayloadLoadTest() (string, []byte) {
+	return "compression_c1", []byte(`{
+  "title": "compression_c1",
+  "primary_key": ["pkey"],
+  "properties": {
+    "cars": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "food": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "id": {
+      "type": "integer"
+    },
+    "pkey": {
+      "type": "string",
+      "autoGenerate": true
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "nested": {
+      "type": "object",
+      "properties": {
+        "random": {
+          "type": "string"
+        },
+        "nested_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "address": {
+          "type": "object",
+          "properties": {
+            "city": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "country": {
+              "type": "string"
+            }
+          }
+        },
+        "name": {
+          "type": "string"
+        },
+        "sentence": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "domain": {
+          "type": "string"
+        },
+        "labels": {
+          "type": "array",
+          "items": {
+        	"type": "string"
+          }
+        },
+        "company": {
+          "type": "string"
+        },
+        "timestamp": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}`)
+}
+
 func collectionsForLoadTest() ([]string, [][]byte) {
 	// first is integer primary key, second is string primary key
 	return []string{"c1", "c2"}, [][]byte{
@@ -175,10 +261,25 @@ func CreateSearchWorkload() []Workload {
 	var workload []Workload
 	workload = append(workload, &workload2.SearchOnlyWorkload{
 		Threads: 16,
-		Records: 128,
+		Records: 256,
 		Project: "test1",
 		Index:   index,
 		Schema:  schema,
+	})
+
+	return workload
+}
+
+func CreateBigPayloadWorkload() []Workload {
+	collections, schemas := collectionsForBigPayloadLoadTest()
+	var workload []Workload
+	workload = append(workload, &workload2.BigPayloadWorkload{
+		Threads:     16,
+		Records:     64,
+		Database:    "test1",
+		Collections: collections,
+		// first is integer primary key, second is string primary key
+		Schemas: schemas,
 	})
 
 	return workload
@@ -243,6 +344,7 @@ func main() {
 	}
 
 	workloads := CreateWorkloads()
+	workloads = append(workloads, CreateBigPayloadWorkload()...)
 	workloads = append(workloads, CreateSearchWorkload()...)
 	for _, w := range workloads {
 		log.Debug().Msgf("running workload type %s", w.Type())

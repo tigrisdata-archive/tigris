@@ -45,6 +45,7 @@ type TenantGetter interface {
 	GetTenant(ctx context.Context, id string) (*Tenant, error)
 }
 
+//go:generate mockery --name NamespaceMetadataMgr
 type NamespaceMetadataMgr interface {
 	GetNamespaceMetadata(ctx context.Context, namespaceId string) *NamespaceMetadata
 	UpdateNamespaceMetadata(ctx context.Context, meta NamespaceMetadata) error

@@ -325,9 +325,11 @@ var DefaultConfig = Config{
 		WriteEnabled:   true,
 		StorageEnabled: true,
 		Chunking:       true,
+		Compression:    false,
 	},
 	KV: KVConfig{
-		Chunking: false,
+		Chunking:    false,
+		Compression: false,
 	},
 	SecondaryIndex: SecondaryIndexConfig{
 		ReadEnabled:   false,
@@ -511,6 +513,8 @@ type SchemaConfig struct {
 type KVConfig struct {
 	// Chunking allows us to persist bigger payload in storage.
 	Chunking bool `mapstructure:"chunking" yaml:"chunking" json:"chunking"`
+	// Compression allows us to compress payload before storing in storage.
+	Compression bool `mapstructure:"compression" yaml:"compression" json:"compression"`
 }
 
 // FoundationDBConfig keeps FoundationDB configuration parameters.
@@ -528,6 +532,8 @@ type SearchConfig struct {
 	StorageEnabled bool `mapstructure:"storage_enabled" yaml:"storage_enabled" json:"storage_enabled"`
 	// Chunking allows us to persist bigger search indexes payload in storage.
 	Chunking bool `mapstructure:"chunking" yaml:"chunking" json:"chunking"`
+	// Compression allows us to compress payload before storing in storage.
+	Compression bool `mapstructure:"compression" yaml:"compression" json:"compression"`
 }
 
 type SecondaryIndexConfig struct {
