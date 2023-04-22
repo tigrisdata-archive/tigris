@@ -18,8 +18,8 @@ import (
 	"context"
 
 	"github.com/google/uuid"
-	"github.com/tigrisdata/tigris/errors"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 )
 
 type noop struct{}

@@ -20,15 +20,15 @@ import (
 
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/services/v1/billing"
 	"google.golang.org/grpc"
-	"github.com/tigrisdata/tigris/server/metadata"
-	"github.com/google/uuid"
-	"github.com/tigrisdata/tigris/errors"
-	"github.com/rs/zerolog/log"
-	"github.com/tigrisdata/tigris/server/request"
 )
 
 const (

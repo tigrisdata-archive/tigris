@@ -25,8 +25,8 @@ import (
 	"github.com/tigrisdata/tigris/server/metadata"
 	mMock "github.com/tigrisdata/tigris/server/metadata/mocks"
 	"github.com/tigrisdata/tigris/server/request"
-	bMock "github.com/tigrisdata/tigris/server/services/v1/billing/mocks"
 	"github.com/tigrisdata/tigris/server/services/v1/billing"
+	bMock "github.com/tigrisdata/tigris/server/services/v1/billing/mocks"
 )
 
 type billingServiceSuite struct {
