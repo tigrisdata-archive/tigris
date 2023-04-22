@@ -310,10 +310,10 @@ func createTestCollection(t *testing.T, database string, collection string, sche
 	createCollection(t, database, collection, schema).Status(http.StatusOK)
 }
 
-func describeCollection(t *testing.T, database string, collection string, schema map[string]interface{}) *httpexpect.Response {
+func describeCollection(t *testing.T, database string, collection string, body map[string]interface{}) *httpexpect.Response {
 	e := expect(t)
 	return e.POST(getCollectionURL(database, collection, "describe")).
-		WithJSON(schema).
+		WithJSON(body).
 		Expect()
 }
 

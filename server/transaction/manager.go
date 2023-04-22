@@ -279,10 +279,10 @@ func (s *TxSession) Get(ctx context.Context, key []byte, isSnapshot bool) (kv.Fu
 		return nil, err
 	}
 
-	return s.kTx.Get(ctx, key, isSnapshot)
+	return s.kTx.Get(ctx, key, isSnapshot), nil
 }
 
-func (s *TxSession) RangeSize(ctx context.Context, table []byte, lKey keys.Key, rKey keys.Key) (size int64, err error) {
+func (s *TxSession) RangeSize(ctx context.Context, _ []byte, lKey keys.Key, rKey keys.Key) (size int64, err error) {
 	s.Lock()
 	defer s.Unlock()
 

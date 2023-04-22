@@ -71,9 +71,9 @@ func (m *secondaryIndexerWithMetrics) BuildCollection(ctx context.Context, txMgr
 	return
 }
 
-func (m *secondaryIndexerWithMetrics) ReadDocAndDelete(ctx context.Context, tx transaction.Tx, key keys.Key) (err error) {
+func (m *secondaryIndexerWithMetrics) ReadDocAndDelete(ctx context.Context, tx transaction.Tx, key keys.Key) (size int32, err error) {
 	m.measure(ctx, "ReadDocAndDelete", func(ctx context.Context) error {
-		err = m.q.ReadDocAndDelete(ctx, tx, key)
+		size, err = m.q.ReadDocAndDelete(ctx, tx, key)
 		return err
 	})
 	return

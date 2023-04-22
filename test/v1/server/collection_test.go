@@ -17,9 +17,12 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 )
 
@@ -440,4 +443,62 @@ func TestCollection_Update(t *testing.T) {
 			createCollection(t, db, coll, c.schema).Status(c.expCode)
 		})
 	}
+}
+
+func TestCollectionStatistics(t *testing.T) {
+	dbName := fmt.Sprintf("db_test_%s", t.Name())
+
+	deleteProject(t, dbName)
+	createProject(t, dbName)
+	defer deleteProject(t, dbName)
+
+	collectionName := fmt.Sprintf("test_collection_stats_%s", t.Name())
+	createCollection(t, dbName, collectionName,
+		Map{
+			"schema": Map{
+				"title": collectionName,
+				"properties": Map{
+					"int_value": Map{
+						"type": "integer",
+					},
+					"string_value": Map{
+						"type": "string",
+					},
+				},
+				"primary_key": []string{"int_value"},
+			},
+		}).Status(http.StatusOK)
+
+	var inputDoc []Doc
+
+	for i := 0; i < 10; i++ {
+		inputDoc = append(inputDoc, Doc{"int_value": i, "string_value": strings.Repeat(fmt.Sprintf("foo%d", i), 10)})
+	}
+
+	r := describeCollection(t, dbName, collectionName, Map{}).Status(http.StatusOK).JSON().Raw()
+	require.Equal(t, float64(0), r.(map[string]any)["size"].(float64))
+
+	insertDocuments(t, dbName, collectionName, inputDoc, true).Status(http.StatusOK)
+
+	// 10*73 {"int_value":5,"string_value":"foo5foo5foo5foo5foo5foo5foo5foo5foo5foo5"}
+	r = describeCollection(t, dbName, collectionName, Map{}).Status(http.StatusOK).JSON().Raw()
+	require.Equal(t, float64(730), r.(map[string]any)["size"].(float64))
+
+	updateByFilter(t, dbName, collectionName,
+		Map{"filter": Map{"int_value": Map{"$gt": 5}}},
+		Map{"fields": Map{"$set": Map{"string_value": "after"}}},
+		Map{}).Status(http.StatusOK)
+
+	r = describeCollection(t, dbName, collectionName, Map{}).Status(http.StatusOK).JSON().Raw()
+	require.Equal(t, float64(590), r.(map[string]any)["size"].(float64))
+
+	deleteByFilter(t, dbName, collectionName, Map{"filter": Map{"int_value": Map{"$lt": 3}}}).Status(http.StatusOK)
+
+	r = describeCollection(t, dbName, collectionName, Map{}).Status(http.StatusOK).JSON().Raw()
+	require.Equal(t, float64(371), r.(map[string]any)["size"].(float64))
+
+	insertDocuments(t, dbName, collectionName, inputDoc, false).Status(http.StatusOK)
+
+	r = describeCollection(t, dbName, collectionName, Map{}).Status(http.StatusOK).JSON().Raw()
+	require.Equal(t, float64(730), r.(map[string]any)["size"].(float64))
 }

@@ -18,6 +18,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 )
 
@@ -41,4 +42,12 @@ func (*noop) PushUsageEvents(_ context.Context, _ []*UsageEvent) error {
 
 func (*noop) PushStorageEvents(_ context.Context, _ []*StorageEvent) error {
 	return errors.Unimplemented("billing not enabled on this server")
+}
+
+func (*noop) GetInvoices(_ context.Context, _ MetronomeId, _ *api.ListInvoicesRequest) (*api.ListInvoicesResponse, error) {
+	return nil, errors.Unimplemented("billing not enabled on this server")
+}
+
+func (*noop) GetInvoiceById(_ context.Context, _ MetronomeId, _ string) (*api.ListInvoicesResponse, error) {
+	return nil, errors.Unimplemented("billing not enabled on this server")
 }

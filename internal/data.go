@@ -122,8 +122,15 @@ func (x *TableData) CloneWithAttributesOnly(newRawData []byte) *TableData {
 		CreatedAt:   x.CreatedAt,
 		UpdatedAt:   x.UpdatedAt,
 		TotalChunks: x.TotalChunks,
+		Compression: x.Compression,
 		RawData:     newRawData,
+		RawSize:     x.RawSize,
 	}
+}
+
+// Size of the payload field.
+func (x *TableData) Size() int32 {
+	return int32(len(x.RawData))
 }
 
 func (x *TableData) IsChunkedData() bool {

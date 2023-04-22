@@ -123,7 +123,7 @@ func (runner *ProjectQueryRunner) describe(ctx context.Context, tx transaction.T
 			return Response{}, ctx, err
 		}
 
-		metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.DbName(), db.BranchName(), c.GetName(), size)
+		metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.DbName(), db.BranchName(), c.GetName(), size.StoredBytes)
 
 		// remove indexing version from the schema before returning the response
 		sch := schema.RemoveIndexingVersion(c.Schema)
@@ -140,7 +140,7 @@ func (runner *ProjectQueryRunner) describe(ctx context.Context, tx transaction.T
 			Collection: c.GetName(),
 			Metadata:   &api.CollectionMetadata{},
 			Schema:     sch,
-			Size:       size,
+			Size:       size.StoredBytes,
 		}
 	}
 
@@ -149,13 +149,13 @@ func (runner *ProjectQueryRunner) describe(ctx context.Context, tx transaction.T
 		return Response{}, ctx, err
 	}
 
-	metrics.UpdateDbSizeMetrics(namespace, tenantName, db.DbName(), db.BranchName(), size)
+	metrics.UpdateDbSizeMetrics(namespace, tenantName, db.DbName(), db.BranchName(), size.StoredBytes)
 
 	return Response{
 		Response: &api.DescribeDatabaseResponse{
 			Metadata:    &api.DatabaseMetadata{},
 			Collections: collections,
-			Size:        size,
+			Size:        size.StoredBytes,
 			Branches:    tenant.ListDatabaseBranches(runner.describeReq.GetProject()),
 		},
 	}, ctx, nil

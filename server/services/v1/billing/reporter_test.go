@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 )
 
 const (
@@ -364,6 +365,14 @@ func (mock *MockBillingSvc) PushUsageEvents(_ context.Context, events []*UsageEv
 	return nil
 }
 
-func (mock *MockBillingSvc) PushStorageEvents(_ context.Context, events []*StorageEvent) error {
+func (mock *MockBillingSvc) PushStorageEvents(_ context.Context, _ []*StorageEvent) error {
+	panic("implement me")
+}
+
+func (mock *MockBillingSvc) GetInvoices(_ context.Context, _ MetronomeId, _ *api.ListInvoicesRequest) (*api.ListInvoicesResponse, error) {
+	panic("implement me")
+}
+
+func (mock *MockBillingSvc) GetInvoiceById(_ context.Context, _ MetronomeId, _ string) (*api.ListInvoicesResponse, error) {
 	panic("implement me")
 }

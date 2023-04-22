@@ -43,7 +43,7 @@ type SecondaryIndexer interface {
 	// Bulk build the indexes in the collection
 	BuildCollection(ctx context.Context, txMgr *transaction.Manager) error
 	// Read the document from the primary store and delete it from secondary indexes
-	ReadDocAndDelete(ctx context.Context, tx transaction.Tx, key keys.Key) error
+	ReadDocAndDelete(ctx context.Context, tx transaction.Tx, key keys.Key) (int32, error)
 	// Delete document from the secondary index
 	Delete(ctx context.Context, tx transaction.Tx, td *internal.TableData, primaryKey []interface{}) error
 	// Index new document
@@ -289,24 +289,22 @@ func (q *SecondaryIndexerImpl) IndexInfo(ctx context.Context, tx transaction.Tx)
 	}, nil
 }
 
-func (q *SecondaryIndexerImpl) ReadDocAndDelete(ctx context.Context, tx transaction.Tx, key keys.Key) error {
+func (q *SecondaryIndexerImpl) ReadDocAndDelete(ctx context.Context, tx transaction.Tx, key keys.Key) (int32, error) {
 	iter, err := tx.Read(ctx, key)
 	if err != nil {
-		return err
+		return 0, err
 	}
+
 	var oldDoc kv.KeyValue
 	if iter.Next(&oldDoc) {
-		err := q.Delete(ctx, tx, oldDoc.Data, key.IndexParts())
-		if err != nil {
-			return err
+		if err = q.Delete(ctx, tx, oldDoc.Data, key.IndexParts()); err != nil {
+			return 0, err
 		}
+
+		return oldDoc.Data.Size(), nil
 	}
 
-	if iter.Err() != nil {
-		return iter.Err()
-	}
-
-	return nil
+	return 0, iter.Err()
 }
 
 func (q *SecondaryIndexerImpl) Delete(ctx context.Context, tx transaction.Tx, td *internal.TableData, primaryKey []interface{}) error {

@@ -332,7 +332,7 @@ func testKVBasic(t *testing.T, kv baseKVStore) {
 	}
 
 	// read individual record
-	it, err := kv.Read(ctx, table, BuildKey("p1", 2))
+	it, err := kv.Read(ctx, table, BuildKey("p1", 2), false)
 	require.NoError(t, err)
 
 	v := readAll(t, it)
@@ -342,7 +342,7 @@ func testKVBasic(t *testing.T, kv baseKVStore) {
 	err = kv.Replace(ctx, table, BuildKey("p1", 2), []byte("value2+2"), false)
 	require.NoError(t, err)
 
-	it, err = kv.Read(ctx, table, BuildKey("p1", 2))
+	it, err = kv.Read(ctx, table, BuildKey("p1", 2), false)
 	require.NoError(t, err)
 
 	v = readAll(t, it)
@@ -359,7 +359,7 @@ func testKVBasic(t *testing.T, kv baseKVStore) {
 	}, v)
 
 	// prefix read
-	it, err = kv.Read(ctx, table, BuildKey("p1"))
+	it, err = kv.Read(ctx, table, BuildKey("p1"), false)
 	require.NoError(t, err)
 
 	v = readAll(t, it)
@@ -413,7 +413,7 @@ func testFullScan(t *testing.T, kv baseKVStore) {
 	}
 
 	// prefix read
-	it, err := kv.Read(ctx, table, nil)
+	it, err := kv.Read(ctx, table, nil, false)
 	require.NoError(t, err)
 
 	v := readAll(t, it)
@@ -483,7 +483,7 @@ func testKVInsert(t *testing.T, kv baseKVStore) {
 				}
 			}
 			for _, i := range v.result {
-				it, err := kv.Read(context.Background(), table, i.Key)
+				it, err := kv.Read(context.Background(), table, i.Key, false)
 				require.NoError(t, err)
 				var res baseKeyValue
 				require.True(t, it.Next(&res))
@@ -557,7 +557,7 @@ func testFDBKVIterator(t *testing.T, kv baseKVStore) {
 		require.NoError(t, err)
 	}
 
-	it, err := kv.Read(ctx, table, nil)
+	it, err := kv.Read(ctx, table, nil, false)
 	require.NoError(t, err)
 
 	ic, ok := it.(*fdbIteratorTxCloser)
@@ -669,11 +669,10 @@ func TestKVFDB(t *testing.T) {
 	cfg, err := config.GetTestFDBConfig("../..")
 	require.NoError(t, err)
 
-	kvStore, err := NewTxStore(cfg)
-	require.NoError(t, err)
-
 	kv, err := newFoundationDB(cfg)
 	require.NoError(t, err)
+
+	kvStore := NewTxStore(kv)
 
 	t.Run("TestKVFBench", func(t *testing.T) {
 		benchKV(t, kv)
@@ -723,6 +722,6 @@ func TestGetCtxTimeout(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
-	ulog.Configure(ulog.LogConfig{Level: "disabled"})
+	ulog.Configure(ulog.LogConfig{Level: "disabled", Format: "console"})
 	os.Exit(m.Run())
 }

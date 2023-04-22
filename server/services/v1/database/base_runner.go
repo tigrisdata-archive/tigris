@@ -32,6 +32,7 @@ import (
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/server/types"
+	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
 	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
@@ -147,13 +148,15 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 			// as Int64 or timestamp to ensure uniqueness if multiple workers end up generating same timestamp.
 			err = tx.Insert(ctx, key, tableData)
 		} else {
+			szCtx := ctx
 			if config.DefaultConfig.SecondaryIndex.WriteEnabled {
-				err := indexer.ReadDocAndDelete(ctx, tx, key)
+				sz, err := indexer.ReadDocAndDelete(ctx, tx, key)
 				if err != nil {
 					return nil, nil, err
 				}
+				szCtx = kv.CtxWithSize(ctx, sz)
 			}
-			err = tx.Replace(ctx, key, tableData, false)
+			err = tx.Replace(szCtx, key, tableData, false)
 		}
 		if err != nil {
 			return nil, nil, err

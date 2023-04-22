@@ -16,7 +16,6 @@ package kv
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -24,22 +23,12 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 )
 
-func TestChunkStore(t *testing.T) {
+func TestCompression(t *testing.T) {
 	cfg, err := config.GetTestFDBConfig("../..")
 	require.NoError(t, err)
 
-	kv, err := newFoundationDB(cfg)
-	require.NoError(t, err)
-
 	ctx := context.Background()
-
 	table := []byte("t1")
-	require.NoError(t, kv.DropTable(ctx, table))
-	require.NoError(t, kv.CreateTable(ctx, table))
-
-	store := NewTxStore(kv)
-
-	chunkStore := NewChunkStore(store, true)
 
 	doc := []byte(`{
     "a": 1,
@@ -96,66 +85,43 @@ func TestChunkStore(t *testing.T) {
         "browser": "Brave"
     }
 }`)
+	chunkSize = KB
 	data := internal.NewTableData(doc)
-
 	cases := []struct {
-		chunkSize   int
-		totalChunks int32
+		compression bool
+		chunking    bool
 	}{
 		{
-			// chunkSize = exact size of the data + 1
-			2125,
-			1,
-		},
-
-		{
-			// chunkSize = exact size of the data
-			2124,
-			1,
-		},
-		{
-			// chunkSize = exact size of the data - 1
-			2123,
-			2,
-		},
-		{
-			KB,
-			3,
-		},
-		{
-			KB,
-			3,
-		},
-		{
-			KB / 2,
-			5,
-		},
-		{
-			KB / 4,
-			9,
-		},
-		{
-			KB / 10,
-			22,
+			true,
+			true,
+		}, {
+			true,
+			false,
+		}, {
+			false,
+			false,
 		},
 	}
 	for _, c := range cases {
-		chunkSize = c.chunkSize
-
-		tx, err := chunkStore.BeginTx(ctx)
-		require.NoError(t, err)
-
-		err = tx.Replace(ctx, table, BuildKey("p1_", 1), data, false)
-		require.NoError(t, err)
-		_ = tx.Commit(ctx)
-		if c.totalChunks == 1 {
-			require.Nil(t, data.TotalChunks)
-		} else {
-			require.True(t, data.IsChunkedData())
-			require.Equal(t, c.totalChunks, *data.TotalChunks)
+		builder := NewBuilder()
+		if c.chunking {
+			builder.WithChunking()
+		}
+		if c.compression {
+			builder.WithCompression()
 		}
 
-		tx, err = chunkStore.BeginTx(ctx)
+		store, err := builder.Build(cfg)
+		require.NoError(t, err)
+		require.NoError(t, store.DropTable(ctx, table))
+		require.NoError(t, store.CreateTable(ctx, table))
+		tx, err := store.BeginTx(ctx)
+		require.NoError(t, err)
+
+		require.NoError(t, tx.Insert(ctx, table, BuildKey("p1_", 1), data))
+		require.NoError(t, tx.Commit(ctx))
+
+		tx, err = store.BeginTx(ctx)
 		require.NoError(t, err)
 		it, err := tx.Read(ctx, table, BuildKey("p1_", 1))
 		require.NoError(t, err)
@@ -167,86 +133,12 @@ func TestChunkStore(t *testing.T) {
 			require.Equal(t, doc, keyValue.Data.RawData)
 			found++
 		}
+		if c.compression {
+			require.True(t, keyValue.Data.Compression != nil)
+		} else {
+			require.True(t, keyValue.Data.Compression == nil)
+		}
 		require.Equal(t, totalExp, found)
-		_ = tx.Commit(ctx)
+		require.NoError(t, tx.Commit(ctx))
 	}
 }
-
-func TestChunkStoreIterator(t *testing.T) {
-	ptr1, ptr2 := int32(1), int32(2)
-	cases := []struct {
-		expValues []*KeyValue
-		expError  error
-		expCall   int
-	}{
-		{
-			[]*KeyValue{{Key: BuildKey("k1"), Data: &internal.TableData{RawData: []byte(`{}`)}}},
-			nil,
-			1,
-		}, {
-			[]*KeyValue{{Key: BuildKey("k2"), Data: &internal.TableData{RawData: []byte(`{}`), TotalChunks: &ptr1}}},
-			nil,
-			1,
-		}, {
-			[]*KeyValue{{Key: BuildKey("k3"), Data: &internal.TableData{RawData: []byte(`{}`), TotalChunks: &ptr2}}},
-			fmt.Errorf("mismatch in total chunk read '1' versus total chunks expected '2'"),
-			0,
-		}, {
-			[]*KeyValue{
-				{Key: BuildKey("k4"), Data: &internal.TableData{RawData: []byte(`{}`), TotalChunks: &ptr2}},
-				{Key: BuildKey("k4"), Data: &internal.TableData{RawData: []byte(`{}`)}},
-			},
-			fmt.Errorf("key shorter than expected chunked key '[k4]'"),
-			0,
-		}, {
-			[]*KeyValue{
-				{Key: BuildKey("k5"), Data: &internal.TableData{RawData: []byte(`{}`), TotalChunks: &ptr2}},
-				{Key: BuildKey("k5", "something", "random"), Data: &internal.TableData{RawData: []byte(`{}`)}},
-			},
-			fmt.Errorf("chunk identifier not found in the key '[k5 something random]'"),
-			0,
-		}, {
-			[]*KeyValue{
-				{Key: BuildKey("k6"), Data: &internal.TableData{RawData: []byte(`{}`), TotalChunks: &ptr2}},
-				{Key: BuildKey("k6", "_C_", "random"), Data: &internal.TableData{RawData: []byte(`{}`)}},
-			},
-			fmt.Errorf("chunk number mismatch found: 'random' exp: '1'"),
-			0,
-		},
-	}
-	for _, c := range cases {
-		it := &ChunkIterator{
-			Iterator: &mockedIterator{
-				values: c.expValues,
-			},
-		}
-
-		times := 0
-		var keyValue KeyValue
-		for it.Next(&keyValue) {
-			times++
-		}
-		require.Equal(t, c.expError, it.err)
-		require.Equal(t, c.expCall, times)
-	}
-}
-
-type mockedIterator struct {
-	idx    int
-	values []*KeyValue
-}
-
-func (it *mockedIterator) Next(value *KeyValue) bool {
-	if it.idx >= len(it.values) {
-		return false
-	}
-
-	hasNext := it.idx < len(it.values)
-	value.Key = it.values[it.idx].Key
-	value.Data = it.values[it.idx].Data
-	it.idx++
-
-	return hasNext
-}
-
-func (it *mockedIterator) Err() error { return nil }

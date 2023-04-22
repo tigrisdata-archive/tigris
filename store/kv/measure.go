@@ -67,7 +67,7 @@ func (i *KeyValueIteratorWithMetrics) Next(value *KeyValue) bool {
 	}
 
 	if reqStatus != nil && value.Data != nil {
-		reqStatus.AddReadBytes(int64(len(value.Data.RawData)))
+		reqStatus.AddReadBytes(int64(value.Data.Size()))
 	}
 	return hasNext
 }
@@ -96,9 +96,9 @@ func (m *TxStoreWithMetrics) DropTable(ctx context.Context, name []byte) (err er
 	return
 }
 
-func (m *TxStoreWithMetrics) TableSize(ctx context.Context, name []byte) (size int64, err error) {
-	m.measure(ctx, "TableSize", func() error {
-		size, err = m.kv.TableSize(ctx, name)
+func (m *TxStoreWithMetrics) GetTableStats(ctx context.Context, name []byte) (stats *TableStats, err error) {
+	m.measure(ctx, "GetTableStats", func() error {
+		stats, err = m.kv.GetTableStats(ctx, name)
 		return err
 	})
 	return
@@ -135,6 +135,14 @@ func (m *TxImplWithMetrics) Delete(ctx context.Context, table []byte, key Key) (
 	// read units for finding records matching the filter and write units for the data actually deleted.
 	m.measure(ctx, "Delete", func() error {
 		err = m.tx.Delete(ctx, table, key)
+		return err
+	})
+	return
+}
+
+func (m *TxImplWithMetrics) GetMetadata(ctx context.Context, table []byte, key Key) (data *internal.TableData, err error) {
+	m.measure(ctx, "GetMetadata", func() error {
+		data, err = m.tx.GetMetadata(ctx, table, key)
 		return err
 	})
 	return
@@ -180,10 +188,18 @@ func (m *TxImplWithMetrics) AtomicReadRange(ctx context.Context, table []byte, l
 	return
 }
 
-func (m *TxImplWithMetrics) Get(ctx context.Context, key []byte, isSnapshot bool) (val Future, err error) {
-	m.measure(ctx, "Get", func() error {
-		val, err = m.tx.Get(ctx, key, isSnapshot)
+func (m *TxImplWithMetrics) AtomicReadPrefix(ctx context.Context, table []byte, key Key, isSnapshot bool) (iter AtomicIterator, err error) {
+	m.measure(ctx, "AtomicReadRange", func() error {
+		iter, err = m.tx.AtomicReadPrefix(ctx, table, key, isSnapshot)
 		return err
+	})
+	return
+}
+
+func (m *TxImplWithMetrics) Get(ctx context.Context, key []byte, isSnapshot bool) (val Future) {
+	m.measure(ctx, "Get", func() error {
+		val = m.tx.Get(ctx, key, isSnapshot)
+		return nil
 	})
 	return
 }
@@ -237,7 +253,7 @@ func (m *TxImplWithMetrics) Replace(ctx context.Context, table []byte, key Key, 
 		fdbKey := getFDBKey(table, key)
 		if !requestStatus.IsKeySecondaryIndex(fdbKey) {
 			// The secondary index keys are counted in query runner
-			requestStatus.AddWriteBytes(int64(len(data.RawData)))
+			requestStatus.AddWriteBytes(int64(data.Size()))
 		}
 	}
 	return

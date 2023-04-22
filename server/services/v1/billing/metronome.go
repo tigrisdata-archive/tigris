@@ -24,12 +24,10 @@ import (
 	"github.com/deepmap/oapi-codegen/pkg/securityprovider"
 	"github.com/google/uuid"
 	biller "github.com/tigrisdata/metronome-go-client"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metrics"
-)
-
-const (
-	TimeFormat = time.RFC3339
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type MetronomeId = uuid.UUID
@@ -57,6 +55,7 @@ func (m *Metronome) measure(ctx context.Context, operation string, f func(ctx co
 		operation,
 		metrics.MetronomeSpanType,
 		metrics.GetMetronomeTags(operation))
+	me.StartTracing(ctx, true)
 
 	resp, err := f(ctx)
 	me.RecordDuration(metrics.MetronomeLatency, me.GetTags())
@@ -96,7 +95,7 @@ func (m *Metronome) CreateAccount(ctx context.Context, namespaceId string, name 
 	}
 
 	if resp.JSON200 == nil {
-		return uuid.Nil, NewMetronomeError(resp.StatusCode(), string(resp.Body))
+		return uuid.Nil, NewMetronomeError(resp.StatusCode(), resp.Body)
 	}
 
 	return resp.JSON200.Data.Id, nil
@@ -134,7 +133,7 @@ func (m *Metronome) AddPlan(ctx context.Context, accountId MetronomeId, planId u
 	}
 
 	if resp.JSON200 == nil {
-		return false, NewMetronomeError(resp.StatusCode(), string(resp.Body))
+		return false, NewMetronomeError(resp.StatusCode(), resp.Body)
 	}
 
 	return true, nil
@@ -214,10 +213,146 @@ func (m *Metronome) pushBillingEvents(ctx context.Context, events []biller.Event
 		}
 
 		if resp.StatusCode() != http.StatusOK {
-			return NewMetronomeError(resp.StatusCode(), string(resp.Body))
+			return NewMetronomeError(resp.StatusCode(), resp.Body)
 		}
 	}
 	return nil
+}
+
+func (m *Metronome) GetInvoices(ctx context.Context, accountId MetronomeId, r *api.ListInvoicesRequest) (*api.ListInvoicesResponse, error) {
+	var (
+		resp *biller.ListInvoicesResponse
+		err  error
+	)
+	pageLimit := 20 // default
+	if r.GetPageSize() != 0 {
+		pageLimit = int(r.GetPageSize())
+	}
+	params := &biller.ListInvoicesParams{
+		Limit: &pageLimit,
+	}
+	if len(r.GetNextPage()) > 0 {
+		np := r.GetNextPage()
+		params.NextPage = &np
+	}
+
+	if r.GetStartingOn() != nil {
+		t := r.GetStartingOn().AsTime()
+		params.StartingOn = &t
+	}
+
+	if r.GetEndingBefore() != nil {
+		t := r.GetEndingBefore().AsTime()
+		params.EndingBefore = &t
+	}
+
+	m.measure(ctx, "list_invoices", func(ctx context.Context) (*http.Response, error) {
+		resp, err = m.client.ListInvoicesWithResponse(ctx, accountId, params)
+		if resp == nil {
+			return nil, err
+		}
+		return resp.HTTPResponse, err
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.JSON200 == nil {
+		return nil, NewMetronomeError(resp.StatusCode(), resp.Body)
+	}
+
+	invoices := make([]*api.Invoice, len(resp.JSON200.Data))
+	for i, data := range resp.JSON200.Data {
+		invoices[i] = buildInvoice(data)
+	}
+
+	return &api.ListInvoicesResponse{
+		Data:     invoices,
+		NextPage: resp.JSON200.NextPage,
+	}, nil
+}
+
+func (m *Metronome) GetInvoiceById(ctx context.Context, accountId MetronomeId, invoiceId string) (*api.ListInvoicesResponse, error) {
+	var (
+		resp *biller.GetInvoiceResponse
+		err  error
+	)
+
+	invoiceUUID, err := uuid.Parse(invoiceId)
+	if err != nil {
+		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "invoiceId is not valid - %s", err.Error())
+	}
+	m.measure(ctx, "get_invoice", func(ctx context.Context) (*http.Response, error) {
+		resp, err = m.client.GetInvoiceWithResponse(ctx, accountId, invoiceUUID)
+		if resp == nil {
+			return nil, err
+		}
+		return resp.HTTPResponse, err
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.JSON200 == nil {
+		return nil, NewMetronomeError(resp.StatusCode(), resp.Body)
+	}
+
+	data := make([]*api.Invoice, 0, 1)
+	if b := buildInvoice(resp.JSON200.Data); b != nil {
+		data = append(data, b)
+	}
+	return &api.ListInvoicesResponse{
+		Data: data,
+	}, nil
+}
+
+func buildInvoice(input biller.Invoice) *api.Invoice {
+	if input.Id == uuid.Nil {
+		return nil
+	}
+	built := &api.Invoice{
+		Id:        input.Id.String(),
+		Entries:   make([]*api.InvoiceLineItem, len(input.LineItems)),
+		StartTime: timestamppb.New(input.StartTimestamp),
+		EndTime:   timestamppb.New(input.EndTimestamp),
+		Subtotal:  input.Subtotal,
+		Total:     input.Total,
+		PlanName:  *input.PlanName,
+	}
+	for i, li := range input.LineItems {
+		built.Entries[i] = &api.InvoiceLineItem{
+			Name:     li.Name,
+			Quantity: li.Quantity,
+			Total:    li.Total,
+			Charges:  make([]*api.Charge, len(li.SubLineItems)),
+		}
+
+		for j, sub := range li.SubLineItems {
+			built.Entries[i].Charges[j] = &api.Charge{
+				Name:     sub.Name,
+				Quantity: sub.Quantity,
+				Subtotal: sub.Subtotal,
+				Tiers:    []*api.ChargeTier{},
+			}
+
+			if sub.Tiers != nil {
+				for _, t := range *sub.Tiers {
+					built.Entries[i].Charges[j].Tiers = append(
+						built.Entries[i].Charges[j].Tiers,
+						&api.ChargeTier{
+							StartingAt: t.StartingAt,
+							Quantity:   t.Quantity,
+							Price:      t.Price,
+							Subtotal:   t.Subtotal,
+						},
+					)
+				}
+			}
+		}
+	}
+
+	return built
 }
 
 func pastMidnight() time.Time {
@@ -235,9 +370,9 @@ func (e *MetronomeError) Error() string {
 	return fmt.Sprintf("HTTP %d: %s", e.HttpCode, e.Message)
 }
 
-func NewMetronomeError(code int, message string) *MetronomeError {
+func NewMetronomeError(code int, message []byte) *MetronomeError {
 	return &MetronomeError{
 		HttpCode: code,
-		Message:  message,
+		Message:  string(message),
 	}
 }

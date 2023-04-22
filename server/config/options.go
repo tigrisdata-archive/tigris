@@ -42,6 +42,7 @@ type Config struct {
 	Billing         Billing              `yaml:"billing" json:"billing"`
 	Cdc             CdcConfig            `yaml:"cdc" json:"cdc"`
 	Search          SearchConfig         `yaml:"search" json:"search"`
+	KV              KVConfig             `yaml:"kv" json:"kv"`
 	SecondaryIndex  SecondaryIndexConfig `mapstructure:"secondary_index" yaml:"secondary_index" json:"secondary_index"`
 	Cache           CacheConfig          `yaml:"cache" json:"cache"`
 	Tracing         TracingConfig        `yaml:"tracing" json:"tracing"`
@@ -295,7 +296,7 @@ var DefaultConfig = Config{
 		EnableNamespaceDeletion: false,
 		EnableNamespaceCreation: true,
 		UserInvitations: Invitation{
-			ExpireAfterSec: 259200, //3days
+			ExpireAfterSec: 259200, // 3days
 		},
 	},
 	Billing: Billing{
@@ -324,6 +325,11 @@ var DefaultConfig = Config{
 		WriteEnabled:   true,
 		StorageEnabled: true,
 		Chunking:       true,
+		Compression:    false,
+	},
+	KV: KVConfig{
+		Chunking:    false,
+		Compression: false,
 	},
 	SecondaryIndex: SecondaryIndexConfig{
 		ReadEnabled:   false,
@@ -503,6 +509,14 @@ type SchemaConfig struct {
 	AllowIncompatible bool `mapstructure:"allow_incompatible" json:"allow_incompatible" yaml:"allow_incompatible"`
 }
 
+// KVConfig keeps KV store configuration parameters.
+type KVConfig struct {
+	// Chunking allows us to persist bigger payload in storage.
+	Chunking bool `mapstructure:"chunking" yaml:"chunking" json:"chunking"`
+	// Compression allows us to compress payload before storing in storage.
+	Compression bool `mapstructure:"compression" yaml:"compression" json:"compression"`
+}
+
 // FoundationDBConfig keeps FoundationDB configuration parameters.
 type FoundationDBConfig struct {
 	ClusterFile string `mapstructure:"cluster_file" json:"cluster_file" yaml:"cluster_file"`
@@ -518,6 +532,8 @@ type SearchConfig struct {
 	StorageEnabled bool `mapstructure:"storage_enabled" yaml:"storage_enabled" json:"storage_enabled"`
 	// Chunking allows us to persist bigger search indexes payload in storage.
 	Chunking bool `mapstructure:"chunking" yaml:"chunking" json:"chunking"`
+	// Compression allows us to compress payload before storing in storage.
+	Compression bool `mapstructure:"compression" yaml:"compression" json:"compression"`
 }
 
 type SecondaryIndexConfig struct {

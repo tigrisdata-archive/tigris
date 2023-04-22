@@ -144,7 +144,7 @@ func (dd *Datadog) QueryQuotaUsage(ctx context.Context, _ *api.QuotaUsageRequest
 	return &api.QuotaUsageResponse{
 		ReadUnits:            ru,
 		WriteUnits:           wu,
-		StorageSize:          size,
+		StorageSize:          size.StoredBytes,
 		ReadUnitsThrottled:   rt,
 		WriteUnitsThrottled:  wt,
 		StorageSizeThrottled: st,

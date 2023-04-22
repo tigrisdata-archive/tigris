@@ -371,7 +371,8 @@ db_negative_tests() {
 error() {
 	exp_out=$1
 	shift
-	out=$("$@" 2>&1 || true)
+	out=$(set +x; "$@" 2>&1 || true)
+	out=${out//warning: GOCOVERDIR not set, no coverage data emitted /}
 	diff -u <(echo "$exp_out") <(echo "$out")
 }
 
@@ -436,6 +437,7 @@ main() {
 	export TIGRIS_URL="localhost:$TIGRIS_TEST_PORT"
 	db_tests
 	test_import
+
 	test_search_import
 	test_backup
 

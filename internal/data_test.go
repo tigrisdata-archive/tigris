@@ -33,6 +33,7 @@ func TestEncode_Decode(t *testing.T) {
 		data, err := Decode(encoded)
 		require.NoError(t, err)
 		require.True(t, proto.Equal(d, data))
+		require.Equal(t, int32(20), data.Size())
 	})
 	t.Run("not_implemented", func(t *testing.T) {
 		data, err := Decode([]byte(`{"a": 1, "b": "foo"}`))
@@ -52,6 +53,7 @@ func TestEncode_Decode(t *testing.T) {
 		data, err := Decode(encoded)
 		require.NoError(t, err)
 		require.True(t, proto.Equal(v, data))
+		require.Equal(t, int32(20), data.Size())
 	})
 
 	t.Run("decode_binc", func(t *testing.T) {
@@ -63,6 +65,7 @@ func TestEncode_Decode(t *testing.T) {
 		data, err := Decode(encoded)
 		require.NoError(t, err)
 		require.True(t, proto.Equal(d, data))
+		require.Equal(t, int32(20), data.Size())
 	})
 
 	t.Run("decode_proto", func(t *testing.T) {
@@ -101,12 +104,14 @@ func Benchmark_Encode(b *testing.B) {
 
 	bb := int32(7)
 	v := &TableData{
-		Ver:         23045,
-		Encoding:    3789,
-		CreatedAt:   tm1,
-		UpdatedAt:   tm2,
-		RawData:     []byte("[s" + strings.Repeat("a", 1024*1024) + "e]"),
-		TotalChunks: &bb,
+		Ver:              23045,
+		Encoding:         3789,
+		CreatedAt:        tm1,
+		UpdatedAt:        tm2,
+		RawData:          []byte("[s" + strings.Repeat("a", 1024*1024) + "e]"),
+		TotalChunks:      &bb,
+		RawSize:          43524354,
+		SearchFieldsSize: &bb,
 	}
 
 	b.Run("ugorji_binc", func(b *testing.B) {
@@ -118,6 +123,8 @@ func Benchmark_Encode(b *testing.B) {
 			_ = enc
 		}
 	})
+	// enc, _ := encodeInternal(v, TableDataType)
+	// fmt.Fprintf(os.Stderr, "Size: %v\n", len(enc))
 
 	b.Run("proto", func(b *testing.B) {
 		for n := 0; n < b.N; n++ {
@@ -141,14 +148,16 @@ func Benchmark_Decode(b *testing.B) {
 	tm1 := NewTimestamp()
 	tm2 := NewTimestamp()
 
-	bb := int32(7)
+	b1 := int32(34524)
 	v := &TableData{
-		Ver:         23045,
-		Encoding:    3789,
-		CreatedAt:   tm1,
-		UpdatedAt:   tm2,
-		RawData:     []byte("[s" + strings.Repeat("a", 1024*1024) + "e]"),
-		TotalChunks: &bb,
+		Ver:              23045,
+		Encoding:         3789,
+		CreatedAt:        tm1,
+		UpdatedAt:        tm2,
+		RawData:          []byte("[s" + strings.Repeat("a", 1024*1024) + "e]"),
+		TotalChunks:      &b1,
+		RawSize:          43524354,
+		SearchFieldsSize: &b1,
 	}
 	enc, err := encodeInternal(v, TableDataType)
 	if err != nil {
