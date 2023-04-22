@@ -30,10 +30,6 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-const (
-	TimeFormat = time.RFC3339
-)
-
 type MetronomeId = uuid.UUID
 
 type Metronome struct {
