@@ -41,8 +41,9 @@ const (
 	GotrueAudHeaderKey = "X-JWT-AUD"
 	ClientIdPrefix     = "tid_"
 	ClientSecretPrefix = "tsec_"
-
-	AppKeyUser = "app key"
+	Component          = "component"
+	AppKey             = "app_key"
+	AppKeyUser         = "app key"
 
 	InvitationStatusPending  = "PENDING"
 	InvitationStatusAccepted = "ACCEPTED"
@@ -132,7 +133,12 @@ func (g *gotrue) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest)
 	if err != nil {
 		return nil, err
 	}
-
+	log.Info().
+		Str("namespace", currentNamespace).
+		Str("sub", currentSub).
+		Str("client_id", clientId).
+		Str(Component, AppKey).
+		Msg("appkey created")
 	return &api.CreateAppKeyResponse{
 		CreatedAppKey: &api.AppKey{
 			Id:          clientId,
@@ -213,6 +219,11 @@ func (g *gotrue) UpdateAppKey(ctx context.Context, req *api.UpdateAppKeyRequest)
 	if req.GetDescription() != "" {
 		result.UpdatedAppKey.Description = req.GetDescription()
 	}
+	log.Info().
+		Str("sub", currentSub).
+		Str("client_id", req.GetId()).
+		Str(Component, AppKey).
+		Msg("appkey updated")
 	return result, nil
 }
 
@@ -272,6 +283,11 @@ func (g *gotrue) RotateAppKey(ctx context.Context, req *api.RotateAppKeyRequest)
 		},
 	}
 
+	log.Info().
+		Str("sub", currentSub).
+		Str("client_id", req.GetId()).
+		Str(Component, AppKey).
+		Msg("appkey rotated")
 	return result, nil
 }
 
@@ -307,6 +323,12 @@ func (g *gotrue) DeleteAppKey(ctx context.Context, req *api.DeleteAppKeyRequest)
 		return nil, errors.Internal("Received non OK status code to delete user")
 	}
 
+	currentSub, _ := GetCurrentSub(ctx)
+	log.Info().
+		Str("sub", currentSub).
+		Str("client_id", req.GetId()).
+		Str(Component, AppKey).
+		Msg("appkey deleted")
 	return &api.DeleteAppKeyResponse{
 		Deleted: true,
 	}, nil
@@ -430,6 +452,7 @@ func (g *gotrue) DeleteAppKeys(ctx context.Context, project string) error {
 		log.Err(err).Msg("Failed to list app keys to delete them")
 		return errors.Internal("Failed to delete app keys")
 	}
+	currentSub, _ := GetCurrentSub(ctx)
 
 	for _, key := range listAppKeysResp.GetAppKeys() {
 		_, err := g.DeleteAppKey(ctx, &api.DeleteAppKeyRequest{
@@ -440,6 +463,12 @@ func (g *gotrue) DeleteAppKeys(ctx context.Context, project string) error {
 			log.Err(err).Str("clientId", key.Id).Msg("Failed to delete app key")
 			return errors.Internal("Failed to delete all app keys")
 		}
+
+		log.Info().
+			Str("sub", currentSub).
+			Str("client_id", key.GetId()).
+			Str(Component, AppKey).
+			Msg("appkey deleted via project")
 	}
 	return nil
 }
