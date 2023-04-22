@@ -49,7 +49,7 @@ func readToken(t *testing.T, file string) string {
 func createTestNamespace(t *testing.T, token string) {
 	e2 := expectLow(t, config.GetBaseURL2())
 	createNamespacePayload := Map{
-		"name": "tigris_test",
+		"name": "tigris_test_name",
 		"id":   "tigris_test",
 	}
 	_ = e2.POST(namespaceOperation("create")).
@@ -434,6 +434,7 @@ func TestUserInvitations(t *testing.T) {
 	verificationRes1 := verifyUserInvitations(t, "b@hello.com", invitationCode, token)
 	verificationRes1.Status(http.StatusOK)
 	require.Equal(t, "tigris_test", verificationRes1.JSON().Object().Value("tigris_namespace").String().Raw())
+	require.Equal(t, "tigris_test_name", verificationRes1.JSON().Object().Value("tigris_namespace_name").String().Raw())
 
 	// verify - invalid code
 	verificationRes2 := verifyUserInvitations(t, "b@hello.com", "invalid-code", token)

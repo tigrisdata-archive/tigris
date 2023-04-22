@@ -28,6 +28,7 @@ import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/request"
 )
 
@@ -42,10 +43,11 @@ type UsersManager interface {
 }
 
 type DefaultUsersManager struct {
-	Management *management.Management
+	Management    *management.Management
+	TenantManager *metadata.TenantManager
 }
 
-func NewDefaultUsersManager() *DefaultUsersManager {
+func NewDefaultUsersManager(tm *metadata.TenantManager) *DefaultUsersManager {
 	auth0HttpClient := &http.Client{Timeout: time.Duration(30) * time.Second}
 	m, err := management.New(config.DefaultConfig.Auth.ExternalDomain,
 		management.WithClientCredentials(config.DefaultConfig.Auth.ManagementClientId, config.DefaultConfig.Auth.ManagementClientSecret),
@@ -56,12 +58,12 @@ func NewDefaultUsersManager() *DefaultUsersManager {
 			panic("Unable to configure default users manager")
 		}
 	}
-	return &DefaultUsersManager{Management: m}
+	return &DefaultUsersManager{Management: m, TenantManager: tm}
 }
 
-func (h *DefaultUsersManager) CreateInvitations(ctx context.Context, req *api.CreateInvitationsRequest) (*api.CreateInvitationsResponse, error) {
+func (um *DefaultUsersManager) CreateInvitations(ctx context.Context, req *api.CreateInvitationsRequest) (*api.CreateInvitationsResponse, error) {
 	for _, invitation := range req.Invitations {
-		err := createInvitation(ctx, invitation.GetEmail(), invitation.GetRole(), invitation.GetInvitationSentByName())
+		err := createInvitation(ctx, invitation.GetEmail(), invitation.GetRole(), invitation.GetInvitationSentByName(), um)
 		if err != nil {
 			return nil, err
 		}
@@ -69,7 +71,7 @@ func (h *DefaultUsersManager) CreateInvitations(ctx context.Context, req *api.Cr
 	return &api.CreateInvitationsResponse{}, nil
 }
 
-func createInvitation(ctx context.Context, email string, role string, invitationSentByName string) error {
+func createInvitation(ctx context.Context, email string, role string, invitationSentByName string, um *DefaultUsersManager) error {
 	if email == "" {
 		return errors.InvalidArgument("Email must be specified")
 	}
@@ -83,6 +85,12 @@ func createInvitation(ctx context.Context, email string, role string, invitation
 		return errors.Internal("Could not create user invitation")
 	}
 
+	namespaceName, err := um.TenantManager.GetNamespaceName(ctx, namespace)
+	if err != nil {
+		log.Err(err).Msg("Failed to get namespace name while creating invitation")
+		return errors.Internal("Could not create user invitation")
+	}
+
 	currentSub, err := request.GetCurrentSub(ctx)
 	if err != nil {
 		log.Err(err).Msg("Failed to get current sub while creating invitation")
@@ -91,12 +99,13 @@ func createInvitation(ctx context.Context, email string, role string, invitation
 
 	expirationTime := time.Now().UnixMilli() + (config.DefaultConfig.Auth.UserInvitations.ExpireAfterSec * 1000)
 	createInvitationPayload := CreateInvitationPayload{
-		Email:           email,
-		Role:            role,
-		TigrisNamespace: namespace,
-		CreatedBy:       currentSub,
-		CreatedByName:   invitationSentByName,
-		ExpirationTime:  expirationTime,
+		Email:               email,
+		Role:                role,
+		TigrisNamespace:     namespace,
+		TigrisNamespaceName: namespaceName,
+		CreatedBy:           currentSub,
+		CreatedByName:       invitationSentByName,
+		ExpirationTime:      expirationTime,
 	}
 	createInvitationPayloadBytes, err := jsoniter.Marshal(createInvitationPayload)
 	if err != nil {
@@ -232,10 +241,7 @@ func (h *DefaultUsersManager) VerifyInvitation(ctx context.Context, req *api.Ver
 		log.Err(err).Msg("Failed to JSON deserialize gotrue's verify user response")
 		return nil, errors.Internal("Could not verify user invitation")
 	}
-	return &api.VerifyInvitationResponse{
-		TigrisNamespace: verifyUserInvitationResponse.GetTigrisNamespace(),
-		Role:            verifyUserInvitationResponse.GetRole(),
-	}, nil
+	return &verifyUserInvitationResponse, nil
 }
 
 func (h *DefaultUsersManager) ListUsers(ctx context.Context, _ *api.ListUsersRequest) (*api.ListUsersResponse, error) {

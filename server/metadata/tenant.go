@@ -256,6 +256,19 @@ func (m *TenantManager) GetNamespaceId(namespaceName string) (uint32, error) {
 	return tenant.namespace.Id(), nil
 }
 
+func (m *TenantManager) GetNamespaceName(ctx context.Context, namespaceId string) (string, error) {
+	tenant, err := m.GetTenant(ctx, namespaceId)
+	if tenant == nil {
+		return "", errors.NotFound("Namespace not found")
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	return tenant.namespace.Metadata().Name, nil
+}
+
 func (m *TenantManager) RefreshNamespaceAccounts(ctx context.Context) error {
 	tx, err := m.txMgr.StartTx(ctx)
 	if err != nil {
