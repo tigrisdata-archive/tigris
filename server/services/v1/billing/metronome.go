@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/deepmap/oapi-codegen/pkg/securityprovider"
@@ -27,6 +26,7 @@ import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/uber-go/tally"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -49,26 +49,33 @@ func NewMetronomeProvider(config config.Metronome) (*Metronome, error) {
 	return &Metronome{Config: config, client: client}, nil
 }
 
-func (m *Metronome) measure(ctx context.Context, operation string, f func(ctx context.Context) (*http.Response, error)) {
+func (m *Metronome) measure(ctx context.Context, scope tally.Scope, operation string, f func(ctx context.Context) (*http.Response, error)) {
 	me := metrics.NewMeasurement(
 		metrics.MetronomeServiceName,
 		operation,
 		metrics.MetronomeSpanType,
-		metrics.GetMetronomeTags(operation))
+		map[string]string{})
 	me.StartTracing(ctx, true)
 
 	resp, err := f(ctx)
-	me.RecordDuration(metrics.MetronomeLatency, me.GetTags())
+	_ = me.FinishTracing(ctx)
+	me.RecordDuration(scope, me.GetTags())
 	if resp != nil {
 		defer resp.Body.Close()
-		me.IncrementCount(metrics.MetronomeResponseCode, me.GetTags(), strconv.Itoa(resp.StatusCode), 1)
+		// e.g.:- metronome_create_account_request
+		// tags: response_code: 200
+		me.IncrementCount(scope, metrics.GetResponseCodeTags(resp.StatusCode), "request", 1)
 	}
 
 	var errCount int64
+	var errTags map[string]string
 	if err != nil {
 		errCount = 1
+		errTags = metrics.GetErrorCodeTags(err)
 	}
-	me.IncrementCount(metrics.MetronomeErrors, me.GetTags(), "error", errCount)
+	// e.g.:- metronome_create_account_error
+	// tags: error_value: err.Error()
+	me.IncrementCount(scope, errTags, "error", errCount)
 }
 
 func (m *Metronome) CreateAccount(ctx context.Context, namespaceId string, name string) (MetronomeId, error) {
@@ -82,7 +89,7 @@ func (m *Metronome) CreateAccount(ctx context.Context, namespaceId string, name 
 		Name:          name,
 	}
 
-	m.measure(ctx, "create_account", func(ctx context.Context) (*http.Response, error) {
+	m.measure(ctx, metrics.MetronomeCreateAccount, "create_account", func(ctx context.Context) (*http.Response, error) {
 		resp, err = m.client.CreateCustomerWithResponse(ctx, body)
 		if resp == nil {
 			return nil, err
@@ -120,7 +127,7 @@ func (m *Metronome) AddPlan(ctx context.Context, accountId MetronomeId, planId u
 		StartingOn: pastMidnight(),
 	}
 
-	m.measure(ctx, "add_plan", func(ctx context.Context) (*http.Response, error) {
+	m.measure(ctx, metrics.MetronomeAddPlan, "add_plan", func(ctx context.Context) (*http.Response, error) {
 		resp, err = m.client.AddPlanToCustomerWithResponse(ctx, accountId, body)
 		if resp == nil {
 			return nil, err
@@ -151,8 +158,8 @@ func (m *Metronome) PushUsageEvents(ctx context.Context, events []*UsageEvent) e
 		metrics.MetronomeServiceName,
 		"ingest",
 		metrics.MetronomeSpanType,
-		metrics.GetMetronomeTags("ingest"))
-	me.IncrementCount(metrics.MetronomeEvents, me.GetTags(), "usage", int64(len(billingEvents)))
+		metrics.GetIngestEventTags("usage"))
+	me.IncrementCount(metrics.MetronomeIngest, me.GetTags(), "events", int64(len(billingEvents)))
 
 	return m.pushBillingEvents(ctx, billingEvents)
 }
@@ -168,8 +175,8 @@ func (m *Metronome) PushStorageEvents(ctx context.Context, events []*StorageEven
 		metrics.MetronomeServiceName,
 		"ingest",
 		metrics.MetronomeSpanType,
-		metrics.GetMetronomeTags("ingest"))
-	me.IncrementCount(metrics.MetronomeEvents, me.GetTags(), "storage", int64(len(billingEvents)))
+		metrics.GetIngestEventTags("storage"))
+	me.IncrementCount(metrics.MetronomeIngest, me.GetTags(), "events", int64(len(billingEvents)))
 
 	return m.pushBillingEvents(ctx, billingEvents)
 }
@@ -201,7 +208,7 @@ func (m *Metronome) pushBillingEvents(ctx context.Context, events []biller.Event
 		page := events[p*pageSize : high]
 
 		// content encoding - gzip?
-		m.measure(ctx, "ingest", func(ctx context.Context) (*http.Response, error) {
+		m.measure(ctx, metrics.MetronomeIngest, "ingest", func(ctx context.Context) (*http.Response, error) {
 			resp, err = m.client.IngestWithResponse(ctx, page)
 			if resp == nil {
 				return nil, err
@@ -246,7 +253,7 @@ func (m *Metronome) GetInvoices(ctx context.Context, accountId MetronomeId, r *a
 		params.EndingBefore = &t
 	}
 
-	m.measure(ctx, "list_invoices", func(ctx context.Context) (*http.Response, error) {
+	m.measure(ctx, metrics.MetronomeListInvoices, "list_invoices", func(ctx context.Context) (*http.Response, error) {
 		resp, err = m.client.ListInvoicesWithResponse(ctx, accountId, params)
 		if resp == nil {
 			return nil, err
@@ -282,7 +289,7 @@ func (m *Metronome) GetInvoiceById(ctx context.Context, accountId MetronomeId, i
 	if err != nil {
 		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "invoiceId is not valid - %s", err.Error())
 	}
-	m.measure(ctx, "get_invoice", func(ctx context.Context) (*http.Response, error) {
+	m.measure(ctx, metrics.MetronomeGetInvoice, "get_invoice", func(ctx context.Context) (*http.Response, error) {
 		resp, err = m.client.GetInvoiceWithResponse(ctx, accountId, invoiceUUID)
 		if resp == nil {
 			return nil, err
