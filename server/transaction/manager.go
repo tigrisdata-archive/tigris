@@ -42,8 +42,8 @@ type BaseTx interface {
 	Insert(ctx context.Context, key keys.Key, data *internal.TableData) error
 	Replace(ctx context.Context, key keys.Key, data *internal.TableData, isUpdate bool) error
 	Delete(ctx context.Context, key keys.Key) error
-	Read(ctx context.Context, key keys.Key) (kv.Iterator, error)
-	ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key, isSnapshot bool) (kv.Iterator, error)
+	Read(ctx context.Context, key keys.Key, reverse bool) (kv.Iterator, error)
+	ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key, isSnapshot bool, reverse bool) (kv.Iterator, error)
 	Get(ctx context.Context, key []byte, isSnapshot bool) (kv.Future, error)
 	SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error
 	SetVersionstampedKey(ctx context.Context, key []byte, value []byte) error
@@ -199,7 +199,7 @@ func (s *TxSession) Delete(ctx context.Context, key keys.Key) error {
 	return s.kTx.Delete(ctx, key.Table(), kv.BuildKey(key.IndexParts()...))
 }
 
-func (s *TxSession) Read(ctx context.Context, key keys.Key) (kv.Iterator, error) {
+func (s *TxSession) Read(ctx context.Context, key keys.Key, reverse bool) (kv.Iterator, error) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -207,10 +207,10 @@ func (s *TxSession) Read(ctx context.Context, key keys.Key) (kv.Iterator, error)
 		return nil, err
 	}
 
-	return s.kTx.Read(ctx, key.Table(), kv.BuildKey(key.IndexParts()...))
+	return s.kTx.Read(ctx, key.Table(), kv.BuildKey(key.IndexParts()...), reverse)
 }
 
-func (s *TxSession) ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key, isSnapshot bool) (kv.Iterator, error) {
+func (s *TxSession) ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key, isSnapshot bool, reverse bool) (kv.Iterator, error) {
 	s.Lock()
 	defer s.Unlock()
 
@@ -219,12 +219,12 @@ func (s *TxSession) ReadRange(ctx context.Context, lKey keys.Key, rKey keys.Key,
 	}
 
 	if rKey != nil && lKey != nil {
-		return s.kTx.ReadRange(ctx, lKey.Table(), kv.BuildKey(lKey.IndexParts()...), kv.BuildKey(rKey.IndexParts()...), isSnapshot)
+		return s.kTx.ReadRange(ctx, lKey.Table(), kv.BuildKey(lKey.IndexParts()...), kv.BuildKey(rKey.IndexParts()...), isSnapshot, reverse)
 	} else if lKey != nil {
-		return s.kTx.ReadRange(ctx, lKey.Table(), kv.BuildKey(lKey.IndexParts()...), nil, isSnapshot)
+		return s.kTx.ReadRange(ctx, lKey.Table(), kv.BuildKey(lKey.IndexParts()...), nil, isSnapshot, reverse)
 	}
 
-	return s.kTx.ReadRange(ctx, rKey.Table(), nil, kv.BuildKey(rKey.IndexParts()...), isSnapshot)
+	return s.kTx.ReadRange(ctx, rKey.Table(), nil, kv.BuildKey(rKey.IndexParts()...), isSnapshot, reverse)
 }
 
 func (s *TxSession) SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error {

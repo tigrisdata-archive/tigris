@@ -353,6 +353,90 @@ func TestQuery_Range(t *testing.T) {
 	}
 }
 
+func TestQuery_Sort(t *testing.T) {
+	db, coll := setupTests(t)
+	insertDocs(t, db, coll)
+	defer cleanupTests(t, db)
+	max := "$TIGRIS_MAX"
+
+	cases := []struct {
+		filter   Map
+		ids      []int
+		keyRange []string
+		sort     []Map
+	}{
+		{
+			Map{"int_value": Map{"$gt": 1}},
+			[]int{3, 30, 1, 4},
+			[]string{"1", max},
+			[]Map{{"int_value": "$desc"}},
+		},
+		{
+			Map{"int_value": Map{"$gt": 0}},
+			[]int{3, 4, 1, 30, 2},
+			[]string{"null", max},
+			[]Map{{"double_value": "$desc"}},
+		},
+		{
+			Map{"double_value": Map{"$eq": 5.05}},
+			[]int{30, 2},
+			[]string{"5.05"},
+			[]Map{{"double_value": "$desc"}},
+		},
+		{
+			Map{"double_value": Map{"$eq": 5.05}},
+			[]int{2, 30},
+			[]string{"5.05"},
+			[]Map{{"double_value": "$asc"}},
+		},
+		{
+			Map{"int_value": Map{"$gt": 0}},
+			[]int{2, 4, 1, 30, 3},
+			[]string{"0", max},
+			[]Map{{"int_value": "$asc"}},
+		},
+		{
+			Map{"$and": []interface{}{
+				Map{"int_value": Map{"$gte": 5}},
+				Map{"int_value": Map{"$lt": 100}},
+			},
+			},
+			[]int{30, 1, 4},
+			[]string{"5", "100"},
+			[]Map{{"int_value": "$desc"}},
+		},
+		{
+			Map{"string_value": Map{"$gt": "B"}},
+			[]int{2, 30, 4},
+			nil,
+			[]Map{{"string_value": "$asc"}},
+		},
+		{
+			Map{"string_value": Map{"$gt": "B"}},
+			[]int{4, 30, 2},
+			nil,
+			[]Map{{"string_value": "$desc"}},
+		},
+	}
+
+	for _, query := range cases {
+		resp := readByFilter(t, db, coll, query.filter, nil, nil, query.sort)
+		ids := getIds(resp)
+		assert.Equal(t, len(query.ids), len(ids), query.filter)
+		assert.Equal(t, query.ids, ids, query.filter)
+		explain := explainQuery(t, db, coll, query.filter, nil, nil, query.sort)
+		if query.keyRange != nil {
+			assert.Equal(t, query.keyRange, explain.KeyRange)
+		}
+
+		fieldName := firstFilterName(query.sort[0])
+		if fieldName != "" {
+			assert.Equal(t, fieldName, explain.Field, query.filter)
+		}
+		assert.Equal(t, "secondary index", explain.ReadType)
+	}
+}
+
 func firstFilterName(filter Map) string {
 	fieldName := ""
 	for k := range filter {

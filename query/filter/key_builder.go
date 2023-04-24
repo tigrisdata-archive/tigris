@@ -19,6 +19,7 @@ import (
 
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/keys"
+	tsort "github.com/tigrisdata/tigris/query/sort"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/value"
 )
@@ -44,16 +45,24 @@ const (
 // The KeyBuilder returns a QueryPlan that contains the keys and type of query against fdb.
 type QueryPlan struct {
 	QueryType QueryPlanType
+	FieldName string
 	DataType  schema.FieldType
 	Keys      []keys.Key
+	Ascending bool
 }
 
-func newQueryPlan(queryType QueryPlanType, dataType schema.FieldType, keys []keys.Key) QueryPlan {
+func NewQueryPlan(queryType QueryPlanType, fieldName string, dataType schema.FieldType, keys []keys.Key) QueryPlan {
 	return QueryPlan{
-		queryType,
-		dataType,
-		keys,
+		QueryType: queryType,
+		FieldName: fieldName,
+		DataType:  dataType,
+		Keys:      keys,
+		Ascending: true,
 	}
+}
+
+func (q QueryPlan) Reverse() bool {
+	return !q.Ascending
 }
 
 // Sort these by QueryPlanType. This creates a simple way to choose a best query plan
@@ -273,10 +282,12 @@ func (s *StrictEqKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys 
 				return nil, err
 			}
 			dataType := schema.UnknownType
+			fieldName := ""
 			if len(k) == 1 {
 				dataType = k[0].Field.DataType
+				fieldName = k[0].Field.Name()
 			}
-			queryPlans = append(queryPlans, newQueryPlan(EQUAL, dataType, []keys.Key{key}))
+			queryPlans = append(queryPlans, NewQueryPlan(EQUAL, fieldName, dataType, []keys.Key{key}))
 		case OrOP:
 			for _, sel := range k {
 				if len(userDefinedKeys) > 1 {
@@ -291,7 +302,7 @@ func (s *StrictEqKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys 
 					return nil, err
 				}
 
-				queryPlans = append(queryPlans, newQueryPlan(EQUAL, sel.Field.DataType, []keys.Key{key}))
+				queryPlans = append(queryPlans, NewQueryPlan(EQUAL, sel.Field.Name(), sel.Field.DataType, []keys.Key{key}))
 			}
 		}
 	}
@@ -367,7 +378,7 @@ func (s *RangeKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys []F
 		}
 
 		if begin != nil && end != nil {
-			queryPlans = append(queryPlans, newQueryPlan(rangeType, k.Type(), []keys.Key{begin, end}))
+			queryPlans = append(queryPlans, NewQueryPlan(rangeType, k.Name(), k.Type(), []keys.Key{begin, end}))
 		}
 	}
 
@@ -400,4 +411,50 @@ func (s *RangeKeyComposer[F]) isLess(selector *Selector) bool {
 	default:
 		return false
 	}
+}
+
+func QueryPlanFromSort(sortFields *[]tsort.SortField, indexeableFields []*schema.QueryableField, encoder KeyEncodingFunc, buildIndexParts BuildIndexPartsFunc) (*QueryPlan, error) {
+	if sortFields == nil {
+		return nil, nil
+	}
+
+	if len(*sortFields) == 0 {
+		return nil, nil
+	}
+
+	if len(*sortFields) > 1 {
+		return nil, errors.InvalidArgument("Cannot query with multiple sort fields")
+	}
+	var field *schema.QueryableField
+	for _, idx := range indexeableFields {
+		if idx.FieldName == (*sortFields)[0].Name {
+			field = idx
+
+			break
+		}
+	}
+
+	if field == nil {
+		return nil, errors.InvalidArgument("Sort field is not indexed")
+	}
+
+	min, err := encoder(buildIndexParts(field.FieldName, value.MinOrderValue())...)
+	if err != nil {
+		return nil, err
+	}
+
+	max, err := encoder(buildIndexParts(field.FieldName, value.MaxOrderValue())...)
+	if err != nil {
+		return nil, err
+	}
+
+	plan := &QueryPlan{
+		FieldName: field.FieldName,
+		QueryType: FULLRANGE,
+		DataType:  field.DataType,
+		Ascending: (*sortFields)[0].Ascending,
+		Keys:      []keys.Key{min, max},
+	}
+
+	return plan, nil
 }

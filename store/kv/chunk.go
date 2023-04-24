@@ -140,8 +140,8 @@ func (tx *ChunkTx) Replace(ctx context.Context, table []byte, key Key, data *int
 }
 
 // Read needs to return chunk iterator so that it can merge and returned merged chunk to caller.
-func (tx *ChunkTx) Read(ctx context.Context, table []byte, key Key) (Iterator, error) {
-	iterator, err := tx.KeyValueTx.Read(ctx, table, key)
+func (tx *ChunkTx) Read(ctx context.Context, table []byte, key Key, reverse bool) (Iterator, error) {
+	iterator, err := tx.KeyValueTx.Read(ctx, table, key, reverse)
 	if err != nil {
 		return nil, err
 	}
@@ -151,8 +151,8 @@ func (tx *ChunkTx) Read(ctx context.Context, table []byte, key Key) (Iterator, e
 	}, nil
 }
 
-func (tx *ChunkTx) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key, isSnapshot bool) (Iterator, error) {
-	iterator, err := tx.KeyValueTx.ReadRange(ctx, table, lKey, rKey, isSnapshot)
+func (tx *ChunkTx) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key, isSnapshot bool, reverse bool) (Iterator, error) {
+	iterator, err := tx.KeyValueTx.ReadRange(ctx, table, lKey, rKey, isSnapshot, reverse)
 	if err != nil {
 		return nil, err
 	}

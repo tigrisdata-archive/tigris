@@ -73,7 +73,7 @@ func (m *metadataSubspace) getPayload(ctx context.Context, tx transaction.Tx, in
 		return nil, invalidArgs
 	}
 
-	it, err := tx.Read(ctx, key)
+	it, err := tx.Read(ctx, key, false)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +172,7 @@ func (m *metadataSubspace) softDeleteMetadata(ctx context.Context, tx transactio
 		return invalidArgs
 	}
 
-	it, err1 := tx.Read(ctx, fromKey)
+	it, err1 := tx.Read(ctx, fromKey, false)
 	if err1 != nil {
 		return err1
 	}
@@ -192,7 +192,7 @@ func (m *metadataSubspace) softDeleteMetadata(ctx context.Context, tx transactio
 func (m *metadataSubspace) listMetadata(ctx context.Context, tx transaction.Tx, key keys.Key, keyLen int,
 	fn func(dropped bool, name string, data *internal.TableData) error,
 ) error {
-	it, err := tx.Read(ctx, key)
+	it, err := tx.Read(ctx, key, false)
 	if err != nil {
 		return err
 	}

@@ -32,8 +32,8 @@ type baseKV interface {
 	Insert(ctx context.Context, table []byte, key Key, data []byte) error
 	Replace(ctx context.Context, table []byte, key Key, data []byte, isUpdate bool) error
 	Delete(ctx context.Context, table []byte, key Key) error
-	Read(ctx context.Context, table []byte, key Key, isSnapshot bool) (baseIterator, error)
-	ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (baseIterator, error)
+	Read(ctx context.Context, table []byte, key Key, isSnapshot bool, reverse bool) (baseIterator, error)
+	ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool, reverse bool) (baseIterator, error)
 	SetVersionstampedKey(_ context.Context, key []byte, value []byte) error
 	SetVersionstampedValue(ctx context.Context, key []byte, value []byte) error
 	Get(ctx context.Context, key []byte, isSnapshot bool) Future

@@ -50,8 +50,8 @@ type KV interface {
 	Insert(ctx context.Context, table []byte, key Key, data *internal.TableData) error
 	Replace(ctx context.Context, table []byte, key Key, data *internal.TableData, isUpdate bool) error
 	Delete(ctx context.Context, table []byte, key Key) error
-	Read(ctx context.Context, table []byte, key Key) (Iterator, error)
-	ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (Iterator, error)
+	Read(ctx context.Context, table []byte, key Key, reverse bool) (Iterator, error)
+	ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool, reverse bool) (Iterator, error)
 
 	GetMetadata(ctx context.Context, table []byte, key Key) (*internal.TableData, error)
 

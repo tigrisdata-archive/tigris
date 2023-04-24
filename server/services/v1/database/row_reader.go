@@ -44,8 +44,8 @@ type ScanIterator struct {
 	err error
 }
 
-func NewScanIterator(ctx context.Context, tx transaction.Tx, from keys.Key, to keys.Key) (*ScanIterator, error) {
-	it, err := tx.ReadRange(ctx, from, to, false)
+func NewScanIterator(ctx context.Context, tx transaction.Tx, from keys.Key, to keys.Key, reverse bool) (*ScanIterator, error) {
+	it, err := tx.ReadRange(ctx, from, to, false, reverse)
 	if ulog.E(err) {
 		return nil, err
 	}
@@ -75,27 +75,29 @@ func (s *ScanIterator) Next(row *Row) bool {
 func (s *ScanIterator) Interrupted() error { return s.err }
 
 type KeyIterator struct {
-	it    kv.Iterator
-	tx    transaction.Tx
-	ctx   context.Context
-	keys  []keys.Key
-	err   error
-	keyId int
+	it      kv.Iterator
+	tx      transaction.Tx
+	ctx     context.Context
+	keys    []keys.Key
+	err     error
+	keyId   int
+	reverse bool
 }
 
-func NewKeyIterator(ctx context.Context, tx transaction.Tx, keys []keys.Key) (*KeyIterator, error) {
+func NewKeyIterator(ctx context.Context, tx transaction.Tx, keys []keys.Key, reverse bool) (*KeyIterator, error) {
 	keyId := 0
-	it, err := tx.Read(ctx, keys[keyId])
+	it, err := tx.Read(ctx, keys[keyId], reverse)
 	if ulog.E(err) {
 		return nil, err
 	}
 
 	return &KeyIterator{
-		tx:    tx,
-		it:    it,
-		ctx:   ctx,
-		keys:  keys,
-		keyId: keyId,
+		tx:      tx,
+		it:      it,
+		ctx:     ctx,
+		keys:    keys,
+		keyId:   keyId,
+		reverse: true,
 	}, nil
 }
 
@@ -121,7 +123,7 @@ func (k *KeyIterator) Next(row *Row) bool {
 			return false
 		}
 
-		k.it, k.err = k.tx.Read(k.ctx, k.keys[k.keyId])
+		k.it, k.err = k.tx.Read(k.ctx, k.keys[k.keyId], k.reverse)
 	}
 }
 
@@ -181,12 +183,12 @@ func NewDatabaseReader(ctx context.Context, tx transaction.Tx) *DatabaseReader {
 
 // ScanTable returns an iterator for all the rows in this table.
 func (reader *DatabaseReader) ScanTable(table []byte) (Iterator, error) {
-	return NewKeyIterator(reader.ctx, reader.tx, []keys.Key{keys.NewKey(table)})
+	return NewKeyIterator(reader.ctx, reader.tx, []keys.Key{keys.NewKey(table)}, false)
 }
 
 // ScanIterator only returns an iterator that has elements starting from.
-func (reader *DatabaseReader) ScanIterator(from keys.Key, to keys.Key) (Iterator, error) {
-	return NewScanIterator(reader.ctx, reader.tx, from, to)
+func (reader *DatabaseReader) ScanIterator(from keys.Key, to keys.Key, reverse bool) (Iterator, error) {
+	return NewScanIterator(reader.ctx, reader.tx, from, to, reverse)
 }
 
 // StrictlyKeysFrom is an optimized version that takes input keys and filter out keys that are lower than the "from".
@@ -205,7 +207,7 @@ func (reader *DatabaseReader) StrictlyKeysFrom(ikeys []keys.Key, from []byte) (I
 
 // KeyIterator returns an iterator that iterates on a key or a set of keys.
 func (reader *DatabaseReader) KeyIterator(ikeys []keys.Key) (Iterator, error) {
-	return NewKeyIterator(reader.ctx, reader.tx, ikeys)
+	return NewKeyIterator(reader.ctx, reader.tx, ikeys, false)
 }
 
 // FilteredRead returns an iterator that implicitly will be doing filtering on the iterator.

@@ -259,9 +259,9 @@ func (m *TxImplWithMetrics) Replace(ctx context.Context, table []byte, key Key, 
 	return
 }
 
-func (m *TxImplWithMetrics) Read(ctx context.Context, table []byte, key Key) (it Iterator, err error) {
+func (m *TxImplWithMetrics) Read(ctx context.Context, table []byte, key Key, reverse bool) (it Iterator, err error) {
 	m.measure(ctx, "Read", func() error {
-		kvIt, err := m.tx.Read(ctx, table, key)
+		kvIt, err := m.tx.Read(ctx, table, key, reverse)
 		it = NewKeyValueIteratorWithMetrics(ctx, kvIt)
 		return err
 	})
@@ -269,9 +269,9 @@ func (m *TxImplWithMetrics) Read(ctx context.Context, table []byte, key Key) (it
 	return
 }
 
-func (m *TxImplWithMetrics) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (it Iterator, err error) {
+func (m *TxImplWithMetrics) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool, reverse bool) (it Iterator, err error) {
 	m.measure(ctx, "ReadRange", func() error {
-		kvIt, err := m.tx.ReadRange(ctx, table, lkey, rkey, isSnapshot)
+		kvIt, err := m.tx.ReadRange(ctx, table, lkey, rkey, isSnapshot, reverse)
 		it = NewKeyValueIteratorWithMetrics(ctx, kvIt)
 		return err
 	})
