@@ -18,6 +18,8 @@ set -ex
 export GO111MODULE=on
 
 go install github.com/golang/mock/mockgen@v1
+go install github.com/vektra/mockery/v2@v2.20.0 # for generating mocks
+
 curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" latest
 
 if [ "$(uname -s)" = "Darwin" ]; then

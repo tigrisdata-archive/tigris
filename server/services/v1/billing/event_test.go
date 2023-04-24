@@ -24,7 +24,10 @@ import (
 
 func TestStorageEvent(t *testing.T) {
 	t.Run("with single property", func(t *testing.T) {
-		billingEvent := NewStorageEventBuilder().WithDatabaseBytes(24).WithNamespaceId("cid").Build()
+		billingEvent := NewStorageEventBuilder().
+			WithDatabaseBytes(24).
+			WithNamespaceId("cid").
+			Build()
 
 		jsonEvent, err := jsoniter.Marshal(billingEvent)
 		require.NoError(t, err)
@@ -34,7 +37,7 @@ func TestStorageEvent(t *testing.T) {
 
 		require.Equal(t, actual["customer_id"], billingEvent.CustomerId)
 		require.Equal(t, actual["transaction_id"], billingEvent.TransactionId)
-		require.Equal(t, actual["timestamp"], "")
+		require.NotEqual(t, actual["timestamp"], "")
 		require.Equal(t, actual["event_type"], "storage")
 		require.Equal(t, actual["properties"], map[string]any{
 			"database_bytes": float64(24),
@@ -42,7 +45,9 @@ func TestStorageEvent(t *testing.T) {
 	})
 
 	t.Run("with 0 values", func(t *testing.T) {
-		billingEvent := NewStorageEventBuilder().WithDatabaseBytes(0).WithIndexBytes(0).Build()
+		billingEvent := NewStorageEventBuilder().
+			WithDatabaseBytes(0).
+			WithIndexBytes(0).Build()
 
 		jsonEvent, err := jsoniter.Marshal(billingEvent)
 		require.NoError(t, err)
@@ -52,7 +57,7 @@ func TestStorageEvent(t *testing.T) {
 
 		require.Equal(t, actual["customer_id"], billingEvent.CustomerId)
 		require.Equal(t, actual["transaction_id"], billingEvent.TransactionId)
-		require.Equal(t, actual["timestamp"], "")
+		require.NotEqual(t, actual["timestamp"], "")
 		require.Equal(t, actual["event_type"], "storage")
 		require.Equal(t, actual["properties"], map[string]any{
 			"index_bytes":    float64(0),
@@ -84,6 +89,25 @@ func TestStorageEvent(t *testing.T) {
 			"database_bytes": float64(345),
 		})
 	})
+
+	t.Run("without transaction id", func(t *testing.T) {
+		billingEvent := NewStorageEventBuilder().
+			WithNamespaceId("c1").
+			WithTimestamp(time.Date(2023, 2, 21, 8, 53, 41, 0, time.UTC)).
+			Build()
+
+		jsonEvent, err := jsoniter.Marshal(billingEvent)
+		require.NoError(t, err)
+		var actual map[string]interface{}
+		err = jsoniter.Unmarshal(jsonEvent, &actual)
+		require.NoError(t, err)
+		require.Equal(t, actual["customer_id"], billingEvent.CustomerId)
+		require.Equal(t, actual["transaction_id"], "c1_1676969621000")
+		require.Equal(t, actual["timestamp"], "2023-02-21T08:53:41Z")
+		require.Equal(t, actual["event_type"], "storage")
+		require.Equal(t, actual["properties"], map[string]any{})
+
+	})
 }
 
 func TestUsageEvent(t *testing.T) {
@@ -98,7 +122,7 @@ func TestUsageEvent(t *testing.T) {
 
 		require.Equal(t, actual["customer_id"], billingEvent.CustomerId)
 		require.Equal(t, actual["transaction_id"], billingEvent.TransactionId)
-		require.Equal(t, actual["timestamp"], "")
+		require.NotEqual(t, actual["timestamp"], "")
 		require.Equal(t, actual["event_type"], "usage")
 		require.Equal(t, actual["properties"], map[string]any{
 			"database_units": float64(55),
@@ -116,7 +140,7 @@ func TestUsageEvent(t *testing.T) {
 
 		require.Equal(t, actual["customer_id"], billingEvent.CustomerId)
 		require.Equal(t, actual["transaction_id"], billingEvent.TransactionId)
-		require.Equal(t, actual["timestamp"], "")
+		require.NotEqual(t, actual["timestamp"], "")
 		require.Equal(t, actual["event_type"], "usage")
 		require.Equal(t, actual["properties"], map[string]any{
 			"database_units": float64(0),
@@ -147,5 +171,24 @@ func TestUsageEvent(t *testing.T) {
 			"database_units": float64(123),
 			"search_units":   float64(542),
 		})
+	})
+
+	t.Run("without transaction id", func(t *testing.T) {
+		billingEvent := NewUsageEventBuilder().
+			WithNamespaceId("c1").
+			WithTimestamp(time.Date(2023, 2, 21, 8, 53, 41, 0, time.UTC)).
+			Build()
+
+		jsonEvent, err := jsoniter.Marshal(billingEvent)
+		require.NoError(t, err)
+		var actual map[string]interface{}
+		err = jsoniter.Unmarshal(jsonEvent, &actual)
+		require.NoError(t, err)
+
+		require.Equal(t, actual["customer_id"], billingEvent.CustomerId)
+		require.Equal(t, actual["transaction_id"], "c1_1676969621000")
+		require.Equal(t, actual["timestamp"], "2023-02-21T08:53:41Z")
+		require.Equal(t, actual["event_type"], "usage")
+		require.Equal(t, actual["properties"], map[string]any{})
 	})
 }

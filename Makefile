@@ -14,6 +14,11 @@ DOCKER_DIR=test/docker
 DOCKER_COMPOSE=COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker compose -f ${DOCKER_DIR}/docker-compose.yml
 CGO_ENABLED=1
 
+# Mocks required for unit tests
+MOCK_INTERFACES=\
+"server/services/v1/billing:Provider" \
+"server/metadata:NamespaceMetadataMgr"
+
 all: server
 
 # Setup local development environment.
@@ -63,7 +68,7 @@ lint: generate
 	shellcheck test/docker/grafana/*
 	golangci-lint --timeout=$(LINT_TIMEOUT) run --fix
 
-clean:
+clean: clean_mocks
 	$(DOCKER_COMPOSE) down -v --remove-orphans
 	rm -f server/service api/server/${V}/*.pb.go \
 		api/server/${V}/*.pb.gw.go \
@@ -99,7 +104,26 @@ coverdir:
 	mkdir -p /tmp/tigris_coverdata && chmod a+w /tmp/tigris_coverdata; rm -f /tmp/tigris_coverdata/*
 	mkdir -p /tmp/tigris_coverdata2 && chmod a+w /tmp/tigris_coverdata2; rm -f /tmp/tigris_coverdata2/*
 
-generate: ${GEN_DIR}/api.pb.go ${GEN_DIR}/api.pb.gw.go ${GEN_DIR}/health.pb.go ${GEN_DIR}/health.pb.gw.go ${GEN_DIR}/admin.pb.go ${GEN_DIR}/admin.pb.gw.go ${DATA_PROTO_DIR}/data.pb.go
+
+generate: generate_api generate_mocks
+
+generate_api: ${GEN_DIR}/api.pb.go ${GEN_DIR}/api.pb.gw.go ${GEN_DIR}/health.pb.go ${GEN_DIR}/health.pb.gw.go ${GEN_DIR}/admin.pb.go ${GEN_DIR}/admin.pb.gw.go ${DATA_PROTO_DIR}/data.pb.go
+
+# generate mocks
+generate_mocks:
+	for ifaces in $(MOCK_INTERFACES) ; do \
+		MOCK_DIR=$${ifaces%:*} ; \
+		MOCK_NAME="$${ifaces#*:}" ; \
+		mockery --dir $${MOCK_DIR} --name $${MOCK_NAME} ; \
+  	done
+
+# clean mocks
+clean_mocks:
+	for ifaces in $(MOCK_INTERFACES) ; do \
+		MOCK_DIR=$${ifaces%:*} ; \
+		MOCK_NAME="$${ifaces#*:}" ; \
+		rm "$${MOCK_DIR}/mock_$${MOCK_NAME}.go" ; \
+  	done
 
 # Build the server binary.
 server: server/service
