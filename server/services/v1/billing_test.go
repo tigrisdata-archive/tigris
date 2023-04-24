@@ -23,16 +23,14 @@ import (
 	"github.com/stretchr/testify/suite"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/metadata"
-	mMock "github.com/tigrisdata/tigris/server/metadata/mocks"
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/services/v1/billing"
-	bMock "github.com/tigrisdata/tigris/server/services/v1/billing/mocks"
 )
 
 type billingServiceSuite struct {
 	suite.Suite
-	mockProvider     *bMock.Provider
-	mockNameSpaceMgr *mMock.NamespaceMetadataMgr
+	mockProvider     *billing.MockProvider
+	mockNameSpaceMgr *metadata.MockNamespaceMetadataMgr
 	billing          *billingService
 	ctx              context.Context
 	nsMeta           metadata.NamespaceMetadata
@@ -42,8 +40,8 @@ type billingServiceSuite struct {
 func TestBillingServiceSuite(t *testing.T) {
 	s := &billingServiceSuite{
 		Suite:            suite.Suite{},
-		mockProvider:     bMock.NewProvider(t),
-		mockNameSpaceMgr: mMock.NewNamespaceMetadataMgr(t),
+		mockProvider:     billing.NewMockProvider(t),
+		mockNameSpaceMgr: metadata.NewMockNamespaceMetadataMgr(t),
 		billing:          nil,
 		ctx:              context.TODO(),
 		nsMeta:           metadata.NewNamespaceMetadata(1, "test_namespace", "test namespace"),
@@ -106,8 +104,8 @@ func (s *billingServiceSuite) Test_ListInvoices_WithNoNamespace_Fails() {
 
 type getMetronomeIdSuite struct {
 	suite.Suite
-	mockProvider     *bMock.Provider
-	mockNameSpaceMgr *mMock.NamespaceMetadataMgr
+	mockProvider     *billing.MockProvider
+	mockNameSpaceMgr *metadata.MockNamespaceMetadataMgr
 	billing          *billingService
 	ctx              context.Context
 }
@@ -115,8 +113,8 @@ type getMetronomeIdSuite struct {
 func TestGetMetronomeIdSuite(t *testing.T) {
 	s := &getMetronomeIdSuite{
 		Suite:            suite.Suite{},
-		mockProvider:     bMock.NewProvider(t),
-		mockNameSpaceMgr: mMock.NewNamespaceMetadataMgr(t),
+		mockProvider:     billing.NewMockProvider(t),
+		mockNameSpaceMgr: metadata.NewMockNamespaceMetadataMgr(t),
 		billing:          nil,
 		ctx:              context.TODO(),
 	}

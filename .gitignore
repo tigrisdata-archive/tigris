@@ -6,3 +6,6 @@ api/client/*
 .idea
 .vscode
 server/service
+
+# mocks
+mock_*.go

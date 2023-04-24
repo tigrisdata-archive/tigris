@@ -15,6 +15,7 @@
 package billing
 
 import (
+	"strconv"
 	"time"
 
 	biller "github.com/tigrisdata/metronome-go-client"
@@ -37,7 +38,7 @@ func NewUsageEventBuilder() *UsageEventBuilder {
 type UsageEventBuilder struct {
 	namespaceId   string
 	transactionId string
-	timestamp     string
+	timestamp     time.Time
 	databaseUnits *int64
 	searchUnits   *int64
 }
@@ -53,7 +54,7 @@ func (ub *UsageEventBuilder) WithTransactionId(id string) *UsageEventBuilder {
 }
 
 func (ub *UsageEventBuilder) WithTimestamp(ts time.Time) *UsageEventBuilder {
-	ub.timestamp = ts.Format(TimeFormat)
+	ub.timestamp = ts
 	return ub
 }
 
@@ -71,10 +72,20 @@ func (ub *UsageEventBuilder) Build() *UsageEvent {
 	billingMetric := &UsageEvent{}
 	billingMetric.EventType = EventTypeUsage
 	billingMetric.CustomerId = ub.namespaceId
-	billingMetric.TransactionId = ub.transactionId
-	billingMetric.Timestamp = ub.timestamp
+
+	// default time
+	if ub.timestamp.IsZero() {
+		ub.timestamp = time.Now()
+	}
+	billingMetric.Timestamp = ub.timestamp.Format(TimeFormat)
 	props := make(map[string]interface{})
 
+	// auto generate transaction id
+	if len(ub.transactionId) != 0 {
+		billingMetric.TransactionId = ub.transactionId
+	} else {
+		billingMetric.TransactionId = ub.namespaceId + "_" + strconv.FormatInt(ub.timestamp.UnixMilli(), 10)
+	}
 	// the key names must match the registered billing metrics in metronome
 	if ub.searchUnits != nil {
 		props["search_units"] = *ub.searchUnits
@@ -98,7 +109,7 @@ func NewStorageEventBuilder() *StorageEventBuilder {
 type StorageEventBuilder struct {
 	namespaceId   string
 	transactionId string
-	timestamp     string
+	timestamp     time.Time
 	databaseBytes *int64
 	indexBytes    *int64
 }
@@ -114,7 +125,7 @@ func (sb *StorageEventBuilder) WithTransactionId(id string) *StorageEventBuilder
 }
 
 func (sb *StorageEventBuilder) WithTimestamp(ts time.Time) *StorageEventBuilder {
-	sb.timestamp = ts.Format(TimeFormat)
+	sb.timestamp = ts
 	return sb
 }
 
@@ -132,9 +143,19 @@ func (sb *StorageEventBuilder) Build() *StorageEvent {
 	billingMetric := &StorageEvent{}
 	billingMetric.EventType = EventTypeStorage
 	billingMetric.CustomerId = sb.namespaceId
-	billingMetric.TransactionId = sb.transactionId
-	billingMetric.Timestamp = sb.timestamp
+	// default time
+	if sb.timestamp.IsZero() {
+		sb.timestamp = time.Now()
+	}
+	billingMetric.Timestamp = sb.timestamp.Format(TimeFormat)
 	props := make(map[string]interface{})
+
+	// auto generate transaction id
+	if len(sb.transactionId) != 0 {
+		billingMetric.TransactionId = sb.transactionId
+	} else {
+		billingMetric.TransactionId = sb.namespaceId + "_" + strconv.FormatInt(sb.timestamp.UnixMilli(), 10)
+	}
 
 	// the key names must match the registered billing metrics in metronome
 	if sb.indexBytes != nil {

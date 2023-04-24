@@ -343,6 +343,7 @@ func (m *Measurement) RecordDuration(scope tally.Scope, tags map[string]string) 
 		histogramEnabled = cfg.SecondaryIndex.Timer.HistogramEnabled
 	case MetronomeCreateAccount, MetronomeAddPlan, MetronomeIngest, MetronomeGetInvoice, MetronomeListInvoices:
 		timerEnabled = true
+		histogramEnabled = true
 	}
 	if scope != nil && timerEnabled {
 		m.recordTimerDuration(scope, tags)

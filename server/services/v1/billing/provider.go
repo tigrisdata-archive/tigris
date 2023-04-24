@@ -23,7 +23,6 @@ import (
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
-//go:generate mockery --name Provider
 type Provider interface {
 	CreateAccount(ctx context.Context, namespaceId string, name string) (MetronomeId, error)
 	AddDefaultPlan(ctx context.Context, accountId MetronomeId) (bool, error)
