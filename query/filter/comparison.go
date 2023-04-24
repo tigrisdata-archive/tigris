@@ -26,6 +26,7 @@ import (
 
 const (
 	EQ       = "$eq"
+	NE       = "$ne"
 	GT       = "$gt"
 	LT       = "$lt"
 	GTE      = "$gte"
@@ -61,6 +62,10 @@ func NewMatcher(key string, v value.Value) (ValueMatcher, error) {
 	switch key {
 	case EQ:
 		return &EqualityMatcher{
+			Value: v,
+		}, nil
+	case NE:
+		return &NotEqualMatcher{
 			Value: v,
 		}, nil
 	case GT:
@@ -128,6 +133,29 @@ func (e *EqualityMatcher) Type() string {
 
 func (e *EqualityMatcher) String() string {
 	return fmt.Sprintf("{$eq:%v}", e.Value)
+}
+
+// NotEqMatcher implements "$ne" operand.
+type NotEqMatcher struct {
+	Value value.Value
+}
+
+// NotEqualMatcher implements "$ne" operand.
+func (n *NotEqMatcher) GetValue() value.Value {
+	return n.Value
+}
+
+func (n *NotEqMatcher) Matches(input value.Value) bool {
+	res, _ := input.CompareTo(n.Value)
+	return res != 0
+}
+
+func (n *NotEqMatcher) Type() string {
+	return "$ne"
+}
+
+func (n *NotEqMatcher) String() string {
+	return fmt.Sprintf("{$ne:%v}", n.Value)
 }
 
 // GreaterThanMatcher implements "$gt" operand.
