@@ -172,7 +172,7 @@ func TestSearchQueryRunner_getSortOrdering(t *testing.T) {
 
 	t.Run("no sort param in input", func(t *testing.T) {
 		runner.req.Sort = nil
-		ordering, err := runner.getSortOrdering(collection, runner.req.Sort)
+		ordering, err := runner.getSearchSortOrdering(collection, runner.req.Sort)
 		assert.NoError(t, err)
 		assert.Nil(t, ordering)
 	})
@@ -180,21 +180,21 @@ func TestSearchQueryRunner_getSortOrdering(t *testing.T) {
 	t.Run("no queryable field in collection", func(t *testing.T) {
 		collection := &schema.DefaultCollection{}
 		runner.req.Sort = []byte(`[{"field_1":"$asc"}]`)
-		sortOrder, err := runner.getSortOrdering(collection, runner.req.Sort)
+		sortOrder, err := runner.getSearchSortOrdering(collection, runner.req.Sort)
 		assert.ErrorContains(t, err, "`field_1` is not present in collection")
 		assert.Nil(t, sortOrder)
 	})
 
 	t.Run("requested sort field is not sortable in collection", func(t *testing.T) {
 		runner.req.Sort = []byte(`[{"field_1":"$desc"},{"field_3":"$asc"}]`)
-		sortOrder, err := runner.getSortOrdering(collection, runner.req.Sort)
+		sortOrder, err := runner.getSearchSortOrdering(collection, runner.req.Sort)
 		assert.ErrorContains(t, err, "Search results can't be sorted on `field_3` field. Enable sorting on this field")
 		assert.Nil(t, sortOrder)
 	})
 
 	t.Run("valid sort fields requested", func(t *testing.T) {
 		runner.req.Sort = []byte(`[{"field_1":"$desc"},{"parent.field_2":"$asc"}]`)
-		sortOrder, err := runner.getSortOrdering(collection, runner.req.Sort)
+		sortOrder, err := runner.getSearchSortOrdering(collection, runner.req.Sort)
 		assert.NoError(t, err)
 		assert.NotNil(t, sortOrder)
 		expected := &sort.Ordering{
@@ -206,7 +206,7 @@ func TestSearchQueryRunner_getSortOrdering(t *testing.T) {
 
 	t.Run("Invalid sort input", func(t *testing.T) {
 		runner.req.Sort = []byte(`[{"field_1":"descending"}]`)
-		sort, err := runner.getSortOrdering(collection, runner.req.Sort)
+		sort, err := runner.getSearchSortOrdering(collection, runner.req.Sort)
 		assert.ErrorContains(t, err, "Sort order can only be `$asc` or `$desc`")
 		assert.Nil(t, sort)
 	})

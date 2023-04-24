@@ -120,7 +120,7 @@ func (q *QueueSubspace) Peek(ctx context.Context, tx transaction.Tx, max int) ([
 	count := 0
 	currentTime := time.Now()
 	endKey := q.getKey(currentTime, maxPriority, maxId)
-	iter, err := tx.ReadRange(ctx, nil, endKey, false)
+	iter, err := tx.ReadRange(ctx, nil, endKey, false, false)
 	if err != nil {
 		return items, err
 	}
@@ -141,7 +141,7 @@ func (q *QueueSubspace) Find(ctx context.Context, tx transaction.Tx, item *Queue
 	startKey := q.getKey(item.Vesting, 0, item.Id)
 	endKey := q.getKey(item.Vesting, maxPriority, item.Id)
 
-	iter, err := tx.ReadRange(ctx, startKey, endKey, false)
+	iter, err := tx.ReadRange(ctx, startKey, endKey, false, false)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +231,7 @@ func (q *QueueSubspace) scanTable(ctx context.Context, tx transaction.Tx) error 
 	startKey := q.getKey(minVesting, 0, "")
 	endKey := q.getKey(currentTime, maxPriority, maxId)
 
-	iter, err := tx.ReadRange(ctx, startKey, endKey, false)
+	iter, err := tx.ReadRange(ctx, startKey, endKey, false, false)
 	if err != nil {
 		return err
 	}

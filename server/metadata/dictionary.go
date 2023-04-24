@@ -134,7 +134,7 @@ func (r *reservedSubspace) reload(ctx context.Context, tx transaction.Tx) error 
 	defer r.Unlock()
 
 	key := keys.NewKey(r.ReservedSubspaceName(), namespaceKey)
-	it, err := tx.Read(ctx, key)
+	it, err := tx.Read(ctx, key, false)
 	if err != nil {
 		return err
 	}
@@ -259,7 +259,7 @@ func (r *reservedSubspace) updateNamespace(ctx context.Context, tx transaction.T
 
 func (r *reservedSubspace) allocateToken(ctx context.Context, tx transaction.Tx, keyName string) (uint32, error) {
 	key := keys.NewKey(r.ReservedSubspaceName(), keyName, counterKey, keyEnd)
-	it, err := tx.Read(ctx, key)
+	it, err := tx.Read(ctx, key, false)
 	if err != nil {
 		return 0, err
 	}

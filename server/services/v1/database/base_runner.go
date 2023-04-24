@@ -222,9 +222,13 @@ func (runner *BaseQueryRunner) buildKeysUsingFilter(coll *schema.DefaultCollecti
 }
 
 func (runner *BaseQueryRunner) buildSecondaryIndexKeysUsingFilter(coll *schema.DefaultCollection,
-	reqFilter []byte, collation *value.Collation,
+	reqFilter []byte, collation *value.Collation, sortFields *sort.Ordering,
 ) (*filter.QueryPlan, error) {
-	if filter.None(reqFilter) {
+	if sortFields != nil && len(*sortFields) > 1 {
+		return nil, errors.InvalidArgument("cannot use secondary index with multiple sort fields")
+	}
+
+	if filter.None(reqFilter) && sortFields == nil {
 		return nil, errors.InvalidArgument("cannot query on an empty filter")
 	}
 
@@ -237,7 +241,7 @@ func (runner *BaseQueryRunner) buildSecondaryIndexKeysUsingFilter(coll *schema.D
 	if err != nil {
 		return nil, err
 	}
-	return BuildSecondaryIndexKeys(coll, filters)
+	return BuildSecondaryIndexKeys(coll, filters, sortFields)
 }
 
 func (runner *BaseQueryRunner) mustBeDocumentsCollection(collection *schema.DefaultCollection, method string) error {
@@ -248,8 +252,8 @@ func (runner *BaseQueryRunner) mustBeDocumentsCollection(collection *schema.Defa
 	return nil
 }
 
-func (runner *BaseQueryRunner) getSortOrdering(coll *schema.DefaultCollection, sortReq jsoniter.RawMessage) (*sort.Ordering, error) {
-	ordering, err := sort.UnmarshalSort(sortReq)
+func (runner *BaseQueryRunner) getSearchSortOrdering(coll *schema.DefaultCollection, sortReq jsoniter.RawMessage) (*sort.Ordering, error) {
+	ordering, err := runner.getSortOrdering(coll, sortReq)
 	if err != nil || ordering == nil {
 		return nil, err
 	}
@@ -267,6 +271,15 @@ func (runner *BaseQueryRunner) getSortOrdering(coll *schema.DefaultCollection, s
 			return nil, errors.InvalidArgument("Search results can't be sorted on `%s` field. Enable sorting on this field", sf.Name)
 		}
 	}
+	return ordering, nil
+}
+
+func (runner *BaseQueryRunner) getSortOrdering(_ *schema.DefaultCollection, sortReq jsoniter.RawMessage) (*sort.Ordering, error) {
+	ordering, err := sort.UnmarshalSort(sortReq)
+	if err != nil || ordering == nil {
+		return nil, err
+	}
+
 	return ordering, nil
 }
 
@@ -312,7 +325,7 @@ func (runner *BaseQueryRunner) getWriteIterator(ctx context.Context, tx transact
 func (runner *BaseQueryRunner) getSecondaryWriterIterator(ctx context.Context, tx transaction.Tx,
 	coll *schema.DefaultCollection, reqFilter []byte, collation *value.Collation,
 ) (Iterator, error) {
-	queryPlan, err := runner.buildSecondaryIndexKeysUsingFilter(coll, reqFilter, collation)
+	queryPlan, err := runner.buildSecondaryIndexKeysUsingFilter(coll, reqFilter, collation, nil)
 	if err != nil {
 		return nil, err
 	}

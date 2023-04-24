@@ -4376,9 +4376,9 @@ func TestRead_Sorted(t *testing.T) {
 			"schema": Map{
 				"title": coll,
 				"properties": Map{
-					"id":           Map{"type": "integer", "searchIndex": true, "sort": true},
+					"id":           Map{"type": "integer", "searchIndex": true, "sort": true, "index": true},
 					"int_value":    Map{"type": "integer"},
-					"string_value": Map{"type": "string", "searchIndex": true, "sort": true},
+					"string_value": Map{"type": "string", "searchIndex": true, "sort": true, "index": true},
 				},
 			},
 		}).Status(http.StatusOK)
@@ -4464,14 +4464,14 @@ func TestRead_Sorted(t *testing.T) {
 			},
 			[]Doc{
 				{
-					"id":           240,
-					"int_value":    2000,
-					"string_value": "Aae",
-				},
-				{
 					"id":           220,
 					"int_value":    3000,
 					"string_value": "aae",
+				},
+				{
+					"id":           240,
+					"int_value":    2000,
+					"string_value": "Aae",
 				},
 				{
 					"id":           230,

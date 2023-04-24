@@ -157,7 +157,7 @@ func TestChunkStore(t *testing.T) {
 
 		tx, err = chunkStore.BeginTx(ctx)
 		require.NoError(t, err)
-		it, err := tx.Read(ctx, table, BuildKey("p1_", 1))
+		it, err := tx.Read(ctx, table, BuildKey("p1_", 1), false)
 		require.NoError(t, err)
 
 		found := 0

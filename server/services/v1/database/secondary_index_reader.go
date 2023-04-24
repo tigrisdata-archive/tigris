@@ -21,6 +21,7 @@ import (
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/query/filter"
+	"github.com/tigrisdata/tigris/query/sort"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
@@ -55,16 +56,17 @@ func newSecondaryIndexReaderImpl(ctx context.Context, tx transaction.Tx, coll *s
 func (reader *SecondaryIndexReaderImpl) createIter() (*SecondaryIndexReaderImpl, error) {
 	var err error
 
-	log.Debug().Msgf("Query Plan Keys %v", reader.queryPlan.GetKeyInterfaceParts())
+	reader.dbgPrintIndex()
+	log.Debug().Msgf("Query Plan Keys %v ascending: %v", reader.queryPlan.GetKeyInterfaceParts(), reader.queryPlan.Ascending)
 
 	switch reader.queryPlan.QueryType {
 	case filter.FULLRANGE, filter.RANGE:
-		reader.kvIter, err = NewScanIterator(reader.ctx, reader.tx, reader.queryPlan.Keys[0], reader.queryPlan.Keys[1])
+		reader.kvIter, err = NewScanIterator(reader.ctx, reader.tx, reader.queryPlan.Keys[0], reader.queryPlan.Keys[1], reader.queryPlan.Reverse())
 		if err != nil {
 			return nil, err
 		}
 	case filter.EQUAL:
-		reader.kvIter, err = NewKeyIterator(reader.ctx, reader.tx, reader.queryPlan.Keys)
+		reader.kvIter, err = NewKeyIterator(reader.ctx, reader.tx, reader.queryPlan.Keys, reader.queryPlan.Reverse())
 		if err != nil {
 			return nil, err
 		}
@@ -75,8 +77,8 @@ func (reader *SecondaryIndexReaderImpl) createIter() (*SecondaryIndexReaderImpl,
 	return reader, nil
 }
 
-func BuildSecondaryIndexKeys(coll *schema.DefaultCollection, queryFilters []filter.Filter) (*filter.QueryPlan, error) {
-	if len(queryFilters) == 0 {
+func BuildSecondaryIndexKeys(coll *schema.DefaultCollection, queryFilters []filter.Filter, sortFields *sort.Ordering) (*filter.QueryPlan, error) {
+	if len(queryFilters) == 0 && sortFields == nil {
 		return nil, errors.InvalidArgument("Cannot index with an empty filter")
 	}
 
@@ -94,30 +96,47 @@ func BuildSecondaryIndexKeys(coll *schema.DefaultCollection, queryFilters []filt
 		return []interface{}{fieldName, typeOrder, val.AsInterface()}
 	}
 
+	sortQueryPlan, err := filter.QueryPlanFromSort(sortFields, indexeableFields, encoder, buildIndexParts)
+	if err != nil {
+		return nil, err
+	}
+
 	eqKeyBuilder := filter.NewSecondaryKeyEqBuilder[*schema.QueryableField](encoder, buildIndexParts)
-	eqPlan, err := eqKeyBuilder.Build(queryFilters, indexeableFields)
+	eqPlans, err := eqKeyBuilder.Build(queryFilters, indexeableFields)
 	if err == nil {
-		for _, plan := range eqPlan {
-			if indexedDataType(plan) {
-				return &plan, nil
+		for _, plan := range eqPlans {
+			// If a user specifies an $eq with the same fields as the field defined in sort
+			// we want to use the eq to narrow down the search
+			if indexedDataType(plan) && worksWithSortPlan(plan, sortQueryPlan) {
+				return mergeWithSortPlan(plan, sortQueryPlan), nil
 			}
 		}
 	}
 
 	rangKeyBuilder := filter.NewRangeKeyBuilder(filter.NewRangeKeyComposer[*schema.QueryableField](encoder, buildIndexParts), false)
 	rangePlans, err := rangKeyBuilder.Build(queryFilters, indexeableFields)
+	// If we could not find a range query plan then fall back to the sort plan if we have one
 	if err != nil {
-		return nil, err
+		if sortQueryPlan != nil {
+			return sortQueryPlan, nil
+		} else {
+			return nil, err
+		}
 	}
 
-	if len(rangePlans) == 0 {
+	if len(rangePlans) == 0 && sortQueryPlan == nil {
 		return nil, errors.InvalidArgument("Could not find a query range")
 	}
 
-	for _, plan := range filter.SortQueryPlans(rangePlans) {
-		if indexedDataType(plan) {
-			return &plan, nil
+	rangePlans = filter.SortQueryPlans(rangePlans)
+	for _, plan := range rangePlans {
+		if indexedDataType(plan) && worksWithSortPlan(plan, sortQueryPlan) {
+			return mergeWithSortPlan(plan, sortQueryPlan), nil
 		}
+	}
+
+	if sortQueryPlan != nil {
+		return sortQueryPlan, nil
 	}
 
 	return nil, errors.InvalidArgument("Could not find a useuable query plan")
@@ -130,6 +149,28 @@ func indexedDataType(queryPlan filter.QueryPlan) bool {
 	default:
 		return true
 	}
+}
+
+func worksWithSortPlan(plan filter.QueryPlan, sortPlan *filter.QueryPlan) bool {
+	if sortPlan == nil {
+		return true
+	}
+
+	if plan.FieldName == sortPlan.FieldName {
+		// plan.Ascending = sortPlan.Ascending
+		return true
+	}
+
+	return false
+}
+
+func mergeWithSortPlan(plan filter.QueryPlan, sortPlan *filter.QueryPlan) *filter.QueryPlan {
+	if sortPlan == nil {
+		return &plan
+	}
+
+	plan.Ascending = sortPlan.Ascending
+	return &plan
 }
 
 func (it *SecondaryIndexReaderImpl) Next(row *Row) bool {
@@ -153,7 +194,7 @@ func (it *SecondaryIndexReaderImpl) Next(row *Row) bool {
 		pks := indexKey.IndexParts()[PrimaryKeyPos:]
 		pkIndexParts := keys.NewKey(it.coll.EncodedName, pks...)
 
-		docIter, err := it.tx.Read(it.ctx, pkIndexParts)
+		docIter, err := it.tx.Read(it.ctx, pkIndexParts, false)
 		if err != nil {
 			it.err = err
 			return false
@@ -173,7 +214,7 @@ func (it *SecondaryIndexReaderImpl) Interrupted() error { return it.err }
 
 // For local debugging and testing.
 //
-//nolint:unused
+
 func (it *SecondaryIndexReaderImpl) dbgPrintIndex() {
 	indexer := newSecondaryIndexerImpl(it.coll)
 	tableIter, err := indexer.scanIndex(it.ctx, it.tx)

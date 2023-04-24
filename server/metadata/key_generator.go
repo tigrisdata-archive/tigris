@@ -66,7 +66,7 @@ func (g *TableKeyGenerator) GenerateCounter(ctx context.Context, txMgr *transact
 // with this approach.
 func (g *TableKeyGenerator) generateCounter(ctx context.Context, tx transaction.Tx, table []byte) (int32, error) {
 	key := keys.NewKey([]byte(generatorSubspaceKey), table, int32IdKey)
-	it, err := tx.Read(ctx, key)
+	it, err := tx.Read(ctx, key, false)
 	if err != nil {
 		return 0, err
 	}

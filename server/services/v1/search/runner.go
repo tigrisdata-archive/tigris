@@ -209,7 +209,7 @@ func (runner *baseRunner) execInStorage(ctx context.Context, tableName string, i
 }
 
 func (runner *baseRunner) readRow(ctx context.Context, tx transaction.Tx, key keys.Key) (*kv.KeyValue, bool, error) {
-	it, err := tx.Read(ctx, key)
+	it, err := tx.Read(ctx, key, false)
 	if ulog.E(err) {
 		return nil, false, err
 	}

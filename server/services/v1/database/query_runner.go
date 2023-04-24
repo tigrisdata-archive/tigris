@@ -481,9 +481,7 @@ func (runner *BaseQueryRunner) buildReaderOptions(req *api.ReadRequest, collecti
 	if req.Options != nil {
 		collation = value.NewCollationFrom(req.Options.Collation)
 	}
-	if options.sorting, err = runner.getSortOrdering(collection, req.Sort); err != nil {
-		return options, err
-	}
+
 	if options.filter, err = filter.NewFactory(collection.QueryableFields, collation).WrappedFilter(req.Filter); err != nil {
 		return options, err
 	}
@@ -492,6 +490,7 @@ func (runner *BaseQueryRunner) buildReaderOptions(req *api.ReadRequest, collecti
 	if options.fieldFactory, err = read.BuildFields(req.GetFields()); err != nil {
 		return options, err
 	}
+
 	if req.Options != nil && len(req.Options.Offset) > 0 {
 		if options.from, err = keys.FromBinary(options.table, req.Options.Offset); err != nil {
 			return options, err
@@ -499,9 +498,20 @@ func (runner *BaseQueryRunner) buildReaderOptions(req *api.ReadRequest, collecti
 	}
 
 	if config.DefaultConfig.SecondaryIndex.ReadEnabled {
-		if queryPlan, err := runner.buildSecondaryIndexKeysUsingFilter(collection, req.Filter, collation); err == nil {
+		secondarySorting, err := runner.getSortOrdering(collection, req.Sort)
+		if err != nil {
+			return options, err
+		}
+		if queryPlan, err := runner.buildSecondaryIndexKeysUsingFilter(collection, req.Filter, collation, secondarySorting); err == nil {
 			options.plan = queryPlan
 			return options, nil
+		}
+	}
+
+	// Gets sorting for search
+	if !config.DefaultConfig.SecondaryIndex.ReadEnabled {
+		if options.sorting, err = runner.getSearchSortOrdering(collection, req.Sort); err != nil {
+			return options, err
 		}
 	}
 
@@ -651,7 +661,7 @@ func (runner *StreamingQueryRunner) iterateOnKvStore(ctx context.Context, tx tra
 	if len(options.ikeys) != 0 {
 		iter, err = reader.KeyIterator(options.ikeys)
 	} else if options.from != nil {
-		if iter, err = reader.ScanIterator(options.from, nil); err == nil {
+		if iter, err = reader.ScanIterator(options.from, nil, false); err == nil {
 			// pass it to filterable
 			iter, err = reader.FilteredRead(iter, options.filter)
 		}
@@ -843,7 +853,7 @@ func (runner *ExplainQueryRunner) Run(ctx context.Context, _ transaction.Tx, ten
 	}
 
 	return Response{
-		Response: buildExplainResp(options, collection, runner.req.Filter),
+		Response: buildExplainResp(options, collection, runner.req.Filter, runner.req.Sort),
 	}, ctx, nil
 }
 
@@ -852,10 +862,11 @@ const (
 	SECONDARY = "secondary index"
 )
 
-func buildExplainResp(options readerOptions, coll *schema.DefaultCollection, filter []byte) *api.ExplainResponse {
+func buildExplainResp(options readerOptions, coll *schema.DefaultCollection, filter []byte, sortFields []byte) *api.ExplainResponse {
 	explain := &api.ExplainResponse{
 		Collection: coll.Name,
 		Filter:     string(filter),
+		Sorting:    string(sortFields),
 	}
 
 	if options.plan != nil {

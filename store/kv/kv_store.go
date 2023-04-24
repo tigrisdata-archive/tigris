@@ -79,8 +79,8 @@ func (tx *KeyValueTx) Replace(ctx context.Context, table []byte, key Key, data *
 	return tx.ftx.Replace(ctx, table, key, enc, isUpdate)
 }
 
-func (tx *KeyValueTx) Read(ctx context.Context, table []byte, key Key) (Iterator, error) {
-	iter, err := tx.ftx.Read(ctx, table, key, false)
+func (tx *KeyValueTx) Read(ctx context.Context, table []byte, key Key, reverse bool) (Iterator, error) {
+	iter, err := tx.ftx.Read(ctx, table, key, false, reverse)
 	if err != nil {
 		return nil, err
 	}
@@ -88,8 +88,8 @@ func (tx *KeyValueTx) Read(ctx context.Context, table []byte, key Key) (Iterator
 	return NewKeyValueIterator(ctx, iter), nil
 }
 
-func (tx *KeyValueTx) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (Iterator, error) {
-	iter, err := tx.ftx.ReadRange(ctx, table, lkey, rkey, isSnapshot)
+func (tx *KeyValueTx) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool, reverse bool) (Iterator, error) {
+	iter, err := tx.ftx.ReadRange(ctx, table, lkey, rkey, isSnapshot, reverse)
 	if err != nil {
 		return nil, err
 	}

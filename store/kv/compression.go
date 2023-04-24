@@ -25,6 +25,7 @@ const (
 	// To avoid impact on latencies for smaller payloads. This can be tuned.
 	minCompressionThreshold = KB
 )
+
 const (
 	zstdLevel2 = zstd.SpeedDefault
 )
@@ -91,8 +92,8 @@ func (tx *CompressTx) Replace(ctx context.Context, table []byte, key Key, data *
 	return tx.Tx.Replace(ctx, table, key, tx.compress(data), isUpdate)
 }
 
-func (tx *CompressTx) Read(ctx context.Context, table []byte, key Key) (Iterator, error) {
-	iterator, err := tx.Tx.Read(ctx, table, key)
+func (tx *CompressTx) Read(ctx context.Context, table []byte, key Key, reverse bool) (Iterator, error) {
+	iterator, err := tx.Tx.Read(ctx, table, key, reverse)
 	if err != nil {
 		return nil, err
 	}
@@ -102,8 +103,8 @@ func (tx *CompressTx) Read(ctx context.Context, table []byte, key Key) (Iterator
 	}, nil
 }
 
-func (tx *CompressTx) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key, isSnapshot bool) (Iterator, error) {
-	iterator, err := tx.Tx.ReadRange(ctx, table, lKey, rKey, isSnapshot)
+func (tx *CompressTx) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key, isSnapshot bool, reverse bool) (Iterator, error) {
+	iterator, err := tx.Tx.ReadRange(ctx, table, lKey, rKey, isSnapshot, reverse)
 	if err != nil {
 		return nil, err
 	}

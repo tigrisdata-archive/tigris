@@ -64,11 +64,11 @@ func (n *NoopKV) Replace(ctx context.Context, table []byte, key Key, data *inter
 	return nil
 }
 func (n *NoopKV) Delete(ctx context.Context, table []byte, key Key) error { return nil }
-func (n *NoopKV) Read(ctx context.Context, table []byte, key Key) (Iterator, error) {
+func (n *NoopKV) Read(ctx context.Context, table []byte, key Key, reverse bool) (Iterator, error) {
 	return &NoopIterator{}, nil
 }
 
-func (n *NoopKV) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (Iterator, error) {
+func (n *NoopKV) ReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool, reverse bool) (Iterator, error) {
 	return &NoopIterator{}, nil
 }
 

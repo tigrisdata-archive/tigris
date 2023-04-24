@@ -53,7 +53,7 @@ func dumpMetadata(subspace []byte, key ...any) {
 	util.Fatal(err, "starting tx")
 
 	k := keys.NewKey(subspace, key...)
-	it, err := tx.Read(ctx, k)
+	it, err := tx.Read(ctx, k, false)
 	if err != nil {
 		panic(err)
 	}
@@ -159,7 +159,7 @@ func dumpData() {
 	util.Fatal(err, "read")
 
 	k := keys.NewKey(enc)
-	it, err := tx.Read(ctx, k)
+	it, err := tx.Read(ctx, k, false)
 	util.Fatal(err, "read")
 
 	var v kv.KeyValue

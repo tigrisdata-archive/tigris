@@ -74,24 +74,24 @@ func (d *fdbkv) init(cfg *config.FoundationDBConfig) (err error) {
 }
 
 // Read returns all the keys which has prefix equal to "key" parameter.
-func (d *fdbkv) Read(ctx context.Context, table []byte, key Key, isSnapshot bool) (baseIterator, error) {
+func (d *fdbkv) Read(ctx context.Context, table []byte, key Key, isSnapshot bool, reverse bool) (baseIterator, error) {
 	tx, err := d.BeginTx(ctx)
 	if err != nil {
 		return nil, err
 	}
-	it, err := tx.Read(ctx, table, key, isSnapshot)
+	it, err := tx.Read(ctx, table, key, isSnapshot, reverse)
 	if err != nil {
 		return nil, err
 	}
 	return &fdbIteratorTxCloser{ctx, it, tx}, nil
 }
 
-func (d *fdbkv) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key, isSnapshot bool) (baseIterator, error) {
+func (d *fdbkv) ReadRange(ctx context.Context, table []byte, lKey Key, rKey Key, isSnapshot bool, reverse bool) (baseIterator, error) {
 	tx, err := d.BeginTx(ctx)
 	if err != nil {
 		return nil, err
 	}
-	it, err := tx.ReadRange(ctx, table, lKey, rKey, isSnapshot)
+	it, err := tx.ReadRange(ctx, table, lKey, rKey, isSnapshot, reverse)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +195,7 @@ func (d *fdbkv) AtomicReadRange(ctx context.Context, table []byte, lKey Key, rKe
 	if err != nil {
 		return nil, err
 	}
-	it, err := tx.ReadRange(ctx, table, lKey, rKey, isSnapshot)
+	it, err := tx.ReadRange(ctx, table, lKey, rKey, isSnapshot, false)
 	if err != nil {
 		return nil, err
 	}
@@ -316,13 +316,13 @@ func (t *ftx) DeleteRange(_ context.Context, table []byte, lKey Key, rKey Key) e
 	return nil
 }
 
-func (t *ftx) Read(_ context.Context, table []byte, key Key, isSnapshot bool) (baseIterator, error) {
+func (t *ftx) Read(_ context.Context, table []byte, key Key, isSnapshot bool, reverse bool) (baseIterator, error) {
 	kr, err := fdb.PrefixRange(getFDBKey(table, key))
 	if ulog.E(err) {
 		return nil, err
 	}
 
-	ro := fdb.RangeOptions{}
+	ro := fdb.RangeOptions{Reverse: reverse}
 	var r fdb.RangeResult
 	// It is possible that caller may be chunking the payload. Therefore, the "iterator" returned by this API is only
 	// applicable for ascending order. Once we add support to do reverse reads then we should return a different iterator
@@ -336,7 +336,7 @@ func (t *ftx) Read(_ context.Context, table []byte, key Key, isSnapshot bool) (b
 	return &fdbIterator{it: r.Iterator(), subspace: subspace.FromBytes(table)}, nil
 }
 
-func (t *ftx) ReadRange(_ context.Context, table []byte, lKey Key, rKey Key, isSnapshot bool) (baseIterator, error) {
+func (t *ftx) ReadRange(_ context.Context, table []byte, lKey Key, rKey Key, isSnapshot bool, reverse bool) (baseIterator, error) {
 	lk := getFDBKey(table, lKey)
 	var rk fdb.Key
 	if rKey == nil {
@@ -350,7 +350,7 @@ func (t *ftx) ReadRange(_ context.Context, table []byte, lKey Key, rKey Key, isS
 	}
 
 	kr := fdb.KeyRange{Begin: lk, End: rk}
-	ro := fdb.RangeOptions{}
+	ro := fdb.RangeOptions{Reverse: reverse}
 
 	var r fdb.RangeResult
 	if isSnapshot {
@@ -397,7 +397,7 @@ func (t *ftx) AtomicRead(_ context.Context, table []byte, key Key) (int64, error
 }
 
 func (t *ftx) AtomicReadPrefix(ctx context.Context, table []byte, key Key, isSnapshot bool) (AtomicIterator, error) {
-	iter, err := t.Read(ctx, table, key, isSnapshot)
+	iter, err := t.Read(ctx, table, key, isSnapshot, false)
 	if err != nil {
 		return nil, err
 	}
@@ -406,7 +406,7 @@ func (t *ftx) AtomicReadPrefix(ctx context.Context, table []byte, key Key, isSna
 }
 
 func (t *ftx) AtomicReadRange(ctx context.Context, table []byte, lkey Key, rkey Key, isSnapshot bool) (AtomicIterator, error) {
-	iter, err := t.ReadRange(ctx, table, lkey, rkey, isSnapshot)
+	iter, err := t.ReadRange(ctx, table, lkey, rkey, isSnapshot, false)
 	if err != nil {
 		return nil, err
 	}
