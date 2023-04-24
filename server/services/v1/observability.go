@@ -226,17 +226,39 @@ func isAllowedMetricQueryInput(tagValue string) bool {
 
 func validateQueryTimeSeriesMetricsRequest(req *api.QueryTimeSeriesMetricsRequest) error {
 	if !isAllowedMetricQueryInput(req.MetricName) || !isAllowedMetricQueryInput(req.Db) || !isAllowedMetricQueryInput(req.Collection) {
+		log.Info().
+			Str("metric_name", req.MetricName).
+			Str("project", req.Db).
+			Str("collection", req.Collection).
+			Msg("Failed to query metrics: reason = invalid character detected in the input")
 		return errors.PermissionDenied("Failed to query metrics: reason = invalid character detected in the input")
 	}
 	for _, aggregationField := range req.SpaceAggregatedBy {
 		if !isAllowedMetricQueryInput(aggregationField) {
+			log.Info().
+				Str("metric_name", req.MetricName).
+				Str("project", req.Db).
+				Str("collection", req.Collection).
+				Str("agg_field", aggregationField).
+				Msg("Failed to query metrics: reason = invalid character detected in SpaceAggregatedBy")
 			return errors.PermissionDenied("Failed to query metrics: reason = invalid character detected in SpaceAggregatedBy")
 		}
 	}
 	if strings.Contains(req.MetricName, ":") {
+		log.Info().
+			Str("metric_name", req.MetricName).
+			Str("project", req.Db).
+			Str("collection", req.Collection).
+			Msg("Failed to query metrics: reason = Metric name cannot contain :")
 		return errors.InvalidArgument("Failed to query metrics: reason = Metric name cannot contain :")
 	}
 	if !(req.Quantile == 0 || req.Quantile == 0.5 || req.Quantile == 0.75 || req.Quantile == 0.95 || req.Quantile == 0.99 || req.Quantile == 0.999) {
+		log.Info().
+			Str("metric_name", req.MetricName).
+			Str("project", req.Db).
+			Str("collection", req.Collection).
+			Float32("quantile", req.Quantile).
+			Msg("Failed to query metrics: reason = allowed quantile values are [0.5, 0.75, 0.95, 0.99, 0.999]")
 		return errors.InvalidArgument("Failed to query metrics: reason = allowed quantile values are [0.5, 0.75, 0.95, 0.99, 0.999]")
 	}
 	return nil

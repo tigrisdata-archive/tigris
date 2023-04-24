@@ -710,8 +710,9 @@ func TestMetronome_buildInvoice(t *testing.T) {
 }
 
 func initializeMetricsForTest() {
-	metrics.MetronomeResponseCode = tally.NewTestScope("resp", map[string]string{})
-	metrics.MetronomeErrors = tally.NewTestScope("errors", map[string]string{})
-	metrics.MetronomeLatency = tally.NewTestScope("latency", map[string]string{})
-	metrics.MetronomeEvents = tally.NewTestScope("latency", map[string]string{})
+	metrics.MetronomeCreateAccount = tally.NewTestScope("create_account", map[string]string{})
+	metrics.MetronomeAddPlan = tally.NewTestScope("add_plan", map[string]string{})
+	metrics.MetronomeIngest = tally.NewTestScope("ingest", map[string]string{})
+	metrics.MetronomeListInvoices = tally.NewTestScope("list_invoices", map[string]string{})
+	metrics.MetronomeGetInvoice = tally.NewTestScope("get_invoice", map[string]string{})
 }

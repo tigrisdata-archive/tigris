@@ -14,24 +14,42 @@
 
 package metrics
 
-import "github.com/uber-go/tally"
+import (
+	"strconv"
+
+	"github.com/uber-go/tally"
+)
 
 var (
-	MetronomeResponseCode tally.Scope
-	MetronomeLatency      tally.Scope
-	MetronomeErrors       tally.Scope
-	MetronomeEvents       tally.Scope
+	MetronomeCreateAccount tally.Scope
+	MetronomeAddPlan       tally.Scope
+	MetronomeIngest        tally.Scope
+	MetronomeListInvoices  tally.Scope
+	MetronomeGetInvoice    tally.Scope
 )
 
 func initializeMetronomeScopes() {
-	MetronomeResponseCode = MetronomeMetrics.SubScope("response_code")
-	MetronomeLatency = MetronomeMetrics.SubScope("latency")
-	MetronomeErrors = MetronomeMetrics.SubScope("errors")
-	MetronomeEvents = MetronomeMetrics.SubScope("events")
+	MetronomeCreateAccount = MetronomeMetrics.SubScope("create_account")
+	MetronomeAddPlan = MetronomeMetrics.SubScope("add_plan")
+	MetronomeIngest = MetronomeMetrics.SubScope("ingest")
+	MetronomeListInvoices = MetronomeMetrics.SubScope("list_invoices")
+	MetronomeGetInvoice = MetronomeMetrics.SubScope("get_invoice")
 }
 
-func GetMetronomeTags(operation string) map[string]string {
+func GetResponseCodeTags(code int) map[string]string {
 	return map[string]string{
-		"operation": operation,
+		"response_code": strconv.Itoa(code),
+	}
+}
+
+func GetErrorCodeTags(err error) map[string]string {
+	return map[string]string{
+		"error_value": err.Error(),
+	}
+}
+
+func GetIngestEventTags(eventType string) map[string]string {
+	return map[string]string{
+		"event_type": eventType,
 	}
 }

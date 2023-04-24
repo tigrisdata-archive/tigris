@@ -21,8 +21,8 @@ import (
 func TestMetronomeMetrics(t *testing.T) {
 	InitializeMetrics()
 	t.Run("Increment metronome counter", func(t *testing.T) {
-		tags := GetMetronomeTags("createAccount")
-		MetronomeResponseCode.Tagged(tags).Counter("200").Inc(1)
-		MetronomeErrors.Tagged(tags).Counter("timeout").Inc(1)
+		tags := GetResponseCodeTags(500)
+		MetronomeListInvoices.Tagged(tags).Counter("request").Inc(1)
+		MetronomeGetInvoice.Tagged(tags).Counter("error").Inc(1)
 	})
 }
