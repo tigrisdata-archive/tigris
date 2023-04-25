@@ -336,7 +336,7 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	var iterator Iterator
 	if filter.None(runner.req.Filter) {
-		iterator, err = NewDatabaseReader(ctx, tx).ScanTable(coll.EncodedName)
+		iterator, err = NewDatabaseReader(ctx, tx).ScanTable(coll.EncodedName, false)
 		// For a delete without filter, do not count the read operations
 		if reqStatusFound {
 			reqStatus.AddDDLDropUnit()
@@ -421,7 +421,7 @@ func (runner *CountQueryRunner) Run(ctx context.Context, tx transaction.Tx, tena
 
 	reader := NewDatabaseReader(ctx, tx)
 	var iterator Iterator
-	if iterator, err = reader.ScanTable(coll.EncodedName); err != nil {
+	if iterator, err = reader.ScanTable(coll.EncodedName, false); err != nil {
 		return Response{}, ctx, err
 	}
 	if !filter.None(runner.req.Filter) {
@@ -462,11 +462,8 @@ type StreamingQueryRunner struct {
 }
 
 type readerOptions struct {
-	from          keys.Key
-	ikeys         []keys.Key
 	plan          *filter.QueryPlan
-	table         []byte
-	noFilter      bool
+	tablePlan     *filter.TableScanPlan
 	inMemoryStore bool
 	// secondaryIndex bool
 	sorting      *sort.Ordering
@@ -486,69 +483,105 @@ func (runner *BaseQueryRunner) buildReaderOptions(req *api.ReadRequest, collecti
 		return options, err
 	}
 
-	options.table = collection.EncodedName
 	if options.fieldFactory, err = read.BuildFields(req.GetFields()); err != nil {
 		return options, err
 	}
 
+	var from keys.Key
 	if req.Options != nil && len(req.Options.Offset) > 0 {
-		if options.from, err = keys.FromBinary(options.table, req.Options.Offset); err != nil {
+		if from, err = keys.FromBinary(collection.EncodedName, req.Options.Offset); err != nil {
 			return options, err
 		}
 	}
 
-	if config.DefaultConfig.SecondaryIndex.ReadEnabled {
+	if from == nil && config.DefaultConfig.SecondaryIndex.ReadEnabled {
 		secondarySorting, err := runner.getSortOrdering(collection, req.Sort)
 		if err != nil {
 			return options, err
 		}
-		if queryPlan, err := runner.buildSecondaryIndexKeysUsingFilter(collection, req.Filter, collation, secondarySorting); err == nil {
-			options.plan = queryPlan
+		if options.plan, err = runner.buildSecondaryIndexKeysUsingFilter(collection, req.Filter, collation, secondarySorting); err == nil {
 			return options, nil
 		}
 	}
 
-	// Gets sorting for search
-	if !config.DefaultConfig.SecondaryIndex.ReadEnabled {
-		if options.sorting, err = runner.getSearchSortOrdering(collection, req.Sort); err != nil {
-			return options, err
+	if searchSorting, err := runner.getSearchOrdering(collection, req.Sort); err == nil && searchSorting != nil {
+		// error here means we need to check if we handle sort on database level
+		if config.DefaultConfig.Search.ReadEnabled {
+			options.sorting = searchSorting
+			options.inMemoryStore = true
+			return options, nil
 		}
+
+		return options, errors.Internal("sorting action is temporarily unavailable")
 	}
 
-	if options.filter.None() || !options.filter.IsSearchIndexed() {
-		// trigger full scan in case there is a field in the filter which is not indexed
-		if options.sorting != nil {
-			options.inMemoryStore = true
-		} else {
-			options.noFilter = true
-		}
-	} else if options.ikeys, err = runner.buildKeysUsingFilter(collection, req.Filter, collation); err != nil {
-		if !config.DefaultConfig.Search.IsReadEnabled() {
-			if options.from == nil {
-				// in this case, scan will happen from the beginning of the table.
-				options.from = keys.NewKey(options.table)
-			}
-		} else {
-			options.inMemoryStore = true
-		}
+	planner, err := NewPrimaryIndexQueryPlanner(collection, runner.encoder, req.Filter, collation)
+	if err != nil {
+		return options, err
 	}
 
+	if options.sorting, err = runner.getSortOrdering(collection, req.Sort); err != nil {
+		return options, err
+	}
+
+	var sortPlan *filter.QueryPlan
+	if sortPlan, err = planner.SortPlan(options.sorting); err != nil {
+		// at this point error means we can't handle sorting
+		return options, err
+	}
+	if sortPlan != nil && planner.isPrefixSort(sortPlan) {
+		// prefix sort OR no filter
+		options.tablePlan, err = planner.GenerateTablePlan(sortPlan, from)
+		return options, err
+	}
+
+	if planner.noFilter {
+		if sortPlan != nil && !planner.isPrefixSort(sortPlan) {
+			return options, errors.InvalidArgument("can't perform sort with empty filter and non-prefix primary key index")
+		}
+
+		// prefix sort OR no filter
+		options.tablePlan, err = planner.GenerateTablePlan(sortPlan, from)
+		return options, err
+	}
+
+	if options.plan, err = planner.GeneratePlan(sortPlan, from); err == nil {
+		// plan can be handled by database index
+		return options, nil
+	}
+	if planner.IsPrefixQueryWithSuffixSort(sortPlan) {
+		// case when it is a prefix query with suffix sort
+		options.tablePlan, err = planner.GenerateTablePlan(sortPlan, from)
+		return options, err
+	}
+	if sortPlan != nil {
+		return options, errors.InvalidArgument("can't perform sort on this field")
+	}
+
+	if runner.noFallbackToSearch(options) {
+		// case when fallback is disabled or we explicitly need to perform table scan
+		options.tablePlan, err = planner.GenerateTablePlan(sortPlan, from)
+		return options, err
+	}
+
+	// fallback
+	options.inMemoryStore = true
 	return options, nil
+}
+
+func (runner *BaseQueryRunner) noFallbackToSearch(options readerOptions) bool {
+	return !config.DefaultConfig.Search.IsReadEnabled() || !options.filter.IsSearchIndexed()
 }
 
 func (runner *StreamingQueryRunner) instrumentRunner(ctx context.Context, options readerOptions) context.Context {
 	// Set read type
 	//nolint:gocritic
-	if options.plan != nil {
-		runner.queryMetrics.SetReadType("secondary")
-	} else if options.ikeys == nil {
-		runner.queryMetrics.SetReadType("non-pkey")
-	} else {
-		runner.queryMetrics.SetReadType("pkey")
-	}
-
-	if options.noFilter {
+	if options.tablePlan != nil {
 		runner.queryMetrics.SetReadType("full_scan")
+	} else if options.plan != nil && filter.IndexTypeSecondary(options.plan.IndexType) {
+		runner.queryMetrics.SetReadType("secondary")
+	} else if options.plan != nil && filter.IndexTypePrimary(options.plan.IndexType) {
+		runner.queryMetrics.SetReadType("pkey")
 	}
 
 	// Sort is only supported for search
@@ -592,7 +625,7 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 		}
 
 		var last []byte
-		if options.plan != nil {
+		if options.plan != nil && filter.IndexTypeSecondary(options.plan.IndexType) {
 			last, err = runner.iterateOnSecondaryIndexStore(ctx, tx, collection, options)
 		} else {
 			last, err = runner.iterateOnKvStore(ctx, tx, collection, options)
@@ -603,7 +636,20 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 		if err == kv.ErrTransactionMaxDurationReached {
 			// We have received ErrTransactionMaxDurationReached i.e. 5 second transaction limit, so we need to retry the
 			// transaction.
-			options.from, _ = keys.FromBinary(options.table, last)
+			// ToDo:
+			//   - for secondary indexes the "from" need to be injected inside the plan
+			//   - for primary index the full scan will handle it for now but we need to optimize it
+			from, _ := keys.FromBinary(collection.EncodedName, last)
+			if options.tablePlan == nil {
+				// this means the Primary index plan or secondary index plan didn't finish under 5seconds
+				options.tablePlan = &filter.TableScanPlan{
+					Table:   collection.EncodedName,
+					From:    from,
+					Reverse: options.plan.Reverse(),
+				}
+			} else {
+				options.tablePlan.From = from
+			}
 			continue
 		}
 
@@ -641,7 +687,7 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 		}
 		return Response{}, ctx, nil
 	} else {
-		if options.plan != nil {
+		if options.plan != nil && filter.IndexTypeSecondary(options.plan.IndexType) {
 			if _, err = runner.iterateOnSecondaryIndexStore(ctx, tx, coll, options); err != nil {
 				return Response{}, ctx, createApiError(err)
 			}
@@ -658,16 +704,24 @@ func (runner *StreamingQueryRunner) iterateOnKvStore(ctx context.Context, tx tra
 	var err error
 	var iter Iterator
 	reader := NewDatabaseReader(ctx, tx)
-	if len(options.ikeys) != 0 {
-		iter, err = reader.KeyIterator(options.ikeys)
-	} else if options.from != nil {
-		if iter, err = reader.ScanIterator(options.from, nil, false); err == nil {
-			// pass it to filterable
-			iter, err = reader.FilteredRead(iter, options.filter)
+	//nolint:gocritic
+	if options.tablePlan != nil {
+		switch {
+		case options.tablePlan.From != nil:
+			if iter, err = reader.ScanIterator(options.tablePlan.From, nil, options.tablePlan.Reverse); err == nil {
+				// pass it to filterable
+				iter, err = reader.FilteredRead(iter, options.filter)
+			}
+		default:
+			if iter, err = reader.ScanTable(options.tablePlan.Table, options.tablePlan.Reverse); err == nil {
+				// pass it to filterable
+				iter, err = reader.FilteredRead(iter, options.filter)
+			}
 		}
-	} else if iter, err = reader.ScanTable(options.table); err == nil {
-		// pass it to filterable
-		iter, err = reader.FilteredRead(iter, options.filter)
+	} else if options.plan != nil {
+		iter, err = reader.KeyIterator(options.plan.Keys)
+	} else {
+		return nil, errors.Internal("no plan to execute")
 	}
 	if err != nil {
 		return nil, err

@@ -204,7 +204,7 @@ func (d *DefaultCollection) GetName() string {
 	return d.Name
 }
 
-// The subspace within a collection where the secondary index information
+// SecondaryIndexKeyword is the subspace within a collection where the secondary index information
 // is stored.
 func (d *DefaultCollection) SecondaryIndexKeyword() string {
 	return "skey"
@@ -230,7 +230,7 @@ func (d *DefaultCollection) GetQueryableFields() []*QueryableField {
 	return d.QueryableFields
 }
 
-// Indexes that can be used for queries.
+// GetActiveIndexedFields returns indexes that can be used for queries.
 func (d *DefaultCollection) GetActiveIndexedFields() []*QueryableField {
 	var indexed []*QueryableField
 	for _, q := range d.QueryableFields {
@@ -255,6 +255,16 @@ func (d *DefaultCollection) GetIndexedFields() []*QueryableField {
 	var indexed []*QueryableField
 	for _, q := range d.QueryableFields {
 		if q.Indexed {
+			indexed = append(indexed, q)
+		}
+	}
+	return indexed
+}
+
+func (d *DefaultCollection) GetPrimaryIndexedFields() []*QueryableField {
+	var indexed []*QueryableField
+	for _, q := range d.QueryableFields {
+		if q.PrimaryIndexed {
 			indexed = append(indexed, q)
 		}
 	}

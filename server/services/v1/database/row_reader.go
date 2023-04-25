@@ -182,8 +182,8 @@ func NewDatabaseReader(ctx context.Context, tx transaction.Tx) *DatabaseReader {
 }
 
 // ScanTable returns an iterator for all the rows in this table.
-func (reader *DatabaseReader) ScanTable(table []byte) (Iterator, error) {
-	return NewKeyIterator(reader.ctx, reader.tx, []keys.Key{keys.NewKey(table)}, false)
+func (reader *DatabaseReader) ScanTable(table []byte, reverse bool) (Iterator, error) {
+	return NewKeyIterator(reader.ctx, reader.tx, []keys.Key{keys.NewKey(table)}, reverse)
 }
 
 // ScanIterator only returns an iterator that has elements starting from.
