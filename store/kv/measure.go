@@ -19,6 +19,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/internal"
+	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metrics"
 )
 
@@ -63,7 +64,9 @@ func (i *KeyValueIteratorWithMetrics) Next(value *KeyValue) bool {
 	hasNext := i.Iterator.Next(value)
 	reqStatus, ok := metrics.RequestStatusFromContext(i.ctx)
 	if !ok {
-		log.Debug().Msg("Iterator did not get request status")
+		if config.DefaultConfig.Metrics.DebugMessages {
+			log.Debug().Msg("Iterator did not get request status")
+		}
 	}
 
 	if reqStatus != nil && value.Data != nil {
@@ -247,7 +250,9 @@ func (m *TxImplWithMetrics) Replace(ctx context.Context, table []byte, key Key, 
 	})
 	requestStatus, ok := metrics.RequestStatusFromContext(ctx)
 	if !ok {
-		log.Debug().Msg("No request status in context")
+		if config.DefaultConfig.Metrics.DebugMessages {
+			log.Debug().Msg("No request status in context")
+		}
 	}
 	if requestStatus != nil {
 		fdbKey := getFDBKey(table, key)
