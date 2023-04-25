@@ -218,6 +218,14 @@ func TestKeyBuilderSecondaryEq(t *testing.T) {
 			errors.InvalidArgument("$or filter is not yet supported for secondary index"),
 			nil,
 		},
+		{
+			// eq combined with another filter
+			[]*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
+			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
+			[]byte(`{"a": 10, "b": {"$gt": 1}}`),
+			nil,
+			[]QueryPlan{NewQueryPlan(EQUAL, "a", schema.Int64Type, []keys.Key{keys.NewKey(nil, int64(10))})},
+		},
 		// NOT SUPPORTED YET
 		// {
 		// 	// simple OR filter
