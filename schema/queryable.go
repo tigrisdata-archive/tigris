@@ -24,19 +24,20 @@ import (
 // is of the following form "field" OR "parent.field". This allows us to perform look faster by just checking in this
 // structure. Object that doesn't have any nested fields will be same as any other top level field.
 type QueryableField struct {
-	FieldName     string
-	Indexed       bool // Secondary Index
-	InMemoryAlias string
-	Faceted       bool
-	SearchIndexed bool
-	Sortable      bool
-	DataType      FieldType
-	SubType       FieldType
-	SearchType    string
-	packThis      bool
-	DoNotFlatten  bool
-	Dimensions    *int
-	SearchIdField bool
+	FieldName      string
+	Indexed        bool // Secondary Index
+	PrimaryIndexed bool // Primary Index
+	InMemoryAlias  string
+	Faceted        bool
+	SearchIndexed  bool
+	Sortable       bool
+	DataType       FieldType
+	SubType        FieldType
+	SearchType     string
+	packThis       bool
+	DoNotFlatten   bool
+	Dimensions     *int
+	SearchIdField  bool
 	// This is not stored in flattened form in search
 	// but will allow filtering on array of objects.
 	// ToDo: With secondary indexes on array of objects we need to revisit this.
@@ -124,14 +125,15 @@ func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, 
 	}
 
 	q := &QueryableField{
-		FieldName:     name,
-		SearchType:    searchType,
-		DataType:      f.DataType,
-		SubType:       subType,
-		packThis:      packThis,
-		Indexed:       f.IsIndexable(),
-		Dimensions:    f.Dimensions,
-		SearchIdField: f.IsSearchId(),
+		FieldName:      name,
+		SearchType:     searchType,
+		DataType:       f.DataType,
+		SubType:        subType,
+		packThis:       packThis,
+		Indexed:        f.IsIndexed(),
+		PrimaryIndexed: f.IsPrimaryKey(),
+		SearchIdField:  f.IsSearchId(),
+		Dimensions:     f.Dimensions,
 	}
 	if !packThis && f.DataType == ArrayType && len(f.Fields) > 0 && f.Fields[0].DataType == ObjectType {
 		// An array of objects stored in search, we need to allow filtering on nested fields inside this object

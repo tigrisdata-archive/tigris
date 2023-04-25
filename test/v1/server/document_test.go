@@ -3706,6 +3706,170 @@ func TestRead_RangePKey(t *testing.T) {
 		inputDocument[1:2])
 }
 
+func TestRead_SortPKey(t *testing.T) {
+	db, _ := setupTests(t)
+	defer cleanupTests(t, db)
+
+	collection := "test_sortpkey_collection"
+	schema := Map{
+		"schema": Map{
+			"title": collection,
+			"properties": Map{
+				"createdAt": Map{
+					"type": "string",
+				},
+				"name": Map{
+					"type": "string",
+				},
+			},
+			"primary_key": []interface{}{"createdAt"},
+		},
+	}
+	createCollection(t, db, collection, schema).Status(200)
+
+	inputDocument := []Doc{
+		{
+			"createdAt": "2023-04-23T01:04:17Z",
+			"name":      "foo",
+		},
+		{
+			"createdAt": "2023-04-21T01:04:17Z",
+			"name":      "bar",
+		},
+		{
+			"createdAt": "2023-04-25T01:04:17Z",
+			"name":      "foo",
+		},
+		{
+			"name":      "bar",
+			"createdAt": "2023-04-20T01:04:17Z",
+		}, {
+			"createdAt": "2023-04-23T01:05:17Z",
+			"name":      "foo",
+		},
+	}
+
+	// should always succeed with mustNotExists as false
+	insertDocuments(t, db, collection, inputDocument, false).
+		Status(http.StatusOK)
+
+	readAndValidateOrder(t,
+		db,
+		collection,
+		Map{
+			"name": "foo",
+		},
+		nil,
+		[]Map{
+			{
+				"createdAt": "$desc",
+			},
+		},
+		append([]Doc{inputDocument[2]}, inputDocument[4], inputDocument[0]),
+	)
+
+	readAndValidateOrder(t,
+		db,
+		collection,
+		Map{
+			"name": "bar",
+		},
+		nil,
+		[]Map{
+			{
+				"createdAt": "$desc",
+			},
+		},
+		append([]Doc{inputDocument[1]}, inputDocument[3]),
+	)
+}
+
+func TestRead_SortPKeyComposite(t *testing.T) {
+	db, _ := setupTests(t)
+	defer cleanupTests(t, db)
+
+	collection := "test_sortpkey_collection"
+	schema := Map{
+		"schema": Map{
+			"title": collection,
+			"properties": Map{
+				"tenant": Map{
+					"type": "string",
+				},
+				"createdAt": Map{
+					"type": "string",
+				},
+				"name": Map{
+					"type": "string",
+				},
+			},
+			"primary_key": []interface{}{"tenant", "createdAt"},
+		},
+	}
+	createCollection(t, db, collection, schema).Status(200)
+
+	inputDocument := []Doc{
+		{
+			"tenant":    "A",
+			"createdAt": "2023-04-25T01:04:17Z",
+			"name":      "foo",
+		},
+		{
+			"tenant":    "B",
+			"createdAt": "2023-04-21T01:04:17Z",
+			"name":      "bar_bar",
+		},
+		{
+			"tenant":    "C",
+			"createdAt": "2023-04-23T01:04:17Z",
+			"name":      "bar_foo",
+		},
+		{
+			"tenant":    "A",
+			"name":      "bar",
+			"createdAt": "2023-04-20T01:04:17Z",
+		}, {
+			"tenant":    "B",
+			"createdAt": "2023-04-23T01:05:17Z",
+			"name":      "foo_bar",
+		},
+	}
+
+	// should always succeed with mustNotExists as false
+	insertDocuments(t, db, collection, inputDocument, false).
+		Status(http.StatusOK)
+
+	readAndValidateOrder(t,
+		db,
+		collection,
+		Map{
+			"tenant": "B",
+		},
+		nil,
+		[]Map{
+			{
+				"createdAt": "$desc",
+			},
+		},
+		append([]Doc{inputDocument[4]}, inputDocument[1]),
+	)
+
+	readAndValidateOrder(t,
+		db,
+		collection,
+		Map{
+			"tenant": "A",
+		},
+		nil,
+		[]Map{
+			{
+				"createdAt": "$desc",
+			},
+		},
+		append([]Doc{inputDocument[0]}, inputDocument[3]),
+	)
+}
+
 func TestRead_RangePKeyInternalIdField(t *testing.T) {
 	db, _ := setupTests(t)
 	defer cleanupTests(t, db)

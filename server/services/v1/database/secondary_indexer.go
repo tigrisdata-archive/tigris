@@ -226,7 +226,7 @@ func createBulkDocsReader(ctx context.Context, tx transaction.Tx, table []byte, 
 		return reader.ScanIterator(from, nil, false)
 	}
 
-	return reader.ScanTable(table)
+	return reader.ScanTable(table, false)
 }
 
 var retryErrors = []error{

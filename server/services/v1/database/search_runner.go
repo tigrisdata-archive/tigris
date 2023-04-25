@@ -85,7 +85,7 @@ func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.
 		return Response{}, ctx, err
 	}
 
-	sortOrder, err := runner.getSearchSortOrdering(collection, runner.req.Sort)
+	sortOrder, err := runner.getSearchOrdering(collection, runner.req.Sort)
 	if err != nil {
 		return Response{}, ctx, err
 	}

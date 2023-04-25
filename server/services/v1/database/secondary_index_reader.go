@@ -40,12 +40,15 @@ type SecondaryIndexReaderImpl struct {
 	kvIter    Iterator
 }
 
-func newSecondaryIndexReaderImpl(ctx context.Context, tx transaction.Tx, coll *schema.DefaultCollection, filter *filter.WrappedFilter, queryPlan *filter.QueryPlan) (*SecondaryIndexReaderImpl, error) {
+func newSecondaryIndexReaderImpl(ctx context.Context, tx transaction.Tx, coll *schema.DefaultCollection, f *filter.WrappedFilter, queryPlan *filter.QueryPlan) (*SecondaryIndexReaderImpl, error) {
+	if queryPlan == nil || !filter.IndexTypeSecondary(queryPlan.IndexType) {
+		return nil, errors.Internal("invalid query plan, expected secondary index plan found '%v'", queryPlan)
+	}
 	reader := &SecondaryIndexReaderImpl{
 		ctx:       ctx,
 		tx:        tx,
 		coll:      coll,
-		filter:    filter,
+		filter:    f,
 		err:       nil,
 		queryPlan: queryPlan,
 	}
@@ -96,7 +99,7 @@ func BuildSecondaryIndexKeys(coll *schema.DefaultCollection, queryFilters []filt
 		return []interface{}{fieldName, typeOrder, val.AsInterface()}
 	}
 
-	sortQueryPlan, err := filter.QueryPlanFromSort(sortFields, indexeableFields, encoder, buildIndexParts)
+	sortQueryPlan, err := filter.QueryPlanFromSort(sortFields, indexeableFields, encoder, buildIndexParts, filter.SecondaryIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +116,7 @@ func BuildSecondaryIndexKeys(coll *schema.DefaultCollection, queryFilters []filt
 		}
 	}
 
-	rangKeyBuilder := filter.NewRangeKeyBuilder(filter.NewRangeKeyComposer[*schema.QueryableField](encoder, buildIndexParts), false)
+	rangKeyBuilder := filter.NewRangeKeyBuilder(filter.NewRangeKeyComposer[*schema.QueryableField](encoder, buildIndexParts, filter.SecondaryIndex), filter.SecondaryIndex)
 	rangePlans, err := rangKeyBuilder.Build(queryFilters, indexeableFields)
 	// If we could not find a range query plan then fall back to the sort plan if we have one
 	if err != nil {
