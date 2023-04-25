@@ -230,10 +230,11 @@ func (s *StrictEqKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys 
 	for _, k := range userDefinedKeys {
 		var repeatedFields []*Selector
 		for _, sel := range selectors {
-			if k.Name() == sel.Field.Name() {
-				repeatedFields = append(repeatedFields, sel)
-			}
-			if sel.Matcher.Type() != EQ {
+			if sel.Matcher.Type() == EQ {
+				if k.Name() == sel.Field.Name() {
+					repeatedFields = append(repeatedFields, sel)
+				}
+			} else if s.matchAll {
 				return nil, errors.InvalidArgument("filters only supporting $eq comparison, found '%s'", sel.Matcher.Type())
 			}
 		}

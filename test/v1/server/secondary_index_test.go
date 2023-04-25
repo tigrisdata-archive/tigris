@@ -127,6 +127,7 @@ func TestQuery_EQ(t *testing.T) {
 		ids      []int
 		keyRange []string
 	}{
+
 		{
 			Map{"int_value": 10},
 			[]int{1},
@@ -156,6 +157,11 @@ func TestQuery_EQ(t *testing.T) {
 			},
 			[]int{2},
 			[]string{"false"},
+		},
+		{
+			Map{"int_value": 1, "double_value": Map{"$gte": 5}},
+			[]int{2},
+			[]string{"1"},
 		},
 		// {
 		// 	Map{
@@ -321,7 +327,7 @@ func TestQuery_Range(t *testing.T) {
 				},
 			},
 			[]int{1, 4},
-			[]string{"2022-12.22T17:42:34Z", max},
+			[]string{"true"},
 		},
 		{
 			Map{
