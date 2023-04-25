@@ -141,6 +141,7 @@ type JaegerTracingConfig struct {
 
 type MetricsConfig struct {
 	Enabled        bool                        `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	DebugMessages  bool                        `mapstructure:"debug_messages" yaml:"debug_messages" json:"debug_messages"`
 	TimerQuantiles []float64                   `mapstructure:"quantiles" yaml:"quantiles" json:"quantiles"`
 	Requests       RequestsMetricGroupConfig   `mapstructure:"requests" yaml:"requests" json:"requests"`
 	Fdb            FdbMetricGroupConfig        `mapstructure:"fdb" yaml:"fdb" json:"fdb"`
@@ -237,8 +238,9 @@ type ObservabilityConfig struct {
 }
 
 type GlobalStatusConfig struct {
-	Enabled     bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	EmitMetrics bool `mapstructure:"emit_metrics" yaml:"emit_metrics" json:"emit_metrics"`
+	Enabled       bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	EmitMetrics   bool `mapstructure:"emit_metrics" yaml:"emit_metrics" json:"emit_metrics"`
+	DebugMessages bool `mapstructure:"debug_messages" yaml:"debug_messages" json:"debug_messages"`
 }
 
 type Billing struct {
@@ -357,6 +359,7 @@ var DefaultConfig = Config{
 	},
 	Metrics: MetricsConfig{
 		Enabled:        true,
+		DebugMessages:  false,
 		TimerQuantiles: []float64{0.5, 0.95, 0.99},
 		Requests: RequestsMetricGroupConfig{
 			Enabled: true,
@@ -484,8 +487,9 @@ var DefaultConfig = Config{
 		AllowIncompatible: false,
 	},
 	GlobalStatus: GlobalStatusConfig{
-		Enabled:     true,
-		EmitMetrics: true,
+		Enabled:       true,
+		EmitMetrics:   true,
+		DebugMessages: false,
 	},
 	MetadataCluster: ClusterConfig{
 		Url: "https://api.global.tigrisdata.cloud",

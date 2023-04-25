@@ -177,7 +177,9 @@ func (r *RequestStatus) AddReadBytes(value int64) {
 		return
 	}
 	r.readBytes += value
-	log.Debug().Int64("Bytes read", value).Int64("Total bytes read", r.readBytes).Msg("Added read bytes")
+	if config.DefaultConfig.GlobalStatus.DebugMessages {
+		log.Debug().Int64("Bytes read", value).Int64("Total bytes read", r.readBytes).Msg("Added read bytes")
+	}
 }
 
 func (r *RequestStatus) AddWriteBytes(value int64) {
@@ -185,7 +187,9 @@ func (r *RequestStatus) AddWriteBytes(value int64) {
 		return
 	}
 	r.writeBytes += value
-	log.Debug().Int64("Bytes written", value).Int64("Total bytes written", r.writeBytes).Msg("Added written bytes")
+	if config.DefaultConfig.GlobalStatus.DebugMessages {
+		log.Debug().Int64("Bytes written", value).Int64("Total bytes written", r.writeBytes).Msg("Added written bytes")
+	}
 }
 
 func (r *RequestStatus) AddDDLDropUnit() {
@@ -193,7 +197,9 @@ func (r *RequestStatus) AddDDLDropUnit() {
 		return
 	}
 	r.ddlDropUnits += 1
-	log.Debug().Msg("Added drop unit")
+	if config.DefaultConfig.GlobalStatus.DebugMessages {
+		log.Debug().Msg("Added drop unit")
+	}
 }
 
 func (r *RequestStatus) AddSearchCreateIndexUnit() {
@@ -201,7 +207,9 @@ func (r *RequestStatus) AddSearchCreateIndexUnit() {
 		return
 	}
 	r.searchCreateIndexUnits += 1
-	log.Debug().Msg("Added search create index unit")
+	if config.DefaultConfig.GlobalStatus.DebugMessages {
+		log.Debug().Msg("Added search create index unit")
+	}
 }
 
 func (r *RequestStatus) GetSearchCreateIndexUnits() int64 {
@@ -213,7 +221,9 @@ func (r *RequestStatus) AddSearchDropIndexUnit() {
 		return
 	}
 	r.searchDropIndexUnits += 1
-	log.Debug().Msg("Added search drop index unit")
+	if config.DefaultConfig.GlobalStatus.DebugMessages {
+		log.Debug().Msg("Added search drop index unit")
+	}
 }
 
 func (r *RequestStatus) GetSearchDropIndexUnits() int64 {
@@ -225,7 +235,9 @@ func (r *RequestStatus) AddSearchDeleteDocumentUnit(count int) {
 		return
 	}
 	r.searchDeleteDocumentUnits += int64(count)
-	log.Trace().Msg("Added search delete index unit")
+	if config.DefaultConfig.GlobalStatus.DebugMessages {
+		log.Debug().Msg("Added search delete index unit")
+	}
 }
 
 func (r *RequestStatus) GetSearchDeleteDocumentUnits() int64 {
@@ -237,7 +249,9 @@ func (r *RequestStatus) AddSearchUnit() {
 		return
 	}
 	r.searchUnits += 1
-	log.Trace().Msg("Added api search unit")
+	if config.DefaultConfig.GlobalStatus.DebugMessages {
+		log.Debug().Msg("Added api search unit")
+	}
 }
 
 func (r *RequestStatus) AddCollectionSearchUnit() {
@@ -245,7 +259,9 @@ func (r *RequestStatus) AddCollectionSearchUnit() {
 		return
 	}
 	r.collectionSearchUnits += 1
-	log.Trace().Msg("Added collection search unit")
+	if config.DefaultConfig.GlobalStatus.DebugMessages {
+		log.Debug().Msg("Added collection search unit")
+	}
 }
 
 func (r *RequestStatus) AddDDLCreateUnit() {
@@ -253,7 +269,9 @@ func (r *RequestStatus) AddDDLCreateUnit() {
 		return
 	}
 	r.ddlCreateUnits += 1
-	log.Trace().Msg("Add ddl create unit")
+	if config.DefaultConfig.GlobalStatus.DebugMessages {
+		log.Debug().Msg("Add ddl create unit")
+	}
 }
 
 func (r *RequestStatus) AddDDLUpdateUnit() {
@@ -261,12 +279,16 @@ func (r *RequestStatus) AddDDLUpdateUnit() {
 		return
 	}
 	r.ddlUpdateUnits += 1
-	log.Trace().Msg("Add ddl update unit")
+	if config.DefaultConfig.GlobalStatus.DebugMessages {
+		log.Debug().Msg("Add ddl update unit")
+	}
 }
 
 func (r *RequestStatus) IsKeySecondaryIndex(fdbKey []byte) bool {
 	if bytes.Contains(fdbKey, []byte("skey")) {
-		log.Trace().Bytes("fdbKey", fdbKey).Msg("Is secondary index")
+		if config.DefaultConfig.GlobalStatus.DebugMessages {
+			log.Debug().Bytes("fdbKey", fdbKey).Msg("Is secondary index")
+		}
 		return true
 	}
 	return false
@@ -275,7 +297,9 @@ func (r *RequestStatus) IsKeySecondaryIndex(fdbKey []byte) bool {
 func (r *RequestStatus) IsSecondaryIndexFieldIgnored(fdbKey []byte) bool {
 	for _, ignoredField := range ignoredFieldsForWrites {
 		if bytes.Contains(fdbKey, ignoredField) {
-			log.Trace().Bytes("fdbKey", fdbKey).Msg("Ignoring secondary index field")
+			if config.DefaultConfig.GlobalStatus.DebugMessages {
+				log.Debug().Bytes("fdbKey", fdbKey).Msg("Ignoring secondary index field")
+			}
 			return true
 		}
 	}
@@ -326,29 +350,32 @@ func (g *GlobalStatus) RecordRequestToActiveChunk(r *RequestStatus, tenantName s
 	writeUnits := getUnitsFromBytes(r.writeBytes, config.WriteUnitSize)
 	readUnits := getUnitsFromBytes(r.readBytes, config.ReadUnitSize)
 	g.ensureTenantForActiveChunk(tenantName)
-	log.Debug().Int64("writeBytes", r.writeBytes).Str("tenantName", tenantName).Msg("Recording write bytes")
+	if config.DefaultConfig.GlobalStatus.DebugMessages {
+		log.Debug().Msg("Recording request to active chunk")
+		log.Debug().Int64("writeBytes", r.writeBytes).Str("tenantName", tenantName).Msg("Recording write bytes")
+		log.Debug().Int64("readBytes", r.readBytes).Str("tenantName", tenantName).Msg("Recording read bytes")
+		log.Debug().Int64("writeUnits", writeUnits).Str("tenantName", tenantName).Msg("Recording write units")
+		log.Debug().Int64("readUnits", readUnits).Str("tenantName", tenantName).Msg("Recording read units")
+		log.Debug().Int64("SearchUnits", r.searchUnits).Str("tenantName", tenantName).Msg("Recording api search units")
+		log.Debug().Int64("collectionSearchUnits", r.collectionSearchUnits).Str("tenantName", tenantName).Msg("Recording collection search units")
+		log.Debug().Int64("ddlDropUnits", r.ddlDropUnits).Str("tenantName", tenantName).Msg("Recording ddl drop units")
+		log.Debug().Int64("ddlCreateUnits", r.ddlCreateUnits).Str("tenantName", tenantName).Msg("Recording ddl create units")
+		log.Debug().Int64("ddlUpdateUnits", r.ddlUpdateUnits).Str("tenantName", tenantName).Msg("Recording ddl update units")
+		log.Debug().Int64("searchCreateIndexUnits", r.searchCreateIndexUnits).Str("tenantName", tenantName).Msg("Recording search create index units")
+		log.Debug().Int64("searchDropIndexUnits", r.searchDropIndexUnits).Str("tenantName", tenantName).Msg("Recording search drop index units")
+		log.Debug().Int64("searchDeleteDocumentUnits", r.searchDeleteDocumentUnits).Str("tenantName", tenantName).Msg("Recording search delete documents units")
+	}
 	g.activeChunk.Tenants[tenantName].writeBytes += r.writeBytes
-	log.Debug().Int64("readBytes", r.readBytes).Str("tenantName", tenantName).Msg("Recording read bytes")
 	g.activeChunk.Tenants[tenantName].readBytes += r.readBytes
-	log.Debug().Int64("writeUnits", writeUnits).Str("tenantName", tenantName).Msg("Recording write units")
 	g.activeChunk.Tenants[tenantName].WriteUnits += writeUnits
-	log.Debug().Int64("readUnits", readUnits).Str("tenantName", tenantName).Msg("Recording read units")
 	g.activeChunk.Tenants[tenantName].ReadUnits += readUnits
-	log.Debug().Int64("SearchUnits", r.searchUnits).Str("tenantName", tenantName).Msg("Recording api search units")
 	g.activeChunk.Tenants[tenantName].SearchUnits += r.searchUnits
-	log.Debug().Int64("collectionSearchUnits", r.collectionSearchUnits).Str("tenantName", tenantName).Msg("Recording collection search units")
 	g.activeChunk.Tenants[tenantName].collectionSearchUnits += r.collectionSearchUnits
-	log.Debug().Int64("ddlDropUnits", r.ddlDropUnits).Str("tenantName", tenantName).Msg("Recording ddl drop units")
 	g.activeChunk.Tenants[tenantName].ddlDropUnits += r.ddlDropUnits
-	log.Debug().Int64("ddlCreateUnits", r.ddlCreateUnits).Str("tenantName", tenantName).Msg("Recording ddl create units")
 	g.activeChunk.Tenants[tenantName].ddlCreateUnits += r.ddlCreateUnits
-	log.Debug().Int64("ddlUpdateUnits", r.ddlUpdateUnits).Str("tenantName", tenantName).Msg("Recording ddl update units")
 	g.activeChunk.Tenants[tenantName].ddlUpdateUnits += r.ddlUpdateUnits
-	log.Debug().Int64("searchCreateIndexUnits", r.searchCreateIndexUnits).Str("tenantName", tenantName).Msg("Recording search create index units")
 	g.activeChunk.Tenants[tenantName].searchCreateIndexUnits += r.searchCreateIndexUnits
-	log.Debug().Int64("searchDropIndexUnits", r.searchDropIndexUnits).Str("tenantName", tenantName).Msg("Recording search drop index units")
 	g.activeChunk.Tenants[tenantName].searchDropIndexUnits += r.searchDropIndexUnits
-	log.Debug().Int64("searchDeleteDocumentUnits", r.searchDeleteDocumentUnits).Str("tenantName", tenantName).Msg("Recording search delete documents units")
 	g.activeChunk.Tenants[tenantName].searchDeleteDocumentUnits += r.searchDeleteDocumentUnits
 	g.mu.Unlock()
 }
@@ -360,15 +387,21 @@ func (g *GlobalStatus) Flush() TenantStatusTimeChunk {
 	res := *g.activeChunk
 	g.activeChunk = NewTenantStatusTimeChunk(startTime)
 	g.mu.Unlock()
-	log.Debug().Int("number of tenants", len(res.Tenants)).Msg("Flushing global status")
+	if config.DefaultConfig.GlobalStatus.DebugMessages {
+		log.Debug().Int("number of tenants", len(res.Tenants)).Msg("Flushing global status")
+	}
 	for _, status := range res.Tenants {
 		status.WriteUnits = getUnitsFromBytes(status.writeBytes, config.WriteUnitSize)
 		status.ReadUnits = getUnitsFromBytes(status.readBytes, config.ReadUnitSize)
 	}
-	log.Debug().Time("start time", res.StartTime).Time("end time", res.EndTime).Msg("flush results")
+	if config.DefaultConfig.GlobalStatus.DebugMessages {
+		log.Debug().Time("start time", res.StartTime).Time("end time", res.EndTime).Msg("flush results")
+	}
 	for tenantName, status := range res.Tenants {
-		log.Debug().Int64("read units", status.ReadUnits).Int64("write units", status.WriteUnits).Str("tenant name", tenantName).Msg("db units flushed")
-		log.Debug().Int64("search units", status.SearchUnits).Int64("collection search units", status.collectionSearchUnits).Str("tenant name", tenantName).Msg("flushed search units")
+		if config.DefaultConfig.GlobalStatus.DebugMessages {
+			log.Debug().Int64("read units", status.ReadUnits).Int64("write units", status.WriteUnits).Str("tenant name", tenantName).Msg("db units flushed")
+			log.Debug().Int64("search units", status.SearchUnits).Int64("collection search units", status.collectionSearchUnits).Str("tenant name", tenantName).Msg("flushed search units")
+		}
 	}
 	return res
 }

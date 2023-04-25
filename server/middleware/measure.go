@@ -22,6 +22,7 @@ import (
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/util"
@@ -144,7 +145,9 @@ func (w *wrappedStream) RecvMsg(m interface{}) error {
 		project, branch, coll := request.GetProjectAndBranchAndColl(m)
 		reqMetadata, err := request.GetRequestMetadataFromContext(w.WrappedContext)
 		if err != nil {
-			log.Debug().Str("error", err.Error()).Msg("error while getting request metadata, not measuring")
+			if config.DefaultConfig.Metrics.DebugMessages {
+				log.Debug().Str("error", err.Error()).Msg("error while getting request metadata, not measuring")
+			}
 			return recvErr
 		}
 		reqMetadata.SetProject(project)
@@ -175,7 +178,9 @@ func (w *wrappedStream) SendMsg(m interface{}) error {
 		project, branch, coll := request.GetProjectAndBranchAndColl(m)
 		reqMetadata, err := request.GetRequestMetadataFromContext(w.WrappedContext)
 		if err != nil {
-			log.Debug().Str("error", err.Error()).Msg("error while getting request metadata, not measuring")
+			if config.DefaultConfig.Metrics.DebugMessages {
+				log.Debug().Str("error", err.Error()).Msg("error while getting request metadata, not measuring")
+			}
 			return nil
 		}
 		reqMetadata.SetProject(project)
