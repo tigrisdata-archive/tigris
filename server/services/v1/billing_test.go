@@ -25,12 +25,16 @@ import (
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/services/v1/billing"
+	bMock "github.com/tigrisdata/tigris/mocks/server/services/v1/billing"
+	mMock "github.com/tigrisdata/tigris/mocks/server/metadata"
 )
 
 type billingServiceSuite struct {
 	suite.Suite
-	mockProvider     *billing.MockProvider
-	mockNameSpaceMgr *metadata.MockNamespaceMetadataMgr
+	//mockProvider     *billing.MockProvider
+	//mockNameSpaceMgr *metadata.MockNamespaceMetadataMgr
+	mockProvider     *bMock.Provider
+	mockNameSpaceMgr *mMock.NamespaceMetadataMgr
 	billing          *billingService
 	ctx              context.Context
 	nsMeta           metadata.NamespaceMetadata
@@ -39,9 +43,11 @@ type billingServiceSuite struct {
 
 func TestBillingServiceSuite(t *testing.T) {
 	s := &billingServiceSuite{
-		Suite:            suite.Suite{},
-		mockProvider:     billing.NewMockProvider(t),
-		mockNameSpaceMgr: metadata.NewMockNamespaceMetadataMgr(t),
+		Suite: suite.Suite{},
+		//mockProvider:     billing.NewMockProvider(t),
+		//mockNameSpaceMgr: metadata.NewMockNamespaceMetadataMgr(t),
+		mockProvider:     bMock.NewProvider(t),
+		mockNameSpaceMgr: mMock.NewNamespaceMetadataMgr(t),
 		billing:          nil,
 		ctx:              context.TODO(),
 		nsMeta:           metadata.NewNamespaceMetadata(1, "test_namespace", "test namespace"),
@@ -104,17 +110,21 @@ func (s *billingServiceSuite) Test_ListInvoices_WithNoNamespace_Fails() {
 
 type getMetronomeIdSuite struct {
 	suite.Suite
-	mockProvider     *billing.MockProvider
-	mockNameSpaceMgr *metadata.MockNamespaceMetadataMgr
+	//mockProvider     *billing.MockProvider
+	//mockNameSpaceMgr *metadata.MockNamespaceMetadataMgr
+	mockProvider     *bMock.Provider
+	mockNameSpaceMgr *mMock.NamespaceMetadataMgr
 	billing          *billingService
 	ctx              context.Context
 }
 
 func TestGetMetronomeIdSuite(t *testing.T) {
 	s := &getMetronomeIdSuite{
-		Suite:            suite.Suite{},
-		mockProvider:     billing.NewMockProvider(t),
-		mockNameSpaceMgr: metadata.NewMockNamespaceMetadataMgr(t),
+		Suite: suite.Suite{},
+		//mockProvider:     billing.NewMockProvider(t),
+		//mockNameSpaceMgr: metadata.NewMockNamespaceMetadataMgr(t),
+		mockProvider:     bMock.NewProvider(t),
+		mockNameSpaceMgr: mMock.NewNamespaceMetadataMgr(t),
 		billing:          nil,
 		ctx:              context.TODO(),
 	}

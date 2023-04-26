@@ -19,6 +19,8 @@ MOCK_INTERFACES=\
 "server/services/v1/billing:Provider" \
 "server/metadata:NamespaceMetadataMgr"
 
+MOCKS_DIR=mocks
+
 all: server
 
 # Setup local development environment.
@@ -112,18 +114,19 @@ generate_api: ${GEN_DIR}/api.pb.go ${GEN_DIR}/api.pb.gw.go ${GEN_DIR}/health.pb.
 # generate mocks
 generate_mocks:
 	for ifaces in $(MOCK_INTERFACES) ; do \
-		MOCK_DIR=$${ifaces%:*} ; \
+		PKG_DIR=$${ifaces%:*} ; \
 		MOCK_NAME="$${ifaces#*:}" ; \
-		mockery --dir $${MOCK_DIR} --name $${MOCK_NAME} ; \
+		mockery --dir $${PKG_DIR} --name $${MOCK_NAME} --output ${MOCKS_DIR}/$${PKG_DIR} ; \
   	done
 
 # clean mocks
 clean_mocks:
-	for ifaces in $(MOCK_INTERFACES) ; do \
-		MOCK_DIR=$${ifaces%:*} ; \
-		MOCK_NAME="$${ifaces#*:}" ; \
-		rm "$${MOCK_DIR}/mock_$${MOCK_NAME}.go" ; \
-  	done
+	rm -rf ${MOCKS_DIR} ; \
+#	for ifaces in $(MOCK_INTERFACES) ; do \
+#		PKG_DIR=$${ifaces%:*} ; \
+#		MOCK_NAME="$${ifaces#*:}" ; \
+#		rm "$${PKG_DIR}/mock_$${MOCK_NAME}.go" ; \
+#  	done
 
 # Build the server binary.
 server: server/service

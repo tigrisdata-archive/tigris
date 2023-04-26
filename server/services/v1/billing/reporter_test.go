@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
+	bMock "github.com/tigrisdata/tigris/mocks/server/services/v1/billing"
 )
 
 func TestUsageReporter_pushUsage(t *testing.T) {
@@ -86,7 +87,8 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 			},
 		}}
 
-		mockProvider := NewMockProvider(t)
+		//mockProvider := NewMockProvider(t)
+		mockProvider := bMock.NewProvider(t)
 
 		// CreateAccount and AddDefaultPlan calls only for "ns1" and "ns3"
 		for _, n := range []string{"ns1", "ns3"} {
@@ -136,7 +138,8 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 			Tenants:   map[string]*metrics.TenantStatus{},
 		}}
 
-		mockProvider := NewMockProvider(t)
+		//mockProvider := NewMockProvider(t)
+		mockProvider := bMock.NewProvider(t)
 		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider)
 
 		err := reporter.pushUsage()
@@ -170,7 +173,8 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 			},
 		}}
 
-		mockProvider := NewMockProvider(t)
+		//mockProvider := NewMockProvider(t)
+		mockProvider := bMock.NewProvider(t)
 		// create account fails
 		mockProvider.EXPECT().CreateAccount(mock.Anything, nsId, mock.Anything).
 			Return(uuid.Nil, fmt.Errorf("failed to create account")).
@@ -213,7 +217,8 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 				},
 			},
 		}}
-		mockProvider, mId := NewMockProvider(t), uuid.New()
+		//mockProvider, mId := NewMockProvider(t), uuid.New()
+		mockProvider, mId := bMock.NewProvider(t), uuid.New()
 		// create account succeeds
 		mockProvider.EXPECT().CreateAccount(mock.Anything, nsId, namespaces[nsId].Name).
 			Return(mId, nil).
@@ -270,7 +275,8 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 			},
 		}}
 
-		mockProvider := NewMockProvider(t)
+		//mockProvider := NewMockProvider(t)
+		mockProvider := bMock.NewProvider(t)
 		// push usage call fails
 		mockProvider.EXPECT().PushUsageEvents(mock.Anything, mock.Anything).
 			RunAndReturn(func(ctx context.Context, events []*UsageEvent) error {
