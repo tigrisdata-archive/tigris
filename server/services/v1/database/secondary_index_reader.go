@@ -23,6 +23,7 @@ import (
 	"github.com/tigrisdata/tigris/query/filter"
 	"github.com/tigrisdata/tigris/query/sort"
 	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/value"
@@ -59,7 +60,6 @@ func newSecondaryIndexReaderImpl(ctx context.Context, tx transaction.Tx, coll *s
 func (reader *SecondaryIndexReaderImpl) createIter() (*SecondaryIndexReaderImpl, error) {
 	var err error
 
-	reader.dbgPrintIndex()
 	log.Debug().Msgf("Query Plan Keys %v ascending: %v", reader.queryPlan.GetKeyInterfaceParts(), reader.queryPlan.Ascending)
 
 	switch reader.queryPlan.QueryType {
@@ -216,9 +216,12 @@ func (it *SecondaryIndexReaderImpl) Next(row *Row) bool {
 func (it *SecondaryIndexReaderImpl) Interrupted() error { return it.err }
 
 // For local debugging and testing.
-//
-
+// nolint:unused
 func (it *SecondaryIndexReaderImpl) dbgPrintIndex() {
+	if config.GetEnvironment() != config.EnvLocal {
+		return
+	}
+
 	indexer := newSecondaryIndexerImpl(it.coll)
 	tableIter, err := indexer.scanIndex(it.ctx, it.tx)
 	if err != nil {
