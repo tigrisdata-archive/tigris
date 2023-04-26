@@ -31,6 +31,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/iancoleman/strcase v0.2.0
 	github.com/json-iterator/go v1.1.12
+	github.com/klauspost/compress v1.15.1
 	github.com/lucsky/cuid v1.2.1
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.29.1
@@ -101,7 +102,6 @@ require (
 	github.com/invopop/yaml v0.2.0 // indirect
 	github.com/jhump/protoreflect v1.15.1 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
-	github.com/klauspost/compress v1.15.1 // indirect
 	github.com/kr/pretty v0.3.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/m3db/prometheus_client_golang v1.12.8 // indirect

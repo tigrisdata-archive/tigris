@@ -121,7 +121,7 @@ func mainWithCode() int {
 	mx.RegisterServices(&cfg.Server, kvStoreForDatabase, searchStore, tenantMgr, txMgr, forSearchTxMgr, bProvider)
 
 	// metrics is already initialized, we can start reporting usage data
-	ur, err := billing.NewUsageReporter(metrics.GlobalSt, tenantMgr, bProvider)
+	ur, err := billing.NewUsageReporter(metrics.GlobalSt, tenantMgr, tenantMgr, bProvider)
 	if !ulog.E(err) {
 		ur.Start()
 	}

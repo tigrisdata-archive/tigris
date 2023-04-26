@@ -1,3 +1,5 @@
+inpackage: True
 testonly: False
 with-expecter: True
-keeptree: True
+keeptree: False
+case: snake

@@ -67,15 +67,15 @@ func (m *Metronome) measure(ctx context.Context, scope tally.Scope, operation st
 		me.IncrementCount(scope, metrics.GetResponseCodeTags(resp.StatusCode), "request", 1)
 	}
 
-	var errCount int64
+	availability := int64(1)
 	var errTags map[string]string
 	if err != nil {
-		errCount = 1
+		availability = 0
 		errTags = metrics.GetErrorCodeTags(err)
 	}
-	// e.g.:- metronome_create_account_error
+	// e.g.:- metronome_create_account_availability
 	// tags: error_value: err.Error()
-	me.IncrementCount(scope, errTags, "error", errCount)
+	me.IncrementCount(scope, errTags, "availability", availability)
 }
 
 func (m *Metronome) CreateAccount(ctx context.Context, namespaceId string, name string) (MetronomeId, error) {

@@ -16,7 +16,6 @@ package billing
 
 import (
 	"context"
-	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -29,24 +28,26 @@ import (
 )
 
 type UsageReporter struct {
-	glbState   metrics.UsageProvider
-	billingSvc Provider
-	interval   time.Duration
-	tenantMgr  metadata.NamespaceMetadataMgr
-	ctx        context.Context
+	glbState     metrics.UsageProvider
+	billingSvc   Provider
+	interval     time.Duration
+	nsMgr        metadata.NamespaceMetadataMgr
+	tenantGetter metadata.TenantGetter
+	ctx          context.Context
 }
 
-func NewUsageReporter(gs metrics.UsageProvider, tm metadata.NamespaceMetadataMgr, billing Provider) (*UsageReporter, error) {
+func NewUsageReporter(gs metrics.UsageProvider, tm metadata.NamespaceMetadataMgr, tg metadata.TenantGetter, billing Provider) (*UsageReporter, error) {
 	if gs == nil || tm == nil {
 		return nil, errors.Internal("usage reporter cannot be initialized")
 	}
 
 	return &UsageReporter{
-		glbState:   gs,
-		billingSvc: billing,
-		interval:   config.DefaultConfig.Billing.Reporter.RefreshInterval,
-		tenantMgr:  tm,
-		ctx:        context.Background(),
+		glbState:     gs,
+		billingSvc:   billing,
+		interval:     config.DefaultConfig.Billing.Reporter.RefreshInterval,
+		nsMgr:        tm,
+		tenantGetter: tg,
+		ctx:          context.Background(),
 	}, nil
 }
 
@@ -61,27 +62,27 @@ func (r *UsageReporter) refreshLoop() {
 	t := time.NewTicker(r.interval)
 	defer t.Stop()
 	for range t.C {
-		ulog.E(r.push())
+		ulog.E(r.pushUsage())
+		ulog.E(r.pushStorage())
 	}
 }
 
-func (r *UsageReporter) push() error {
+func (r *UsageReporter) pushUsage() error {
 	chunk := r.glbState.Flush()
-	log.Info().Msgf("reporting data for %d tenants", len(chunk.Tenants))
+	log.Info().Msgf("reporting usage data for %d tenants", len(chunk.Tenants))
 
 	if len(chunk.Tenants) == 0 {
 		log.Info().Msg("no tenant data to report")
 		return nil
 	}
 
-	trxnSuffix := strconv.FormatInt(chunk.EndTime.Unix(), 10)
 	events := make([]*UsageEvent, 0, len(chunk.Tenants))
 
 	// refresh and get metadata for all tenants if anyone is missing metronome integration
 	for namespaceId := range chunk.Tenants {
-		nsMeta := r.tenantMgr.GetNamespaceMetadata(r.ctx, namespaceId)
+		nsMeta := r.nsMgr.GetNamespaceMetadata(r.ctx, namespaceId)
 		if nsMeta == nil || nsMeta.Accounts.Metronome == nil {
-			err := r.tenantMgr.RefreshNamespaceAccounts(r.ctx)
+			err := r.nsMgr.RefreshNamespaceAccounts(r.ctx)
 			if err != nil {
 				log.Error().Err(err).Msg("failed to refresh namespace metadata")
 			}
@@ -90,39 +91,16 @@ func (r *UsageReporter) push() error {
 	}
 
 	for namespaceId, stats := range chunk.Tenants {
-		nsMeta := r.tenantMgr.GetNamespaceMetadata(r.ctx, namespaceId)
+		nsMeta := r.nsMgr.GetNamespaceMetadata(r.ctx, namespaceId)
 		if nsMeta == nil {
 			log.Error().Msgf("invalid namespace id %s", namespaceId)
 			continue
 		}
 
-		// create account if not yet
-		_, enabled := nsMeta.Accounts.GetMetronomeId()
-		if !enabled {
-			log.Info().Msgf("creating Metronome account for %s", namespaceId)
-
-			billingId, err := r.billingSvc.CreateAccount(r.ctx, nsMeta.StrId, nsMeta.Name)
-			if !ulog.E(err) && billingId != uuid.Nil {
-				nsMeta.Accounts.AddMetronome(billingId.String())
-
-				// add default plan to the user
-				added, err := r.billingSvc.AddDefaultPlan(r.ctx, billingId)
-				if err != nil || !added {
-					log.Error().Err(err).Msgf("error adding default plan to user id %s", namespaceId)
-				}
-
-				// save updated namespace metadata
-				err = r.tenantMgr.UpdateNamespaceMetadata(r.ctx, *nsMeta)
-				if err != nil {
-					log.Error().Err(err).Msgf("error saving metadata for user %s", namespaceId)
-				}
-				// continue to send event, metronome will disregard it if account does not exist
-			}
-		}
-
+		r.ensureAccountExists(nsMeta)
+		// continue to send event, metronome will disregard it if account does not exist
 		event := NewUsageEventBuilder().
 			WithNamespaceId(nsMeta.StrId).
-			WithTransactionId(nsMeta.StrId + "_" + trxnSuffix).
 			WithTimestamp(chunk.EndTime).
 			WithDatabaseUnits(stats.ReadUnits + stats.WriteUnits).
 			WithSearchUnits(stats.SearchUnits).
@@ -137,4 +115,68 @@ func (r *UsageReporter) push() error {
 		return err
 	}
 	return nil
+}
+
+func (r *UsageReporter) pushStorage() error {
+	tenants := r.tenantGetter.AllTenants(r.ctx)
+	log.Info().Msgf("reporting storage data for %d tenants", len(tenants))
+
+	events := make([]*StorageEvent, 0, len(tenants))
+	for _, t := range tenants {
+		nsMeta := t.GetNamespace().Metadata()
+		r.ensureAccountExists(&nsMeta)
+		// continue to send event, metronome will disregard it if account does not exist
+
+		var dbBytes int64
+		// ensure size
+		dbStats, err := t.Size(r.ctx)
+		if err != nil || dbStats == nil {
+			log.Error().Err(err).Str("ns", nsMeta.StrId).Msgf("tenant.Size() failed")
+		} else {
+			dbBytes += dbStats.StoredBytes
+		}
+
+		secondaryIndexStats, err := t.IndexSize(r.ctx)
+		if err != nil || secondaryIndexStats == nil {
+			log.Error().Err(err).Str("ns", nsMeta.StrId).Msgf("tenant.IndexSize() failed")
+		} else {
+			dbBytes += secondaryIndexStats.StoredBytes
+		}
+
+		//todo: add search index sizes
+		event := NewStorageEventBuilder().
+			WithNamespaceId(nsMeta.StrId).
+			WithTimestamp(time.Now()).
+			WithDatabaseBytes(dbBytes).
+			Build()
+		events = append(events, event)
+
+		log.Debug().Msgf("reporting storage for %s -> %+v", nsMeta.StrId, event)
+	}
+
+	return r.billingSvc.PushStorageEvents(r.ctx, events)
+}
+
+func (r *UsageReporter) ensureAccountExists(nsMeta *metadata.NamespaceMetadata) {
+	_, enabled := nsMeta.Accounts.GetMetronomeId()
+	if !enabled {
+		log.Info().Msgf("creating Metronome account for %s", nsMeta.StrId)
+
+		billingId, err := r.billingSvc.CreateAccount(r.ctx, nsMeta.StrId, nsMeta.Name)
+		if !ulog.E(err) && billingId != uuid.Nil {
+			nsMeta.Accounts.AddMetronome(billingId.String())
+
+			// add default plan to the user
+			added, err := r.billingSvc.AddDefaultPlan(r.ctx, billingId)
+			if err != nil || !added {
+				log.Error().Err(err).Msgf("error adding default plan to user id %s", nsMeta.StrId)
+			}
+
+			// save updated namespace metadata
+			err = r.nsMgr.UpdateNamespaceMetadata(r.ctx, *nsMeta)
+			if err != nil {
+				log.Error().Err(err).Msgf("error saving metadata for user %s", nsMeta.StrId)
+			}
+		}
+	}
 }

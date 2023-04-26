@@ -43,6 +43,7 @@ const (
 
 type TenantGetter interface {
 	GetTenant(ctx context.Context, id string) (*Tenant, error)
+	AllTenants(ctx context.Context) []*Tenant
 }
 
 //go:generate mockery --name NamespaceMetadataMgr
@@ -372,6 +373,19 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceId string) (*Ten
 	}
 
 	return tenant, nil
+}
+
+func (m *TenantManager) AllTenants(_ context.Context) []*Tenant {
+	m.RLock()
+	defer m.RUnlock()
+
+	tenants := make([]*Tenant, len(m.tenants))
+	i := 0
+	for _, t := range m.tenants {
+		tenants[i] = t
+		i += 1
+	}
+	return tenants
 }
 
 // UpdateNamespaceMetadata updates a namespace metadata for a tenant.

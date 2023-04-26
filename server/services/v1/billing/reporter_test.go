@@ -21,19 +21,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
 )
 
-const (
-	createAccountFailure  = "createAccountFail"
-	addDefaultPlanFailure = "95b84feb-e217-46a0-a1de-406dbd466a6a"
-	pushUsageFailure      = "pushUsageEventsFail"
-)
-
-func TestUsageReporter_Push(t *testing.T) {
+func TestUsageReporter_pushUsage(t *testing.T) {
 	t.Run("pushes all valid events", func(t *testing.T) {
 		namespaces := map[string]metadata.NamespaceMetadata{
 			"ns1": {
@@ -91,47 +85,46 @@ func TestUsageReporter_Push(t *testing.T) {
 				},
 			},
 		}}
-		billing := &MockBillingSvc{
-			createAccountCalls:  map[string]int{},
-			defaultPlanCalls:    map[string]int{},
-			pushUsageEventCalls: map[string][]*UsageEvent{},
+
+		mockProvider := NewMockProvider(t)
+
+		// CreateAccount and AddDefaultPlan calls only for "ns1" and "ns3"
+		for _, n := range []string{"ns1", "ns3"} {
+			mId := uuid.New()
+			mockProvider.EXPECT().CreateAccount(mock.Anything, namespaces[n].StrId, namespaces[n].Name).
+				Return(mId, nil).
+				Once()
+			mockProvider.EXPECT().AddDefaultPlan(mock.Anything, mId).
+				Return(true, nil).
+				Once()
 		}
 
-		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, billing)
-		err := reporter.push()
+		// Usage events pushed for each namespace
+		mockProvider.EXPECT().PushUsageEvents(mock.Anything, mock.Anything).
+			RunAndReturn(func(ctx context.Context, events []*UsageEvent) error {
+				require.Len(t, events, 3)
+				for _, e := range events {
+					require.Contains(t, []string{"ns1", "ns2", "ns3"}, e.CustomerId)
+
+					expected, actual := glbStatus.data.Tenants[e.CustomerId], *e.Properties
+					require.Equal(t, expected.WriteUnits+expected.ReadUnits, actual["database_units"])
+					require.Equal(t, expected.SearchUnits, actual["search_units"])
+				}
+				return nil
+			}).Once()
+
+		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider)
+		err := reporter.pushUsage()
 		require.NoError(t, err)
 
 		// refreshNamespaceAccounts is only called once
 		require.Equal(t, 1, tenantMgr.refreshNamespaceCalls)
-
-		// CreateAccount call only for "ns1" and "ns3"
-		require.Len(t, billing.createAccountCalls, 2)
-		require.Equal(t, billing.createAccountCalls["ns1"], 1)
-		require.Equal(t, billing.createAccountCalls["ns3"], 1)
-
-		// AddDefaultPlan call only for "ns1" and "ns3"
-		require.Len(t, billing.defaultPlanCalls, 2)
-		require.Equal(t, billing.defaultPlanCalls[namespaces["ns1"].Accounts.Metronome.Id], 1)
-		require.Equal(t, billing.defaultPlanCalls[namespaces["ns3"].Accounts.Metronome.Id], 1)
 
 		for _, ns := range namespaces {
 			// validate UpdateNamespaceMetadata adds metronome integration to all
 			id, enabled := ns.Accounts.GetMetronomeId()
 			require.Equal(t, true, enabled)
 			require.NotNil(t, id)
-
-			// validate usage events - transactionId, timestamp, dbUnits, searchUnits
-			require.Len(t, billing.pushUsageEventCalls[ns.StrId], 1)
-			event := billing.pushUsageEventCalls[ns.StrId][0]
-			require.Equal(t, ns.StrId+"_1672531200", event.TransactionId)
-			require.Equal(t, "2023-01-01T00:00:00Z", event.Timestamp)
-			require.Equal(t, EventTypeUsage, event.EventType)
-
-			stats := glbStatus.data.Tenants[ns.StrId]
-			require.Equal(t, &map[string]interface{}{
-				"search_units":   stats.SearchUnits,
-				"database_units": stats.ReadUnits + stats.WriteUnits,
-			}, event.Properties)
 		}
 	})
 
@@ -142,30 +135,25 @@ func TestUsageReporter_Push(t *testing.T) {
 			EndTime:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
 			Tenants:   map[string]*metrics.TenantStatus{},
 		}}
-		metronome := &MockBillingSvc{
-			createAccountCalls:  map[string]int{},
-			defaultPlanCalls:    map[string]int{},
-			pushUsageEventCalls: map[string][]*UsageEvent{},
-		}
 
-		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, metronome)
-		err := reporter.push()
+		mockProvider := NewMockProvider(t)
+		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider)
+
+		err := reporter.pushUsage()
 		require.NoError(t, err)
-
 		// refreshNamespaceAccounts is never called
 		require.Equal(t, 0, tenantMgr.refreshNamespaceCalls)
+		// no calls should be made to metronome provider
+		require.Empty(t, mockProvider.Calls)
 
-		// no calls should be made to metronome service
-		require.Empty(t, metronome.createAccountCalls)
-		require.Empty(t, metronome.defaultPlanCalls)
-		require.Empty(t, metronome.pushUsageEventCalls)
 	})
 
 	t.Run("fails to create metronome account", func(t *testing.T) {
+		nsId := "createAccountFails"
 		namespaces := map[string]metadata.NamespaceMetadata{
-			createAccountFailure: {
+			nsId: {
 				Id:    4,
-				StrId: createAccountFailure,
+				StrId: nsId,
 				Name:  "metronome account creation fails for this user",
 			},
 		}
@@ -174,37 +162,42 @@ func TestUsageReporter_Push(t *testing.T) {
 			StartTime: time.Time{},
 			EndTime:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
 			Tenants: map[string]*metrics.TenantStatus{
-				createAccountFailure: {
+				nsId: {
 					ReadUnits:   4,
 					WriteUnits:  5,
 					SearchUnits: 6,
 				},
 			},
 		}}
-		metronome := &MockBillingSvc{
-			createAccountCalls:  map[string]int{},
-			defaultPlanCalls:    map[string]int{},
-			pushUsageEventCalls: map[string][]*UsageEvent{},
-		}
 
-		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, metronome)
-		err := reporter.push()
+		mockProvider := NewMockProvider(t)
+		// create account fails
+		mockProvider.EXPECT().CreateAccount(mock.Anything, nsId, mock.Anything).
+			Return(uuid.Nil, fmt.Errorf("failed to create account")).
+			Once()
+		// should still push events
+		mockProvider.EXPECT().PushUsageEvents(mock.Anything, mock.Anything).
+			RunAndReturn(func(ctx context.Context, events []*UsageEvent) error {
+				require.Len(t, events, 1)
+				require.Equal(t, nsId, events[0].CustomerId)
+				return nil
+			}).
+			Once()
+
+		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider)
+		err := reporter.pushUsage()
 		require.NoError(t, err)
 
 		// refreshNamespaceAccounts is only called once
 		require.Equal(t, 1, tenantMgr.refreshNamespaceCalls)
-
-		require.Equal(t, 1, metronome.createAccountCalls[createAccountFailure])
-		require.Empty(t, metronome.defaultPlanCalls)
-		// should still publish events
-		require.Contains(t, metronome.pushUsageEventCalls, createAccountFailure)
 	})
 
 	t.Run("fails to add default plan to metronome account", func(t *testing.T) {
+		nsId := "someId"
 		namespaces := map[string]metadata.NamespaceMetadata{
-			addDefaultPlanFailure: {
+			nsId: {
 				Id:    4,
-				StrId: addDefaultPlanFailure,
+				StrId: nsId,
 				Name:  "Adding default plan fails for this user",
 			},
 		}
@@ -213,38 +206,55 @@ func TestUsageReporter_Push(t *testing.T) {
 			StartTime: time.Time{},
 			EndTime:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
 			Tenants: map[string]*metrics.TenantStatus{
-				addDefaultPlanFailure: {
+				nsId: {
 					ReadUnits:   4,
 					WriteUnits:  5,
 					SearchUnits: 6,
 				},
 			},
 		}}
-		metronome := &MockBillingSvc{
-			createAccountCalls:  map[string]int{},
-			defaultPlanCalls:    map[string]int{},
-			pushUsageEventCalls: map[string][]*UsageEvent{},
-		}
+		mockProvider, mId := NewMockProvider(t), uuid.New()
+		// create account succeeds
+		mockProvider.EXPECT().CreateAccount(mock.Anything, nsId, namespaces[nsId].Name).
+			Return(mId, nil).
+			Once()
+		// add default plan fails
+		mockProvider.EXPECT().AddDefaultPlan(mock.Anything, mId).
+			Return(false, fmt.Errorf("failed to add account")).
+			Once()
+		// should still push events
+		mockProvider.EXPECT().PushUsageEvents(mock.Anything, mock.Anything).
+			RunAndReturn(func(ctx context.Context, events []*UsageEvent) error {
+				require.Len(t, events, 1)
+				require.Equal(t, nsId, events[0].CustomerId)
 
-		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, metronome)
-		err := reporter.push()
+				props := *events[0].Properties
+				require.Equal(t, int64(9), props["database_units"])
+				require.Equal(t, int64(6), props["search_units"])
+				return nil
+			}).
+			Once()
+
+		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider)
+
+		err := reporter.pushUsage()
 		require.NoError(t, err)
-
-		// refreshNamespaceAccounts is only called once
 		require.Equal(t, 1, tenantMgr.refreshNamespaceCalls)
-
-		require.Equal(t, 1, metronome.createAccountCalls[addDefaultPlanFailure])
-		require.Equal(t, 1, metronome.defaultPlanCalls[addDefaultPlanFailure])
-		// should still publish events
-		require.Contains(t, metronome.pushUsageEventCalls, addDefaultPlanFailure)
 	})
 
 	t.Run("fails to push events", func(t *testing.T) {
+		nsId := "PushUsageEvent_fails"
 		namespaces := map[string]metadata.NamespaceMetadata{
-			pushUsageFailure: {
+			nsId: {
 				Id:    5,
-				StrId: pushUsageFailure,
-				Name:  "Failure to push events for this namespace",
+				StrId: nsId,
+				Name:  "Failure to pushUsage events for this namespace",
+				Accounts: metadata.AccountIntegrations{
+					Metronome: &metadata.Metronome{
+						Enabled: true,
+						Id:      uuid.New().String(),
+					},
+				},
 			},
 		}
 		tenantMgr := &MockTenantManager{data: namespaces}
@@ -252,22 +262,30 @@ func TestUsageReporter_Push(t *testing.T) {
 			StartTime: time.Time{},
 			EndTime:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
 			Tenants: map[string]*metrics.TenantStatus{
-				pushUsageFailure: {
+				nsId: {
 					ReadUnits:   4,
 					WriteUnits:  5,
 					SearchUnits: 6,
 				},
 			},
 		}}
-		metronome := &MockBillingSvc{
-			createAccountCalls:  map[string]int{},
-			defaultPlanCalls:    map[string]int{},
-			pushUsageEventCalls: map[string][]*UsageEvent{},
-		}
 
-		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, metronome)
-		err := reporter.push()
-		require.Error(t, err)
+		mockProvider := NewMockProvider(t)
+		// push usage call fails
+		mockProvider.EXPECT().PushUsageEvents(mock.Anything, mock.Anything).
+			RunAndReturn(func(ctx context.Context, events []*UsageEvent) error {
+				require.Len(t, events, 1)
+				require.Equal(t, nsId, events[0].CustomerId)
+				require.Equal(t, int64(9), (*events[0].Properties)["database_units"])
+				require.Equal(t, int64(6), (*events[0].Properties)["search_units"])
+
+				return fmt.Errorf("failed to push usage events")
+			}).Once()
+
+		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider)
+
+		err := reporter.pushUsage()
+		require.ErrorContains(t, err, "failed to push usage events")
 	})
 }
 
@@ -278,6 +296,10 @@ type MockTenantManager struct {
 
 func (mock *MockTenantManager) GetTenant(_ context.Context, id string) (*metadata.Tenant, error) {
 	return nil, fmt.Errorf("invalid tenant id %s", id)
+}
+
+func (mock *MockTenantManager) AllTenants(_ context.Context) []*metadata.Tenant {
+	return []*metadata.Tenant{}
 }
 
 func (mock *MockTenantManager) GetNamespaceMetadata(_ context.Context, namespaceId string) *metadata.NamespaceMetadata {
@@ -303,76 +325,4 @@ type MockGlobalStatus struct {
 
 func (mock *MockGlobalStatus) Flush() metrics.TenantStatusTimeChunk {
 	return mock.data
-}
-
-type MockBillingSvc struct {
-	createAccountCalls  map[string]int
-	defaultPlanCalls    map[string]int
-	pushUsageEventCalls map[string][]*UsageEvent
-}
-
-func (mock *MockBillingSvc) CreateAccount(_ context.Context, namespaceId string, _ string) (MetronomeId, error) {
-	if count, ok := mock.createAccountCalls[namespaceId]; !ok {
-		mock.createAccountCalls[namespaceId] = 1
-	} else {
-		mock.createAccountCalls[namespaceId] = count + 1
-	}
-
-	if namespaceId == createAccountFailure {
-		return uuid.Nil, fmt.Errorf("metronome failure")
-	}
-
-	switch namespaceId {
-	case createAccountFailure:
-		return uuid.Nil, fmt.Errorf("metronome failure")
-	case addDefaultPlanFailure:
-		return uuid.Parse(addDefaultPlanFailure)
-	}
-	return uuid.New(), nil
-}
-
-func (mock *MockBillingSvc) AddDefaultPlan(_ context.Context, accountId MetronomeId) (bool, error) {
-	if count, ok := mock.defaultPlanCalls[accountId.String()]; !ok {
-		mock.defaultPlanCalls[accountId.String()] = 1
-	} else {
-		mock.defaultPlanCalls[accountId.String()] = count + 1
-	}
-
-	if accountId.String() == addDefaultPlanFailure {
-		return false, fmt.Errorf("metronome failure")
-	}
-
-	return true, nil
-}
-
-func (mock *MockBillingSvc) AddPlan(_ context.Context, _ MetronomeId, _ uuid.UUID) (bool, error) {
-	return false, nil
-}
-
-func (mock *MockBillingSvc) PushUsageEvents(_ context.Context, events []*UsageEvent) error {
-	for _, e := range events {
-		if _, ok := mock.pushUsageEventCalls[e.CustomerId]; !ok {
-			mock.pushUsageEventCalls[e.CustomerId] = []*UsageEvent{e}
-		} else {
-			mock.pushUsageEventCalls[e.CustomerId] = append(mock.pushUsageEventCalls[e.CustomerId], e)
-		}
-
-		if e.CustomerId == pushUsageFailure {
-			return fmt.Errorf("metronome failure")
-		}
-	}
-
-	return nil
-}
-
-func (mock *MockBillingSvc) PushStorageEvents(_ context.Context, _ []*StorageEvent) error {
-	panic("implement me")
-}
-
-func (mock *MockBillingSvc) GetInvoices(_ context.Context, _ MetronomeId, _ *api.ListInvoicesRequest) (*api.ListInvoicesResponse, error) {
-	panic("implement me")
-}
-
-func (mock *MockBillingSvc) GetInvoiceById(_ context.Context, _ MetronomeId, _ string) (*api.ListInvoicesResponse, error) {
-	panic("implement me")
 }

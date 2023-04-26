@@ -104,6 +104,7 @@ go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@v2
 go install github.com/google/gnostic/cmd/protoc-gen-openapi@v0 #generate openapi 3.0 spec
 go install github.com/deepmap/oapi-codegen/cmd/oapi-codegen@v1 #generate go http client
 go install github.com/mikefarah/yq/v4@latest                   # used to fix OpenAPI spec in scripts/fix_openapi.sh
+go install github.com/vektra/mockery/v2@v2.20.0 # used for generating mocks
 
 # Install FoundationDB package
 case "${OS}" in
