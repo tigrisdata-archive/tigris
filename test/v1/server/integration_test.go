@@ -46,6 +46,7 @@ var testCreateSchemaComposite = Map{
 				"type":        "integer",
 				"searchIndex": true,
 				"sort":        true,
+				"index":       true,
 			},
 			"int_value": Map{
 				"description": "simple int field",
@@ -142,6 +143,7 @@ var testCreateSchema = Map{
 				"type":        "integer",
 				"searchIndex": true,
 				"sort":        true,
+				"index":       true,
 			},
 			"int_value": Map{
 				"description": "simple int field",

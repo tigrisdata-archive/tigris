@@ -215,7 +215,7 @@ func createBulkDocsReader(ctx context.Context, tx transaction.Tx, table []byte, 
 		if err != nil {
 			return nil, err
 		}
-		return reader.ScanIterator(from, nil)
+		return reader.ScanIterator(from, nil, false)
 	}
 
 	if last != nil {
@@ -223,10 +223,10 @@ func createBulkDocsReader(ctx context.Context, tx transaction.Tx, table []byte, 
 		if err != nil {
 			return nil, err
 		}
-		return reader.ScanIterator(from, nil)
+		return reader.ScanIterator(from, nil, false)
 	}
 
-	return reader.ScanTable(table)
+	return reader.ScanTable(table, false)
 }
 
 var retryErrors = []error{
@@ -248,7 +248,7 @@ func shouldRetryBulkIndex(err error) bool {
 func (q *SecondaryIndexerImpl) scanIndex(ctx context.Context, tx transaction.Tx) (kv.Iterator, error) {
 	start := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.SecondaryIndexKeyword(), KVSubspace)
 	end := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.SecondaryIndexKeyword(), KVSubspace, 0xFF)
-	return tx.ReadRange(ctx, start, end, false)
+	return tx.ReadRange(ctx, start, end, false, false)
 }
 
 func (q *SecondaryIndexerImpl) IndexSize(ctx context.Context, tx transaction.Tx) (int64, error) {
@@ -290,7 +290,7 @@ func (q *SecondaryIndexerImpl) IndexInfo(ctx context.Context, tx transaction.Tx)
 }
 
 func (q *SecondaryIndexerImpl) ReadDocAndDelete(ctx context.Context, tx transaction.Tx, key keys.Key) (int32, error) {
-	iter, err := tx.Read(ctx, key)
+	iter, err := tx.Read(ctx, key, false)
 	if err != nil {
 		return 0, err
 	}

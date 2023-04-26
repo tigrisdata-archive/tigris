@@ -19,6 +19,7 @@ import (
 
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/keys"
+	tsort "github.com/tigrisdata/tigris/query/sort"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/value"
 )
@@ -33,6 +34,14 @@ type (
 	BuildIndexPartsFunc func(fieldName string, val value.Value) []interface{}
 )
 
+type IndexType uint8
+
+const (
+	Unknown IndexType = iota
+	PrimaryIndex
+	SecondaryIndex
+)
+
 type QueryPlanType uint8
 
 const (
@@ -41,22 +50,47 @@ const (
 	FULLRANGE
 )
 
-// The KeyBuilder returns a QueryPlan that contains the keys and type of query against fdb.
-type QueryPlan struct {
-	QueryType QueryPlanType
-	DataType  schema.FieldType
-	Keys      []keys.Key
+func IndexTypeSecondary(indexType IndexType) bool {
+	return indexType == SecondaryIndex
 }
 
-func newQueryPlan(queryType QueryPlanType, dataType schema.FieldType, keys []keys.Key) QueryPlan {
+func IndexTypePrimary(indexType IndexType) bool {
+	return indexType == PrimaryIndex
+}
+
+type TableScanPlan struct {
+	Table   []byte
+	From    keys.Key
+	Reverse bool
+}
+
+// QueryPlan is returned by KeyBuilder that contains the keys and type of query against fdb.
+type QueryPlan struct {
+	QueryType           QueryPlanType
+	FieldName           string
+	DataType            schema.FieldType
+	Keys                []keys.Key
+	Ascending           bool
+	IndexType           IndexType
+	From                keys.Key
+}
+
+func NewQueryPlan(queryType QueryPlanType, fieldName string, dataType schema.FieldType, keys []keys.Key, indexType IndexType) QueryPlan {
 	return QueryPlan{
-		queryType,
-		dataType,
-		keys,
+		QueryType: queryType,
+		FieldName: fieldName,
+		DataType:  dataType,
+		Keys:      keys,
+		Ascending: true,
+		IndexType: indexType,
 	}
 }
 
-// Sort these by QueryPlanType. This creates a simple way to choose a best query plan
+func (q QueryPlan) Reverse() bool {
+	return !q.Ascending
+}
+
+// SortQueryPlans creates a simple way to choose a best query plan
 // based on the queryType.
 func SortQueryPlans(queries []QueryPlan) []QueryPlan {
 	sort.Slice(queries, func(i, j int) bool {
@@ -83,39 +117,39 @@ type fieldable interface {
 // KeyBuilder uses generics so that it can accept either schema.QueryableField or schema.Field
 // so that it can build a query plan for primay or secondary indexes.
 type KeyBuilder[F fieldable] struct {
-	composer   KeyComposer[F]
-	primaryKey bool
+	composer  KeyComposer[F]
+	indexType IndexType
 }
 
-// NewPrimaryKeyEQBuild returns a KeyBuilder for use with schema.Field to build a primary key query plan.
+// NewPrimaryKeyEqBuilder returns a KeyBuilder for use with schema.Field to build a primary key query plan.
 func NewPrimaryKeyEqBuilder(keyEncodingFunc KeyEncodingFunc) *KeyBuilder[*schema.Field] {
 	return NewKeyBuilder[*schema.Field](
-		NewStrictEqKeyComposer[*schema.Field](keyEncodingFunc, PKBuildIndexPartsFunc, true),
-		true,
+		NewStrictEqKeyComposer[*schema.Field](keyEncodingFunc, PKBuildIndexPartsFunc, true, PrimaryIndex),
+		PrimaryIndex,
 	)
 }
 
-// NewSecondaryKeyEQBuild returns a KeyBuilder for use with the secondary index.
+// NewSecondaryKeyEqBuilder returns a KeyBuilder for use with the secondary index.
 func NewSecondaryKeyEqBuilder[F fieldable](keyEncodingFunc KeyEncodingFunc, buildIndexPartsFunc BuildIndexPartsFunc) *KeyBuilder[F] {
 	return NewKeyBuilder[F](
-		NewStrictEqKeyComposer[F](keyEncodingFunc, buildIndexPartsFunc, false),
-		false,
+		NewStrictEqKeyComposer[F](keyEncodingFunc, buildIndexPartsFunc, false, SecondaryIndex),
+		SecondaryIndex,
 	)
 }
 
 // NewRangeKeyBuilder returns a KeyBuilder for use with schema.QueryableField.
-func NewRangeKeyBuilder(composer KeyComposer[*schema.QueryableField], primaryKey bool) *KeyBuilder[*schema.QueryableField] {
+func NewRangeKeyBuilder(composer KeyComposer[*schema.QueryableField], indexType IndexType) *KeyBuilder[*schema.QueryableField] {
 	return &KeyBuilder[*schema.QueryableField]{
-		composer:   composer,
-		primaryKey: primaryKey,
+		composer:  composer,
+		indexType: indexType,
 	}
 }
 
 // NewKeyBuilder returns a KeyBuilder.
-func NewKeyBuilder[F fieldable](composer KeyComposer[F], primaryKey bool) *KeyBuilder[F] {
+func NewKeyBuilder[F fieldable](composer KeyComposer[F], indexType IndexType) *KeyBuilder[F] {
 	return &KeyBuilder[F]{
-		composer:   composer,
-		primaryKey: primaryKey,
+		composer:  composer,
+		indexType: indexType,
 	}
 }
 
@@ -148,7 +182,7 @@ func (k *KeyBuilder[F]) Build(filters []Filter, userDefinedKeys []F) ([]QueryPla
 	for len(queue) > 0 {
 		element := queue[0]
 		if e, ok := element.(LogicalFilter); ok {
-			if e.Type() == OrOP && !k.primaryKey {
+			if e.Type() == OrOP && IndexTypeSecondary(k.indexType) {
 				return nil, errors.InvalidArgument("$or filter is not yet supported for secondary index")
 			}
 			var singleLevel []*Selector
@@ -173,7 +207,7 @@ func (k *KeyBuilder[F]) Build(filters []Filter, userDefinedKeys []F) ([]QueryPla
 	}
 
 	// PrimaryKey is always a single plan with all the keys
-	if k.primaryKey {
+	if IndexTypePrimary(k.indexType) {
 		combined := allKeys[0]
 		for _, plan := range allKeys[1:] {
 			combined.Keys = append(combined.Keys, plan.Keys...)
@@ -202,13 +236,15 @@ type StrictEqKeyComposer[F fieldable] struct {
 	// keyEncodingFunc returns encoded key from index parts
 	keyEncodingFunc     KeyEncodingFunc
 	buildIndexPartsFunc BuildIndexPartsFunc
+	indexType           IndexType
 }
 
-func NewStrictEqKeyComposer[F fieldable](keyEncodingFunc KeyEncodingFunc, buildIndexPartsFunc BuildIndexPartsFunc, matchAll bool) *StrictEqKeyComposer[F] {
+func NewStrictEqKeyComposer[F fieldable](keyEncodingFunc KeyEncodingFunc, buildIndexPartsFunc BuildIndexPartsFunc, matchAll bool, indexType IndexType) *StrictEqKeyComposer[F] {
 	return &StrictEqKeyComposer[F]{
 		matchAll,
 		keyEncodingFunc,
 		buildIndexPartsFunc,
+		indexType,
 	}
 }
 
@@ -221,10 +257,11 @@ func (s *StrictEqKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys 
 	for _, k := range userDefinedKeys {
 		var repeatedFields []*Selector
 		for _, sel := range selectors {
-			if k.Name() == sel.Field.Name() {
-				repeatedFields = append(repeatedFields, sel)
-			}
-			if sel.Matcher.Type() != EQ {
+			if sel.Matcher.Type() == EQ {
+				if k.Name() == sel.Field.Name() {
+					repeatedFields = append(repeatedFields, sel)
+				}
+			} else if s.matchAll {
 				return nil, errors.InvalidArgument("filters only supporting $eq comparison, found '%s'", sel.Matcher.Type())
 			}
 		}
@@ -273,10 +310,12 @@ func (s *StrictEqKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys 
 				return nil, err
 			}
 			dataType := schema.UnknownType
+			fieldName := ""
 			if len(k) == 1 {
 				dataType = k[0].Field.DataType
+				fieldName = k[0].Field.Name()
 			}
-			queryPlans = append(queryPlans, newQueryPlan(EQUAL, dataType, []keys.Key{key}))
+			queryPlans = append(queryPlans, NewQueryPlan(EQUAL, fieldName, dataType, []keys.Key{key}, s.indexType))
 		case OrOP:
 			for _, sel := range k {
 				if len(userDefinedKeys) > 1 {
@@ -291,7 +330,7 @@ func (s *StrictEqKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys 
 					return nil, err
 				}
 
-				queryPlans = append(queryPlans, newQueryPlan(EQUAL, sel.Field.DataType, []keys.Key{key}))
+				queryPlans = append(queryPlans, NewQueryPlan(EQUAL, sel.Field.Name(), sel.Field.DataType, []keys.Key{key}, s.indexType))
 			}
 		}
 	}
@@ -299,19 +338,21 @@ func (s *StrictEqKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys 
 	return queryPlans, nil
 }
 
-// Range Key Composer will generate a range key set on the user defined keys
+// RangeKeyComposer will generate a range key set on the user defined keys
 // It will set the KeyQuery to `FullRange` if the start or end key is not defined in the query
 // if there is a defined start and end key for a range then `Range` is set.
 type RangeKeyComposer[F fieldable] struct {
 	// keyEncodingFunc returns encoded key from index parts
 	keyEncodingFunc     KeyEncodingFunc
 	buildIndexPartsFunc BuildIndexPartsFunc
+	indexType           IndexType
 }
 
-func NewRangeKeyComposer[F fieldable](keyEncodingFunc KeyEncodingFunc, buildIndexParts BuildIndexPartsFunc) *RangeKeyComposer[F] {
+func NewRangeKeyComposer[F fieldable](keyEncodingFunc KeyEncodingFunc, buildIndexParts BuildIndexPartsFunc, indexType IndexType) *RangeKeyComposer[F] {
 	return &RangeKeyComposer[F]{
 		keyEncodingFunc,
 		buildIndexParts,
+		indexType,
 	}
 }
 
@@ -367,7 +408,7 @@ func (s *RangeKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys []F
 		}
 
 		if begin != nil && end != nil {
-			queryPlans = append(queryPlans, newQueryPlan(rangeType, k.Type(), []keys.Key{begin, end}))
+			queryPlans = append(queryPlans, NewQueryPlan(rangeType, k.Name(), k.Type(), []keys.Key{begin, end}, s.indexType))
 		}
 	}
 
@@ -400,4 +441,48 @@ func (s *RangeKeyComposer[F]) isLess(selector *Selector) bool {
 	default:
 		return false
 	}
+}
+
+func QueryPlanFromSort(sortFields *[]tsort.SortField, indexableFields []*schema.QueryableField, encoder KeyEncodingFunc, buildIndexParts BuildIndexPartsFunc, indexType IndexType) (*QueryPlan, error) {
+	if sortFields == nil {
+		return nil, nil
+	}
+
+	if len(*sortFields) == 0 {
+		return nil, nil
+	}
+
+	var field *schema.QueryableField
+	for _, idx := range indexableFields {
+		if idx.FieldName == (*sortFields)[0].Name {
+			field = idx
+
+			break
+		}
+	}
+
+	if field == nil {
+		return nil, errors.InvalidArgument("Sort field is not indexed")
+	}
+
+	min, err := encoder(buildIndexParts(field.FieldName, value.MinOrderValue())...)
+	if err != nil {
+		return nil, err
+	}
+
+	max, err := encoder(buildIndexParts(field.FieldName, value.MaxOrderValue())...)
+	if err != nil {
+		return nil, err
+	}
+
+	plan := &QueryPlan{
+		FieldName:           field.FieldName,
+		QueryType:           FULLRANGE,
+		DataType:            field.DataType,
+		Ascending:           (*sortFields)[0].Ascending,
+		Keys:                []keys.Key{min, max},
+		IndexType:           indexType,
+	}
+
+	return plan, nil
 }

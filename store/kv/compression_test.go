@@ -123,7 +123,7 @@ func TestCompression(t *testing.T) {
 
 		tx, err = store.BeginTx(ctx)
 		require.NoError(t, err)
-		it, err := tx.Read(ctx, table, BuildKey("p1_", 1))
+		it, err := tx.Read(ctx, table, BuildKey("p1_", 1), false)
 		require.NoError(t, err)
 
 		found := 0

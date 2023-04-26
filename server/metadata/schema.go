@@ -143,7 +143,7 @@ func schemaGetLatest(ctx context.Context, tx transaction.Tx, key keys.Key) (*sch
 
 // Get returns all the version stored for a collection inside a given namespace and database.
 func schemaGet(ctx context.Context, tx transaction.Tx, key keys.Key) (schema.Versions, error) {
-	it, err := tx.Read(ctx, key)
+	it, err := tx.Read(ctx, key, false)
 	if err != nil {
 		return nil, err
 	}

@@ -357,6 +357,15 @@ func TestDescribeCollection(t *testing.T) {
 		{
 			"fields": []Map{
 				{
+					"name": "pkey_int",
+				},
+			},
+			"name":  "pkey_int",
+			"state": "INDEX ACTIVE",
+		},
+		{
+			"fields": []Map{
+				{
 					"name": "string_value",
 				},
 			},

@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/keys"
+	tsort "github.com/tigrisdata/tigris/query/sort"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/value"
 )
@@ -128,7 +129,7 @@ func TestKeyBuilderStrictEq(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		b := NewKeyBuilder[*schema.Field](NewStrictEqKeyComposer[*schema.Field](dummyEncodeFunc, PKBuildIndexPartsFunc, true), true)
+		b := NewKeyBuilder[*schema.Field](NewStrictEqKeyComposer[*schema.Field](dummyEncodeFunc, PKBuildIndexPartsFunc, true, PrimaryIndex), PrimaryIndex)
 		filters := testFilters(t, c.userFields, c.userInput, false)
 		buildKeys, err := b.Build(filters, c.userKeys)
 		require.Equal(t, c.expError, err)
@@ -163,7 +164,7 @@ func TestKeyBuilderSecondaryEq(t *testing.T) {
 			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}},
 			[]byte(`{"b": 10, "a": {"$eq": 1}}`),
 			nil,
-			[]QueryPlan{newQueryPlan(EQUAL, schema.Int64Type, []keys.Key{keys.NewKey(nil, int64(1))})},
+			[]QueryPlan{NewQueryPlan(EQUAL, "a", schema.Int64Type, []keys.Key{keys.NewKey(nil, int64(1))}, SecondaryIndex)},
 		},
 		{
 			// single user defined key
@@ -171,7 +172,7 @@ func TestKeyBuilderSecondaryEq(t *testing.T) {
 			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.Int64Type}},
 			[]byte(`{"b": 10}`),
 			nil,
-			[]QueryPlan{newQueryPlan(EQUAL, schema.Int64Type, []keys.Key{keys.NewKey(nil, int64(10))})},
+			[]QueryPlan{NewQueryPlan(EQUAL, "b", schema.Int64Type, []keys.Key{keys.NewKey(nil, int64(10))}, SecondaryIndex)},
 		},
 		{
 			// multiple defined query keys
@@ -180,8 +181,8 @@ func TestKeyBuilderSecondaryEq(t *testing.T) {
 			[]byte(`{"b": 10, "a": {"$eq": 1}}`),
 			nil,
 			[]QueryPlan{
-				newQueryPlan(EQUAL, schema.Int64Type, []keys.Key{keys.NewKey(nil, int64(1))}),
-				newQueryPlan(EQUAL, schema.Int64Type, []keys.Key{keys.NewKey(nil, int64(10))}),
+				NewQueryPlan(EQUAL, "a", schema.Int64Type, []keys.Key{keys.NewKey(nil, int64(1))}, SecondaryIndex),
+				NewQueryPlan(EQUAL, "b", schema.Int64Type, []keys.Key{keys.NewKey(nil, int64(10))}, SecondaryIndex),
 			},
 		},
 		{
@@ -191,9 +192,9 @@ func TestKeyBuilderSecondaryEq(t *testing.T) {
 			[]byte(`{"b": 10, "a": {"$eq": true}, "c": "foo"}`),
 			nil,
 			[]QueryPlan{
-				newQueryPlan(EQUAL, schema.BoolType, []keys.Key{keys.NewKey(nil, true)}),
-				newQueryPlan(EQUAL, schema.Int64Type, []keys.Key{keys.NewKey(nil, int64(10))}),
-				newQueryPlan(EQUAL, schema.StringType, []keys.Key{keys.NewKey(nil, encodeString("foo"))}),
+				NewQueryPlan(EQUAL, "a", schema.BoolType, []keys.Key{keys.NewKey(nil, true)}, SecondaryIndex),
+				NewQueryPlan(EQUAL, "b", schema.Int64Type, []keys.Key{keys.NewKey(nil, int64(10))}, SecondaryIndex),
+				NewQueryPlan(EQUAL, "c", schema.StringType, []keys.Key{keys.NewKey(nil, encodeString("foo"))}, SecondaryIndex),
 			},
 		},
 		{
@@ -203,10 +204,10 @@ func TestKeyBuilderSecondaryEq(t *testing.T) {
 			[]byte(`{"$and":[{"a":1},{"b":"aaa"},{"$and":[{"a":2},{"c":5},{"b":"bbb"}]}]}`),
 			nil,
 			[]QueryPlan{
-				newQueryPlan(EQUAL, schema.Int64Type, []keys.Key{keys.NewKey(nil, int64(1))}),
-				newQueryPlan(EQUAL, schema.StringType, []keys.Key{keys.NewKey(nil, encodeString("aaa"))}),
-				newQueryPlan(EQUAL, schema.Int64Type, []keys.Key{keys.NewKey(nil, int64(2))}),
-				newQueryPlan(EQUAL, schema.StringType, []keys.Key{keys.NewKey(nil, encodeString("bbb"))}),
+				NewQueryPlan(EQUAL, "a", schema.Int64Type, []keys.Key{keys.NewKey(nil, int64(1))}, SecondaryIndex),
+				NewQueryPlan(EQUAL, "b", schema.StringType, []keys.Key{keys.NewKey(nil, encodeString("aaa"))}, SecondaryIndex),
+				NewQueryPlan(EQUAL, "a", schema.Int64Type, []keys.Key{keys.NewKey(nil, int64(2))}, SecondaryIndex),
+				NewQueryPlan(EQUAL, "b", schema.StringType, []keys.Key{keys.NewKey(nil, encodeString("bbb"))}, SecondaryIndex),
 			},
 		},
 		{
@@ -216,6 +217,14 @@ func TestKeyBuilderSecondaryEq(t *testing.T) {
 			[]byte(`{"$or" :[{"$and":[{"K1":"vK1"},{"K2":1}]},{"$and":[{"K1": "vK1"}, {"K2":3}]}]}`),
 			errors.InvalidArgument("$or filter is not yet supported for secondary index"),
 			nil,
+		},
+		{
+			// eq combined with another filter
+			[]*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
+			[]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}},
+			[]byte(`{"a": 10, "b": {"$gt": 1}}`),
+			nil,
+			[]QueryPlan{NewQueryPlan(EQUAL, "a", schema.Int64Type, []keys.Key{keys.NewKey(nil, int64(10))}, SecondaryIndex)},
 		},
 		// NOT SUPPORTED YET
 		// {
@@ -256,7 +265,7 @@ func TestKeyBuilderSecondaryEq(t *testing.T) {
 		// },
 	}
 	for _, c := range cases {
-		b := NewKeyBuilder[*schema.Field](NewStrictEqKeyComposer[*schema.Field](dummyEncodeFunc, PKBuildIndexPartsFunc, false), false)
+		b := NewKeyBuilder[*schema.Field](NewStrictEqKeyComposer[*schema.Field](dummyEncodeFunc, PKBuildIndexPartsFunc, false, SecondaryIndex), SecondaryIndex)
 		filters := testFilters(t, c.userFields, c.userInput, true)
 		queryPlans, err := b.Build(filters, c.userKeys)
 		require.Equal(t, c.expError, err)
@@ -337,7 +346,7 @@ func TestKeyBuilderRangeKey(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		b := NewKeyBuilder[*schema.Field](NewRangeKeyComposer[*schema.Field](dummyEncodeFunc, dummyBuildIndexParts), false)
+		b := NewKeyBuilder[*schema.Field](NewRangeKeyComposer[*schema.Field](dummyEncodeFunc, dummyBuildIndexParts, SecondaryIndex), SecondaryIndex)
 		filters := testFilters(t, c.userFields, c.userInput, true)
 		queryPlans, err := b.Build(filters, c.userKeys)
 		assert.NoError(t, err)
@@ -356,7 +365,7 @@ func TestKeyBuilderMultipleRangeKey(t *testing.T) {
 	userKeys := []*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}}
 	filter := []byte(`{"$and": [{"a": {"$gte": 1}}, {"a": {"$lt": 10}}, {"b": {"$gt": 3}}, {"b": {"$lte": 30}}]}`)
 
-	b := NewKeyBuilder[*schema.Field](NewRangeKeyComposer[*schema.Field](dummyEncodeFunc, dummyBuildIndexParts), false)
+	b := NewKeyBuilder[*schema.Field](NewRangeKeyComposer[*schema.Field](dummyEncodeFunc, dummyBuildIndexParts, SecondaryIndex), SecondaryIndex)
 	filters := testFilters(t, userFields, filter, true)
 	keyReads, err := b.Build(filters, userKeys)
 
@@ -366,9 +375,70 @@ func TestKeyBuilderMultipleRangeKey(t *testing.T) {
 	assert.Equal(t, []keys.Key{keys.NewKey(nil, value.ToSecondaryOrder(schema.Int64Type, nil), "b", int64(3), 0xFF), keys.NewKey(nil, value.ToSecondaryOrder(schema.Int64Type, nil), "b", int64(30), 0xFF)}, keyReads[1].Keys)
 }
 
+func TestSortQueryPlanBuilder(t *testing.T) {
+	userFields := []*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.BoolType}}
+	cases := []struct {
+		sort *[]tsort.SortField
+		err  error
+		plan *QueryPlan
+	}{
+		{
+			nil,
+			nil,
+			nil,
+		},
+		{
+			&[]tsort.SortField{},
+			nil,
+			nil,
+		},
+		{
+			&[]tsort.SortField{{Name: "c"}},
+			errors.InvalidArgument("Sort field is not indexed"),
+			nil,
+		},
+		{
+			&[]tsort.SortField{{Name: "a", Ascending: true}},
+			nil,
+			&QueryPlan{
+				FieldName: "a",
+				QueryType: FULLRANGE,
+				DataType:  schema.Int64Type,
+				Ascending: true,
+				Keys: []keys.Key{
+					keys.NewKey(nil, value.ToSecondaryOrder(schema.NullType, nil), "a", nil),
+					keys.NewKey(nil, 127, "a", 0xFF),
+				},
+				IndexType: SecondaryIndex,
+			},
+		},
+		{
+			&[]tsort.SortField{{Name: "b", Ascending: false}},
+			nil,
+			&QueryPlan{
+				FieldName: "b",
+				QueryType: FULLRANGE,
+				DataType:  schema.BoolType,
+				Ascending: false,
+				Keys: []keys.Key{
+					keys.NewKey(nil, value.ToSecondaryOrder(schema.NullType, nil), "b", nil),
+					keys.NewKey(nil, 127, "b", 0xFF),
+				},
+				IndexType: SecondaryIndex,
+			},
+		},
+	}
+
+	for _, check := range cases {
+		plan, err := QueryPlanFromSort(check.sort, userFields, dummyEncodeFunc, dummyBuildIndexParts, SecondaryIndex)
+		assert.Equal(t, check.err, err)
+		assert.Equal(t, check.plan, plan)
+	}
+}
+
 func BenchmarkStrictEqKeyComposer_Compose(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		kb := NewKeyBuilder[*schema.Field](NewStrictEqKeyComposer[*schema.Field](dummyEncodeFunc, PKBuildIndexPartsFunc, true), true)
+		kb := NewKeyBuilder[*schema.Field](NewStrictEqKeyComposer[*schema.Field](dummyEncodeFunc, PKBuildIndexPartsFunc, true, PrimaryIndex), PrimaryIndex)
 		filters := testFilters(b, []*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.Int64Type}}, []byte(`{"b": 10, "a": {"$eq": 10}, "c": "foo"}}`), false)
 		_, err := kb.Build(filters, []*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.Int64Type}})
 		require.NoError(b, err)

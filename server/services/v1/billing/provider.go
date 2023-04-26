@@ -18,9 +18,9 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/config"
 	ulog "github.com/tigrisdata/tigris/util/log"
-	api "github.com/tigrisdata/tigris/api/server/v1"
 )
 
 //go:generate mockery --name Provider
