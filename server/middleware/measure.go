@@ -23,11 +23,13 @@ import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/defaults"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -50,6 +52,23 @@ func measureMethod(fullMethod string) bool {
 		}
 	}
 	return true
+}
+
+func logError(ctx context.Context, err error, reqType string) {
+	httpCode := 999 // Integer value for the unknown response code
+	userAgent := defaults.UnknownValue
+	message := defaults.UnknownValue
+	var tigrisErr *api.TigrisError
+	if grpcMetaData, grpcMetaDataFound := metadata.FromIncomingContext(ctx); grpcMetaDataFound {
+		if userAgents, userAgentFound := grpcMetaData["user-agent"]; userAgentFound {
+			userAgent = userAgents[0]
+		}
+	}
+	if errors.As(err, &tigrisErr) {
+		message = tigrisErr.Message
+		httpCode = api.ToHTTPCode(tigrisErr.Code)
+	}
+	log.Error().Err(err).Int("HTTP response", httpCode).Str("message", message).Str("user-agent", userAgent).Str("request type", reqType).Msg("grpc request error")
 }
 
 func measureUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
@@ -77,6 +96,7 @@ func measureUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryS
 			measurement.CountErrorForScope(metrics.RequestsErrorCount, measurement.GetRequestErrorTags(err))
 			_ = measurement.FinishWithError(ctx, err)
 			measurement.RecordDuration(metrics.RequestsErrorRespTime, measurement.GetRequestErrorTags(err))
+			logError(ctx, err, "unary")
 			return nil, err
 		}
 		// Request was ok
@@ -117,6 +137,7 @@ func measureStream() grpc.StreamServerInterceptor {
 			measurement.CountErrorForScope(metrics.RequestsErrorCount, measurement.GetRequestErrorTags(err))
 			_ = measurement.FinishWithError(wrapped.WrappedContext, err)
 			measurement.RecordDuration(metrics.RequestsErrorRespTime, measurement.GetRequestErrorTags(err))
+			logError(wrapped.WrappedContext, err, "stream")
 			ulog.E(err)
 		} else {
 			measurement.CountOkForScope(metrics.RequestsOkCount, measurement.GetRequestOkTags())
@@ -134,7 +155,7 @@ func measureStream() grpc.StreamServerInterceptor {
 func (w *wrappedStream) RecvMsg(m interface{}) error {
 	recvErr := w.ServerStream.RecvMsg(m)
 	if recvErr != nil {
-		ulog.E(recvErr)
+		log.Error().Err(recvErr).Interface("message", m).Msg("stream receive message error")
 	}
 	if w.measurement == nil {
 		return recvErr
@@ -167,7 +188,7 @@ func (w *wrappedStream) RecvMsg(m interface{}) error {
 func (w *wrappedStream) SendMsg(m interface{}) error {
 	err := w.ServerStream.SendMsg(m)
 	if err != nil {
-		return errors.Internal("Could not handle stream send message err: %v", err.Error())
+		log.Error().Err(err).Interface("message", m).Msg("stream send message error")
 	}
 	if w.measurement == nil {
 		return nil
