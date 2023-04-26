@@ -22,6 +22,7 @@ import (
 	"net/http"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/query/filter"
 	qsearch "github.com/tigrisdata/tigris/query/search"
 	"github.com/tigrisdata/tigris/util"
@@ -155,6 +156,7 @@ func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query
 		Searches: params,
 	}, StreamContentType)
 	if err != nil {
+		log.Error().Err(err).Interface("query", query).Msg("search error")
 		return nil, s.convertToInternalError(err)
 	}
 
@@ -164,6 +166,7 @@ func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query
 
 	var dest tsApi.MultiSearchResult
 	if err := decoder.Decode(&dest); err != nil {
+		log.Error().Err(err).Interface("query", query).Msg("search error")
 		return nil, s.convertToInternalError(err)
 	}
 	for _, each := range dest.Results {
@@ -179,6 +182,7 @@ func (s *storeImpl) Search(_ context.Context, table string, query *qsearch.Query
 
 			var errorsRes errorsResult
 			if err = jsoniter.Unmarshal(res.Body, &errorsRes); err == nil && len(errorsRes.Res) > 0 {
+				log.Error().Err(err).Interface("query", query).Msg("search error")
 				return nil, NewSearchError(errorsRes.Res[0].Code, ErrCodeUnhandled, errorsRes.Res[0].Message)
 			}
 		}
