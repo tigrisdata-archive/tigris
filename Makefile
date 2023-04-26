@@ -121,7 +121,7 @@ generate_mocks:
 clean_mocks:
 	for ifaces in $(MOCK_INTERFACES) ; do \
 		MOCK_DIR=$${ifaces%:*} ; \
-		rm $${MOCK_DIR}/mock_*.go ; \
+		rm -f $${MOCK_DIR}/mock_*.go ; \
   	done
 
 # Build the server binary.
