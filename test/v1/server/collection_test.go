@@ -305,8 +305,30 @@ func TestDropCollection(t *testing.T) {
 func TestDescribeCollection(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)
+	dropCollection(t, db, coll)
 
-	createCollection(t, db, coll, testCreateSchema).Status(http.StatusOK)
+	schema1 := Map{
+		"schema": Map{
+			"title": coll,
+			"properties": Map{
+				"int_field": Map{
+					"type":  "integer",
+					"index": true,
+				},
+				"string_field": Map{
+					"type":  "string",
+					"index": true,
+				},
+				"double_value": Map{
+					"type":  "number",
+					"index": true,
+				},
+			},
+			"primary_key": []interface{}{"int_field"},
+		},
+	}
+
+	createCollection(t, db, coll, schema1).Status(http.StatusOK)
 	resp := describeCollection(t, db, coll, Map{})
 
 	indexes := []Map{
@@ -321,24 +343,6 @@ func TestDescribeCollection(t *testing.T) {
 		{
 			"fields": []Map{
 				{
-					"name": "bool_value",
-				},
-			},
-			"name":  "bool_value",
-			"state": "INDEX ACTIVE",
-		},
-		{
-			"fields": []Map{
-				{
-					"name": "date_time_value",
-				},
-			},
-			"name":  "date_time_value",
-			"state": "INDEX ACTIVE",
-		},
-		{
-			"fields": []Map{
-				{
 					"name": "double_value",
 				},
 			},
@@ -348,37 +352,19 @@ func TestDescribeCollection(t *testing.T) {
 		{
 			"fields": []Map{
 				{
-					"name": "int_value",
+					"name": "int_field",
 				},
 			},
-			"name":  "int_value",
+			"name":  "int_field",
 			"state": "INDEX ACTIVE",
 		},
 		{
 			"fields": []Map{
 				{
-					"name": "pkey_int",
+					"name": "string_field",
 				},
 			},
-			"name":  "pkey_int",
-			"state": "INDEX ACTIVE",
-		},
-		{
-			"fields": []Map{
-				{
-					"name": "string_value",
-				},
-			},
-			"name":  "string_value",
-			"state": "INDEX ACTIVE",
-		},
-		{
-			"fields": []Map{
-				{
-					"name": "uuid_value",
-				},
-			},
-			"name":  "uuid_value",
+			"name":  "string_field",
 			"state": "INDEX ACTIVE",
 		},
 	}
@@ -389,6 +375,64 @@ func TestDescribeCollection(t *testing.T) {
 		ValueEqual("collection", coll).
 		ValueEqual("size", 0).
 		ValueEqual("indexes", indexes)
+
+	schema2 := Map{
+		"schema": Map{
+			"title": coll,
+			"properties": Map{
+				"int_field": Map{
+					"type":  "integer",
+					"index": true,
+				},
+				"string_field": Map{
+					"type":  "string",
+					"index": true,
+				},
+				"double_value": Map{
+					"type": "number",
+				},
+			},
+			"primary_key": []interface{}{"int_field"},
+		},
+	}
+
+	createCollection(t, db, coll, schema2).Status(http.StatusOK)
+	resp2 := describeCollection(t, db, coll, Map{})
+	indexesUpdated := []Map{
+		{
+			"name":  "_tigris_created_at",
+			"state": "INDEX ACTIVE",
+		},
+		{
+			"name":  "_tigris_updated_at",
+			"state": "INDEX ACTIVE",
+		},
+		{
+			"fields": []Map{
+				{
+					"name": "int_field",
+				},
+			},
+			"name":  "int_field",
+			"state": "INDEX ACTIVE",
+		},
+		{
+			"fields": []Map{
+				{
+					"name": "string_field",
+				},
+			},
+			"name":  "string_field",
+			"state": "INDEX ACTIVE",
+		},
+	}
+
+	resp2.Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("collection", coll).
+		ValueEqual("size", 0).
+		ValueEqual("indexes", indexesUpdated)
 
 	// cleanup
 	dropCollection(t, db, coll)

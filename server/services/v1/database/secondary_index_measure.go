@@ -103,6 +103,14 @@ func (m *secondaryIndexerWithMetrics) Update(ctx context.Context, tx transaction
 	return
 }
 
+func (m *secondaryIndexerWithMetrics) DeleteIndex(ctx context.Context, tx transaction.Tx, index *schema.Index) (err error) {
+	m.measure(ctx, "DeleteIndex", func(ctx context.Context) error {
+		err = m.q.DeleteIndex(ctx, tx, index)
+		return err
+	})
+	return
+}
+
 type secondaryIndexReaderWithMetrics struct {
 	reader *SecondaryIndexReaderImpl
 }

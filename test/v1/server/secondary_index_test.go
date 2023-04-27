@@ -127,7 +127,6 @@ func TestQuery_EQ(t *testing.T) {
 		ids      []int
 		keyRange []string
 	}{
-
 		{
 			Map{"int_value": 10},
 			[]int{1},
@@ -886,7 +885,7 @@ func TestQuery_BuildIndex(t *testing.T) {
 		ids := getIds(resp)
 		assert.Equal(t, query.count, len(ids), query.filter)
 		explain := explainQuery(t, db, coll, query.filter, nil, nil, nil)
-		assert.Equal(t, explain.ReadType, "secondary index")
+		assert.Equal(t, "secondary index", explain.ReadType)
 	}
 }
 
