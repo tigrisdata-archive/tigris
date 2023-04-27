@@ -96,8 +96,39 @@ func (r *UsageReporter) pushUsage() error {
 			log.Error().Msgf("invalid namespace id %s", namespaceId)
 			continue
 		}
+		if len(nsMeta.StrId) == 0 {
+			// invalid namespace id, permanently disable account creation
+			nsMeta.Accounts.DisableMetronome()
+			err := r.nsMgr.UpdateNamespaceMetadata(r.ctx, *nsMeta)
+			if err != nil {
+				log.Error().Err(err).Msgf("error saving metadata for user %s", nsMeta.StrId)
+			}
+			continue
+		}
 
-		r.ensureAccountExists(nsMeta)
+		if id, enabled := nsMeta.Accounts.GetMetronomeId(); !enabled {
+			continue
+		} else if len(id) == 0 {
+			log.Info().Msgf("creating Metronome account for %s", nsMeta.StrId)
+
+			billingId, err := r.billingSvc.CreateAccount(r.ctx, nsMeta.StrId, nsMeta.Name)
+			if !ulog.E(err) && billingId != uuid.Nil {
+				nsMeta.Accounts.AddMetronome(billingId.String())
+
+				// add default plan to the user
+				added, err := r.billingSvc.AddDefaultPlan(r.ctx, billingId)
+				if err != nil || !added {
+					log.Error().Err(err).Msgf("error adding default plan to user id %s", nsMeta.StrId)
+				}
+
+				// save updated namespace metadata
+				err = r.nsMgr.UpdateNamespaceMetadata(r.ctx, *nsMeta)
+				if err != nil {
+					log.Error().Err(err).Msgf("error saving metadata for user %s", nsMeta.StrId)
+				}
+			}
+		}
+
 		// continue to send event, metronome will disregard it if account does not exist
 		event := NewUsageEventBuilder().
 			WithNamespaceId(nsMeta.StrId).
@@ -124,9 +155,10 @@ func (r *UsageReporter) pushStorage() error {
 	events := make([]*StorageEvent, 0, len(tenants))
 	for _, t := range tenants {
 		nsMeta := t.GetNamespace().Metadata()
-		r.ensureAccountExists(&nsMeta)
-		// continue to send event, metronome will disregard it if account does not exist
-
+		if id, enabled := nsMeta.Accounts.GetMetronomeId(); len(id) == 0 || !enabled {
+			// user doesn't have metronome integration; skip
+			continue
+		}
 		var dbBytes int64
 		// ensure size
 		dbStats, err := t.Size(r.ctx)
@@ -155,28 +187,4 @@ func (r *UsageReporter) pushStorage() error {
 	}
 
 	return r.billingSvc.PushStorageEvents(r.ctx, events)
-}
-
-func (r *UsageReporter) ensureAccountExists(nsMeta *metadata.NamespaceMetadata) {
-	_, enabled := nsMeta.Accounts.GetMetronomeId()
-	if !enabled {
-		log.Info().Msgf("creating Metronome account for %s", nsMeta.StrId)
-
-		billingId, err := r.billingSvc.CreateAccount(r.ctx, nsMeta.StrId, nsMeta.Name)
-		if !ulog.E(err) && billingId != uuid.Nil {
-			nsMeta.Accounts.AddMetronome(billingId.String())
-
-			// add default plan to the user
-			added, err := r.billingSvc.AddDefaultPlan(r.ctx, billingId)
-			if err != nil || !added {
-				log.Error().Err(err).Msgf("error adding default plan to user id %s", nsMeta.StrId)
-			}
-
-			// save updated namespace metadata
-			err = r.nsMgr.UpdateNamespaceMetadata(r.ctx, *nsMeta)
-			if err != nil {
-				log.Error().Err(err).Msgf("error saving metadata for user %s", nsMeta.StrId)
-			}
-		}
-	}
 }
