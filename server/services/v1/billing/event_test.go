@@ -106,7 +106,6 @@ func TestStorageEvent(t *testing.T) {
 		require.Equal(t, actual["timestamp"], "2023-02-21T08:53:41Z")
 		require.Equal(t, actual["event_type"], "storage")
 		require.Equal(t, actual["properties"], map[string]any{})
-
 	})
 }
 

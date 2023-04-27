@@ -47,13 +47,19 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 				},
 			},
 			"ns3": {
-				Id:    3,
-				StrId: "ns3",
-				Name:  "with metronome disabled",
+				Id:       3,
+				StrId:    "ns3",
+				Name:     "with metronome disabled",
+				Accounts: metadata.AccountIntegrations{},
+			},
+			"ns4": {
+				Id:    4,
+				StrId: "ns4",
+				Name:  "with empty metronome id",
 				Accounts: metadata.AccountIntegrations{
 					Metronome: &metadata.Metronome{
-						Enabled: false,
-						Id:      "m3",
+						Enabled: true,
+						Id:      "",
 					},
 				},
 			},
@@ -78,6 +84,11 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 					WriteUnits:  32,
 					SearchUnits: 33,
 				},
+				"ns4": {
+					ReadUnits:   41,
+					WriteUnits:  42,
+					SearchUnits: 43,
+				},
 				"doesNotExist": { // this should be ignored and other events should be processed as normal
 					ReadUnits:   1,
 					WriteUnits:  2,
@@ -89,7 +100,7 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 		mockProvider := NewMockProvider(t)
 
 		// CreateAccount and AddDefaultPlan calls only for "ns1" and "ns3"
-		for _, n := range []string{"ns1", "ns3"} {
+		for _, n := range []string{"ns1", "ns3", "ns4"} {
 			mId := uuid.New()
 			mockProvider.EXPECT().CreateAccount(mock.Anything, namespaces[n].StrId, namespaces[n].Name).
 				Return(mId, nil).
@@ -102,9 +113,9 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 		// Usage events pushed for each namespace
 		mockProvider.EXPECT().PushUsageEvents(mock.Anything, mock.Anything).
 			RunAndReturn(func(ctx context.Context, events []*UsageEvent) error {
-				require.Len(t, events, 3)
+				require.Len(t, events, 4)
 				for _, e := range events {
-					require.Contains(t, []string{"ns1", "ns2", "ns3"}, e.CustomerId)
+					require.Contains(t, []string{"ns1", "ns2", "ns3", "ns4"}, e.CustomerId)
 
 					expected, actual := glbStatus.data.Tenants[e.CustomerId], *e.Properties
 					require.Equal(t, expected.WriteUnits+expected.ReadUnits, actual["database_units"])
@@ -145,7 +156,6 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 		require.Equal(t, 0, tenantMgr.refreshNamespaceCalls)
 		// no calls should be made to metronome provider
 		require.Empty(t, mockProvider.Calls)
-
 	})
 
 	t.Run("fails to create metronome account", func(t *testing.T) {
@@ -260,7 +270,7 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 		tenantMgr := &MockTenantManager{data: namespaces}
 		glbStatus := &MockGlobalStatus{data: metrics.TenantStatusTimeChunk{
 			StartTime: time.Time{},
-			EndTime:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
+			EndTime:   time.Time{},
 			Tenants: map[string]*metrics.TenantStatus{
 				nsId: {
 					ReadUnits:   4,
@@ -286,6 +296,104 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 
 		err := reporter.pushUsage()
 		require.ErrorContains(t, err, "failed to push usage events")
+	})
+
+	t.Run("tenant does not exist", func(t *testing.T) {
+		tenantMgr := &MockTenantManager{data: map[string]metadata.NamespaceMetadata{}}
+		glbStatus := &MockGlobalStatus{data: metrics.TenantStatusTimeChunk{
+			StartTime: time.Time{},
+			EndTime:   time.Time{},
+			Tenants: map[string]*metrics.TenantStatus{
+				"ns1": {
+					SearchUnits: 6,
+				},
+			},
+		}}
+		mockProvider := NewMockProvider(t)
+		mockProvider.EXPECT().PushUsageEvents(mock.Anything, mock.Anything).
+			RunAndReturn(func(ctx context.Context, events []*UsageEvent) error {
+				require.Empty(t, events)
+				return nil
+			}).Once()
+		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider)
+		err := reporter.pushUsage()
+		require.NoError(t, err)
+	})
+
+	t.Run("metronome gets disabled for invalid namespaceId", func(t *testing.T) {
+		nsId := ""
+		namespaces := map[string]metadata.NamespaceMetadata{
+			nsId: {
+				Id:    1,
+				StrId: nsId,
+				Accounts: metadata.AccountIntegrations{
+					Metronome: &metadata.Metronome{
+						Enabled: true,
+						Id:      uuid.New().String(),
+					},
+				},
+			},
+		}
+		glbStatus := &MockGlobalStatus{data: metrics.TenantStatusTimeChunk{
+			StartTime: time.Time{},
+			EndTime:   time.Time{},
+			Tenants: map[string]*metrics.TenantStatus{
+				nsId: {
+					SearchUnits: 6,
+				},
+			},
+		}}
+		tenantMgr := &MockTenantManager{data: namespaces}
+
+		mockProvider := NewMockProvider(t)
+		mockProvider.EXPECT().PushUsageEvents(mock.Anything, mock.Anything).
+			RunAndReturn(func(ctx context.Context, events []*UsageEvent) error {
+				require.Empty(t, events)
+				return nil
+			}).Once()
+
+		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider)
+		err := reporter.pushUsage()
+		require.NoError(t, err)
+		updated := tenantMgr.GetNamespaceMetadata(context.TODO(), nsId)
+		require.False(t, updated.Accounts.Metronome.Enabled)
+	})
+
+	t.Run("tenant is skipped if metronome is disabled", func(t *testing.T) {
+		nsId := "ns1"
+		namespaces := map[string]metadata.NamespaceMetadata{
+			nsId: {
+				Id:    1,
+				StrId: nsId,
+				Accounts: metadata.AccountIntegrations{
+					Metronome: &metadata.Metronome{
+						Enabled: false,
+						Id:      uuid.New().String(),
+					},
+				},
+			},
+		}
+		glbStatus := &MockGlobalStatus{data: metrics.TenantStatusTimeChunk{
+			StartTime: time.Time{},
+			EndTime:   time.Time{},
+			Tenants: map[string]*metrics.TenantStatus{
+				nsId: {
+					SearchUnits: 6,
+				},
+			},
+		}}
+		tenantMgr := &MockTenantManager{data: namespaces}
+
+		mockProvider := NewMockProvider(t)
+		mockProvider.EXPECT().PushUsageEvents(mock.Anything, mock.Anything).
+			RunAndReturn(func(ctx context.Context, events []*UsageEvent) error {
+				require.Empty(t, events)
+				return nil
+			}).Once()
+
+		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider)
+		err := reporter.pushUsage()
+		require.NoError(t, err)
 	})
 }
 

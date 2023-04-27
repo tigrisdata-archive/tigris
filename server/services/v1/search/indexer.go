@@ -33,7 +33,8 @@ import (
 // writeTransformer is used to transform the incoming user document to the document that we need to index as we need
 // inject internal fields and flatten objects.
 type writeTransformer interface {
-	toSearch(rawDoc []byte, doc map[string]any) (string, map[string]any, error)
+	getOrGenerateId(rawDoc []byte, doc map[string]any) (string, error)
+	toSearch(id string, doc map[string]any) (map[string]any, error)
 }
 
 // readTransformer is to inverse the indexing document to the user document.
@@ -65,31 +66,21 @@ func newWriteTransformer(index *schema.SearchIndex, ts *internal.Timestamp, isUp
 	}
 }
 
-func (transformer *transformer) toSearch(rawDoc []byte, doc map[string]any) (string, map[string]any, error) {
-	id, err := transformer.transformStart(rawDoc, doc)
-	if err != nil {
-		return "", nil, err
+func (transformer *transformer) toSearch(id string, doc map[string]any) (map[string]any, error) {
+	if err := transformer.transformStart(id, doc); err != nil {
+		return nil, err
 	}
 
-	transformed, err := transformer.transformEnd(doc)
-	return id, transformed, err
+	return transformer.transformEnd(doc)
 }
 
 // transformStart is used to validate/generate the id if missing. After this method, the incoming payload is guaranteed to have
 // "id" as top level key in the map.
-func (transformer *transformer) transformStart(rawDoc []byte, doc map[string]any) (string, error) {
-	id, err := transformer.getOrGenerateId(rawDoc, doc)
-	if err != nil {
-		return "", err
-	}
-	if len(id) == 0 {
-		return "", errors.InvalidArgument("empty 'id' is not allowed")
-	}
-
+func (transformer *transformer) transformStart(id string, doc map[string]any) error {
 	if _, err := transformer.converter.Convert(doc, transformer.index.GetInt64FieldsPath()); err != nil {
 		// User may have an explicit "id" field in the schema which is integer, but it is not a document "id" field
 		// so we need to first do any conversion before we change it to "_tigris_id".
-		return "", err
+		return err
 	}
 
 	if transformer.index.SearchIDField != nil && transformer.index.SearchIDField.FieldName != schema.SearchId {
@@ -102,7 +93,7 @@ func (transformer *transformer) transformStart(rawDoc []byte, doc map[string]any
 	}
 
 	doc[schema.SearchId] = id
-	return id, nil
+	return nil
 }
 
 // transformEnd is responsible for flattening the map, update the document with timestamp fields, perform any other
@@ -288,6 +279,9 @@ func (transformer *transformer) getOrGenerateId(rawDoc []byte, doc map[string]an
 		if dtp != jsonparser.String {
 			return "", errors.InvalidArgument("wrong type of 'id' field")
 		}
+		if len(value) == 0 {
+			return "", errors.InvalidArgument("empty 'id' is not allowed")
+		}
 
 		return string(value), nil
 	}
@@ -300,6 +294,9 @@ func (transformer *transformer) getOrGenerateId(rawDoc []byte, doc map[string]an
 	strId, ok := id.(string)
 	if !ok {
 		return "", errors.InvalidArgument("wrong type of 'id' field")
+	}
+	if len(strId) == 0 {
+		return "", errors.InvalidArgument("empty 'id' is not allowed")
 	}
 
 	return strId, nil

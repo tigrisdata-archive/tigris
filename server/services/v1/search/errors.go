@@ -76,6 +76,11 @@ func convertStoreErrToApiErr(id string, code int, msg string) *api.Error {
 			Code:    http.StatusConflict,
 			Message: fmt.Sprintf("A document with id '%s' already exists.", id),
 		}
+	case http.StatusBadRequest:
+		return &api.Error{
+			Code:    http.StatusBadRequest,
+			Message: msg,
+		}
 	default:
 		return &api.Error{
 			Code:    api.Code(code),

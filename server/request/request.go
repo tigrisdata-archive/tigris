@@ -223,25 +223,25 @@ func (m *Metadata) SaveToContext(ctx context.Context) context.Context {
 
 func (m *Metadata) SetNamespace(ctx context.Context, namespace string) {
 	m.namespace = namespace
-	if !config.DefaultConfig.Auth.EnableNamespaceIsolation {
+	if !config.DefaultConfig.Auth.EnableNamespaceIsolation && !config.DefaultConfig.Auth.Enabled {
 		m.namespaceName = defaults.DefaultNamespaceName
 		return
 	}
 	if namespace == defaults.UnknownValue {
 		// The namespace is unknown for reporting purposes, no need to get the tenant metadata for further
 		// metadata for that.
-		m.namespaceName = "unknown"
+		m.namespaceName = defaults.UnknownValue
 		return
 	}
 	tenant, err := tenantGetter.GetTenant(ctx, namespace)
 	if err != nil {
-		m.namespaceName = defaults.DefaultNamespaceName
+		m.namespaceName = defaults.UnknownValue
 		ulog.E(err)
 		return
 	}
 
 	if tenant == nil {
-		m.namespaceName = defaults.DefaultNamespaceName
+		m.namespaceName = defaults.UnknownValue
 	} else {
 		m.namespaceName = tenant.GetNamespace().Metadata().Name
 	}
