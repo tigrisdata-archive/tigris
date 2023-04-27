@@ -22,10 +22,10 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/defaults"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
 	ulog "github.com/tigrisdata/tigris/util/log"
-	"github.com/tigrisdata/tigris/server/defaults"
 )
 
 type UsageReporter struct {
