@@ -710,6 +710,65 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 		assert.Equal(t, 8, count)
 		assert.NoError(t, tx.Commit(ctx))
 	})
+
+	t.Run("delete index", func(t *testing.T) {
+		coll := indexStore.coll
+		_ = kvStore.DropTable(ctx, coll.EncodedTableIndexName)
+		tx, err := tm.StartTx(ctx)
+		assert.NoError(t, err)
+
+		info, err := indexStore.IndexInfo(ctx, tx)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(0), info.Rows)
+		assert.Equal(t, info.Size, int64(0))
+
+		for i := 0; i < 5; i++ {
+			td, pk := createDoc(`{"id":1, "double_f":2,"created":"2023-01-16T12:55:17.304154Z","updated": "2023-01-16T12:55:17.304154Z", "arr":[1]}`, []interface{}{i}...)
+			err = indexStore.Index(ctx, tx, td, pk)
+			assert.NoError(t, err)
+		}
+
+		info, err = indexStore.IndexInfo(ctx, tx)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(35), info.Rows)
+		err = tx.Commit(ctx)
+		assert.NoError(t, err)
+
+		tx, err = tm.StartTx(ctx)
+		assert.NoError(t, err)
+		indexMeta := schema.Index{
+			Id:   1,
+			Name: "double_f",
+			Fields: []*schema.Field{
+				{
+					FieldName: "double_f",
+				},
+			},
+		}
+		assert.NoError(t, indexStore.DeleteIndex(ctx, tx, &indexMeta))
+
+		err = tx.Commit(ctx)
+		assert.NoError(t, err)
+
+		tx, err = tm.StartTx(ctx)
+		assert.NoError(t, err)
+
+		info, err = indexStore.IndexInfo(ctx, tx)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(30), info.Rows)
+
+		iter, err := indexStore.scanIndex(ctx, tx)
+		assert.NoError(t, err)
+
+		count := 0
+		var row kv.KeyValue
+		for iter.Next(&row) {
+			count += 1
+		}
+		assert.NoError(t, err)
+		assert.Nil(t, iter.Err())
+		assert.Equal(t, 30, count)
+	})
 }
 
 func TestBulkIndexing(t *testing.T) {

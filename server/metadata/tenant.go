@@ -1484,6 +1484,15 @@ func (tenant *Tenant) UpdateCollectionIndexes(ctx context.Context, tx transactio
 	return nil
 }
 
+func (tenant *Tenant) GetCollectionMetadata(ctx context.Context, tx transaction.Tx, db *Database, collectionName string) (*CollectionMetadata, error) {
+	metadata, err := tenant.metaStore.Collection().Get(ctx, tx, tenant.namespace.Id(), db.id, collectionName)
+	if err != nil {
+		return nil, err
+	}
+
+	return metadata, nil
+}
+
 // DropCollection is to drop a collection and its associated indexes. It removes the "created" entry from the encoding
 // subspace and adds a "dropped" entry for the same collection key.
 func (tenant *Tenant) DropCollection(ctx context.Context, tx transaction.Tx, db *Database, collectionName string) error {

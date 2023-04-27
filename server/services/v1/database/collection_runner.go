@@ -101,8 +101,13 @@ func (runner *CollectionQueryRunner) createOrUpdate(ctx context.Context, tx tran
 		return Response{}, ctx, err
 	}
 
+	var oldMetadata *metadata.CollectionMetadata
 	if db.GetCollection(req.GetCollection()) == nil {
 		collectionExists = true
+		oldMetadata, err = tenant.GetCollectionMetadata(ctx, tx, db, req.GetCollection())
+		if err != nil && err.Error() != "not found" {
+			return Response{}, ctx, errors.InvalidArgument("could not get existing collection metadata")
+		}
 	}
 
 	if !collectionExists && req.OnlyCreate {
@@ -136,6 +141,23 @@ func (runner *CollectionQueryRunner) createOrUpdate(ctx context.Context, tx tran
 	}
 	if collectionExists {
 		countDDLCreateUnit(ctx)
+
+		if config.DefaultConfig.SecondaryIndex.WriteEnabled && oldMetadata != nil {
+			updatedMetadata, err := tenant.GetCollectionMetadata(ctx, tx, db, req.GetCollection())
+			if err != nil {
+				return Response{}, nil, errors.InvalidArgument("could not get updated collection metadata")
+			}
+
+			indexer := NewSecondaryIndexer(db.GetCollection(req.GetCollection()))
+
+			for _, oldIndex := range oldMetadata.Indexes {
+				if !schema.HasIndex(updatedMetadata.Indexes, oldIndex) {
+					if err = indexer.DeleteIndex(ctx, tx, oldIndex); err != nil {
+						return Response{}, nil, errors.Aborted("could not remove old index")
+					}
+				}
+			}
+		}
 	} else {
 		countDDLUpdateUnit(ctx, true)
 	}
