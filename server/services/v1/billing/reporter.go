@@ -25,6 +25,7 @@ import (
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
 	ulog "github.com/tigrisdata/tigris/util/log"
+	"github.com/tigrisdata/tigris/server/defaults"
 )
 
 type UsageReporter struct {
@@ -96,7 +97,7 @@ func (r *UsageReporter) pushUsage() error {
 			log.Error().Msgf("invalid namespace id %s", namespaceId)
 			continue
 		}
-		if len(nsMeta.StrId) == 0 {
+		if len(nsMeta.StrId) == 0 || nsMeta.StrId == defaults.DefaultNamespaceName {
 			// invalid namespace id, permanently disable account creation
 			nsMeta.Accounts.DisableMetronome()
 			err := r.nsMgr.UpdateNamespaceMetadata(r.ctx, *nsMeta)
