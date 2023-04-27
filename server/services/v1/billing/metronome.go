@@ -67,7 +67,7 @@ func (m *Metronome) measure(ctx context.Context, scope tally.Scope, operation st
 		me.IncrementCount(scope, metrics.GetResponseCodeTags(resp.StatusCode), "request", 1)
 	}
 
-	availability := int64(1)
+	availability := int64(100)
 	var errTags map[string]string
 	if err != nil {
 		availability = 0

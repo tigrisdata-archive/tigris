@@ -120,15 +120,25 @@ func (a *AccountIntegrations) AddMetronome(id string) {
 	}
 }
 
-// GetMetronomeId returns the linked Metronome account id and a boolean to indicate if integration is enabled.
+// DisableMetronome for this user
+func (a *AccountIntegrations) DisableMetronome() {
+	if a.Metronome == nil {
+		a.Metronome = &Metronome{}
+	}
+	a.Metronome.Enabled = false
+}
+
+// GetMetronomeId returns the linked Metronome account id and a boolean to indicate if integration could be enabled.
 func (a *AccountIntegrations) GetMetronomeId() (string, bool) {
 	if a.Metronome == nil {
-		return "", false
+		return "", true
 	}
 	return a.Metronome.Id, a.Metronome.Enabled
 }
 
 type Metronome struct {
+	// true - Either customer is already registered or can be registered with Metronome
+	// false - do not use Metronome for this user
 	Enabled bool
 	Id      string
 }

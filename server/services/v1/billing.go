@@ -73,7 +73,7 @@ func (b *billingService) getMetronomeId(ctx context.Context, namespaceId string)
 	}
 
 	mIdStr, enabled := nsMeta.Accounts.GetMetronomeId()
-	if !enabled {
+	if !enabled || len(mIdStr) == 0 {
 		log.Error().Msgf("No metronome account for the namespace: %s", namespaceId)
 		return uuid.Nil, errors.Internal("No account linked for the user")
 	}
