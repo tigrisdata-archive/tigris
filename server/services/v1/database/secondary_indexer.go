@@ -248,8 +248,7 @@ func shouldRetryBulkIndex(err error) bool {
 }
 
 func (q *SecondaryIndexerImpl) DeleteIndex(ctx context.Context, tx transaction.Tx, index *schema.Index) error {
-	field := index.Fields[0]
-	indexKey := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.SecondaryIndexKeyword(), KVSubspace, field.Name())
+	indexKey := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.SecondaryIndexKeyword(), KVSubspace, index.Name)
 
 	return tx.Delete(ctx, indexKey)
 }
