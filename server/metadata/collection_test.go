@@ -255,8 +255,8 @@ func TestCollectionWithIndexes(t *testing.T) {
 
 		updatedMeta, err := c.Update(ctx, tx, 1, 1, "name5", 1, idxsUpdated)
 		require.NoError(t, err)
-		require.Len(t, updatedMeta.Indexes, 2)
-		require.Equal(t, updatedMeta.Indexes[1].State, schema.INDEX_DELETED)
+		require.Len(t, updatedMeta.Indexes, 1)
+		require.Equal(t, updatedMeta.Indexes[0].State, schema.INDEX_ACTIVE)
 	})
 
 	t.Run("list", func(t *testing.T) {

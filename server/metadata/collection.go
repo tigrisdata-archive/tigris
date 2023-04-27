@@ -79,24 +79,20 @@ func (c *CollectionSubspace) Create(ctx context.Context, tx transaction.Tx, nsID
 func (c *CollectionSubspace) updateMetadataIndexes(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, name string, id uint32, metadata *CollectionMetadata, updatedIndexes []*schema.Index,
 ) error {
 	for _, updateIdx := range updatedIndexes {
-		if !hasIndex(metadata.Indexes, updateIdx) {
+		existingIdx := schema.FindIndex(metadata.Indexes, updateIdx.Name)
+		if existingIdx != nil {
+			if updateIdx.State == schema.UNKNOWN {
+				updateIdx.State = existingIdx.State
+			}
+		} else {
 			updateIdx.State = schema.INDEX_WRITE_MODE
 			if err := c.createBuildIndexTask(ctx, tx, nsID, dbID, name, id, updateIdx); err != nil {
 				return err
 			}
-			metadata.Indexes = append(metadata.Indexes, updateIdx)
 		}
 	}
 
-	for _, existing := range metadata.Indexes {
-		if !hasIndex(updatedIndexes, existing) {
-			existing.State = schema.INDEX_DELETED
-			if err := c.createDeleteIndexTask(ctx, tx, nsID, dbID, name, id, existing); err != nil {
-				return err
-			}
-		}
-	}
-
+	metadata.Indexes = updatedIndexes
 	return nil
 }
 
@@ -126,10 +122,6 @@ func (c *CollectionSubspace) Update(ctx context.Context, tx transaction.Tx, nsID
 }
 
 func (c *CollectionSubspace) createBuildIndexTask(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, name string, id uint32, index *schema.Index) error {
-	return nil
-}
-
-func (c *CollectionSubspace) createDeleteIndexTask(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, name string, id uint32, index *schema.Index) error {
 	return nil
 }
 
@@ -247,14 +239,4 @@ func (c *CollectionSubspace) list(ctx context.Context, tx transaction.Tx, namesp
 	}
 
 	return collections, nil
-}
-
-func hasIndex(indexes []*schema.Index, idx *schema.Index) bool {
-	for _, index := range indexes {
-		if index.Name == idx.Name {
-			return true
-		}
-	}
-
-	return false
 }

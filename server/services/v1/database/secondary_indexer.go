@@ -50,6 +50,8 @@ type SecondaryIndexer interface {
 	Index(ctx context.Context, tx transaction.Tx, td *internal.TableData, primaryKey []interface{}) error
 	// Update an existing document in the secondary index
 	Update(ctx context.Context, tx transaction.Tx, newTd *internal.TableData, oldTd *internal.TableData, primaryKey []interface{}) error
+	// Delete the KVS for an index
+	DeleteIndex(ctx context.Context, tx transaction.Tx, index *schema.Index) error
 }
 
 type IndexRow struct {
@@ -243,6 +245,13 @@ func shouldRetryBulkIndex(err error) bool {
 		}
 	}
 	return false
+}
+
+func (q *SecondaryIndexerImpl) DeleteIndex(ctx context.Context, tx transaction.Tx, index *schema.Index) error {
+	field := index.Fields[0]
+	indexKey := keys.NewKey(q.coll.EncodedTableIndexName, q.coll.SecondaryIndexKeyword(), KVSubspace, field.Name())
+
+	return tx.Delete(ctx, indexKey)
 }
 
 func (q *SecondaryIndexerImpl) scanIndex(ctx context.Context, tx transaction.Tx) (kv.Iterator, error) {

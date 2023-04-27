@@ -393,6 +393,26 @@ func (i *Index) IsCompatible(i1 *Index) error {
 	return nil
 }
 
+func HasIndex(indexes []*Index, idx *Index) bool {
+	for _, index := range indexes {
+		if index.Name == idx.Name {
+			return true
+		}
+	}
+
+	return false
+}
+
+func FindIndex(indexes []*Index, name string) *Index {
+	for _, idx := range indexes {
+		if idx.Name == name {
+			return idx
+		}
+	}
+
+	return nil
+}
+
 type FieldBuilder struct {
 	FieldName            string
 	Description          string              `json:"description,omitempty"`
