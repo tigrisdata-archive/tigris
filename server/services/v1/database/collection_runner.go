@@ -106,7 +106,7 @@ func (runner *CollectionQueryRunner) createOrUpdate(ctx context.Context, tx tran
 		collectionExists = true
 		oldMetadata, err = tenant.GetCollectionMetadata(ctx, tx, db, req.GetCollection())
 		if err != nil && err != errors.ErrNotFound {
-			return Response{}, ctx, errors.InvalidArgument("could not get existing collection metadata")
+			return Response{}, ctx, createApiError(err)
 		}
 	}
 
