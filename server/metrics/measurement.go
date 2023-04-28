@@ -196,6 +196,14 @@ func (m *Measurement) GetCollectionSizeTags() map[string]string {
 	return filterTags(standardizeTags(m.tags, getCollectionSizeTagKeys()), config.DefaultConfig.Metrics.Size.FilteredTags)
 }
 
+func (m *Measurement) GetSearchSizeTagKeys() map[string]string {
+	return filterTags(standardizeTags(m.tags, getSearchSizeTagKeys()), config.DefaultConfig.Metrics.Size.FilteredTags)
+}
+
+func (m *Measurement) GetSearchIndexSizeTagKeys() map[string]string {
+	return filterTags(standardizeTags(m.tags, getSearchIndexSizeTagKeys()), config.DefaultConfig.Metrics.Size.FilteredTags)
+}
+
 func (m *Measurement) GetNetworkTags() map[string]string {
 	return filterTags(standardizeTags(m.tags, getNetworkTagKeys()), config.DefaultConfig.Metrics.Network.FilteredTags)
 }

@@ -219,6 +219,18 @@ func TestTracing(t *testing.T) {
 			assert.NotNil(t, collSizeTags[key])
 		}
 		assert.Equal(t, len(getCollectionSizeTagKeys()), len(collSizeTags))
+
+		searchSizeTags := measurement.GetSearchSizeTagKeys()
+		for _, key := range getSearchSizeTagKeys() {
+			assert.NotNil(t, searchSizeTags[key])
+		}
+		assert.Equal(t, len(getSearchSizeTagKeys()), len(searchSizeTags))
+
+		searchIndexSizeTags := measurement.GetSearchIndexSizeTagKeys()
+		for _, key := range getSearchIndexSizeTagKeys() {
+			assert.NotNil(t, searchIndexSizeTags[key])
+		}
+		assert.Equal(t, len(getSearchIndexSizeTagKeys()), len(searchIndexSizeTags))
 	})
 
 	t.Run("Test network tags", func(t *testing.T) {

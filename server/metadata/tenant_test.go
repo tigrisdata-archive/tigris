@@ -1072,6 +1072,162 @@ func TestTenantManager_DataSize(t *testing.T) {
 	})
 }
 
+func TestTenantManager_SearchDataSize(t *testing.T) {
+	tm := transaction.NewManager(kvStore)
+	m, ctx, cancel := NewTestTenantMgr(t, kvStore)
+	defer cancel()
+
+	docSize := 10 * 1024
+
+	var err error
+	searchConfig := config.GetTestSearchConfig()
+	searchConfig.AuthKey = "ts_test_key"
+	m.searchStore, err = search.NewStore(searchConfig)
+	require.NoError(t, err)
+
+	tenant, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 1, NewNamespaceMetadata(1, "ns-test1", "ns-test1-display_name")})
+	require.NoError(t, err)
+
+	tmTx, err := tm.StartTx(ctx)
+	require.NoError(t, err)
+	err = tenant.CreateProject(ctx, tmTx, tenantProj1, nil)
+	require.NoError(t, err)
+
+	err = tenant.CreateProject(ctx, tmTx, tenantProj2, nil)
+	require.NoError(t, err)
+	require.NoError(t, tenant.reload(ctx, tmTx, nil, nil))
+
+	//proj1
+	proj1, err := tenant.GetProject(tenantProj1)
+	require.NoError(t, err)
+
+	//proj2
+	proj2, err := tenant.GetProject(tenantProj2)
+	require.NoError(t, err)
+
+	jsSchema := []byte(`{
+        "title": "test_index",
+		"properties": {
+			"K1": {
+				"type": "string"
+			},
+			"K2": {
+				"type": "integer"
+			},
+			"D1": {
+				"type": "string",
+				"maxLength": 128
+			}
+		}
+	}`)
+	factory1, err := schema.NewFactoryBuilder(true).BuildSearch("prj1_test_index_1", jsSchema)
+	require.NoError(t, err)
+	//create prj1_test_index_1 for proj1
+	require.NoError(t, tenant.CreateSearchIndex(ctx, tmTx, proj1, factory1))
+
+	factory2, err := schema.NewFactoryBuilder(true).BuildSearch("prj1_test_index_2", jsSchema)
+	require.NoError(t, err)
+	//create prj1_test_index_2 for proj1
+	require.NoError(t, tenant.CreateSearchIndex(ctx, tmTx, proj1, factory2))
+
+	factory3, err := schema.NewFactoryBuilder(true).BuildSearch("prj2_test_index", jsSchema)
+	require.NoError(t, err)
+	//create index for proj2
+	require.NoError(t, tenant.CreateSearchIndex(ctx, tmTx, proj2, factory3))
+
+	indexesInSearchStore, err := tenant.searchStore.AllCollections(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, indexesInSearchStore[tenant.Encoder.EncodeSearchTableName(tenant.namespace.Id(), proj1.Id(), factory1.Name)])
+	require.NotNil(t, indexesInSearchStore[tenant.Encoder.EncodeSearchTableName(tenant.namespace.Id(), proj1.Id(), factory2.Name)])
+	require.NotNil(t, indexesInSearchStore[tenant.Encoder.EncodeSearchTableName(tenant.namespace.Id(), proj2.Id(), factory3.Name)])
+
+	t.Run("search_index_size", func(t *testing.T) {
+		//initial size 0
+		sz, err := tenant.ProjectSearchSize(ctx, tmTx, proj1)
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), sz.StoredBytes)
+
+		sz, err = tenant.ProjectSearchSize(ctx, tmTx, proj2)
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), sz.StoredBytes)
+
+		sz, err = tenant.SearchSize(ctx, tmTx)
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), sz.StoredBytes)
+
+		// proj1 , "prj1_test_index_1"
+		index, ok := proj1.search.GetIndex("prj1_test_index_1")
+		require.True(t, ok)
+		table := m.encoder.EncodeFDBSearchTableName(index.StoreIndexName())
+		err = kvStore.DropTable(ctx, table)
+		require.NoError(t, err)
+
+		tx, err := kvStore.BeginTx(ctx)
+		require.NoError(t, err)
+
+		for i := 0; i < 100; i++ {
+			err = tx.Insert(ctx, table, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+			require.NoError(t, err)
+		}
+		_ = tx.Commit(ctx)
+
+		sz, err = tenant.SearchIndexSize(ctx, index)
+		require.NoError(t, err)
+		assert.Equal(t, int64(1024000), sz.StoredBytes)
+
+		//proj2, "test_index_2"
+		index, ok = proj2.search.GetIndex("prj2_test_index")
+		require.True(t, ok)
+		table = m.encoder.EncodeFDBSearchTableName(index.StoreIndexName())
+		err = kvStore.DropTable(ctx, table)
+		require.NoError(t, err)
+
+		tx, err = kvStore.BeginTx(ctx)
+		require.NoError(t, err)
+
+		for i := 0; i < 150; i++ {
+			err = tx.Insert(ctx, table, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+		}
+		_ = tx.Commit(ctx)
+
+		sz, err = tenant.SearchIndexSize(ctx, index)
+		require.NoError(t, err)
+		assert.Equal(t, int64(1536000), sz.StoredBytes)
+
+		//proj1
+		index, ok = proj1.search.GetIndex("prj1_test_index_2")
+		require.True(t, ok)
+		table = m.encoder.EncodeFDBSearchTableName(index.StoreIndexName())
+		err = kvStore.DropTable(ctx, table)
+		require.NoError(t, err)
+
+		tx, err = kvStore.BeginTx(ctx)
+		require.NoError(t, err)
+
+		for i := 0; i < 100; i++ {
+			err = tx.Insert(ctx, table, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+		}
+		_ = tx.Commit(ctx)
+
+		//search size of proj1
+		sz, err = tenant.ProjectSearchSize(ctx, tmTx, proj1)
+		require.NoError(t, err)
+		assert.Equal(t, int64(2048000), sz.StoredBytes)
+
+		//search size of proj1
+		sz, err = tenant.ProjectSearchSize(ctx, tmTx, proj2)
+		require.NoError(t, err)
+		assert.Equal(t, int64(1536000), sz.StoredBytes)
+
+		// search size
+		sz, err = tenant.SearchSize(ctx, tmTx)
+		require.NoError(t, err)
+		assert.Equal(t, int64(3584000), sz.StoredBytes)
+
+		testClearDictionary(ctx, m.metaStore, m.kvStore)
+	})
+}
+
 func TestMain(m *testing.M) {
 	ulog.Configure(ulog.LogConfig{Level: "disabled", Format: "console"})
 

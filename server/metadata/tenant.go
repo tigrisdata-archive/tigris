@@ -1632,6 +1632,16 @@ func (tenant *Tenant) listEncIndexName(db *Database) [][]byte {
 	return colls
 }
 
+func (tenant *Tenant) listEncSearchIndexName(searchIndexes []*schema.SearchIndex) [][]byte {
+	encSearchIndexes := make([][]byte, 0, len(searchIndexes))
+
+	for _, v := range searchIndexes {
+		encSearchIndexes = append(encSearchIndexes, tenant.Encoder.EncodeFDBSearchTableName(v.StoreIndexName()))
+	}
+
+	return encSearchIndexes
+}
+
 func (tenant *Tenant) sumSizes(ctx context.Context, tables [][]byte) (*kv.TableStats, error) {
 	var sumStats kv.TableStats
 
@@ -1732,6 +1742,47 @@ func (tenant *Tenant) CollectionIndexSize(ctx context.Context, db *Database, col
 	}
 
 	return stats, nil
+}
+
+func (tenant *Tenant) SearchIndexSize(ctx context.Context, index *schema.SearchIndex) (*kv.TableStats, error) {
+	tenant.Lock()
+	defer tenant.Unlock()
+
+	indexName := tenant.Encoder.EncodeFDBSearchTableName(index.StoreIndexName())
+	stats, err := tenant.kvStore.GetTableStats(ctx, indexName)
+	if err != nil {
+		return nil, err
+	}
+
+	return stats, nil
+}
+
+func (tenant *Tenant) ProjectSearchSize(ctx context.Context, tx transaction.Tx, project *Project) (*kv.TableStats, error) {
+
+	projectSearchIndexes, err := tenant.ListSearchIndexes(ctx, tx, project)
+	if err != nil {
+		return nil, err
+	}
+
+	encSearchIndexes := tenant.listEncSearchIndexName(projectSearchIndexes)
+
+	return tenant.sumSizes(ctx, encSearchIndexes)
+}
+
+func (tenant *Tenant) SearchSize(ctx context.Context, tx transaction.Tx) (*kv.TableStats, error) {
+	sIndexes := make([][]byte, 0)
+
+	for _, p := range tenant.projects {
+		projectSearchIndexes, err := tenant.ListSearchIndexes(ctx, tx, p)
+
+		if err != nil {
+			return nil, err
+		}
+
+		sIndexes = append(sIndexes, tenant.listEncSearchIndexName(projectSearchIndexes)...)
+	}
+
+	return tenant.sumSizes(ctx, sIndexes)
 }
 
 type Project struct {
