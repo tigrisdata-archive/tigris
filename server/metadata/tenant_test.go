@@ -1097,11 +1097,11 @@ func TestTenantManager_SearchDataSize(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, tenant.reload(ctx, tmTx, nil, nil))
 
-	//proj1
+	// proj1
 	proj1, err := tenant.GetProject(tenantProj1)
 	require.NoError(t, err)
 
-	//proj2
+	// proj2
 	proj2, err := tenant.GetProject(tenantProj2)
 	require.NoError(t, err)
 
@@ -1122,17 +1122,17 @@ func TestTenantManager_SearchDataSize(t *testing.T) {
 	}`)
 	factory1, err := schema.NewFactoryBuilder(true).BuildSearch("prj1_test_index_1", jsSchema)
 	require.NoError(t, err)
-	//create prj1_test_index_1 for proj1
+
 	require.NoError(t, tenant.CreateSearchIndex(ctx, tmTx, proj1, factory1))
 
 	factory2, err := schema.NewFactoryBuilder(true).BuildSearch("prj1_test_index_2", jsSchema)
 	require.NoError(t, err)
-	//create prj1_test_index_2 for proj1
+
 	require.NoError(t, tenant.CreateSearchIndex(ctx, tmTx, proj1, factory2))
 
 	factory3, err := schema.NewFactoryBuilder(true).BuildSearch("prj2_test_index", jsSchema)
 	require.NoError(t, err)
-	//create index for proj2
+
 	require.NoError(t, tenant.CreateSearchIndex(ctx, tmTx, proj2, factory3))
 
 	indexesInSearchStore, err := tenant.searchStore.AllCollections(ctx)
@@ -1142,7 +1142,6 @@ func TestTenantManager_SearchDataSize(t *testing.T) {
 	require.NotNil(t, indexesInSearchStore[tenant.Encoder.EncodeSearchTableName(tenant.namespace.Id(), proj2.Id(), factory3.Name)])
 
 	t.Run("search_index_size", func(t *testing.T) {
-		//initial size 0
 		sz, err := tenant.ProjectSearchSize(ctx, tmTx, proj1)
 		require.NoError(t, err)
 		assert.Equal(t, int64(0), sz.StoredBytes)
@@ -1175,7 +1174,6 @@ func TestTenantManager_SearchDataSize(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, int64(1024000), sz.StoredBytes)
 
-		//proj2, "test_index_2"
 		index, ok = proj2.search.GetIndex("prj2_test_index")
 		require.True(t, ok)
 		table = m.encoder.EncodeFDBSearchTableName(index.StoreIndexName())
@@ -1187,6 +1185,7 @@ func TestTenantManager_SearchDataSize(t *testing.T) {
 
 		for i := 0; i < 150; i++ {
 			err = tx.Insert(ctx, table, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+			require.NoError(t, err)
 		}
 		_ = tx.Commit(ctx)
 
@@ -1194,7 +1193,6 @@ func TestTenantManager_SearchDataSize(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, int64(1536000), sz.StoredBytes)
 
-		//proj1
 		index, ok = proj1.search.GetIndex("prj1_test_index_2")
 		require.True(t, ok)
 		table = m.encoder.EncodeFDBSearchTableName(index.StoreIndexName())
@@ -1206,15 +1204,14 @@ func TestTenantManager_SearchDataSize(t *testing.T) {
 
 		for i := 0; i < 100; i++ {
 			err = tx.Insert(ctx, table, kv.BuildKey(fmt.Sprintf("aaa%d", i)), &internal.TableData{RawData: make([]byte, docSize)})
+			require.NoError(t, err)
 		}
 		_ = tx.Commit(ctx)
 
-		//search size of proj1
 		sz, err = tenant.ProjectSearchSize(ctx, tmTx, proj1)
 		require.NoError(t, err)
 		assert.Equal(t, int64(2048000), sz.StoredBytes)
 
-		//search size of proj1
 		sz, err = tenant.ProjectSearchSize(ctx, tmTx, proj2)
 		require.NoError(t, err)
 		assert.Equal(t, int64(1536000), sz.StoredBytes)

@@ -120,7 +120,7 @@ func (a *AccountIntegrations) AddMetronome(id string) {
 	}
 }
 
-// DisableMetronome for this user
+// DisableMetronome for this user.
 func (a *AccountIntegrations) DisableMetronome() {
 	if a.Metronome == nil {
 		a.Metronome = &Metronome{}

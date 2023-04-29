@@ -1758,7 +1758,6 @@ func (tenant *Tenant) SearchIndexSize(ctx context.Context, index *schema.SearchI
 }
 
 func (tenant *Tenant) ProjectSearchSize(ctx context.Context, tx transaction.Tx, project *Project) (*kv.TableStats, error) {
-
 	projectSearchIndexes, err := tenant.ListSearchIndexes(ctx, tx, project)
 	if err != nil {
 		return nil, err
@@ -1774,7 +1773,6 @@ func (tenant *Tenant) SearchSize(ctx context.Context, tx transaction.Tx) (*kv.Ta
 
 	for _, p := range tenant.projects {
 		projectSearchIndexes, err := tenant.ListSearchIndexes(ctx, tx, p)
-
 		if err != nil {
 			return nil, err
 		}
