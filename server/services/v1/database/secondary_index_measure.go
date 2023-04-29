@@ -111,55 +111,6 @@ func (m *secondaryIndexerWithMetrics) DeleteIndex(ctx context.Context, tx transa
 	return
 }
 
-type secondaryIndexReaderWithMetrics struct {
-	reader *SecondaryIndexReaderImpl
-}
-
 func NewSecondaryIndexReader(ctx context.Context, tx transaction.Tx, coll *schema.DefaultCollection, filter *filter.WrappedFilter, queryPlan *filter.QueryPlan) (Iterator, error) {
-	if config.DefaultConfig.Metrics.SecondaryIndex.Enabled {
-		return newSecondaryIndexReaderWithMetrics(ctx, tx, coll, filter, queryPlan)
-	}
-
 	return newSecondaryIndexReaderImpl(ctx, tx, coll, filter, queryPlan)
-}
-
-func newSecondaryIndexReaderWithMetrics(ctx context.Context, tx transaction.Tx, coll *schema.DefaultCollection, filter *filter.WrappedFilter, queryPlan *filter.QueryPlan) (Iterator, error) {
-	reader, err := newSecondaryIndexReaderImpl(ctx, tx, coll, filter, queryPlan)
-	if err != nil {
-		return nil, err
-	}
-
-	return &secondaryIndexReaderWithMetrics{
-		reader: reader,
-	}, nil
-}
-
-func (m *secondaryIndexReaderWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
-	// Low level measurement wrapper that is called by the measure functions on the appropriate receiver
-	measurement := metrics.NewMeasurement(metrics.SecondaryIndexServiceName, name, metrics.SecondaryIndexSpanType, metrics.GetSecondaryIndexTags(name))
-	ctx = measurement.StartTracing(ctx, true)
-	err := f(ctx)
-	if err != nil {
-		// Request had error
-		measurement.CountErrorForScope(metrics.SecondaryIndexErrorCount, measurement.GetSecondaryIndexErrorTags(err))
-		_ = measurement.FinishWithError(ctx, err)
-		measurement.RecordDuration(metrics.SecondaryIndexErrorRespTime, measurement.GetSecondaryIndexErrorTags(err))
-	} else {
-		// Request was ok
-		measurement.CountOkForScope(metrics.SecondaryIndexOkCount, measurement.GetSecondaryIndexOkTags())
-		_ = measurement.FinishTracing(ctx)
-		measurement.RecordDuration(metrics.SecondaryIndexRespTime, measurement.GetSecondaryIndexOkTags())
-	}
-}
-
-func (m *secondaryIndexReaderWithMetrics) Next(row *Row) (hasNext bool) {
-	m.measure(m.reader.ctx, "Next", func(ctx context.Context) error {
-		hasNext = m.reader.Next(row)
-		return nil
-	})
-	return
-}
-
-func (m *secondaryIndexReaderWithMetrics) Interrupted() error {
-	return m.reader.Interrupted()
 }
