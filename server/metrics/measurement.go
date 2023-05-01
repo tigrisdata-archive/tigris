@@ -60,6 +60,7 @@ type Measurement struct {
 	startedAt       time.Time
 	stoppedAt       time.Time
 	projectCollTags map[string]string
+	nDocs           int64
 }
 
 type MeasurementCtxKey struct{}
@@ -89,6 +90,10 @@ func (m *Measurement) countOk(scope tally.Scope, tags map[string]string) {
 
 func (m *Measurement) IncrementCount(scope tally.Scope, tags map[string]string, counterName string, count int64) {
 	scope.Tagged(tags).Counter(counterName).Inc(count)
+}
+
+func (m *Measurement) SetNDocs(value int64) {
+	m.nDocs += value
 }
 
 func (m *Measurement) CountUnits(reqStatus *RequestStatus, tags map[string]string) {
@@ -366,7 +371,7 @@ func (m *Measurement) logLongRequest() {
 	if totalTime < config.DefaultConfig.Metrics.LogLongMethodTime {
 		return
 	}
-	log.Error().Int64("total time (ms)", int64(totalTime/time.Millisecond)).Time("start time", m.startedAt).Time("stop time", m.stoppedAt).Str("grpc method", m.getTag("grpc_method")).Int64("threshold", int64(config.DefaultConfig.Metrics.LogLongMethodTime/time.Millisecond)).Msg("long method call")
+	log.Error().Int64("total time (ms)", int64(totalTime/time.Millisecond)).Time("start time", m.startedAt).Time("stop time", m.stoppedAt).Str("grpc method", m.getTag("grpc_method")).Int64("threshold", int64(config.DefaultConfig.Metrics.LogLongMethodTime/time.Millisecond)).Int64("result documents", m.nDocs).Msg("long method call")
 }
 
 func (m *Measurement) recordTimerDuration(scope tally.Scope, tags map[string]string) {
