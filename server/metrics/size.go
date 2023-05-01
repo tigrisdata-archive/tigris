@@ -31,7 +31,7 @@ func initializeSizeScopes() {
 	DbSize = SizeMetrics.SubScope("db")
 	CollectionSize = SizeMetrics.SubScope("collection")
 	SearchSize = SizeMetrics.SubScope("search")
-	SearchIndexSize = SizeMetrics.SubScope("search-index")
+	SearchIndexSize = SizeMetrics.SubScope("search_index")
 }
 
 func getNameSpaceSizeTagKeys() []string {
