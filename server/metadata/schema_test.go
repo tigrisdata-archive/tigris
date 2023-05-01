@@ -97,12 +97,12 @@ func TestSchemaSubspace(t *testing.T) {
 		sch, err := s.GetLatest(ctx, tx, 1, 2, 3)
 		require.NoError(t, err)
 		require.Equal(t, schema, sch.Schema)
-		require.Equal(t, 1, sch.Version)
+		require.Equal(t, uint32(1), sch.Version)
 
 		schemas, err := s.Get(ctx, tx, 1, 2, 3)
 		require.NoError(t, err)
 		require.Equal(t, schema, schemas[0].Schema)
-		require.Equal(t, 1, schemas[0].Version)
+		require.Equal(t, uint32(1), schemas[0].Version)
 	})
 
 	t.Run("put_get_multiple", func(t *testing.T) {
@@ -148,14 +148,14 @@ func TestSchemaSubspace(t *testing.T) {
 		sch, err := s.GetLatest(ctx, tx, 1, 2, 3)
 		require.NoError(t, err)
 		require.Equal(t, schema2, sch.Schema)
-		require.Equal(t, 2, sch.Version)
+		require.Equal(t, uint32(2), sch.Version)
 
 		schemas, err := s.Get(ctx, tx, 1, 2, 3)
 		require.NoError(t, err)
 		require.Equal(t, schema1, schemas[0].Schema)
 		require.Equal(t, schema2, schemas[1].Schema)
-		require.Equal(t, 1, schemas[0].Version)
-		require.Equal(t, 2, schemas[1].Version)
+		require.Equal(t, uint32(1), schemas[0].Version)
+		require.Equal(t, uint32(2), schemas[1].Version)
 	})
 
 	t.Run("put_delete_get", func(t *testing.T) {

@@ -118,7 +118,7 @@ type JSONSchema struct {
 	PrimaryKeys     []string            `json:"primary_key,omitempty"`
 	CollectionType  string              `json:"collection_type,omitempty"`
 	IndexingVersion string              `json:"indexing_version,omitempty"`
-	Version         int32               `json:"version,omitempty"`
+	Version         uint32              `json:"version,omitempty"`
 }
 
 // Factory is used as an intermediate step so that collection can be initialized with properly encoded values.
@@ -138,7 +138,7 @@ type Factory struct {
 	// CollectionType is the type of the collection. Only two types of collections are supported "messages" and "documents"
 	CollectionType  CollectionType
 	IndexingVersion string
-	Version         int32
+	Version         uint32
 }
 
 func (f *Factory) SecondaryIndexes() []*Index {

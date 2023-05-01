@@ -89,8 +89,8 @@ func FormDatadogQuery(namespace string, req *api.QueryTimeSeriesMetricsRequest) 
 
 func FormDatadogQueryNoMeta(namespace string, noMeta bool, req *api.QueryTimeSeriesMetricsRequest) (string, error) {
 	// final version examples:
-	// sum:tigris.requests_count_ok.count{db:ycsb_tigris,collection:user_tables}.as_rate()
-	// sum:tigris.requests_count_ok.count{db:ycsb_tigris,tigris_tenant:default_namespace} by {db,collection}.as_rate()
+	// sum:tigris.requests_count_ok.count{project:ycsb_tigris,collection:user_tables}.as_rate()
+	// sum:tigris.requests_count_ok.count{project:ycsb_tigris,tigris_tenant:default_namespace} by {project,collection}.as_rate()
 	ddQuery := fmt.Sprintf("%s:%s", strings.ToLower(req.SpaceAggregation.String()), req.MetricName)
 	var tags []string
 
@@ -116,7 +116,7 @@ func FormDatadogQueryNoMeta(namespace string, noMeta bool, req *api.QueryTimeSer
 	}
 
 	if req.Db != "" {
-		tags = append(tags, "db:"+req.Db)
+		tags = append(tags, "project:"+req.Db)
 	}
 
 	if req.GetBranch() != "" {

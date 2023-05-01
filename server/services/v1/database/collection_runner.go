@@ -126,10 +126,14 @@ func (runner *CollectionQueryRunner) createOrUpdate(ctx context.Context, tx tran
 		tx.Context().StageDatabase(db)
 	}
 
+	if err = metadata.UpdateSchemaVersion(ctx, tenant.MetaStore, tx, tenant.GetNamespace().Id(), db, schFactory); err != nil {
+		return Response{}, ctx, err
+	}
+
 	if err = tenant.CreateCollection(ctx, tx, db, schFactory); err != nil {
 		if err == kv.ErrDuplicateKey {
 			// this simply means, concurrently CreateCollection is called,
-			return Response{}, ctx, errors.Aborted("concurrent createReq collection request, aborting")
+			err = errors.Aborted("concurrent createReq collection request, aborting")
 		}
 
 		if collectionExists {
@@ -137,6 +141,7 @@ func (runner *CollectionQueryRunner) createOrUpdate(ctx context.Context, tx tran
 		} else {
 			countDDLUpdateUnit(ctx, true)
 		}
+
 		return Response{}, ctx, err
 	}
 	if collectionExists {

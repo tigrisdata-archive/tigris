@@ -151,7 +151,7 @@ type SearchIndex struct {
 	// Name is the name of the index.
 	Name string
 	// index version
-	Version int
+	Version uint32
 	// Fields are derived from the user schema.
 	Fields []*Field
 	// JSON schema.
@@ -170,7 +170,7 @@ type SearchIndex struct {
 	int64FieldsPath *int64PathBuilder
 }
 
-func NewSearchIndex(ver int, searchStoreName string, factory *SearchFactory, fieldsInSearch []tsApi.Field) *SearchIndex {
+func NewSearchIndex(ver uint32, searchStoreName string, factory *SearchFactory, fieldsInSearch []tsApi.Field) *SearchIndex {
 	queryableFields := NewQueryableFieldsBuilder().BuildQueryableFields(factory.Fields, fieldsInSearch)
 
 	var searchIdField *QueryableField

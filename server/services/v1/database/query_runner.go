@@ -141,7 +141,7 @@ type UpdateQueryRunner struct {
 	queryMetrics *metrics.WriteQueryMetrics
 }
 
-func updateDefaultsAndSchema(db string, branch string, collection *schema.DefaultCollection, doc []byte, version int32, ts *internal.Timestamp) ([]byte, error) {
+func updateDefaultsAndSchema(db string, branch string, collection *schema.DefaultCollection, doc []byte, version uint32, ts *internal.Timestamp) ([]byte, error) {
 	var (
 		err    error
 		decDoc map[string]any
@@ -236,7 +236,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 			return Response{}, ctx, err
 		}
 
-		merged, err := updateDefaultsAndSchema(db.DbName(), db.BranchName(), coll, row.Data.RawData, row.Data.Ver, ts)
+		merged, err := updateDefaultsAndSchema(db.DbName(), db.BranchName(), coll, row.Data.RawData, uint32(row.Data.Ver), ts)
 		if err != nil {
 			return Response{}, ctx, err
 		}
@@ -257,7 +257,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		}
 
 		newData := internal.NewTableDataWithTS(row.Data.CreatedAt, ts, merged)
-		newData.SetVersion(coll.GetVersion())
+		newData.SetVersion(int32(coll.GetVersion()))
 		// as we have merged the data, it is safe to call replace
 
 		szCtx := kv.CtxWithSize(ctx, row.Data.Size())
@@ -787,8 +787,8 @@ func (runner *StreamingQueryRunner) iterate(ctx context.Context, coll *schema.De
 		rawData := row.Data.RawData
 		var err error
 
-		if !coll.CompatibleSchemaSince(row.Data.Ver) {
-			rawData, err = coll.UpdateRowSchemaRaw(rawData, row.Data.Ver)
+		if !coll.CompatibleSchemaSince(uint32(row.Data.Ver)) {
+			rawData, err = coll.UpdateRowSchemaRaw(rawData, uint32(row.Data.Ver))
 			if err != nil {
 				return row.Key, err
 			}

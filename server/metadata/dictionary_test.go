@@ -52,7 +52,7 @@ func TestDictionaryEncoding(t *testing.T) {
 
 	tx, err = tm.StartTx(ctx)
 	require.NoError(t, err)
-	dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1234)
+	dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1234, 0)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit(ctx))
 
@@ -107,7 +107,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1234)
+		dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1234, 0)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
@@ -148,7 +148,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1234)
+		dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1234, 0)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
@@ -195,7 +195,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1234)
+		dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1234, 0)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 		require.NotEqual(t, 0, dbMeta.ID)
@@ -250,7 +250,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1234)
+		dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1234, 0)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
@@ -306,7 +306,7 @@ func TestDictionaryEncoding_Error(t *testing.T) {
 	tx, err := tm.StartTx(ctx)
 	require.NoError(t, err)
 
-	_, err = k.CreateDatabase(ctx, tx, "db-1", 0)
+	_, err = k.CreateDatabase(ctx, tx, "db-1", 0, 0)
 	require.Error(t, errors.InvalidArgument("invalid namespace id"), err)
 
 	_, err = k.CreateCollection(ctx, tx, "coll-1", 1234, 0, createSecondaryIdxs())
@@ -330,9 +330,9 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		dbMeta1, err := k.CreateDatabase(ctx, tx, "db-1", 1)
+		dbMeta1, err := k.CreateDatabase(ctx, tx, "db-1", 1, 0)
 		require.NoError(t, err)
-		dbMeta2, err := k.CreateDatabase(ctx, tx, "db-2", 1)
+		dbMeta2, err := k.CreateDatabase(ctx, tx, "db-2", 1, 0)
 		require.NoError(t, err)
 
 		dbToId, err := k.GetDatabases(ctx, tx, 1)
@@ -352,7 +352,7 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1)
+		dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1, 0)
 		require.NoError(t, err)
 
 		cid1, err := k.CreateCollection(ctx, tx, "coll-1", 1, dbMeta.ID, createSecondaryIdxs())
@@ -377,7 +377,7 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 
 		tx, err := tm.StartTx(ctx)
 		require.NoError(t, err)
-		dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1)
+		dbMeta, err := k.CreateDatabase(ctx, tx, "db-1", 1, 0)
 		require.NoError(t, err)
 
 		cid1, err := k.CreateCollection(ctx, tx, "coll-1", 1, dbMeta.ID, createSecondaryIdxs())

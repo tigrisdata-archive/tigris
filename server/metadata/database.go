@@ -23,6 +23,7 @@ import (
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
+	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/transaction"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
@@ -35,6 +36,9 @@ const (
 // DatabaseMetadata contains database wide metadata.
 type DatabaseMetadata struct {
 	ID uint32 `json:"id,omitempty"`
+
+	SchemaVersion    uint32 `json:"schema_version"`
+	MinSchemaVersion uint32 `json:"min_schema_version"` // explicit version less than this value will be rejected
 }
 
 // DatabaseName represents a primary database and its branch name.
@@ -124,7 +128,7 @@ func (d *DatabaseSubspace) insert(ctx context.Context, tx transaction.Tx, nsID u
 	)
 }
 
-func (c *DatabaseSubspace) decodeMetadata(_ string, payload *internal.TableData) (*DatabaseMetadata, error) {
+func (_ *DatabaseSubspace) decodeMetadata(_ string, payload *internal.TableData) (*DatabaseMetadata, error) {
 	if payload == nil {
 		return nil, errors.ErrNotFound
 	}
@@ -234,4 +238,75 @@ func (d *DatabaseSubspace) list(ctx context.Context, tx transaction.Tx, namespac
 	}
 
 	return databases, nil
+}
+
+func getMaxSchemaVersion(ctx context.Context, metaStore *Dictionary, tx transaction.Tx, nsID uint32, db *Database) (uint32, error) {
+	var maxVer uint32
+
+	for _, coll := range db.ListCollection() {
+		sch, err := metaStore.Schema().GetLatest(ctx, tx, nsID, db.Id(), coll.Id)
+		if err != nil {
+			return 0, err
+		}
+
+		if sch.Version > maxVer {
+			maxVer = sch.Version
+		}
+	}
+
+	return maxVer, nil
+}
+
+func UpdateSchemaVersion(ctx context.Context, metaStore *Dictionary, tx transaction.Tx, nsID uint32, db *Database,
+	schFactory *schema.Factory,
+) error {
+	if db.PendingSchemaVersion == 0 { // this is first create or update collection in the transaction
+		dbMeta, err := metaStore.Database().Get(ctx, tx, nsID, db.Name())
+		if err != nil {
+			if err != errors.ErrNotFound {
+				return errors.Internal("failed to read database metadata")
+			}
+			dbMeta = &DatabaseMetadata{}
+		}
+
+		curSchemaVersion := dbMeta.SchemaVersion
+
+		// we know the schema version or user want to start versioning
+		if dbMeta.SchemaVersion != 0 || schFactory.Version != 0 {
+			switch {
+			case dbMeta.SchemaVersion == 0:
+				// start db schema versioning from the first version we see from the user
+				maxVer, err := getMaxSchemaVersion(ctx, metaStore, tx, nsID, db)
+				if err != nil {
+					return err
+				}
+
+				// first database schema version should be greater than all existing individual collection versions
+				if schFactory.Version <= maxVer {
+					return errors.InvalidArgument("next schema version should be %d", maxVer+1)
+				}
+
+				dbMeta.SchemaVersion = schFactory.Version
+				dbMeta.MinSchemaVersion = schFactory.Version
+			case dbMeta.MinSchemaVersion > schFactory.Version:
+				return errors.InvalidArgument("schema version cannot be less than %d", dbMeta.MinSchemaVersion)
+			case dbMeta.SchemaVersion+1 < schFactory.Version:
+				// if db schema version already set, ensure it's sequential
+				return errors.InvalidArgument("next schema version should be %v", dbMeta.SchemaVersion+1)
+			case dbMeta.SchemaVersion+1 == schFactory.Version:
+				dbMeta.SchemaVersion += 1
+			}
+
+			db.PendingSchemaVersion = dbMeta.SchemaVersion
+			db.CurrentSchemaVersion = curSchemaVersion // this is used to validate collection schema against in create collection
+
+			if err = metaStore.Database().Update(ctx, tx, nsID, db.Name(), dbMeta); err != nil {
+				return errors.Internal("failed to update database metadata")
+			}
+		}
+	} else if schFactory.Version != db.PendingSchemaVersion { // subsequent requests should have the same schema version as the first one
+		return errors.InvalidArgument("collection schema version should be the same in the transaction. got %v expected %v", schFactory.Version, db.PendingSchemaVersion)
+	}
+
+	return nil
 }

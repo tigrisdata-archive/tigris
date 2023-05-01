@@ -42,16 +42,16 @@ func NewSchemaStore(mdNameRegistry *NameRegistry) *SchemaSubspace {
 	}
 }
 
-func (s *SchemaSubspace) getKey(namespaceId uint32, dbId uint32, collId uint32, revision int) keys.Key {
+func (s *SchemaSubspace) getKey(namespaceId uint32, dbId uint32, collId uint32, revision uint32) keys.Key {
 	if revision > 0 {
-		return keys.NewKey(s.SubspaceName, s.version, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), keyEnd, UInt32ToByte(uint32(revision)))
+		return keys.NewKey(s.SubspaceName, s.version, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), keyEnd, UInt32ToByte(revision))
 	}
 
 	return keys.NewKey(s.SubspaceName, s.version, UInt32ToByte(namespaceId), UInt32ToByte(dbId), UInt32ToByte(collId), keyEnd)
 }
 
 // Put is to persist schema for a given namespace, database and collection.
-func (s *SchemaSubspace) Put(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbId uint32, collId uint32, schema []byte, revision int) error {
+func (s *SchemaSubspace) Put(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbId uint32, collId uint32, schema []byte, revision uint32) error {
 	return schemaPut(ctx, tx, s.getKey(namespaceId, dbId, collId, revision), schema, revision)
 }
 
@@ -63,6 +63,35 @@ func (s *SchemaSubspace) GetLatest(ctx context.Context, tx transaction.Tx, names
 // Get returns all the version stored for a collection inside a given namespace and database.
 func (s *SchemaSubspace) Get(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbId uint32, collId uint32) (schema.Versions, error) {
 	return schemaGet(ctx, tx, s.getKey(namespaceId, dbId, collId, 0))
+}
+
+func (s *SchemaSubspace) GetNotGreater(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbId uint32, collId uint32, version uint32) (*schema.Version, error) {
+	versions, err := schemaGet(ctx, tx, s.getKey(namespaceId, dbId, collId, 0))
+	if err != nil {
+		return nil, err
+	}
+
+	for i := len(versions) - 1; i >= 0; i-- {
+		if versions[i].Version <= version {
+			return &versions[i], nil
+		}
+	}
+
+	return nil, errors.NotFound("schema version %d not found", version)
+}
+
+// GetVersion returns specific version stored for a collection inside a given namespace and database.
+func (s *SchemaSubspace) GetVersion(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbId uint32, collId uint32, version uint32) (*schema.Version, error) {
+	v, err := schemaGet(ctx, tx, s.getKey(namespaceId, dbId, collId, version))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(v) == 0 {
+		return nil, errors.NotFound("schema version %d not found", version)
+	}
+
+	return &v[0], nil
 }
 
 // Delete is to remove schema for a given namespace, database and collection.
@@ -83,16 +112,16 @@ func NewSearchSchemaStore(mdNameRegistry *NameRegistry) *SearchSchemaSubspace {
 	}
 }
 
-func (s *SearchSchemaSubspace) getKey(namespaceId uint32, dbId uint32, search string, revision int) keys.Key {
+func (s *SearchSchemaSubspace) getKey(namespaceId uint32, dbId uint32, search string, revision uint32) keys.Key {
 	if revision > 0 {
-		return keys.NewKey(s.SubspaceName, s.version, UInt32ToByte(namespaceId), UInt32ToByte(dbId), search, keyEnd, UInt32ToByte(uint32(revision)))
+		return keys.NewKey(s.SubspaceName, s.version, UInt32ToByte(namespaceId), UInt32ToByte(dbId), search, keyEnd, UInt32ToByte(revision))
 	}
 
 	return keys.NewKey(s.SubspaceName, s.version, UInt32ToByte(namespaceId), UInt32ToByte(dbId), search, keyEnd)
 }
 
 // Put is to persist schema for a given namespace, database and search index.
-func (s *SearchSchemaSubspace) Put(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbId uint32, search string, schema []byte, revision int) error {
+func (s *SearchSchemaSubspace) Put(ctx context.Context, tx transaction.Tx, namespaceId uint32, dbId uint32, search string, schema []byte, revision uint32) error {
 	return schemaPut(ctx, tx, s.getKey(namespaceId, dbId, search, revision), schema, revision)
 }
 
@@ -111,7 +140,7 @@ func (s *SearchSchemaSubspace) Delete(ctx context.Context, tx transaction.Tx, na
 	return schemaDelete(ctx, tx, s.getKey(namespaceId, dbId, index, 0))
 }
 
-func schemaPut(ctx context.Context, tx transaction.Tx, key keys.Key, schema []byte, revision int) error {
+func schemaPut(ctx context.Context, tx transaction.Tx, key keys.Key, schema []byte, revision uint32) error {
 	if revision <= 0 {
 		return errors.InvalidArgument("invalid schema version %d", revision)
 	}
@@ -159,7 +188,7 @@ func schemaGet(ctx context.Context, tx transaction.Tx, key keys.Key) (schema.Ver
 			return nil, errors.Internal("not able to extract revision from schema %v", row.Key)
 		}
 
-		versions = append(versions, schema.Version{Version: int(ByteToUInt32(ver)), Schema: row.Data.RawData})
+		versions = append(versions, schema.Version{Version: ByteToUInt32(ver), Schema: row.Data.RawData})
 	}
 
 	if it.Err() != nil {

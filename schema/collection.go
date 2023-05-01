@@ -38,7 +38,7 @@ type DefaultCollection struct {
 	// Id is the dictionary encoded value for this collection.
 	Id uint32
 	// SchVer returns the schema version
-	SchVer int
+	SchVer uint32
 	// Name is the name of the collection.
 	Name string
 	// EncodedName is the encoded name of the collection.
@@ -138,7 +138,7 @@ func disableAdditionalPropertiesAndAllowNullable(required []string, properties m
 	}
 }
 
-func NewDefaultCollection(id uint32, schVer int, factory *Factory, schemas Versions,
+func NewDefaultCollection(id uint32, schVer uint32, factory *Factory, schemas Versions,
 	implicitSearchIndex *ImplicitSearchIndex,
 ) (*DefaultCollection, error) {
 	url := factory.Name + ".json"
@@ -210,8 +210,8 @@ func (d *DefaultCollection) SecondaryIndexKeyword() string {
 	return "skey"
 }
 
-func (d *DefaultCollection) GetVersion() int32 {
-	return int32(d.SchVer)
+func (d *DefaultCollection) GetVersion() uint32 {
+	return d.SchVer
 }
 
 func (d *DefaultCollection) Type() CollectionType {

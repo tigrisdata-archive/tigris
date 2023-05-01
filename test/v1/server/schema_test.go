@@ -21,6 +21,9 @@ import (
 	"net/http"
 	"testing"
 
+	jsoniter "github.com/json-iterator/go"
+	"github.com/stretchr/testify/require"
+
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/config"
 )
@@ -392,5 +395,174 @@ func TestInsert_SchemaSignOff(t *testing.T) {
 		WithJSON(Map{
 			"documents": inputDoc,
 		}).Expect().
+		Status(http.StatusOK)
+}
+
+func schemaOne(collName string, version int) Map {
+	return Map{
+		"schema": Map{
+			"version": version,
+			"title":   collName,
+			"properties": Map{
+				"int_value":     Map{"type": "integer"},
+				"string_value":  Map{"type": "string"},
+				"string_value1": Map{"type": "string"},
+			},
+		},
+	}
+}
+
+func schemaTwo(collName string, version int) Map {
+	return Map{
+		"schema": Map{
+			"version": version,
+			"title":   collName,
+			"properties": Map{
+				"int_value":     Map{"type": "integer"},
+				"string_value":  Map{"type": "string"},
+				"string_value1": Map{"type": "string"},
+				"string_value2": Map{"type": "string"},
+			},
+		},
+	}
+}
+
+func TestSchemaVersion(t *testing.T) {
+	dbName := fmt.Sprintf("db_test_%s", t.Name())
+
+	deleteProject(t, dbName)
+	createProject(t, dbName)
+	defer deleteProject(t, dbName)
+
+	collectionName := fmt.Sprintf("test_collection_%s", t.Name())
+
+	// implicit version 1
+	createCollection(t, dbName, collectionName,
+		Map{
+			"schema": Map{
+				"title": collectionName,
+				"properties": Map{
+					"int_value":    Map{"type": "integer"},
+					"string_value": Map{"type": "string"},
+				},
+			},
+		}).Status(http.StatusOK)
+
+	// implicit version 1
+	createCollection(t, dbName, collectionName+"_1",
+		Map{
+			"schema": Map{
+				"title": collectionName + "_1",
+				"properties": Map{
+					"int_value":    Map{"type": "integer"},
+					"string_value": Map{"type": "string"},
+				},
+			},
+		}).Status(http.StatusOK)
+
+	// implicit version 2
+	createCollection(t, dbName, collectionName+"_1",
+		Map{
+			"schema": Map{
+				"title": collectionName + "_1",
+				"properties": Map{
+					"int_value":     Map{"type": "integer"},
+					"string_value":  Map{"type": "string"},
+					"string_value1": Map{"type": "string"},
+				},
+			},
+		}).Status(http.StatusOK)
+
+	// first explicit should start from maximum from above 2 plus 1 = 3
+	// meaning 1 should fail
+	createCollection(t, dbName, collectionName,
+		schemaOne(collectionName, 1),
+	).Status(http.StatusBadRequest).
+		JSON().Object().Path("$.error.message").Equal("next schema version should be 3")
+
+	// we can start from anything greater than 3
+	createCollection(t, dbName, collectionName,
+		schemaOne(collectionName, 5),
+	).Status(http.StatusOK)
+
+	createCollection(t, dbName, collectionName,
+		schemaTwo(collectionName, 6),
+	).Status(http.StatusOK)
+
+	createCollection(t, dbName, collectionName+"_1",
+		schemaTwo(collectionName+"_1", 7),
+	).Status(http.StatusOK)
+
+	// version can't be less than what we started from 5
+	createCollection(t, dbName, collectionName,
+		schemaOne(collectionName, 3),
+	).Status(http.StatusBadRequest).
+		JSON().Object().Path("$.error.message").Equal("schema version cannot be less than 5")
+
+	// don't allow different schema for existing version
+	createCollection(t, dbName, collectionName,
+		schemaTwo(collectionName, 5),
+	).Status(http.StatusBadRequest).
+		JSON().Object().Path("$.error.message").Equal("historical schema mismatch. provided version 5. current version 7")
+
+	// while same schema should be allowed
+	// to allow older version of application run in parallel
+	createCollection(t, dbName, collectionName,
+		schemaOne(collectionName, 5),
+	).Status(http.StatusOK)
+
+	// if the schema body is equal to the first version before
+	// the given version it should be allowed.
+	// because we don't persist equal schema body in the history.
+	// last modified at 6 with schemaTwo.
+	createCollection(t, dbName, collectionName,
+		schemaTwo(collectionName, 7),
+	).Status(http.StatusOK)
+
+	// while different body should be rejected
+	createCollection(t, dbName, collectionName,
+		schemaOne(collectionName, 7),
+	).Status(http.StatusBadRequest).
+		JSON().Object().Path("$.error.message").Equal("historical schema mismatch. provided version 7. current version 7")
+
+	e := expect(t)
+	r1 := e.POST(fmt.Sprintf("/v1/projects/%s/database/transactions/begin", dbName)).
+		Expect().Status(http.StatusOK).
+		Body().Raw()
+
+	res1 := struct {
+		TxCtx api.TransactionCtx `json:"tx_ctx"`
+	}{}
+
+	// allow only same version in the transaction
+	err := jsoniter.Unmarshal([]byte(r1), &res1)
+	require.NoError(t, err)
+
+	e.POST(getCollectionURL(dbName, collectionName, "createOrUpdate")).
+		WithJSON(schemaTwo(collectionName, 7)).
+		WithHeader("Tigris-Tx-Id", res1.TxCtx.Id).
+		WithHeader("Tigris-Tx-Origin", res1.TxCtx.Origin).
+		Expect().
+		Status(http.StatusOK)
+
+	e.POST(getCollectionURL(dbName, collectionName+"_1", "createOrUpdate")).
+		WithJSON(schemaOne(collectionName+"_1", 5)).
+		WithHeader("Tigris-Tx-Id", res1.TxCtx.Id).
+		WithHeader("Tigris-Tx-Origin", res1.TxCtx.Origin).
+		Expect().
+		Status(http.StatusBadRequest).
+		JSON().Object().Path("$.error.message").Equal("collection schema version should be the same in the transaction. got 5 expected 7")
+
+	e.POST(getCollectionURL(dbName, collectionName+"_1", "createOrUpdate")).
+		WithJSON(schemaTwo(collectionName+"_1", 7)).
+		WithHeader("Tigris-Tx-Id", res1.TxCtx.Id).
+		WithHeader("Tigris-Tx-Origin", res1.TxCtx.Origin).
+		Expect().
+		Status(http.StatusOK)
+
+	e.POST(fmt.Sprintf("/v1/projects/%s/database/transactions/commit", dbName)).
+		WithHeader("Tigris-Tx-Id", res1.TxCtx.Id).
+		WithHeader("Tigris-Tx-Origin", res1.TxCtx.Origin).
+		Expect().
 		Status(http.StatusOK)
 }
