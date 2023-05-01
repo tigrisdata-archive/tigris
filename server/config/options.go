@@ -140,17 +140,18 @@ type JaegerTracingConfig struct {
 }
 
 type MetricsConfig struct {
-	Enabled        bool                        `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	DebugMessages  bool                        `mapstructure:"debug_messages" yaml:"debug_messages" json:"debug_messages"`
-	TimerQuantiles []float64                   `mapstructure:"quantiles" yaml:"quantiles" json:"quantiles"`
-	Requests       RequestsMetricGroupConfig   `mapstructure:"requests" yaml:"requests" json:"requests"`
-	Fdb            FdbMetricGroupConfig        `mapstructure:"fdb" yaml:"fdb" json:"fdb"`
-	Search         SearchMetricGroupConfig     `mapstructure:"search" yaml:"search" json:"search"`
-	Session        SessionMetricGroupConfig    `mapstructure:"session" yaml:"session" json:"session"`
-	Size           SizeMetricGroupConfig       `mapstructure:"size" yaml:"size" json:"size"`
-	Network        NetworkMetricGroupConfig    `mapstructure:"network" yaml:"network" json:"network"`
-	Auth           AuthMetricsConfig           `mapstructure:"auth" yaml:"auth" json:"auth"`
-	SecondaryIndex SecondaryIndexMetricsConfig `mapstructure:"secondary_index" yaml:"secondary_index" json:"secondary_index"`
+	Enabled           bool                        `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	DebugMessages     bool                        `mapstructure:"debug_messages" yaml:"debug_messages" json:"debug_messages"`
+	TimerQuantiles    []float64                   `mapstructure:"quantiles" yaml:"quantiles" json:"quantiles"`
+	LogLongMethodTime time.Duration               `mapstructure:"log_long_method_time" yaml:"log_long_method_time" json:"log_long_method_time"`
+	Requests          RequestsMetricGroupConfig   `mapstructure:"requests" yaml:"requests" json:"requests"`
+	Fdb               FdbMetricGroupConfig        `mapstructure:"fdb" yaml:"fdb" json:"fdb"`
+	Search            SearchMetricGroupConfig     `mapstructure:"search" yaml:"search" json:"search"`
+	Session           SessionMetricGroupConfig    `mapstructure:"session" yaml:"session" json:"session"`
+	Size              SizeMetricGroupConfig       `mapstructure:"size" yaml:"size" json:"size"`
+	Network           NetworkMetricGroupConfig    `mapstructure:"network" yaml:"network" json:"network"`
+	Auth              AuthMetricsConfig           `mapstructure:"auth" yaml:"auth" json:"auth"`
+	SecondaryIndex    SecondaryIndexMetricsConfig `mapstructure:"secondary_index" yaml:"secondary_index" json:"secondary_index"`
 }
 
 type TimerConfig struct {
@@ -358,9 +359,10 @@ var DefaultConfig = Config{
 		},
 	},
 	Metrics: MetricsConfig{
-		Enabled:        true,
-		DebugMessages:  false,
-		TimerQuantiles: []float64{0.5, 0.95, 0.99},
+		Enabled:           true,
+		DebugMessages:     false,
+		TimerQuantiles:    []float64{0.5, 0.95, 0.99},
+		LogLongMethodTime: 500 * time.Millisecond,
 		Requests: RequestsMetricGroupConfig{
 			Enabled: true,
 			Counter: CounterConfig{

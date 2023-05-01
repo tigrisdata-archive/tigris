@@ -329,6 +329,7 @@ func (m *Measurement) RecordDuration(scope tally.Scope, tags map[string]string) 
 	case RequestsRespTime, RequestsErrorRespTime:
 		timerEnabled = cfg.Requests.Timer.TimerEnabled
 		histogramEnabled = cfg.Requests.Timer.HistogramEnabled
+		m.logLongRequest()
 	case FdbRespTime, FdbErrorRespTime:
 		timerEnabled = cfg.Fdb.Timer.TimerEnabled
 		histogramEnabled = cfg.Fdb.Timer.HistogramEnabled
@@ -351,6 +352,21 @@ func (m *Measurement) RecordDuration(scope tally.Scope, tags map[string]string) 
 	if scope != nil && histogramEnabled {
 		m.recordHistogramDuration(scope, tags)
 	}
+}
+
+func (m *Measurement) getTag(name string) string {
+	if value, ok := m.tags[name]; ok {
+		return value
+	}
+	return "unknown"
+}
+
+func (m *Measurement) logLongRequest() {
+	totalTime := m.stoppedAt.Sub(m.startedAt)
+	if totalTime < config.DefaultConfig.Metrics.LogLongMethodTime {
+		return
+	}
+	log.Error().Int64("total time (ms)", int64(totalTime/time.Millisecond)).Time("start time", m.startedAt).Time("stop time", m.stoppedAt).Str("grpc method", m.getTag("grpc_method")).Int64("threshold", int64(config.DefaultConfig.Metrics.LogLongMethodTime/time.Millisecond)).Msg("long method call")
 }
 
 func (m *Measurement) recordTimerDuration(scope tally.Scope, tags map[string]string) {
