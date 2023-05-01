@@ -32,7 +32,7 @@ test_import_null() {
 }
 
 test_import_all_types() {
-  cat <<EOF | TIGRIS_LOG_LEVEL=debug $cli import --project=db_import_test import_test --primary-key=uuid_field --autogenerate=uuid_field
+  cat <<EOF | TIGRIS_LOG_LEVEL=debug $cli import --detect-byte-arrays=true --project=db_import_test import_test --primary-key=uuid_field --autogenerate=uuid_field
 {
 	"str_field" : "str_value",
 	"int_field" : 1,
@@ -302,10 +302,10 @@ test_import() {
   test_import_null
   test_import_all_types
 
-  error "collection doesn't exist 'import_test_no_create'"  $cli import --no-create-collection --project=db_import_test import_test_no_create '{ "str_field" : "str_value" }'
+  error "collection doesn't exist 'import_test_no_create'"  "$cli" import --no-create-collection --project=db_import_test import_test_no_create '{ "str_field" : "str_value" }'
 
   $cli import --project=db_import_test import_test_append '{ "str_field" : "str_value" }'
-  error "collection exists. use --append if you need to add documents to existing collection" $cli import --project=db_import_test import_test_append '{ "str_field" : "str_value" }'
+  error "collection exists. use --append if you need to add documents to existing collection" "$cli" import --project=db_import_test import_test_append '{ "str_field" : "str_value" }'
 
   test_evolve_schema
   test_multi_pk
@@ -314,10 +314,10 @@ test_import() {
 }
 
 test_csv_import_all_types() {
-  cat <<EOF | TIGRIS_LOG_LEVEL=debug $cli import --project=db_import_test import_test_csv --primary-key=uuid_field --autogenerate=uuid_field
+  cat <<EOF | TIGRIS_LOG_LEVEL=debug $cli import --detect-byte-arrays=true --project=db_import_test import_test_csv --primary-key=uuid_field --autogenerate=uuid_field
 str_field,int_field,float_field,uuid_field,time_field,bool_field,binary_field,objects.str_field,objects.int_field,objects.float_field,objects.uuid_field,objects.time_field,objects.bool_field,objects.binary_field,arrays.str_field,arrays.int_field,arrays.float_field,arrays.uuid_field,arrays.time_field,arrays.bool_field,arrays.binary_field
 str_value,1,1.1,1ed6ff32-4c0f-4553-9cd3-a2ea3d58e9d1,2022-11-04T16:17:23.967964263-07:00,true,cGVlay1hLWJvbwo=,str_value,1,1.1,1ed6ff32-4c0f-4553-9cd3-a2ea3d58e9d1,2022-11-04T16:17:23.967964263-07:00,true,cGVlay1hLWJvbwo=,str_value,1,1.1,1ed6ff32-4c0f-4553-9cd3-a2ea3d58e9d1,2022-11-04T16:17:23.967964263-07:00,true,cGVlay1hLWJvbwo=
-str_value,2,2.1,"2ed6ff32-4c0f-4553-9cd3-a2ea3d58e9d1","2012-11-04T16:17:23.967964263-07:00",false,"",,0,3.1,"1ed6ff32-4c0f-4554-9cd3-a2ea3d58e9d1","2002-11-04T16:17:23.967964263-07:00",false,"cGVlay1hLWJvbwo=","str_value",3,4.1,"5ed6ff32-4c0f-4553-9cd3-a2ea3d58e9d1","2000-11-04T16:17:23.967964263-07:00",true,"cGVlay1hLWJvbwo="
+str_value,2,2.1,"2ed6ff32-4c0f-4553-9cd3-a2ea3d58e9d1","2012-11-04T16:17:23.967964263-07:00",false,cGVlay1hLWJvbwo=,,0,3.1,"1ed6ff32-4c0f-4554-9cd3-a2ea3d58e9d1","2002-11-04T16:17:23.967964263-07:00",false,"cGVlay1hLWJvbwo=","str_value",3,4.1,"5ed6ff32-4c0f-4553-9cd3-a2ea3d58e9d1","2000-11-04T16:17:23.967964263-07:00",true,"cGVlay1hLWJvbwo="
 EOF
 
   exp_out='{
