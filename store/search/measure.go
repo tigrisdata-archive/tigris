@@ -158,6 +158,11 @@ func (m *storeImplWithMetrics) Search(ctx context.Context, table string, query *
 		if reqStatus.IsApiSearch() {
 			reqStatus.AddSearchUnit()
 		}
+		for _, res := range result {
+			if res.Hits != nil {
+				reqStatus.AddResultDocs(int64(len(*res.Hits)))
+			}
+		}
 	}
 	return
 }

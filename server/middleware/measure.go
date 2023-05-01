@@ -100,6 +100,7 @@ func measureUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryS
 			return nil, err
 		}
 		// Request was ok
+		measurement.SetNDocs(reqStatus.GetResultDocs())
 		measurement.CountOkForScope(metrics.RequestsOkCount, measurement.GetRequestOkTags())
 		measurement.CountReceivedBytes(metrics.BytesReceived, measurement.GetNetworkTags(), proto.Size(req.(proto.Message)))
 		measurement.CountSentBytes(metrics.BytesSent, measurement.GetNetworkTags(), proto.Size(resp.(proto.Message)))

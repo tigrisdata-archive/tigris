@@ -60,6 +60,7 @@ type Measurement struct {
 	startedAt       time.Time
 	stoppedAt       time.Time
 	projectCollTags map[string]string
+	nDocs           int64
 }
 
 type MeasurementCtxKey struct{}
@@ -89,6 +90,10 @@ func (m *Measurement) countOk(scope tally.Scope, tags map[string]string) {
 
 func (m *Measurement) IncrementCount(scope tally.Scope, tags map[string]string, counterName string, count int64) {
 	scope.Tagged(tags).Counter(counterName).Inc(count)
+}
+
+func (m *Measurement) SetNDocs(value int64) {
+	m.nDocs += value
 }
 
 func (m *Measurement) CountUnits(reqStatus *RequestStatus, tags map[string]string) {
@@ -337,6 +342,7 @@ func (m *Measurement) RecordDuration(scope tally.Scope, tags map[string]string) 
 	case RequestsRespTime, RequestsErrorRespTime:
 		timerEnabled = cfg.Requests.Timer.TimerEnabled
 		histogramEnabled = cfg.Requests.Timer.HistogramEnabled
+		m.logLongRequest()
 	case FdbRespTime, FdbErrorRespTime:
 		timerEnabled = cfg.Fdb.Timer.TimerEnabled
 		histogramEnabled = cfg.Fdb.Timer.HistogramEnabled
@@ -359,6 +365,21 @@ func (m *Measurement) RecordDuration(scope tally.Scope, tags map[string]string) 
 	if scope != nil && histogramEnabled {
 		m.recordHistogramDuration(scope, tags)
 	}
+}
+
+func (m *Measurement) getTag(name string) string {
+	if value, ok := m.tags[name]; ok {
+		return value
+	}
+	return "unknown"
+}
+
+func (m *Measurement) logLongRequest() {
+	totalTime := m.stoppedAt.Sub(m.startedAt)
+	if totalTime < config.DefaultConfig.Metrics.LogLongMethodTime {
+		return
+	}
+	log.Error().Int64("total time (ms)", int64(totalTime/time.Millisecond)).Time("start time", m.startedAt).Time("stop time", m.stoppedAt).Str("grpc method", m.getTag("grpc_method")).Int64("threshold", int64(config.DefaultConfig.Metrics.LogLongMethodTime/time.Millisecond)).Int64("result documents", m.nDocs).Msg("long method call")
 }
 
 func (m *Measurement) recordTimerDuration(scope tally.Scope, tags map[string]string) {
