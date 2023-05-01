@@ -15,6 +15,7 @@
 package schema
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -71,6 +72,9 @@ var FieldNames = [...]string{
 var (
 	MsgFieldNameInvalidPattern = "Invalid collection field name, field name can only contain [a-zA-Z0-9_$] and it can only start with [a-zA-Z_$] for fieldName = '%s'"
 	ValidFieldNamePattern      = regexp.MustCompile(`^[a-zA-Z_$][a-zA-Z0-9_$]*$`)
+
+	ErrInvalidType               = fmt.Errorf("invalid type. expected string or array of strings")
+	ErrOnlyOneNonNullTypeAllowed = fmt.Errorf("only one non-null type allowed for the field")
 )
 
 const (
@@ -413,10 +417,66 @@ func FindIndex(indexes []*Index, name string) *Index {
 	return nil
 }
 
+type FieldMultiType struct {
+	Type       []string
+	isNullable bool
+}
+
+func (f *FieldMultiType) append(val string) {
+	if val == "null" {
+		f.isNullable = true
+	} else {
+		f.Type = append(f.Type, val)
+	}
+}
+
+func NewMultiType(val string) FieldMultiType {
+	var f FieldMultiType
+
+	f.append(val)
+
+	return f
+}
+
+func (f *FieldMultiType) UnmarshalJSON(b []byte) error {
+	var tp any
+
+	if err := jsoniter.Unmarshal(b, &tp); err != nil {
+		return err
+	}
+
+	switch val := tp.(type) {
+	case string:
+		f.append(val)
+	case []any:
+		for _, v := range val {
+			if s, ok := v.(string); ok {
+				f.append(s)
+			} else {
+				return ErrInvalidType
+			}
+		}
+	}
+
+	if len(f.Type) > 1 {
+		return ErrOnlyOneNonNullTypeAllowed
+	}
+
+	return nil
+}
+
+func (f *FieldMultiType) First() string {
+	if len(f.Type) > 0 {
+		return f.Type[0]
+	}
+
+	return ""
+}
+
 type FieldBuilder struct {
 	FieldName            string
 	Description          string              `json:"description,omitempty"`
-	Type                 string              `json:"type,omitempty"`
+	TypeRaw              FieldMultiType      `json:"type,omitempty"`
 	Format               string              `json:"format,omitempty"`
 	Encoding             string              `json:"contentEncoding,omitempty"`
 	Default              interface{}         `json:"default,omitempty"`
@@ -438,8 +498,16 @@ type FieldBuilder struct {
 	AdditionalProperties *bool `json:"additionalProperties,omitempty"`
 }
 
+func (f *FieldBuilder) JSONType() string {
+	return f.TypeRaw.First()
+}
+
+func (f *FieldBuilder) Type() FieldType {
+	return ToFieldType(f.JSONType(), f.Encoding, f.Format)
+}
+
 func (f *FieldBuilder) Build(setSearchDefaults bool) (*Field, error) {
-	fieldType := ToFieldType(f.Type, f.Encoding, f.Format)
+	fieldType := f.Type()
 	if setSearchDefaults {
 		// for search indexes, any field in schema is search indexable if it is not set explicitly.
 		// Similarly, we also tag it with sort if it is numeric.

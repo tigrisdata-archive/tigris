@@ -24,6 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/schema"
 )
 
 func TestCreateCollection(t *testing.T) {
@@ -270,6 +271,44 @@ func TestCreateCollection(t *testing.T) {
 			WithJSON(createOrUpdateOptions).
 			Expect()
 		testError(resp, http.StatusConflict, api.Code_ALREADY_EXISTS, "collection already exist")
+	})
+	t.Run("allow_nullable", func(t *testing.T) {
+		dropCollection(t, db, coll)
+
+		schema := Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"addr": Map{"type": []string{"null", "string"}},
+					//					"null_only":      Map{"type": []string{"null"}},
+					//					"null_only_1":    Map{"type": "null"},
+					"obj_1level":     Map{"type": []string{"object", "null"}, "properties": Map{"name": Map{"type": []string{"string", "null"}}}},
+					"obj_2level_arr": Map{"type": "object", "properties": Map{"level2": Map{"type": "object", "properties": Map{"arr": Map{"type": []string{"array", "null"}, "items": Map{"type": []string{"string", "null"}}}}}}},
+				},
+			},
+		}
+
+		createCollection(t, db, coll, schema).Status(http.StatusOK)
+		resp := describeCollection(t, db, coll, Map{})
+		body := resp.Status(http.StatusOK).Body().Raw()
+		require.JSONEq(t, `{"collection":"test_collection","metadata":{},"schema":{"properties":{"addr":{"type":["null","string"]},"obj_1level":{"properties":{"name":{"type":["string","null"]}},"type":["object","null"]},"obj_2level_arr":{"properties":{"level2":{"properties":{"arr":{"items":{"type":["string","null"]},"type":["array","null"]}},"type":"object"}},"type":"object"},"id":{"type":"string","format":"uuid","autoGenerate":true}},"title":"test_collection","primary_key":["id"]},"size":0,"indexes":[{"name":"_tigris_created_at","state":"INDEX ACTIVE"},{"name":"_tigris_updated_at","state":"INDEX ACTIVE"}]}
+       `, body)
+	})
+	t.Run("allow_only_one_nullable", func(t *testing.T) {
+		dropCollection(t, db, coll)
+
+		sch := Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"addr": Map{"type": []string{"null", "string", "object"}},
+				},
+			},
+		}
+
+		resp := createCollection(t, db, coll, sch)
+		resp.Status(http.StatusBadRequest)
+		require.Contains(t, resp.Body().Raw(), schema.ErrOnlyOneNonNullTypeAllowed.Error())
 	})
 }
 
