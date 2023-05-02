@@ -50,7 +50,7 @@ type Value interface {
 	Comparable
 
 	// AsInterface to return the value as interface
-	AsInterface() interface{}
+	AsInterface() any
 	DataType() schema.FieldType
 }
 
@@ -154,7 +154,7 @@ func (a *ArrayValue) CompareTo(v Value) (int, error) {
 	return bytes.Compare(a.raw, converted.raw), nil
 }
 
-func (a *ArrayValue) AsInterface() interface{} {
+func (a *ArrayValue) AsInterface() any {
 	return a.decoded
 }
 
@@ -196,7 +196,7 @@ func (i *IntValue) CompareTo(v Value) (int, error) {
 	return 1, nil
 }
 
-func (i *IntValue) AsInterface() interface{} {
+func (i *IntValue) AsInterface() any {
 	return int64(*i)
 }
 
@@ -258,7 +258,7 @@ func (d *DoubleValue) CompareTo(v Value) (int, error) {
 	return d.Float.Cmp(converted.Float), nil
 }
 
-func (d *DoubleValue) AsInterface() interface{} {
+func (d *DoubleValue) AsInterface() any {
 	return d.Double
 }
 
@@ -305,7 +305,7 @@ func (s *StringValue) CompareTo(v Value) (int, error) {
 	return s.Collation.CompareString(s.Value, converted.Value), nil
 }
 
-func (s *StringValue) AsInterface() interface{} {
+func (s *StringValue) AsInterface() any {
 	if s.Collation.IsCollationSortKey() {
 		return s.Collation.GenerateSortKey(s.Value)
 	}
@@ -354,7 +354,7 @@ func (d *DateTimeValue) CompareTo(v Value) (int, error) {
 	return 1, nil
 }
 
-func (d *DateTimeValue) AsInterface() interface{} {
+func (d *DateTimeValue) AsInterface() any {
 	return d.Value
 }
 
@@ -390,7 +390,7 @@ func (b *BytesValue) CompareTo(v Value) (int, error) {
 	return bytes.Compare(*b, *converted), nil
 }
 
-func (b *BytesValue) AsInterface() interface{} {
+func (b *BytesValue) AsInterface() any {
 	return []byte(*b)
 }
 
@@ -432,7 +432,7 @@ func (b *BoolValue) CompareTo(v Value) (int, error) {
 	return 0, nil
 }
 
-func (b *BoolValue) AsInterface() interface{} {
+func (b *BoolValue) AsInterface() any {
 	return bool(*b)
 }
 
@@ -454,7 +454,7 @@ func NewNullValue() *NullValue {
 	return &NullValue{}
 }
 
-func (n *NullValue) AsInterface() interface{} {
+func (n *NullValue) AsInterface() any {
 	return nil
 }
 
@@ -483,7 +483,7 @@ func NewMaxValue() *MaxValue {
 	return &MaxValue{}
 }
 
-func (m *MaxValue) AsInterface() interface{} {
+func (m *MaxValue) AsInterface() any {
 	return 0xFF
 }
 

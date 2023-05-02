@@ -34,6 +34,63 @@ func TestNewMatcher(t *testing.T) {
 	require.Nil(t, matcher)
 }
 
+func TestArrMatcher(t *testing.T) {
+	cases := []struct {
+		arrV     []any
+		matcher  ValueMatcher
+		expMatch bool
+	}{
+		{
+			[]any{2, 3, 4},
+			mustMatcher(EQ, value.NewIntValue(10)),
+			false,
+		}, {
+			[]any{2, 3, 10, 4},
+			mustMatcher(EQ, value.NewIntValue(10)),
+			true,
+		}, {
+			[]any{2, 3, 10, 4},
+			mustMatcher(GT, value.NewIntValue(10)),
+			false,
+		}, {
+			[]any{2, 3, 10, 4},
+			mustMatcher(GT, value.NewIntValue(9)),
+			true,
+		}, {
+			[]any{2, 3, 10, 4},
+			mustMatcher(LT, value.NewIntValue(4)),
+			true,
+		}, {
+			[]any{2.2, 3.3, 10.10, 4.44},
+			mustMatcher(EQ, value.NewDoubleUsingFloat(10.10)),
+			true,
+		}, {
+			[]any{2.2, 3.3, 10.10, 4.44},
+			mustMatcher(EQ, value.NewDoubleUsingFloat(10.11)),
+			false,
+		}, {
+			[]any{2.2, 3.3, -10.10, 4.3},
+			mustMatcher(GT, value.NewDoubleUsingFloat(-10.11)),
+			true,
+		}, {
+			[]any{2.2, 3.3, -10.10, 4.3},
+			mustMatcher(LT, value.NewDoubleUsingFloat(-10.10)),
+			false,
+		}, {
+			[]any{"orange", "apple"},
+			mustMatcher(EQ, value.NewStringValue("apple", nil)),
+			true,
+		}, {
+			[]any{"orange", "apple"},
+			mustMatcher(EQ, value.NewStringValue("apple1", nil)),
+			false,
+		},
+	}
+	for _, c := range cases {
+		require.Equal(t, c.expMatch, c.matcher.ArrMatches(c.arrV))
+	}
+}
+
 func TestLikeMatcher(t *testing.T) {
 	t.Run("regex", func(t *testing.T) {
 		cases := []struct {
@@ -162,4 +219,13 @@ func TestLikeMatcher(t *testing.T) {
 			require.Equal(t, c.expMatch, r.Matches(c.input))
 		}
 	})
+}
+
+func mustMatcher(key string, v value.Value) ValueMatcher {
+	matcher, err := NewMatcher(key, v)
+	if err != nil {
+		panic(err)
+	}
+
+	return matcher
 }
