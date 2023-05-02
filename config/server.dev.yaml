@@ -25,6 +25,7 @@ search:
   host: localhost
   port: 8108
   auth_key: ts_test_key
+  read_enabled: false
 
 log:
   level: debug

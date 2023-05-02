@@ -25,9 +25,10 @@ import (
 // structure. Object that doesn't have any nested fields will be same as any other top level field.
 type QueryableField struct {
 	FieldName      string
+	InMemoryAlias  string
+	UnFlattenName  string
 	Indexed        bool // Secondary Index
 	PrimaryIndexed bool // Primary Index
-	InMemoryAlias  string
 	Faceted        bool
 	SearchIndexed  bool
 	Sortable       bool
@@ -87,6 +88,17 @@ func NewQueryableFieldsBuilder() *QueryableFieldsBuilder {
 	return &QueryableFieldsBuilder{}
 }
 
+// NewDynamicQueryableField returns a QueryableField which may not be present in the schema. This allows querying
+// fields that are dynamically added to the document like in case of free flow object or Array of free flow object.
+func NewDynamicQueryableField(name string, unFlattenName string, ft FieldType) *QueryableField {
+	return &QueryableField{
+		FieldName:     name,
+		InMemoryAlias: name,
+		UnFlattenName: unFlattenName,
+		DataType:      ft,
+	}
+}
+
 func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, fieldsInSearch []tsApi.Field) *QueryableField {
 	var (
 		searchType    string
@@ -134,6 +146,7 @@ func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, 
 		PrimaryIndexed: f.IsPrimaryKey(),
 		SearchIdField:  f.IsSearchId(),
 		Dimensions:     f.Dimensions,
+		UnFlattenName:  f.Name(),
 	}
 	if !packThis && f.DataType == ArrayType && len(f.Fields) > 0 && f.Fields[0].DataType == ObjectType {
 		// An array of objects stored in search, we need to allow filtering on nested fields inside this object
@@ -148,10 +161,11 @@ func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, 
 				subType = nested.Fields[0].DataType
 			}
 
-			name := f.Name() + "." + nested.FieldName
+			name := q.FieldName + "." + nested.FieldName
 			q.AllowedNestedQFields = append(q.AllowedNestedQFields, &QueryableField{
 				FieldName:     name,
 				InMemoryAlias: name,
+				UnFlattenName: nested.FieldName,
 				SearchIndexed: true,
 				DataType:      nested.DataType,
 				SubType:       subType,

@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/value"
 )
 
@@ -43,12 +44,17 @@ type Matcher interface {
 type LikeMatcher interface {
 	Matcher
 
-	Matches(docValue any) bool
+	Matches(value any) bool
+}
+
+type ArrayMatcher interface {
+	ArrMatches(value []any) bool
 }
 
 // ValueMatcher is an interface that has method like Matches.
 type ValueMatcher interface {
 	Matcher
+	ArrayMatcher
 
 	// Matches returns true if the receiver has the value object that has the same value as input
 	Matches(input value.Value) bool
@@ -122,6 +128,23 @@ func (e *EqualityMatcher) Matches(input value.Value) bool {
 	return res == 0
 }
 
+func (e *EqualityMatcher) ArrMatches(arr []any) bool {
+	for _, element := range arr {
+		if nestedArr, ok := element.([]any); ok {
+			// array of array
+			for _, ne := range nestedArr {
+				if value.AnyCompare(ne, e.Value) == 0 {
+					return true
+				}
+			}
+		} else if value.AnyCompare(element, e.Value) == 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (e *EqualityMatcher) Type() string {
 	return "$eq"
 }
@@ -142,6 +165,23 @@ func (g *GreaterThanMatcher) GetValue() value.Value {
 func (g *GreaterThanMatcher) Matches(input value.Value) bool {
 	res, _ := input.CompareTo(g.Value)
 	return res > 0
+}
+
+func (g *GreaterThanMatcher) ArrMatches(arr []any) bool {
+	for _, element := range arr {
+		if nestedArr, ok := element.([]any); ok {
+			// array of array
+			for _, ne := range nestedArr {
+				if cmp := value.AnyCompare(ne, g.Value); cmp > 0 {
+					return true
+				}
+			}
+		} else if cmp := value.AnyCompare(element, g.Value); cmp > 0 {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (g *GreaterThanMatcher) Type() string {
@@ -166,6 +206,24 @@ func (g *GreaterThanEqMatcher) Matches(input value.Value) bool {
 	return res >= 0
 }
 
+// ArrMatches returns true for "GreaterThanEqMatcher" if "v" is lower than any one of the elements of the array.
+func (g *GreaterThanEqMatcher) ArrMatches(arr []any) bool {
+	for _, element := range arr {
+		if nestedArr, ok := element.([]any); ok {
+			// array of array
+			for _, ne := range nestedArr {
+				if cmp := value.AnyCompare(ne, g.Value); cmp >= 0 {
+					return true
+				}
+			}
+		} else if cmp := value.AnyCompare(element, g.Value); cmp >= 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (g *GreaterThanEqMatcher) Type() string {
 	return "$gte"
 }
@@ -188,6 +246,23 @@ func (l *LessThanMatcher) Matches(input value.Value) bool {
 	return res < 0
 }
 
+func (l *LessThanMatcher) ArrMatches(arr []any) bool {
+	for _, element := range arr {
+		if nestedArr, ok := element.([]any); ok {
+			// array of array
+			for _, ne := range nestedArr {
+				if cmp := value.AnyCompare(ne, l.Value); cmp < 0 {
+					return true
+				}
+			}
+		} else if cmp := value.AnyCompare(element, l.Value); cmp < 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (l *LessThanMatcher) Type() string {
 	return "$lt"
 }
@@ -208,6 +283,24 @@ func (l *LessThanEqMatcher) GetValue() value.Value {
 func (l *LessThanEqMatcher) Matches(input value.Value) bool {
 	res, _ := input.CompareTo(l.Value)
 	return res <= 0
+}
+
+// ArrMatches returns true for "LessThanEqMatcher" if "v" is greater than any one of the array element.
+func (l *LessThanEqMatcher) ArrMatches(arr []any) bool {
+	for _, element := range arr {
+		if nestedArr, ok := element.([]any); ok {
+			// array of array
+			for _, ne := range nestedArr {
+				if cmp := value.AnyCompare(ne, l.Value); cmp <= 0 {
+					return true
+				}
+			}
+		} else if cmp := value.AnyCompare(element, l.Value); cmp <= 0 {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (l *LessThanEqMatcher) Type() string {
@@ -351,4 +444,8 @@ func StringContains(s string, substr string, collation *value.Collation) bool {
 		return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 	}
 	return strings.Contains(s, substr)
+}
+
+func MatcherForArray(matcher ValueMatcher) bool {
+	return matcher.GetValue().DataType() == schema.ArrayType
 }

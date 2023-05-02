@@ -4530,6 +4530,334 @@ func TestFilteringOnArrays_Primitives(t *testing.T) {
 	)
 }
 
+func TestFilteringOnArrays(t *testing.T) {
+	db, _ := setupTests(t)
+	defer cleanupTests(t, db)
+
+	collection := "test_nested_objects_arrays"
+	schema := []byte(`{
+  "schema": {
+    "properties": {
+      "arr_obj": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "zipcodes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "string_arr": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "int_arr": {
+        "type": "array",
+        "items": {
+          "type": "integer"
+        }
+      },
+      "double_arr": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        }
+      },
+      "bool_arr": {
+        "type": "array",
+        "items": {
+          "type": "boolean"
+        }
+      },
+      "arr_of_arr": {
+        "type": "array",
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "obj": {
+        "type": "object",
+        "properties": {
+          "array_obj": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "university": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "str_field": {
+            "type": "string"
+          },
+		  "arr_primitive": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "pkey_int": {
+        "type": "integer"
+	  }
+    },
+    "primary_key": ["pkey_int"],
+    "title": "test_nested_objects_arrays"
+  }
+}`)
+	var schemaObj map[string]any
+	require.NoError(t, jsoniter.Unmarshal(schema, &schemaObj))
+	createCollection(t, db, collection, schemaObj).Status(200)
+
+	jsonDocuments := []byte(`[
+  {
+    "pkey_int": 1,
+    "arr_of_arr": [
+      [
+        "shopping",
+        "clothes",
+        "shoes"
+      ],
+      [
+        "playing",
+        "soccerr",
+        "tennis"
+      ]
+    ],
+    "obj": {
+      "array_obj": [
+        {
+          "university": "abc@university"
+        },
+        {
+          "university": "cal@university"
+        }
+      ],
+      "str_field": "masters",
+      "arr_primitive": [
+        "cars",
+        "bikes"
+      ]
+    },
+    "arr_obj": [
+      {
+        "name": "classic",
+        "zipcodes": [
+          "95008",
+          "94089"
+        ]
+      }
+    ],
+    "string_arr": [
+      "paris",
+      "italy"
+    ],
+    "int_arr": [
+      10,
+      20
+    ],
+    "double_arr": [
+      11.1,
+      12.2
+    ],
+    "bool_arr": [
+      true,
+      false
+    ]
+  },
+  {
+    "pkey_int": 2,
+    "arr_of_arr": [
+      [
+        "product",
+        "branding"
+      ],
+      [
+        "marketing"
+      ]
+    ],
+    "obj": {
+      "array_obj": [
+        {
+          "university": "stan@university"
+        },
+        {
+          "university": "mit@university"
+        }
+      ],
+      "str_field": "bachelors",
+      "arr_primitive": [
+        "tennis",
+        "soccer",
+        "football"
+      ]
+    },
+    "arr_obj": [
+      {
+        "name": "exemplary",
+        "zipcodes": [
+          "1234"
+        ]
+      }
+    ],
+    "string_arr": [
+      "switzerland",
+      "london"
+    ],
+    "int_arr": [
+      30,
+      40
+    ],
+    "double_arr": [
+      21.1,
+      22.2
+    ],
+    "bool_arr": [
+      true,
+      false
+    ]
+  },
+  {
+    "pkey_int": 3,
+    "arr_of_arr": [
+      [
+        "books",
+        "novels",
+        "product"
+      ],
+      [
+        "system",
+        "reading"
+      ]
+    ],
+    "obj": {
+      "array_obj": [
+        {
+          "university": "berk@university"
+        },
+        {
+          "university": "harvard@university"
+        }
+      ],
+      "str_field": "psychology",
+      "arr_primitive": [
+        "books",
+        "music"
+      ]
+    },
+    "arr_obj": [
+      {
+        "name": "demo",
+        "zipcodes": [
+          "95123"
+        ]
+      }
+    ],
+    "string_arr": [
+      "rome",
+      "italy"
+    ],
+    "int_arr": [
+      40,
+      50
+    ],
+    "double_arr": [
+      51.1,
+      52.2
+    ],
+    "bool_arr": [
+      true,
+      false
+    ]
+  }
+]`)
+
+	var inputRaw []jsoniter.RawMessage
+	require.NoError(t, jsoniter.Unmarshal(jsonDocuments, &inputRaw))
+	var inputDocument []Doc
+	for _, raw := range inputRaw {
+		var doc Doc
+		require.NoError(t, jsoniter.Unmarshal(raw, &doc))
+		inputDocument = append(inputDocument, doc)
+	}
+
+	// should always succeed with mustNotExists as false
+	insertDocuments(t, db, collection, inputDocument, false).
+		Status(http.StatusOK)
+
+	cases := []struct {
+		filter Map
+		expDocuments []Doc
+	} {
+		{
+			Map{
+				"arr_of_arr": "clothes",
+			},
+			inputDocument[0:1],
+		}, {
+			Map{
+				"obj.array_obj.university": "cal@university",
+			},
+			inputDocument[0:1],
+		}, {
+			Map{
+				"obj.arr_primitive": "cars",
+			},
+			inputDocument[0:1],
+		}, {
+			Map{
+				"arr_obj.zipcodes": 94089,
+			},
+			inputDocument[0:1],
+		}, {
+			Map{
+				"string_arr": "paris",
+			},
+			inputDocument[0:1],
+		},{
+			Map{
+				"int_arr": 20,
+			},
+			inputDocument[0:1],
+		}, {
+			Map{
+				"double_arr": 12.2,
+			},
+			inputDocument[0:1],
+		}, {
+			Map{
+				"bool_arr": false,
+			},
+			inputDocument,
+		},
+	}
+	for i, c := range cases {
+		fmt.Println("i: ", i)
+		readAndValidate(t,
+			db,
+			collection,
+			c.filter,
+			nil,
+			c.expDocuments)
+	}
+}
+
 func TestRead_Sorted(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)
