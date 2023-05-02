@@ -32,18 +32,29 @@ import (
 )
 
 const (
-	Authorization    = "Authorization"
-	Bearer           = "bearer "
-	RSATokenFilePath = "../../docker/test-token-rsa.jwt"  //nolint:gosec
-	HSTokenFilePath  = "../../docker/test-token-hs.jwt"   //nolint:gosec
-	HSTokenAFilePath = "../../docker/test-token-A-hs.jwt" //nolint:gosec
-	HSTokenBFilePath = "../../docker/test-token-B-hs.jwt" //nolint:gosec
+	Authorization         = "Authorization"
+	Bearer                = "bearer "
+	RSATokenFilePath      = "../../docker/test-token-rsa.jwt"          //nolint:gosec
+	HSTokenFilePath       = "../../docker/test-token-hs.jwt"           //nolint:gosec
+	HSTokenAFilePath      = "../../docker/test-token-A-hs.jwt"         //nolint:gosec
+	HSTokenBFilePath      = "../../docker/test-token-B-hs.jwt"         //nolint:gosec
+	OwnerTokenFilePath    = "../../docker/test-token-rsa-owner.jwt"    //nolint:gosec
+	EditorTokenFilePath   = "../../docker/test-token-rsa-editor.jwt"   //nolint:gosec
+	ReadOnlyTokenFilePath = "../../docker/test-token-rsa-readonly.jwt" //nolint:gosec
 )
 
 func readToken(t *testing.T, file string) string {
 	tokenBytes, err := os.ReadFile(file)
 	require.NoError(t, err)
 	return string(tokenBytes)
+}
+
+func createNamespaceWithToken(t *testing.T, name string, token string) *httpexpect.Response {
+	e := expectLow(t, config.GetBaseURL2())
+	return e.POST(getCreateNamespaceURL()).
+		WithHeader(Authorization, Bearer+token).
+		WithJSON(Map{"name": name}).
+		Expect()
 }
 
 func createTestNamespace(t *testing.T, token string) {
@@ -55,6 +66,14 @@ func createTestNamespace(t *testing.T, token string) {
 	_ = e2.POST(namespaceOperation("create")).
 		WithHeader(Authorization, Bearer+token).
 		WithJSON(createNamespacePayload).Expect()
+
+	createNamespacePayload2 := Map{
+		"name": "tigris_test_name_non_admin",
+		"id":   "tigris_test_non_admin",
+	}
+	_ = e2.POST(namespaceOperation("create")).
+		WithHeader(Authorization, Bearer+token).
+		WithJSON(createNamespacePayload2).Expect()
 }
 
 func TestHS256TokenValidation(t *testing.T) {
@@ -441,6 +460,43 @@ func TestUserInvitations(t *testing.T) {
 	verificationRes2.Status(http.StatusUnauthorized)
 }
 
+func TestAuthzOwner(t *testing.T) {
+	token := readToken(t, OwnerTokenFilePath)
+	createTestNamespace(t, token)
+
+	// create project should be allowed
+	createProject2(t, "TestAuthzOwner", token).
+		Status(http.StatusOK)
+
+	// creating namespace should NOT be allowed
+	createNamespaceWithToken(t, "TestAuthzOwner", token).Status(http.StatusForbidden)
+}
+
+func TestAuthzEditor(t *testing.T) {
+	token := readToken(t, EditorTokenFilePath)
+	createTestNamespace(t, token)
+
+	// create project should be allowed
+	createProject2(t, "TestAuthzEditor", token).
+		Status(http.StatusOK)
+
+	// creating namespace is not be allowed
+	resp := createNamespaceWithToken(t, "TestAuthzEditor", token).Status(http.StatusForbidden).Body().Raw()
+	require.Equal(t, "{\"error\":{\"code\":\"PERMISSION_DENIED\",\"message\":\"You are not allowed to perform operation: /tigrisdata.management.v1.Management/CreateNamespace\"}}", resp)
+}
+
+func TestAuthzReadonly(t *testing.T) {
+	// listing projects should be allowed.
+	token := readToken(t, ReadOnlyTokenFilePath)
+	listProjects(t, token).Status(http.StatusOK)
+
+	// create project should NOT be allowed
+	resp := createProject2(t, "TestAuthzReadonly", token).
+		Status(http.StatusForbidden).Body().Raw()
+
+	require.Equal(t, "{\"error\":{\"code\":\"PERMISSION_DENIED\",\"message\":\"You are not allowed to perform operation: /tigrisdata.v1.Tigris/CreateProject\"}}", resp)
+}
+
 func createProject2(t *testing.T, projectName string, token string) *httpexpect.Response {
 	e2 := expectLow(t, config.GetBaseURL2())
 
@@ -500,6 +556,21 @@ func listUserInvitations(t *testing.T, token string) *httpexpect.Response {
 		Expect()
 }
 
+func listUsers(t *testing.T, token string) *httpexpect.Response {
+	e2 := expectLow(t, config.GetBaseURL2())
+
+	return e2.GET(listUsersUrl()).
+		WithHeader(Authorization, Bearer+token).
+		Expect()
+}
+
+func listProjects(t *testing.T, token string) *httpexpect.Response {
+	e2 := expectLow(t, config.GetBaseURL2())
+	return e2.GET(listProjectsUrl()).
+		WithHeader(Authorization, Bearer+token).
+		Expect()
+}
+
 func verifyUserInvitations(t *testing.T, email string, code string, token string) *httpexpect.Response {
 	e2 := expectLow(t, config.GetBaseURL2())
 	payload := make(map[string]string)
@@ -524,4 +595,12 @@ func deleteUserInvitations(t *testing.T, email string, status string, token stri
 
 func invitationUrl(operation string) string {
 	return fmt.Sprintf("/v1/auth/namespace/invitations/%s", operation)
+}
+
+func listUsersUrl() string {
+	return "/v1/auth/namespace/users"
+}
+
+func listProjectsUrl() string {
+	return "/v1/projects"
 }

@@ -67,6 +67,9 @@ type Gotrue struct {
 	SharedSecret string `mapstructure:"shared_secret" yaml:"shared_secret" json:"shared_secret"`
 }
 
+type AuthzConfig struct {
+	Enabled bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+}
 type AuthConfig struct {
 	Enabled                    bool                  `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 	Validators                 []ValidatorConfig     `mapstructure:"validators" yaml:"validators" json:"validators"`
@@ -90,6 +93,7 @@ type AuthConfig struct {
 	EnableNamespaceDeletion    bool                  `mapstructure:"enable_namespace_deletion" yaml:"enable_namespace_deletion" json:"enable_namespace_deletion"`
 	EnableNamespaceCreation    bool                  `mapstructure:"enable_namespace_creation" yaml:"enable_namespace_creation" json:"enable_namespace_creation"`
 	UserInvitations            Invitation            `mapstructure:"user_invitations" yaml:"user_invitations" json:"user_invitations"`
+	Authz                      AuthzConfig           `mapstructure:"authz" yaml:"authz" json:"authz"`
 }
 
 type Invitation struct {
@@ -304,6 +308,7 @@ var DefaultConfig = Config{
 		UserInvitations: Invitation{
 			ExpireAfterSec: 259200, // 3days
 		},
+		Authz: AuthzConfig{Enabled: false},
 	},
 	Billing: Billing{
 		Metronome: Metronome{

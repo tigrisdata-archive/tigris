@@ -72,6 +72,7 @@ func TestRequestMetadata(t *testing.T) {
 		require.True(t, IsAdminApi("/tigrisdata.management.v1.Management/CreateNamespace"))
 		require.True(t, IsAdminApi("/tigrisdata.management.v1.Management/ListNamespaces"))
 		require.True(t, IsAdminApi("/tigrisdata.management.v1.Management/DeleteNamespace"))
+		require.True(t, IsAdminApi("/tigrisdata.auth.v1.Auth/VerifyInvitation"))
 		require.False(t, IsAdminApi("/.HealthAPI/Health"))
 		require.False(t, IsAdminApi("some-random"))
 	})
@@ -79,37 +80,70 @@ func TestRequestMetadata(t *testing.T) {
 	t.Run("Test get namespace from token 1", func(t *testing.T) {
 		// base64 encoding of {"https://tigris":{"ue":"test@tigrisdata.com","nc":"test-namespace"},"iss":"https://test-issuer.com/","sub":"google-oauth2|1","aud":["https://tigris-api-test"],"iat":1662745495,"exp":1662831895,"azp":"test","scope":"openid profile email","org_id":"test"}
 		testToken := "header.eyJodHRwczovL3RpZ3JpcyI6eyJ1ZSI6InRlc3RAdGlncmlzZGF0YS5jb20iLCJuYyI6InRlc3QtbmFtZXNwYWNlIn0sImlzcyI6Imh0dHBzOi8vdGVzdC1pc3N1ZXIuY29tLyIsInN1YiI6Imdvb2dsZS1vYXV0aDJ8MSIsImF1ZCI6WyJodHRwczovL3RpZ3Jpcy1hcGktdGVzdCJdLCJpYXQiOjE2NjI3NDU0OTUsImV4cCI6MTY2MjgzMTg5NSwiYXpwIjoidGVzdCIsInNjb3BlIjoib3BlbmlkIHByb2ZpbGUgZW1haWwiLCJvcmdfaWQiOiJ0ZXN0In0=.signature" //nolint:gosec
-		ns, utype, sub := getMetadataFromToken(testToken)
+		ns, utype, sub, role := getMetadataFromToken(testToken)
 		assert.Equal(t, "test-namespace", ns)
 		assert.Equal(t, true, utype)
 		assert.Equal(t, "google-oauth2|1", sub)
+		assert.Equal(t, "", role)
 	})
 
 	t.Run("Test get namespace from token 2 (backward compatibility)", func(t *testing.T) {
 		// base64 encoding of {"https://tigris/n":{"code":"test_namespace"},"iss":"https://some-issuer","sub":"google2|12","aud":"https://test","iat":1676573357,"exp":1676659757,"azp":"123","gty":"client-credentials"}
 		testToken := "header.eyJodHRwczovL3RpZ3Jpcy9uIjp7ImNvZGUiOiJ0ZXN0X25hbWVzcGFjZSJ9LCJpc3MiOiJodHRwczovL3NvbWUtaXNzdWVyIiwic3ViIjoiZ29vZ2xlMnwxMiIsImF1ZCI6Imh0dHBzOi8vdGVzdCIsImlhdCI6MTY3NjU3MzM1NywiZXhwIjoxNjc2NjU5NzU3LCJhenAiOiIxMjMiLCJndHkiOiJjbGllbnQtY3JlZGVudGlhbHMifQ==.signature" //nolint:gosec
-		ns, utype, sub := getMetadataFromToken(testToken)
+		ns, utype, sub, role := getMetadataFromToken(testToken)
 		assert.Equal(t, "test_namespace", ns)
 		assert.Equal(t, false, utype)
 		assert.Equal(t, "google2|12", sub)
+		assert.Equal(t, "", role)
 	})
 
 	//
 	t.Run("Test get namespace from token 3", func(t *testing.T) {
 		// base64 encoding of {"https://tigris":{"nc":"test-namespace","ue":"test@test.com"},"iss":"https://test-issuer.com/","sub":"google-oauth2|2","aud":["https://tigris-api-test"],"iat":1662745495,"exp":1662831895,"azp":"test","scope":"openid profile email","org_id":"test"}
 		testToken := "header.eyJodHRwczovL3RpZ3JpcyI6eyJuYyI6InRlc3QtbmFtZXNwYWNlIiwidWUiOiJ0ZXN0QHRlc3QuY29tIn0sImlzcyI6Imh0dHBzOi8vdGVzdC1pc3N1ZXIuY29tLyIsInN1YiI6Imdvb2dsZS1vYXV0aDJ8MiIsImF1ZCI6WyJodHRwczovL3RpZ3Jpcy1hcGktdGVzdCJdLCJpYXQiOjE2NjI3NDU0OTUsImV4cCI6MTY2MjgzMTg5NSwiYXpwIjoidGVzdCIsInNjb3BlIjoib3BlbmlkIHByb2ZpbGUgZW1haWwiLCJvcmdfaWQiOiJ0ZXN0In0=.signature" //nolint:gosec
-		ns, utype, sub := getMetadataFromToken(testToken)
+		ns, utype, sub, role := getMetadataFromToken(testToken)
 		assert.Equal(t, "test-namespace", ns)
 		assert.Equal(t, true, utype)
 		assert.Equal(t, "google-oauth2|2", sub)
+		assert.Equal(t, "", role)
 	})
 
 	t.Run("Test get namespace from token 4", func(t *testing.T) {
 		// base64 encoding of {"https://tigris":{"nc":"test-namespace"},"iss":"https://test-issuer.com/","sub":"google-oauth2|1","aud":["https://tigris-api-test"],"iat":1662745495,"exp":1662831895,"azp":"test","scope":"openid profile email","org_id":"test"}
 		testToken := "header.eyJodHRwczovL3RpZ3JpcyI6eyJuYyI6InRlc3QtbmFtZXNwYWNlIn0sImlzcyI6Imh0dHBzOi8vdGVzdC1pc3N1ZXIuY29tLyIsInN1YiI6Imdvb2dsZS1vYXV0aDJ8MSIsImF1ZCI6WyJodHRwczovL3RpZ3Jpcy1hcGktdGVzdCJdLCJpYXQiOjE2NjI3NDU0OTUsImV4cCI6MTY2MjgzMTg5NSwiYXpwIjoidGVzdCIsInNjb3BlIjoib3BlbmlkIHByb2ZpbGUgZW1haWwiLCJvcmdfaWQiOiJ0ZXN0In0=.signature" //nolint:gosec
-		ns, utype, sub := getMetadataFromToken(testToken)
+		ns, utype, sub, _ := getMetadataFromToken(testToken)
 		assert.Equal(t, "test-namespace", ns)
 		assert.Equal(t, false, utype)
 		assert.Equal(t, "google-oauth2|1", sub)
+	})
+
+	t.Run("Test get namespace from token 5 - with role: owner  ", func(t *testing.T) {
+		// base64 encoding of {"https://tigris":{"ue":"test@tigrisdata.com","nc":"test-namespace","r":"o"},"iss":"https://test-issuer.com/","sub":"google-oauth2|1","aud":["https://tigris-api-test"],"iat":1662745495,"exp":1662831895,"azp":"test","scope":"openid profile email","org_id":"test"}
+		testToken := "header.eyJodHRwczovL3RpZ3JpcyI6eyJ1ZSI6InRlc3RAdGlncmlzZGF0YS5jb20iLCJuYyI6InRlc3QtbmFtZXNwYWNlIiwiciI6Im8ifSwiaXNzIjoiaHR0cHM6Ly90ZXN0LWlzc3Vlci5jb20vIiwic3ViIjoiZ29vZ2xlLW9hdXRoMnwxIiwiYXVkIjpbImh0dHBzOi8vdGlncmlzLWFwaS10ZXN0Il0sImlhdCI6MTY2Mjc0NTQ5NSwiZXhwIjoxNjYyODMxODk1LCJhenAiOiJ0ZXN0Iiwic2NvcGUiOiJvcGVuaWQgcHJvZmlsZSBlbWFpbCIsIm9yZ19pZCI6InRlc3QifQ==.signature" //nolint:gosec
+		ns, utype, sub, role := getMetadataFromToken(testToken)
+		assert.Equal(t, "test-namespace", ns)
+		assert.Equal(t, true, utype)
+		assert.Equal(t, "google-oauth2|1", sub)
+		assert.Equal(t, "o", role)
+	})
+
+	t.Run("Test get namespace from token 5 - with role: editor  ", func(t *testing.T) {
+		// base64 encoding of {"https://tigris":{"ue":"test@tigrisdata.com","nc":"test-namespace","r":"e"},"iss":"https://test-issuer.com/","sub":"google-oauth2|1","aud":["https://tigris-api-test"],"iat":1662745495,"exp":1662831895,"azp":"test","scope":"openid profile email","org_id":"test"}
+		testToken := "header.eyJodHRwczovL3RpZ3JpcyI6eyJ1ZSI6InRlc3RAdGlncmlzZGF0YS5jb20iLCJuYyI6InRlc3QtbmFtZXNwYWNlIiwiciI6ImUifSwiaXNzIjoiaHR0cHM6Ly90ZXN0LWlzc3Vlci5jb20vIiwic3ViIjoiZ29vZ2xlLW9hdXRoMnwxIiwiYXVkIjpbImh0dHBzOi8vdGlncmlzLWFwaS10ZXN0Il0sImlhdCI6MTY2Mjc0NTQ5NSwiZXhwIjoxNjYyODMxODk1LCJhenAiOiJ0ZXN0Iiwic2NvcGUiOiJvcGVuaWQgcHJvZmlsZSBlbWFpbCIsIm9yZ19pZCI6InRlc3QifQ==.signature" //nolint:gosec
+		ns, utype, sub, role := getMetadataFromToken(testToken)
+		assert.Equal(t, "test-namespace", ns)
+		assert.Equal(t, true, utype)
+		assert.Equal(t, "google-oauth2|1", sub)
+		assert.Equal(t, "e", role)
+	})
+
+	t.Run("Test get namespace from token 5 - with role: readonly  ", func(t *testing.T) {
+		// base64 encoding of {"https://tigris":{"ue":"test@tigrisdata.com","nc":"test-namespace","r":"ro"},"iss":"https://test-issuer.com/","sub":"google-oauth2|1","aud":["https://tigris-api-test"],"iat":1662745495,"exp":1662831895,"azp":"test","scope":"openid profile email","org_id":"test"}
+		testToken := "header.eyJodHRwczovL3RpZ3JpcyI6eyJ1ZSI6InRlc3RAdGlncmlzZGF0YS5jb20iLCJuYyI6InRlc3QtbmFtZXNwYWNlIiwiciI6InJvIn0sImlzcyI6Imh0dHBzOi8vdGVzdC1pc3N1ZXIuY29tLyIsInN1YiI6Imdvb2dsZS1vYXV0aDJ8MSIsImF1ZCI6WyJodHRwczovL3RpZ3Jpcy1hcGktdGVzdCJdLCJpYXQiOjE2NjI3NDU0OTUsImV4cCI6MTY2MjgzMTg5NSwiYXpwIjoidGVzdCIsInNjb3BlIjoib3BlbmlkIHByb2ZpbGUgZW1haWwiLCJvcmdfaWQiOiJ0ZXN0In0=.signature" //nolint:gosec
+		ns, utype, sub, role := getMetadataFromToken(testToken)
+		assert.Equal(t, "test-namespace", ns)
+		assert.Equal(t, true, utype)
+		assert.Equal(t, "google-oauth2|1", sub)
+		assert.Equal(t, "ro", role)
 	})
 }

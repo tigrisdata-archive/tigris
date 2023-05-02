@@ -37,6 +37,7 @@ import (
 const (
 	JWTTigrisClaimSpace = "https://tigris"
 	NamespaceCode       = "nc"
+	Role                = "r"
 	UserEmail           = "ue"
 	Subject             = "sub"
 )
@@ -46,7 +47,7 @@ const (
 )
 
 var (
-	adminMethods = container.NewHashSet(api.CreateNamespaceMethodName, api.ListNamespaceMethodName, api.DeleteNamespaceMethodName)
+	adminMethods = container.NewHashSet(api.CreateNamespaceMethodName, api.ListNamespacesMethodName, api.DeleteNamespaceMethodName, api.VerifyInvitationMethodName)
 	tenantGetter metadata.TenantGetter
 )
 
@@ -70,7 +71,8 @@ type Metadata struct {
 	collection string
 
 	// Current user/application
-	Sub string
+	Sub  string
+	Role string
 }
 
 func Init(tg metadata.TenantGetter) {
@@ -78,15 +80,15 @@ func Init(tg metadata.TenantGetter) {
 }
 
 func NewRequestMetadata(ctx context.Context) Metadata {
-	ns, utype, sub := GetMetadataFromHeader(ctx)
-	md := Metadata{IsHuman: utype, Sub: sub}
+	ns, utype, sub, role := GetMetadataFromHeader(ctx)
+	md := Metadata{IsHuman: utype, Sub: sub, Role: role}
 	md.SetNamespace(ctx, ns)
 	return md
 }
 
 func NewRequestEndpointMetadata(ctx context.Context, serviceName string, methodInfo grpc.MethodInfo, db string, branch string, coll string) Metadata {
-	ns, utype, sub := GetMetadataFromHeader(ctx)
-	md := Metadata{serviceName: serviceName, methodInfo: methodInfo, IsHuman: utype, Sub: sub, project: db, branch: branch, collection: coll}
+	ns, utype, sub, role := GetMetadataFromHeader(ctx)
+	md := Metadata{serviceName: serviceName, methodInfo: methodInfo, IsHuman: utype, Sub: sub, Role: role, project: db, branch: branch, collection: coll}
 	md.SetNamespace(ctx, ns)
 	return md
 }
@@ -217,6 +219,10 @@ func (m *Metadata) GetFullMethod() string {
 	return fmt.Sprintf("/%s/%s", m.serviceName, m.methodInfo.Name)
 }
 
+func (m *Metadata) GetRole() string {
+	return m.Role
+}
+
 func (m *Metadata) SaveToContext(ctx context.Context) context.Context {
 	return context.WithValue(ctx, MetadataCtxKey{}, m)
 }
@@ -335,11 +341,11 @@ func getTokenFromHeader(header string) (string, error) {
 }
 
 // extracts namespace and type of the user from the token.
-func getMetadataFromToken(token string) (string, bool, string) {
+func getMetadataFromToken(token string) (string, bool, string, string) {
 	tokenParts := strings.SplitN(token, ".", 3)
 	if len(tokenParts) < 3 {
 		log.Debug().Msg("Could not split the token into its parts")
-		return defaults.UnknownValue, false, ""
+		return defaults.UnknownValue, false, "", ""
 	}
 
 	var decodedToken []byte
@@ -348,19 +354,19 @@ func getMetadataFromToken(token string) (string, bool, string) {
 		stdDecoded, err := base64.StdEncoding.DecodeString(tokenParts[1])
 		if err != nil {
 			log.Error().Err(err).Msg("Could not base64 decode token")
-			return defaults.UnknownValue, false, ""
+			return defaults.UnknownValue, false, "", ""
 		}
 		decodedToken = stdDecoded
 	}
 
-	var namespaceCode, userEmail string
+	var namespaceCode, userEmail, role string
 	namespaceCode, err = jsonparser.GetString(decodedToken, JWTTigrisClaimSpace, NamespaceCode)
 	if err != nil {
 		// try parsing the old way
 		namespaceCode, err = jsonparser.GetString(decodedToken, JWTTigrisClaimSpace+"/n", "code")
 		if err != nil {
 			log.Error().Err(err).Msg("Could not read namespace code")
-			return defaults.UnknownValue, false, ""
+			return defaults.UnknownValue, false, "", ""
 		}
 	}
 
@@ -370,22 +376,29 @@ func getMetadataFromToken(token string) (string, bool, string) {
 		// this is allowed for m2m apps
 	}
 
+	role, err = jsonparser.GetString(decodedToken, JWTTigrisClaimSpace, Role)
+	if err != nil {
+		log.Debug().Err(err).Msg("Could not read user role")
+		// this is allowed for transition
+		// TODO: this should be disabled once RBAC is rolled out
+	}
+
 	sub, err := jsonparser.GetString(decodedToken, Subject)
 	if err != nil {
 		log.Error().Err(err).Msg("Could not read subject")
-		return defaults.UnknownValue, false, ""
+		return defaults.UnknownValue, false, "", ""
 	}
-	return namespaceCode, len(userEmail) > 0, sub
+	return namespaceCode, len(userEmail) > 0, sub, role
 }
 
-func GetMetadataFromHeader(ctx context.Context) (string, bool, string) {
+func GetMetadataFromHeader(ctx context.Context) (string, bool, string, string) {
 	if !config.DefaultConfig.Auth.EnableNamespaceIsolation {
-		return defaults.DefaultNamespaceName, false, ""
+		return defaults.DefaultNamespaceName, false, "", ""
 	}
 	header := api.GetHeader(ctx, api.HeaderAuthorization)
 	token, err := getTokenFromHeader(header)
 	if err != nil {
-		return defaults.DefaultNamespaceName, false, ""
+		return defaults.DefaultNamespaceName, false, "", ""
 	}
 
 	return getMetadataFromToken(token)
@@ -402,9 +415,9 @@ func isRead(name string) bool {
 	}
 
 	switch name {
-	case api.ReadMethodName, api.EventsMethodName, api.SearchMethodName, api.SubscribeMethodName:
+	case api.ReadMethodName, api.SearchMethodName:
 		return true
-	case api.ListCollectionsMethodName, api.ListDatabasesMethodName:
+	case api.ListCollectionsMethodName, api.ListProjectsMethodName:
 		return true
 	case api.DescribeCollectionMethodName, api.DescribeDatabaseMethodName:
 		return true
