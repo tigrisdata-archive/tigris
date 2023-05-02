@@ -301,20 +301,24 @@ type Dictionary struct {
 
 	schemaStore       *SchemaSubspace
 	searchSchemaStore *SearchSchemaSubspace
+
+	queueStore *QueueSubspace
 }
 
 func NewMetadataDictionary(mdNameRegistry *NameRegistry) *Dictionary {
+	queueStore := NewQueueStore(mdNameRegistry)
 	return &Dictionary{
 		NameRegistry: *mdNameRegistry,
 
 		reservedSb:        newReservedSubspace(mdNameRegistry),
 		nsStore:           NewNamespaceStore(mdNameRegistry),
 		clusterStore:      NewClusterStore(mdNameRegistry),
-		collStore:         newCollectionStore(mdNameRegistry),
+		collStore:         newCollectionStore(mdNameRegistry, queueStore),
 		primaryIdxStore:   newPrimaryIndexStore(mdNameRegistry),
 		dbStore:           newDatabaseStore(mdNameRegistry),
 		schemaStore:       NewSchemaStore(mdNameRegistry),
 		searchSchemaStore: NewSearchSchemaStore(mdNameRegistry),
+		queueStore:        queueStore,
 	}
 }
 
@@ -344,6 +348,10 @@ func (k *Dictionary) SearchSchema() *SearchSchemaSubspace {
 
 func (k *Dictionary) Namespace() *NamespaceSubspace {
 	return k.nsStore
+}
+
+func (k *Dictionary) Queue() *QueueSubspace {
+	return k.queueStore
 }
 
 // ReserveNamespace is the first step in the encoding and the mapping is passed the caller. As this is the first encoded
@@ -397,14 +405,14 @@ func (k *Dictionary) DropDatabase(ctx context.Context, tx transaction.Tx, dbName
 }
 
 func (k *Dictionary) CreateCollection(ctx context.Context, tx transaction.Tx, name string,
-	namespaceId uint32, dbId uint32, indexes []*schema.Index,
+	namespace Namespace, db *Database, indexes []*schema.Index,
 ) (*CollectionMetadata, error) {
 	id, err := k.allocate(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
 
-	meta, err := k.Collection().Create(ctx, tx, namespaceId, dbId, name, id, indexes)
+	meta, err := k.Collection().Create(ctx, tx, namespace, db, name, id, indexes)
 	if err != nil {
 		return nil, err
 	}
@@ -413,9 +421,9 @@ func (k *Dictionary) CreateCollection(ctx context.Context, tx transaction.Tx, na
 }
 
 func (k *Dictionary) UpdateCollection(ctx context.Context, tx transaction.Tx, name string,
-	namespaceId uint32, dbId uint32, collId uint32, updatedIndexes []*schema.Index,
+	namespace Namespace, db *Database, collId uint32, updatedIndexes []*schema.Index,
 ) (*CollectionMetadata, error) {
-	meta, err := k.Collection().Update(ctx, tx, namespaceId, dbId, name, collId, updatedIndexes)
+	meta, err := k.Collection().Update(ctx, tx, namespace, db, name, collId, updatedIndexes)
 	if err != nil {
 		return nil, err
 	}

@@ -19,6 +19,7 @@ import (
 	"os/signal"
 	"runtime"
 	"syscall"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/server/config"
@@ -28,6 +29,7 @@ import (
 	"github.com/tigrisdata/tigris/server/quota"
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/services/v1/billing"
+	"github.com/tigrisdata/tigris/server/services/v1/workers"
 	"github.com/tigrisdata/tigris/server/tracing"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/server/types"
@@ -116,6 +118,15 @@ func mainWithCode() int {
 	request.Init(tenantMgr)
 	_ = quota.Init(tenantMgr, cfg)
 	defer quota.Cleanup()
+
+	if cfg.Workers.Enabled {
+		workerPool := workers.NewWorkerPool(cfg.Workers.Count, tenantMgr.GetQueue(), txMgr, tenantMgr, 300*time.Millisecond)
+		if err := workerPool.Start(); ulog.E(err) {
+			log.Error().Err(err).Msgf("error starting worker pool")
+		}
+		defer workerPool.Stop()
+		log.Info().Msgf("initialized worker pool with %d workers", cfg.Workers.Count)
+	}
 
 	bProvider := billing.NewProvider()
 

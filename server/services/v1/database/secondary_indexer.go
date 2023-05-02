@@ -39,9 +39,11 @@ var (
 	SizeSubSpace  = "size"
 )
 
+type ProgressUpdateFn func(ctx context.Context, tx transaction.Tx) error
+
 type SecondaryIndexer interface {
 	// Bulk build the indexes in the collection
-	BuildCollection(ctx context.Context, txMgr *transaction.Manager) error
+	BuildCollection(ctx context.Context, txMgr *transaction.Manager, progressUpdate ProgressUpdateFn) error
 	// Read the document from the primary store and delete it from secondary indexes
 	ReadDocAndDelete(ctx context.Context, tx transaction.Tx, key keys.Key) (int32, error)
 	// Delete document from the secondary index
@@ -149,7 +151,7 @@ func newSecondaryIndexerImpl(coll *schema.DefaultCollection) *SecondaryIndexerIm
 	}
 }
 
-func (q *SecondaryIndexerImpl) BuildCollection(ctx context.Context, txMgr *transaction.Manager) error {
+func (q *SecondaryIndexerImpl) BuildCollection(ctx context.Context, txMgr *transaction.Manager, progressUpdate ProgressUpdateFn) error {
 	docFetch := 500
 	var last []byte
 	var first []byte
@@ -185,6 +187,12 @@ func (q *SecondaryIndexerImpl) BuildCollection(ctx context.Context, txMgr *trans
 				return err
 			}
 			count++
+		}
+
+		if progressUpdate != nil {
+			if err = progressUpdate(ctx, tx); err != nil {
+				return err
+			}
 		}
 
 		if err = tx.Commit(ctx); err != nil {

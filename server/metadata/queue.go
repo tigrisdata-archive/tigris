@@ -67,25 +67,42 @@ type QueueSubspace struct {
 	metadataSubspace
 }
 
+type TaskType uint8
+
+const (
+	BUILD_INDEX_QUEUE_TASK TaskType = iota
+	TEST_QUEUE_TASK
+)
+
+type IndexBuildTask struct {
+	TaskType    uint32 `json:"tasktype"`
+	NamespaceId string `json:"tenantId"`
+	ProjName    string `json:"projectName"`
+	Branch      string `json:"branch"`
+	CollName    string `json:"collection"`
+}
+
 type QueueItem struct {
 	Id         string    `json:"id"`
 	Priority   int64     `json:"priority"`
 	ErrorCount uint8     `json:"error_count"`
 	LeaseId    string    `json:"lease_id,omitempty"`
 	Data       []byte    `json:"data"`
+	TaskType   TaskType  `json:"task_type"`
 	Vesting    time.Time `json:"vesting_time"`
 }
 
-func NewQueueItem(priority int64, data []byte) *QueueItem {
+func NewQueueItem(priority int64, data []byte, taskType TaskType) *QueueItem {
 	return &QueueItem{
 		Id:         uuid.NewUUIDAsString(),
 		Priority:   priority,
 		ErrorCount: 0,
 		Data:       data,
+		TaskType:   taskType,
 	}
 }
 
-func newQueueStore(nameRegistry *NameRegistry) *QueueSubspace {
+func NewQueueStore(nameRegistry *NameRegistry) *QueueSubspace {
 	return &QueueSubspace{
 		metadataSubspace{
 			SubspaceName: nameRegistry.QueueSubspaceName(),
@@ -113,6 +130,17 @@ func (q *QueueSubspace) Enqueue(ctx context.Context, tx transaction.Tx, item *Qu
 		return err
 	}
 	return tx.Replace(ctx, key, tableData, false)
+}
+
+func (q *QueueSubspace) Requeue(ctx context.Context, tx transaction.Tx, item *QueueItem, delay time.Duration) error {
+	if len(item.Id) == 0 {
+		return ErrMissingId
+	}
+	if err := q.Dequeue(ctx, tx, item); err != nil {
+		return err
+	}
+
+	return q.Enqueue(ctx, tx, item, delay)
 }
 
 func (q *QueueSubspace) Peek(ctx context.Context, tx transaction.Tx, max int) ([]QueueItem, error) {
@@ -219,10 +247,34 @@ func (q *QueueSubspace) RenewLease(ctx context.Context, tx transaction.Tx, item 
 	return q.Enqueue(ctx, tx, item, leaseTime)
 }
 
+func (q *QueueSubspace) GetAll(ctx context.Context, tx transaction.Tx) ([]*QueueItem, error) {
+	minVesting := time.UnixMilli(int64(1678281734380)) // 8 March 2023 - No queue item will be before this
+	currentTime := time.Now().Add(48 * time.Hour)
+	startKey := q.getKey(minVesting, 0, "")
+	endKey := q.getKey(currentTime, maxPriority, maxId)
+
+	iter, err := tx.ReadRange(ctx, startKey, endKey, false, false)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]*QueueItem, 0)
+	var v kv.KeyValue
+	for iter.Next(&v) {
+		item, err := q.decodeItem(v.Data)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+
+	return items, iter.Err()
+}
+
 // For local debugging and testing.
 //
-//nolint:unused
-func (q *QueueSubspace) scanTable(ctx context.Context, tx transaction.Tx) error {
+
+func (q *QueueSubspace) ScanTable(ctx context.Context, tx transaction.Tx) error {
 	minVesting := time.UnixMilli(int64(1678281734380)) // 8 March 2023 - No queue item will be before this
 	currentTime := time.Now().Add(2 * time.Hour)
 	t := time.Now()

@@ -22,6 +22,7 @@ import (
 	"math"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
@@ -834,6 +835,57 @@ func setupIndexBuildTest(t *testing.T, schema Map) (string, string) {
 	return db, testCollection
 }
 
+func TestQuery_BackgroundBuildIndex(t *testing.T) {
+	db, coll := setupIndexBuildTest(t, testBuildIndexSchema)
+	defer cleanupTests(t, db)
+
+	for i := 0; i < 20; i++ {
+		writeDocs(t, db, coll, i*50, 50)
+	}
+
+	for _, val := range testBuildIndexSchema["schema"].(Map)["properties"].(Map) {
+		prop := val.(Map)
+		prop["index"] = true
+	}
+
+	createCollection(t, db, coll, testBuildIndexSchema).Status(http.StatusOK)
+	waitForIndexesActive(t, db, coll)
+
+	cases := []struct {
+		filter Map
+		count  int
+	}{
+		{
+			Map{"int_value": Map{"$gt": nil}},
+			1000,
+		},
+		{
+			Map{"string_value": Map{"$gt": nil}},
+			1000,
+		},
+		{
+			Map{"bool_value": Map{"$gt": nil}},
+			1000,
+		},
+		{
+			Map{"double_value": Map{"$gt": nil}},
+			1000,
+		},
+		{
+			Map{"date_time_value": Map{"$gt": nil}},
+			1000,
+		},
+	}
+
+	for _, query := range cases {
+		resp := readByFilter(t, db, coll, query.filter, nil, nil, nil)
+		ids := getIds(resp)
+		assert.Equal(t, query.count, len(ids), query.filter)
+		explain := explainQuery(t, db, coll, query.filter, nil, nil, nil)
+		assert.Equal(t, "secondary index", explain.ReadType)
+	}
+}
+
 func TestQuery_BuildIndex(t *testing.T) {
 	db, coll := setupIndexBuildTest(t, testBuildIndexSchema)
 	defer cleanupTests(t, db)
@@ -903,7 +955,6 @@ func TestQuery_BuildIndex(t *testing.T) {
 }
 
 func writeDocs(t *testing.T, db string, coll string, startId int, count int) {
-
 	for i := 0; i < count; i++ {
 		inputDocument := []Doc{
 
@@ -936,6 +987,36 @@ func checkIndexesActive(t *testing.T, indexes []*api.CollectionIndex) {
 	for _, idx := range indexes {
 		assert.Equal(t, "INDEX ACTIVE", idx.State)
 	}
+}
+
+func waitForIndexesActive(t *testing.T, db string, coll string) {
+	count := 0
+	for count < 10 {
+		str := describeCollection(t, db, coll, Map{}).Body().Raw()
+		desc := &api.DescribeCollectionResponse{}
+		err := desc.UnmarshalJSON([]byte(str))
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+		assert.Len(t, desc.Indexes, 9)
+		active := true
+		for _, idx := range desc.Indexes {
+			if idx.State != "INDEX ACTIVE" {
+				active = false
+				break
+			}
+		}
+
+		if active {
+			return
+		}
+
+		count += 1
+		time.Sleep(1 * time.Second)
+	}
+
+	assert.Fail(t, "indexes are not active")
 }
 
 func stringEncoder(input string) string {

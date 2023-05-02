@@ -733,6 +733,23 @@ func (x *DescribeCollectionResponse) MarshalJSON() ([]byte, error) {
 	})
 }
 
+func (x *DescribeCollectionResponse) UnmarshalJSON(data []byte) error {
+
+	var desc collDesc
+	err := jsoniter.Unmarshal(data, &desc)
+	if err != nil {
+		return err
+	}
+
+	x.Collection = desc.Collection
+	x.Metadata = desc.Metadata
+	x.Schema = []byte(desc.Schema)
+	x.Size = desc.Size
+	x.Indexes = desc.Indexes
+
+	return nil
+}
+
 func (x *DescribeDatabaseResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
 		Metadata    *DatabaseMetadata `json:"metadata"`

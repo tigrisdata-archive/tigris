@@ -23,6 +23,7 @@ import (
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/transaction"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
@@ -36,13 +37,15 @@ type CollectionMetadata struct {
 // CollectionSubspace is used to store metadata about Tigris collections.
 type CollectionSubspace struct {
 	metadataSubspace
+	queue *QueueSubspace
 }
 
 const collMetaValueVersion int32 = 1
 
-func newCollectionStore(nameRegistry *NameRegistry) *CollectionSubspace {
+func newCollectionStore(nameRegistry *NameRegistry, queue *QueueSubspace) *CollectionSubspace {
 	return &CollectionSubspace{
-		metadataSubspace{
+		queue: queue,
+		metadataSubspace: metadataSubspace{
 			SubspaceName: nameRegistry.EncodingSubspaceName(),
 			KeyVersion:   []byte{encKeyVersion},
 		},
@@ -57,7 +60,7 @@ func (c *CollectionSubspace) getKey(nsID uint32, dbID uint32, name string) keys.
 	return keys.NewKey(c.SubspaceName, c.KeyVersion, UInt32ToByte(nsID), UInt32ToByte(dbID), collectionKey, name, keyEnd)
 }
 
-func (c *CollectionSubspace) Create(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, name string, id uint32, indexes []*schema.Index,
+func (c *CollectionSubspace) Create(ctx context.Context, tx transaction.Tx, ns Namespace, db *Database, collName string, collId uint32, indexes []*schema.Index,
 ) (*CollectionMetadata, error) {
 	for _, index := range indexes {
 		// The indexes are created when the collection is created which means we do not need to
@@ -66,18 +69,19 @@ func (c *CollectionSubspace) Create(ctx context.Context, tx transaction.Tx, nsID
 	}
 
 	meta := &CollectionMetadata{
-		id,
+		collId,
 		indexes,
 	}
 
-	if err := c.insert(ctx, tx, nsID, dbID, name, meta); err != nil {
+	if err := c.insert(ctx, tx, ns.Id(), db.Id(), collName, meta); err != nil {
 		return nil, err
 	}
 	return meta, nil
 }
 
-func (c *CollectionSubspace) updateMetadataIndexes(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, name string, id uint32, metadata *CollectionMetadata, updatedIndexes []*schema.Index,
+func (c *CollectionSubspace) updateMetadataIndexes(ctx context.Context, tx transaction.Tx, ns Namespace, db *Database, name string, _id uint32, metadata *CollectionMetadata, updatedIndexes []*schema.Index,
 ) error {
+	shouldAddIndexBuildTask := false
 	for _, updateIdx := range updatedIndexes {
 		existingIdx := schema.FindIndex(metadata.Indexes, updateIdx.Name)
 		if existingIdx != nil {
@@ -86,9 +90,24 @@ func (c *CollectionSubspace) updateMetadataIndexes(ctx context.Context, tx trans
 			}
 		} else {
 			updateIdx.State = schema.INDEX_WRITE_MODE
-			if err := c.createBuildIndexTask(ctx, tx, nsID, dbID, name, id, updateIdx); err != nil {
-				return err
-			}
+			shouldAddIndexBuildTask = true
+		}
+	}
+
+	if shouldAddIndexBuildTask && config.DefaultConfig.Workers.Enabled {
+		queueData, err := jsoniter.Marshal(IndexBuildTask{
+			TaskType:    1,
+			NamespaceId: ns.StrId(),
+			ProjName:    db.DbName(),
+			Branch:      db.BranchName(),
+			CollName:    name,
+		})
+		if err != nil {
+			return err
+		}
+
+		if err = c.queue.Enqueue(ctx, tx, NewQueueItem(0, queueData, BUILD_INDEX_QUEUE_TASK), 0); err != nil {
+			return err
 		}
 	}
 
@@ -96,20 +115,20 @@ func (c *CollectionSubspace) updateMetadataIndexes(ctx context.Context, tx trans
 	return nil
 }
 
-func (c *CollectionSubspace) Update(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, name string, id uint32, updatedIndexes []*schema.Index,
+func (c *CollectionSubspace) Update(ctx context.Context, tx transaction.Tx, ns Namespace, db *Database, name string, id uint32, updatedIndexes []*schema.Index,
 ) (*CollectionMetadata, error) {
-	metadata, err := c.Get(ctx, tx, nsID, dbID, name)
+	metadata, err := c.Get(ctx, tx, ns.Id(), db.Id(), name)
 	if err != nil {
 		return nil, err
 	}
 
-	if err = c.updateMetadataIndexes(ctx, tx, nsID, dbID, name, id, metadata, updatedIndexes); err != nil {
+	if err = c.updateMetadataIndexes(ctx, tx, ns, db, name, id, metadata, updatedIndexes); err != nil {
 		return nil, err
 	}
 
 	err = c.updateMetadata(ctx, tx,
-		c.validateArgs(nsID, dbID, name, &metadata),
-		c.getKey(nsID, dbID, name),
+		c.validateArgs(ns.Id(), db.Id(), name, &metadata),
+		c.getKey(ns.Id(), db.Id(), name),
 		collMetaValueVersion,
 		metadata,
 	)
@@ -119,10 +138,6 @@ func (c *CollectionSubspace) Update(ctx context.Context, tx transaction.Tx, nsID
 	}
 
 	return metadata, nil
-}
-
-func (*CollectionSubspace) createBuildIndexTask(_ context.Context, _ transaction.Tx, _ uint32, _ uint32, _ string, _ uint32, _ *schema.Index) error {
-	return nil
 }
 
 func (c *CollectionSubspace) insert(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, name string,
