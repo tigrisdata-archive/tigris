@@ -65,7 +65,7 @@ $cli server info
 $cli server version
 
 if [ "$OS" == 'Darwin' ]; then
-  export TIGRIS_TIMEOUT=25s
+  export TIGRIS_TIMEOUT=35s
 fi
 
 test_config() {

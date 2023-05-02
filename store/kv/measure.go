@@ -71,6 +71,7 @@ func (i *KeyValueIteratorWithMetrics) Next(value *KeyValue) bool {
 
 	if reqStatus != nil && value.Data != nil {
 		reqStatus.AddReadBytes(int64(value.Data.Size()))
+		reqStatus.AddResultDocs(1)
 	}
 	return hasNext
 }

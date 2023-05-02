@@ -122,6 +122,12 @@ func disableAdditionalPropertiesAndAllowNullable(required []string, properties m
 							case "string", "number", "object", "integer", "array", "boolean":
 								itemsP.Types = append(itemsP.Types, "null")
 							}
+							if len(itemsP.Properties) > 0 {
+								if itemsP.AdditionalProperties == nil {
+									itemsP.AdditionalProperties = false
+								}
+								disableAdditionalPropertiesAndAllowNullable(itemsP.Required, itemsP.Properties)
+							}
 						}
 					}
 				}

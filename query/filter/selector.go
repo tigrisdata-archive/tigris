@@ -20,6 +20,8 @@ import (
 	"math"
 
 	"github.com/buger/jsonparser"
+	jsoniter "github.com/json-iterator/go"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/lib/date"
 	"github.com/tigrisdata/tigris/schema"
 	ulog "github.com/tigrisdata/tigris/util/log"
@@ -37,15 +39,16 @@ import (
 //	{f:20} (default is "$eq" so we automatically append EqualityMatcher for this case in parser)
 //	{f:<Expr>}
 type Selector struct {
-	Field       *schema.QueryableField
-	Matcher     ValueMatcher
-	Collation   *value.Collation
-	LikeMatcher LikeMatcher
+	Matcher   ValueMatcher
+	Parent    *schema.QueryableField
+	Field     *schema.QueryableField
+	Collation *value.Collation
 }
 
 // NewSelector returns Selector object.
-func NewSelector(field *schema.QueryableField, matcher ValueMatcher, collation *value.Collation) *Selector {
+func NewSelector(parent *schema.QueryableField, field *schema.QueryableField, matcher ValueMatcher, collation *value.Collation) *Selector {
 	return &Selector{
+		Parent:    parent,
 		Field:     field,
 		Matcher:   matcher,
 		Collation: collation,
@@ -53,6 +56,8 @@ func NewSelector(field *schema.QueryableField, matcher ValueMatcher, collation *
 }
 
 func (s *Selector) MatchesDoc(doc map[string]any) bool {
+	// we don't need any special handling for arrays in this case because this is
+	// already taken care by search store
 	v, ok := doc[s.Field.Name()]
 	if !ok {
 		return true
@@ -85,14 +90,31 @@ func (s *Selector) MatchesDoc(doc map[string]any) bool {
 // and that is an acceptable error, so return false
 // Only log an error that is unexpected.
 func (s *Selector) Matches(doc []byte, metadata []byte) bool {
-	docValue, dtp, err := getJSONField(doc, metadata, s.Field.FieldName, s.Field.KeyPath())
+	if ((s.Parent != nil && s.Parent.DataType == schema.ArrayType) || (s.Field.DataType == schema.ArrayType)) && !MatcherForArray(s.Matcher) {
+		// The second condition is on matcher i.e. if filter has received an array then we don't need
+		// "ArrMatches" comparison because then "Matches" can simply compare both the arrays. Here we
+		// are handling case when user is passing non-array value in a filter for a field which is
+		// an array which means we need to iterate on an array and perform the comparison. This is the
+		// responsibility of ArrMatches method.
+		// We handle here,
+		// - filtering inside array of objects
+		// - single element comparison inside array
+		// - single element range on an array
+		arr, err := s.getArrayField(doc)
+		if ulog.E(err) {
+			return false
+		}
+		return s.Matcher.ArrMatches(arr)
+	}
 
+	docValue, dtp, err := getJSONField(doc, metadata, s.Field.FieldName, s.Field.KeyPath())
 	if dtp == jsonparser.NotExist {
 		return false
 	}
 	if ulog.E(err) {
 		return false
 	}
+
 	if dtp == jsonparser.Null {
 		docValue = nil
 	}
@@ -171,6 +193,82 @@ func (s *Selector) IsSearchIndexed() bool {
 // String a helpful method for logging.
 func (s *Selector) String() string {
 	return fmt.Sprintf("{%v:%v}", s.Field.Name(), s.Matcher)
+}
+
+// getArrayField is to extract an array from doc and then extract fieldName from each element of this Array. In case
+// element is not object then it simply returns the array.
+func (s *Selector) getArrayField(doc []byte) ([]any, error) {
+	keyPath := s.Field.KeyPath()
+	if s.Parent != nil {
+		// this means we need to fetch parent array
+		keyPath = s.Parent.KeyPath()
+	}
+
+	var items []any
+	var err error
+	_, err = jsonparser.ArrayEach(doc, func(item []byte, vt jsonparser.ValueType, offset int, err1 error) {
+		if err1 != nil {
+			err = err1
+			return
+		}
+
+		var converted any
+		if vt == jsonparser.Object {
+			// if array of object then we try to "Get" the requested field
+			v, dtp, _, er := jsonparser.Get(item, s.Field.UnFlattenName)
+			if dtp == jsonparser.NotExist || er != nil {
+				err = er
+				return
+			}
+
+			converted, err = convertByteToType(s.Field.SubType, dtp, v)
+		} else {
+			converted, err = convertByteToType(s.Field.SubType, vt, item)
+		}
+		if err != nil {
+			return
+		}
+
+		items = append(items, converted)
+	}, keyPath...)
+
+	return items, err
+}
+
+func convertByteToType(ft schema.FieldType, dtp jsonparser.ValueType, value []byte) (any, error) {
+	if dtp == jsonparser.Array || ft == schema.ArrayType {
+		var arr []any
+		if err := jsoniter.Unmarshal(value, &arr); err != nil {
+			return nil, err
+		}
+		return arr, nil
+	}
+
+	switch ft {
+	case schema.DoubleType:
+		return jsonparser.ParseFloat(value)
+	case schema.StringType, schema.UUIDType:
+		return string(value), nil
+	case schema.Int32Type, schema.Int64Type:
+		return jsonparser.ParseInt(value)
+	case schema.BoolType:
+		return jsonparser.ParseBoolean(value)
+	case schema.NullType:
+		return value, nil
+	}
+
+	switch dtp {
+	case jsonparser.Boolean:
+		return jsonparser.ParseBoolean(value)
+	case jsonparser.String:
+		return string(value), nil
+	case jsonparser.Number:
+		return jsonparser.ParseFloat(value)
+	case jsonparser.Null:
+		return value, nil
+	}
+
+	return nil, errors.InvalidArgument("unsupported value found '%s'", string(value))
 }
 
 func getJSONField(doc []byte, metadata []byte, fieldName string, keyPath []string) ([]byte, jsonparser.ValueType, error) {

@@ -85,6 +85,8 @@ type RequestStatus struct {
 	// bytes are the sum of document and index bytes written, and the read bytes in this case would be the data
 	// update or delete request where there may be a scan depending on the query filter.
 	writeBytes int64
+	// number of documents
+	nDocs int64
 	// Type of search request 0 - api search, 1 - collection search (used internally)
 	searchRequestType int
 	// One drop operation (for example drop collection) is one drop unit
@@ -153,6 +155,14 @@ func (r *RequestStatus) IsCollectionSearch() bool {
 
 func (r *RequestStatus) IsApiSearch() bool {
 	return r.searchRequestType == 0
+}
+
+func (r *RequestStatus) AddResultDocs(value int64) {
+	r.nDocs += value
+}
+
+func (r *RequestStatus) GetResultDocs() int64 {
+	return r.nDocs
 }
 
 func (r *RequestStatus) GetCollectionSearchUnits() int64 {

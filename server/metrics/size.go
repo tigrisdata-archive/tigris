@@ -19,15 +19,19 @@ import (
 )
 
 var (
-	NamespaceSize  tally.Scope
-	DbSize         tally.Scope
-	CollectionSize tally.Scope
+	NamespaceSize   tally.Scope
+	DbSize          tally.Scope
+	CollectionSize  tally.Scope
+	SearchSize      tally.Scope
+	SearchIndexSize tally.Scope
 )
 
 func initializeSizeScopes() {
 	NamespaceSize = SizeMetrics.SubScope("namespace")
 	DbSize = SizeMetrics.SubScope("db")
 	CollectionSize = SizeMetrics.SubScope("collection")
+	SearchSize = SizeMetrics.SubScope("search")
+	SearchIndexSize = SizeMetrics.SubScope("search_index")
 }
 
 func getNameSpaceSizeTagKeys() []string {
@@ -67,6 +71,29 @@ func getCollectionSizeTagKeys() []string {
 	}
 }
 
+func getSearchSizeTagKeys() []string {
+	return []string{
+		"env",
+		"service",
+		"tigris_tenant",
+		"tigris_tenant_name",
+		"version",
+		"project",
+	}
+}
+
+func getSearchIndexSizeTagKeys() []string {
+	return []string{
+		"env",
+		"service",
+		"tigris_tenant",
+		"tigris_tenant_name",
+		"version",
+		"project",
+		"index",
+	}
+}
+
 func getNamespaceSizeTags(namespace string, namespaceName string) map[string]string {
 	return map[string]string{
 		"tigris_tenant":      namespace,
@@ -95,6 +122,23 @@ func getCollectionSizeTags(namespace string, namespaceName string, dbName string
 	}
 }
 
+func getSearchSizeTags(namespace string, namespaceName string, projectName string) map[string]string {
+	return map[string]string{
+		"tigris_tenant":      namespace,
+		"tigris_tenant_name": GetTenantNameTagValue(namespace, namespaceName),
+		"project":            projectName,
+	}
+}
+
+func getSearchIndexSizeTags(namespace string, namespaceName string, projectName string, indexName string) map[string]string {
+	return map[string]string{
+		"tigris_tenant":      namespace,
+		"tigris_tenant_name": GetTenantNameTagValue(namespace, namespaceName),
+		"project":            projectName,
+		"index":              indexName,
+	}
+}
+
 func UpdateNameSpaceSizeMetrics(namespace string, namespaceName string, size int64) {
 	if NamespaceSize != nil {
 		NamespaceSize.Tagged(getNamespaceSizeTags(namespace, namespaceName)).Gauge("bytes").Update(float64(size))
@@ -110,5 +154,17 @@ func UpdateDbSizeMetrics(namespace string, namespaceName string, dbName string, 
 func UpdateCollectionSizeMetrics(namespace string, namespaceName string, dbName string, branch string, collectionName string, size int64) {
 	if NamespaceSize != nil {
 		CollectionSize.Tagged(getCollectionSizeTags(namespace, namespaceName, dbName, branch, collectionName)).Gauge("bytes").Update(float64(size))
+	}
+}
+
+func UpdateSearchSizeMetrics(namespace string, namespaceName string, projectName string, size int64) {
+	if NamespaceSize != nil {
+		SearchSize.Tagged(getSearchSizeTags(namespace, namespaceName, projectName)).Gauge("bytes").Update(float64(size))
+	}
+}
+
+func UpdateSearchIndexSizeMetrics(namespace string, namespaceName string, projectName string, indexName string, size int64) {
+	if NamespaceSize != nil {
+		SearchIndexSize.Tagged(getSearchIndexSizeTags(namespace, namespaceName, projectName, indexName)).Gauge("bytes").Update(float64(size))
 	}
 }

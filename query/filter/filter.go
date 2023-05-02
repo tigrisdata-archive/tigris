@@ -16,6 +16,7 @@ package filter
 
 import (
 	"bytes"
+	"strings"
 
 	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
@@ -243,21 +244,47 @@ func convertExprListToFilters(expr []expression.Expr) ([]Filter, error) {
 	return filters, nil
 }
 
-// ParseSelector is a short-circuit for Selector i.e. when we know the filter passed is not logical then we directly
-// call this because if it is not logical then it is simply a Selector filter.
-func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.ValueType) (Filter, error) {
-	var field *schema.QueryableField
+func (factory *Factory) filterToQueryableField(filterField string) (*schema.QueryableField, *schema.QueryableField) {
+	var (
+		field *schema.QueryableField
+		// parent is needed in case of an array where we need to extract first the array from the document.
+		parent *schema.QueryableField
+	)
 	for _, f := range factory.fields {
-		if f.Name() == string(k) {
+		if f.Name() == filterField {
 			field = f
 			break
 		}
 
 		for _, nested := range f.AllowedNestedQFields {
-			if nested.Name() == string(k) {
+			if nested.Name() == filterField {
 				field = nested
+				parent = f
 				break
 			}
+		}
+	}
+
+	return field, parent
+}
+
+// ParseSelector is a short-circuit for Selector i.e. when we know the filter passed is not logical then we directly
+// call this because if it is not logical then it is simply a Selector filter.
+func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.ValueType) (Filter, error) {
+	filterField := string(k)
+	field, parent := factory.filterToQueryableField(filterField)
+	if field == nil {
+		// try level - 1
+		idx := strings.LastIndex(filterField, ".")
+		if idx <= 0 {
+			return nil, errors.InvalidArgument("querying on non schema field '%s'", string(k))
+		}
+
+		if field, parent = factory.filterToQueryableField(filterField[0:idx]); field == nil && parent == nil {
+			return nil, errors.InvalidArgument("querying on non schema field '%s'", string(k))
+		} else {
+			parent = field
+			field = schema.NewDynamicQueryableField(filterField, filterField[idx+1:], schema.UnknownType)
 		}
 	}
 	if field == nil {
@@ -266,11 +293,8 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 
 	switch dataType {
 	case jsonparser.Boolean, jsonparser.Number, jsonparser.String, jsonparser.Array, jsonparser.Null:
-		tigrisType := field.DataType
-		if tigrisType == schema.ArrayType && dataType != jsonparser.Array {
-			// this allows querying primitive arrays
-			tigrisType = field.SubType
-		}
+		tigrisType := toTigrisType(field, dataType)
+
 		if dataType == jsonparser.Null {
 			// need to explicitly set as nil otherwise, jsonparser is setting it as []byte{null}
 			v = nil
@@ -287,7 +311,7 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 			return nil, err
 		}
 
-		return NewSelector(field, NewEqualityMatcher(val), factory.collation), nil
+		return NewSelector(parent, field, NewEqualityMatcher(val), factory.collation), nil
 	case jsonparser.Object:
 		valueMatcher, likeMatcher, collation, err := buildValueMatcher(v, field, factory.collation, factory.buildForSecondaryIndex)
 		if err != nil {
@@ -298,9 +322,9 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 		}
 
 		if collation != nil {
-			return NewSelector(field, valueMatcher, collation), nil
+			return NewSelector(parent, field, valueMatcher, collation), nil
 		}
-		return NewSelector(field, valueMatcher, factory.collation), nil
+		return NewSelector(parent, field, valueMatcher, factory.collation), nil
 	default:
 		return nil, errors.InvalidArgument("unable to parse the comparison operator")
 	}
@@ -334,11 +358,7 @@ func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField, 
 		case EQ, GT, GTE, LT, LTE:
 			switch dataType {
 			case jsonparser.Boolean, jsonparser.Number, jsonparser.String, jsonparser.Null, jsonparser.Array:
-				tigrisType := field.DataType
-				if tigrisType == schema.ArrayType && dataType != jsonparser.Array {
-					// this allows querying primitive arrays
-					tigrisType = field.SubType
-				}
+				tigrisType := toTigrisType(field, dataType)
 
 				var val value.Value
 				//nolint:gocritic
@@ -400,4 +420,35 @@ func buildCollation(input jsoniter.RawMessage, factoryCollation *value.Collation
 	}
 
 	return collation, nil
+}
+
+func toTigrisType(field *schema.QueryableField, jsonType jsonparser.ValueType) schema.FieldType {
+	switch field.DataType {
+	case schema.ArrayType:
+		if jsonType != jsonparser.Array && !(field.SubType == schema.ArrayType || field.SubType == schema.ObjectType) {
+			return field.SubType
+		}
+		return jsonToTigrisType(jsonType)
+	case schema.UnknownType:
+		field.DataType = jsonToTigrisType(jsonType)
+	}
+
+	return field.DataType
+}
+
+func jsonToTigrisType(jsonType jsonparser.ValueType) schema.FieldType {
+	switch jsonType {
+	case jsonparser.Boolean:
+		return schema.BoolType
+	case jsonparser.String:
+		return schema.StringType
+	case jsonparser.Number:
+		return schema.DoubleType
+	case jsonparser.Array:
+		return schema.ArrayType
+	case jsonparser.Null:
+		return schema.NullType
+	}
+
+	return schema.UnknownType
 }

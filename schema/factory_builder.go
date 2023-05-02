@@ -16,6 +16,7 @@ package schema
 
 import (
 	"bytes"
+	"strings"
 
 	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
@@ -51,7 +52,7 @@ func (fb *FactoryBuilder) deserializeArray(items *FieldBuilder, current *[]*Fiel
 
 	// object array type
 	if len(items.Properties) > 0 {
-		if items.Type != jsonSpecObject {
+		if items.JSONType() != jsonSpecObject {
 			return errors.InvalidArgument("Properties only allowed for object type")
 		}
 
@@ -96,10 +97,14 @@ func (fb *FactoryBuilder) deserializeProperties(properties jsoniter.RawMessage, 
 		dec := jsoniter.NewDecoder(bytes.NewReader(v))
 		dec.UseNumber()
 		if err = dec.Decode(&builder); err != nil {
+			if strings.Contains(err.Error(), ErrInvalidType.Error()) ||
+				strings.Contains(err.Error(), ErrOnlyOneNonNullTypeAllowed.Error()) {
+				return errors.InvalidArgument(err.Error())
+			}
 			return errors.Internal(err.Error())
 		}
 
-		if builder.Type == jsonSpecArray {
+		if builder.JSONType() == jsonSpecArray {
 			if builder.Items != nil {
 				if err = fb.deserializeArray(builder.Items, &builder.Fields); err != nil {
 					return err
@@ -115,7 +120,7 @@ func (fb *FactoryBuilder) deserializeProperties(properties jsoniter.RawMessage, 
 		// for objects, properties are part of the field definitions in that case deserialize those
 		// nested fields
 		if len(builder.Properties) > 0 {
-			if builder.Type != jsonSpecObject {
+			if builder.JSONType() != jsonSpecObject {
 				return errors.InvalidArgument("Properties only allowed for object type")
 			}
 
@@ -142,8 +147,7 @@ func (fb *FactoryBuilder) deserializeProperties(properties jsoniter.RawMessage, 
 
 		if fb.forSearch && setSearchDefaults == nil {
 			setSearchDefaultsC = true
-			ty := ToFieldType(builder.Type, builder.Encoding, builder.Format)
-			if ty == ObjectType && len(builder.Fields) > 0 {
+			if builder.Type() == ObjectType && len(builder.Fields) > 0 {
 				setSearchDefaultsC = false
 			}
 		}

@@ -142,6 +142,22 @@ func getCollSize(ctx context.Context, tenant *metadata.Tenant, db *metadata.Data
 	return collSize.StoredBytes
 }
 
+func getProjectSearchSize(ctx context.Context, tenant *metadata.Tenant, project *metadata.Project) int64 {
+	prjSearchSize, err := tenant.ProjectSearchSize(ctx, nil, project)
+	if ulog.E(err) {
+		return 0
+	}
+	return prjSearchSize.StoredBytes
+}
+
+func getSearchIndexSize(ctx context.Context, tenant *metadata.Tenant, index *schema.SearchIndex) int64 {
+	searchIndexSize, err := tenant.SearchIndexSize(ctx, index)
+	if ulog.E(err) {
+		return 0
+	}
+	return searchIndexSize.StoredBytes
+}
+
 func (s *storage) getTenantSize(ctx context.Context, namespace string) int64 {
 	tenant, err := s.tenantMgr.GetTenant(ctx, namespace)
 	if ulog.E(err) {
@@ -178,6 +194,12 @@ func (s *storage) updateMetricsForNamespace(ctx context.Context, namespace strin
 				metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.DbName(), db.BranchName(), coll.Name, getCollSize(ctx, tenant, db, coll))
 			}
 		}
+
+		for _, index := range project.GetSearch().GetIndexes() {
+			metrics.UpdateSearchIndexSizeMetrics(namespace, tenantName, projName, index.Name, getSearchIndexSize(ctx, tenant, index))
+		}
+
+		metrics.UpdateSearchSizeMetrics(namespace, tenantName, projName, getProjectSearchSize(ctx, tenant, project))
 	}
 
 	dsz := s.getTenantSize(ctx, namespace)

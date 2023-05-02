@@ -253,7 +253,7 @@ func ApplySearchIndexBackwardCompatibilityRules(existing *SearchIndex, current *
 // validated on builder and can't be done on field has to be done here. Similar to ValidateFieldAttributes, this is
 // also only done during incoming requests and ignored during reloading of schemas.
 func ValidateFieldBuilder(f FieldBuilder) error {
-	fieldType := ToFieldType(f.Type, f.Encoding, f.Format)
+	fieldType := f.Type()
 	if fieldType == UnknownType {
 		if len(f.Encoding) > 0 {
 			return errors.InvalidArgument("unsupported encoding '%s'", f.Encoding)
@@ -262,7 +262,7 @@ func ValidateFieldBuilder(f FieldBuilder) error {
 			return errors.InvalidArgument("unsupported format '%s'", f.Format)
 		}
 
-		return errors.InvalidArgument("unsupported type detected '%s'", f.Type)
+		return errors.InvalidArgument("unsupported type detected '%s'", f.TypeRaw.First())
 	}
 
 	if f.CreatedAt != nil || f.UpdatedAt != nil || f.Default != nil {
