@@ -220,7 +220,7 @@ func (o *observabilityService) RegisterGRPC(grpc *grpc.Server) error {
 }
 
 func isAllowedMetricQueryInput(tagValue string) bool {
-	allowedPattern := regexp.MustCompile("^[a-zA-Z0-9_.]*$")
+	allowedPattern := regexp.MustCompile("^[a-zA-Z]+[a-zA-Z0-9._-]+$")
 	return allowedPattern.MatchString(tagValue)
 }
 

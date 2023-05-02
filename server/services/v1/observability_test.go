@@ -25,7 +25,12 @@ func TestDatadogQueryValidation(t *testing.T) {
 	require.True(t, isAllowedMetricQueryInput("user_db"))
 	require.True(t, isAllowedMetricQueryInput("user_db_1"))
 	require.True(t, isAllowedMetricQueryInput("requests_count_ok.count"))
+	require.True(t, isAllowedMetricQueryInput("project-1"))
+
+	require.False(t, isAllowedMetricQueryInput(".project-1")) // must not start with dot
+	require.False(t, isAllowedMetricQueryInput("-project-1")) // must not start with dash
 	require.False(t, isAllowedMetricQueryInput("users:"))
 	require.False(t, isAllowedMetricQueryInput("users "))
 	require.False(t, isAllowedMetricQueryInput("users,foo:bar"))
+	require.False(t, isAllowedMetricQueryInput(""))
 }
