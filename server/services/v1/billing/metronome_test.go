@@ -20,6 +20,9 @@ import (
 	"testing"
 	"time"
 
+	"io"
+	"net/http"
+
 	"github.com/google/uuid"
 	"github.com/h2non/gock"
 	jsoniter "github.com/json-iterator/go"
@@ -189,8 +192,8 @@ func TestMetronome_PushStorageEvents(t *testing.T) {
 					"timestamp":      "2023-01-01T00:00:00Z",
 					"event_type":     "storage",
 					"properties": map[string]interface{}{
-						"database_bytes": 920_000_000,
-						"index_bytes":    256000,
+						StorageDbBytes:    920_000_000,
+						StorageIndexBytes: 256000,
 					},
 				},
 				{
@@ -199,7 +202,7 @@ func TestMetronome_PushStorageEvents(t *testing.T) {
 					"timestamp":      "2023-02-02T00:00:00Z",
 					"event_type":     "storage",
 					"properties": map[string]interface{}{
-						"index_bytes": 8_750_000_000,
+						StorageIndexBytes: 8_750_000_000,
 					},
 				},
 			}).
@@ -295,8 +298,8 @@ func TestMetronome_PushUsageEvents(t *testing.T) {
 					"timestamp":      "2023-01-01T00:00:00Z",
 					"event_type":     "usage",
 					"properties": map[string]interface{}{
-						"database_units": 920,
-						"search_units":   256,
+						UsageDbUnits:     920,
+						UsageSearchUnits: 256,
 					},
 				},
 				{
@@ -305,7 +308,7 @@ func TestMetronome_PushUsageEvents(t *testing.T) {
 					"timestamp":      "2023-02-02T00:00:00Z",
 					"event_type":     "usage",
 					"properties": map[string]interface{}{
-						"search_units": 8_750,
+						UsageSearchUnits: 8_750,
 					},
 				},
 			}).
@@ -535,6 +538,229 @@ func TestMetronome_GetInvoiceById(t *testing.T) {
 	})
 }
 
+func TestMetronome_GetUsage(t *testing.T) {
+	initializeMetricsForTest()
+	defer gock.Off()
+	cfg := config.DefaultConfig.Billing.Metronome
+	cfg.BilledMetrics = map[string]string{
+		"db_bytes":       "bbab00f7-f127-46cd-83bf-6f9c01903779",
+		UsageSearchUnits: "327e631d-e6dc-4c67-a2a8-dfd3621a907f",
+	}
+	metronome, err := NewMetronomeProvider(cfg)
+	require.NoError(t, err)
+	ctx := context.TODO()
+
+	t.Run("retrieves usage successfully", func(t *testing.T) {
+		cid := uuid.New()
+		startDate := time.Date(2023, 4, 30, 0, 0, 0, 0, time.UTC)
+		endDate := time.Date(2023, 5, 1, 0, 0, 0, 0, time.UTC)
+		require.NoError(t, err)
+		req := &UsageRequest{
+			BillableMetric: nil,
+			StartTime:      &startDate,
+			EndTime:        &endDate,
+			NextPage:       nil,
+		}
+
+		bodyMatcher := gock.NewBasicMatcher()
+		bodyMatcher.Add(func(actualReq *http.Request, expectedReq *gock.Request) (bool, error) {
+			actualBuf, err := io.ReadAll(actualReq.Body)
+			if err != nil {
+				return false, err
+			}
+
+			var actualBody biller.GetUsageBatchJSONRequestBody
+			err = jsoniter.Unmarshal(actualBuf, &actualBody)
+			if err != nil {
+				return false, err
+			}
+
+			if actualBody.WindowSize != "hour" {
+				return false, fmt.Errorf("window_size mismatch. expected: '%s', actual: '%s'", "hour", actualBody.WindowSize)
+			}
+
+			if len(*actualBody.CustomerIds) != 1 || (*actualBody.CustomerIds)[0] != cid {
+				return false, fmt.Errorf("customer_ids mismatch. expected: '%s', actual: '%v'", cid, actualBody.CustomerIds)
+			}
+
+			if actualBody.StartingOn != startDate {
+				return false, fmt.Errorf("starting_on mismatch. expected: '%s', actual: '%s'", startDate, actualBody.StartingOn)
+			}
+
+			if actualBody.EndingBefore != endDate {
+				return false, fmt.Errorf("ending_before mismatch. expected: '%s', actual: '%s'", endDate, actualBody.EndingBefore)
+			}
+
+			if len(*actualBody.BillableMetrics) != len(cfg.BilledMetrics) {
+				return false, fmt.Errorf("billable_metrics length mismatch")
+			}
+
+			for _, bm := range *actualBody.BillableMetrics {
+				if _, ok := metronome.billedMetricsById[bm.Id]; !ok {
+					return false, fmt.Errorf("billable_metrics mismatch. missing '%s'", bm.Id)
+				}
+			}
+
+			return true, nil
+		})
+
+		gock.New(cfg.URL).
+			Post("/usage").
+			MatchHeader("Authorization", cfg.ApiKey).
+			MatchHeader("Content-Type", "application/json").
+			MatchType("json").
+			SetMatcher(bodyMatcher).
+			Reply(200).
+			JSON(map[string]interface{}{
+				"data": []map[string]interface{}{{
+					"billable_metric_id": "327e631d-e6dc-4c67-a2a8-dfd3621a907f", // search_units metric
+					"start_timestamp":    "2023-04-30T01:00:00+00:00",
+					"end_timestamp":      "2023-04-30T02:00:00+00:00",
+					"value":              25,
+				}, {
+					"billable_metric_id": "50ff7b3f-4a5e-4bf9-87a8-1a99a18fae9f", // unknown metric
+					"start_timestamp":    "2023-04-30T02:00:00+00:00",
+					"end_timestamp":      "2023-04-30T03:00:00+00:00",
+					"value":              218,
+				}},
+			})
+
+		resp, err := metronome.GetUsage(ctx, cid, req)
+		require.NoError(t, err)
+
+		// requested metrics should always be included in response
+		// unknown metrics to be ignored
+		require.Len(t, resp.Data, len(cfg.BilledMetrics))
+		for n := range cfg.BilledMetrics {
+			require.Contains(t, resp.Data, n)
+		}
+
+		// db_bytes are not returned in API response, hence should be empty
+		require.Empty(t, resp.Data["db_bytes"])
+		// search_units have a single value in API response
+		require.Len(t, resp.Data[UsageSearchUnits], 1)
+		expectedStartTime, err := time.Parse(time.RFC3339, "2023-04-30T01:00:00+00:00")
+		require.NoError(t, err)
+		expectedEndTime, err := time.Parse(time.RFC3339, "2023-04-30T02:00:00+00:00")
+		require.NoError(t, err)
+		expectedValue := float32(25)
+		require.Equal(t, &Usage{
+			StartTime: expectedStartTime,
+			EndTime:   expectedEndTime,
+			Value:     &expectedValue,
+		}, resp.Data[UsageSearchUnits][0])
+		require.Nil(t, resp.NextPage)
+
+		require.True(t, gock.IsDone())
+	})
+
+	t.Run("when start time is missing", func(t *testing.T) {
+		endTime := time.Date(2023, 5, 1, 0, 0, 0, 0, time.UTC)
+		req := &UsageRequest{
+			BillableMetric: nil,
+			StartTime:      nil,
+			EndTime:        &endTime,
+		}
+		resp, err := metronome.GetUsage(ctx, uuid.New(), req)
+		require.ErrorContains(t, err, "is not a valid start time")
+		require.Nil(t, resp)
+	})
+
+	t.Run("when end time is missing", func(t *testing.T) {
+		startTime := time.Date(2023, 5, 1, 0, 0, 0, 0, time.UTC)
+		req := &UsageRequest{
+			BillableMetric: nil,
+			StartTime:      &startTime,
+			EndTime:        &time.Time{},
+		}
+		resp, err := metronome.GetUsage(ctx, uuid.New(), req)
+		require.ErrorContains(t, err, "is not a valid end time")
+		require.Nil(t, resp)
+	})
+
+	t.Run("specific billable metrics are requested with pagination", func(t *testing.T) {
+		cid, requestedMetric := uuid.New(), "db_bytes"
+		rt := time.Date(2023, 5, 1, 0, 0, 0, 0, time.UTC)
+		nextPageToken := "next_page_token"
+
+		gock.New(cfg.URL).
+			Post("usage").
+			MatchParam("next_page", nextPageToken).
+			MatchType("json").
+			JSON(map[string]interface{}{
+				"customer_ids": []string{cid.String()},
+				"billable_metrics": []map[string]interface{}{
+					{"id": cfg.BilledMetrics[requestedMetric]},
+				},
+				"window_size":   "hour",
+				"starting_on":   "2023-05-01T00:00:00Z",
+				"ending_before": "2023-05-01T00:00:00Z",
+			}).
+			Reply(200).
+			JSON(map[string]interface{}{
+				"data":      []map[string]interface{}{},
+				"next_page": "resp_next_page",
+			})
+
+		resp, err := metronome.GetUsage(ctx, cid, &UsageRequest{
+			BillableMetric: &[]string{requestedMetric},
+			StartTime:      &rt,
+			EndTime:        &rt,
+			NextPage:       &nextPageToken,
+		})
+
+		require.NoError(t, err)
+		require.Len(t, resp.Data, 1)
+		require.Len(t, resp.Data[requestedMetric], 0)
+		require.Equal(t, *resp.NextPage, "resp_next_page")
+
+		require.True(t, gock.IsDone())
+	})
+
+	t.Run("invalid billable metric requested", func(t *testing.T) {
+		rt := time.Date(2023, 5, 1, 0, 0, 0, 0, time.UTC)
+		req := &UsageRequest{
+			BillableMetric: &[]string{"invalid_metric"},
+			StartTime:      &rt,
+			EndTime:        &rt,
+		}
+		resp, err := metronome.GetUsage(ctx, uuid.New(), req)
+		require.ErrorContains(t, err, "is not a valid billable metric")
+		require.Nil(t, resp)
+	})
+
+	t.Run("remote service failure", func(t *testing.T) {
+		rt := time.Date(2023, 5, 1, 0, 0, 0, 0, time.UTC)
+		gock.New(cfg.URL).Post("usage").Reply(500).JSON(map[string]interface{}{
+			"message": "request failed",
+		})
+		resp, err := metronome.GetUsage(ctx, uuid.New(), &UsageRequest{
+			BillableMetric: nil,
+			StartTime:      &rt,
+			EndTime:        &rt,
+		})
+
+		require.ErrorContains(t, err, "request failed")
+		require.Nil(t, resp)
+		require.True(t, gock.IsDone())
+	})
+
+	t.Run("remote service times out", func(t *testing.T) {
+		rt := time.Date(2023, 5, 1, 0, 0, 0, 0, time.UTC)
+		gock.New(cfg.URL).Post("usage").ReplyError(fmt.Errorf("request timed out"))
+		resp, err := metronome.GetUsage(ctx, uuid.New(), &UsageRequest{
+			BillableMetric: nil,
+			StartTime:      &rt,
+			EndTime:        &rt,
+		})
+
+		require.ErrorContains(t, err, "request timed out")
+		require.Nil(t, resp)
+		require.True(t, gock.IsDone())
+	})
+
+}
+
 func TestMetronome_buildInvoice(t *testing.T) {
 	t.Run("deserializes complete invoice", func(t *testing.T) {
 		payload := `
@@ -715,4 +941,5 @@ func initializeMetricsForTest() {
 	metrics.MetronomeIngest = tally.NewTestScope("ingest", map[string]string{})
 	metrics.MetronomeListInvoices = tally.NewTestScope("list_invoices", map[string]string{})
 	metrics.MetronomeGetInvoice = tally.NewTestScope("get_invoice", map[string]string{})
+	metrics.MetronomeGetUsage = tally.NewTestScope("get_usage", map[string]string{})
 }

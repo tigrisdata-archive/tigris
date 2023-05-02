@@ -17,20 +17,43 @@ package billing
 import (
 	"context"
 
+	"time"
+
 	"github.com/google/uuid"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/config"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
+type AccountId = uuid.UUID
+
 type Provider interface {
-	CreateAccount(ctx context.Context, namespaceId string, name string) (MetronomeId, error)
-	AddDefaultPlan(ctx context.Context, accountId MetronomeId) (bool, error)
-	AddPlan(ctx context.Context, accountId MetronomeId, planId uuid.UUID) (bool, error)
+	CreateAccount(ctx context.Context, namespaceId string, name string) (AccountId, error)
+	AddDefaultPlan(ctx context.Context, accountId AccountId) (bool, error)
+	AddPlan(ctx context.Context, accountId AccountId, planId uuid.UUID) (bool, error)
 	PushUsageEvents(ctx context.Context, events []*UsageEvent) error
 	PushStorageEvents(ctx context.Context, events []*StorageEvent) error
-	GetInvoices(ctx context.Context, accountId MetronomeId, r *api.ListInvoicesRequest) (*api.ListInvoicesResponse, error)
-	GetInvoiceById(ctx context.Context, accountId MetronomeId, invoiceId string) (*api.ListInvoicesResponse, error)
+	GetInvoices(ctx context.Context, accountId AccountId, r *api.ListInvoicesRequest) (*api.ListInvoicesResponse, error)
+	GetInvoiceById(ctx context.Context, accountId AccountId, invoiceId string) (*api.ListInvoicesResponse, error)
+	GetUsage(ctx context.Context, id AccountId, r *UsageRequest) (*UsageAggregate, error)
+}
+
+type UsageRequest struct {
+	BillableMetric *[]string
+	StartTime      *time.Time
+	EndTime        *time.Time
+	NextPage       *string
+}
+
+type Usage struct {
+	StartTime time.Time
+	EndTime   time.Time
+	Value     *float32
+}
+
+type UsageAggregate struct {
+	Data     map[string][]*Usage
+	NextPage *string
 }
 
 func NewProvider() Provider {

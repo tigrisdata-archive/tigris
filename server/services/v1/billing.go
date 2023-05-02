@@ -65,7 +65,7 @@ func (b *billingService) ListInvoices(ctx context.Context, req *api.ListInvoices
 	return b.GetInvoices(ctx, mId, req)
 }
 
-func (b *billingService) getMetronomeId(ctx context.Context, namespaceId string) (billing.MetronomeId, error) {
+func (b *billingService) getMetronomeId(ctx context.Context, namespaceId string) (billing.AccountId, error) {
 	nsMeta := b.nsMgr.GetNamespaceMetadata(ctx, namespaceId)
 	if nsMeta == nil {
 		log.Warn().Msgf("Could not find namespace, this must not happen with right authn/authz configured")

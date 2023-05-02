@@ -250,11 +250,14 @@ type Billing struct {
 }
 
 type Metronome struct {
-	Enabled     bool   `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	URL         string `mapstructure:"url" yaml:"url" json:"url"`
-	ApiKey      string `mapstructure:"api_key" yaml:"api_key" json:"api_key"`
-	DefaultPlan string `mapstructure:"default_plan" yaml:"default_plan" json:"default_plan"`
+	Enabled       bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	URL           string        `mapstructure:"url" yaml:"url" json:"url"`
+	ApiKey        string        `mapstructure:"api_key" yaml:"api_key" json:"api_key"`
+	DefaultPlan   string        `mapstructure:"default_plan" yaml:"default_plan" json:"default_plan"`
+	BilledMetrics BilledMetrics `mapstructure:"billed_metrics" yaml:"billed_metrics" json:"billed_metrics"`
 }
+
+type BilledMetrics = map[string]string
 
 type BillingReporter struct {
 	Enabled         bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`

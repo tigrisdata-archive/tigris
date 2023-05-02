@@ -40,7 +40,7 @@ func TestStorageEvent(t *testing.T) {
 		require.NotEqual(t, actual["timestamp"], "")
 		require.Equal(t, actual["event_type"], "storage")
 		require.Equal(t, actual["properties"], map[string]any{
-			"database_bytes": float64(24),
+			StorageDbBytes: float64(24),
 		})
 	})
 
@@ -60,8 +60,8 @@ func TestStorageEvent(t *testing.T) {
 		require.NotEqual(t, actual["timestamp"], "")
 		require.Equal(t, actual["event_type"], "storage")
 		require.Equal(t, actual["properties"], map[string]any{
-			"index_bytes":    float64(0),
-			"database_bytes": float64(0),
+			StorageIndexBytes: float64(0),
+			StorageDbBytes:    float64(0),
 		})
 	})
 
@@ -85,8 +85,8 @@ func TestStorageEvent(t *testing.T) {
 		require.Equal(t, actual["timestamp"], "2023-02-21T08:53:41Z")
 		require.Equal(t, actual["event_type"], "storage")
 		require.Equal(t, actual["properties"], map[string]any{
-			"index_bytes":    float64(12),
-			"database_bytes": float64(345),
+			StorageIndexBytes: float64(12),
+			StorageDbBytes:    float64(345),
 		})
 	})
 
@@ -124,7 +124,7 @@ func TestUsageEvent(t *testing.T) {
 		require.NotEqual(t, actual["timestamp"], "")
 		require.Equal(t, actual["event_type"], "usage")
 		require.Equal(t, actual["properties"], map[string]any{
-			"database_units": float64(55),
+			UsageDbUnits: float64(55),
 		})
 	})
 
@@ -142,8 +142,8 @@ func TestUsageEvent(t *testing.T) {
 		require.NotEqual(t, actual["timestamp"], "")
 		require.Equal(t, actual["event_type"], "usage")
 		require.Equal(t, actual["properties"], map[string]any{
-			"database_units": float64(0),
-			"search_units":   float64(0),
+			UsageDbUnits:     float64(0),
+			UsageSearchUnits: float64(0),
 		})
 	})
 
@@ -167,8 +167,8 @@ func TestUsageEvent(t *testing.T) {
 		require.Equal(t, actual["timestamp"], "2023-02-21T08:53:41Z")
 		require.Equal(t, actual["event_type"], "usage")
 		require.Equal(t, actual["properties"], map[string]any{
-			"database_units": float64(123),
-			"search_units":   float64(542),
+			UsageDbUnits:     float64(123),
+			UsageSearchUnits: float64(542),
 		})
 	})
 
