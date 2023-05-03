@@ -16,7 +16,6 @@ package billing
 
 import (
 	"context"
-
 	"time"
 
 	"github.com/google/uuid"
