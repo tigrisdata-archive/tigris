@@ -97,15 +97,15 @@ func FormDatadogQueryNoMeta(namespace string, noMeta bool, req *api.QueryTimeSer
 	switch {
 	case req.TigrisOperation == api.TigrisOperation_WRITE:
 		if noMeta {
-			tags = append(tags, "grpc_method IN (createproject,deleteproject,createorupdatecollection,dropcollection,insert,update,delete,replace,publish)")
+			tags = append(tags, "grpc_method IN (createproject,deleteproject,createorupdatecollection,dropcollection,insert,update,delete,replace,publish,buildcollectionindex,import,createbranch,deletebranch,createorupdateindex,deleteindex,createbyid,create,createorreplace,update,delete,deletebyquery)")
 		} else {
-			tags = append(tags, "grpc_method IN (insert,update,delete,replace,publish)")
+			tags = append(tags, "grpc_method IN (insert,update,delete,replace,publish,buildcollectionindex,import,createbyid,create,createorreplace,update,delete,deletebyquery)")
 		}
 	case req.TigrisOperation == api.TigrisOperation_READ:
 		if noMeta {
-			tags = append(tags, "grpc_method IN (listprojects,listcollections,describeproject,describecollection, read,search,subscribe)")
+			tags = append(tags, "grpc_method IN (listprojects,listcollections,describedatabase,describecollection,read,search,subscribe,count,explain,listbranches,getindex,listindexes)")
 		} else {
-			tags = append(tags, "grpc_method IN (read,search,subscribe)")
+			tags = append(tags, "grpc_method IN (read,search,subscribe,explain,get)")
 		}
 	case req.TigrisOperation == api.TigrisOperation_METADATA:
 		tags = append(tags, "grpc_method IN (createorupdatecollection,dropcollection,listprojects,listcollections,createproject,deleteproject,describeproject,describecollection)")
