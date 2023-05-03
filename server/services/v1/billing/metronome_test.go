@@ -17,11 +17,10 @@ package billing
 import (
 	"context"
 	"fmt"
-	"testing"
-	"time"
-
 	"io"
 	"net/http"
+	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/h2non/gock"
@@ -758,7 +757,6 @@ func TestMetronome_GetUsage(t *testing.T) {
 		require.Nil(t, resp)
 		require.True(t, gock.IsDone())
 	})
-
 }
 
 func TestMetronome_buildInvoice(t *testing.T) {

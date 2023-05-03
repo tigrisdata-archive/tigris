@@ -24,8 +24,8 @@ import (
 	"github.com/tigrisdata/tigris/store/search"
 )
 
-// createApiError helps construct API errors from internal errors.
-func createApiError(err error) error {
+// CreateApiError helps construct API errors from internal errors.
+func CreateApiError(err error) error {
 	switch e := err.(type) {
 	case nil:
 		return nil
@@ -58,6 +58,8 @@ func createApiError(err error) error {
 		case kv.ErrCodeValueSizeExceeded, kv.ErrCodeTransactionSizeExceeded:
 			// ToDo: change it to 413, need to add it in proto
 			return apiErrors.ContentTooLarge(e.Msg())
+		case kv.ErrCodeConflictingTransaction:
+			return apiErrors.Aborted(e.Msg())
 		}
 	default:
 		return err

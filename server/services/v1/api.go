@@ -178,7 +178,7 @@ func (s *apiService) CommitTransaction(ctx context.Context, _ *api.CommitTransac
 
 	err := session.Commit(s.versionH, session.GetTx().Context().GetStagedDatabase() != nil, nil)
 	if err != nil {
-		return nil, err
+		return nil, database.CreateApiError(err)
 	}
 
 	return &api.CommitTransactionResponse{}, nil
@@ -254,6 +254,21 @@ func (s *apiService) BuildCollectionIndex(ctx context.Context, r *api.BuildColle
 	}
 
 	return resp.Response.(*api.BuildCollectionIndexResponse), nil
+}
+
+func (s *apiService) BuildSearchIndex(ctx context.Context, r *api.BuildCollectionSearchIndexRequest) (*api.BuildCollectionSearchIndexResponse, error) {
+	qm := metrics.WriteQueryMetrics{}
+	accessToken, _ := request.GetAccessToken(ctx)
+
+	resp, err := s.sessions.ReadOnlyExecute(ctx, s.runnerFactory.GetSearchIndexRunner(r, &qm, accessToken), database.ReqOptions{
+		MetadataChange:     true,
+		InstantVerTracking: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.BuildCollectionSearchIndexResponse), nil
 }
 
 func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.ReplaceResponse, error) {

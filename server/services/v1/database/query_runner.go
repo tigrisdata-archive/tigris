@@ -494,6 +494,26 @@ func (runner *BaseQueryRunner) buildReaderOptions(req *api.ReadRequest, collecti
 		}
 	}
 
+	if searchSorting, err := runner.getSearchOrdering(collection, req.Sort); err == nil && searchSorting != nil {
+		onlySearch := true
+		if len(*searchSorting) == 1 {
+			if secondarySorting, err := runner.getSortOrdering(collection, req.Sort); err == nil && secondarySorting != nil {
+				onlySearch = false
+			}
+		}
+
+		if onlySearch {
+			// error here means we need to check if we handle sort on database level
+			if config.DefaultConfig.Search.ReadEnabled {
+				options.sorting = searchSorting
+				options.inMemoryStore = true
+				return options, nil
+			}
+
+			return options, errors.Internal("sorting action is temporarily unavailable")
+		}
+	}
+
 	if from == nil && config.DefaultConfig.SecondaryIndex.ReadEnabled {
 		secondarySorting, err := runner.getSortOrdering(collection, req.Sort)
 		if err != nil {
@@ -502,17 +522,6 @@ func (runner *BaseQueryRunner) buildReaderOptions(req *api.ReadRequest, collecti
 		if options.plan, err = runner.buildSecondaryIndexKeysUsingFilter(collection, req.Filter, collation, secondarySorting); err == nil {
 			return options, nil
 		}
-	}
-
-	if searchSorting, err := runner.getSearchOrdering(collection, req.Sort); err == nil && searchSorting != nil {
-		// error here means we need to check if we handle sort on database level
-		if config.DefaultConfig.Search.ReadEnabled {
-			options.sorting = searchSorting
-			options.inMemoryStore = true
-			return options, nil
-		}
-
-		return options, errors.Internal("sorting action is temporarily unavailable")
 	}
 
 	planner, err := NewPrimaryIndexQueryPlanner(collection, runner.encoder, req.Filter, collation)
@@ -611,7 +620,7 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 
 	if options.inMemoryStore {
 		if err = runner.iterateOnSearchStore(ctx, collection, options); err != nil {
-			return Response{}, ctx, createApiError(err)
+			return Response{}, ctx, CreateApiError(err)
 		}
 		return Response{}, ctx, nil
 	}
@@ -654,7 +663,7 @@ func (runner *StreamingQueryRunner) ReadOnly(ctx context.Context, tenant *metada
 		}
 
 		if err != nil {
-			return Response{}, ctx, createApiError(err)
+			return Response{}, ctx, CreateApiError(err)
 		}
 
 		ctx = runner.instrumentRunner(ctx, options)
@@ -683,18 +692,18 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 	ctx = runner.instrumentRunner(ctx, options)
 	if options.inMemoryStore {
 		if err = runner.iterateOnSearchStore(ctx, coll, options); err != nil {
-			return Response{}, ctx, createApiError(err)
+			return Response{}, ctx, CreateApiError(err)
 		}
 		return Response{}, ctx, nil
 	} else {
 		if options.plan != nil && filter.IndexTypeSecondary(options.plan.IndexType) {
 			if _, err = runner.iterateOnSecondaryIndexStore(ctx, tx, coll, options); err != nil {
-				return Response{}, ctx, createApiError(err)
+				return Response{}, ctx, CreateApiError(err)
 			}
 			return Response{}, ctx, nil
 		}
 		if _, err = runner.iterateOnKvStore(ctx, tx, coll, options); err != nil {
-			return Response{}, ctx, createApiError(err)
+			return Response{}, ctx, CreateApiError(err)
 		}
 		return Response{}, ctx, nil
 	}

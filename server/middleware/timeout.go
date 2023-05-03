@@ -39,12 +39,12 @@ func timeoutUnaryServerInterceptor(timeout time.Duration) grpc.UnaryServerInterc
 		ctx, cancel = setDeadlineUsingHeader(ctx)
 
 		d, ok := ctx.Deadline()
-		if ok && info.FullMethod != api.IndexCollection && time.Until(d) > MaximumTimeout {
+		if ok && !isLongRunningAPI(info.FullMethod) && time.Until(d) > MaximumTimeout {
 			timeout = MaximumTimeout
 			ok = false
 		}
 
-		if !ok && info.FullMethod == api.IndexCollection {
+		if !ok && isLongRunningAPI(info.FullMethod) {
 			timeout = LongRunningTimeout
 		}
 
@@ -63,6 +63,10 @@ func timeoutUnaryServerInterceptor(timeout time.Duration) grpc.UnaryServerInterc
 
 		return handler(ctx, req)
 	}
+}
+
+func isLongRunningAPI(method string) bool {
+	return method == api.IndexCollection || method == api.SearchIndexCollectionMethodName
 }
 
 func setDeadlineUsingHeader(ctx context.Context) (context.Context, context.CancelFunc) {
