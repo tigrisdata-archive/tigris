@@ -22,6 +22,7 @@ import (
 	"os"
 	"strings"
 	"text/template"
+	"unsafe"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
@@ -172,4 +173,9 @@ func Fatal(err error, msg string, args ...interface{}) {
 	_ = Error(err, msg, args...)
 
 	os.Exit(1)
+}
+
+func RawMessageToByte(arr []jsoniter.RawMessage) [][]byte {
+	ptr := unsafe.Pointer(&arr)
+	return *(*[][]byte)(ptr)
 }
