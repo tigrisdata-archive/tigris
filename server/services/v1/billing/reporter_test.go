@@ -118,8 +118,8 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 					require.Contains(t, []string{"ns1", "ns2", "ns3", "ns4"}, e.CustomerId)
 
 					expected, actual := glbStatus.data.Tenants[e.CustomerId], *e.Properties
-					require.Equal(t, expected.WriteUnits+expected.ReadUnits, actual["database_units"])
-					require.Equal(t, expected.SearchUnits, actual["search_units"])
+					require.Equal(t, expected.WriteUnits+expected.ReadUnits, actual[UsageDbUnits])
+					require.Equal(t, expected.SearchUnits, actual[UsageSearchUnits])
 				}
 				return nil
 			}).Once()
@@ -239,8 +239,8 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 				require.Equal(t, nsId, events[0].CustomerId)
 
 				props := *events[0].Properties
-				require.Equal(t, int64(9), props["database_units"])
-				require.Equal(t, int64(6), props["search_units"])
+				require.Equal(t, int64(9), props[UsageDbUnits])
+				require.Equal(t, int64(6), props[UsageSearchUnits])
 				return nil
 			}).
 			Once()
@@ -286,8 +286,8 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 			RunAndReturn(func(ctx context.Context, events []*UsageEvent) error {
 				require.Len(t, events, 1)
 				require.Equal(t, nsId, events[0].CustomerId)
-				require.Equal(t, int64(9), (*events[0].Properties)["database_units"])
-				require.Equal(t, int64(6), (*events[0].Properties)["search_units"])
+				require.Equal(t, int64(9), (*events[0].Properties)[UsageDbUnits])
+				require.Equal(t, int64(6), (*events[0].Properties)[UsageSearchUnits])
 
 				return fmt.Errorf("failed to push usage events")
 			}).Once()

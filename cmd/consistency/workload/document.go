@@ -15,7 +15,7 @@
 package workload
 
 import (
-	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/brianvoe/gofakeit/v6"
@@ -29,8 +29,8 @@ type IDocument interface {
 }
 
 type Document struct {
-	Id int64 `json:"id"`
-	F2 string
+	Id int64  `json:"id"`
+	F2 string `json:"F2" fake:"{sentence:50}"`
 	F3 []byte
 	F4 uuid.UUID
 	F5 time.Time
@@ -41,13 +41,15 @@ func (d *Document) ID() int64 {
 }
 
 func NewDocument(uniqueId int64) *Document {
-	return &Document{
-		Id: uniqueId,
-		F2: fmt.Sprintf("id_%d", uniqueId),
-		F3: []byte(`1234`),
-		F4: uuid.New(),
-		F5: time.Now().UTC(),
+	var document Document
+	if err := gofakeit.Struct(&document); err != nil {
+		log.Panic().Err(err).Msgf("failed in generating fake document")
 	}
+	document.Id = uniqueId
+	document.F3 = []byte(document.F2[0:rand.Intn(len(document.F2))]) //nolint:gosec
+	document.F4 = uuid.New()
+	document.F5 = time.Now().UTC()
+	return &document
 }
 
 func SerializeDocV1(doc *DocumentV1) ([]byte, error) {

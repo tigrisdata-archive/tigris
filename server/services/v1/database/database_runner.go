@@ -202,7 +202,7 @@ func (runner *BranchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		dbBranch := metadata.NewDatabaseNameWithBranch(runner.createBranch.GetProject(), runner.createBranch.GetBranch())
 		err := tenant.CreateBranch(ctx, tx, runner.createBranch.GetProject(), dbBranch)
 		if err != nil {
-			return Response{}, ctx, createApiError(err)
+			return Response{}, ctx, CreateApiError(err)
 		}
 
 		countDDLCreateUnit(ctx)
@@ -216,7 +216,7 @@ func (runner *BranchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		dbBranch := metadata.NewDatabaseNameWithBranch(runner.deleteBranch.GetProject(), runner.deleteBranch.GetBranch())
 		err := tenant.DeleteBranch(ctx, tx, runner.deleteBranch.GetProject(), dbBranch)
 		if err != nil {
-			return Response{}, ctx, createApiError(err)
+			return Response{}, ctx, CreateApiError(err)
 		}
 
 		countDDLDropUnit(ctx)

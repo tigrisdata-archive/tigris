@@ -136,7 +136,7 @@ func TestDatadogQueryFormation(t *testing.T) {
 	}
 	formedQuery, err = FormDatadogQuery("", req)
 	require.NoError(t, err)
-	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (read,search,subscribe) AND project:db1 AND collection:col1} by {db,collection}.as_rate()", formedQuery)
+	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (read,search,subscribe,explain,get) AND project:db1 AND collection:col1} by {db,collection}.as_rate()", formedQuery)
 
 	req = &api.QueryTimeSeriesMetricsRequest{
 		Db:                "db1",
@@ -151,7 +151,7 @@ func TestDatadogQueryFormation(t *testing.T) {
 	}
 	formedQuery, err = FormDatadogQuery("", req)
 	require.NoError(t, err)
-	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (insert,update,delete,replace,publish) AND project:db1 AND collection:col1} by {db,collection}.as_rate()", formedQuery)
+	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (insert,update,delete,replace,publish,buildcollectionindex,import,createbyid,create,createorreplace,update,delete,deletebyquery) AND project:db1 AND collection:col1} by {db,collection}.as_rate()", formedQuery)
 
 	req = &api.QueryTimeSeriesMetricsRequest{
 		From:             1,
@@ -163,7 +163,7 @@ func TestDatadogQueryFormation(t *testing.T) {
 	}
 	formedQuery, err = FormDatadogQuery("", req)
 	require.NoError(t, err)
-	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (insert,update,delete,replace,publish)}.as_rate()", formedQuery)
+	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (insert,update,delete,replace,publish,buildcollectionindex,import,createbyid,create,createorreplace,update,delete,deletebyquery)}.as_rate()", formedQuery)
 
 	req = &api.QueryTimeSeriesMetricsRequest{
 		From:             1,
@@ -175,7 +175,7 @@ func TestDatadogQueryFormation(t *testing.T) {
 	}
 	formedQuery, err = FormDatadogQuery("", req)
 	require.NoError(t, err)
-	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (read,search,subscribe)}.as_rate()", formedQuery)
+	require.Equal(t, "sum:requests_count_ok.count{grpc_method IN (read,search,subscribe,explain,get)}.as_rate()", formedQuery)
 
 	req = &api.QueryTimeSeriesMetricsRequest{
 		From:             1,

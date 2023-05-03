@@ -4847,8 +4847,7 @@ func TestFilteringOnArrays(t *testing.T) {
 			inputDocument,
 		},
 	}
-	for i, c := range cases {
-		fmt.Println("i: ", i)
+	for _, c := range cases {
 		readAndValidate(t,
 			db,
 			collection,

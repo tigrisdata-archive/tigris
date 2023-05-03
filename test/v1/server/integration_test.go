@@ -305,6 +305,12 @@ func createCollection(t *testing.T, database string, collection string, schema m
 		Expect()
 }
 
+func createCollections(t *testing.T, database string, body map[string]interface{}) *httpexpect.Response {
+	e := expect(t)
+	url := fmt.Sprintf("/v1/projects/%s/database/collections/createOrUpdate", database)
+	return e.POST(url).WithJSON(body).Expect()
+}
+
 func createTestCollection(t *testing.T, database string, collection string, schema map[string]interface{}) {
 	deleteProject(t, database)
 	createProject(t, database)

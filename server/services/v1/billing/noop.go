@@ -24,15 +24,15 @@ import (
 
 type noop struct{}
 
-func (n *noop) CreateAccount(_ context.Context, _ string, _ string) (MetronomeId, error) {
+func (n *noop) CreateAccount(_ context.Context, _ string, _ string) (AccountId, error) {
 	return uuid.Nil, errors.Unimplemented("billing not enabled on this server")
 }
 
-func (n *noop) AddDefaultPlan(ctx context.Context, accountId MetronomeId) (bool, error) {
+func (n *noop) AddDefaultPlan(ctx context.Context, accountId AccountId) (bool, error) {
 	return n.AddPlan(ctx, accountId, uuid.New())
 }
 
-func (*noop) AddPlan(_ context.Context, _ MetronomeId, _ uuid.UUID) (bool, error) {
+func (*noop) AddPlan(_ context.Context, _ AccountId, _ uuid.UUID) (bool, error) {
 	return false, errors.Unimplemented("billing not enabled on this server")
 }
 
@@ -44,10 +44,14 @@ func (*noop) PushStorageEvents(_ context.Context, _ []*StorageEvent) error {
 	return errors.Unimplemented("billing not enabled on this server")
 }
 
-func (*noop) GetInvoices(_ context.Context, _ MetronomeId, _ *api.ListInvoicesRequest) (*api.ListInvoicesResponse, error) {
+func (*noop) GetInvoices(_ context.Context, _ AccountId, _ *api.ListInvoicesRequest) (*api.ListInvoicesResponse, error) {
 	return nil, errors.Unimplemented("billing not enabled on this server")
 }
 
-func (*noop) GetInvoiceById(_ context.Context, _ MetronomeId, _ string) (*api.ListInvoicesResponse, error) {
+func (*noop) GetInvoiceById(_ context.Context, _ AccountId, _ string) (*api.ListInvoicesResponse, error) {
+	return nil, errors.Unimplemented("billing not enabled on this server")
+}
+
+func (*noop) GetUsage(_ context.Context, _ AccountId, _ *UsageRequest) (*UsageAggregate, error) {
 	return nil, errors.Unimplemented("billing not enabled on this server")
 }

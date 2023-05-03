@@ -34,7 +34,7 @@ type billingServiceSuite struct {
 	billing          *billingService
 	ctx              context.Context
 	nsMeta           metadata.NamespaceMetadata
-	mId              billing.MetronomeId
+	mId              billing.AccountId
 }
 
 func TestBillingServiceSuite(t *testing.T) {

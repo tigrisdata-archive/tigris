@@ -22,6 +22,7 @@ import (
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
@@ -177,7 +178,7 @@ func (s *apiService) CommitTransaction(ctx context.Context, _ *api.CommitTransac
 
 	err := session.Commit(s.versionH, session.GetTx().Context().GetStagedDatabase() != nil, nil)
 	if err != nil {
-		return nil, err
+		return nil, database.CreateApiError(err)
 	}
 
 	return &api.CommitTransactionResponse{}, nil
@@ -253,6 +254,21 @@ func (s *apiService) BuildCollectionIndex(ctx context.Context, r *api.BuildColle
 	}
 
 	return resp.Response.(*api.BuildCollectionIndexResponse), nil
+}
+
+func (s *apiService) BuildSearchIndex(ctx context.Context, r *api.BuildCollectionSearchIndexRequest) (*api.BuildCollectionSearchIndexResponse, error) {
+	qm := metrics.WriteQueryMetrics{}
+	accessToken, _ := request.GetAccessToken(ctx)
+
+	resp, err := s.sessions.ReadOnlyExecute(ctx, s.runnerFactory.GetSearchIndexRunner(r, &qm, accessToken), database.ReqOptions{
+		MetadataChange:     true,
+		InstantVerTracking: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.BuildCollectionSearchIndexResponse), nil
 }
 
 func (s *apiService) Replace(ctx context.Context, r *api.ReplaceRequest) (*api.ReplaceResponse, error) {
@@ -389,6 +405,49 @@ func (s *apiService) CreateOrUpdateCollection(ctx context.Context, r *api.Create
 		Status:  resp.Status,
 		Message: fmt.Sprintf("collection of type '%s' created successfully", collectionType),
 	}, nil
+}
+
+func (s *apiService) CreateOrUpdateCollections(ctx context.Context, r *api.CreateOrUpdateCollectionsRequest) (*api.CreateOrUpdateCollectionsResponse, error) {
+	accessToken, _ := request.GetAccessToken(ctx)
+
+	resp := &api.CreateOrUpdateCollectionsResponse{
+		Resp: make([]*api.CreateCollectionStatus, len(r.Schemas)),
+	}
+
+	for i, c := range r.Schemas {
+		coll := jsoniter.Get(c, "title")
+		if len(coll.ToString()) == 0 {
+			resp.FailedAtIndex = int32(i)
+			resp.Error = &api.Error{Code: api.Code_INVALID_ARGUMENT, Message: "Collection name is empty at index %d"}
+
+			return resp, nil
+		}
+
+		runner := s.runnerFactory.GetCollectionQueryRunner(accessToken)
+		runner.SetCreateOrUpdateCollectionReq(&api.CreateOrUpdateCollectionRequest{
+			Collection: coll.ToString(),
+			Schema:     c,
+			OnlyCreate: r.OnlyCreate,
+			Branch:     r.Branch,
+			Project:    r.Project,
+		})
+
+		oneResp, err := s.sessions.Execute(ctx, runner, database.ReqOptions{
+			TxCtx:              api.GetTransaction(ctx),
+			MetadataChange:     true,
+			InstantVerTracking: true,
+		})
+		if err != nil {
+			resp.Error = api.ToAPIError(err)
+			resp.FailedAtIndex = int32(i)
+
+			return resp, nil
+		}
+
+		resp.Resp[i] = &api.CreateCollectionStatus{Status: oneResp.Status}
+	}
+
+	return resp, nil
 }
 
 func (s *apiService) DropCollection(ctx context.Context, r *api.DropCollectionRequest) (*api.DropCollectionResponse, error) {

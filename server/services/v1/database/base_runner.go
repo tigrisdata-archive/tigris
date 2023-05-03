@@ -79,13 +79,13 @@ func (runner *BaseQueryRunner) getDatabase(_ context.Context, tx transaction.Tx,
 
 	project, err := tenant.GetProject(projName)
 	if err != nil {
-		return nil, createApiError(err)
+		return nil, CreateApiError(err)
 	}
 
 	// otherwise, simply read from the in-memory cache/disk.
 	db, err := project.GetDatabase(dbBranch)
 	if err != nil {
-		return nil, createApiError(err)
+		return nil, CreateApiError(err)
 	}
 
 	return db, nil
