@@ -70,6 +70,7 @@ type Gotrue struct {
 type AuthzConfig struct {
 	Enabled bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 }
+
 type AuthConfig struct {
 	Enabled                    bool                  `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 	Validators                 []ValidatorConfig     `mapstructure:"validators" yaml:"validators" json:"validators"`

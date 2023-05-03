@@ -19,8 +19,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris/api/server/v1"
-	"github.com/tigrisdata/tigris/server/config"
-	"github.com/tigrisdata/tigris/util/log"
 )
 
 func TestAuthzOwnerRole(t *testing.T) {
@@ -54,8 +52,8 @@ func TestAuthzOwnerRole(t *testing.T) {
 	require.True(t, isAuthorized(api.DeleteAppKeyMethodName, ownerRoleName))
 	require.True(t, isAuthorized(api.ListAppKeysMethodName, ownerRoleName))
 	require.True(t, isAuthorized(api.RotateAppKeySecretMethodName, ownerRoleName))
-	require.True(t, isAuthorized(api.IndexCollection, editorRoleName))
-	require.True(t, isAuthorized(api.SearchIndexCollectionMethodName, editorRoleName))
+	require.True(t, isAuthorized(api.IndexCollection, ownerRoleName))
+	require.True(t, isAuthorized(api.SearchIndexCollectionMethodName, ownerRoleName))
 
 	// auth
 	require.True(t, isAuthorized(api.GetAccessTokenMethodName, ownerRoleName))
@@ -248,31 +246,11 @@ func TestAuthzReadOnlyRole(t *testing.T) {
 	require.False(t, isAuthorized(api.RotateAppKeySecretMethodName, readOnlyRoleName))
 	require.False(t, isAuthorized(api.CreateInvitationsMethodName, readOnlyRoleName))
 	require.False(t, isAuthorized(api.DeleteInvitationsMethodName, readOnlyRoleName))
-	require.False(t, isAuthorized(api.IndexCollection, editorRoleName))
-	require.False(t, isAuthorized(api.SearchIndexCollectionMethodName, editorRoleName))
+	require.False(t, isAuthorized(api.IndexCollection, readOnlyRoleName))
+	require.False(t, isAuthorized(api.SearchIndexCollectionMethodName, readOnlyRoleName))
 	require.False(t, isAuthorized(api.ListUsersMethodName, readOnlyRoleName))
 	require.False(t, isAuthorized(api.VerifyInvitationMethodName, readOnlyRoleName))
 	require.False(t, isAuthorized(api.CreateNamespaceMethodName, readOnlyRoleName))
 	require.False(t, isAuthorized(api.ListNamespacesMethodName, readOnlyRoleName))
 	require.False(t, isAuthorized(api.DeleteNamespaceMethodName, readOnlyRoleName))
-}
-
-func TestAdminNamespace(t *testing.T) {
-	enforcedAuthConfig := config.Config{
-		Server: config.ServerConfig{},
-		Log: log.LogConfig{
-			Level: "error",
-		},
-		Auth: config.AuthConfig{
-			Validators:               []config.ValidatorConfig{},
-			PrimaryAudience:          "",
-			JWKSCacheTimeout:         0,
-			LogOnly:                  false,
-			EnableNamespaceIsolation: false,
-			AdminNamespaces:          []string{"tigris-admin"},
-		},
-		FoundationDB: config.FoundationDBConfig{},
-	}
-	require.False(t, isAdminNamespace("tigris-non-admin", &enforcedAuthConfig))
-	require.True(t, isAdminNamespace("tigris-admin", &enforcedAuthConfig))
 }

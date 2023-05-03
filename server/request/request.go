@@ -391,6 +391,7 @@ func getMetadataFromToken(token string) (string, bool, string, string) {
 	return namespaceCode, len(userEmail) > 0, sub, role
 }
 
+// GetMetadataFromHeader returns the namespaceCode, isHuman, user sub and user role from the header token.
 func GetMetadataFromHeader(ctx context.Context) (string, bool, string, string) {
 	if !config.DefaultConfig.Auth.EnableNamespaceIsolation {
 		return defaults.DefaultNamespaceName, false, "", ""

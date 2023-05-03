@@ -16,7 +16,6 @@ package middleware
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
@@ -34,7 +33,8 @@ var (
 	ownerRoleName        = "o"
 	ClusterAdminRoleName = "cluster_admin"
 
-	realOnlyMethods = container.NewHashSet(
+	adminNamespaces = container.NewHashSet(config.DefaultConfig.Auth.AdminNamespaces...)
+	readonlyMethods = container.NewHashSet(
 		// db
 		api.ReadMethodName,
 		api.CountMethodName,
@@ -225,7 +225,7 @@ var (
 		api.MessagesMethodName,
 		api.ListSubscriptionsMethodName,
 	)
-	clusterAdmin = container.NewHashSet(
+	clusterAdminMethods = container.NewHashSet(
 		// db
 		api.BeginTransactionMethodName,
 		api.CommitTransactionMethodName,
@@ -314,13 +314,10 @@ func authzUnaryServerInterceptor() func(ctx context.Context, req interface{}, in
 
 			// empty role check for transition purpose
 			if role != "" {
-				authorized := isAuthorized(reqMetadata.GetFullMethod(), role)
-				if !authorized {
-					return nil, errors.PermissionDenied(fmt.Sprintf("You are not allowed to perform operation: %s", reqMetadata.GetFullMethod()))
+				if !isAuthorized(reqMetadata.GetFullMethod(), role) {
+					return nil, errors.PermissionDenied("You are not allowed to perform operation: %s", reqMetadata.GetFullMethod())
 				}
 			}
-			resp, err := handler(ctx, req)
-			return resp, err
 		}
 		return handler(ctx, req)
 	}
@@ -332,9 +329,8 @@ func authzStreamServerInterceptor() grpc.StreamServerInterceptor {
 		role := getRole(reqMetadata)
 		// empty role check for transition purpose
 		if role != "" {
-			authorized := isAuthorized(reqMetadata.GetFullMethod(), role)
-			if !authorized {
-				return errors.PermissionDenied(fmt.Sprintf("You are not allowed to perform operation: %s", reqMetadata.GetFullMethod()))
+			if !isAuthorized(reqMetadata.GetFullMethod(), role) {
+				return errors.PermissionDenied("You are not allowed to perform operation: %s", reqMetadata.GetFullMethod())
 			}
 		}
 		return handler(srv, stream)
@@ -343,18 +339,12 @@ func authzStreamServerInterceptor() grpc.StreamServerInterceptor {
 
 func isAuthorized(methodName string, role string) bool {
 	allowed := false
-	switch role {
-	case ClusterAdminRoleName:
-		allowed = clusterAdmin.Contains(methodName)
-	case ownerRoleName:
-		allowed = ownerMethods.Contains(methodName)
-	case editorRoleName:
-		allowed = editorMethods.Contains(methodName)
-	case readOnlyRoleName:
-		allowed = realOnlyMethods.Contains(methodName)
+	if methods := getMethodsForRole(role); methods != nil {
+		allowed = methods.Contains(methodName)
 	}
+
 	if !allowed {
-		log.Debug().
+		log.Warn().
 			Str("methodName", methodName).
 			Str("role", role).
 			Msg("Authz - not allowed")
@@ -362,9 +352,22 @@ func isAuthorized(methodName string, role string) bool {
 	return allowed
 }
 
+func getMethodsForRole(role string) *container.HashSet {
+	switch role {
+	case ClusterAdminRoleName:
+		return &clusterAdminMethods
+	case ownerRoleName:
+		return &ownerMethods
+	case editorRoleName:
+		return &editorMethods
+	case readOnlyRoleName:
+		return &readonlyMethods
+	}
+	return nil
+}
+
 func getRole(reqMetadata *request.Metadata) string {
-	isAdmin := isAdminNamespace(reqMetadata.GetNamespace(), &config.DefaultConfig)
-	if isAdmin {
+	if isAdminNamespace(reqMetadata.GetNamespace()) {
 		return ClusterAdminRoleName
 	}
 
@@ -375,11 +378,6 @@ func getRole(reqMetadata *request.Metadata) string {
 	return reqMetadata.GetRole()
 }
 
-func isAdminNamespace(incomingNamespace string, config *config.Config) bool {
-	for _, allowedAdminNamespace := range config.Auth.AdminNamespaces {
-		if incomingNamespace == allowedAdminNamespace {
-			return true
-		}
-	}
-	return false
+func isAdminNamespace(incomingNamespace string) bool {
+	return adminNamespaces.Contains(incomingNamespace)
 }
