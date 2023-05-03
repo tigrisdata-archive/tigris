@@ -15,6 +15,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -226,6 +227,18 @@ func (e *TigrisError) GRPCStatus() *status.Status {
 	}
 
 	return st
+}
+
+// ToAPIError is used when it is needed to manually produce error in wire format.
+// For example in the batch API like CreateOrUpdateCollections.
+func ToAPIError(err error) *Error {
+	var ep *TigrisError
+
+	if errors.As(err, &ep) {
+		return &Error{Code: ep.Code, Message: ep.Message}
+	}
+
+	return &Error{Code: Code_INTERNAL, Message: err.Error()}
 }
 
 // MarshalStatus marshal status object.
