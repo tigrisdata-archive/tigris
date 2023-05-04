@@ -80,11 +80,6 @@ func TestAuth(t *testing.T) {
 		require.Contains(t, err.Error(), "Failed to validate access token")
 	})
 
-	t.Run("isAdminNamespace", func(t *testing.T) {
-		require.False(t, isAdminNamespace("test-name", &enforcedAuthConfig))
-		require.True(t, isAdminNamespace("tigris-admin", &enforcedAuthConfig))
-	})
-
 	t.Run("bypassCache", func(t *testing.T) {
 		cache := gcache.New(2).Expiration(time.Duration(5) * time.Minute).Build()
 		_ = cache.Set("token1", "token-value-1")

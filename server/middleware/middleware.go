@@ -61,6 +61,10 @@ func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerI
 		streamInterceptors = append(streamInterceptors, grpc_auth.StreamServerInterceptor(authFunc))
 	}
 
+	if config.Auth.Authz.Enabled {
+		streamInterceptors = append(streamInterceptors, authzStreamServerInterceptor())
+	}
+
 	streamInterceptors = append(streamInterceptors, []grpc.StreamServerInterceptor{
 		namespaceSetterStreamServerInterceptor(config.Auth.EnableNamespaceIsolation),
 		quotaStreamServerInterceptor(),
@@ -89,6 +93,10 @@ func Get(config *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerI
 
 	if authFunc != nil {
 		unaryInterceptors = append(unaryInterceptors, grpc_auth.UnaryServerInterceptor(authFunc))
+	}
+
+	if config.Auth.Authz.Enabled {
+		unaryInterceptors = append(unaryInterceptors, authzUnaryServerInterceptor())
 	}
 
 	unaryInterceptors = append(unaryInterceptors, []grpc.UnaryServerInterceptor{

@@ -221,18 +221,7 @@ func authFunction(ctx context.Context, jwtValidators []*validator.Validator, con
 			if namespaceCode == "" {
 				log.Warn().Msg("Valid token with empty namespace received")
 				reqMetadata.SetNamespace(ctx, defaults.UnknownValue)
-				return ctx, errors.Unauthenticated("You are not authorized to perform this admin action")
-			}
-			isAdmin := fullMethodNameFound && request.IsAdminApi(fullMethodName)
-			if isAdmin {
-				// admin api being called, let's check if the user is of admin allowed namespaces
-				if !isAdminNamespace(namespaceCode, config) {
-					log.Warn().
-						Interface("AdminNamespaces", config.Auth.AdminNamespaces).
-						Str("IncomingNamespace", namespaceCode).
-						Msg("Valid token received for admin action - but not allowed to administer from this namespace")
-					return ctx, errors.Unauthenticated("You are not authorized to perform this admin action")
-				}
+				return ctx, errors.Unauthenticated("You are not authorized to perform this action")
 			}
 
 			log.Debug().Msg("Valid token received")
@@ -263,15 +252,6 @@ func getCachedToken(ctx context.Context, tkn string, cache gcache.Cache) interfa
 		log.Debug().Msg("Token validation cache is disabled for this call")
 	}
 	return nil
-}
-
-func isAdminNamespace(incomingNamespace string, config *config.Config) bool {
-	for _, allowedAdminNamespace := range config.Auth.AdminNamespaces {
-		if incomingNamespace == allowedAdminNamespace {
-			return true
-		}
-	}
-	return false
 }
 
 func getAuthFunction(config *config.Config) func(ctx context.Context) (context.Context, error) {

@@ -494,34 +494,19 @@ func (runner *BaseQueryRunner) buildReaderOptions(req *api.ReadRequest, collecti
 		}
 	}
 
-	if searchSorting, err := runner.getSearchOrdering(collection, req.Sort); err == nil && searchSorting != nil {
-		onlySearch := true
-		if len(*searchSorting) == 1 {
-			if secondarySorting, err := runner.getSortOrdering(collection, req.Sort); err == nil && secondarySorting != nil {
-				onlySearch = false
-			}
-		}
-
-		if onlySearch {
-			// error here means we need to check if we handle sort on database level
-			if config.DefaultConfig.Search.ReadEnabled {
-				options.sorting = searchSorting
-				options.inMemoryStore = true
+	if from == nil && config.DefaultConfig.SecondaryIndex.ReadEnabled {
+		if secondarySorting, err := runner.getSortOrdering(collection, req.Sort); err == nil {
+			if options.plan, err = runner.buildSecondaryIndexKeysUsingFilter(collection, req.Filter, collation, secondarySorting); err == nil {
 				return options, nil
 			}
-
-			return options, errors.Internal("sorting action is temporarily unavailable")
 		}
 	}
 
-	if from == nil && config.DefaultConfig.SecondaryIndex.ReadEnabled {
-		secondarySorting, err := runner.getSortOrdering(collection, req.Sort)
-		if err != nil {
-			return options, err
-		}
-		if options.plan, err = runner.buildSecondaryIndexKeysUsingFilter(collection, req.Filter, collation, secondarySorting); err == nil {
-			return options, nil
-		}
+	if searchSorting, err := runner.getSearchOrdering(collection, req.Sort); err == nil && searchSorting != nil {
+		// error here means we need to check if we handle sort on database level
+		options.sorting = searchSorting
+		options.inMemoryStore = true
+		return options, nil
 	}
 
 	planner, err := NewPrimaryIndexQueryPlanner(collection, runner.encoder, req.Filter, collation)
