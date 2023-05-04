@@ -176,8 +176,9 @@ func (s *apiService) CommitTransaction(ctx context.Context, _ *api.CommitTransac
 		}
 	}()
 
-	err := session.Commit(s.versionH, session.GetTx().Context().GetStagedDatabase() != nil, nil)
-	if err != nil {
+	db, _ := session.GetTx().Context().GetStagedDatabase().(*metadata.Database)
+
+	if err := session.Commit(s.versionH, db != nil && db.MetadataChange, nil); err != nil {
 		return nil, database.CreateApiError(err)
 	}
 

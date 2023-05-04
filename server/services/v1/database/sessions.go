@@ -310,7 +310,9 @@ func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, runner Quer
 			continue
 		}
 
-		err = session.Commit(sessMgr.versionH, req.MetadataChange, err)
+		db, _ := session.GetTx().Context().GetStagedDatabase().(*metadata.Database)
+
+		err = session.Commit(sessMgr.versionH, (db == nil && req.MetadataChange) || (db != nil && db.MetadataChange), err)
 		log.Debug().Err(err).Msg("session.commit after")
 		if !IsErrConflictingTransaction(err) && !search.IsErrDuplicateFieldNames(err) {
 			return

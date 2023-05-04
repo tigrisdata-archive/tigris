@@ -19,7 +19,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
@@ -103,22 +102,19 @@ const (
 	AutoPrimaryKeyF     = "id"
 	PrimaryKeySchemaK   = "primary_key"
 	// DateTimeFormat represents the supported date time format.
-	DateTimeFormat               = time.RFC3339Nano
-	CollectionTypeF              = "collection_type"
-	IndexingSchemaVersionKey     = "indexing_version"
-	DefaultIndexingSchemaVersion = "v1"
+	DateTimeFormat  = time.RFC3339Nano
+	CollectionTypeF = "collection_type"
 
 	SecondaryKeyIndexName = "skey"
 )
 
 type JSONSchema struct {
-	Name            string              `json:"title,omitempty"`
-	Description     string              `json:"description,omitempty"`
-	Properties      jsoniter.RawMessage `json:"properties,omitempty"`
-	PrimaryKeys     []string            `json:"primary_key,omitempty"`
-	CollectionType  string              `json:"collection_type,omitempty"`
-	IndexingVersion string              `json:"indexing_version,omitempty"`
-	Version         uint32              `json:"version,omitempty"`
+	Name           string              `json:"title,omitempty"`
+	Description    string              `json:"description,omitempty"`
+	Properties     jsoniter.RawMessage `json:"properties,omitempty"`
+	PrimaryKeys    []string            `json:"primary_key,omitempty"`
+	CollectionType string              `json:"collection_type,omitempty"`
+	Version        uint32              `json:"version,omitempty"`
 }
 
 // Factory is used as an intermediate step so that collection can be initialized with properly encoded values.
@@ -136,39 +132,12 @@ type Factory struct {
 	// schema subspace.
 	Schema jsoniter.RawMessage
 	// CollectionType is the type of the collection. Only two types of collections are supported "messages" and "documents"
-	CollectionType  CollectionType
-	IndexingVersion string
-	Version         uint32
+	CollectionType CollectionType
+	Version        uint32
 }
 
 func (f *Factory) SecondaryIndexes() []*Index {
 	return f.Indexes.All
-}
-
-func RemoveIndexingVersion(schema jsoniter.RawMessage) jsoniter.RawMessage {
-	if v, _, _, _ := jsonparser.Get(schema, IndexingSchemaVersionKey); len(v) > 0 {
-		return jsonparser.Delete(schema, IndexingSchemaVersionKey)
-	}
-	return schema
-}
-
-func SetIndexingVersion(factory *Factory) error {
-	// take a copy, so modification is not touching the existing req payload schema
-	tmp := make([]byte, len(factory.Schema))
-	copy(tmp, factory.Schema)
-	factory.Schema = tmp
-
-	if _, dt, _, _ := jsonparser.Get(factory.Schema, IndexingSchemaVersionKey); dt == jsonparser.NotExist {
-		var err error
-		var schema jsoniter.RawMessage
-		if schema, err = jsonparser.Set(factory.Schema, []byte(fmt.Sprintf(`"%s"`, DefaultIndexingSchemaVersion)), IndexingSchemaVersionKey); err != nil {
-			return err
-		}
-
-		factory.Schema = schema
-		factory.IndexingVersion = DefaultIndexingSchemaVersion
-	}
-	return nil
 }
 
 func GetCollectionType(_ jsoniter.RawMessage) (CollectionType, error) {
@@ -261,11 +230,10 @@ func (fb *FactoryBuilder) Build(collection string, reqSchema jsoniter.RawMessage
 		Indexes: &Indexes{
 			All: secondaryIndex,
 		},
-		Name:            collection,
-		Schema:          reqSchema,
-		CollectionType:  cType,
-		IndexingVersion: schema.IndexingVersion,
-		Version:         schema.Version,
+		Name:           collection,
+		Schema:         reqSchema,
+		CollectionType: cType,
+		Version:        schema.Version,
 	}
 
 	if fb.onUserRequest {

@@ -1324,14 +1324,12 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 			return err
 		}
 
+		database.MetadataChange = true
+
 		return tenant.updateCollection(ctx, tx, database, c, schFactory)
 	}
 
-	// add indexing version here in the name, because this is a fresh create collection request
-	if err := schema.SetIndexingVersion(schFactory); err != nil {
-		return err
-	}
-	schFactory.IndexingVersion = schema.DefaultIndexingSchemaVersion
+	database.MetadataChange = true
 
 	collMeta, err := tenant.MetaStore.CreateCollection(ctx, tx, schFactory.Name, tenant.namespace.Id(), database.id, schFactory.SecondaryIndexes())
 	if err != nil {
@@ -1556,6 +1554,8 @@ func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db 
 	if db == nil {
 		return errors.NotFound("database missing")
 	}
+
+	db.MetadataChange = true
 
 	cHolder, ok := db.collections[collectionName]
 	if !ok {
@@ -1867,6 +1867,8 @@ type Database struct {
 	// valid during transactional collection schema update
 	PendingSchemaVersion uint32
 	CurrentSchemaVersion uint32
+
+	MetadataChange bool
 }
 
 func NewDatabase(id uint32, name string) *Database {
