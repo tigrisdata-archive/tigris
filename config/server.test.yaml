@@ -34,10 +34,13 @@ secondary_index:
 
 auth:
   enabled: true
+  authz:
+    enabled: true
   enable_namespace_isolation: true
   enable_oauth: true
   log_only: false
-  admin_namespaces: tigris_test
+  admin_namespaces:
+    - tigris_test
   validators:
     - issuer: http://tigris_gotrue:8086
       algorithm: RS256
