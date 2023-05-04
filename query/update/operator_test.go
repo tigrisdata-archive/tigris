@@ -228,6 +228,67 @@ func TestMergeAndGet_AtomicErrors(t *testing.T) {
 	}
 }
 
+func TestMergeAndGet_Push(t *testing.T) {
+	cases := []struct {
+		inputDoc    jsoniter.RawMessage
+		existingDoc jsoniter.RawMessage
+		outputDoc   jsoniter.RawMessage
+	}{
+		{
+			[]byte(`{"f_int": 1}`),
+			[]byte(`{"f_int": []}`),
+			[]byte(`{"f_int": [1]}`),
+		},
+		{
+			[]byte(`{"f_int": 2}`),
+			[]byte(`{"f_int": [1]}`),
+			[]byte(`{"f_int": [1, 2]}`),
+		},
+		{
+			[]byte(`{"f_str": "world"}`),
+			[]byte(`{"f_str": ["hello"]}`),
+			[]byte(`{"f_str": ["hello", "world"]}`),
+		},
+		{
+			[]byte(`{"f_obj.a": 4}`),
+			[]byte(`{"f_obj": {"a": []}}`),
+			[]byte(`{"f_obj": {"a": [4]}}`),
+		},
+		{
+			[]byte(`{"f_obj.a": 4}`),
+			[]byte(`{"f_obj": {"a": [1, 2, 3]}}`),
+			[]byte(`{"f_obj": {"a": [1, 2, 3, 4]}}`),
+		},
+		{
+			[]byte(`{"f_obj.b": "hello"}`),
+			[]byte(`{"f_obj": {"b": []}}`),
+			[]byte(`{"f_obj": {"b": ["hello"]}}`),
+		},
+		{
+			[]byte(`{"f_obj_arr": {"c": 1 , "d": "hello"}}`),
+			[]byte(`{"f_obj_arr": []}`),
+			[]byte(`{"f_obj_arr": [{"c": 1 , "d": "hello"}]}`),
+		},
+		{
+			[]byte(`{"f_obj_arr": {"c": 2 , "d": "world"}}`),
+			[]byte(`{"f_obj_arr": [{"c": 1 , "d": "hello"}]}`),
+			[]byte(`{"f_obj_arr": [{"c": 1 , "d": "hello"}, {"c": 2 , "d": "world"}]}`),
+		},
+	}
+
+	for _, c := range cases {
+		reqInput := []byte(fmt.Sprintf(`{"%s": %s}`, Push, c.inputDoc))
+		f, err := BuildFieldOperators(reqInput)
+		require.NoError(t, err)
+
+		actualOut, keysToRemove, pkeyMutation, err := f.MergeAndGet(c.existingDoc, testCollection3(t))
+		require.False(t, pkeyMutation)
+		require.NoError(t, err)
+		require.Nil(t, keysToRemove)
+		require.JSONEq(t, string(c.outputDoc), string(actualOut), fmt.Sprintf("exp '%s' actual '%s'", string(c.outputDoc), string(actualOut)))
+	}
+}
+
 func TestMergeAndGet_PrimaryKeyMutation(t *testing.T) {
 	cases := []struct {
 		inputDoc           jsoniter.RawMessage
@@ -244,62 +305,86 @@ func TestMergeAndGet_PrimaryKeyMutation(t *testing.T) {
 			Set,
 			true,
 			nil,
-		}, {
+		},
+		{
 			[]byte(`{"b": 10, "a": 10}`),
 			[]byte(`{"a": 1, "b": 1, "c": "c", "f": {"f_str": "f"}}`),
 			[]byte(`{"a": 10, "b": 10, "c": "c", "f": {"f_str": "f"}}`),
 			Set,
 			true,
 			nil,
-		}, {
+		},
+		{
 			[]byte(`{"b": 1, "d": 10.22}`),
 			[]byte(`{"a": 1, "b": 10, "d": 1.22}`),
 			[]byte(`{"a": 1, "b": 1, "d": 10.22}`),
 			Set,
 			false,
 			nil,
-		}, {
+		},
+		{
 			[]byte(`{"f.f_str": "ff", "g": "new"}`),
 			[]byte(`{"a": 1, "c": "c", "f": {"f_str": "f"}}`),
 			[]byte(`{"a": 1, "c": "c", "f": {"f_str": "ff"},"g":"new"}`),
 			Set,
 			false,
 			nil,
-		}, {
+		},
+		{
 			[]byte(`{"a": 1, "c": "foo"}`),
 			[]byte(`{"a": 10, "b": 10, "d": 1.22}`),
 			[]byte(`{"a": 1, "b": 10, "d": 1.22,"c":"foo"}`),
 			Set,
 			true,
 			nil,
-		}, {
+		},
+		{
 			[]byte(`["a", "b"]`),
 			[]byte(`{"a": 10, "b": 10, "d": 1.22}`),
 			[]byte(`{ "d": 1.22}`),
 			UnSet,
 			true,
 			errors.InvalidArgument("primary key field can't be unset"),
-		}, {
+		},
+		{
 			[]byte(`["b", "d"]`),
 			[]byte(`{"a": 10, "b": 10, "d": 1.22}`),
 			[]byte(`{"a": 10}`),
 			UnSet,
 			false,
 			nil,
-		}, {
+		},
+		{
 			[]byte(`{"a": 10}`),
 			[]byte(`{"a": 1, "b": 10, "d": 1.22}`),
 			[]byte(`{"a": 11, "b": 10, "d": 1.22}`),
 			Increment,
 			true,
 			nil,
-		}, {
+		},
+		{
 			[]byte(`{"b": 10}`),
 			[]byte(`{"a": 1, "b": 10, "d": 1.22}`),
 			[]byte(`{"a": 1, "b": 20, "d": 1.22}`),
 			Increment,
 			false,
 			nil,
+		},
+		{
+			inputDoc:           []byte(`{"e": 4}`),
+			existingDoc:        []byte(`{"a": 1, "e": [], "d": 1.22}`),
+			outputDoc:          []byte(`{"a": 1, "e": [4], "d": 1.22}`),
+			apply:              Push,
+			primaryKeyMutation: false,
+			expError:           nil,
+		},
+		{
+			inputDoc:           []byte(`{"e": 4}`),
+			existingDoc:        []byte(`{"a": 1, "e": [1,2,3], "d": 1.22}`),
+			outputDoc:          []byte(`{"a": 1, "e": [1,2,3,4], "d": 1.22}`),
+			apply:              Push,
+			primaryKeyMutation: false,
+			expError:           nil,
 		},
 	}
 	for _, c := range cases {
@@ -540,6 +625,74 @@ func testCollection2(t *testing.T) *schema.DefaultCollection {
 }`)
 
 	schFactory, err := schema.NewFactoryBuilder(true).Build("test_update", reqSchema)
+	require.NoError(t, err)
+
+	c, err := schema.NewDefaultCollection(1, 1, schFactory, nil, nil)
+	require.NoError(t, err)
+
+	return c
+}
+
+func testCollection3(t *testing.T) *schema.DefaultCollection {
+	reqSchema := []byte(`{
+	"title": "test_array_update",
+	"properties": {
+		"id": {
+			"type": "integer"
+		},
+		"f_int": {
+			"type": "array",
+			"items": {
+				"type": "integer"
+			}
+		},
+		"f_str": {
+			"type": "array",
+			"items": {
+				"type": "string",
+				"maxLength": 128
+			}
+		},
+		"f_obj": {
+			"type": "object",
+			"properties": {
+				"a": {
+					"type": "array",
+					"items": {
+						"type": "integer"
+					}
+				},
+				"b": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				}
+			}
+		},
+		"f_obj_arr": {
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"c": {
+						"type": "integer"
+					},
+					"d": {
+						"type": "string",
+						"maxLength": 128
+					}
+				}
+			}
+		},
+		"g": {
+			"type": "string",
+			"maxLength": 128
+		}
+	},
+	"primary_key": ["id"]
+}`)
+	schFactory, err := schema.NewFactoryBuilder(true).Build("test_array_update", reqSchema)
 	require.NoError(t, err)
 
 	c, err := schema.NewDefaultCollection(1, 1, schFactory, nil, nil)

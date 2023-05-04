@@ -36,6 +36,7 @@ const (
 	Decrement FieldOPType = "$decrement"
 	Multiply  FieldOPType = "$multiply"
 	Divide    FieldOPType = "$divide"
+	Push      FieldOPType = "$push"
 )
 
 // BuildFieldOperators un-marshals request "fields" present in the Update API and returns a FieldOperatorFactory
@@ -46,7 +47,6 @@ func BuildFieldOperators(reqFields []byte) (*FieldOperatorFactory, error) {
 	if err := jsoniter.Unmarshal(reqFields, &decodedOperators); log.E(err) {
 		return nil, err
 	}
-
 	operators := make(map[string]*FieldOperator)
 	for op, val := range decodedOperators {
 		switch op {
@@ -62,6 +62,8 @@ func BuildFieldOperators(reqFields []byte) (*FieldOperatorFactory, error) {
 			operators[string(Multiply)] = NewFieldOperator(Multiply, val)
 		case string(Divide):
 			operators[string(Divide)] = NewFieldOperator(Divide, val)
+		case string(Push):
+			operators[string(Push)] = NewFieldOperator(Push, val)
 		}
 	}
 
@@ -115,6 +117,11 @@ func (factory *FieldOperatorFactory) MergeAndGet(existingDoc jsoniter.RawMessage
 		}
 		if primaryKeyMutation {
 			return nil, nil, false, errors.InvalidArgument("primary key field can't be unset")
+		}
+	}
+	if pushFieldOp, ok := factory.FieldOperators[string(Push)]; ok {
+		if out, err = factory.push(out, pushFieldOp); err != nil {
+			return nil, nil, false, err
 		}
 	}
 
@@ -189,6 +196,40 @@ func (factory *FieldOperatorFactory) set(collection *schema.DefaultCollection, e
 	}
 
 	return output, tentativeKeysToRemove, primaryKeyMutation, nil
+}
+
+func (factory *FieldOperatorFactory) push(existingDoc jsoniter.RawMessage, operator *FieldOperator) (jsoniter.RawMessage, error) {
+	var output []byte = existingDoc
+	var pushInput map[string]any
+	if err := jsoniter.Unmarshal(operator.Input, &pushInput); err != nil {
+		return nil, err
+	}
+
+	for key, value := range pushInput {
+		keys := strings.Split(key, ".")
+		existingVal, dataType, _, err := jsonparser.Get(existingDoc, keys...)
+		if err != nil && dataType != jsonparser.NotExist {
+			return nil, errors.Internal("failing to get key '%s' err: '%s'", keys, err.Error())
+		}
+
+		var newValue []any
+		err = jsoniter.Unmarshal(existingVal, &newValue)
+		if err != nil {
+			return nil, err
+		}
+
+		updatedValue, err := jsoniter.Marshal(append(newValue, value))
+		if err != nil {
+			return nil, err
+		}
+
+		output, err = jsonparser.Set(output, updatedValue, keys...)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return output, nil
 }
 
 func (factory *FieldOperatorFactory) buildKeysForObjects(existingDoc []byte, key []byte) ([]string, error) {
@@ -267,6 +308,7 @@ func (factory *FieldOperatorFactory) atomicOperations(collection *schema.Default
 // { "$multiply": { <field1>: <multiplyBy> } }
 // { "$divide": { <field1>: <divideBy> } }
 // { "$unset": ["d"] }.
+// { "$push": { <field1>: <value1>, ... } }.
 type FieldOperator struct {
 	Op    FieldOPType
 	Input jsoniter.RawMessage
