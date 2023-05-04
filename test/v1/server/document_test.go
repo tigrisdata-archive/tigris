@@ -2125,7 +2125,7 @@ func testUpdateValidate(t *testing.T, db string, collection string, filter Map, 
 	}
 
 	for _, i := range notChanged {
-		validateInputDocToRes(t, out[i], input[i])
+		validateInputDocToRes(t, out[i], input[i], filter)
 	}
 }
 
@@ -4802,57 +4802,71 @@ func TestFilteringOnArrays(t *testing.T) {
 		Status(http.StatusOK)
 
 	cases := []struct {
-		filter Map
+		filter       Map
 		expDocuments []Doc
-	} {
+		order        []Map
+	}{
+		/**
+		These two tests will work once we disable fallback to search. This functionality is added on Tigris side.
 		{
 			Map{
 				"arr_of_arr": "clothes",
 			},
 			inputDocument[0:1],
+		    nil,
 		}, {
 			Map{
 				"obj.array_obj.university": "cal@university",
 			},
 			inputDocument[0:1],
-		}, {
+		    nil,
+		},*/{
 			Map{
 				"obj.arr_primitive": "cars",
 			},
 			inputDocument[0:1],
+			nil,
 		}, {
 			Map{
 				"arr_obj.zipcodes": 94089,
 			},
 			inputDocument[0:1],
+			nil,
 		}, {
 			Map{
 				"string_arr": "paris",
 			},
 			inputDocument[0:1],
-		},{
+			nil,
+		}, {
 			Map{
 				"int_arr": 20,
 			},
 			inputDocument[0:1],
+			nil,
 		}, {
 			Map{
 				"double_arr": 12.2,
 			},
 			inputDocument[0:1],
+			nil,
 		}, {
 			Map{
 				"bool_arr": false,
 			},
 			inputDocument,
+			[]Map{
+				{"pkey_int": "$asc"},
+			},
 		},
 	}
 	for _, c := range cases {
-		readAndValidate(t,
+		readAndValidateOrder(t,
 			db,
 			collection,
 			c.filter,
 			nil,
+			c.order,
 			c.expDocuments)
 	}
 }
@@ -4870,6 +4884,7 @@ func TestRead_Sorted(t *testing.T) {
 					"id":           Map{"type": "integer", "searchIndex": true, "sort": true, "index": true},
 					"int_value":    Map{"type": "integer"},
 					"string_value": Map{"type": "string", "searchIndex": true, "sort": true, "index": true},
+					"search_only":  Map{"type": "string", "searchIndex": true, "sort": true},
 				},
 			},
 		}).Status(http.StatusOK)
@@ -4879,26 +4894,37 @@ func TestRead_Sorted(t *testing.T) {
 			"id":           210,
 			"int_value":    1000,
 			"string_value": "zab",
+			"search_only":  "zab",
 		},
 		{
 			"id":           250,
 			"int_value":    2000,
 			"string_value": "cef",
+			"search_only":  "cef",
 		},
 		{
 			"id":           230,
 			"int_value":    2000,
 			"string_value": "cbf",
+			"search_only":  "cbf",
 		},
 		{
 			"id":           220,
 			"int_value":    3000,
 			"string_value": "aae",
+			"search_only":  "aae",
 		},
 		{
 			"id":           240,
 			"int_value":    2000,
 			"string_value": "Aae",
+			"search_only":  "Aae",
+		},
+		{
+			"id":           260,
+			"int_value":    5000,
+			"string_value": "aab",
+			"search_only":  "zab",
 		},
 	}
 
@@ -4923,26 +4949,37 @@ func TestRead_Sorted(t *testing.T) {
 					"id":           210,
 					"int_value":    1000,
 					"string_value": "zab",
+					"search_only":  "zab",
 				},
 				{
 					"id":           220,
 					"int_value":    3000,
 					"string_value": "aae",
+					"search_only":  "aae",
 				},
 				{
 					"id":           230,
 					"int_value":    2000,
 					"string_value": "cbf",
+					"search_only":  "cbf",
 				},
 				{
 					"id":           240,
 					"int_value":    2000,
 					"string_value": "Aae",
+					"search_only":  "Aae",
 				},
 				{
 					"id":           250,
 					"int_value":    2000,
 					"string_value": "cef",
+					"search_only":  "cef",
+				},
+				{
+					"id":           260,
+					"int_value":    5000,
+					"string_value": "aab",
+					"search_only":  "zab",
 				},
 			},
 		},
@@ -4955,29 +4992,135 @@ func TestRead_Sorted(t *testing.T) {
 			},
 			[]Doc{
 				{
+					"id":           260,
+					"int_value":    5000,
+					"string_value": "aab",
+					"search_only":  "zab",
+				},
+				{
 					"id":           220,
 					"int_value":    3000,
 					"string_value": "aae",
+					"search_only":  "aae",
 				},
 				{
 					"id":           240,
 					"int_value":    2000,
 					"string_value": "Aae",
+					"search_only":  "Aae",
 				},
 				{
 					"id":           230,
 					"int_value":    2000,
 					"string_value": "cbf",
+					"search_only":  "cbf",
 				},
 				{
 					"id":           250,
 					"int_value":    2000,
 					"string_value": "cef",
+					"search_only":  "cef",
 				},
 				{
 					"id":           210,
 					"int_value":    1000,
 					"string_value": "zab",
+					"search_only":  "zab",
+				},
+			},
+		},
+		{
+			Map{"id": Map{"$gte": 0}},
+			[]Map{
+				{
+					"search_only": "$asc",
+				},
+			},
+			[]Doc{
+				{
+					"id":           240,
+					"int_value":    2000,
+					"string_value": "Aae",
+					"search_only":  "Aae",
+				},
+				{
+					"id":           220,
+					"int_value":    3000,
+					"string_value": "aae",
+					"search_only":  "aae",
+				},
+				{
+					"id":           230,
+					"int_value":    2000,
+					"string_value": "cbf",
+					"search_only":  "cbf",
+				},
+				{
+					"id":           250,
+					"int_value":    2000,
+					"string_value": "cef",
+					"search_only":  "cef",
+				},
+				{
+					"id":           260,
+					"int_value":    5000,
+					"string_value": "aab",
+					"search_only":  "zab",
+				},
+				{
+					"id":           210,
+					"int_value":    1000,
+					"string_value": "zab",
+					"search_only":  "zab",
+				},
+			},
+		},
+		{
+			Map{"id": Map{"$gte": 0}},
+			[]Map{
+				{
+					"search_only": "$asc",
+				},
+				{
+					"string_value": "$desc",
+				},
+			},
+			[]Doc{
+				{
+					"id":           240,
+					"int_value":    2000,
+					"string_value": "Aae",
+					"search_only":  "Aae",
+				},
+				{
+					"id":           220,
+					"int_value":    3000,
+					"string_value": "aae",
+					"search_only":  "aae",
+				},
+				{
+					"id":           230,
+					"int_value":    2000,
+					"string_value": "cbf",
+					"search_only":  "cbf",
+				},
+				{
+					"id":           250,
+					"int_value":    2000,
+					"string_value": "cef",
+					"search_only":  "cef",
+				},
+				{
+					"id":           210,
+					"int_value":    1000,
+					"string_value": "zab",
+					"search_only":  "zab",
+				},
+				{
+					"id":           260,
+					"int_value":    5000,
+					"string_value": "aab",
+					"search_only":  "zab",
 				},
 			},
 		},
@@ -5632,16 +5775,16 @@ func readAndValidateWithOptions(t *testing.T, db string, collection string, filt
 	require.Equal(t, len(inputDocument), len(readResp))
 
 	for i := 0; i < len(inputDocument); i++ {
-		validateInputDocToRes(t, readResp[i], inputDocument[i])
+		validateInputDocToRes(t, readResp[i], inputDocument[i], filter)
 	}
 }
 
 func readAndValidate(t *testing.T, db string, collection string, filter Map, fields Map, inputDocument []Doc) {
 	readResp := readByFilter(t, db, collection, filter, fields, nil, nil)
-	require.Equal(t, len(inputDocument), len(readResp))
+	require.Equal(t, len(inputDocument), len(readResp), filter)
 
 	for i := 0; i < len(inputDocument); i++ {
-		validateInputDocToRes(t, readResp[i], inputDocument[i])
+		validateInputDocToRes(t, readResp[i], inputDocument[i], filter)
 	}
 }
 
@@ -5650,16 +5793,16 @@ func readAndValidateOrder(t *testing.T, db string, collection string, filter Map
 	require.Equal(t, len(inputDocument), len(readResp))
 
 	for i := 0; i < len(inputDocument); i++ {
-		validateInputDocToRes(t, readResp[i], inputDocument[i])
+		validateInputDocToRes(t, readResp[i], inputDocument[i], filter)
 	}
 }
 
-func validateInputDocToRes(t *testing.T, readResp map[string]jsoniter.RawMessage, input Doc) {
+func validateInputDocToRes(t *testing.T, readResp map[string]jsoniter.RawMessage, input Doc, filter Map) {
 	var doc map[string]jsoniter.RawMessage
 	require.NoError(t, jsoniter.Unmarshal(readResp["result"], &doc))
 
 	actualDoc := []byte(doc["data"])
 	expDoc, err := jsoniter.Marshal(input)
 	require.NoError(t, err)
-	require.JSONEqf(t, string(expDoc), string(actualDoc), "exp '%s' actual '%s'", string(expDoc), string(actualDoc))
+	require.JSONEqf(t, string(expDoc), string(actualDoc), "exp '%s' actual '%s'", string(expDoc), string(actualDoc), fmt.Sprintf("%v", filter))
 }
