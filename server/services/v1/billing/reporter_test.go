@@ -25,9 +25,16 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/tigrisdata/tigris/server/transaction"
+	"github.com/tigrisdata/tigris/store/kv"
+)
+
+var (
+	mockKvStore kv.TxStore
 )
 
 func TestUsageReporter_pushUsage(t *testing.T) {
+	mockTxMgr := transaction.NewManager(mockKvStore)
 	t.Run("pushes all valid events", func(t *testing.T) {
 		namespaces := map[string]metadata.NamespaceMetadata{
 			"ns1": {
@@ -124,7 +131,7 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 				return nil
 			}).Once()
 
-		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider)
+		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider, mockTxMgr)
 		err := reporter.pushUsage()
 		require.NoError(t, err)
 
@@ -148,7 +155,7 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 		}}
 
 		mockProvider := NewMockProvider(t)
-		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider)
+		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider, mockTxMgr)
 
 		err := reporter.pushUsage()
 		require.NoError(t, err)
@@ -194,7 +201,7 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 			}).
 			Once()
 
-		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider)
+		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider, mockTxMgr)
 		err := reporter.pushUsage()
 		require.NoError(t, err)
 
@@ -245,7 +252,7 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 			}).
 			Once()
 
-		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider)
+		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider, mockTxMgr)
 
 		err := reporter.pushUsage()
 		require.NoError(t, err)
@@ -292,7 +299,7 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 				return fmt.Errorf("failed to push usage events")
 			}).Once()
 
-		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider)
+		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider, mockTxMgr)
 
 		err := reporter.pushUsage()
 		require.ErrorContains(t, err, "failed to push usage events")
@@ -315,7 +322,7 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 				require.Empty(t, events)
 				return nil
 			}).Once()
-		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider)
+		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider, mockTxMgr)
 		err := reporter.pushUsage()
 		require.NoError(t, err)
 	})
@@ -352,7 +359,7 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 				return nil
 			}).Once()
 
-		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider)
+		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider, mockTxMgr)
 		err := reporter.pushUsage()
 		require.NoError(t, err)
 		updated := tenantMgr.GetNamespaceMetadata(context.TODO(), nsId)
@@ -391,7 +398,7 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 				return nil
 			}).Once()
 
-		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider)
+		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider, mockTxMgr)
 		err := reporter.pushUsage()
 		require.NoError(t, err)
 	})
