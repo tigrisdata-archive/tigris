@@ -19,10 +19,10 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/tigrisdata/tigris/util"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/protobuf/proto"
 )
@@ -259,10 +259,7 @@ func (x *ImportRequest) UnmarshalJSON(data []byte) error {
 				return err
 			}
 
-			x.Documents = make([][]byte, len(docs))
-			for i := 0; i < len(docs); i++ {
-				x.Documents[i] = docs[i]
-			}
+			x.Documents = RawMessageToByte(docs)
 			continue
 		default:
 			continue
@@ -314,10 +311,7 @@ func (x *InsertRequest) UnmarshalJSON(data []byte) error {
 				return err
 			}
 
-			x.Documents = make([][]byte, len(docs))
-			for i := 0; i < len(docs); i++ {
-				x.Documents[i] = docs[i]
-			}
+			x.Documents = RawMessageToByte(docs)
 			continue
 		default:
 			continue
@@ -358,10 +352,7 @@ func (x *ReplaceRequest) UnmarshalJSON(data []byte) error {
 				return err
 			}
 
-			x.Documents = make([][]byte, len(docs))
-			for i := 0; i < len(docs); i++ {
-				x.Documents[i] = docs[i]
-			}
+			x.Documents = RawMessageToByte(docs)
 			continue
 		case "options":
 			v = &x.Options
@@ -552,7 +543,7 @@ func (x *CreateOrUpdateCollectionsRequest) UnmarshalJSON(data []byte) error {
 				return err
 			}
 
-			x.Schemas = util.RawMessageToByte(schemas)
+			x.Schemas = RawMessageToByte(schemas)
 
 			continue
 		case "options":
@@ -1177,4 +1168,9 @@ func unmarshalRollup(data []byte) (*RollupFunction, error) {
 	}
 
 	return result, nil
+}
+
+func RawMessageToByte(arr []jsoniter.RawMessage) [][]byte {
+	ptr := unsafe.Pointer(&arr)
+	return *(*[][]byte)(ptr)
 }
