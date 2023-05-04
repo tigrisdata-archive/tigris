@@ -344,8 +344,8 @@ var DefaultConfig = Config{
 		Compression: false,
 	},
 	SecondaryIndex: SecondaryIndexConfig{
-		ReadEnabled:   false,
-		WriteEnabled:  false,
+		ReadEnabled:   true,
+		WriteEnabled:  true,
 		MutateEnabled: false,
 	},
 	Cache: CacheConfig{

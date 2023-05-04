@@ -29,9 +29,7 @@ import (
 	"github.com/tigrisdata/tigris/store/kv"
 )
 
-var (
-	mockKvStore kv.TxStore
-)
+var mockKvStore kv.TxStore
 
 func TestUsageReporter_pushUsage(t *testing.T) {
 	mockTxMgr := transaction.NewManager(mockKvStore)

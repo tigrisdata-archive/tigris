@@ -44,7 +44,8 @@ func NewUsageReporter(
 	tm metadata.NamespaceMetadataMgr,
 	tg metadata.TenantGetter,
 	billing Provider,
-	txMgr *transaction.Manager) (*UsageReporter, error) {
+	txMgr *transaction.Manager,
+) (*UsageReporter, error) {
 	if gs == nil || tm == nil || txMgr == nil {
 		return nil, errors.Internal("usage reporter cannot be initialized")
 	}
