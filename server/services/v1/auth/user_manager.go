@@ -32,6 +32,11 @@ import (
 	"github.com/tigrisdata/tigris/server/request"
 )
 
+const (
+	CreatedStatus = "created"
+	DeletedStatus = "deleted"
+)
+
 var InvalidInvitationCodeErr = errors.Unauthenticated("Failed to verify invitation code")
 
 type UsersManager interface {
@@ -68,7 +73,11 @@ func (um *DefaultUsersManager) CreateInvitations(ctx context.Context, req *api.C
 			return nil, err
 		}
 	}
-	return &api.CreateInvitationsResponse{}, nil
+	return &api.CreateInvitationsResponse{
+		Status:  CreatedStatus,
+		Message: "Invitation(s) created successfully",
+		Count:   int32(len(req.Invitations)),
+	}, nil
 }
 
 func createInvitation(ctx context.Context, email string, role string, invitationSentByName string, um *DefaultUsersManager) error {
@@ -164,7 +173,10 @@ func (h *DefaultUsersManager) DeleteInvitations(ctx context.Context, req *api.De
 	}
 
 	log.Debug().Str("email", req.GetEmail()).Str("status", req.GetStatus()).Msg("Deleted user invitation(s)")
-	return &api.DeleteInvitationsResponse{}, nil
+	return &api.DeleteInvitationsResponse{
+		Status:  DeletedStatus,
+		Message: "Invitation(s) deleted successfully",
+	}, nil
 }
 
 func (h *DefaultUsersManager) ListInvitations(ctx context.Context, req *api.ListInvitationsRequest) (*api.ListInvitationsResponse, error) {
