@@ -405,13 +405,33 @@ func TestUserInvitations(t *testing.T) {
 	token := readToken(t, RSATokenFilePath)
 	createTestNamespace(t, token)
 	createUserInvitation(t, "a@hello.com", "editor_a", "TestUserInvitations", token).
-		Status(http.StatusOK)
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("status").
+		String().
+		Equal(auth.CreatedStatus)
 	createUserInvitation(t, "b@hello.com", "editor_b", "TestUserInvitations", token).
-		Status(http.StatusOK)
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("status").
+		String().
+		Equal(auth.CreatedStatus)
 	createUserInvitation(t, "c@hello.com", "editor_c", "TestUserInvitations", token).
-		Status(http.StatusOK)
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("status").
+		String().
+		Equal(auth.CreatedStatus)
 	createUserInvitation(t, "a@hello.com", "editor_a", "TestUserInvitations", token).
-		Status(http.StatusOK)
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("status").
+		String().
+		Equal(auth.CreatedStatus)
 
 	listUserInvitations1 := listUserInvitations(t, token)
 	listUserInvitations1.Status(http.StatusOK)
@@ -430,7 +450,12 @@ func TestUserInvitations(t *testing.T) {
 
 	// delete invitation
 	deleteUserInvitations(t, "c@hello.com", "PENDING", token).
-		Status(http.StatusOK)
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("status").
+		String().
+		Equal(auth.DeletedStatus)
 
 	// list user invitations
 	listUserInvitations2 := listUserInvitations(t, token)
