@@ -299,6 +299,37 @@ func TestListAppKeys(t *testing.T) {
 	require.Equal(t, 2, int(appKeysOdd.Length().Raw()))
 }
 
+func TestListGlobalAppKeys(t *testing.T) {
+	e2 := expectLow(t, config.GetBaseURL2())
+	token := readToken(t, RSATokenFilePath)
+	createTestNamespace(t, token)
+
+	for i := 0; i < 5; i++ {
+		createGlobalAppKeyPayload := Map{
+			"name":        fmt.Sprintf("test_key_%d", i),
+			"description": "This key is used for integration test purpose.",
+		}
+
+		createdAppKey := e2.POST(globalAppKeysOperation("create")).
+			WithHeader(Authorization, Bearer+token).WithJSON(createGlobalAppKeyPayload).
+			Expect().
+			Status(http.StatusOK).
+			JSON().
+			Object().Value("created_app_key")
+		require.NotNil(t, createdAppKey)
+	}
+
+	globalKeys := e2.GET(globalAppKeysOperation("get")).
+		WithHeader(Authorization, Bearer+token).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().Value("app_keys").Array()
+
+	// 2 odd app keys should be retrieved
+	require.Equal(t, 5, int(globalKeys.Length().Raw()))
+}
+
 func TestEmptyListAppKeys(t *testing.T) {
 	e2 := expectLow(t, config.GetBaseURL2())
 	testProject := "TestEmptyListAppKeys"
@@ -365,6 +396,50 @@ func TestCreateAccessToken(t *testing.T) {
 	deleteProject2(t, "new-project-3", token)
 	// use access token with cache
 	createProject2(t, "new-project-3", accessToken).Status(http.StatusOK)
+}
+
+func TestCreateGlobalAccessToken(t *testing.T) {
+	e2 := expectLow(t, config.GetBaseURL2())
+	token := readToken(t, RSATokenFilePath)
+	createTestNamespace(t, token)
+
+	createGlobalAppKeyPayload := Map{
+		"name":        "test_key",
+		"description": "This key is used for integration test purpose.",
+	}
+
+	createdAppKey := e2.POST(globalAppKeysOperation("create")).
+		WithHeader(Authorization, Bearer+token).WithJSON(createGlobalAppKeyPayload).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().Value("created_app_key")
+	require.NotNil(t, createdAppKey)
+
+	id := createdAppKey.Object().Value("id").String()
+	secret := createdAppKey.Object().Value("secret").String()
+
+	getAccessTokenResponse := e2.POST(getAuthToken()).
+		WithFormField("client_id", id.Raw()).
+		WithFormField("client_secret", secret.Raw()).
+		WithFormField("grant_type", "client_credentials").
+		Expect()
+	getAccessTokenResponse.Status(http.StatusOK)
+
+	accessToken := getAccessTokenResponse.JSON().Object().Value("access_token").String().Raw()
+	require.True(t, accessToken != "")
+	require.NotNil(t, getAccessTokenResponse.JSON().Object().Value("expires_in"))
+
+	// use access token
+	createProject2(t, "new-project-1", accessToken).Status(http.StatusOK)
+
+	deleteProject2(t, "new-project-2", token)
+	// use access token bypassing auth caches
+	_ = e2.POST(getProjectURL("new-project-2", "create")).
+		WithHeader(Authorization, Bearer+accessToken).
+		WithHeader(api.HeaderBypassAuthCache, "true").
+		Expect().
+		Status(http.StatusOK)
 }
 
 func TestCreateAccessTokenUsingInvalidCreds(t *testing.T) {

@@ -53,6 +53,12 @@ type Provider interface {
 	DeleteAppKey(ctx context.Context, req *api.DeleteAppKeyRequest) (*api.DeleteAppKeyResponse, error)
 	ListAppKeys(ctx context.Context, req *api.ListAppKeysRequest) (*api.ListAppKeysResponse, error)
 	DeleteAppKeys(ctx context.Context, project string) error
+
+	CreateGlobalAppKey(ctx context.Context, req *api.CreateGlobalAppKeyRequest) (*api.CreateGlobalAppKeyResponse, error)
+	UpdateGlobalAppKey(ctx context.Context, req *api.UpdateGlobalAppKeyRequest) (*api.UpdateGlobalAppKeyResponse, error)
+	RotateGlobalAppKeySecret(ctx context.Context, req *api.RotateGlobalAppKeySecretRequest) (*api.RotateGlobalAppKeySecretResponse, error)
+	DeleteGlobalAppKey(ctx context.Context, req *api.DeleteGlobalAppKeyRequest) (*api.DeleteGlobalAppKeyResponse, error)
+	ListGlobalAppKeys(ctx context.Context, req *api.ListGlobalAppKeysRequest) (*api.ListGlobalAppKeysResponse, error)
 }
 
 func NewProvider(userstore *metadata.UserSubspace, txMgr *transaction.Manager) Provider {

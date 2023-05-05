@@ -282,6 +282,13 @@ func appKeysOperation(project string, operation string) string {
 	return fmt.Sprintf("/v1/projects/%s/apps/keys/%s", project, operation)
 }
 
+func globalAppKeysOperation(operation string) string {
+	if operation == "get" {
+		return "/v1/apps/keys"
+	}
+	return fmt.Sprintf("/v1/apps/keys/%s", operation)
+}
+
 func getAuthToken() string {
 	return "/v1/auth/token"
 }

@@ -50,3 +50,23 @@ func (noop) ListAppKeys(_ context.Context, _ *api.ListAppKeysRequest) (*api.List
 func (noop) DeleteAppKeys(_ context.Context, _ string) error {
 	return errors.Internal("authentication not enabled on this server")
 }
+
+func (noop) CreateGlobalAppKey(_ context.Context, _ *api.CreateGlobalAppKeyRequest) (*api.CreateGlobalAppKeyResponse, error) {
+	return nil, errors.Internal("authentication not enabled on this server")
+}
+
+func (noop) UpdateGlobalAppKey(_ context.Context, _ *api.UpdateGlobalAppKeyRequest) (*api.UpdateGlobalAppKeyResponse, error) {
+	return nil, errors.Internal("authentication not enabled on this server")
+}
+
+func (noop) RotateGlobalAppKeySecret(_ context.Context, _ *api.RotateGlobalAppKeySecretRequest) (*api.RotateGlobalAppKeySecretResponse, error) {
+	return nil, errors.Internal("authentication not enabled on this server")
+}
+
+func (noop) DeleteGlobalAppKey(_ context.Context, _ *api.DeleteGlobalAppKeyRequest) (*api.DeleteGlobalAppKeyResponse, error) {
+	return nil, errors.Internal("authentication not enabled on this server")
+}
+
+func (noop) ListGlobalAppKeys(_ context.Context, _ *api.ListGlobalAppKeysRequest) (*api.ListGlobalAppKeysResponse, error) {
+	return nil, errors.Internal("authentication not enabled on this server")
+}
