@@ -44,7 +44,7 @@ type DefaultUserMetadataProvider struct {
 }
 
 func (a *DefaultUserMetadataProvider) GetUserMetadata(ctx context.Context, req *api.GetUserMetadataRequest) (*api.GetUserMetadataResponse, error) {
-	namespaceId, currentSub, tx, err := metadataPrepareOperation(UserMetadataType, "read", ctx, a.txMgr, a.tenantMgr)
+	namespaceId, currentSub, tx, err := metadataPrepareOperation(ctx, UserMetadataType, "read", a.txMgr, a.tenantMgr)
 	if err != nil {
 		log.Err(err).Msg("Failed to get user metadata")
 		return nil, err
@@ -70,7 +70,7 @@ func (a *DefaultUserMetadataProvider) GetUserMetadata(ctx context.Context, req *
 }
 
 func (a *DefaultUserMetadataProvider) InsertUserMetadata(ctx context.Context, req *api.InsertUserMetadataRequest) (*api.InsertUserMetadataResponse, error) {
-	namespaceId, currentSub, tx, err := metadataPrepareOperation(UserMetadataType, "insert", ctx, a.txMgr, a.tenantMgr)
+	namespaceId, currentSub, tx, err := metadataPrepareOperation(ctx, UserMetadataType, "insert", a.txMgr, a.tenantMgr)
 	if err != nil {
 		log.Err(err).Msg("Failed to insert user metadata")
 		return nil, err
@@ -96,7 +96,7 @@ func (a *DefaultUserMetadataProvider) InsertUserMetadata(ctx context.Context, re
 	}, nil
 }
 
-func metadataPrepareOperation(metadataType string, operationName string, ctx context.Context, txMgr *transaction.Manager, tenantMgr *metadata.TenantManager) (uint32, string, transaction.Tx, error) {
+func metadataPrepareOperation(ctx context.Context, metadataType string, operationName string, txMgr *transaction.Manager, tenantMgr *metadata.TenantManager) (uint32, string, transaction.Tx, error) {
 	namespace, err := request.GetNamespace(ctx)
 	if err != nil {
 		log.Err(err).Msgf("Failed to %s %s metadata. reason: failed to read user namespace.", operationName, metadataType)
@@ -124,7 +124,7 @@ func metadataPrepareOperation(metadataType string, operationName string, ctx con
 }
 
 func (a *DefaultUserMetadataProvider) UpdateUserMetadata(ctx context.Context, req *api.UpdateUserMetadataRequest) (*api.UpdateUserMetadataResponse, error) {
-	namespaceId, currentSub, tx, err := metadataPrepareOperation(UserMetadataType, "update", ctx, a.txMgr, a.tenantMgr)
+	namespaceId, currentSub, tx, err := metadataPrepareOperation(ctx, UserMetadataType, "update", a.txMgr, a.tenantMgr)
 	if err != nil {
 		log.Err(err).Msg("Failed to update user metadata")
 		return nil, err

@@ -279,7 +279,7 @@ func NewExprField(alias string, expr expression.Expr) *ExprField {
 	}
 }
 
-func (e *ExprField) Include() bool {
+func (*ExprField) Include() bool {
 	return true
 }
 
@@ -291,7 +291,7 @@ func (e *ExprField) Alias() string {
 	return e.FieldAlias
 }
 
-func (e *ExprField) Apply(_ map[string]*JSONObject) ([]byte, error) {
+func (*ExprField) Apply(_ map[string]*JSONObject) ([]byte, error) {
 	return nil, nil
 }
 

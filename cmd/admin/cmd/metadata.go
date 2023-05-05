@@ -181,7 +181,7 @@ func dumpData() {
 		b, err := json.MarshalIndent(td, "", "\t")
 		util.Fatal(err, "marshal key value")
 
-		fmt.Fprintf(os.Stdout, "%v\n", string(b))
+		_, _ = fmt.Fprintf(os.Stdout, "%v\n", string(b))
 	}
 }
 

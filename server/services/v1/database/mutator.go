@@ -56,7 +56,7 @@ func (mutator *insertPayloadMutator) setDefaultsInIncomingPayload(doc map[string
 	return mutator.setDefaultsInternal(mutator.collection.TaggedDefaultsForInsert(), doc, mutator.setDefaults)
 }
 
-func (mutator *insertPayloadMutator) setDefaultsInExistingPayload(_ map[string]any) error {
+func (*insertPayloadMutator) setDefaultsInExistingPayload(_ map[string]any) error {
 	return nil
 }
 
@@ -93,7 +93,7 @@ func newUpdatePayloadMutator(collection *schema.DefaultCollection, updatedAt str
 	}
 }
 
-func (mutator *updatePayloadMutator) setDefaultsInIncomingPayload(_ map[string]any) error {
+func (*updatePayloadMutator) setDefaultsInIncomingPayload(_ map[string]any) error {
 	// no need to update anything in the incoming payload for update requests
 	return nil
 }

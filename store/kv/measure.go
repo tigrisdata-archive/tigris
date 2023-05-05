@@ -80,7 +80,7 @@ func (i *KeyValueIteratorWithMetrics) Err() error {
 	return i.Iterator.Err()
 }
 
-func (m *TxStoreWithMetrics) measure(ctx context.Context, name string, f func() error) {
+func (*TxStoreWithMetrics) measure(ctx context.Context, name string, f func() error) {
 	measureLow(ctx, name, f)
 }
 
@@ -121,16 +121,15 @@ func (m *TxStoreWithMetrics) BeginTx(ctx context.Context) (Tx, error) {
 	}, err
 }
 
-func (m *TxStoreWithMetrics) GetInternalDatabase() (k interface{}, err error) {
-	k, err = m.kv.GetInternalDatabase()
-	return
+func (m *TxStoreWithMetrics) GetInternalDatabase() (any, error) {
+	return m.kv.GetInternalDatabase()
 }
 
 type TxImplWithMetrics struct {
 	tx Tx
 }
 
-func (m *TxImplWithMetrics) measure(ctx context.Context, name string, f func() error) {
+func (*TxImplWithMetrics) measure(ctx context.Context, name string, f func() error) {
 	measureLow(ctx, name, f)
 }
 

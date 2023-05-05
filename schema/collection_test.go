@@ -231,7 +231,7 @@ func TestCollection_SchemaValidate(t *testing.T) {
 
 		dec := jsoniter.NewDecoder(bytes.NewReader(c.document))
 		dec.UseNumber()
-		var v interface{}
+		var v any
 		require.NoError(t, dec.Decode(&v))
 		if len(c.expError) > 0 {
 			require.Contains(t, coll.Validate(v).Error(), c.expError)
@@ -307,7 +307,7 @@ func TestCollection_AdditionalProperties(t *testing.T) {
 
 		dec := jsoniter.NewDecoder(bytes.NewReader(c.document))
 		dec.UseNumber()
-		var v interface{}
+		var v any
 		require.NoError(t, dec.Decode(&v))
 
 		var resMsg string
@@ -350,7 +350,7 @@ func TestCollection_Object(t *testing.T) {
 
 		dec := jsoniter.NewDecoder(bytes.NewReader(c.document))
 		dec.UseNumber()
-		var v interface{}
+		var v any
 		require.NoError(t, dec.Decode(&v))
 		require.NoError(t, coll.Validate(v))
 	}

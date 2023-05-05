@@ -72,7 +72,7 @@ type SessionManagerWithMetrics struct {
 	s *SessionManager
 }
 
-func (m *SessionManagerWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
+func (*SessionManagerWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
 	measurement := metrics.NewMeasurement(metrics.SessionManagerServiceName, name, metrics.SessionSpanType, metrics.GetSessionTags(name))
 	ctx = measurement.StartTracing(ctx, true)
 	if err := f(ctx); err != nil {
@@ -310,7 +310,9 @@ func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, runner Quer
 			continue
 		}
 
-		err = session.Commit(sessMgr.versionH, req.MetadataChange, err)
+		db, _ := session.GetTx().Context().GetStagedDatabase().(*metadata.Database)
+
+		err = session.Commit(sessMgr.versionH, (db == nil && req.MetadataChange) || (db != nil && db.MetadataChange), err)
 		log.Debug().Err(err).Msg("session.commit after")
 		if !IsErrConflictingTransaction(err) && !search.IsErrDuplicateFieldNames(err) {
 			return
@@ -421,7 +423,7 @@ func (s *QuerySession) Commit(versionMgr *metadata.VersionHandler, incVersion bo
 	return err
 }
 
-func (sessMgr *SessionManager) askMetadataCluster(ctx context.Context, namespaceId string) (*api.NamespaceInfo, error) {
+func (*SessionManager) askMetadataCluster(ctx context.Context, namespaceId string) (*api.NamespaceInfo, error) {
 	log.
 		Debug().
 		Str(Component, NamespaceLocalization).

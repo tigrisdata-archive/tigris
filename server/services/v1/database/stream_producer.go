@@ -43,25 +43,25 @@ func NewStreamer(_ context.Context, tenant *metadata2.Tenant, base *BaseQueryRun
 	}
 }
 
-func (c *StreamProducer) SetHeader(_ metadata.MD) error {
+func (*StreamProducer) SetHeader(_ metadata.MD) error {
 	return nil
 }
 
-func (c *StreamProducer) SendHeader(_ metadata.MD) error {
+func (*StreamProducer) SendHeader(_ metadata.MD) error {
 	return nil
 }
 
-func (c *StreamProducer) SetTrailer(_ metadata.MD) {}
+func (*StreamProducer) SetTrailer(_ metadata.MD) {}
 
-func (c *StreamProducer) Context() context.Context {
+func (*StreamProducer) Context() context.Context {
 	return context.TODO()
 }
 
-func (c *StreamProducer) SendMsg(_ interface{}) error {
+func (*StreamProducer) SendMsg(_ any) error {
 	return nil
 }
 
-func (c *StreamProducer) RecvMsg(_ interface{}) error {
+func (*StreamProducer) RecvMsg(_ any) error {
 	return nil
 }
 

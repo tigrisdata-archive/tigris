@@ -73,34 +73,34 @@ func NewStore(config *config.SearchConfig) (Store, error) {
 
 type NoopStore struct{}
 
-func (n *NoopStore) AllCollections(context.Context) (map[string]*tsApi.CollectionResponse, error) {
+func (*NoopStore) AllCollections(context.Context) (map[string]*tsApi.CollectionResponse, error) {
 	return nil, nil
 }
 
-func (n *NoopStore) DescribeCollection(context.Context, string) (*tsApi.CollectionResponse, error) {
+func (*NoopStore) DescribeCollection(context.Context, string) (*tsApi.CollectionResponse, error) {
 	return &tsApi.CollectionResponse{}, nil
 }
-func (n *NoopStore) CreateCollection(context.Context, *tsApi.CollectionSchema) error { return nil }
-func (n *NoopStore) UpdateCollection(context.Context, string, *tsApi.CollectionUpdateSchema) error {
+func (*NoopStore) CreateCollection(context.Context, *tsApi.CollectionSchema) error { return nil }
+func (*NoopStore) UpdateCollection(context.Context, string, *tsApi.CollectionUpdateSchema) error {
 	return nil
 }
-func (n *NoopStore) DropCollection(context.Context, string) error { return nil }
-func (n *NoopStore) IndexDocuments(context.Context, string, io.Reader, IndexDocumentsOptions) ([]IndexResp, error) {
+func (*NoopStore) DropCollection(context.Context, string) error { return nil }
+func (*NoopStore) IndexDocuments(context.Context, string, io.Reader, IndexDocumentsOptions) ([]IndexResp, error) {
 	return nil, nil
 }
-func (n *NoopStore) DeleteDocument(context.Context, string, string) error { return nil }
-func (n *NoopStore) DeleteDocuments(context.Context, string, *filter.WrappedFilter) (int, error) {
+func (*NoopStore) DeleteDocument(context.Context, string, string) error { return nil }
+func (*NoopStore) DeleteDocuments(context.Context, string, *filter.WrappedFilter) (int, error) {
 	return 0, nil
 }
 
-func (n *NoopStore) Search(context.Context, string, *qsearch.Query, int) ([]tsApi.SearchResult, error) {
+func (*NoopStore) Search(context.Context, string, *qsearch.Query, int) ([]tsApi.SearchResult, error) {
 	return nil, nil
 }
 
-func (n *NoopStore) GetDocuments(_ context.Context, _ string, _ []string) (*tsApi.SearchResult, error) {
+func (*NoopStore) GetDocuments(_ context.Context, _ string, _ []string) (*tsApi.SearchResult, error) {
 	return nil, nil
 }
 
-func (n *NoopStore) CreateDocument(_ context.Context, _ string, _ map[string]any) error {
+func (*NoopStore) CreateDocument(_ context.Context, _ string, _ map[string]any) error {
 	return nil
 }

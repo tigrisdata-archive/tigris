@@ -86,7 +86,7 @@ func (runner *ProjectQueryRunner) delete(ctx context.Context, tx transaction.Tx,
 	return Response{Status: DroppedStatus}, ctx, nil
 }
 
-func (runner *ProjectQueryRunner) list(ctx context.Context, _ transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
+func (*ProjectQueryRunner) list(ctx context.Context, _ transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
 	// listReq projects need not include any branches
 	projectList := tenant.ListProjects(ctx)
 	projects := make([]*api.ProjectInfo, len(projectList))
@@ -125,8 +125,7 @@ func (runner *ProjectQueryRunner) describe(ctx context.Context, tx transaction.T
 
 		metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.DbName(), db.BranchName(), c.GetName(), size.StoredBytes)
 
-		// remove indexing version from the schema before returning the response
-		sch := schema.RemoveIndexingVersion(c.Schema)
+		sch := c.Schema
 
 		// Generate schema in the requested language format
 		if runner.describeReq.SchemaFormat != "" {

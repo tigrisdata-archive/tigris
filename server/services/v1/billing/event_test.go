@@ -31,7 +31,7 @@ func TestStorageEvent(t *testing.T) {
 
 		jsonEvent, err := jsoniter.Marshal(billingEvent)
 		require.NoError(t, err)
-		var actual map[string]interface{}
+		var actual map[string]any
 		err = jsoniter.Unmarshal(jsonEvent, &actual)
 		require.NoError(t, err)
 
@@ -51,7 +51,7 @@ func TestStorageEvent(t *testing.T) {
 
 		jsonEvent, err := jsoniter.Marshal(billingEvent)
 		require.NoError(t, err)
-		var actual map[string]interface{}
+		var actual map[string]any
 		err = jsoniter.Unmarshal(jsonEvent, &actual)
 		require.NoError(t, err)
 
@@ -76,7 +76,7 @@ func TestStorageEvent(t *testing.T) {
 
 		jsonEvent, err := jsoniter.Marshal(billingEvent)
 		require.NoError(t, err)
-		var actual map[string]interface{}
+		var actual map[string]any
 		err = jsoniter.Unmarshal(jsonEvent, &actual)
 		require.NoError(t, err)
 
@@ -98,7 +98,7 @@ func TestStorageEvent(t *testing.T) {
 
 		jsonEvent, err := jsoniter.Marshal(billingEvent)
 		require.NoError(t, err)
-		var actual map[string]interface{}
+		var actual map[string]any
 		err = jsoniter.Unmarshal(jsonEvent, &actual)
 		require.NoError(t, err)
 		require.Equal(t, actual["customer_id"], billingEvent.CustomerId)
@@ -115,7 +115,7 @@ func TestUsageEvent(t *testing.T) {
 
 		jsonEvent, err := jsoniter.Marshal(billingEvent)
 		require.NoError(t, err)
-		var actual map[string]interface{}
+		var actual map[string]any
 		err = jsoniter.Unmarshal(jsonEvent, &actual)
 		require.NoError(t, err)
 
@@ -133,7 +133,7 @@ func TestUsageEvent(t *testing.T) {
 
 		jsonEvent, err := jsoniter.Marshal(billingEvent)
 		require.NoError(t, err)
-		var actual map[string]interface{}
+		var actual map[string]any
 		err = jsoniter.Unmarshal(jsonEvent, &actual)
 		require.NoError(t, err)
 
@@ -158,7 +158,7 @@ func TestUsageEvent(t *testing.T) {
 
 		jsonEvent, err := jsoniter.Marshal(billingEvent)
 		require.NoError(t, err)
-		var actual map[string]interface{}
+		var actual map[string]any
 		err = jsoniter.Unmarshal(jsonEvent, &actual)
 		require.NoError(t, err)
 
@@ -180,7 +180,7 @@ func TestUsageEvent(t *testing.T) {
 
 		jsonEvent, err := jsoniter.Marshal(billingEvent)
 		require.NoError(t, err)
-		var actual map[string]interface{}
+		var actual map[string]any
 		err = jsoniter.Unmarshal(jsonEvent, &actual)
 		require.NoError(t, err)
 

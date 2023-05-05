@@ -132,7 +132,7 @@ func TestRedis(t *testing.T) {
 		}
 
 		var totalKeys []string
-		var cursor uint64 = 0
+		var cursor uint64
 
 		keys, cursor := c.Scan(ctx, tableName, cursor, 10, "*")
 		totalKeys = append(totalKeys, keys...)

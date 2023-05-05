@@ -62,7 +62,7 @@ type Encoder interface {
 	//   - IndexParts: This has the index identifier and value(s) associated with a single or composite index. This is appended
 	//	   to the table name to form the Key. The first element of this list is the dictionary encoding of index type key
 	//	   information i.e. whether the index is pkey, etc. The remaining elements are values for this index.
-	EncodeKey(encodedTable []byte, idx *schema.Index, idxParts []interface{}) (keys.Key, error)
+	EncodeKey(encodedTable []byte, idx *schema.Index, idxParts []any) (keys.Key, error)
 
 	// DecodeTableName is used to decode the key stored in FDB and extract namespace name, database name and collection ids.
 	DecodeTableName(tableName []byte) (uint32, uint32, uint32, bool)
@@ -101,21 +101,21 @@ func (d *DictKeyEncoder) EncodeIndexName(idx *schema.Index) []byte {
 	return d.encodedIdxName(idx)
 }
 
-func (d *DictKeyEncoder) EncodeKey(encodedTable []byte, idx *schema.Index, idxParts []interface{}) (keys.Key, error) {
+func (d *DictKeyEncoder) EncodeKey(encodedTable []byte, idx *schema.Index, idxParts []any) (keys.Key, error) {
 	if idx == nil {
 		return nil, errors.InvalidArgument("index is missing")
 	}
 
 	encodedIdxName := d.encodedIdxName(idx)
 
-	var remainingKeyParts []interface{}
+	var remainingKeyParts []any
 	remainingKeyParts = append(remainingKeyParts, encodedIdxName)
 	remainingKeyParts = append(remainingKeyParts, idxParts...)
 
 	return keys.NewKey(encodedTable, remainingKeyParts...), nil
 }
 
-func (d *DictKeyEncoder) encodedTableName(ns Namespace, db *Database, coll *schema.DefaultCollection, prefix []byte) []byte {
+func (*DictKeyEncoder) encodedTableName(ns Namespace, db *Database, coll *schema.DefaultCollection, prefix []byte) []byte {
 	var appendTo []byte
 	appendTo = append(appendTo, prefix...)
 	appendTo = append(appendTo, UInt32ToByte(ns.Id())...)
@@ -128,7 +128,7 @@ func (d *DictKeyEncoder) encodedTableName(ns Namespace, db *Database, coll *sche
 	return appendTo
 }
 
-func (d *DictKeyEncoder) encodedIdxName(idx *schema.Index) []byte {
+func (*DictKeyEncoder) encodedIdxName(idx *schema.Index) []byte {
 	return UInt32ToByte(idx.Id)
 }
 
@@ -144,19 +144,19 @@ func (d *DictKeyEncoder) DecodeTableName(tableName []byte) (uint32, uint32, uint
 	return nsId, dbId, collId, true
 }
 
-func (d *DictKeyEncoder) validPrefix(tableName []byte) bool {
+func (*DictKeyEncoder) validPrefix(tableName []byte) bool {
 	return bytes.Equal(tableName[0:4], internal.UserTableKeyPrefix) || bytes.Equal(tableName[0:4], internal.PartitionKeyPrefix)
 }
 
-func (d *DictKeyEncoder) DecodeIndexName(indexName []byte) uint32 {
+func (*DictKeyEncoder) DecodeIndexName(indexName []byte) uint32 {
 	return ByteToUInt32(indexName)
 }
 
-func (d *DictKeyEncoder) EncodeCacheTableName(tenantId uint32, projId uint32, name string) (string, error) {
+func (*DictKeyEncoder) EncodeCacheTableName(tenantId uint32, projId uint32, name string) (string, error) {
 	return fmt.Sprintf("%s:%d:%d:%s", internal.CacheKeyPrefix, tenantId, projId, name), nil
 }
 
-func (d *DictKeyEncoder) DecodeInternalCacheKeyNameToExternal(internalKey string) string {
+func (*DictKeyEncoder) DecodeInternalCacheKeyNameToExternal(internalKey string) string {
 	i := 0
 	// first four parts are internal (cache prefix, tenant, project, cache name)
 	for m := 1; m <= 4; m++ {
@@ -164,13 +164,12 @@ func (d *DictKeyEncoder) DecodeInternalCacheKeyNameToExternal(internalKey string
 		if x < 0 {
 			break
 		}
-		i += x
-		i += 1
+		i += x + 1
 	}
 	return internalKey[i:]
 }
 
-func (d *DictKeyEncoder) DecodeCacheTableName(name string) (uint32, uint32, string, bool) {
+func (*DictKeyEncoder) DecodeCacheTableName(name string) (uint32, uint32, string, bool) {
 	if !strings.HasPrefix(name, internal.CacheKeyPrefix) {
 		return 0, 0, "", false
 	}
@@ -183,13 +182,13 @@ func (d *DictKeyEncoder) DecodeCacheTableName(name string) (uint32, uint32, stri
 
 // EncodeSearchTableName will encode search index created by the user and return an encoded string that will be use
 // as an index name in the underlying search store.
-func (d *DictKeyEncoder) EncodeSearchTableName(tenantId uint32, projId uint32, indexName string) string {
+func (*DictKeyEncoder) EncodeSearchTableName(tenantId uint32, projId uint32, indexName string) string {
 	return fmt.Sprintf("%d:%d:%s", tenantId, projId, indexName)
 }
 
 // DecodeSearchTableName will decode the information from encoded search index Name. This method returns tenant id,
 // project id, and index name.
-func (d *DictKeyEncoder) DecodeSearchTableName(name string) (uint32, uint32, string, bool) {
+func (*DictKeyEncoder) DecodeSearchTableName(name string) (uint32, uint32, string, bool) {
 	allParts := strings.Split(name, ":")
 	if len(allParts) != 3 {
 		return 0, 0, "", false
@@ -201,7 +200,7 @@ func (d *DictKeyEncoder) DecodeSearchTableName(name string) (uint32, uint32, str
 	return uint32(nsId), uint32(pid), allParts[2], true
 }
 
-func (d *DictKeyEncoder) EncodeFDBSearchTableName(searchTable string) []byte {
+func (*DictKeyEncoder) EncodeFDBSearchTableName(searchTable string) []byte {
 	var appendTo []byte
 	appendTo = append(appendTo, internal.SearchTableKeyPrefix...)
 	appendTo = append(appendTo, []byte(searchTable)...)

@@ -563,7 +563,7 @@ func (runner *BaseQueryRunner) buildReaderOptions(req *api.ReadRequest, collecti
 	return options, nil
 }
 
-func (runner *BaseQueryRunner) noFallbackToSearch(options readerOptions) bool {
+func (*BaseQueryRunner) noFallbackToSearch(options readerOptions) bool {
 	return !config.DefaultConfig.Search.IsReadEnabled() || !options.filter.IsSearchIndexed()
 }
 
@@ -680,18 +680,19 @@ func (runner *StreamingQueryRunner) Run(ctx context.Context, tx transaction.Tx, 
 			return Response{}, ctx, CreateApiError(err)
 		}
 		return Response{}, ctx, nil
-	} else {
-		if options.plan != nil && filter.IndexTypeSecondary(options.plan.IndexType) {
-			if _, err = runner.iterateOnSecondaryIndexStore(ctx, tx, coll, options); err != nil {
-				return Response{}, ctx, CreateApiError(err)
-			}
-			return Response{}, ctx, nil
-		}
-		if _, err = runner.iterateOnKvStore(ctx, tx, coll, options); err != nil {
+	}
+
+	if options.plan != nil && filter.IndexTypeSecondary(options.plan.IndexType) {
+		if _, err = runner.iterateOnSecondaryIndexStore(ctx, tx, coll, options); err != nil {
 			return Response{}, ctx, CreateApiError(err)
 		}
 		return Response{}, ctx, nil
 	}
+	if _, err = runner.iterateOnKvStore(ctx, tx, coll, options); err != nil {
+		return Response{}, ctx, CreateApiError(err)
+	}
+
+	return Response{}, ctx, nil
 }
 
 func (runner *StreamingQueryRunner) iterateOnKvStore(ctx context.Context, tx transaction.Tx, coll *schema.DefaultCollection, options readerOptions) ([]byte, error) {
@@ -774,7 +775,7 @@ func (runner *StreamingQueryRunner) iterate(ctx context.Context, coll *schema.De
 	limit += skip
 	for i := int64(0); (limit == 0 || i < limit) && iterator.Next(&row); i++ {
 		if skip > 0 {
-			skip -= 1
+			skip--
 			continue
 		}
 
@@ -854,17 +855,19 @@ func (runner *StreamingQueryRunner) injectMDInsideBody(raw []byte, createdAt *ti
 			return nil, err
 		}
 	}
+
 	if updatedAt != nil {
 		if err := runner.writeTimestamp(&buf, schema.ReservedFields[schema.UpdatedAt], updatedAt); err != nil {
 			return nil, err
 		}
 	}
-	buf.WriteByte(lastByte)
+
+	_ = buf.WriteByte(lastByte)
 
 	return buf.Bytes(), nil
 }
 
-func (runner *StreamingQueryRunner) writeTimestamp(buf *bytes.Buffer, key string, timestamp *timestamppb.Timestamp) error {
+func (*StreamingQueryRunner) writeTimestamp(buf *bytes.Buffer, key string, timestamp *timestamppb.Timestamp) error {
 	ts, err := jsoniter.Marshal(timestamp.AsTime())
 	if err != nil {
 		return err

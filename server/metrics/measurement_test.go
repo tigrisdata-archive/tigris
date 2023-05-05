@@ -26,7 +26,7 @@ import (
 
 type FakeError struct{}
 
-func (f *FakeError) Error() string {
+func (*FakeError) Error() string {
 	return "fake error for testing tags"
 }
 

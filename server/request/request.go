@@ -93,7 +93,7 @@ func NewRequestEndpointMetadata(ctx context.Context, serviceName string, methodI
 	return md
 }
 
-func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod string, methodType string, req interface{}) Metadata {
+func GetGrpcEndPointMetadataFromFullMethod(ctx context.Context, fullMethod string, methodType string, req any) Metadata {
 	project, branch, coll := GetProjectAndBranchAndColl(req)
 	var methodInfo grpc.MethodInfo
 	methodList := strings.Split(fullMethod, "/")
@@ -162,9 +162,8 @@ func (m *Metadata) GetMethodName() string {
 func (m *Metadata) GetServiceType() string {
 	if m.methodInfo.IsServerStream {
 		return "stream"
-	} else {
-		return "unary"
 	}
+	return "unary"
 }
 
 func (m *Metadata) GetServiceName() string {
@@ -190,7 +189,7 @@ func (m *Metadata) GetInitialTags() map[string]string {
 	}
 }
 
-func GetProjectAndBranchAndColl(req interface{}) (string, string, string) {
+func GetProjectAndBranchAndColl(req any) (string, string, string) {
 	project := ""
 	branch := defaults.UnknownValue
 	coll := ""
@@ -314,7 +313,7 @@ func IsHumanUser(ctx context.Context) bool {
 	return false
 }
 
-func (tokenNamespaceExtractor *AccessTokenNamespaceExtractor) Extract(ctx context.Context) (string, error) {
+func (*AccessTokenNamespaceExtractor) Extract(ctx context.Context) (string, error) {
 	// read token
 	token, _ := GetAccessToken(ctx)
 	if token == nil {

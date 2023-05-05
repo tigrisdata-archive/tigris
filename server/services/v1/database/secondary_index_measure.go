@@ -45,7 +45,7 @@ func NewSecondaryIndexerWithMetrics(coll *schema.DefaultCollection) SecondaryInd
 	}
 }
 
-func (m *secondaryIndexerWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
+func (*secondaryIndexerWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
 	// Low level measurement wrapper that is called by the measure functions on the appropriate receiver
 	measurement := metrics.NewMeasurement(metrics.SecondaryIndexServiceName, name, metrics.SecondaryIndexSpanType, metrics.GetSecondaryIndexTags(name))
 	ctx = measurement.StartTracing(ctx, true)
@@ -79,7 +79,7 @@ func (m *secondaryIndexerWithMetrics) ReadDocAndDelete(ctx context.Context, tx t
 	return
 }
 
-func (m *secondaryIndexerWithMetrics) Delete(ctx context.Context, tx transaction.Tx, td *internal.TableData, primaryKey []interface{}) (err error) {
+func (m *secondaryIndexerWithMetrics) Delete(ctx context.Context, tx transaction.Tx, td *internal.TableData, primaryKey []any) (err error) {
 	m.measure(ctx, "Delete", func(ctx context.Context) error {
 		err = m.q.Delete(ctx, tx, td, primaryKey)
 		return err
@@ -87,7 +87,7 @@ func (m *secondaryIndexerWithMetrics) Delete(ctx context.Context, tx transaction
 	return
 }
 
-func (m *secondaryIndexerWithMetrics) Index(ctx context.Context, tx transaction.Tx, td *internal.TableData, primaryKey []interface{}) (err error) {
+func (m *secondaryIndexerWithMetrics) Index(ctx context.Context, tx transaction.Tx, td *internal.TableData, primaryKey []any) (err error) {
 	m.measure(ctx, "Index", func(ctx context.Context) error {
 		err = m.q.Index(ctx, tx, td, primaryKey)
 		return err
@@ -95,7 +95,7 @@ func (m *secondaryIndexerWithMetrics) Index(ctx context.Context, tx transaction.
 	return
 }
 
-func (m *secondaryIndexerWithMetrics) Update(ctx context.Context, tx transaction.Tx, newTd *internal.TableData, oldTd *internal.TableData, primaryKey []interface{}) (err error) {
+func (m *secondaryIndexerWithMetrics) Update(ctx context.Context, tx transaction.Tx, newTd *internal.TableData, oldTd *internal.TableData, primaryKey []any) (err error) {
 	m.measure(ctx, "Update", func(ctx context.Context) error {
 		err = m.q.Update(ctx, tx, newTd, oldTd, primaryKey)
 		return err

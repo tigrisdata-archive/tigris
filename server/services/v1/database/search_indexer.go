@@ -50,11 +50,11 @@ func NewSearchIndexer(searchStore search.Store, tenantMgr *metadata.TenantManage
 	}
 }
 
-func (i *SearchIndexer) OnPostCommit(ctx context.Context, tenant *metadata.Tenant, eventListener kv.EventListener) error {
+func (i *SearchIndexer) OnPostCommit(ctx context.Context, _ *metadata.Tenant, eventListener kv.EventListener) error {
 	for _, event := range eventListener.GetEvents() {
 		var err error
 
-		_, db, collName, ok := i.tenantMgr.DecodeTableName(event.Table)
+		db, collName, ok := i.tenantMgr.DecodeTableName(event.Table)
 		if !ok {
 			continue
 		}
@@ -114,11 +114,11 @@ func (i *SearchIndexer) OnPostCommit(ctx context.Context, tenant *metadata.Tenan
 	return nil
 }
 
-func (i *SearchIndexer) OnPreCommit(context.Context, *metadata.Tenant, transaction.Tx, kv.EventListener) error {
+func (*SearchIndexer) OnPreCommit(context.Context, *metadata.Tenant, transaction.Tx, kv.EventListener) error {
 	return nil
 }
 
-func (i *SearchIndexer) OnRollback(context.Context, *metadata.Tenant, kv.EventListener) {}
+func (*SearchIndexer) OnRollback(context.Context, *metadata.Tenant, kv.EventListener) {}
 
 func CreateSearchKey(key kv.Key) (string, error) {
 	// the zeroth element is index key name i.e. pkey
@@ -203,7 +203,7 @@ func PackSearchFields(ctx context.Context, data *internal.TableData, collection 
 
 		if f.SearchType == "string[]" {
 			// if string array has null set then replace it with our null marker
-			if valueArr, ok := value.([]interface{}); ok {
+			if valueArr, ok := value.([]any); ok {
 				for i, item := range valueArr {
 					if item == nil {
 						valueArr[i] = schema.ReservedFields[schema.SearchArrNullItem]
@@ -250,7 +250,7 @@ func PackSearchFields(ctx context.Context, data *internal.TableData, collection 
 	return encoded, nil
 }
 
-func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCollection) (string, *internal.TableData, map[string]interface{}, error) {
+func UnpackSearchFields(doc map[string]any, collection *schema.DefaultCollection) (string, *internal.TableData, map[string]any, error) {
 	userCreatedAt := false
 	userUpdatedAt := false
 	for _, f := range collection.QueryableFields {
@@ -289,7 +289,7 @@ func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCo
 	for _, f := range collection.QueryableFields {
 		if f.SearchType == "string[]" {
 			// if string array has our internal null marker
-			if valueArr, ok := doc[f.FieldName].([]interface{}); ok {
+			if valueArr, ok := doc[f.FieldName].([]any); ok {
 				for i, item := range valueArr {
 					if item == schema.ReservedFields[schema.SearchArrNullItem] {
 						valueArr[i] = nil
@@ -302,7 +302,7 @@ func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCo
 				switch f.DataType {
 				case schema.ArrayType:
 					if _, ok := v.(string); ok {
-						var value interface{}
+						var value any
 						if err := jsoniter.UnmarshalFromString(v.(string), &value); err != nil {
 							return "", nil, nil, err
 						}
@@ -315,7 +315,7 @@ func UnpackSearchFields(doc map[string]interface{}, collection *schema.DefaultCo
 					delete(doc, shadowedKey)
 				default:
 					if _, ok := v.(string); ok {
-						var value interface{}
+						var value any
 						if err := jsoniter.UnmarshalFromString(v.(string), &value); err != nil {
 							return "", nil, nil, err
 						}

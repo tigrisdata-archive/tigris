@@ -61,7 +61,7 @@ func NewMetronomeProvider(conf config.Metronome) (*Metronome, error) {
 	return &Metronome{Config: conf, client: client, billedMetricsByName: bm, billedMetricsById: bu}, nil
 }
 
-func (m *Metronome) measure(ctx context.Context, scope tally.Scope, operation string, f func(ctx context.Context) (*http.Response, error)) {
+func (*Metronome) measure(ctx context.Context, scope tally.Scope, operation string, f func(ctx context.Context) (*http.Response, error)) {
 	me := metrics.NewMeasurement(
 		metrics.MetronomeServiceName,
 		operation,
@@ -208,7 +208,7 @@ func (m *Metronome) pushBillingEvents(ctx context.Context, events []biller.Event
 	pageSize := 100
 	pages := len(events) / pageSize
 	if len(events)%pageSize > 0 {
-		pages += 1
+		pages++
 	}
 
 	for p := 0; p < pages; p++ {
@@ -374,11 +374,12 @@ func (m *Metronome) GetUsage(ctx context.Context, id AccountId, r *UsageRequest)
 		}
 	} else {
 		for _, name := range *r.BillableMetric {
-			if id, ok := m.billedMetricsByName[name]; ok {
-				*l = append(*l, mBillableMetric{Id: id})
-			} else {
+			id, ok := m.billedMetricsByName[name]
+			if !ok {
 				return nil, errors.InvalidArgument("'%s' is not a valid billable metric", name)
 			}
+
+			*l = append(*l, mBillableMetric{Id: id})
 		}
 	}
 

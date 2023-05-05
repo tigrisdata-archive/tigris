@@ -275,17 +275,17 @@ func (it *FilterableSearchIterator) getTotalFound() int64 {
 	return it.pageReader.found
 }
 
-// SearchReader is responsible for iterating on the search results. It uses pageReader internally to read page
+// Reader is responsible for iterating on the search results. It uses pageReader internally to read page
 // and then iterate on documents inside hits.
-type SearchReader struct {
+type Reader struct {
 	ctx   context.Context
 	query *qsearch.Query
 	store search.Store
 	index *schema.SearchIndex
 }
 
-func NewSearchReader(ctx context.Context, store search.Store, index *schema.SearchIndex, query *qsearch.Query) *SearchReader {
-	return &SearchReader{
+func NewReader(ctx context.Context, store search.Store, index *schema.SearchIndex, query *qsearch.Query) *Reader {
+	return &Reader{
 		ctx:   ctx,
 		store: store,
 		query: query,
@@ -293,13 +293,13 @@ func NewSearchReader(ctx context.Context, store search.Store, index *schema.Sear
 	}
 }
 
-func (reader *SearchReader) SinglePageIterator(index *schema.SearchIndex, filter *filter.WrappedFilter, pageNo int32) *FilterableSearchIterator {
+func (reader *Reader) SinglePageIterator(index *schema.SearchIndex, filter *filter.WrappedFilter, pageNo int32) *FilterableSearchIterator {
 	pageReader := newPageReader(reader.ctx, reader.store, reader.index, reader.query, pageNo)
 
 	return NewFilterableSearchIterator(index, pageReader, filter, true)
 }
 
-func (reader *SearchReader) Iterator(index *schema.SearchIndex, filter *filter.WrappedFilter) *FilterableSearchIterator {
+func (reader *Reader) Iterator(index *schema.SearchIndex, filter *filter.WrappedFilter) *FilterableSearchIterator {
 	pageReader := newPageReader(reader.ctx, reader.store, reader.index, reader.query, defaultPageNo)
 
 	return NewFilterableSearchIterator(index, pageReader, filter, false)

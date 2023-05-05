@@ -30,8 +30,8 @@ type KeyComposer[F fieldable] interface {
 }
 
 type (
-	KeyEncodingFunc     func(indexParts ...interface{}) (keys.Key, error)
-	BuildIndexPartsFunc func(fieldName string, val value.Value) []interface{}
+	KeyEncodingFunc     func(indexParts ...any) (keys.Key, error)
+	BuildIndexPartsFunc func(fieldName string, val value.Value) []any
 )
 
 type IndexType uint8
@@ -99,8 +99,8 @@ func SortQueryPlans(queries []QueryPlan) []QueryPlan {
 	return queries
 }
 
-func (q QueryPlan) GetKeyInterfaceParts() [][]interface{} {
-	keys := make([][]interface{}, len(q.Keys))
+func (q QueryPlan) GetKeyInterfaceParts() [][]any {
+	keys := make([][]any, len(q.Keys))
 	for i, key := range q.Keys {
 		keys[i] = key.IndexParts()
 	}
@@ -218,8 +218,8 @@ func (k *KeyBuilder[F]) Build(filters []Filter, userDefinedKeys []F) ([]QueryPla
 	return allKeys, nil
 }
 
-func PKBuildIndexPartsFunc(name string, value value.Value) []interface{} {
-	return []interface{}{value.AsInterface()}
+func PKBuildIndexPartsFunc(_ string, value value.Value) []any {
+	return []any{value.AsInterface()}
 }
 
 // StrictEqKeyComposer works in to ways to generate internal keys if the condition is equality.
@@ -270,9 +270,8 @@ func (s *StrictEqKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys 
 			if s.matchAll {
 				// nothing found or a gap
 				return nil, errors.InvalidArgument("filters doesn't contains primary key fields")
-			} else {
-				continue
 			}
+			continue
 		}
 		if len(repeatedFields) > 1 && parent == AndOP && s.matchAll {
 			// with AND there is no use of EQ on the same field
@@ -299,7 +298,7 @@ func (s *StrictEqKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys 
 	for _, k := range compositeKeys {
 		switch parent {
 		case AndOP:
-			var keyParts []interface{}
+			var keyParts []any
 			for _, sel := range k {
 				newParts := s.buildIndexPartsFunc(sel.Field.Name(), sel.Matcher.GetValue())
 				keyParts = append(keyParts, newParts...)
@@ -356,7 +355,7 @@ func NewRangeKeyComposer[F fieldable](keyEncodingFunc KeyEncodingFunc, buildInde
 	}
 }
 
-func (s *RangeKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys []F, parent LogicalOP) ([]QueryPlan, error) {
+func (s *RangeKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys []F, _ LogicalOP) ([]QueryPlan, error) {
 	var err error
 	var queryPlans []QueryPlan
 	for _, k := range userDefinedKeys {
@@ -425,7 +424,7 @@ func (s *RangeKeyComposer[F]) isRange(selector *Selector) bool {
 	return false
 }
 
-func (s *RangeKeyComposer[F]) isGreater(selector *Selector) bool {
+func (*RangeKeyComposer[F]) isGreater(selector *Selector) bool {
 	switch selector.Matcher.Type() {
 	case GT, GTE:
 		return true
@@ -434,7 +433,7 @@ func (s *RangeKeyComposer[F]) isGreater(selector *Selector) bool {
 	}
 }
 
-func (s *RangeKeyComposer[F]) isLess(selector *Selector) bool {
+func (*RangeKeyComposer[F]) isLess(selector *Selector) bool {
 	switch selector.Matcher.Type() {
 	case LT, LTE:
 		return true

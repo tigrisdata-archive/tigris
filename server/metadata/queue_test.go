@@ -49,12 +49,12 @@ func TestEnqueueAndpeek(t *testing.T) {
 		queue, tx, cleanup := initQueueTest(t)
 		defer cleanup()
 
-		checkQueueEmpty(t, queue, ctx, tx)
+		checkQueueEmpty(t, queue, tx)
 
 		item := NewQueueItem(0, []byte("item1"))
 		assert.NoError(t, queue.Enqueue(ctx, tx, item, 100*time.Millisecond))
 
-		checkQueueEmpty(t, queue, ctx, tx)
+		checkQueueEmpty(t, queue, tx)
 		time.Sleep(500 * time.Millisecond)
 
 		items, err := queue.Peek(ctx, tx, 10)
@@ -103,7 +103,7 @@ func TestEnqueueAndpeek(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 
 		for i := 0; i < 5; i++ {
-			checkQueueLength(t, queue, ctx, tx, i)
+			checkQueueLength(t, queue, tx, i)
 		}
 	})
 }
@@ -126,7 +126,7 @@ func TestPriorityInPeek(t *testing.T) {
 
 		time.Sleep(100 * time.Millisecond)
 
-		items := checkQueueLength(t, queue, ctx, tx, 3)
+		items := checkQueueLength(t, queue, tx, 3)
 
 		assert.Equal(t, item1.Id, items[0].Id)
 		assert.Equal(t, item2.Id, items[1].Id)
@@ -142,7 +142,7 @@ func TestEnqueueObtainComplete(t *testing.T) {
 	queue, tx, cleanup := initQueueTest(t)
 	defer cleanup()
 
-	checkQueueEmpty(t, queue, ctx, tx)
+	checkQueueEmpty(t, queue, tx)
 
 	// Enqueue Item
 	assert.NoError(t, queue.Enqueue(ctx, tx, item, 10*time.Millisecond))
@@ -154,17 +154,17 @@ func TestEnqueueObtainComplete(t *testing.T) {
 
 	working, err := queue.ObtainLease(ctx, tx, &items[0], 100*time.Millisecond)
 	assert.NoError(t, err)
-	checkQueueEmpty(t, queue, ctx, tx)
+	checkQueueEmpty(t, queue, tx)
 
 	time.Sleep(101 * time.Millisecond)
-	checkQueueLength(t, queue, ctx, tx, 1)
+	checkQueueLength(t, queue, tx, 1)
 	working, err = queue.ObtainLease(ctx, tx, working, 30*time.Millisecond)
 	assert.NoError(t, err)
-	checkQueueEmpty(t, queue, ctx, tx)
+	checkQueueEmpty(t, queue, tx)
 
 	assert.NoError(t, queue.Complete(ctx, tx, working))
 	time.Sleep(200 * time.Millisecond)
-	checkQueueEmpty(t, queue, ctx, tx)
+	checkQueueEmpty(t, queue, tx)
 }
 
 func TestErrors(t *testing.T) {
@@ -202,7 +202,7 @@ func TestWorkProcessFlow(t *testing.T) {
 	}
 
 	time.Sleep(200 * time.Millisecond)
-	waiting := checkQueueLength(t, queue, ctx, tx, 5)
+	waiting := checkQueueLength(t, queue, tx, 5)
 
 	// Claim items Items
 	for z := 4; z >= 0; z-- {
@@ -212,7 +212,7 @@ func TestWorkProcessFlow(t *testing.T) {
 		assert.NoError(t, err)
 		activeItems = append(activeItems, *active)
 
-		checkQueueLength(t, queue, ctx, tx, z)
+		checkQueueLength(t, queue, tx, z)
 	}
 
 	// Work on items
@@ -223,16 +223,18 @@ func TestWorkProcessFlow(t *testing.T) {
 	}
 
 	// Check empty queue
-	checkQueueEmpty(t, queue, ctx, tx)
+	checkQueueEmpty(t, queue, tx)
 }
 
-func checkQueueLength(t *testing.T, queue *QueueSubspace, ctx context.Context, tx transaction.Tx, length int) []QueueItem {
+func checkQueueLength(t *testing.T, queue *QueueSubspace, tx transaction.Tx, length int) []QueueItem {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	items, err := queue.Peek(ctx, tx, length)
 	assert.NoError(t, err)
 	assert.Len(t, items, length)
 	return items
 }
 
-func checkQueueEmpty(t *testing.T, queue *QueueSubspace, ctx context.Context, tx transaction.Tx) {
-	checkQueueLength(t, queue, ctx, tx, 0)
+func checkQueueEmpty(t *testing.T, queue *QueueSubspace, tx transaction.Tx) {
+	checkQueueLength(t, queue, tx, 0)
 }

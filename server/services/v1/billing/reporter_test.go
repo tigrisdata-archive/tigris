@@ -407,11 +407,11 @@ type MockTenantManager struct {
 	refreshNamespaceCalls int
 }
 
-func (mock *MockTenantManager) GetTenant(_ context.Context, id string) (*metadata.Tenant, error) {
+func (*MockTenantManager) GetTenant(_ context.Context, id string) (*metadata.Tenant, error) {
 	return nil, fmt.Errorf("invalid tenant id %s", id)
 }
 
-func (mock *MockTenantManager) AllTenants(_ context.Context) []*metadata.Tenant {
+func (*MockTenantManager) AllTenants(_ context.Context) []*metadata.Tenant {
 	return []*metadata.Tenant{}
 }
 
@@ -428,7 +428,7 @@ func (mock *MockTenantManager) UpdateNamespaceMetadata(_ context.Context, meta m
 }
 
 func (mock *MockTenantManager) RefreshNamespaceAccounts(_ context.Context) error {
-	mock.refreshNamespaceCalls += 1
+	mock.refreshNamespaceCalls++
 	return nil
 }
 

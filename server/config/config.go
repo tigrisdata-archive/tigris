@@ -79,7 +79,7 @@ func LoadEnvironment() {
 	}
 }
 
-func LoadConfig(config interface{}) {
+func LoadConfig(config any) {
 	LoadEnvironment()
 
 	pflag.StringVarP(&configFile, "config", "c", "", "server configuration file")
@@ -172,7 +172,7 @@ func GetTestFDBConfig(path string) (*FoundationDBConfig, error) {
 		_, err = cmd.Output()
 	}
 	if err != nil {
-		fmt.Printf("\nRun `make local_run` in the terminal to start FDB instance for tests\n") //nolint:forbidigo
+		fmt.Printf("\nRun `make local_run` in the terminal to start FDB instance for tests\n")
 		return nil, err
 	}
 

@@ -165,10 +165,10 @@ func getGrpcTagsFromContext(ctx context.Context) map[string]string {
 		return map[string]string{
 			"grpc_method": strings.Split(fullMethodName, "/")[2],
 		}
-	} else {
-		return map[string]string{
-			"grpc_method": defaults.UnknownValue,
-		}
+	}
+
+	return map[string]string{
+		"grpc_method": defaults.UnknownValue,
 	}
 }
 

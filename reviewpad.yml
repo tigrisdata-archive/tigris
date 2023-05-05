@@ -48,6 +48,6 @@ workflows:
   - name: automerge-release-pr
     always-run: true
     if:
-      - rule: '$base() == "beta" && $approvalsCount() >= 1 && $haveAllChecksRunCompleted([], "success")'
+      - rule: '$base() == "beta" && $approvalsCount() >= 1 && $haveAllChecksRunCompleted([], "success", ["skipped"])'
     then:
       - '$merge("merge")'

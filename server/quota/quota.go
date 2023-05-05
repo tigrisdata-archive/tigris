@@ -109,7 +109,7 @@ func Init(tm *metadata.TenantManager, cfg *config.Config) error {
 	return nil
 }
 
-func (m *Manager) cleanup() {
+func (*Manager) cleanup() {
 	for _, q := range mgr.quota {
 		q.Cleanup()
 	}

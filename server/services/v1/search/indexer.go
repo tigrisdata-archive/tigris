@@ -123,7 +123,7 @@ func (transformer *transformer) transformEnd(doc map[string]any) (map[string]any
 
 		if f.SearchType == "string[]" {
 			// if string array has null set then replace it with our null marker
-			if valueArr, ok := value.([]interface{}); ok {
+			if valueArr, ok := value.([]any); ok {
 				for i, item := range valueArr {
 					if item == nil {
 						valueArr[i] = schema.ReservedFields[schema.SearchArrNullItem]
@@ -181,7 +181,7 @@ func (transformer *transformer) inverseStart(doc map[string]any) (map[string]any
 	for _, f := range transformer.index.QueryableFields {
 		if f.SearchType == "string[]" {
 			// if string array has our internal null marker
-			if valueArr, ok := doc[f.FieldName].([]interface{}); ok {
+			if valueArr, ok := doc[f.FieldName].([]any); ok {
 				for i, item := range valueArr {
 					if item == schema.ReservedFields[schema.SearchArrNullItem] {
 						valueArr[i] = nil
@@ -194,7 +194,7 @@ func (transformer *transformer) inverseStart(doc map[string]any) (map[string]any
 				switch f.DataType {
 				case schema.ArrayType:
 					if _, ok := v.(string); ok {
-						var value interface{}
+						var value any
 						if err := jsoniter.UnmarshalFromString(v.(string), &value); err != nil {
 							return nil, nil, nil, err
 						}
@@ -207,7 +207,7 @@ func (transformer *transformer) inverseStart(doc map[string]any) (map[string]any
 					delete(doc, shadowedKey)
 				default:
 					if _, ok := v.(string); ok {
-						var value interface{}
+						var value any
 						if err := jsoniter.UnmarshalFromString(v.(string), &value); err != nil {
 							return nil, nil, nil, err
 						}

@@ -62,7 +62,7 @@ func (h *Hits) HasMoreHits() bool {
 }
 
 type Hit struct {
-	Document map[string]interface{}
+	Document map[string]any
 	Match    *api.Match
 }
 
@@ -70,11 +70,11 @@ type Hit struct {
 // True - field values is nil
 // False - field has non-nil value.
 func (sh *Hit) isFieldMissingOrNil(f string) bool {
-	if v, ok := sh.Document[f]; !ok {
-		return true
-	} else {
+	if v, ok := sh.Document[f]; ok {
 		return v == nil
 	}
+
+	return true
 }
 
 func NewSearchHit(tsHit *tsApi.SearchResultHit) *Hit {
@@ -117,7 +117,7 @@ func fromHighlights(highlights []tsApi.SearchHighlight, fields *[]*api.MatchFiel
 	}
 }
 
-func fromHighlight(highlight map[string]interface{}, fields *[]*api.MatchField) {
+func fromHighlight(highlight map[string]any, fields *[]*api.MatchField) {
 	// check first in highlight
 	for name, value := range highlight {
 		if mp, ok := value.(map[string]any); ok {

@@ -32,7 +32,7 @@ var (
 )
 
 type (
-	Map map[string]interface{}
+	Map map[string]any
 	Doc Map
 )
 
@@ -129,7 +129,7 @@ var testCreateSchemaComposite = Map{
 				},
 			},
 		},
-		"primary_key": []interface{}{"pkey_int", "string_value"},
+		"primary_key": []any{"pkey_int", "string_value"},
 	},
 }
 
@@ -226,7 +226,7 @@ var testCreateSchema = Map{
 				},
 			},
 		},
-		"primary_key": []interface{}{"pkey_int"},
+		"primary_key": []any{"pkey_int"},
 	},
 }
 
@@ -298,27 +298,27 @@ func getCollectionURL(databaseName, collectionName string, methodName string) st
 	return fmt.Sprintf("/v1/projects/%s/database/collections/%s/%s", databaseName, collectionName, methodName)
 }
 
-func createCollection(t *testing.T, database string, collection string, schema map[string]interface{}) *httpexpect.Response {
+func createCollection(t *testing.T, database string, collection string, schema map[string]any) *httpexpect.Response {
 	e := expect(t)
 	return e.POST(getCollectionURL(database, collection, "createOrUpdate")).
 		WithJSON(schema).
 		Expect()
 }
 
-func createCollections(t *testing.T, database string, body map[string]interface{}) *httpexpect.Response {
+func createCollections(t *testing.T, database string, body map[string]any) *httpexpect.Response {
 	e := expect(t)
 	url := fmt.Sprintf("/v1/projects/%s/database/collections/createOrUpdate", database)
 	return e.POST(url).WithJSON(body).Expect()
 }
 
-func createTestCollection(t *testing.T, database string, collection string, schema map[string]interface{}) {
+func createTestCollection(t *testing.T, database string, collection string, schema map[string]any) {
 	deleteProject(t, database)
 	createProject(t, database)
 	dropCollection(t, database, collection)
 	createCollection(t, database, collection, schema).Status(http.StatusOK)
 }
 
-func describeCollection(t *testing.T, database string, collection string, body map[string]interface{}) *httpexpect.Response {
+func describeCollection(t *testing.T, database string, collection string, body map[string]any) *httpexpect.Response {
 	e := expect(t)
 	return e.POST(getCollectionURL(database, collection, "describe")).
 		WithJSON(body).

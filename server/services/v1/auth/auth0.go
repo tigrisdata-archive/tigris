@@ -43,7 +43,7 @@ type auth0 struct {
 	txMgr      *transaction.Manager
 }
 
-func (a *auth0) managementToTigrisErrorCode(err error) api.Code {
+func (*auth0) managementToTigrisErrorCode(err error) api.Code {
 	managementError, ok := err.(management.Error)
 	if !ok {
 		return api.Code_INTERNAL
@@ -95,7 +95,7 @@ func (a *auth0) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest) 
 	grant := &management.ClientGrant{
 		ClientID: c.ClientID,
 		Audience: &a.AuthConfig.PrimaryAudience,
-		Scope:    []interface{}{},
+		Scope:    []any{},
 	}
 
 	err = a.Management.ClientGrant.Create(grant)
@@ -389,12 +389,11 @@ func getAccessTokenUsingClientCredentialsAuth0(ctx context.Context, req *api.Get
 				AccessToken: tokenMetadataEntry.AccessToken,
 				ExpiresIn:   int32(tokenMetadataEntry.ExpireAt - time.Now().Unix()),
 			}, nil
-		} else {
-			// expired entry, delete it
-			err := deleteApplicationMetadata(ctx, defaultNamespaceId, req.GetClientId(), metadataKey, a.userStore, a.txMgr)
-			if err != nil {
-				return nil, err
-			}
+		}
+		// expired entry, delete it
+		err = deleteApplicationMetadata(ctx, defaultNamespaceId, req.GetClientId(), metadataKey, a.userStore, a.txMgr)
+		if err != nil {
+			return nil, err
 		}
 	}
 

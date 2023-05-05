@@ -62,11 +62,11 @@ func (s *LikeFilter) Matches(doc []byte, metadata []byte) bool {
 	return s.Matcher.Matches(docValue)
 }
 
-func (s *LikeFilter) ToSearchFilter() string {
+func (*LikeFilter) ToSearchFilter() string {
 	return ""
 }
 
-func (s *LikeFilter) IsSearchIndexed() bool {
+func (*LikeFilter) IsSearchIndexed() bool {
 	return false
 }
 

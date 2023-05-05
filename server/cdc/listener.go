@@ -57,4 +57,4 @@ func (p *Publisher) OnCommit(ctx context.Context, tx transaction.Tx, listener kv
 	return tx.SetVersionstampedKey(ctx, key, enc)
 }
 
-func (p *Publisher) OnRollback(_ context.Context, _ kv.EventListener) {}
+func (*Publisher) OnRollback(_ context.Context, _ kv.EventListener) {}

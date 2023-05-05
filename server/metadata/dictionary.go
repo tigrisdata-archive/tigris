@@ -493,8 +493,8 @@ func (k *Dictionary) GetPrimaryIndex(ctx context.Context, tx transaction.Tx, ind
 
 // decode is currently only use for debugging purpose, once we have a layer on top of this encoding then
 // we leverage this method.
-func (k *Dictionary) decode(_ context.Context, fdbKey kv.Key) (map[string]interface{}, error) {
-	decoded := make(map[string]interface{})
+func (*Dictionary) decode(_ context.Context, fdbKey kv.Key) (map[string]any, error) {
+	decoded := make(map[string]any)
 	if len(fdbKey) > 0 {
 		decoded["version"] = fdbKey[0]
 	}

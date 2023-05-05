@@ -51,7 +51,7 @@ func initDatadogMetrics(cfg *config.Config) *Datadog {
 
 type NoopMetrics struct{}
 
-func (d *NoopMetrics) CurRates(_ context.Context, _ string) (int64, int64, error) {
+func (*NoopMetrics) CurRates(_ context.Context, _ string) (int64, int64, error) {
 	return 0, 0, nil
 }
 

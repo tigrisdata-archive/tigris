@@ -46,9 +46,8 @@ var (
 func getVersion() string {
 	if util.Version != "" {
 		return util.Version
-	} else {
-		return "dev"
 	}
+	return "dev"
 }
 
 func GetGlobalTags() map[string]string {

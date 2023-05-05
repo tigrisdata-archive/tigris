@@ -240,7 +240,7 @@ func (g *gotrue) RotateAppKey(ctx context.Context, req *api.RotateAppKeyRequest)
 	newSecret := generateClientSecret(g)
 
 	newAppMetadata := &UserAppData{UpdatedBy: currentSub, UpdatedAt: time.Now().UnixMilli()}
-	payload := make(map[string]interface{})
+	payload := make(map[string]any)
 	payload["password"] = newSecret
 	payload["app_metadata"] = newAppMetadata
 	payloadBytes, err := jsoniter.Marshal(payload)
@@ -558,7 +558,7 @@ func getAccessTokenUsingClientCredentialsGotrue(ctx context.Context, clientId st
 	}
 
 	// parse JSON response
-	var getTokenJsonMap map[string]interface{}
+	var getTokenJsonMap map[string]any
 	err = json.Unmarshal(getTokenResBody, &getTokenJsonMap)
 	if err != nil {
 		log.Err(err).Msg("Failed to deserialize response into JSON")

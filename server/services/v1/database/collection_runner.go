@@ -211,8 +211,7 @@ func (runner *CollectionQueryRunner) describe(ctx context.Context, tx transactio
 	}
 
 	metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.DbName(), db.BranchName(), coll.GetName(), size.StoredBytes)
-	// remove indexing version from the schema before returning the response
-	sch := schema.RemoveIndexingVersion(coll.Schema)
+	sch := coll.Schema
 
 	// Generate schema in the requested language format
 	if runner.describeReq.SchemaFormat != "" {

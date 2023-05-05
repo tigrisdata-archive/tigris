@@ -16,10 +16,10 @@ package cache
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	xredis "github.com/go-redis/redis/v8"
-	"github.com/pkg/errors"
 	"github.com/tigrisdata/tigris/internal"
 )
 
@@ -52,7 +52,7 @@ type StreamMessages struct {
 	xredis.XStream
 }
 
-func (sm *StreamMessages) Decode(message xredis.XMessage) (*internal.StreamData, error) {
+func (*StreamMessages) Decode(message xredis.XMessage) (*internal.StreamData, error) {
 	return decodeFromStreamValue(message)
 }
 
@@ -188,13 +188,13 @@ func (s *stream) Delete(ctx context.Context) error {
 	return err
 }
 
-func encodeToStreamValue(event *internal.StreamData) (map[string]interface{}, error) {
+func encodeToStreamValue(event *internal.StreamData) (map[string]any, error) {
 	enc, err := internal.EncodeStreamData(event)
 	if err != nil {
 		return nil, err
 	}
 
-	return map[string]interface{}{
+	return map[string]any{
 		payloadKey: enc,
 	}, nil
 }
@@ -202,7 +202,7 @@ func encodeToStreamValue(event *internal.StreamData) (map[string]interface{}, er
 func decodeFromStreamValue(message xredis.XMessage) (*internal.StreamData, error) {
 	enc, ok := message.Values[payloadKey]
 	if !ok {
-		return nil, errors.New("encoding issue")
+		return nil, fmt.Errorf("encoding issue")
 	}
 
 	streamData, err := internal.DecodeStreamData([]byte(enc.(string)))

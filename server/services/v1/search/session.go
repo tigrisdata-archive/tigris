@@ -74,7 +74,7 @@ func (sessions *SessionManager) Execute(ctx context.Context, runner Runner) (Res
 	return resp, createApiError(err)
 }
 
-func (sessions *SessionManager) execute(ctx context.Context, tenant *metadata.Tenant, runner Runner) (Response, error) {
+func (*SessionManager) execute(ctx context.Context, tenant *metadata.Tenant, runner Runner) (Response, error) {
 	return runner.Run(ctx, tenant)
 }
 

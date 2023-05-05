@@ -121,7 +121,7 @@ func (c *CollectionSubspace) Update(ctx context.Context, tx transaction.Tx, nsID
 	return metadata, nil
 }
 
-func (c *CollectionSubspace) createBuildIndexTask(ctx context.Context, tx transaction.Tx, nsID uint32, dbID uint32, name string, id uint32, index *schema.Index) error {
+func (*CollectionSubspace) createBuildIndexTask(_ context.Context, _ transaction.Tx, _ uint32, _ uint32, _ string, _ uint32, _ *schema.Index) error {
 	return nil
 }
 
@@ -136,7 +136,7 @@ func (c *CollectionSubspace) insert(ctx context.Context, tx transaction.Tx, nsID
 	)
 }
 
-func (c *CollectionSubspace) decodeMetadata(_ string, payload *internal.TableData) (*CollectionMetadata, error) {
+func (*CollectionSubspace) decodeMetadata(_ string, payload *internal.TableData) (*CollectionMetadata, error) {
 	if payload == nil {
 		return nil, errors.ErrNotFound
 	}

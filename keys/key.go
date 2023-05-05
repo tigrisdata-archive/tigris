@@ -37,7 +37,7 @@ type Key interface {
 	// associated with a single or composite index. The identifier is used to differentiate whether encoding is for primary
 	// key index or some other user defined index. Essentially to encode key for a given row. Some other internal packages
 	// may use this as simply to form a key without any significance of index identifier.
-	IndexParts() []interface{}
+	IndexParts() []any
 	// SerializeToBytes follows the ordering of how the Key is persisted in database so to compare a Key call this method
 	// get bytes and compare it with raw bytes stored in database.
 	SerializeToBytes() []byte
@@ -48,11 +48,11 @@ type Key interface {
 
 type tableKey struct {
 	table      []byte
-	indexParts []interface{}
+	indexParts []any
 }
 
 // NewKey returns the Key.
-func NewKey(table []byte, indexParts ...interface{}) Key {
+func NewKey(table []byte, indexParts ...any) Key {
 	return &tableKey{
 		table:      table,
 		indexParts: indexParts,
@@ -63,7 +63,7 @@ func (p *tableKey) Table() []byte {
 	return p.table
 }
 
-func (p *tableKey) IndexParts() []interface{} {
+func (p *tableKey) IndexParts() []any {
 	return p.indexParts
 }
 
@@ -95,5 +95,5 @@ func FromBinary(table []byte, fdbKey []byte) (Key, error) {
 		return nil, err
 	}
 
-	return NewKey(table, *(*[]interface{})(unsafe.Pointer(&tp))...), nil
+	return NewKey(table, *(*[]any)(unsafe.Pointer(&tp))...), nil
 }

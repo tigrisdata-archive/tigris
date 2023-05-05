@@ -16,13 +16,13 @@ package workload
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris-client-go/driver"
 )
@@ -34,7 +34,7 @@ type DDLWorkload struct {
 	Schemas     [][]byte
 }
 
-func (w *DDLWorkload) Type() string {
+func (*DDLWorkload) Type() string {
 	return "ddl_workload"
 }
 
@@ -53,7 +53,7 @@ func (w *DDLWorkload) Setup(client driver.Driver) error {
 	return nil
 }
 
-func (w *DDLWorkload) Start(client driver.Driver) (int64, error) { return 0, nil }
+func (*DDLWorkload) Start(_ driver.Driver) (int64, error) { return 0, nil }
 
 func (w *DDLWorkload) Check(client driver.Driver) (bool, error) {
 	var wg sync.WaitGroup
@@ -107,14 +107,14 @@ func (w *DDLWorkload) validate(iteration int16, client driver.Driver, isCommit b
 	var err error
 	tx, err := client.UseDatabase(w.Database).BeginTx(context.TODO())
 	if err != nil {
-		return false, errors.Wrapf(err, "begin tx failed for db '%s'", w.Database)
+		return false, fmt.Errorf("%w begin tx failed for db '%s'", err, w.Database)
 	}
 
 	_ = tx.DropCollection(context.TODO(), w.Collections[0])
 
 	collections, err := tx.ListCollections(context.TODO())
 	if err != nil {
-		return false, errors.Wrapf(err, "list collection failed for db '%s'", w.Database)
+		return false, fmt.Errorf("%w list collection failed for db '%s'", err, w.Database)
 	}
 
 	isExists := w.isCollectionExists(collections, w.Collections[0])
@@ -134,7 +134,7 @@ func (w *DDLWorkload) validate(iteration int16, client driver.Driver, isCommit b
 			continue
 		}
 
-		return false, errors.Wrapf(err, "create collection failed '%s'", w.Collections[0])
+		return false, fmt.Errorf("%w create collection failed '%s'", err, w.Collections[0])
 	}
 	if err != nil {
 		// ignore this thread check, concurrency is causing conflicts
@@ -144,7 +144,7 @@ func (w *DDLWorkload) validate(iteration int16, client driver.Driver, isCommit b
 
 	collections, err = tx.ListCollections(context.TODO())
 	if err != nil {
-		return false, errors.Wrapf(err, "list collection failed '%s'", w.Database)
+		return false, fmt.Errorf("%w list collection failed '%s'", err, w.Database)
 	}
 
 	log.Debug().Msgf("iteration %d collections %v", iteration, collections)
@@ -186,7 +186,7 @@ func (w *DDLWorkload) validate(iteration int16, client driver.Driver, isCommit b
 	return true, nil
 }
 
-func (w *DDLWorkload) isCollectionExists(collections []string, queryingAbout string) bool {
+func (*DDLWorkload) isCollectionExists(collections []string, queryingAbout string) bool {
 	for _, c := range collections {
 		if c == queryingAbout {
 			return true

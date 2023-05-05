@@ -31,7 +31,7 @@ type quotaStream struct {
 }
 
 func quotaUnaryServerInterceptor() grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		ns, _ := request.GetNamespace(ctx)
 
 		if m := info.FullMethod; m != api.HealthMethodName && !request.IsAdminApi(m) {
@@ -45,7 +45,7 @@ func quotaUnaryServerInterceptor() grpc.UnaryServerInterceptor {
 }
 
 func quotaStreamServerInterceptor() grpc.StreamServerInterceptor {
-	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	return func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		if m := info.FullMethod; m != api.HealthMethodName && !request.IsAdminApi(m) {
 			ns, _ := request.GetNamespace(stream.Context())
 			wrapped := &quotaStream{
@@ -59,7 +59,7 @@ func quotaStreamServerInterceptor() grpc.StreamServerInterceptor {
 	}
 }
 
-func (w *quotaStream) RecvMsg(req interface{}) error {
+func (w *quotaStream) RecvMsg(req any) error {
 	if err := quota.Allow(w.Context(), w.namespace, proto.Size(req.(proto.Message)), request.IsWrite(w.Context())); err != nil {
 		return err
 	}
@@ -67,7 +67,7 @@ func (w *quotaStream) RecvMsg(req interface{}) error {
 	return w.ServerStream.RecvMsg(req)
 }
 
-func (w *quotaStream) SendMsg(req interface{}) error {
+func (w *quotaStream) SendMsg(req any) error {
 	if err := quota.Wait(w.Context(), w.namespace, proto.Size(req.(proto.Message)), request.IsWrite(w.Context())); err != nil {
 		return err
 	}

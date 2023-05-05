@@ -28,7 +28,7 @@ func (x *SetRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	for key, value := range mp {
-		var v interface{}
+		var v any
 
 		switch strings.ToLower(key) {
 		case "project":
@@ -69,7 +69,7 @@ func (x *GetSetRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	for key, value := range mp {
-		var v interface{}
+		var v any
 
 		switch strings.ToLower(key) {
 		case "project":
@@ -104,7 +104,7 @@ func (x *DelRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	for key, value := range mp {
-		var v interface{}
+		var v any
 		switch strings.ToLower(key) {
 		case "project":
 			v = &x.Project
@@ -131,7 +131,7 @@ func (x *KeysRequest) UnmarshalJSON(data []byte) error {
 	}
 
 	for key, value := range mp {
-		var v interface{}
+		var v any
 		switch strings.ToLower(key) {
 		case "project":
 			v = &x.Project

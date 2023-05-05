@@ -566,8 +566,8 @@ func TestTypeConversionRules(t *testing.T) {
 	t.Run("from_bool", func(t *testing.T) {
 		cases := []struct {
 			to   FieldType
-			from interface{}
-			exp  interface{}
+			from any
+			exp  any
 		}{
 			{UnknownType, true, nil},
 			{NullType, true, nil},
@@ -605,8 +605,8 @@ func TestTypeConversionRules(t *testing.T) {
 	t.Run("from_bytes", func(t *testing.T) {
 		cases := []struct {
 			to   FieldType
-			from interface{}
-			exp  interface{}
+			from any
+			exp  any
 		}{
 			{UnknownType, "YWFhYQ==", nil},
 			{NullType, "YWFhYQ==", nil},
@@ -659,8 +659,8 @@ func TestTypeConversionRules(t *testing.T) {
 	t.Run("from_double", func(t *testing.T) {
 		cases := []struct {
 			to   FieldType
-			from interface{}
-			exp  interface{}
+			from any
+			exp  any
 		}{
 			{UnknownType, json.Number("1.2"), nil},
 			{NullType, json.Number("1.2"), nil},
@@ -700,8 +700,8 @@ func TestTypeConversionRules(t *testing.T) {
 	t.Run("from_string", func(t *testing.T) {
 		cases := []struct {
 			to   FieldType
-			from interface{}
-			exp  interface{}
+			from any
+			exp  any
 		}{
 			{UnknownType, "str1", nil},
 			{NullType, "str1", nil},
@@ -728,8 +728,8 @@ func TestTypeConversionRules(t *testing.T) {
 	t.Run("from_int64", func(t *testing.T) {
 		cases := []struct {
 			to   FieldType
-			from interface{}
-			exp  interface{}
+			from any
+			exp  any
 		}{
 			{UnknownType, json.Number("123"), nil},
 			{NullType, json.Number("123"), nil},

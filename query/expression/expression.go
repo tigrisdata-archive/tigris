@@ -23,7 +23,7 @@ import (
 )
 
 // Expr can be any operator, filter, field literal, etc. It is useful for parsing complex grammar, it can be nested.
-type Expr interface{}
+type Expr any
 
 func Unmarshal(input jsoniter.RawMessage, objCb func(jsoniter.RawMessage) (Expr, error)) (Expr, error) {
 	iter := jsoniter.ParseBytes(jsoniter.ConfigCompatibleWithStandardLibrary, input)

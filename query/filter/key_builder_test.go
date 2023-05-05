@@ -446,15 +446,15 @@ func BenchmarkStrictEqKeyComposer_Compose(b *testing.B) {
 	b.ReportAllocs()
 }
 
-func dummyEncodeFunc(indexParts ...interface{}) (keys.Key, error) {
+func dummyEncodeFunc(indexParts ...any) (keys.Key, error) {
 	return keys.NewKey(nil, indexParts...), nil
 }
 
-func dummyBuildIndexParts(fieldName string, val value.Value) []interface{} {
+func dummyBuildIndexParts(fieldName string, val value.Value) []any {
 	typeOrder := value.ToSecondaryOrder(val.DataType(), nil)
-	return []interface{}{typeOrder, fieldName, val.AsInterface()}
+	return []any{typeOrder, fieldName, val.AsInterface()}
 }
 
-func encodeString(val string) interface{} {
+func encodeString(val string) any {
 	return value.NewStringValue(val, value.NewSortKeyCollation()).AsInterface()
 }

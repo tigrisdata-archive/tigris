@@ -88,7 +88,7 @@ deps:
 .PRECIOUS: ${PROTO_DIR}/%_openapi.yaml ${PROTO_DIR}/%.proto
 
 BUILD_PARAM=-tags=release -ldflags "-X 'github.com/tigrisdata/tigris/util.Version=$(VERSION)' -X 'github.com/tigrisdata/tigris/util.BuildHash=$(GIT_HASH)'" $(shell printenv BUILD_PARAM)
-TEST_PARAM=-cover -race -tags=test,integration $(shell printenv TEST_PARAM)
+TEST_PARAM=-cover -race -tags=test,integration,tigris_http,tigris_grpc $(shell printenv TEST_PARAM)
 
 ${PROTO_DIR}/%.proto:
 	git submodule update --init --recursive

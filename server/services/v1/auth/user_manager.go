@@ -32,6 +32,11 @@ import (
 	"github.com/tigrisdata/tigris/server/request"
 )
 
+const (
+	CreatedStatus = "created"
+	DeletedStatus = "deleted"
+)
+
 var InvalidInvitationCodeErr = errors.Unauthenticated("Failed to verify invitation code")
 
 type UsersManager interface {
@@ -68,7 +73,11 @@ func (um *DefaultUsersManager) CreateInvitations(ctx context.Context, req *api.C
 			return nil, err
 		}
 	}
-	return &api.CreateInvitationsResponse{}, nil
+	return &api.CreateInvitationsResponse{
+		Status:  CreatedStatus,
+		Message: "Invitation(s) created successfully",
+		Count:   int32(len(req.Invitations)),
+	}, nil
 }
 
 func createInvitation(ctx context.Context, email string, role string, invitationSentByName string, um *DefaultUsersManager) error {
@@ -122,7 +131,7 @@ func createInvitation(ctx context.Context, email string, role string, invitation
 	return nil
 }
 
-func (h *DefaultUsersManager) DeleteInvitations(ctx context.Context, req *api.DeleteInvitationsRequest) (*api.DeleteInvitationsResponse, error) {
+func (*DefaultUsersManager) DeleteInvitations(ctx context.Context, req *api.DeleteInvitationsRequest) (*api.DeleteInvitationsResponse, error) {
 	if req.GetEmail() == "" {
 		return nil, errors.InvalidArgument("Email must be specified")
 	}
@@ -164,10 +173,13 @@ func (h *DefaultUsersManager) DeleteInvitations(ctx context.Context, req *api.De
 	}
 
 	log.Debug().Str("email", req.GetEmail()).Str("status", req.GetStatus()).Msg("Deleted user invitation(s)")
-	return &api.DeleteInvitationsResponse{}, nil
+	return &api.DeleteInvitationsResponse{
+		Status:  DeletedStatus,
+		Message: "Invitation(s) deleted successfully",
+	}, nil
 }
 
-func (h *DefaultUsersManager) ListInvitations(ctx context.Context, req *api.ListInvitationsRequest) (*api.ListInvitationsResponse, error) {
+func (*DefaultUsersManager) ListInvitations(ctx context.Context, req *api.ListInvitationsRequest) (*api.ListInvitationsResponse, error) {
 	if req.GetStatus() != "" {
 		err := validateInvitationStatusInput(req.GetStatus())
 		if err != nil {
@@ -209,7 +221,7 @@ func (h *DefaultUsersManager) ListInvitations(ctx context.Context, req *api.List
 	return &api.ListInvitationsResponse{Invitations: invitations}, nil
 }
 
-func (h *DefaultUsersManager) VerifyInvitation(ctx context.Context, req *api.VerifyInvitationRequest) (*api.VerifyInvitationResponse, error) {
+func (*DefaultUsersManager) VerifyInvitation(ctx context.Context, req *api.VerifyInvitationRequest) (*api.VerifyInvitationResponse, error) {
 	if req.GetEmail() == "" {
 		return nil, errors.InvalidArgument("Email must be specified")
 	}
@@ -244,7 +256,7 @@ func (h *DefaultUsersManager) VerifyInvitation(ctx context.Context, req *api.Ver
 	return &verifyUserInvitationResponse, nil
 }
 
-func (h *DefaultUsersManager) ListUsers(ctx context.Context, _ *api.ListUsersRequest) (*api.ListUsersResponse, error) {
+func (um *DefaultUsersManager) ListUsers(ctx context.Context, _ *api.ListUsersRequest) (*api.ListUsersResponse, error) {
 	namespace, err := request.GetNamespace(ctx)
 	if err != nil {
 		log.Err(err).Msg("Failed to get namespace while listing invitations")
@@ -252,7 +264,7 @@ func (h *DefaultUsersManager) ListUsers(ctx context.Context, _ *api.ListUsersReq
 	}
 
 	queryStr := fmt.Sprintf("app_metadata.tigris_namespace:%s", namespace)
-	users, err := h.Management.User.List(management.Query(queryStr))
+	users, err := um.Management.User.List(management.Query(queryStr))
 	if err != nil {
 		log.Err(err).Msg("Failed to get list of users from auth0")
 		return nil, errors.Internal("Could not list users")
@@ -292,10 +304,9 @@ func invitationsCall(ctx context.Context, payload []byte, path string, method st
 	if invitationRes.StatusCode != http.StatusOK {
 		if invitationRes.StatusCode == http.StatusUnauthorized {
 			return nil, InvalidInvitationCodeErr
-		} else {
-			log.Error().Int("status", invitationRes.StatusCode).Msgf("Received non OK status from gotrue while performing invitation operation at path: %s", path)
-			return nil, errors.Internal("Received non OK status")
 		}
+		log.Error().Int("status", invitationRes.StatusCode).Msgf("Received non OK status from gotrue while performing invitation operation at path: %s", path)
+		return nil, errors.Internal("Received non OK status")
 	}
 
 	invitationResBody, err := io.ReadAll(invitationRes.Body)

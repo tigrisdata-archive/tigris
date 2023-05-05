@@ -27,9 +27,9 @@ type App struct {
 	Devices []*Device
 }
 
-func NewApp(url url.URL, channel string) *App {
+func NewApp(u url.URL, channel string) *App {
 	return &App{
-		Url:     url,
+		Url:     u,
 		Channel: channel,
 	}
 }

@@ -51,7 +51,7 @@ type Filter interface {
 	// Matches returns true if the input doc passes the filter, otherwise false
 	Matches(doc []byte, metadata []byte) bool
 	// MatchesDoc similar to Matches but used when document is already parsed
-	MatchesDoc(doc map[string]interface{}) bool
+	MatchesDoc(doc map[string]any) bool
 	ToSearchFilter() string
 	// IsSearchIndexed to let caller knows if there is any fields in the query not indexed in search. This
 	// will trigger full scan.
@@ -60,10 +60,10 @@ type Filter interface {
 
 type EmptyFilter struct{}
 
-func (f *EmptyFilter) Matches(_ []byte, _ []byte) bool          { return true }
-func (f *EmptyFilter) MatchesDoc(_ map[string]interface{}) bool { return true }
-func (f *EmptyFilter) ToSearchFilter() string                   { return "" }
-func (f *EmptyFilter) IsSearchIndexed() bool                    { return false }
+func (*EmptyFilter) Matches(_ []byte, _ []byte) bool  { return true }
+func (*EmptyFilter) MatchesDoc(_ map[string]any) bool { return true }
+func (*EmptyFilter) ToSearchFilter() string           { return "" }
+func (*EmptyFilter) IsSearchIndexed() bool            { return false }
 
 type WrappedFilter struct {
 	Filter
@@ -282,11 +282,12 @@ func (factory *Factory) ParseSelector(k []byte, v []byte, dataType jsonparser.Va
 
 		if field, parent = factory.filterToQueryableField(filterField[0:idx]); field == nil && parent == nil {
 			return nil, errors.InvalidArgument("querying on non schema field '%s'", string(k))
-		} else {
-			parent = field
-			field = schema.NewDynamicQueryableField(filterField, filterField[idx+1:], schema.UnknownType)
 		}
+
+		parent = field
+		field = schema.NewDynamicQueryableField(filterField, filterField[idx+1:], schema.UnknownType)
 	}
+
 	if field == nil {
 		return nil, errors.InvalidArgument("querying on non schema field '%s'", string(k))
 	}

@@ -174,9 +174,8 @@ func (m *TenantManager) CreateOrGetTenant(ctx context.Context, namespace Namespa
 			// tenant was present
 			log.Debug().Str("ns", tenant.String()).Msg("tenant found")
 			return tenant, nil
-		} else {
-			return nil, errors.InvalidArgument("id is already assigned to strId='%s'", tenant.namespace.StrId())
 		}
+		return nil, errors.InvalidArgument("id is already assigned to strId='%s'", tenant.namespace.StrId())
 	}
 
 	tx, e := m.txMgr.StartTx(ctx)
@@ -383,7 +382,7 @@ func (m *TenantManager) AllTenants(_ context.Context) []*Tenant {
 	i := 0
 	for _, t := range m.tenants {
 		tenants[i] = t
-		i += 1
+		i++
 	}
 	return tenants
 }
@@ -473,44 +472,44 @@ func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transa
 }
 
 // GetTableFromIds returns tenant name, database object, collection name corresponding to their encoded ids.
-func (m *TenantManager) GetTableFromIds(tenantId uint32, dbId uint32, collId uint32) (string, *Database, string, bool) {
+func (m *TenantManager) GetTableFromIds(tenantId uint32, dbId uint32, collId uint32) (*Database, string, bool) {
 	m.RLock()
 	defer m.RUnlock()
 
 	// get tenant info
 	tenantName, ok := m.idToTenantMap[tenantId]
 	if !ok {
-		return "", nil, "", ok
+		return nil, "", ok
 	}
 	tenant, ok := m.tenants[tenantName]
 	if !ok {
-		return "", nil, "", ok
+		return nil, "", ok
 	}
 
 	// get db info
 	dbObj, ok := tenant.idToDatabaseMap[dbId]
 	if !ok {
-		return tenantName, nil, "", ok
+		return nil, "", ok
 	}
 
 	// finally, the collection
 	collName, ok := dbObj.idToCollectionMap[collId]
 	if !ok {
-		return tenantName, dbObj, "", ok
+		return dbObj, "", ok
 	}
-	return tenantName, dbObj, collName, ok
+	return dbObj, collName, ok
 }
 
-func (m *TenantManager) DecodeTableName(tableName []byte) (string, *Database, string, bool) {
+func (m *TenantManager) DecodeTableName(tableName []byte) (*Database, string, bool) {
 	n, d, c, ok := m.encoder.DecodeTableName(tableName)
 	if !ok {
-		return "", nil, "", false
+		return nil, "", false
 	}
-	tenantName, db, collName, ok := m.GetTableFromIds(n, d, c)
+	db, collName, ok := m.GetTableFromIds(n, d, c)
 	if !ok {
-		return "", nil, "", false
+		return nil, "", false
 	}
-	return tenantName, db, collName, ok
+	return db, collName, ok
 }
 
 // Reload reads all the tenants exist in the database and builds an in-memory view of the manager to track the tenants.
@@ -1324,14 +1323,12 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 			return err
 		}
 
+		database.MetadataChange = true
+
 		return tenant.updateCollection(ctx, tx, database, c, schFactory)
 	}
 
-	// add indexing version here in the name, because this is a fresh create collection request
-	if err := schema.SetIndexingVersion(schFactory); err != nil {
-		return err
-	}
-	schFactory.IndexingVersion = schema.DefaultIndexingSchemaVersion
+	database.MetadataChange = true
 
 	collMeta, err := tenant.MetaStore.CreateCollection(ctx, tx, schFactory.Name, tenant.namespace.Id(), database.id, schFactory.SecondaryIndexes())
 	if err != nil {
@@ -1557,6 +1554,8 @@ func (tenant *Tenant) dropCollection(ctx context.Context, tx transaction.Tx, db 
 		return errors.NotFound("database missing")
 	}
 
+	db.MetadataChange = true
+
 	cHolder, ok := db.collections[collectionName]
 	if !ok {
 		return errors.NotFound("collection doesn't exists '%s'", collectionName)
@@ -1614,7 +1613,7 @@ func (tenant *Tenant) String() string {
 	return fmt.Sprintf("id: %d, name: %s", tenant.namespace.Id(), tenant.namespace.StrId())
 }
 
-func (tenant *Tenant) listEncCollName(db *Database) [][]byte {
+func (*Tenant) listEncCollName(db *Database) [][]byte {
 	colls := make([][]byte, 0, len(db.collections))
 	for _, v := range db.collections {
 		colls = append(colls, v.collection.EncodedName)
@@ -1623,7 +1622,7 @@ func (tenant *Tenant) listEncCollName(db *Database) [][]byte {
 	return colls
 }
 
-func (tenant *Tenant) listEncIndexName(db *Database) [][]byte {
+func (*Tenant) listEncIndexName(db *Database) [][]byte {
 	colls := make([][]byte, 0, len(db.collections))
 	for _, v := range db.collections {
 		colls = append(colls, v.collection.EncodedTableIndexName)
@@ -1867,6 +1866,8 @@ type Database struct {
 	// valid during transactional collection schema update
 	PendingSchemaVersion uint32
 	CurrentSchemaVersion uint32
+
+	MetadataChange bool
 }
 
 func NewDatabase(id uint32, name string) *Database {
@@ -2097,7 +2098,7 @@ func (s *Search) GetIndexes() []*schema.SearchIndex {
 }
 
 func isSchemaEq(s1, s2 []byte) (bool, error) {
-	var j, j2 map[string]interface{}
+	var j, j2 map[string]any
 
 	if err := jsoniter.Unmarshal(s1, &j); err != nil {
 		return false, err

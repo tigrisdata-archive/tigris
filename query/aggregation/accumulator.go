@@ -73,7 +73,7 @@ func (a *AccumulatorOp) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-func (a *AccumulatorOp) Apply(document jsoniter.RawMessage) {}
+func (*AccumulatorOp) Apply(_ jsoniter.RawMessage) {}
 
 func (a *AccumulatorOp) String() string {
 	return fmt.Sprintf(`{"%s": %v}`, a.Type, a.Agg)
