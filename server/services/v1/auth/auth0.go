@@ -308,23 +308,23 @@ func (a *auth0) DeleteAppKeys(ctx context.Context, project string) error {
 	return nil
 }
 
-func (a *auth0) CreateGlobalAppKey(_ context.Context, _ *api.CreateGlobalAppKeyRequest) (*api.CreateGlobalAppKeyResponse, error) {
+func (*auth0) CreateGlobalAppKey(_ context.Context, _ *api.CreateGlobalAppKeyRequest) (*api.CreateGlobalAppKeyResponse, error) {
 	return nil, errors.Internal("auth0 implementation doesn't support it")
 }
 
-func (a *auth0) UpdateGlobalAppKey(_ context.Context, _ *api.UpdateGlobalAppKeyRequest) (*api.UpdateGlobalAppKeyResponse, error) {
+func (*auth0) UpdateGlobalAppKey(_ context.Context, _ *api.UpdateGlobalAppKeyRequest) (*api.UpdateGlobalAppKeyResponse, error) {
 	return nil, errors.Internal("auth0 implementation doesn't support it")
 }
 
-func (a *auth0) RotateGlobalAppKeySecret(_ context.Context, _ *api.RotateGlobalAppKeySecretRequest) (*api.RotateGlobalAppKeySecretResponse, error) {
+func (*auth0) RotateGlobalAppKeySecret(_ context.Context, _ *api.RotateGlobalAppKeySecretRequest) (*api.RotateGlobalAppKeySecretResponse, error) {
 	return nil, errors.Internal("auth0 implementation doesn't support it")
 }
 
-func (a *auth0) DeleteGlobalAppKey(_ context.Context, _ *api.DeleteGlobalAppKeyRequest) (*api.DeleteGlobalAppKeyResponse, error) {
+func (*auth0) DeleteGlobalAppKey(_ context.Context, _ *api.DeleteGlobalAppKeyRequest) (*api.DeleteGlobalAppKeyResponse, error) {
 	return nil, errors.Internal("auth0 implementation doesn't support it")
 }
 
-func (a *auth0) ListGlobalAppKeys(_ context.Context, _ *api.ListGlobalAppKeysRequest) (*api.ListGlobalAppKeysResponse, error) {
+func (*auth0) ListGlobalAppKeys(_ context.Context, _ *api.ListGlobalAppKeysRequest) (*api.ListGlobalAppKeysResponse, error) {
 	return nil, errors.Internal("auth0 implementation doesn't support it")
 }
 

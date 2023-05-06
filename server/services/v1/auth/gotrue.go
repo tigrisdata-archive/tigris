@@ -95,17 +95,17 @@ type UserAppData struct {
 	Project         string `json:"tigris_project"`
 }
 
-func _createAppKey(ctx context.Context, clientId string, clientSecret string, g *gotrue, keyName string, keyDescription string, project string) (error, string, int64) {
+func _createAppKey(ctx context.Context, clientId string, clientSecret string, g *gotrue, keyName string, keyDescription string, project string) (string, int64, error) {
 	currentSub, err := GetCurrentSub(ctx)
 	if err != nil {
 		log.Err(err).Msg("Failed to create application: reason - unable to extract current sub")
-		return errors.Internal("Failed to create application: reason = %s", err.Error()), "", 0
+		return "", 0, errors.Internal("Failed to create application: reason = %s", err.Error())
 	}
 
 	currentNamespace, err := request.GetNamespace(ctx)
 	if err != nil {
 		log.Err(err).Msg("Failed to create application: reason - unable to extract current namespace")
-		return errors.Internal("Failed to create applications: reason = %s", err.Error()), "", 0
+		return "", 0, errors.Internal("Failed to create applications: reason = %s", err.Error())
 	}
 
 	// make gotrue call
@@ -124,11 +124,11 @@ func _createAppKey(ctx context.Context, clientId string, clientSecret string, g 
 	})
 	if err != nil {
 		log.Err(err).Msg("Failed to create user")
-		return errors.Internal("Failed to create user"), "", 0
+		return "", 0, errors.Internal("Failed to create user")
 	}
 	err = createUser(ctx, payloadBytes, g.AuthConfig.PrimaryAudience, AppKeyUser, g)
 	if err != nil {
-		return err, "", 0
+		return "", 0, err
 	}
 	log.Info().
 		Str("namespace", currentNamespace).
@@ -136,7 +136,7 @@ func _createAppKey(ctx context.Context, clientId string, clientSecret string, g 
 		Str("client_id", clientId).
 		Str(Component, AppKey).
 		Msg("appkey created")
-	return nil, currentSub, creationTime
+	return currentSub, creationTime, nil
 }
 
 func (g *gotrue) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest) (*api.CreateAppKeyResponse, error) {
@@ -146,7 +146,7 @@ func (g *gotrue) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest)
 	clientId := generateClientId(g)
 	clientSecret := generateClientSecret(g)
 
-	err, currentSub, creationTime := _createAppKey(ctx, clientId, clientSecret, g, req.GetName(), req.GetDescription(), req.GetProject())
+	currentSub, creationTime, err := _createAppKey(ctx, clientId, clientSecret, g, req.GetName(), req.GetDescription(), req.GetProject())
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +168,7 @@ func (g *gotrue) CreateGlobalAppKey(ctx context.Context, req *api.CreateGlobalAp
 	clientId := generateClientId(g)
 	clientSecret := generateClientSecret(g)
 
-	err, currentSub, creationTime := _createAppKey(ctx, clientId, clientSecret, g, req.GetName(), req.GetDescription(), "")
+	currentSub, creationTime, err := _createAppKey(ctx, clientId, clientSecret, g, req.GetName(), req.GetDescription(), "")
 	if err != nil {
 		return nil, err
 	}
@@ -290,14 +290,14 @@ func (g *gotrue) UpdateGlobalAppKey(ctx context.Context, req *api.UpdateGlobalAp
 	return result, nil
 }
 
-func _rotateAppKeySecret(ctx context.Context, g *gotrue, id string) (error, string) {
+func _rotateAppKeySecret(ctx context.Context, g *gotrue, id string) (string, error) {
 	email := fmt.Sprintf("%s%s", id, g.AuthConfig.Gotrue.UsernameSuffix)
 	updateAppKeyUrl := fmt.Sprintf("%s/admin/users/%s", g.AuthConfig.Gotrue.URL, email)
 
 	currentSub, err := GetCurrentSub(ctx)
 	if err != nil {
 		log.Err(err).Msg("Couldn't resolve current sub")
-		return errors.Internal("Failed to update app key"), ""
+		return "", errors.Internal("Failed to update app key")
 	}
 
 	newSecret := generateClientSecret(g)
@@ -309,7 +309,7 @@ func _rotateAppKeySecret(ctx context.Context, g *gotrue, id string) (error, stri
 	payloadBytes, err := jsoniter.Marshal(payload)
 	if err != nil {
 		log.Err(err).Msg("Failed to marshal payload")
-		return errors.Internal("Unable to update app key"), ""
+		return "", errors.Internal("Unable to update app key")
 	}
 
 	payloadBytesReader := bytes.NewReader(payloadBytes)
@@ -318,12 +318,12 @@ func _rotateAppKeySecret(ctx context.Context, g *gotrue, id string) (error, stri
 	updateAppKeyReq, err := http.NewRequestWithContext(ctx, http.MethodPut, updateAppKeyUrl, payloadBytesReader)
 	if err != nil {
 		log.Err(err).Msg("Failed to construct updateAppKeyReq")
-		return errors.Internal("Unable to update app key"), ""
+		return "", errors.Internal("Unable to update app key")
 	}
 	adminAccessToken, _, err := getGotrueAdminAccessToken(ctx, g)
 	if err != nil {
 		log.Err(err).Msg("Failed to get admin access token")
-		return errors.Internal("Failed to update app key: couldn't get admin access token"), ""
+		return "", errors.Internal("Failed to update app key: couldn't get admin access token")
 	}
 	updateAppKeyReq.Header.Add("Authorization", fmt.Sprintf("bearer %s", adminAccessToken))
 	updateAppKeyReq.Header.Add("Content-Type", "application/json")
@@ -331,13 +331,13 @@ func _rotateAppKeySecret(ctx context.Context, g *gotrue, id string) (error, stri
 	updateAppKeyRes, err := ctxhttp.Do(ctx, client, updateAppKeyReq)
 	if err != nil {
 		log.Err(err).Msg("Failed to update app key - failed to make call to gotrue")
-		return errors.Internal("Failed to update app key"), ""
+		return "", errors.Internal("Failed to update app key")
 	}
 	defer updateAppKeyRes.Body.Close()
 
 	if updateAppKeyRes.StatusCode != http.StatusOK {
 		log.Error().Int("status", updateAppKeyRes.StatusCode).Msg("Received non OK status code to update user.")
-		return errors.Internal("Failed to update app key"), ""
+		return "", errors.Internal("Failed to update app key")
 	}
 
 	log.Info().
@@ -346,14 +346,14 @@ func _rotateAppKeySecret(ctx context.Context, g *gotrue, id string) (error, stri
 		Str(Component, AppKey).
 		Msg("appkey rotated")
 
-	return nil, newSecret
+	return newSecret, nil
 }
 
 func (g *gotrue) RotateAppKey(ctx context.Context, req *api.RotateAppKeyRequest) (*api.RotateAppKeyResponse, error) {
 	if req.GetProject() == "" {
 		return nil, errors.InvalidArgument("Project must be specified")
 	}
-	err, newSecret := _rotateAppKeySecret(ctx, g, req.GetId())
+	newSecret, err := _rotateAppKeySecret(ctx, g, req.GetId())
 	if err != nil {
 		return nil, err
 	}
@@ -368,7 +368,7 @@ func (g *gotrue) RotateAppKey(ctx context.Context, req *api.RotateAppKeyRequest)
 }
 
 func (g *gotrue) RotateGlobalAppKeySecret(ctx context.Context, req *api.RotateGlobalAppKeySecretRequest) (*api.RotateGlobalAppKeySecretResponse, error) {
-	err, newSecret := _rotateAppKeySecret(ctx, g, req.GetId())
+	newSecret, err := _rotateAppKeySecret(ctx, g, req.GetId())
 	if err != nil {
 		return nil, err
 	}
@@ -456,47 +456,42 @@ type appKeyInternal struct {
 	Project     string
 }
 
-func _listAppKeys(ctx context.Context, g *gotrue, project string) (error, []*appKeyInternal) {
+func _listAppKeys(ctx context.Context, g *gotrue, project string) ([]*appKeyInternal, error) {
 	currentSub, err := GetCurrentSub(ctx)
 	if err != nil {
-		return errors.Internal("Failed to list applications: reason = %s", err.Error()), nil
+		return nil, errors.Internal("Failed to list applications: reason = %s", err.Error())
 	}
 
 	currentNamespace, err := request.GetNamespace(ctx)
 	if err != nil {
-		return errors.Internal("Failed to list applications: reason = %s", err.Error()), nil
+		return nil, errors.Internal("Failed to list applications: reason = %s", err.Error())
 	}
 
 	// get admin access token
 	adminAccessToken, _, err := getGotrueAdminAccessToken(ctx, g)
 	if err != nil {
-		return err, nil
+		return nil, err
 	}
 
 	// make external call
-	var getUsersUrl string
-	if project != "" {
-		getUsersUrl = fmt.Sprintf("%s/admin/users?created_by=%s&tigris_namespace=%s&tigris_project=%s&page=1&per_page=5000", g.AuthConfig.Gotrue.URL, currentSub, currentNamespace, project)
-	} else {
-		getUsersUrl = fmt.Sprintf("%s/admin/users?created_by=%s&tigris_namespace=%s&page=1&per_page=5000", g.AuthConfig.Gotrue.URL, currentSub, currentNamespace)
-	}
+	getUsersUrl := fmt.Sprintf("%s/admin/users?created_by=%s&tigris_namespace=%s&tigris_project=%s&page=1&per_page=5000", g.AuthConfig.Gotrue.URL, currentSub, currentNamespace, project)
 	client := &http.Client{}
 	getUsersReq, err := http.NewRequestWithContext(ctx, http.MethodGet, getUsersUrl, nil)
 	if err != nil {
 		log.Err(err).Msg("Failed to form request to delete user from gotrue")
-		return errors.Internal("Failed to form request to get users request"), nil
+		return nil, errors.Internal("Failed to form request to get users request")
 	}
 	getUsersReq.Header.Add("Authorization", fmt.Sprintf("bearer %s", adminAccessToken))
 
 	getUsersResp, err := client.Do(getUsersReq)
 	if err != nil {
 		log.Err(err).Msg("Failed to get users from gotrue")
-		return errors.Internal("Failed to get users from gotrue"), nil
+		return nil, errors.Internal("Failed to get users from gotrue")
 	}
 
 	if getUsersResp.StatusCode != http.StatusOK {
 		log.Error().Int("status", getUsersResp.StatusCode).Msg("Received non OK status code to get users")
-		return errors.Internal("Received non OK status code to get users"), nil
+		return nil, errors.Internal("Received non OK status code to get users")
 	}
 
 	// remove it from metadata cache
@@ -505,20 +500,20 @@ func _listAppKeys(ctx context.Context, g *gotrue, project string) (error, []*app
 	getUsersRespBytes, err := io.ReadAll(getUsersResp.Body)
 	if err != nil {
 		log.Err(err).Msg("Failed to read get users response")
-		return errors.Internal("Failed to read get users response"), nil
+		return nil, errors.Internal("Failed to read get users response")
 	}
 	var getUsersRespJSON map[string]jsoniter.RawMessage
 	err = jsoniter.Unmarshal(getUsersRespBytes, &getUsersRespJSON)
 	if err != nil {
 		log.Err(err).Msg("Failed to parse getUsersResp")
-		return errors.Internal("Failed to parse getUsers response"), nil
+		return nil, errors.Internal("Failed to parse getUsers response")
 	}
 
 	var users []map[string]jsoniter.RawMessage
 	err = jsoniter.Unmarshal(getUsersRespJSON["users"], &users)
 	if err != nil {
 		log.Err(err).Msg("Failed to parse getUsersResp - users")
-		return errors.Internal("Failed to parse getUsers response"), nil
+		return nil, errors.Internal("Failed to parse getUsers response")
 	}
 
 	appKeys := make([]*appKeyInternal, len(users))
@@ -527,21 +522,21 @@ func _listAppKeys(ctx context.Context, g *gotrue, project string) (error, []*app
 		err := jsoniter.Unmarshal(user["email"], &email)
 		if err != nil {
 			log.Err(err).Msg("Failed to parse getUsersResp - email")
-			return errors.Internal("Failed to parse getUsers response"), nil
+			return nil, errors.Internal("Failed to parse getUsers response")
 		}
 		clientId := strings.Split(email, "@")[0]
 
 		err = jsoniter.Unmarshal(user["encrypted_password"], &clientSecret)
 		if err != nil {
 			log.Err(err).Msg("Failed to parse getUsersResp - clientSecret")
-			return errors.Internal("Failed to parse getUsers response"), nil
+			return nil, errors.Internal("Failed to parse getUsers response")
 		}
 
 		var appMetadata UserAppData
 		err = jsoniter.Unmarshal(user["app_metadata"], &appMetadata)
 		if err != nil {
 			log.Err(err).Msg("Failed to parse getUsersResp - appMetadata")
-			return errors.Internal("Failed to parse getUsers response"), nil
+			return nil, errors.Internal("Failed to parse getUsers response")
 		}
 
 		var createdAtStr string
@@ -549,7 +544,7 @@ func _listAppKeys(ctx context.Context, g *gotrue, project string) (error, []*app
 		err = jsoniter.Unmarshal(user["created_at"], &createdAtStr)
 		if err != nil {
 			log.Err(err).Msg("Failed to parse getUsersResp - createAt")
-			return errors.Internal("Failed to parse getUsers response"), nil
+			return nil, errors.Internal("Failed to parse getUsers response")
 		}
 		if createdAtStr != "" {
 			// parse string time to millis using rfc3339 format
@@ -567,11 +562,11 @@ func _listAppKeys(ctx context.Context, g *gotrue, project string) (error, []*app
 		}
 		appKeys[i] = &appKey
 	}
-	return nil, appKeys
+	return appKeys, nil
 }
 
 func (g *gotrue) ListAppKeys(ctx context.Context, req *api.ListAppKeysRequest) (*api.ListAppKeysResponse, error) {
-	err, appKeysInternal := _listAppKeys(ctx, g, req.GetProject())
+	appKeysInternal, err := _listAppKeys(ctx, g, req.GetProject())
 	if err != nil {
 		return nil, errors.Internal("Failed to delete app keys")
 	}
@@ -592,8 +587,8 @@ func (g *gotrue) ListAppKeys(ctx context.Context, req *api.ListAppKeysRequest) (
 	}, nil
 }
 
-func (g *gotrue) ListGlobalAppKeys(ctx context.Context, req *api.ListGlobalAppKeysRequest) (*api.ListGlobalAppKeysResponse, error) {
-	err, appKeysInternal := _listAppKeys(ctx, g, "")
+func (g *gotrue) ListGlobalAppKeys(ctx context.Context, _ *api.ListGlobalAppKeysRequest) (*api.ListGlobalAppKeysResponse, error) {
+	appKeysInternal, err := _listAppKeys(ctx, g, "")
 	if err != nil {
 		return nil, errors.Internal("Failed to delete app keys")
 	}

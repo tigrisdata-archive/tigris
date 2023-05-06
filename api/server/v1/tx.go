@@ -72,6 +72,12 @@ const (
 	ListAppKeysMethodName        = apiMethodPrefix + "ListAppKeys"
 	RotateAppKeySecretMethodName = apiMethodPrefix + "RotateAppKeySecret"
 
+	CreateGlobalAppKeyMethodName       = apiMethodPrefix + "CreateGlobalAppKey"
+	UpdateGlobalAppKeyMethodName       = apiMethodPrefix + "UpdateGlobalAppKey"
+	DeleteGlobalAppKeyMethodName       = apiMethodPrefix + "DeleteGlobalAppKey"
+	ListGlobalAppKeysMethodName        = apiMethodPrefix + "ListGlobalAppKeys"
+	RotateGlobalAppKeySecretMethodName = apiMethodPrefix + "RotateGlobalAppKeySecret"
+
 	// Auth.
 	GetAccessTokenMethodName    = authMethodPrefix + "GetAccessToken"
 	CreateInvitationsMethodName = authMethodPrefix + "CreateInvitations"

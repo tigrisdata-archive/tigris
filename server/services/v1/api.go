@@ -47,7 +47,7 @@ const (
 	databasePathPattern    = fullProjectPath + "/database/*"
 	applicationPathPattern = fullProjectPath + "/apps/*"
 
-	appsPath    = "/apps"
+	appsPath    = "/apps/*"
 	infoPath    = "/info"
 	metricsPath = "/metrics"
 )
