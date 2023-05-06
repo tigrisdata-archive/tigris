@@ -30,6 +30,7 @@ import (
 	"github.com/tigrisdata/tigris/server/services/v1/billing"
 	"github.com/tigrisdata/tigris/server/tracing"
 	"github.com/tigrisdata/tigris/server/transaction"
+	"github.com/tigrisdata/tigris/server/types"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
 	"github.com/tigrisdata/tigris/util"
@@ -57,6 +58,7 @@ func mainWithCode() int {
 	log.Info().Msgf("Environment: '%v'", config.GetEnvironment())
 	log.Info().Msgf("Number of CPUs: %v", runtime.NumCPU())
 	log.Info().Msgf("Server Type: '%v'", config.DefaultConfig.Server.Type)
+	log.Info().Msgf("My Origin: '%v'", types.MyOrigin)
 
 	defaultConfig := &config.DefaultConfig
 	closerFunc, err := tracing.InitTracer(defaultConfig)

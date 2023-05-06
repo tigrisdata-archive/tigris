@@ -52,6 +52,11 @@ func TestAuthzOwnerRole(t *testing.T) {
 	require.True(t, isAuthorized(api.DeleteAppKeyMethodName, ownerRoleName))
 	require.True(t, isAuthorized(api.ListAppKeysMethodName, ownerRoleName))
 	require.True(t, isAuthorized(api.RotateAppKeySecretMethodName, ownerRoleName))
+	require.True(t, isAuthorized(api.CreateGlobalAppKeyMethodName, ownerRoleName))
+	require.True(t, isAuthorized(api.UpdateGlobalAppKeyMethodName, ownerRoleName))
+	require.True(t, isAuthorized(api.DeleteGlobalAppKeyMethodName, ownerRoleName))
+	require.True(t, isAuthorized(api.ListGlobalAppKeysMethodName, ownerRoleName))
+	require.True(t, isAuthorized(api.RotateGlobalAppKeySecretMethodName, ownerRoleName))
 	require.True(t, isAuthorized(api.IndexCollection, ownerRoleName))
 	require.True(t, isAuthorized(api.SearchIndexCollectionMethodName, ownerRoleName))
 
@@ -185,6 +190,12 @@ func TestAuthzEditorRole(t *testing.T) {
 	require.False(t, isAuthorized(api.CreateNamespaceMethodName, editorRoleName))
 	require.False(t, isAuthorized(api.ListNamespacesMethodName, editorRoleName))
 	require.False(t, isAuthorized(api.DeleteNamespaceMethodName, editorRoleName))
+
+	require.False(t, isAuthorized(api.CreateGlobalAppKeyMethodName, editorRoleName))
+	require.False(t, isAuthorized(api.UpdateGlobalAppKeyMethodName, editorRoleName))
+	require.False(t, isAuthorized(api.DeleteGlobalAppKeyMethodName, editorRoleName))
+	require.False(t, isAuthorized(api.ListGlobalAppKeysMethodName, editorRoleName))
+	require.False(t, isAuthorized(api.RotateGlobalAppKeySecretMethodName, editorRoleName))
 }
 
 func TestAuthzReadOnlyRole(t *testing.T) {
@@ -253,4 +264,9 @@ func TestAuthzReadOnlyRole(t *testing.T) {
 	require.False(t, isAuthorized(api.CreateNamespaceMethodName, readOnlyRoleName))
 	require.False(t, isAuthorized(api.ListNamespacesMethodName, readOnlyRoleName))
 	require.False(t, isAuthorized(api.DeleteNamespaceMethodName, readOnlyRoleName))
+	require.False(t, isAuthorized(api.CreateGlobalAppKeyMethodName, readOnlyRoleName))
+	require.False(t, isAuthorized(api.UpdateGlobalAppKeyMethodName, readOnlyRoleName))
+	require.False(t, isAuthorized(api.DeleteGlobalAppKeyMethodName, readOnlyRoleName))
+	require.False(t, isAuthorized(api.ListGlobalAppKeysMethodName, readOnlyRoleName))
+	require.False(t, isAuthorized(api.RotateGlobalAppKeySecretMethodName, readOnlyRoleName))
 }
