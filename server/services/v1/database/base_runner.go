@@ -188,6 +188,10 @@ func (*BaseQueryRunner) mutateAndValidatePayload(ctx context.Context, coll *sche
 	}
 
 	if request.NeedSchemaValidation(ctx) {
+		if mutator.ofType() == updateMutator {
+			// there may be dot notation in the field
+			deserializedDoc = util.UnFlatMap(deserializedDoc)
+		}
 		if err = coll.Validate(deserializedDoc); err != nil {
 			// schema validation failed
 			return doc, err

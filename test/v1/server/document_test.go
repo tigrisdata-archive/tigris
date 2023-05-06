@@ -2879,6 +2879,127 @@ func TestUpdate_Object(t *testing.T) {
 		}})
 }
 
+func TestUpdate_ObjectDotNotation(t *testing.T) {
+	db, _ := setupTests(t)
+	defer cleanupTests(t, db)
+
+	collection := "test_update_collection"
+	schema := Map{
+		"schema": Map{
+			"title": collection,
+			"properties": Map{
+				"a": Map{
+					"type": "integer",
+				},
+				"b": Map{
+					"type": "string",
+				},
+				"c": Map{
+					"type": "object",
+					"properties": Map{
+						"f1": Map{
+							"type": "string",
+						},
+						"f2": Map{
+							"type": "string",
+						},
+					},
+				},
+				"d": Map{
+					"type":       "object",
+					"properties": Map{},
+				},
+			},
+			"primary_key": []any{"a"},
+		},
+	}
+	createCollection(t, db, collection, schema).Status(200)
+
+	inputDocument := []Doc{
+		{
+			"a": 1,
+			"b": "1",
+			"c": Doc{"f1": "A", "f2": "B"},
+			"d": Doc{"f1": "A", "f2": "B"},
+		},
+	}
+
+	insertDocuments(t, db, collection, inputDocument, false).
+		Status(http.StatusOK)
+
+	updateByFilter(t,
+		db,
+		collection,
+		Map{
+			"filter": Map{
+				"b": "1",
+			},
+		},
+		Map{
+			"fields": Map{
+				"$set": Map{
+					"c.f1": "updated_A",
+					"d.f1": "updated_A",
+				},
+			},
+		},
+		nil).Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("modified_count", 1).
+		Path("$.metadata").Object()
+
+	readAndValidate(t,
+		db,
+		collection,
+		Map{
+			"b": "1",
+		},
+		nil,
+		[]Doc{{
+			"a": 1,
+			"b": "1",
+			"c": Doc{"f1": "updated_A", "f2": "B"},
+			"d": Doc{"f1": "updated_A", "f2": "B"},
+		}})
+
+	updateByFilter(t,
+		db,
+		collection,
+		Map{
+			"filter": Map{
+				"b": "1",
+			},
+		},
+		Map{
+			"fields": Map{
+				"$set": Map{
+					"c.f2": "updated_B",
+					"d.f2": "updated_B",
+				},
+			},
+		},
+		nil).Status(http.StatusOK).
+		JSON().
+		Object().
+		ValueEqual("modified_count", 1).
+		Path("$.metadata").Object()
+
+	readAndValidate(t,
+		db,
+		collection,
+		Map{
+			"b": "1",
+		},
+		nil,
+		[]Doc{{
+			"a": 1,
+			"b": "1",
+			"c": Doc{"f1": "updated_A", "f2": "updated_B"},
+			"d": Doc{"f1": "updated_A", "f2": "updated_B"},
+		}})
+}
+
 func TestDelete_BadRequest(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)

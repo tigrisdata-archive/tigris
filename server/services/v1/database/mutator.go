@@ -21,11 +21,17 @@ import (
 	"github.com/tigrisdata/tigris/server/services/v1/common"
 )
 
+const (
+	insertMutator = "insert_mutator"
+	updateMutator = "update_mutator"
+)
+
 type mutator interface {
 	isMutated() bool
 	stringToInt64(doc map[string]any) error
 	setDefaultsInIncomingPayload(doc map[string]any) error
 	setDefaultsInExistingPayload(doc map[string]any) error
+	ofType() string
 }
 
 type baseMutator struct {
@@ -75,6 +81,8 @@ func (mutator *insertPayloadMutator) setDefaults(doc map[string]any, field *sche
 	}
 }
 
+func (*insertPayloadMutator) ofType() string { return insertMutator }
+
 type updatePayloadMutator struct {
 	*baseMutator
 
@@ -114,6 +122,8 @@ func (mutator *updatePayloadMutator) setDefaults(doc map[string]any, field *sche
 		doc[field.FieldName] = mutator.updatedAt
 	}
 }
+
+func (*updatePayloadMutator) ofType() string { return updateMutator }
 
 func (p *baseMutator) isMutated() bool {
 	return p.mutated
