@@ -60,7 +60,7 @@ func (a *ArithmeticOp) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-func (a *ArithmeticOp) Apply(document jsoniter.RawMessage) {}
+func (*ArithmeticOp) Apply(_ jsoniter.RawMessage) {}
 
 func (a *ArithmeticOp) String() string {
 	return fmt.Sprintf(`{"%s": %v}`, a.Type, a.Agg)

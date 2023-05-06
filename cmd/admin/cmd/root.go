@@ -25,6 +25,7 @@ var rootCmd = &cobra.Command{
 	Short: "admin is an admin command line interface of Tigris data platform",
 }
 
+//nolint:revive
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

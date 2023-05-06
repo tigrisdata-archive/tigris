@@ -249,4 +249,4 @@ func (it *mockedIterator) Next(value *KeyValue) bool {
 	return hasNext
 }
 
-func (it *mockedIterator) Err() error { return nil }
+func (*mockedIterator) Err() error { return nil }

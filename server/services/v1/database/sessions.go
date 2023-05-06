@@ -72,7 +72,7 @@ type SessionManagerWithMetrics struct {
 	s *SessionManager
 }
 
-func (m *SessionManagerWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
+func (*SessionManagerWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {
 	measurement := metrics.NewMeasurement(metrics.SessionManagerServiceName, name, metrics.SessionSpanType, metrics.GetSessionTags(name))
 	ctx = measurement.StartTracing(ctx, true)
 	if err := f(ctx); err != nil {
@@ -89,7 +89,7 @@ func (m *SessionManagerWithMetrics) measure(ctx context.Context, name string, f 
 func (m *SessionManagerWithMetrics) Create(ctx context.Context, trackVerInOwnTxn bool, instantVerTracking bool, track bool) (qs *QuerySession, err error) {
 	m.measure(ctx, "Create", func(ctx context.Context) error {
 		qs, err = m.s.Create(ctx, trackVerInOwnTxn, instantVerTracking, track)
-		return createApiError(err)
+		return CreateApiError(err)
 	})
 	return
 }
@@ -123,7 +123,7 @@ func (m *SessionManagerWithMetrics) Execute(ctx context.Context, runner QueryRun
 func (m *SessionManagerWithMetrics) executeWithRetry(ctx context.Context, runner QueryRunner, req ReqOptions) (resp Response, err error) {
 	m.measure(ctx, "executeWithRetry", func(ctx context.Context) error {
 		resp, err = m.s.executeWithRetry(ctx, runner, req)
-		return createApiError(err)
+		return CreateApiError(err)
 	})
 	return
 }
@@ -275,24 +275,21 @@ func (sessMgr *SessionManager) Execute(ctx context.Context, runner QueryRunner, 
 		}
 		resp, ctx, err := session.Run(runner)
 		session.ctx = ctx
-		return resp, createApiError(err)
+		return resp, CreateApiError(err)
 	}
 
 	resp, err := sessMgr.executeWithRetry(ctx, runner, req)
-	if err == kv.ErrConflictingTransaction {
-		return Response{}, errors.Aborted(err.Error())
-	}
-	return resp, createApiError(err)
+	return resp, CreateApiError(err)
 }
 
 func (sessMgr *SessionManager) ReadOnlyExecute(ctx context.Context, runner ReadOnlyQueryRunner, _ ReqOptions) (Response, error) {
 	session, err := sessMgr.CreateReadOnlySession(ctx)
 	if err != nil {
-		return Response{}, createApiError(err)
+		return Response{}, CreateApiError(err)
 	}
 
 	resp, _, err := session.Run(runner)
-	return resp, createApiError(err)
+	return resp, CreateApiError(err)
 }
 
 func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, runner QueryRunner, req ReqOptions) (resp Response, err error) {
@@ -313,7 +310,9 @@ func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, runner Quer
 			continue
 		}
 
-		err = session.Commit(sessMgr.versionH, req.MetadataChange, err)
+		db, _ := session.GetTx().Context().GetStagedDatabase().(*metadata.Database)
+
+		err = session.Commit(sessMgr.versionH, (db == nil && req.MetadataChange) || (db != nil && db.MetadataChange), err)
 		log.Debug().Err(err).Msg("session.commit after")
 		if !IsErrConflictingTransaction(err) && !search.IsErrDuplicateFieldNames(err) {
 			return
@@ -424,7 +423,7 @@ func (s *QuerySession) Commit(versionMgr *metadata.VersionHandler, incVersion bo
 	return err
 }
 
-func (sessMgr *SessionManager) askMetadataCluster(ctx context.Context, namespaceId string) (*api.NamespaceInfo, error) {
+func (*SessionManager) askMetadataCluster(ctx context.Context, namespaceId string) (*api.NamespaceInfo, error) {
 	log.
 		Debug().
 		Str(Component, NamespaceLocalization).

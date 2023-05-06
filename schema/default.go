@@ -38,7 +38,7 @@ func isSupportedDefaultFunction(fnName string) bool {
 	return !strings.HasSuffix(fnName, "()")
 }
 
-func getDefaultValue(fieldType FieldType) interface{} {
+func getDefaultValue(fieldType FieldType) any {
 	switch fieldType {
 	case BoolType:
 		return false
@@ -50,7 +50,7 @@ func getDefaultValue(fieldType FieldType) interface{} {
 }
 
 type FieldDefaulter struct {
-	value     interface{}
+	value     any
 	createdAt bool
 	updatedAt bool
 }
@@ -137,7 +137,7 @@ func (defaulter *FieldDefaulter) TaggedWithCreatedAt() bool {
 
 // GetValue returns the value if there is default tag set for a field. For functions, it will execute it and return the
 // value. If the function is now() then it is converted to createdAt during the construction of the defaulter.
-func (defaulter *FieldDefaulter) GetValue() interface{} {
+func (defaulter *FieldDefaulter) GetValue() any {
 	switch defaulter.value {
 	case funcUUIDName:
 		return uuid.New().String()

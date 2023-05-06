@@ -76,7 +76,7 @@ type TxStore interface {
 	BeginTx(ctx context.Context) (Tx, error)
 	CreateTable(ctx context.Context, name []byte) error
 	DropTable(ctx context.Context, name []byte) error
-	GetInternalDatabase() (interface{}, error) // TODO: CDC remove workaround
+	GetInternalDatabase() (any, error) // TODO: CDC remove workaround
 	GetTableStats(ctx context.Context, name []byte) (*TableStats, error)
 }
 
@@ -91,16 +91,16 @@ type AtomicIterator interface {
 }
 
 type (
-	KeyPart interface{}
+	KeyPart any
 	Key     []KeyPart
 )
 
-func BuildKey(parts ...interface{}) Key {
+func BuildKey(parts ...any) Key {
 	ptr := unsafe.Pointer(&parts)
 	return *(*Key)(ptr)
 }
 
-func (k Key) AddPart(part interface{}) Key {
+func (k Key) AddPart(part any) Key {
 	k = append(k, KeyPart(part))
 	return k
 }

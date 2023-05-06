@@ -25,6 +25,12 @@ const (
 	EventTypeUsage   string = "usage"
 	EventTypeStorage string = "storage"
 	TimeFormat              = time.RFC3339
+
+	StorageIndexBytes = "index_bytes"
+	StorageDbBytes    = "database_bytes"
+
+	UsageSearchUnits = "search_units"
+	UsageDbUnits     = "database_units"
 )
 
 type UsageEvent struct {
@@ -78,7 +84,7 @@ func (ub *UsageEventBuilder) Build() *UsageEvent {
 		ub.timestamp = time.Now()
 	}
 	billingMetric.Timestamp = ub.timestamp.Format(TimeFormat)
-	props := make(map[string]interface{})
+	props := make(map[string]any)
 
 	// auto generate transaction id
 	if len(ub.transactionId) != 0 {
@@ -88,11 +94,11 @@ func (ub *UsageEventBuilder) Build() *UsageEvent {
 	}
 	// the key names must match the registered billing metrics in metronome
 	if ub.searchUnits != nil {
-		props["search_units"] = *ub.searchUnits
+		props[UsageSearchUnits] = *ub.searchUnits
 	}
 
 	if ub.databaseUnits != nil {
-		props["database_units"] = *ub.databaseUnits
+		props[UsageDbUnits] = *ub.databaseUnits
 	}
 	billingMetric.Properties = &props
 	return billingMetric
@@ -148,7 +154,7 @@ func (sb *StorageEventBuilder) Build() *StorageEvent {
 		sb.timestamp = time.Now()
 	}
 	billingMetric.Timestamp = sb.timestamp.Format(TimeFormat)
-	props := make(map[string]interface{})
+	props := make(map[string]any)
 
 	// auto generate transaction id
 	if len(sb.transactionId) != 0 {
@@ -159,11 +165,11 @@ func (sb *StorageEventBuilder) Build() *StorageEvent {
 
 	// the key names must match the registered billing metrics in metronome
 	if sb.indexBytes != nil {
-		props["index_bytes"] = *sb.indexBytes
+		props[StorageIndexBytes] = *sb.indexBytes
 	}
 
 	if sb.databaseBytes != nil {
-		props["database_bytes"] = *sb.databaseBytes
+		props[StorageDbBytes] = *sb.databaseBytes
 	}
 	billingMetric.Properties = &props
 	return billingMetric

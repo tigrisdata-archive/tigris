@@ -225,7 +225,7 @@ func testDriverBinary(t *testing.T, c driver.Driver) {
 	_, err = db1.Insert(ctx, "c1", []driver.Document{docEnc})
 	require.NoError(t, err)
 
-	filterEnc, err := jsoniter.Marshal(map[string]interface{}{
+	filterEnc, err := jsoniter.Marshal(map[string]any{
 		"K1": []byte("vK1"),
 	})
 	require.NoError(t, err)
@@ -236,7 +236,7 @@ func testDriverBinary(t *testing.T, c driver.Driver) {
 	require.NoError(t, jsoniter.Unmarshal(docs[0], &actualDoc))
 	require.Equal(t, doc1, actualDoc)
 
-	filterEnc, err = jsoniter.Marshal(map[string]interface{}{
+	filterEnc, err = jsoniter.Marshal(map[string]any{
 		"K1": []byte(`1234`),
 	})
 	require.NoError(t, err)

@@ -44,7 +44,7 @@ func (k *KeyValueTxStore) BeginTx(ctx context.Context) (Tx, error) {
 	}, nil
 }
 
-func (k *KeyValueTxStore) GetInternalDatabase() (interface{}, error) {
+func (k *KeyValueTxStore) GetInternalDatabase() (any, error) {
 	return k.db, nil
 }
 

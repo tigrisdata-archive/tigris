@@ -32,18 +32,29 @@ import (
 )
 
 const (
-	Authorization    = "Authorization"
-	Bearer           = "bearer "
-	RSATokenFilePath = "../../docker/test-token-rsa.jwt"  //nolint:gosec
-	HSTokenFilePath  = "../../docker/test-token-hs.jwt"   //nolint:gosec
-	HSTokenAFilePath = "../../docker/test-token-A-hs.jwt" //nolint:gosec
-	HSTokenBFilePath = "../../docker/test-token-B-hs.jwt" //nolint:gosec
+	Authorization         = "Authorization"
+	Bearer                = "bearer "
+	RSATokenFilePath      = "../../docker/test-token-rsa.jwt"          //nolint:gosec
+	HSTokenFilePath       = "../../docker/test-token-hs.jwt"           //nolint:gosec
+	HSTokenAFilePath      = "../../docker/test-token-A-hs.jwt"         //nolint:gosec
+	HSTokenBFilePath      = "../../docker/test-token-B-hs.jwt"         //nolint:gosec
+	OwnerTokenFilePath    = "../../docker/test-token-rsa-owner.jwt"    //nolint:gosec
+	EditorTokenFilePath   = "../../docker/test-token-rsa-editor.jwt"   //nolint:gosec
+	ReadOnlyTokenFilePath = "../../docker/test-token-rsa-readonly.jwt" //nolint:gosec
 )
 
 func readToken(t *testing.T, file string) string {
 	tokenBytes, err := os.ReadFile(file)
 	require.NoError(t, err)
 	return string(tokenBytes)
+}
+
+func createNamespaceWithToken(t *testing.T, name string, token string) *httpexpect.Response {
+	e := expectLow(t, config.GetBaseURL2())
+	return e.POST(getCreateNamespaceURL()).
+		WithHeader(Authorization, Bearer+token).
+		WithJSON(Map{"name": name}).
+		Expect()
 }
 
 func createTestNamespace(t *testing.T, token string) {
@@ -55,6 +66,14 @@ func createTestNamespace(t *testing.T, token string) {
 	_ = e2.POST(namespaceOperation("create")).
 		WithHeader(Authorization, Bearer+token).
 		WithJSON(createNamespacePayload).Expect()
+
+	createNamespacePayload2 := Map{
+		"name": "tigris_test_name_non_admin",
+		"id":   "tigris_test_non_admin",
+	}
+	_ = e2.POST(namespaceOperation("create")).
+		WithHeader(Authorization, Bearer+token).
+		WithJSON(createNamespacePayload2).Expect()
 }
 
 func TestHS256TokenValidation(t *testing.T) {
@@ -177,6 +196,106 @@ func TestGoTrueAuthProvider(t *testing.T) {
 	// delete
 	deletedResponse := e2.DELETE(appKeysOperation("auth_test", "delete")).
 		WithHeader(Authorization, Bearer+token).WithJSON(updateAppKeyPayload).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("deleted").
+		Boolean()
+	require.True(t, deletedResponse.Raw())
+}
+
+func TestGlobalAppKeys(t *testing.T) {
+	e2 := expectLow(t, config.GetBaseURL2())
+	token := readToken(t, RSATokenFilePath)
+
+	createTestNamespace(t, token)
+
+	// create app key
+	createGlobalAppKeyPayload := Map{
+		"name":        "test_key",
+		"description": "This key is used for integration test purpose.",
+	}
+
+	createdAppKey := e2.POST(globalAppKeysOperation("create")).
+		WithHeader(Authorization, Bearer+token).WithJSON(createGlobalAppKeyPayload).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().Value("created_app_key")
+	require.NotNil(t, createdAppKey)
+	id := createdAppKey.Object().Value("id").String()
+	secret := createdAppKey.Object().Value("secret").String()
+
+	name := createdAppKey.Object().Value("name").String()
+	description := createdAppKey.Object().Value("description").String()
+
+	require.Equal(t, "test_key", name.Raw())
+	require.Equal(t, "This key is used for integration test purpose.", description.Raw())
+	require.True(t, int(id.Length().Raw()) == 30+len(auth.ClientIdPrefix))         // length + prefix
+	require.True(t, int(secret.Length().Raw()) == 50+len(auth.ClientSecretPrefix)) // length + prefix
+
+	// update
+	updateGlobalAppKeyPayload := Map{
+		"id":          id.Raw(),
+		"description": "[updated]This key is used for integration test purpose.",
+	}
+	updatedAppKey := e2.PUT(globalAppKeysOperation("update")).
+		WithHeader(Authorization, Bearer+token).WithJSON(updateGlobalAppKeyPayload).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().Value("updated_app_key")
+	// updates only in description
+	require.Equal(t, id.Raw(), updatedAppKey.Object().Value("id").Raw())
+	require.Equal(t, "[updated]This key is used for integration test purpose.", updatedAppKey.Object().Value("description").Raw())
+
+	// rotate
+	rotateGlobalAppKeyPayload := Map{
+		"id": id.Raw(),
+	}
+	rotatedKey := e2.POST(globalAppKeysOperation("rotate")).
+		WithHeader(Authorization, Bearer+token).WithJSON(rotateGlobalAppKeyPayload).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().Value("app_key")
+	require.Equal(t, id.Raw(), rotatedKey.Object().Value("id").Raw())
+	require.NotEqual(t, secret.Raw(), rotatedKey.Object().Value("secret").Raw())
+	require.True(t, len(rotatedKey.Object().Value("secret").String().Raw()) == 50+len(auth.ClientSecretPrefix))
+
+	// list
+	globalAppKeys := e2.GET(globalAppKeysOperation("get")).
+		WithHeader(Authorization, Bearer+token).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().Value("app_keys").Array()
+
+	found := false
+	for i := 0; i < int(globalAppKeys.Length().Raw()); i++ {
+		k := globalAppKeys.Element(i)
+		if k.Object().Value("id").Raw() == id.Raw() {
+			found = true
+			require.NotEqual(t, secret.Raw(), rotatedKey.Object().Value("secret").Raw())
+		}
+	}
+
+	require.True(t, found)
+
+	retrievedAppKey := globalAppKeys.Element(0)
+	require.Equal(t, id.Raw(), retrievedAppKey.Object().Value("id").String().Raw())
+	require.NotNil(t, retrievedAppKey.Object().Value("secret").String().Raw())
+	require.Equal(t, name.Raw(), retrievedAppKey.Object().Value("name").String().Raw())
+	require.Equal(t, "[updated]This key is used for integration test purpose.", retrievedAppKey.Object().Value("description").String().Raw())
+	require.True(t, strings.HasPrefix(retrievedAppKey.Object().Value("created_by").String().Raw(), "gt|"))
+
+	// delete
+	deleteGlobalAppKeyPayload := Map{
+		"id": id.Raw(),
+	}
+	deletedResponse := e2.DELETE(globalAppKeysOperation("delete")).
+		WithHeader(Authorization, Bearer+token).WithJSON(deleteGlobalAppKeyPayload).
 		Expect().
 		Status(http.StatusOK).
 		JSON().
@@ -348,6 +467,50 @@ func TestCreateAccessToken(t *testing.T) {
 	createProject2(t, "new-project-3", accessToken).Status(http.StatusOK)
 }
 
+func TestCreateGlobalAccessToken(t *testing.T) {
+	e2 := expectLow(t, config.GetBaseURL2())
+	token := readToken(t, RSATokenFilePath)
+	createTestNamespace(t, token)
+
+	createGlobalAppKeyPayload := Map{
+		"name":        "test_key",
+		"description": "This key is used for integration test purpose.",
+	}
+
+	createdAppKey := e2.POST(globalAppKeysOperation("create")).
+		WithHeader(Authorization, Bearer+token).WithJSON(createGlobalAppKeyPayload).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().Value("created_app_key")
+	require.NotNil(t, createdAppKey)
+
+	id := createdAppKey.Object().Value("id").String()
+	secret := createdAppKey.Object().Value("secret").String()
+
+	getAccessTokenResponse := e2.POST(getAuthToken()).
+		WithFormField("client_id", id.Raw()).
+		WithFormField("client_secret", secret.Raw()).
+		WithFormField("grant_type", "client_credentials").
+		Expect()
+	getAccessTokenResponse.Status(http.StatusOK)
+
+	accessToken := getAccessTokenResponse.JSON().Object().Value("access_token").String().Raw()
+	require.True(t, accessToken != "")
+	require.NotNil(t, getAccessTokenResponse.JSON().Object().Value("expires_in"))
+
+	// use access token
+	createProject2(t, "TestCreateGlobalAccessToken-project-1", accessToken).Status(http.StatusOK)
+
+	deleteProject2(t, "TestCreateGlobalAccessToken-project-1", token)
+	// use access token bypassing auth caches
+	_ = e2.POST(getProjectURL("TestCreateGlobalAccessToken-project-2", "create")).
+		WithHeader(Authorization, Bearer+accessToken).
+		WithHeader(api.HeaderBypassAuthCache, "true").
+		Expect().
+		Status(http.StatusOK)
+}
+
 func TestCreateAccessTokenUsingInvalidCreds(t *testing.T) {
 	e2 := expectLow(t, config.GetBaseURL2())
 	getAccessTokenResponse := e2.POST(getAuthToken()).
@@ -386,13 +549,33 @@ func TestUserInvitations(t *testing.T) {
 	token := readToken(t, RSATokenFilePath)
 	createTestNamespace(t, token)
 	createUserInvitation(t, "a@hello.com", "editor_a", "TestUserInvitations", token).
-		Status(http.StatusOK)
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("status").
+		String().
+		Equal(auth.CreatedStatus)
 	createUserInvitation(t, "b@hello.com", "editor_b", "TestUserInvitations", token).
-		Status(http.StatusOK)
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("status").
+		String().
+		Equal(auth.CreatedStatus)
 	createUserInvitation(t, "c@hello.com", "editor_c", "TestUserInvitations", token).
-		Status(http.StatusOK)
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("status").
+		String().
+		Equal(auth.CreatedStatus)
 	createUserInvitation(t, "a@hello.com", "editor_a", "TestUserInvitations", token).
-		Status(http.StatusOK)
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("status").
+		String().
+		Equal(auth.CreatedStatus)
 
 	listUserInvitations1 := listUserInvitations(t, token)
 	listUserInvitations1.Status(http.StatusOK)
@@ -411,7 +594,12 @@ func TestUserInvitations(t *testing.T) {
 
 	// delete invitation
 	deleteUserInvitations(t, "c@hello.com", "PENDING", token).
-		Status(http.StatusOK)
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("status").
+		String().
+		Equal(auth.DeletedStatus)
 
 	// list user invitations
 	listUserInvitations2 := listUserInvitations(t, token)
@@ -439,6 +627,43 @@ func TestUserInvitations(t *testing.T) {
 	// verify - invalid code
 	verificationRes2 := verifyUserInvitations(t, "b@hello.com", "invalid-code", token)
 	verificationRes2.Status(http.StatusUnauthorized)
+}
+
+func TestAuthzOwner(t *testing.T) {
+	token := readToken(t, OwnerTokenFilePath)
+	createTestNamespace(t, token)
+
+	// create project should be allowed
+	createProject2(t, "TestAuthzOwner", token).
+		Status(http.StatusOK)
+
+	// creating namespace should NOT be allowed
+	createNamespaceWithToken(t, "TestAuthzOwner", token).Status(http.StatusForbidden)
+}
+
+func TestAuthzEditor(t *testing.T) {
+	token := readToken(t, EditorTokenFilePath)
+	createTestNamespace(t, token)
+
+	// create project should be allowed
+	createProject2(t, "TestAuthzEditor", token).
+		Status(http.StatusOK)
+
+	// creating namespace is not be allowed
+	resp := createNamespaceWithToken(t, "TestAuthzEditor", token).Status(http.StatusForbidden).Body().Raw()
+	require.Equal(t, "{\"error\":{\"code\":\"PERMISSION_DENIED\",\"message\":\"You are not allowed to perform operation: /tigrisdata.management.v1.Management/CreateNamespace\"}}", resp)
+}
+
+func TestAuthzReadonly(t *testing.T) {
+	// listing projects should be allowed.
+	token := readToken(t, ReadOnlyTokenFilePath)
+	listProjects(t, token).Status(http.StatusOK)
+
+	// create project should NOT be allowed
+	resp := createProject2(t, "TestAuthzReadonly", token).
+		Status(http.StatusForbidden).Body().Raw()
+
+	require.Equal(t, "{\"error\":{\"code\":\"PERMISSION_DENIED\",\"message\":\"You are not allowed to perform operation: /tigrisdata.v1.Tigris/CreateProject\"}}", resp)
 }
 
 func createProject2(t *testing.T, projectName string, token string) *httpexpect.Response {
@@ -500,6 +725,21 @@ func listUserInvitations(t *testing.T, token string) *httpexpect.Response {
 		Expect()
 }
 
+func listUsers(t *testing.T, token string) *httpexpect.Response {
+	e2 := expectLow(t, config.GetBaseURL2())
+
+	return e2.GET(listUsersUrl()).
+		WithHeader(Authorization, Bearer+token).
+		Expect()
+}
+
+func listProjects(t *testing.T, token string) *httpexpect.Response {
+	e2 := expectLow(t, config.GetBaseURL2())
+	return e2.GET(listProjectsUrl()).
+		WithHeader(Authorization, Bearer+token).
+		Expect()
+}
+
 func verifyUserInvitations(t *testing.T, email string, code string, token string) *httpexpect.Response {
 	e2 := expectLow(t, config.GetBaseURL2())
 	payload := make(map[string]string)
@@ -524,4 +764,12 @@ func deleteUserInvitations(t *testing.T, email string, status string, token stri
 
 func invitationUrl(operation string) string {
 	return fmt.Sprintf("/v1/auth/namespace/invitations/%s", operation)
+}
+
+func listUsersUrl() string {
+	return "/v1/auth/namespace/users"
+}
+
+func listProjectsUrl() string {
+	return "/v1/projects"
 }

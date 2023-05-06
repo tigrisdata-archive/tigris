@@ -57,7 +57,7 @@ func TestSchemaMigration(t *testing.T) {
 					"type": "string",
 				},
 			},
-			"primary_key": []interface{}{"pkey_int"},
+			"primary_key": []any{"pkey_int"},
 		},
 	}
 
@@ -77,7 +77,7 @@ func TestSchemaMigration(t *testing.T) {
 					"type": "string",
 				},
 			},
-			"primary_key": []interface{}{"pkey_int"},
+			"primary_key": []any{"pkey_int"},
 		},
 	}
 
@@ -100,7 +100,7 @@ func TestSchemaMigration(t *testing.T) {
 					"type": "string",
 				},
 			},
-			"primary_key": []interface{}{"pkey_int"},
+			"primary_key": []any{"pkey_int"},
 		},
 	}
 

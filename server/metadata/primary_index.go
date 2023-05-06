@@ -65,7 +65,7 @@ func (c *PrimaryIndexSubspace) insert(ctx context.Context, tx transaction.Tx, ns
 	)
 }
 
-func (c *PrimaryIndexSubspace) decodeMetadata(_ string, payload *internal.TableData) (*PrimaryIndexMetadata, error) {
+func (*PrimaryIndexSubspace) decodeMetadata(_ string, payload *internal.TableData) (*PrimaryIndexMetadata, error) {
 	if payload.Ver == 0 {
 		return &PrimaryIndexMetadata{ID: ByteToUInt32(payload.RawData)}, nil
 	}
@@ -121,7 +121,7 @@ func (c *PrimaryIndexSubspace) softDelete(ctx context.Context, tx transaction.Tx
 	)
 }
 
-func (_ *PrimaryIndexSubspace) validateArgs(nsID uint32, dbID uint32, collID uint32, name string, metadata **PrimaryIndexMetadata) error {
+func (*PrimaryIndexSubspace) validateArgs(nsID uint32, dbID uint32, collID uint32, name string, metadata **PrimaryIndexMetadata) error {
 	if nsID == 0 || dbID == 0 || collID == 0 {
 		return errors.InvalidArgument("invalid id")
 	}

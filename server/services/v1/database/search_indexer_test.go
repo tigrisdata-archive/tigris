@@ -34,15 +34,15 @@ import (
 
 func TestFlattenObj(t *testing.T) {
 	rawData := []byte(`{"a":1, "b": {"c": {"d": "foo", "c_nested": {"c_2": 10}}, "e": 3, "f": [1, 2, 3]}, "out": 10, "all_out": {"yes": 5}}`)
-	var UnFlattenMap map[string]any
-	require.NoError(t, jsoniter.Unmarshal(rawData, &UnFlattenMap))
+	var unFlattenMap map[string]any
+	require.NoError(t, jsoniter.Unmarshal(rawData, &unFlattenMap))
 
-	flattened := util.FlatMap(UnFlattenMap, container.NewHashSet())
+	flattened := util.FlatMap(unFlattenMap, container.NewHashSet())
 	require.Equal(t, "foo", flattened["b.c.d"])
 	require.Equal(t, float64(3), flattened["b.e"])
-	require.Equal(t, []interface{}{float64(1), float64(2), float64(3)}, flattened["b.f"])
+	require.Equal(t, []any{float64(1), float64(2), float64(3)}, flattened["b.f"])
 
-	require.True(t, reflect.DeepEqual(UnFlattenMap, util.UnFlatMap(flattened)))
+	require.True(t, reflect.DeepEqual(unFlattenMap, util.UnFlatMap(flattened)))
 }
 
 func TestPackSearchFields(t *testing.T) {
@@ -282,7 +282,7 @@ func TestUnpackSearchFields(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, unpacked, 1)
 		require.Len(t, unpacked["parent"], 2)
-		require.Equal(t, map[string]interface{}{"node_1": 123, "node_2": "someData"}, unpacked["parent"])
+		require.Equal(t, map[string]any{"node_1": 123, "node_2": "someData"}, unpacked["parent"])
 	})
 
 	t.Run("array type is unpacked from string", func(t *testing.T) {
@@ -297,13 +297,13 @@ func TestUnpackSearchFields(t *testing.T) {
 		_, _, unpacked, err := UnpackSearchFields(doc, coll)
 		require.NoError(t, err)
 		require.Len(t, unpacked, 1)
-		require.Equal(t, []interface{}{1.1, 2.1, 3.0, 4.3, 5.5}, unpacked["arrayField"])
+		require.Equal(t, []any{1.1, 2.1, 3.0, 4.3, 5.5}, unpacked["arrayField"])
 	})
 
 	t.Run("array type not packed as string", func(t *testing.T) {
 		doc := map[string]any{
 			"id":         "123",
-			"arrayField": []interface{}{1.1, 2.1, 3.0, 4.3, 5.5},
+			"arrayField": []any{1.1, 2.1, 3.0, 4.3, 5.5},
 		}
 		f := &schema.Field{DataType: schema.ArrayType, FieldName: "arrayField"}
 		coll := &schema.DefaultCollection{
@@ -312,7 +312,7 @@ func TestUnpackSearchFields(t *testing.T) {
 		_, _, unpacked, err := UnpackSearchFields(doc, coll)
 		require.NoError(t, err)
 		require.Len(t, unpacked, 1)
-		require.Equal(t, []interface{}{1.1, 2.1, 3.0, 4.3, 5.5}, unpacked["arrayField"])
+		require.Equal(t, []any{1.1, 2.1, 3.0, 4.3, 5.5}, unpacked["arrayField"])
 	})
 
 	t.Run("dateTime fields are unpacked", func(t *testing.T) {
@@ -348,7 +348,7 @@ func BenchmarkEncDec(b *testing.B) {
 
 	id := "1"
 	for i := 0; i < b.N; i++ {
-		var data map[string]interface{}
+		var data map[string]any
 		if err := jsoniter.Unmarshal(js, &data); err != nil {
 			require.NoError(b, err)
 		}

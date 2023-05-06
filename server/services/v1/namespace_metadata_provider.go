@@ -43,7 +43,7 @@ type DefaultNamespaceMetadataProvider struct {
 }
 
 func (a *DefaultNamespaceMetadataProvider) GetNamespaceMetadata(ctx context.Context, req *api.GetNamespaceMetadataRequest) (*api.GetNamespaceMetadataResponse, error) {
-	namespaceId, _, tx, err := metadataPrepareOperation(NamespaceMetadataType, "read", ctx, a.txMgr, a.tenantMgr)
+	namespaceId, _, tx, err := metadataPrepareOperation(ctx, NamespaceMetadataType, "read", a.txMgr, a.tenantMgr)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func (a *DefaultNamespaceMetadataProvider) DeleteNamespace(ctx context.Context, 
 }
 
 func (a *DefaultNamespaceMetadataProvider) InsertNamespaceMetadata(ctx context.Context, req *api.InsertNamespaceMetadataRequest) (*api.InsertNamespaceMetadataResponse, error) {
-	namespaceId, _, tx, err := metadataPrepareOperation(NamespaceMetadataType, "insert", ctx, a.txMgr, a.tenantMgr)
+	namespaceId, _, tx, err := metadataPrepareOperation(ctx, NamespaceMetadataType, "insert", a.txMgr, a.tenantMgr)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +93,7 @@ func (a *DefaultNamespaceMetadataProvider) InsertNamespaceMetadata(ctx context.C
 }
 
 func (a *DefaultNamespaceMetadataProvider) UpdateNamespaceMetadata(ctx context.Context, req *api.UpdateNamespaceMetadataRequest) (*api.UpdateNamespaceMetadataResponse, error) {
-	namespaceId, _, tx, err := metadataPrepareOperation(NamespaceMetadataType, "update", ctx, a.txMgr, a.tenantMgr)
+	namespaceId, _, tx, err := metadataPrepareOperation(ctx, NamespaceMetadataType, "update", a.txMgr, a.tenantMgr)
 	if err != nil {
 		return nil, err
 	}

@@ -85,7 +85,7 @@ func EncodeEventAsMsgPack(event proto.Message) ([]byte, error) {
 	return EncodeAsMsgPack(event)
 }
 
-func EncodeAsMsgPack(data interface{}) ([]byte, error) {
+func EncodeAsMsgPack(data any) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := codec.NewEncoder(&buf, &msgpackHandle)
 	if err := enc.Encode(data); ulog.E(err) {
@@ -95,7 +95,7 @@ func EncodeAsMsgPack(data interface{}) ([]byte, error) {
 }
 
 func JsonByteToMsgPack(data []byte) ([]byte, error) {
-	var obj interface{}
+	var obj any
 	err := jsoniter.Unmarshal(data, &obj)
 	if err != nil {
 		return nil, err
@@ -169,7 +169,7 @@ func SanitizeUserData(toEnc internal.UserDataEncType, data *internal.StreamData)
 		return data.RawData, nil
 	}
 
-	var rawDecoded interface{}
+	var rawDecoded any
 	switch internal.UserDataEncType(data.Encoding) {
 	case internal.MsgpackEncoding:
 		if err := codec.NewDecoderBytes(data.RawData, &msgpackHandle).Decode(&rawDecoded); err != nil {

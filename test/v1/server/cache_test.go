@@ -30,7 +30,7 @@ import (
 	"gopkg.in/gavv/httpexpect.v1"
 )
 
-type CacheTestMap map[string]interface{}
+type CacheTestMap map[string]any
 
 // getCacheName generates per test cache name
 func getCacheName(t *testing.T) string {

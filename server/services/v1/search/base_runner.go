@@ -48,7 +48,7 @@ func newBaseRunner(store search.Store, encoder metadata.Encoder, txMgr *transact
 	}
 }
 
-func (runner *baseRunner) getIndex(tenant *metadata.Tenant, projName string, indexName string) (*schema.SearchIndex, error) {
+func (*baseRunner) getIndex(tenant *metadata.Tenant, projName string, indexName string) (*schema.SearchIndex, error) {
 	project, err := tenant.GetProject(projName)
 	if err != nil {
 		return nil, err
@@ -63,7 +63,7 @@ func (runner *baseRunner) getIndex(tenant *metadata.Tenant, projName string, ind
 	return index, nil
 }
 
-func (runner *baseRunner) encodeDocuments(index *schema.SearchIndex, documents [][]byte, buffer *bytes.Buffer, isUpdate bool) ([]string, [][]byte, []error, int) {
+func (*baseRunner) encodeDocuments(index *schema.SearchIndex, documents [][]byte, buffer *bytes.Buffer, isUpdate bool) ([]string, [][]byte, []error, int) {
 	var (
 		validDocs      = 0
 		ts             = internal.NewTimestamp()
@@ -100,8 +100,8 @@ func (runner *baseRunner) encodeDocuments(index *schema.SearchIndex, documents [
 			continue
 		}
 
-		buffer.Write(serializedDocs[i])
-		buffer.WriteByte('\n')
+		_, _ = buffer.Write(serializedDocs[i])
+		_ = buffer.WriteByte('\n')
 		validDocs++
 	}
 
@@ -138,7 +138,7 @@ func (runner *baseRunner) execInStorage(ctx context.Context, tableName string, i
 	return tx.Commit(ctx)
 }
 
-func (runner *baseRunner) readRow(ctx context.Context, tx transaction.Tx, key keys.Key) (*kv.KeyValue, bool, error) {
+func (*baseRunner) readRow(ctx context.Context, tx transaction.Tx, key keys.Key) (*kv.KeyValue, bool, error) {
 	it, err := tx.Read(ctx, key, false)
 	if ulog.E(err) {
 		return nil, false, err
@@ -157,7 +157,7 @@ func (runner *baseRunner) readRow(ctx context.Context, tx transaction.Tx, key ke
 // documents. The batchErrors is set before sending requests to store which means first we check if that is set if yes
 // then we fill the response with that error otherwise that document was successfully sent to store so we need to check
 // whether store is processed it without any error.
-func (runner *baseRunner) buildDocStatusResp(ids []string, batchErrors []error, storeResp []search.IndexResp) []*api.DocStatus {
+func (*baseRunner) buildDocStatusResp(ids []string, batchErrors []error, storeResp []search.IndexResp) []*api.DocStatus {
 	var (
 		respIdx int
 		status  = make([]*api.DocStatus, len(ids))

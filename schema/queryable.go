@@ -99,7 +99,7 @@ func NewDynamicQueryableField(name string, unFlattenName string, ft FieldType) *
 	}
 }
 
-func (builder *QueryableFieldsBuilder) NewQueryableField(name string, f *Field, fieldsInSearch []tsApi.Field) *QueryableField {
+func (*QueryableFieldsBuilder) NewQueryableField(name string, f *Field, fieldsInSearch []tsApi.Field) *QueryableField {
 	var (
 		searchType    string
 		faceted       = f.Faceted

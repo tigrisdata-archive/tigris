@@ -163,7 +163,7 @@ func (x *Message) UnmarshalJSON(data []byte) error {
 	}
 
 	for key, value := range mp {
-		var v interface{}
+		var v any
 
 		switch key {
 		case "id":

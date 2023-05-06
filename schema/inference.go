@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	schema "github.com/tigrisdata/tigris/schema/lang"
 	"github.com/tigrisdata/tigris/util"
@@ -46,7 +45,7 @@ func parseDateTime(s string) bool {
 	return false
 }
 
-func translateStringType(v interface{}) (string, string, error) {
+func translateStringType(v any) (string, string, error) {
 	t := reflect.TypeOf(v)
 
 	if t.PkgPath() == "encoding/json" && t.Name() == "Number" {
@@ -88,7 +87,7 @@ func translateStringType(v interface{}) (string, string, error) {
 	return jsonSpecString, "", nil
 }
 
-func translateType(v interface{}) (string, string, error) {
+func translateType(v any) (string, string, error) {
 	t := reflect.TypeOf(v)
 
 	//nolint:exhaustive
@@ -104,7 +103,7 @@ func translateType(v interface{}) (string, string, error) {
 	case reflect.Map:
 		return jsonSpecObject, "", nil
 	default:
-		return "", "", errors.Wrapf(ErrUnsupportedType, "name='%s' kind='%s'", t.Name(), t.Kind())
+		return "", "", fmt.Errorf("%w name='%s' kind='%s'", ErrUnsupportedType, t.Name(), t.Kind())
 	}
 }
 
@@ -222,7 +221,7 @@ func setAutoGenerate(autoGen []string, name string, field *schema.Field) {
 	}
 }
 
-func traverseFields(sch map[string]*schema.Field, fields map[string]interface{}, autoGen []string) error {
+func traverseFields(sch map[string]*schema.Field, fields map[string]any, autoGen []string) error {
 	for k, v := range fields {
 		t, format, err := translateType(v)
 		if err != nil {

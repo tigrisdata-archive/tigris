@@ -61,7 +61,7 @@ func (p *page) hasCapacity() bool {
 
 // readRow should be used to read search data because this is the single point where we unpack search fields, apply
 // filter and then pack the document into bytes.
-func (p *page) readRow() map[string]interface{} {
+func (p *page) readRow() map[string]any {
 	for p.idx < len(p.hits) {
 		document := p.hits[p.idx].Document
 		p.idx++

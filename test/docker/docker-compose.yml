@@ -60,7 +60,7 @@ services:
       - TIGRIS_SERVER_SEARCH_AUTH_KEY=ts_test_key
       - TIGRIS_SERVER_SEARCH_HOST=tigris_search
       - TIGRIS_SERVER_TRACING_ENABLED=true
-      - TIGRIS_SERVER_SEARCH_READ_ENABLED=false
+      - TIGRIS_SERVER_SEARCH_READ_ENABLED=true
       - TIGRIS_SERVER_SECONDARY_INDEX_WRITE_ENABLED=true
       - TIGRIS_SERVER_SECONDARY_INDEX_READ_ENABLED=true
       - TIGRIS_SERVER_SECONDARY_INDEX_MUTATE_ENABLED=true
@@ -110,12 +110,13 @@ services:
     ports:
       - "8082:8081"
     command: >
-      bash -c '/server/service'
+      bash -c 'sleep 5; /server/service'
     depends_on:
       - tigris_server
       - tigris_db2
       - tigris_realtime
       - tigris_gotrue
+      - tigris_search
 
   tigris_realtime:
     container_name: tigris_realtime

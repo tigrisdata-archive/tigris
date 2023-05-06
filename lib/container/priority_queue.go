@@ -16,12 +16,11 @@ package container
 
 import (
 	"container/heap"
-
-	"github.com/pkg/errors"
+	"fmt"
 )
 
 // ErrEmpty is returned for queues with no items.
-var ErrEmpty = errors.New("queue is empty")
+var ErrEmpty = fmt.Errorf("queue is empty")
 
 type PriorityQueue[T any] struct {
 	queue queue[T]

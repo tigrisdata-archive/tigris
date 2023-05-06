@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/schema"
@@ -251,7 +252,7 @@ func TestCreateCollection(t *testing.T) {
 	t.Run("status_conflict", func(t *testing.T) {
 		dropCollection(t, db, coll)
 
-		createOrUpdateOptions := map[string]interface{}{
+		createOrUpdateOptions := map[string]any{
 			"only_create": true,
 		}
 		for key, value := range testCreateSchema {
@@ -593,4 +594,104 @@ func TestCollectionStatistics(t *testing.T) {
 
 	r = describeCollection(t, dbName, collectionName, Map{}).Status(http.StatusOK).JSON().Raw()
 	require.Equal(t, float64(730), r.(map[string]any)["size"].(float64))
+}
+
+func TestCreateCollections(t *testing.T) {
+	db, _ := setupTests(t)
+	defer cleanupTests(t, db)
+
+	t.Run("success", func(t *testing.T) {
+		coll1 := strings.ReplaceAll(t.Name(), "/", "_") + "_coll1"
+		coll2 := strings.ReplaceAll(t.Name(), "/", "_") + "_coll2"
+
+		dropCollection(t, db, coll1)
+		dropCollection(t, db, coll2)
+
+		body := Map{
+			"schemas": []Map{
+				{
+					"title": coll1,
+					"properties": Map{
+						"int_value": Map{
+							"type": "integer",
+						},
+						"string_value": Map{
+							"type": "string",
+						},
+					},
+					"primary_key": []string{"int_value"},
+				}, {
+					"title": coll2,
+					"properties": Map{
+						"int_value": Map{
+							"type": "integer",
+						},
+						"string_value": Map{
+							"type": "string",
+						},
+					},
+					"primary_key": []string{"int_value"},
+				},
+			},
+		}
+
+		resp := createCollections(t, db, body)
+		resp.Status(http.StatusOK)
+
+		var r api.CreateOrUpdateCollectionsResponse
+		err := jsoniter.Unmarshal([]byte(resp.Body().Raw()), &r)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(r.Resp))
+		require.Equal(t, "created", r.Resp[0].Status)
+		require.Equal(t, "created", r.Resp[1].Status)
+
+		resp = describeCollection(t, db, coll1, Map{})
+		resp.Status(http.StatusOK)
+
+		resp = describeCollection(t, db, coll2, Map{})
+		resp.Status(http.StatusOK)
+	})
+
+	t.Run("error", func(t *testing.T) {
+		coll1 := strings.ReplaceAll(t.Name(), "/", "_") + "_coll1"
+		coll2 := strings.ReplaceAll(t.Name(), "/", "_") + "_coll2"
+
+		dropCollection(t, db, coll1)
+		dropCollection(t, db, coll2)
+
+		body := Map{
+			"schemas": []Map{
+				{
+					"title": coll1,
+					"properties": Map{
+						"int_value": Map{
+							"type": "integer",
+						},
+					},
+					"primary_key": []string{"int_value"},
+				}, {
+					"title": coll2,
+					"properties": Map{
+						"int_value": Map{
+							"type_this_is_an_error": "integer",
+						},
+					},
+					"primary_key": []string{"int_value"},
+				},
+			},
+		}
+
+		resp := createCollections(t, db, body)
+		resp.Status(http.StatusOK)
+
+		var r api.CreateOrUpdateCollectionsResponse
+		err := jsoniter.Unmarshal([]byte(resp.Body().Raw()), &r)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(r.Resp))
+		require.Equal(t, "created", r.Resp[0].Status)
+		require.Equal(t, "", r.Resp[1].Status)
+		require.Equal(t, int32(1), r.FailedAtIndex)
+		require.Equal(t, "unsupported property found 'type_this_is_an_error'", r.Error.Message)
+		require.Equal(t, api.Code_INVALID_ARGUMENT, r.Error.Code)
+	})
 }

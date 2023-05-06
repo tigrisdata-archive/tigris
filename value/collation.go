@@ -60,8 +60,8 @@ func NewCollationFrom(apiCollation *api.Collation) *Collation {
 }
 
 // CompareString returns an integer comparing the two strings. The result will be 0 if a==b, -1 if a < b, and +1 if a > b.
-func (c *Collation) CompareString(a string, b string) int {
-	return c.collator.CompareString(a, b)
+func (x *Collation) CompareString(a string, b string) int {
+	return x.collator.CompareString(a, b)
 }
 
 func (x *Collation) IsCaseSensitive() bool {

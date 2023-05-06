@@ -62,7 +62,7 @@ func TestNewSearchHit(t *testing.T) {
 	})
 
 	t.Run("with empty document", func(t *testing.T) {
-		d := make(map[string]interface{})
+		d := make(map[string]any)
 		hit := NewSearchHit(&tsApi.SearchResultHit{
 			Document: &d,
 		})
@@ -71,7 +71,7 @@ func TestNewSearchHit(t *testing.T) {
 	})
 
 	t.Run("with nil text match score", func(t *testing.T) {
-		d := make(map[string]interface{})
+		d := make(map[string]any)
 		hit := NewSearchHit(&tsApi.SearchResultHit{
 			Document:  &d,
 			TextMatch: nil,
@@ -81,7 +81,7 @@ func TestNewSearchHit(t *testing.T) {
 }
 
 func TestSearchHit_isFieldMissingOrNil(t *testing.T) {
-	doc := map[string]interface{}{
+	doc := map[string]any{
 		"str_field":         "hello",
 		"zero_field":        0,
 		"false_field":       false,
@@ -234,7 +234,7 @@ func dateFrom(dateStr string) int64 {
 	return d
 }
 
-type document map[string]interface{}
+type document map[string]any
 
 var documents = map[string]document{
 	"complete_document": {
@@ -310,7 +310,7 @@ func generateTsHits(docs ...document) []tsApi.SearchResultHit {
 		reader := bytes.NewReader(encoded)
 		decoder := jsoniter.NewDecoder(reader)
 		decoder.UseNumber()
-		var decoded map[string]interface{}
+		var decoded map[string]any
 		_ = decoder.Decode(&decoded)
 		score := doc["_text_match"].(int64)
 		hits = append(hits, tsApi.SearchResultHit{

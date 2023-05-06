@@ -26,7 +26,7 @@ type reqValidator interface {
 	Validate() error
 }
 
-func validate(req interface{}) error {
+func validate(req any) error {
 	if v, ok := req.(reqValidator); ok {
 		if err := v.Validate(); err != nil {
 			return errors.InvalidArgument(err.Error())
@@ -38,7 +38,7 @@ func validate(req interface{}) error {
 
 // validatorUnaryServerInterceptor returns a new unary server interceptor that validates incoming messages.
 func validatorUnaryServerInterceptor() grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		if tx := api.GetTransaction(ctx); !api.IsTxSupported(ctx) && tx != nil {
 			return nil, errors.InvalidArgument("interactive tx not supported but transaction token found")
 		}
@@ -52,7 +52,7 @@ func validatorUnaryServerInterceptor() grpc.UnaryServerInterceptor {
 
 // validatorStreamServerInterceptor returns a new streaming server interceptor that validates incoming messages.
 func validatorStreamServerInterceptor() grpc.StreamServerInterceptor {
-	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	return func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		if tx := api.GetTransaction(stream.Context()); !api.IsTxSupported(stream.Context()) && tx != nil {
 			return errors.InvalidArgument("interactive tx not supported but transaction token found")
 		}
@@ -66,14 +66,10 @@ type recvWrapper struct {
 }
 
 // RecvMsg wrapper to validate individual stream messages.
-func (s *recvWrapper) RecvMsg(m interface{}) error {
+func (s *recvWrapper) RecvMsg(m any) error {
 	if err := s.ServerStream.RecvMsg(m); err != nil {
 		return err
 	}
 
-	if err := validate(m); err != nil {
-		return err
-	}
-
-	return nil
+	return validate(m)
 }

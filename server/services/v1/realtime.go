@@ -93,7 +93,7 @@ var upgradeToSocket = websocket.Upgrader{
 	},
 }
 
-func (s *realtimeService) extractConnParams(r *http.Request) realtime.ConnectionParams {
+func (*realtimeService) extractConnParams(r *http.Request) realtime.ConnectionParams {
 	var params realtime.ConnectionParams
 
 	// project name is part of path
@@ -138,7 +138,7 @@ func (s *realtimeService) DeviceConnectionHandler(w http.ResponseWriter, r *http
 	_ = session.Start(ctx)
 }
 
-func (s *realtimeService) Ping(_ context.Context, _ *api.HeartbeatEvent) (*api.HeartbeatEvent, error) {
+func (*realtimeService) Ping(_ context.Context, _ *api.HeartbeatEvent) (*api.HeartbeatEvent, error) {
 	return &api.HeartbeatEvent{}, nil
 }
 

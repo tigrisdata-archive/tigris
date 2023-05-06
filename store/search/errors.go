@@ -37,7 +37,7 @@ type Error struct {
 	Msg      string
 }
 
-func NewSearchError(httpCode int, code ErrCode, msg string, args ...interface{}) error {
+func NewSearchError(httpCode int, code ErrCode, msg string, args ...any) error {
 	return Error{HttpCode: httpCode, Code: code, Msg: fmt.Sprintf(msg, args...)}
 }
 

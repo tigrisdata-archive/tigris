@@ -40,7 +40,7 @@ func TestCreateNamespace(t *testing.T) {
 	// JSON number maps to float64 in Go
 	var previousMaxId float64 = 0
 	for _, namespace := range namespaces {
-		if converted, ok := namespace.(map[string]interface{}); ok {
+		if converted, ok := namespace.(map[string]any); ok {
 			if converted["code"].(float64) > previousMaxId {
 				previousMaxId = converted["code"].(float64)
 			}
@@ -60,7 +60,7 @@ func TestCreateNamespace(t *testing.T) {
 		Object().
 		Value("namespace").Raw()
 	require.NotNil(t, createdNamespace)
-	createdNamespaceMap := createdNamespace.(map[string]interface{})
+	createdNamespaceMap := createdNamespace.(map[string]any)
 	assert.Equal(t, displayName, createdNamespaceMap["name"])
 	assert.Equal(t, previousMaxId+1, createdNamespaceMap["code"])
 }
@@ -77,7 +77,7 @@ func TestListNamespaces(t *testing.T) {
 		Raw()
 	found := false
 	for _, namespace := range namespaces {
-		if converted, ok := namespace.(map[string]interface{}); ok {
+		if converted, ok := namespace.(map[string]any); ok {
 			if converted["name"] == name {
 				found = true
 			}

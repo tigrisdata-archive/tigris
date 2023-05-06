@@ -450,11 +450,12 @@ func (f *FieldMultiType) UnmarshalJSON(b []byte) error {
 		f.append(val)
 	case []any:
 		for _, v := range val {
-			if s, ok := v.(string); ok {
-				f.append(s)
-			} else {
+			s, ok := v.(string)
+			if !ok {
 				return ErrInvalidType
 			}
+
+			f.append(s)
 		}
 	}
 
@@ -479,7 +480,7 @@ type FieldBuilder struct {
 	TypeRaw              FieldMultiType      `json:"type,omitempty"`
 	Format               string              `json:"format,omitempty"`
 	Encoding             string              `json:"contentEncoding,omitempty"`
-	Default              interface{}         `json:"default,omitempty"`
+	Default              any                 `json:"default,omitempty"`
 	CreatedAt            *bool               `json:"createdAt,omitempty"`
 	UpdatedAt            *bool               `json:"updatedAt,omitempty"`
 	MaxLength            *int32              `json:"maxLength,omitempty"`

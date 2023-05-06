@@ -695,7 +695,7 @@ func testKVAddAtomicValue(t *testing.T, kv baseKVStore) {
 	expected := []int64{11, 5}
 	for iter.Next(&rangeVal) {
 		require.Equal(t, expected[count], rangeVal.Data)
-		count += 1
+		count++
 	}
 
 	require.Equal(t, 2, count)

@@ -48,7 +48,7 @@ type Error struct {
 	msg  string
 }
 
-func NewCacheError(code ErrCode, msg string, args ...interface{}) error {
+func NewCacheError(code ErrCode, msg string, args ...any) error {
 	return Error{code: code, msg: fmt.Sprintf(msg, args...)}
 }
 

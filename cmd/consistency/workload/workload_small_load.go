@@ -20,7 +20,6 @@ import (
 	"sync"
 
 	"github.com/hashicorp/go-multierror"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris-client-go/driver"
 )
@@ -62,11 +61,11 @@ type SmallConciseWorkload struct {
 	WorkloadData *Queue
 }
 
-func (w *SmallConciseWorkload) Type() string {
+func (*SmallConciseWorkload) Type() string {
 	return "small_only_workload"
 }
 
-func (w *SmallConciseWorkload) Setup(client driver.Driver) error {
+func (*SmallConciseWorkload) Setup(_ driver.Driver) error {
 	return nil
 }
 
@@ -106,7 +105,7 @@ func (w *SmallConciseWorkload) Start(client driver.Driver) (int64, error) {
 				}
 
 				if _, err := db.Replace(context.TODO(), collection, []driver.Document{serialized}); err != nil {
-					replaceErr = multierror.Append(replaceErr, errors.Wrapf(err, "replace to collection failed '%s' '%s'", w.Database, collection))
+					replaceErr = multierror.Append(replaceErr, fmt.Errorf("%w replace to collection failed '%s' '%s'", err, w.Database, collection))
 					log.Debug().Err(err).Msg("Replace document failed")
 					return
 				}
@@ -120,6 +119,6 @@ func (w *SmallConciseWorkload) Start(client driver.Driver) (int64, error) {
 	return w.Records * int64(w.Threads), replaceErr
 }
 
-func (w *SmallConciseWorkload) Check(client driver.Driver) (bool, error) {
+func (*SmallConciseWorkload) Check(_ driver.Driver) (bool, error) {
 	return true, nil
 }

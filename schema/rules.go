@@ -54,7 +54,7 @@ type SearchIndexValidator interface {
 
 type PrimaryIndexSchemaValidator struct{}
 
-func (v *PrimaryIndexSchemaValidator) Validate(existing *DefaultCollection, current *Factory) error {
+func (*PrimaryIndexSchemaValidator) Validate(existing *DefaultCollection, current *Factory) error {
 	return existing.GetPrimaryKey().IsCompatible(current.PrimaryKey)
 }
 
@@ -174,7 +174,7 @@ func (v *SearchIdSchemaValidator) ValidateIndex(existing *SearchIndex, current *
 
 type SearchIndexSourceValidator struct{}
 
-func (v *SearchIndexSourceValidator) ValidateIndex(existing *SearchIndex, current *SearchFactory) error {
+func (*SearchIndexSourceValidator) ValidateIndex(existing *SearchIndex, current *SearchFactory) error {
 	if len(existing.Source.Type) > 0 && existing.Source.Type != current.Source.Type {
 		if existing.Source.Type == "user" && current.Source.Type == SearchSourceExternal {
 			return nil
@@ -309,15 +309,18 @@ func ValidateFieldAttributes(isSearch bool, field *Field) error {
 		if hasIndexingAttributes(field) {
 			if field.IsIndexed() {
 				return errors.InvalidArgument("Cannot enable index on object '%s' or object fields", field.Name())
-			} else {
-				if len(field.Fields) > 0 {
-					// either index an object or the flattened form i.e. object with fields
-					return errors.InvalidArgument("Cannot have search attributes on object '%s', set it on object fields", field.Name())
-				} else if field.IsSorted() || field.IsFaceted() {
-					return errors.InvalidArgument("Cannot have sort or facet attribute on an object '%s'", field.Name())
-				}
+			}
+
+			if len(field.Fields) > 0 {
+				// either index an object or the flattened form i.e. object with fields
+				return errors.InvalidArgument("Cannot have search attributes on object '%s', set it on object fields", field.Name())
+			}
+
+			if field.IsSorted() || field.IsFaceted() {
+				return errors.InvalidArgument("Cannot have sort or facet attribute on an object '%s'", field.Name())
 			}
 		}
+
 		return validateObjectFields(field, false)
 	}
 
@@ -330,10 +333,9 @@ func validateObjectFields(f *Field, notSupported bool) error {
 			if hasIndexingAttributes(nested) {
 				if nested.IsIndexed() {
 					return errors.InvalidArgument("Cannot enable index on object '%s' or object fields", nested.Name())
-				} else {
-					// it needs to be on field level.
-					return errors.InvalidArgument("Cannot have search attributes on object '%s', set it on object fields", nested.Name())
 				}
+				// it needs to be on field level.
+				return errors.InvalidArgument("Cannot have search attributes on object '%s', set it on object fields", nested.Name())
 			}
 			if hasIndexingAttributes(nested) && len(nested.Fields) == 0 {
 				// it needs to be on field level.

@@ -105,7 +105,7 @@ func (m *managementService) CreateNamespace(ctx context.Context, req *api.Create
 		if err != nil {
 			return nil, errors.Internal("Failed to generate ID")
 		}
-		var maxId uint32 = 0
+		var maxId uint32
 		for _, namespace := range namespaces {
 			if maxId < namespace.Id() {
 				maxId = namespace.Id()
@@ -138,29 +138,27 @@ func (m *managementService) CreateNamespace(ctx context.Context, req *api.Create
 	if err != nil {
 		_ = tx.Rollback(ctx)
 		return nil, err
-	} else {
-		if err = tx.Commit(ctx); err == nil {
-			return &api.CreateNamespaceResponse{
-				Status:  "CREATED",
-				Message: "Namespace created, with code=" + fmt.Sprint(code) + ", and id=" + id,
-				Namespace: &api.NamespaceInfo{
-					Code: int32(code),
-					Id:   id,
-					Name: req.GetName(),
-				},
-			}, nil
-		} else {
-			return nil, err
-		}
 	}
+
+	if err = tx.Commit(ctx); err == nil {
+		return &api.CreateNamespaceResponse{
+			Status:  "CREATED",
+			Message: "Namespace created, with code=" + fmt.Sprint(code) + ", and id=" + id,
+			Namespace: &api.NamespaceInfo{
+				Code: int32(code),
+				Id:   id,
+				Name: req.GetName(),
+			},
+		}, nil
+	}
+	return nil, err
 }
 
 func (m *managementService) ListNamespaces(ctx context.Context, req *api.ListNamespacesRequest) (*api.ListNamespacesResponse, error) {
 	if req.GetDescribe() {
 		return m.getNamespacesDetails(ctx, req.GetNamespaceId())
-	} else {
-		return m.listNamespaces(ctx, req.GetNamespaceId())
 	}
+	return m.listNamespaces(ctx, req.GetNamespaceId())
 }
 
 func (m *managementService) DeleteNamespace(ctx context.Context, req *api.DeleteNamespaceRequest) (*api.DeleteNamespaceResponse, error) {

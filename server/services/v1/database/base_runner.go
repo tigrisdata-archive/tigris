@@ -58,7 +58,7 @@ func NewBaseQueryRunner(encoder metadata.Encoder, cdcMgr *cdc.Manager, txMgr *tr
 
 // getDatabase is a helper method to return database either from the transactional context for explicit transactions or
 // from the tenant object. Returns a user facing error if the database is not present.
-func (runner *BaseQueryRunner) getDatabase(_ context.Context, tx transaction.Tx, tenant *metadata.Tenant, projName string, branch string) (*metadata.Database, error) {
+func (*BaseQueryRunner) getDatabase(_ context.Context, tx transaction.Tx, tenant *metadata.Tenant, projName string, branch string) (*metadata.Database, error) {
 	dbBranch := metadata.NewDatabaseNameWithBranch(projName, branch)
 
 	if tx != nil && tx.Context().GetStagedDatabase() != nil {
@@ -79,13 +79,13 @@ func (runner *BaseQueryRunner) getDatabase(_ context.Context, tx transaction.Tx,
 
 	project, err := tenant.GetProject(projName)
 	if err != nil {
-		return nil, createApiError(err)
+		return nil, CreateApiError(err)
 	}
 
 	// otherwise, simply read from the in-memory cache/disk.
 	db, err := project.GetDatabase(dbBranch)
 	if err != nil {
-		return nil, createApiError(err)
+		return nil, CreateApiError(err)
 	}
 
 	return db, nil
@@ -93,7 +93,7 @@ func (runner *BaseQueryRunner) getDatabase(_ context.Context, tx transaction.Tx,
 
 // getCollection is a wrapper around getCollection method on the database object to return a user facing error if the
 // collection is not present.
-func (runner *BaseQueryRunner) getCollection(db *metadata.Database, collName string) (*schema.DefaultCollection, error) {
+func (*BaseQueryRunner) getCollection(db *metadata.Database, collName string) (*schema.DefaultCollection, error) {
 	collection := db.GetCollection(collName)
 	if collection == nil {
 		return nil, errors.NotFound("collection doesn't exist '%s'", collName)
@@ -172,7 +172,7 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 	return ts, allKeys, err
 }
 
-func (runner *BaseQueryRunner) mutateAndValidatePayload(ctx context.Context, coll *schema.DefaultCollection, mutator mutator, doc []byte) ([]byte, error) {
+func (*BaseQueryRunner) mutateAndValidatePayload(ctx context.Context, coll *schema.DefaultCollection, mutator mutator, doc []byte) ([]byte, error) {
 	deserializedDoc, err := util.JSONToMap(doc)
 	if ulog.E(err) {
 		return doc, err
@@ -201,7 +201,7 @@ func (runner *BaseQueryRunner) mutateAndValidatePayload(ctx context.Context, col
 	return doc, nil
 }
 
-func (runner *BaseQueryRunner) buildSecondaryIndexKeysUsingFilter(coll *schema.DefaultCollection,
+func (*BaseQueryRunner) buildSecondaryIndexKeysUsingFilter(coll *schema.DefaultCollection,
 	reqFilter []byte, collation *value.Collation, sortFields *sort.Ordering,
 ) (*filter.QueryPlan, error) {
 	if sortFields != nil && len(*sortFields) > 1 {
@@ -224,7 +224,7 @@ func (runner *BaseQueryRunner) buildSecondaryIndexKeysUsingFilter(coll *schema.D
 	return BuildSecondaryIndexKeys(coll, filters, sortFields)
 }
 
-func (runner *BaseQueryRunner) mustBeDocumentsCollection(collection *schema.DefaultCollection, method string) error {
+func (*BaseQueryRunner) mustBeDocumentsCollection(collection *schema.DefaultCollection, method string) error {
 	if collection.Type() != schema.DocumentsType {
 		return errors.InvalidArgument("%s is only supported on collection type of 'documents'", method)
 	}
@@ -232,7 +232,7 @@ func (runner *BaseQueryRunner) mustBeDocumentsCollection(collection *schema.Defa
 	return nil
 }
 
-func (runner *BaseQueryRunner) getSearchOrdering(coll *schema.DefaultCollection, sortReq jsoniter.RawMessage) (*sort.Ordering, error) {
+func (*BaseQueryRunner) getSearchOrdering(coll *schema.DefaultCollection, sortReq jsoniter.RawMessage) (*sort.Ordering, error) {
 	ordering, err := sort.UnmarshalSort(sortReq)
 	if err != nil || ordering == nil {
 		return nil, err
@@ -254,7 +254,7 @@ func (runner *BaseQueryRunner) getSearchOrdering(coll *schema.DefaultCollection,
 	return ordering, nil
 }
 
-func (runner *BaseQueryRunner) getSortOrdering(_ *schema.DefaultCollection, sortReq jsoniter.RawMessage) (*sort.Ordering, error) {
+func (*BaseQueryRunner) getSortOrdering(_ *schema.DefaultCollection, sortReq jsoniter.RawMessage) (*sort.Ordering, error) {
 	ordering, err := sort.UnmarshalSort(sortReq)
 	if err != nil || ordering == nil {
 		return nil, err
@@ -327,7 +327,7 @@ func (runner *BaseQueryRunner) getSecondaryWriterIterator(ctx context.Context, t
 	return NewSecondaryIndexReader(ctx, tx, coll, filter.NewWrappedFilter(filters), queryPlan)
 }
 
-func (runner *BaseQueryRunner) indexToCollectionIndex(all []*schema.Index) []*api.CollectionIndex {
+func (*BaseQueryRunner) indexToCollectionIndex(all []*schema.Index) []*api.CollectionIndex {
 	indexes := make([]*api.CollectionIndex, len(all))
 	for i, index := range all {
 		fields := make([]*api.Field, len(index.Fields))

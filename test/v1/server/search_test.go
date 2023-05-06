@@ -227,7 +227,7 @@ func getIndexURL(projectName, indexName string) string {
 	return fmt.Sprintf("/v1/projects/%s/search/indexes/%s", projectName, indexName)
 }
 
-func createSearchIndex(t *testing.T, project string, index string, schema map[string]interface{}) *httpexpect.Response {
+func createSearchIndex(t *testing.T, project string, index string, schema map[string]any) *httpexpect.Response {
 	e := expect(t)
 	return e.PUT(getIndexURL(project, index)).
 		WithJSON(schema).
@@ -418,7 +418,7 @@ func TestIndex_Management(t *testing.T) {
 		found := false
 		items := respList.Value("indexes").Array()
 		for _, item := range items.Iter() {
-			if item.Raw().(map[string]interface{})["name"] == testIndex {
+			if item.Raw().(map[string]any)["name"] == testIndex {
 				found = true
 			}
 		}
@@ -438,7 +438,7 @@ func TestIndex_Management(t *testing.T) {
 			found := false
 			items := respList.Value("indexes").Array()
 			for _, item := range items.Iter() {
-				if item.Raw().(map[string]interface{})["name"] == testIndex {
+				if item.Raw().(map[string]any)["name"] == testIndex {
 					found = true
 				}
 			}
@@ -907,8 +907,8 @@ func TestSearch(t *testing.T) {
 
 	res = getSearchResults(t, project, index, Map{"q": "*", "group_by": Doc{"fields": []string{"object_value.string_value"}}, "sort": []Doc{{"created_at": "$asc"}}}, false)
 	require.Equal(t, 2, len(res.Result.Groups))
-	require.Equal(t, []interface{}{"san francisco"}, res.Result.Groups[0]["group_keys"])
-	require.Equal(t, []interface{}{"san diego"}, res.Result.Groups[1]["group_keys"])
+	require.Equal(t, []any{"san francisco"}, res.Result.Groups[0]["group_keys"])
+	require.Equal(t, []any{"san diego"}, res.Result.Groups[1]["group_keys"])
 
 	compareDocs(t, docs[2], res.Result.Groups[0]["hits"].([]any)[0].(map[string]any)["data"].(map[string]any))
 	compareDocs(t, docs[0], res.Result.Groups[0]["hits"].([]any)[1].(map[string]any)["data"].(map[string]any))

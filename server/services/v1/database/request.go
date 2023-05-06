@@ -26,6 +26,7 @@ const (
 	DeletedStatus  string = "deleted"
 	CreatedStatus  string = "created"
 	DroppedStatus  string = "dropped"
+	OkStatus       string = "success"
 )
 
 // Streaming is a wrapper interface for passing around for streaming reads.

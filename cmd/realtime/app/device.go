@@ -23,6 +23,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 type Device struct {
@@ -36,7 +37,7 @@ func NewDevice(id string, url url.URL) (*Device, error) {
 		log.Err(err).Msg("connecting to ws error")
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { ulog.E(resp.Body.Close()) }()
 
 	d := &Device{
 		id:   id,
@@ -123,11 +124,7 @@ func (d *Device) Subscribe(channel string) error {
 		return err
 	}
 
-	if err = d.conn.WriteMessage(websocket.TextMessage, encR); err != nil {
-		return err
-	}
-
-	return nil
+	return d.conn.WriteMessage(websocket.TextMessage, encR)
 }
 
 func (d *Device) Publish(channel string, id string) error {
@@ -148,12 +145,9 @@ func (d *Device) Publish(channel string, id string) error {
 		return err
 	}
 
-	if err := d.conn.WriteMessage(websocket.TextMessage, encR); err != nil {
-		return err
-	}
-	return nil
+	return d.conn.WriteMessage(websocket.TextMessage, encR)
 }
 
 func (d *Device) Close() {
-	d.conn.Close()
+	ulog.E(d.conn.Close())
 }

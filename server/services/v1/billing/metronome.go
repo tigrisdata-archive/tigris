@@ -21,35 +21,47 @@ import (
 	"time"
 
 	"github.com/deepmap/oapi-codegen/pkg/securityprovider"
+	"github.com/deepmap/oapi-codegen/pkg/types"
 	"github.com/google/uuid"
 	biller "github.com/tigrisdata/metronome-go-client"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/uber-go/tally"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-type MetronomeId = uuid.UUID
-
 type Metronome struct {
-	Config config.Metronome
-	client *biller.ClientWithResponses
+	Config              config.Metronome
+	client              *biller.ClientWithResponses
+	billedMetricsByName map[string]uuid.UUID
+	billedMetricsById   map[uuid.UUID]string
 }
 
-func NewMetronomeProvider(config config.Metronome) (*Metronome, error) {
-	bearerTokenProvider, err := securityprovider.NewSecurityProviderBearerToken(config.ApiKey)
+func NewMetronomeProvider(conf config.Metronome) (*Metronome, error) {
+	bearerTokenProvider, err := securityprovider.NewSecurityProviderBearerToken(conf.ApiKey)
 	if err != nil {
 		return nil, err
 	}
-	client, err := biller.NewClientWithResponses(config.URL, biller.WithRequestEditorFn(bearerTokenProvider.Intercept))
+	client, err := biller.NewClientWithResponses(conf.URL, biller.WithRequestEditorFn(bearerTokenProvider.Intercept))
 	if err != nil {
 		return nil, err
 	}
-	return &Metronome{Config: config, client: client}, nil
+	// billable metrics should be uuids
+	bm, bu := map[string]uuid.UUID{}, map[uuid.UUID]string{}
+	for name, id := range conf.BilledMetrics {
+		uid, err := uuid.Parse(id)
+		if err != nil {
+			return nil, err
+		}
+		bm[name] = uid
+		bu[uid] = name
+	}
+	return &Metronome{Config: conf, client: client, billedMetricsByName: bm, billedMetricsById: bu}, nil
 }
 
-func (m *Metronome) measure(ctx context.Context, scope tally.Scope, operation string, f func(ctx context.Context) (*http.Response, error)) {
+func (*Metronome) measure(ctx context.Context, scope tally.Scope, operation string, f func(ctx context.Context) (*http.Response, error)) {
 	me := metrics.NewMeasurement(
 		metrics.MetronomeServiceName,
 		operation,
@@ -78,7 +90,7 @@ func (m *Metronome) measure(ctx context.Context, scope tally.Scope, operation st
 	me.IncrementCount(scope, errTags, "availability", availability)
 }
 
-func (m *Metronome) CreateAccount(ctx context.Context, namespaceId string, name string) (MetronomeId, error) {
+func (m *Metronome) CreateAccount(ctx context.Context, namespaceId string, name string) (AccountId, error) {
 	var (
 		resp *biller.CreateCustomerResponse
 		err  error
@@ -108,7 +120,7 @@ func (m *Metronome) CreateAccount(ctx context.Context, namespaceId string, name 
 	return resp.JSON200.Data.Id, nil
 }
 
-func (m *Metronome) AddDefaultPlan(ctx context.Context, accountId MetronomeId) (bool, error) {
+func (m *Metronome) AddDefaultPlan(ctx context.Context, accountId AccountId) (bool, error) {
 	planId, err := uuid.Parse(m.Config.DefaultPlan)
 	if err != nil {
 		return false, err
@@ -116,7 +128,7 @@ func (m *Metronome) AddDefaultPlan(ctx context.Context, accountId MetronomeId) (
 	return m.AddPlan(ctx, accountId, planId)
 }
 
-func (m *Metronome) AddPlan(ctx context.Context, accountId MetronomeId, planId uuid.UUID) (bool, error) {
+func (m *Metronome) AddPlan(ctx context.Context, accountId AccountId, planId uuid.UUID) (bool, error) {
 	var (
 		resp *biller.AddPlanToCustomerResponse
 		err  error
@@ -196,7 +208,7 @@ func (m *Metronome) pushBillingEvents(ctx context.Context, events []biller.Event
 	pageSize := 100
 	pages := len(events) / pageSize
 	if len(events)%pageSize > 0 {
-		pages += 1
+		pages++
 	}
 
 	for p := 0; p < pages; p++ {
@@ -226,7 +238,7 @@ func (m *Metronome) pushBillingEvents(ctx context.Context, events []biller.Event
 	return nil
 }
 
-func (m *Metronome) GetInvoices(ctx context.Context, accountId MetronomeId, r *api.ListInvoicesRequest) (*api.ListInvoicesResponse, error) {
+func (m *Metronome) GetInvoices(ctx context.Context, accountId AccountId, r *api.ListInvoicesRequest) (*api.ListInvoicesResponse, error) {
 	var (
 		resp *biller.ListInvoicesResponse
 		err  error
@@ -279,7 +291,7 @@ func (m *Metronome) GetInvoices(ctx context.Context, accountId MetronomeId, r *a
 	}, nil
 }
 
-func (m *Metronome) GetInvoiceById(ctx context.Context, accountId MetronomeId, invoiceId string) (*api.ListInvoicesResponse, error) {
+func (m *Metronome) GetInvoiceById(ctx context.Context, accountId AccountId, invoiceId string) (*api.ListInvoicesResponse, error) {
 	var (
 		resp *biller.GetInvoiceResponse
 		err  error
@@ -311,6 +323,101 @@ func (m *Metronome) GetInvoiceById(ctx context.Context, accountId MetronomeId, i
 	}
 	return &api.ListInvoicesResponse{
 		Data: data,
+	}, nil
+}
+
+func (m *Metronome) GetUsage(ctx context.Context, id AccountId, r *UsageRequest) (*UsageAggregate, error) {
+	var (
+		resp *biller.GetUsageBatchResponse
+		err  error
+	)
+	if r.StartTime == nil || r.StartTime.IsZero() {
+		return nil, errors.InvalidArgument("'%s' is not a valid start time", r.StartTime)
+	}
+	if r.EndTime == nil || r.EndTime.IsZero() {
+		return nil, errors.InvalidArgument("'%s' is not a valid end time", r.EndTime)
+	}
+
+	type mBillableMetric struct {
+		GroupBy *struct {
+			Key    string    `json:"key"`
+			Values *[]string `json:"values,omitempty"`
+		} `json:"group_by,omitempty"`
+		Id types.UUID `json:"id"`
+	}
+
+	reqParams := biller.GetUsageBatchJSONRequestBody{
+		BillableMetrics: (*[]struct {
+			GroupBy *struct {
+				Key    string    `json:"key"`
+				Values *[]string `json:"values,omitempty"`
+			} `json:"group_by,omitempty"`
+			Id types.UUID `json:"id"`
+		})(&[]struct {
+			GroupBy *struct {
+				Key    string
+				Values *[]string
+			}
+			Id uuid.UUID
+		}{}),
+		CustomerIds:  &[]AccountId{id},
+		StartingOn:   *r.StartTime,
+		EndingBefore: *r.EndTime,
+		WindowSize:   "hour",
+	}
+
+	l := reqParams.BillableMetrics
+	if r.BillableMetric == nil || len(*r.BillableMetric) == 0 {
+		// query all metrics
+		for _, bid := range m.billedMetricsByName {
+			*l = append(*l, mBillableMetric{Id: bid})
+		}
+	} else {
+		for _, name := range *r.BillableMetric {
+			id, ok := m.billedMetricsByName[name]
+			if !ok {
+				return nil, errors.InvalidArgument("'%s' is not a valid billable metric", name)
+			}
+
+			*l = append(*l, mBillableMetric{Id: id})
+		}
+	}
+
+	m.measure(ctx, metrics.MetronomeGetUsage, "get_usage", func(ctx context.Context) (*http.Response, error) {
+		resp, err = m.client.GetUsageBatchWithResponse(ctx, &biller.GetUsageBatchParams{NextPage: r.NextPage}, reqParams)
+		if resp == nil {
+			return nil, err
+		}
+		return resp.HTTPResponse, err
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.JSON200 == nil {
+		return nil, NewMetronomeError(resp.StatusCode(), resp.Body)
+	}
+
+	aggUsage := map[string][]*Usage{}
+	for _, param := range *reqParams.BillableMetrics {
+		n := m.billedMetricsById[param.Id]
+		aggUsage[n] = []*Usage{}
+	}
+
+	for _, d := range resp.JSON200.Data {
+		if n, ok := m.billedMetricsById[d.BillableMetricId]; ok {
+			aggUsage[n] = append(aggUsage[n], &Usage{
+				StartTime: d.StartTimestamp,
+				EndTime:   d.EndTimestamp,
+				Value:     d.Value,
+			})
+		}
+	}
+
+	return &UsageAggregate{
+		Data:     aggUsage,
+		NextPage: resp.JSON200.NextPage,
 	}, nil
 }
 

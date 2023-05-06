@@ -16,7 +16,8 @@
 package schema
 
 import (
-	"github.com/pkg/errors"
+	"fmt"
+
 	"github.com/tigrisdata/tigris/templates"
 )
 
@@ -35,7 +36,7 @@ func getJavaStringType(format string) string {
 	}
 }
 
-func (c *JSONToJava) GetType(tp string, format string) (string, error) {
+func (*JSONToJava) GetType(tp string, format string) (string, error) {
 	var resType string
 
 	switch tp {
@@ -55,7 +56,7 @@ func (c *JSONToJava) GetType(tp string, format string) (string, error) {
 	}
 
 	if resType == "" {
-		return "", errors.Wrapf(ErrUnsupportedType, "type=%s, format=%s", tp, format)
+		return "", fmt.Errorf("%w type=%s, format=%s", ErrUnsupportedType, tp, format)
 	}
 
 	return resType, nil

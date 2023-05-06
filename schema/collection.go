@@ -212,7 +212,7 @@ func (d *DefaultCollection) GetName() string {
 
 // SecondaryIndexKeyword is the subspace within a collection where the secondary index information
 // is stored.
-func (d *DefaultCollection) SecondaryIndexKeyword() string {
+func (*DefaultCollection) SecondaryIndexKeyword() string {
 	return "skey"
 }
 
@@ -297,7 +297,7 @@ func (d *DefaultCollection) GetField(name string) *Field {
 }
 
 // Validate expects an unmarshalled document which it will validate again the schema of this collection.
-func (d *DefaultCollection) Validate(document interface{}) error {
+func (d *DefaultCollection) Validate(document any) error {
 	err := d.Validator.Validate(document)
 	if err == nil {
 		return nil
@@ -354,13 +354,13 @@ func buildPath(parent string, field string) string {
 			parent = parent + "." + field
 		}
 		return parent
-	} else {
-		return field
 	}
+
+	return field
 }
 
 func init() {
-	jsonschema.Formats[FieldNames[ByteType]] = func(i interface{}) bool {
+	jsonschema.Formats[FieldNames[ByteType]] = func(i any) bool {
 		if i == nil {
 			return true
 		}
@@ -371,7 +371,7 @@ func init() {
 		}
 		return false
 	}
-	jsonschema.Formats[FieldNames[Int32Type]] = func(i interface{}) bool {
+	jsonschema.Formats[FieldNames[Int32Type]] = func(i any) bool {
 		if i == nil {
 			return true
 		}
@@ -383,7 +383,7 @@ func init() {
 
 		return !(val < math.MinInt32 || val > math.MaxInt32)
 	}
-	jsonschema.Formats[FieldNames[Int64Type]] = func(i interface{}) bool {
+	jsonschema.Formats[FieldNames[Int64Type]] = func(i any) bool {
 		if i == nil {
 			return true
 		}
@@ -393,7 +393,7 @@ func init() {
 	}
 }
 
-func parseInt(i interface{}) (int64, error) {
+func parseInt(i any) (int64, error) {
 	switch i.(type) {
 	case json.Number, float64, int, int32, int64:
 		n, err := strconv.ParseInt(fmt.Sprint(i), 10, 64)

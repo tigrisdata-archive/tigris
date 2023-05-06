@@ -64,7 +64,7 @@ func (a *AndFilter) validate() error {
 	return nil
 }
 
-func (a *AndFilter) Type() LogicalOP {
+func (*AndFilter) Type() LogicalOP {
 	return AndOP
 }
 
@@ -79,7 +79,7 @@ func (a *AndFilter) Matches(doc []byte, metadata []byte) bool {
 	return true
 }
 
-func (a *AndFilter) MatchesDoc(doc map[string]interface{}) bool {
+func (a *AndFilter) MatchesDoc(doc map[string]any) bool {
 	for _, f := range a.filter {
 		if !f.MatchesDoc(doc) {
 			return false
@@ -145,7 +145,7 @@ func (o *OrFilter) validate() error {
 	return nil
 }
 
-func (o *OrFilter) Type() LogicalOP {
+func (*OrFilter) Type() LogicalOP {
 	return OrOP
 }
 
@@ -160,7 +160,7 @@ func (o *OrFilter) Matches(doc []byte, metadata []byte) bool {
 	return false
 }
 
-func (o *OrFilter) MatchesDoc(doc map[string]interface{}) bool {
+func (o *OrFilter) MatchesDoc(doc map[string]any) bool {
 	for _, f := range o.filter {
 		if f.MatchesDoc(doc) {
 			return true

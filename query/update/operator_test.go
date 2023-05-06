@@ -405,20 +405,20 @@ func TestMergeAndGet_PrimaryKeyMutation(t *testing.T) {
 
 func TestMergeAndGet_MarshalInput(t *testing.T) {
 	cases := []struct {
-		inputDoc    map[string]interface{}
-		existingDoc map[string]interface{}
+		inputDoc    map[string]any
+		existingDoc map[string]any
 		outputDoc   jsoniter.RawMessage
 		apply       FieldOPType
 	}{
 		{
-			map[string]interface{}{
+			map[string]any{
 				"int_value":    200,
 				"string_value": "simple_insert1_update_modified",
 				"bool_value":   false,
 				"double_value": 200.00001,
 				"bytes_value":  []byte(`"simple_insert1_update_modified"`),
 			},
-			map[string]interface{}{
+			map[string]any{
 				"pkey_int":     100,
 				"int_value":    100,
 				"string_value": "simple_insert1_update",
@@ -431,7 +431,7 @@ func TestMergeAndGet_MarshalInput(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		reqInput := make(map[string]interface{})
+		reqInput := make(map[string]any)
 		reqInput[string(c.apply)] = c.inputDoc
 		input, err := jsoniter.Marshal(reqInput)
 		require.NoError(t, err)
@@ -491,7 +491,7 @@ func BenchmarkSetDeserializeInput(b *testing.B) {
 	}
 }
 
-func (factory *FieldOperatorFactory) testSetDeserializeInput(outMap map[string]any, setDoc jsoniter.RawMessage) error {
+func (*FieldOperatorFactory) testSetDeserializeInput(outMap map[string]any, setDoc jsoniter.RawMessage) error {
 	setMap, err := util.JSONToMap(setDoc)
 	if err != nil {
 		return err
@@ -504,7 +504,7 @@ func (factory *FieldOperatorFactory) testSetDeserializeInput(outMap map[string]a
 	return nil
 }
 
-func (factory *FieldOperatorFactory) testSetNoDeserialization(input jsoniter.RawMessage, setDoc jsoniter.RawMessage) error {
+func (*FieldOperatorFactory) testSetNoDeserialization(input jsoniter.RawMessage, setDoc jsoniter.RawMessage) error {
 	var (
 		output []byte = input
 		err    error

@@ -39,7 +39,7 @@ type Error struct {
 	msg  string
 }
 
-func NewMetadataError(code ErrorCode, msg string, args ...interface{}) error {
+func NewMetadataError(code ErrorCode, msg string, args ...any) error {
 	return Error{
 		code: code,
 		msg:  fmt.Sprintf(msg, args...),

@@ -43,14 +43,17 @@ func CreateWatcher(ctx context.Context, name string, pos string, existingPos str
 		// just use the existing id
 		err := w.move(ctx, existingPos)
 		return w, err
-	} else {
-		if pos > existingPos {
-			log.Warn().Msgf("new position '%s' is greater than existing pos '%s' for watch '%s'", pos, existingPos, name)
-		}
-
-		err := w.move(ctx, pos)
-		return w, err
 	}
+
+	if pos > existingPos {
+		log.Warn().Msgf("new position '%s' is greater than existing pos '%s' for watch '%s'", pos, existingPos, name)
+	}
+
+	if err := w.move(ctx, pos); err != nil {
+		return nil, err
+	}
+
+	return w, nil
 }
 
 func CreateAndRegisterWatcher(ctx context.Context, name string, pos string, stream cache.Stream) (*ChannelWatcher, error) {

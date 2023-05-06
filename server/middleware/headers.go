@@ -33,8 +33,8 @@ const (
 	CookieMaxAgeKey = "Expires"
 )
 
-func headersUnaryServerInterceptor() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func headersUnaryServerInterceptor() func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		resp, err := handler(ctx, req)
 		callHeaders := metadata.New(map[string]string{})
 
@@ -52,7 +52,7 @@ func headersUnaryServerInterceptor() func(ctx context.Context, req interface{}, 
 }
 
 func headersStreamServerInterceptor() grpc.StreamServerInterceptor {
-	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	return func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		if err := grpc.SendHeader(stream.Context(), OutgoingStreamHeaders); err != nil {
 			return err
 		}

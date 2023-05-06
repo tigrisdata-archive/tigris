@@ -33,18 +33,18 @@ var (
 // timeoutUnaryServerInterceptor returns a new unary server interceptor
 // that sets request timeout if it's not set in the context.
 func timeoutUnaryServerInterceptor(timeout time.Duration) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (iface interface{}, err error) {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (iface any, err error) {
 		var cancel context.CancelFunc
 
 		ctx, cancel = setDeadlineUsingHeader(ctx)
 
 		d, ok := ctx.Deadline()
-		if ok && info.FullMethod != api.IndexCollection && time.Until(d) > MaximumTimeout {
+		if ok && !isLongRunningAPI(info.FullMethod) && time.Until(d) > MaximumTimeout {
 			timeout = MaximumTimeout
 			ok = false
 		}
 
-		if !ok && info.FullMethod == api.IndexCollection {
+		if !ok && isLongRunningAPI(info.FullMethod) {
 			timeout = LongRunningTimeout
 		}
 
@@ -63,6 +63,10 @@ func timeoutUnaryServerInterceptor(timeout time.Duration) grpc.UnaryServerInterc
 
 		return handler(ctx, req)
 	}
+}
+
+func isLongRunningAPI(method string) bool {
+	return method == api.IndexCollection || method == api.SearchIndexCollectionMethodName
 }
 
 func setDeadlineUsingHeader(ctx context.Context) (context.Context, context.CancelFunc) {

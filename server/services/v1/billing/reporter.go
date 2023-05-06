@@ -25,6 +25,7 @@ import (
 	"github.com/tigrisdata/tigris/server/defaults"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
+	"github.com/tigrisdata/tigris/server/transaction"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
@@ -35,10 +36,17 @@ type UsageReporter struct {
 	nsMgr        metadata.NamespaceMetadataMgr
 	tenantGetter metadata.TenantGetter
 	ctx          context.Context
+	txMgr        *transaction.Manager
 }
 
-func NewUsageReporter(gs metrics.UsageProvider, tm metadata.NamespaceMetadataMgr, tg metadata.TenantGetter, billing Provider) (*UsageReporter, error) {
-	if gs == nil || tm == nil {
+func NewUsageReporter(
+	gs metrics.UsageProvider,
+	tm metadata.NamespaceMetadataMgr,
+	tg metadata.TenantGetter,
+	billing Provider,
+	txMgr *transaction.Manager,
+) (*UsageReporter, error) {
+	if gs == nil || tm == nil || txMgr == nil {
 		return nil, errors.Internal("usage reporter cannot be initialized")
 	}
 
@@ -49,6 +57,7 @@ func NewUsageReporter(gs metrics.UsageProvider, tm metadata.NamespaceMetadataMgr
 		nsMgr:        tm,
 		tenantGetter: tg,
 		ctx:          context.Background(),
+		txMgr:        txMgr,
 	}, nil
 }
 
@@ -160,8 +169,8 @@ func (r *UsageReporter) pushStorage() error {
 			// user doesn't have metronome integration; skip
 			continue
 		}
-		var dbBytes int64
-		// ensure size
+		var dbBytes, indexBytes int64
+		// ensure size available
 		dbStats, err := t.Size(r.ctx)
 		if err != nil || dbStats == nil {
 			log.Error().Err(err).Str("ns", nsMeta.StrId).Msgf("tenant.Size() failed")
@@ -176,11 +185,22 @@ func (r *UsageReporter) pushStorage() error {
 			dbBytes += secondaryIndexStats.StoredBytes
 		}
 
-		// todo: add search index sizes
+		tx, err := r.txMgr.StartTx(r.ctx)
+		if err != nil {
+			log.Error().Err(err).Str("ns", nsMeta.StrId).Msgf("failed to start transaction")
+		}
+		searchStats, err := t.SearchSize(r.ctx, tx)
+		if err != nil || searchStats == nil {
+			log.Error().Err(err).Str("ns", nsMeta.StrId).Msgf("tenant.SearchSize() failed")
+		} else {
+			indexBytes += searchStats.StoredBytes
+		}
+
 		event := NewStorageEventBuilder().
 			WithNamespaceId(nsMeta.StrId).
 			WithTimestamp(time.Now()).
 			WithDatabaseBytes(dbBytes).
+			WithIndexBytes(indexBytes).
 			Build()
 		events = append(events, event)
 

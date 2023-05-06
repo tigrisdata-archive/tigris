@@ -57,7 +57,7 @@ type DefaultListener struct {
 	Events []*Event
 }
 
-func (l *DefaultListener) skip(table []byte) bool {
+func (*DefaultListener) skip(table []byte) bool {
 	return !bytes.Equal(table[0:4], internal.UserTableKeyPrefix) &&
 		!bytes.Equal(table[0:4], internal.PartitionKeyPrefix)
 }
@@ -93,9 +93,9 @@ func (l *DefaultListener) GetEvents() []*Event {
 
 type NoopEventListener struct{}
 
-func (l *NoopEventListener) OnSet(string, []byte, Key, *internal.TableData) {}
-func (l *NoopEventListener) OnClear(string, []byte, Key)                    {}
-func (l *NoopEventListener) GetEvents() []*Event                            { return nil }
+func (*NoopEventListener) OnSet(string, []byte, Key, *internal.TableData) {}
+func (*NoopEventListener) OnClear(string, []byte, Key)                    {}
+func (*NoopEventListener) GetEvents() []*Event                            { return nil }
 
 func WrapEventListenerCtx(ctx context.Context) context.Context {
 	return context.WithValue(ctx, EventListenerCtxKey{}, &DefaultListener{})

@@ -369,11 +369,7 @@ func (s *schemaGenerator) genCollectionSchema(rawSchema []byte) error {
 
 	var tn string
 
-	if err := s.genSchema(s.writer, sch.Name, sch.Desc, sch.Fields, sch.PrimaryKey, sch.Required, &tn); err != nil {
-		return err
-	}
-
-	return nil
+	return s.genSchema(s.writer, sch.Name, sch.Desc, sch.Fields, sch.PrimaryKey, sch.Required, &tn)
 }
 
 func getGenerator(lang string) (JSONToLangType, error) {

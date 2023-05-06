@@ -46,7 +46,7 @@ type storageState struct {
 
 func skipStorageCheck(name string) bool {
 	switch name {
-	case api.DropCollectionMethodName, api.DropDatabaseMethodName:
+	case api.DropCollectionMethodName, api.DeleteProjectMethodName:
 		return true
 	case api.DeleteMethodName:
 		return true

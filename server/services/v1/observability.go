@@ -176,7 +176,7 @@ func (o *observabilityService) QueryTimeSeriesMetrics(ctx context.Context, req *
 	return o.Provider.QueryTimeSeriesMetrics(ctx, req)
 }
 
-func (o *observabilityService) QuotaLimits(ctx context.Context, _ *api.QuotaLimitsRequest) (*api.QuotaLimitsResponse, error) {
+func (*observabilityService) QuotaLimits(ctx context.Context, _ *api.QuotaLimitsRequest) (*api.QuotaLimitsResponse, error) {
 	ns, err := request.GetNamespace(ctx)
 	if err != nil {
 		return nil, err
@@ -193,7 +193,7 @@ func (o *observabilityService) QuotaUsage(ctx context.Context, request *api.Quot
 	return o.Provider.QueryQuotaUsage(ctx, request)
 }
 
-func (o *observabilityService) GetInfo(_ context.Context, _ *api.GetInfoRequest) (*api.GetInfoResponse, error) {
+func (*observabilityService) GetInfo(_ context.Context, _ *api.GetInfoRequest) (*api.GetInfoResponse, error) {
 	return &api.GetInfoResponse{
 		ServerVersion: util.Version,
 	}, nil
@@ -220,7 +220,7 @@ func (o *observabilityService) RegisterGRPC(grpc *grpc.Server) error {
 }
 
 func isAllowedMetricQueryInput(tagValue string) bool {
-	allowedPattern := regexp.MustCompile("^[a-zA-Z0-9_.]*$")
+	allowedPattern := regexp.MustCompile("^[a-zA-Z]+[a-zA-Z0-9._-]+$")
 	return allowedPattern.MatchString(tagValue)
 }
 

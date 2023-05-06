@@ -101,13 +101,13 @@ func GetJWTValidators(config *config.Config) []*validator.Validator {
 	for i, validatorCfg := range config.Auth.Validators {
 		log.Info().Msg(validatorCfg.Issuer)
 		issuerURL, _ := url.Parse(validatorCfg.Issuer)
-		var keyFunc func(ctx context.Context) (interface{}, error)
+		var keyFunc func(ctx context.Context) (any, error)
 		switch validatorCfg.Algorithm {
 		case validator.RS256:
 			provider := jwks.NewCachingProvider(issuerURL, config.Auth.JWKSCacheTimeout)
 			keyFunc = provider.KeyFunc
 		case validator.HS256:
-			keyFunc = func(ctx context.Context) (interface{}, error) {
+			keyFunc = func(ctx context.Context) (any, error) {
 				return []byte(config.Auth.Gotrue.SharedSecret), nil
 			}
 		default:
@@ -134,20 +134,20 @@ func GetJWTValidators(config *config.Config) []*validator.Validator {
 	return jwtValidators
 }
 
-func measuredAuthFunction(ctx context.Context, jwtValidators []*validator.Validator, config *config.Config, cache gcache.Cache) (ctxResult context.Context, err error) {
+func measuredAuthFunction(ctx context.Context, jwtValidators []*validator.Validator, config *config.Config, cache gcache.Cache) (context.Context, error) {
 	measurement := metrics.NewMeasurement("auth", "auth", metrics.AuthSpanType, metrics.GetAuthBaseTags(ctx))
 	measurement.StartTracing(ctx, true)
-	ctxResult, err = authFunction(ctx, jwtValidators, config, cache)
+	ctxResult, err := authFunction(ctx, jwtValidators, config, cache)
 	if err != nil {
 		measurement.CountErrorForScope(metrics.AuthErrorCount, measurement.GetAuthErrorTags(err))
 		measurement.FinishWithError(ctxResult, err)
 		measurement.RecordDuration(metrics.AuthErrorRespTime, measurement.GetAuthErrorTags(err))
-		return
+		return nil, err
 	}
 	measurement.CountOkForScope(metrics.AuthOkCount, measurement.GetAuthOkTags())
 	measurement.FinishTracing(ctxResult)
 	measurement.RecordDuration(metrics.AuthRespTime, measurement.GetAuthOkTags())
-	return
+	return ctxResult, nil
 }
 
 func authFunction(ctx context.Context, jwtValidators []*validator.Validator, config *config.Config, cache gcache.Cache) (ctxResult context.Context, err error) {
@@ -221,18 +221,7 @@ func authFunction(ctx context.Context, jwtValidators []*validator.Validator, con
 			if namespaceCode == "" {
 				log.Warn().Msg("Valid token with empty namespace received")
 				reqMetadata.SetNamespace(ctx, defaults.UnknownValue)
-				return ctx, errors.Unauthenticated("You are not authorized to perform this admin action")
-			}
-			isAdmin := fullMethodNameFound && request.IsAdminApi(fullMethodName)
-			if isAdmin {
-				// admin api being called, let's check if the user is of admin allowed namespaces
-				if !isAdminNamespace(namespaceCode, config) {
-					log.Warn().
-						Interface("AdminNamespaces", config.Auth.AdminNamespaces).
-						Str("IncomingNamespace", namespaceCode).
-						Msg("Valid token received for admin action - but not allowed to administer from this namespace")
-					return ctx, errors.Unauthenticated("You are not authorized to perform this admin action")
-				}
+				return ctx, errors.Unauthenticated("You are not authorized to perform this action")
 			}
 
 			log.Debug().Msg("Valid token received")
@@ -253,7 +242,7 @@ func authFunction(ctx context.Context, jwtValidators []*validator.Validator, con
 	return ctx, errors.Unauthenticated("You are not authorized to perform this action")
 }
 
-func getCachedToken(ctx context.Context, tkn string, cache gcache.Cache) interface{} {
+func getCachedToken(ctx context.Context, tkn string, cache gcache.Cache) any {
 	if !BypassAuthCaches(ctx) {
 		validatedToken, err := cache.Get(tkn)
 		if validatedToken != nil && err == nil {
@@ -263,15 +252,6 @@ func getCachedToken(ctx context.Context, tkn string, cache gcache.Cache) interfa
 		log.Debug().Msg("Token validation cache is disabled for this call")
 	}
 	return nil
-}
-
-func isAdminNamespace(incomingNamespace string, config *config.Config) bool {
-	for _, allowedAdminNamespace := range config.Auth.AdminNamespaces {
-		if incomingNamespace == allowedAdminNamespace {
-			return true
-		}
-	}
-	return false
 }
 
 func getAuthFunction(config *config.Config) func(ctx context.Context) (context.Context, error) {
@@ -287,10 +267,10 @@ func getAuthFunction(config *config.Config) func(ctx context.Context) (context.C
 			return func(ctx context.Context) (context.Context, error) {
 				return measuredAuthFunction(ctx, jwtValidators, config, lruCache)
 			}
-		} else {
-			return func(ctx context.Context) (context.Context, error) {
-				return authFunction(ctx, jwtValidators, config, lruCache)
-			}
+		}
+
+		return func(ctx context.Context) (context.Context, error) {
+			return authFunction(ctx, jwtValidators, config, lruCache)
 		}
 	}
 

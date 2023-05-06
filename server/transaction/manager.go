@@ -62,14 +62,14 @@ type Tx interface {
 // SessionCtx is used to store any baggage for the lifetime of the transaction. We use it to stage the database inside
 // a transaction when the transaction is performing any DDLs.
 type SessionCtx struct {
-	db interface{}
+	db any
 }
 
-func (c *SessionCtx) StageDatabase(db interface{}) {
+func (c *SessionCtx) StageDatabase(db any) {
 	c.db = db
 }
 
-func (c *SessionCtx) GetStagedDatabase() interface{} {
+func (c *SessionCtx) GetStagedDatabase() any {
 	return c.db
 }
 

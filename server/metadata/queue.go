@@ -126,7 +126,7 @@ func (q *QueueSubspace) Peek(ctx context.Context, tx transaction.Tx, max int) ([
 	}
 	var v kv.KeyValue
 	for iter.Next(&v) && count < max {
-		count += 1
+		count++
 		item, err := q.decodeItem(v.Data)
 		if err != nil {
 			return nil, err
@@ -215,10 +215,8 @@ func (q *QueueSubspace) RenewLease(ctx context.Context, tx transaction.Tx, item 
 	if err := q.Dequeue(ctx, tx, item); err != nil {
 		return err
 	}
-	if err := q.Enqueue(ctx, tx, item, leaseTime); err != nil {
-		return err
-	}
-	return nil
+
+	return q.Enqueue(ctx, tx, item, leaseTime)
 }
 
 // For local debugging and testing.
@@ -248,7 +246,7 @@ func (q *QueueSubspace) scanTable(ctx context.Context, tx transaction.Tx) error 
 	return iter.Err()
 }
 
-func (q *QueueSubspace) decodeItem(data *internal.TableData) (*QueueItem, error) {
+func (*QueueSubspace) decodeItem(data *internal.TableData) (*QueueItem, error) {
 	var item QueueItem
 	if err := jsoniter.Unmarshal(data.RawData, &item); ulog.E(err) {
 		return nil, ErrJsonDeSerialize
@@ -257,7 +255,7 @@ func (q *QueueSubspace) decodeItem(data *internal.TableData) (*QueueItem, error)
 	return &item, nil
 }
 
-func (q *QueueSubspace) encodeItem(item *QueueItem) (*internal.TableData, error) {
+func (*QueueSubspace) encodeItem(item *QueueItem) (*internal.TableData, error) {
 	jsonItem, err := jsoniter.Marshal(item)
 	if ulog.E(err) {
 		return nil, ErrJsonSerialize

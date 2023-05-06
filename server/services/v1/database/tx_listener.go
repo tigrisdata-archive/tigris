@@ -36,11 +36,11 @@ type TxListener interface {
 
 type NoopTxListener struct{}
 
-func (l *NoopTxListener) OnPreCommit(context.Context, *metadata.Tenant, transaction.Tx, kv.EventListener) error {
+func (*NoopTxListener) OnPreCommit(context.Context, *metadata.Tenant, transaction.Tx, kv.EventListener) error {
 	return nil
 }
 
-func (l *NoopTxListener) OnPostCommit(context.Context, *metadata.Tenant, kv.EventListener) error {
+func (*NoopTxListener) OnPostCommit(context.Context, *metadata.Tenant, kv.EventListener) error {
 	return nil
 }
-func (l *NoopTxListener) OnRollback(context.Context, *metadata.Tenant, kv.EventListener) {}
+func (*NoopTxListener) OnRollback(context.Context, *metadata.Tenant, kv.EventListener) {}

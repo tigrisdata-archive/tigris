@@ -21,46 +21,109 @@ import (
 )
 
 const (
-	HealthMethodName = "/HealthAPI/Health"
+	apiMethodPrefix           = "/tigrisdata.v1.Tigris/"
+	authMethodPrefix          = "/tigrisdata.auth.v1.Auth/"
+	billingMethodPrefix       = "/tigrisdata.billing.v1.Billing/"
+	cacheMethodPrefix         = "/tigrisdata.cache.v1.Cache/"
+	ManagementMethodPrefix    = "/tigrisdata.management.v1.Management/"
+	ObservabilityMethodPrefix = "/tigrisdata.observability.v1.Observability/"
+	realtimeMethodPrefix      = "/tigrisdata.realtime.v1.Realtime/"
 
-	apiMethodPrefix = "/tigrisdata.v1.Tigris/"
-
-	InsertMethodName  = apiMethodPrefix + "Insert"
-	ReplaceMethodName = apiMethodPrefix + "Replace"
-	UpdateMethodName  = apiMethodPrefix + "Update"
-	DeleteMethodName  = apiMethodPrefix + "Delete"
-	ReadMethodName    = apiMethodPrefix + "Read"
-
-	IndexCollection = apiMethodPrefix + "IndexCollection"
-
-	SearchMethodName = apiMethodPrefix + "Search"
-
-	SubscribeMethodName = apiMethodPrefix + "Subscribe"
-
-	EventsMethodName = apiMethodPrefix + "Events"
-
+	BeginTransactionMethodName    = apiMethodPrefix + "BeginTransaction"
 	CommitTransactionMethodName   = apiMethodPrefix + "CommitTransaction"
 	RollbackTransactionMethodName = apiMethodPrefix + "RollbackTransaction"
 
-	CreateOrUpdateCollectionMethodName = apiMethodPrefix + "CreateOrUpdateCollection"
-	DropCollectionMethodName           = apiMethodPrefix + "DropCollection"
+	InsertMethodName  = apiMethodPrefix + "Insert"
+	ReplaceMethodName = apiMethodPrefix + "Replace"
+	DeleteMethodName  = apiMethodPrefix + "Delete"
+	UpdateMethodName  = apiMethodPrefix + "Update"
+	ReadMethodName    = apiMethodPrefix + "Read"
+	CountMethodName   = apiMethodPrefix + "Count"
 
-	DropDatabaseMethodName = apiMethodPrefix + "DropDatabase"
+	BuildCollectionIndexMethodName = apiMethodPrefix + "BuildCollectionIndex"
+	ExplainMethodName              = apiMethodPrefix + "Explain"
 
-	ListDatabasesMethodName   = apiMethodPrefix + "ListDatabases"
+	SearchMethodName = apiMethodPrefix + "Search"
+	ImportMethodName = apiMethodPrefix + "Import"
+
+	IndexCollection                 = apiMethodPrefix + "IndexCollection"
+	SearchIndexCollectionMethodName = apiMethodPrefix + "BuildSearchIndex"
+
+	CreateOrUpdateCollectionMethodName  = apiMethodPrefix + "CreateOrUpdateCollection"
+	CreateOrUpdateCollectionsMethodName = apiMethodPrefix + "CreateOrUpdateCollections"
+
+	DropCollectionMethodName = apiMethodPrefix + "DropCollection"
+
+	ListProjectsMethodName    = apiMethodPrefix + "ListProjects"
 	ListCollectionsMethodName = apiMethodPrefix + "ListCollections"
+	CreateProjectMethodName   = apiMethodPrefix + "CreateProject"
 
+	DeleteProjectMethodName      = apiMethodPrefix + "DeleteProject"
 	DescribeDatabaseMethodName   = apiMethodPrefix + "DescribeDatabase"
 	DescribeCollectionMethodName = apiMethodPrefix + "DescribeCollection"
 
-	ObservabilityMethodPrefix = "/tigrisdata.observability.v1.Observability/"
-	ManagementMethodPrefix    = "/tigrisdata.management.v1.Management/"
-	CreateNamespaceMethodName = ManagementMethodPrefix + "CreateNamespace"
-	ListNamespaceMethodName   = ManagementMethodPrefix + "ListNamespaces"
-	DeleteNamespaceMethodName = ManagementMethodPrefix + "DeleteNamespace"
+	CreateBranchMethodName = apiMethodPrefix + "CreateBranch"
+	DeleteBranchMethodName = apiMethodPrefix + "DeleteBranch"
+	ListBranchesMethodName = apiMethodPrefix + "ListBranches"
 
-	AuthMethodPrefix         = "/tigrisdata.auth.v1.Auth/"
-	GetAccessTokenMethodName = AuthMethodPrefix + "GetAccessToken"
+	CreateAppKeyMethodName       = apiMethodPrefix + "CreateAppKey"
+	UpdateAppKeyMethodName       = apiMethodPrefix + "UpdateAppKey"
+	DeleteAppKeyMethodName       = apiMethodPrefix + "DeleteAppKey"
+	ListAppKeysMethodName        = apiMethodPrefix + "ListAppKeys"
+	RotateAppKeySecretMethodName = apiMethodPrefix + "RotateAppKeySecret"
+
+	CreateGlobalAppKeyMethodName       = apiMethodPrefix + "CreateGlobalAppKey"
+	UpdateGlobalAppKeyMethodName       = apiMethodPrefix + "UpdateGlobalAppKey"
+	DeleteGlobalAppKeyMethodName       = apiMethodPrefix + "DeleteGlobalAppKey"
+	ListGlobalAppKeysMethodName        = apiMethodPrefix + "ListGlobalAppKeys"
+	RotateGlobalAppKeySecretMethodName = apiMethodPrefix + "RotateGlobalAppKeySecret"
+
+	// Auth.
+	GetAccessTokenMethodName    = authMethodPrefix + "GetAccessToken"
+	CreateInvitationsMethodName = authMethodPrefix + "CreateInvitations"
+	DeleteInvitationsMethodName = authMethodPrefix + "DeleteInvitations"
+	ListInvitationsMethodName   = authMethodPrefix + "ListInvitations"
+	VerifyInvitationMethodName  = authMethodPrefix + "VerifyInvitation"
+	ListUsersMethodName         = authMethodPrefix + "ListUsers"
+
+	// Billing.
+	ListInvoicesMethodName = billingMethodPrefix + "ListInvoices"
+
+	// Cache.
+	CreateCacheMethodName = cacheMethodPrefix + "CreateCache"
+	ListCachesMethodName  = cacheMethodPrefix + "ListCaches"
+	DeleteCacheMethodName = cacheMethodPrefix + "DeleteCache"
+	SetMethodName         = cacheMethodPrefix + "Set"
+	GetSetMethodName      = cacheMethodPrefix + "GetSet"
+	GetMethodName         = cacheMethodPrefix + "Get"
+	DelMethodName         = cacheMethodPrefix + "Del"
+	KeysMethodName        = cacheMethodPrefix + "Keys"
+
+	// Health.
+	HealthMethodName = "/HealthAPI/Health"
+
+	// Management.
+	CreateNamespaceMethodName         = ManagementMethodPrefix + "CreateNamespace"
+	ListNamespacesMethodName          = ManagementMethodPrefix + "ListNamespaces"
+	DeleteNamespaceMethodName         = ManagementMethodPrefix + "DeleteNamespace"
+	InsertUserMetadataMethodName      = ManagementMethodPrefix + "InsertUserMetadata"
+	GetUserMetadataMethodName         = ManagementMethodPrefix + "GetUserMetadata"
+	UpdateUserMetadataMethodName      = ManagementMethodPrefix + "UpdateUserMetadata"
+	InsertNamespaceMetadataMethodName = ManagementMethodPrefix + "InsertNamespaceMetadata"
+	GetNamespaceMetadataMethodName    = ManagementMethodPrefix + "GetNamespaceMetadata"
+	UpdateNamespaceMetadataMethodName = ManagementMethodPrefix + "UpdateNamespaceMetadata"
+
+	// Observability.
+	QueryTimeSeriesMetricsMethodName = ObservabilityMethodPrefix + "QueryTimeSeriesMetrics"
+	QuotaLimitsMetricsMethodName     = ObservabilityMethodPrefix + "QuotaLimits"
+
+	// Realtime.
+	PresenceMethodName          = realtimeMethodPrefix + "Presence"
+	GetRTChannelMethodName      = realtimeMethodPrefix + "GetRTChannel"
+	GetRTChannelsMethodName     = realtimeMethodPrefix + "GetRTChannels"
+	ReadMessagesMethodName      = realtimeMethodPrefix + "ReadMessages"
+	MessagesMethodName          = realtimeMethodPrefix + "Messages"
+	ListSubscriptionsMethodName = realtimeMethodPrefix + "ListSubscriptions"
 )
 
 func IsTxSupported(ctx context.Context) bool {

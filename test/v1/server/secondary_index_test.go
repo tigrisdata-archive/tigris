@@ -149,7 +149,7 @@ func TestQuery_EQ(t *testing.T) {
 		},
 		{
 			Map{
-				"$and": []interface{}{
+				"$and": []any{
 					Map{"string_value": Map{"$eq": "G"}},
 					Map{"bool_value": false},
 				},
@@ -164,7 +164,7 @@ func TestQuery_EQ(t *testing.T) {
 		},
 		// {
 		// 	Map{
-		// 		"$or": []interface{}{
+		// 		"$or": []any{
 		// 			Map{"int_value": Map{"$eq": 10}},
 		// 			Map{"int_value": 100},
 		// 			Map{"double_value": 25.05},
@@ -208,7 +208,7 @@ func TestQuery_Range(t *testing.T) {
 		},
 		{
 			Map{
-				"$and": []interface{}{
+				"$and": []any{
 					Map{"int_value": Map{"$gte": 30}},
 					Map{"int_value": Map{"$lte": 100}},
 				},
@@ -228,7 +228,7 @@ func TestQuery_Range(t *testing.T) {
 		},
 		{
 			Map{
-				"$and": []interface{}{
+				"$and": []any{
 					Map{"string_value": Map{"$gte": "G"}},
 					Map{"string_value": Map{"$lt": "z"}},
 				},
@@ -238,7 +238,7 @@ func TestQuery_Range(t *testing.T) {
 		},
 		{
 			Map{
-				"$and": []interface{}{
+				"$and": []any{
 					Map{"bool_value": Map{"$gte": true}},
 					Map{"bool_value": Map{"$lte": true}},
 				},
@@ -300,7 +300,7 @@ func TestQuery_Range(t *testing.T) {
 		},
 		{
 			Map{
-				"$and": []interface{}{
+				"$and": []any{
 					Map{"double_value": Map{"$gte": 10.01}},
 					Map{"double_value": Map{"$lt": 1000}},
 				},
@@ -330,7 +330,7 @@ func TestQuery_Range(t *testing.T) {
 		},
 		{
 			Map{
-				"$and": []interface{}{
+				"$and": []any{
 					Map{"date_time_value": Map{"$gte": "2013-11-01T17:42:34Z"}},
 					Map{"date_time_value": Map{"$lt": "2015-12.22T17:42:34Z"}},
 				},
@@ -500,7 +500,7 @@ func TestQuery_RangeWithNull(t *testing.T) {
 		},
 		{
 			Map{
-				"$and": []interface{}{
+				"$and": []any{
 					Map{"string_value": Map{"$gte": "G"}},
 					Map{"string_value": Map{"$lt": "z"}},
 				},
@@ -509,7 +509,7 @@ func TestQuery_RangeWithNull(t *testing.T) {
 		},
 		{
 			Map{
-				"$and": []interface{}{
+				"$and": []any{
 					Map{"bool_value": Map{"$gte": true}},
 					Map{"bool_value": Map{"$lte": true}},
 				},

@@ -106,7 +106,7 @@ func (runner *CollectionQueryRunner) createOrUpdate(ctx context.Context, tx tran
 		collectionExists = true
 		oldMetadata, err = tenant.GetCollectionMetadata(ctx, tx, db, req.GetCollection())
 		if err != nil && err != errors.ErrNotFound {
-			return Response{}, ctx, createApiError(err)
+			return Response{}, ctx, CreateApiError(err)
 		}
 	}
 
@@ -150,7 +150,7 @@ func (runner *CollectionQueryRunner) createOrUpdate(ctx context.Context, tx tran
 		if config.DefaultConfig.SecondaryIndex.WriteEnabled && oldMetadata != nil {
 			updatedMetadata, err := tenant.GetCollectionMetadata(ctx, tx, db, req.GetCollection())
 			if err != nil {
-				return Response{}, nil, createApiError(err)
+				return Response{}, nil, CreateApiError(err)
 			}
 
 			indexer := NewSecondaryIndexer(db.GetCollection(req.GetCollection()))
@@ -158,7 +158,7 @@ func (runner *CollectionQueryRunner) createOrUpdate(ctx context.Context, tx tran
 			for _, oldIndex := range oldMetadata.Indexes {
 				if !schema.HasIndex(updatedMetadata.Indexes, oldIndex) {
 					if err = indexer.DeleteIndex(ctx, tx, oldIndex); err != nil {
-						return Response{}, nil, createApiError(err)
+						return Response{}, nil, CreateApiError(err)
 					}
 				}
 			}
@@ -211,8 +211,7 @@ func (runner *CollectionQueryRunner) describe(ctx context.Context, tx transactio
 	}
 
 	metrics.UpdateCollectionSizeMetrics(namespace, tenantName, db.DbName(), db.BranchName(), coll.GetName(), size.StoredBytes)
-	// remove indexing version from the schema before returning the response
-	sch := schema.RemoveIndexingVersion(coll.Schema)
+	sch := coll.Schema
 
 	// Generate schema in the requested language format
 	if runner.describeReq.SchemaFormat != "" {

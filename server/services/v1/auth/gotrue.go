@@ -95,20 +95,17 @@ type UserAppData struct {
 	Project         string `json:"tigris_project"`
 }
 
-func (g *gotrue) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest) (*api.CreateAppKeyResponse, error) {
-	clientId := generateClientId(g)
-	clientSecret := generateClientSecret(g)
-
+func _createAppKey(ctx context.Context, clientId string, clientSecret string, g *gotrue, keyName string, keyDescription string, project string) (string, int64, error) {
 	currentSub, err := GetCurrentSub(ctx)
 	if err != nil {
 		log.Err(err).Msg("Failed to create application: reason - unable to extract current sub")
-		return nil, errors.Internal("Failed to create application: reason = %s", err.Error())
+		return "", 0, errors.Internal("Failed to create application: reason = %s", err.Error())
 	}
 
 	currentNamespace, err := request.GetNamespace(ctx)
 	if err != nil {
 		log.Err(err).Msg("Failed to create application: reason - unable to extract current namespace")
-		return nil, errors.Internal("Failed to create applications: reason = %s", err.Error())
+		return "", 0, errors.Internal("Failed to create applications: reason = %s", err.Error())
 	}
 
 	// make gotrue call
@@ -120,18 +117,18 @@ func (g *gotrue) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest)
 			CreatedAt:       creationTime,
 			CreatedBy:       currentSub,
 			TigrisNamespace: currentNamespace,
-			Name:            req.GetName(),
-			Description:     req.GetDescription(),
-			Project:         req.GetProject(),
+			Name:            keyName,
+			Description:     keyDescription,
+			Project:         project,
 		},
 	})
 	if err != nil {
 		log.Err(err).Msg("Failed to create user")
-		return nil, errors.Internal("Failed to create user")
+		return "", 0, errors.Internal("Failed to create user")
 	}
 	err = createUser(ctx, payloadBytes, g.AuthConfig.PrimaryAudience, AppKeyUser, g)
 	if err != nil {
-		return nil, err
+		return "", 0, err
 	}
 	log.Info().
 		Str("namespace", currentNamespace).
@@ -139,6 +136,21 @@ func (g *gotrue) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest)
 		Str("client_id", clientId).
 		Str(Component, AppKey).
 		Msg("appkey created")
+	return currentSub, creationTime, nil
+}
+
+func (g *gotrue) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest) (*api.CreateAppKeyResponse, error) {
+	if req.GetProject() == "" {
+		return nil, errors.InvalidArgument("Project must be specified")
+	}
+	clientId := generateClientId(g)
+	clientSecret := generateClientSecret(g)
+
+	currentSub, creationTime, err := _createAppKey(ctx, clientId, clientSecret, g, req.GetName(), req.GetDescription(), req.GetProject())
+	if err != nil {
+		return nil, err
+	}
+
 	return &api.CreateAppKeyResponse{
 		CreatedAppKey: &api.AppKey{
 			Id:          clientId,
@@ -152,14 +164,35 @@ func (g *gotrue) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest)
 	}, nil
 }
 
-func (g *gotrue) UpdateAppKey(ctx context.Context, req *api.UpdateAppKeyRequest) (*api.UpdateAppKeyResponse, error) {
-	email := fmt.Sprintf("%s%s", req.GetId(), g.AuthConfig.Gotrue.UsernameSuffix)
+func (g *gotrue) CreateGlobalAppKey(ctx context.Context, req *api.CreateGlobalAppKeyRequest) (*api.CreateGlobalAppKeyResponse, error) {
+	clientId := generateClientId(g)
+	clientSecret := generateClientSecret(g)
+
+	currentSub, creationTime, err := _createAppKey(ctx, clientId, clientSecret, g, req.GetName(), req.GetDescription(), "")
+	if err != nil {
+		return nil, err
+	}
+
+	return &api.CreateGlobalAppKeyResponse{
+		CreatedAppKey: &api.GlobalAppKey{
+			Id:          clientId,
+			Name:        req.GetName(),
+			Description: req.GetDescription(),
+			Secret:      clientSecret,
+			CreatedAt:   creationTime,
+			CreatedBy:   currentSub,
+		},
+	}, nil
+}
+
+func _updateAppKey(ctx context.Context, g *gotrue, id string, name string, description string) error {
+	email := fmt.Sprintf("%s%s", id, g.AuthConfig.Gotrue.UsernameSuffix)
 	updateAppKeyUrl := fmt.Sprintf("%s/admin/users/%s", g.AuthConfig.Gotrue.URL, email)
 
 	currentSub, err := GetCurrentSub(ctx)
 	if err != nil {
 		log.Err(err).Msg("Couldn't resolve current sub")
-		return nil, errors.Internal("Failed to update app key")
+		return errors.Internal("Failed to update app key")
 	}
 
 	newAppMetadata := UserAppData{
@@ -167,19 +200,19 @@ func (g *gotrue) UpdateAppKey(ctx context.Context, req *api.UpdateAppKeyRequest)
 		UpdatedBy: currentSub,
 	}
 
-	if req.GetName() != "" {
-		newAppMetadata.Name = req.GetName()
+	if name != "" {
+		newAppMetadata.Name = name
 	}
 
-	if req.GetDescription() != "" {
-		newAppMetadata.Description = req.GetDescription()
+	if description != "" {
+		newAppMetadata.Description = description
 	}
 	appMetadataMap := make(map[string]UserAppData)
 	appMetadataMap["app_metadata"] = newAppMetadata
 	payloadBytes, err := jsoniter.Marshal(appMetadataMap)
 	if err != nil {
 		log.Err(err).Msg("Failed to marshal payload")
-		return nil, errors.Internal("Unable to update app key")
+		return errors.Internal("Unable to update app key")
 	}
 	payloadBytesReader := bytes.NewReader(payloadBytes)
 
@@ -187,12 +220,12 @@ func (g *gotrue) UpdateAppKey(ctx context.Context, req *api.UpdateAppKeyRequest)
 	updateAppKeyReq, err := http.NewRequestWithContext(ctx, http.MethodPut, updateAppKeyUrl, payloadBytesReader)
 	if err != nil {
 		log.Err(err).Msg("Failed to construct updateAppKeyReq")
-		return nil, errors.Internal("Unable to update app key")
+		return errors.Internal("Unable to update app key")
 	}
 	adminAccessToken, _, err := getGotrueAdminAccessToken(ctx, g)
 	if err != nil {
 		log.Err(err).Msg("Failed to get admin access token")
-		return nil, errors.Internal("Failed to update app key: couldn't get admin access token")
+		return errors.Internal("Failed to update app key: couldn't get admin access token")
 	}
 	updateAppKeyReq.Header.Add("Authorization", fmt.Sprintf("bearer %s", adminAccessToken))
 	updateAppKeyReq.Header.Add("Content-Type", "application/json")
@@ -200,13 +233,29 @@ func (g *gotrue) UpdateAppKey(ctx context.Context, req *api.UpdateAppKeyRequest)
 	updateAppKeyRes, err := ctxhttp.Do(ctx, client, updateAppKeyReq)
 	if err != nil {
 		log.Err(err).Msg("Failed to update app key - failed to make call to gotrue")
-		return nil, errors.Internal("Failed to update app key")
+		return errors.Internal("Failed to update app key")
 	}
 	defer updateAppKeyRes.Body.Close()
 
 	if updateAppKeyRes.StatusCode != http.StatusOK {
 		log.Error().Int("status", updateAppKeyRes.StatusCode).Msg("Received non OK status code to update user.")
-		return nil, errors.Internal("Failed to update app key")
+		return errors.Internal("Failed to update app key")
+	}
+	log.Info().
+		Str("sub", currentSub).
+		Str("client_id", id).
+		Str(Component, AppKey).
+		Msg("appkey updated")
+	return nil
+}
+
+func (g *gotrue) UpdateAppKey(ctx context.Context, req *api.UpdateAppKeyRequest) (*api.UpdateAppKeyResponse, error) {
+	if req.GetProject() == "" {
+		return nil, errors.InvalidArgument("Project must be specified")
+	}
+	err := _updateAppKey(ctx, g, req.GetId(), req.GetName(), req.GetDescription())
+	if err != nil {
+		return nil, err
 	}
 	result := &api.UpdateAppKeyResponse{
 		UpdatedAppKey: &api.AppKey{
@@ -219,34 +268,48 @@ func (g *gotrue) UpdateAppKey(ctx context.Context, req *api.UpdateAppKeyRequest)
 	if req.GetDescription() != "" {
 		result.UpdatedAppKey.Description = req.GetDescription()
 	}
-	log.Info().
-		Str("sub", currentSub).
-		Str("client_id", req.GetId()).
-		Str(Component, AppKey).
-		Msg("appkey updated")
 	return result, nil
 }
 
-func (g *gotrue) RotateAppKey(ctx context.Context, req *api.RotateAppKeyRequest) (*api.RotateAppKeyResponse, error) {
-	email := fmt.Sprintf("%s%s", req.GetId(), g.AuthConfig.Gotrue.UsernameSuffix)
+func (g *gotrue) UpdateGlobalAppKey(ctx context.Context, req *api.UpdateGlobalAppKeyRequest) (*api.UpdateGlobalAppKeyResponse, error) {
+	err := _updateAppKey(ctx, g, req.GetId(), req.GetName(), req.GetDescription())
+	if err != nil {
+		return nil, err
+	}
+	result := &api.UpdateGlobalAppKeyResponse{
+		UpdatedAppKey: &api.GlobalAppKey{
+			Id: req.GetId(),
+		},
+	}
+	if req.GetName() != "" {
+		result.UpdatedAppKey.Name = req.GetName()
+	}
+	if req.GetDescription() != "" {
+		result.UpdatedAppKey.Description = req.GetDescription()
+	}
+	return result, nil
+}
+
+func _rotateAppKeySecret(ctx context.Context, g *gotrue, id string) (string, error) {
+	email := fmt.Sprintf("%s%s", id, g.AuthConfig.Gotrue.UsernameSuffix)
 	updateAppKeyUrl := fmt.Sprintf("%s/admin/users/%s", g.AuthConfig.Gotrue.URL, email)
 
 	currentSub, err := GetCurrentSub(ctx)
 	if err != nil {
 		log.Err(err).Msg("Couldn't resolve current sub")
-		return nil, errors.Internal("Failed to update app key")
+		return "", errors.Internal("Failed to update app key")
 	}
 
 	newSecret := generateClientSecret(g)
 
 	newAppMetadata := &UserAppData{UpdatedBy: currentSub, UpdatedAt: time.Now().UnixMilli()}
-	payload := make(map[string]interface{})
+	payload := make(map[string]any)
 	payload["password"] = newSecret
 	payload["app_metadata"] = newAppMetadata
 	payloadBytes, err := jsoniter.Marshal(payload)
 	if err != nil {
 		log.Err(err).Msg("Failed to marshal payload")
-		return nil, errors.Internal("Unable to update app key")
+		return "", errors.Internal("Unable to update app key")
 	}
 
 	payloadBytesReader := bytes.NewReader(payloadBytes)
@@ -255,12 +318,12 @@ func (g *gotrue) RotateAppKey(ctx context.Context, req *api.RotateAppKeyRequest)
 	updateAppKeyReq, err := http.NewRequestWithContext(ctx, http.MethodPut, updateAppKeyUrl, payloadBytesReader)
 	if err != nil {
 		log.Err(err).Msg("Failed to construct updateAppKeyReq")
-		return nil, errors.Internal("Unable to update app key")
+		return "", errors.Internal("Unable to update app key")
 	}
 	adminAccessToken, _, err := getGotrueAdminAccessToken(ctx, g)
 	if err != nil {
 		log.Err(err).Msg("Failed to get admin access token")
-		return nil, errors.Internal("Failed to update app key: couldn't get admin access token")
+		return "", errors.Internal("Failed to update app key: couldn't get admin access token")
 	}
 	updateAppKeyReq.Header.Add("Authorization", fmt.Sprintf("bearer %s", adminAccessToken))
 	updateAppKeyReq.Header.Add("Content-Type", "application/json")
@@ -268,73 +331,132 @@ func (g *gotrue) RotateAppKey(ctx context.Context, req *api.RotateAppKeyRequest)
 	updateAppKeyRes, err := ctxhttp.Do(ctx, client, updateAppKeyReq)
 	if err != nil {
 		log.Err(err).Msg("Failed to update app key - failed to make call to gotrue")
-		return nil, errors.Internal("Failed to update app key")
+		return "", errors.Internal("Failed to update app key")
 	}
 	defer updateAppKeyRes.Body.Close()
 
 	if updateAppKeyRes.StatusCode != http.StatusOK {
 		log.Error().Int("status", updateAppKeyRes.StatusCode).Msg("Received non OK status code to update user.")
-		return nil, errors.Internal("Failed to update app key")
+		return "", errors.Internal("Failed to update app key")
 	}
+
+	log.Info().
+		Str("sub", currentSub).
+		Str("client_id", id).
+		Str(Component, AppKey).
+		Msg("appkey rotated")
+
+	return newSecret, nil
+}
+
+func (g *gotrue) RotateAppKey(ctx context.Context, req *api.RotateAppKeyRequest) (*api.RotateAppKeyResponse, error) {
+	if req.GetProject() == "" {
+		return nil, errors.InvalidArgument("Project must be specified")
+	}
+	newSecret, err := _rotateAppKeySecret(ctx, g, req.GetId())
+	if err != nil {
+		return nil, err
+	}
+
 	result := &api.RotateAppKeyResponse{
 		AppKey: &api.AppKey{
 			Id:     req.GetId(),
 			Secret: newSecret,
 		},
 	}
-
-	log.Info().
-		Str("sub", currentSub).
-		Str("client_id", req.GetId()).
-		Str(Component, AppKey).
-		Msg("appkey rotated")
 	return result, nil
 }
 
-func (g *gotrue) DeleteAppKey(ctx context.Context, req *api.DeleteAppKeyRequest) (*api.DeleteAppKeyResponse, error) {
+func (g *gotrue) RotateGlobalAppKeySecret(ctx context.Context, req *api.RotateGlobalAppKeySecretRequest) (*api.RotateGlobalAppKeySecretResponse, error) {
+	newSecret, err := _rotateAppKeySecret(ctx, g, req.GetId())
+	if err != nil {
+		return nil, err
+	}
+
+	result := &api.RotateGlobalAppKeySecretResponse{
+		AppKey: &api.GlobalAppKey{
+			Id:     req.GetId(),
+			Secret: newSecret,
+		},
+	}
+	return result, nil
+}
+
+func _deleteAppKey(ctx context.Context, g *gotrue, id string) error {
 	// TODO: verify ownership
 
 	// get admin access token
 	adminAccessToken, _, err := getGotrueAdminAccessToken(ctx, g)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// make external call
-	deleteUserUrl := fmt.Sprintf("%s/admin/users/%s%s", g.AuthConfig.Gotrue.URL, req.GetId(), g.AuthConfig.Gotrue.UsernameSuffix)
+	deleteUserUrl := fmt.Sprintf("%s/admin/users/%s%s", g.AuthConfig.Gotrue.URL, id, g.AuthConfig.Gotrue.UsernameSuffix)
 	client := &http.Client{}
 	deleteUserReq, err := http.NewRequestWithContext(ctx, http.MethodDelete, deleteUserUrl, nil)
 	if err != nil {
 		log.Err(err).Msg("Failed to form request to delete user from gotrue")
-		return nil, errors.Internal("Failed to form request to delete app key")
+		return errors.Internal("Failed to form request to delete app key")
 	}
 	deleteUserReq.Header.Add("Authorization", fmt.Sprintf("bearer %s", adminAccessToken))
 
 	deleteUserRes, err := ctxhttp.Do(ctx, client, deleteUserReq)
 	if err != nil {
 		log.Err(err).Msg("Failed to delete user from gotrue")
-		return nil, errors.Internal("Failed to delete user from gotrue")
+		return errors.Internal("Failed to delete user from gotrue")
 	}
 
 	defer deleteUserRes.Body.Close()
 
 	if deleteUserRes.StatusCode != http.StatusOK {
 		log.Error().Int("status", deleteUserRes.StatusCode).Msg("Received non OK status code to delete user")
-		return nil, errors.Internal("Received non OK status code to delete user")
+		return errors.Internal("Received non OK status code to delete user")
 	}
 
 	currentSub, _ := GetCurrentSub(ctx)
 	log.Info().
 		Str("sub", currentSub).
-		Str("client_id", req.GetId()).
+		Str("client_id", id).
 		Str(Component, AppKey).
 		Msg("appkey deleted")
+	return nil
+}
+
+func (g *gotrue) DeleteAppKey(ctx context.Context, req *api.DeleteAppKeyRequest) (*api.DeleteAppKeyResponse, error) {
+	if req.GetProject() == "" {
+		return nil, errors.InvalidArgument("Project must be specified")
+	}
+	err := _deleteAppKey(ctx, g, req.GetId())
+	if err != nil {
+		return nil, err
+	}
 	return &api.DeleteAppKeyResponse{
 		Deleted: true,
 	}, nil
 }
 
-func (g *gotrue) ListAppKeys(ctx context.Context, req *api.ListAppKeysRequest) (*api.ListAppKeysResponse, error) {
+func (g *gotrue) DeleteGlobalAppKey(ctx context.Context, req *api.DeleteGlobalAppKeyRequest) (*api.DeleteGlobalAppKeyResponse, error) {
+	err := _deleteAppKey(ctx, g, req.GetId())
+	if err != nil {
+		return nil, err
+	}
+	return &api.DeleteGlobalAppKeyResponse{
+		Deleted: true,
+	}, nil
+}
+
+type appKeyInternal struct {
+	Id          string
+	Name        string
+	Description string
+	Secret      string
+	CreatedBy   string
+	CreatedAt   int64
+	Project     string
+}
+
+func _listAppKeys(ctx context.Context, g *gotrue, project string) ([]*appKeyInternal, error) {
 	currentSub, err := GetCurrentSub(ctx)
 	if err != nil {
 		return nil, errors.Internal("Failed to list applications: reason = %s", err.Error())
@@ -352,7 +474,7 @@ func (g *gotrue) ListAppKeys(ctx context.Context, req *api.ListAppKeysRequest) (
 	}
 
 	// make external call
-	getUsersUrl := fmt.Sprintf("%s/admin/users?created_by=%s&tigris_namespace=%s&tigris_project=%s&page=1&per_page=5000", g.AuthConfig.Gotrue.URL, currentSub, currentNamespace, req.GetProject())
+	getUsersUrl := fmt.Sprintf("%s/admin/users?created_by=%s&tigris_namespace=%s&tigris_project=%s&page=1&per_page=5000", g.AuthConfig.Gotrue.URL, currentSub, currentNamespace, project)
 	client := &http.Client{}
 	getUsersReq, err := http.NewRequestWithContext(ctx, http.MethodGet, getUsersUrl, nil)
 	if err != nil {
@@ -394,7 +516,7 @@ func (g *gotrue) ListAppKeys(ctx context.Context, req *api.ListAppKeysRequest) (
 		return nil, errors.Internal("Failed to parse getUsers response")
 	}
 
-	appKeys := make([]*api.AppKey, len(users))
+	appKeys := make([]*appKeyInternal, len(users))
 	for i, user := range users {
 		var email, clientSecret string
 		err := jsoniter.Unmarshal(user["email"], &email)
@@ -429,7 +551,7 @@ func (g *gotrue) ListAppKeys(ctx context.Context, req *api.ListAppKeysRequest) (
 			createdAtMillis = readDate(createdAtStr)
 		}
 
-		appKey := api.AppKey{
+		appKey := appKeyInternal{
 			Id:          clientId,
 			Name:        appMetadata.Name,
 			Description: appMetadata.Description,
@@ -440,8 +562,49 @@ func (g *gotrue) ListAppKeys(ctx context.Context, req *api.ListAppKeysRequest) (
 		}
 		appKeys[i] = &appKey
 	}
+	return appKeys, nil
+}
+
+func (g *gotrue) ListAppKeys(ctx context.Context, req *api.ListAppKeysRequest) (*api.ListAppKeysResponse, error) {
+	appKeysInternal, err := _listAppKeys(ctx, g, req.GetProject())
+	if err != nil {
+		return nil, errors.Internal("Failed to delete app keys")
+	}
+	appKeys := make([]*api.AppKey, len(appKeysInternal))
+	for i, internalAppKey := range appKeysInternal {
+		appKeys[i] = &api.AppKey{
+			Id:          internalAppKey.Id,
+			Name:        internalAppKey.Name,
+			Description: internalAppKey.Description,
+			Secret:      internalAppKey.Secret,
+			CreatedAt:   internalAppKey.CreatedAt,
+			CreatedBy:   internalAppKey.CreatedBy,
+			Project:     internalAppKey.Project,
+		}
+	}
 	return &api.ListAppKeysResponse{
 		AppKeys: appKeys,
+	}, nil
+}
+
+func (g *gotrue) ListGlobalAppKeys(ctx context.Context, _ *api.ListGlobalAppKeysRequest) (*api.ListGlobalAppKeysResponse, error) {
+	appKeysInternal, err := _listAppKeys(ctx, g, "")
+	if err != nil {
+		return nil, errors.Internal("Failed to delete app keys")
+	}
+	globalAppKeys := make([]*api.GlobalAppKey, len(appKeysInternal))
+	for i, internalAppKey := range appKeysInternal {
+		globalAppKeys[i] = &api.GlobalAppKey{
+			Id:          internalAppKey.Id,
+			Name:        internalAppKey.Name,
+			Description: internalAppKey.Description,
+			Secret:      internalAppKey.Secret,
+			CreatedAt:   internalAppKey.CreatedAt,
+			CreatedBy:   internalAppKey.CreatedBy,
+		}
+	}
+	return &api.ListGlobalAppKeysResponse{
+		AppKeys: globalAppKeys,
 	}, nil
 }
 
@@ -558,7 +721,7 @@ func getAccessTokenUsingClientCredentialsGotrue(ctx context.Context, clientId st
 	}
 
 	// parse JSON response
-	var getTokenJsonMap map[string]interface{}
+	var getTokenJsonMap map[string]any
 	err = json.Unmarshal(getTokenResBody, &getTokenJsonMap)
 	if err != nil {
 		log.Err(err).Msg("Failed to deserialize response into JSON")

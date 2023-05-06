@@ -43,7 +43,7 @@ type auth0 struct {
 	txMgr      *transaction.Manager
 }
 
-func (a *auth0) managementToTigrisErrorCode(err error) api.Code {
+func (*auth0) managementToTigrisErrorCode(err error) api.Code {
 	managementError, ok := err.(management.Error)
 	if !ok {
 		return api.Code_INTERNAL
@@ -95,7 +95,7 @@ func (a *auth0) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest) 
 	grant := &management.ClientGrant{
 		ClientID: c.ClientID,
 		Audience: &a.AuthConfig.PrimaryAudience,
-		Scope:    []interface{}{},
+		Scope:    []any{},
 	}
 
 	err = a.Management.ClientGrant.Create(grant)
@@ -308,6 +308,26 @@ func (a *auth0) DeleteAppKeys(ctx context.Context, project string) error {
 	return nil
 }
 
+func (*auth0) CreateGlobalAppKey(_ context.Context, _ *api.CreateGlobalAppKeyRequest) (*api.CreateGlobalAppKeyResponse, error) {
+	return nil, errors.Internal("auth0 implementation doesn't support it")
+}
+
+func (*auth0) UpdateGlobalAppKey(_ context.Context, _ *api.UpdateGlobalAppKeyRequest) (*api.UpdateGlobalAppKeyResponse, error) {
+	return nil, errors.Internal("auth0 implementation doesn't support it")
+}
+
+func (*auth0) RotateGlobalAppKeySecret(_ context.Context, _ *api.RotateGlobalAppKeySecretRequest) (*api.RotateGlobalAppKeySecretResponse, error) {
+	return nil, errors.Internal("auth0 implementation doesn't support it")
+}
+
+func (*auth0) DeleteGlobalAppKey(_ context.Context, _ *api.DeleteGlobalAppKeyRequest) (*api.DeleteGlobalAppKeyResponse, error) {
+	return nil, errors.Internal("auth0 implementation doesn't support it")
+}
+
+func (*auth0) ListGlobalAppKeys(_ context.Context, _ *api.ListGlobalAppKeysRequest) (*api.ListGlobalAppKeysResponse, error) {
+	return nil, errors.Internal("auth0 implementation doesn't support it")
+}
+
 func validateOwnershipAuth0(ctx context.Context, operationName string, appId string, a *auth0) (*management.Client, string, error) {
 	client, err := a.Management.Client.Read(appId)
 	if err != nil {
@@ -389,12 +409,11 @@ func getAccessTokenUsingClientCredentialsAuth0(ctx context.Context, req *api.Get
 				AccessToken: tokenMetadataEntry.AccessToken,
 				ExpiresIn:   int32(tokenMetadataEntry.ExpireAt - time.Now().Unix()),
 			}, nil
-		} else {
-			// expired entry, delete it
-			err := deleteApplicationMetadata(ctx, defaultNamespaceId, req.GetClientId(), metadataKey, a.userStore, a.txMgr)
-			if err != nil {
-				return nil, err
-			}
+		}
+		// expired entry, delete it
+		err = deleteApplicationMetadata(ctx, defaultNamespaceId, req.GetClientId(), metadataKey, a.userStore, a.txMgr)
+		if err != nil {
+			return nil, err
 		}
 	}
 

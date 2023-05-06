@@ -71,8 +71,8 @@ func logError(ctx context.Context, err error, reqType string) {
 	log.Error().Err(err).Int("HTTP response", httpCode).Str("message", message).Str("user-agent", userAgent).Str("request type", reqType).Msg("grpc request error")
 }
 
-func measureUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func measureUnary() func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		var reqStatus *metrics.RequestStatus
 		if !measureMethod(info.FullMethod) {
 			resp, err := handler(ctx, req)
@@ -114,7 +114,7 @@ func measureUnary() func(ctx context.Context, req interface{}, info *grpc.UnaryS
 }
 
 func measureStream() grpc.StreamServerInterceptor {
-	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	return func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		var reqStatus *metrics.RequestStatus
 		wrapped := &wrappedStream{WrappedServerStream: middleware.WrapServerStream(stream)}
 		wrapped.WrappedContext = stream.Context()
@@ -153,7 +153,7 @@ func measureStream() grpc.StreamServerInterceptor {
 	}
 }
 
-func (w *wrappedStream) RecvMsg(m interface{}) error {
+func (w *wrappedStream) RecvMsg(m any) error {
 	recvErr := w.ServerStream.RecvMsg(m)
 	if recvErr != nil {
 		log.Error().Err(recvErr).Interface("message", m).Msg("stream receive message error")
@@ -186,7 +186,7 @@ func (w *wrappedStream) RecvMsg(m interface{}) error {
 	return recvErr
 }
 
-func (w *wrappedStream) SendMsg(m interface{}) error {
+func (w *wrappedStream) SendMsg(m any) error {
 	err := w.ServerStream.SendMsg(m)
 	if err != nil {
 		log.Error().Err(err).Interface("message", m).Msg("stream send message error")
