@@ -294,6 +294,7 @@ func (m *TenantManager) RefreshNamespaceAccounts(ctx context.Context) error {
 			tenant.Lock()
 			tenantMeta := tenant.namespace.Metadata()
 			tenantMeta.Accounts = metadata.Accounts
+			tenant.namespace.SetMetadata(tenantMeta)
 			tenant.Unlock()
 		}
 	}
