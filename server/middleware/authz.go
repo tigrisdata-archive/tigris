@@ -179,6 +179,11 @@ var (
 		api.DeleteAppKeyMethodName,
 		api.ListAppKeysMethodName,
 		api.RotateAppKeySecretMethodName,
+		api.CreateGlobalAppKeyMethodName,
+		api.UpdateGlobalAppKeyMethodName,
+		api.DeleteGlobalAppKeyMethodName,
+		api.ListGlobalAppKeysMethodName,
+		api.RotateGlobalAppKeySecretMethodName,
 		api.IndexCollection,
 		api.SearchIndexCollectionMethodName,
 

@@ -308,6 +308,26 @@ func (a *auth0) DeleteAppKeys(ctx context.Context, project string) error {
 	return nil
 }
 
+func (*auth0) CreateGlobalAppKey(_ context.Context, _ *api.CreateGlobalAppKeyRequest) (*api.CreateGlobalAppKeyResponse, error) {
+	return nil, errors.Internal("auth0 implementation doesn't support it")
+}
+
+func (*auth0) UpdateGlobalAppKey(_ context.Context, _ *api.UpdateGlobalAppKeyRequest) (*api.UpdateGlobalAppKeyResponse, error) {
+	return nil, errors.Internal("auth0 implementation doesn't support it")
+}
+
+func (*auth0) RotateGlobalAppKeySecret(_ context.Context, _ *api.RotateGlobalAppKeySecretRequest) (*api.RotateGlobalAppKeySecretResponse, error) {
+	return nil, errors.Internal("auth0 implementation doesn't support it")
+}
+
+func (*auth0) DeleteGlobalAppKey(_ context.Context, _ *api.DeleteGlobalAppKeyRequest) (*api.DeleteGlobalAppKeyResponse, error) {
+	return nil, errors.Internal("auth0 implementation doesn't support it")
+}
+
+func (*auth0) ListGlobalAppKeys(_ context.Context, _ *api.ListGlobalAppKeysRequest) (*api.ListGlobalAppKeysResponse, error) {
+	return nil, errors.Internal("auth0 implementation doesn't support it")
+}
+
 func validateOwnershipAuth0(ctx context.Context, operationName string, appId string, a *auth0) (*management.Client, string, error) {
 	client, err := a.Management.Client.Read(appId)
 	if err != nil {

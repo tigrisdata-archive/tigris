@@ -205,6 +205,106 @@ func TestGoTrueAuthProvider(t *testing.T) {
 	require.True(t, deletedResponse.Raw())
 }
 
+func TestGlobalAppKeys(t *testing.T) {
+	e2 := expectLow(t, config.GetBaseURL2())
+	token := readToken(t, RSATokenFilePath)
+
+	createTestNamespace(t, token)
+
+	// create app key
+	createGlobalAppKeyPayload := Map{
+		"name":        "test_key",
+		"description": "This key is used for integration test purpose.",
+	}
+
+	createdAppKey := e2.POST(globalAppKeysOperation("create")).
+		WithHeader(Authorization, Bearer+token).WithJSON(createGlobalAppKeyPayload).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().Value("created_app_key")
+	require.NotNil(t, createdAppKey)
+	id := createdAppKey.Object().Value("id").String()
+	secret := createdAppKey.Object().Value("secret").String()
+
+	name := createdAppKey.Object().Value("name").String()
+	description := createdAppKey.Object().Value("description").String()
+
+	require.Equal(t, "test_key", name.Raw())
+	require.Equal(t, "This key is used for integration test purpose.", description.Raw())
+	require.True(t, int(id.Length().Raw()) == 30+len(auth.ClientIdPrefix))         // length + prefix
+	require.True(t, int(secret.Length().Raw()) == 50+len(auth.ClientSecretPrefix)) // length + prefix
+
+	// update
+	updateGlobalAppKeyPayload := Map{
+		"id":          id.Raw(),
+		"description": "[updated]This key is used for integration test purpose.",
+	}
+	updatedAppKey := e2.PUT(globalAppKeysOperation("update")).
+		WithHeader(Authorization, Bearer+token).WithJSON(updateGlobalAppKeyPayload).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().Value("updated_app_key")
+	// updates only in description
+	require.Equal(t, id.Raw(), updatedAppKey.Object().Value("id").Raw())
+	require.Equal(t, "[updated]This key is used for integration test purpose.", updatedAppKey.Object().Value("description").Raw())
+
+	// rotate
+	rotateGlobalAppKeyPayload := Map{
+		"id": id.Raw(),
+	}
+	rotatedKey := e2.POST(globalAppKeysOperation("rotate")).
+		WithHeader(Authorization, Bearer+token).WithJSON(rotateGlobalAppKeyPayload).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().Value("app_key")
+	require.Equal(t, id.Raw(), rotatedKey.Object().Value("id").Raw())
+	require.NotEqual(t, secret.Raw(), rotatedKey.Object().Value("secret").Raw())
+	require.True(t, len(rotatedKey.Object().Value("secret").String().Raw()) == 50+len(auth.ClientSecretPrefix))
+
+	// list
+	globalAppKeys := e2.GET(globalAppKeysOperation("get")).
+		WithHeader(Authorization, Bearer+token).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().Value("app_keys").Array()
+
+	found := false
+	for i := 0; i < int(globalAppKeys.Length().Raw()); i++ {
+		k := globalAppKeys.Element(i)
+		if k.Object().Value("id").Raw() == id.Raw() {
+			found = true
+			require.NotEqual(t, secret.Raw(), rotatedKey.Object().Value("secret").Raw())
+		}
+	}
+
+	require.True(t, found)
+
+	retrievedAppKey := globalAppKeys.Element(0)
+	require.Equal(t, id.Raw(), retrievedAppKey.Object().Value("id").String().Raw())
+	require.NotNil(t, retrievedAppKey.Object().Value("secret").String().Raw())
+	require.Equal(t, name.Raw(), retrievedAppKey.Object().Value("name").String().Raw())
+	require.Equal(t, "[updated]This key is used for integration test purpose.", retrievedAppKey.Object().Value("description").String().Raw())
+	require.True(t, strings.HasPrefix(retrievedAppKey.Object().Value("created_by").String().Raw(), "gt|"))
+
+	// delete
+	deleteGlobalAppKeyPayload := Map{
+		"id": id.Raw(),
+	}
+	deletedResponse := e2.DELETE(globalAppKeysOperation("delete")).
+		WithHeader(Authorization, Bearer+token).WithJSON(deleteGlobalAppKeyPayload).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("deleted").
+		Boolean()
+	require.True(t, deletedResponse.Raw())
+}
+
 func TestMultipleAppsCreation(t *testing.T) {
 	testStartTime := time.Now()
 
@@ -365,6 +465,50 @@ func TestCreateAccessToken(t *testing.T) {
 	deleteProject2(t, "new-project-3", token)
 	// use access token with cache
 	createProject2(t, "new-project-3", accessToken).Status(http.StatusOK)
+}
+
+func TestCreateGlobalAccessToken(t *testing.T) {
+	e2 := expectLow(t, config.GetBaseURL2())
+	token := readToken(t, RSATokenFilePath)
+	createTestNamespace(t, token)
+
+	createGlobalAppKeyPayload := Map{
+		"name":        "test_key",
+		"description": "This key is used for integration test purpose.",
+	}
+
+	createdAppKey := e2.POST(globalAppKeysOperation("create")).
+		WithHeader(Authorization, Bearer+token).WithJSON(createGlobalAppKeyPayload).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().Value("created_app_key")
+	require.NotNil(t, createdAppKey)
+
+	id := createdAppKey.Object().Value("id").String()
+	secret := createdAppKey.Object().Value("secret").String()
+
+	getAccessTokenResponse := e2.POST(getAuthToken()).
+		WithFormField("client_id", id.Raw()).
+		WithFormField("client_secret", secret.Raw()).
+		WithFormField("grant_type", "client_credentials").
+		Expect()
+	getAccessTokenResponse.Status(http.StatusOK)
+
+	accessToken := getAccessTokenResponse.JSON().Object().Value("access_token").String().Raw()
+	require.True(t, accessToken != "")
+	require.NotNil(t, getAccessTokenResponse.JSON().Object().Value("expires_in"))
+
+	// use access token
+	createProject2(t, "TestCreateGlobalAccessToken-project-1", accessToken).Status(http.StatusOK)
+
+	deleteProject2(t, "TestCreateGlobalAccessToken-project-1", token)
+	// use access token bypassing auth caches
+	_ = e2.POST(getProjectURL("TestCreateGlobalAccessToken-project-2", "create")).
+		WithHeader(Authorization, Bearer+accessToken).
+		WithHeader(api.HeaderBypassAuthCache, "true").
+		Expect().
+		Status(http.StatusOK)
 }
 
 func TestCreateAccessTokenUsingInvalidCreds(t *testing.T) {

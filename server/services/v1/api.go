@@ -47,6 +47,7 @@ const (
 	databasePathPattern    = fullProjectPath + "/database/*"
 	applicationPathPattern = fullProjectPath + "/apps/*"
 
+	appsPath    = "/apps/*"
 	infoPath    = "/info"
 	metricsPath = "/metrics"
 )
@@ -138,6 +139,9 @@ func (s *apiService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel)
 		mux.ServeHTTP(w, r)
 	})
 	router.HandleFunc(apiPathPrefix+infoPath, func(w http.ResponseWriter, r *http.Request) {
+		mux.ServeHTTP(w, r)
+	})
+	router.HandleFunc(apiPathPrefix+appsPath, func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
 	})
 
@@ -631,4 +635,24 @@ func (s *apiService) ListAppKeys(ctx context.Context, req *api.ListAppKeysReques
 
 func (s *apiService) RotateAppKeySecret(ctx context.Context, req *api.RotateAppKeyRequest) (*api.RotateAppKeyResponse, error) {
 	return s.authProvider.RotateAppKey(ctx, req)
+}
+
+func (s *apiService) CreateGlobalAppKey(ctx context.Context, req *api.CreateGlobalAppKeyRequest) (*api.CreateGlobalAppKeyResponse, error) {
+	return s.authProvider.CreateGlobalAppKey(ctx, req)
+}
+
+func (s *apiService) UpdateGlobalAppKey(ctx context.Context, req *api.UpdateGlobalAppKeyRequest) (*api.UpdateGlobalAppKeyResponse, error) {
+	return s.authProvider.UpdateGlobalAppKey(ctx, req)
+}
+
+func (s *apiService) DeleteGlobalAppKey(ctx context.Context, req *api.DeleteGlobalAppKeyRequest) (*api.DeleteGlobalAppKeyResponse, error) {
+	return s.authProvider.DeleteGlobalAppKey(ctx, req)
+}
+
+func (s *apiService) ListGlobalAppKeys(ctx context.Context, req *api.ListGlobalAppKeysRequest) (*api.ListGlobalAppKeysResponse, error) {
+	return s.authProvider.ListGlobalAppKeys(ctx, req)
+}
+
+func (s *apiService) RotateGlobalAppKeySecret(ctx context.Context, req *api.RotateGlobalAppKeySecretRequest) (*api.RotateGlobalAppKeySecretResponse, error) {
+	return s.authProvider.RotateGlobalAppKeySecret(ctx, req)
 }

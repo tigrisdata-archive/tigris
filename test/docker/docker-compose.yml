@@ -80,7 +80,7 @@ services:
     ports:
       - "8081:8081"
     command: >
-      bash -c '[ ! -f /etc/foundationdb/initialized ] && fdbcli --exec "configure new single memory" && touch /etc/foundationdb/initialized; sleep 5;
+      bash -c '[ ! -f /etc/foundationdb/initialized ] && fdbcli --exec "configure new single memory" && touch /etc/foundationdb/initialized;
         /server/service'
     depends_on:
       - tigris_db
