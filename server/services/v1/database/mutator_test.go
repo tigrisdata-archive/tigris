@@ -316,6 +316,96 @@ func TestMutatePayload(t *testing.T) {
 	}
 }
 
+func TestMutateSetDefaultPayloadOnly(t *testing.T) {
+	reqSchema := []byte(`{
+		"title": "t1",
+		"properties": {
+			"id": {
+				"type": "integer"
+			},
+			"createdAt": {
+				"type": "string",
+				"format": "date-time",
+				"createdAt": true
+			},
+			"arr_obj_1": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"properties": {
+						"double_f": {
+							"type": "number",
+							"default": 1.5
+						},
+						"created": {
+							"type": "string",
+							"format": "date-time",
+							"createdAt": true
+						}
+					}
+				}
+			},
+			"arr_obj_2": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"properties": {
+						"createdAt": {
+							"type": "string",
+							"format": "date-time",
+							"createdAt": true
+						},
+						"updated": {
+							"type": "string",
+							"format": "date-time",
+							"updatedAt": true
+						},
+						"c": {
+							"type": "integer"
+						}
+					}
+				}
+			}
+		},
+		"primary_key": ["id"]
+	}`)
+
+	schFactory, err := schema.NewFactoryBuilder(true).Build("t1", reqSchema)
+	require.NoError(t, err)
+	coll, err := schema.NewDefaultCollection(1, 1, schFactory, nil, nil)
+	require.NoError(t, err)
+	p := newInsertPayloadMutator(coll, time.Now().UTC().String())
+
+	cases := []struct {
+		input   []byte
+		mutated bool
+		output  []byte
+	}{
+		{
+			// created and double_f will be populated
+			[]byte(`{"arr_obj_1":[{}]}`),
+			true,
+			[]byte(fmt.Sprintf(`{"arr_obj_1":[{"double_f": 1.5, "created": "%s"}]}`, p.(*insertPayloadMutator).createdAt)),
+		},
+		{
+			// createdAt will be populated
+			[]byte(`{"arr_obj_2": [{ "c": 1 }]}`),
+			true,
+			[]byte(fmt.Sprintf(`{"arr_obj_2": [{ "c": 1 , "createdAt": "%s"}]}`, p.(*insertPayloadMutator).createdAt)),
+		},
+	}
+	for _, c := range cases {
+		doc, err := util.JSONToMap(c.input)
+		require.NoError(t, err)
+
+		require.NoError(t, p.setDefaultsForPayloadOnly(doc))
+		require.Equal(t, c.mutated, p.isMutated())
+		actualJS, err := util.MapToJSON(doc)
+		require.NoError(t, err)
+		require.JSONEq(t, string(c.output), string(actualJS))
+	}
+}
+
 func BenchmarkStringToInteger(b *testing.B) {
 	reqSchema := []byte(`{
 		"title": "t1",

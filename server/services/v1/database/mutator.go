@@ -26,6 +26,7 @@ type mutator interface {
 	stringToInt64(doc map[string]any) error
 	setDefaultsInIncomingPayload(doc map[string]any) error
 	setDefaultsInExistingPayload(doc map[string]any) error
+	setDefaultsForPayloadOnly(doc map[string]any) error
 }
 
 type baseMutator struct {
@@ -57,6 +58,24 @@ func (mutator *insertPayloadMutator) setDefaultsInIncomingPayload(doc map[string
 }
 
 func (*insertPayloadMutator) setDefaultsInExistingPayload(_ map[string]any) error {
+	return nil
+}
+
+func (mutator *insertPayloadMutator) setDefaultsForPayloadOnly(doc map[string]any) error {
+	taggedFields := make(map[string]struct{})
+
+	for key, value := range mutator.collection.TaggedDefaultsForInsert() {
+		keys := strings.Split(key, ".")
+
+		_, ok := doc[keys[0]]
+		if ok {
+			taggedFields[key] = value
+		}
+	}
+	if len(taggedFields) > 0 {
+		return mutator.setDefaultsInternal(taggedFields, doc, mutator.setDefaults)
+	}
+
 	return nil
 }
 
@@ -101,6 +120,24 @@ func (*updatePayloadMutator) setDefaultsInIncomingPayload(_ map[string]any) erro
 func (mutator *updatePayloadMutator) setDefaultsInExistingPayload(doc map[string]any) error {
 	// we need to update the updatedAt for the payload that we have in the database
 	return mutator.setDefaultsInternal(mutator.collection.TaggedDefaultsForUpdate(), doc, mutator.setDefaults)
+}
+
+func (mutator *updatePayloadMutator) setDefaultsForPayloadOnly(doc map[string]any) error {
+	taggedFields := make(map[string]struct{})
+
+	for key, value := range mutator.collection.TaggedDefaultsForUpdate() {
+		keys := strings.Split(key, ".")
+		_, ok := doc[keys[0]]
+		if ok {
+			taggedFields[key] = value
+		}
+	}
+
+	if len(taggedFields) > 0 {
+		return mutator.setDefaultsInternal(taggedFields, doc, mutator.setDefaults)
+	}
+
+	return nil
 }
 
 // setDefaults ensures that only updatedAt tag is updated during update request.

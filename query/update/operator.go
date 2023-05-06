@@ -198,7 +198,7 @@ func (factory *FieldOperatorFactory) set(collection *schema.DefaultCollection, e
 	return output, tentativeKeysToRemove, primaryKeyMutation, nil
 }
 
-func (factory *FieldOperatorFactory) push(existingDoc jsoniter.RawMessage, operator *FieldOperator) (jsoniter.RawMessage, error) {
+func (*FieldOperatorFactory) push(existingDoc jsoniter.RawMessage, operator *FieldOperator) (jsoniter.RawMessage, error) {
 	var output []byte = existingDoc
 	var pushInput map[string]any
 	if err := jsoniter.Unmarshal(operator.Input, &pushInput); err != nil {
@@ -213,9 +213,13 @@ func (factory *FieldOperatorFactory) push(existingDoc jsoniter.RawMessage, opera
 		}
 
 		var newValue []any
-		err = jsoniter.Unmarshal(existingVal, &newValue)
-		if err != nil {
-			return nil, err
+		if len(existingVal) == 0 {
+			newValue = make([]any, 0)
+		} else {
+			err = jsoniter.Unmarshal(existingVal, &newValue)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		updatedValue, err := jsoniter.Marshal(append(newValue, value))

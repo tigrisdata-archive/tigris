@@ -236,7 +236,7 @@ func TestMergeAndGet_Push(t *testing.T) {
 	}{
 		{
 			[]byte(`{"f_int": 1}`),
-			[]byte(`{"f_int": []}`),
+			[]byte(`{}`),
 			[]byte(`{"f_int": [1]}`),
 		},
 		{
@@ -251,7 +251,7 @@ func TestMergeAndGet_Push(t *testing.T) {
 		},
 		{
 			[]byte(`{"f_obj.a": 4}`),
-			[]byte(`{"f_obj": {"a": []}}`),
+			[]byte(`{}`),
 			[]byte(`{"f_obj": {"a": [4]}}`),
 		},
 		{
@@ -266,8 +266,8 @@ func TestMergeAndGet_Push(t *testing.T) {
 		},
 		{
 			[]byte(`{"f_obj_arr": {"c": 1 , "d": "hello"}}`),
-			[]byte(`{"f_obj_arr": []}`),
-			[]byte(`{"f_obj_arr": [{"c": 1 , "d": "hello"}]}`),
+			[]byte(`{"g": "hello"}`),
+			[]byte(`{"g": "hello", "f_obj_arr": [{"c": 1 , "d": "hello"}]}`),
 		},
 		{
 			[]byte(`{"f_obj_arr": {"c": 2 , "d": "world"}}`),
