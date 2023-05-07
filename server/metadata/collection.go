@@ -79,7 +79,7 @@ func (c *CollectionSubspace) Create(ctx context.Context, tx transaction.Tx, ns N
 	return meta, nil
 }
 
-func (c *CollectionSubspace) updateMetadataIndexes(ctx context.Context, tx transaction.Tx, ns Namespace, db *Database, name string, _id uint32, metadata *CollectionMetadata, updatedIndexes []*schema.Index,
+func (c *CollectionSubspace) updateMetadataIndexes(ctx context.Context, tx transaction.Tx, ns Namespace, db *Database, name string, _ uint32, metadata *CollectionMetadata, updatedIndexes []*schema.Index,
 ) error {
 	shouldAddIndexBuildTask := false
 	for _, updateIdx := range updatedIndexes {

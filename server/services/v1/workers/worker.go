@@ -103,13 +103,14 @@ func (w *Worker) Loop() {
 		select {
 		case <-w.done:
 			log.Info().Msgf("Worker %d shutting down", w.id)
+			hbTicker.Stop()
 			return
 		case <-hbTicker.C:
 			w.hearbeatChan <- w.id
 		default:
 			err := w.peekAndProcess()
 			if err != nil {
-				w.errCount += 1
+				w.errCount++
 				// if the worker is getting to many errors in a row
 				// shut the worker down and restart a new one
 				if w.errCount >= MAX_ERROR_COUNT {
@@ -208,7 +209,7 @@ func (w *Worker) testQueueTask(item *metadata.QueueItem) error {
 	}
 
 	if testTask.NumErrors > 0 {
-		testTask.NumErrors -= 1
+		testTask.NumErrors--
 		item.Data, _ = jsoniter.Marshal(testTask)
 		return fmt.Errorf("test error generated %d", testTask.NumErrors)
 	}
@@ -391,7 +392,6 @@ func (pool *WorkerPool) checkHeartbeats() {
 			log.Info().Msgf("No response from worker %d adding new worker", info.worker.id)
 			active = append(active, pool.newWorker(pool.nextWorkerId))
 		} else {
-			info.lastHearbeat = time.Now()
 			active = append(active, info)
 		}
 	}
