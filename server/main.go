@@ -121,11 +121,10 @@ func mainWithCode() int {
 
 	if cfg.Workers.Enabled {
 		workerPool := workers.NewWorkerPool(cfg.Workers.Count, tenantMgr.GetQueue(), txMgr, tenantMgr, 300*time.Millisecond)
-		if err := workerPool.Start(); ulog.E(err) {
-			log.Error().Err(err).Msgf("error starting worker pool")
+		if !ulog.E(workerPool.Start()) {
+			defer workerPool.Stop()
+			log.Info().Msgf("initialized worker pool with %d workers", cfg.Workers.Count)
 		}
-		defer workerPool.Stop()
-		log.Info().Msgf("initialized worker pool with %d workers", cfg.Workers.Count)
 	}
 
 	bProvider := billing.NewProvider()

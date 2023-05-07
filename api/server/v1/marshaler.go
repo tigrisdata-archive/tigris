@@ -734,7 +734,6 @@ func (x *DescribeCollectionResponse) MarshalJSON() ([]byte, error) {
 }
 
 func (x *DescribeCollectionResponse) UnmarshalJSON(data []byte) error {
-
 	var desc collDesc
 	err := jsoniter.Unmarshal(data, &desc)
 	if err != nil {

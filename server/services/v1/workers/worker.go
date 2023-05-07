@@ -113,11 +113,12 @@ func (w *Worker) Loop() {
 				// if the worker is getting to many errors in a row
 				// shut the worker down and restart a new one
 				if w.errCount >= MAX_ERROR_COUNT {
-					w.Stop()
+					log.Err(err).Msgf("Worker %d exceeded error count and shutting down", w.id)
+					return
 				}
-				return
+			} else {
+				w.errCount = 0
 			}
-			w.errCount = 0
 		}
 		w.jitterSleep()
 	}
@@ -160,7 +161,7 @@ func (w *Worker) peekAndProcess() error {
 }
 
 func (w *Worker) handleFailedProcessing(ctx context.Context, selectedItem *metadata.QueueItem) error {
-	selectedItem.ErrorCount += 1
+	selectedItem.ErrorCount++
 	tx, err := w.txMgr.StartTx(ctx)
 	if err != nil {
 		return err
