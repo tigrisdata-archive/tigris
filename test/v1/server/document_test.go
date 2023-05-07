@@ -1110,16 +1110,14 @@ func TestInsertUpdate_Defaults(t *testing.T) {
 	require.Equal(t, doc["arr_obj"].([]any)[0].(map[string]any)["updated"], doc["arr_obj"].([]any)[1].(map[string]any)["updated"])
 
 	// push field asserts
-	createdAtArrObjNew, err := time.Parse(time.RFC3339, doc["arr_obj"].([]any)[3].(map[string]any)["created"].(string))
-	require.NoError(t, err)
-	require.WithinRange(t, createdAtArrObjNew, start, time.Now().UTC())
-
 	require.Equal(t, 4, len(doc["arr_obj"].([]any)))
 	require.Equal(t, float64(123), doc["arr_obj"].([]any)[3].(map[string]any)["int_f"])
-
-	require.Nil(t, doc["arr_obj"].([]any)[3].(map[string]any)["updated"])
 	require.Equal(t, 1, len(doc["int_arr"].([]any)))
 	require.Equal(t, float64(5), doc["int_arr"].([]any)[0])
+
+	// not supporting default values in array
+	require.Nil(t, doc["arr_obj"].([]any)[3].(map[string]any)["created"])
+	require.Nil(t, doc["arr_obj"].([]any)[3].(map[string]any)["updated"])
 }
 
 func TestInsertUpdate_AllDefaults(t *testing.T) {
@@ -1303,8 +1301,6 @@ func TestInsertUpdate_AllDefaults(t *testing.T) {
 
 	// push field assert
 	require.Equal(t, "ABC", doc["arr_obj"].([]any)[0].(map[string]any)["name"])
-	require.Equal(t, float64(12345), doc["arr_obj"].([]any)[0].(map[string]any)["zipcodes"].([]any)[0])
-	require.Equal(t, float64(54321), doc["arr_obj"].([]any)[0].(map[string]any)["zipcodes"].([]any)[1])
 
 	createdAtAfter, err := time.Parse(time.RFC3339, doc["created"].(string))
 	require.NoError(t, err)

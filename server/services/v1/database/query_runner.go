@@ -199,11 +199,6 @@ func mutatePushPayload(coll *schema.DefaultCollection, doc []byte) ([]byte, erro
 		return doc, err
 	}
 
-	// this will set default values for the specific nested doc only
-	if err = mutator.setDefaultsForPayloadOnly(deserializedDoc); err != nil {
-		return doc, err
-	}
-
 	if mutator.isMutated() {
 		for key, v := range deserializedDoc {
 			deserializedDoc[key] = v.([]any)[0]
@@ -255,7 +250,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}
 
 	if fieldOperator, ok := factory.FieldOperators[string(update.Push)]; ok {
-		// mutate if push payload needs set default values and also need to convert numeric fields from string to int64
+		// mutate if it needs to convert numeric fields from string to int64
 		fieldOperator.Input, err = mutatePushPayload(coll, fieldOperator.Input)
 		if err != nil {
 			return Response{}, ctx, err
