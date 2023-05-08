@@ -222,7 +222,7 @@ func (*BaseQueryRunner) buildSecondaryIndexKeysUsingFilter(coll *schema.DefaultC
 
 	filterFactory := filter.NewFactoryForSecondaryIndex(coll.GetActiveIndexedFields())
 	filters, err := filterFactory.Factorize(reqFilter)
-	if err != nil {
+	if err != nil && sortFields == nil {
 		return nil, err
 	}
 	return BuildSecondaryIndexKeys(coll, filters, sortFields)

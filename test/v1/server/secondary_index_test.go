@@ -456,6 +456,19 @@ func firstFilterName(filter Map) string {
 	return fieldName
 }
 
+func TestQuery_SortWithNonIndexedFilter(t *testing.T) {
+	db, coll := setupIndexBuildTest(t, testBuildIndexSchema)
+	defer cleanupTests(t, db)
+	writeDocs(t, db, coll, 0, 5)
+
+	filter := Map{"double_value": 11.01}
+	options := []Map{{"int_value": "$desc"}}
+
+	resp := readByFilter(t, db, coll, filter, nil, nil, options)
+	ids := getIds(resp)
+	assert.Equal(t, []int{1}, ids)
+}
+
 func TestQuery_RangeWithNull(t *testing.T) {
 	db, coll := setupTests(t)
 	insertDocs(t, db, coll, Doc{
