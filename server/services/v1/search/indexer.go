@@ -239,7 +239,7 @@ func (transformer *transformer) inverseStart(doc map[string]any) (map[string]any
 	delete(doc, schema.ReservedFields[schema.UpdatedAt])
 
 	// unFlatten the map now
-	doc = util.UnFlatMap(doc)
+	doc = util.UnFlatMap(doc, false)
 	return doc, createdAt, updatedAt, nil
 }
 
