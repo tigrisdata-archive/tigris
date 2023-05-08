@@ -331,13 +331,14 @@ var DefaultConfig = Config{
 		StreamBuffer:   200,
 	},
 	Search: SearchConfig{
-		Host:           "localhost",
-		Port:           8108,
-		ReadEnabled:    true,
-		WriteEnabled:   true,
-		StorageEnabled: true,
-		Chunking:       true,
-		Compression:    false,
+		Host:              "localhost",
+		Port:              8108,
+		ReadEnabled:       true,
+		WriteEnabled:      true,
+		StorageEnabled:    true,
+		Chunking:          true,
+		Compression:       false,
+		IgnoreExtraFields: false,
 	},
 	KV: KVConfig{
 		Chunking:    false,
@@ -548,7 +549,8 @@ type SearchConfig struct {
 	// Chunking allows us to persist bigger search indexes payload in storage.
 	Chunking bool `mapstructure:"chunking" yaml:"chunking" json:"chunking"`
 	// Compression allows us to compress payload before storing in storage.
-	Compression bool `mapstructure:"compression" yaml:"compression" json:"compression"`
+	Compression       bool `mapstructure:"compression" yaml:"compression" json:"compression"`
+	IgnoreExtraFields bool `mapstructure:"ignore_extra_fields" yaml:"ignore_extra_fields" json:"ignore_extra_fields"`
 }
 
 type SecondaryIndexConfig struct {

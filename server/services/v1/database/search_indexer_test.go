@@ -42,7 +42,7 @@ func TestFlattenObj(t *testing.T) {
 	require.Equal(t, float64(3), flattened["b.e"])
 	require.Equal(t, []any{float64(1), float64(2), float64(3)}, flattened["b.f"])
 
-	require.True(t, reflect.DeepEqual(unFlattenMap, util.UnFlatMap(flattened)))
+	require.True(t, reflect.DeepEqual(unFlattenMap, util.UnFlatMap(flattened, false)))
 }
 
 func TestPackSearchFields(t *testing.T) {

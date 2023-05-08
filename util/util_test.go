@@ -18,17 +18,45 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/tigrisdata/tigris/lib/container"
 )
 
 func TestUnFlatMap(t *testing.T) {
-	input := make(map[string]any)
-	input["app_metadata"] = nil
-	input["app_metadata.provider"] = "foo"
-	output := UnFlatMap(input)
+	t.Run("simple_flattened", func(t *testing.T) {
+		input := make(map[string]any)
+		input["app_metadata"] = nil
+		input["app_metadata.provider"] = "foo"
+		output := UnFlatMap(input, false)
 
-	require.Equal(t, 1, len(output))
+		require.Equal(t, 1, len(output))
 
-	expected := make(map[string]any)
-	expected["provider"] = "foo"
-	require.Equal(t, expected, output["app_metadata"])
+		expected := make(map[string]any)
+		expected["provider"] = "foo"
+		require.Equal(t, expected, output["app_metadata"])
+	})
+	t.Run("nested_map", func(t *testing.T) {
+		flattened := []byte(`{
+	"address.country": "USA",
+	"address.postalCode": "12345",
+	"arr_obj_1": [{
+		"createdAt": "2023-05-06T16:30:49.54288Z"
+	}, {
+		"createdAt": "2023-05-06T17:46:29.79824Z"
+	}],
+	"arr_prim": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"],
+	"obj.description": "test description",
+	"obj.name": "toplevel",
+    "obj.arr": [{
+		"createdAt": "2023-05-06T16:30:49.54288Z"
+	}, {
+		"createdAt": "2023-05-06T17:46:29.79824Z"
+	}]
+}`)
+
+		mp, err := JSONToMap(flattened)
+		require.NoError(t, err)
+		mp = FlatMap(mp, container.NewHashSet())
+		unFlat := UnFlatMap(mp, false)
+		require.Equal(t, unFlat["arr_obj_1"].([]any)[0].(map[string]any)["createdAt"], "2023-05-06T16:30:49.54288Z")
+	})
 }

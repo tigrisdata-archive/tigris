@@ -104,7 +104,7 @@ func flatMap(key string, obj map[string]any, resp map[string]any, notFlat contai
 	}
 }
 
-func UnFlatMap(flat map[string]any) map[string]any {
+func UnFlatMap(flat map[string]any, ignoreExtra bool) map[string]any {
 	result := make(map[string]any)
 
 	for k, v := range flat {
@@ -116,7 +116,13 @@ func UnFlatMap(flat map[string]any) map[string]any {
 				m[keys[i]] = make(map[string]any)
 			}
 
-			m = m[keys[i]].(map[string]any)
+			if ignoreExtra {
+				if _, ok := m[keys[i]].(map[string]any); ok {
+					m = m[keys[i]].(map[string]any)
+				}
+			} else {
+				m = m[keys[i]].(map[string]any)
+			}
 		}
 
 		if v != nil {
