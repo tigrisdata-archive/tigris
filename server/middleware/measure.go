@@ -102,8 +102,10 @@ func measureUnary() func(ctx context.Context, req any, info *grpc.UnaryServerInf
 		// Request was ok
 		measurement.SetNDocs(reqStatus.GetResultDocs())
 		measurement.CountOkForScope(metrics.RequestsOkCount, measurement.GetRequestOkTags())
-		measurement.CountReceivedBytes(metrics.BytesReceived, measurement.GetNetworkTags(), proto.Size(req.(proto.Message)))
-		measurement.CountSentBytes(metrics.BytesSent, measurement.GetNetworkTags(), proto.Size(resp.(proto.Message)))
+		measurement.AddReceivedBytes(proto.Size(req.(proto.Message)))
+		measurement.AddSentBytes(proto.Size(resp.(proto.Message)))
+		measurement.CountReceivedBytes(metrics.BytesReceived, measurement.GetNetworkTags())
+		measurement.CountSentBytes(metrics.BytesSent, measurement.GetNetworkTags())
 		_ = measurement.FinishTracing(ctx)
 		measurement.RecordDuration(metrics.RequestsRespTime, measurement.GetRequestOkTags())
 		// Global status and metrics related to them, config switches are handled inside these
@@ -148,6 +150,10 @@ func measureStream() grpc.StreamServerInterceptor {
 		// Global status and metrics related to them, config switches are handled inside these
 		metrics.GlobalSt.RecordRequestToActiveChunk(reqStatus, reqMetadata.GetNamespace())
 		measurement.CountUnits(reqStatus, measurement.GetGlobalStatusTags())
+		// The actual bytes are counted in RecvMsg during streaming
+		measurement.CountReceivedBytes(metrics.BytesReceived, measurement.GetNetworkTags())
+		// The actual bytes are counted in SendMsg during streaming
+		measurement.CountSentBytes(metrics.BytesSent, measurement.GetNetworkTags())
 		wrapped.WrappedContext = reqStatus.SaveRequestStatusToContext(wrapped.WrappedContext)
 		return err
 	}
@@ -181,8 +187,7 @@ func (w *wrappedStream) RecvMsg(m any) error {
 		w.WrappedContext = reqMetadata.SaveToContext(w.WrappedContext)
 		w.measurement.AddProjectBranchCollTags(project, branch, coll)
 	}
-
-	w.measurement.CountReceivedBytes(metrics.BytesReceived, w.measurement.GetNetworkTags(), proto.Size(m.(proto.Message)))
+	w.measurement.AddReceivedBytes(proto.Size(m.(proto.Message)))
 	return recvErr
 }
 
@@ -216,7 +221,6 @@ func (w *wrappedStream) SendMsg(m any) error {
 
 		w.measurement.AddProjectBranchCollTags(project, branch, coll)
 	}
-
-	w.measurement.CountSentBytes(metrics.BytesSent, w.measurement.GetNetworkTags(), proto.Size(m.(proto.Message)))
+	w.measurement.AddSentBytes(proto.Size(m.(proto.Message)))
 	return nil
 }
