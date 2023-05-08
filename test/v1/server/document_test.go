@@ -5751,6 +5751,9 @@ func TestComplexObjectsCollectionSearch(t *testing.T) {
                   "properties": {
                     "a": {
                       "type": "string"
+                    },
+                    "b": {
+                      "type": "string"
                     }
                   }
                 }
@@ -5779,8 +5782,31 @@ func TestComplexObjectsCollectionSearch(t *testing.T) {
               "properties": {
                 "a": {
                   "type": "string"
+                },
+                "b": {
+                  "type": "string"
                 }
               }
+            }
+          },
+          "f": {
+            "searchIndex": true,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "g": {
+            "searchIndex": true,
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "h": {
+            "type": "array",
+            "items": {
+              "type": "object"
             }
           }
         }
@@ -5806,6 +5832,9 @@ func TestComplexObjectsCollectionSearch(t *testing.T) {
           "properties": {
             "a": {
               "type": "string"
+            },
+            "b": {
+              "type": "string"
             }
           }
         }
@@ -5815,6 +5844,27 @@ func TestComplexObjectsCollectionSearch(t *testing.T) {
         "type": "array",
         "items": {
           "type": "string"
+        }
+      },
+      "h": {
+        "searchIndex": true,
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "i": {
+        "searchIndex": true,
+        "type": "array",
+        "items": {
+          "type": "integer"
+        }
+      },
+      "j": {
+        "searchIndex": true,
+        "type": "array",
+        "items": {
+          "type": "object"
         }
       }
     }
@@ -5834,16 +5884,22 @@ func TestComplexObjectsCollectionSearch(t *testing.T) {
 			"c": Map{
 				"a": "foo",
 				"b": Map{"name": "this is free flow object but not indexed"},
-				"c": []Map{{"a": "car"}, {"a": "bike"}},
+				"c": []Map{{"a": "car"}, {"a": "bike", "b": nil}},
 				"d": []string{"PARIS", "LONDON", "ENGLAND"},
 			},
 			"d": []string{"SANTA CLARA", "SAN JOSE"},
-			"e": []Map{{"a": "football"}, {"a": "basketball"}},
+			"e": []Map{{"a": "football", "b": nil}, {"a": "basketball", "b": nil}},
+			"f": nil,
+			"g": nil,
+			"h": nil,
 		},
 		"d": Map{"agent": "free flow object top level"},
-		"e": []Map{{"random": "array of free flow object"}},
-		"f": []Map{{"a": "array of object with a field"}},
+		"e": []Map{{"random": "array of free flow object", "some_null": nil}, {"random": "array of free flow object", "some_null": nil}},
+		"f": []Map{{"a": "array of object with a field", "b": nil}, {"a": "array of object with a field second", "b": nil}},
 		"g": []string{"NEW YORK", "MIAMI"},
+		"h": nil,
+		"i": nil,
+		"j": nil,
 	}
 
 	insertDocuments(t, project, collectionName, []Doc{docA}, false).

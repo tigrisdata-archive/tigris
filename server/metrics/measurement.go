@@ -61,6 +61,8 @@ type Measurement struct {
 	stoppedAt       time.Time
 	projectCollTags map[string]string
 	nDocs           int64
+	sentBytes       int
+	receivedBytes   int
 }
 
 type MeasurementCtxKey struct{}
@@ -88,12 +90,27 @@ func (m *Measurement) countOk(scope tally.Scope, tags map[string]string) {
 	m.IncrementCount(scope, tags, "ok", 1)
 }
 
+func (m *Measurement) GetNamespaceName() string {
+	if namespaceName, found := m.tags["tigris_tenant_name"]; found {
+		return namespaceName
+	}
+	return defaults.UnknownValue
+}
+
 func (*Measurement) IncrementCount(scope tally.Scope, tags map[string]string, counterName string, count int64) {
 	scope.Tagged(tags).Counter(counterName).Inc(count)
 }
 
 func (m *Measurement) SetNDocs(value int64) {
 	m.nDocs += value
+}
+
+func (m *Measurement) AddSentBytes(value int) {
+	m.sentBytes += value
+}
+
+func (m *Measurement) AddReceivedBytes(value int) {
+	m.receivedBytes += value
 }
 
 func (*Measurement) CountUnits(reqStatus *RequestStatus, tags map[string]string) {
@@ -303,14 +320,20 @@ func (m *Measurement) StartTracing(ctx context.Context, childOnly bool) context.
 
 func (m *Measurement) FinishTracing(ctx context.Context) context.Context {
 	if !m.started {
-		log.Error().Str("service_name", m.serviceName).Str("resource_name", m.resourceName).Msg("Finish tracing called before starting the trace")
+		log.Error().
+			Str("service_name", m.serviceName).
+			Str("resource_name", m.resourceName).
+			Msg("Finish tracing called before starting the trace")
 		return ctx
 	}
 
 	m.stopped = true
 	m.stoppedAt = time.Now()
 
-	log.Trace().Str("started", strconv.FormatBool(m.started)).Str("stopped", strconv.FormatBool(m.stopped)).Str("span_type", m.spanType).Msg("FinishingTracing start")
+	log.Trace().Str("started", strconv.FormatBool(m.started)).
+		Str("stopped", strconv.FormatBool(m.stopped)).
+		Str("span_type", m.spanType).
+		Msg("FinishingTracing start")
 
 	if m.datadogSpan != nil {
 		m.datadogSpan.Finish()
@@ -379,17 +402,33 @@ func (m *Measurement) logLongRequest() {
 	if totalTime < config.DefaultConfig.Metrics.LogLongMethodTime {
 		return
 	}
-	log.Error().Int64("total time (ms)", int64(totalTime/time.Millisecond)).Time("start time", m.startedAt).Time("stop time", m.stoppedAt).Str("grpc method", m.getTag("grpc_method")).Int64("threshold", int64(config.DefaultConfig.Metrics.LogLongMethodTime/time.Millisecond)).Int64("result documents", m.nDocs).Msg("long method call")
+	log.Error().
+		Int64("total time (ms)", int64(totalTime/time.Millisecond)).
+		Time("start time", m.startedAt).Time("stop time", m.stoppedAt).
+		Str("grpc method", m.getTag("grpc_method")).
+		Int64("threshold", int64(config.DefaultConfig.Metrics.LogLongMethodTime/time.Millisecond)).
+		Int64("result documents", m.nDocs).Str("tenant name", m.GetNamespaceName()).
+		Int("bytes sent", m.sentBytes).
+		Int("bytes received", m.receivedBytes).
+		Msg("long method call")
 }
 
 func (m *Measurement) recordTimerDuration(scope tally.Scope, tags map[string]string) {
 	// Should be called after tracing is finished
 	if !m.started {
-		log.Error().Str("service_name", m.serviceName).Str("resource_name", m.resourceName).Str("span_type", m.spanType).Msg("recordTimerDuration was called on a span that was not started")
+		log.Error().
+			Str("service_name", m.serviceName).
+			Str("resource_name", m.resourceName).
+			Str("span_type", m.spanType).
+			Msg("recordTimerDuration was called on a span that was not started")
 		return
 	}
 	if !m.stopped {
-		log.Error().Str("service_name", m.serviceName).Str("resource_name", m.resourceName).Str("span_type", m.spanType).Msg("recordTimerDuration was called on a span that was not stopped")
+		log.Error().
+			Str("service_name", m.serviceName).
+			Str("resource_name", m.resourceName).
+			Str("span_type", m.spanType).
+			Msg("recordTimerDuration was called on a span that was not stopped")
 		return
 	}
 	scope.Tagged(tags).Timer("time").Record(m.stoppedAt.Sub(m.startedAt))
@@ -397,11 +436,19 @@ func (m *Measurement) recordTimerDuration(scope tally.Scope, tags map[string]str
 
 func (m *Measurement) recordHistogramDuration(scope tally.Scope, tags map[string]string) {
 	if !m.started {
-		log.Error().Str("service_name", m.serviceName).Str("resource_name", m.resourceName).Str("span_type", m.spanType).Msg("recordHistogramDuration was called on a span that was not started")
+		log.Error().
+			Str("service_name", m.serviceName).
+			Str("resource_name", m.resourceName).
+			Str("span_type", m.spanType).
+			Msg("recordHistogramDuration was called on a span that was not started")
 		return
 	}
 	if !m.stopped {
-		log.Error().Str("service_name", m.serviceName).Str("resource_name", m.resourceName).Str("span_type", m.spanType).Msg("recordHistogramDuration was called on a span that was not stopped")
+		log.Error().
+			Str("service_name", m.serviceName).
+			Str("resource_name", m.resourceName).
+			Str("span_type", m.spanType).
+			Msg("recordHistogramDuration was called on a span that was not stopped")
 		return
 	}
 	scope.Tagged(tags).Histogram("histogram", tally.DefaultBuckets).RecordDuration(m.stoppedAt.Sub(m.startedAt))
@@ -409,7 +456,10 @@ func (m *Measurement) recordHistogramDuration(scope tally.Scope, tags map[string
 
 func (m *Measurement) FinishWithError(ctx context.Context, err error) context.Context {
 	if !m.started {
-		log.Error().Str("service_name", m.serviceName).Str("resource_name", m.resourceName).Msg("Finish tracing called before starting the trace")
+		log.Error().
+			Str("service_name", m.serviceName).
+			Str("resource_name", m.resourceName).
+			Msg("Finish tracing called before starting the trace")
 		return ctx
 	}
 
@@ -441,6 +491,9 @@ func (m *Measurement) FinishWithError(ctx context.Context, err error) context.Co
 		ctx = ClearMeasurementContext(ctx)
 	}
 
-	log.Trace().Str("started", strconv.FormatBool(m.started)).Str("span_type", m.spanType).Str("stopped", strconv.FormatBool(m.stopped)).Msg("FinishWithError end")
+	log.Trace().Str("started", strconv.FormatBool(m.started)).
+		Str("span_type", m.spanType).
+		Str("stopped", strconv.FormatBool(m.stopped)).
+		Msg("FinishWithError end")
 	return ctx
 }

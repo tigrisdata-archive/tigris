@@ -18,9 +18,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 )
 
 func TestDatadogQueryValidation(t *testing.T) {
+	require.True(t, isAllowedMetricQueryInput("tigris.requests_count_ok.count"))
 	require.True(t, isAllowedMetricQueryInput("users"))
 	require.True(t, isAllowedMetricQueryInput("user_db"))
 	require.True(t, isAllowedMetricQueryInput("user_db_1"))
@@ -33,4 +35,23 @@ func TestDatadogQueryValidation(t *testing.T) {
 	require.False(t, isAllowedMetricQueryInput("users "))
 	require.False(t, isAllowedMetricQueryInput("users,foo:bar"))
 	require.False(t, isAllowedMetricQueryInput(""))
+}
+
+func TestMetricsQueryRequest(t *testing.T) {
+	require.NoError(t, validateQueryTimeSeriesMetricsRequest(&api.QueryTimeSeriesMetricsRequest{
+		Db:         "",
+		Branch:     "",
+		Collection: "",
+		From:       0,
+		To:         10,
+		MetricName: "tigris.requests_count_ok.count",
+	}))
+
+	require.NoError(t, validateQueryTimeSeriesMetricsRequest(&api.QueryTimeSeriesMetricsRequest{
+		Db:         "p1",
+		Collection: "",
+		From:       0,
+		To:         10,
+		MetricName: "tigris.requests_count_ok.count",
+	}))
 }

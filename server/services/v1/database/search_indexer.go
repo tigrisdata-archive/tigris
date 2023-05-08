@@ -20,14 +20,17 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/apple/foundationdb/bindings/go/src/fdb/tuple"
 	jsoniter "github.com/json-iterator/go"
+	zlog "github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/lib/date"
 	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
@@ -199,6 +202,8 @@ func PackSearchFields(ctx context.Context, data *internal.TableData, collection 
 			}
 
 			continue
+		} else if len(f.AllowedNestedQFields) > 0 {
+			removeNullsFromArrayObj(f.AllowedNestedQFields, decData, f.Name())
 		}
 
 		if f.SearchType == "string[]" {
@@ -250,6 +255,31 @@ func PackSearchFields(ctx context.Context, data *internal.TableData, collection 
 	return encoded, nil
 }
 
+func removeNullsFromArrayObj(nestedFields []*schema.QueryableField, doc map[string]any, parent string) {
+	var arrays []*schema.QueryableField
+	for _, n := range nestedFields {
+		if n.DataType == schema.ArrayType {
+			arrays = append(arrays, n)
+		}
+	}
+
+	if _, found := doc[parent]; !found {
+		return
+	}
+
+	if arr, ok := doc[parent].([]any); ok {
+		for _, each := range arr {
+			if eachMp, ok := each.(map[string]any); ok {
+				for _, a := range arrays {
+					if _, found := eachMp[a.UnFlattenName]; found && eachMp[a.UnFlattenName] == nil {
+						delete(eachMp, a.UnFlattenName)
+					}
+				}
+			}
+		}
+	}
+}
+
 func UnpackSearchFields(doc map[string]any, collection *schema.DefaultCollection) (string, *internal.TableData, map[string]any, error) {
 	userCreatedAt := false
 	userUpdatedAt := false
@@ -286,6 +316,7 @@ func UnpackSearchFields(doc map[string]any, collection *schema.DefaultCollection
 	}
 
 	// process user fields now
+	var arrayOfObjects []string
 	for _, f := range collection.QueryableFields {
 		if f.SearchType == "string[]" {
 			// if string array has our internal null marker
@@ -324,7 +355,21 @@ func UnpackSearchFields(doc map[string]any, collection *schema.DefaultCollection
 				}
 			}
 		}
+		if f.DataType == schema.ArrayType && f.SubType == schema.ObjectType {
+			arrayOfObjects = append(arrayOfObjects, f.Name())
+		}
 	}
+	for k, v := range doc {
+		for _, ao := range arrayOfObjects {
+			if strings.HasPrefix(k, ao+util.ObjFlattenDelimiter) {
+				if _, ok := v.([]any); !ok {
+					zlog.Info().Msgf("found non slice entry in flattened array of object element '%v'", v)
+				}
+				delete(doc, k)
+			}
+		}
+	}
+
 	if v, found := doc[schema.ReservedFields[schema.SearchNullKeys]]; found {
 		if vArr, ok := v.([]string); ok {
 			for _, k := range vArr {
@@ -335,7 +380,7 @@ func UnpackSearchFields(doc map[string]any, collection *schema.DefaultCollection
 	}
 
 	// unFlatten the map now
-	doc = util.UnFlatMap(doc)
+	doc = util.UnFlatMap(doc, config.DefaultConfig.Search.IgnoreExtraFields)
 
 	searchKey := doc[schema.SearchId].(string)
 	if value, ok := doc[schema.ReservedFields[schema.IdToSearchKey]]; ok {

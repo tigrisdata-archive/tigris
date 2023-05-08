@@ -326,6 +326,7 @@ const (
 	NOT_INDEXED
 	INDEX_DELETED
 	INDEX_WRITE_MODE
+	INDEX_WRITE_MODE_BUILDING
 	INDEX_ACTIVE
 )
 
@@ -341,8 +342,9 @@ type Index struct {
 	// Secondary indexes can be in 4 states:
 	// 1. UNKNOWN = Have not fetched the index metadata yet so the state is unknown
 	// 2. NOT_INDEXED = field is not indexed
-	// 3. INDEX_WRITE_MODE = index is being built in the background and cannot be used for queries
-	// 4. INDEX_ACTIVE = index can be used for queries
+	// 3. INDEX_WRITE_MODE = index needs to be built in the background and cannot be used for queries
+	// 4. INDEX_WRITE_MODE_BUILDING = index is being built in the background and cannot be used for queries
+	// 5. INDEX_ACTIVE = index can be used for queries
 	// Note: this is not used for primary key indexes
 	State IndexState
 	// Either a PrimaryKey index or a Secondary Key index
@@ -361,6 +363,8 @@ func (i *Index) StateString() string {
 		return "INDEX DELETED"
 	case INDEX_WRITE_MODE:
 		return "INDEX WRITE MODE"
+	case INDEX_WRITE_MODE_BUILDING:
+		return "INDEX WRITE MODE BUILDING"
 	case INDEX_ACTIVE:
 		return "INDEX ACTIVE"
 	default:

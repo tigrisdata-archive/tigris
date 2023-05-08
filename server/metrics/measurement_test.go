@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/defaults"
 	"github.com/tigrisdata/tigris/server/tracing"
 )
 
@@ -34,12 +35,53 @@ func TestTracing(t *testing.T) {
 	t.Run("Test NewMeasurement", func(t *testing.T) {
 		tags := GetGlobalTags()
 		testMeasurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
+		assert.Equal(t, defaults.UnknownValue, testMeasurement.GetNamespaceName())
 		assert.Equal(t, "test.service.name", testMeasurement.serviceName)
 		assert.Equal(t, "TestResource", testMeasurement.resourceName)
 		assert.Equal(t, "rpc", testMeasurement.spanType)
 		assert.Equal(t, tags, testMeasurement.tags)
 		assert.Nil(t, testMeasurement.datadogSpan)
 		assert.Nil(t, testMeasurement.parent)
+	})
+
+	t.Run("Test Namespace in tenant", func(t *testing.T) {
+		testMeasurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
+		assert.Equal(t, defaults.UnknownValue, testMeasurement.GetNamespaceName())
+		testMeasurement.tags["tigris_tenant_name"] = "test_tenant_name"
+		assert.Equal(t, "test_tenant_name", testMeasurement.GetNamespaceName())
+		assert.Equal(t, 3, len(testMeasurement.GetGlobalStatusTags()))
+	})
+
+	t.Run("Test nDocs in measurement", func(t *testing.T) {
+		testMeasurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
+		testMeasurement.SetNDocs(int64(2))
+		assert.Equal(t, int64(2), testMeasurement.nDocs)
+	})
+
+	t.Run("Test project branch collection tags", func(t *testing.T) {
+		testMeasurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
+		testMeasurement.AddProjectBranchCollTags("testproject", "testbranch", "testcollection")
+		if projectValue, projectFound := testMeasurement.tags["project"]; projectFound {
+			assert.Equal(t, "testproject", projectValue)
+		} else {
+			assert.Fail(t, "project not found in tags")
+		}
+
+		if branchValue, branchFound := testMeasurement.tags["branch"]; branchFound {
+			assert.Equal(t, "testbranch", branchValue)
+		} else {
+			assert.Fail(t, "branch not found in tags")
+		}
+
+		if collectionValue, collectionFound := testMeasurement.tags["collection"]; collectionFound {
+			assert.Equal(t, "testcollection", collectionValue)
+		} else {
+			assert.Fail(t, "collection not found in tags")
+		}
+
+		assert.Equal(t, 4, len(testMeasurement.GetProjectCollTags()))
+		assert.Equal(t, "test.service.name", testMeasurement.GetServiceName())
+		assert.Equal(t, "TestResource", testMeasurement.GetResourceName())
 	})
 
 	t.Run("Test GetSpanOptions", func(t *testing.T) {

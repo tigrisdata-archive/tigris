@@ -190,7 +190,7 @@ func (*BaseQueryRunner) mutateAndValidatePayload(ctx context.Context, coll *sche
 	if request.NeedSchemaValidation(ctx) {
 		if mutator.ofType() == updateMutator {
 			// there may be dot notation in the field
-			deserializedDoc = util.UnFlatMap(deserializedDoc)
+			deserializedDoc = util.UnFlatMap(deserializedDoc, false)
 		}
 		if err = coll.Validate(deserializedDoc); err != nil {
 			// schema validation failed
@@ -222,7 +222,7 @@ func (*BaseQueryRunner) buildSecondaryIndexKeysUsingFilter(coll *schema.DefaultC
 
 	filterFactory := filter.NewFactoryForSecondaryIndex(coll.GetActiveIndexedFields())
 	filters, err := filterFactory.Factorize(reqFilter)
-	if err != nil {
+	if err != nil && sortFields == nil {
 		return nil, err
 	}
 	return BuildSecondaryIndexKeys(coll, filters, sortFields)
