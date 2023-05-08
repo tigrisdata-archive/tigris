@@ -1506,6 +1506,22 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 	return nil
 }
 
+// Old collections may not have any indexes stored in metadata. This will update that
+func (tenant *Tenant) UpgradeCollectionIndexes(ctx context.Context, tx transaction.Tx, db *Database, coll *schema.DefaultCollection) error {
+	builder := schema.NewFactoryBuilder(false)
+	schFactory, err := builder.Build(coll.Name, coll.Schema)
+	if err != nil {
+		return err
+	}
+
+	if err = tenant.UpdateCollectionIndexes(ctx, tx, db, coll.Name, schFactory.SecondaryIndexes()); err != nil {
+		return err
+	}
+
+	coll.SecondaryIndexes = schFactory.Indexes
+	return nil
+}
+
 // UpdateCollectionIndexes Updates the indexes for a collection.
 func (tenant *Tenant) UpdateCollectionIndexes(ctx context.Context, tx transaction.Tx, db *Database, collectionName string, indexes []*schema.Index) error {
 	tenant.Lock()

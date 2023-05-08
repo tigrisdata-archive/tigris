@@ -220,6 +220,12 @@ func (runner *CollectionQueryRunner) describe(ctx context.Context, tx transactio
 			return Response{}, ctx, err
 		}
 	}
+	// A legacy collection that needs to be updated
+	if coll.SecondaryIndexes.All == nil {
+		if err = tenant.UpgradeCollectionIndexes(ctx, tx, db, coll); err != nil {
+			return Response{}, ctx, err
+		}
+	}
 
 	return Response{
 		Response: &api.DescribeCollectionResponse{

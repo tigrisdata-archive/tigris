@@ -58,6 +58,15 @@ func (runner *IndexerRunner) ReadOnly(ctx context.Context, tenant *metadata.Tena
 
 	indexer := NewSecondaryIndexer(coll)
 
+	for _, index := range coll.SecondaryIndexes.All {
+		if index.State == schema.INDEX_WRITE_MODE {
+			index.State = schema.INDEX_WRITE_MODE_BUILDING
+		}
+	}
+	if err = runner.updateCollectionState(ctx, tenant, db, coll.Name, coll.SecondaryIndexes.All); err != nil {
+		return Response{}, ctx, err
+	}
+
 	if err = indexer.BuildCollection(ctx, runner.txMgr); err != nil {
 		log.Err(err).Msgf("Failed to index collection \"%s\" for db \"%s\"", coll.Name, db.DbName())
 		return Response{}, ctx, err
@@ -67,16 +76,7 @@ func (runner *IndexerRunner) ReadOnly(ctx context.Context, tenant *metadata.Tena
 		index.State = schema.INDEX_ACTIVE
 	}
 
-	tx, err = runner.txMgr.StartTx(ctx)
-	if err != nil {
-		return Response{}, ctx, err
-	}
-
-	if err = tenant.UpdateCollectionIndexes(ctx, tx, db, coll.Name, coll.SecondaryIndexes.All); ulog.E(err) {
-		return Response{}, ctx, err
-	}
-
-	if err = tx.Commit(ctx); ulog.E(err) {
+	if err = runner.updateCollectionState(ctx, tenant, db, coll.Name, coll.SecondaryIndexes.All); ulog.E(err) {
 		return Response{}, ctx, err
 	}
 
@@ -88,6 +88,23 @@ func (runner *IndexerRunner) ReadOnly(ctx context.Context, tenant *metadata.Tena
 			Indexes: runner.indexToCollectionIndex(coll.SecondaryIndexes.All),
 		},
 	}, ctx, nil
+}
+
+func (runner *IndexerRunner) updateCollectionState(ctx context.Context, tenant *metadata.Tenant, db *metadata.Database, collName string, indexes []*schema.Index) error {
+	tx, err := runner.txMgr.StartTx(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err = tenant.UpdateCollectionIndexes(ctx, tx, db, collName, indexes); ulog.E(err) {
+		return err
+	}
+
+	if err = tx.Commit(ctx); ulog.E(err) {
+		return err
+	}
+
+	return nil
 }
 
 type SearchIndexerRunner struct {
