@@ -551,7 +551,7 @@ func (s *apiService) DescribeCollection(ctx context.Context, r *api.DescribeColl
 	runner := s.runnerFactory.GetCollectionQueryRunner(accessToken)
 	runner.SetDescribeCollectionReq(r)
 
-	resp, err := s.sessions.Execute(ctx, runner, database.ReqOptions{InstantVerTracking: true})
+	resp, err := s.sessions.Execute(ctx, runner, database.ReqOptions{InstantVerTracking: true, MetadataChange: true})
 	if err != nil {
 		return nil, err
 	}
