@@ -225,11 +225,16 @@ func isAllowedMetricQueryInput(tagValue string) bool {
 }
 
 func validateQueryTimeSeriesMetricsRequest(req *api.QueryTimeSeriesMetricsRequest) error {
-	if !isAllowedMetricQueryInput(req.MetricName) || !isAllowedMetricQueryInput(req.Db) || !isAllowedMetricQueryInput(req.Collection) {
+	// project(db), collection & branch names can be empty
+	if !isAllowedMetricQueryInput(req.MetricName) ||
+		(req.Db != "" && !isAllowedMetricQueryInput(req.Db)) ||
+		(req.Collection != "" && !isAllowedMetricQueryInput(req.Collection)) ||
+		(req.Branch != "" && !isAllowedMetricQueryInput(req.Branch)) {
 		log.Info().
 			Str("metric_name", req.MetricName).
 			Str("project", req.Db).
 			Str("collection", req.Collection).
+			Str("branch", req.Branch).
 			Msg("Failed to query metrics: reason = invalid character detected in the input")
 		return errors.PermissionDenied("Failed to query metrics: reason = invalid character detected in the input")
 	}
