@@ -26,10 +26,12 @@ func TestNetworkMetrics(t *testing.T) {
 	testMeasurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
 
 	t.Run("Test bytes send", func(t *testing.T) {
-		testMeasurement.CountSentBytes(BytesSent, testMeasurement.GetNetworkTags(), 100)
+		testMeasurement.AddSentBytes(100)
+		testMeasurement.CountSentBytes(BytesSent, testMeasurement.GetNetworkTags())
 	})
 
 	t.Run("Test bytes received", func(t *testing.T) {
-		testMeasurement.CountReceivedBytes(BytesReceived, testMeasurement.GetNetworkTags(), 100)
+		testMeasurement.AddReceivedBytes(100)
+		testMeasurement.CountReceivedBytes(BytesReceived, testMeasurement.GetNetworkTags())
 	})
 }

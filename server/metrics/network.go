@@ -42,16 +42,16 @@ func initializeNetworkScopes() {
 	BytesSent = NetworkMetrics.SubScope("bytes")
 }
 
-func (*Measurement) CountSentBytes(scope tally.Scope, tags map[string]string, size int) {
+func (m *Measurement) CountSentBytes(scope tally.Scope, tags map[string]string) {
 	if scope != nil {
 		// proto.Size has int, need to convert it here
-		scope.Tagged(tags).Counter("sent").Inc(int64(size))
+		scope.Tagged(tags).Counter("sent").Inc(int64(m.sentBytes))
 	}
 }
 
-func (*Measurement) CountReceivedBytes(scope tally.Scope, tags map[string]string, size int) {
+func (m *Measurement) CountReceivedBytes(scope tally.Scope, tags map[string]string) {
 	if scope != nil {
 		// proto.Size has int, need to convert it here
-		scope.Tagged(tags).Counter("received").Inc(int64(size))
+		scope.Tagged(tags).Counter("received").Inc(int64(m.receivedBytes))
 	}
 }
