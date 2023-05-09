@@ -65,7 +65,6 @@ services:
       - TIGRIS_SERVER_SECONDARY_INDEX_READ_ENABLED=true
       - TIGRIS_SERVER_SECONDARY_INDEX_MUTATE_ENABLED=true
       - TIGRIS_SERVER_WORKERS_ENABLED=true
-      - TIGRIS_SERVER_WORKERS_COUNT=5
       - GOCOVERDIR=/tmp/tigris_coverdata
     build:
       context: ../../

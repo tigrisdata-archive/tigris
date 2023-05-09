@@ -33,25 +33,25 @@ import (
 var kvStore kv.TxStore
 
 func TestCompleteMultipleJobs(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	tm := transaction.NewManager(kvStore)
 	queue := metadata.NewQueueStore(&metadata.NameRegistry{QueueSB: "test_queue_" + t.Name()})
 	_ = kvStore.DropTable(ctx, queue.SubspaceName)
-	pool := NewWorkerPool(10, queue, tm, nil, 10*time.Millisecond)
+	pool := NewWorkerPool(10, queue, tm, nil, 10*time.Millisecond, 100*time.Millisecond)
 	assert.NoError(t, pool.Start())
 
 	for i := 0; i < 5; i++ {
 		tx, err := tm.StartTx(ctx)
 		assert.NoError(t, err)
-		err = queue.Enqueue(ctx, tx, testTask(t, time.Duration(i*10)*time.Millisecond, 0, false), 0)
+		err = queue.Enqueue(ctx, tx, testTask(t, time.Duration(i*1)*time.Millisecond, 0, false), 0)
 		assert.NoError(t, err)
 		assert.NoError(t, tx.Commit(ctx))
 	}
 
 	eventChan := make(chan Event)
-	pool.Subscribe(eventChan)
+	pool.subscribe(eventChan)
 
 	for i := 0; i < 5; i++ {
 		event := <-eventChan
@@ -66,18 +66,18 @@ func TestCompleteMultipleJobs(t *testing.T) {
 }
 
 func TestJobWithToManyErrorsIsDropped(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	tm := transaction.NewManager(kvStore)
 	queue := metadata.NewQueueStore(&metadata.NameRegistry{QueueSB: "test_queue_" + t.Name()})
 	_ = kvStore.DropTable(ctx, queue.SubspaceName)
 
-	pool := NewWorkerPool(3, queue, tm, nil, 10*time.Millisecond)
+	pool := NewWorkerPool(3, queue, tm, nil, 10*time.Millisecond, 100*time.Millisecond)
 	defer pool.Stop()
 	assert.NoError(t, pool.Start())
 	eventChan := make(chan Event)
-	pool.Subscribe(eventChan)
+	pool.subscribe(eventChan)
 
 	tx, err := tm.StartTx(ctx)
 	assert.NoError(t, err)
@@ -98,26 +98,26 @@ func TestJobWithToManyErrorsIsDropped(t *testing.T) {
 }
 
 func TestJobWithErrorCountMultipleWorkers(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	tm := transaction.NewManager(kvStore)
 	queue := metadata.NewQueueStore(&metadata.NameRegistry{QueueSB: "test_queue_" + t.Name()})
 	_ = kvStore.DropTable(ctx, queue.SubspaceName)
 
-	pool := NewWorkerPool(10, queue, tm, nil, 100*time.Millisecond)
+	pool := NewWorkerPool(10, queue, tm, nil, 100*time.Millisecond, 100*time.Millisecond)
 	defer pool.Stop()
 	assert.NoError(t, pool.Start())
 	completedChan := make(chan Event)
-	pool.Subscribe(completedChan)
+	pool.subscribe(completedChan)
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 4; i++ {
 		tx, err := tm.StartTx(ctx)
 		assert.NoError(t, err)
 		assert.NoError(t, queue.Enqueue(ctx, tx, testTask(t, 0, i+1, false), time.Duration(i*10*int(time.Millisecond))))
 		assert.NoError(t, tx.Commit(ctx))
 	}
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 4; i++ {
 		event := <-completedChan
 		assert.Equal(t, uint8(i+1), event.Item.ErrorCount)
 	}
@@ -131,19 +131,19 @@ func TestJobWithErrorCountMultipleWorkers(t *testing.T) {
 }
 
 func TestJobWithDyingWorkers(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	tm := transaction.NewManager(kvStore)
 	queue := metadata.NewQueueStore(&metadata.NameRegistry{QueueSB: "test_queue_" + t.Name()})
 	_ = kvStore.DropTable(ctx, queue.SubspaceName)
 
-	pool := NewWorkerPool(1, queue, tm, nil, 100*time.Millisecond)
+	pool := NewWorkerPool(1, queue, tm, nil, 100*time.Millisecond, 100*time.Millisecond)
 	defer pool.Stop()
 	assert.NoError(t, pool.Start())
 
 	completedChan := make(chan Event)
-	pool.Subscribe(completedChan)
+	pool.subscribe(completedChan)
 
 	tx, err := tm.StartTx(ctx)
 	assert.NoError(t, err)

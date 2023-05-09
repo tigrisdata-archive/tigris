@@ -61,6 +61,7 @@ var (
 	ErrClaimed         = fmt.Errorf("another worker has claimed this item")
 	ErrJsonDeSerialize = fmt.Errorf("failed to unmarshal queue item")
 	ErrJsonSerialize   = fmt.Errorf("failed to marshal queue item")
+	minVestingTime     = time.UnixMilli(int64(1678281734380)) // 8 March 2023 - No queue item will be before this
 )
 
 type QueueSubspace struct {
@@ -75,7 +76,6 @@ const (
 )
 
 type IndexBuildTask struct {
-	TaskType    uint32 `json:"tasktype"`
 	NamespaceId string `json:"tenantId"`
 	ProjName    string `json:"projectName"`
 	Branch      string `json:"branch"`
@@ -248,9 +248,8 @@ func (q *QueueSubspace) RenewLease(ctx context.Context, tx transaction.Tx, item 
 }
 
 func (q *QueueSubspace) GetAll(ctx context.Context, tx transaction.Tx) ([]*QueueItem, error) {
-	minVesting := time.UnixMilli(int64(1678281734380)) // 8 March 2023 - No queue item will be before this
 	currentTime := time.Now().Add(48 * time.Hour)
-	startKey := q.getKey(minVesting, 0, "")
+	startKey := q.getKey(minVestingTime, 0, "")
 	endKey := q.getKey(currentTime, maxPriority, maxId)
 
 	iter, err := tx.ReadRange(ctx, startKey, endKey, false, false)

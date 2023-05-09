@@ -41,4 +41,4 @@ secondary_index:
 
 workers:
   enabled: true
-  count: 5
+  count: 2

@@ -120,7 +120,7 @@ func mainWithCode() int {
 	defer quota.Cleanup()
 
 	if cfg.Workers.Enabled {
-		workerPool := workers.NewWorkerPool(cfg.Workers.Count, tenantMgr.GetQueue(), txMgr, tenantMgr, 300*time.Millisecond)
+		workerPool := workers.NewWorkerPool(cfg.Workers.Count, tenantMgr.GetQueue(), txMgr, tenantMgr, 2*time.Second, 30*time.Second)
 		if !ulog.E(workerPool.Start()) {
 			defer workerPool.Stop()
 			log.Info().Msgf("initialized worker pool with %d workers", cfg.Workers.Count)

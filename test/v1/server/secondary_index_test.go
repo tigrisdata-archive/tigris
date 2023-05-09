@@ -850,7 +850,6 @@ func TestQuery_BackgroundBuildIndex(t *testing.T) {
 
 	createCollection(t, db, coll, testBuildIndexSchema).Status(http.StatusOK)
 	waitForIndexesActive(t, db, coll)
-
 	cases := []struct {
 		filter Map
 		count  int
@@ -906,7 +905,6 @@ func TestQuery_BuildIndex(t *testing.T) {
 	assert.NoError(t, err)
 
 	checkIndexesActive(t, resp.Indexes)
-
 	str = describeCollection(t, db, coll, Map{}).Status(http.StatusOK).Body().Raw()
 	desc := Map{}
 	err = jsoniter.Unmarshal([]byte(str), &desc)
@@ -1013,7 +1011,7 @@ func waitForIndexesActive(t *testing.T, db string, coll string) {
 		}
 
 		count += 1
-		time.Sleep(1 * time.Second)
+		time.Sleep(2 * time.Second)
 	}
 
 	assert.Fail(t, "indexes are not active")

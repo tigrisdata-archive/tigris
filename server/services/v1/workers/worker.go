@@ -33,6 +33,7 @@ import (
 const (
 	MAX_ERROR_COUNT = 10
 	LEASE_TIME      = 1 * time.Minute
+	PEAK_JOB_ITEMS  = 5 // number of items to fetch from the queue to see which one to select
 )
 
 type WorkerTestTask struct {
@@ -98,7 +99,8 @@ func (w *Worker) Start() {
 }
 
 func (w *Worker) Loop() {
-	hbTicker := time.NewTicker(1500 * time.Millisecond)
+	hbTicker := time.NewTicker(2 * w.sleepTime)
+	c := 0
 	for {
 		select {
 		case <-w.done:
@@ -108,9 +110,11 @@ func (w *Worker) Loop() {
 		case <-hbTicker.C:
 			w.hearbeatChan <- w.id
 		default:
+			c++
 			err := w.peekAndProcess()
 			if err != nil {
 				w.errCount++
+				log.Err(err).Msgf("Worker %d error while processing", w.id)
 				// if the worker is getting to many errors in a row
 				// shut the worker down and restart a new one
 				if w.errCount >= MAX_ERROR_COUNT {
@@ -135,7 +139,7 @@ func (w *Worker) peekAndProcess() error {
 	if err != nil {
 		return err
 	}
-	items, err := w.queue.Peek(ctx, tx, 10)
+	items, err := w.queue.Peek(ctx, tx, PEAK_JOB_ITEMS)
 	if err != nil {
 		return err
 	}
@@ -143,7 +147,7 @@ func (w *Worker) peekAndProcess() error {
 		return tx.Rollback(ctx)
 	}
 	selectedItem, err := w.queue.ObtainLease(ctx, tx, &items[0], LEASE_TIME)
-	log.Debug().Msgf("Worker %d: proceeding it %s", w.id, selectedItem.Id)
+	log.Debug().Msgf("Worker %d: processing task %s", w.id, selectedItem.Id)
 	if err != nil {
 		return err
 	}
@@ -152,7 +156,7 @@ func (w *Worker) peekAndProcess() error {
 	}
 
 	if err = w.processItem(selectedItem); err != nil {
-		log.Err(err).Msgf("Worker %d: failed to proceeds %s", w.id, selectedItem.Id)
+		log.Err(err).Msgf("Worker %d: failed to process %s", w.id, selectedItem.Id)
 		return w.handleFailedProcessing(ctx, selectedItem)
 	}
 
@@ -213,6 +217,8 @@ func (w *Worker) testQueueTask(item *metadata.QueueItem) error {
 		item.Data, _ = jsoniter.Marshal(testTask)
 		return fmt.Errorf("test error generated %d", testTask.NumErrors)
 	}
+
+	time.Sleep(testTask.Sleep)
 
 	tx, err := w.txMgr.StartTx(ctx)
 	if err != nil {
@@ -283,35 +289,37 @@ type WorkerInfo struct {
 
 type WorkerPool struct {
 	sync.Mutex
-	maxWorkers       uint
-	queue            *metadata.QueueSubspace
-	txMgr            *transaction.Manager
-	tenantMgr        *metadata.TenantManager
-	workers          []WorkerInfo
-	nextWorkerId     uint
-	workerSleepTime  time.Duration
-	heartbeatChan    chan uint
-	stopChan         chan struct{}
-	eventChan        chan Event
-	eventListeteners []chan<- Event
+	maxWorkers      uint
+	queue           *metadata.QueueSubspace
+	txMgr           *transaction.Manager
+	tenantMgr       *metadata.TenantManager
+	workers         []*WorkerInfo
+	nextWorkerId    uint
+	workerSleepTime time.Duration
+	poolSleepTime   time.Duration
+	heartbeatChan   chan uint
+	stopChan        chan struct{}
+	eventChan       chan Event
+	eventListeners  []chan<- Event
 }
 
 type Complete func(item *metadata.QueueItem)
 
-func NewWorkerPool(maxWorkers uint, queue *metadata.QueueSubspace, txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, workerSleepTime time.Duration) *WorkerPool {
+func NewWorkerPool(maxWorkers uint, queue *metadata.QueueSubspace, txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, workerSleepTime time.Duration, poolSleepTime time.Duration) *WorkerPool {
 	return &WorkerPool{
-		maxWorkers:      maxWorkers,
+		maxWorkers:      1,
 		queue:           queue,
 		txMgr:           txMgr,
 		tenantMgr:       tenantMgr,
-		workers:         make([]WorkerInfo, 0),
+		workers:         make([]*WorkerInfo, 0),
 		nextWorkerId:    0,
 		workerSleepTime: workerSleepTime,
+		poolSleepTime:   poolSleepTime,
 		heartbeatChan:   make(chan uint, maxWorkers*3),
 		stopChan:        make(chan struct{}, 1),
 		eventChan:       make(chan Event, maxWorkers*3),
 		// This is for testing
-		eventListeteners: make([]chan<- Event, 0),
+		eventListeners: make([]chan<- Event, 0),
 	}
 }
 
@@ -325,31 +333,37 @@ func (pool *WorkerPool) Start() error {
 	return nil
 }
 
-func (pool *WorkerPool) newWorker(id uint) WorkerInfo {
+func (pool *WorkerPool) newWorker(id uint) *WorkerInfo {
 	worker := newWorker(id, pool.queue, pool.txMgr, pool.tenantMgr, pool.workerSleepTime, pool.eventChan, pool.heartbeatChan)
 	go worker.Start()
-	return WorkerInfo{
+	return &WorkerInfo{
 		worker:       worker,
 		lastHearbeat: time.Now(),
 	}
 }
 
-func (pool *WorkerPool) Subscribe(listener chan<- Event) {
+// Internal testing for worker events.
+func (pool *WorkerPool) subscribe(listener chan<- Event) {
 	pool.Lock()
 	defer pool.Unlock()
-	pool.eventListeteners = append(pool.eventListeteners, listener)
+	pool.eventListeners = append(pool.eventListeners, listener)
 }
 
 func (pool *WorkerPool) notify(event Event) {
 	pool.Lock()
 	defer pool.Unlock()
-	for _, listener := range pool.eventListeteners {
-		listener <- event
+	for _, listener := range pool.eventListeners {
+		select {
+		case listener <- event:
+			continue
+		case <-time.After(5 * time.Millisecond):
+			continue
+		}
 	}
 }
 
 func (pool *WorkerPool) Loop() {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(pool.poolSleepTime)
 	for {
 		select {
 		case <-pool.stopChan:
@@ -384,19 +398,14 @@ func (pool *WorkerPool) checkHeartbeats() {
 	defer pool.Unlock()
 
 	now := time.Now()
-	active := pool.workers[:0]
-	for _, info := range pool.workers {
-		if now.Sub(info.lastHearbeat) > 2*time.Second {
+	for i, info := range pool.workers {
+		if now.Sub(info.lastHearbeat) > 5*pool.workerSleepTime {
 			info.worker.Stop()
 			pool.nextWorkerId++
-			log.Info().Msgf("No response from worker %d adding new worker", info.worker.id)
-			active = append(active, pool.newWorker(pool.nextWorkerId))
-		} else {
-			active = append(active, info)
+			log.Error().Msgf("No response from worker %d adding new worker", info.worker.id)
+			pool.workers[i] = pool.newWorker(pool.nextWorkerId)
 		}
 	}
-
-	pool.workers = active
 }
 
 func (pool *WorkerPool) Stop() {

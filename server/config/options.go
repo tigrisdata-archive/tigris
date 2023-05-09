@@ -514,7 +514,7 @@ var DefaultConfig = Config{
 	},
 	Workers: WorkersConfig{
 		Enabled: false,
-		Count:   5,
+		Count:   2,
 	},
 }
 

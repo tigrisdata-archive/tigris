@@ -96,7 +96,6 @@ func (c *CollectionSubspace) updateMetadataIndexes(ctx context.Context, tx trans
 
 	if shouldAddIndexBuildTask && config.DefaultConfig.Workers.Enabled {
 		queueData, err := jsoniter.Marshal(IndexBuildTask{
-			TaskType:    1,
 			NamespaceId: ns.StrId(),
 			ProjName:    db.DbName(),
 			Branch:      db.BranchName(),
