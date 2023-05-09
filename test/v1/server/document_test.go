@@ -989,6 +989,12 @@ func TestInsertUpdate_Defaults(t *testing.T) {
 					}
 				}
 			},
+			"int_arr": {
+				"type": "array",
+				"items": {
+					"type": "integer"
+				}
+			},
 			"pkey_int": {
 				"type": "integer"
 			}
@@ -1062,6 +1068,12 @@ func TestInsertUpdate_Defaults(t *testing.T) {
 				"$set": Map{
 					"int_f": 10,
 				},
+				"$push": Map{
+					"arr_obj": Map{
+						"int_f": 123,
+					},
+					"int_arr": 5,
+				},
 			},
 		},
 		nil).Status(http.StatusOK).
@@ -1096,6 +1108,16 @@ func TestInsertUpdate_Defaults(t *testing.T) {
 
 	require.Equal(t, doc["arr_obj"].([]any)[0].(map[string]any)["updated"], doc["arr_obj"].([]any)[2].(map[string]any)["updated"])
 	require.Equal(t, doc["arr_obj"].([]any)[0].(map[string]any)["updated"], doc["arr_obj"].([]any)[1].(map[string]any)["updated"])
+
+	// push field asserts
+	require.Equal(t, 4, len(doc["arr_obj"].([]any)))
+	require.Equal(t, float64(123), doc["arr_obj"].([]any)[3].(map[string]any)["int_f"])
+	require.Equal(t, 1, len(doc["int_arr"].([]any)))
+	require.Equal(t, float64(5), doc["int_arr"].([]any)[0])
+
+	// not supporting default values in array
+	require.Nil(t, doc["arr_obj"].([]any)[3].(map[string]any)["created"])
+	require.Nil(t, doc["arr_obj"].([]any)[3].(map[string]any)["updated"])
 }
 
 func TestInsertUpdate_AllDefaults(t *testing.T) {
@@ -1246,6 +1268,12 @@ func TestInsertUpdate_AllDefaults(t *testing.T) {
 					"double_f": 2.1,
 					"int_f":    20,
 				},
+				"$push": Map{
+					"arr_obj": Map{
+						"name": "ABC",
+					},
+					"string_arr": "Hello",
+				},
 			},
 		},
 		nil).Status(http.StatusOK).
@@ -1268,8 +1296,11 @@ func TestInsertUpdate_AllDefaults(t *testing.T) {
 	require.True(t, doc["bool_f"].(bool))
 	require.Equal(t, 2.1, doc["double_f"].(float64))
 	require.Equal(t, float64(20), doc["int_f"].(float64))
-	require.Equal(t, []any{"a"}, doc["string_arr"].([]any))
+	require.Equal(t, []any{"a", "Hello"}, doc["string_arr"].([]any))
 	require.Equal(t, float64(10), doc["obj"].(map[string]any)["int_field"].(float64))
+
+	// push field assert
+	require.Equal(t, "ABC", doc["arr_obj"].([]any)[0].(map[string]any)["name"])
 
 	createdAtAfter, err := time.Parse(time.RFC3339, doc["created"].(string))
 	require.NoError(t, err)
@@ -1370,6 +1401,20 @@ func TestUpdate_BadRequest(t *testing.T) {
 			},
 			nil,
 			"filter is a required field",
+			http.StatusBadRequest,
+		},
+		{
+			db,
+			coll,
+			Map{
+				"$push": Map{
+					"simple_array_value": 1,
+				},
+			},
+			Map{
+				"pkey_int": 1,
+			},
+			"json schema validation failed for field 'simple_array_value/0' reason 'expected string or null, but got number'",
 			http.StatusBadRequest,
 		},
 	}
@@ -2340,6 +2385,167 @@ func TestUpdate_SetAndUnset(t *testing.T) {
 				"pkey_int":    100,
 				"int_value":   400,
 				"bytes_value": []byte(`"bytes3"`),
+			}},
+		},
+	}
+	for _, c := range cases {
+		tstart := time.Now().UTC()
+		updateByFilter(t,
+			db,
+			coll,
+			Map{
+				"filter": Map{
+					"pkey_int": 100,
+				},
+			},
+			c.userInput,
+			nil).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("modified_count", 1).
+			Path("$.metadata").Object().
+			Value("updated_at").String().DateTime(time.RFC3339Nano).InRange(tstart, time.Now().UTC().Add(1*time.Second))
+
+		readAndValidate(t,
+			db,
+			coll,
+			Map{
+				"pkey_int": 100,
+			},
+			nil,
+			c.expOut)
+	}
+}
+
+func TestUpdate_Push(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	inputDocument := []Doc{
+		{
+			"pkey_int":     100,
+			"int_value":    100,
+			"string_value": "simple_insert1_update",
+			"bool_value":   true,
+			"double_value": 100.00001,
+			"bytes_value":  []byte(`"simple_insert1_update"`),
+			"array_value": []Doc{
+				{
+					"id":      9223372036854775801,
+					"product": "foo",
+				},
+			},
+		},
+	}
+
+	insertDocuments(t, db, coll, inputDocument, false).
+		Status(http.StatusOK)
+
+	readAndValidate(t,
+		db,
+		coll,
+		Map{
+			"pkey_int": 100,
+		},
+		nil,
+		inputDocument)
+
+	cases := []struct {
+		userInput Map
+		expOut    []Doc
+	}{
+		{
+			Map{
+				"fields": Map{
+					"$push": Map{
+						"array_value": Map{
+							"id":      9223372036854775123,
+							"product": "bar",
+						},
+					},
+				},
+			},
+			[]Doc{{
+				"pkey_int":     100,
+				"int_value":    100,
+				"string_value": "simple_insert1_update",
+				"bool_value":   true,
+				"double_value": 100.00001,
+				"bytes_value":  []byte(`"simple_insert1_update"`),
+				"array_value": []Doc{
+					{
+						"id":      float64(9223372036854775801),
+						"product": "foo",
+					},
+					{
+						"id":      float64(9223372036854775123),
+						"product": "bar",
+					},
+				},
+			}},
+		},
+		{
+			Map{
+				"fields": Map{
+					"$push": Map{
+						"simple_array_value": "hello world",
+					},
+				},
+			},
+			[]Doc{{
+				"pkey_int":     100,
+				"int_value":    100,
+				"string_value": "simple_insert1_update",
+				"bool_value":   true,
+				"double_value": 100.00001,
+				"bytes_value":  []byte(`"simple_insert1_update"`),
+				"array_value": []Doc{
+					{
+						"id":      float64(9223372036854775801),
+						"product": "foo",
+					},
+					{
+						"id":      float64(9223372036854775123),
+						"product": "bar",
+					},
+				},
+				"simple_array_value": []string{"hello world"},
+			}},
+		},
+		{
+			Map{
+				"fields": Map{
+					"$push": Map{
+						"array_value": Map{
+							"id":      "9223372036854775456",
+							"product": "table",
+						},
+						"simple_array_value": "abc def",
+					},
+				},
+			},
+			[]Doc{{
+				"pkey_int":     100,
+				"int_value":    100,
+				"string_value": "simple_insert1_update",
+				"bool_value":   true,
+				"double_value": 100.00001,
+				"bytes_value":  []byte(`"simple_insert1_update"`),
+				"array_value": []Doc{
+					{
+						"id":      float64(9223372036854775801),
+						"product": "foo",
+					},
+					{
+						"id":      float64(9223372036854775123),
+						"product": "bar",
+					},
+					{
+						"id":      float64(9223372036854775456),
+						"product": "table",
+					},
+				},
+				"simple_array_value": []string{"hello world", "abc def"},
 			}},
 		},
 	}

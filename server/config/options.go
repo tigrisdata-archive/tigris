@@ -44,6 +44,7 @@ type Config struct {
 	Search          SearchConfig         `yaml:"search" json:"search"`
 	KV              KVConfig             `yaml:"kv" json:"kv"`
 	SecondaryIndex  SecondaryIndexConfig `mapstructure:"secondary_index" yaml:"secondary_index" json:"secondary_index"`
+	Workers         WorkersConfig        `yaml:"workers" json:"workers"`
 	Cache           CacheConfig          `yaml:"cache" json:"cache"`
 	Tracing         TracingConfig        `yaml:"tracing" json:"tracing"`
 	Metrics         MetricsConfig        `yaml:"metrics" json:"metrics"`
@@ -95,6 +96,7 @@ type AuthConfig struct {
 	EnableNamespaceCreation    bool                  `mapstructure:"enable_namespace_creation" yaml:"enable_namespace_creation" json:"enable_namespace_creation"`
 	UserInvitations            Invitation            `mapstructure:"user_invitations" yaml:"user_invitations" json:"user_invitations"`
 	Authz                      AuthzConfig           `mapstructure:"authz" yaml:"authz" json:"authz"`
+	EnableErrorLog             bool                  `mapstructure:"enable_error_log" yaml:"enable_error_log" json:"enable_error_log"`
 }
 
 type Invitation struct {
@@ -222,6 +224,11 @@ type SecondaryIndexMetricsConfig struct {
 	FilteredTags []string      `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
 }
 
+type WorkersConfig struct {
+	Enabled bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Count   uint `mapstructure:"count" yaml:"count" json:"count"`
+}
+
 type ProfilingConfig struct {
 	Enabled         bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 	EnableCPU       bool `mapstructure:"enable_cpu" yaml:"enable_cpu" json:"enable_cpu"`
@@ -309,7 +316,8 @@ var DefaultConfig = Config{
 		UserInvitations: Invitation{
 			ExpireAfterSec: 259200, // 3days
 		},
-		Authz: AuthzConfig{Enabled: false},
+		Authz:          AuthzConfig{Enabled: false},
+		EnableErrorLog: true,
 	},
 	Billing: Billing{
 		Metronome: Metronome{
@@ -505,6 +513,10 @@ var DefaultConfig = Config{
 	},
 	MetadataCluster: ClusterConfig{
 		Url: "https://api.global.tigrisdata.cloud",
+	},
+	Workers: WorkersConfig{
+		Enabled: false,
+		Count:   2,
 	},
 }
 

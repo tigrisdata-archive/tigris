@@ -182,22 +182,30 @@ func authFunction(ctx context.Context, jwtValidators []*validator.Validator, con
 
 	// if not found from cache
 	if validatedToken == nil {
+		var count = 0
 		for i, jwtValidator := range jwtValidators {
 			validatedToken, err = jwtValidator.ValidateToken(ctx, tkn)
 			if err == nil {
 				break
+			} else if config.Auth.EnableErrorLog {
+				log.Err(err).Int("count", count).Msg("Failed to validate the token moving to next validator")
 			}
 			// if none of the validator validated the token, then reject the request
 			if i == len(jwtValidators)-1 && err != nil {
 				if reqMetadata != nil {
-					log.Debug().Str("error", err.Error()).Str("unauthenticated_namespace", reqMetadata.GetNamespace()).Str("unauthenticated_namespace_name", reqMetadata.GetNamespaceName()).Err(err).Msg("Failed to validate access token")
+					if config.Auth.EnableErrorLog {
+						log.Err(err).Str("error", err.Error()).Str("unauthenticated_namespace", reqMetadata.GetNamespace()).Str("unauthenticated_namespace_name", reqMetadata.GetNamespaceName()).Err(err).Msg("Failed to validate access token")
+					}
 				} else {
-					log.Debug().Str("error", err.Error()).Err(err).Msg("Failed to validate access token, was not validated")
+					if config.Auth.EnableErrorLog {
+						log.Err(err).Str("error", err.Error()).Msg("Failed to validate access token, was not validated")
+					}
 				}
 				// remove it from cache
 				_ = cache.Remove(tkn)
 				return ctx, errors.Unauthenticated("Failed to validate access token, could not be validated")
 			}
+			count++
 		}
 	}
 

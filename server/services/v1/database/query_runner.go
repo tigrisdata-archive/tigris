@@ -178,6 +178,44 @@ func updateDefaultsAndSchema(db string, branch string, collection *schema.Defaul
 	return doc, nil
 }
 
+func mutateAndValidatePushPayload(ctx context.Context, coll *schema.DefaultCollection, doc []byte) ([]byte, error) {
+	ts := internal.NewTimestamp()
+	deserializedDoc, err := util.JSONToMap(doc)
+	if ulog.E(err) {
+		return doc, err
+	}
+
+	// converting a single element to array for mutation.
+	for key, value := range deserializedDoc {
+		var newValue []any
+		newValue = append(newValue, value)
+		deserializedDoc[key] = newValue
+	}
+
+	mutator := newUpdatePayloadMutator(coll, ts.ToRFC3339())
+
+	// this will mutate map, so we need to serialize this map again
+	if err = mutator.stringToInt64(deserializedDoc); err != nil {
+		return doc, err
+	}
+
+	if request.NeedSchemaValidation(ctx) {
+		if err = coll.Validate(deserializedDoc); err != nil {
+			// schema validation failed
+			return doc, err
+		}
+	}
+
+	if mutator.isMutated() {
+		for key, v := range deserializedDoc {
+			deserializedDoc[key] = v.([]any)[0]
+		}
+		return util.MapToJSON(deserializedDoc)
+	}
+
+	return doc, nil
+}
+
 func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
 	db, coll, err := runner.getDBAndCollection(ctx, tx, tenant,
 		runner.req.GetProject(), runner.req.GetCollection(), runner.req.GetBranch())
@@ -213,6 +251,14 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	if fieldOperator, ok := factory.FieldOperators[string(update.Set)]; ok {
 		// Set operation needs schema validation as well as mutation if we need to convert numeric fields from string to int64
 		fieldOperator.Input, err = runner.mutateAndValidatePayload(ctx, coll, newUpdatePayloadMutator(coll, ts.ToRFC3339()), fieldOperator.Input)
+		if err != nil {
+			return Response{}, ctx, err
+		}
+	}
+
+	if fieldOperator, ok := factory.FieldOperators[string(update.Push)]; ok {
+		// mutate if it needs to convert numeric fields from string to int64
+		fieldOperator.Input, err = mutateAndValidatePushPayload(ctx, coll, fieldOperator.Input)
 		if err != nil {
 			return Response{}, ctx, err
 		}
