@@ -479,12 +479,11 @@ func (n *NeMatcher) Matches(docValue any) bool {
 	      }
 	  }
 	  return true
-     }
      case []byte:
      	  if n.collation.IsCaseInsensitive() {
 	     return !bytes.Equal(bytes.ToLower(dv), bytes.ToLower([]byte(n.value)))
 	  }
-	  return !bytes.Equal(bytes.ToLower(dv), []byte(n.value))
+	  return !bytes.Equal(dv, []byte(n.value))
 }
 
 func (n *NeMatcher) Type() string {
