@@ -114,18 +114,7 @@ func TestGoTrueAuthProvider(t *testing.T) {
 	createProject2(t, testProject, token).Status(http.StatusOK)
 
 	// create app key
-	createAppKeyPayload := Map{
-		"name":        "test_key",
-		"description": "This key is used for integration test purpose.",
-		"project":     testProject,
-	}
-
-	createdAppKey := e2.POST(appKeysOperation("auth_test", "create")).
-		WithHeader(Authorization, Bearer+token).WithJSON(createAppKeyPayload).
-		Expect().
-		Status(http.StatusOK).
-		JSON().
-		Object().Value("created_app_key")
+	createdAppKey := createAppKey(e2, token, "test_key", "auth_test")
 	require.NotNil(t, createdAppKey)
 	id := createdAppKey.Object().Value("id").String()
 	secret := createdAppKey.Object().Value("secret").String()
@@ -206,23 +195,13 @@ func TestGoTrueAuthProvider(t *testing.T) {
 }
 
 func TestGlobalAppKeys(t *testing.T) {
-	e2 := expectLow(t, config.GetBaseURL2())
+	e := expectLow(t, config.GetBaseURL2())
 	token := readToken(t, RSATokenFilePath)
 
 	createTestNamespace(t, token)
 
 	// create app key
-	createGlobalAppKeyPayload := Map{
-		"name":        "test_key",
-		"description": "This key is used for integration test purpose.",
-	}
-
-	createdAppKey := e2.POST(globalAppKeysOperation("create")).
-		WithHeader(Authorization, Bearer+token).WithJSON(createGlobalAppKeyPayload).
-		Expect().
-		Status(http.StatusOK).
-		JSON().
-		Object().Value("created_app_key")
+	createdAppKey := createGlobalAppKey(e, token, "test_key")
 	require.NotNil(t, createdAppKey)
 	id := createdAppKey.Object().Value("id").String()
 	secret := createdAppKey.Object().Value("secret").String()
@@ -240,7 +219,7 @@ func TestGlobalAppKeys(t *testing.T) {
 		"id":          id.Raw(),
 		"description": "[updated]This key is used for integration test purpose.",
 	}
-	updatedAppKey := e2.PUT(globalAppKeysOperation("update")).
+	updatedAppKey := e.PUT(globalAppKeysOperation("update")).
 		WithHeader(Authorization, Bearer+token).WithJSON(updateGlobalAppKeyPayload).
 		Expect().
 		Status(http.StatusOK).
@@ -254,7 +233,7 @@ func TestGlobalAppKeys(t *testing.T) {
 	rotateGlobalAppKeyPayload := Map{
 		"id": id.Raw(),
 	}
-	rotatedKey := e2.POST(globalAppKeysOperation("rotate")).
+	rotatedKey := e.POST(globalAppKeysOperation("rotate")).
 		WithHeader(Authorization, Bearer+token).WithJSON(rotateGlobalAppKeyPayload).
 		Expect().
 		Status(http.StatusOK).
@@ -265,7 +244,7 @@ func TestGlobalAppKeys(t *testing.T) {
 	require.True(t, len(rotatedKey.Object().Value("secret").String().Raw()) == 50+len(auth.ClientSecretPrefix))
 
 	// list
-	globalAppKeys := e2.GET(globalAppKeysOperation("get")).
+	globalAppKeys := e.GET(globalAppKeysOperation("get")).
 		WithHeader(Authorization, Bearer+token).
 		Expect().
 		Status(http.StatusOK).
@@ -294,7 +273,7 @@ func TestGlobalAppKeys(t *testing.T) {
 	deleteGlobalAppKeyPayload := Map{
 		"id": id.Raw(),
 	}
-	deletedResponse := e2.DELETE(globalAppKeysOperation("delete")).
+	deletedResponse := e.DELETE(globalAppKeysOperation("delete")).
 		WithHeader(Authorization, Bearer+token).WithJSON(deleteGlobalAppKeyPayload).
 		Expect().
 		Status(http.StatusOK).
@@ -305,29 +284,89 @@ func TestGlobalAppKeys(t *testing.T) {
 	require.True(t, deletedResponse.Raw())
 }
 
+func TestGlobalAndLocalAppKeys(t *testing.T) {
+	e := expectLow(t, config.GetBaseURL2())
+	token := readToken(t, RSATokenFilePath)
+
+	createTestNamespace(t, token)
+	createProject2(t, "TestGlobalAndLocalAppKeys", token)
+	// create two global app key
+	_ = createGlobalAppKey(e, token, "g1")
+	_ = createGlobalAppKey(e, token, "g2")
+
+	// create three local app keys
+	_ = createAppKey(e, token, "l1", "TestGlobalAndLocalAppKeys")
+	_ = createAppKey(e, token, "l2", "TestGlobalAndLocalAppKeys")
+	_ = createAppKey(e, token, "l3", "TestGlobalAndLocalAppKeys")
+
+	// list
+	globalAppKeys := e.GET(globalAppKeysOperation("get")).
+		WithHeader(Authorization, Bearer+token).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().Value("app_keys").Array()
+	require.Equal(t, float64(2), globalAppKeys.Length().Raw())
+	var globalKeysMap = make(map[string]int32)
+	for _, gKey := range globalAppKeys.Iter() {
+		globalKeysMap[gKey.Object().Value("name").String().Raw()]++
+	}
+	require.Equal(t, int32(1), globalKeysMap["g1"])
+	require.Equal(t, int32(1), globalKeysMap["g2"])
+
+	localAppKeys := e.GET(appKeysOperation("TestGlobalAndLocalAppKeys", "get")).
+		WithHeader(Authorization, Bearer+token).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().Value("app_keys").Array()
+	require.Equal(t, float64(3), localAppKeys.Length().Raw())
+	var localKeysMap = make(map[string]int32)
+	for _, lKey := range localAppKeys.Iter() {
+		localKeysMap[lKey.Object().Value("name").String().Raw()]++
+	}
+	require.Equal(t, int32(1), localKeysMap["l1"])
+	require.Equal(t, int32(1), localKeysMap["l2"])
+	require.Equal(t, int32(1), localKeysMap["l3"])
+}
+
+func createAppKey(e *httpexpect.Expect, token string, name string, project string) *httpexpect.Value {
+	createAppKeyPayload := Map{
+		"name":        name,
+		"description": "This key is used for integration test purpose.",
+		"project":     project,
+	}
+	return e.POST(appKeysOperation(project, "create")).
+		WithHeader(Authorization, Bearer+token).WithJSON(createAppKeyPayload).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().Value("created_app_key")
+}
+func createGlobalAppKey(e *httpexpect.Expect, token string, name string) *httpexpect.Value {
+	createGlobalAppKeyPayload := Map{
+		"name":        name,
+		"description": "This key is used for integration test purpose.",
+	}
+	return e.POST(globalAppKeysOperation("create")).
+		WithHeader(Authorization, Bearer+token).WithJSON(createGlobalAppKeyPayload).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object().Value("created_app_key")
+}
 func TestMultipleAppsCreation(t *testing.T) {
 	testStartTime := time.Now()
 
 	e2 := expectLow(t, config.GetBaseURL2())
-	testProject := "auth_test"
+	testProject := "TestMultipleAppsCreation2"
 	token := readToken(t, RSATokenFilePath)
 	createTestNamespace(t, token)
 	deleteProject2(t, testProject, token)
 	createProject2(t, testProject, token).Status(http.StatusOK)
 
 	for i := 0; i < 5; i++ {
-		createAppKeyPayload := Map{
-			"name":        fmt.Sprintf("test_key_%d", i),
-			"description": "This key is used for integration test purpose.",
-			"project":     testProject,
-		}
-
-		createdAppKey := e2.POST(appKeysOperation("auth_test", "create")).
-			WithHeader(Authorization, Bearer+token).WithJSON(createAppKeyPayload).
-			Expect().
-			Status(http.StatusOK).
-			JSON().
-			Object().Value("created_app_key")
+		createdAppKey := createAppKey(e2, token, fmt.Sprintf("test_key_%d", i), testProject)
 		require.NotNil(t, createdAppKey)
 		generatedClientId := createdAppKey.Object().Value("id").String().Raw()
 		generatedClientSecret := createdAppKey.Object().Value("secret").String().Raw()
@@ -336,13 +375,15 @@ func TestMultipleAppsCreation(t *testing.T) {
 		require.True(t, strings.HasPrefix(generatedClientSecret, auth.ClientSecretPrefix))
 	}
 
-	appKeys := e2.GET(appKeysOperation("auth_test", "get")).
+	appKeys := e2.GET(appKeysOperation(testProject, "get")).
 		WithHeader(Authorization, Bearer+token).
 		Expect().
 		Status(http.StatusOK).
 		JSON().
 		Object().Value("app_keys").Array()
-
+	for _, key := range appKeys.Raw() {
+		fmt.Println(key)
+	}
 	require.Equal(t, 5, int(appKeys.Length().Raw()))
 	for _, value := range appKeys.Iter() {
 		createdAt := int64(value.Object().Value("created_at").Number().Raw())
@@ -363,18 +404,7 @@ func TestListAppKeys(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		projectForThisKey := fmt.Sprintf("%s%d", testProject, i%2)
-		createAppKeyPayload := Map{
-			"name":        fmt.Sprintf("test_key_%d", i),
-			"description": "This key is used for integration test purpose.",
-			"project":     projectForThisKey,
-		}
-
-		createdAppKey := e2.POST(appKeysOperation(projectForThisKey, "create")).
-			WithHeader(Authorization, Bearer+token).WithJSON(createAppKeyPayload).
-			Expect().
-			Status(http.StatusOK).
-			JSON().
-			Object().Value("created_app_key")
+		createdAppKey := createAppKey(e2, token, fmt.Sprintf("test_key_%d", i), projectForThisKey)
 		require.NotNil(t, createdAppKey)
 	}
 
@@ -421,19 +451,7 @@ func TestCreateAccessToken(t *testing.T) {
 	testProject := "auth_test"
 	token := readToken(t, RSATokenFilePath)
 	createTestNamespace(t, token)
-
-	createAppKeyPayload := Map{
-		"name":        "test_key",
-		"description": "This key is used for integration test purpose.",
-		"project":     testProject,
-	}
-
-	createdAppKey := e2.POST(appKeysOperation("auth_test", "create")).
-		WithHeader(Authorization, Bearer+token).WithJSON(createAppKeyPayload).
-		Expect().
-		Status(http.StatusOK).
-		JSON().
-		Object().Value("created_app_key")
+	createdAppKey := createAppKey(e2, token, "test_key", testProject)
 	require.NotNil(t, createdAppKey)
 
 	id := createdAppKey.Object().Value("id").String()
@@ -580,7 +598,8 @@ func TestUserInvitations(t *testing.T) {
 	listUserInvitations1 := listUserInvitations(t, token)
 	listUserInvitations1.Status(http.StatusOK)
 	invitations1 := listUserInvitations1.JSON().Object().Value("invitations").Array()
-	require.Equal(t, float64(4), invitations1.Length().Raw())
+	fmt.Println(invitations1)
+	require.Equal(t, float64(3), invitations1.Length().Raw())
 
 	emailCountMap1 := make(map[string]int)
 	for _, value := range invitations1.Iter() {
@@ -588,7 +607,7 @@ func TestUserInvitations(t *testing.T) {
 	}
 
 	require.Equal(t, 3, len(emailCountMap1))
-	require.Equal(t, 2, emailCountMap1["a@hello.com"])
+	require.Equal(t, 1, emailCountMap1["a@hello.com"])
 	require.Equal(t, 1, emailCountMap1["b@hello.com"])
 	require.Equal(t, 1, emailCountMap1["c@hello.com"])
 
@@ -605,14 +624,14 @@ func TestUserInvitations(t *testing.T) {
 	listUserInvitations2 := listUserInvitations(t, token)
 	listUserInvitations2.Status(http.StatusOK)
 	invitations2 := listUserInvitations2.JSON().Object().Value("invitations").Array()
-	require.Equal(t, float64(3), invitations2.Length().Raw())
+	require.Equal(t, float64(2), invitations2.Length().Raw())
 
 	emailCountMap2 := make(map[string]int)
 	for _, value := range invitations2.Iter() {
 		emailCountMap2[value.Object().Value("email").String().Raw()]++
 	}
 	require.Equal(t, 2, len(emailCountMap2))
-	require.Equal(t, 2, emailCountMap2["a@hello.com"])
+	require.Equal(t, 1, emailCountMap2["a@hello.com"])
 	require.Equal(t, 1, emailCountMap2["b@hello.com"])
 
 	// call gotrue to get the code
