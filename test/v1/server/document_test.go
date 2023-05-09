@@ -3549,6 +3549,48 @@ func TestRead_Collation(t *testing.T) {
 					"string_value": "UPPER",
 				},
 			},
+		}, {
+			Map{
+				"string_value": Map{
+					"$ne": "upper",
+					"collation": Map{
+						 "case": "ci",
+					},
+				},
+			},
+			[]Doc{
+				{
+					"pkey_int":     210,
+					"string_value": "lower",
+				},
+				{
+					"pkey_int":     220,
+					"string_value": "loweR",
+				},
+			},
+		}, {
+			Map{
+				"string_value": Map{
+					"$ne": "upper",
+					"collation": Map{
+						 "case": "cs",
+					},
+				},
+			},
+			[]Doc{
+				{
+					"pkey_int":     210,
+					"string_value": "lower",
+				},
+				{
+					"pkey_int":     220,
+					"string_value": "loweR",
+				},
+				{
+					"pkey_int":	230,
+					"string_value":	"UPPER",
+				},
+			},
 		},
 	}
 	for _, c := range cases {

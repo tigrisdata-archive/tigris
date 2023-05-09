@@ -377,7 +377,7 @@ func buildValueMatcher(input jsoniter.RawMessage, field *schema.QueryableField, 
 				valueMatcher, err = NewMatcher(string(key), val)
 				return err
 			}
-		case REGEX, CONTAINS, NOT:
+		case REGEX, CONTAINS, NOT, NE:
 			if dataType != jsonparser.String {
 				return errors.InvalidArgument("string is only supported type for 'regex/contains/not' filters")
 			}

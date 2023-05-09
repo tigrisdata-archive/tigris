@@ -219,6 +219,50 @@ func TestLikeMatcher(t *testing.T) {
 			require.Equal(t, c.expMatch, r.Matches(c.input))
 		}
 	})
+	t.Run("ne", func(t *testing.T) {
+		cases := []struct {
+			input    any
+			matchStr string
+			expMatch bool
+			expError string
+		}{
+			{
+				"foo bar",
+				"foo",
+				true,
+				"",
+			}, {
+				"foo bar",
+				"FOO",
+				true,
+				"",
+			}, {
+				[]string{"foo", "bar"},
+				"bar",
+				false,
+				"",
+			}, {
+				[]string{"foo", "bar"},
+				"bbr",
+				true,
+				"",
+			}, {
+				[]string{"foo", "bar"},
+				"FOO",
+				true,
+				"",
+			},
+		}
+		for _, c := range cases {
+			r, err := NewNeMatcher(c.matchStr, value.NewCollation())
+			if len(c.expError) > 0 {
+				require.ErrorContains(t, err, c.expError)
+				continue
+			}
+			require.NoError(t, err)
+			require.Equal(t, c.expMatch, r.Matches(c.input))
+		}
+	})
 }
 
 func mustMatcher(key string, v value.Value) ValueMatcher {

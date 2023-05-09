@@ -34,6 +34,7 @@ const (
 	NOT      = "$not"
 	REGEX    = "$regex"
 	CONTAINS = "$contains"
+	NE 	 = "$ne"
 )
 
 type Matcher interface {
@@ -102,6 +103,8 @@ func NewLikeMatcher(key string, input string, collation *value.Collation) (LikeM
 		return NewContainsMatcher(input, collation)
 	case NOT:
 		return NewNotMatcher(input, collation)
+	case NE:
+		return NewNeMatcher(input, collation)
 	default:
 		return nil, errors.InvalidArgument("unsupported operand '%s'", key)
 	}
@@ -444,6 +447,52 @@ func StringContains(s string, substr string, collation *value.Collation) bool {
 		return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 	}
 	return strings.Contains(s, substr)
+}
+
+func StringEqual(s string, other string, collation *value.Collation) bool {
+     if collation.IsCaseInsensitive() {
+     		return strings.Compare(strings.ToLower(s), strings.ToLower(other)) == 0
+     }
+     return strings.Compare(s, other) == 0
+}
+
+type NeMatcher struct {
+     value     string
+     collation *value.Collation
+}
+
+func NewNeMatcher(value string, collation *value.Collation) (LikeMatcher, error) {
+     return &NeMatcher{
+     	    value:	value,
+	    collation:	collation,
+     }, nil
+}
+
+func (n *NeMatcher) Matches(docValue any) bool {
+     switch dv := docValue.(type) {
+     case string:
+     	  return !StringEqual(dv, n.value, n.collation)
+     case []string:
+     	  for _,e := range dv {
+	      if StringEqual(e, n.value, n.collation) {
+	      	 return false
+	      }
+	  }
+	  return true
+     }
+     case []byte:
+     	  if n.collation.IsCaseInsensitive() {
+	     return !bytes.Equal(bytes.ToLower(dv), bytes.ToLower([]byte(n.value)))
+	  }
+	  return !bytes.Equal(bytes.ToLower(dv), []byte(n.value))
+}
+
+func (n *NeMatcher) Type() string {
+     return "$ne"
+}
+
+func (n *NeMatcher) String() string {
+     return fmt.Sprintf("{$ne:%v}", n.value)
 }
 
 func MatcherForArray(matcher ValueMatcher) bool {
