@@ -161,6 +161,7 @@ func (m *Metronome) AddPlan(ctx context.Context, accountId AccountId, planId uui
 func (m *Metronome) PushUsageEvents(ctx context.Context, events []*UsageEvent) error {
 	var billingEvents []biller.Event
 	for _, se := range events {
+		// skip publishing events if they are not reporting any metrics
 		if se != nil && se.Properties != nil && len(*se.Properties) > 0 {
 			billingEvents = append(billingEvents, se.Event)
 		}
@@ -179,6 +180,7 @@ func (m *Metronome) PushUsageEvents(ctx context.Context, events []*UsageEvent) e
 func (m *Metronome) PushStorageEvents(ctx context.Context, events []*StorageEvent) error {
 	var billingEvents []biller.Event
 	for _, se := range events {
+		// skip publishing events if they are not reporting any metrics
 		if se != nil && se.Properties != nil && len(*se.Properties) > 0 {
 			billingEvents = append(billingEvents, se.Event)
 		}
