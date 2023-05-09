@@ -96,6 +96,7 @@ type AuthConfig struct {
 	EnableNamespaceCreation    bool                  `mapstructure:"enable_namespace_creation" yaml:"enable_namespace_creation" json:"enable_namespace_creation"`
 	UserInvitations            Invitation            `mapstructure:"user_invitations" yaml:"user_invitations" json:"user_invitations"`
 	Authz                      AuthzConfig           `mapstructure:"authz" yaml:"authz" json:"authz"`
+	EnableErrorLog             bool                  `mapstructure:"enable_error_log" yaml:"enable_error_log" json:"enable_error_log"`
 }
 
 type Invitation struct {
@@ -315,7 +316,8 @@ var DefaultConfig = Config{
 		UserInvitations: Invitation{
 			ExpireAfterSec: 259200, // 3days
 		},
-		Authz: AuthzConfig{Enabled: false},
+		Authz:          AuthzConfig{Enabled: false},
+		EnableErrorLog: true,
 	},
 	Billing: Billing{
 		Metronome: Metronome{
