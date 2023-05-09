@@ -1506,7 +1506,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 	return nil
 }
 
-// Old collections may not have any indexes stored in metadata. This will update that
+// Old collections may not have any indexes stored in metadata. This will update that.
 func (tenant *Tenant) UpgradeCollectionIndexes(ctx context.Context, tx transaction.Tx, db *Database, coll *schema.DefaultCollection) error {
 	builder := schema.NewFactoryBuilder(false)
 	schFactory, err := builder.Build(coll.Name, coll.Schema)
