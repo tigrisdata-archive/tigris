@@ -44,6 +44,7 @@ type Config struct {
 	Search          SearchConfig         `yaml:"search" json:"search"`
 	KV              KVConfig             `yaml:"kv" json:"kv"`
 	SecondaryIndex  SecondaryIndexConfig `mapstructure:"secondary_index" yaml:"secondary_index" json:"secondary_index"`
+	Workers         WorkersConfig        `yaml:"workers" json:"workers"`
 	Cache           CacheConfig          `yaml:"cache" json:"cache"`
 	Tracing         TracingConfig        `yaml:"tracing" json:"tracing"`
 	Metrics         MetricsConfig        `yaml:"metrics" json:"metrics"`
@@ -220,6 +221,11 @@ type SecondaryIndexMetricsConfig struct {
 	Counter      CounterConfig `mapstructure:"counter" yaml:"counter" json:"counter"`
 	Timer        TimerConfig   `mapstructure:"timer" yaml:"timer" json:"timer"`
 	FilteredTags []string      `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
+}
+
+type WorkersConfig struct {
+	Enabled bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Count   uint `mapstructure:"count" yaml:"count" json:"count"`
 }
 
 type ProfilingConfig struct {
@@ -505,6 +511,10 @@ var DefaultConfig = Config{
 	},
 	MetadataCluster: ClusterConfig{
 		Url: "https://api.global.tigrisdata.cloud",
+	},
+	Workers: WorkersConfig{
+		Enabled: false,
+		Count:   2,
 	},
 }
 

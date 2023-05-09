@@ -112,23 +112,23 @@ func FormDatadogQueryNoMeta(namespace string, noMeta bool, req *api.QueryTimeSer
 	}
 
 	if config.GetEnvironment() != "" {
-		tags = append(tags, "env:"+config.GetEnvironment())
+		tags = append(tags, "env:"+strings.ToLower(config.GetEnvironment()))
 	}
 
 	if req.Db != "" {
-		tags = append(tags, "project:"+req.Db)
+		tags = append(tags, "project:"+strings.ToLower(req.Db))
 	}
 
 	if req.GetBranch() != "" {
-		tags = append(tags, "branch:"+req.GetBranch())
+		tags = append(tags, "branch:"+strings.ToLower(req.GetBranch()))
 	}
 
 	if req.Collection != "" {
-		tags = append(tags, "collection:"+req.Collection)
+		tags = append(tags, "collection:"+strings.ToLower(req.Collection))
 	}
 
 	if namespace != "" {
-		tags = append(tags, "tigris_tenant:"+namespace)
+		tags = append(tags, "tigris_tenant:"+strings.ToLower(namespace))
 	}
 
 	if req.Quantile != 0 {

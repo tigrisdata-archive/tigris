@@ -817,7 +817,7 @@ func TestBulkIndexing(t *testing.T) {
 	}
 	assert.NoError(t, tx.Commit(ctx))
 
-	err = indexStore.BuildCollection(ctx, tm)
+	err = indexStore.BuildCollection(ctx, tm, nil)
 	assert.NoError(t, err)
 
 	tx, err = tm.StartTx(ctx)
