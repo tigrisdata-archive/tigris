@@ -44,7 +44,7 @@ func TestStorageEvent(t *testing.T) {
 		})
 	})
 
-	t.Run("with 0 values", func(t *testing.T) {
+	t.Run("with 0 values should be skipped", func(t *testing.T) {
 		billingEvent := NewStorageEventBuilder().
 			WithDatabaseBytes(0).
 			WithIndexBytes(0).Build()
@@ -59,10 +59,7 @@ func TestStorageEvent(t *testing.T) {
 		require.Equal(t, actual["transaction_id"], billingEvent.TransactionId)
 		require.NotEqual(t, actual["timestamp"], "")
 		require.Equal(t, actual["event_type"], "storage")
-		require.Equal(t, actual["properties"], map[string]any{
-			StorageIndexBytes: float64(0),
-			StorageDbBytes:    float64(0),
-		})
+		require.Empty(t, actual["properties"])
 	})
 
 	t.Run("complete object", func(t *testing.T) {
@@ -128,7 +125,7 @@ func TestUsageEvent(t *testing.T) {
 		})
 	})
 
-	t.Run("with 0 values", func(t *testing.T) {
+	t.Run("with 0 values should be skipped", func(t *testing.T) {
 		billingEvent := NewUsageEventBuilder().WithDatabaseUnits(0).WithSearchUnits(0).Build()
 
 		jsonEvent, err := jsoniter.Marshal(billingEvent)
@@ -141,10 +138,7 @@ func TestUsageEvent(t *testing.T) {
 		require.Equal(t, actual["transaction_id"], billingEvent.TransactionId)
 		require.NotEqual(t, actual["timestamp"], "")
 		require.Equal(t, actual["event_type"], "usage")
-		require.Equal(t, actual["properties"], map[string]any{
-			UsageDbUnits:     float64(0),
-			UsageSearchUnits: float64(0),
-		})
+		require.Empty(t, actual["properties"])
 	})
 
 	t.Run("complete object", func(t *testing.T) {
