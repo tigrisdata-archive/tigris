@@ -71,7 +71,7 @@ func (*Metronome) measure(ctx context.Context, scope tally.Scope, operation stri
 
 	resp, err := f(ctx)
 	_ = me.FinishTracing(ctx)
-	me.RecordDuration(scope, me.GetTags())
+	me.RecordDuration(scope, map[string]string{})
 	if resp != nil {
 		defer resp.Body.Close()
 		// e.g.:- metronome_create_account_request
