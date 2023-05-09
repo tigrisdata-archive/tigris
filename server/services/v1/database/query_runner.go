@@ -178,7 +178,7 @@ func updateDefaultsAndSchema(db string, branch string, collection *schema.Defaul
 	return doc, nil
 }
 
-func mutatePushPayload(coll *schema.DefaultCollection, doc []byte) ([]byte, error) {
+func mutateAndValidatePushPayload(ctx context.Context, coll *schema.DefaultCollection, doc []byte) ([]byte, error) {
 	ts := internal.NewTimestamp()
 	deserializedDoc, err := util.JSONToMap(doc)
 	if ulog.E(err) {
@@ -192,11 +192,18 @@ func mutatePushPayload(coll *schema.DefaultCollection, doc []byte) ([]byte, erro
 		deserializedDoc[key] = newValue
 	}
 
-	mutator := newInsertPayloadMutator(coll, ts.ToRFC3339())
+	mutator := newUpdatePayloadMutator(coll, ts.ToRFC3339())
 
 	// this will mutate map, so we need to serialize this map again
 	if err = mutator.stringToInt64(deserializedDoc); err != nil {
 		return doc, err
+	}
+
+	if request.NeedSchemaValidation(ctx) {
+		if err = coll.Validate(deserializedDoc); err != nil {
+			// schema validation failed
+			return doc, err
+		}
 	}
 
 	if mutator.isMutated() {
@@ -251,7 +258,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 
 	if fieldOperator, ok := factory.FieldOperators[string(update.Push)]; ok {
 		// mutate if it needs to convert numeric fields from string to int64
-		fieldOperator.Input, err = mutatePushPayload(coll, fieldOperator.Input)
+		fieldOperator.Input, err = mutateAndValidatePushPayload(ctx, coll, fieldOperator.Input)
 		if err != nil {
 			return Response{}, ctx, err
 		}

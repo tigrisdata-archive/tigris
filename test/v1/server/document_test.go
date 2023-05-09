@@ -1403,6 +1403,20 @@ func TestUpdate_BadRequest(t *testing.T) {
 			"filter is a required field",
 			http.StatusBadRequest,
 		},
+		{
+			db,
+			coll,
+			Map{
+				"$push": Map{
+					"simple_array_value": 1,
+				},
+			},
+			Map{
+				"pkey_int": 1,
+			},
+			"json schema validation failed for field 'simple_array_value/0' reason 'expected string or null, but got number'",
+			http.StatusBadRequest,
+		},
 	}
 	for _, c := range cases {
 		resp := expect(t).PUT(getDocumentURL(c.database, c.collection, "update")).
