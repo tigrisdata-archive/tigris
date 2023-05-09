@@ -70,8 +70,6 @@ func (*Metronome) measure(ctx context.Context, scope tally.Scope, operation stri
 	me.StartTracing(ctx, true)
 
 	resp, err := f(ctx)
-	_ = me.FinishTracing(ctx)
-	me.RecordDuration(scope, me.GetTags())
 	if resp != nil {
 		defer resp.Body.Close()
 		// e.g.:- metronome_create_account_request
@@ -88,6 +86,8 @@ func (*Metronome) measure(ctx context.Context, scope tally.Scope, operation stri
 	// e.g.:- metronome_create_account_availability
 	// tags: error_value: err.Error()
 	me.IncrementCount(scope, errTags, "availability", availability)
+	_ = me.FinishTracing(ctx)
+	me.RecordDuration(scope, me.GetTags())
 }
 
 func (m *Metronome) CreateAccount(ctx context.Context, namespaceId string, name string) (AccountId, error) {
