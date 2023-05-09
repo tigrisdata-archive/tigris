@@ -63,9 +63,9 @@ func (*secondaryIndexerWithMetrics) measure(ctx context.Context, name string, f 
 	}
 }
 
-func (m *secondaryIndexerWithMetrics) BuildCollection(ctx context.Context, txMgr *transaction.Manager) (err error) {
+func (m *secondaryIndexerWithMetrics) BuildCollection(ctx context.Context, txMgr *transaction.Manager, progressUpdateFn ProgressUpdateFn) (err error) {
 	m.measure(ctx, "BuildCollection", func(ctx context.Context) error {
-		err = m.q.BuildCollection(ctx, txMgr)
+		err = m.q.BuildCollection(ctx, txMgr, progressUpdateFn)
 		return err
 	})
 	return

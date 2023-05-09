@@ -38,3 +38,7 @@ secondary_index:
   read_enabled: true
   write_enabled: true
   mutate_enabled: true
+
+workers:
+  enabled: true
+  count: 2

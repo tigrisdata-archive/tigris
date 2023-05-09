@@ -32,7 +32,8 @@ var testCollectionMetadata = &CollectionMetadata{
 }
 
 func initCollectionTest(t *testing.T, ctx context.Context) (*CollectionSubspace, *transaction.Manager, func()) {
-	c := newCollectionStore(newTestNameRegistry(t))
+	registry := newTestNameRegistry(t)
+	c := newCollectionStore(registry, NewQueueStore(registry))
 
 	_ = kvStore.DropTable(ctx, c.SubspaceName)
 
@@ -157,8 +158,8 @@ func TestCollectionWithIndexes(t *testing.T) {
 				State: schema.UNKNOWN,
 			},
 		}
-
-		meta, err := c.Create(ctx, tx, 1, 1, "coll1", 1, idxs)
+		ns, db := NsAndDB()
+		meta, err := c.Create(ctx, tx, ns, db, "coll1", 1, idxs)
 		require.NoError(t, err)
 
 		require.Len(t, meta.Indexes, 2)
@@ -185,8 +186,8 @@ func TestCollectionWithIndexes(t *testing.T) {
 				State: schema.UNKNOWN,
 			},
 		}
-
-		meta, err := c.Create(ctx, tx, 1, 1, "name3", 1, idxs)
+		ns, db := NsAndDB()
+		meta, err := c.Create(ctx, tx, ns, db, "name3", 1, idxs)
 		require.NoError(t, err)
 		collection, err := c.Get(ctx, tx, 1, 1, "name3")
 		require.NoError(t, err)
@@ -210,7 +211,7 @@ func TestCollectionWithIndexes(t *testing.T) {
 			},
 		}
 
-		updateMeta, err := c.Update(ctx, tx, 1, 1, "name3", 1, idxs2)
+		updateMeta, err := c.Update(ctx, tx, ns, db, "name3", 1, idxs2)
 		require.NoError(t, err)
 		require.Len(t, updateMeta.Indexes, 3)
 		require.Equal(t, updateMeta.Indexes[0].State, schema.INDEX_ACTIVE)
@@ -239,7 +240,8 @@ func TestCollectionWithIndexes(t *testing.T) {
 			},
 		}
 
-		meta, err := c.Create(ctx, tx, 1, 1, "name5", 1, idxs)
+		ns, db := NsAndDB()
+		meta, err := c.Create(ctx, tx, ns, db, "name5", 1, idxs)
 		require.NoError(t, err)
 		collection, err := c.Get(ctx, tx, 1, 1, "name5")
 		require.NoError(t, err)
@@ -253,7 +255,7 @@ func TestCollectionWithIndexes(t *testing.T) {
 			},
 		}
 
-		updatedMeta, err := c.Update(ctx, tx, 1, 1, "name5", 1, idxsUpdated)
+		updatedMeta, err := c.Update(ctx, tx, ns, db, "name5", 1, idxsUpdated)
 		require.NoError(t, err)
 		require.Len(t, updatedMeta.Indexes, 1)
 		require.Equal(t, updatedMeta.Indexes[0].State, schema.INDEX_ACTIVE)
@@ -284,9 +286,10 @@ func TestCollectionWithIndexes(t *testing.T) {
 			},
 		}
 
-		meta1, err := c.Create(ctx, tx, 1, 1, "name8", 1, idxs1)
+		ns, db := NsAndDB()
+		meta1, err := c.Create(ctx, tx, ns, db, "name8", 1, idxs1)
 		require.NoError(t, err)
-		meta2, err := c.Create(ctx, tx, 1, 1, "name9", 2, idxs2)
+		meta2, err := c.Create(ctx, tx, ns, db, "name9", 2, idxs2)
 		require.NoError(t, err)
 
 		colls, err := c.list(ctx, tx, 1, 1)
@@ -366,11 +369,19 @@ func TestCollectionSubspaceMigrationV1(t *testing.T) {
 	require.Equal(t, &CollectionMetadata{ID: 123}, collMeta)
 
 	// Updating should overwrite with new format
-	_, err = c.Update(ctx, tx, 1, 1, "name7", 123, nil)
+	ns, db := NsAndDB()
+	_, err = c.Update(ctx, tx, ns, db, "name7", 123, nil)
 	require.NoError(t, err)
 
 	// We are able to read in new format
 	collMeta, err = c.Get(ctx, tx, 1, 1, "name7")
 	require.NoError(t, err)
 	require.Equal(t, &CollectionMetadata{ID: 123}, collMeta)
+}
+
+func NsAndDB() (Namespace, *Database) {
+	ns := NewTenantNamespace("ns1", NewNamespaceMetadata(1, "1", "ns1"))
+	db := NewDatabase(1, "db1")
+
+	return ns, db
 }

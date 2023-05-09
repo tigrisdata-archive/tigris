@@ -28,7 +28,7 @@ func initQueueTest(t *testing.T) (*QueueSubspace, transaction.Tx, func()) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	s := newQueueStore(newTestNameRegistry(t))
+	s := NewQueueStore(newTestNameRegistry(t))
 
 	_ = kvStore.DropTable(ctx, s.SubspaceName)
 
@@ -51,7 +51,7 @@ func TestEnqueueAndpeek(t *testing.T) {
 
 		checkQueueEmpty(t, queue, tx)
 
-		item := NewQueueItem(0, []byte("item1"))
+		item := NewQueueItem(0, []byte("item1"), TEST_QUEUE_TASK)
 		assert.NoError(t, queue.Enqueue(ctx, tx, item, 100*time.Millisecond))
 
 		checkQueueEmpty(t, queue, tx)
@@ -71,7 +71,7 @@ func TestEnqueueAndpeek(t *testing.T) {
 		defer cleanup()
 
 		for i, data := range toEnQueue {
-			item := NewQueueItem(0, []byte(data))
+			item := NewQueueItem(0, []byte(data), TEST_QUEUE_TASK)
 			assert.NoError(t, queue.Enqueue(ctx, tx, item, time.Duration(i*100)*time.Millisecond))
 		}
 
@@ -96,7 +96,7 @@ func TestEnqueueAndpeek(t *testing.T) {
 		defer cleanup()
 
 		for _, data := range toEnQueue {
-			item := NewQueueItem(0, []byte(data))
+			item := NewQueueItem(0, []byte(data), TEST_QUEUE_TASK)
 			assert.NoError(t, queue.Enqueue(ctx, tx, item, 1*time.Millisecond))
 		}
 
@@ -110,9 +110,9 @@ func TestEnqueueAndpeek(t *testing.T) {
 
 func TestPriorityInPeek(t *testing.T) {
 	t.Run("orderd by different time and priority", func(t *testing.T) {
-		item1 := NewQueueItem(0, []byte("one-item"))
-		item2 := NewQueueItem(1, []byte("two-item"))
-		item3 := NewQueueItem(0, []byte("one-item"))
+		item1 := NewQueueItem(0, []byte("one-item"), TEST_QUEUE_TASK)
+		item2 := NewQueueItem(1, []byte("two-item"), TEST_QUEUE_TASK)
+		item3 := NewQueueItem(0, []byte("one-item"), TEST_QUEUE_TASK)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
@@ -135,7 +135,7 @@ func TestPriorityInPeek(t *testing.T) {
 }
 
 func TestEnqueueObtainComplete(t *testing.T) {
-	item := NewQueueItem(0, []byte("one-item"))
+	item := NewQueueItem(0, []byte("one-item"), TEST_QUEUE_TASK)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -168,7 +168,7 @@ func TestEnqueueObtainComplete(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
-	item := NewQueueItem(0, []byte("one-item"))
+	item := NewQueueItem(0, []byte("one-item"), TEST_QUEUE_TASK)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -188,7 +188,7 @@ func TestWorkProcessFlow(t *testing.T) {
 	items := make([]*QueueItem, 0, 5)
 	activeItems := make([]QueueItem, 0, 5)
 	for _, data := range []string{"one", "two", "three", "four", "five"} {
-		items = append(items, NewQueueItem(0, []byte(data)))
+		items = append(items, NewQueueItem(0, []byte(data), TEST_QUEUE_TASK))
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

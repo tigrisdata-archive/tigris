@@ -203,6 +203,10 @@ func (m *TenantManager) GetEncoder() Encoder {
 	return m.encoder
 }
 
+func (m *TenantManager) GetQueue() *QueueSubspace {
+	return m.metaStore.queueStore
+}
+
 // CreateTenant is a thread safe implementation of creating a new tenant. It returns an error if it already exists.
 func (m *TenantManager) CreateTenant(ctx context.Context, tx transaction.Tx, namespace Namespace) (Namespace, error) {
 	m.Lock()
@@ -1331,7 +1335,7 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 
 	database.MetadataChange = true
 
-	collMeta, err := tenant.MetaStore.CreateCollection(ctx, tx, schFactory.Name, tenant.namespace.Id(), database.id, schFactory.SecondaryIndexes())
+	collMeta, err := tenant.MetaStore.CreateCollection(ctx, tx, schFactory.Name, tenant.namespace, database, schFactory.SecondaryIndexes())
 	if err != nil {
 		return err
 	}
@@ -1440,8 +1444,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 	if err != nil {
 		return err
 	}
-
-	collMeta, err := tenant.MetaStore.UpdateCollection(ctx, tx, existingCollection.Name, tenant.namespace.Id(), database.id, existingCollection.Id, schFactory.SecondaryIndexes())
+	collMeta, err := tenant.MetaStore.UpdateCollection(ctx, tx, existingCollection.Name, tenant.namespace, database, existingCollection.Id, schFactory.SecondaryIndexes())
 	if err != nil {
 		return err
 	}
@@ -1531,7 +1534,7 @@ func (tenant *Tenant) UpdateCollectionIndexes(ctx context.Context, tx transactio
 	if !ok {
 		return errors.NotFound("collection doesn't exists '%s'", collectionName)
 	}
-	_, err := tenant.MetaStore.Collection().Update(ctx, tx, tenant.namespace.Id(), db.id, collectionName, cHolder.id, indexes)
+	_, err := tenant.MetaStore.Collection().Update(ctx, tx, tenant.namespace, db, collectionName, cHolder.id, indexes)
 	if err != nil {
 		return err
 	}
