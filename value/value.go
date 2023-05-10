@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"strconv"
 
+	"github.com/buger/jsonparser"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/schema"
@@ -60,7 +61,11 @@ func NewValueUsingCollation(fieldType schema.FieldType, value []byte, collation 
 	}
 
 	if fieldType == schema.StringType && len(value) > 0 {
-		return NewStringValue(string(value), collation), nil
+		parsed, err := jsonparser.ParseString(value)
+		if err != nil {
+			return nil, err
+		}
+		return NewStringValue(parsed, collation), nil
 	}
 
 	return NewValue(fieldType, value)
@@ -89,7 +94,11 @@ func NewValue(fieldType schema.FieldType, value []byte) (Value, error) {
 
 		return NewIntValue(val), nil
 	case schema.StringType, schema.UUIDType:
-		return NewStringValue(string(value), nil), nil
+		parsed, err := jsonparser.ParseString(value)
+		if err != nil {
+			return nil, err
+		}
+		return NewStringValue(parsed, nil), nil
 	case schema.DateTimeType:
 		return NewDateTimeValue(string(value)), nil
 	case schema.ByteType:

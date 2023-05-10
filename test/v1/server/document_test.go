@@ -4958,7 +4958,7 @@ func TestFilteringOnArrays(t *testing.T) {
     "arr_of_arr": [
       [
         "shopping",
-        "clothes",
+        "clothes has braces ( and > ( < and escaped operators or some emoji 😀",
         "shoes"
       ],
       [
@@ -5133,11 +5133,9 @@ func TestFilteringOnArrays(t *testing.T) {
 		expDocuments []Doc
 		order        []Map
 	}{
-		/**
-		These two tests will work once we disable fallback to search. This functionality is added on Tigris side.
 		{
 			Map{
-				"arr_of_arr": "clothes",
+				"arr_of_arr": "clothes has braces ( and > ( < and escaped operators or some emoji 😀",
 			},
 			inputDocument[0:1],
 		    nil,
@@ -5147,7 +5145,7 @@ func TestFilteringOnArrays(t *testing.T) {
 			},
 			inputDocument[0:1],
 		    nil,
-		},*/{
+		},{
 			Map{
 				"obj.arr_primitive": "cars",
 			},
@@ -5450,6 +5448,94 @@ func TestRead_Sorted(t *testing.T) {
 					"search_only":  "zab",
 				},
 			},
+		},
+	}
+	for _, c := range cases {
+		readAndValidateOrder(t,
+			db,
+			coll,
+			c.filters,
+			nil,
+			c.sortOrder,
+			c.expDocuments)
+	}
+}
+
+func TestRead_Unicode(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	dropCollection(t, db, coll)
+	createCollection(t, db, coll,
+		Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"id":           Map{"type": "integer"},
+					"index_value": Map{"type": "string", "index": true},
+					"search_value":  Map{"type": "string", "searchIndex": true, "sort": true},
+					"local_value":  Map{"type": "string"},
+				},
+			},
+		}).Status(http.StatusOK)
+
+	inputDocument := []Doc{
+		{
+			"id":           1,
+			"index_value":    "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			"search_value": "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			"local_value":  "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+		},
+		{
+			"id":           2,
+			"index_value":   "has braces ( and > ( < and escaped operators 안녕 or some emoji",
+			"search_value": "has braces ( and > ( < and escaped operators 안녕 or some emoji",
+			"local_value":  "has braces ( and > ( < and escaped operators 안녕 or some emoji",
+		}, {
+			"id":           3,
+			"index_value":   "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			"search_value": "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			"local_value":  "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+		},
+	}
+
+	// should always succeed with mustNotExists as false
+	insertDocuments(t, db, coll, inputDocument, false).
+		Status(http.StatusOK)
+
+	cases := []struct {
+		filters      Map
+		sortOrder    []Map
+		expDocuments []Doc
+	}{
+		{
+			Map{
+				"index_value": "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			},
+			[]Map{
+				{
+					"index_value": "$desc",
+				},
+			},
+			[]Doc{inputDocument[2], inputDocument[0]},
+		},
+		{
+			Map{
+				"local_value": "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			},
+			nil,
+			[]Doc{inputDocument[0], inputDocument[2]},
+		},
+		{
+			Map{
+				"search_value": "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			},
+			[]Map{
+				{
+					"search_value": "$desc",
+				},
+			},
+			[]Doc{inputDocument[2], inputDocument[0]},
 		},
 	}
 	for _, c := range cases {
