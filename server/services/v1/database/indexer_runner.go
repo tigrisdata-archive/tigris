@@ -56,7 +56,7 @@ func (runner *IndexerRunner) ReadOnly(ctx context.Context, tenant *metadata.Tena
 		return Response{}, ctx, err
 	}
 
-	indexer := NewSecondaryIndexer(coll)
+	indexer := NewSecondaryIndexer(coll, false)
 
 	for _, index := range coll.SecondaryIndexes.All {
 		if index.State == schema.INDEX_WRITE_MODE {

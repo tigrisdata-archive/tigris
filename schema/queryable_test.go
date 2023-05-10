@@ -61,3 +61,26 @@ func TestBuildQueryableFields(t *testing.T) {
 		require.Equal(t, expTypes[i], q.SearchType)
 	}
 }
+
+func TestIncludeMetadata(t *testing.T) {
+	fields := []*Field{
+		{FieldName: "A1", DataType: Int32Type},
+		{FieldName: "A2", DataType: Int64Type},
+	}
+
+	queryable := NewQueryableFieldsBuilder().BuildQueryableFields(fields, nil, true)
+	expTypes := []string{"int32", "int64", "int64", "int64"}
+	expFields := []string{"A1", "A2", "_tigris_created_at", "_tigris_updated_at"}
+	for i, q := range queryable {
+		require.Equal(t, expFields[i], q.FieldName)
+		require.Equal(t, expTypes[i], q.SearchType)
+	}
+
+	queryable = NewQueryableFieldsBuilder().BuildQueryableFields(fields, nil, false)
+	expTypes = []string{"int32", "int64"}
+	expFields = []string{"A1", "A2"}
+	for i, q := range queryable {
+		require.Equal(t, expFields[i], q.FieldName)
+		require.Equal(t, expTypes[i], q.SearchType)
+	}
+}

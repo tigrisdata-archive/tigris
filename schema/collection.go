@@ -167,7 +167,7 @@ func NewDefaultCollection(id uint32, schVer uint32, factory *Factory, schemas Ve
 	if implicitSearchIndex != nil {
 		prevVersionInSearch = implicitSearchIndex.prevVersionInSearch
 	}
-	queryableFields := NewQueryableFieldsBuilder().BuildQueryableFields(factory.Fields, prevVersionInSearch, true)
+	queryableFields := NewQueryableFieldsBuilder().BuildQueryableFields(factory.Fields, prevVersionInSearch, factory.Indexes.IndexMetadata)
 
 	schemaDeltas, err := buildSchemaDeltas(schemas)
 	if err != nil {
@@ -216,6 +216,10 @@ func (*DefaultCollection) SecondaryIndexKeyword() string {
 	return "skey"
 }
 
+func (d *DefaultCollection) SecondaryIndexMetadata() bool {
+	return d.SecondaryIndexes.IndexMetadata
+}
+
 func (d *DefaultCollection) GetVersion() uint32 {
 	return d.SchVer
 }
@@ -250,7 +254,7 @@ func (d *DefaultCollection) GetActiveIndexedFields() []*QueryableField {
 func (d *DefaultCollection) GetWriteModeIndexes() []*QueryableField {
 	var indexed []*QueryableField
 	for _, q := range d.QueryableFields {
-		if q.Indexed && !d.SecondaryIndexes.IsWriteModeIndex(q.FieldName) {
+		if q.Indexed && !d.SecondaryIndexes.IsActiveIndex(q.FieldName) {
 			indexed = append(indexed, q)
 		}
 	}

@@ -222,7 +222,7 @@ func (r *SecondaryIndexReaderImpl) dbgPrintIndex() {
 		return
 	}
 
-	indexer := newSecondaryIndexerImpl(r.coll)
+	indexer := newSecondaryIndexerImpl(r.coll, false)
 	tableIter, err := indexer.scanIndex(r.ctx, r.tx)
 	if err != nil {
 		panic(err)
