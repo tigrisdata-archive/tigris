@@ -53,7 +53,7 @@ func TestBuildQueryableFields(t *testing.T) {
 		{FieldName: "F8", DataType: ArrayType, Fields: []*Field{{FieldName: "A", DataType: ObjectType}}},
 	}
 
-	queryable := NewQueryableFieldsBuilder().BuildQueryableFields(fields, nil)
+	queryable := NewQueryableFieldsBuilder().BuildQueryableFields(fields, nil, true)
 	expTypes := []string{"int32", "int64", "float", "bool", "string", "string", "int64", "string", "int64", "string", "string", "object", "object", "string", "int32[]", "int64[]", "float[]", "bool[]", "string[]", "string[]", "string[]", "string", "object[]", "int64", "int64"}
 	expFields := []string{"A1", "A2", "A3", "A4", "B1", "B2", "B3", "B4", "C.E", "C.F", "C.G.H", "C.G.I", "D", "E", "F", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "_tigris_created_at", "_tigris_updated_at"}
 	for i, q := range queryable {

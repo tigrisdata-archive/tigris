@@ -182,7 +182,7 @@ func authFunction(ctx context.Context, jwtValidators []*validator.Validator, con
 
 	// if not found from cache
 	if validatedToken == nil {
-		var count = 0
+		count := 0
 		for i, jwtValidator := range jwtValidators {
 			validatedToken, err = jwtValidator.ValidateToken(ctx, tkn)
 			if err == nil {

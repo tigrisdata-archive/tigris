@@ -21,6 +21,9 @@ server:
 cdc:
   enabled: false
 
+kv:
+  chunking: true
+
 search:
   host: localhost
   port: 8108

@@ -168,6 +168,8 @@ func (s *Selector) ToSearchFilter() string {
 			}
 			return filterString
 		}
+	case schema.StringType:
+		return fmt.Sprintf(op, s.Field.InMemoryName(), fmt.Sprintf("`%s`", v.AsInterface()))
 	}
 	return fmt.Sprintf(op, s.Field.InMemoryName(), v.AsInterface())
 }

@@ -4958,7 +4958,7 @@ func TestFilteringOnArrays(t *testing.T) {
     "arr_of_arr": [
       [
         "shopping",
-        "clothes",
+        "clothes has braces ( and > ( < and escaped operators or some emoji 😀",
         "shoes"
       ],
       [
@@ -5133,11 +5133,9 @@ func TestFilteringOnArrays(t *testing.T) {
 		expDocuments []Doc
 		order        []Map
 	}{
-		/**
-		These two tests will work once we disable fallback to search. This functionality is added on Tigris side.
 		{
 			Map{
-				"arr_of_arr": "clothes",
+				"arr_of_arr": "clothes has braces ( and > ( < and escaped operators or some emoji 😀",
 			},
 			inputDocument[0:1],
 		    nil,
@@ -5147,7 +5145,7 @@ func TestFilteringOnArrays(t *testing.T) {
 			},
 			inputDocument[0:1],
 		    nil,
-		},*/{
+		},{
 			Map{
 				"obj.arr_primitive": "cars",
 			},
@@ -5450,6 +5448,94 @@ func TestRead_Sorted(t *testing.T) {
 					"search_only":  "zab",
 				},
 			},
+		},
+	}
+	for _, c := range cases {
+		readAndValidateOrder(t,
+			db,
+			coll,
+			c.filters,
+			nil,
+			c.sortOrder,
+			c.expDocuments)
+	}
+}
+
+func TestRead_Unicode(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	dropCollection(t, db, coll)
+	createCollection(t, db, coll,
+		Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"id":           Map{"type": "integer"},
+					"index_value": Map{"type": "string", "index": true},
+					"search_value":  Map{"type": "string", "searchIndex": true, "sort": true},
+					"local_value":  Map{"type": "string"},
+				},
+			},
+		}).Status(http.StatusOK)
+
+	inputDocument := []Doc{
+		{
+			"id":           1,
+			"index_value":    "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			"search_value": "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			"local_value":  "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+		},
+		{
+			"id":           2,
+			"index_value":   "has braces ( and > ( < and escaped operators 안녕 or some emoji",
+			"search_value": "has braces ( and > ( < and escaped operators 안녕 or some emoji",
+			"local_value":  "has braces ( and > ( < and escaped operators 안녕 or some emoji",
+		}, {
+			"id":           3,
+			"index_value":   "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			"search_value": "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			"local_value":  "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+		},
+	}
+
+	// should always succeed with mustNotExists as false
+	insertDocuments(t, db, coll, inputDocument, false).
+		Status(http.StatusOK)
+
+	cases := []struct {
+		filters      Map
+		sortOrder    []Map
+		expDocuments []Doc
+	}{
+		{
+			Map{
+				"index_value": "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			},
+			[]Map{
+				{
+					"index_value": "$desc",
+				},
+			},
+			[]Doc{inputDocument[2], inputDocument[0]},
+		},
+		{
+			Map{
+				"local_value": "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			},
+			nil,
+			[]Doc{inputDocument[0], inputDocument[2]},
+		},
+		{
+			Map{
+				"search_value": "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			},
+			[]Map{
+				{
+					"search_value": "$desc",
+				},
+			},
+			[]Doc{inputDocument[2], inputDocument[0]},
 		},
 	}
 	for _, c := range cases {
@@ -5947,6 +6033,161 @@ func TestComplexObjectsCollectionSearch(t *testing.T) {
 		res := getSearchResults(t, project, collectionName, c.query, true)
 		require.Equal(t, 1, len(res.Result.Hits))
 	}
+}
+
+func TestDocumentsChunking(t *testing.T) {
+	project := setupTestsOnlyProject(t)
+	defer cleanupTests(t, project)
+
+	collectionName := "fake_collection"
+	var schemaObj map[string]any
+	require.NoError(t, jsoniter.Unmarshal(FakeCollectionSchema, &schemaObj))
+
+	t.Run("insert_read", func(t *testing.T) {
+		createCollection(t, project, collectionName, schemaObj).Status(http.StatusOK)
+		defer dropCollection(t, project, collectionName)
+
+		_, documents := GenerateFakesForDoc(t, []string{"1", "2", "3"})
+		insertDocuments(t, project, collectionName, documents, true).
+			Status(http.StatusOK)
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			nil,
+			nil,
+			nil,
+			documents)
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			nil,
+			nil,
+			[]Map{{"id": "$desc"}},
+			[]Doc{documents[2], documents[1], documents[0]})
+	})
+	t.Run("replace_read", func(t *testing.T) {
+		createCollection(t, project, collectionName, schemaObj).Status(http.StatusOK)
+		defer dropCollection(t, project, collectionName)
+
+		_, documents := GenerateFakesForDocWithPlaceholder(t, []string{"1", "2", "3"}, []string{"first", "second", "third"})
+		insertDocuments(t, project, collectionName, documents, false).
+			Status(http.StatusOK)
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			nil,
+			nil,
+			nil,
+			documents)
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			nil,
+			nil,
+			[]Map{{"id": "$desc"}},
+			[]Doc{documents[2], documents[1], documents[0]})
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			Map{
+				"$or": []Doc{
+					{"placeholder": "first"},
+					{"placeholder": "second"},
+					{"placeholder": "third"},
+				},
+			},
+			nil,
+			[]Map{{"placeholder": "$desc"}},
+			[]Doc{documents[2], documents[1], documents[0]})
+	})
+	t.Run("update_read", func(t *testing.T) {
+		createCollection(t, project, collectionName, schemaObj).Status(http.StatusOK)
+		defer dropCollection(t, project, collectionName)
+
+		fakes, documents := GenerateFakesForDoc(t, []string{"1", "2", "3"})
+		insertDocuments(t, project, collectionName, documents, false).
+			Status(http.StatusOK)
+
+		fakes[0].Name = "updated_name"
+		fakes[0].Nested.Address.City = "updated_city"
+		fakes[0].Cars = []string{"updated_cars"}
+		updateByFilter(t,
+			project,
+			collectionName,
+			Map{
+				"filter": Map{
+					"id": "1",
+				},
+			},
+			Map{
+				"fields": Map{
+					"$set": Map{
+						"name": fakes[0].Name,
+						"nested.address.city": fakes[0].Nested.Address.City,
+						"cars": fakes[0].Cars,
+					},
+				},
+			},
+			nil).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("modified_count", 1)
+
+		documents[0] = GenerateDocFromFake(t, fakes[0])
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			nil,
+			nil,
+			nil,
+			documents)
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			nil,
+			nil,
+			[]Map{{"id": "$desc"}},
+			[]Doc{documents[2], documents[1], documents[0]})
+
+	})
+	t.Run("delete_read", func(t *testing.T) {
+		createCollection(t, project, collectionName, schemaObj).Status(http.StatusOK)
+		defer dropCollection(t, project, collectionName)
+
+		_, documents := GenerateFakesForDocWithPlaceholder(t, []string{"1", "2", "3"}, []string{"first", "second", "third"})
+		insertDocuments(t, project, collectionName, documents, false).
+			Status(http.StatusOK)
+
+		deleteByFilter(t,
+			project,
+			collectionName,
+			Map{
+			"filter":
+				Map{"placeholder": "first"},
+		}).
+			Status(http.StatusOK)
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			Map{
+				"$or": []Doc{
+					{"placeholder": "first"},
+					{"placeholder": "second"},
+					{"placeholder": "third"},
+				},
+			},
+			nil,
+			[]Map{{"placeholder": "$desc"}},
+			[]Doc{documents[2], documents[1]})
+	})
 }
 
 func insertDocuments(t *testing.T, db string, collection string, documents []Doc, mustNotExist bool) *httpexpect.Response {

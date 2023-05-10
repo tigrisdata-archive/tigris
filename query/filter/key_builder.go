@@ -25,8 +25,8 @@ import (
 )
 
 // KeyComposer needs to be implemented to have a custom Compose method with different constraints.
-type KeyComposer[F fieldable] interface {
-	Compose(level []*Selector, userDefinedKeys []F, parent LogicalOP) ([]QueryPlan, error)
+type KeyComposer interface {
+	Compose(level []*Selector, indexedKeys []*schema.QueryableField, parent LogicalOP) ([]QueryPlan, error)
 }
 
 type (
@@ -107,47 +107,42 @@ func (q QueryPlan) GetKeyInterfaceParts() [][]any {
 	return keys
 }
 
-type fieldable interface {
-	Name() string
-	Type() schema.FieldType
-}
-
 // KeyBuilder is responsible for building internal Keys. A composer is caller by the builder to build the internal keys
 // based on the Composer logic.
 // KeyBuilder uses generics so that it can accept either schema.QueryableField or schema.Field
 // so that it can build a query plan for primay or secondary indexes.
-type KeyBuilder[F fieldable] struct {
-	composer  KeyComposer[F]
+type KeyBuilder struct {
+	composer  KeyComposer
 	indexType IndexType
 }
 
 // NewPrimaryKeyEqBuilder returns a KeyBuilder for use with schema.Field to build a primary key query plan.
-func NewPrimaryKeyEqBuilder(keyEncodingFunc KeyEncodingFunc) *KeyBuilder[*schema.Field] {
-	return NewKeyBuilder[*schema.Field](
-		NewStrictEqKeyComposer[*schema.Field](keyEncodingFunc, PKBuildIndexPartsFunc, true, PrimaryIndex),
+func NewPrimaryKeyEqBuilder(keyEncodingFunc KeyEncodingFunc) *KeyBuilder {
+	return NewKeyBuilder(
+		NewStrictEqKeyComposer(keyEncodingFunc, PKBuildIndexPartsFunc, true, PrimaryIndex),
 		PrimaryIndex,
 	)
 }
 
 // NewSecondaryKeyEqBuilder returns a KeyBuilder for use with the secondary index.
-func NewSecondaryKeyEqBuilder[F fieldable](keyEncodingFunc KeyEncodingFunc, buildIndexPartsFunc BuildIndexPartsFunc) *KeyBuilder[F] {
-	return NewKeyBuilder[F](
-		NewStrictEqKeyComposer[F](keyEncodingFunc, buildIndexPartsFunc, false, SecondaryIndex),
+func NewSecondaryKeyEqBuilder(keyEncodingFunc KeyEncodingFunc, buildIndexPartsFunc BuildIndexPartsFunc) *KeyBuilder {
+	return NewKeyBuilder(
+		NewStrictEqKeyComposer(keyEncodingFunc, buildIndexPartsFunc, false, SecondaryIndex),
 		SecondaryIndex,
 	)
 }
 
 // NewRangeKeyBuilder returns a KeyBuilder for use with schema.QueryableField.
-func NewRangeKeyBuilder(composer KeyComposer[*schema.QueryableField], indexType IndexType) *KeyBuilder[*schema.QueryableField] {
-	return &KeyBuilder[*schema.QueryableField]{
+func NewRangeKeyBuilder(composer KeyComposer, indexType IndexType) *KeyBuilder {
+	return &KeyBuilder{
 		composer:  composer,
 		indexType: indexType,
 	}
 }
 
 // NewKeyBuilder returns a KeyBuilder.
-func NewKeyBuilder[F fieldable](composer KeyComposer[F], indexType IndexType) *KeyBuilder[F] {
-	return &KeyBuilder[F]{
+func NewKeyBuilder(composer KeyComposer, indexType IndexType) *KeyBuilder {
+	return &KeyBuilder{
 		composer:  composer,
 		indexType: indexType,
 	}
@@ -158,7 +153,7 @@ func NewKeyBuilder[F fieldable](composer KeyComposer[F], indexType IndexType) *K
 // On each level multiple keys can be formed because the user can specify ranges. The builder is not deciding the logic
 // of key generation, the builder is simply traversing on the filters and calling compose where the logic resides.
 // If the build is for a primary key, the query plans are merged into a single plan.
-func (k *KeyBuilder[F]) Build(filters []Filter, userDefinedKeys []F) ([]QueryPlan, error) {
+func (k *KeyBuilder) Build(filters []Filter, indexedKeys []*schema.QueryableField) ([]QueryPlan, error) {
 	var queue []Filter
 	var singleLevel []*Selector
 	var allKeys []QueryPlan
@@ -172,7 +167,7 @@ func (k *KeyBuilder[F]) Build(filters []Filter, userDefinedKeys []F) ([]QueryPla
 	}
 	if len(singleLevel) > 0 {
 		// if we have something on top level
-		iKeys, err := k.composer.Compose(singleLevel, userDefinedKeys, AndOP)
+		iKeys, err := k.composer.Compose(singleLevel, indexedKeys, AndOP)
 		if err != nil {
 			return nil, err
 		}
@@ -196,7 +191,7 @@ func (k *KeyBuilder[F]) Build(filters []Filter, userDefinedKeys []F) ([]QueryPla
 
 			if len(singleLevel) > 0 {
 				// try building keys with there is selector available
-				iKeys, err := k.composer.Compose(singleLevel, userDefinedKeys, e.Type())
+				iKeys, err := k.composer.Compose(singleLevel, indexedKeys, e.Type())
 				if err != nil {
 					return nil, err
 				}
@@ -225,13 +220,13 @@ func PKBuildIndexPartsFunc(_ string, value value.Value) []any {
 // StrictEqKeyComposer works in to ways to generate internal keys if the condition is equality.
 //  1. When `matchAll=true`, it will generate internal keys of equality on the fields of the schema if all these fields
 //     are present in the filters. The following rules are applied for StrictEqKeyComposer:
-//     - The userDefinedKeys(indexes defined in the schema) passed in parameter should be present in the filter
+//     - The indexedKeys(indexes defined in the schema) passed in parameter should be present in the filter
 //     - For AND filters it is possible to build internal keys for composite indexes, for OR it is not possible.
 //
 // 2. When `matchAll=false`, it will treat all userDefined as individual and generate an `$eq` query plan for each one that is found.
 //
 // For OR filter an error is returned if it is used for indexes that are composite.
-type StrictEqKeyComposer[F fieldable] struct {
+type StrictEqKeyComposer struct {
 	matchAll bool
 	// keyEncodingFunc returns encoded key from index parts
 	keyEncodingFunc     KeyEncodingFunc
@@ -239,8 +234,8 @@ type StrictEqKeyComposer[F fieldable] struct {
 	indexType           IndexType
 }
 
-func NewStrictEqKeyComposer[F fieldable](keyEncodingFunc KeyEncodingFunc, buildIndexPartsFunc BuildIndexPartsFunc, matchAll bool, indexType IndexType) *StrictEqKeyComposer[F] {
-	return &StrictEqKeyComposer[F]{
+func NewStrictEqKeyComposer(keyEncodingFunc KeyEncodingFunc, buildIndexPartsFunc BuildIndexPartsFunc, matchAll bool, indexType IndexType) *StrictEqKeyComposer {
+	return &StrictEqKeyComposer{
 		matchAll,
 		keyEncodingFunc,
 		buildIndexPartsFunc,
@@ -249,12 +244,12 @@ func NewStrictEqKeyComposer[F fieldable](keyEncodingFunc KeyEncodingFunc, buildI
 }
 
 // Compose is implementing the logic of composing keys.
-func (s *StrictEqKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys []F, parent LogicalOP) ([]QueryPlan, error) {
+func (s *StrictEqKeyComposer) Compose(selectors []*Selector, indexedKeys []*schema.QueryableField, parent LogicalOP) ([]QueryPlan, error) {
 	var compositeKeys [][]*Selector
 	if s.matchAll {
 		compositeKeys = make([][]*Selector, 1) // allocate just for the first keyParts
 	}
-	for _, k := range userDefinedKeys {
+	for _, k := range indexedKeys {
 		var repeatedFields []*Selector
 		for _, sel := range selectors {
 			if sel.Matcher.Type() == EQ {
@@ -317,7 +312,7 @@ func (s *StrictEqKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys 
 			queryPlans = append(queryPlans, NewQueryPlan(EQUAL, fieldName, dataType, []keys.Key{key}, s.indexType))
 		case OrOP:
 			for _, sel := range k {
-				if len(userDefinedKeys) > 1 {
+				if len(indexedKeys) > 1 {
 					// this means OR can't build independently these keys
 					return nil, errors.InvalidArgument("OR is not supported with composite primary keys")
 				}
@@ -340,25 +335,25 @@ func (s *StrictEqKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys 
 // RangeKeyComposer will generate a range key set on the user defined keys
 // It will set the KeyQuery to `FullRange` if the start or end key is not defined in the query
 // if there is a defined start and end key for a range then `Range` is set.
-type RangeKeyComposer[F fieldable] struct {
+type RangeKeyComposer struct {
 	// keyEncodingFunc returns encoded key from index parts
 	keyEncodingFunc     KeyEncodingFunc
 	buildIndexPartsFunc BuildIndexPartsFunc
 	indexType           IndexType
 }
 
-func NewRangeKeyComposer[F fieldable](keyEncodingFunc KeyEncodingFunc, buildIndexParts BuildIndexPartsFunc, indexType IndexType) *RangeKeyComposer[F] {
-	return &RangeKeyComposer[F]{
+func NewRangeKeyComposer(keyEncodingFunc KeyEncodingFunc, buildIndexParts BuildIndexPartsFunc, indexType IndexType) *RangeKeyComposer {
+	return &RangeKeyComposer{
 		keyEncodingFunc,
 		buildIndexParts,
 		indexType,
 	}
 }
 
-func (s *RangeKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys []F, _ LogicalOP) ([]QueryPlan, error) {
+func (s *RangeKeyComposer) Compose(selectors []*Selector, indexedKeys []*schema.QueryableField, _ LogicalOP) ([]QueryPlan, error) {
 	var err error
 	var queryPlans []QueryPlan
-	for _, k := range userDefinedKeys {
+	for _, k := range indexedKeys {
 		var begin, end keys.Key
 		rangeType := FULLRANGE
 		for _, sel := range selectors {
@@ -417,14 +412,14 @@ func (s *RangeKeyComposer[F]) Compose(selectors []*Selector, userDefinedKeys []F
 	return queryPlans, nil
 }
 
-func (s *RangeKeyComposer[F]) isRange(selector *Selector) bool {
+func (s *RangeKeyComposer) isRange(selector *Selector) bool {
 	if s.isGreater(selector) || s.isLess(selector) {
 		return true
 	}
 	return false
 }
 
-func (*RangeKeyComposer[F]) isGreater(selector *Selector) bool {
+func (*RangeKeyComposer) isGreater(selector *Selector) bool {
 	switch selector.Matcher.Type() {
 	case GT, GTE:
 		return true
@@ -433,7 +428,7 @@ func (*RangeKeyComposer[F]) isGreater(selector *Selector) bool {
 	}
 }
 
-func (*RangeKeyComposer[F]) isLess(selector *Selector) bool {
+func (*RangeKeyComposer) isLess(selector *Selector) bool {
 	switch selector.Matcher.Type() {
 	case LT, LTE:
 		return true

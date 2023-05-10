@@ -17,6 +17,7 @@ package filter
 import (
 	"testing"
 
+	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/value"
@@ -44,6 +45,7 @@ func TestSelector(t *testing.T) {
       "f": [{"a": "array of object with a field"}],
       "g": ["NEW YORK","MIAMI"],
       "h": 1.1
+      "i": "has braces ( and > ( < and escaped operators or some emoji 😀"
     }`)
 
 	cases := []struct {
@@ -105,4 +107,21 @@ func TestSelector(t *testing.T) {
 		s := NewSelector(c.parent, c.field, c.matcher, nil)
 		require.Equal(t, c.expMatch, s.Matches(doc, nil))
 	}
+
+	// the string with unicodes
+	v, _, _, err := jsonparser.Get(doc, "i")
+	require.NoError(t, err)
+
+	eqMatcher := NewEqualityMatcher(mustNewValue(t, schema.StringType, v))
+	s := NewSelector(nil, &schema.QueryableField{FieldName: "i", DataType: schema.StringType, UnFlattenName: "i"}, eqMatcher, nil)
+	require.Equal(t, true, s.Matches(doc, nil))
+}
+
+func mustNewValue(t *testing.T, ty schema.FieldType, v []byte) value.Value {
+	val, err := value.NewValue(ty, v)
+	if err != nil {
+		require.NoError(t, err)
+	}
+
+	return val
 }
