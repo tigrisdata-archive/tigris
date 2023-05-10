@@ -262,8 +262,7 @@ func (um *DefaultUsersManager) ListUsers(ctx context.Context, _ *api.ListUsersRe
 		log.Err(err).Msg("Failed to get namespace while listing invitations")
 		return nil, errors.Internal("Could not list users")
 	}
-
-	queryStr := fmt.Sprintf("app_metadata.tigris_namespace:%s", namespace)
+	queryStr := fmt.Sprintf("app_metadata.accessibleNamespaces.code:%s", namespace)
 	users, err := um.Management.User.List(management.Query(queryStr))
 	if err != nil {
 		log.Err(err).Msg("Failed to get list of users from auth0")
