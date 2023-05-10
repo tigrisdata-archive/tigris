@@ -598,19 +598,8 @@ func (runner *BaseQueryRunner) buildReaderOptions(req *api.ReadRequest, collecti
 		return options, errors.InvalidArgument("can't perform sort on this field")
 	}
 
-	if runner.noFallbackToSearch(options) {
-		// case when fallback is disabled or we explicitly need to perform table scan
-		options.tablePlan, err = planner.GenerateTablePlan(sortPlan, from)
-		return options, err
-	}
-
-	// fallback
-	options.inMemoryStore = true
-	return options, nil
-}
-
-func (*BaseQueryRunner) noFallbackToSearch(options readerOptions) bool {
-	return !config.DefaultConfig.Search.IsReadEnabled() || !options.filter.IsSearchIndexed()
+	options.tablePlan, err = planner.GenerateTablePlan(sortPlan, from)
+	return options, err
 }
 
 func (runner *StreamingQueryRunner) instrumentRunner(ctx context.Context, options readerOptions) context.Context {
