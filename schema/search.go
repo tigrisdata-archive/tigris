@@ -171,7 +171,7 @@ type SearchIndex struct {
 }
 
 func NewSearchIndex(ver uint32, searchStoreName string, factory *SearchFactory, fieldsInSearch []tsApi.Field) *SearchIndex {
-	queryableFields := NewQueryableFieldsBuilder().BuildQueryableFields(factory.Fields, fieldsInSearch)
+	queryableFields := NewQueryableFieldsBuilder().BuildQueryableFields(factory.Fields, fieldsInSearch, true)
 
 	var searchIdField *QueryableField
 	for _, q := range queryableFields {
@@ -316,7 +316,7 @@ func (s *SearchIndex) buildSearchSchema(name string) {
 func (s *SearchIndex) GetSearchDeltaFields(existingFields []*QueryableField, fieldsInSearch []tsApi.Field) []tsApi.Field {
 	ptrTrue := true
 
-	incomingQueryable := NewQueryableFieldsBuilder().BuildQueryableFields(s.Fields, fieldsInSearch)
+	incomingQueryable := NewQueryableFieldsBuilder().BuildQueryableFields(s.Fields, fieldsInSearch, true)
 
 	existingFieldMap := make(map[string]*QueryableField)
 	for _, f := range existingFields {
@@ -399,7 +399,7 @@ type ImplicitSearchIndex struct {
 
 func NewImplicitSearchIndex(name string, searchStoreName string, fields []*Field, prevVersionInSearch []tsApi.Field) *ImplicitSearchIndex {
 	// this is created by collection so the forSearchIndex is false.
-	queryableFields := NewQueryableFieldsBuilder().BuildQueryableFields(fields, prevVersionInSearch)
+	queryableFields := NewQueryableFieldsBuilder().BuildQueryableFields(fields, prevVersionInSearch, true)
 	index := &ImplicitSearchIndex{
 		Name:                name,
 		QueryableFields:     queryableFields,
@@ -476,7 +476,7 @@ func (s *ImplicitSearchIndex) buildSearchSchema(searchStoreName string) {
 func (s *ImplicitSearchIndex) GetSearchDeltaFields(existingFields []*QueryableField, incomingFields []*Field) []tsApi.Field {
 	ptrTrue := true
 
-	incomingQueryable := NewQueryableFieldsBuilder().BuildQueryableFields(incomingFields, s.prevVersionInSearch)
+	incomingQueryable := NewQueryableFieldsBuilder().BuildQueryableFields(incomingFields, s.prevVersionInSearch, true)
 
 	existingFieldMap := make(map[string]*QueryableField)
 	for _, f := range existingFields {
