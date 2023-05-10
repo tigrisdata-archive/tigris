@@ -263,7 +263,7 @@ func (um *DefaultUsersManager) ListUsers(ctx context.Context, _ *api.ListUsersRe
 		return nil, errors.Internal("Could not list users")
 	}
 	queryStr := fmt.Sprintf("app_metadata.accessibleNamespaces.code:%s", namespace)
-	users, err := um.Management.User.List(management.Query(queryStr))
+	users, err := um.Management.User.Search(management.Query(queryStr))
 	if err != nil {
 		log.Err(err).Msg("Failed to get list of users from auth0")
 		return nil, errors.Internal("Could not list users")
@@ -273,7 +273,7 @@ func (um *DefaultUsersManager) ListUsers(ctx context.Context, _ *api.ListUsersRe
 	for i, user := range users.Users {
 		usersRes[i] = &api.User{
 			Email:     user.GetEmail(),
-			Name:      user.GetEmail(),
+			Name:      user.GetName(),
 			CreatedAt: user.GetCreatedAt().UnixMilli(),
 			Picture:   user.GetPicture(),
 		}
