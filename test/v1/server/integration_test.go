@@ -31,11 +31,6 @@ var (
 	testCollection = "test_collection"
 )
 
-type (
-	Map map[string]any
-	Doc Map
-)
-
 var testCreateSchemaComposite = Map{
 	"schema": Map{
 		"title":       testCollection + "_composite",

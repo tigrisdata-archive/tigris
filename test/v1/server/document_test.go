@@ -5949,6 +5949,161 @@ func TestComplexObjectsCollectionSearch(t *testing.T) {
 	}
 }
 
+func TestDocumentsChunking(t *testing.T) {
+	project := setupTestsOnlyProject(t)
+	defer cleanupTests(t, project)
+
+	collectionName := "fake_collection"
+	var schemaObj map[string]any
+	require.NoError(t, jsoniter.Unmarshal(FakeCollectionSchema, &schemaObj))
+
+	t.Run("insert_read", func(t *testing.T) {
+		createCollection(t, project, collectionName, schemaObj).Status(http.StatusOK)
+		defer dropCollection(t, project, collectionName)
+
+		_, documents := GenerateFakesForDoc(t, []string{"1", "2", "3"})
+		insertDocuments(t, project, collectionName, documents, true).
+			Status(http.StatusOK)
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			nil,
+			nil,
+			nil,
+			documents)
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			nil,
+			nil,
+			[]Map{{"id": "$desc"}},
+			[]Doc{documents[2], documents[1], documents[0]})
+	})
+	t.Run("replace_read", func(t *testing.T) {
+		createCollection(t, project, collectionName, schemaObj).Status(http.StatusOK)
+		defer dropCollection(t, project, collectionName)
+
+		_, documents := GenerateFakesForDocWithPlaceholder(t, []string{"1", "2", "3"}, []string{"first", "second", "third"})
+		insertDocuments(t, project, collectionName, documents, false).
+			Status(http.StatusOK)
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			nil,
+			nil,
+			nil,
+			documents)
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			nil,
+			nil,
+			[]Map{{"id": "$desc"}},
+			[]Doc{documents[2], documents[1], documents[0]})
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			Map{
+				"$or": []Doc{
+					{"placeholder": "first"},
+					{"placeholder": "second"},
+					{"placeholder": "third"},
+				},
+			},
+			nil,
+			[]Map{{"placeholder": "$desc"}},
+			[]Doc{documents[2], documents[1], documents[0]})
+	})
+	t.Run("update_read", func(t *testing.T) {
+		createCollection(t, project, collectionName, schemaObj).Status(http.StatusOK)
+		defer dropCollection(t, project, collectionName)
+
+		fakes, documents := GenerateFakesForDoc(t, []string{"1", "2", "3"})
+		insertDocuments(t, project, collectionName, documents, false).
+			Status(http.StatusOK)
+
+		fakes[0].Name = "updated_name"
+		fakes[0].Nested.Address.City = "updated_city"
+		fakes[0].Cars = []string{"updated_cars"}
+		updateByFilter(t,
+			project,
+			collectionName,
+			Map{
+				"filter": Map{
+					"id": "1",
+				},
+			},
+			Map{
+				"fields": Map{
+					"$set": Map{
+						"name": fakes[0].Name,
+						"nested.address.city": fakes[0].Nested.Address.City,
+						"cars": fakes[0].Cars,
+					},
+				},
+			},
+			nil).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("modified_count", 1)
+
+		documents[0] = GenerateDocFromFake(t, fakes[0])
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			nil,
+			nil,
+			nil,
+			documents)
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			nil,
+			nil,
+			[]Map{{"id": "$desc"}},
+			[]Doc{documents[2], documents[1], documents[0]})
+
+	})
+	t.Run("delete_read", func(t *testing.T) {
+		createCollection(t, project, collectionName, schemaObj).Status(http.StatusOK)
+		defer dropCollection(t, project, collectionName)
+
+		_, documents := GenerateFakesForDocWithPlaceholder(t, []string{"1", "2", "3"}, []string{"first", "second", "third"})
+		insertDocuments(t, project, collectionName, documents, false).
+			Status(http.StatusOK)
+
+		deleteByFilter(t,
+			project,
+			collectionName,
+			Map{
+			"filter":
+				Map{"placeholder": "first"},
+		}).
+			Status(http.StatusOK)
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			Map{
+				"$or": []Doc{
+					{"placeholder": "first"},
+					{"placeholder": "second"},
+					{"placeholder": "third"},
+				},
+			},
+			nil,
+			[]Map{{"placeholder": "$desc"}},
+			[]Doc{documents[2], documents[1]})
+	})
+}
+
 func insertDocuments(t *testing.T, db string, collection string, documents []Doc, mustNotExist bool) *httpexpect.Response {
 	e := expect(t)
 
