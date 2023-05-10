@@ -94,6 +94,7 @@ func measureUnary() func(ctx context.Context, req any, info *grpc.UnaryServerInf
 		if err != nil {
 			// Request had an error
 			measurement.CountErrorForScope(metrics.RequestsErrorCount, measurement.GetRequestErrorTags(err))
+			measurement.AddReceivedBytes(proto.Size(req.(proto.Message)))
 			_ = measurement.FinishWithError(ctx, err)
 			measurement.RecordDuration(metrics.RequestsErrorRespTime, measurement.GetRequestErrorTags(err))
 			logError(ctx, err, "unary")

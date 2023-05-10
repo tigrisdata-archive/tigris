@@ -25,6 +25,151 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type (
+	Map map[string]any
+	Doc Map
+)
+
+var FakeCollectionSchema = []byte(`{
+  "schema": {
+    "title": "fake_collection",
+    "primary_key": ["id"],
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "sentence": {
+        "type": "string"
+      },
+      "quote": {
+        "type": "string"
+      },
+      "phrase": {
+        "type": "string"
+      },
+      "paragraph1": {
+        "type": "string"
+      },
+      "paragraph2": {
+        "type": "string"
+      },
+      "paragraph3": {
+        "type": "string"
+      },
+      "paragraph": {
+        "type": "string"
+      },
+      "random": {
+        "type": "string"
+      },
+      "number": {
+        "type": "number"
+      },
+      "url": {
+        "type": "string"
+      },
+      "placeholder": {
+        "searchIndex": true,
+        "sort": true,
+        "type": "string"
+      },
+      "created_at": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updated_at": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "map": {
+        "type": "object",
+        "properties": {}
+      },
+      "cars": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "animals": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "fruits": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "nested": {
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "integer"
+          },
+          "paragraph": {
+            "type": "string"
+          },
+          "places": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "vegetables": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "dessert": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "object": {
+            "searchIndex": false,
+            "type": "object",
+            "properties": {}
+          },
+          "address": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "countryName": {
+                "type": "string"
+              },
+              "latitude": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "longitude": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}`)
+
 var FakeDocumentSchema = []byte(`{
   "schema": {
     "title": "fake_index",
@@ -185,7 +330,7 @@ type FakeDocument struct {
 
 type Nested struct {
 	Timestamp  int64    `json:"timestamp" fake:"{nanosecond}"`
-	Paragraph  string   `json:"city"  fake:"{paragraph:10,10,50}"`
+	Paragraph  string   `json:"paragraph"  fake:"{paragraph:10,10,50}"`
 	Address    Address  `json:"address"`
 	Places     []string `json:"places"  fake:"{city}" fakesize:"10000"`
 	Vegetables []string `json:"vegetables"  fake:"{vegetable}" fakesize:"10000"`
@@ -235,4 +380,39 @@ func GenerateFakes(t *testing.T, ids []string, placeholder []string) ([]FakeDocu
 	}
 
 	return fakes, serialized
+}
+
+func GenerateFakesForDoc(t *testing.T, ids []string) ([]FakeDocument, []Doc) {
+	return GenerateFakesForDocWithPlaceholder(t, ids, nil)
+}
+
+func GenerateFakesForDocWithPlaceholder(t *testing.T, ids []string, placeholder []string) ([]FakeDocument, []Doc) {
+	if len(placeholder) == 0 {
+		placeholder = make([]string, len(ids))
+	}
+
+	var fakes []FakeDocument
+	var documents []Doc
+	for i := 0; i < len(ids); i++ {
+		fake := NewFakeDocument(ids[i], placeholder[i])
+		payload, err := Serialize(fake)
+		require.NoError(t, err)
+
+		fakes = append(fakes, fake)
+
+		var doc Doc
+		require.NoError(t, jsoniter.Unmarshal(payload, &doc))
+		documents = append(documents, doc)
+	}
+
+	return fakes, documents
+}
+
+func GenerateDocFromFake(t *testing.T, f FakeDocument) Doc {
+	payload, err := Serialize(f)
+	require.NoError(t, err)
+
+	var doc Doc
+	require.NoError(t, jsoniter.Unmarshal(payload, &doc))
+	return doc
 }

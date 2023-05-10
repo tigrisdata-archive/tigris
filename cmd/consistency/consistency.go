@@ -154,6 +154,36 @@ func collectionsForBigPayloadLoadTest() (string, []byte) {
         "random": {
           "type": "string"
         },
+        "random1": {
+          "type": "string"
+        },
+        "random2": {
+          "type": "string"
+        },
+        "random3": {
+          "type": "string"
+        },
+        "random4": {
+          "type": "string"
+        },
+        "random5": {
+          "type": "string"
+        },
+        "random6": {
+          "type": "string"
+        },
+        "random7": {
+          "type": "string"
+        },
+        "random8": {
+          "type": "string"
+        },
+        "random9": {
+          "type": "string"
+        },
+        "random10": {
+          "type": "string"
+        },
         "nested_id": {
           "type": "string",
           "format": "uuid"
@@ -274,12 +304,13 @@ func CreateBigPayloadWorkload() []Workload {
 	collections, schemas := collectionsForBigPayloadLoadTest()
 	var workload []Workload
 	workload = append(workload, &workload2.BigPayloadWorkload{
-		Threads:     16,
+		Threads:     2,
 		Records:     64,
 		Database:    "test1",
 		Collections: collections,
 		// first is integer primary key, second is string primary key
 		Schemas: schemas,
+		IsBatch: false,
 	})
 
 	return workload

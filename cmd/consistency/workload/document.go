@@ -72,12 +72,22 @@ type Address struct {
 
 type Nested struct {
 	Timestamp int64    `json:"timestamp" fake:"{nanosecond}"`
-	Random    string   `json:"random" fake:"{sentence:10}"`
-	Name      string   `json:"name"  fake:"{firstname}"`
-	URL       string   `json:"url" fake:"{url}"`
-	Domain    string   `json:"domain"  fake:"{domainname}"`
-	Sentence  string   `json:"sentence" fake:"{sentence:10}"`
-	Company   string   `json:"company"  fake:"{company}"`
+	Random    string   `json:"random" fake:"{paragraph:10,10,50}"`
+	Random1   string   `json:"random1" fake:"{paragraph:10,10,50}"`
+	Random2   string   `json:"random2" fake:"{paragraph:10,10,50}"`
+	Random3   string   `json:"random3" fake:"{paragraph:10,10,50}"`
+	Random4   string   `json:"random4" fake:"{paragraph:10,10,50}"`
+	Random5   string   `json:"random5" fake:"{paragraph:10,10,50}"`
+	Random6   string   `json:"random6" fake:"{paragraph:10,10,50}"`
+	Random7   string   `json:"random7" fake:"{paragraph:10,10,50}"`
+	Random8   string   `json:"random8" fake:"{paragraph:10,10,50}"`
+	Random9   string   `json:"random9" fake:"{paragraph:10,10,50}"`
+	Random10  string   `json:"random10" fake:"{paragraph:10,10,50}"`
+	Name      string   `json:"name"  fake:"{paragraph:10,10,50}"`
+	URL       string   `json:"url" fake:"{paragraph:10,10,50}"`
+	Domain    string   `json:"domain"  fake:"{sentence:50}"`
+	Sentence  string   `json:"sentence" fake:"{paragraph:10,10,50}"`
+	Company   string   `json:"company"  fake:"{paragraph:10,10,50}"`
 	Labels    []string `json:"labels"  fakesize:"20000"`
 	Address   Address  `json:"address"`
 	NestedId  string   `json:"nested_id"  fake:"{uuid}"`

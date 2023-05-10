@@ -112,16 +112,16 @@ func (tx *ChunkTx) Insert(ctx context.Context, table []byte, key Key, data *inte
 }
 
 func (tx *ChunkTx) Replace(ctx context.Context, table []byte, key Key, data *internal.TableData, isUpdate bool) error {
+	// cleanup the existing range
+	if err := tx.KeyValueTx.Delete(ctx, table, key); err != nil {
+		return err
+	}
+
 	if !tx.isChunkingNeeded(data) {
 		return tx.KeyValueTx.Replace(ctx, table, key, data, isUpdate)
 	}
 
 	data.SetTotalChunks(int32(chunkSize))
-
-	// cleanup the existing range
-	if err := tx.KeyValueTx.Delete(ctx, table, key); err != nil {
-		return err
-	}
 
 	return tx.executeChunks(data, func(chunk int32, chunkData []byte) error {
 		var chunked *internal.TableData
@@ -148,6 +148,7 @@ func (tx *ChunkTx) Read(ctx context.Context, table []byte, key Key, reverse bool
 
 	return &ChunkIterator{
 		Iterator: iterator,
+		reverse:  reverse,
 	}, nil
 }
 
@@ -159,18 +160,25 @@ func (tx *ChunkTx) ReadRange(ctx context.Context, table []byte, lKey Key, rKey K
 
 	return &ChunkIterator{
 		Iterator: iterator,
+		reverse:  reverse,
 	}, nil
 }
 
 type ChunkIterator struct {
 	Iterator
 
-	err error
+	reverse bool
+	err     error
 }
 
 func (it *ChunkIterator) Next(value *KeyValue) bool {
 	if !it.Iterator.Next(value) {
 		return false
+	}
+
+	if it.reverse {
+		// this value won't have chunking information as this is last row
+		return it.handleReverse(value)
 	}
 
 	if !value.Data.IsChunkedData() {
@@ -207,6 +215,72 @@ func (it *ChunkIterator) Next(value *KeyValue) bool {
 
 	value.Data.RawData = buf.Bytes()
 	return hasNext
+}
+
+func (it *ChunkIterator) handleReverse(value *KeyValue) bool {
+	var buf bytes.Buffer
+	hasNext := false
+
+	lastChunk := it.chunkNumberFromKey(value.Key)
+	if it.Err() != nil {
+		return false
+	}
+	if lastChunk == 0 {
+		return true
+	}
+
+	totalChunks := lastChunk + 1
+	chunks := make([][]byte, totalChunks)
+	chunks[totalChunks-1] = value.Data.RawData
+
+	chunkNo := totalChunks - 2
+	for ; chunkNo >= 0; chunkNo-- {
+		var chunked KeyValue
+		if hasNext = it.Iterator.Next(&chunked); !hasNext {
+			break
+		}
+
+		if chunkNo > 0 {
+			if it.validChunkKey(chunked.Key, int32(chunkNo)); it.Err() != nil {
+				return false
+			}
+		}
+
+		chunks[chunkNo] = chunked.Data.RawData
+	}
+	if it.Iterator.Err() != nil {
+		// there can be an error in between we need to return that error
+		it.err = it.Iterator.Err()
+		return false
+	}
+	if chunkNo >= 0 {
+		it.err = fmt.Errorf("reverse iterator mismatch in total chunk read '%d' versus total chunks expected '%d'",
+			chunkNo, totalChunks)
+		return false
+	}
+
+	for _, chunk := range chunks {
+		_, _ = buf.Write(chunk)
+	}
+
+	value.Data.RawData = buf.Bytes()
+	return hasNext
+}
+
+func (it *ChunkIterator) chunkNumberFromKey(key Key) int {
+	switch {
+	case len(key) < 2:
+		return 0
+	case key[len(key)-2] != chunkIdentifier:
+		return 0
+	default:
+		chunkNo, ok := key[len(key)-1].(int64)
+		if !ok {
+			it.err = fmt.Errorf("not able to cast chunk number found: '%v'", key[len(key)-1])
+		}
+
+		return int(chunkNo)
+	}
 }
 
 func (it *ChunkIterator) validChunkKey(key Key, expChunk int32) {
