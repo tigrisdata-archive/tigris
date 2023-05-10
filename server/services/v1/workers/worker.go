@@ -255,7 +255,7 @@ func (w *Worker) buildIndexTask(queueItem *metadata.QueueItem) error {
 	}
 
 	coll := db.GetCollection(task.CollName)
-	// Indexer will only index indexes that are in not `INDEX_ACTIVE` state
+	// Indexer will only index indexes that are not `INDEX_ACTIVE` state
 	indexer := database.NewSecondaryIndexer(coll, true)
 
 	// Extend the lease of the queue item so that another worker does not

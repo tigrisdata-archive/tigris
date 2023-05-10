@@ -209,21 +209,23 @@ func (builder *QueryableFieldsBuilder) BuildQueryableFields(fields []*Field, fie
 		}
 	}
 
-	if includeMetadata {
-		ptrTrue := true
-		// Allowing metadata fields to be queryable. User provided reserved fields are rejected by FieldBuilder.
-		queryableFields = append(queryableFields, builder.NewQueryableField(ReservedFields[CreatedAt], &Field{
-			FieldName: ReservedFields[CreatedAt],
-			DataType:  DateTimeType,
-			Indexed:   &ptrTrue,
-		}, fieldsInSearch))
+	ptrTrue := true
+	// Allowing metadata fields to be queryable. User provided reserved fields are rejected by FieldBuilder.
+	queryableFields = append(queryableFields, builder.NewQueryableField(ReservedFields[CreatedAt], &Field{
+		FieldName:     ReservedFields[CreatedAt],
+		DataType:      DateTimeType,
+		Sorted:        &ptrTrue,
+		SearchIndexed: &ptrTrue,
+		Indexed:       &includeMetadata,
+	}, fieldsInSearch))
 
-		queryableFields = append(queryableFields, builder.NewQueryableField(ReservedFields[UpdatedAt], &Field{
-			FieldName: ReservedFields[UpdatedAt],
-			DataType:  DateTimeType,
-			Indexed:   &ptrTrue,
-		}, fieldsInSearch))
-	}
+	queryableFields = append(queryableFields, builder.NewQueryableField(ReservedFields[UpdatedAt], &Field{
+		FieldName:     ReservedFields[UpdatedAt],
+		DataType:      DateTimeType,
+		Sorted:        &ptrTrue,
+		SearchIndexed: &ptrTrue,
+		Indexed:       &includeMetadata,
+	}, fieldsInSearch))
 
 	return queryableFields
 }

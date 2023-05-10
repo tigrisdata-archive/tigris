@@ -472,6 +472,9 @@ func (q *SecondaryIndexerImpl) buildTSRows(tableData *internal.TableData) ([]Ind
 			dt = schema.DateTimeType
 		}
 
+		// If the indexer is only indexing indexes in WriteMode
+		// this checks to see what state the metadata indexes are in
+		// and if we should index them
 		if q.indexWriteModeOnly {
 			for _, idx := range q.coll.SecondaryIndexes.All {
 				if idx.Name == schema.ReservedFields[ts.field] {
