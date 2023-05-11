@@ -21,17 +21,19 @@ import (
 var (
 	QueueMetrics tally.Scope
 	QueueErrors  tally.Scope
+	QueueOk      tally.Scope
 )
 
 func initializeQueueScopes() {
 	QueueErrors = QueueMetrics.SubScope("errors")
+	QueueOk = QueueMetrics.SubScope("ok")
 }
 
 func SetQueueSize(size int) {
 	if QueueMetrics == nil {
 		return
 	}
-	QueueMetrics.Gauge("size").Update(float64(size))
+	QueueOk.Gauge("size").Update(float64(size))
 }
 
 func IncFailedJobError() {

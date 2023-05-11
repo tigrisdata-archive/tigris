@@ -27,7 +27,8 @@ func TestQueueMetrics(t *testing.T) {
 
 	t.Run("enabled", func(t *testing.T) {
 		SetQueueSize(10)
-		IncQueueError()
+		IncFailedJobError()
+		IncFailedWorkerError()
 	})
 
 	t.Run("disabled", func(t *testing.T) {
@@ -36,6 +37,7 @@ func TestQueueMetrics(t *testing.T) {
 
 		QueueMetrics = nil
 		SetQueueSize(10)
-		IncQueueError()
+		IncFailedJobError()
+		IncFailedWorkerError()
 	})
 }

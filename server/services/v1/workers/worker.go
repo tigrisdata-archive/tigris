@@ -24,6 +24,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/services/v1/database"
@@ -386,6 +387,9 @@ func (pool *WorkerPool) Loop() {
 }
 
 func (pool *WorkerPool) updateQueueSizeMetric() {
+	if !config.DefaultConfig.Metrics.Queue.Enabled {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	tx, err := pool.txMgr.StartTx(ctx)
