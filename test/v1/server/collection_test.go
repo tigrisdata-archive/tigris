@@ -292,7 +292,7 @@ func TestCreateCollection(t *testing.T) {
 		createCollection(t, db, coll, schema).Status(http.StatusOK)
 		resp := describeCollection(t, db, coll, Map{})
 		body := resp.Status(http.StatusOK).Body().Raw()
-		require.JSONEq(t, `{"collection":"test_collection","metadata":{},"schema":{"properties":{"addr":{"type":["null","string"]},"obj_1level":{"properties":{"name":{"type":["string","null"]}},"type":["object","null"]},"obj_2level_arr":{"properties":{"level2":{"properties":{"arr":{"items":{"type":["string","null"]},"type":["array","null"]}},"type":"object"}},"type":"object"},"id":{"type":"string","format":"uuid","autoGenerate":true}},"title":"test_collection","primary_key":["id"]},"size":0,"indexes":[{"name":"_tigris_created_at","state":"INDEX ACTIVE"},{"name":"_tigris_updated_at","state":"INDEX ACTIVE"}]}
+		require.JSONEq(t, `{"collection":"test_collection","metadata":{},"schema":{"properties":{"addr":{"type":["null","string"]},"obj_1level":{"properties":{"name":{"type":["string","null"]}},"type":["object","null"]},"obj_2level_arr":{"properties":{"level2":{"properties":{"arr":{"items":{"type":["string","null"]},"type":["array","null"]}},"type":"object"}},"type":"object"},"id":{"type":"string","format":"uuid","autoGenerate":true}},"title":"test_collection","primary_key":["id"]},"size":0,"indexes":[{"name":"_tigris_created_at","state":"INDEX ACTIVE"},{"name":"_tigris_updated_at","state":"INDEX ACTIVE"}],"search_status":"No Search Index"}
        `, body)
 	})
 	t.Run("allow_only_one_nullable", func(t *testing.T) {
@@ -345,137 +345,256 @@ func TestDropCollection(t *testing.T) {
 func TestDescribeCollection(t *testing.T) {
 	db, coll := setupTests(t)
 	defer cleanupTests(t, db)
-	dropCollection(t, db, coll)
 
-	schema1 := Map{
-		"schema": Map{
-			"title": coll,
-			"properties": Map{
-				"int_field": Map{
-					"type":  "integer",
-					"index": true,
+	t.Run("test_describe", func(t *testing.T) {
+		dropCollection(t, db, coll)
+
+		schema1 := Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"int_field": Map{
+						"type":  "integer",
+						"index": true,
+					},
+					"string_field": Map{
+						"type":  "string",
+						"index": true,
+					},
+					"double_value": Map{
+						"type":  "number",
+						"index": true,
+					},
 				},
-				"string_field": Map{
-					"type":  "string",
-					"index": true,
+				"primary_key": []interface{}{"int_field"},
+			},
+		}
+
+		createCollection(t, db, coll, schema1).Status(http.StatusOK)
+		resp := describeCollection(t, db, coll, Map{})
+
+		indexes := []Map{
+			{
+				"name":  "_tigris_created_at",
+				"state": "INDEX ACTIVE",
+			},
+			{
+				"name":  "_tigris_updated_at",
+				"state": "INDEX ACTIVE",
+			},
+			{
+				"fields": []Map{
+					{
+						"name": "double_value",
+					},
 				},
-				"double_value": Map{
-					"type":  "number",
-					"index": true,
+				"name":  "double_value",
+				"state": "INDEX ACTIVE",
+			},
+			{
+				"fields": []Map{
+					{
+						"name": "int_field",
+					},
+				},
+				"name":  "int_field",
+				"state": "INDEX ACTIVE",
+			},
+			{
+				"fields": []Map{
+					{
+						"name": "string_field",
+					},
+				},
+				"name":  "string_field",
+				"state": "INDEX ACTIVE",
+			},
+		}
+
+		resp.Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("collection", coll).
+			ValueEqual("size", 0).
+			ValueEqual("indexes", indexes)
+
+		schema2 := Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"int_field": Map{
+						"type":  "integer",
+						"index": true,
+					},
+					"string_field": Map{
+						"type":  "string",
+						"index": true,
+					},
+					"double_value": Map{
+						"type": "number",
+					},
+				},
+				"primary_key": []interface{}{"int_field"},
+			},
+		}
+
+		createCollection(t, db, coll, schema2).Status(http.StatusOK)
+		resp2 := describeCollection(t, db, coll, Map{})
+		indexesUpdated := []Map{
+			{
+				"name":  "_tigris_created_at",
+				"state": "INDEX ACTIVE",
+			},
+			{
+				"name":  "_tigris_updated_at",
+				"state": "INDEX ACTIVE",
+			},
+			{
+				"fields": []Map{
+					{
+						"name": "int_field",
+					},
+				},
+				"name":  "int_field",
+				"state": "INDEX ACTIVE",
+			},
+			{
+				"fields": []Map{
+					{
+						"name": "string_field",
+					},
+				},
+				"name":  "string_field",
+				"state": "INDEX ACTIVE",
+			},
+		}
+
+		resp2.Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("collection", coll).
+			ValueEqual("size", 0).
+			ValueEqual("indexes", indexesUpdated)
+
+		// cleanup
+		dropCollection(t, db, coll)
+	})
+	t.Run("test_describe_search_status", func(t *testing.T) {
+		dropCollection(t, db, coll)
+
+		schema := Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"addr":    Map{"type": "string"},
+					"name":    Map{"type": "string", "searchIndex": true},
 				},
 			},
-			"primary_key": []interface{}{"int_field"},
-		},
-	}
+		}
 
-	createCollection(t, db, coll, schema1).Status(http.StatusOK)
-	resp := describeCollection(t, db, coll, Map{})
+		createCollection(t, db, coll, schema).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status", "created")
 
-	indexes := []Map{
-		{
-			"name":  "_tigris_created_at",
-			"state": "INDEX ACTIVE",
-		},
-		{
-			"name":  "_tigris_updated_at",
-			"state": "INDEX ACTIVE",
-		},
-		{
-			"fields": []Map{
-				{
-					"name": "double_value",
+		resp := describeCollection(t, db, coll, Map{})
+		resp.Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("collection", coll).
+			ValueEqual("search_status", "Search Active")
+
+		// adding more search index won't change the status
+		schema = Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"addr":    Map{"type": "string", "searchIndex": true},
+					"name":    Map{"type": "string", "searchIndex": true},
 				},
 			},
-			"name":  "double_value",
-			"state": "INDEX ACTIVE",
-		},
-		{
-			"fields": []Map{
-				{
-					"name": "int_field",
+		}
+
+		createCollection(t, db, coll, schema).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status", "created")
+
+		describeCollection(t, db, coll, Map{}).
+			Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("collection", coll).
+			ValueEqual("search_status", "Search Active")
+
+		// remove first index
+		schema = Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"addr":    Map{"type": "string", "searchIndex": true},
+					"name":    Map{"type": "string"},
 				},
 			},
-			"name":  "int_field",
-			"state": "INDEX ACTIVE",
-		},
-		{
-			"fields": []Map{
-				{
-					"name": "string_field",
+		}
+
+		createCollection(t, db, coll, schema).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status", "created")
+
+		describeCollection(t, db, coll, Map{}).
+			Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("collection", coll).
+			ValueEqual("search_status", "Search Active")
+
+		schema = Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"addr":    Map{"type": "string"},
+					"name":    Map{"type": "string"},
 				},
 			},
-			"name":  "string_field",
-			"state": "INDEX ACTIVE",
-		},
-	}
+		}
 
-	resp.Status(http.StatusOK).
-		JSON().
-		Object().
-		ValueEqual("collection", coll).
-		ValueEqual("size", 0).
-		ValueEqual("indexes", indexes)
+		createCollection(t, db, coll, schema).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status", "created")
 
-	schema2 := Map{
-		"schema": Map{
-			"title": coll,
-			"properties": Map{
-				"int_field": Map{
-					"type":  "integer",
-					"index": true,
-				},
-				"string_field": Map{
-					"type":  "string",
-					"index": true,
-				},
-				"double_value": Map{
-					"type": "number",
+		describeCollection(t, db, coll, Map{}).
+			Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("collection", coll).
+			ValueEqual("search_status", "No Search Index")
+
+		// add again
+		schema = Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"addr":    Map{"type": "string", "searchIndex": true},
+					"name":    Map{"type": "string"},
 				},
 			},
-			"primary_key": []interface{}{"int_field"},
-		},
-	}
+		}
 
-	createCollection(t, db, coll, schema2).Status(http.StatusOK)
-	resp2 := describeCollection(t, db, coll, Map{})
-	indexesUpdated := []Map{
-		{
-			"name":  "_tigris_created_at",
-			"state": "INDEX ACTIVE",
-		},
-		{
-			"name":  "_tigris_updated_at",
-			"state": "INDEX ACTIVE",
-		},
-		{
-			"fields": []Map{
-				{
-					"name": "int_field",
-				},
-			},
-			"name":  "int_field",
-			"state": "INDEX ACTIVE",
-		},
-		{
-			"fields": []Map{
-				{
-					"name": "string_field",
-				},
-			},
-			"name":  "string_field",
-			"state": "INDEX ACTIVE",
-		},
-	}
+		createCollection(t, db, coll, schema).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("status", "created")
 
-	resp2.Status(http.StatusOK).
-		JSON().
-		Object().
-		ValueEqual("collection", coll).
-		ValueEqual("size", 0).
-		ValueEqual("indexes", indexesUpdated)
-
-	// cleanup
-	dropCollection(t, db, coll)
+		describeCollection(t, db, coll, Map{}).
+			Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("collection", coll).
+			ValueEqual("search_status", "Search Active")
+	})
 }
 
 func TestCollection_Update(t *testing.T) {
