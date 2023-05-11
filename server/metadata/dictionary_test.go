@@ -67,7 +67,7 @@ func TestDictionaryEncoding(t *testing.T) {
 	tx, err = tm.StartTx(ctx)
 	require.NoError(t, err)
 	ns, db := buildNsAndDBFrom(&nsMeta, dbMeta)
-	collMeta, err := k.CreateCollection(ctx, tx, "coll-1", ns, db, createSecondaryIdxs())
+	collMeta, err := k.CreateCollection(ctx, tx, "coll-1", ns, db, createSecondaryIdxs(), schema.SearchIndexActive)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit(ctx))
 
@@ -165,7 +165,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
 		ns, db := buildNsAndDBFrom(&nsMeta, dbMeta)
-		collMeta, err := k.CreateCollection(ctx, tx, "coll-1", ns, db, createSecondaryIdxs())
+		collMeta, err := k.CreateCollection(ctx, tx, "coll-1", ns, db, createSecondaryIdxs(), schema.SearchIndexActive)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
@@ -216,7 +216,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 		require.NoError(t, err)
 
 		ns, db := buildNsAndDBFrom(&nsMeta, dbMeta)
-		collMeta, err := k.CreateCollection(ctx, tx, "coll-1", ns, db, createSecondaryIdxs())
+		collMeta, err := k.CreateCollection(ctx, tx, "coll-1", ns, db, createSecondaryIdxs(), schema.SearchIndexActive)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 		require.NotEqual(t, 0, collMeta.ID)
@@ -272,7 +272,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
 		ns, db := buildNsAndDBFrom(&nsMeta, dbMeta)
-		collMeta, err := k.CreateCollection(ctx, tx, "coll-1", ns, db, createSecondaryIdxs())
+		collMeta, err := k.CreateCollection(ctx, tx, "coll-1", ns, db, createSecondaryIdxs(), schema.SearchIndexActive)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
@@ -297,7 +297,7 @@ func TestDictionaryEncodingDropped(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		newColl, err := k.CreateCollection(ctx, tx, "coll-1", ns, db, createSecondaryIdxs())
+		newColl, err := k.CreateCollection(ctx, tx, "coll-1", ns, db, createSecondaryIdxs(), schema.SearchIndexActive)
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit(ctx))
 
@@ -330,7 +330,7 @@ func TestDictionaryEncoding_Error(t *testing.T) {
 		ID: 0,
 	}
 	ns, db := buildNsAndDBFrom(&nsMeta, dbMeta)
-	_, err = k.CreateCollection(ctx, tx, "coll-1", ns, db, createSecondaryIdxs())
+	_, err = k.CreateCollection(ctx, tx, "coll-1", ns, db, createSecondaryIdxs(), schema.SearchIndexActive)
 	require.Error(t, errors.InvalidArgument("invalid database id"), err)
 
 	_, err = k.CreatePrimaryIndex(ctx, tx, "pkey", 1234, 1, 0)
@@ -378,9 +378,9 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 		require.NoError(t, err)
 
 		ns, db := buildNsAndDBFrom(&nsMeta, dbMeta)
-		cid1, err := k.CreateCollection(ctx, tx, "coll-1", ns, db, createSecondaryIdxs())
+		cid1, err := k.CreateCollection(ctx, tx, "coll-1", ns, db, createSecondaryIdxs(), schema.SearchIndexActive)
 		require.NoError(t, err)
-		cid2, err := k.CreateCollection(ctx, tx, "coll-2", ns, db, createSecondaryIdxs())
+		cid2, err := k.CreateCollection(ctx, tx, "coll-2", ns, db, createSecondaryIdxs(), schema.SearchIndexActive)
 		require.NoError(t, err)
 
 		collToId, err := k.GetCollections(ctx, tx, 1, dbMeta.ID)
@@ -405,7 +405,7 @@ func TestDictionaryEncoding_GetMethods(t *testing.T) {
 
 		nsMeta := NewNamespaceMetadata(1234, "proj1-org-1", "proj1-org-1-display_name")
 		ns, db := buildNsAndDBFrom(&nsMeta, dbMeta)
-		cid1, err := k.CreateCollection(ctx, tx, "coll-1", ns, db, createSecondaryIdxs())
+		cid1, err := k.CreateCollection(ctx, tx, "coll-1", ns, db, createSecondaryIdxs(), schema.SearchIndexActive)
 		require.NoError(t, err)
 
 		pkID, err := k.CreatePrimaryIndex(ctx, tx, "pkey", 1, dbMeta.ID, cid1.ID)

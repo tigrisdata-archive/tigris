@@ -226,14 +226,20 @@ func (runner *CollectionQueryRunner) describe(ctx context.Context, tx transactio
 			return Response{}, ctx, err
 		}
 	}
+	if coll.GetSearchState() == schema.UnknownSearchState {
+		if err = tenant.UpdateSearchStatus(ctx, tx, db, coll); err != nil {
+			return Response{}, ctx, err
+		}
+	}
 
 	return Response{
 		Response: &api.DescribeCollectionResponse{
-			Collection: coll.Name,
-			Metadata:   &api.CollectionMetadata{},
-			Schema:     sch,
-			Size:       size.StoredBytes,
-			Indexes:    runner.indexToCollectionIndex(coll.SecondaryIndexes.All),
+			Collection:   coll.Name,
+			Metadata:     &api.CollectionMetadata{},
+			Schema:       sch,
+			Size:         size.StoredBytes,
+			Indexes:      runner.indexToCollectionIndex(coll.SecondaryIndexes.All),
+			SearchStatus: schema.SearchIndexStateNames[coll.GetSearchState()],
 		},
 	}, ctx, nil
 }

@@ -296,6 +296,10 @@ func (d *DefaultCollection) GetField(name string) *Field {
 	return nil
 }
 
+func (d *DefaultCollection) GetSearchState() SearchIndexState {
+	return d.ImplicitSearchIndex.GetState()
+}
+
 // Validate expects an unmarshalled document which it will validate again the schema of this collection.
 func (d *DefaultCollection) Validate(document any) error {
 	err := d.Validator.Validate(document)
