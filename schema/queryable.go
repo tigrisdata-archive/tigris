@@ -192,7 +192,7 @@ func (*QueryableFieldsBuilder) NewQueryableField(name string, f *Field, fieldsIn
 	return q
 }
 
-func (builder *QueryableFieldsBuilder) BuildQueryableFields(fields []*Field, fieldsInSearch []tsApi.Field, includeMetadata bool) []*QueryableField {
+func (builder *QueryableFieldsBuilder) BuildQueryableFields(fields []*Field, fieldsInSearch []tsApi.Field, indexMetadata bool) []*QueryableField {
 	var queryableFields []*QueryableField
 
 	for _, f := range fields {
@@ -216,7 +216,7 @@ func (builder *QueryableFieldsBuilder) BuildQueryableFields(fields []*Field, fie
 		DataType:      DateTimeType,
 		Sorted:        &ptrTrue,
 		SearchIndexed: &ptrTrue,
-		Indexed:       &includeMetadata,
+		Indexed:       &indexMetadata,
 	}, fieldsInSearch))
 
 	queryableFields = append(queryableFields, builder.NewQueryableField(ReservedFields[UpdatedAt], &Field{
@@ -224,7 +224,7 @@ func (builder *QueryableFieldsBuilder) BuildQueryableFields(fields []*Field, fie
 		DataType:      DateTimeType,
 		Sorted:        &ptrTrue,
 		SearchIndexed: &ptrTrue,
-		Indexed:       &includeMetadata,
+		Indexed:       &indexMetadata,
 	}, fieldsInSearch))
 
 	return queryableFields
