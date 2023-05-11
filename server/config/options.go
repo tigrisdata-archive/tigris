@@ -159,6 +159,7 @@ type MetricsConfig struct {
 	Network           NetworkMetricGroupConfig    `mapstructure:"network" yaml:"network" json:"network"`
 	Auth              AuthMetricsConfig           `mapstructure:"auth" yaml:"auth" json:"auth"`
 	SecondaryIndex    SecondaryIndexMetricsConfig `mapstructure:"secondary_index" yaml:"secondary_index" json:"secondary_index"`
+	Queue             QueueMetricsConfig          `mapstructure:"queue" yaml:"queue" json:"queue"`
 }
 
 type TimerConfig struct {
@@ -222,6 +223,10 @@ type SecondaryIndexMetricsConfig struct {
 	Counter      CounterConfig `mapstructure:"counter" yaml:"counter" json:"counter"`
 	Timer        TimerConfig   `mapstructure:"timer" yaml:"timer" json:"timer"`
 	FilteredTags []string      `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
+}
+
+type QueueMetricsConfig struct {
+	Enabled bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 }
 
 type WorkersConfig struct {
@@ -455,6 +460,9 @@ var DefaultConfig = Config{
 		Auth: AuthMetricsConfig{
 			Enabled:      true,
 			FilteredTags: nil,
+		},
+		Queue: QueueMetricsConfig{
+			Enabled: true,
 		},
 	},
 	Profiling: ProfilingConfig{
