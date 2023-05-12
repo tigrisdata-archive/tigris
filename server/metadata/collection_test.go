@@ -159,12 +159,13 @@ func TestCollectionWithIndexes(t *testing.T) {
 			},
 		}
 		ns, db := NsAndDB()
-		meta, err := c.Create(ctx, tx, ns, db, "coll1", 1, idxs)
+		meta, err := c.Create(ctx, tx, ns, db, "coll1", 1, idxs, schema.SearchIndexActive)
 		require.NoError(t, err)
 
 		require.Len(t, meta.Indexes, 2)
 		require.Equal(t, meta.Indexes[0].State, schema.INDEX_ACTIVE)
 		require.Equal(t, meta.Indexes[1].State, schema.INDEX_ACTIVE)
+		require.Equal(t, schema.SearchIndexActive, meta.SearchState)
 
 		collection, err := c.Get(ctx, tx, 1, 1, "coll1")
 		require.NoError(t, err)
@@ -187,7 +188,7 @@ func TestCollectionWithIndexes(t *testing.T) {
 			},
 		}
 		ns, db := NsAndDB()
-		meta, err := c.Create(ctx, tx, ns, db, "name3", 1, idxs)
+		meta, err := c.Create(ctx, tx, ns, db, "name3", 1, idxs, schema.UnknownSearchState)
 		require.NoError(t, err)
 		collection, err := c.Get(ctx, tx, 1, 1, "name3")
 		require.NoError(t, err)
@@ -211,12 +212,13 @@ func TestCollectionWithIndexes(t *testing.T) {
 			},
 		}
 
-		updateMeta, err := c.Update(ctx, tx, ns, db, "name3", 1, idxs2)
+		updateMeta, err := c.Update(ctx, tx, ns, db, "name3", 1, idxs2, schema.SearchIndexActive)
 		require.NoError(t, err)
 		require.Len(t, updateMeta.Indexes, 3)
 		require.Equal(t, updateMeta.Indexes[0].State, schema.INDEX_ACTIVE)
 		require.Equal(t, updateMeta.Indexes[1].State, schema.INDEX_ACTIVE)
 		require.Equal(t, updateMeta.Indexes[2].State, schema.INDEX_WRITE_MODE)
+		require.Equal(t, schema.SearchIndexActive, updateMeta.SearchState)
 
 		collection, err = c.Get(ctx, tx, 1, 1, "name3")
 		require.NoError(t, err)
@@ -241,11 +243,12 @@ func TestCollectionWithIndexes(t *testing.T) {
 		}
 
 		ns, db := NsAndDB()
-		meta, err := c.Create(ctx, tx, ns, db, "name5", 1, idxs)
+		meta, err := c.Create(ctx, tx, ns, db, "name5", 1, idxs, schema.SearchIndexActive)
 		require.NoError(t, err)
 		collection, err := c.Get(ctx, tx, 1, 1, "name5")
 		require.NoError(t, err)
 		require.Equal(t, meta, collection)
+		require.Equal(t, schema.SearchIndexActive, meta.SearchState)
 
 		idxsUpdated := []*schema.Index{
 			{
@@ -255,10 +258,11 @@ func TestCollectionWithIndexes(t *testing.T) {
 			},
 		}
 
-		updatedMeta, err := c.Update(ctx, tx, ns, db, "name5", 1, idxsUpdated)
+		updatedMeta, err := c.Update(ctx, tx, ns, db, "name5", 1, idxsUpdated, schema.NoSearchIndex)
 		require.NoError(t, err)
 		require.Len(t, updatedMeta.Indexes, 1)
 		require.Equal(t, updatedMeta.Indexes[0].State, schema.INDEX_ACTIVE)
+		require.Equal(t, schema.NoSearchIndex, updatedMeta.SearchState)
 	})
 
 	t.Run("list", func(t *testing.T) {
@@ -287,9 +291,9 @@ func TestCollectionWithIndexes(t *testing.T) {
 		}
 
 		ns, db := NsAndDB()
-		meta1, err := c.Create(ctx, tx, ns, db, "name8", 1, idxs1)
+		meta1, err := c.Create(ctx, tx, ns, db, "name8", 1, idxs1, schema.SearchIndexActive)
 		require.NoError(t, err)
-		meta2, err := c.Create(ctx, tx, ns, db, "name9", 2, idxs2)
+		meta2, err := c.Create(ctx, tx, ns, db, "name9", 2, idxs2, schema.SearchIndexActive)
 		require.NoError(t, err)
 
 		colls, err := c.list(ctx, tx, 1, 1)
@@ -370,13 +374,13 @@ func TestCollectionSubspaceMigrationV1(t *testing.T) {
 
 	// Updating should overwrite with new format
 	ns, db := NsAndDB()
-	_, err = c.Update(ctx, tx, ns, db, "name7", 123, nil)
+	_, err = c.Update(ctx, tx, ns, db, "name7", 123, nil, schema.SearchIndexActive)
 	require.NoError(t, err)
 
 	// We are able to read in new format
 	collMeta, err = c.Get(ctx, tx, 1, 1, "name7")
 	require.NoError(t, err)
-	require.Equal(t, &CollectionMetadata{ID: 123}, collMeta)
+	require.Equal(t, &CollectionMetadata{ID: 123, SearchState: schema.SearchIndexActive}, collMeta)
 }
 
 func NsAndDB() (Namespace, *Database) {

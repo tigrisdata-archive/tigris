@@ -5598,6 +5598,7 @@ func TestImport(t *testing.T) {
 			{"name": "_tigris_created_at", "state": "INDEX ACTIVE"},
 			{"name": "_tigris_updated_at", "state": "INDEX ACTIVE"}
 		],
+        "search_status":"No Search Index",
 		"metadata": {},
 		"size": 0,
 		"schema": {
@@ -5664,6 +5665,7 @@ func TestImport(t *testing.T) {
 						{"name": "_tigris_created_at", "state": "INDEX ACTIVE"},
 						{"name": "_tigris_updated_at", "state": "INDEX ACTIVE"}
 					],
+                    "search_status":"No Search Index",
 					"metadata": {},
 					"size": 0,
 					"schema": {
@@ -5690,6 +5692,7 @@ func TestImport(t *testing.T) {
 						{"name": "_tigris_created_at", "state": "INDEX ACTIVE"},
 						{"name": "_tigris_updated_at", "state": "INDEX ACTIVE"}
 					],
+                    "search_status":"No Search Index",
 					"metadata": {},
 					"size": 0,
 					"schema": {
@@ -5726,6 +5729,7 @@ func TestImport(t *testing.T) {
 				{"name": "_tigris_created_at", "state": "INDEX ACTIVE"},
 				{"name": "_tigris_updated_at", "state": "INDEX ACTIVE"}
 			],
+            "search_status":"No Search Index",
 			"metadata": {},
 			"size": 0,
 			"schema": {

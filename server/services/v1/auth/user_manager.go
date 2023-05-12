@@ -233,6 +233,11 @@ func (*DefaultUsersManager) VerifyInvitation(ctx context.Context, req *api.Verif
 		Email: req.GetEmail(),
 		Code:  req.GetCode(),
 	}
+	if req.Dry != nil {
+		verifyInvitationPayload.Dry = req.GetDry()
+	} else {
+		verifyInvitationPayload.Dry = false
+	}
 	verifyInvitationPayloadBytes, err := jsoniter.Marshal(verifyInvitationPayload)
 	if err != nil {
 		log.Err(err).Msg("Failed to marshal verify invitation payload to json bytes")
