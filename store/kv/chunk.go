@@ -230,8 +230,8 @@ func (it *ChunkIterator) handleReverse(value *KeyValue) bool {
 	}
 
 	totalChunks := lastChunk + 1
-	chunks := make([][]byte, totalChunks)
-	chunks[totalChunks-1] = value.Data.RawData
+	chunks := make([]*internal.TableData, totalChunks)
+	chunks[totalChunks-1] = value.Data
 
 	chunkNo := totalChunks - 2
 	for ; chunkNo >= 0; chunkNo-- {
@@ -246,7 +246,7 @@ func (it *ChunkIterator) handleReverse(value *KeyValue) bool {
 			}
 		}
 
-		chunks[chunkNo] = chunked.Data.RawData
+		chunks[chunkNo] = chunked.Data
 	}
 	if it.Iterator.Err() != nil {
 		// there can be an error in between we need to return that error
@@ -260,10 +260,11 @@ func (it *ChunkIterator) handleReverse(value *KeyValue) bool {
 	}
 
 	for _, chunk := range chunks {
-		_, _ = buf.Write(chunk)
+		_, _ = buf.Write(chunk.RawData)
 	}
 
-	value.Data.RawData = buf.Bytes()
+	// Zeroth chunk has all the meta attributes
+	value.Data = chunks[0].CloneWithAttributesOnly(buf.Bytes())
 	return hasNext
 }
 
