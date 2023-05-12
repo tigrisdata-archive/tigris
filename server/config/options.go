@@ -500,7 +500,7 @@ var DefaultConfig = Config{
 		Storage: StorageLimitsConfig{
 			Enabled:         false,
 			DataSizeLimit:   100 * 1024 * 1024,
-			RefreshInterval: 60 * time.Second,
+			RefreshInterval: 600 * time.Second,
 		},
 	},
 	Observability: ObservabilityConfig{

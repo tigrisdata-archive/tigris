@@ -47,7 +47,6 @@ func Get(cfg *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerInte
 
 	// The order of the interceptors matter with optional elements in them
 	streamInterceptors := []grpc.StreamServerInterceptor{
-		headersStreamServerInterceptor(),
 		metadataExtractorStream(),
 	}
 
@@ -81,7 +80,6 @@ func Get(cfg *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerInte
 
 	// The order of the interceptors matter with optional elements in them
 	unaryInterceptors := []grpc.UnaryServerInterceptor{
-		headersUnaryServerInterceptor(),
 		metadataExtractorUnary(),
 	}
 

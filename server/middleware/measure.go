@@ -101,6 +101,10 @@ func measureUnary() func(ctx context.Context, req any, info *grpc.UnaryServerInf
 			logError(ctx, err, "unary")
 			return nil, err
 		}
+		if err = setHeadersToUnary(ctx, resp, measurement); err != nil {
+			return nil, err
+		}
+
 		// Request was ok
 		measurement.SetNDocs(reqStatus.GetResultDocs())
 		measurement.CountOkForScope(metrics.RequestsOkCount, measurement.GetRequestOkTags())
@@ -139,7 +143,7 @@ func measureStream() grpc.StreamServerInterceptor {
 		wrapped.WrappedContext = measurement.StartTracing(wrapped.WrappedContext, false)
 		err = handler(srv, wrapped)
 		if err == nil {
-			ulog.E(wrapped.addServerTimingHeader())
+			ulog.E(setHeadersToStream(wrapped))
 		}
 		if err != nil {
 			measurement.CountErrorForScope(metrics.RequestsErrorCount, measurement.GetRequestErrorTags(err))
@@ -162,22 +166,6 @@ func measureStream() grpc.StreamServerInterceptor {
 		wrapped.WrappedContext = reqStatus.SaveRequestStatusToContext(wrapped.WrappedContext)
 		return err
 	}
-}
-
-func (w *wrappedStream) addServerTimingHeader() error {
-	if w.setServerTimingHeader {
-		return nil
-	}
-
-	if w.measurement != nil {
-		if err := w.SetHeader(metadata.New(map[string]string{
-			ServerTimingHeader: getServerTimingValue(w.measurement.TimeSinceStart()),
-		})); err != nil {
-			return err
-		}
-	}
-	w.setServerTimingHeader = true
-	return nil
 }
 
 func (w *wrappedStream) RecvMsg(m any) error {
@@ -213,7 +201,7 @@ func (w *wrappedStream) RecvMsg(m any) error {
 }
 
 func (w *wrappedStream) SendMsg(m any) error {
-	err := w.addServerTimingHeader()
+	err := setHeadersToStream(w)
 	if ulog.E(err) {
 		return err
 	}

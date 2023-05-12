@@ -63,6 +63,9 @@ type Measurement struct {
 	nDocs           int64
 	sentBytes       int
 	receivedBytes   int
+
+	commitDuration time.Duration
+	searchDuration time.Duration
 }
 
 type MeasurementCtxKey struct{}
@@ -111,6 +114,22 @@ func (m *Measurement) AddSentBytes(value int) {
 
 func (m *Measurement) AddReceivedBytes(value int) {
 	m.receivedBytes += value
+}
+
+func (m *Measurement) GetCommitDuration() time.Duration {
+	return m.commitDuration
+}
+
+func (m *Measurement) GetSearchIndexDuration() time.Duration {
+	return m.searchDuration
+}
+
+func (m *Measurement) SetCommitDuration(dur time.Duration) {
+	m.commitDuration = dur
+}
+
+func (m *Measurement) SetSearchIndexDuration(dur time.Duration) {
+	m.searchDuration = dur
 }
 
 func (*Measurement) CountUnits(reqStatus *RequestStatus, tags map[string]string) {
