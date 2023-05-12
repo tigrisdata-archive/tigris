@@ -30,11 +30,13 @@ var (
 )
 
 const (
-	CookieMaxAgeKey = "Expires"
+	CookieMaxAgeKey    = "Expires"
+	ServerTimingHeader = "Server-Timing"
 )
 
 func headersUnaryServerInterceptor() func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		startTime := time.Now()
 		resp, err := handler(ctx, req)
 		callHeaders := metadata.New(map[string]string{})
 
@@ -43,6 +45,8 @@ func headersUnaryServerInterceptor() func(ctx context.Context, req any, info *gr
 			expirationTime := time.Now().Add(MaximumTimeout + 2*time.Second)
 			callHeaders.Append(api.SetCookie, fmt.Sprintf("%s=%s;%s=%s", api.HeaderTxID, ty.GetTxCtx().GetId(), CookieMaxAgeKey, expirationTime.Format(time.RFC1123)))
 		}
+
+		callHeaders.Append(ServerTimingHeader, getServerTimingValue(time.Since(startTime)))
 		if err := grpc.SendHeader(ctx, metadata.Join(OutgoingHeaders, callHeaders)); err != nil {
 			return nil, err
 		}
@@ -53,9 +57,10 @@ func headersUnaryServerInterceptor() func(ctx context.Context, req any, info *gr
 
 func headersStreamServerInterceptor() grpc.StreamServerInterceptor {
 	return func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		if err := grpc.SendHeader(stream.Context(), OutgoingStreamHeaders); err != nil {
-			return err
-		}
 		return handler(srv, stream)
 	}
+}
+
+func getServerTimingValue(dur time.Duration) string {
+	return fmt.Sprintf("total;dur=%d", dur.Milliseconds())
 }
