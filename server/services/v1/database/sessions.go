@@ -403,7 +403,14 @@ func (s *QuerySession) Commit(versionMgr *metadata.VersionHandler, incVersion bo
 		}
 	}
 
+	start := time.Now()
+	measurement, exists := metrics.MeasurementFromContext(s.ctx)
 	if err = s.tx.Commit(s.ctx); err == nil {
+		if exists {
+			measurement.SetCommitDuration(time.Since(start))
+		}
+
+		start = time.Now()
 		if len(s.txListeners) > 0 {
 			if s.GetTx().Context().GetStagedDatabase() != nil {
 				// we need to reload tenant if in a transaction there is a DML as well as DDL both.
@@ -417,6 +424,9 @@ func (s *QuerySession) Commit(versionMgr *metadata.VersionHandler, incVersion bo
 			if err = listener.OnPostCommit(s.ctx, s.tenant, kv.GetEventListener(s.ctx)); ulog.E(err) {
 				return errors.DeadlineExceeded(err.Error())
 			}
+		}
+		if exists {
+			measurement.SetSearchIndexDuration(time.Since(start))
 		}
 	}
 
