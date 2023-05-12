@@ -153,7 +153,7 @@ func (runner *CollectionQueryRunner) createOrUpdate(ctx context.Context, tx tran
 				return Response{}, nil, CreateApiError(err)
 			}
 
-			indexer := NewSecondaryIndexer(db.GetCollection(req.GetCollection()))
+			indexer := NewSecondaryIndexer(db.GetCollection(req.GetCollection()), false)
 
 			for _, oldIndex := range oldMetadata.Indexes {
 				if !schema.HasIndex(updatedMetadata.Indexes, oldIndex) {

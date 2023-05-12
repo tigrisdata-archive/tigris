@@ -30,18 +30,17 @@ type secondaryIndexerWithMetrics struct {
 	q *SecondaryIndexerImpl
 }
 
-func NewSecondaryIndexer(coll *schema.DefaultCollection) SecondaryIndexer {
+func NewSecondaryIndexer(coll *schema.DefaultCollection, indexWriteModeOnly bool) SecondaryIndexer {
 	if config.DefaultConfig.Metrics.SecondaryIndex.Enabled {
-		return NewSecondaryIndexerWithMetrics(coll)
+		return newSecondaryIndexerWithMetrics(coll, indexWriteModeOnly)
 	}
 
-	return newSecondaryIndexerImpl(coll)
+	return newSecondaryIndexerImpl(coll, indexWriteModeOnly)
 }
 
-func NewSecondaryIndexerWithMetrics(coll *schema.DefaultCollection) SecondaryIndexer {
-	q := newSecondaryIndexerImpl(coll)
+func newSecondaryIndexerWithMetrics(coll *schema.DefaultCollection, indexWriteModeOnly bool) SecondaryIndexer {
 	return &secondaryIndexerWithMetrics{
-		q,
+		q: newSecondaryIndexerImpl(coll, indexWriteModeOnly),
 	}
 }
 

@@ -292,14 +292,13 @@ var SupportedFieldProperties = container.NewHashSet(
 // Indexes is to wrap different index that a collection can have.
 type Indexes struct {
 	All []*Index
+
+	// Schema level set if the collection should index the `created_at` and `updated_at` metadata
+	IndexMetadata bool
 }
 
 func (i *Indexes) IsActiveIndex(name string) bool {
 	return i.indexesHasStateState(name, INDEX_ACTIVE)
-}
-
-func (i *Indexes) IsWriteModeIndex(name string) bool {
-	return i.indexesHasStateState(name, INDEX_WRITE_MODE)
 }
 
 func (i *Indexes) indexesHasStateState(name string, state IndexState) bool {

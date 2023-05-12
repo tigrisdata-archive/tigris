@@ -262,6 +262,7 @@ func TestCreateCollectionFromSchema(t *testing.T) {
 						State:   UNKNOWN,
 					},
 				},
+				IndexMetadata: true,
 			},
 			Fields: []*Field{
 				{FieldName: "id", DataType: Int64Type, PrimaryKeyField: &b},
