@@ -405,14 +405,14 @@ func (k *Dictionary) DropDatabase(ctx context.Context, tx transaction.Tx, dbName
 }
 
 func (k *Dictionary) CreateCollection(ctx context.Context, tx transaction.Tx, name string,
-	namespace Namespace, db *Database, indexes []*schema.Index,
+	namespace Namespace, db *Database, indexes []*schema.Index, searchState schema.SearchIndexState,
 ) (*CollectionMetadata, error) {
 	id, err := k.allocate(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
 
-	meta, err := k.Collection().Create(ctx, tx, namespace, db, name, id, indexes)
+	meta, err := k.Collection().Create(ctx, tx, namespace, db, name, id, indexes, searchState)
 	if err != nil {
 		return nil, err
 	}
@@ -421,9 +421,9 @@ func (k *Dictionary) CreateCollection(ctx context.Context, tx transaction.Tx, na
 }
 
 func (k *Dictionary) UpdateCollection(ctx context.Context, tx transaction.Tx, name string,
-	namespace Namespace, db *Database, collId uint32, updatedIndexes []*schema.Index,
+	namespace Namespace, db *Database, collId uint32, updatedIndexes []*schema.Index, searchState schema.SearchIndexState,
 ) (*CollectionMetadata, error) {
-	meta, err := k.Collection().Update(ctx, tx, namespace, db, name, collId, updatedIndexes)
+	meta, err := k.Collection().Update(ctx, tx, namespace, db, name, collId, updatedIndexes, searchState)
 	if err != nil {
 		return nil, err
 	}

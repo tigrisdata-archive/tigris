@@ -30,8 +30,9 @@ import (
 
 // CollectionMetadata contains collection wide metadata.
 type CollectionMetadata struct {
-	ID      uint32          `json:"id,omitempty"`
-	Indexes []*schema.Index `json:"indexes"`
+	ID          uint32                  `json:"id,omitempty"`
+	Indexes     []*schema.Index         `json:"indexes"`
+	SearchState schema.SearchIndexState `json:"search_state"`
 }
 
 // CollectionSubspace is used to store metadata about Tigris collections.
@@ -60,7 +61,8 @@ func (c *CollectionSubspace) getKey(nsID uint32, dbID uint32, name string) keys.
 	return keys.NewKey(c.SubspaceName, c.KeyVersion, UInt32ToByte(nsID), UInt32ToByte(dbID), collectionKey, name, keyEnd)
 }
 
-func (c *CollectionSubspace) Create(ctx context.Context, tx transaction.Tx, ns Namespace, db *Database, collName string, collId uint32, indexes []*schema.Index,
+func (c *CollectionSubspace) Create(ctx context.Context, tx transaction.Tx, ns Namespace, db *Database,
+	collName string, collId uint32, indexes []*schema.Index, searchState schema.SearchIndexState,
 ) (*CollectionMetadata, error) {
 	for _, index := range indexes {
 		// The indexes are created when the collection is created which means we do not need to
@@ -71,6 +73,7 @@ func (c *CollectionSubspace) Create(ctx context.Context, tx transaction.Tx, ns N
 	meta := &CollectionMetadata{
 		collId,
 		indexes,
+		searchState,
 	}
 
 	if err := c.insert(ctx, tx, ns.Id(), db.Id(), collName, meta); err != nil {
@@ -114,12 +117,32 @@ func (c *CollectionSubspace) updateMetadataIndexes(ctx context.Context, tx trans
 	return nil
 }
 
-func (c *CollectionSubspace) Update(ctx context.Context, tx transaction.Tx, ns Namespace, db *Database, name string, id uint32, updatedIndexes []*schema.Index,
+func (c *CollectionSubspace) UpdateSearchStatus(ctx context.Context, tx transaction.Tx, ns Namespace, db *Database, name string, newSearchState schema.SearchIndexState) error {
+	metadata, err := c.Get(ctx, tx, ns.Id(), db.Id(), name)
+	if err != nil {
+		return err
+	}
+	metadata.SearchState = newSearchState
+
+	err = c.updateMetadata(ctx, tx,
+		c.validateArgs(ns.Id(), db.Id(), name, &metadata),
+		c.getKey(ns.Id(), db.Id(), name),
+		collMetaValueVersion,
+		metadata,
+	)
+
+	return err
+}
+
+func (c *CollectionSubspace) Update(ctx context.Context, tx transaction.Tx, ns Namespace, db *Database, name string,
+	id uint32, updatedIndexes []*schema.Index, newSearchState schema.SearchIndexState,
 ) (*CollectionMetadata, error) {
 	metadata, err := c.Get(ctx, tx, ns.Id(), db.Id(), name)
 	if err != nil {
 		return nil, err
 	}
+
+	metadata.SearchState = newSearchState
 
 	if err = c.updateMetadataIndexes(ctx, tx, ns, db, name, id, metadata, updatedIndexes); err != nil {
 		return nil, err
