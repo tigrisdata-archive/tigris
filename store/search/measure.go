@@ -33,16 +33,23 @@ type storeImplWithMetrics struct {
 	s Store
 }
 
-func NewStoreWithMetrics(config *config.SearchConfig) (Store, error) {
+func NewStore(config *config.SearchConfig, withMetrics bool) Store {
 	client := typesense.NewClient(
 		typesense.WithServer(fmt.Sprintf("http://%s", net.JoinHostPort(config.Host, fmt.Sprintf("%d", config.Port)))),
 		typesense.WithAPIKey(config.AuthKey))
 	log.Info().Str("host", config.Host).Int16("port", config.Port).Msg("initialized search store")
-	return &storeImplWithMetrics{
-		&storeImpl{
-			client: client,
-		},
-	}, nil
+
+	store := &storeImpl{
+		client: client,
+	}
+
+	if withMetrics {
+		return &storeImplWithMetrics{
+			store,
+		}
+	}
+
+	return store
 }
 
 func (*storeImplWithMetrics) measure(ctx context.Context, name string, f func(ctx context.Context) error) {

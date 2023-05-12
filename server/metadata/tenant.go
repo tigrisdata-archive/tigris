@@ -1544,7 +1544,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 	return nil
 }
 
-func (tenant *Tenant) UpdateSearchStatus(ctx context.Context, tx transaction.Tx, db *Database, coll *schema.DefaultCollection) error {
+func (tenant *Tenant) UpgradeSearchStatus(ctx context.Context, tx transaction.Tx, db *Database, coll *schema.DefaultCollection) error {
 	if coll.GetSearchState() != schema.UnknownSearchState {
 		return nil
 	}
@@ -1560,6 +1560,14 @@ func (tenant *Tenant) UpdateSearchStatus(ctx context.Context, tx transaction.Tx,
 		return err
 	}
 	coll.ImplicitSearchIndex.SetState(searchState)
+	return nil
+}
+
+func (tenant *Tenant) UpdateSearchStatus(ctx context.Context, tx transaction.Tx, db *Database, coll *schema.DefaultCollection, newSearchState schema.SearchIndexState) error {
+	if err := tenant.MetaStore.Collection().UpdateSearchStatus(ctx, tx, tenant.namespace, db, coll.Name, newSearchState); err != nil {
+		return err
+	}
+	coll.ImplicitSearchIndex.SetState(newSearchState)
 	return nil
 }
 
