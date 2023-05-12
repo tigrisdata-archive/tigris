@@ -35,8 +35,9 @@ import (
 
 type wrappedStream struct {
 	*middleware.WrappedServerStream
-	measurement *metrics.Measurement
-	reqStatus   *metrics.RequestStatus
+	measurement           *metrics.Measurement
+	reqStatus             *metrics.RequestStatus
+	setServerTimingHeader bool
 }
 
 func getNoMeasurementMethods() []string {
@@ -137,6 +138,9 @@ func measureStream() grpc.StreamServerInterceptor {
 		wrapped.WrappedContext = reqStatus.SaveRequestStatusToContext(wrapped.WrappedContext)
 		wrapped.WrappedContext = measurement.StartTracing(wrapped.WrappedContext, false)
 		err = handler(srv, wrapped)
+		if err == nil {
+			ulog.E(wrapped.addServerTimingHeader())
+		}
 		if err != nil {
 			measurement.CountErrorForScope(metrics.RequestsErrorCount, measurement.GetRequestErrorTags(err))
 			_ = measurement.FinishWithError(wrapped.WrappedContext, err)
@@ -158,6 +162,22 @@ func measureStream() grpc.StreamServerInterceptor {
 		wrapped.WrappedContext = reqStatus.SaveRequestStatusToContext(wrapped.WrappedContext)
 		return err
 	}
+}
+
+func (w *wrappedStream) addServerTimingHeader() error {
+	if w.setServerTimingHeader {
+		return nil
+	}
+
+	if w.measurement != nil {
+		if err := w.SetHeader(metadata.New(map[string]string{
+			ServerTimingHeader: getServerTimingValue(w.measurement.TimeSinceStart()),
+		})); err != nil {
+			return err
+		}
+	}
+	w.setServerTimingHeader = true
+	return nil
 }
 
 func (w *wrappedStream) RecvMsg(m any) error {
@@ -193,7 +213,12 @@ func (w *wrappedStream) RecvMsg(m any) error {
 }
 
 func (w *wrappedStream) SendMsg(m any) error {
-	err := w.ServerStream.SendMsg(m)
+	err := w.addServerTimingHeader()
+	if ulog.E(err) {
+		return err
+	}
+
+	err = w.ServerStream.SendMsg(m)
 	if err != nil {
 		log.Error().Err(err).Interface("message", m).Msg("stream send message error")
 	}

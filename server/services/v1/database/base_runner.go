@@ -124,7 +124,7 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 	var err error
 	ts := internal.NewTimestamp()
 	allKeys := make([][]byte, 0, len(documents))
-	indexer := NewSecondaryIndexer(coll)
+	indexer := NewSecondaryIndexer(coll, false)
 	for _, doc := range documents {
 		// reset it back to doc
 		doc, err = runner.mutateAndValidatePayload(ctx, coll, newInsertPayloadMutator(coll, ts.ToRFC3339()), doc)

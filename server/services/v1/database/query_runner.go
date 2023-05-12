@@ -223,7 +223,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return Response{}, ctx, err
 	}
 
-	indexer := NewSecondaryIndexer(coll)
+	indexer := NewSecondaryIndexer(coll, false)
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
@@ -370,7 +370,7 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
-	indexer := NewSecondaryIndexer(coll)
+	indexer := NewSecondaryIndexer(coll, false)
 
 	if err = runner.mustBeDocumentsCollection(coll, "deleteReq"); err != nil {
 		return Response{}, ctx, err
@@ -969,7 +969,7 @@ func buildExplainResp(options readerOptions, coll *schema.DefaultCollection, fil
 					friendlyVal = "$TIGRIS_MAX"
 				default:
 					if encodedString, ok := val.([]byte); ok {
-						friendlyVal = string(encodedString)
+						friendlyVal = fmt.Sprint(encodedString)
 					} else {
 						friendlyVal = fmt.Sprint(val)
 					}

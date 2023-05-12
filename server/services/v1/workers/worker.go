@@ -24,16 +24,19 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/services/v1/database"
 	"github.com/tigrisdata/tigris/server/transaction"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 const (
-	MAX_ERROR_COUNT = 10
-	LEASE_TIME      = 1 * time.Minute
-	PEAK_JOB_ITEMS  = 5 // number of items to fetch from the queue to see which one to select
+	MAX_ERROR_COUNT     = 10
+	LEASE_TIME          = 1 * time.Minute
+	PEAK_JOB_ITEMS      = 5 // number of items to fetch from the queue to see which one to select
+	QUEUE_UPDATE_PERIOD = 5 * time.Minute
 )
 
 type WorkerTestTask struct {
@@ -115,6 +118,7 @@ func (w *Worker) Loop() {
 			if err != nil {
 				w.errCount++
 				log.Err(err).Msgf("Worker %d error while processing", w.id)
+				metrics.IncFailedJobError()
 				// if the worker is getting to many errors in a row
 				// shut the worker down and restart a new one
 				if w.errCount >= MAX_ERROR_COUNT {
@@ -251,7 +255,8 @@ func (w *Worker) buildIndexTask(queueItem *metadata.QueueItem) error {
 	}
 
 	coll := db.GetCollection(task.CollName)
-	indexer := database.NewSecondaryIndexer(coll)
+	// Indexer will only index indexes that are not `INDEX_ACTIVE` state
+	indexer := database.NewSecondaryIndexer(coll, true)
 
 	// Extend the lease of the queue item so that another worker does not
 	// try and process it
@@ -307,7 +312,7 @@ type Complete func(item *metadata.QueueItem)
 
 func NewWorkerPool(maxWorkers uint, queue *metadata.QueueSubspace, txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, workerSleepTime time.Duration, poolSleepTime time.Duration) *WorkerPool {
 	return &WorkerPool{
-		maxWorkers:      1,
+		maxWorkers:      maxWorkers,
 		queue:           queue,
 		txMgr:           txMgr,
 		tenantMgr:       tenantMgr,
@@ -364,6 +369,7 @@ func (pool *WorkerPool) notify(event Event) {
 
 func (pool *WorkerPool) Loop() {
 	ticker := time.NewTicker(pool.poolSleepTime)
+	queueSizeCheck := time.NewTicker(QUEUE_UPDATE_PERIOD)
 	for {
 		select {
 		case <-pool.stopChan:
@@ -373,9 +379,32 @@ func (pool *WorkerPool) Loop() {
 			pool.rxHeartbeats(id)
 		case event := <-pool.eventChan:
 			pool.notify(event)
+		case <-queueSizeCheck.C:
+			pool.updateQueueSizeMetric()
 		case <-ticker.C:
 			pool.checkHeartbeats()
 		}
+	}
+}
+
+func (pool *WorkerPool) updateQueueSizeMetric() {
+	if !config.DefaultConfig.Metrics.Queue.Enabled {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	tx, err := pool.txMgr.StartTx(ctx)
+	if err != nil {
+		log.Err(err).Msg("failed to start tx for queue metric size")
+	}
+	items, err := pool.queue.GetAll(ctx, tx)
+	if err != nil {
+		log.Err(err).Msg("failed to get queue items for queue metric size")
+	}
+	metrics.SetQueueSize(len(items))
+	err = tx.Rollback(ctx)
+	if err != nil {
+		log.Err(err).Msg("failed to rollback for queue metric size")
 	}
 }
 
@@ -402,6 +431,7 @@ func (pool *WorkerPool) checkHeartbeats() {
 		if now.Sub(info.lastHearbeat) > 5*pool.workerSleepTime {
 			info.worker.Stop()
 			pool.nextWorkerId++
+			metrics.IncFailedJobError()
 			log.Error().Msgf("No response from worker %d adding new worker", info.worker.id)
 			pool.workers[i] = pool.newWorker(pool.nextWorkerId)
 		}

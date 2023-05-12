@@ -238,6 +238,10 @@ func (m *Measurement) GetAuthErrorTags(err error) map[string]string {
 	return filterTags(standardizeTags(mergeTags(m.tags, getTagsForError(err)), getAuthErrorTagKeys()), config.DefaultConfig.Metrics.Auth.FilteredTags)
 }
 
+func (m *Measurement) TimeSinceStart() time.Duration {
+	return time.Since(m.startedAt)
+}
+
 func (m *Measurement) SaveMeasurementToContext(ctx context.Context) (context.Context, error) {
 	if m.datadogSpan == nil && m.jaegerSpan == nil {
 		return nil, fmt.Errorf("parent span was not created")

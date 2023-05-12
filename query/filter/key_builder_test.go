@@ -460,5 +460,12 @@ func encodeString(val string) any {
 }
 
 func fieldsToQueryableFields(fields []*schema.Field) []*schema.QueryableField {
-	return schema.NewQueryableFieldsBuilder().BuildQueryableFields(fields, nil, false)
+	builder := schema.NewQueryableFieldsBuilder()
+	qf := make([]*schema.QueryableField, len(fields))
+
+	for i, field := range fields {
+		qf[i] = builder.NewQueryableField(field.Name(), field, nil)
+	}
+
+	return qf
 }
