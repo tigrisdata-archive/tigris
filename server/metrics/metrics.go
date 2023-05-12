@@ -148,6 +148,11 @@ func InitializeMetrics() func() {
 			initializeSecondaryIndexScopes()
 		}
 
+		if cfg.Queue.Enabled {
+			QueueMetrics = root.SubScope("queue")
+			initializeQueueScopes()
+		}
+
 		// Metrics for Metronome - external billing service
 		MetronomeMetrics = root.SubScope("metronome")
 		initializeMetronomeScopes()

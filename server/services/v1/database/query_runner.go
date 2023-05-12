@@ -969,7 +969,7 @@ func buildExplainResp(options readerOptions, coll *schema.DefaultCollection, fil
 					friendlyVal = "$TIGRIS_MAX"
 				default:
 					if encodedString, ok := val.([]byte); ok {
-						friendlyVal = string(encodedString)
+						friendlyVal = fmt.Sprint(encodedString)
 					} else {
 						friendlyVal = fmt.Sprint(val)
 					}
