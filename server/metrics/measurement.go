@@ -63,6 +63,7 @@ type Measurement struct {
 	nDocs           int64
 	sentBytes       int
 	receivedBytes   int
+	hasError        bool
 
 	commitDuration time.Duration
 	searchDuration time.Duration
@@ -87,6 +88,10 @@ func (m *Measurement) CountOkForScope(scope tally.Scope, tags map[string]string)
 	if scope != nil {
 		m.countOk(scope, tags)
 	}
+}
+
+func (m *Measurement) SetError() {
+	m.hasError = true
 }
 
 func (m *Measurement) countOk(scope tally.Scope, tags map[string]string) {
@@ -433,6 +438,7 @@ func (m *Measurement) logLongRequest() {
 		Int64("result documents", m.nDocs).Str("tenant name", m.GetNamespaceName()).
 		Int("bytes sent", m.sentBytes).
 		Int("bytes received", m.receivedBytes).
+		Bool("has error", m.hasError).
 		Msg("long method call")
 }
 

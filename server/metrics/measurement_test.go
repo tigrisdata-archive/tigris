@@ -290,4 +290,12 @@ func TestTracing(t *testing.T) {
 		}
 		assert.Equal(t, len(getNetworkTagKeys()), len(networkTags))
 	})
+
+	t.Run("Test error status", func(t *testing.T) {
+		InitializeMetrics()
+		measurement := NewMeasurement("test.service.name", "TestResource", "rpc", GetGlobalTags())
+		assert.False(t, measurement.hasError)
+		measurement.SetError()
+		assert.True(t, measurement.hasError)
+	})
 }

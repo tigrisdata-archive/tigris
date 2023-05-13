@@ -94,6 +94,7 @@ func measureUnary() func(ctx context.Context, req any, info *grpc.UnaryServerInf
 		resp, err := handler(ctx, req)
 		if err != nil {
 			// Request had an error
+			measurement.SetError()
 			measurement.CountErrorForScope(metrics.RequestsErrorCount, measurement.GetRequestErrorTags(err))
 			measurement.AddReceivedBytes(proto.Size(req.(proto.Message)))
 			_ = measurement.FinishWithError(ctx, err)
@@ -142,16 +143,15 @@ func measureStream() grpc.StreamServerInterceptor {
 		wrapped.WrappedContext = reqStatus.SaveRequestStatusToContext(wrapped.WrappedContext)
 		wrapped.WrappedContext = measurement.StartTracing(wrapped.WrappedContext, false)
 		err = handler(srv, wrapped)
-		if err == nil {
-			ulog.E(setHeadersToStream(wrapped))
-		}
 		if err != nil {
+			measurement.SetError()
 			measurement.CountErrorForScope(metrics.RequestsErrorCount, measurement.GetRequestErrorTags(err))
 			_ = measurement.FinishWithError(wrapped.WrappedContext, err)
 			measurement.RecordDuration(metrics.RequestsErrorRespTime, measurement.GetRequestErrorTags(err))
 			logError(wrapped.WrappedContext, err, "stream")
 			ulog.E(err)
 		} else {
+			ulog.E(setHeadersToStream(wrapped))
 			measurement.CountOkForScope(metrics.RequestsOkCount, measurement.GetRequestOkTags())
 			_ = measurement.FinishTracing(wrapped.WrappedContext)
 			measurement.RecordDuration(metrics.RequestsRespTime, measurement.GetRequestOkTags())
