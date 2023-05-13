@@ -36,6 +36,7 @@ import (
 	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"github.com/tigrisdata/tigris/value"
+	"github.com/rs/zerolog/log"
 )
 
 type BaseQueryRunner struct {
@@ -193,6 +194,7 @@ func (*BaseQueryRunner) mutateAndValidatePayload(ctx context.Context, coll *sche
 			deserializedDoc = util.UnFlatMap(deserializedDoc, false)
 		}
 		if err = coll.Validate(deserializedDoc); err != nil {
+			log.Err(err).Msgf("json schema validation failed for data '%s'", string(doc))
 			// schema validation failed
 			return doc, err
 		}
