@@ -26,81 +26,120 @@ import (
 
 func TestCollection_SchemaValidate(t *testing.T) {
 	reqSchema := []byte(`{
-		"title": "t1",
-		"properties": {
-			"id": {
-				"type": "integer"
-			},
-			"id_32": {
-				"type": "integer",
-				"format": "int32"
-			},
-			"id_64": {
-				"type": "integer",
-				"format": "int64"
-			},
-			"random": {
-				"type": "string",
-				"format": "byte",
-				"maxLength": 1024
-			},
-			"random_binary": {
-				"type": "string",
-				"format": ""
-			},
-			"product": {
-				"type": "string",
-				"maxLength": 100
-			},
-			"id_uuid": {
-				"type": "string",
-				"format": "uuid"
-			},
-			"ts": {
-				"type": "string",
-				"format": "date-time"
-			},
-			"price": {
-				"type": "number"
-			},
-			"simple_items": {
-				"type": "array",
-				"items": {
-					"type": "integer"
-				}
-			},
-			"simple_items_string": {
-				"type": "array",
-				"items": {
-					"type": "string"
-				}
-			},
-			"simple_object": {
-				"type": "object",
-				"properties": {
-					"name": { "type": "string" }
-				}
-			},
-			"product_items": {
-				"type": "array",
-				"items": {
-					"type": "object",
-					"properties": {
-						"id": {
-							"type": "integer"
-						},
-						"item_name": {
-							"type": "string"
-						},
-						"id_product_items": {
-							"type": "integer"
-						}
-					}
-				}
-			}
-		},
-		"primary_key": ["id"]
-	}`)
+  "title": "t1",
+  "properties": {
+    "id": {
+      "type": "integer"
+    },
+    "id_32": {
+      "type": "integer",
+      "format": "int32"
+    },
+    "id_64": {
+      "type": "integer",
+      "format": "int64"
+    },
+    "random": {
+      "type": "string",
+      "format": "byte",
+      "maxLength": 1024
+    },
+    "random_binary": {
+      "type": "string",
+      "format": ""
+    },
+    "product": {
+      "type": "string",
+      "maxLength": 100
+    },
+    "id_uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "price": {
+      "type": "number"
+    },
+    "simple_items": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      }
+    },
+    "simple_items_string": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "simple_object": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "product_items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "product_items_nested_arr": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "simple_object": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "price": {
+                  "type": "number"
+                },
+                "product_items_nested_arr_nested": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "simple_object": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "price": {
+                        "type": "number"
+                      },
+                      "simple_items_string": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "primary_key": [
+    "id"
+  ]
+}`)
 
 	base64Encoded, err := jsoniter.Marshal([]byte(`"base64 string"`))
 	require.NoError(t, err)
@@ -108,6 +147,14 @@ func TestCollection_SchemaValidate(t *testing.T) {
 		document []byte
 		expError string
 	}{
+		{
+			document: []byte(`{"id": 1, "product_items": [{"product_items_nested": [{"simple_object": null, "price": null, "product_items_nested_arr_nested": null}]}]}`),
+			expError: "",
+		},
+		{
+			document: []byte(`{"id": 1, "product_items": [{"product_items_nested": [{"product_items_nested_arr_nested": {"simple_object": null, "price": null, "simple_items_string": null}}]}]}`),
+			expError: "",
+		},
 		{
 			document: []byte(`{"id": 1, "product": "hello", "price": 1.01}`),
 			expError: "",
@@ -147,10 +194,6 @@ func TestCollection_SchemaValidate(t *testing.T) {
 		{
 			document: []byte(`{"id": 1, "product_items": [1, 2]}`),
 			expError: "expected object, but got number",
-		},
-		{
-			document: []byte(`{"id": 1, "product_items": [{"id": 1, "item_name": 2}]}`),
-			expError: "expected string or null, but got number",
 		},
 		{
 			document: []byte(`{"id": 1, "id_32": null, "id_64": null}`),

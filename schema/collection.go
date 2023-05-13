@@ -119,8 +119,19 @@ func disableAdditionalPropertiesAndAllowNullable(required []string, properties m
 					} else {
 						for _, itemsP := range items.Properties {
 							switch itemsP.Types[0] {
-							case "string", "number", "object", "integer", "array", "boolean":
+							case "string", "number", "object", "integer", "boolean":
 								itemsP.Types = append(itemsP.Types, "null")
+							case "array":
+								if itemsA, ok := itemsP.Items.(*jsonschema.Schema); ok {
+									if len(itemsA.Properties) == 0 {
+										items.Types = append(items.Types, "null")
+									} else {
+										if itemsA.AdditionalProperties == nil {
+											itemsA.AdditionalProperties = false
+										}
+										disableAdditionalPropertiesAndAllowNullable(itemsA.Required, itemsA.Properties)
+									}
+								}
 							}
 							if len(itemsP.Properties) > 0 {
 								if itemsP.AdditionalProperties == nil {
