@@ -332,6 +332,34 @@ func TestUnpackSearchFields(t *testing.T) {
 	})
 }
 
+func TestRemoveNullFromArrayObj(t *testing.T) {
+	doc := map[string]any{
+		"a": 1,
+		"b": nil,
+		"c": []any{
+			map[string]any{"a": "foo", "b": nil},
+			map[string]any{"a": "foo", "b": []any{map[string]any{"a": "foo", "b": nil}, map[string]any{"b": nil}}},
+			map[string]any{"a": []any{map[string]any{"a": "foo", "b": nil}, map[string]any{"b": nil}, []any{map[string]any{"a": "foo", "b": nil}}, []any{map[string]any{"a": nil}}}},
+			[]string{"a", "b"},
+		},
+		"d": []string{"a", "b"},
+	}
+
+	removeNullsFromArrayObj(doc, "c")
+
+	require.Equal(t, map[string]any{
+		"a": 1,
+		"b": nil,
+		"c": []any{
+			map[string]any{"a": "foo"},
+			map[string]any{"a": "foo", "b": []any{map[string]any{"a": "foo"}, map[string]any{}}},
+			map[string]any{"a": []any{map[string]any{"a": "foo"}, map[string]any{}, []any{map[string]any{"a": "foo"}}, []any{map[string]any{}}}},
+			[]string{"a", "b"},
+		},
+		"d": []string{"a", "b"},
+	}, doc)
+}
+
 // Benchmarking to test if it makes sense to decode the data and then add fields to the decoded map and then encode
 // again and this benchmark shows if we are setting more than one field then it is better to decode.
 func BenchmarkEncDec(b *testing.B) {
