@@ -92,6 +92,11 @@ func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	runner.queryMetrics.SetWriteType("insert")
 	metrics.UpdateSpanTags(ctx, runner.queryMetrics)
 
+	reqStatus, reqStatusFound := metrics.RequestStatusFromContext(ctx)
+	if reqStatus != nil && reqStatusFound {
+		reqStatus.AddResultDocs(int64(len(runner.req.Documents)))
+	}
+
 	return Response{
 		CreatedAt: ts,
 		AllKeys:   allKeys,
@@ -126,6 +131,11 @@ func (runner *ReplaceQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 
 	runner.queryMetrics.SetWriteType("replace")
 	metrics.UpdateSpanTags(ctx, runner.queryMetrics)
+
+	reqStatus, reqStatusFound := metrics.RequestStatusFromContext(ctx)
+	if reqStatus != nil && reqStatusFound {
+		reqStatus.AddResultDocs(int64(len(runner.req.Documents)))
+	}
 
 	return Response{
 		CreatedAt: ts,
