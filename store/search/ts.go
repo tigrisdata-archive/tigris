@@ -136,7 +136,8 @@ func (*storeImpl) getBaseSearchParam(table string, query *qsearch.Query, pageNo 
 	if groupBy := query.ToSearchGroupBy(); len(groupBy) > 0 {
 		baseParam.GroupBy = &groupBy
 	}
-	if searchFilter := query.WrappedF.SearchFilter(); len(searchFilter) > 1 {
+	searchFilter := query.WrappedF.SearchFilter()
+	if !query.HasNoSearchFilter() && len(searchFilter) > 1 {
 		baseParam.FilterBy = &searchFilter
 	}
 	if vector := query.ToSearchVector(); len(vector) > 0 {
