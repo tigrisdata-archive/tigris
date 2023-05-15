@@ -366,7 +366,8 @@ func (s *apiService) Explain(ctx context.Context, r *api.ReadRequest) (*api.Expl
 	queryMetrics := metrics.WriteQueryMetrics{}
 	accessToken, _ := request.GetAccessToken(ctx)
 	resp, err := s.sessions.Execute(ctx, s.runnerFactory.GetExplainQueryRunner(r, &queryMetrics, accessToken), database.ReqOptions{
-		TxCtx: api.GetTransaction(ctx),
+		TxCtx:              api.GetTransaction(ctx),
+		InstantVerTracking: true,
 	})
 	if err != nil {
 		return nil, err

@@ -92,6 +92,11 @@ func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	runner.queryMetrics.SetWriteType("insert")
 	metrics.UpdateSpanTags(ctx, runner.queryMetrics)
 
+	reqStatus, reqStatusFound := metrics.RequestStatusFromContext(ctx)
+	if reqStatus != nil && reqStatusFound {
+		reqStatus.AddResultDocs(int64(len(runner.req.Documents)))
+	}
+
 	return Response{
 		CreatedAt: ts,
 		AllKeys:   allKeys,
@@ -126,6 +131,11 @@ func (runner *ReplaceQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 
 	runner.queryMetrics.SetWriteType("replace")
 	metrics.UpdateSpanTags(ctx, runner.queryMetrics)
+
+	reqStatus, reqStatusFound := metrics.RequestStatusFromContext(ctx)
+	if reqStatus != nil && reqStatusFound {
+		reqStatus.AddResultDocs(int64(len(runner.req.Documents)))
+	}
 
 	return Response{
 		CreatedAt: ts,
@@ -512,9 +522,10 @@ type readerOptions struct {
 	tablePlan     *filter.TableScanPlan
 	inMemoryStore bool
 	// secondaryIndex bool
-	sorting      *sort.Ordering
-	filter       *filter.WrappedFilter
-	fieldFactory *read.FieldFactory
+	sorting        *sort.Ordering
+	noSearchFilter *filter.WrappedFilter
+	filter         *filter.WrappedFilter
+	fieldFactory   *read.FieldFactory
 }
 
 func (runner *BaseQueryRunner) buildReaderOptions(req *api.ReadRequest, collection *schema.DefaultCollection) (readerOptions, error) {
@@ -549,7 +560,9 @@ func (runner *BaseQueryRunner) buildReaderOptions(req *api.ReadRequest, collecti
 	}
 
 	if searchSorting, err := runner.getSearchOrdering(collection, req.Sort); err == nil && searchSorting != nil {
-		// error here means we need to check if we handle sort on database level
+		// only in case when sorting is explicitly tagged on the field we query search store. Also, we are not
+		// passing filters, we are only using for sort and then applying filtering on server.
+		options.noSearchFilter = filter.WrappedEmptyFilter
 		options.sorting = searchSorting
 		options.inMemoryStore = true
 		return options, nil
@@ -772,10 +785,12 @@ func (runner *StreamingQueryRunner) iterateOnSecondaryIndexStore(ctx context.Con
 func (runner *StreamingQueryRunner) iterateOnSearchStore(ctx context.Context, coll *schema.DefaultCollection, options readerOptions) error {
 	rowReader := NewSearchReader(ctx, runner.searchStore, coll, qsearch.NewBuilder().
 		Filter(options.filter).
+		NoSearchFilter(options.noSearchFilter).
 		SortOrder(options.sorting).
 		PageSize(defaultPerPage).
 		Build())
 
+	// Note: Iterator expects the "options.filter" so that we use it to perform in-memory filtering.
 	if _, err := runner.iterate(ctx, coll, rowReader.Iterator(coll, options.filter), options.fieldFactory); err != nil {
 		return err
 	}
