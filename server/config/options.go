@@ -151,6 +151,7 @@ type MetricsConfig struct {
 	DebugMessages     bool                        `mapstructure:"debug_messages" yaml:"debug_messages" json:"debug_messages"`
 	TimerQuantiles    []float64                   `mapstructure:"quantiles" yaml:"quantiles" json:"quantiles"`
 	LogLongMethodTime time.Duration               `mapstructure:"log_long_method_time" yaml:"log_long_method_time" json:"log_long_method_time"`
+	LongRequestConfig LongRequestConfig           `mapstructure:"long_request_config" yaml:"long_request_config" json:"long_request_config"`
 	Requests          RequestsMetricGroupConfig   `mapstructure:"requests" yaml:"requests" json:"requests"`
 	Fdb               FdbMetricGroupConfig        `mapstructure:"fdb" yaml:"fdb" json:"fdb"`
 	Search            SearchMetricGroupConfig     `mapstructure:"search" yaml:"search" json:"search"`
@@ -160,6 +161,10 @@ type MetricsConfig struct {
 	Auth              AuthMetricsConfig           `mapstructure:"auth" yaml:"auth" json:"auth"`
 	SecondaryIndex    SecondaryIndexMetricsConfig `mapstructure:"secondary_index" yaml:"secondary_index" json:"secondary_index"`
 	Queue             QueueMetricsConfig          `mapstructure:"queue" yaml:"queue" json:"queue"`
+}
+
+type LongRequestConfig struct {
+	FilteredMethods []string `mapstructure:"filtered_methods" yaml:"filtered_methods" json:"filtered_methods"`
 }
 
 type TimerConfig struct {
@@ -386,6 +391,11 @@ var DefaultConfig = Config{
 		DebugMessages:     false,
 		TimerQuantiles:    []float64{0.5, 0.95, 0.99},
 		LogLongMethodTime: 500 * time.Millisecond,
+		LongRequestConfig: LongRequestConfig{
+			FilteredMethods: []string{
+				"QueryTimeSeriesMetrics",
+			},
+		},
 		Requests: RequestsMetricGroupConfig{
 			Enabled: true,
 			Counter: CounterConfig{

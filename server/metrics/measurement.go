@@ -28,6 +28,7 @@ import (
 	"github.com/uber-go/tally"
 	"go.opentelemetry.io/otel/attribute"
 	opentrace "go.opentelemetry.io/otel/trace"
+	"golang.org/x/exp/slices"
 	"google.golang.org/grpc/status"
 	ddtracer "gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 )
@@ -427,13 +428,18 @@ func (m *Measurement) getTag(name string) string {
 
 func (m *Measurement) logLongRequest() {
 	totalTime := m.stoppedAt.Sub(m.startedAt)
+	grpcMethod := m.getTag("grpc_method")
+	if slices.Contains(config.DefaultConfig.Metrics.LongRequestConfig.FilteredMethods, grpcMethod) {
+		// No need to log the filtered method, these are known to be long
+		return
+	}
 	if totalTime < config.DefaultConfig.Metrics.LogLongMethodTime {
 		return
 	}
 	log.Error().
 		Int64("total time (ms)", int64(totalTime/time.Millisecond)).
 		Time("start time", m.startedAt).Time("stop time", m.stoppedAt).
-		Str("grpc method", m.getTag("grpc_method")).
+		Str("grpc method", m.getTag(grpcMethod)).
 		Int64("threshold", int64(config.DefaultConfig.Metrics.LogLongMethodTime/time.Millisecond)).
 		Int64("result documents", m.nDocs).Str("tenant name", m.GetNamespaceName()).
 		Int("bytes sent", m.sentBytes).
