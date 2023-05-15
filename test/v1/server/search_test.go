@@ -21,8 +21,10 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/util"
@@ -1536,6 +1538,54 @@ func TestSearch_StringInt64(t *testing.T) {
 		"integer_value": 9223372036854775804,
 	}
 	compareDocs(t, docs[0], res.Result.Hits[0]["data"])
+}
+
+func TestSearch_BackgroundBuildIndex(t *testing.T) {
+	db, coll := setupIndexBuildTest(t, testBuildIndexSchema)
+	defer cleanupTests(t, db)
+
+	for i := 0; i < 20; i++ {
+		writeDocs(t, db, coll, i*50, 50)
+	}
+
+	for k, val := range testBuildIndexSchema["schema"].(Map)["properties"].(Map) {
+		if k == "int_value" || k == "string_value" {
+			prop := val.(Map)
+			prop["searchIndex"] = true
+			prop["sort"] = true
+		}
+	}
+
+	createCollection(t, db, coll, testBuildIndexSchema).Status(http.StatusOK)
+	waitForSearchIndexesActive(t, db, coll)
+
+	for i := 0; i < 20; i++ {
+		res := getSearchResults(t, db, coll, Map{"q": fmt.Sprintf("\"a-%d\"", i), "search_fields": []string{"string_value"}, "page_size": 100, "sort": []Doc{{"int_value": "$desc"}}}, true)
+		assert.Len(t, res.Result.Hits, 20)
+	}
+
+}
+
+func waitForSearchIndexesActive(t *testing.T, db string, coll string) {
+	count := 0
+	for count < 10 {
+		str := describeCollection(t, db, coll, Map{}).Body().Raw()
+		desc := &api.DescribeCollectionResponse{}
+		err := desc.UnmarshalJSON([]byte(str))
+		if err != nil {
+			assert.Fail(t, err.Error())
+			return
+		}
+
+		if desc.SearchStatus == "Search Active" {
+			return
+		}
+
+		count += 1
+		time.Sleep(2 * time.Second)
+	}
+
+	assert.Fail(t, "indexes are not active")
 }
 
 func validateReadOut(t *testing.T, project string, index string, ids []string, expReadOut [][]byte) {

@@ -144,7 +144,7 @@ func (c *CollectionSubspace) Update(ctx context.Context, tx transaction.Tx, ns N
 
 	metadata.SearchState = newSearchState
 
-	if newSearchState == schema.SearchIndexWriteMode && config.DefaultConfig.Workers.Enabled {
+	if newSearchState == schema.SearchIndexWriteMode && config.DefaultConfig.Workers.SearchEnabled {
 		queueData, err := jsoniter.Marshal(IndexBuildTask{
 			NamespaceId: ns.StrId(),
 			ProjName:    db.DbName(),

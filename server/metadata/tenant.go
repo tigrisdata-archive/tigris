@@ -1474,7 +1474,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 		case schema.NoSearchIndex, schema.UnknownSearchState:
 			// even though this should be "SearchIndexWriteMode", it is still as Active because there is no backfill
 			// needed right now. This will be changed when we moved to async backfill.
-			newSearchState = schema.SearchIndexActive
+			newSearchState = schema.SearchIndexWriteMode
 		}
 	} else {
 		newSearchState = schema.NoSearchIndex

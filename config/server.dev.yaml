@@ -45,3 +45,4 @@ secondary_index:
 workers:
   enabled: true
   count: 2
+  search_enabled: true

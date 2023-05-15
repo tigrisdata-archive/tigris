@@ -349,7 +349,9 @@ func (w *Worker) buildSearchTask(queueItem *metadata.QueueItem) error {
 		return err
 	}
 
-	tenant.UpdateSearchStatus(ctx, tx, db, coll, schema.SearchIndexActive)
+	if err = tenant.UpdateSearchStatus(ctx, tx, db, coll, schema.SearchIndexActive); err != nil {
+		return err
+	}
 
 	if err = w.queue.Complete(ctx, tx, queueItem); ulog.E(err) {
 		return err

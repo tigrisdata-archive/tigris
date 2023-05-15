@@ -237,7 +237,9 @@ func (runner *SearchIndexerRunner) consume(r *api.ReadResponse) error {
 		runner.logSince = time.Now()
 
 		if runner.ProgressUpdate != nil {
-			runner.ProgressUpdate(runner.ctx)
+			if err = runner.ProgressUpdate(runner.ctx); err != nil {
+				return err
+			}
 		}
 	}
 
