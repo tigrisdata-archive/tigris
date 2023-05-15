@@ -458,25 +458,12 @@ func (s *ImplicitSearchIndex) buildSearchSchema(searchStoreName string) {
 	tsFields := make([]tsApi.Field, 0, len(s.QueryableFields))
 
 	for _, f := range s.QueryableFields {
-		// the implicit search index by default index all the fields that are indexable and same applies to facet/sort.
-		shouldIndex := SupportedSearchIndexableType(f.DataType, f.SubType)
-		shouldFacet := DefaultFacetableType(f.DataType)
-		shouldSort := DefaultSortableType(f.DataType)
-
-		if !shouldSort && f.Sortable {
-			// honor schema i.e. in case of strings user can explicitly enable sorting.
-			shouldSort = true
-		}
-		if !shouldFacet && f.Faceted {
-			shouldFacet = true
-		}
-
 		tsFields = append(tsFields, tsApi.Field{
 			Name:     f.Name(),
 			Type:     f.SearchType,
-			Facet:    &shouldFacet,
-			Index:    &shouldIndex,
-			Sort:     &shouldSort,
+			Facet:    &f.Faceted,
+			Index:    &f.SearchIndexed,
+			Sort:     &f.Sortable,
 			Optional: &ptrTrue,
 			NumDim:   f.Dimensions,
 		})
@@ -486,9 +473,9 @@ func (s *ImplicitSearchIndex) buildSearchSchema(searchStoreName string) {
 			tsFields = append(tsFields, tsApi.Field{
 				Name:     f.InMemoryName(),
 				Type:     f.SearchType,
-				Facet:    &shouldFacet,
-				Index:    &shouldIndex,
-				Sort:     &shouldSort,
+				Facet:    &f.Faceted,
+				Index:    &f.SearchIndexed,
+				Sort:     &f.Sortable,
 				Optional: &ptrTrue,
 			})
 		}
@@ -531,26 +518,16 @@ func (s *ImplicitSearchIndex) GetSearchDeltaFields(existingFields []*QueryableFi
 		e := existingFieldMap[f.FieldName]
 		delete(existingFieldMap, f.FieldName)
 
-		shouldIndex := SupportedSearchIndexableType(f.DataType, f.SubType)
-		shouldFacet := DefaultFacetableType(f.DataType)
-		shouldSort := DefaultSortableType(f.DataType)
-		if !shouldSort && f.Sortable {
-			shouldSort = true
-		}
-		if !shouldFacet && f.Faceted {
-			shouldFacet = true
-		}
-
 		stateChanged := false
 		if e != nil {
 			inSearchState, found := fieldsInSearchMap[f.FieldName]
-			if found && inSearchState.Index != nil && *inSearchState.Index != shouldIndex {
+			if found && inSearchState.Index != nil && *inSearchState.Index != f.SearchIndexed {
 				stateChanged = true
 			}
-			if found && inSearchState.Facet != nil && *inSearchState.Facet != shouldFacet {
+			if found && inSearchState.Facet != nil && *inSearchState.Facet != f.Faceted {
 				stateChanged = true
 			}
-			if found && inSearchState.Sort != nil && *inSearchState.Sort != shouldSort {
+			if found && inSearchState.Sort != nil && *inSearchState.Sort != f.Sortable {
 				stateChanged = true
 			}
 
@@ -579,9 +556,9 @@ func (s *ImplicitSearchIndex) GetSearchDeltaFields(existingFields []*QueryableFi
 		tsFields = append(tsFields, tsApi.Field{
 			Name:     f.FieldName,
 			Type:     f.SearchType,
-			Facet:    &shouldFacet,
-			Index:    &shouldIndex,
-			Sort:     &shouldSort,
+			Facet:    &f.Faceted,
+			Index:    &f.SearchIndexed,
+			Sort:     &f.Sortable,
 			Optional: &ptrTrue,
 			NumDim:   f.Dimensions,
 		})

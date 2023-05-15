@@ -175,6 +175,10 @@ func (s *Selector) ToSearchFilter() string {
 }
 
 func (s *Selector) IsSearchIndexed() bool {
+	if !s.Field.SearchIndexed {
+		return false
+	}
+
 	switch {
 	case s.Field.DataType == schema.DoubleType:
 		v, ok := s.Matcher.GetValue().(*value.DoubleValue)

@@ -54,7 +54,8 @@ var (
 type Filter interface {
 	// Matches returns true if the input doc passes the filter, otherwise false
 	Matches(doc []byte, metadata []byte) bool
-	// MatchesDoc similar to Matches but used when document is already parsed
+	// MatchesDoc similar to Matches but used when document is already parsed. This is mainly used by
+	// standalone search index.
 	MatchesDoc(doc map[string]any) bool
 	ToSearchFilter() string
 	// IsSearchIndexed to let caller knows if there is any fields in the query not indexed in search. This
