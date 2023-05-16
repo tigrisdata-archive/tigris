@@ -214,7 +214,7 @@ func (w *wrappedStream) SendMsg(m any) error {
 		return nil
 	}
 
-	if len(w.measurement.GetProjectCollTags()) == 0 {
+	if !w.measurement.IsFirstDocSent() {
 		// The request is not tagged yet with db and collection, need to do it on the first message
 		project, branch, coll := request.GetProjectAndBranchAndColl(m)
 		reqMetadata, err := request.GetRequestMetadataFromContext(w.WrappedContext)
@@ -230,6 +230,9 @@ func (w *wrappedStream) SendMsg(m any) error {
 		w.measurement.AddTags(map[string]string{
 			"human": strconv.FormatBool(reqMetadata.IsHuman),
 		})
+		// Sets the flag so first time processing does not happen with subsequent documents
+		w.measurement.MarkFirstDocSent()
+		w.measurement.RecordDuration(metrics.RequestsRespTimeToFirstDoc, w.measurement.GetRequestOkTags())
 		reqMetadata.SaveToContext(w.WrappedContext)
 		w.WrappedContext = reqMetadata.SaveToContext(w.WrappedContext)
 
