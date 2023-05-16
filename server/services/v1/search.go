@@ -85,7 +85,9 @@ func (s *searchService) CreateOrUpdateIndex(ctx context.Context, req *api.Create
 	runner := s.runnerFactory.GetIndexRunner(accessToken)
 	runner.SetCreateIndexReq(req)
 
-	resp, err := s.sessions.TxExecute(ctx, runner)
+	resp, err := s.sessions.TxExecute(ctx, runner, search.SessionOptions{
+		IncVersion: true,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +103,9 @@ func (s *searchService) GetIndex(ctx context.Context, req *api.GetIndexRequest) 
 	runner := s.runnerFactory.GetIndexRunner(accessToken)
 	runner.SetGetIndexReq(req)
 
-	resp, err := s.sessions.TxExecute(ctx, runner)
+	resp, err := s.sessions.TxExecute(ctx, runner, search.SessionOptions{
+		IncVersion: false,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +119,9 @@ func (s *searchService) DeleteIndex(ctx context.Context, req *api.DeleteIndexReq
 	runner := s.runnerFactory.GetIndexRunner(accessToken)
 	runner.SetDeleteIndexReq(req)
 
-	resp, err := s.sessions.TxExecute(ctx, runner)
+	resp, err := s.sessions.TxExecute(ctx, runner, search.SessionOptions{
+		IncVersion: true,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +137,9 @@ func (s *searchService) ListIndexes(ctx context.Context, req *api.ListIndexesReq
 	runner := s.runnerFactory.GetIndexRunner(accessToken)
 	runner.SetListIndexesReq(req)
 
-	resp, err := s.sessions.TxExecute(ctx, runner)
+	resp, err := s.sessions.TxExecute(ctx, runner, search.SessionOptions{
+		IncVersion: false,
+	})
 	if err != nil {
 		return nil, err
 	}
