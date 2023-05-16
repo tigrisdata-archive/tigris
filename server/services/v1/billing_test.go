@@ -107,10 +107,11 @@ func (s *billingServiceSuite) Test_ListInvoices_WithNoNamespace_Fails() {
 }
 
 func (s *billingServiceSuite) Test_ListUsages_Succeeds() {
-	st, et := time.Now().UTC(), time.Now().UTC()
+	st, et, w := time.Now().UTC(), time.Now().UTC(), api.AggregationWindow_DAY
 	mockReq, mockResp := &api.UsageRequest{
-		StartTime: timestamppb.New(st),
-		EndTime:   timestamppb.New(et),
+		StartTime:   timestamppb.New(st),
+		EndTime:     timestamppb.New(et),
+		AggregateBy: &w,
 	}, &api.UsageResponse{}
 
 	providerRequest := &billing.UsageRequest{
@@ -118,6 +119,7 @@ func (s *billingServiceSuite) Test_ListUsages_Succeeds() {
 		StartTime:      &st,
 		EndTime:        &et,
 		NextPage:       nil,
+		AggWindow:      billing.Day,
 	}
 	s.mockProvider.EXPECT().GetUsage(mock.Anything, s.mId, providerRequest).
 		Return(mockResp, nil).

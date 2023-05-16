@@ -42,6 +42,24 @@ type UsageRequest struct {
 	StartTime      *time.Time
 	EndTime        *time.Time
 	NextPage       *string
+	AggWindow      WindowSize
+}
+
+type WindowSize int
+
+const (
+	Hour WindowSize = iota
+	Day
+)
+
+func (w WindowSize) String() string {
+	switch w {
+	case Hour:
+		return "hour"
+	case Day:
+		return "day"
+	}
+	return ""
 }
 
 func NewProvider() Provider {

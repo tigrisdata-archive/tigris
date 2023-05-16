@@ -678,6 +678,19 @@ func TestMetronome_GetUsage(t *testing.T) {
 		require.Nil(t, resp)
 	})
 
+	t.Run("when invalid window size provided", func(t *testing.T) {
+		ts := time.Date(2023, 5, 1, 0, 0, 0, 0, time.UTC)
+		req := &UsageRequest{
+			BillableMetric: nil,
+			StartTime:      &ts,
+			EndTime:        &ts,
+			AggWindow:      3,
+		}
+		resp, err := metronome.GetUsage(ctx, uuid.New(), req)
+		require.ErrorContains(t, err, "is not a valid AggWindow")
+		require.Nil(t, resp)
+	})
+
 	t.Run("specific billable metrics are requested with pagination", func(t *testing.T) {
 		cid, requestedMetric := uuid.New(), "db_bytes"
 		rt := time.Date(2023, 5, 1, 0, 0, 0, 0, time.UTC)

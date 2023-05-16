@@ -339,6 +339,10 @@ func (m *Metronome) GetUsage(ctx context.Context, id AccountId, r *UsageRequest)
 	if r.EndTime == nil || r.EndTime.IsZero() {
 		return nil, errors.InvalidArgument("'%s' is not a valid end time", r.EndTime)
 	}
+	w := r.AggWindow.String()
+	if len(w) == 0 {
+		return nil, errors.InvalidArgument("'%d' is not a valid AggWindow", r.AggWindow)
+	}
 
 	type mBillableMetric struct {
 		GroupBy *struct {
@@ -365,7 +369,7 @@ func (m *Metronome) GetUsage(ctx context.Context, id AccountId, r *UsageRequest)
 		CustomerIds:  &[]AccountId{id},
 		StartingOn:   *r.StartTime,
 		EndingBefore: *r.EndTime,
-		WindowSize:   "hour",
+		WindowSize:   biller.UsageBatchQueryPayloadWindowSize(w),
 	}
 
 	l := reqParams.BillableMetrics

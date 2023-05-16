@@ -87,9 +87,15 @@ func (b *billingService) ListUsages(ctx context.Context, req *api.UsageRequest) 
 		BillableMetric: &req.Metric,
 		NextPage:       req.NextPage,
 	}
-	// todo: add aggregate by
 	st, et := req.GetStartTime().AsTime(), req.GetEndTime().AsTime()
 	ur.StartTime, ur.EndTime = &st, &et
+
+	switch req.GetAggregateBy() {
+	case api.AggregationWindow_DAY:
+		ur.AggWindow = billing.Day
+	default:
+		ur.AggWindow = billing.Hour
+	}
 
 	return b.Provider.GetUsage(ctx, mId, ur)
 }
