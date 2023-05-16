@@ -23,6 +23,8 @@ import (
 	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/request"
+	"github.com/tigrisdata/tigris/server/services/v1/auth"
+	"github.com/tigrisdata/tigris/server/types"
 	"google.golang.org/grpc"
 )
 
@@ -32,12 +34,6 @@ const (
 )
 
 var (
-	// role names.
-	readOnlyRoleName     = "ro"
-	editorRoleName       = "e"
-	ownerRoleName        = "o"
-	ClusterAdminRoleName = "cluster_admin"
-
 	adminNamespaces = container.NewHashSet(config.DefaultConfig.Auth.AdminNamespaces...)
 	readonlyMethods = container.NewHashSet(
 		// db
@@ -434,11 +430,12 @@ func authorize(ctx context.Context) (err error) {
 			Msg("Empty role allowed for transition purpose")
 		return nil
 	}
-	// if !isAuthorizedProject(reqMetadata, accessToken) {
-	//	authorizationErr = errors.PermissionDenied("You are not allowed to perform operation: %s", reqMetadata.GetFullMethod())
-	//}
 	var authorizationErr error
-	if !isAuthorizedOperation(reqMetadata.GetFullMethod(), role) {
+	if !isAuthorizedProject(reqMetadata, accessToken) {
+		authorizationErr = errors.PermissionDenied("You are not allowed to perform operation on this project: %s", reqMetadata.GetFullMethod())
+	}
+
+	if authorizationErr == nil && !isAuthorizedOperation(reqMetadata.GetFullMethod(), role) {
 		authorizationErr = errors.PermissionDenied("You are not allowed to perform operation: %s", reqMetadata.GetFullMethod())
 	}
 
@@ -457,6 +454,17 @@ func authorize(ctx context.Context) (err error) {
 	return nil
 }
 
+func isAuthorizedProject(reqMetadata *request.Metadata, accessToken *types.AccessToken) bool {
+	if reqMetadata.GetProject() != "" && accessToken.Project != "" && reqMetadata.GetProject() != accessToken.Project {
+		log.Error().
+			Str("accessible_project", accessToken.Project).
+			Str("requested_project", reqMetadata.GetProject()).
+			Msg("Project mismatch")
+		return false
+	}
+	return true
+}
+
 func isAuthorizedOperation(method string, role string) bool {
 	if methods := getMethodsForRole(role); methods != nil {
 		return methods.Contains(method)
@@ -466,13 +474,13 @@ func isAuthorizedOperation(method string, role string) bool {
 
 func getMethodsForRole(role string) *container.HashSet {
 	switch role {
-	case ClusterAdminRoleName:
+	case auth.ClusterAdminRoleName:
 		return &clusterAdminMethods
-	case ownerRoleName:
+	case auth.OwnerRoleName:
 		return &ownerMethods
-	case editorRoleName:
+	case auth.EditorRoleName:
 		return &editorMethods
-	case readOnlyRoleName:
+	case auth.ReadOnlyRoleName:
 		return &readonlyMethods
 	}
 	return nil
@@ -480,7 +488,7 @@ func getMethodsForRole(role string) *container.HashSet {
 
 func getRole(reqMetadata *request.Metadata) string {
 	if isAdminNamespace(reqMetadata.GetNamespace()) {
-		return ClusterAdminRoleName
+		return auth.ClusterAdminRoleName
 	}
 
 	// empty role check for transition purpose
