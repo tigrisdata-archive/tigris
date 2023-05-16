@@ -29,8 +29,12 @@ import (
 )
 
 var (
-	filterNone  = []byte(`{}`)
-	emptyFilter = &WrappedFilter{Filter: &EmptyFilter{}}
+	filterNone         = []byte(`{}`)
+	emptyFilter        = &EmptyFilter{}
+	WrappedEmptyFilter = &WrappedFilter{
+		Filter:       emptyFilter,
+		searchFilter: emptyFilter.ToSearchFilter(),
+	}
 )
 
 // A Filter represents a query filter that can have any multiple conditions, logical filtering, nested conditions, etc.
@@ -73,10 +77,7 @@ type WrappedFilter struct {
 
 func NewWrappedFilter(filters []Filter) *WrappedFilter {
 	if len(filters) == 0 {
-		return &WrappedFilter{
-			Filter:       emptyFilter,
-			searchFilter: emptyFilter.ToSearchFilter(),
-		}
+		return WrappedEmptyFilter
 	} else if len(filters) <= 1 {
 		return &WrappedFilter{
 			Filter:       filters[0],

@@ -44,6 +44,7 @@ type Config struct {
 	Search          SearchConfig         `yaml:"search" json:"search"`
 	KV              KVConfig             `yaml:"kv" json:"kv"`
 	SecondaryIndex  SecondaryIndexConfig `mapstructure:"secondary_index" yaml:"secondary_index" json:"secondary_index"`
+	Workers         WorkersConfig        `yaml:"workers" json:"workers"`
 	Cache           CacheConfig          `yaml:"cache" json:"cache"`
 	Tracing         TracingConfig        `yaml:"tracing" json:"tracing"`
 	Metrics         MetricsConfig        `yaml:"metrics" json:"metrics"`
@@ -95,6 +96,7 @@ type AuthConfig struct {
 	EnableNamespaceCreation    bool                  `mapstructure:"enable_namespace_creation" yaml:"enable_namespace_creation" json:"enable_namespace_creation"`
 	UserInvitations            Invitation            `mapstructure:"user_invitations" yaml:"user_invitations" json:"user_invitations"`
 	Authz                      AuthzConfig           `mapstructure:"authz" yaml:"authz" json:"authz"`
+	EnableErrorLog             bool                  `mapstructure:"enable_error_log" yaml:"enable_error_log" json:"enable_error_log"`
 }
 
 type Invitation struct {
@@ -149,6 +151,7 @@ type MetricsConfig struct {
 	DebugMessages     bool                        `mapstructure:"debug_messages" yaml:"debug_messages" json:"debug_messages"`
 	TimerQuantiles    []float64                   `mapstructure:"quantiles" yaml:"quantiles" json:"quantiles"`
 	LogLongMethodTime time.Duration               `mapstructure:"log_long_method_time" yaml:"log_long_method_time" json:"log_long_method_time"`
+	LongRequestConfig LongRequestConfig           `mapstructure:"long_request_config" yaml:"long_request_config" json:"long_request_config"`
 	Requests          RequestsMetricGroupConfig   `mapstructure:"requests" yaml:"requests" json:"requests"`
 	Fdb               FdbMetricGroupConfig        `mapstructure:"fdb" yaml:"fdb" json:"fdb"`
 	Search            SearchMetricGroupConfig     `mapstructure:"search" yaml:"search" json:"search"`
@@ -157,6 +160,11 @@ type MetricsConfig struct {
 	Network           NetworkMetricGroupConfig    `mapstructure:"network" yaml:"network" json:"network"`
 	Auth              AuthMetricsConfig           `mapstructure:"auth" yaml:"auth" json:"auth"`
 	SecondaryIndex    SecondaryIndexMetricsConfig `mapstructure:"secondary_index" yaml:"secondary_index" json:"secondary_index"`
+	Queue             QueueMetricsConfig          `mapstructure:"queue" yaml:"queue" json:"queue"`
+}
+
+type LongRequestConfig struct {
+	FilteredMethods []string `mapstructure:"filtered_methods" yaml:"filtered_methods" json:"filtered_methods"`
 }
 
 type TimerConfig struct {
@@ -220,6 +228,15 @@ type SecondaryIndexMetricsConfig struct {
 	Counter      CounterConfig `mapstructure:"counter" yaml:"counter" json:"counter"`
 	Timer        TimerConfig   `mapstructure:"timer" yaml:"timer" json:"timer"`
 	FilteredTags []string      `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
+}
+
+type QueueMetricsConfig struct {
+	Enabled bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+}
+
+type WorkersConfig struct {
+	Enabled bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Count   uint `mapstructure:"count" yaml:"count" json:"count"`
 }
 
 type ProfilingConfig struct {
@@ -309,7 +326,8 @@ var DefaultConfig = Config{
 		UserInvitations: Invitation{
 			ExpireAfterSec: 259200, // 3days
 		},
-		Authz: AuthzConfig{Enabled: false},
+		Authz:          AuthzConfig{Enabled: false},
+		EnableErrorLog: true,
 	},
 	Billing: Billing{
 		Metronome: Metronome{
@@ -373,6 +391,11 @@ var DefaultConfig = Config{
 		DebugMessages:     false,
 		TimerQuantiles:    []float64{0.5, 0.95, 0.99},
 		LogLongMethodTime: 500 * time.Millisecond,
+		LongRequestConfig: LongRequestConfig{
+			FilteredMethods: []string{
+				"QueryTimeSeriesMetrics",
+			},
+		},
 		Requests: RequestsMetricGroupConfig{
 			Enabled: true,
 			Counter: CounterConfig{
@@ -448,6 +471,9 @@ var DefaultConfig = Config{
 			Enabled:      true,
 			FilteredTags: nil,
 		},
+		Queue: QueueMetricsConfig{
+			Enabled: true,
+		},
 	},
 	Profiling: ProfilingConfig{
 		Enabled:    false,
@@ -484,7 +510,7 @@ var DefaultConfig = Config{
 		Storage: StorageLimitsConfig{
 			Enabled:         false,
 			DataSizeLimit:   100 * 1024 * 1024,
-			RefreshInterval: 60 * time.Second,
+			RefreshInterval: 600 * time.Second,
 		},
 	},
 	Observability: ObservabilityConfig{
@@ -505,6 +531,10 @@ var DefaultConfig = Config{
 	},
 	MetadataCluster: ClusterConfig{
 		Url: "https://api.global.tigrisdata.cloud",
+	},
+	Workers: WorkersConfig{
+		Enabled: false,
+		Count:   2,
 	},
 }
 

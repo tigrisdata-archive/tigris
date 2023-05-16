@@ -28,6 +28,7 @@ import (
 	"github.com/uber-go/tally"
 	"go.opentelemetry.io/otel/attribute"
 	opentrace "go.opentelemetry.io/otel/trace"
+	"golang.org/x/exp/slices"
 	"google.golang.org/grpc/status"
 	ddtracer "gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
 )
@@ -48,21 +49,27 @@ const (
 )
 
 type Measurement struct {
-	serviceName     string
-	resourceName    string
-	spanType        string
-	tags            map[string]string
-	jaegerSpan      opentrace.Span
-	datadogSpan     ddtracer.Span
-	parent          *Measurement
-	started         bool
-	stopped         bool
-	startedAt       time.Time
-	stoppedAt       time.Time
-	projectCollTags map[string]string
-	nDocs           int64
-	sentBytes       int
-	receivedBytes   int
+	serviceName         string
+	resourceName        string
+	spanType            string
+	tags                map[string]string
+	jaegerSpan          opentrace.Span
+	datadogSpan         ddtracer.Span
+	parent              *Measurement
+	started             bool
+	stopped             bool
+	startedAt           time.Time
+	stoppedAt           time.Time
+	firstDocumentSentAt time.Time
+	projectCollTags     map[string]string
+	nDocs               int64
+	sentBytes           int
+	receivedBytes       int
+	hasError            bool
+	sentFirstInStream   bool
+
+	commitDuration time.Duration
+	searchDuration time.Duration
 }
 
 type MeasurementCtxKey struct{}
@@ -84,6 +91,19 @@ func (m *Measurement) CountOkForScope(scope tally.Scope, tags map[string]string)
 	if scope != nil {
 		m.countOk(scope, tags)
 	}
+}
+
+func (m *Measurement) SetError() {
+	m.hasError = true
+}
+
+func (m *Measurement) IsFirstDocSent() bool {
+	return m.sentFirstInStream
+}
+
+func (m *Measurement) MarkFirstDocSent() {
+	m.firstDocumentSentAt = time.Now()
+	m.sentFirstInStream = true
 }
 
 func (m *Measurement) countOk(scope tally.Scope, tags map[string]string) {
@@ -111,6 +131,22 @@ func (m *Measurement) AddSentBytes(value int) {
 
 func (m *Measurement) AddReceivedBytes(value int) {
 	m.receivedBytes += value
+}
+
+func (m *Measurement) GetCommitDuration() time.Duration {
+	return m.commitDuration
+}
+
+func (m *Measurement) GetSearchIndexDuration() time.Duration {
+	return m.searchDuration
+}
+
+func (m *Measurement) SetCommitDuration(dur time.Duration) {
+	m.commitDuration = dur
+}
+
+func (m *Measurement) SetSearchIndexDuration(dur time.Duration) {
+	m.searchDuration = dur
 }
 
 func (*Measurement) CountUnits(reqStatus *RequestStatus, tags map[string]string) {
@@ -236,6 +272,10 @@ func (m *Measurement) GetAuthOkTags() map[string]string {
 
 func (m *Measurement) GetAuthErrorTags(err error) map[string]string {
 	return filterTags(standardizeTags(mergeTags(m.tags, getTagsForError(err)), getAuthErrorTagKeys()), config.DefaultConfig.Metrics.Auth.FilteredTags)
+}
+
+func (m *Measurement) TimeSinceStart() time.Duration {
+	return time.Since(m.startedAt)
 }
 
 func (m *Measurement) SaveMeasurementToContext(ctx context.Context) (context.Context, error) {
@@ -381,6 +421,9 @@ func (m *Measurement) RecordDuration(scope tally.Scope, tags map[string]string) 
 	case MetronomeCreateAccount, MetronomeAddPlan, MetronomeIngest, MetronomeGetInvoice, MetronomeListInvoices, MetronomeGetUsage:
 		timerEnabled = true
 		histogramEnabled = true
+	case RequestsRespTimeToFirstDoc:
+		// Response time to first document
+		m.RecordFirstDocumentDuration(scope, tags)
 	}
 	if scope != nil && timerEnabled {
 		m.recordTimerDuration(scope, tags)
@@ -388,6 +431,28 @@ func (m *Measurement) RecordDuration(scope tally.Scope, tags map[string]string) 
 	if scope != nil && histogramEnabled {
 		m.recordHistogramDuration(scope, tags)
 	}
+}
+
+func (m *Measurement) RecordFirstDocumentDuration(scope tally.Scope, tags map[string]string) {
+	// Records the duration when the first document was sent to the client. This does not need a stopped
+	// tracing scope.
+	if !m.started {
+		log.Error().
+			Str("service_name", m.serviceName).
+			Str("resource_name", m.resourceName).
+			Str("span_type", m.spanType).
+			Msg("recordTimerDuration was called on a span that was not started")
+		return
+	}
+	if !m.sentFirstInStream {
+		log.Error().
+			Str("service_name", m.serviceName).
+			Str("resource_name", m.resourceName).
+			Str("span_type", m.spanType).
+			Msg("recordTimerDuration was called on a span that was not stopped")
+		return
+	}
+	scope.Tagged(tags).Timer("time").Record(m.firstDocumentSentAt.Sub(m.startedAt))
 }
 
 func (m *Measurement) getTag(name string) string {
@@ -399,17 +464,23 @@ func (m *Measurement) getTag(name string) string {
 
 func (m *Measurement) logLongRequest() {
 	totalTime := m.stoppedAt.Sub(m.startedAt)
+	grpcMethod := m.getTag("grpc_method")
+	if slices.Contains(config.DefaultConfig.Metrics.LongRequestConfig.FilteredMethods, grpcMethod) {
+		// No need to log the filtered method, these are known to be long
+		return
+	}
 	if totalTime < config.DefaultConfig.Metrics.LogLongMethodTime {
 		return
 	}
 	log.Error().
 		Int64("total time (ms)", int64(totalTime/time.Millisecond)).
 		Time("start time", m.startedAt).Time("stop time", m.stoppedAt).
-		Str("grpc method", m.getTag("grpc_method")).
+		Str("grpc method", m.getTag(grpcMethod)).
 		Int64("threshold", int64(config.DefaultConfig.Metrics.LogLongMethodTime/time.Millisecond)).
 		Int64("result documents", m.nDocs).Str("tenant name", m.GetNamespaceName()).
 		Int("bytes sent", m.sentBytes).
 		Int("bytes received", m.receivedBytes).
+		Bool("has error", m.hasError).
 		Msg("long method call")
 }
 

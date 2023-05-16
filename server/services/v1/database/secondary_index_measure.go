@@ -30,18 +30,17 @@ type secondaryIndexerWithMetrics struct {
 	q *SecondaryIndexerImpl
 }
 
-func NewSecondaryIndexer(coll *schema.DefaultCollection) SecondaryIndexer {
+func NewSecondaryIndexer(coll *schema.DefaultCollection, indexWriteModeOnly bool) SecondaryIndexer {
 	if config.DefaultConfig.Metrics.SecondaryIndex.Enabled {
-		return NewSecondaryIndexerWithMetrics(coll)
+		return newSecondaryIndexerWithMetrics(coll, indexWriteModeOnly)
 	}
 
-	return newSecondaryIndexerImpl(coll)
+	return newSecondaryIndexerImpl(coll, indexWriteModeOnly)
 }
 
-func NewSecondaryIndexerWithMetrics(coll *schema.DefaultCollection) SecondaryIndexer {
-	q := newSecondaryIndexerImpl(coll)
+func newSecondaryIndexerWithMetrics(coll *schema.DefaultCollection, indexWriteModeOnly bool) SecondaryIndexer {
 	return &secondaryIndexerWithMetrics{
-		q,
+		q: newSecondaryIndexerImpl(coll, indexWriteModeOnly),
 	}
 }
 
@@ -63,9 +62,9 @@ func (*secondaryIndexerWithMetrics) measure(ctx context.Context, name string, f 
 	}
 }
 
-func (m *secondaryIndexerWithMetrics) BuildCollection(ctx context.Context, txMgr *transaction.Manager) (err error) {
+func (m *secondaryIndexerWithMetrics) BuildCollection(ctx context.Context, txMgr *transaction.Manager, progressUpdateFn ProgressUpdateFn) (err error) {
 	m.measure(ctx, "BuildCollection", func(ctx context.Context) error {
-		err = m.q.BuildCollection(ctx, txMgr)
+		err = m.q.BuildCollection(ctx, txMgr, progressUpdateFn)
 		return err
 	})
 	return

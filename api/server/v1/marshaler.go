@@ -716,21 +716,39 @@ func (x *GetAccessTokenRequest) UnmarshalJSON(data []byte) error {
 }
 
 type collDesc struct {
-	Collection string              `json:"collection"`
-	Metadata   *CollectionMetadata `json:"metadata"`
-	Schema     jsoniter.RawMessage `json:"schema"`
-	Size       int64               `json:"size"`
-	Indexes    []*CollectionIndex  `json:"indexes"`
+	Collection   string              `json:"collection"`
+	Metadata     *CollectionMetadata `json:"metadata"`
+	Schema       jsoniter.RawMessage `json:"schema"`
+	Size         int64               `json:"size"`
+	Indexes      []*CollectionIndex  `json:"indexes"`
+	SearchStatus string              `json:"search_status"`
 }
 
 func (x *DescribeCollectionResponse) MarshalJSON() ([]byte, error) {
 	return jsoniter.Marshal(&collDesc{
-		Collection: x.Collection,
-		Metadata:   x.Metadata,
-		Schema:     x.Schema,
-		Size:       x.Size,
-		Indexes:    x.Indexes,
+		Collection:   x.Collection,
+		Metadata:     x.Metadata,
+		Schema:       x.Schema,
+		Size:         x.Size,
+		Indexes:      x.Indexes,
+		SearchStatus: x.SearchStatus,
 	})
+}
+
+func (x *DescribeCollectionResponse) UnmarshalJSON(data []byte) error {
+	var desc collDesc
+	err := jsoniter.Unmarshal(data, &desc)
+	if err != nil {
+		return err
+	}
+
+	x.Collection = desc.Collection
+	x.Metadata = desc.Metadata
+	x.Schema = []byte(desc.Schema)
+	x.Size = desc.Size
+	x.Indexes = desc.Indexes
+
+	return nil
 }
 
 func (x *DescribeDatabaseResponse) MarshalJSON() ([]byte, error) {

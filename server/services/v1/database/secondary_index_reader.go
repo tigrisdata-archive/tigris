@@ -104,7 +104,7 @@ func BuildSecondaryIndexKeys(coll *schema.DefaultCollection, queryFilters []filt
 		return nil, err
 	}
 
-	eqKeyBuilder := filter.NewSecondaryKeyEqBuilder[*schema.QueryableField](encoder, buildIndexParts)
+	eqKeyBuilder := filter.NewSecondaryKeyEqBuilder(encoder, buildIndexParts)
 	eqPlans, err := eqKeyBuilder.Build(queryFilters, indexeableFields)
 	if err == nil {
 		for _, plan := range eqPlans {
@@ -116,7 +116,7 @@ func BuildSecondaryIndexKeys(coll *schema.DefaultCollection, queryFilters []filt
 		}
 	}
 
-	rangKeyBuilder := filter.NewRangeKeyBuilder(filter.NewRangeKeyComposer[*schema.QueryableField](encoder, buildIndexParts, filter.SecondaryIndex), filter.SecondaryIndex)
+	rangKeyBuilder := filter.NewRangeKeyBuilder(filter.NewRangeKeyComposer(encoder, buildIndexParts, filter.SecondaryIndex), filter.SecondaryIndex)
 	rangePlans, err := rangKeyBuilder.Build(queryFilters, indexeableFields)
 	// If we could not find a range query plan then fall back to the sort plan if we have one
 	if err != nil {
@@ -222,7 +222,7 @@ func (r *SecondaryIndexReaderImpl) dbgPrintIndex() {
 		return
 	}
 
-	indexer := newSecondaryIndexerImpl(r.coll)
+	indexer := newSecondaryIndexerImpl(r.coll, false)
 	tableIter, err := indexer.scanIndex(r.ctx, r.tx)
 	if err != nil {
 		panic(err)

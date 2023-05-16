@@ -56,7 +56,7 @@ func (runner *IndexerRunner) ReadOnly(ctx context.Context, tenant *metadata.Tena
 		return Response{}, ctx, err
 	}
 
-	indexer := NewSecondaryIndexer(coll)
+	indexer := NewSecondaryIndexer(coll, false)
 
 	for _, index := range coll.SecondaryIndexes.All {
 		if index.State == schema.INDEX_WRITE_MODE {
@@ -67,7 +67,7 @@ func (runner *IndexerRunner) ReadOnly(ctx context.Context, tenant *metadata.Tena
 		return Response{}, ctx, err
 	}
 
-	if err = indexer.BuildCollection(ctx, runner.txMgr); err != nil {
+	if err = indexer.BuildCollection(ctx, runner.txMgr, nil); err != nil {
 		log.Err(err).Msgf("Failed to index collection \"%s\" for db \"%s\"", coll.Name, db.DbName())
 		return Response{}, ctx, err
 	}

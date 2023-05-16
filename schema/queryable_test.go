@@ -53,11 +53,31 @@ func TestBuildQueryableFields(t *testing.T) {
 		{FieldName: "F8", DataType: ArrayType, Fields: []*Field{{FieldName: "A", DataType: ObjectType}}},
 	}
 
-	queryable := NewQueryableFieldsBuilder().BuildQueryableFields(fields, nil)
+	queryable := NewQueryableFieldsBuilder().BuildQueryableFields(fields, nil, true)
 	expTypes := []string{"int32", "int64", "float", "bool", "string", "string", "int64", "string", "int64", "string", "string", "object", "object", "string", "int32[]", "int64[]", "float[]", "bool[]", "string[]", "string[]", "string[]", "string", "object[]", "int64", "int64"}
 	expFields := []string{"A1", "A2", "A3", "A4", "B1", "B2", "B3", "B4", "C.E", "C.F", "C.G.H", "C.G.I", "D", "E", "F", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "_tigris_created_at", "_tigris_updated_at"}
 	for i, q := range queryable {
 		require.Equal(t, expFields[i], q.FieldName)
 		require.Equal(t, expTypes[i], q.SearchType)
+	}
+}
+
+func TestIncludeMetadata(t *testing.T) {
+	fields := []*Field{}
+	expTypes := []string{"int64", "int64"}
+	expFields := []string{"_tigris_created_at", "_tigris_updated_at"}
+
+	queryable := NewQueryableFieldsBuilder().BuildQueryableFields(fields, nil, true)
+	for i, q := range queryable {
+		require.Equal(t, expFields[i], q.FieldName)
+		require.Equal(t, expTypes[i], q.SearchType)
+		require.True(t, q.Indexed)
+	}
+
+	queryable = NewQueryableFieldsBuilder().BuildQueryableFields(fields, nil, false)
+	for i, q := range queryable {
+		require.Equal(t, expFields[i], q.FieldName)
+		require.Equal(t, expTypes[i], q.SearchType)
+		require.False(t, q.Indexed)
 	}
 }

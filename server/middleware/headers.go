@@ -20,42 +20,67 @@ import (
 	"time"
 
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
 
-var (
-	OutgoingHeaders       = metadata.New(map[string]string{})
-	OutgoingStreamHeaders = metadata.New(map[string]string{})
-)
-
 const (
-	CookieMaxAgeKey = "Expires"
+	CookieMaxAgeKey    = "Expires"
+	ServerTimingHeader = "Server-Timing"
 )
 
-func headersUnaryServerInterceptor() func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		resp, err := handler(ctx, req)
-		callHeaders := metadata.New(map[string]string{})
+func setHeadersToUnary(ctx context.Context, resp any, measurement *metrics.Measurement) error {
+	respHeaders := metadata.New(map[string]string{
+		ServerTimingHeader: serverTimingHeaderValue(measurement),
+	})
 
-		// add cookie header for sticky routing for interactive transactional operations
-		if ty, ok := resp.(*api.BeginTransactionResponse); ok {
-			expirationTime := time.Now().Add(MaximumTimeout + 2*time.Second)
-			callHeaders.Append(api.SetCookie, fmt.Sprintf("%s=%s;%s=%s", api.HeaderTxID, ty.GetTxCtx().GetId(), CookieMaxAgeKey, expirationTime.Format(time.RFC1123)))
-		}
-		if err := grpc.SendHeader(ctx, metadata.Join(OutgoingHeaders, callHeaders)); err != nil {
-			return nil, err
-		}
-
-		return resp, err
+	// add cookie header for sticky routing for interactive transactional operations
+	if ty, ok := resp.(*api.BeginTransactionResponse); ok {
+		expirationTime := time.Now().Add(MaximumTimeout + 2*time.Second)
+		respHeaders.Append(api.SetCookie, fmt.Sprintf("%s=%s;%s=%s", api.HeaderTxID, ty.GetTxCtx().GetId(), CookieMaxAgeKey, expirationTime.Format(time.RFC1123)))
 	}
+
+	return grpc.SendHeader(ctx, respHeaders)
 }
 
-func headersStreamServerInterceptor() grpc.StreamServerInterceptor {
-	return func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		if err := grpc.SendHeader(stream.Context(), OutgoingStreamHeaders); err != nil {
+// setHeadersToStream is called by wrapped stream before pushing every message. This method checks if the header is
+// already set if not then it sets them.
+func setHeadersToStream(w *wrappedStream) error {
+	if w.setServerTimingHeader {
+		return nil
+	}
+
+	if w.measurement != nil {
+		if err := w.SetHeader(metadata.New(map[string]string{
+			ServerTimingHeader: serverTimingHeaderValue(w.measurement),
+		})); err != nil {
 			return err
 		}
-		return handler(srv, stream)
 	}
+	w.setServerTimingHeader = true
+	return nil
+}
+
+func serverTimingHeaderValue(measurement *metrics.Measurement) string {
+	totalTime := measurement.TimeSinceStart().Milliseconds()
+	commitTime := measurement.GetCommitDuration().Milliseconds()
+	searchTime := measurement.GetSearchIndexDuration().Milliseconds()
+	if commitTime > 0 && searchTime > 0 {
+		return fmt.Sprintf(
+			"total;dur=%d,commit;dur=%d,search;dur=%d",
+			totalTime,
+			commitTime,
+			searchTime,
+		)
+	}
+	if commitTime > 0 {
+		return fmt.Sprintf(
+			"total;dur=%d,commit;dur=%d",
+			totalTime,
+			commitTime,
+		)
+	}
+
+	return fmt.Sprintf("total;dur=%d", totalTime)
 }

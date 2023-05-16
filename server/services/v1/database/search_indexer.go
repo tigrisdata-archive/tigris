@@ -203,7 +203,7 @@ func PackSearchFields(ctx context.Context, data *internal.TableData, collection 
 
 			continue
 		} else if len(f.AllowedNestedQFields) > 0 {
-			removeNullsFromArrayObj(f.AllowedNestedQFields, decData, f.Name())
+			removeNullsFromArrayObj(decData, f.Name())
 		}
 
 		if f.SearchType == "string[]" {
@@ -255,27 +255,27 @@ func PackSearchFields(ctx context.Context, data *internal.TableData, collection 
 	return encoded, nil
 }
 
-func removeNullsFromArrayObj(nestedFields []*schema.QueryableField, doc map[string]any, parent string) {
-	var arrays []*schema.QueryableField
-	for _, n := range nestedFields {
-		if n.DataType == schema.ArrayType {
-			arrays = append(arrays, n)
+func removeNullObjectLow(obj any) {
+	switch orig := obj.(type) {
+	case []any:
+		for _, a := range orig {
+			removeNullObjectLow(a)
+		}
+	case map[string]any:
+		for key, value := range orig {
+			if value == nil {
+				delete(orig, key)
+			} else {
+				removeNullObjectLow(value)
+			}
 		}
 	}
+}
 
-	if _, found := doc[parent]; !found {
-		return
-	}
-
+func removeNullsFromArrayObj(doc map[string]any, parent string) {
 	if arr, ok := doc[parent].([]any); ok {
 		for _, each := range arr {
-			if eachMp, ok := each.(map[string]any); ok {
-				for _, a := range arrays {
-					if _, found := eachMp[a.UnFlattenName]; found && eachMp[a.UnFlattenName] == nil {
-						delete(eachMp, a.UnFlattenName)
-					}
-				}
-			}
+			removeNullObjectLow(each)
 		}
 	}
 }

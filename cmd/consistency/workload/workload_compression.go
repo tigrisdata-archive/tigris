@@ -32,6 +32,7 @@ type BigPayloadWorkload struct {
 	Collections  string
 	Schemas      []byte
 	WorkloadData *Queue
+	IsBatch      bool
 }
 
 func (*BigPayloadWorkload) Type() string {
@@ -74,19 +75,10 @@ func (w *BigPayloadWorkload) Start(client driver.Driver) (int64, error) {
 		go func(id int64) {
 			defer wg.Done()
 			for j := int64(0); j < w.Records; j++ {
-				var documents []driver.Document
-				for k := 0; k < 10; k++ {
-					// batch 10 documents and then write. Each document is around 550KB
-					doc := NewDocumentV1(id)
-
-					serialized, err := SerializeDocV1(doc)
-					if err != nil {
-						insertErr = multierror.Append(insertErr, err)
-						return
-					}
-
-					documents = append(documents, serialized)
-					w.WorkloadData.Add(w.Collections, doc)
+				documents, err := w.buildDocumentsForWrite(id)
+				if err != nil {
+					insertErr = multierror.Append(insertErr, err)
+					return
 				}
 
 				if _, err := client.UseDatabase(w.Database).Replace(context.TODO(), w.Collections, documents); err != nil {
@@ -103,9 +95,39 @@ func (w *BigPayloadWorkload) Start(client driver.Driver) (int64, error) {
 	return w.Records * int64(w.Threads), insertErr
 }
 
+func (w *BigPayloadWorkload) buildDocumentsForWrite(id int64) ([]driver.Document, error) {
+	var documents []driver.Document
+	if w.IsBatch {
+		for k := 0; k < 10; k++ {
+			// batch 10 documents and then write. Each document is around 550KB
+			doc := NewDocumentV1(id + int64(k))
+			serialized, err := SerializeDocV1(doc)
+			if err != nil {
+				return nil, err
+			}
+
+			documents = append(documents, serialized)
+			w.WorkloadData.Add(w.Collections, doc)
+		}
+	} else {
+		doc := NewDocumentV1(id)
+		serialized, err := SerializeDocV1(doc)
+		if err != nil {
+			return nil, err
+		}
+
+		documents = append(documents, serialized)
+		w.WorkloadData.Add(w.Collections, doc)
+	}
+
+	return documents, nil
+}
+
 func (w *BigPayloadWorkload) Check(client driver.Driver) (bool, error) {
 	isSuccess := false
-	it, err := client.UseDatabase(w.Database).Read(context.TODO(), w.Collections, driver.Filter(`{}`), nil)
+	it, err := client.UseDatabase(w.Database).Read(context.TODO(), w.Collections, driver.Filter(`{}`), nil, &driver.ReadOptions{
+		Sort: []byte(`[{"pkey":"$desc"}]`),
+	})
 	if err != nil {
 		return false, fmt.Errorf("%w read to collection failed '%s' '%s'", err, w.Database, w.Collections)
 	}

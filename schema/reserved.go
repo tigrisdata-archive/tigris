@@ -15,7 +15,8 @@
 package schema
 
 const (
-	SearchId = "id"
+	SearchId           = "id"
+	TigrisFieldsPrefix = "_tigris_"
 )
 
 type ReservedField uint8
@@ -31,13 +32,13 @@ const (
 )
 
 var ReservedFields = [...]string{
-	CreatedAt:           "_tigris_created_at",
-	UpdatedAt:           "_tigris_updated_at",
-	Metadata:            "_tigris_metadata",
-	IdToSearchKey:       "_tigris_id",
-	DateSearchKeyPrefix: "_tigris_date_",
-	SearchArrNullItem:   "_tigris_null",
-	SearchNullKeys:      "_tigris_null_keys",
+	CreatedAt:           TigrisFieldsPrefix + "created_at",
+	UpdatedAt:           TigrisFieldsPrefix + "updated_at",
+	Metadata:            TigrisFieldsPrefix + "metadata",
+	IdToSearchKey:       TigrisFieldsPrefix + "id",
+	DateSearchKeyPrefix: TigrisFieldsPrefix + "date_",
+	SearchArrNullItem:   TigrisFieldsPrefix + "null",
+	SearchNullKeys:      TigrisFieldsPrefix + "null_keys",
 }
 
 func IsReservedField(name string) bool {

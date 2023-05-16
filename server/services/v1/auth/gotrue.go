@@ -82,6 +82,7 @@ type DeleteInvitationsPayload struct {
 type VerifyInvitationPayload struct {
 	Email string `json:"email"`
 	Code  string `json:"code"`
+	Dry   bool   `json:"dry"`
 }
 
 type UserAppData struct {
@@ -568,7 +569,7 @@ func _listAppKeys(ctx context.Context, g *gotrue, project string) ([]*appKeyInte
 func (g *gotrue) ListAppKeys(ctx context.Context, req *api.ListAppKeysRequest) (*api.ListAppKeysResponse, error) {
 	appKeysInternal, err := _listAppKeys(ctx, g, req.GetProject())
 	if err != nil {
-		return nil, errors.Internal("Failed to delete app keys")
+		return nil, errors.Internal("Failed to list app keys")
 	}
 	appKeys := make([]*api.AppKey, len(appKeysInternal))
 	for i, internalAppKey := range appKeysInternal {

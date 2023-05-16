@@ -39,9 +39,11 @@ var (
 	SizeSubSpace  = "size"
 )
 
+type ProgressUpdateFn func(ctx context.Context, tx transaction.Tx) error
+
 type SecondaryIndexer interface {
 	// Bulk build the indexes in the collection
-	BuildCollection(ctx context.Context, txMgr *transaction.Manager) error
+	BuildCollection(ctx context.Context, txMgr *transaction.Manager, progressUpdate ProgressUpdateFn) error
 	// Read the document from the primary store and delete it from secondary indexes
 	ReadDocAndDelete(ctx context.Context, tx transaction.Tx, key keys.Key) (int32, error)
 	// Delete document from the secondary index
@@ -136,20 +138,23 @@ type SecondaryIndexerImpl struct {
 	// Used for unit tests because it can index deeper into a schema than we currently expose to the user
 	// This can be removed once indexing into arrays and objects is exposed to the user
 	indexAll bool
+	// only index fields that are not active. For background indexing
+	indexWriteModeOnly bool
 	// Spare indexes do not index missing fields
 	sparse bool
 }
 
-func newSecondaryIndexerImpl(coll *schema.DefaultCollection) *SecondaryIndexerImpl {
+func newSecondaryIndexerImpl(coll *schema.DefaultCollection, indexWriteModeOnly bool) *SecondaryIndexerImpl {
 	return &SecondaryIndexerImpl{
-		collation: value.NewCollationFrom(&api.Collation{Case: "csk"}),
-		coll:      coll,
-		indexAll:  false,
-		sparse:    false, // For now indexes are only non-sparse
+		collation:          value.NewCollationFrom(&api.Collation{Case: "csk"}),
+		coll:               coll,
+		indexAll:           false,
+		indexWriteModeOnly: indexWriteModeOnly,
+		sparse:             false, // For now indexes are only non-sparse
 	}
 }
 
-func (q *SecondaryIndexerImpl) BuildCollection(ctx context.Context, txMgr *transaction.Manager) error {
+func (q *SecondaryIndexerImpl) BuildCollection(ctx context.Context, txMgr *transaction.Manager, progressUpdate ProgressUpdateFn) error {
 	docFetch := 500
 	var last []byte
 	var first []byte
@@ -185,6 +190,12 @@ func (q *SecondaryIndexerImpl) BuildCollection(ctx context.Context, txMgr *trans
 				return err
 			}
 			count++
+		}
+
+		if progressUpdate != nil {
+			if err = progressUpdate(ctx, tx); err != nil {
+				return err
+			}
 		}
 
 		if err = tx.Commit(ctx); err != nil {
@@ -432,20 +443,26 @@ func (q *SecondaryIndexerImpl) buildTableRows(tableData *internal.TableData) ([]
 
 func (q *SecondaryIndexerImpl) buildTSRows(tableData *internal.TableData) ([]IndexRow, error) {
 	timeStamps := []struct {
-		ts    *internal.Timestamp
-		field schema.ReservedField
+		ts          *internal.Timestamp
+		field       schema.ReservedField
+		shouldIndex bool
 	}{
 		{
 			tableData.CreatedAt,
 			schema.CreatedAt,
+			true,
 		},
 		{
 			tableData.UpdatedAt,
 			schema.UpdatedAt,
+			true,
 		},
 	}
 
 	rows := make([]IndexRow, 0, len(timeStamps))
+	if !q.coll.SecondaryIndexMetadata() {
+		return rows, nil
+	}
 
 	for _, ts := range timeStamps {
 		val := []byte{}
@@ -453,6 +470,23 @@ func (q *SecondaryIndexerImpl) buildTSRows(tableData *internal.TableData) ([]Ind
 		if ts.ts != nil {
 			val = []byte(ts.ts.ToRFC3339())
 			dt = schema.DateTimeType
+		}
+
+		// If the indexer is only indexing indexes in WriteMode
+		// this checks to see what state the metadata indexes are in
+		// and if we should index them
+		if q.indexWriteModeOnly {
+			for _, idx := range q.coll.SecondaryIndexes.All {
+				if idx.Name == schema.ReservedFields[ts.field] {
+					if idx.State == schema.INDEX_ACTIVE {
+						ts.shouldIndex = false
+					}
+				}
+			}
+		}
+
+		if !ts.shouldIndex {
+			continue
 		}
 
 		row, err := newIndexRow(dt, q.collation, schema.ReservedFields[ts.field], val, 0, false)
@@ -625,6 +659,10 @@ func (q *SecondaryIndexerImpl) indexArray(doc []byte, field *schema.QueryableFie
 func (q *SecondaryIndexerImpl) getIndexedFields() []*schema.QueryableField {
 	if q.indexAll {
 		return q.coll.QueryableFields
+	}
+
+	if q.indexWriteModeOnly {
+		return q.coll.GetWriteModeIndexes()
 	}
 
 	return q.coll.GetIndexedFields()

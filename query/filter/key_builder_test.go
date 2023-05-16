@@ -50,11 +50,11 @@ func testFilters(t testing.TB, fields []*schema.QueryableField, input []byte, st
 
 func TestKeyBuilderStrictEq(t *testing.T) {
 	cases := []struct {
-		userFields []*schema.QueryableField
-		userKeys   []*schema.Field
-		userInput  []byte
-		expError   error
-		expKeys    []keys.Key
+		userFields  []*schema.QueryableField
+		indexedKeys []*schema.Field
+		userInput   []byte
+		expError    error
+		expKeys     []keys.Key
 	}{
 		{
 			// fewer fields in user input
@@ -129,9 +129,9 @@ func TestKeyBuilderStrictEq(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		b := NewKeyBuilder[*schema.Field](NewStrictEqKeyComposer[*schema.Field](dummyEncodeFunc, PKBuildIndexPartsFunc, true, PrimaryIndex), PrimaryIndex)
+		b := NewKeyBuilder(NewStrictEqKeyComposer(dummyEncodeFunc, PKBuildIndexPartsFunc, true, PrimaryIndex), PrimaryIndex)
 		filters := testFilters(t, c.userFields, c.userInput, false)
-		buildKeys, err := b.Build(filters, c.userKeys)
+		buildKeys, err := b.Build(filters, fieldsToQueryableFields(c.indexedKeys))
 		require.Equal(t, c.expError, err)
 		if c.expError != nil {
 			continue
@@ -152,11 +152,11 @@ func TestKeyBuilderStrictEq(t *testing.T) {
 
 func TestKeyBuilderSecondaryEq(t *testing.T) {
 	cases := []struct {
-		userFields []*schema.QueryableField
-		userKeys   []*schema.Field
-		userInput  []byte
-		expError   error
-		queryPlans []QueryPlan
+		userFields  []*schema.QueryableField
+		indexedKeys []*schema.Field
+		userInput   []byte
+		expError    error
+		queryPlans  []QueryPlan
 	}{
 		{
 			// single user defined key
@@ -265,9 +265,9 @@ func TestKeyBuilderSecondaryEq(t *testing.T) {
 		// },
 	}
 	for _, c := range cases {
-		b := NewKeyBuilder[*schema.Field](NewStrictEqKeyComposer[*schema.Field](dummyEncodeFunc, PKBuildIndexPartsFunc, false, SecondaryIndex), SecondaryIndex)
+		b := NewKeyBuilder(NewStrictEqKeyComposer(dummyEncodeFunc, PKBuildIndexPartsFunc, false, SecondaryIndex), SecondaryIndex)
 		filters := testFilters(t, c.userFields, c.userInput, true)
-		queryPlans, err := b.Build(filters, c.userKeys)
+		queryPlans, err := b.Build(filters, fieldsToQueryableFields(c.indexedKeys))
 		require.Equal(t, c.expError, err)
 		require.Equal(t, len(c.queryPlans), len(queryPlans))
 		for i, plan := range c.queryPlans {
@@ -280,11 +280,11 @@ func TestKeyBuilderSecondaryEq(t *testing.T) {
 
 func TestKeyBuilderRangeKey(t *testing.T) {
 	cases := []struct {
-		userFields []*schema.QueryableField
-		userKeys   []*schema.Field
-		userInput  []byte
-		queryType  QueryPlanType
-		expKeys    []keys.Key
+		userFields  []*schema.QueryableField
+		indexedKeys []*schema.Field
+		userInput   []byte
+		queryType   QueryPlanType
+		expKeys     []keys.Key
 	}{
 		{
 			// single gt
@@ -346,9 +346,9 @@ func TestKeyBuilderRangeKey(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		b := NewKeyBuilder[*schema.Field](NewRangeKeyComposer[*schema.Field](dummyEncodeFunc, dummyBuildIndexParts, SecondaryIndex), SecondaryIndex)
+		b := NewKeyBuilder(NewRangeKeyComposer(dummyEncodeFunc, dummyBuildIndexParts, SecondaryIndex), SecondaryIndex)
 		filters := testFilters(t, c.userFields, c.userInput, true)
-		queryPlans, err := b.Build(filters, c.userKeys)
+		queryPlans, err := b.Build(filters, fieldsToQueryableFields(c.indexedKeys))
 		assert.NoError(t, err)
 		assert.Len(t, queryPlans, 1)
 		queryPlan := queryPlans[0]
@@ -365,9 +365,9 @@ func TestKeyBuilderMultipleRangeKey(t *testing.T) {
 	userKeys := []*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}}
 	filter := []byte(`{"$and": [{"a": {"$gte": 1}}, {"a": {"$lt": 10}}, {"b": {"$gt": 3}}, {"b": {"$lte": 30}}]}`)
 
-	b := NewKeyBuilder[*schema.Field](NewRangeKeyComposer[*schema.Field](dummyEncodeFunc, dummyBuildIndexParts, SecondaryIndex), SecondaryIndex)
+	b := NewKeyBuilder(NewRangeKeyComposer(dummyEncodeFunc, dummyBuildIndexParts, SecondaryIndex), SecondaryIndex)
 	filters := testFilters(t, userFields, filter, true)
-	keyReads, err := b.Build(filters, userKeys)
+	keyReads, err := b.Build(filters, fieldsToQueryableFields(userKeys))
 
 	assert.NoError(t, err)
 	assert.Len(t, keyReads, 2)
@@ -438,9 +438,9 @@ func TestSortQueryPlanBuilder(t *testing.T) {
 
 func BenchmarkStrictEqKeyComposer_Compose(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		kb := NewKeyBuilder[*schema.Field](NewStrictEqKeyComposer[*schema.Field](dummyEncodeFunc, PKBuildIndexPartsFunc, true, PrimaryIndex), PrimaryIndex)
+		kb := NewKeyBuilder(NewStrictEqKeyComposer(dummyEncodeFunc, PKBuildIndexPartsFunc, true, PrimaryIndex), PrimaryIndex)
 		filters := testFilters(b, []*schema.QueryableField{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.Int64Type}}, []byte(`{"b": 10, "a": {"$eq": 10}, "c": "foo"}}`), false)
-		_, err := kb.Build(filters, []*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.Int64Type}})
+		_, err := kb.Build(filters, fieldsToQueryableFields([]*schema.Field{{FieldName: "a", DataType: schema.Int64Type}, {FieldName: "b", DataType: schema.Int64Type}, {FieldName: "c", DataType: schema.Int64Type}}))
 		require.NoError(b, err)
 	}
 	b.ReportAllocs()
@@ -457,4 +457,15 @@ func dummyBuildIndexParts(fieldName string, val value.Value) []any {
 
 func encodeString(val string) any {
 	return value.NewStringValue(val, value.NewSortKeyCollation()).AsInterface()
+}
+
+func fieldsToQueryableFields(fields []*schema.Field) []*schema.QueryableField {
+	builder := schema.NewQueryableFieldsBuilder()
+	qf := make([]*schema.QueryableField, len(fields))
+
+	for i, field := range fields {
+		qf[i] = builder.NewQueryableField(field.Name(), field, nil)
+	}
+
+	return qf
 }

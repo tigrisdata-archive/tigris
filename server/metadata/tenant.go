@@ -203,6 +203,10 @@ func (m *TenantManager) GetEncoder() Encoder {
 	return m.encoder
 }
 
+func (m *TenantManager) GetQueue() *QueueSubspace {
+	return m.metaStore.queueStore
+}
+
 // CreateTenant is a thread safe implementation of creating a new tenant. It returns an error if it already exists.
 func (m *TenantManager) CreateTenant(ctx context.Context, tx transaction.Tx, namespace Namespace) (Namespace, error) {
 	m.Lock()
@@ -738,7 +742,7 @@ func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbN
 
 		// Note: Skipping the error here as during create collection the online flow guarantees that schema is properly
 		// validated.
-		collection, err := createCollection(meta.ID, coll, schemas, primaryIdxMeta, searchCollectionName, fieldsInSearch, meta.Indexes)
+		collection, err := createCollection(meta.ID, coll, schemas, primaryIdxMeta, searchCollectionName, fieldsInSearch, meta.Indexes, meta.SearchState)
 		if err != nil {
 			database.needFixingCollections[coll] = struct{}{}
 			log.Debug().Err(err).Str("collection", coll).Msg("skipping loading collection")
@@ -1328,10 +1332,30 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 
 		return tenant.updateCollection(ctx, tx, database, c, schFactory)
 	}
-
 	database.MetadataChange = true
 
-	collMeta, err := tenant.MetaStore.CreateCollection(ctx, tx, schFactory.Name, tenant.namespace.Id(), database.id, schFactory.SecondaryIndexes())
+	implicitSearchIndex := schema.NewImplicitSearchIndex(
+		schFactory.Name,
+		tenant.getSearchCollName(database.Name(), schFactory.Name),
+		schFactory.Fields,
+		nil,
+	)
+	searchState := schema.UnknownSearchState
+	if implicitSearchIndex.HasUserTaggedSearchIndexes() {
+		// because this is a create call it will be active since beginning
+		searchState = schema.SearchIndexActive
+	}
+	implicitSearchIndex.SetState(searchState)
+
+	collMeta, err := tenant.MetaStore.CreateCollection(
+		ctx,
+		tx,
+		schFactory.Name,
+		tenant.namespace,
+		database,
+		schFactory.SecondaryIndexes(),
+		searchState,
+	)
 	if err != nil {
 		return err
 	}
@@ -1359,13 +1383,6 @@ func (tenant *Tenant) createCollection(ctx context.Context, tx transaction.Tx, d
 
 	// store the collection to the databaseObject, this is actually cloned database object passed by the query runner.
 	// So failure of the transaction won't impact the consistency of the cache
-	implicitSearchIndex := schema.NewImplicitSearchIndex(
-		schFactory.Name,
-		tenant.getSearchCollName(database.Name(), schFactory.Name),
-		schFactory.Fields,
-		nil,
-	)
-
 	collection, err := schema.NewDefaultCollection(
 		collMeta.ID,
 		baseSchemaVersion,
@@ -1436,18 +1453,6 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 		return err
 	}
 
-	allSchemas, err := tenant.schemaStore.Get(ctx, tx, tenant.namespace.Id(), database.id, cHolder.id)
-	if err != nil {
-		return err
-	}
-
-	collMeta, err := tenant.MetaStore.UpdateCollection(ctx, tx, existingCollection.Name, tenant.namespace.Id(), database.id, existingCollection.Id, schFactory.SecondaryIndexes())
-	if err != nil {
-		return err
-	}
-
-	schFactory.Indexes.All = collMeta.Indexes
-
 	existingSearch := &tsApi.CollectionResponse{}
 	if config.DefaultConfig.Search.WriteEnabled {
 		existingSearch, err = tenant.searchStore.DescribeCollection(ctx, existingCollection.ImplicitSearchIndex.StoreIndexName())
@@ -1462,6 +1467,39 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 		schFactory.Fields,
 		existingSearch.Fields,
 	)
+
+	newSearchState := existingCollection.GetSearchState()
+	if updatedSearchIndex.HasUserTaggedSearchIndexes() {
+		switch existingCollection.GetSearchState() {
+		case schema.NoSearchIndex, schema.UnknownSearchState:
+			// even though this should be "SearchIndexWriteMode", it is still as Active because there is no backfill
+			// needed right now. This will be changed when we moved to async backfill.
+			newSearchState = schema.SearchIndexActive
+		}
+	} else {
+		newSearchState = schema.NoSearchIndex
+	}
+	updatedSearchIndex.SetState(newSearchState)
+
+	allSchemas, err := tenant.schemaStore.Get(ctx, tx, tenant.namespace.Id(), database.id, cHolder.id)
+	if err != nil {
+		return err
+	}
+	collMeta, err := tenant.MetaStore.UpdateCollection(
+		ctx,
+		tx,
+		existingCollection.Name,
+		tenant.namespace,
+		database,
+		existingCollection.Id,
+		schFactory.SecondaryIndexes(),
+		newSearchState,
+	)
+	if err != nil {
+		return err
+	}
+
+	schFactory.Indexes.All = collMeta.Indexes
 
 	// store the collection to the databaseObject, this is actually cloned database object passed by the query runner.
 	// So failure of the transaction won't impact the consistency of the cache
@@ -1506,7 +1544,26 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 	return nil
 }
 
-// Old collections may not have any indexes stored in metadata. This will update that.
+func (tenant *Tenant) UpdateSearchStatus(ctx context.Context, tx transaction.Tx, db *Database, coll *schema.DefaultCollection) error {
+	if coll.GetSearchState() != schema.UnknownSearchState {
+		return nil
+	}
+
+	var searchState schema.SearchIndexState
+	if coll.ImplicitSearchIndex.HasUserTaggedSearchIndexes() {
+		searchState = schema.SearchIndexActive
+	} else {
+		searchState = schema.NoSearchIndex
+	}
+
+	if err := tenant.MetaStore.Collection().UpdateSearchStatus(ctx, tx, tenant.namespace, db, coll.Name, searchState); err != nil {
+		return err
+	}
+	coll.ImplicitSearchIndex.SetState(searchState)
+	return nil
+}
+
+// UpgradeCollectionIndexes is to updated Old collections that may not have any indexes stored in metadata.
 func (tenant *Tenant) UpgradeCollectionIndexes(ctx context.Context, tx transaction.Tx, db *Database, coll *schema.DefaultCollection) error {
 	builder := schema.NewFactoryBuilder(false)
 	schFactory, err := builder.Build(coll.Name, coll.Schema)
@@ -1531,7 +1588,7 @@ func (tenant *Tenant) UpdateCollectionIndexes(ctx context.Context, tx transactio
 	if !ok {
 		return errors.NotFound("collection doesn't exists '%s'", collectionName)
 	}
-	_, err := tenant.MetaStore.Collection().Update(ctx, tx, tenant.namespace.Id(), db.id, collectionName, cHolder.id, indexes)
+	_, err := tenant.MetaStore.Collection().Update(ctx, tx, tenant.namespace, db, collectionName, cHolder.id, indexes, cHolder.collection.GetSearchState())
 	if err != nil {
 		return err
 	}
@@ -1982,7 +2039,12 @@ type collectionHolder struct {
 	primaryIdxMeta map[string]*PrimaryIndexMetadata
 }
 
-func newCollectionHolder(id uint32, name string, collection *schema.DefaultCollection, idxMeta map[string]*PrimaryIndexMetadata) *collectionHolder {
+func newCollectionHolder(
+	id uint32,
+	name string,
+	collection *schema.DefaultCollection,
+	idxMeta map[string]*PrimaryIndexMetadata,
+) *collectionHolder {
 	return &collectionHolder{
 		id:             id,
 		name:           name,
@@ -2010,6 +2072,7 @@ func (c *collectionHolder) clone() *collectionHolder {
 		implicitIndex.StoreIndexName(),
 		implicitIndex.StoreSchema.Fields,
 		c.collection.SecondaryIndexes.All,
+		c.collection.GetSearchState(),
 	)
 	if err != nil {
 		panic(err)
@@ -2043,8 +2106,15 @@ func (c *collectionHolder) get() *schema.DefaultCollection {
 	return c.collection
 }
 
-func createCollection(id uint32, name string, schemas schema.Versions, idxMeta map[string]*PrimaryIndexMetadata,
-	searchCollectionName string, fieldsInSearch []tsApi.Field, secondaryIndexes []*schema.Index,
+func createCollection(
+	id uint32,
+	name string,
+	schemas schema.Versions,
+	idxMeta map[string]*PrimaryIndexMetadata,
+	searchCollectionName string,
+	fieldsInSearch []tsApi.Field,
+	secondaryIndexes []*schema.Index,
+	searchState schema.SearchIndexState,
 ) (*schema.DefaultCollection, error) {
 	schFactory, err := schema.NewFactoryBuilder(false).Build(name, schemas.Latest().Schema)
 	if err != nil {
@@ -2063,6 +2133,7 @@ func createCollection(id uint32, name string, schemas schema.Versions, idxMeta m
 	schFactory.Indexes.All = secondaryIndexes
 
 	implicitSearchIndex := schema.NewImplicitSearchIndex(name, searchCollectionName, schFactory.Fields, fieldsInSearch)
+	implicitSearchIndex.SetState(searchState)
 
 	c, err := schema.NewDefaultCollection(id, schemas.Latest().Version, schFactory, schemas, implicitSearchIndex)
 	if err != nil {

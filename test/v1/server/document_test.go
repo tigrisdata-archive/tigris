@@ -989,6 +989,12 @@ func TestInsertUpdate_Defaults(t *testing.T) {
 					}
 				}
 			},
+			"int_arr": {
+				"type": "array",
+				"items": {
+					"type": "integer"
+				}
+			},
 			"pkey_int": {
 				"type": "integer"
 			}
@@ -1062,6 +1068,12 @@ func TestInsertUpdate_Defaults(t *testing.T) {
 				"$set": Map{
 					"int_f": 10,
 				},
+				"$push": Map{
+					"arr_obj": Map{
+						"int_f": 123,
+					},
+					"int_arr": 5,
+				},
 			},
 		},
 		nil).Status(http.StatusOK).
@@ -1096,6 +1108,16 @@ func TestInsertUpdate_Defaults(t *testing.T) {
 
 	require.Equal(t, doc["arr_obj"].([]any)[0].(map[string]any)["updated"], doc["arr_obj"].([]any)[2].(map[string]any)["updated"])
 	require.Equal(t, doc["arr_obj"].([]any)[0].(map[string]any)["updated"], doc["arr_obj"].([]any)[1].(map[string]any)["updated"])
+
+	// push field asserts
+	require.Equal(t, 4, len(doc["arr_obj"].([]any)))
+	require.Equal(t, float64(123), doc["arr_obj"].([]any)[3].(map[string]any)["int_f"])
+	require.Equal(t, 1, len(doc["int_arr"].([]any)))
+	require.Equal(t, float64(5), doc["int_arr"].([]any)[0])
+
+	// not supporting default values in array
+	require.Nil(t, doc["arr_obj"].([]any)[3].(map[string]any)["created"])
+	require.Nil(t, doc["arr_obj"].([]any)[3].(map[string]any)["updated"])
 }
 
 func TestInsertUpdate_AllDefaults(t *testing.T) {
@@ -1246,6 +1268,12 @@ func TestInsertUpdate_AllDefaults(t *testing.T) {
 					"double_f": 2.1,
 					"int_f":    20,
 				},
+				"$push": Map{
+					"arr_obj": Map{
+						"name": "ABC",
+					},
+					"string_arr": "Hello",
+				},
 			},
 		},
 		nil).Status(http.StatusOK).
@@ -1268,8 +1296,11 @@ func TestInsertUpdate_AllDefaults(t *testing.T) {
 	require.True(t, doc["bool_f"].(bool))
 	require.Equal(t, 2.1, doc["double_f"].(float64))
 	require.Equal(t, float64(20), doc["int_f"].(float64))
-	require.Equal(t, []any{"a"}, doc["string_arr"].([]any))
+	require.Equal(t, []any{"a", "Hello"}, doc["string_arr"].([]any))
 	require.Equal(t, float64(10), doc["obj"].(map[string]any)["int_field"].(float64))
+
+	// push field assert
+	require.Equal(t, "ABC", doc["arr_obj"].([]any)[0].(map[string]any)["name"])
 
 	createdAtAfter, err := time.Parse(time.RFC3339, doc["created"].(string))
 	require.NoError(t, err)
@@ -1370,6 +1401,20 @@ func TestUpdate_BadRequest(t *testing.T) {
 			},
 			nil,
 			"filter is a required field",
+			http.StatusBadRequest,
+		},
+		{
+			db,
+			coll,
+			Map{
+				"$push": Map{
+					"simple_array_value": 1,
+				},
+			},
+			Map{
+				"pkey_int": 1,
+			},
+			"json schema validation failed for field 'simple_array_value/0' reason 'expected string or null, but got number'",
 			http.StatusBadRequest,
 		},
 	}
@@ -2340,6 +2385,167 @@ func TestUpdate_SetAndUnset(t *testing.T) {
 				"pkey_int":    100,
 				"int_value":   400,
 				"bytes_value": []byte(`"bytes3"`),
+			}},
+		},
+	}
+	for _, c := range cases {
+		tstart := time.Now().UTC()
+		updateByFilter(t,
+			db,
+			coll,
+			Map{
+				"filter": Map{
+					"pkey_int": 100,
+				},
+			},
+			c.userInput,
+			nil).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("modified_count", 1).
+			Path("$.metadata").Object().
+			Value("updated_at").String().DateTime(time.RFC3339Nano).InRange(tstart, time.Now().UTC().Add(1*time.Second))
+
+		readAndValidate(t,
+			db,
+			coll,
+			Map{
+				"pkey_int": 100,
+			},
+			nil,
+			c.expOut)
+	}
+}
+
+func TestUpdate_Push(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	inputDocument := []Doc{
+		{
+			"pkey_int":     100,
+			"int_value":    100,
+			"string_value": "simple_insert1_update",
+			"bool_value":   true,
+			"double_value": 100.00001,
+			"bytes_value":  []byte(`"simple_insert1_update"`),
+			"array_value": []Doc{
+				{
+					"id":      9223372036854775801,
+					"product": "foo",
+				},
+			},
+		},
+	}
+
+	insertDocuments(t, db, coll, inputDocument, false).
+		Status(http.StatusOK)
+
+	readAndValidate(t,
+		db,
+		coll,
+		Map{
+			"pkey_int": 100,
+		},
+		nil,
+		inputDocument)
+
+	cases := []struct {
+		userInput Map
+		expOut    []Doc
+	}{
+		{
+			Map{
+				"fields": Map{
+					"$push": Map{
+						"array_value": Map{
+							"id":      9223372036854775123,
+							"product": "bar",
+						},
+					},
+				},
+			},
+			[]Doc{{
+				"pkey_int":     100,
+				"int_value":    100,
+				"string_value": "simple_insert1_update",
+				"bool_value":   true,
+				"double_value": 100.00001,
+				"bytes_value":  []byte(`"simple_insert1_update"`),
+				"array_value": []Doc{
+					{
+						"id":      float64(9223372036854775801),
+						"product": "foo",
+					},
+					{
+						"id":      float64(9223372036854775123),
+						"product": "bar",
+					},
+				},
+			}},
+		},
+		{
+			Map{
+				"fields": Map{
+					"$push": Map{
+						"simple_array_value": "hello world",
+					},
+				},
+			},
+			[]Doc{{
+				"pkey_int":     100,
+				"int_value":    100,
+				"string_value": "simple_insert1_update",
+				"bool_value":   true,
+				"double_value": 100.00001,
+				"bytes_value":  []byte(`"simple_insert1_update"`),
+				"array_value": []Doc{
+					{
+						"id":      float64(9223372036854775801),
+						"product": "foo",
+					},
+					{
+						"id":      float64(9223372036854775123),
+						"product": "bar",
+					},
+				},
+				"simple_array_value": []string{"hello world"},
+			}},
+		},
+		{
+			Map{
+				"fields": Map{
+					"$push": Map{
+						"array_value": Map{
+							"id":      "9223372036854775456",
+							"product": "table",
+						},
+						"simple_array_value": "abc def",
+					},
+				},
+			},
+			[]Doc{{
+				"pkey_int":     100,
+				"int_value":    100,
+				"string_value": "simple_insert1_update",
+				"bool_value":   true,
+				"double_value": 100.00001,
+				"bytes_value":  []byte(`"simple_insert1_update"`),
+				"array_value": []Doc{
+					{
+						"id":      float64(9223372036854775801),
+						"product": "foo",
+					},
+					{
+						"id":      float64(9223372036854775123),
+						"product": "bar",
+					},
+					{
+						"id":      float64(9223372036854775456),
+						"product": "table",
+					},
+				},
+				"simple_array_value": []string{"hello world", "abc def"},
 			}},
 		},
 	}
@@ -4794,7 +5000,7 @@ func TestFilteringOnArrays(t *testing.T) {
     "arr_of_arr": [
       [
         "shopping",
-        "clothes",
+        "clothes has braces ( and > ( < and escaped operators or some emoji 😀",
         "shoes"
       ],
       [
@@ -4969,11 +5175,9 @@ func TestFilteringOnArrays(t *testing.T) {
 		expDocuments []Doc
 		order        []Map
 	}{
-		/**
-		These two tests will work once we disable fallback to search. This functionality is added on Tigris side.
 		{
 			Map{
-				"arr_of_arr": "clothes",
+				"arr_of_arr": "clothes has braces ( and > ( < and escaped operators or some emoji 😀",
 			},
 			inputDocument[0:1],
 		    nil,
@@ -4983,7 +5187,7 @@ func TestFilteringOnArrays(t *testing.T) {
 			},
 			inputDocument[0:1],
 		    nil,
-		},*/{
+		},{
 			Map{
 				"obj.arr_primitive": "cars",
 			},
@@ -5299,6 +5503,94 @@ func TestRead_Sorted(t *testing.T) {
 	}
 }
 
+func TestRead_Unicode(t *testing.T) {
+	db, coll := setupTests(t)
+	defer cleanupTests(t, db)
+
+	dropCollection(t, db, coll)
+	createCollection(t, db, coll,
+		Map{
+			"schema": Map{
+				"title": coll,
+				"properties": Map{
+					"id":           Map{"type": "integer"},
+					"index_value": Map{"type": "string", "index": true},
+					"search_value":  Map{"type": "string", "searchIndex": true, "sort": true},
+					"local_value":  Map{"type": "string"},
+				},
+			},
+		}).Status(http.StatusOK)
+
+	inputDocument := []Doc{
+		{
+			"id":           1,
+			"index_value":    "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			"search_value": "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			"local_value":  "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+		},
+		{
+			"id":           2,
+			"index_value":   "has braces ( and > ( < and escaped operators 안녕 or some emoji",
+			"search_value": "has braces ( and > ( < and escaped operators 안녕 or some emoji",
+			"local_value":  "has braces ( and > ( < and escaped operators 안녕 or some emoji",
+		}, {
+			"id":           3,
+			"index_value":   "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			"search_value": "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			"local_value":  "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+		},
+	}
+
+	// should always succeed with mustNotExists as false
+	insertDocuments(t, db, coll, inputDocument, false).
+		Status(http.StatusOK)
+
+	cases := []struct {
+		filters      Map
+		sortOrder    []Map
+		expDocuments []Doc
+	}{
+		{
+			Map{
+				"index_value": "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			},
+			[]Map{
+				{
+					"index_value": "$desc",
+				},
+			},
+			[]Doc{inputDocument[2], inputDocument[0]},
+		},
+		{
+			Map{
+				"local_value": "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			},
+			nil,
+			[]Doc{inputDocument[0], inputDocument[2]},
+		},
+		{
+			Map{
+				"search_value": "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			},
+			[]Map{
+				{
+					"search_value": "$desc",
+				},
+			},
+			[]Doc{inputDocument[2], inputDocument[0]},
+		},
+	}
+	for _, c := range cases {
+		readAndValidateOrder(t,
+			db,
+			coll,
+			c.filters,
+			nil,
+			c.sortOrder,
+			c.expDocuments)
+	}
+}
+
 func TestImport(t *testing.T) {
 	db, _ := setupTests(t)
 	defer cleanupTests(t, db)
@@ -5348,6 +5640,7 @@ func TestImport(t *testing.T) {
 			{"name": "_tigris_created_at", "state": "INDEX ACTIVE"},
 			{"name": "_tigris_updated_at", "state": "INDEX ACTIVE"}
 		],
+        "search_status":"No Search Index",
 		"metadata": {},
 		"size": 0,
 		"schema": {
@@ -5414,6 +5707,7 @@ func TestImport(t *testing.T) {
 						{"name": "_tigris_created_at", "state": "INDEX ACTIVE"},
 						{"name": "_tigris_updated_at", "state": "INDEX ACTIVE"}
 					],
+                    "search_status":"No Search Index",
 					"metadata": {},
 					"size": 0,
 					"schema": {
@@ -5440,6 +5734,7 @@ func TestImport(t *testing.T) {
 						{"name": "_tigris_created_at", "state": "INDEX ACTIVE"},
 						{"name": "_tigris_updated_at", "state": "INDEX ACTIVE"}
 					],
+                    "search_status":"No Search Index",
 					"metadata": {},
 					"size": 0,
 					"schema": {
@@ -5476,6 +5771,7 @@ func TestImport(t *testing.T) {
 				{"name": "_tigris_created_at", "state": "INDEX ACTIVE"},
 				{"name": "_tigris_updated_at", "state": "INDEX ACTIVE"}
 			],
+            "search_status":"No Search Index",
 			"metadata": {},
 			"size": 0,
 			"schema": {
@@ -5783,6 +6079,161 @@ func TestComplexObjectsCollectionSearch(t *testing.T) {
 		res := getSearchResults(t, project, collectionName, c.query, true)
 		require.Equal(t, 1, len(res.Result.Hits))
 	}
+}
+
+func TestDocumentsChunking(t *testing.T) {
+	project := setupTestsOnlyProject(t)
+	defer cleanupTests(t, project)
+
+	collectionName := "fake_collection"
+	var schemaObj map[string]any
+	require.NoError(t, jsoniter.Unmarshal(FakeCollectionSchema, &schemaObj))
+
+	t.Run("insert_read", func(t *testing.T) {
+		createCollection(t, project, collectionName, schemaObj).Status(http.StatusOK)
+		defer dropCollection(t, project, collectionName)
+
+		_, documents := GenerateFakesForDoc(t, []string{"1", "2", "3"})
+		insertDocuments(t, project, collectionName, documents, true).
+			Status(http.StatusOK)
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			nil,
+			nil,
+			nil,
+			documents)
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			nil,
+			nil,
+			[]Map{{"id": "$desc"}},
+			[]Doc{documents[2], documents[1], documents[0]})
+	})
+	t.Run("replace_read", func(t *testing.T) {
+		createCollection(t, project, collectionName, schemaObj).Status(http.StatusOK)
+		defer dropCollection(t, project, collectionName)
+
+		_, documents := GenerateFakesForDocWithPlaceholder(t, []string{"1", "2", "3"}, []string{"first", "second", "third"})
+		insertDocuments(t, project, collectionName, documents, false).
+			Status(http.StatusOK)
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			nil,
+			nil,
+			nil,
+			documents)
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			nil,
+			nil,
+			[]Map{{"id": "$desc"}},
+			[]Doc{documents[2], documents[1], documents[0]})
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			Map{
+				"$or": []Doc{
+					{"placeholder": "first"},
+					{"placeholder": "second"},
+					{"placeholder": "third"},
+				},
+			},
+			nil,
+			[]Map{{"placeholder": "$desc"}},
+			[]Doc{documents[2], documents[1], documents[0]})
+	})
+	t.Run("update_read", func(t *testing.T) {
+		createCollection(t, project, collectionName, schemaObj).Status(http.StatusOK)
+		defer dropCollection(t, project, collectionName)
+
+		fakes, documents := GenerateFakesForDoc(t, []string{"1", "2", "3"})
+		insertDocuments(t, project, collectionName, documents, false).
+			Status(http.StatusOK)
+
+		fakes[0].Name = "updated_name"
+		fakes[0].Nested.Address.City = "updated_city"
+		fakes[0].Cars = []string{"updated_cars"}
+		updateByFilter(t,
+			project,
+			collectionName,
+			Map{
+				"filter": Map{
+					"id": "1",
+				},
+			},
+			Map{
+				"fields": Map{
+					"$set": Map{
+						"name": fakes[0].Name,
+						"nested.address.city": fakes[0].Nested.Address.City,
+						"cars": fakes[0].Cars,
+					},
+				},
+			},
+			nil).Status(http.StatusOK).
+			JSON().
+			Object().
+			ValueEqual("modified_count", 1)
+
+		documents[0] = GenerateDocFromFake(t, fakes[0])
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			nil,
+			nil,
+			nil,
+			documents)
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			nil,
+			nil,
+			[]Map{{"id": "$desc"}},
+			[]Doc{documents[2], documents[1], documents[0]})
+
+	})
+	t.Run("delete_read", func(t *testing.T) {
+		createCollection(t, project, collectionName, schemaObj).Status(http.StatusOK)
+		defer dropCollection(t, project, collectionName)
+
+		_, documents := GenerateFakesForDocWithPlaceholder(t, []string{"1", "2", "3"}, []string{"first", "second", "third"})
+		insertDocuments(t, project, collectionName, documents, false).
+			Status(http.StatusOK)
+
+		deleteByFilter(t,
+			project,
+			collectionName,
+			Map{
+			"filter":
+				Map{"placeholder": "first"},
+		}).
+			Status(http.StatusOK)
+
+		readAndValidateOrder(t,
+			project,
+			collectionName,
+			Map{
+				"$or": []Doc{
+					{"placeholder": "first"},
+					{"placeholder": "second"},
+					{"placeholder": "third"},
+				},
+			},
+			nil,
+			[]Map{{"placeholder": "$desc"}},
+			[]Doc{documents[2], documents[1]})
+	})
 }
 
 func insertDocuments(t *testing.T, db string, collection string, documents []Doc, mustNotExist bool) *httpexpect.Response {

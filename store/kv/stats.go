@@ -153,7 +153,7 @@ func (tx *StatsTx) Replace(ctx context.Context, table []byte, key Key, data *int
 				return err
 			}
 		default:
-			return err
+			return convertFDBToStoreErr(err)
 		}
 	}
 

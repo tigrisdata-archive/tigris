@@ -23,6 +23,25 @@ import (
 	tsApi "github.com/tigrisdata/typesense-go/typesense/api"
 )
 
+// SearchIndexState represents the search state of collection search.
+type SearchIndexState uint8
+
+const (
+	UnknownSearchState SearchIndexState = iota
+	SearchIndexActive
+	SearchIndexWriteMode
+	SearchIndexBuilding
+	NoSearchIndex
+)
+
+var SearchIndexStateNames = [...]string{
+	UnknownSearchState:   "Search Status Unknown",
+	SearchIndexActive:    "Search Active",
+	SearchIndexWriteMode: "Search Write Mode",
+	SearchIndexBuilding:  "Search Building",
+	NoSearchIndex:        "No Search Index",
+}
+
 type SearchSourceType string
 
 const (
@@ -171,7 +190,7 @@ type SearchIndex struct {
 }
 
 func NewSearchIndex(ver uint32, searchStoreName string, factory *SearchFactory, fieldsInSearch []tsApi.Field) *SearchIndex {
-	queryableFields := NewQueryableFieldsBuilder().BuildQueryableFields(factory.Fields, fieldsInSearch)
+	queryableFields := NewQueryableFieldsBuilder().BuildQueryableFields(factory.Fields, fieldsInSearch, true)
 
 	var searchIdField *QueryableField
 	for _, q := range queryableFields {
@@ -316,7 +335,7 @@ func (s *SearchIndex) buildSearchSchema(name string) {
 func (s *SearchIndex) GetSearchDeltaFields(existingFields []*QueryableField, fieldsInSearch []tsApi.Field) []tsApi.Field {
 	ptrTrue := true
 
-	incomingQueryable := NewQueryableFieldsBuilder().BuildQueryableFields(s.Fields, fieldsInSearch)
+	incomingQueryable := NewQueryableFieldsBuilder().BuildQueryableFields(s.Fields, fieldsInSearch, true)
 
 	existingFieldMap := make(map[string]*QueryableField)
 	for _, f := range existingFields {
@@ -392,14 +411,15 @@ type ImplicitSearchIndex struct {
 	// QueryableFields are similar to Fields but these are flattened forms of fields. For instance, a simple field
 	// will be one to one mapped to queryable field but complex fields like object type field there may be more than
 	// one queryableFields. As queryableFields represent a flattened state these can be used as-is to index in memory.
-	QueryableFields []*QueryableField
-
+	QueryableFields     []*QueryableField
 	prevVersionInSearch []tsApi.Field
+	// State will start tracking whether collection search index is active or not
+	state SearchIndexState
 }
 
 func NewImplicitSearchIndex(name string, searchStoreName string, fields []*Field, prevVersionInSearch []tsApi.Field) *ImplicitSearchIndex {
 	// this is created by collection so the forSearchIndex is false.
-	queryableFields := NewQueryableFieldsBuilder().BuildQueryableFields(fields, prevVersionInSearch)
+	queryableFields := NewQueryableFieldsBuilder().BuildQueryableFields(fields, prevVersionInSearch, false)
 	index := &ImplicitSearchIndex{
 		Name:                name,
 		QueryableFields:     queryableFields,
@@ -409,6 +429,24 @@ func NewImplicitSearchIndex(name string, searchStoreName string, fields []*Field
 	index.buildSearchSchema(searchStoreName)
 
 	return index
+}
+
+func (s *ImplicitSearchIndex) SetState(state SearchIndexState) {
+	s.state = state
+}
+
+func (s *ImplicitSearchIndex) GetState() SearchIndexState {
+	return s.state
+}
+
+func (s *ImplicitSearchIndex) HasUserTaggedSearchIndexes() bool {
+	for _, s := range s.QueryableFields {
+		if s.SearchIndexed {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (s *ImplicitSearchIndex) StoreIndexName() string {
@@ -476,7 +514,7 @@ func (s *ImplicitSearchIndex) buildSearchSchema(searchStoreName string) {
 func (s *ImplicitSearchIndex) GetSearchDeltaFields(existingFields []*QueryableField, incomingFields []*Field) []tsApi.Field {
 	ptrTrue := true
 
-	incomingQueryable := NewQueryableFieldsBuilder().BuildQueryableFields(incomingFields, s.prevVersionInSearch)
+	incomingQueryable := NewQueryableFieldsBuilder().BuildQueryableFields(incomingFields, s.prevVersionInSearch, false)
 
 	existingFieldMap := make(map[string]*QueryableField)
 	for _, f := range existingFields {

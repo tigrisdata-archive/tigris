@@ -233,6 +233,11 @@ func (*DefaultUsersManager) VerifyInvitation(ctx context.Context, req *api.Verif
 		Email: req.GetEmail(),
 		Code:  req.GetCode(),
 	}
+	if req.Dry != nil {
+		verifyInvitationPayload.Dry = req.GetDry()
+	} else {
+		verifyInvitationPayload.Dry = false
+	}
 	verifyInvitationPayloadBytes, err := jsoniter.Marshal(verifyInvitationPayload)
 	if err != nil {
 		log.Err(err).Msg("Failed to marshal verify invitation payload to json bytes")
@@ -262,9 +267,8 @@ func (um *DefaultUsersManager) ListUsers(ctx context.Context, _ *api.ListUsersRe
 		log.Err(err).Msg("Failed to get namespace while listing invitations")
 		return nil, errors.Internal("Could not list users")
 	}
-
-	queryStr := fmt.Sprintf("app_metadata.tigris_namespace:%s", namespace)
-	users, err := um.Management.User.List(management.Query(queryStr))
+	queryStr := fmt.Sprintf("app_metadata.accessibleNamespaces.code:%s", namespace)
+	users, err := um.Management.User.Search(management.Query(queryStr))
 	if err != nil {
 		log.Err(err).Msg("Failed to get list of users from auth0")
 		return nil, errors.Internal("Could not list users")
@@ -274,7 +278,7 @@ func (um *DefaultUsersManager) ListUsers(ctx context.Context, _ *api.ListUsersRe
 	for i, user := range users.Users {
 		usersRes[i] = &api.User{
 			Email:     user.GetEmail(),
-			Name:      user.GetEmail(),
+			Name:      user.GetName(),
 			CreatedAt: user.GetCreatedAt().UnixMilli(),
 			Picture:   user.GetPicture(),
 		}

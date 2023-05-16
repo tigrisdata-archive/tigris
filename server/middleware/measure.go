@@ -35,8 +35,9 @@ import (
 
 type wrappedStream struct {
 	*middleware.WrappedServerStream
-	measurement *metrics.Measurement
-	reqStatus   *metrics.RequestStatus
+	measurement           *metrics.Measurement
+	reqStatus             *metrics.RequestStatus
+	setServerTimingHeader bool
 }
 
 func getNoMeasurementMethods() []string {
@@ -93,12 +94,18 @@ func measureUnary() func(ctx context.Context, req any, info *grpc.UnaryServerInf
 		resp, err := handler(ctx, req)
 		if err != nil {
 			// Request had an error
+			measurement.SetError()
 			measurement.CountErrorForScope(metrics.RequestsErrorCount, measurement.GetRequestErrorTags(err))
+			measurement.AddReceivedBytes(proto.Size(req.(proto.Message)))
 			_ = measurement.FinishWithError(ctx, err)
 			measurement.RecordDuration(metrics.RequestsErrorRespTime, measurement.GetRequestErrorTags(err))
 			logError(ctx, err, "unary")
 			return nil, err
 		}
+		if err = setHeadersToUnary(ctx, resp, measurement); err != nil {
+			return nil, err
+		}
+
 		// Request was ok
 		measurement.SetNDocs(reqStatus.GetResultDocs())
 		measurement.CountOkForScope(metrics.RequestsOkCount, measurement.GetRequestOkTags())
@@ -137,12 +144,14 @@ func measureStream() grpc.StreamServerInterceptor {
 		wrapped.WrappedContext = measurement.StartTracing(wrapped.WrappedContext, false)
 		err = handler(srv, wrapped)
 		if err != nil {
+			measurement.SetError()
 			measurement.CountErrorForScope(metrics.RequestsErrorCount, measurement.GetRequestErrorTags(err))
 			_ = measurement.FinishWithError(wrapped.WrappedContext, err)
 			measurement.RecordDuration(metrics.RequestsErrorRespTime, measurement.GetRequestErrorTags(err))
 			logError(wrapped.WrappedContext, err, "stream")
 			ulog.E(err)
 		} else {
+			ulog.E(setHeadersToStream(wrapped))
 			measurement.CountOkForScope(metrics.RequestsOkCount, measurement.GetRequestOkTags())
 			_ = measurement.FinishTracing(wrapped.WrappedContext)
 			measurement.RecordDuration(metrics.RequestsRespTime, measurement.GetRequestOkTags())
@@ -192,7 +201,12 @@ func (w *wrappedStream) RecvMsg(m any) error {
 }
 
 func (w *wrappedStream) SendMsg(m any) error {
-	err := w.ServerStream.SendMsg(m)
+	err := setHeadersToStream(w)
+	if ulog.E(err) {
+		return err
+	}
+
+	err = w.ServerStream.SendMsg(m)
 	if err != nil {
 		log.Error().Err(err).Interface("message", m).Msg("stream send message error")
 	}
@@ -200,7 +214,7 @@ func (w *wrappedStream) SendMsg(m any) error {
 		return nil
 	}
 
-	if len(w.measurement.GetProjectCollTags()) == 0 {
+	if !w.measurement.IsFirstDocSent() {
 		// The request is not tagged yet with db and collection, need to do it on the first message
 		project, branch, coll := request.GetProjectAndBranchAndColl(m)
 		reqMetadata, err := request.GetRequestMetadataFromContext(w.WrappedContext)
@@ -216,6 +230,9 @@ func (w *wrappedStream) SendMsg(m any) error {
 		w.measurement.AddTags(map[string]string{
 			"human": strconv.FormatBool(reqMetadata.IsHuman),
 		})
+		// Sets the flag so first time processing does not happen with subsequent documents
+		w.measurement.MarkFirstDocSent()
+		w.measurement.RecordDuration(metrics.RequestsRespTimeToFirstDoc, w.measurement.GetRequestOkTags())
 		reqMetadata.SaveToContext(w.WrappedContext)
 		w.WrappedContext = reqMetadata.SaveToContext(w.WrappedContext)
 

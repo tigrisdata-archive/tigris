@@ -84,7 +84,6 @@ func (ub *UsageEventBuilder) Build() *UsageEvent {
 		ub.timestamp = time.Now()
 	}
 	billingMetric.Timestamp = ub.timestamp.Format(TimeFormat)
-	props := make(map[string]any)
 
 	// auto generate transaction id
 	if len(ub.transactionId) != 0 {
@@ -92,12 +91,15 @@ func (ub *UsageEventBuilder) Build() *UsageEvent {
 	} else {
 		billingMetric.TransactionId = ub.namespaceId + "_" + strconv.FormatInt(ub.timestamp.UnixMilli(), 10)
 	}
+
+	props := make(map[string]any)
 	// the key names must match the registered billing metrics in metronome
-	if ub.searchUnits != nil {
+	// skip '0' values
+	if ub.searchUnits != nil && *ub.searchUnits != 0 {
 		props[UsageSearchUnits] = *ub.searchUnits
 	}
 
-	if ub.databaseUnits != nil {
+	if ub.databaseUnits != nil && *ub.databaseUnits != 0 {
 		props[UsageDbUnits] = *ub.databaseUnits
 	}
 	billingMetric.Properties = &props
@@ -154,7 +156,6 @@ func (sb *StorageEventBuilder) Build() *StorageEvent {
 		sb.timestamp = time.Now()
 	}
 	billingMetric.Timestamp = sb.timestamp.Format(TimeFormat)
-	props := make(map[string]any)
 
 	// auto generate transaction id
 	if len(sb.transactionId) != 0 {
@@ -163,12 +164,14 @@ func (sb *StorageEventBuilder) Build() *StorageEvent {
 		billingMetric.TransactionId = sb.namespaceId + "_" + strconv.FormatInt(sb.timestamp.UnixMilli(), 10)
 	}
 
+	props := make(map[string]any)
 	// the key names must match the registered billing metrics in metronome
-	if sb.indexBytes != nil {
+	// skip '0' values
+	if sb.indexBytes != nil && *sb.indexBytes != 0 {
 		props[StorageIndexBytes] = *sb.indexBytes
 	}
 
-	if sb.databaseBytes != nil {
+	if sb.databaseBytes != nil && *sb.databaseBytes != 0 {
 		props[StorageDbBytes] = *sb.databaseBytes
 	}
 	billingMetric.Properties = &props

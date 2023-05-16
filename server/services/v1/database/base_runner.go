@@ -18,6 +18,7 @@ import (
 	"context"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
@@ -124,7 +125,7 @@ func (runner *BaseQueryRunner) insertOrReplace(ctx context.Context, tx transacti
 	var err error
 	ts := internal.NewTimestamp()
 	allKeys := make([][]byte, 0, len(documents))
-	indexer := NewSecondaryIndexer(coll)
+	indexer := NewSecondaryIndexer(coll, false)
 	for _, doc := range documents {
 		// reset it back to doc
 		doc, err = runner.mutateAndValidatePayload(ctx, coll, newInsertPayloadMutator(coll, ts.ToRFC3339()), doc)
@@ -193,6 +194,7 @@ func (*BaseQueryRunner) mutateAndValidatePayload(ctx context.Context, coll *sche
 			deserializedDoc = util.UnFlatMap(deserializedDoc, false)
 		}
 		if err = coll.Validate(deserializedDoc); err != nil {
+			log.Err(err).Msgf("json schema validation failed for data '%s'", string(doc))
 			// schema validation failed
 			return doc, err
 		}

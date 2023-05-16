@@ -199,16 +199,20 @@ func (it *FilterableSearchIterator) Next(row *Row) bool {
 			}
 			row.Key = []byte(searchKey)
 
-			// now apply the filter
-			if !it.filter.MatchesDoc(doc) {
-				continue
-			}
-
 			var rawData []byte
 			// marshal the doc as bytes
 			if rawData, it.err = util.MapToJSON(doc); it.err != nil {
 				return false
 			}
+			tsJSON, err := row.Data.TimeStampsToJSON()
+			if err != nil {
+				return false
+			}
+			// now apply the filter
+			if !it.filter.Matches(rawData, tsJSON) {
+				continue
+			}
+
 			row.Data.RawData = rawData
 			return true
 		}

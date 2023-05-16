@@ -89,6 +89,25 @@ func TestIndexingCreateSimpleKVsforDoc(t *testing.T) {
 		}
 		assertKVs(t, expected, updateSet.addKeys, updateSet.addCounts)
 	})
+
+	t.Run("insert with no metadata", func(t *testing.T) {
+		indexStore.coll.SecondaryIndexes.IndexMetadata = false
+		defer func() {
+			indexStore.coll.SecondaryIndexes.IndexMetadata = true
+		}()
+		updateSet, err := indexStore.buildAddAndRemoveKVs(td, nil, primaryKey)
+		assert.NoError(t, err)
+		expected := [][]any{
+			{"skey", KVSubspace, "id", value.ToSecondaryOrder(schema.Int64Type, nil), int64(1), 0, 1},
+			{"skey", KVSubspace, "double_f", value.ToSecondaryOrder(schema.DoubleType, nil), float64(2), 0, 1},
+			{"skey", KVSubspace, "created", value.ToSecondaryOrder(schema.DateTimeType, nil), "2023-01-16T12:55:17.304154Z", 0, 1},
+			{"skey", KVSubspace, "updated", value.ToSecondaryOrder(schema.DateTimeType, nil), "2023-01-16T12:55:17.304154Z", 0, 1},
+			{"skey", KVSubspace, "arr", value.ToSecondaryOrder(schema.Int64Type, nil), int64(1), 0, 1},
+			{"skey", KVSubspace, "arr", value.ToSecondaryOrder(schema.Int64Type, nil), int64(2), 1, 1},
+		}
+		assertKVs(t, expected, updateSet.addKeys, updateSet.addCounts)
+	})
+
 	t.Run("update new values", func(t *testing.T) {
 		updateTD, _ := createDoc(`{"id":1, "double_f":3,"created":"2023-01-17T12:55:17.304154Z","updated": "2023-01-17T12:55:17.304154Z","binary_val": "cGVlay1hLWJvbwo=", "arr":[1,3]}`)
 		updateTD.CreatedAt = td.CreatedAt
@@ -771,6 +790,67 @@ func TestIndexingStoreAndGetSimpleKVsforDoc(t *testing.T) {
 	})
 }
 
+func TestWriteModeOnlyIndexing(t *testing.T) {
+	reqSchema := []byte(`{
+		"title": "t1",
+		"properties": {
+			"id": {
+				"type": "integer",
+				"index": true
+			},
+			"double_f": {
+				"type": "number",
+				"default": 1.5,
+				"index": true
+			},
+			"number": {
+				"type": "number",
+				"index": true
+			},
+			"created": {
+				"type": "string",
+				"format": "date-time",
+				"createdAt": true,
+				"index": true
+			},
+			"updated": {
+				"type": "string",
+				"format": "date-time",
+				"updatedAt": true,
+				"index": true
+			}
+		},
+		"primary_key": ["id"]
+	}`)
+
+	indexStore := setupTest(t, reqSchema)
+	indexStore.indexWriteModeOnly = true
+	indexStore.indexAll = false
+	td, primaryKey := createDoc(`{"id":1, "double_f":2,"number":4,"created":"2023-01-16T12:55:17.304154Z","updated": "2023-01-16T12:55:17.304154Z","binary_val": "cGVlay1hLWJvbwo=", "arr":[1,2]}`)
+
+	for _, idx := range indexStore.coll.SecondaryIndexes.All {
+		switch idx.Name {
+		case "double_f":
+			idx.State = schema.INDEX_WRITE_MODE
+		case "updated":
+			idx.State = schema.INDEX_WRITE_MODE_BUILDING
+		case "number":
+			idx.State = schema.UNKNOWN
+		default:
+			idx.State = schema.INDEX_ACTIVE
+		}
+	}
+
+	updateSet, err := indexStore.buildAddAndRemoveKVs(td, nil, primaryKey)
+	assert.NoError(t, err)
+	expected := [][]any{
+		{"skey", KVSubspace, "double_f", value.ToSecondaryOrder(schema.DoubleType, nil), float64(2), 0, 1},
+		{"skey", KVSubspace, "number", value.ToSecondaryOrder(schema.DoubleType, nil), float64(4), 0, 1},
+		{"skey", KVSubspace, "updated", value.ToSecondaryOrder(schema.DateTimeType, nil), "2023-01-16T12:55:17.304154Z", 0, 1},
+	}
+	assertKVs(t, expected, updateSet.addKeys, updateSet.addCounts)
+}
+
 func TestBulkIndexing(t *testing.T) {
 	reqSchema := []byte(`{
 		"title": "t1",
@@ -817,7 +897,7 @@ func TestBulkIndexing(t *testing.T) {
 	}
 	assert.NoError(t, tx.Commit(ctx))
 
-	err = indexStore.BuildCollection(ctx, tm)
+	err = indexStore.BuildCollection(ctx, tm, nil)
 	assert.NoError(t, err)
 
 	tx, err = tm.StartTx(ctx)
@@ -840,7 +920,7 @@ func setupTest(t *testing.T, reqSchema []byte) *SecondaryIndexerImpl {
 	assert.NoError(t, err)
 	coll.EncodedName = []byte("t1")
 	coll.EncodedTableIndexName = []byte("sidx1")
-	indexer := newSecondaryIndexerImpl(coll)
+	indexer := newSecondaryIndexerImpl(coll, false)
 	indexer.indexAll = true
 
 	return indexer

@@ -70,7 +70,6 @@ func Get(cfg *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerInte
 		grpcLogging.StreamServerInterceptor(grpcZerolog.InterceptorLogger(sampledTaggedLogger), []grpcLogging.Option{}...),
 		validatorStreamServerInterceptor(),
 		grpcRecovery.StreamServerInterceptor(grpcRecovery.WithRecoveryHandler(recoveryHandler)),
-		headersStreamServerInterceptor(),
 	}...)
 	stream := middleware.ChainStreamServer(streamInterceptors...)
 
@@ -106,7 +105,6 @@ func Get(cfg *config.Config) (grpc.UnaryServerInterceptor, grpc.StreamServerInte
 		validatorUnaryServerInterceptor(),
 		timeoutUnaryServerInterceptor(DefaultTimeout),
 		grpcRecovery.UnaryServerInterceptor(grpcRecovery.WithRecoveryHandler(recoveryHandler)),
-		headersUnaryServerInterceptor(),
 	}...)
 	unary := middleware.ChainUnaryServer(unaryInterceptors...)
 

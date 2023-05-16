@@ -27,15 +27,16 @@ const (
 )
 
 type Query struct {
-	Q            string
-	SearchFields []string
-	Facets       Facets
-	PageSize     int
-	WrappedF     *filter.WrappedFilter
-	ReadFields   *read.FieldFactory
-	SortOrder    *sort.Ordering
-	GroupBy      GroupBy
-	VectorS      VectorSearch
+	Q              string
+	SearchFields   []string
+	Facets         Facets
+	PageSize       int
+	WrappedF       *filter.WrappedFilter
+	NoSearchFilter *filter.WrappedFilter
+	ReadFields     *read.FieldFactory
+	SortOrder      *sort.Ordering
+	GroupBy        GroupBy
+	VectorS        VectorSearch
 }
 
 func (q *Query) ToSearchFacetSize() int {
@@ -143,6 +144,10 @@ func (q *Query) IsQAndVectorBoth() bool {
 	return len(q.VectorS.VectorF) > 0 && len(q.Q) > 0 && q.Q != all
 }
 
+func (q *Query) HasNoSearchFilter() bool {
+	return q.NoSearchFilter != nil
+}
+
 type Builder struct {
 	query *Query
 }
@@ -167,6 +172,13 @@ func (b *Builder) Query(q string) *Builder {
 
 func (b *Builder) Filter(w *filter.WrappedFilter) *Builder {
 	b.query.WrappedF = w
+	return b
+}
+
+// NoSearchFilter allows to send the empty filter to search. If this is set then we send empty filter to
+// search but still use "WrappedF"(above) filter for in-memory filtering.
+func (b *Builder) NoSearchFilter(w *filter.WrappedFilter) *Builder {
+	b.query.NoSearchFilter = w
 	return b
 }
 

@@ -587,6 +587,13 @@ func TestUserInvitations(t *testing.T) {
 		Value("status").
 		String().
 		Equal(auth.CreatedStatus)
+	createUserInvitation(t, "d@hello.com", "editor_c", "TestUserInvitations", token).
+		Status(http.StatusOK).
+		JSON().
+		Object().
+		Value("status").
+		String().
+		Equal(auth.CreatedStatus)
 	createUserInvitation(t, "a@hello.com", "editor_a", "TestUserInvitations", token).
 		Status(http.StatusOK).
 		JSON().
@@ -599,17 +606,18 @@ func TestUserInvitations(t *testing.T) {
 	listUserInvitations1.Status(http.StatusOK)
 	invitations1 := listUserInvitations1.JSON().Object().Value("invitations").Array()
 	fmt.Println(invitations1)
-	require.Equal(t, float64(3), invitations1.Length().Raw())
+	require.Equal(t, float64(4), invitations1.Length().Raw())
 
 	emailCountMap1 := make(map[string]int)
 	for _, value := range invitations1.Iter() {
 		emailCountMap1[value.Object().Value("email").String().Raw()]++
 	}
 
-	require.Equal(t, 3, len(emailCountMap1))
+	require.Equal(t, 4, len(emailCountMap1))
 	require.Equal(t, 1, emailCountMap1["a@hello.com"])
 	require.Equal(t, 1, emailCountMap1["b@hello.com"])
 	require.Equal(t, 1, emailCountMap1["c@hello.com"])
+	require.Equal(t, 1, emailCountMap1["d@hello.com"])
 
 	// delete invitation
 	deleteUserInvitations(t, "c@hello.com", "PENDING", token).
@@ -624,28 +632,43 @@ func TestUserInvitations(t *testing.T) {
 	listUserInvitations2 := listUserInvitations(t, token)
 	listUserInvitations2.Status(http.StatusOK)
 	invitations2 := listUserInvitations2.JSON().Object().Value("invitations").Array()
-	require.Equal(t, float64(2), invitations2.Length().Raw())
+	require.Equal(t, float64(3), invitations2.Length().Raw())
 
 	emailCountMap2 := make(map[string]int)
 	for _, value := range invitations2.Iter() {
 		emailCountMap2[value.Object().Value("email").String().Raw()]++
 	}
-	require.Equal(t, 2, len(emailCountMap2))
+	require.Equal(t, 3, len(emailCountMap2))
 	require.Equal(t, 1, emailCountMap2["a@hello.com"])
 	require.Equal(t, 1, emailCountMap2["b@hello.com"])
+	require.Equal(t, 1, emailCountMap2["d@hello.com"])
 
 	// call gotrue to get the code
 	invitationCode := getInvitationCode(t, "tigris_test", "b@hello.com")
 
 	// verify - valid code
-	verificationRes1 := verifyUserInvitations(t, "b@hello.com", invitationCode, token)
+	verificationRes1 := verifyUserInvitations(t, "b@hello.com", invitationCode, token, false)
 	verificationRes1.Status(http.StatusOK)
 	require.Equal(t, "tigris_test", verificationRes1.JSON().Object().Value("tigris_namespace").String().Raw())
 	require.Equal(t, "tigris_test_name", verificationRes1.JSON().Object().Value("tigris_namespace_name").String().Raw())
 
-	// verify - invalid code
-	verificationRes2 := verifyUserInvitations(t, "b@hello.com", "invalid-code", token)
+	// verify - same valid code - it should fail as the invitation is marked as accepted
+	verificationRes2 := verifyUserInvitations(t, "b@hello.com", invitationCode, token, false)
 	verificationRes2.Status(http.StatusUnauthorized)
+
+	// dry verification
+	invitationCodeC := getInvitationCode(t, "tigris_test", "d@hello.com")
+	for i := 0; i < 5; i++ {
+		// verify - valid code
+		verificationRes := verifyUserInvitations(t, "d@hello.com", invitationCodeC, token, true)
+		verificationRes.Status(http.StatusOK)
+		require.Equal(t, "tigris_test", verificationRes1.JSON().Object().Value("tigris_namespace").String().Raw())
+		require.Equal(t, "tigris_test_name", verificationRes1.JSON().Object().Value("tigris_namespace_name").String().Raw())
+	}
+
+	// verify - invalid code
+	verificationRes3 := verifyUserInvitations(t, "b@hello.com", "invalid-code", token, false)
+	verificationRes3.Status(http.StatusUnauthorized)
 }
 
 func TestAuthzOwner(t *testing.T) {
@@ -759,11 +782,12 @@ func listProjects(t *testing.T, token string) *httpexpect.Response {
 		Expect()
 }
 
-func verifyUserInvitations(t *testing.T, email string, code string, token string) *httpexpect.Response {
+func verifyUserInvitations(t *testing.T, email string, code string, token string, dry bool) *httpexpect.Response {
 	e2 := expectLow(t, config.GetBaseURL2())
-	payload := make(map[string]string)
+	payload := make(map[string]any)
 	payload["email"] = email
 	payload["code"] = code
+	payload["dry"] = dry
 	return e2.POST(invitationUrl("verify")).
 		WithJSON(payload).
 		WithHeader(Authorization, Bearer+token).

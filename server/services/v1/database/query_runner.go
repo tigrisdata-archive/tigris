@@ -92,6 +92,11 @@ func (runner *InsertQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	runner.queryMetrics.SetWriteType("insert")
 	metrics.UpdateSpanTags(ctx, runner.queryMetrics)
 
+	reqStatus, reqStatusFound := metrics.RequestStatusFromContext(ctx)
+	if reqStatus != nil && reqStatusFound {
+		reqStatus.AddResultDocs(int64(len(runner.req.Documents)))
+	}
+
 	return Response{
 		CreatedAt: ts,
 		AllKeys:   allKeys,
@@ -126,6 +131,11 @@ func (runner *ReplaceQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 
 	runner.queryMetrics.SetWriteType("replace")
 	metrics.UpdateSpanTags(ctx, runner.queryMetrics)
+
+	reqStatus, reqStatusFound := metrics.RequestStatusFromContext(ctx)
+	if reqStatus != nil && reqStatusFound {
+		reqStatus.AddResultDocs(int64(len(runner.req.Documents)))
+	}
 
 	return Response{
 		CreatedAt: ts,
@@ -178,6 +188,44 @@ func updateDefaultsAndSchema(db string, branch string, collection *schema.Defaul
 	return doc, nil
 }
 
+func mutateAndValidatePushPayload(ctx context.Context, coll *schema.DefaultCollection, doc []byte) ([]byte, error) {
+	ts := internal.NewTimestamp()
+	deserializedDoc, err := util.JSONToMap(doc)
+	if ulog.E(err) {
+		return doc, err
+	}
+
+	// converting a single element to array for mutation.
+	for key, value := range deserializedDoc {
+		var newValue []any
+		newValue = append(newValue, value)
+		deserializedDoc[key] = newValue
+	}
+
+	mutator := newUpdatePayloadMutator(coll, ts.ToRFC3339())
+
+	// this will mutate map, so we need to serialize this map again
+	if err = mutator.stringToInt64(deserializedDoc); err != nil {
+		return doc, err
+	}
+
+	if request.NeedSchemaValidation(ctx) {
+		if err = coll.Validate(deserializedDoc); err != nil {
+			// schema validation failed
+			return doc, err
+		}
+	}
+
+	if mutator.isMutated() {
+		for key, v := range deserializedDoc {
+			deserializedDoc[key] = v.([]any)[0]
+		}
+		return util.MapToJSON(deserializedDoc)
+	}
+
+	return doc, nil
+}
+
 func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
 	db, coll, err := runner.getDBAndCollection(ctx, tx, tenant,
 		runner.req.GetProject(), runner.req.GetCollection(), runner.req.GetBranch())
@@ -185,7 +233,7 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 		return Response{}, ctx, err
 	}
 
-	indexer := NewSecondaryIndexer(coll)
+	indexer := NewSecondaryIndexer(coll, false)
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
 
@@ -213,6 +261,14 @@ func (runner *UpdateQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	if fieldOperator, ok := factory.FieldOperators[string(update.Set)]; ok {
 		// Set operation needs schema validation as well as mutation if we need to convert numeric fields from string to int64
 		fieldOperator.Input, err = runner.mutateAndValidatePayload(ctx, coll, newUpdatePayloadMutator(coll, ts.ToRFC3339()), fieldOperator.Input)
+		if err != nil {
+			return Response{}, ctx, err
+		}
+	}
+
+	if fieldOperator, ok := factory.FieldOperators[string(update.Push)]; ok {
+		// mutate if it needs to convert numeric fields from string to int64
+		fieldOperator.Input, err = mutateAndValidatePushPayload(ctx, coll, fieldOperator.Input)
 		if err != nil {
 			return Response{}, ctx, err
 		}
@@ -324,7 +380,7 @@ func (runner *DeleteQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	}
 
 	ctx = runner.cdcMgr.WrapContext(ctx, db.Name())
-	indexer := NewSecondaryIndexer(coll)
+	indexer := NewSecondaryIndexer(coll, false)
 
 	if err = runner.mustBeDocumentsCollection(coll, "deleteReq"); err != nil {
 		return Response{}, ctx, err
@@ -466,9 +522,10 @@ type readerOptions struct {
 	tablePlan     *filter.TableScanPlan
 	inMemoryStore bool
 	// secondaryIndex bool
-	sorting      *sort.Ordering
-	filter       *filter.WrappedFilter
-	fieldFactory *read.FieldFactory
+	sorting        *sort.Ordering
+	noSearchFilter *filter.WrappedFilter
+	filter         *filter.WrappedFilter
+	fieldFactory   *read.FieldFactory
 }
 
 func (runner *BaseQueryRunner) buildReaderOptions(req *api.ReadRequest, collection *schema.DefaultCollection) (readerOptions, error) {
@@ -503,7 +560,9 @@ func (runner *BaseQueryRunner) buildReaderOptions(req *api.ReadRequest, collecti
 	}
 
 	if searchSorting, err := runner.getSearchOrdering(collection, req.Sort); err == nil && searchSorting != nil {
-		// error here means we need to check if we handle sort on database level
+		// only in case when sorting is explicitly tagged on the field we query search store. Also, we are not
+		// passing filters, we are only using for sort and then applying filtering on server.
+		options.noSearchFilter = filter.WrappedEmptyFilter
 		options.sorting = searchSorting
 		options.inMemoryStore = true
 		return options, nil
@@ -552,19 +611,8 @@ func (runner *BaseQueryRunner) buildReaderOptions(req *api.ReadRequest, collecti
 		return options, errors.InvalidArgument("can't perform sort on this field")
 	}
 
-	if runner.noFallbackToSearch(options) {
-		// case when fallback is disabled or we explicitly need to perform table scan
-		options.tablePlan, err = planner.GenerateTablePlan(sortPlan, from)
-		return options, err
-	}
-
-	// fallback
-	options.inMemoryStore = true
-	return options, nil
-}
-
-func (*BaseQueryRunner) noFallbackToSearch(options readerOptions) bool {
-	return !config.DefaultConfig.Search.IsReadEnabled() || !options.filter.IsSearchIndexed()
+	options.tablePlan, err = planner.GenerateTablePlan(sortPlan, from)
+	return options, err
 }
 
 func (runner *StreamingQueryRunner) instrumentRunner(ctx context.Context, options readerOptions) context.Context {
@@ -737,10 +785,12 @@ func (runner *StreamingQueryRunner) iterateOnSecondaryIndexStore(ctx context.Con
 func (runner *StreamingQueryRunner) iterateOnSearchStore(ctx context.Context, coll *schema.DefaultCollection, options readerOptions) error {
 	rowReader := NewSearchReader(ctx, runner.searchStore, coll, qsearch.NewBuilder().
 		Filter(options.filter).
+		NoSearchFilter(options.noSearchFilter).
 		SortOrder(options.sorting).
 		PageSize(defaultPerPage).
 		Build())
 
+	// Note: Iterator expects the "options.filter" so that we use it to perform in-memory filtering.
 	if _, err := runner.iterate(ctx, coll, rowReader.Iterator(coll, options.filter), options.fieldFactory); err != nil {
 		return err
 	}
@@ -934,7 +984,7 @@ func buildExplainResp(options readerOptions, coll *schema.DefaultCollection, fil
 					friendlyVal = "$TIGRIS_MAX"
 				default:
 					if encodedString, ok := val.([]byte); ok {
-						friendlyVal = string(encodedString)
+						friendlyVal = fmt.Sprint(encodedString)
 					} else {
 						friendlyVal = fmt.Sprint(val)
 					}

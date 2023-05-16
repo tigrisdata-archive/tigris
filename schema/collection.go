@@ -119,8 +119,19 @@ func disableAdditionalPropertiesAndAllowNullable(required []string, properties m
 					} else {
 						for _, itemsP := range items.Properties {
 							switch itemsP.Types[0] {
-							case "string", "number", "object", "integer", "array", "boolean":
+							case "string", "number", "object", "integer", "boolean":
 								itemsP.Types = append(itemsP.Types, "null")
+							case "array":
+								if itemsA, ok := itemsP.Items.(*jsonschema.Schema); ok {
+									if len(itemsA.Properties) == 0 {
+										items.Types = append(items.Types, "null")
+									} else {
+										if itemsA.AdditionalProperties == nil {
+											itemsA.AdditionalProperties = false
+										}
+										disableAdditionalPropertiesAndAllowNullable(itemsA.Required, itemsA.Properties)
+									}
+								}
 							}
 							if len(itemsP.Properties) > 0 {
 								if itemsP.AdditionalProperties == nil {
@@ -167,7 +178,7 @@ func NewDefaultCollection(id uint32, schVer uint32, factory *Factory, schemas Ve
 	if implicitSearchIndex != nil {
 		prevVersionInSearch = implicitSearchIndex.prevVersionInSearch
 	}
-	queryableFields := NewQueryableFieldsBuilder().BuildQueryableFields(factory.Fields, prevVersionInSearch)
+	queryableFields := NewQueryableFieldsBuilder().BuildQueryableFields(factory.Fields, prevVersionInSearch, factory.Indexes.IndexMetadata)
 
 	schemaDeltas, err := buildSchemaDeltas(schemas)
 	if err != nil {
@@ -216,6 +227,10 @@ func (*DefaultCollection) SecondaryIndexKeyword() string {
 	return "skey"
 }
 
+func (d *DefaultCollection) SecondaryIndexMetadata() bool {
+	return d.SecondaryIndexes.IndexMetadata
+}
+
 func (d *DefaultCollection) GetVersion() uint32 {
 	return d.SchVer
 }
@@ -250,7 +265,7 @@ func (d *DefaultCollection) GetActiveIndexedFields() []*QueryableField {
 func (d *DefaultCollection) GetWriteModeIndexes() []*QueryableField {
 	var indexed []*QueryableField
 	for _, q := range d.QueryableFields {
-		if q.Indexed && !d.SecondaryIndexes.IsWriteModeIndex(q.FieldName) {
+		if q.Indexed && !d.SecondaryIndexes.IsActiveIndex(q.FieldName) {
 			indexed = append(indexed, q)
 		}
 	}
@@ -294,6 +309,10 @@ func (d *DefaultCollection) GetField(name string) *Field {
 	}
 
 	return nil
+}
+
+func (d *DefaultCollection) GetSearchState() SearchIndexState {
+	return d.ImplicitSearchIndex.GetState()
 }
 
 // Validate expects an unmarshalled document which it will validate again the schema of this collection.

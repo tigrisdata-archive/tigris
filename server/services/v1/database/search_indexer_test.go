@@ -162,7 +162,7 @@ func TestPackSearchFields(t *testing.T) {
 		}
 		f := &schema.Field{DataType: schema.ArrayType, FieldName: "arrayField"}
 		coll := &schema.DefaultCollection{
-			QueryableFields: schema.NewQueryableFieldsBuilder().BuildQueryableFields([]*schema.Field{f}, nil),
+			QueryableFields: schema.NewQueryableFieldsBuilder().BuildQueryableFields([]*schema.Field{f}, nil, true),
 		}
 
 		res, err := PackSearchFields(context.TODO(), td, coll, "123")
@@ -180,7 +180,7 @@ func TestPackSearchFields(t *testing.T) {
 		}
 		f := &schema.Field{DataType: schema.DateTimeType, FieldName: "dateField"}
 		coll := &schema.DefaultCollection{
-			QueryableFields: schema.NewQueryableFieldsBuilder().BuildQueryableFields([]*schema.Field{f}, nil),
+			QueryableFields: schema.NewQueryableFieldsBuilder().BuildQueryableFields([]*schema.Field{f}, nil, true),
 		}
 		res, err := PackSearchFields(context.TODO(), td, coll, "123")
 		require.NoError(t, err)
@@ -292,7 +292,7 @@ func TestUnpackSearchFields(t *testing.T) {
 		}
 		f := &schema.Field{DataType: schema.ArrayType, FieldName: "arrayField"}
 		coll := &schema.DefaultCollection{
-			QueryableFields: schema.NewQueryableFieldsBuilder().BuildQueryableFields([]*schema.Field{f}, nil),
+			QueryableFields: schema.NewQueryableFieldsBuilder().BuildQueryableFields([]*schema.Field{f}, nil, true),
 		}
 		_, _, unpacked, err := UnpackSearchFields(doc, coll)
 		require.NoError(t, err)
@@ -307,7 +307,7 @@ func TestUnpackSearchFields(t *testing.T) {
 		}
 		f := &schema.Field{DataType: schema.ArrayType, FieldName: "arrayField"}
 		coll := &schema.DefaultCollection{
-			QueryableFields: schema.NewQueryableFieldsBuilder().BuildQueryableFields([]*schema.Field{f}, nil),
+			QueryableFields: schema.NewQueryableFieldsBuilder().BuildQueryableFields([]*schema.Field{f}, nil, true),
 		}
 		_, _, unpacked, err := UnpackSearchFields(doc, coll)
 		require.NoError(t, err)
@@ -323,13 +323,41 @@ func TestUnpackSearchFields(t *testing.T) {
 		}
 		f := &schema.Field{DataType: schema.DateTimeType, FieldName: "dateField"}
 		coll := &schema.DefaultCollection{
-			QueryableFields: schema.NewQueryableFieldsBuilder().BuildQueryableFields([]*schema.Field{f}, nil),
+			QueryableFields: schema.NewQueryableFieldsBuilder().BuildQueryableFields([]*schema.Field{f}, nil, true),
 		}
 		_, _, unpacked, err := UnpackSearchFields(doc, coll)
 		require.NoError(t, err)
 		require.Len(t, unpacked, 1)
 		require.Equal(t, "2022-10-11T04:19:32+05:30", unpacked["dateField"])
 	})
+}
+
+func TestRemoveNullFromArrayObj(t *testing.T) {
+	doc := map[string]any{
+		"a": 1,
+		"b": nil,
+		"c": []any{
+			map[string]any{"a": "foo", "b": nil},
+			map[string]any{"a": "foo", "b": []any{map[string]any{"a": "foo", "b": nil}, map[string]any{"b": nil}}},
+			map[string]any{"a": []any{map[string]any{"a": "foo", "b": nil}, map[string]any{"b": nil}, []any{map[string]any{"a": "foo", "b": nil}}, []any{map[string]any{"a": nil}}}},
+			[]string{"a", "b"},
+		},
+		"d": []string{"a", "b"},
+	}
+
+	removeNullsFromArrayObj(doc, "c")
+
+	require.Equal(t, map[string]any{
+		"a": 1,
+		"b": nil,
+		"c": []any{
+			map[string]any{"a": "foo"},
+			map[string]any{"a": "foo", "b": []any{map[string]any{"a": "foo"}, map[string]any{}}},
+			map[string]any{"a": []any{map[string]any{"a": "foo"}, map[string]any{}, []any{map[string]any{"a": "foo"}}, []any{map[string]any{}}}},
+			[]string{"a", "b"},
+		},
+		"d": []string{"a", "b"},
+	}, doc)
 }
 
 // Benchmarking to test if it makes sense to decode the data and then add fields to the decoded map and then encode

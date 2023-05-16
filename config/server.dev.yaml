@@ -21,6 +21,9 @@ server:
 cdc:
   enabled: false
 
+kv:
+  chunking: true
+
 search:
   host: localhost
   port: 8108
@@ -38,3 +41,7 @@ secondary_index:
   read_enabled: true
   write_enabled: true
   mutate_enabled: true
+
+workers:
+  enabled: true
+  count: 2
