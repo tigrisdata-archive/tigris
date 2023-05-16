@@ -29,6 +29,14 @@ workflows:
     then:
       - '$commentOnce($sprintf("Welcome @%v! Thank you so much for your first pull request!", [$author()]))'
 
+  - name: check-conventional-commits
+    description: Validate that pull requests follow the conventional commits
+    run:
+      - if: '$isDraft() == false && $base() == "main"'
+        then:
+          - '$commitLint()'
+          - '$titleLint()'
+
   - name: empty-description
     always-run: true
     if:

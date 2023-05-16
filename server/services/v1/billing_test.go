@@ -135,7 +135,7 @@ func (s *billingServiceSuite) Test_ListUsages_WithoutStartTime_Fails() {
 	r, err := s.billing.ListUsages(s.ctx, mockReq)
 	require.ErrorContains(s.T(), err, "start_time is required")
 	require.Nil(s.T(), r)
-	require.Empty(s.T(), s.mockProvider.Calls)
+	s.mockProvider.AssertNotCalled(s.T(), "GetUsage")
 }
 
 func (s *billingServiceSuite) Test_ListUsages_WithoutEndTime_Fails() {
@@ -145,7 +145,7 @@ func (s *billingServiceSuite) Test_ListUsages_WithoutEndTime_Fails() {
 	r, err := s.billing.ListUsages(s.ctx, mockReq)
 	require.ErrorContains(s.T(), err, "end_time is required")
 	require.Nil(s.T(), r)
-	require.Empty(s.T(), s.mockProvider.Calls)
+	s.mockProvider.AssertNotCalled(s.T(), "GetUsage")
 }
 
 func (s *billingServiceSuite) Test_ListUsages_WithNoNamespace_Fails() {
