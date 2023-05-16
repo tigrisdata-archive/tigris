@@ -242,7 +242,10 @@ func (w *Worker) buildIndexTask(queueItem *metadata.QueueItem) error {
 
 	ctx := context.Background()
 	dbBranch := metadata.NewDatabaseNameWithBranch(task.ProjName, task.Branch)
-	tenant, _ := w.tenantMgr.GetTenant(ctx, task.NamespaceId)
+	tenant, err := w.tenantMgr.GetTenant(ctx, task.NamespaceId)
+	if err != nil {
+		return err
+	}
 
 	project, err := tenant.GetProject(task.ProjName)
 	if err != nil {
@@ -255,6 +258,9 @@ func (w *Worker) buildIndexTask(queueItem *metadata.QueueItem) error {
 	}
 
 	coll := db.GetCollection(task.CollName)
+	if coll == nil {
+		return fmt.Errorf("could not find collection \"%s\"", task.CollName)
+	}
 	// Indexer will only index indexes that are not `INDEX_ACTIVE` state
 	indexer := database.NewSecondaryIndexer(coll, true)
 
