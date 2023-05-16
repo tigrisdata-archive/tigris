@@ -34,7 +34,7 @@ type Provider interface {
 	PushStorageEvents(ctx context.Context, events []*StorageEvent) error
 	GetInvoices(ctx context.Context, accountId AccountId, r *api.ListInvoicesRequest) (*api.ListInvoicesResponse, error)
 	GetInvoiceById(ctx context.Context, accountId AccountId, invoiceId string) (*api.ListInvoicesResponse, error)
-	GetUsage(ctx context.Context, id AccountId, r *UsageRequest) (*UsageAggregate, error)
+	GetUsage(ctx context.Context, id AccountId, r *UsageRequest) (*api.UsageResponse, error)
 }
 
 type UsageRequest struct {
@@ -42,17 +42,6 @@ type UsageRequest struct {
 	StartTime      *time.Time
 	EndTime        *time.Time
 	NextPage       *string
-}
-
-type Usage struct {
-	StartTime time.Time
-	EndTime   time.Time
-	Value     *float32
-}
-
-type UsageAggregate struct {
-	Data     map[string][]*Usage
-	NextPage *string
 }
 
 func NewProvider() Provider {

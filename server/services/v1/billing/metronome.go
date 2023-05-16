@@ -328,7 +328,7 @@ func (m *Metronome) GetInvoiceById(ctx context.Context, accountId AccountId, inv
 	}, nil
 }
 
-func (m *Metronome) GetUsage(ctx context.Context, id AccountId, r *UsageRequest) (*UsageAggregate, error) {
+func (m *Metronome) GetUsage(ctx context.Context, id AccountId, r *UsageRequest) (*api.UsageResponse, error) {
 	var (
 		resp *biller.GetUsageBatchResponse
 		err  error
@@ -401,23 +401,27 @@ func (m *Metronome) GetUsage(ctx context.Context, id AccountId, r *UsageRequest)
 		return nil, NewMetronomeError(resp.StatusCode(), resp.Body)
 	}
 
-	aggUsage := map[string][]*Usage{}
+	aggUsage := map[string]*api.UsageTimeSeries{}
 	for _, param := range *reqParams.BillableMetrics {
 		n := m.billedMetricsById[param.Id]
-		aggUsage[n] = []*Usage{}
+		aggUsage[n] = &api.UsageTimeSeries{}
 	}
 
 	for _, d := range resp.JSON200.Data {
+		val := float32(0)
+		if d.Value != nil {
+			val = *d.Value
+		}
 		if n, ok := m.billedMetricsById[d.BillableMetricId]; ok {
-			aggUsage[n] = append(aggUsage[n], &Usage{
-				StartTime: d.StartTimestamp,
-				EndTime:   d.EndTimestamp,
-				Value:     d.Value,
+			aggUsage[n].Series = append(aggUsage[n].Series, &api.Usage{
+				StartTime: timestamppb.New(d.StartTimestamp),
+				EndTime:   timestamppb.New(d.EndTimestamp),
+				Value:     val,
 			})
 		}
 	}
 
-	return &UsageAggregate{
+	return &api.UsageResponse{
 		Data:     aggUsage,
 		NextPage: resp.JSON200.NextPage,
 	}, nil
