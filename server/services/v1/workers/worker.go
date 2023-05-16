@@ -242,7 +242,10 @@ func (w *Worker) buildIndexTask(queueItem *metadata.QueueItem) error {
 
 	ctx := context.Background()
 	dbBranch := metadata.NewDatabaseNameWithBranch(task.ProjName, task.Branch)
-	tenant, _ := w.tenantMgr.GetTenant(ctx, task.NamespaceId)
+	tenant, err := w.tenantMgr.GetTenant(ctx, task.NamespaceId)
+	if err != nil {
+		return err
+	}
 
 	project, err := tenant.GetProject(task.ProjName)
 	if err != nil {
