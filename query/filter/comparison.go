@@ -495,5 +495,5 @@ func (n *NeMatcher) String() string {
 }
 
 func MatcherForArray(matcher ValueMatcher) bool {
-	return matcher.GetValue().DataType() == schema.ArrayType
+     return matcher.GetValue().DataType() == schema.ArrayType
 }
