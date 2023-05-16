@@ -106,16 +106,16 @@ func (s *billingServiceSuite) Test_ListInvoices_WithNoNamespace_Fails() {
 	s.mockProvider.AssertNotCalled(s.T(), "GetInvoiceById")
 }
 
-func (s *billingServiceSuite) Test_ListUsages_Succeeds() {
+func (s *billingServiceSuite) Test_GetUsage_Succeeds() {
 	st, et, w := time.Now().UTC(), time.Now().UTC(), api.AggregationWindow_DAY
-	mockReq, mockResp := &api.UsageRequest{
+	mockReq, mockResp := &api.GetUsageRequest{
 		StartTime:   timestamppb.New(st),
 		EndTime:     timestamppb.New(et),
 		AggregateBy: &w,
-	}, &api.UsageResponse{}
+	}, &api.GetUsageResponse{}
 
 	providerRequest := &billing.UsageRequest{
-		BillableMetric: &mockReq.Metric,
+		BillableMetric: &mockReq.Metrics,
 		StartTime:      &st,
 		EndTime:        &et,
 		NextPage:       nil,
@@ -125,7 +125,7 @@ func (s *billingServiceSuite) Test_ListUsages_Succeeds() {
 		Return(mockResp, nil).
 		Once()
 
-	r, err := s.billing.ListUsages(s.ctx, mockReq)
+	r, err := s.billing.GetUsage(s.ctx, mockReq)
 	require.NoError(s.T(), err)
 	require.Equal(s.T(), r, mockResp)
 }
@@ -133,8 +133,8 @@ func (s *billingServiceSuite) Test_ListUsages_Succeeds() {
 func (s *billingServiceSuite) Test_ListUsages_WithoutStartTime_Fails() {
 	_ = s.mockNameSpaceMgr.GetNamespaceMetadata(s.ctx, s.nsMeta.StrId)
 
-	mockReq := &api.UsageRequest{}
-	r, err := s.billing.ListUsages(s.ctx, mockReq)
+	mockReq := &api.GetUsageRequest{}
+	r, err := s.billing.GetUsage(s.ctx, mockReq)
 	require.ErrorContains(s.T(), err, "start_time is required")
 	require.Nil(s.T(), r)
 	s.mockProvider.AssertNotCalled(s.T(), "GetUsage")
@@ -143,8 +143,8 @@ func (s *billingServiceSuite) Test_ListUsages_WithoutStartTime_Fails() {
 func (s *billingServiceSuite) Test_ListUsages_WithoutEndTime_Fails() {
 	_ = s.mockNameSpaceMgr.GetNamespaceMetadata(s.ctx, s.nsMeta.StrId)
 
-	mockReq := &api.UsageRequest{StartTime: timestamppb.New(time.Now())}
-	r, err := s.billing.ListUsages(s.ctx, mockReq)
+	mockReq := &api.GetUsageRequest{StartTime: timestamppb.New(time.Now())}
+	r, err := s.billing.GetUsage(s.ctx, mockReq)
 	require.ErrorContains(s.T(), err, "end_time is required")
 	require.Nil(s.T(), r)
 	s.mockProvider.AssertNotCalled(s.T(), "GetUsage")
@@ -152,8 +152,8 @@ func (s *billingServiceSuite) Test_ListUsages_WithoutEndTime_Fails() {
 
 func (s *billingServiceSuite) Test_ListUsages_WithNoNamespace_Fails() {
 	_ = s.mockNameSpaceMgr.GetNamespaceMetadata(s.ctx, s.nsMeta.StrId)
-	mockReq := &api.UsageRequest{}
-	r, err := s.billing.ListUsages(context.TODO(), mockReq)
+	mockReq := &api.GetUsageRequest{}
+	r, err := s.billing.GetUsage(context.TODO(), mockReq)
 	require.ErrorContains(s.T(), err, "namespace not found")
 	require.Nil(s.T(), r)
 }

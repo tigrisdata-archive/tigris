@@ -34,7 +34,7 @@ type Provider interface {
 	PushStorageEvents(ctx context.Context, events []*StorageEvent) error
 	GetInvoices(ctx context.Context, accountId AccountId, r *api.ListInvoicesRequest) (*api.ListInvoicesResponse, error)
 	GetInvoiceById(ctx context.Context, accountId AccountId, invoiceId string) (*api.ListInvoicesResponse, error)
-	GetUsage(ctx context.Context, id AccountId, r *UsageRequest) (*api.UsageResponse, error)
+	GetUsage(ctx context.Context, id AccountId, r *UsageRequest) (*api.GetUsageResponse, error)
 }
 
 type UsageRequest struct {

@@ -328,7 +328,7 @@ func (m *Metronome) GetInvoiceById(ctx context.Context, accountId AccountId, inv
 	}, nil
 }
 
-func (m *Metronome) GetUsage(ctx context.Context, id AccountId, r *UsageRequest) (*api.UsageResponse, error) {
+func (m *Metronome) GetUsage(ctx context.Context, id AccountId, r *UsageRequest) (*api.GetUsageResponse, error) {
 	var (
 		resp *biller.GetUsageBatchResponse
 		err  error
@@ -425,7 +425,7 @@ func (m *Metronome) GetUsage(ctx context.Context, id AccountId, r *UsageRequest)
 		}
 	}
 
-	return &api.UsageResponse{
+	return &api.GetUsageResponse{
 		Data:     aggUsage,
 		NextPage: resp.JSON200.NextPage,
 	}, nil

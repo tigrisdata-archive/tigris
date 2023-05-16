@@ -65,7 +65,7 @@ func (b *billingService) ListInvoices(ctx context.Context, req *api.ListInvoices
 	return b.GetInvoices(ctx, mId, req)
 }
 
-func (b *billingService) ListUsages(ctx context.Context, req *api.UsageRequest) (*api.UsageResponse, error) {
+func (b *billingService) GetUsage(ctx context.Context, req *api.GetUsageRequest) (*api.GetUsageResponse, error) {
 	namespace, err := request.GetNamespace(ctx)
 	if err != nil {
 		return nil, err
@@ -84,7 +84,7 @@ func (b *billingService) ListUsages(ctx context.Context, req *api.UsageRequest) 
 	}
 
 	ur := &billing.UsageRequest{
-		BillableMetric: &req.Metric,
+		BillableMetric: &req.Metrics,
 		NextPage:       req.NextPage,
 	}
 	st, et := req.GetStartTime().AsTime(), req.GetEndTime().AsTime()

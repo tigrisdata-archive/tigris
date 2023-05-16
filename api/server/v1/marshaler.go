@@ -903,7 +903,7 @@ func (x *UpdateNamespaceMetadataRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (x *UsageRequest) UnmarshalJSON(data []byte) error {
+func (x *GetUsageRequest) UnmarshalJSON(data []byte) error {
 	var mp map[string]jsoniter.RawMessage
 	if err := jsoniter.Unmarshal(data, &mp); err != nil {
 		return err
@@ -915,21 +915,21 @@ func (x *UsageRequest) UnmarshalJSON(data []byte) error {
 			if err := jsoniter.Unmarshal(value, &strTime); err != nil {
 				return err
 			}
-			if t, err := time.Parse(time.RFC3339, strTime); err != nil {
+			t, err := time.Parse(time.RFC3339, strTime)
+			if err != nil {
 				return err
-			} else {
-				x.StartTime = timestamppb.New(t)
 			}
+			x.StartTime = timestamppb.New(t)
 		case "end_time":
 			var strTime string
 			if err := jsoniter.Unmarshal(value, &strTime); err != nil {
 				return err
 			}
-			if t, err := time.Parse(time.RFC3339, strTime); err != nil {
+			t, err := time.Parse(time.RFC3339, strTime)
+			if err != nil {
 				return err
-			} else {
-				x.EndTime = timestamppb.New(t)
 			}
+			x.EndTime = timestamppb.New(t)
 		case "aggregate_by":
 			var aggBy string
 			err := jsoniter.Unmarshal(value, &aggBy)
@@ -948,8 +948,8 @@ func (x *UsageRequest) UnmarshalJSON(data []byte) error {
 			if err := jsoniter.Unmarshal(value, &x.NextPage); err != nil {
 				return err
 			}
-		case "metric":
-			if err := jsoniter.Unmarshal(value, &x.Metric); err != nil {
+		case "metrics":
+			if err := jsoniter.Unmarshal(value, &x.Metrics); err != nil {
 				return err
 			}
 		}
