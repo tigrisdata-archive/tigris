@@ -22,6 +22,7 @@ var (
 	RequestsOkCount               tally.Scope
 	RequestsErrorCount            tally.Scope
 	RequestsRespTime              tally.Scope
+	RequestsRespTimeToFirstDoc    tally.Scope
 	RequestsErrorRespTime         tally.Scope
 	RequestsReadBytes             tally.Scope
 	RequestsReadUnits             tally.Scope
@@ -86,6 +87,7 @@ func initializeRequestScopes() {
 	RequestsOkCount = Requests.SubScope("count")
 	RequestsErrorCount = Requests.SubScope("count")
 	RequestsRespTime = Requests.SubScope("response")
+	RequestsRespTimeToFirstDoc = Requests.SubScope("first_doc_response")
 	RequestsErrorRespTime = Requests.SubScope("error_response")
 	RequestsReadBytes = Requests.SubScope("read")
 	RequestsReadUnits = Requests.SubScope("read")
