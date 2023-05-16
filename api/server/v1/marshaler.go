@@ -25,6 +25,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const (
@@ -897,6 +898,60 @@ func (x *UpdateNamespaceMetadataRequest) UnmarshalJSON(data []byte) error {
 			}
 		case "value":
 			x.Value = value
+		}
+	}
+	return nil
+}
+
+func (x *UsageRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+	for key, value := range mp {
+		switch key {
+		case "start_time":
+			var strTime string
+			if err := jsoniter.Unmarshal(value, &strTime); err != nil {
+				return err
+			}
+			if t, err := time.Parse(time.RFC3339, strTime); err != nil {
+				return err
+			} else {
+				x.StartTime = timestamppb.New(t)
+			}
+		case "end_time":
+			var strTime string
+			if err := jsoniter.Unmarshal(value, &strTime); err != nil {
+				return err
+			}
+			if t, err := time.Parse(time.RFC3339, strTime); err != nil {
+				return err
+			} else {
+				x.EndTime = timestamppb.New(t)
+			}
+		case "aggregate_by":
+			var aggBy string
+			err := jsoniter.Unmarshal(value, &aggBy)
+			if err != nil {
+				return err
+			}
+			switch strings.ToUpper(aggBy) {
+			case "HOUR":
+				a := AggregationWindow_HOUR
+				x.AggregateBy = &a
+			case "DAY":
+				a := AggregationWindow_DAY
+				x.AggregateBy = &a
+			}
+		case "next_page":
+			if err := jsoniter.Unmarshal(value, &x.NextPage); err != nil {
+				return err
+			}
+		case "metric":
+			if err := jsoniter.Unmarshal(value, &x.Metric); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
