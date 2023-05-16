@@ -107,7 +107,6 @@ func (w *Worker) Start() {
 
 func (w *Worker) Loop() {
 	hbTicker := time.NewTicker(2 * w.sleepTime)
-	c := 0
 	for {
 		select {
 		case <-w.done:
@@ -117,7 +116,6 @@ func (w *Worker) Loop() {
 		case <-hbTicker.C:
 			w.hearbeatChan <- w.id
 		default:
-			c++
 			err := w.peekAndProcess()
 			if err != nil {
 				w.errCount++
@@ -319,6 +317,9 @@ func (w *Worker) buildSearchTask(queueItem *metadata.QueueItem) error {
 		return err
 	}
 	coll := db.GetCollection(task.CollName)
+	if coll == nil {
+		return fmt.Errorf("could not find collection \"%s\"", task.CollName)
+	}
 
 	req := &api.BuildCollectionSearchIndexRequest{
 		Branch:     task.Branch,
