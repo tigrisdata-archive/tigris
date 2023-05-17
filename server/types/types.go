@@ -30,4 +30,6 @@ var MyOrigin, _ = os.Hostname()
 type AccessToken struct {
 	Namespace string
 	Sub       string
+	Project   string
+	Role      string
 }
