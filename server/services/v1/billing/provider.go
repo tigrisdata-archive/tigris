@@ -34,7 +34,7 @@ type Provider interface {
 	PushStorageEvents(ctx context.Context, events []*StorageEvent) error
 	GetInvoices(ctx context.Context, accountId AccountId, r *api.ListInvoicesRequest) (*api.ListInvoicesResponse, error)
 	GetInvoiceById(ctx context.Context, accountId AccountId, invoiceId string) (*api.ListInvoicesResponse, error)
-	GetUsage(ctx context.Context, id AccountId, r *UsageRequest) (*UsageAggregate, error)
+	GetUsage(ctx context.Context, id AccountId, r *UsageRequest) (*api.GetUsageResponse, error)
 }
 
 type UsageRequest struct {
@@ -42,17 +42,24 @@ type UsageRequest struct {
 	StartTime      *time.Time
 	EndTime        *time.Time
 	NextPage       *string
+	AggWindow      WindowSize
 }
 
-type Usage struct {
-	StartTime time.Time
-	EndTime   time.Time
-	Value     *float32
-}
+type WindowSize int
 
-type UsageAggregate struct {
-	Data     map[string][]*Usage
-	NextPage *string
+const (
+	Hour WindowSize = iota
+	Day
+)
+
+func (w WindowSize) String() string {
+	switch w {
+	case Hour:
+		return "hour"
+	case Day:
+		return "day"
+	}
+	return ""
 }
 
 func NewProvider() Provider {
