@@ -52,6 +52,6 @@ func (*noop) GetInvoiceById(_ context.Context, _ AccountId, _ string) (*api.List
 	return nil, errors.Unimplemented("billing not enabled on this server")
 }
 
-func (*noop) GetUsage(_ context.Context, _ AccountId, _ *UsageRequest) (*UsageAggregate, error) {
+func (*noop) GetUsage(_ context.Context, _ AccountId, _ *UsageRequest) (*api.GetUsageResponse, error) {
 	return nil, errors.Unimplemented("billing not enabled on this server")
 }
