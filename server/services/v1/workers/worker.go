@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -101,8 +102,20 @@ func (w *Worker) jitterSleep() {
 }
 
 func (w *Worker) Start() {
+	defer catchWorkerPanics()
 	w.jitterSleep()
 	w.Loop()
+}
+
+func catchWorkerPanics() {
+	if r := recover(); r != nil {
+		stackTrace := string(debug.Stack())
+		if err, ok := r.(error); ok {
+			log.Err(err).Str("stacktrace", stackTrace).Msg("worker panic")
+		} else {
+			log.Error().Str("stacktrack", stackTrace).Msgf("worker panic %v", err)
+		}
+	}
 }
 
 func (w *Worker) Loop() {
