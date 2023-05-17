@@ -958,6 +958,52 @@ func (x *GetUsageRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func (x *ListInvoicesRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+	for key, value := range mp {
+		var v any
+		switch key {
+		case "starting_on":
+			var strTime string
+			if err := jsoniter.Unmarshal(value, &strTime); err != nil {
+				return err
+			}
+			t, err := time.Parse(time.RFC3339, strTime)
+			if err != nil {
+				return err
+			}
+			x.StartingOn = timestamppb.New(t)
+			continue
+		case "ending_before":
+			var strTime string
+			if err := jsoniter.Unmarshal(value, &strTime); err != nil {
+				return err
+			}
+			t, err := time.Parse(time.RFC3339, strTime)
+			if err != nil {
+				return err
+			}
+			x.EndingBefore = timestamppb.New(t)
+			continue
+		case "invoice_id":
+			v = &x.InvoiceId
+		case "page_size":
+			v = &x.PageSize
+		case "next_page":
+			v = &x.NextPage
+		default:
+			continue
+		}
+		if err := jsoniter.Unmarshal(value, v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (x *GetNamespaceMetadataResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
 		MetadataKey string              `json:"metadataKey,omitempty"`
