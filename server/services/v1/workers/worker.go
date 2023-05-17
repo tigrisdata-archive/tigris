@@ -262,6 +262,9 @@ func (w *Worker) buildIndexTask(queueItem *metadata.QueueItem) error {
 	}
 
 	coll := db.GetCollection(task.CollName)
+	if coll == nil {
+		return fmt.Errorf("could not find collection \"%s\"", task.CollName)
+	}
 	// Indexer will only index indexes that are not `INDEX_ACTIVE` state
 	indexer := database.NewSecondaryIndexer(coll, true)
 
