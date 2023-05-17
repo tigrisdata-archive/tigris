@@ -27,6 +27,7 @@ import (
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
+	"github.com/tigrisdata/tigris/store/search"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
@@ -39,7 +40,7 @@ func TestCompleteMultipleJobs(t *testing.T) {
 	tm := transaction.NewManager(kvStore)
 	queue := metadata.NewQueueStore(&metadata.NameRegistry{QueueSB: "test_queue_" + t.Name()})
 	_ = kvStore.DropTable(ctx, queue.SubspaceName)
-	pool := NewWorkerPool(10, queue, tm, nil, 10*time.Millisecond, 100*time.Millisecond)
+	pool := NewWorkerPool(10, queue, tm, nil, &search.NoopStore{}, 10*time.Millisecond, 100*time.Millisecond)
 	assert.NoError(t, pool.Start())
 
 	for i := 0; i < 5; i++ {
@@ -73,7 +74,7 @@ func TestJobWithToManyErrorsIsDropped(t *testing.T) {
 	queue := metadata.NewQueueStore(&metadata.NameRegistry{QueueSB: "test_queue_" + t.Name()})
 	_ = kvStore.DropTable(ctx, queue.SubspaceName)
 
-	pool := NewWorkerPool(3, queue, tm, nil, 10*time.Millisecond, 100*time.Millisecond)
+	pool := NewWorkerPool(3, queue, tm, nil, &search.NoopStore{}, 10*time.Millisecond, 100*time.Millisecond)
 	defer pool.Stop()
 	assert.NoError(t, pool.Start())
 	eventChan := make(chan Event)
@@ -105,7 +106,7 @@ func TestJobWithErrorCountMultipleWorkers(t *testing.T) {
 	queue := metadata.NewQueueStore(&metadata.NameRegistry{QueueSB: "test_queue_" + t.Name()})
 	_ = kvStore.DropTable(ctx, queue.SubspaceName)
 
-	pool := NewWorkerPool(10, queue, tm, nil, 100*time.Millisecond, 100*time.Millisecond)
+	pool := NewWorkerPool(10, queue, tm, nil, &search.NoopStore{}, 100*time.Millisecond, 100*time.Millisecond)
 	defer pool.Stop()
 	assert.NoError(t, pool.Start())
 	completedChan := make(chan Event)
@@ -138,7 +139,7 @@ func TestJobWithDyingWorkers(t *testing.T) {
 	queue := metadata.NewQueueStore(&metadata.NameRegistry{QueueSB: "test_queue_" + t.Name()})
 	_ = kvStore.DropTable(ctx, queue.SubspaceName)
 
-	pool := NewWorkerPool(1, queue, tm, nil, 100*time.Millisecond, 100*time.Millisecond)
+	pool := NewWorkerPool(1, queue, tm, nil, &search.NoopStore{}, 100*time.Millisecond, 100*time.Millisecond)
 	defer pool.Stop()
 	assert.NoError(t, pool.Start())
 

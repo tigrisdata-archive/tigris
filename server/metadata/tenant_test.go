@@ -534,7 +534,7 @@ func TestTenantManager_SearchIndexes(t *testing.T) {
 	var err error
 	searchConfig := config.GetTestSearchConfig()
 	searchConfig.AuthKey = "ts_test_key"
-	m.searchStore, err = search.NewStore(searchConfig)
+	m.searchStore = search.NewStore(searchConfig, false)
 	require.NoError(t, err)
 
 	_, err = m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 2, NewNamespaceMetadata(2, "ns-test1", "ns-test1-display_name")})
@@ -1082,7 +1082,7 @@ func TestTenantManager_SearchDataSize(t *testing.T) {
 	var err error
 	searchConfig := config.GetTestSearchConfig()
 	searchConfig.AuthKey = "ts_test_key"
-	m.searchStore, err = search.NewStore(searchConfig)
+	m.searchStore = search.NewStore(searchConfig, false)
 	require.NoError(t, err)
 
 	tenant, err := m.CreateOrGetTenant(ctx, &TenantNamespace{"ns-test1", 1, NewNamespaceMetadata(1, "ns-test1", "ns-test1-display_name")})

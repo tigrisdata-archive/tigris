@@ -5138,14 +5138,14 @@ func TestFilteringOnArrays(t *testing.T) {
 				"arr_of_arr": "clothes has braces ( and > ( < and escaped operators or some emoji 😀",
 			},
 			inputDocument[0:1],
-		    nil,
+			nil,
 		}, {
 			Map{
 				"obj.array_obj.university": "cal@university",
 			},
 			inputDocument[0:1],
-		    nil,
-		},{
+			nil,
+		}, {
 			Map{
 				"obj.arr_primitive": "cars",
 			},
@@ -5472,8 +5472,8 @@ func TestRead_Unicode(t *testing.T) {
 				"title": coll,
 				"properties": Map{
 					"id":           Map{"type": "integer"},
-					"index_value": Map{"type": "string", "index": true},
-					"search_value":  Map{"type": "string", "searchIndex": true, "sort": true},
+					"index_value":  Map{"type": "string", "index": true},
+					"search_value": Map{"type": "string", "searchIndex": true, "sort": true},
 					"local_value":  Map{"type": "string"},
 				},
 			},
@@ -5482,18 +5482,18 @@ func TestRead_Unicode(t *testing.T) {
 	inputDocument := []Doc{
 		{
 			"id":           1,
-			"index_value":    "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			"index_value":  "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
 			"search_value": "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
 			"local_value":  "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
 		},
 		{
 			"id":           2,
-			"index_value":   "has braces ( and > ( < and escaped operators 안녕 or some emoji",
+			"index_value":  "has braces ( and > ( < and escaped operators 안녕 or some emoji",
 			"search_value": "has braces ( and > ( < and escaped operators 안녕 or some emoji",
 			"local_value":  "has braces ( and > ( < and escaped operators 안녕 or some emoji",
 		}, {
 			"id":           3,
-			"index_value":   "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
+			"index_value":  "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
 			"search_value": "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
 			"local_value":  "has braces ( and > ( < and escaped operators 안녕 or some emoji 😀",
 		},
@@ -6131,9 +6131,9 @@ func TestDocumentsChunking(t *testing.T) {
 			Map{
 				"fields": Map{
 					"$set": Map{
-						"name": fakes[0].Name,
+						"name":                fakes[0].Name,
 						"nested.address.city": fakes[0].Nested.Address.City,
-						"cars": fakes[0].Cars,
+						"cars":                fakes[0].Cars,
 					},
 				},
 			},
@@ -6173,9 +6173,8 @@ func TestDocumentsChunking(t *testing.T) {
 			project,
 			collectionName,
 			Map{
-			"filter":
-				Map{"placeholder": "first"},
-		}).
+				"filter": Map{"placeholder": "first"},
+			}).
 			Status(http.StatusOK)
 
 		readAndValidateOrder(t,

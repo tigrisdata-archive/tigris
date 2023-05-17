@@ -110,15 +110,16 @@ func (runner *IndexerRunner) updateCollectionState(ctx context.Context, tenant *
 type SearchIndexerRunner struct {
 	*BaseQueryRunner
 
-	ctx          context.Context
-	req          *api.BuildCollectionSearchIndexRequest
-	queryMetrics *metrics.WriteQueryMetrics
-	collection   *schema.DefaultCollection
-	sigDone      chan struct{}
-	close        bool
-	rowsWritten  int64
-	since        time.Time
-	logSince     time.Time
+	ctx            context.Context
+	req            *api.BuildCollectionSearchIndexRequest
+	queryMetrics   *metrics.WriteQueryMetrics
+	collection     *schema.DefaultCollection
+	sigDone        chan struct{}
+	close          bool
+	rowsWritten    int64
+	since          time.Time
+	logSince       time.Time
+	ProgressUpdate func(context.Context) error
 }
 
 func (runner *SearchIndexerRunner) ReadOnly(ctx context.Context, tenant *metadata.Tenant) (Response, context.Context, error) {
@@ -234,6 +235,12 @@ func (runner *SearchIndexerRunner) consume(r *api.ReadResponse) error {
 		log.Info().Msgf("Written '%d' rows in time '%v' for collection '%s' index '%s'",
 			runner.rowsWritten, time.Since(runner.since), runner.collection.Name, runner.collection.ImplicitSearchIndex.StoreIndexName())
 		runner.logSince = time.Now()
+
+		if runner.ProgressUpdate != nil {
+			if err = runner.ProgressUpdate(runner.ctx); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil

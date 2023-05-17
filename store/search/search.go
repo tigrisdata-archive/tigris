@@ -16,15 +16,10 @@ package search
 
 import (
 	"context"
-	"fmt"
 	"io"
-	"net"
 
-	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/query/filter"
 	qsearch "github.com/tigrisdata/tigris/query/search"
-	"github.com/tigrisdata/tigris/server/config"
-	"github.com/tigrisdata/typesense-go/typesense"
 	tsApi "github.com/tigrisdata/typesense-go/typesense/api"
 )
 
@@ -59,16 +54,6 @@ type Store interface {
 	Search(ctx context.Context, table string, query *qsearch.Query, pageNo int) ([]tsApi.SearchResult, error)
 	// GetDocuments is to get a single or multiple documents by id.
 	GetDocuments(ctx context.Context, table string, ids []string) (*tsApi.SearchResult, error)
-}
-
-func NewStore(config *config.SearchConfig) (Store, error) {
-	client := typesense.NewClient(
-		typesense.WithServer(fmt.Sprintf("http://%s", net.JoinHostPort(config.Host, fmt.Sprintf("%d", config.Port)))),
-		typesense.WithAPIKey(config.AuthKey))
-	log.Info().Str("host", config.Host).Int16("port", config.Port).Msg("initialized search store")
-	return &storeImpl{
-		client: client,
-	}, nil
 }
 
 type NoopStore struct{}

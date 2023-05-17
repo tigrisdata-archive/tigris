@@ -1474,7 +1474,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 		case schema.NoSearchIndex, schema.UnknownSearchState:
 			// even though this should be "SearchIndexWriteMode", it is still as Active because there is no backfill
 			// needed right now. This will be changed when we moved to async backfill.
-			newSearchState = schema.SearchIndexActive
+			newSearchState = schema.SearchIndexWriteMode
 		}
 	} else {
 		newSearchState = schema.NoSearchIndex
@@ -1544,7 +1544,7 @@ func (tenant *Tenant) updateCollection(ctx context.Context, tx transaction.Tx, d
 	return nil
 }
 
-func (tenant *Tenant) UpdateSearchStatus(ctx context.Context, tx transaction.Tx, db *Database, coll *schema.DefaultCollection) error {
+func (tenant *Tenant) UpgradeSearchStatus(ctx context.Context, tx transaction.Tx, db *Database, coll *schema.DefaultCollection) error {
 	if coll.GetSearchState() != schema.UnknownSearchState {
 		return nil
 	}
@@ -1560,6 +1560,14 @@ func (tenant *Tenant) UpdateSearchStatus(ctx context.Context, tx transaction.Tx,
 		return err
 	}
 	coll.ImplicitSearchIndex.SetState(searchState)
+	return nil
+}
+
+func (tenant *Tenant) UpdateSearchStatus(ctx context.Context, tx transaction.Tx, db *Database, coll *schema.DefaultCollection, newSearchState schema.SearchIndexState) error {
+	if err := tenant.MetaStore.Collection().UpdateSearchStatus(ctx, tx, tenant.namespace, db, coll.Name, newSearchState); err != nil {
+		return err
+	}
+	coll.ImplicitSearchIndex.SetState(newSearchState)
 	return nil
 }
 

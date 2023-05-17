@@ -486,8 +486,8 @@ func TestDescribeCollection(t *testing.T) {
 			"schema": Map{
 				"title": coll,
 				"properties": Map{
-					"addr":    Map{"type": "string"},
-					"name":    Map{"type": "string", "searchIndex": true},
+					"addr": Map{"type": "string"},
+					"name": Map{"type": "string", "searchIndex": true},
 				},
 			},
 		}
@@ -509,8 +509,8 @@ func TestDescribeCollection(t *testing.T) {
 			"schema": Map{
 				"title": coll,
 				"properties": Map{
-					"addr":    Map{"type": "string", "searchIndex": true},
-					"name":    Map{"type": "string", "searchIndex": true},
+					"addr": Map{"type": "string", "searchIndex": true},
+					"name": Map{"type": "string", "searchIndex": true},
 				},
 			},
 		}
@@ -532,8 +532,8 @@ func TestDescribeCollection(t *testing.T) {
 			"schema": Map{
 				"title": coll,
 				"properties": Map{
-					"addr":    Map{"type": "string", "searchIndex": true},
-					"name":    Map{"type": "string"},
+					"addr": Map{"type": "string", "searchIndex": true},
+					"name": Map{"type": "string"},
 				},
 			},
 		}
@@ -554,8 +554,8 @@ func TestDescribeCollection(t *testing.T) {
 			"schema": Map{
 				"title": coll,
 				"properties": Map{
-					"addr":    Map{"type": "string"},
-					"name":    Map{"type": "string"},
+					"addr": Map{"type": "string"},
+					"name": Map{"type": "string"},
 				},
 			},
 		}
@@ -577,8 +577,8 @@ func TestDescribeCollection(t *testing.T) {
 			"schema": Map{
 				"title": coll,
 				"properties": Map{
-					"addr":    Map{"type": "string", "searchIndex": true},
-					"name":    Map{"type": "string"},
+					"addr": Map{"type": "string", "searchIndex": true},
+					"name": Map{"type": "string"},
 				},
 			},
 		}
@@ -593,7 +593,7 @@ func TestDescribeCollection(t *testing.T) {
 			JSON().
 			Object().
 			ValueEqual("collection", coll).
-			ValueEqual("search_status", "Search Active")
+			ValueEqual("search_status", "Search Write Mode")
 	})
 }
 
