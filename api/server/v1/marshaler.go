@@ -748,6 +748,7 @@ func (x *DescribeCollectionResponse) UnmarshalJSON(data []byte) error {
 	x.Schema = []byte(desc.Schema)
 	x.Size = desc.Size
 	x.Indexes = desc.Indexes
+	x.SearchStatus = desc.SearchStatus
 
 	return nil
 }

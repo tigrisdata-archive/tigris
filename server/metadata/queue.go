@@ -73,6 +73,7 @@ type TaskType uint8
 const (
 	BUILD_INDEX_QUEUE_TASK TaskType = iota
 	TEST_QUEUE_TASK
+	BUILD_SEARCH_INDEX_TASK
 )
 
 type IndexBuildTask struct {

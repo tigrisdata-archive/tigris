@@ -23,18 +23,20 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
+	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/services/v1/database"
 	"github.com/tigrisdata/tigris/server/transaction"
+	"github.com/tigrisdata/tigris/store/search"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
 const (
 	MAX_ERROR_COUNT     = 10
-	LEASE_TIME          = 1 * time.Minute
+	LEASE_TIME          = 3 * time.Minute
 	PEAK_JOB_ITEMS      = 5 // number of items to fetch from the queue to see which one to select
 	QUEUE_UPDATE_PERIOD = 5 * time.Minute
 )
@@ -46,11 +48,12 @@ type WorkerTestTask struct {
 }
 
 type Worker struct {
-	id        uint
-	queue     *metadata.QueueSubspace
-	txMgr     *transaction.Manager
-	tenantMgr *metadata.TenantManager
-	errCount  uint
+	id          uint
+	queue       *metadata.QueueSubspace
+	txMgr       *transaction.Manager
+	tenantMgr   *metadata.TenantManager
+	searchStore search.Store
+	errCount    uint
 	// Indicated to the worker to shutdown
 	done chan struct{}
 	// How long the worker sleeps between checking queue
@@ -73,12 +76,13 @@ func newEvent(success bool, item metadata.QueueItem, workerId uint) Event {
 	}
 }
 
-func newWorker(id uint, queue *metadata.QueueSubspace, txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, sleepTime time.Duration, itemEvent chan<- Event, heartbeatChan chan<- uint) *Worker {
+func newWorker(id uint, queue *metadata.QueueSubspace, txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, searchStore search.Store, sleepTime time.Duration, itemEvent chan<- Event, heartbeatChan chan<- uint) *Worker {
 	return &Worker{
 		id:           id,
 		queue:        queue,
 		txMgr:        txMgr,
 		tenantMgr:    tenantMgr,
+		searchStore:  searchStore,
 		errCount:     0,
 		done:         make(chan struct{}, 1),
 		sleepTime:    sleepTime,
@@ -103,7 +107,6 @@ func (w *Worker) Start() {
 
 func (w *Worker) Loop() {
 	hbTicker := time.NewTicker(2 * w.sleepTime)
-	c := 0
 	for {
 		select {
 		case <-w.done:
@@ -113,7 +116,6 @@ func (w *Worker) Loop() {
 		case <-hbTicker.C:
 			w.hearbeatChan <- w.id
 		default:
-			c++
 			err := w.peekAndProcess()
 			if err != nil {
 				w.errCount++
@@ -197,6 +199,8 @@ func (w *Worker) processItem(queueItem *metadata.QueueItem) error {
 		return w.buildIndexTask(queueItem)
 	case metadata.TEST_QUEUE_TASK:
 		return w.testQueueTask(queueItem)
+	case metadata.BUILD_SEARCH_INDEX_TASK:
+		return w.buildSearchTask(queueItem)
 	}
 
 	return fmt.Errorf("unknown job type")
@@ -293,6 +297,73 @@ func (w *Worker) buildIndexTask(queueItem *metadata.QueueItem) error {
 	return tx.Commit(ctx)
 }
 
+func (w *Worker) buildSearchTask(queueItem *metadata.QueueItem) error {
+	var task metadata.IndexBuildTask
+	if err := jsoniter.Unmarshal(queueItem.Data, &task); err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	dbBranch := metadata.NewDatabaseNameWithBranch(task.ProjName, task.Branch)
+	tenant, err := w.tenantMgr.GetTenant(ctx, task.NamespaceId)
+	if err != nil {
+		return err
+	}
+
+	project, err := tenant.GetProject(task.ProjName)
+	if err != nil {
+		return err
+	}
+
+	db, err := project.GetDatabase(dbBranch)
+	if err != nil {
+		return err
+	}
+	coll := db.GetCollection(task.CollName)
+	if coll == nil {
+		return fmt.Errorf("could not find collection \"%s\"", task.CollName)
+	}
+
+	req := &api.BuildCollectionSearchIndexRequest{
+		Branch:     task.Branch,
+		Collection: task.CollName,
+		Project:    task.ProjName,
+	}
+
+	qr := database.NewQueryRunnerFactory(w.txMgr, nil, w.searchStore)
+	searchIndexer := qr.GetSearchIndexRunner(req, &metrics.WriteQueryMetrics{}, nil)
+	searchIndexer.ProgressUpdate = func(ctx context.Context) error {
+		tx, err := w.txMgr.StartTx(ctx)
+		if err != nil {
+			return err
+		}
+		if err = w.queue.RenewLease(ctx, tx, queueItem, LEASE_TIME); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	}
+
+	_, _, err = searchIndexer.ReadOnly(ctx, tenant)
+	if err != nil {
+		return err
+	}
+
+	tx, err := w.txMgr.StartTx(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err = tenant.UpdateSearchStatus(ctx, tx, db, coll, schema.SearchIndexActive); err != nil {
+		return err
+	}
+
+	if err = w.queue.Complete(ctx, tx, queueItem); ulog.E(err) {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
 type WorkerInfo struct {
 	worker       *Worker
 	lastHearbeat time.Time
@@ -304,6 +375,7 @@ type WorkerPool struct {
 	queue           *metadata.QueueSubspace
 	txMgr           *transaction.Manager
 	tenantMgr       *metadata.TenantManager
+	searchStore     search.Store
 	workers         []*WorkerInfo
 	nextWorkerId    uint
 	workerSleepTime time.Duration
@@ -316,12 +388,13 @@ type WorkerPool struct {
 
 type Complete func(item *metadata.QueueItem)
 
-func NewWorkerPool(maxWorkers uint, queue *metadata.QueueSubspace, txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, workerSleepTime time.Duration, poolSleepTime time.Duration) *WorkerPool {
+func NewWorkerPool(maxWorkers uint, queue *metadata.QueueSubspace, txMgr *transaction.Manager, tenantMgr *metadata.TenantManager, searchStore search.Store, workerSleepTime time.Duration, poolSleepTime time.Duration) *WorkerPool {
 	return &WorkerPool{
 		maxWorkers:      maxWorkers,
 		queue:           queue,
 		txMgr:           txMgr,
 		tenantMgr:       tenantMgr,
+		searchStore:     searchStore,
 		workers:         make([]*WorkerInfo, 0),
 		nextWorkerId:    0,
 		workerSleepTime: workerSleepTime,
@@ -345,7 +418,7 @@ func (pool *WorkerPool) Start() error {
 }
 
 func (pool *WorkerPool) newWorker(id uint) *WorkerInfo {
-	worker := newWorker(id, pool.queue, pool.txMgr, pool.tenantMgr, pool.workerSleepTime, pool.eventChan, pool.heartbeatChan)
+	worker := newWorker(id, pool.queue, pool.txMgr, pool.tenantMgr, pool.searchStore, pool.workerSleepTime, pool.eventChan, pool.heartbeatChan)
 	go worker.Start()
 	return &WorkerInfo{
 		worker:       worker,
