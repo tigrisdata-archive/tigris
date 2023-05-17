@@ -339,8 +339,7 @@ func authzStreamServerInterceptor() grpc.StreamServerInterceptor {
 	}
 }
 
-func authorize(ctx context.Context) error {
-	var err error
+func authorize(ctx context.Context) (err error) {
 	defer func() {
 		if err != nil {
 			if config.DefaultConfig.Auth.Authz.LogOnly {
