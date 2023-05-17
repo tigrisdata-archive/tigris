@@ -75,16 +75,7 @@ func mainWithCode() int {
 
 	log.Info().Str("version", util.Version).Msgf("Starting server")
 
-	var searchStore search.Store
-	if defaultConfig.Metrics.Search.Enabled {
-		searchStore, err = search.NewStoreWithMetrics(&defaultConfig.Search)
-	} else {
-		searchStore, err = search.NewStore(&defaultConfig.Search)
-	}
-	if err != nil {
-		log.Error().Err(err).Msg("error initializing search store")
-		return 1
-	}
+	searchStore := search.NewStore(&defaultConfig.Search, defaultConfig.Metrics.Search.Enabled)
 
 	// creating kv store for search and database independently allows us to enable functionality slowly. This is
 	// temporary as once we have functionality tested then
@@ -120,7 +111,7 @@ func mainWithCode() int {
 	defer quota.Cleanup()
 
 	if cfg.Workers.Enabled {
-		workerPool := workers.NewWorkerPool(cfg.Workers.Count, tenantMgr.GetQueue(), txMgr, tenantMgr, 2*time.Second, 30*time.Second)
+		workerPool := workers.NewWorkerPool(cfg.Workers.Count, tenantMgr.GetQueue(), txMgr, tenantMgr, searchStore, 2*time.Second, 30*time.Second)
 		if !ulog.E(workerPool.Start()) {
 			defer workerPool.Stop()
 			log.Info().Msgf("initialized worker pool with %d workers", cfg.Workers.Count)

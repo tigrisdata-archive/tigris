@@ -39,18 +39,7 @@ func main() {
 	ulog.Configure(config.DefaultConfig.Log)
 
 	defaultConfig := &config.DefaultConfig
-
-	var searchStore search.Store
-	var err error
-	if defaultConfig.Metrics.Search.Enabled {
-		searchStore, err = search.NewStoreWithMetrics(&defaultConfig.Search)
-	} else {
-		searchStore, err = search.NewStore(&defaultConfig.Search)
-	}
-	if err != nil {
-		log.Error().Err(err).Msg("error initializing search store")
-		os.Exit(1)
-	}
+	searchStore := search.NewStore(&defaultConfig.Search, defaultConfig.Metrics.Search.Enabled)
 
 	// creating kv store for search and database independently allows us to enable functionality slowly. This is
 	// temporary as once we have functionality tested then

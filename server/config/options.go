@@ -235,8 +235,9 @@ type QueueMetricsConfig struct {
 }
 
 type WorkersConfig struct {
-	Enabled bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
-	Count   uint `mapstructure:"count" yaml:"count" json:"count"`
+	Enabled       bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Count         uint `mapstructure:"count" yaml:"count" json:"count"`
+	SearchEnabled bool `mapstructure:"search_enabled" yaml:"search_enabled" json:"search_enabled"`
 }
 
 type ProfilingConfig struct {
@@ -533,8 +534,9 @@ var DefaultConfig = Config{
 		Url: "https://api.global.tigrisdata.cloud",
 	},
 	Workers: WorkersConfig{
-		Enabled: false,
-		Count:   2,
+		Enabled:       false,
+		Count:         2,
+		SearchEnabled: false,
 	},
 }
 

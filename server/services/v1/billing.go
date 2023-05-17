@@ -65,6 +65,41 @@ func (b *billingService) ListInvoices(ctx context.Context, req *api.ListInvoices
 	return b.GetInvoices(ctx, mId, req)
 }
 
+func (b *billingService) GetUsage(ctx context.Context, req *api.GetUsageRequest) (*api.GetUsageResponse, error) {
+	namespace, err := request.GetNamespace(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if req.GetStartTime() == nil {
+		return nil, errors.InvalidArgument("start_time is required")
+	}
+	if req.GetEndTime() == nil {
+		return nil, errors.InvalidArgument("end_time is required")
+	}
+
+	mId, err := b.getMetronomeId(ctx, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	ur := &billing.UsageRequest{
+		BillableMetric: &req.Metrics,
+		NextPage:       req.NextPage,
+	}
+	st, et := req.GetStartTime().AsTime(), req.GetEndTime().AsTime()
+	ur.StartTime, ur.EndTime = &st, &et
+
+	switch req.GetAggregateBy() {
+	case api.AggregationWindow_DAY:
+		ur.AggWindow = billing.Day
+	default:
+		ur.AggWindow = billing.Hour
+	}
+
+	return b.Provider.GetUsage(ctx, mId, ur)
+}
+
 func (b *billingService) getMetronomeId(ctx context.Context, namespaceId string) (billing.AccountId, error) {
 	nsMeta := b.nsMgr.GetNamespaceMetadata(ctx, namespaceId)
 	if nsMeta == nil {

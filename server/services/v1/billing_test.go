@@ -18,13 +18,17 @@ import (
 	"context"
 	"testing"
 
+	"time"
+
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/services/v1/billing"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type billingServiceSuite struct {
@@ -100,6 +104,58 @@ func (s *billingServiceSuite) Test_ListInvoices_WithNoNamespace_Fails() {
 
 	s.mockProvider.AssertNotCalled(s.T(), "GetInvoices")
 	s.mockProvider.AssertNotCalled(s.T(), "GetInvoiceById")
+}
+
+func (s *billingServiceSuite) Test_GetUsage_Succeeds() {
+	st, et, w := time.Now().UTC(), time.Now().UTC(), api.AggregationWindow_DAY
+	mockReq, mockResp := &api.GetUsageRequest{
+		StartTime:   timestamppb.New(st),
+		EndTime:     timestamppb.New(et),
+		AggregateBy: &w,
+	}, &api.GetUsageResponse{}
+
+	providerRequest := &billing.UsageRequest{
+		BillableMetric: &mockReq.Metrics,
+		StartTime:      &st,
+		EndTime:        &et,
+		NextPage:       nil,
+		AggWindow:      billing.Day,
+	}
+	s.mockProvider.EXPECT().GetUsage(mock.Anything, s.mId, providerRequest).
+		Return(mockResp, nil).
+		Once()
+
+	r, err := s.billing.GetUsage(s.ctx, mockReq)
+	require.NoError(s.T(), err)
+	require.Equal(s.T(), r, mockResp)
+}
+
+func (s *billingServiceSuite) Test_ListUsages_WithoutStartTime_Fails() {
+	_ = s.mockNameSpaceMgr.GetNamespaceMetadata(s.ctx, s.nsMeta.StrId)
+
+	mockReq := &api.GetUsageRequest{}
+	r, err := s.billing.GetUsage(s.ctx, mockReq)
+	require.ErrorContains(s.T(), err, "start_time is required")
+	require.Nil(s.T(), r)
+	s.mockProvider.AssertNotCalled(s.T(), "GetUsage")
+}
+
+func (s *billingServiceSuite) Test_ListUsages_WithoutEndTime_Fails() {
+	_ = s.mockNameSpaceMgr.GetNamespaceMetadata(s.ctx, s.nsMeta.StrId)
+
+	mockReq := &api.GetUsageRequest{StartTime: timestamppb.New(time.Now())}
+	r, err := s.billing.GetUsage(s.ctx, mockReq)
+	require.ErrorContains(s.T(), err, "end_time is required")
+	require.Nil(s.T(), r)
+	s.mockProvider.AssertNotCalled(s.T(), "GetUsage")
+}
+
+func (s *billingServiceSuite) Test_ListUsages_WithNoNamespace_Fails() {
+	_ = s.mockNameSpaceMgr.GetNamespaceMetadata(s.ctx, s.nsMeta.StrId)
+	mockReq := &api.GetUsageRequest{}
+	r, err := s.billing.GetUsage(context.TODO(), mockReq)
+	require.ErrorContains(s.T(), err, "namespace not found")
+	require.Nil(s.T(), r)
 }
 
 type getMetronomeIdSuite struct {

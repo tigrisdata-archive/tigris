@@ -226,10 +226,8 @@ func (runner *CollectionQueryRunner) describe(ctx context.Context, tx transactio
 			return Response{}, ctx, err
 		}
 	}
-	if coll.GetSearchState() == schema.UnknownSearchState {
-		if err = tenant.UpdateSearchStatus(ctx, tx, db, coll); err != nil {
-			return Response{}, ctx, err
-		}
+	if err = tenant.UpgradeSearchStatus(ctx, tx, db, coll); err != nil {
+		return Response{}, ctx, err
 	}
 
 	return Response{

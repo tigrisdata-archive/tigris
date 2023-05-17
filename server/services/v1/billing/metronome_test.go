@@ -637,17 +637,18 @@ func TestMetronome_GetUsage(t *testing.T) {
 		// db_bytes are not returned in API response, hence should be empty
 		require.Empty(t, resp.Data["db_bytes"])
 		// search_units have a single value in API response
-		require.Len(t, resp.Data[UsageSearchUnits], 1)
+		require.Contains(t, resp.Data, UsageSearchUnits)
+		require.Len(t, resp.Data[UsageSearchUnits].Series, 1)
+
 		expectedStartTime, err := time.Parse(time.RFC3339, "2023-04-30T01:00:00+00:00")
 		require.NoError(t, err)
 		expectedEndTime, err := time.Parse(time.RFC3339, "2023-04-30T02:00:00+00:00")
 		require.NoError(t, err)
-		expectedValue := float32(25)
-		require.Equal(t, &Usage{
-			StartTime: expectedStartTime,
-			EndTime:   expectedEndTime,
-			Value:     &expectedValue,
-		}, resp.Data[UsageSearchUnits][0])
+		require.Equal(t, &api.Usage{
+			StartTime: timestamppb.New(expectedStartTime),
+			EndTime:   timestamppb.New(expectedEndTime),
+			Value:     float32(25),
+		}, resp.Data[UsageSearchUnits].Series[0])
 		require.Nil(t, resp.NextPage)
 
 		require.True(t, gock.IsDone())
@@ -674,6 +675,19 @@ func TestMetronome_GetUsage(t *testing.T) {
 		}
 		resp, err := metronome.GetUsage(ctx, uuid.New(), req)
 		require.ErrorContains(t, err, "is not a valid end time")
+		require.Nil(t, resp)
+	})
+
+	t.Run("when invalid window size provided", func(t *testing.T) {
+		ts := time.Date(2023, 5, 1, 0, 0, 0, 0, time.UTC)
+		req := &UsageRequest{
+			BillableMetric: nil,
+			StartTime:      &ts,
+			EndTime:        &ts,
+			AggWindow:      3,
+		}
+		resp, err := metronome.GetUsage(ctx, uuid.New(), req)
+		require.ErrorContains(t, err, "is not a valid AggWindow")
 		require.Nil(t, resp)
 	})
 
@@ -710,7 +724,7 @@ func TestMetronome_GetUsage(t *testing.T) {
 
 		require.NoError(t, err)
 		require.Len(t, resp.Data, 1)
-		require.Len(t, resp.Data[requestedMetric], 0)
+		require.Len(t, resp.Data[requestedMetric].Series, 0)
 		require.Equal(t, *resp.NextPage, "resp_next_page")
 
 		require.True(t, gock.IsDone())
