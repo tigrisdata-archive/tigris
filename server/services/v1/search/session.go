@@ -25,6 +25,10 @@ import (
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
+type SessionOptions struct {
+	IncVersion      bool
+}
+
 type Session interface {
 	// Execute executes the request using the query runner
 	Execute(ctx context.Context, runner Runner) (Response, error)
@@ -32,7 +36,7 @@ type Session interface {
 	// TxExecute executes in a fdb transaction. This is mainly used to manage search indexes. This metadata
 	// is stored in fdb as part of project metadata and that modification is a transactional operation. This API
 	// is automatically bumping up the metadata version as this should only be used for metadata operation.
-	TxExecute(ctx context.Context, runner TxRunner) (Response, error)
+	TxExecute(ctx context.Context, runner TxRunner, option SessionOptions) (Response, error)
 }
 
 type SessionManager struct {
@@ -83,7 +87,7 @@ func (sessions *SessionManager) TrackVersion(ctx context.Context, tenant *metada
 	return err
 }
 
-func (sessions *SessionManager) TxExecute(ctx context.Context, runner TxRunner) (Response, error) {
+func (sessions *SessionManager) TxExecute(ctx context.Context, runner TxRunner, option SessionOptions) (Response, error) {
 	namespace, err := request.GetNamespace(ctx)
 	if err != nil {
 		return Response{}, err
@@ -106,9 +110,12 @@ func (sessions *SessionManager) TxExecute(ctx context.Context, runner TxRunner) 
 		_ = tx.Rollback(ctx)
 		return Response{}, createApiError(err)
 	}
-	if err = sessions.versionH.Increment(ctx, tx); ulog.E(err) {
-		_ = tx.Rollback(ctx)
-		return Response{}, err
+
+	if option.IncVersion {
+		if err = sessions.versionH.Increment(ctx, tx); ulog.E(err) {
+			_ = tx.Rollback(ctx)
+			return Response{}, err
+		}
 	}
 
 	if err = tx.Commit(ctx); err != nil {
