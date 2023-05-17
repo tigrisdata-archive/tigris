@@ -91,7 +91,7 @@ func (r *UsageReporter) pushUsage() error {
 	// refresh and get metadata for all tenants if anyone is missing metronome integration
 	for namespaceId := range chunk.Tenants {
 		nsMeta := r.nsMgr.GetNamespaceMetadata(r.ctx, namespaceId)
-		if nsMeta == nil || nsMeta.Accounts.Metronome == nil {
+		if nsMeta == nil || nsMeta.Accounts == nil || nsMeta.Accounts.Metronome == nil {
 			err := r.nsMgr.RefreshNamespaceAccounts(r.ctx)
 			if err != nil {
 				log.Error().Err(err).Msg("failed to refresh namespace metadata")
@@ -106,12 +106,15 @@ func (r *UsageReporter) pushUsage() error {
 			log.Error().Msgf("invalid namespace id %s", namespaceId)
 			continue
 		}
+		if nsMeta.Accounts == nil {
+			nsMeta.Accounts = &metadata.AccountIntegrations{}
+		}
 		if len(nsMeta.StrId) == 0 || nsMeta.StrId == defaults.DefaultNamespaceName {
 			// invalid namespace id, permanently disable account creation
 			nsMeta.Accounts.DisableMetronome()
 			err := r.nsMgr.UpdateNamespaceMetadata(r.ctx, *nsMeta)
 			if err != nil {
-				log.Error().Err(err).Msgf("error saving metadata for user %s", nsMeta.StrId)
+				log.Error().Err(err).Str("ns", nsMeta.StrId).Msgf("error saving metadata for %s", nsMeta.StrId)
 			}
 			continue
 		}
@@ -119,23 +122,24 @@ func (r *UsageReporter) pushUsage() error {
 		if id, enabled := nsMeta.Accounts.GetMetronomeId(); !enabled {
 			continue
 		} else if len(id) == 0 {
-			log.Info().Msgf("creating Metronome account for %s", nsMeta.StrId)
+			log.Info().Str("ns", nsMeta.StrId).Msgf("creating Metronome account for %s", nsMeta.StrId)
 
 			billingId, err := r.billingSvc.CreateAccount(r.ctx, nsMeta.StrId, nsMeta.Name)
 			if !ulog.E(err) && billingId != uuid.Nil {
 				nsMeta.Accounts.AddMetronome(billingId.String())
 
-				// add default plan to the user
-				added, err := r.billingSvc.AddDefaultPlan(r.ctx, billingId)
-				if err != nil || !added {
-					log.Error().Err(err).Msgf("error adding default plan to user id %s", nsMeta.StrId)
-				}
-
 				// save updated namespace metadata
 				err = r.nsMgr.UpdateNamespaceMetadata(r.ctx, *nsMeta)
 				if err != nil {
-					log.Error().Err(err).Msgf("error saving metadata for user %s", nsMeta.StrId)
+					log.Error().Err(err).Str("ns", nsMeta.StrId).Msgf("error saving metadata for %s", nsMeta.StrId)
 				}
+
+				// add default plan to the user
+				added, err := r.billingSvc.AddDefaultPlan(r.ctx, billingId)
+				if err != nil || !added {
+					log.Error().Err(err).Str("ns", nsMeta.StrId).Msgf("error adding default plan %s", nsMeta.StrId)
+				}
+
 			}
 		}
 
