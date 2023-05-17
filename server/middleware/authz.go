@@ -23,7 +23,13 @@ import (
 	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/request"
+	"github.com/tigrisdata/tigris/server/types"
 	"google.golang.org/grpc"
+)
+
+const (
+	Component = "component"
+	Authz     = "authz"
 )
 
 var (
@@ -314,14 +320,9 @@ var (
 func authzUnaryServerInterceptor() func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		if config.DefaultConfig.Auth.Authz.Enabled {
-			reqMetadata, _ := request.GetRequestMetadataFromContext(ctx)
-			role := getRole(reqMetadata)
-
-			// empty role check for transition purpose
-			if role != "" {
-				if !isAuthorized(reqMetadata.GetFullMethod(), role) {
-					return nil, errors.PermissionDenied("You are not allowed to perform operation: %s", reqMetadata.GetFullMethod())
-				}
+			err := authorize(ctx)
+			if err != nil {
+				return nil, err
 			}
 		}
 		return handler(ctx, req)
@@ -330,31 +331,79 @@ func authzUnaryServerInterceptor() func(ctx context.Context, req any, info *grpc
 
 func authzStreamServerInterceptor() grpc.StreamServerInterceptor {
 	return func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		reqMetadata, _ := request.GetRequestMetadataFromContext(stream.Context())
-		role := getRole(reqMetadata)
-		// empty role check for transition purpose
-		if role != "" {
-			if !isAuthorized(reqMetadata.GetFullMethod(), role) {
-				return errors.PermissionDenied("You are not allowed to perform operation: %s", reqMetadata.GetFullMethod())
-			}
+		err := authorize(stream.Context())
+		if err != nil {
+			return err
 		}
 		return handler(srv, stream)
 	}
 }
 
-func isAuthorized(methodName string, role string) bool {
-	allowed := false
-	if methods := getMethodsForRole(role); methods != nil {
-		allowed = methods.Contains(methodName)
+func authorize(ctx context.Context) (err error) {
+	defer func() {
+		if err != nil {
+			if config.DefaultConfig.Auth.Authz.LogOnly {
+				err = nil
+			}
+		}
+	}()
+
+	reqMetadata, err := request.GetRequestMetadataFromContext(ctx)
+	if err != nil {
+		return errors.PermissionDenied("Couldn't read the requestMetadata, reason: %s", err.Error())
 	}
 
-	if !allowed {
-		log.Warn().
-			Str("methodName", methodName).
-			Str("role", role).
-			Msg("Authz - not allowed")
+	if BypassAuthForTheseMethods.Contains(reqMetadata.GetFullMethod()) {
+		return nil
 	}
-	return allowed
+
+	accessToken, err := request.GetAccessToken(ctx)
+	if err != nil {
+		return errors.PermissionDenied("Couldn't read the accessToken, reason: %s", err.Error())
+	}
+	role := getRole(reqMetadata)
+	if role == "" {
+		log.Warn().
+			Str(Component, Authz).
+			Str("sub", accessToken.Sub).
+			Msg("Empty role allowed for transition purpose")
+		return nil
+	}
+	var authorizationErr error
+	if !isAuthorizedProject(reqMetadata, accessToken) {
+		authorizationErr = errors.PermissionDenied("You are not allowed to perform operation: %s", reqMetadata.GetFullMethod())
+	}
+	if err == nil && !isAuthorizedOperation(reqMetadata.GetFullMethod(), role) {
+		authorizationErr = errors.PermissionDenied("You are not allowed to perform operation: %s", reqMetadata.GetFullMethod())
+	}
+
+	if authorizationErr != nil {
+		log.Warn().
+			Err(authorizationErr).
+			Str(Component, Authz).
+			Bool("log_only", config.DefaultConfig.Auth.Authz.LogOnly).
+			Str("sub", accessToken.Sub).
+			Str("role", role).
+			Str("operation", reqMetadata.GetFullMethod()).
+			Str("project", reqMetadata.GetProject()).
+			Msg("Authorization failed")
+		return authorizationErr
+	}
+	return nil
+}
+
+func isAuthorizedProject(reqMetadata *request.Metadata, accessToken *types.AccessToken) bool {
+	if accessToken.Project != "" && reqMetadata.GetProject() != accessToken.Project {
+		return false
+	}
+	return true
+}
+
+func isAuthorizedOperation(method string, role string) bool {
+	if methods := getMethodsForRole(role); methods != nil {
+		return methods.Contains(method)
+	}
+	return false
 }
 
 func getMethodsForRole(role string) *container.HashSet {
@@ -377,7 +426,7 @@ func getRole(reqMetadata *request.Metadata) string {
 	}
 
 	// empty role check for transition purpose
-	if reqMetadata == nil && reqMetadata.GetRole() == "" {
+	if reqMetadata == nil || reqMetadata.GetRole() == "" {
 		return ""
 	}
 	return reqMetadata.GetRole()

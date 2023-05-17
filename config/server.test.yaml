@@ -36,6 +36,7 @@ auth:
   enabled: true
   authz:
     enabled: true
+    log_only: false
   enable_namespace_isolation: true
   enable_oauth: true
   log_only: false
