@@ -70,7 +70,8 @@ func (c CustomClaim) Validate(_ context.Context) error {
 type TigrisClaims struct {
 	NamespaceCode        string `json:"nc"`
 	NamespaceDisplayName string `json:"nd"`
-	Project              string `json:"-"`
+	Project              string `json:"p"`
+	Role                 string `json:"r"`
 	UserEmail            string `json:"ue"`
 }
 
@@ -236,6 +237,8 @@ func authFunction(ctx context.Context, jwtValidators []*validator.Validator, con
 			token := &types.AccessToken{
 				Namespace: namespaceCode,
 				Sub:       validatedClaims.RegisteredClaims.Subject,
+				Role:      customClaims.TigrisClaims.Role,
+				Project:   customClaims.TigrisClaims.Project,
 			}
 			reqMetadata.SetAccessToken(token)
 			// update cache

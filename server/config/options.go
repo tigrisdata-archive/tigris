@@ -70,6 +70,7 @@ type Gotrue struct {
 
 type AuthzConfig struct {
 	Enabled bool `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	LogOnly bool `mapstructure:"log_only" yaml:"log_only" json:"log_only"`
 }
 
 type AuthConfig struct {
@@ -327,7 +328,7 @@ var DefaultConfig = Config{
 		UserInvitations: Invitation{
 			ExpireAfterSec: 259200, // 3days
 		},
-		Authz:          AuthzConfig{Enabled: false},
+		Authz:          AuthzConfig{Enabled: false, LogOnly: true},
 		EnableErrorLog: true,
 	},
 	Billing: Billing{
