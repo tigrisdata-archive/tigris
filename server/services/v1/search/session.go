@@ -26,7 +26,7 @@ import (
 )
 
 type SessionOptions struct {
-	IncVersion      bool
+	IncVersion bool
 }
 
 type Session interface {

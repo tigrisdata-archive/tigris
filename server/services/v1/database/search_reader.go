@@ -16,12 +16,12 @@ package database
 
 import (
 	"context"
-	"github.com/tigrisdata/tigris/server/metrics"
 
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/query/filter"
 	qsearch "github.com/tigrisdata/tigris/query/search"
 	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/server/metrics"
 	tsearch "github.com/tigrisdata/tigris/server/search"
 	"github.com/tigrisdata/tigris/store/search"
 	"github.com/tigrisdata/tigris/util"

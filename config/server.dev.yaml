@@ -17,12 +17,16 @@
 server:
   host: localhost
   port: 8081
+  chunking: true
+  compression: true
 
 cdc:
   enabled: false
 
 kv:
   chunking: true
+  compression: true
+  min_compression_threshold: 1
 
 search:
   host: localhost
