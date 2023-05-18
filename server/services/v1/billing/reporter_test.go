@@ -121,8 +121,7 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 					return &n
 				}
 				return nil
-			}).
-			Times(2 * len(glbStatus.data.Tenants))
+			})
 		mockTenantMgr.EXPECT().RefreshNamespaceAccounts(reporter.ctx).Return(nil).Once()
 
 		err := reporter.pushUsage()
