@@ -22,6 +22,13 @@ environment: test
 search:
   auth_key: ts_test_key
   host: tigris_search
+  chunking: true
+  compression: true
+
+kv:
+  chunking: true
+  compression: true
+  min_compression_threshold: 1
 
 log:
   level: debug

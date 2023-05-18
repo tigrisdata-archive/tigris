@@ -517,7 +517,8 @@ func (runner *DeleteRunner) deleteDocumentsById(ctx context.Context, tenant *met
 	resp := &api.DeleteDocumentResponse{}
 
 	for _, id := range req.Ids {
-		metrics.AddSearchBytesInContext(ctx, int64(len(id)))
+		// 1 delete means 1 search write unit consumed which is why the bytes are set as the upper limit 4KB.
+		metrics.AddSearchBytesInContext(ctx, int64(config.SearchUnitSize))
 		wr := &api.DocStatus{
 			Id: id,
 		}

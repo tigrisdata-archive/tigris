@@ -574,6 +574,7 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVe
 type Tenant struct {
 	sync.RWMutex
 
+	name              string
 	kvStore           kv.TxStore
 	searchStore       search.Store
 	SIndexStore       *PrimaryIndexSubspace
@@ -598,6 +599,7 @@ func NewTenant(namespace Namespace, kvStore kv.TxStore, searchStore search.Store
 	encoder Encoder, versionH *VersionHandler, currentVersion Version, _ *TableKeyGenerator,
 ) *Tenant {
 	return &Tenant{
+		name:              namespace.Metadata().Name,
 		kvStore:           kvStore,
 		searchStore:       searchStore,
 		namespace:         namespace,
@@ -802,6 +804,10 @@ func (tenant *Tenant) reloadSearch(ctx context.Context, tx transaction.Tx, proje
 	}
 
 	return searchObj, nil
+}
+
+func (tenant *Tenant) Name() string {
+	return tenant.name
 }
 
 // GetNamespace returns the namespace of this tenant.
