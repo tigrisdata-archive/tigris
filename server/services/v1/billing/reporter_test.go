@@ -27,6 +27,7 @@ import (
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
+	"github.com/tigrisdata/tigris/server/defaults"
 )
 
 var mockKvStore kv.TxStore
@@ -402,9 +403,258 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 	})
 }
 
+func TestUsageReporter_setupBillingAccount(t *testing.T) {
+	glbStatus := &MockGlobalStatus{}
+	mockTxMgr := transaction.NewManager(mockKvStore)
+
+	t.Run("with nil metadata", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), &metadata.MockNamespaceMetadataMgr{}, &metadata.MockTenantGetter{}
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+
+		success := r.setupBillingAccount(nil)
+		require.False(t, success)
+	})
+
+	t.Run("with default namespace", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), &metadata.MockNamespaceMetadataMgr{}, &metadata.MockTenantGetter{}
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+
+		nsMeta := &metadata.NamespaceMetadata{
+			Id:    1,
+			StrId: defaults.DefaultNamespaceName,
+			Name:  "test namespace",
+		}
+
+		mockTenantMgr.EXPECT().UpdateNamespaceMetadata(r.ctx, mock.Anything).
+			RunAndReturn(func(ctx context.Context, actual metadata.NamespaceMetadata) error {
+				require.Equal(t, nsMeta.StrId, actual.StrId)
+				require.Equal(t, nsMeta.Id, actual.Id)
+				require.NotNil(t, actual.Accounts)
+				require.NotNil(t, actual.Accounts.Metronome)
+				require.False(t, actual.Accounts.Metronome.Enabled)
+				require.Equal(t, actual.Accounts.Metronome.Id, "")
+				return nil
+			}).
+			Once()
+
+		success := r.setupBillingAccount(nsMeta)
+		require.False(t, success)
+	})
+
+	t.Run("with empty namespaceId", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), &metadata.MockNamespaceMetadataMgr{}, &metadata.MockTenantGetter{}
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+
+		nsMeta := &metadata.NamespaceMetadata{
+			Id:    1,
+			StrId: "",
+			Name:  "test namespace",
+			Accounts: &metadata.AccountIntegrations{Metronome: &metadata.Metronome{
+				Enabled: true,
+				Id:      "123",
+			}},
+		}
+
+		mockTenantMgr.EXPECT().UpdateNamespaceMetadata(r.ctx, mock.Anything).
+			RunAndReturn(func(ctx context.Context, actual metadata.NamespaceMetadata) error {
+				require.Equal(t, "", actual.StrId)
+				require.Equal(t, nsMeta.Id, actual.Id)
+				require.NotNil(t, actual.Accounts)
+				require.NotNil(t, actual.Accounts.Metronome)
+				require.False(t, actual.Accounts.Metronome.Enabled)
+				require.Equal(t, nsMeta.Accounts.Metronome.Id, actual.Accounts.Metronome.Id)
+				return nil
+			}).
+			Once()
+
+		success := r.setupBillingAccount(nsMeta)
+		require.False(t, success)
+	})
+
+	t.Run("when metronome is disabled", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), &metadata.MockNamespaceMetadataMgr{}, &metadata.MockTenantGetter{}
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+
+		nsMeta := &metadata.NamespaceMetadata{
+			Id:    1,
+			StrId: "ns123",
+			Name:  "test namespace",
+			Accounts: &metadata.AccountIntegrations{Metronome: &metadata.Metronome{
+				Enabled: false,
+				Id:      "123",
+			}},
+		}
+
+		success := r.setupBillingAccount(nsMeta)
+		require.False(t, success)
+	})
+
+	t.Run("when metronome id exists", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), &metadata.MockNamespaceMetadataMgr{}, &metadata.MockTenantGetter{}
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+
+		nsMeta := &metadata.NamespaceMetadata{
+			Id:    1,
+			StrId: "ns123",
+			Name:  "test namespace",
+			Accounts: &metadata.AccountIntegrations{Metronome: &metadata.Metronome{
+				Enabled: true,
+				Id:      "123",
+			}},
+		}
+
+		success := r.setupBillingAccount(nsMeta)
+		require.True(t, success)
+	})
+
+	t.Run("when account creation succeeds", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), &metadata.MockNamespaceMetadataMgr{}, &metadata.MockTenantGetter{}
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+		nsMeta := &metadata.NamespaceMetadata{
+			Id:    1,
+			StrId: "ns123",
+			Name:  "test namespace",
+		}
+		expectedAccountId := uuid.New()
+		mockProvider.EXPECT().CreateAccount(r.ctx, nsMeta.StrId, nsMeta.Name).Return(expectedAccountId, nil).Once()
+		mockProvider.EXPECT().AddDefaultPlan(r.ctx, expectedAccountId).Return(true, nil).Once()
+		mockTenantMgr.EXPECT().UpdateNamespaceMetadata(r.ctx, mock.Anything).
+			RunAndReturn(func(ctx context.Context, actual metadata.NamespaceMetadata) error {
+				require.True(t, actual.Accounts.Metronome.Enabled)
+				require.Equal(t, actual.Accounts.Metronome.Id, expectedAccountId.String())
+				return nil
+			}).
+			Once()
+
+		success := r.setupBillingAccount(nsMeta)
+		require.True(t, success)
+	})
+
+	t.Run("when adding default plan fails", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), &metadata.MockNamespaceMetadataMgr{}, &metadata.MockTenantGetter{}
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+		nsMeta := &metadata.NamespaceMetadata{
+			Id:    1,
+			StrId: "ns123",
+			Name:  "test namespace",
+		}
+		expectedAccountId := uuid.New()
+		mockProvider.EXPECT().CreateAccount(r.ctx, nsMeta.StrId, nsMeta.Name).Return(expectedAccountId, nil).Once()
+		mockProvider.EXPECT().AddDefaultPlan(r.ctx, expectedAccountId).
+			Return(false, fmt.Errorf("failed to add default plan")).
+			Once()
+		mockTenantMgr.EXPECT().UpdateNamespaceMetadata(r.ctx, mock.Anything).
+			RunAndReturn(func(ctx context.Context, actual metadata.NamespaceMetadata) error {
+				require.True(t, actual.Accounts.Metronome.Enabled)
+				require.Equal(t, actual.Accounts.Metronome.Id, expectedAccountId.String())
+				return nil
+			}).
+			Once()
+
+		success := r.setupBillingAccount(nsMeta)
+		require.True(t, success)
+	})
+
+	t.Run("when creating account fails because of HTTP 409 - conflict", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), &metadata.MockNamespaceMetadataMgr{}, &metadata.MockTenantGetter{}
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+		nsMeta := &metadata.NamespaceMetadata{
+			Id:    1,
+			StrId: "ns123",
+			Name:  "test namespace",
+		}
+		expectedAccountId := uuid.New()
+		mockProvider.EXPECT().CreateAccount(r.ctx, nsMeta.StrId, nsMeta.Name).
+			Return(uuid.Nil, NewMetronomeError(409, []byte("conflict"))).
+			Once()
+		mockProvider.EXPECT().GetAccountId(r.ctx, nsMeta.StrId).Return(expectedAccountId, nil).Once()
+		mockTenantMgr.EXPECT().UpdateNamespaceMetadata(r.ctx, mock.Anything).
+			RunAndReturn(func(ctx context.Context, actual metadata.NamespaceMetadata) error {
+				require.True(t, actual.Accounts.Metronome.Enabled)
+				require.Equal(t, actual.Accounts.Metronome.Id, expectedAccountId.String())
+				return nil
+			}).
+			Once()
+
+		success := r.setupBillingAccount(nsMeta)
+		require.True(t, success)
+	})
+
+	t.Run("when creating account fails for Bad Request", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), &metadata.MockNamespaceMetadataMgr{}, &metadata.MockTenantGetter{}
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+		nsMeta := &metadata.NamespaceMetadata{
+			Id:    1,
+			StrId: "ns123",
+			Name:  "test namespace",
+		}
+		mockProvider.EXPECT().CreateAccount(r.ctx, nsMeta.StrId, nsMeta.Name).
+			Return(uuid.Nil, NewMetronomeError(400, []byte("bad request"))).
+			Once()
+
+		success := r.setupBillingAccount(nsMeta)
+		require.False(t, success)
+	})
+
+	t.Run("when creating account fails for unexpected error", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), &metadata.MockNamespaceMetadataMgr{}, &metadata.MockTenantGetter{}
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+		nsMeta := &metadata.NamespaceMetadata{
+			Id:    1,
+			StrId: "ns123",
+			Name:  "test namespace",
+		}
+		mockProvider.EXPECT().CreateAccount(r.ctx, nsMeta.StrId, nsMeta.Name).
+			Return(uuid.Nil, fmt.Errorf("remote service error")).
+			Once()
+
+		success := r.setupBillingAccount(nsMeta)
+		require.False(t, success)
+	})
+
+	t.Run("when getting account id from billing service fails", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), &metadata.MockNamespaceMetadataMgr{}, &metadata.MockTenantGetter{}
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+		nsMeta := &metadata.NamespaceMetadata{
+			Id:    1,
+			StrId: "ns123",
+			Name:  "test namespace",
+		}
+		mockProvider.EXPECT().CreateAccount(r.ctx, nsMeta.StrId, nsMeta.Name).
+			Return(uuid.Nil, NewMetronomeError(409, []byte("conflict"))).
+			Once()
+		mockProvider.EXPECT().GetAccountId(r.ctx, nsMeta.StrId).
+			Return(uuid.Nil, NewMetronomeError(403, []byte("Unauthorized"))).
+			Once()
+
+		success := r.setupBillingAccount(nsMeta)
+		require.True(t, success)
+	})
+
+	t.Run("when updating namespace metadata fails", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), &metadata.MockNamespaceMetadataMgr{}, &metadata.MockTenantGetter{}
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+		nsMeta := &metadata.NamespaceMetadata{
+			Id:    1,
+			StrId: "ns123",
+			Name:  "test namespace",
+		}
+		expectedAccountId := uuid.New()
+		mockProvider.EXPECT().CreateAccount(r.ctx, nsMeta.StrId, nsMeta.Name).Return(expectedAccountId, nil).Once()
+		mockProvider.EXPECT().AddDefaultPlan(r.ctx, expectedAccountId).Return(true, nil).Once()
+		mockTenantMgr.EXPECT().UpdateNamespaceMetadata(r.ctx, mock.Anything).
+			Return(fmt.Errorf("failed to update namespace metadata")).
+			Once()
+
+		success := r.setupBillingAccount(nsMeta)
+		require.True(t, success)
+	})
+}
+
 type MockTenantManager struct {
 	data                  map[string]metadata.NamespaceMetadata
 	refreshNamespaceCalls int
+	updateNamespaceCalls  map[string]int
 }
 
 func (*MockTenantManager) GetTenant(_ context.Context, id string) (*metadata.Tenant, error) {
