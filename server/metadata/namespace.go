@@ -44,7 +44,7 @@ type NamespaceMetadata struct {
 	// displayName for the namespace
 	Name string
 	// external accounts
-	Accounts AccountIntegrations
+	Accounts *AccountIntegrations
 }
 
 // DefaultNamespace is for "default" namespace in the cluster. This is useful when there is no need to logically group
@@ -96,9 +96,10 @@ func (n *DefaultNamespace) SetMetadata(update NamespaceMetadata) {
 
 func NewNamespaceMetadata(id uint32, name string, displayName string) NamespaceMetadata {
 	return NamespaceMetadata{
-		Id:    id,
-		StrId: name,
-		Name:  displayName,
+		Id:       id,
+		StrId:    name,
+		Name:     displayName,
+		Accounts: &AccountIntegrations{},
 	}
 }
 
