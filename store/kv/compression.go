@@ -19,6 +19,7 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 	"github.com/tigrisdata/tigris/internal"
+	"github.com/tigrisdata/tigris/server/config"
 )
 
 const (
@@ -67,7 +68,12 @@ type CompressTx struct {
 }
 
 func (tx *CompressTx) shouldCompress(data *internal.TableData) bool {
-	return data.ActualUserPayloadSize() > minCompressionThreshold && tx.enabled
+	minCompThreshold := config.DefaultConfig.KV.MinCompressThreshold
+	if minCompThreshold <= 0 {
+		minCompThreshold = minCompressionThreshold
+	}
+
+	return data.ActualUserPayloadSize() > minCompThreshold && tx.enabled
 }
 
 func (tx *CompressTx) compress(data *internal.TableData) *internal.TableData {

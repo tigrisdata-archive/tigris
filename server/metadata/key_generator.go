@@ -16,10 +16,10 @@ package metadata
 
 import (
 	"context"
-	"github.com/tigrisdata/tigris/server/metrics"
 
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 )
