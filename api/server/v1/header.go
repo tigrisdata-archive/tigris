@@ -43,6 +43,8 @@ const (
 	HeaderTxOrigin                  = "Tigris-Tx-Origin"
 	grpcGatewayPrefix               = "Grpc-Gateway-"
 	HeaderSchemaSignOff             = "Tigris-Schema-Sign-Off"
+	HeaderDisableSearch             = "Tigris-Disable-Search"
+	HeaderSchemaVersion             = "Tigris-Schema-Version"
 	HeaderBypassAuthCache           = "Tigris-Bypass-Auth-Cache" // #nosec G101
 	HeaderReadSearchDataFromStorage = "Tigris-Search-Read-From-Storage"
 	HeaderServerTiming              = "Server-Timing"

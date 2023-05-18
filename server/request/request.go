@@ -444,6 +444,10 @@ func NeedSchemaValidation(ctx context.Context) bool {
 	return api.GetHeader(ctx, api.HeaderSchemaSignOff) != "true"
 }
 
+func DisableSearch(ctx context.Context) bool {
+	return api.GetHeader(ctx, api.HeaderDisableSearch) == "true"
+}
+
 func ReadSearchDataFromStorage(ctx context.Context) bool {
 	return api.GetHeader(ctx, api.HeaderReadSearchDataFromStorage) == "true"
 }
