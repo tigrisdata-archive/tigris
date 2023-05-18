@@ -159,11 +159,14 @@ func (m *storeImplWithMetrics) Search(ctx context.Context, table string, query *
 		return err
 	})
 	if reqStatus != nil && reqStatusExists {
-		if reqStatus.IsCollectionSearch() {
-			reqStatus.AddCollectionSearchUnit()
-		}
-		if reqStatus.IsApiSearch() {
-			reqStatus.AddSearchUnit()
+		if !reqStatus.IsCollectionRead() {
+			// Collection reads are counted in search_reader.go iterator
+			if reqStatus.IsCollectionSearch() {
+				reqStatus.AddCollectionSearchUnit()
+			}
+			if reqStatus.IsApiSearch() {
+				reqStatus.AddSearchUnit()
+			}
 		}
 		for _, res := range result {
 			if res.Hits != nil {

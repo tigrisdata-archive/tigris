@@ -783,6 +783,10 @@ func (runner *StreamingQueryRunner) iterateOnSecondaryIndexStore(ctx context.Con
 }
 
 func (runner *StreamingQueryRunner) iterateOnSearchStore(ctx context.Context, coll *schema.DefaultCollection, options readerOptions) error {
+	reqStatus, exists := metrics.RequestStatusFromContext(ctx)
+	if reqStatus != nil && exists {
+		reqStatus.SetCollectionRead()
+	}
 	rowReader := NewSearchReader(ctx, runner.searchStore, coll, qsearch.NewBuilder().
 		Filter(options.filter).
 		NoSearchFilter(options.noSearchFilter).
@@ -791,7 +795,7 @@ func (runner *StreamingQueryRunner) iterateOnSearchStore(ctx context.Context, co
 		Build())
 
 	// Note: Iterator expects the "options.filter" so that we use it to perform in-memory filtering.
-	if _, err := runner.iterate(ctx, coll, rowReader.Iterator(coll, options.filter), options.fieldFactory); err != nil {
+	if _, err := runner.iterate(ctx, coll, rowReader.Iterator(ctx, coll, options.filter), options.fieldFactory); err != nil {
 		return err
 	}
 

@@ -16,6 +16,7 @@ package metadata
 
 import (
 	"context"
+	"github.com/tigrisdata/tigris/server/metrics"
 
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
@@ -70,6 +71,9 @@ func (*TableKeyGenerator) generateCounter(ctx context.Context, tx transaction.Tx
 	if err != nil {
 		return 0, err
 	}
+
+	// Do not count for metadata operations
+	metrics.SetMetadataOperationInContext(ctx)
 
 	id := uint32(1)
 	var row kv.KeyValue

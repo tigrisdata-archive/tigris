@@ -284,21 +284,25 @@ func (m *TenantManager) RefreshNamespaceAccounts(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	log.Debug().Interface("ns", namespaces).Msg("reloaded namespaces")
+	log.Debug().Interface("namespaces", namespaces).Msg("reloaded namespaces")
 
-	for namespaceId, metadata := range namespaces {
+	for namespaceId, loadedMeta := range namespaces {
 		// getTenant
 		tenant, err := m.GetTenant(ctx, namespaceId)
 		if err != nil {
-			log.Error().Err(err).Msgf("cannot find tenant with id %s", namespaceId)
+			log.Error().Err(err).Str("ns", namespaceId).Msgf("cannot find tenant with id %s", namespaceId)
+			continue
+		}
+		if loadedMeta.Accounts == nil {
+			log.Debug().Str("ns", namespaceId).Msg("no accounts for the namespace, skipping")
 			continue
 		}
 		// update accounts if tenant does not have it
-		if tenant.namespace.Metadata().Accounts.Metronome == nil {
+		cachedMeta := tenant.namespace.Metadata()
+		if cachedMeta.Accounts == nil || cachedMeta.Accounts.Metronome == nil {
 			tenant.Lock()
-			tenantMeta := tenant.namespace.Metadata()
-			tenantMeta.Accounts = metadata.Accounts
-			tenant.namespace.SetMetadata(tenantMeta)
+			cachedMeta.Accounts = loadedMeta.Accounts
+			tenant.namespace.SetMetadata(cachedMeta)
 			tenant.Unlock()
 		}
 	}

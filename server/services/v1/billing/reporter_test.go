@@ -44,7 +44,7 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 				Id:    2,
 				StrId: "ns2",
 				Name:  "with metronome integration",
-				Accounts: metadata.AccountIntegrations{
+				Accounts: &metadata.AccountIntegrations{
 					Metronome: &metadata.Metronome{
 						Enabled: true,
 						Id:      "m2",
@@ -55,13 +55,13 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 				Id:       3,
 				StrId:    "ns3",
 				Name:     "with metronome disabled",
-				Accounts: metadata.AccountIntegrations{},
+				Accounts: &metadata.AccountIntegrations{},
 			},
 			"ns4": {
 				Id:    4,
 				StrId: "ns4",
 				Name:  "with empty metronome id",
-				Accounts: metadata.AccountIntegrations{
+				Accounts: &metadata.AccountIntegrations{
 					Metronome: &metadata.Metronome{
 						Enabled: true,
 						Id:      "",
@@ -264,7 +264,7 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 				Id:    5,
 				StrId: nsId,
 				Name:  "Failure to pushUsage events for this namespace",
-				Accounts: metadata.AccountIntegrations{
+				Accounts: &metadata.AccountIntegrations{
 					Metronome: &metadata.Metronome{
 						Enabled: true,
 						Id:      uuid.New().String(),
@@ -331,7 +331,7 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 			nsId: {
 				Id:    1,
 				StrId: nsId,
-				Accounts: metadata.AccountIntegrations{
+				Accounts: &metadata.AccountIntegrations{
 					Metronome: &metadata.Metronome{
 						Enabled: true,
 						Id:      uuid.New().String(),
@@ -370,7 +370,7 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 			nsId: {
 				Id:    1,
 				StrId: nsId,
-				Accounts: metadata.AccountIntegrations{
+				Accounts: &metadata.AccountIntegrations{
 					Metronome: &metadata.Metronome{
 						Enabled: false,
 						Id:      uuid.New().String(),

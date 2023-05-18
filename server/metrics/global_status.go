@@ -51,10 +51,14 @@ type TenantStatus struct {
 	ReadUnits int64
 	// Counted from writeBytes at the end of the request
 	WriteUnits int64
+	// Counted from searchWriteBytes at the end of the request
+	SearchWriteUnits int64
 	// Bytes read, converted to write units
 	readBytes int64
 	// Bytes written, converted to write units
 	writeBytes int64
+	// Bytes written to search, converted to write units
+	searchWriteBytes int64
 	// One drop operation (for example drop collection) is one drop unit
 	ddlDropUnits int64
 	// One create operation (for example one create collection) is one create unit
@@ -85,10 +89,14 @@ type RequestStatus struct {
 	// bytes are the sum of document and index bytes written, and the read bytes in this case would be the data
 	// update or delete request where there may be a scan depending on the query filter.
 	writeBytes int64
+	// For search request, the number of bytes written to search on a successful request.
+	searchWriteBytes int64
 	// number of documents
 	nDocs int64
 	// Type of search request 0 - api search, 1 - collection search (used internally)
 	searchRequestType int
+	// Collection read when the read is falling back to search
+	collectionRead bool
 	// One drop operation (for example drop collection) is one drop unit
 	ddlDropUnits int64
 	// One create operation (for example one create collection) is one create unit
@@ -107,6 +115,8 @@ type RequestStatus struct {
 	searchDropIndexUnits int64
 	// Deleting one document from a search index is one delete document unit
 	searchDeleteDocumentUnits int64
+	// Metadata operation that should not be counted
+	metadataOperation bool
 }
 
 type RequestStatusCtxKey struct{}
@@ -141,8 +151,34 @@ func RequestStatusFromContext(ctx context.Context) (*RequestStatus, bool) {
 	return r, ok
 }
 
+func SetMetadataOperationInContext(ctx context.Context) {
+	reqStatus, exists := RequestStatusFromContext(ctx)
+	if reqStatus != nil && exists {
+		reqStatus.metadataOperation = true
+	}
+}
+
+func AddSearchBytesInContext(ctx context.Context, value int64) {
+	reqStatus, exists := RequestStatusFromContext(ctx)
+	if reqStatus != nil && exists {
+		reqStatus.writeBytes += value
+	}
+}
+
+func (r *RequestStatus) IsMetadataOperation() bool {
+	return r.metadataOperation
+}
+
 func (r *RequestStatus) SetCollectionSearchType() {
 	r.searchRequestType = 1
+}
+
+func (r *RequestStatus) SetCollectionRead() {
+	r.collectionRead = true
+}
+
+func (r *RequestStatus) IsCollectionRead() bool {
+	return r.collectionRead
 }
 
 func (r *RequestStatus) SetApiSearchType() {
@@ -199,6 +235,16 @@ func (r *RequestStatus) AddWriteBytes(value int64) {
 	r.writeBytes += value
 	if config.DefaultConfig.GlobalStatus.DebugMessages {
 		log.Debug().Int64("Bytes written", value).Int64("Total bytes written", r.writeBytes).Msg("Added written bytes")
+	}
+}
+
+func (r *RequestStatus) AddSearchWriteByes(value int64) {
+	if !config.DefaultConfig.GlobalStatus.Enabled {
+		return
+	}
+	r.searchWriteBytes += value
+	if config.DefaultConfig.GlobalStatus.DebugMessages {
+		log.Debug().Int64("search bytes written", value).Int64("Total search bytes written", r.searchWriteBytes).Msg("Added written search bytes")
 	}
 }
 
@@ -362,18 +408,30 @@ func (g *GlobalStatus) RecordRequestToActiveChunk(r *RequestStatus, tenantName s
 	g.ensureTenantForActiveChunk(tenantName)
 	if config.DefaultConfig.GlobalStatus.DebugMessages {
 		log.Debug().Msg("Recording request to active chunk")
-		log.Debug().Int64("writeBytes", r.writeBytes).Str("tenantName", tenantName).Msg("Recording write bytes")
-		log.Debug().Int64("readBytes", r.readBytes).Str("tenantName", tenantName).Msg("Recording read bytes")
-		log.Debug().Int64("writeUnits", writeUnits).Str("tenantName", tenantName).Msg("Recording write units")
-		log.Debug().Int64("readUnits", readUnits).Str("tenantName", tenantName).Msg("Recording read units")
-		log.Debug().Int64("SearchUnits", r.searchUnits).Str("tenantName", tenantName).Msg("Recording api search units")
-		log.Debug().Int64("collectionSearchUnits", r.collectionSearchUnits).Str("tenantName", tenantName).Msg("Recording collection search units")
-		log.Debug().Int64("ddlDropUnits", r.ddlDropUnits).Str("tenantName", tenantName).Msg("Recording ddl drop units")
-		log.Debug().Int64("ddlCreateUnits", r.ddlCreateUnits).Str("tenantName", tenantName).Msg("Recording ddl create units")
-		log.Debug().Int64("ddlUpdateUnits", r.ddlUpdateUnits).Str("tenantName", tenantName).Msg("Recording ddl update units")
-		log.Debug().Int64("searchCreateIndexUnits", r.searchCreateIndexUnits).Str("tenantName", tenantName).Msg("Recording search create index units")
-		log.Debug().Int64("searchDropIndexUnits", r.searchDropIndexUnits).Str("tenantName", tenantName).Msg("Recording search drop index units")
-		log.Debug().Int64("searchDeleteDocumentUnits", r.searchDeleteDocumentUnits).Str("tenantName", tenantName).Msg("Recording search delete documents units")
+		log.Debug().Int64("writeBytes", r.writeBytes).
+			Str("tenantName", tenantName).Msg("Recording write bytes")
+		log.Debug().Int64("readBytes", r.readBytes).
+			Str("tenantName", tenantName).Msg("Recording read bytes")
+		log.Debug().Int64("writeUnits", writeUnits).
+			Str("tenantName", tenantName).Msg("Recording write units")
+		log.Debug().Int64("readUnits", readUnits).
+			Str("tenantName", tenantName).Msg("Recording read units")
+		log.Debug().Int64("SearchUnits", r.searchUnits).
+			Str("tenantName", tenantName).Msg("Recording api search units")
+		log.Debug().Int64("collectionSearchUnits", r.collectionSearchUnits).
+			Str("tenantName", tenantName).Msg("Recording collection search units")
+		log.Debug().Int64("ddlDropUnits", r.ddlDropUnits).
+			Str("tenantName", tenantName).Msg("Recording ddl drop units")
+		log.Debug().Int64("ddlCreateUnits", r.ddlCreateUnits).
+			Str("tenantName", tenantName).Msg("Recording ddl create units")
+		log.Debug().Int64("ddlUpdateUnits", r.ddlUpdateUnits).
+			Str("tenantName", tenantName).Msg("Recording ddl update units")
+		log.Debug().Int64("searchCreateIndexUnits", r.searchCreateIndexUnits).
+			Str("tenantName", tenantName).Msg("Recording search create index units")
+		log.Debug().Int64("searchDropIndexUnits", r.searchDropIndexUnits).
+			Str("tenantName", tenantName).Msg("Recording search drop index units")
+		log.Debug().Int64("searchDeleteDocumentUnits", r.searchDeleteDocumentUnits).
+			Str("tenantName", tenantName).Msg("Recording search delete documents units")
 	}
 	g.activeChunk.Tenants[tenantName].writeBytes += r.writeBytes
 	g.activeChunk.Tenants[tenantName].readBytes += r.readBytes
@@ -403,14 +461,20 @@ func (g *GlobalStatus) Flush() TenantStatusTimeChunk {
 	for _, status := range res.Tenants {
 		status.WriteUnits = getUnitsFromBytes(status.writeBytes, config.WriteUnitSize)
 		status.ReadUnits = getUnitsFromBytes(status.readBytes, config.ReadUnitSize)
+		status.SearchWriteUnits = getUnitsFromBytes(status.searchWriteBytes, config.SearchUnitSize)
 	}
 	if config.DefaultConfig.GlobalStatus.DebugMessages {
 		log.Debug().Time("start time", res.StartTime).Time("end time", res.EndTime).Msg("flush results")
 	}
 	for tenantName, status := range res.Tenants {
 		if config.DefaultConfig.GlobalStatus.DebugMessages {
-			log.Debug().Int64("read units", status.ReadUnits).Int64("write units", status.WriteUnits).Str("tenant name", tenantName).Msg("db units flushed")
-			log.Debug().Int64("search units", status.SearchUnits).Int64("collection search units", status.collectionSearchUnits).Str("tenant name", tenantName).Msg("flushed search units")
+			log.Debug().Int64("read units", status.ReadUnits).
+				Int64("write units", status.WriteUnits).Str("tenant name", tenantName).Msg("db units flushed")
+			log.Debug().Int64("search units", status.SearchUnits).
+				Int64("collection search units", status.collectionSearchUnits).Str("tenant name", tenantName).
+				Msg("flushed search units")
+			log.Debug().Int64("search write units", status.SearchWriteUnits).Str("tenant name", tenantName).
+				Msg("search write units flushed")
 		}
 	}
 	return res
