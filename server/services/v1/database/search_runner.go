@@ -18,12 +18,14 @@ import (
 	"context"
 	"math"
 
+	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/query/filter"
 	"github.com/tigrisdata/tigris/query/read"
 	qsearch "github.com/tigrisdata/tigris/query/search"
 	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
 	ulog "github.com/tigrisdata/tigris/util/log"
@@ -62,6 +64,14 @@ func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.
 	wrappedF, err := filter.NewFactory(collection.QueryableFields, value.NewCollationFrom(runner.req.Collation)).WrappedFilter(runner.req.Filter)
 	if err != nil {
 		return Response{}, ctx, err
+	}
+	if config.DefaultConfig.Search.LogFilter {
+		log.Error().
+			Str("tenant", tenant.Name()).
+			Str("project", db.Name()).
+			Str("collection", collection.Name).
+			Str("filter", string(runner.req.Filter)).
+			Msg("collection search filters")
 	}
 
 	searchFields, err := runner.getSearchFields(collection)
