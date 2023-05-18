@@ -139,7 +139,6 @@ func (r *UsageReporter) pushUsage() error {
 				if err != nil || !added {
 					log.Error().Err(err).Str("ns", nsMeta.StrId).Msgf("error adding default plan %s", nsMeta.StrId)
 				}
-
 			}
 		}
 
