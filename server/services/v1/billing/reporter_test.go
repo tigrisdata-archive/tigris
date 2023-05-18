@@ -27,6 +27,7 @@ import (
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
+	"github.com/tigrisdata/tigris/server/defaults"
 )
 
 var mockKvStore kv.TxStore
@@ -38,7 +39,13 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 			"ns1": {
 				Id:    1,
 				StrId: "ns1",
-				Name:  "no metronome integration",
+				Name:  "enabled metronome account",
+				Accounts: &metadata.AccountIntegrations{
+					Metronome: &metadata.Metronome{
+						Enabled: true,
+						Id:      "m1",
+					},
+				},
 			},
 			"ns2": {
 				Id:    2,
@@ -52,24 +59,18 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 				},
 			},
 			"ns3": {
-				Id:       3,
-				StrId:    "ns3",
-				Name:     "with metronome disabled",
-				Accounts: &metadata.AccountIntegrations{},
-			},
-			"ns4": {
-				Id:    4,
-				StrId: "ns4",
-				Name:  "with empty metronome id",
+				Id:    3,
+				StrId: "ns3",
+				Name:  "disabled metronome account",
 				Accounts: &metadata.AccountIntegrations{
 					Metronome: &metadata.Metronome{
-						Enabled: true,
-						Id:      "",
+						Enabled: false,
+						Id:      "m3",
 					},
 				},
 			},
 		}
-		tenantMgr := &MockTenantManager{data: namespaces}
+		//tenantMgr := &MockTenantManager{data: namespaces}
 		glbStatus := &MockGlobalStatus{data: metrics.TenantStatusTimeChunk{
 			StartTime: time.Time{},
 			EndTime:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -89,11 +90,6 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 					WriteUnits:  32,
 					SearchUnits: 33,
 				},
-				"ns4": {
-					ReadUnits:   41,
-					WriteUnits:  42,
-					SearchUnits: 43,
-				},
 				"doesNotExist": { // this should be ignored and other events should be processed as normal
 					ReadUnits:   1,
 					WriteUnits:  2,
@@ -102,25 +98,15 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 			},
 		}}
 
-		mockProvider := NewMockProvider(t)
-
-		// CreateAccount and AddDefaultPlan calls only for "ns1" and "ns3"
-		for _, n := range []string{"ns1", "ns3", "ns4"} {
-			mId := uuid.New()
-			mockProvider.EXPECT().CreateAccount(mock.Anything, namespaces[n].StrId, namespaces[n].Name).
-				Return(mId, nil).
-				Once()
-			mockProvider.EXPECT().AddDefaultPlan(mock.Anything, mId).
-				Return(true, nil).
-				Once()
-		}
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), metadata.NewMockNamespaceMetadataMgr(t), metadata.NewMockTenantGetter(t)
+		reporter, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
 
 		// Usage events pushed for each namespace
 		mockProvider.EXPECT().PushUsageEvents(mock.Anything, mock.Anything).
 			RunAndReturn(func(ctx context.Context, events []*UsageEvent) error {
-				require.Len(t, events, 4)
+				require.Len(t, events, 2)
 				for _, e := range events {
-					require.Contains(t, []string{"ns1", "ns2", "ns3", "ns4"}, e.CustomerId)
+					require.Contains(t, []string{"ns1", "ns2"}, e.CustomerId)
 
 					expected, actual := glbStatus.data.Tenants[e.CustomerId], *e.Properties
 					require.Equal(t, expected.WriteUnits+expected.ReadUnits, actual[UsageDbUnits])
@@ -129,155 +115,53 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 				return nil
 			}).Once()
 
-		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider, mockTxMgr)
+		mockTenantMgr.EXPECT().GetNamespaceMetadata(reporter.ctx, mock.Anything).
+			RunAndReturn(func(ctx context.Context, s string) *metadata.NamespaceMetadata {
+				if n, ok := namespaces[s]; ok {
+					return &n
+				}
+				return nil
+			})
+		mockTenantMgr.EXPECT().RefreshNamespaceAccounts(reporter.ctx).Return(nil).Once()
+
 		err := reporter.pushUsage()
 		require.NoError(t, err)
-
-		// refreshNamespaceAccounts is only called once
-		require.Equal(t, 1, tenantMgr.refreshNamespaceCalls)
-
-		for _, ns := range namespaces {
-			// validate UpdateNamespaceMetadata adds metronome integration to all
-			id, enabled := ns.Accounts.GetMetronomeId()
-			require.Equal(t, true, enabled)
-			require.NotNil(t, id)
-		}
 	})
 
 	t.Run("push empty events", func(t *testing.T) {
-		tenantMgr := &MockTenantManager{data: map[string]metadata.NamespaceMetadata{}}
 		glbStatus := &MockGlobalStatus{data: metrics.TenantStatusTimeChunk{
 			StartTime: time.Time{},
 			EndTime:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
 			Tenants:   map[string]*metrics.TenantStatus{},
 		}}
 
-		mockProvider := NewMockProvider(t)
-		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider, mockTxMgr)
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), metadata.NewMockNamespaceMetadataMgr(t), metadata.NewMockTenantGetter(t)
+		reporter, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
 
 		err := reporter.pushUsage()
 		require.NoError(t, err)
-		// refreshNamespaceAccounts is never called
-		require.Equal(t, 0, tenantMgr.refreshNamespaceCalls)
-		// no calls should be made to metronome provider
+		// mocks not called
+		require.Empty(t, mockTenantMgr.Calls)
 		require.Empty(t, mockProvider.Calls)
 	})
 
-	t.Run("fails to create metronome account", func(t *testing.T) {
-		nsId := "createAccountFails"
-		namespaces := map[string]metadata.NamespaceMetadata{
-			nsId: {
-				Id:    4,
-				StrId: nsId,
-				Name:  "metronome account creation fails for this user",
-			},
-		}
-		tenantMgr := &MockTenantManager{data: namespaces}
-		glbStatus := &MockGlobalStatus{data: metrics.TenantStatusTimeChunk{
-			StartTime: time.Time{},
-			EndTime:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
-			Tenants: map[string]*metrics.TenantStatus{
-				nsId: {
-					ReadUnits:   4,
-					WriteUnits:  5,
-					SearchUnits: 6,
-				},
-			},
-		}}
-
-		mockProvider := NewMockProvider(t)
-		// create account fails
-		mockProvider.EXPECT().CreateAccount(mock.Anything, nsId, mock.Anything).
-			Return(uuid.Nil, fmt.Errorf("failed to create account")).
-			Once()
-		// should still push events
-		mockProvider.EXPECT().PushUsageEvents(mock.Anything, mock.Anything).
-			RunAndReturn(func(ctx context.Context, events []*UsageEvent) error {
-				require.Len(t, events, 1)
-				require.Equal(t, nsId, events[0].CustomerId)
-				return nil
-			}).
-			Once()
-
-		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider, mockTxMgr)
-		err := reporter.pushUsage()
-		require.NoError(t, err)
-
-		// refreshNamespaceAccounts is only called once
-		require.Equal(t, 1, tenantMgr.refreshNamespaceCalls)
-	})
-
-	t.Run("fails to add default plan to metronome account", func(t *testing.T) {
-		nsId := "someId"
-		namespaces := map[string]metadata.NamespaceMetadata{
-			nsId: {
-				Id:    4,
-				StrId: nsId,
-				Name:  "Adding default plan fails for this user",
-			},
-		}
-		tenantMgr := &MockTenantManager{data: namespaces}
-		glbStatus := &MockGlobalStatus{data: metrics.TenantStatusTimeChunk{
-			StartTime: time.Time{},
-			EndTime:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
-			Tenants: map[string]*metrics.TenantStatus{
-				nsId: {
-					ReadUnits:   4,
-					WriteUnits:  5,
-					SearchUnits: 6,
-				},
-			},
-		}}
-		mockProvider, mId := NewMockProvider(t), uuid.New()
-		// create account succeeds
-		mockProvider.EXPECT().CreateAccount(mock.Anything, nsId, namespaces[nsId].Name).
-			Return(mId, nil).
-			Once()
-		// add default plan fails
-		mockProvider.EXPECT().AddDefaultPlan(mock.Anything, mId).
-			Return(false, fmt.Errorf("failed to add account")).
-			Once()
-		// should still push events
-		mockProvider.EXPECT().PushUsageEvents(mock.Anything, mock.Anything).
-			RunAndReturn(func(ctx context.Context, events []*UsageEvent) error {
-				require.Len(t, events, 1)
-				require.Equal(t, nsId, events[0].CustomerId)
-
-				props := *events[0].Properties
-				require.Equal(t, int64(9), props[UsageDbUnits])
-				require.Equal(t, int64(6), props[UsageSearchUnits])
-				return nil
-			}).
-			Once()
-
-		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider, mockTxMgr)
-
-		err := reporter.pushUsage()
-		require.NoError(t, err)
-		require.Equal(t, 1, tenantMgr.refreshNamespaceCalls)
-	})
-
 	t.Run("fails to push events", func(t *testing.T) {
-		nsId := "PushUsageEvent_fails"
-		namespaces := map[string]metadata.NamespaceMetadata{
-			nsId: {
-				Id:    5,
-				StrId: nsId,
-				Name:  "Failure to pushUsage events for this namespace",
-				Accounts: &metadata.AccountIntegrations{
-					Metronome: &metadata.Metronome{
-						Enabled: true,
-						Id:      uuid.New().String(),
-					},
+		ns := &metadata.NamespaceMetadata{
+			Id:    5,
+			StrId: "PushUsageEvent_fails",
+			Name:  "Failure to pushUsage events for this namespace",
+			Accounts: &metadata.AccountIntegrations{
+				Metronome: &metadata.Metronome{
+					Enabled: true,
+					Id:      uuid.New().String(),
 				},
 			},
 		}
-		tenantMgr := &MockTenantManager{data: namespaces}
 		glbStatus := &MockGlobalStatus{data: metrics.TenantStatusTimeChunk{
 			StartTime: time.Time{},
 			EndTime:   time.Time{},
 			Tenants: map[string]*metrics.TenantStatus{
-				nsId: {
+				ns.StrId: {
 					ReadUnits:   4,
 					WriteUnits:  5,
 					SearchUnits: 6,
@@ -285,151 +169,275 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 			},
 		}}
 
-		mockProvider := NewMockProvider(t)
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), metadata.NewMockNamespaceMetadataMgr(t), metadata.NewMockTenantGetter(t)
+		reporter, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+
+		mockTenantMgr.EXPECT().GetNamespaceMetadata(reporter.ctx, ns.StrId).
+			Return(ns).
+			Times(2)
+
 		// push usage call fails
 		mockProvider.EXPECT().PushUsageEvents(mock.Anything, mock.Anything).
 			RunAndReturn(func(ctx context.Context, events []*UsageEvent) error {
 				require.Len(t, events, 1)
-				require.Equal(t, nsId, events[0].CustomerId)
+				require.Equal(t, ns.StrId, events[0].CustomerId)
 				require.Equal(t, int64(9), (*events[0].Properties)[UsageDbUnits])
 				require.Equal(t, int64(6), (*events[0].Properties)[UsageSearchUnits])
 
 				return fmt.Errorf("failed to push usage events")
 			}).Once()
 
-		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider, mockTxMgr)
-
 		err := reporter.pushUsage()
 		require.ErrorContains(t, err, "failed to push usage events")
 	})
+}
 
-	t.Run("tenant does not exist", func(t *testing.T) {
-		tenantMgr := &MockTenantManager{data: map[string]metadata.NamespaceMetadata{}}
-		glbStatus := &MockGlobalStatus{data: metrics.TenantStatusTimeChunk{
-			StartTime: time.Time{},
-			EndTime:   time.Time{},
-			Tenants: map[string]*metrics.TenantStatus{
-				"ns1": {
-					SearchUnits: 6,
-				},
-			},
-		}}
-		mockProvider := NewMockProvider(t)
-		mockProvider.EXPECT().PushUsageEvents(mock.Anything, mock.Anything).
-			RunAndReturn(func(ctx context.Context, events []*UsageEvent) error {
-				require.Empty(t, events)
-				return nil
-			}).Once()
-		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider, mockTxMgr)
-		err := reporter.pushUsage()
-		require.NoError(t, err)
+func TestUsageReporter_setupBillingAccount(t *testing.T) {
+	glbStatus := &MockGlobalStatus{}
+	mockTxMgr := transaction.NewManager(mockKvStore)
+
+	t.Run("with nil metadata", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), metadata.NewMockNamespaceMetadataMgr(t), metadata.NewMockTenantGetter(t)
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+
+		success := r.setupBillingAccount(nil)
+		require.False(t, success)
 	})
 
-	t.Run("metronome gets disabled for invalid namespaceId", func(t *testing.T) {
-		nsId := ""
-		namespaces := map[string]metadata.NamespaceMetadata{
-			nsId: {
-				Id:    1,
-				StrId: nsId,
-				Accounts: &metadata.AccountIntegrations{
-					Metronome: &metadata.Metronome{
-						Enabled: true,
-						Id:      uuid.New().String(),
-					},
-				},
-			},
+	t.Run("with default namespace", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), metadata.NewMockNamespaceMetadataMgr(t), metadata.NewMockTenantGetter(t)
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+
+		nsMeta := &metadata.NamespaceMetadata{
+			Id:    1,
+			StrId: defaults.DefaultNamespaceName,
+			Name:  "test namespace",
 		}
-		glbStatus := &MockGlobalStatus{data: metrics.TenantStatusTimeChunk{
-			StartTime: time.Time{},
-			EndTime:   time.Time{},
-			Tenants: map[string]*metrics.TenantStatus{
-				nsId: {
-					SearchUnits: 6,
-				},
-			},
-		}}
-		tenantMgr := &MockTenantManager{data: namespaces}
 
-		mockProvider := NewMockProvider(t)
-		mockProvider.EXPECT().PushUsageEvents(mock.Anything, mock.Anything).
-			RunAndReturn(func(ctx context.Context, events []*UsageEvent) error {
-				require.Empty(t, events)
+		mockTenantMgr.EXPECT().UpdateNamespaceMetadata(r.ctx, mock.Anything).
+			RunAndReturn(func(ctx context.Context, actual metadata.NamespaceMetadata) error {
+				require.Equal(t, nsMeta.StrId, actual.StrId)
+				require.Equal(t, nsMeta.Id, actual.Id)
+				require.NotNil(t, actual.Accounts)
+				require.NotNil(t, actual.Accounts.Metronome)
+				require.False(t, actual.Accounts.Metronome.Enabled)
+				require.Equal(t, actual.Accounts.Metronome.Id, "")
 				return nil
-			}).Once()
+			}).
+			Once()
 
-		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider, mockTxMgr)
-		err := reporter.pushUsage()
-		require.NoError(t, err)
-		updated := tenantMgr.GetNamespaceMetadata(context.TODO(), nsId)
-		require.False(t, updated.Accounts.Metronome.Enabled)
+		success := r.setupBillingAccount(nsMeta)
+		require.False(t, success)
 	})
 
-	t.Run("tenant is skipped if metronome is disabled", func(t *testing.T) {
-		nsId := "ns1"
-		namespaces := map[string]metadata.NamespaceMetadata{
-			nsId: {
-				Id:    1,
-				StrId: nsId,
-				Accounts: &metadata.AccountIntegrations{
-					Metronome: &metadata.Metronome{
-						Enabled: false,
-						Id:      uuid.New().String(),
-					},
-				},
-			},
+	t.Run("with empty namespaceId", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), metadata.NewMockNamespaceMetadataMgr(t), metadata.NewMockTenantGetter(t)
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+
+		nsMeta := &metadata.NamespaceMetadata{
+			Id:    1,
+			StrId: "",
+			Name:  "test namespace",
+			Accounts: &metadata.AccountIntegrations{Metronome: &metadata.Metronome{
+				Enabled: true,
+				Id:      "123",
+			}},
 		}
-		glbStatus := &MockGlobalStatus{data: metrics.TenantStatusTimeChunk{
-			StartTime: time.Time{},
-			EndTime:   time.Time{},
-			Tenants: map[string]*metrics.TenantStatus{
-				nsId: {
-					SearchUnits: 6,
-				},
-			},
-		}}
-		tenantMgr := &MockTenantManager{data: namespaces}
 
-		mockProvider := NewMockProvider(t)
-		mockProvider.EXPECT().PushUsageEvents(mock.Anything, mock.Anything).
-			RunAndReturn(func(ctx context.Context, events []*UsageEvent) error {
-				require.Empty(t, events)
+		mockTenantMgr.EXPECT().UpdateNamespaceMetadata(r.ctx, mock.Anything).
+			RunAndReturn(func(ctx context.Context, actual metadata.NamespaceMetadata) error {
+				require.Equal(t, "", actual.StrId)
+				require.Equal(t, nsMeta.Id, actual.Id)
+				require.NotNil(t, actual.Accounts)
+				require.NotNil(t, actual.Accounts.Metronome)
+				require.False(t, actual.Accounts.Metronome.Enabled)
+				require.Equal(t, nsMeta.Accounts.Metronome.Id, actual.Accounts.Metronome.Id)
 				return nil
-			}).Once()
+			}).
+			Once()
 
-		reporter, _ := NewUsageReporter(glbStatus, tenantMgr, tenantMgr, mockProvider, mockTxMgr)
-		err := reporter.pushUsage()
-		require.NoError(t, err)
+		success := r.setupBillingAccount(nsMeta)
+		require.False(t, success)
 	})
-}
 
-type MockTenantManager struct {
-	data                  map[string]metadata.NamespaceMetadata
-	refreshNamespaceCalls int
-}
+	t.Run("when metronome is disabled", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), metadata.NewMockNamespaceMetadataMgr(t), metadata.NewMockTenantGetter(t)
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
 
-func (*MockTenantManager) GetTenant(_ context.Context, id string) (*metadata.Tenant, error) {
-	return nil, fmt.Errorf("invalid tenant id %s", id)
-}
+		nsMeta := &metadata.NamespaceMetadata{
+			Id:    1,
+			StrId: "ns123",
+			Name:  "test namespace",
+			Accounts: &metadata.AccountIntegrations{Metronome: &metadata.Metronome{
+				Enabled: false,
+				Id:      "123",
+			}},
+		}
 
-func (*MockTenantManager) AllTenants(_ context.Context) []*metadata.Tenant {
-	return []*metadata.Tenant{}
-}
+		success := r.setupBillingAccount(nsMeta)
+		require.False(t, success)
+	})
 
-func (mock *MockTenantManager) GetNamespaceMetadata(_ context.Context, namespaceId string) *metadata.NamespaceMetadata {
-	if ns, ok := mock.data[namespaceId]; ok {
-		return &ns
-	}
-	return nil
-}
+	t.Run("when metronome id exists", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), metadata.NewMockNamespaceMetadataMgr(t), metadata.NewMockTenantGetter(t)
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
 
-func (mock *MockTenantManager) UpdateNamespaceMetadata(_ context.Context, meta metadata.NamespaceMetadata) error {
-	mock.data[meta.StrId] = meta
-	return nil
-}
+		nsMeta := &metadata.NamespaceMetadata{
+			Id:    1,
+			StrId: "ns123",
+			Name:  "test namespace",
+			Accounts: &metadata.AccountIntegrations{Metronome: &metadata.Metronome{
+				Enabled: true,
+				Id:      "123",
+			}},
+		}
 
-func (mock *MockTenantManager) RefreshNamespaceAccounts(_ context.Context) error {
-	mock.refreshNamespaceCalls++
-	return nil
+		success := r.setupBillingAccount(nsMeta)
+		require.True(t, success)
+	})
+
+	t.Run("when account creation succeeds", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), metadata.NewMockNamespaceMetadataMgr(t), metadata.NewMockTenantGetter(t)
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+		nsMeta := &metadata.NamespaceMetadata{
+			Id:    1,
+			StrId: "ns123",
+			Name:  "test namespace",
+		}
+		expectedAccountId := uuid.New()
+		mockProvider.EXPECT().CreateAccount(r.ctx, nsMeta.StrId, nsMeta.Name).Return(expectedAccountId, nil).Once()
+		mockProvider.EXPECT().AddDefaultPlan(r.ctx, expectedAccountId).Return(true, nil).Once()
+		mockTenantMgr.EXPECT().UpdateNamespaceMetadata(r.ctx, mock.Anything).
+			RunAndReturn(func(ctx context.Context, actual metadata.NamespaceMetadata) error {
+				require.True(t, actual.Accounts.Metronome.Enabled)
+				require.Equal(t, actual.Accounts.Metronome.Id, expectedAccountId.String())
+				return nil
+			}).
+			Once()
+
+		success := r.setupBillingAccount(nsMeta)
+		require.True(t, success)
+	})
+
+	t.Run("when adding default plan fails", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), metadata.NewMockNamespaceMetadataMgr(t), metadata.NewMockTenantGetter(t)
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+		nsMeta := &metadata.NamespaceMetadata{
+			Id:    1,
+			StrId: "ns123",
+			Name:  "test namespace",
+		}
+		expectedAccountId := uuid.New()
+		mockProvider.EXPECT().CreateAccount(r.ctx, nsMeta.StrId, nsMeta.Name).Return(expectedAccountId, nil).Once()
+		mockProvider.EXPECT().AddDefaultPlan(r.ctx, expectedAccountId).
+			Return(false, fmt.Errorf("failed to add default plan")).
+			Once()
+		mockTenantMgr.EXPECT().UpdateNamespaceMetadata(r.ctx, mock.Anything).
+			RunAndReturn(func(ctx context.Context, actual metadata.NamespaceMetadata) error {
+				require.True(t, actual.Accounts.Metronome.Enabled)
+				require.Equal(t, actual.Accounts.Metronome.Id, expectedAccountId.String())
+				return nil
+			}).
+			Once()
+
+		success := r.setupBillingAccount(nsMeta)
+		require.True(t, success)
+	})
+
+	t.Run("when creating account fails because of HTTP 409 - conflict", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), metadata.NewMockNamespaceMetadataMgr(t), metadata.NewMockTenantGetter(t)
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+		nsMeta := &metadata.NamespaceMetadata{
+			Id:    1,
+			StrId: "ns123",
+			Name:  "test namespace",
+		}
+		expectedAccountId := uuid.New()
+		mockProvider.EXPECT().CreateAccount(r.ctx, nsMeta.StrId, nsMeta.Name).
+			Return(uuid.Nil, NewMetronomeError(409, []byte("conflict"))).
+			Once()
+		mockProvider.EXPECT().GetAccountId(r.ctx, nsMeta.StrId).Return(expectedAccountId, nil).Once()
+		mockTenantMgr.EXPECT().UpdateNamespaceMetadata(r.ctx, mock.Anything).
+			RunAndReturn(func(ctx context.Context, actual metadata.NamespaceMetadata) error {
+				require.True(t, actual.Accounts.Metronome.Enabled)
+				require.Equal(t, actual.Accounts.Metronome.Id, expectedAccountId.String())
+				return nil
+			}).
+			Once()
+
+		success := r.setupBillingAccount(nsMeta)
+		require.True(t, success)
+	})
+
+	t.Run("when creating account fails for Bad Request", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), metadata.NewMockNamespaceMetadataMgr(t), metadata.NewMockTenantGetter(t)
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+		nsMeta := &metadata.NamespaceMetadata{
+			Id:    1,
+			StrId: "ns123",
+			Name:  "test namespace",
+		}
+		mockProvider.EXPECT().CreateAccount(r.ctx, nsMeta.StrId, nsMeta.Name).
+			Return(uuid.Nil, NewMetronomeError(400, []byte("bad request"))).
+			Once()
+
+		success := r.setupBillingAccount(nsMeta)
+		require.False(t, success)
+	})
+
+	t.Run("when creating account fails for unexpected error", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), metadata.NewMockNamespaceMetadataMgr(t), metadata.NewMockTenantGetter(t)
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+		nsMeta := &metadata.NamespaceMetadata{
+			Id:    1,
+			StrId: "ns123",
+			Name:  "test namespace",
+		}
+		mockProvider.EXPECT().CreateAccount(r.ctx, nsMeta.StrId, nsMeta.Name).
+			Return(uuid.Nil, fmt.Errorf("remote service error")).
+			Once()
+
+		success := r.setupBillingAccount(nsMeta)
+		require.False(t, success)
+	})
+
+	t.Run("when getting account id from billing service fails", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), metadata.NewMockNamespaceMetadataMgr(t), metadata.NewMockTenantGetter(t)
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+		nsMeta := &metadata.NamespaceMetadata{
+			Id:    1,
+			StrId: "ns123",
+			Name:  "test namespace",
+		}
+		mockProvider.EXPECT().CreateAccount(r.ctx, nsMeta.StrId, nsMeta.Name).
+			Return(uuid.Nil, NewMetronomeError(409, []byte("conflict"))).
+			Once()
+		mockProvider.EXPECT().GetAccountId(r.ctx, nsMeta.StrId).
+			Return(uuid.Nil, NewMetronomeError(403, []byte("Unauthorized"))).
+			Once()
+
+		success := r.setupBillingAccount(nsMeta)
+		require.True(t, success)
+	})
+
+	t.Run("when updating namespace metadata fails", func(t *testing.T) {
+		mockProvider, mockTenantMgr, mockTenantGetter := NewMockProvider(t), metadata.NewMockNamespaceMetadataMgr(t), metadata.NewMockTenantGetter(t)
+		r, _ := NewUsageReporter(glbStatus, mockTenantMgr, mockTenantGetter, mockProvider, mockTxMgr)
+		nsMeta := &metadata.NamespaceMetadata{
+			Id:    1,
+			StrId: "ns123",
+			Name:  "test namespace",
+		}
+		expectedAccountId := uuid.New()
+		mockProvider.EXPECT().CreateAccount(r.ctx, nsMeta.StrId, nsMeta.Name).Return(expectedAccountId, nil).Once()
+		mockProvider.EXPECT().AddDefaultPlan(r.ctx, expectedAccountId).Return(true, nil).Once()
+		mockTenantMgr.EXPECT().UpdateNamespaceMetadata(r.ctx, mock.Anything).
+			Return(fmt.Errorf("failed to update namespace metadata")).
+			Once()
+
+		success := r.setupBillingAccount(nsMeta)
+		require.True(t, success)
+	})
 }
 
 type MockGlobalStatus struct {

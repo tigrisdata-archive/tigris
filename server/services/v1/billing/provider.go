@@ -35,6 +35,7 @@ type Provider interface {
 	GetInvoices(ctx context.Context, accountId AccountId, r *api.ListInvoicesRequest) (*api.ListInvoicesResponse, error)
 	GetInvoiceById(ctx context.Context, accountId AccountId, invoiceId string) (*api.ListInvoicesResponse, error)
 	GetUsage(ctx context.Context, id AccountId, r *UsageRequest) (*api.GetUsageResponse, error)
+	GetAccountId(ctx context.Context, namespaceId string) (AccountId, error)
 }
 
 type UsageRequest struct {

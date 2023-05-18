@@ -27,6 +27,7 @@ var (
 	MetronomeListInvoices  tally.Scope
 	MetronomeGetInvoice    tally.Scope
 	MetronomeGetUsage      tally.Scope
+	MetronomeGetCustomer   tally.Scope
 )
 
 func initializeMetronomeScopes() {
@@ -36,6 +37,7 @@ func initializeMetronomeScopes() {
 	MetronomeListInvoices = MetronomeMetrics.SubScope("list_invoices")
 	MetronomeGetInvoice = MetronomeMetrics.SubScope("get_invoice")
 	MetronomeGetUsage = MetronomeMetrics.SubScope("get_usage")
+	MetronomeGetCustomer = MetronomeMetrics.SubScope("get_customer")
 }
 
 func GetResponseCodeTags(code int) map[string]string {
