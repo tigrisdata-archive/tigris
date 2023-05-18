@@ -1243,6 +1243,38 @@ func (x *Usage) MarshalJSON() ([]byte, error) {
 		EndTime   *time.Time `json:"end_time,omitempty"`
 		Value     *float32   `json:"value,omitempty"`
 	}{}
+	if x.GetStartTime() != nil {
+		st := x.GetStartTime().AsTime()
+		resp.StartTime = &st
+	}
+	if x.GetEndTime() != nil {
+		et := x.GetEndTime().AsTime()
+		resp.EndTime = &et
+	}
+	if x.GetStartTime() != nil || x.GetEndTime() != nil {
+		resp.Value = &x.Value
+	}
+
+	return jsoniter.Marshal(resp)
+}
+
+func (x *Invoice) MarshalJSON() ([]byte, error) {
+	resp := struct {
+		Id        string             `json:"id,omitempty"`
+		Entries   []*InvoiceLineItem `json:"entries"`
+		StartTime *time.Time         `json:"start_time,omitempty"`
+		EndTime   *time.Time         `json:"end_time,omitempty"`
+		SubTotal  float32            `json:"subtotal"`
+		Total     float32            `json:"total"`
+		PlanName  string             `json:"plan_name,omitempty"`
+	}{
+		Id:       x.GetId(),
+		Entries:  x.GetEntries(),
+		SubTotal: x.GetSubtotal(),
+		Total:    x.GetTotal(),
+		PlanName: x.GetPlanName(),
+	}
+
 	if x.StartTime != nil {
 		st := x.StartTime.AsTime()
 		resp.StartTime = &st
@@ -1251,10 +1283,64 @@ func (x *Usage) MarshalJSON() ([]byte, error) {
 		et := x.EndTime.AsTime()
 		resp.EndTime = &et
 	}
-	if x.StartTime != nil || x.EndTime != nil {
-		resp.Value = &x.Value
+
+	if resp.Entries == nil {
+		resp.Entries = make([]*InvoiceLineItem, 0)
 	}
 
+	return jsoniter.Marshal(resp)
+}
+
+func (x *InvoiceLineItem) MarshalJSON() ([]byte, error) {
+	resp := struct {
+		Name     string    `json:"name,omitempty"`
+		Quantity float32   `json:"quantity,omitempty"`
+		Total    float32   `json:"total"`
+		Charges  []*Charge `json:"charges,omitempty"`
+	}{
+		Name:     x.GetName(),
+		Quantity: x.GetQuantity(),
+		Total:    x.GetTotal(),
+		Charges:  x.GetCharges(),
+	}
+
+	if resp.Charges == nil {
+		resp.Charges = make([]*Charge, 0)
+	}
+	return jsoniter.Marshal(resp)
+}
+
+func (x *Charge) MarshalJSON() ([]byte, error) {
+	resp := struct {
+		Name     string        `json:"name,omitempty"`
+		Quantity float32       `json:"quantity"`
+		SubTotal float32       `json:"subtotal"`
+		Tiers    []*ChargeTier `json:"tiers,omitempty"`
+	}{
+		Name:     x.GetName(),
+		Quantity: x.GetQuantity(),
+		SubTotal: x.GetSubtotal(),
+		Tiers:    x.GetTiers(),
+	}
+
+	if resp.Tiers == nil {
+		resp.Tiers = make([]*ChargeTier, 0)
+	}
+	return jsoniter.Marshal(resp)
+}
+
+func (x *ChargeTier) MarshalJSON() ([]byte, error) {
+	resp := struct {
+		StartingAt float32 `json:"starting_at"`
+		Quantity   float32 `json:"quantity"`
+		Price      float32 `json:"price"`
+		SubTotal   float32 `json:"subtotal"`
+	}{
+		StartingAt: x.GetStartingAt(),
+		Quantity:   x.GetQuantity(),
+		Price:      x.GetPrice(),
+		SubTotal:   x.GetSubtotal(),
+	}
 	return jsoniter.Marshal(resp)
 }
 

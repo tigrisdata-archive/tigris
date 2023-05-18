@@ -77,38 +77,124 @@ func TestJSONEncoding(t *testing.T) {
 		require.NoError(t, err)
 		require.JSONEq(t, `{"hits":[],"facets":{"myField":{"counts":[{"count":32,"value":"adidas"}],"stats":{"avg":40,"count":50}}},"meta":{"found":1234, "matched_fields":null, "total_pages":0,"page":{"current":2,"size":10}}}`, string(r))
 	})
+}
 
-	t.Run("marshal billing.Usage", func(t *testing.T) {
+func TestUsage_MarshalJSON(t *testing.T) {
+	ts := time.Date(2023, 5, 1, 0, 0, 0, 0, time.UTC)
+	t.Run("empty", func(t *testing.T) {
 		resp := &Usage{}
 		r, err := jsoniter.Marshal(resp)
 		require.NoError(t, err)
 		require.JSONEq(t, `{}`, string(r))
+	})
 
-		ts := time.Date(2023, 5, 1, 0, 0, 0, 0, time.UTC)
-		resp = &Usage{
+	t.Run("complete object", func(t *testing.T) {
+		resp := &Usage{
 			StartTime: timestamppb.New(ts),
 			EndTime:   timestamppb.New(ts),
 			Value:     22,
 		}
-		r, err = jsoniter.Marshal(resp)
+		r, err := jsoniter.Marshal(resp)
 		require.NoError(t, err)
 		require.JSONEq(t, `{"start_time":"2023-05-01T00:00:00Z","end_time":"2023-05-01T00:00:00Z","value":22}`, string(r))
-
-		resp = &Usage{
+	})
+	t.Run("partial object", func(t *testing.T) {
+		resp := &Usage{
 			StartTime: timestamppb.New(ts),
 			Value:     12,
 		}
-		r, err = jsoniter.Marshal(resp)
+		r, err := jsoniter.Marshal(resp)
 		require.NoError(t, err)
 		require.JSONEq(t, `{"start_time":"2023-05-01T00:00:00Z","value":12}`, string(r))
+	})
 
-		resp = &Usage{
+	t.Run("zero value", func(t *testing.T) {
+		resp := &Usage{
 			EndTime: timestamppb.New(ts),
 			Value:   0,
 		}
-		r, err = jsoniter.Marshal(resp)
+		r, err := jsoniter.Marshal(resp)
 		require.NoError(t, err)
 		require.JSONEq(t, `{"end_time":"2023-05-01T00:00:00Z","value":0}`, string(r))
+	})
+}
+
+func TestInvoice_MarshalJSON(t *testing.T) {
+	ts := time.Date(2023, 5, 1, 0, 0, 0, 0, time.UTC)
+	t.Run("empty", func(t *testing.T) {
+		resp := &Invoice{}
+		r, err := jsoniter.Marshal(resp)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"total":0,"subtotal":0,"entries":[]}`, string(r))
+	})
+
+	t.Run("complete object", func(t *testing.T) {
+		resp := &Invoice{
+			Id: "1",
+			Entries: []*InvoiceLineItem{
+				{
+					Name:     "db",
+					Quantity: 1.5,
+					Total:    4.55,
+					Charges: []*Charge{
+						{
+							Name:     "dru",
+							Quantity: 5.0,
+							Subtotal: 8.70,
+							Tiers: []*ChargeTier{
+								{
+									StartingAt: 3.2,
+									Quantity:   4.0,
+									Price:      1.8,
+									Subtotal:   7.2,
+								},
+							},
+						},
+					},
+				},
+			},
+			StartTime: timestamppb.New(ts),
+			EndTime:   timestamppb.New(ts),
+			Subtotal:  15.10,
+			Total:     30.50,
+			PlanName:  "personal db",
+		}
+
+		r, err := jsoniter.Marshal(resp)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"id":"1","entries":[{"name":"db","quantity":1.5,"total":4.55,"charges":[{"name":"dru","quantity":5,"subtotal":8.7,"tiers":[{"starting_at":3.2,"quantity":4,"price":1.8,"subtotal":7.2}]}]}],"start_time":"2023-05-01T00:00:00Z","end_time":"2023-05-01T00:00:00Z","subtotal":15.1,"total":30.5,"plan_name":"personal db"}`, string(r))
+	})
+
+	t.Run("partial Invoice", func(t *testing.T) {
+		resp := &Invoice{
+			Id:       "123",
+			EndTime:  nil,
+			Total:    0,
+			PlanName: "personal db",
+		}
+		r, err := jsoniter.Marshal(resp)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"id":"123","plan_name":"personal db","subtotal":0,"total":0,"entries":[]}`, string(r))
+	})
+
+	t.Run("empty InvoiceLineItem", func(t *testing.T) {
+		resp := &InvoiceLineItem{}
+		r, err := jsoniter.Marshal(resp)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"total":0}`, string(r))
+	})
+
+	t.Run("empty charge", func(t *testing.T) {
+		resp := &Charge{}
+		r, err := jsoniter.Marshal(resp)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"quantity":0,"subtotal":0}`, string(r))
+	})
+	t.Run("empty charge tier", func(t *testing.T) {
+		resp := &ChargeTier{}
+		r, err := jsoniter.Marshal(resp)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"starting_at":0,"quantity":0,"price":0,"subtotal":0}`, string(r))
 	})
 }
 
