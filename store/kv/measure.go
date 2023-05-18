@@ -69,7 +69,8 @@ func (i *KeyValueIteratorWithMetrics) Next(value *KeyValue) bool {
 		}
 	}
 
-	if reqStatus != nil && value.Data != nil {
+	// No need to count if the collection is reloaded
+	if reqStatus != nil && value.Data != nil && !reqStatus.IsMetadataOperation() {
 		reqStatus.AddReadBytes(int64(value.Data.Size()))
 		reqStatus.AddResultDocs(1)
 	}

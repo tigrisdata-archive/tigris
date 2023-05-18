@@ -16,6 +16,7 @@ package database
 
 import (
 	"context"
+	"github.com/tigrisdata/tigris/server/metrics"
 
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/query/filter"
@@ -169,10 +170,12 @@ type FilterableSearchIterator struct {
 	filter     *filter.WrappedFilter
 	pageReader *pageReader
 	collection *schema.DefaultCollection
+	ctx        context.Context
 }
 
-func NewFilterableSearchIterator(collection *schema.DefaultCollection, reader *pageReader, filter *filter.WrappedFilter, singlePage bool) *FilterableSearchIterator {
+func NewFilterableSearchIterator(ctx context.Context, collection *schema.DefaultCollection, reader *pageReader, filter *filter.WrappedFilter, singlePage bool) *FilterableSearchIterator {
 	return &FilterableSearchIterator{
+		ctx:        ctx,
 		single:     singlePage,
 		pageReader: reader,
 		filter:     filter,
@@ -209,11 +212,18 @@ func (it *FilterableSearchIterator) Next(row *Row) bool {
 				return false
 			}
 			// now apply the filter
+
+			reqStatus, exists := metrics.RequestStatusFromContext(it.ctx)
+			if reqStatus != nil && exists && reqStatus.IsCollectionRead() {
+				reqStatus.AddReadBytes(int64(len(rawData)))
+			}
+
 			if !it.filter.Matches(rawData, tsJSON) {
 				continue
 			}
 
 			row.Data.RawData = rawData
+
 			return true
 		}
 
@@ -255,14 +265,14 @@ func NewSearchReader(ctx context.Context, store search.Store, coll *schema.Defau
 	}
 }
 
-func (reader *SearchReader) SinglePageIterator(collection *schema.DefaultCollection, filter *filter.WrappedFilter, pageNo int32) *FilterableSearchIterator {
+func (reader *SearchReader) SinglePageIterator(ctx context.Context, collection *schema.DefaultCollection, filter *filter.WrappedFilter, pageNo int32) *FilterableSearchIterator {
 	pageReader := newPageReader(reader.ctx, reader.store, reader.collection, reader.query, pageNo)
 
-	return NewFilterableSearchIterator(collection, pageReader, filter, true)
+	return NewFilterableSearchIterator(ctx, collection, pageReader, filter, true)
 }
 
-func (reader *SearchReader) Iterator(collection *schema.DefaultCollection, filter *filter.WrappedFilter) *FilterableSearchIterator {
+func (reader *SearchReader) Iterator(ctx context.Context, collection *schema.DefaultCollection, filter *filter.WrappedFilter) *FilterableSearchIterator {
 	pageReader := newPageReader(reader.ctx, reader.store, reader.collection, reader.query, defaultPageNo)
 
-	return NewFilterableSearchIterator(collection, pageReader, filter, false)
+	return NewFilterableSearchIterator(ctx, collection, pageReader, filter, false)
 }

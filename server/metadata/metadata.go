@@ -16,6 +16,7 @@ package metadata
 
 import (
 	"context"
+	"github.com/tigrisdata/tigris/server/metrics"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
@@ -77,6 +78,9 @@ func (m *metadataSubspace) getPayload(ctx context.Context, tx transaction.Tx, in
 	if err != nil {
 		return nil, err
 	}
+
+	// Do not count for metadata operations
+	metrics.SetMetadataOperationInContext(ctx)
 
 	var row kv.KeyValue
 	if !it.Next(&row) {
@@ -177,6 +181,9 @@ func (m *metadataSubspace) softDeleteMetadata(ctx context.Context, tx transactio
 		return err1
 	}
 
+	// Do not count for metadata operations
+	metrics.SetMetadataOperationInContext(ctx)
+
 	var row kv.KeyValue
 	if !it.Next(&row) {
 		return it.Err()
@@ -198,6 +205,9 @@ func (m *metadataSubspace) listMetadata(ctx context.Context, tx transaction.Tx, 
 	}
 
 	var v kv.KeyValue
+
+	// Do not count for metadata operations
+	metrics.SetMetadataOperationInContext(ctx)
 
 	for it.Next(&v) {
 		if len(v.Key) != keyLen {

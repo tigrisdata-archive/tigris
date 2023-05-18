@@ -24,6 +24,7 @@ import (
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/lib/uuid"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	ulog "github.com/tigrisdata/tigris/util/log"
@@ -153,6 +154,10 @@ func (q *QueueSubspace) Peek(ctx context.Context, tx transaction.Tx, max int) ([
 	if err != nil {
 		return items, err
 	}
+
+	// Do not count for metadata operations
+	metrics.SetMetadataOperationInContext(ctx)
+
 	var v kv.KeyValue
 	for iter.Next(&v) && count < max {
 		count++
@@ -174,6 +179,10 @@ func (q *QueueSubspace) Find(ctx context.Context, tx transaction.Tx, item *Queue
 	if err != nil {
 		return nil, err
 	}
+
+	// Do not count for metadata operations
+	metrics.SetMetadataOperationInContext(ctx)
+
 	var v kv.KeyValue
 	for iter.Next(&v) {
 		found, err := q.decodeItem(v.Data)
@@ -258,6 +267,9 @@ func (q *QueueSubspace) GetAll(ctx context.Context, tx transaction.Tx) ([]*Queue
 		return nil, err
 	}
 
+	// Do not count for metadata operations
+	metrics.SetMetadataOperationInContext(ctx)
+
 	items := make([]*QueueItem, 0)
 	var v kv.KeyValue
 	for iter.Next(&v) {
@@ -286,6 +298,10 @@ func (q *QueueSubspace) ScanTable(ctx context.Context, tx transaction.Tx) error 
 		return err
 	}
 	log.Debug().Msg("Queue Table Scan")
+
+	// Do not count for metadata operations
+	metrics.SetMetadataOperationInContext(ctx)
+
 	var v kv.KeyValue
 	for iter.Next(&v) {
 		item, err := q.decodeItem(v.Data)

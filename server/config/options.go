@@ -289,8 +289,9 @@ type BillingReporter struct {
 }
 
 var (
-	WriteUnitSize = 4096
-	ReadUnitSize  = 4096
+	WriteUnitSize  = 4096
+	ReadUnitSize   = 4096
+	SearchUnitSize = 4096
 )
 
 var DefaultConfig = Config{

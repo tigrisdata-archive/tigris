@@ -17,6 +17,7 @@ package search
 import (
 	"bytes"
 	"context"
+	"github.com/tigrisdata/tigris/server/metrics"
 
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/internal"
@@ -63,7 +64,7 @@ func (*baseRunner) getIndex(tenant *metadata.Tenant, projName string, indexName 
 	return index, nil
 }
 
-func (*baseRunner) encodeDocuments(index *schema.SearchIndex, documents [][]byte, buffer *bytes.Buffer, isUpdate bool) ([]string, [][]byte, []error, int) {
+func (*baseRunner) encodeDocuments(ctx context.Context, index *schema.SearchIndex, documents [][]byte, buffer *bytes.Buffer, isUpdate bool) ([]string, [][]byte, []error, int) {
 	var (
 		validDocs      = 0
 		ts             = internal.NewTimestamp()
@@ -74,6 +75,7 @@ func (*baseRunner) encodeDocuments(index *schema.SearchIndex, documents [][]byte
 	)
 
 	for i, raw := range documents {
+		metrics.AddSearchBytesInContext(ctx, int64(len(raw)))
 		doc, err := util.JSONToMap(raw)
 		if err != nil {
 			docErrors[i] = err
@@ -143,6 +145,9 @@ func (*baseRunner) readRow(ctx context.Context, tx transaction.Tx, key keys.Key)
 	if ulog.E(err) {
 		return nil, false, err
 	}
+
+	// Do not count for metadata operations
+	metrics.SetMetadataOperationInContext(ctx)
 
 	var value kv.KeyValue
 	if it.Next(&value) {
