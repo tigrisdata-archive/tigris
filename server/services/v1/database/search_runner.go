@@ -126,9 +126,9 @@ func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.
 	searchReader := NewSearchReader(ctx, runner.searchStore, collection, searchQ)
 	var iterator *FilterableSearchIterator
 	if runner.req.Page != 0 {
-		iterator = searchReader.SinglePageIterator(collection, wrappedF, runner.req.Page)
+		iterator = searchReader.SinglePageIterator(ctx, collection, wrappedF, runner.req.Page)
 	} else {
-		iterator = searchReader.Iterator(collection, wrappedF)
+		iterator = searchReader.Iterator(ctx, collection, wrappedF)
 	}
 	if err != nil {
 		return Response{}, ctx, err

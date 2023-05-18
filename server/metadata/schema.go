@@ -23,6 +23,7 @@ import (
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 )
@@ -181,6 +182,9 @@ func schemaGet(ctx context.Context, tx transaction.Tx, key keys.Key) (schema.Ver
 		versions schema.Versions
 		row      kv.KeyValue
 	)
+
+	// Do not count for metadata operations
+	metrics.SetMetadataOperationInContext(ctx)
 
 	for it.Next(&row) {
 		ver, ok := row.Key[len(row.Key)-1].([]byte)

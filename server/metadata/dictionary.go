@@ -26,6 +26,7 @@ import (
 	"github.com/tigrisdata/tigris/internal"
 	"github.com/tigrisdata/tigris/keys"
 	"github.com/tigrisdata/tigris/schema"
+	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	ulog "github.com/tigrisdata/tigris/util/log"
@@ -138,6 +139,9 @@ func (r *reservedSubspace) reload(ctx context.Context, tx transaction.Tx) error 
 	if err != nil {
 		return err
 	}
+
+	// Do not count for metadata operations
+	metrics.SetMetadataOperationInContext(ctx)
 
 	var row kv.KeyValue
 	for it.Next(&row) {
@@ -265,6 +269,9 @@ func (r *reservedSubspace) allocateToken(ctx context.Context, tx transaction.Tx,
 	}
 
 	newValue := r.BaseCounterValue
+
+	// Do not count for metadata operations
+	metrics.SetMetadataOperationInContext(ctx)
 
 	var row kv.KeyValue
 	if it.Next(&row) {

@@ -280,6 +280,8 @@ func (runner *CreateRunner) createDocumentById(ctx context.Context, tenant *meta
 		return Response{}, err
 	}
 
+	metrics.AddSearchBytesInContext(ctx, int64(len(req.Document)))
+
 	decDoc, err := util.JSONToMap(req.Document)
 	if err != nil {
 		return Response{}, err
@@ -326,7 +328,7 @@ func (runner *CreateRunner) createDocuments(ctx context.Context, tenant *metadat
 	}
 
 	var buffer bytes.Buffer
-	ids, serialized, batchErrors, validDocs := runner.encodeDocuments(index, req.Documents, &buffer, false)
+	ids, serialized, batchErrors, validDocs := runner.encodeDocuments(ctx, index, req.Documents, &buffer, false)
 
 	var storeResponses []search.IndexResp
 	if validDocs > 0 {
@@ -369,7 +371,7 @@ func (runner *CreateOrReplaceRunner) Run(ctx context.Context, tenant *metadata.T
 	}
 
 	var buffer bytes.Buffer
-	ids, serialized, batchErrors, validDocs := runner.encodeDocuments(index, runner.req.Documents, &buffer, false)
+	ids, serialized, batchErrors, validDocs := runner.encodeDocuments(ctx, index, runner.req.Documents, &buffer, false)
 
 	var storeResponses []search.IndexResp
 
@@ -413,7 +415,7 @@ func (runner *UpdateRunner) Run(ctx context.Context, tenant *metadata.Tenant) (R
 	}
 
 	var buffer bytes.Buffer
-	ids, serialized, batchErrors, validDocs := runner.encodeDocuments(index, runner.req.Documents, &buffer, true)
+	ids, serialized, batchErrors, validDocs := runner.encodeDocuments(ctx, index, runner.req.Documents, &buffer, true)
 
 	var storeResponses []search.IndexResp
 	if validDocs > 0 {
@@ -513,7 +515,9 @@ func (runner *DeleteRunner) deleteDocumentsById(ctx context.Context, tenant *met
 	}
 
 	resp := &api.DeleteDocumentResponse{}
+
 	for _, id := range req.Ids {
+		metrics.AddSearchBytesInContext(ctx, int64(len(id)))
 		wr := &api.DocStatus{
 			Id: id,
 		}
@@ -546,6 +550,9 @@ func (runner *DeleteRunner) deleteDocumentsByQuery(ctx context.Context, tenant *
 	if err != nil {
 		return Response{}, err
 	}
+
+	// Deleting documents by query counts as 1 write unit
+	metrics.AddSearchBytesInContext(ctx, int64(config.SearchUnitSize))
 
 	factory := filter.NewFactory(index.QueryableFields, nil)
 	filters, err := factory.Factorize(req.Filter)
