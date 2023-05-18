@@ -418,7 +418,8 @@ func (m *Measurement) RecordDuration(scope tally.Scope, tags map[string]string) 
 	case SecondaryIndexRespTime, SecondaryIndexErrorRespTime:
 		timerEnabled = cfg.SecondaryIndex.Timer.TimerEnabled
 		histogramEnabled = cfg.SecondaryIndex.Timer.HistogramEnabled
-	case MetronomeCreateAccount, MetronomeAddPlan, MetronomeIngest, MetronomeGetInvoice, MetronomeListInvoices, MetronomeGetUsage:
+	case MetronomeCreateAccount, MetronomeAddPlan, MetronomeIngest, MetronomeGetInvoice, MetronomeListInvoices,
+		MetronomeGetUsage, MetronomeGetCustomer:
 		timerEnabled = true
 		histogramEnabled = true
 	case RequestsRespTimeToFirstDoc:

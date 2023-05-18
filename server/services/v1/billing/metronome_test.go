@@ -773,6 +773,86 @@ func TestMetronome_GetUsage(t *testing.T) {
 	})
 }
 
+func TestMetronome_GetAccountId(t *testing.T) {
+	initializeMetricsForTest()
+	defer gock.Off()
+	cfg := config.DefaultConfig.Billing.Metronome
+	metronome, err := NewMetronomeProvider(cfg)
+	require.NoError(t, err)
+	ctx := context.TODO()
+
+	t.Run("when a valid customer exists", func(t *testing.T) {
+		nsId, expectedAccountId := "namespaceId", uuid.New()
+
+		gock.New(cfg.URL).
+			Get("customers").
+			MatchParam("ingest_alias", nsId).
+			Reply(200).
+			JSON(map[string]any{
+				"data": []map[string]any{{
+					"id":   expectedAccountId,
+					"name": "new customer",
+				}},
+			})
+		id, err := metronome.GetAccountId(ctx, nsId)
+
+		require.NoError(t, err)
+		require.Equal(t, expectedAccountId, id)
+		require.True(t, gock.IsDone())
+	})
+
+	t.Run("given a invalid namespaceId", func(t *testing.T) {
+		id, err := metronome.GetAccountId(ctx, "")
+		require.ErrorContains(t, err, "cannot be empty")
+		require.Equal(t, uuid.Nil, id)
+		require.True(t, gock.IsDone())
+	})
+
+	t.Run("no customer exists on metronome", func(t *testing.T) {
+		nsId := "namespaceId"
+
+		gock.New(cfg.URL).
+			Get("customers").
+			MatchParam("ingest_alias", nsId).
+			Reply(200).
+			JSON(map[string]any{
+				"data": []map[string]any{},
+			})
+
+		id, err := metronome.GetAccountId(ctx, nsId)
+		require.ErrorContains(t, err, "no account found")
+		require.Equal(t, uuid.Nil, id)
+		require.True(t, gock.IsDone())
+	})
+
+	t.Run("remote service failure", func(t *testing.T) {
+		nsId := "namespaceId"
+
+		gock.New(cfg.URL).
+			Get("customers").
+			MatchParam("ingest_alias", nsId).
+			Reply(400).
+			JSON(map[string]any{
+				"message": "bad request",
+			})
+
+		id, err := metronome.GetAccountId(ctx, nsId)
+		require.ErrorContains(t, err, "bad request")
+		require.Equal(t, uuid.Nil, id)
+		require.True(t, gock.IsDone())
+	})
+
+	t.Run("remote service times out", func(t *testing.T) {
+		gock.New(cfg.URL).Get("customers").ReplyError(fmt.Errorf("request timed out"))
+		id, err := metronome.GetAccountId(ctx, "ns123")
+
+		require.ErrorContains(t, err, "request timed out")
+		require.Equal(t, uuid.Nil, id)
+		require.True(t, gock.IsDone())
+	})
+	require.True(t, gock.IsDone())
+}
+
 func TestMetronome_buildInvoice(t *testing.T) {
 	t.Run("deserializes complete invoice", func(t *testing.T) {
 		payload := `
@@ -954,4 +1034,5 @@ func initializeMetricsForTest() {
 	metrics.MetronomeListInvoices = tally.NewTestScope("list_invoices", map[string]string{})
 	metrics.MetronomeGetInvoice = tally.NewTestScope("get_invoice", map[string]string{})
 	metrics.MetronomeGetUsage = tally.NewTestScope("get_usage", map[string]string{})
+	metrics.MetronomeGetCustomer = tally.NewTestScope("get_customer", map[string]string{})
 }
