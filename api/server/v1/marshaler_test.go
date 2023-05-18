@@ -19,6 +19,8 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/require"
+	"time"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func TestJSONEncoding(t *testing.T) {
@@ -74,6 +76,39 @@ func TestJSONEncoding(t *testing.T) {
 		r, err := jsoniter.Marshal(resp)
 		require.NoError(t, err)
 		require.JSONEq(t, `{"hits":[],"facets":{"myField":{"counts":[{"count":32,"value":"adidas"}],"stats":{"avg":40,"count":50}}},"meta":{"found":1234, "matched_fields":null, "total_pages":0,"page":{"current":2,"size":10}}}`, string(r))
+	})
+
+	t.Run("marshal billing.Usage", func(t *testing.T) {
+		resp := &Usage{}
+		r, err := jsoniter.Marshal(resp)
+		require.NoError(t, err)
+		require.JSONEq(t, `{}`, string(r))
+
+		ts := time.Date(2023, 5, 1, 0, 0, 0, 0, time.UTC)
+		resp = &Usage{
+			StartTime: timestamppb.New(ts),
+			EndTime:   timestamppb.New(ts),
+			Value:     22,
+		}
+		r, err = jsoniter.Marshal(resp)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"start_time":"2023-05-01T00:00:00Z","end_time":"2023-05-01T00:00:00Z","value":22}`, string(r))
+
+		resp = &Usage{
+			StartTime: timestamppb.New(ts),
+			Value:     12,
+		}
+		r, err = jsoniter.Marshal(resp)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"start_time":"2023-05-01T00:00:00Z","value":12}`, string(r))
+
+		resp = &Usage{
+			EndTime: timestamppb.New(ts),
+			Value:   0,
+		}
+		r, err = jsoniter.Marshal(resp)
+		require.NoError(t, err)
+		require.JSONEq(t, `{"end_time":"2023-05-01T00:00:00Z","value":0}`, string(r))
 	})
 }
 

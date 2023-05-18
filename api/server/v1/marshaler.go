@@ -1237,6 +1237,27 @@ func CreateMDFromSearchMD(x *SearchHitMeta) *SearchHitMetadata {
 	return &md
 }
 
+func (x *Usage) MarshalJSON() ([]byte, error) {
+	resp := struct {
+		StartTime *time.Time `json:"start_time,omitempty"`
+		EndTime   *time.Time `json:"end_time,omitempty"`
+		Value     *float32   `json:"value,omitempty"`
+	}{}
+	if x.StartTime != nil {
+		st := x.StartTime.AsTime()
+		resp.StartTime = &st
+	}
+	if x.EndTime != nil {
+		et := x.EndTime.AsTime()
+		resp.EndTime = &et
+	}
+	if x.StartTime != nil || x.EndTime != nil {
+		resp.Value = &x.Value
+	}
+
+	return jsoniter.Marshal(resp)
+}
+
 func unmarshalAdditionalFunction(data []byte) (*AdditionalFunction, error) {
 	var mp map[string]jsoniter.RawMessage
 
