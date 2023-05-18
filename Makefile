@@ -17,8 +17,7 @@ CGO_ENABLED=1
 # Mocks required for unit tests
 MOCK_INTERFACES=\
 "server/services/v1/billing:Provider" \
-"server/metadata:NamespaceMetadataMgr" \
-"server/metadata:TenantGetter"
+"server/metadata:NamespaceMetadataMgr"
 
 all: server
 

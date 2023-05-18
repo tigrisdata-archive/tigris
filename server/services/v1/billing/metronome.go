@@ -431,34 +431,6 @@ func (m *Metronome) GetUsage(ctx context.Context, id AccountId, r *UsageRequest)
 	}, nil
 }
 
-func (m *Metronome) GetAccountId(ctx context.Context, namespaceId string) (AccountId, error) {
-	var (
-		resp *biller.ListCustomersResponse
-		err  error
-	)
-	if len(namespaceId) == 0 {
-		return uuid.Nil, errors.InvalidArgument("namespaceId cannot be empty")
-	}
-	params := &biller.ListCustomersParams{IngestAlias: &namespaceId}
-	m.measure(ctx, metrics.MetronomeGetCustomer, "get_customer", func(ctx context.Context) (*http.Response, error) {
-		resp, err = m.client.ListCustomersWithResponse(ctx, params)
-		if resp == nil {
-			return nil, err
-		}
-		return resp.HTTPResponse, err
-	})
-	if err != nil {
-		return uuid.Nil, err
-	}
-	if resp.JSON200 == nil {
-		return uuid.Nil, NewMetronomeError(resp.StatusCode(), resp.Body)
-	}
-	if len(resp.JSON200.Data) == 0 {
-		return uuid.Nil, errors.NotFound("no account found for namespaceId %s", namespaceId)
-	}
-	return resp.JSON200.Data[0].Id, nil
-}
-
 func buildInvoice(input biller.Invoice) *api.Invoice {
 	if input.Id == uuid.Nil {
 		return nil

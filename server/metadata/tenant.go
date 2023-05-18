@@ -41,15 +41,12 @@ const (
 	baseSchemaVersion = uint32(1)
 )
 
-// TenantGetter
-// 'make generate' to use mock
 type TenantGetter interface {
 	GetTenant(ctx context.Context, id string) (*Tenant, error)
 	AllTenants(ctx context.Context) []*Tenant
 }
 
-// NamespaceMetadataMgr
-// 'make generate' to use mock
+//go:generate mockery --name NamespaceMetadataMgr
 type NamespaceMetadataMgr interface {
 	GetNamespaceMetadata(ctx context.Context, namespaceId string) *NamespaceMetadata
 	UpdateNamespaceMetadata(ctx context.Context, meta NamespaceMetadata) error
