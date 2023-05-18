@@ -163,12 +163,11 @@ func (r *UsageReporter) setupBillingAccount(nsMeta *metadata.NamespaceMetadata) 
 	} else {
 		// check if we received 409 from metronome
 		var metronomeError *MetronomeError
-		if errors.As(err, &metronomeError) && metronomeError.HttpCode == 409 {
-			if billingId, err = r.billingSvc.GetAccountId(r.ctx, nsMeta.StrId); ulog.E(err) && billingId == uuid.Nil {
-				return true
-			}
-		} else {
+		if !(errors.As(err, &metronomeError) && metronomeError.HttpCode == 409) {
 			return false
+		}
+		if billingId, err = r.billingSvc.GetAccountId(r.ctx, nsMeta.StrId); ulog.E(err) || billingId == uuid.Nil {
+			return true
 		}
 	}
 
