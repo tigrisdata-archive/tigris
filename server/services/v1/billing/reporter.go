@@ -161,11 +161,12 @@ func (r *UsageReporter) setupBillingAccount(nsMeta *metadata.NamespaceMetadata) 
 			log.Error().Err(err).Str("ns", nsMeta.StrId).Msgf("error adding default plan %s", nsMeta.StrId)
 		}
 	} else {
-		// check if we received 409 from metronome
+		// check if we received HTTP 409 from billing svc, in that case namespaceId already exists there
 		var metronomeError *MetronomeError
 		if !(errors.As(err, &metronomeError) && metronomeError.HttpCode == 409) {
 			return false
 		}
+		// get id from billing svc and store it
 		if billingId, err = r.billingSvc.GetAccountId(r.ctx, nsMeta.StrId); ulog.E(err) || billingId == uuid.Nil {
 			return true
 		}
