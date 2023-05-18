@@ -441,37 +441,6 @@ func TestUsageReporter_setupBillingAccount(t *testing.T) {
 	})
 }
 
-type MockTenantManager struct {
-	data                  map[string]metadata.NamespaceMetadata
-	refreshNamespaceCalls int
-	updateNamespaceCalls  map[string]int
-}
-
-func (*MockTenantManager) GetTenant(_ context.Context, id string) (*metadata.Tenant, error) {
-	return nil, fmt.Errorf("invalid tenant id %s", id)
-}
-
-func (*MockTenantManager) AllTenants(_ context.Context) []*metadata.Tenant {
-	return []*metadata.Tenant{}
-}
-
-func (mock *MockTenantManager) GetNamespaceMetadata(_ context.Context, namespaceId string) *metadata.NamespaceMetadata {
-	if ns, ok := mock.data[namespaceId]; ok {
-		return &ns
-	}
-	return nil
-}
-
-func (mock *MockTenantManager) UpdateNamespaceMetadata(_ context.Context, meta metadata.NamespaceMetadata) error {
-	mock.data[meta.StrId] = meta
-	return nil
-}
-
-func (mock *MockTenantManager) RefreshNamespaceAccounts(_ context.Context) error {
-	mock.refreshNamespaceCalls++
-	return nil
-}
-
 type MockGlobalStatus struct {
 	data metrics.TenantStatusTimeChunk
 }
