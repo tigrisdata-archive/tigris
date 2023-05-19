@@ -16,7 +16,6 @@ package api
 
 import (
 	"testing"
-
 	"time"
 
 	jsoniter "github.com/json-iterator/go"
