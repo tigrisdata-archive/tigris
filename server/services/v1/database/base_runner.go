@@ -295,6 +295,11 @@ func (runner *BaseQueryRunner) getWriteIterator(ctx context.Context, tx transact
 			metrics.SetWriteType("non-pkey")
 			return iterator, nil
 		}
+	} else if err == filter.ErrKeysEmpty {
+		log.Err(err).
+			Str("collection", collection.Name).
+			Str("filter", string(reqFilter)).
+			Msg("not able to build keys")
 	}
 
 	pkIterator, err := reader.ScanTable(collection.EncodedName, false)
