@@ -28,6 +28,7 @@ const (
 	ManagementMethodPrefix    = "/tigrisdata.management.v1.Management/"
 	ObservabilityMethodPrefix = "/tigrisdata.observability.v1.Observability/"
 	realtimeMethodPrefix      = "/tigrisdata.realtime.v1.Realtime/"
+	searchMethodPrefix        = "/tigrisdata.search.v1.Search/"
 
 	BeginTransactionMethodName    = apiMethodPrefix + "BeginTransaction"
 	CommitTransactionMethodName   = apiMethodPrefix + "CommitTransaction"
@@ -87,7 +88,8 @@ const (
 	ListUsersMethodName         = authMethodPrefix + "ListUsers"
 
 	// Billing.
-	ListInvoicesMethodName = billingMethodPrefix + "ListInvoices"
+	ListInvoicesMethodName    = billingMethodPrefix + "ListInvoices"
+	BillingGetUsageMethodName = billingMethodPrefix + "GetUsage"
 
 	// Cache.
 	CreateCacheMethodName = cacheMethodPrefix + "CreateCache"
@@ -124,6 +126,20 @@ const (
 	ReadMessagesMethodName      = realtimeMethodPrefix + "ReadMessages"
 	MessagesMethodName          = realtimeMethodPrefix + "Messages"
 	ListSubscriptionsMethodName = realtimeMethodPrefix + "ListSubscriptions"
+
+	// Search
+	CreateOrUpdateIndexMethodName = searchMethodPrefix + "CreateOrUpdateIndex"
+	GetIndexMethodName            = searchMethodPrefix + "GetIndex"
+	DeleteIndexMethodName         = searchMethodPrefix + "DeleteIndex"
+	ListIndexesMethodName         = searchMethodPrefix + "ListIndexes"
+	SearchGetMethodName           = searchMethodPrefix + "Get"
+	SearchCreateById              = searchMethodPrefix + "CreateById"
+	SearchCreate                  = searchMethodPrefix + "Create"
+	SearchCreateOrReplace         = searchMethodPrefix + "CreateOrReplace"
+	SearchUpdate                  = searchMethodPrefix + "Update"
+	SearchDelete                  = searchMethodPrefix + "Delete"
+	SearchDeleteByQuery           = searchMethodPrefix + "DeleteByQuery"
+	SearchSearch                  = searchMethodPrefix + "Search"
 )
 
 func IsTxSupported(ctx context.Context) bool {
