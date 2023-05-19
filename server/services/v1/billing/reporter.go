@@ -188,6 +188,10 @@ func (r *UsageReporter) pushStorage() error {
 	events := make([]*StorageEvent, 0, len(tenants))
 	for _, t := range tenants {
 		nsMeta := t.GetNamespace().Metadata()
+		if nsMeta.Accounts == nil {
+			nsMeta.Accounts = &metadata.AccountIntegrations{}
+		}
+
 		if id, enabled := nsMeta.Accounts.GetMetronomeId(); len(id) == 0 || !enabled {
 			// user doesn't have metronome integration; skip
 			continue

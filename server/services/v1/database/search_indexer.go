@@ -32,6 +32,7 @@ import (
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
+	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
@@ -54,6 +55,10 @@ func NewSearchIndexer(searchStore search.Store, tenantMgr *metadata.TenantManage
 }
 
 func (i *SearchIndexer) OnPostCommit(ctx context.Context, _ *metadata.Tenant, eventListener kv.EventListener) error {
+	if request.DisableSearch(ctx) {
+		return nil
+	}
+
 	for _, event := range eventListener.GetEvents() {
 		var err error
 
@@ -77,11 +82,13 @@ func (i *SearchIndexer) OnPostCommit(ctx context.Context, _ *metadata.Tenant, ev
 		if searchIndex == nil {
 			return fmt.Errorf("implicit search index not found")
 		}
+
 		if event.Op == kv.DeleteEvent {
 			if err = i.searchStore.DeleteDocument(ctx, searchIndex.StoreIndexName(), searchKey); err != nil {
 				if !search.IsErrNotFound(err) {
 					return err
 				}
+
 				return nil
 			}
 		} else {
@@ -101,13 +108,16 @@ func (i *SearchIndexer) OnPostCommit(ctx context.Context, _ *metadata.Tenant, ev
 			}
 
 			reader := bytes.NewReader(searchData)
+
 			var resp []search.IndexResp
+
 			if resp, err = i.searchStore.IndexDocuments(ctx, searchIndex.StoreIndexName(), reader, search.IndexDocumentsOptions{
 				Action:    action,
 				BatchSize: 1,
 			}); err != nil {
 				return err
 			}
+
 			if len(resp) == 1 && !resp[0].Success {
 				return search.NewSearchError(resp[0].Code, search.ErrCodeUnhandled, resp[0].Error)
 			}

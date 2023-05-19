@@ -106,6 +106,9 @@ func (b *billingService) getMetronomeId(ctx context.Context, namespaceId string)
 		log.Warn().Msgf("Could not find namespace, this must not happen with right authn/authz configured")
 		return uuid.Nil, errors.NotFound("Namespace %s not found", namespaceId)
 	}
+	if nsMeta.Accounts == nil {
+		nsMeta.Accounts = &metadata.AccountIntegrations{}
+	}
 
 	mIdStr, enabled := nsMeta.Accounts.GetMetronomeId()
 	if !enabled || len(mIdStr) == 0 {
