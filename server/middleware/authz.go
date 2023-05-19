@@ -74,6 +74,12 @@ var (
 
 		// realtime
 		api.ReadMessagesMethodName,
+
+		// search
+		api.GetIndexMethodName,
+		api.ListIndexesMethodName,
+		api.SearchGetMethodName,
+		api.SearchSearch,
 	)
 
 	// editor.
@@ -150,6 +156,19 @@ var (
 		api.ReadMessagesMethodName,
 		api.MessagesMethodName,
 		api.ListSubscriptionsMethodName,
+
+		// search
+		api.CreateOrUpdateIndexMethodName,
+		api.GetIndexMethodName,
+		api.DeleteIndexMethodName,
+		api.ListIndexesMethodName,
+		api.SearchGetMethodName,
+		api.SearchCreateById,
+		api.SearchCreate,
+		api.SearchCreateOrReplace,
+		api.SearchUpdate,
+		api.SearchDeleteByQuery,
+		api.SearchSearch,
 	)
 
 	ownerMethods = container.NewHashSet(
@@ -235,6 +254,19 @@ var (
 		api.ReadMessagesMethodName,
 		api.MessagesMethodName,
 		api.ListSubscriptionsMethodName,
+
+		// search
+		api.CreateOrUpdateIndexMethodName,
+		api.GetIndexMethodName,
+		api.DeleteIndexMethodName,
+		api.ListIndexesMethodName,
+		api.SearchGetMethodName,
+		api.SearchCreateById,
+		api.SearchCreate,
+		api.SearchCreateOrReplace,
+		api.SearchUpdate,
+		api.SearchDeleteByQuery,
+		api.SearchSearch,
 	)
 	clusterAdminMethods = container.NewHashSet(
 		// db
@@ -314,6 +346,19 @@ var (
 		api.ReadMessagesMethodName,
 		api.MessagesMethodName,
 		api.ListSubscriptionsMethodName,
+
+		// search
+		api.CreateOrUpdateIndexMethodName,
+		api.GetIndexMethodName,
+		api.DeleteIndexMethodName,
+		api.ListIndexesMethodName,
+		api.SearchGetMethodName,
+		api.SearchCreateById,
+		api.SearchCreate,
+		api.SearchCreateOrReplace,
+		api.SearchUpdate,
+		api.SearchDeleteByQuery,
+		api.SearchSearch,
 	)
 )
 

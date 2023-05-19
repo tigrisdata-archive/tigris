@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/internal"
@@ -601,7 +602,13 @@ func (runner *BaseQueryRunner) buildReaderOptions(req *api.ReadRequest, collecti
 	if options.plan, err = planner.GeneratePlan(sortPlan, from); err == nil {
 		// plan can be handled by database index
 		return options, nil
+	} else if err == filter.ErrKeysEmpty {
+		log.Err(err).
+			Str("collection", collection.Name).
+			Str("filter", string(req.Filter)).
+			Msg("not able to build keys")
 	}
+
 	if planner.IsPrefixQueryWithSuffixSort(sortPlan) {
 		// case when it is a prefix query with suffix sort
 		options.tablePlan, err = planner.GenerateTablePlan(sortPlan, from)

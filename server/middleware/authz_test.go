@@ -103,6 +103,19 @@ func TestAuthzOwnerRole(t *testing.T) {
 	require.True(t, isAuthorizedOperation(api.MessagesMethodName, ownerRoleName))
 	require.True(t, isAuthorizedOperation(api.ListSubscriptionsMethodName, ownerRoleName))
 
+	// search
+	require.True(t, isAuthorizedOperation(api.CreateOrUpdateIndexMethodName, ownerRoleName))
+	require.True(t, isAuthorizedOperation(api.GetIndexMethodName, ownerRoleName))
+	require.True(t, isAuthorizedOperation(api.DeleteIndexMethodName, ownerRoleName))
+	require.True(t, isAuthorizedOperation(api.ListIndexesMethodName, ownerRoleName))
+	require.True(t, isAuthorizedOperation(api.SearchGetMethodName, ownerRoleName))
+	require.True(t, isAuthorizedOperation(api.SearchCreateById, ownerRoleName))
+	require.True(t, isAuthorizedOperation(api.SearchCreate, ownerRoleName))
+	require.True(t, isAuthorizedOperation(api.SearchCreateOrReplace, ownerRoleName))
+	require.True(t, isAuthorizedOperation(api.SearchUpdate, ownerRoleName))
+	require.True(t, isAuthorizedOperation(api.SearchDeleteByQuery, ownerRoleName))
+	require.True(t, isAuthorizedOperation(api.SearchSearch, ownerRoleName))
+
 	// negative
 	require.False(t, isAuthorizedOperation(api.VerifyInvitationMethodName, ownerRoleName))
 	require.False(t, isAuthorizedOperation(api.CreateNamespaceMethodName, ownerRoleName))
@@ -184,6 +197,19 @@ func TestAuthzEditorRole(t *testing.T) {
 	require.True(t, isAuthorizedOperation(api.MessagesMethodName, editorRoleName))
 	require.True(t, isAuthorizedOperation(api.ListSubscriptionsMethodName, editorRoleName))
 
+	// search
+	require.True(t, isAuthorizedOperation(api.CreateOrUpdateIndexMethodName, editorRoleName))
+	require.True(t, isAuthorizedOperation(api.GetIndexMethodName, editorRoleName))
+	require.True(t, isAuthorizedOperation(api.DeleteIndexMethodName, editorRoleName))
+	require.True(t, isAuthorizedOperation(api.ListIndexesMethodName, editorRoleName))
+	require.True(t, isAuthorizedOperation(api.SearchGetMethodName, editorRoleName))
+	require.True(t, isAuthorizedOperation(api.SearchCreateById, editorRoleName))
+	require.True(t, isAuthorizedOperation(api.SearchCreate, editorRoleName))
+	require.True(t, isAuthorizedOperation(api.SearchCreateOrReplace, editorRoleName))
+	require.True(t, isAuthorizedOperation(api.SearchUpdate, editorRoleName))
+	require.True(t, isAuthorizedOperation(api.SearchDeleteByQuery, editorRoleName))
+	require.True(t, isAuthorizedOperation(api.SearchSearch, editorRoleName))
+
 	// negative
 	require.False(t, isAuthorizedOperation(api.ListUsersMethodName, editorRoleName))
 	require.False(t, isAuthorizedOperation(api.VerifyInvitationMethodName, editorRoleName))
@@ -233,6 +259,12 @@ func TestAuthzReadOnlyRole(t *testing.T) {
 	// realtime
 	require.True(t, isAuthorizedOperation(api.ReadMessagesMethodName, readOnlyRoleName))
 
+	// search
+	require.True(t, isAuthorizedOperation(api.GetIndexMethodName, readOnlyRoleName))
+	require.True(t, isAuthorizedOperation(api.ListIndexesMethodName, readOnlyRoleName))
+	require.True(t, isAuthorizedOperation(api.SearchGetMethodName, readOnlyRoleName))
+	require.True(t, isAuthorizedOperation(api.SearchSearch, readOnlyRoleName))
+
 	// negative
 	require.False(t, isAuthorizedOperation(api.BeginTransactionMethodName, readOnlyRoleName))
 	require.False(t, isAuthorizedOperation(api.CommitTransactionMethodName, readOnlyRoleName))
@@ -269,4 +301,13 @@ func TestAuthzReadOnlyRole(t *testing.T) {
 	require.False(t, isAuthorizedOperation(api.DeleteGlobalAppKeyMethodName, readOnlyRoleName))
 	require.False(t, isAuthorizedOperation(api.ListGlobalAppKeysMethodName, readOnlyRoleName))
 	require.False(t, isAuthorizedOperation(api.RotateGlobalAppKeySecretMethodName, readOnlyRoleName))
+
+	// search
+	require.False(t, isAuthorizedOperation(api.CreateOrUpdateIndexMethodName, readOnlyRoleName))
+	require.False(t, isAuthorizedOperation(api.DeleteIndexMethodName, readOnlyRoleName))
+	require.False(t, isAuthorizedOperation(api.SearchCreateById, readOnlyRoleName))
+	require.False(t, isAuthorizedOperation(api.SearchCreate, readOnlyRoleName))
+	require.False(t, isAuthorizedOperation(api.SearchCreateOrReplace, readOnlyRoleName))
+	require.False(t, isAuthorizedOperation(api.SearchUpdate, readOnlyRoleName))
+	require.False(t, isAuthorizedOperation(api.SearchDeleteByQuery, readOnlyRoleName))
 }

@@ -15,6 +15,7 @@
 package filter
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/tigrisdata/tigris/errors"
@@ -22,6 +23,10 @@ import (
 	tsort "github.com/tigrisdata/tigris/query/sort"
 	"github.com/tigrisdata/tigris/schema"
 	"github.com/tigrisdata/tigris/value"
+)
+
+var (
+	ErrKeysEmpty = fmt.Errorf("empty keys")
 )
 
 // KeyComposer needs to be implemented to have a custom Compose method with different constraints.
@@ -203,6 +208,10 @@ func (k *KeyBuilder) Build(filters []Filter, indexedKeys []*schema.QueryableFiel
 
 	// PrimaryKey is always a single plan with all the keys
 	if IndexTypePrimary(k.indexType) {
+		if len(allKeys) == 0 {
+			// this is to know in which case error is not triggered but keys are empty.
+			return nil, ErrKeysEmpty
+		}
 		combined := allKeys[0]
 		for _, plan := range allKeys[1:] {
 			combined.Keys = append(combined.Keys, plan.Keys...)
