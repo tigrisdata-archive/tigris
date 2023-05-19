@@ -102,6 +102,10 @@ func (r *UsageReporter) pushUsage() error {
 
 	for namespaceId, stats := range chunk.Tenants {
 		nsMeta := r.nsMgr.GetNamespaceMetadata(r.ctx, namespaceId)
+		if nsMeta == nil {
+			log.Error().Str("ns", namespaceId).Msgf("namespace metadata cannot be nil")
+			continue
+		}
 		if success := r.setupBillingAccount(nsMeta); !success {
 			continue
 		}
@@ -129,7 +133,6 @@ func (r *UsageReporter) pushUsage() error {
 // returns true, if billing account already exists or new account was setup
 func (r *UsageReporter) setupBillingAccount(nsMeta *metadata.NamespaceMetadata) bool {
 	if nsMeta == nil {
-		log.Error().Msgf("namespace metadata cannot be nil")
 		return false
 	}
 
