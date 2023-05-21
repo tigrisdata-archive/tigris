@@ -34,11 +34,14 @@ func TestJavaSchemaGenerator(t *testing.T) {
 		{
 			"types", typesTest, `
 class Product {
+    private long[] arrIntPtrPtrs;
+    private long[] arrIntPtrs;
     private long[] arrInts;
     private boolean bool;
     private byte[] byte1;
     private int id;
     private long int64;
+    private long int64Ptr;
     @TigrisField(description = "field description")
     private long int64WithDesc;
     private String name;
@@ -46,6 +49,22 @@ class Product {
     private Date time1;
     private long[] twoDArr;
     private UUID uUID1;
+
+    public long[] getArrIntPtrPtrs() {
+        return arrIntPtrPtrs;
+    }
+
+    public void setArrIntPtrPtrs(long[] arrIntPtrPtrs) {
+        this.arrIntPtrPtrs = arrIntPtrPtrs;
+    }
+
+    public long[] getArrIntPtrs() {
+        return arrIntPtrs;
+    }
+
+    public void setArrIntPtrs(long[] arrIntPtrs) {
+        this.arrIntPtrs = arrIntPtrs;
+    }
 
     public long[] getArrInts() {
         return arrInts;
@@ -85,6 +104,14 @@ class Product {
 
     public void setInt64(long int64) {
         this.int64 = int64;
+    }
+
+    public long getInt64Ptr() {
+        return int64Ptr;
+    }
+
+    public void setInt64Ptr(long int64Ptr) {
+        this.int64Ptr = int64Ptr;
     }
 
     public long getInt64WithDesc() {
@@ -138,11 +165,14 @@ class Product {
     public Product() {};
 
     public Product(
+        long[] arrIntPtrPtrs,
+        long[] arrIntPtrs,
         long[] arrInts,
         boolean bool,
         byte[] byte1,
         int id,
         long int64,
+        long int64Ptr,
         long int64WithDesc,
         String name,
         double price,
@@ -150,11 +180,14 @@ class Product {
         long[] twoDArrs,
         UUID uUID1
     ) {
+        this.arrIntPtrPtrs = arrIntPtrPtrs;
+        this.arrIntPtrs = arrIntPtrs;
         this.arrInts = arrInts;
         this.bool = bool;
         this.byte1 = byte1;
         this.id = id;
         this.int64 = int64;
+        this.int64Ptr = int64Ptr;
         this.int64WithDesc = int64WithDesc;
         this.name = name;
         this.price = price;
@@ -174,11 +207,14 @@ class Product {
 
         Product other = (Product) o;
         return
+            Arrays.equals(arrIntPtrPtrs, other.arrIntPtrPtrs) &&
+            Arrays.equals(arrIntPtrs, other.arrIntPtrs) &&
             Arrays.equals(arrInts, other.arrInts) &&
             bool == other.bool &&
             byte1 == other.byte1 &&
             id == other.id &&
             int64 == other.int64 &&
+            int64Ptr == other.int64Ptr &&
             int64WithDesc == other.int64WithDesc &&
             name == other.name &&
             price == other.price &&
@@ -190,11 +226,14 @@ class Product {
     @Override
     public int hashCode() {
         return Objects.hash(
+            arrIntPtrPtrs,
+            arrIntPtrs,
             arrInts,
             bool,
             byte1,
             id,
             int64,
+            int64Ptr,
             int64WithDesc,
             name,
             price,

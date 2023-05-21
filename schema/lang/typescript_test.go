@@ -35,6 +35,12 @@ func TestTypeScriptSchemaGenerator(t *testing.T) {
 			"types", typesTest, `
 export class Product {
   @Field({ elements: TigrisDataTypes.INT64 })
+  arrIntPtrPtrs: Array<string>;
+
+  @Field({ elements: TigrisDataTypes.INT64 })
+  arrIntPtrs: Array<string>;
+
+  @Field({ elements: TigrisDataTypes.INT64 })
   arrInts: Array<string>;
 
   @Field()
@@ -48,6 +54,9 @@ export class Product {
 
   @Field(TigrisDataTypes.INT64)
   int64: string;
+
+  @Field(TigrisDataTypes.INT64)
+  int64Ptr: string;
 
   // field description
   @Field(TigrisDataTypes.INT64)

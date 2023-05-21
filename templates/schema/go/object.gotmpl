@@ -9,7 +9,9 @@ type {{ .Name }} struct {
     {{- if .Description}}
 {{"\t"}}// {{.Name}} {{.Description}}{{end}}
     {{- $jsonTag := ne $v.NameJSON $v.Name }}
-{{"\t"}}{{ $v.Name }} {{ if $v.IsArray -}} [] {{- end -}} {{ $v.Type }}
+{{"\t"}}{{ $v.Name }} {{ if $v.Nullable -}} * {{- end -}}
+    {{ if $v.IsArray -}} [] {{- end -}}
+    {{ if $v.ItemsNullable -}} * {{- end -}} {{ $v.Type }}
 
     {{- $m := false -}}
     {{- $def := $v.Default}}

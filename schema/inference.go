@@ -156,7 +156,7 @@ func traverseObject(existingField *schema.Field, newField *schema.Field, values 
 	switch {
 	case existingField == nil:
 		newField.Fields = make(map[string]*schema.Field)
-	case existingField.Type == jsonSpecObject:
+	case existingField.Type.First() == jsonSpecObject:
 		if existingField.Fields == nil {
 			newField.Fields = make(map[string]*schema.Field)
 		} else {
@@ -179,20 +179,20 @@ func traverseArray(existingField *schema.Field, newField *schema.Field, v any) e
 		if i == 0 {
 			switch {
 			case existingField == nil:
-				newField.Items = &schema.Field{Type: t, Format: format}
-			case existingField.Type == jsonSpecArray:
+				newField.Items = &schema.Field{Type: schema.NewMultiType(t), Format: format}
+			case existingField.Type.First() == jsonSpecArray:
 				newField.Items = existingField.Items
 			default:
 				return ErrIncompatibleSchema
 			}
 		}
 
-		nt, nf, err := extendedType(newField.Items.Type, newField.Items.Format, t, format)
+		nt, nf, err := extendedType(newField.Items.Type.First(), newField.Items.Format, t, format)
 		if err != nil {
 			return err
 		}
 
-		newField.Items.Type = nt
+		newField.Items.Type = schema.NewMultiType(nt)
 		newField.Items.Format = nf
 
 		if t == jsonSpecObject {
@@ -228,12 +228,12 @@ func traverseFields(sch map[string]*schema.Field, fields map[string]any, autoGen
 			return err
 		}
 
-		f := &schema.Field{Type: t, Format: format}
+		f := &schema.Field{Type: schema.NewMultiType(t), Format: format}
 
 		switch {
 		case t == jsonSpecObject:
 			vm, _ := v.(map[string]any)
-			if err := traverseObject(sch[k], f, vm); err != nil {
+			if err = traverseObject(sch[k], f, vm); err != nil {
 				return err
 			}
 
@@ -254,12 +254,12 @@ func traverseFields(sch map[string]*schema.Field, fields map[string]any, autoGen
 				continue // empty object
 			}
 		case sch[k] != nil:
-			nt, nf, err := extendedType(sch[k].Type, sch[k].Format, t, format)
+			nt, nf, err := extendedType(sch[k].Type.First(), sch[k].Format, t, format)
 			if err != nil {
 				return ErrIncompatibleSchema
 			}
 
-			f.Type = nt
+			f.Type = schema.NewMultiType(nt)
 			f.Format = nf
 		}
 

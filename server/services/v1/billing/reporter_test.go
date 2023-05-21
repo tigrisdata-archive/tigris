@@ -23,11 +23,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"github.com/tigrisdata/tigris/server/defaults"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
-	"github.com/tigrisdata/tigris/server/defaults"
 )
 
 var mockKvStore kv.TxStore
@@ -70,7 +70,7 @@ func TestUsageReporter_pushUsage(t *testing.T) {
 				},
 			},
 		}
-		//tenantMgr := &MockTenantManager{data: namespaces}
+
 		glbStatus := &MockGlobalStatus{data: metrics.TenantStatusTimeChunk{
 			StartTime: time.Time{},
 			EndTime:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),

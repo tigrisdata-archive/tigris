@@ -127,7 +127,7 @@ const (
 	MessagesMethodName          = realtimeMethodPrefix + "Messages"
 	ListSubscriptionsMethodName = realtimeMethodPrefix + "ListSubscriptions"
 
-	// Search
+	// Search.
 	CreateOrUpdateIndexMethodName = searchMethodPrefix + "CreateOrUpdateIndex"
 	GetIndexMethodName            = searchMethodPrefix + "GetIndex"
 	DeleteIndexMethodName         = searchMethodPrefix + "DeleteIndex"
