@@ -161,7 +161,10 @@ func SetMetadataOperationInContext(ctx context.Context) {
 func AddSearchBytesInContext(ctx context.Context, value int64) {
 	reqStatus, exists := RequestStatusFromContext(ctx)
 	if reqStatus != nil && exists {
-		reqStatus.writeBytes += value
+		reqStatus.searchWriteBytes += value
+	}
+	if config.DefaultConfig.GlobalStatus.DebugMessages {
+		log.Debug().Int64("search bytes written", value).Int64("Total search bytes written", reqStatus.searchWriteBytes).Msg("Added written search bytes")
 	}
 }
 
@@ -235,16 +238,6 @@ func (r *RequestStatus) AddWriteBytes(value int64) {
 	r.writeBytes += value
 	if config.DefaultConfig.GlobalStatus.DebugMessages {
 		log.Debug().Int64("Bytes written", value).Int64("Total bytes written", r.writeBytes).Msg("Added written bytes")
-	}
-}
-
-func (r *RequestStatus) AddSearchWriteByes(value int64) {
-	if !config.DefaultConfig.GlobalStatus.Enabled {
-		return
-	}
-	r.searchWriteBytes += value
-	if config.DefaultConfig.GlobalStatus.DebugMessages {
-		log.Debug().Int64("search bytes written", value).Int64("Total search bytes written", r.searchWriteBytes).Msg("Added written search bytes")
 	}
 }
 
@@ -405,6 +398,7 @@ func (g *GlobalStatus) RecordRequestToActiveChunk(r *RequestStatus, tenantName s
 	g.mu.Lock()
 	writeUnits := getUnitsFromBytes(r.writeBytes, config.WriteUnitSize)
 	readUnits := getUnitsFromBytes(r.readBytes, config.ReadUnitSize)
+	searchWriteUnits := getUnitsFromBytes(r.searchWriteBytes, config.SearchUnitSize)
 	g.ensureTenantForActiveChunk(tenantName)
 	if config.DefaultConfig.GlobalStatus.DebugMessages {
 		log.Debug().Msg("Recording request to active chunk")
@@ -437,6 +431,8 @@ func (g *GlobalStatus) RecordRequestToActiveChunk(r *RequestStatus, tenantName s
 	g.activeChunk.Tenants[tenantName].readBytes += r.readBytes
 	g.activeChunk.Tenants[tenantName].WriteUnits += writeUnits
 	g.activeChunk.Tenants[tenantName].ReadUnits += readUnits
+	g.activeChunk.Tenants[tenantName].SearchWriteUnits += searchWriteUnits
+	g.activeChunk.Tenants[tenantName].searchWriteBytes += r.searchWriteBytes
 	g.activeChunk.Tenants[tenantName].SearchUnits += r.searchUnits
 	g.activeChunk.Tenants[tenantName].collectionSearchUnits += r.collectionSearchUnits
 	g.activeChunk.Tenants[tenantName].ddlDropUnits += r.ddlDropUnits
