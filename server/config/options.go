@@ -363,8 +363,8 @@ var DefaultConfig = Config{
 		LogFilter:         false,
 	},
 	KV: KVConfig{
-		Chunking:    false,
-		Compression: false,
+		Chunking:             false,
+		Compression:          false,
 		MinCompressThreshold: 0,
 	},
 	SecondaryIndex: SecondaryIndexConfig{
@@ -566,7 +566,7 @@ type KVConfig struct {
 	// Chunking allows us to persist bigger payload in storage.
 	Chunking bool `mapstructure:"chunking" yaml:"chunking" json:"chunking"`
 	// Compression allows us to compress payload before storing in storage.
-	Compression bool `mapstructure:"compression" yaml:"compression" json:"compression"`
+	Compression          bool  `mapstructure:"compression" yaml:"compression" json:"compression"`
 	MinCompressThreshold int32 `mapstructure:"min_compression_threshold" yaml:"min_compression_threshold" json:"min_compression_threshold"`
 }
 

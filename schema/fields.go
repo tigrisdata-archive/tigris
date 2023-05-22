@@ -23,6 +23,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/lib/container"
+	schema "github.com/tigrisdata/tigris/schema/lang"
 	"github.com/tigrisdata/tigris/server/config"
 )
 
@@ -420,83 +421,26 @@ func FindIndex(indexes []*Index, name string) *Index {
 	return nil
 }
 
-type FieldMultiType struct {
-	Type       []string
-	isNullable bool
-}
-
-func (f *FieldMultiType) append(val string) {
-	if val == "null" {
-		f.isNullable = true
-	} else {
-		f.Type = append(f.Type, val)
-	}
-}
-
-func NewMultiType(val string) FieldMultiType {
-	var f FieldMultiType
-
-	f.append(val)
-
-	return f
-}
-
-func (f *FieldMultiType) UnmarshalJSON(b []byte) error {
-	var tp any
-
-	if err := jsoniter.Unmarshal(b, &tp); err != nil {
-		return err
-	}
-
-	switch val := tp.(type) {
-	case string:
-		f.append(val)
-	case []any:
-		for _, v := range val {
-			s, ok := v.(string)
-			if !ok {
-				return ErrInvalidType
-			}
-
-			f.append(s)
-		}
-	}
-
-	if len(f.Type) > 1 {
-		return ErrOnlyOneNonNullTypeAllowed
-	}
-
-	return nil
-}
-
-func (f *FieldMultiType) First() string {
-	if len(f.Type) > 0 {
-		return f.Type[0]
-	}
-
-	return ""
-}
-
 type FieldBuilder struct {
 	FieldName            string
-	Description          string              `json:"description,omitempty"`
-	TypeRaw              FieldMultiType      `json:"type,omitempty"`
-	Format               string              `json:"format,omitempty"`
-	Encoding             string              `json:"contentEncoding,omitempty"`
-	Default              any                 `json:"default,omitempty"`
-	CreatedAt            *bool               `json:"createdAt,omitempty"`
-	UpdatedAt            *bool               `json:"updatedAt,omitempty"`
-	MaxLength            *int32              `json:"maxLength,omitempty"`
-	MaxItems             *int32              `json:"maxItems,omitempty"`
-	Auto                 *bool               `json:"autoGenerate,omitempty"`
-	Sorted               *bool               `json:"sort,omitempty"`
-	Index                *bool               `json:"index,omitempty"`
-	Facet                *bool               `json:"facet,omitempty"`
-	ID                   *bool               `json:"id,omitempty"`
-	SearchIndex          *bool               `json:"searchIndex,omitempty"`
-	Dimensions           *int                `json:"dimensions,omitempty"`
-	Items                *FieldBuilder       `json:"items,omitempty"`
-	Properties           jsoniter.RawMessage `json:"properties,omitempty"`
+	Description          string                `json:"description,omitempty"`
+	TypeRaw              schema.FieldMultiType `json:"type,omitempty"`
+	Format               string                `json:"format,omitempty"`
+	Encoding             string                `json:"contentEncoding,omitempty"`
+	Default              any                   `json:"default,omitempty"`
+	CreatedAt            *bool                 `json:"createdAt,omitempty"`
+	UpdatedAt            *bool                 `json:"updatedAt,omitempty"`
+	MaxLength            *int32                `json:"maxLength,omitempty"`
+	MaxItems             *int32                `json:"maxItems,omitempty"`
+	Auto                 *bool                 `json:"autoGenerate,omitempty"`
+	Sorted               *bool                 `json:"sort,omitempty"`
+	Index                *bool                 `json:"index,omitempty"`
+	Facet                *bool                 `json:"facet,omitempty"`
+	ID                   *bool                 `json:"id,omitempty"`
+	SearchIndex          *bool                 `json:"searchIndex,omitempty"`
+	Dimensions           *int                  `json:"dimensions,omitempty"`
+	Items                *FieldBuilder         `json:"items,omitempty"`
+	Properties           jsoniter.RawMessage   `json:"properties,omitempty"`
 	Primary              *bool
 	Fields               []*Field
 	AdditionalProperties *bool `json:"additionalProperties,omitempty"`

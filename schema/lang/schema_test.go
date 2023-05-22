@@ -28,12 +28,15 @@ var (
           "id": { "type": "integer", "format": "int32" },
           "name": { "type": "string" },
           "price": { "type": "number" },
+          "int64Ptr": { "type": ["integer","null"], "format": "int64" },
           "int64": { "type": "integer", "format": "int64" },
           "bool": { "type": "boolean"},
           "byte1": { "type": "string", "format": "byte"},
           "time1": { "type": "string", "format": "date-time"},
           "uUID1": { "type": "string", "format": "uuid"},
           "arrInts": { "type": "array", "items" : { "type" : "integer" } },
+          "arrIntPtrs": { "type": ["array","null"], "items" : { "type" : "integer" } },
+          "arrIntPtrPtrs": { "type": ["array","null"], "items" : { "type" : ["integer","null"] } },
           "int64WithDesc": { "type": "integer", "format": "int64", "description": "field description" },
           "twoDArr": { "type": "array", "items" : { "type": "array", "items" : { "type" : "integer" } } }
 		}}`
@@ -90,7 +93,7 @@ var (
                     }
                   },
 				  "subObjectNested": {
-                    "type": "object",
+                    "type": ["object", "null"],
                     "properties": { "field_3": { "type": "integer", "format": "int32" } }
                   },
 				  "subObjectNestedReuseTypeByBody": {

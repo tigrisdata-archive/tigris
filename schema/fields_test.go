@@ -20,6 +20,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/tigrisdata/tigris/errors"
+	schema "github.com/tigrisdata/tigris/schema/lang"
 )
 
 var boolTrue = true
@@ -39,27 +40,27 @@ func TestFieldBuilder_Build(t *testing.T) {
 			expError error
 		}{
 			{
-				builder:  &FieldBuilder{FieldName: "test", TypeRaw: NewMultiType("boolean")},
+				builder:  &FieldBuilder{FieldName: "test", TypeRaw: schema.NewMultiType("boolean")},
 				expError: nil,
 			},
 			{
-				builder:  &FieldBuilder{FieldName: "test", TypeRaw: NewMultiType("bool")},
+				builder:  &FieldBuilder{FieldName: "test", TypeRaw: schema.NewMultiType("bool")},
 				expError: errors.InvalidArgument("unsupported type detected 'bool'"),
 			},
 			{
-				builder:  &FieldBuilder{FieldName: "test", TypeRaw: NewMultiType("string"), Format: "uuid"},
+				builder:  &FieldBuilder{FieldName: "test", TypeRaw: schema.NewMultiType("string"), Format: "uuid"},
 				expError: nil,
 			},
 			{
-				builder:  &FieldBuilder{FieldName: "test", TypeRaw: NewMultiType("number")},
+				builder:  &FieldBuilder{FieldName: "test", TypeRaw: schema.NewMultiType("number")},
 				expError: nil,
 			},
 			{
-				builder:  &FieldBuilder{FieldName: "test", TypeRaw: NewMultiType("integer"), Primary: &boolTrue},
+				builder:  &FieldBuilder{FieldName: "test", TypeRaw: schema.NewMultiType("integer"), Primary: &boolTrue},
 				expError: nil,
 			},
 			{
-				builder:  &FieldBuilder{FieldName: "_test", TypeRaw: NewMultiType("integer")},
+				builder:  &FieldBuilder{FieldName: "_test", TypeRaw: schema.NewMultiType("integer")},
 				expError: nil,
 			},
 		}
@@ -105,7 +106,7 @@ func TestFieldBuilder_Build(t *testing.T) {
 	t.Run("test valid field name pattern", func(t *testing.T) {
 		validFieldNames := []string{"a1", "$a1", "$_a1", "$_", "A1", "Z1"}
 		for _, validFieldName := range validFieldNames {
-			_, err := (&FieldBuilder{FieldName: validFieldName, TypeRaw: NewMultiType("string")}).Build(false) // one time builder, thrown away after test concluded
+			_, err := (&FieldBuilder{FieldName: validFieldName, TypeRaw: schema.NewMultiType("string")}).Build(false) // one time builder, thrown away after test concluded
 			require.NoError(t, err)
 		}
 	})

@@ -60,7 +60,7 @@ const (
 
 // Field represents JSON schema object.
 type Field struct {
-	Type   string            `json:"type,omitempty"`
+	Type   FieldMultiType    `json:"type,omitempty"`
 	Format string            `json:"format,omitempty"`
 	Tags   []string          `json:"tags,omitempty"`
 	Desc   string            `json:"description,omitempty"`
@@ -137,6 +137,9 @@ type FieldGen struct {
 	Facet       bool
 	Sort        bool
 
+	Nullable      bool
+	ItemsNullable bool
+
 	Description string
 }
 
@@ -182,6 +185,7 @@ func (s *schemaGenerator) genField(w io.Writer, n string, v *Field, pk []string,
 	f.SearchIndex = v.SearchIndex
 	f.Facet = v.Facet
 	f.Sort = v.Sort
+	f.Nullable = v.Type.isNullable
 
 	f.Default = v.Default
 	if s, ok := f.Default.(string); ok {
@@ -189,7 +193,7 @@ func (s *schemaGenerator) genField(w io.Writer, n string, v *Field, pk []string,
 		f.DefaultStrSingleQuotes = fmt.Sprintf(`'%s'`, strings.ReplaceAll(s, "'", "\\\\'"))
 	}
 
-	if v.Type == typeArray {
+	if v.Type.First() == typeArray {
 		f.Name = plural.Plural(f.Name)
 	}
 
@@ -197,17 +201,18 @@ func (s *schemaGenerator) genField(w io.Writer, n string, v *Field, pk []string,
 	f.NameSnake = strcase.ToSnake(n)
 	f.Description = v.Desc
 
-	for v.Type == typeArray {
+	for v.Type.First() == typeArray {
 		v = v.Items
 		f.ArrayDimensions++
+		f.ItemsNullable = v.Type.isNullable
 	}
 
 	f.IsArray = f.ArrayDimensions > 0
 
-	if v.Type == typeObject {
+	if v.Type.First() == typeObject {
 		var tn string
 
-		if err := s.genSchema(w, n, v.Desc, v.Fields, nil, v.Required, &tn); err != nil {
+		if err = s.genSchema(w, n, v.Desc, v.Fields, nil, v.Required, &tn); err != nil {
 			return nil, err
 		}
 
@@ -218,7 +223,7 @@ func (s *schemaGenerator) genField(w io.Writer, n string, v *Field, pk []string,
 		f.Type = plural.Singular(tn)
 		f.TypeDecap = strings.ToLower(f.Type[0:1]) + f.Type[1:]
 		f.IsObject = true
-	} else if f.Type, err = s.langTypeGen.GetType(v.Type, v.Format); err != nil {
+	} else if f.Type, err = s.langTypeGen.GetType(v.Type.First(), v.Format); err != nil {
 		return nil, err
 	}
 

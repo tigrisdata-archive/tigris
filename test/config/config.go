@@ -44,3 +44,12 @@ func GetBaseURL2() string {
 	}
 	return "http://localhost:8082"
 }
+
+func GetGotrueURL() string {
+	config.LoadEnvironment()
+
+	if config.GetEnvironment() == config.EnvTest {
+		return "http://tigris_gotrue:8086"
+	}
+	return "http://localhost:8086"
+}

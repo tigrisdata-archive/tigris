@@ -25,9 +25,7 @@ import (
 	"github.com/tigrisdata/tigris/value"
 )
 
-var (
-	ErrKeysEmpty = fmt.Errorf("empty keys")
-)
+var ErrKeysEmpty = fmt.Errorf("empty keys")
 
 // KeyComposer needs to be implemented to have a custom Compose method with different constraints.
 type KeyComposer interface {

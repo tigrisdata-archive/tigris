@@ -33,11 +33,14 @@ func TestGoSchemaGenerator(t *testing.T) {
 		{
 			"types", typesTest, `
 type Product struct {
+	ArrIntPtrPtrs *[]*int64 ` + "`" + `json:"arrIntPtrPtrs"` + "`" + `
+	ArrIntPtrs *[]int64 ` + "`" + `json:"arrIntPtrs"` + "`" + `
 	ArrInts []int64 ` + "`" + `json:"arrInts"` + "`" + `
 	Bool bool ` + "`" + `json:"bool"` + "`" + `
 	Byte1 []byte ` + "`" + `json:"byte1"` + "`" + `
 	Id int32 ` + "`" + `json:"id"` + "`" + `
 	Int64 int64 ` + "`" + `json:"int64"` + "`" + `
+	Int64Ptr *int64 ` + "`" + `json:"int64Ptr"` + "`" + `
 	// Int64WithDesc field description
 	Int64WithDesc int64 ` + "`" + `json:"int64WithDesc"` + "`" + `
 	Name string ` + "`" + `json:"name"` + "`" + `
@@ -107,7 +110,7 @@ type SubObjectNestedTwo struct {
 type SubArray struct {
 	Field3 int32 ` + "`" + `json:"field_3"` + "`" + `
 	SubArrayNesteds []SubArrayNested ` + "`" + `json:"subArrayNesteds"` + "`" + `
-	SubObjectNested SubObjectNested ` + "`" + `json:"subObjectNested"` + "`" + `
+	SubObjectNested *SubObjectNested ` + "`" + `json:"subObjectNested"` + "`" + `
 	SubObjectNestedOne SubObjectNestedOne ` + "`" + `json:"subObjectNestedOne"` + "`" + `
 	SubObjectNestedReuseTypeByBody SubObjectNested ` + "`" + `json:"subObjectNestedReuseTypeByBody"` + "`" + `
 	SubObjectNestedThree SubObjectNestedThree ` + "`" + `json:"subObjectNestedThree"` + "`" + `

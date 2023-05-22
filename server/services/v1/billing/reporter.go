@@ -130,7 +130,7 @@ func (r *UsageReporter) pushUsage() error {
 }
 
 // returns false if account cannot be setup, no data should be reported in that case
-// returns true, if billing account already exists or new account was setup
+// returns true, if billing account already exists or new account was setup.
 func (r *UsageReporter) setupBillingAccount(nsMeta *metadata.NamespaceMetadata) bool {
 	if nsMeta == nil {
 		return false
