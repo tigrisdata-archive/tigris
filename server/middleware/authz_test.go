@@ -69,6 +69,7 @@ func TestAuthzOwnerRole(t *testing.T) {
 
 	// billing
 	require.True(t, isAuthorizedOperation(api.ListInvoicesMethodName, ownerRoleName))
+	require.True(t, isAuthorizedOperation(api.BillingGetUsageMethodName, ownerRoleName))
 
 	// cache
 	require.True(t, isAuthorizedOperation(api.CreateCacheMethodName, ownerRoleName))
@@ -94,6 +95,8 @@ func TestAuthzOwnerRole(t *testing.T) {
 	// observability
 	require.True(t, isAuthorizedOperation(api.QueryTimeSeriesMetricsMethodName, ownerRoleName))
 	require.True(t, isAuthorizedOperation(api.QuotaLimitsMetricsMethodName, ownerRoleName))
+	require.True(t, isAuthorizedOperation(api.QuotaUsageMethodName, ownerRoleName))
+	require.True(t, isAuthorizedOperation(api.GetInfoMethodName, ownerRoleName))
 
 	// realtime
 	require.True(t, isAuthorizedOperation(api.PresenceMethodName, ownerRoleName))
@@ -188,6 +191,8 @@ func TestAuthzEditorRole(t *testing.T) {
 	// observability
 	require.True(t, isAuthorizedOperation(api.QueryTimeSeriesMetricsMethodName, editorRoleName))
 	require.True(t, isAuthorizedOperation(api.QuotaLimitsMetricsMethodName, editorRoleName))
+	require.True(t, isAuthorizedOperation(api.QuotaUsageMethodName, editorRoleName))
+	require.True(t, isAuthorizedOperation(api.GetInfoMethodName, editorRoleName))
 
 	// realtime
 	require.True(t, isAuthorizedOperation(api.PresenceMethodName, editorRoleName))
@@ -222,6 +227,7 @@ func TestAuthzEditorRole(t *testing.T) {
 	require.False(t, isAuthorizedOperation(api.DeleteGlobalAppKeyMethodName, editorRoleName))
 	require.False(t, isAuthorizedOperation(api.ListGlobalAppKeysMethodName, editorRoleName))
 	require.False(t, isAuthorizedOperation(api.RotateGlobalAppKeySecretMethodName, editorRoleName))
+	require.False(t, isAuthorizedOperation(api.BillingGetUsageMethodName, editorRoleName))
 }
 
 func TestAuthzReadOnlyRole(t *testing.T) {
@@ -255,6 +261,8 @@ func TestAuthzReadOnlyRole(t *testing.T) {
 	// observability
 	require.True(t, isAuthorizedOperation(api.QueryTimeSeriesMetricsMethodName, readOnlyRoleName))
 	require.True(t, isAuthorizedOperation(api.QuotaLimitsMetricsMethodName, readOnlyRoleName))
+	require.True(t, isAuthorizedOperation(api.QuotaUsageMethodName, readOnlyRoleName))
+	require.True(t, isAuthorizedOperation(api.GetInfoMethodName, readOnlyRoleName))
 
 	// realtime
 	require.True(t, isAuthorizedOperation(api.ReadMessagesMethodName, readOnlyRoleName))
@@ -301,6 +309,8 @@ func TestAuthzReadOnlyRole(t *testing.T) {
 	require.False(t, isAuthorizedOperation(api.DeleteGlobalAppKeyMethodName, readOnlyRoleName))
 	require.False(t, isAuthorizedOperation(api.ListGlobalAppKeysMethodName, readOnlyRoleName))
 	require.False(t, isAuthorizedOperation(api.RotateGlobalAppKeySecretMethodName, readOnlyRoleName))
+	require.False(t, isAuthorizedOperation(api.BillingGetUsageMethodName, readOnlyRoleName))
+	require.False(t, isAuthorizedOperation(api.ListInvoicesMethodName, readOnlyRoleName))
 
 	// search
 	require.False(t, isAuthorizedOperation(api.CreateOrUpdateIndexMethodName, readOnlyRoleName))

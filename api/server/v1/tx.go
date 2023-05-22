@@ -118,6 +118,8 @@ const (
 	// Observability.
 	QueryTimeSeriesMetricsMethodName = ObservabilityMethodPrefix + "QueryTimeSeriesMetrics"
 	QuotaLimitsMetricsMethodName     = ObservabilityMethodPrefix + "QuotaLimits"
+	QuotaUsageMethodName             = ObservabilityMethodPrefix + "QuotaUsage"
+	GetInfoMethodName                = ObservabilityMethodPrefix + "GetInfo"
 
 	// Realtime.
 	PresenceMethodName          = realtimeMethodPrefix + "Presence"

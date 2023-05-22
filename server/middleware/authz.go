@@ -71,7 +71,9 @@ var (
 		// observability
 		api.QueryTimeSeriesMetricsMethodName,
 		api.QuotaLimitsMetricsMethodName,
-
+		api.QuotaUsageMethodName,
+		api.GetInfoMethodName,
+		
 		// realtime
 		api.ReadMessagesMethodName,
 
@@ -148,6 +150,8 @@ var (
 		// observability
 		api.QueryTimeSeriesMetricsMethodName,
 		api.QuotaLimitsMetricsMethodName,
+		api.QuotaUsageMethodName,
+		api.GetInfoMethodName,
 
 		// realtime
 		api.PresenceMethodName,
@@ -221,6 +225,7 @@ var (
 
 		// billing
 		api.ListInvoicesMethodName,
+		api.BillingGetUsageMethodName,
 
 		// cache
 		api.CreateCacheMethodName,
@@ -246,6 +251,8 @@ var (
 		// observability
 		api.QueryTimeSeriesMetricsMethodName,
 		api.QuotaLimitsMetricsMethodName,
+		api.QuotaUsageMethodName,
+		api.GetInfoMethodName,
 
 		// realtime
 		api.PresenceMethodName,
@@ -310,6 +317,7 @@ var (
 
 		// billing
 		api.ListInvitationsMethodName,
+		api.BillingGetUsageMethodName,
 
 		// cache
 		api.CreateCacheMethodName,
@@ -338,6 +346,8 @@ var (
 		// observability
 		api.QueryTimeSeriesMetricsMethodName,
 		api.QuotaLimitsMetricsMethodName,
+		api.QuotaUsageMethodName,
+		api.GetInfoMethodName,
 
 		// realtime
 		api.PresenceMethodName,
