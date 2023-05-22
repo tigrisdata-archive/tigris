@@ -221,6 +221,7 @@ var (
 
 		// billing
 		api.ListInvoicesMethodName,
+		api.BillingGetUsageMethodName,
 
 		// cache
 		api.CreateCacheMethodName,
@@ -310,6 +311,7 @@ var (
 
 		// billing
 		api.ListInvitationsMethodName,
+		api.BillingGetUsageMethodName,
 
 		// cache
 		api.CreateCacheMethodName,

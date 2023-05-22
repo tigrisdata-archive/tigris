@@ -69,6 +69,7 @@ func TestAuthzOwnerRole(t *testing.T) {
 
 	// billing
 	require.True(t, isAuthorizedOperation(api.ListInvoicesMethodName, ownerRoleName))
+	require.True(t, isAuthorizedOperation(api.BillingGetUsageMethodName, ownerRoleName))
 
 	// cache
 	require.True(t, isAuthorizedOperation(api.CreateCacheMethodName, ownerRoleName))
@@ -222,6 +223,7 @@ func TestAuthzEditorRole(t *testing.T) {
 	require.False(t, isAuthorizedOperation(api.DeleteGlobalAppKeyMethodName, editorRoleName))
 	require.False(t, isAuthorizedOperation(api.ListGlobalAppKeysMethodName, editorRoleName))
 	require.False(t, isAuthorizedOperation(api.RotateGlobalAppKeySecretMethodName, editorRoleName))
+	require.False(t, isAuthorizedOperation(api.BillingGetUsageMethodName, editorRoleName))
 }
 
 func TestAuthzReadOnlyRole(t *testing.T) {
@@ -301,6 +303,8 @@ func TestAuthzReadOnlyRole(t *testing.T) {
 	require.False(t, isAuthorizedOperation(api.DeleteGlobalAppKeyMethodName, readOnlyRoleName))
 	require.False(t, isAuthorizedOperation(api.ListGlobalAppKeysMethodName, readOnlyRoleName))
 	require.False(t, isAuthorizedOperation(api.RotateGlobalAppKeySecretMethodName, readOnlyRoleName))
+	require.False(t, isAuthorizedOperation(api.BillingGetUsageMethodName, readOnlyRoleName))
+	require.False(t, isAuthorizedOperation(api.ListInvoicesMethodName, readOnlyRoleName))
 
 	// search
 	require.False(t, isAuthorizedOperation(api.CreateOrUpdateIndexMethodName, readOnlyRoleName))
