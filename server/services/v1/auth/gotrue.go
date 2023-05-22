@@ -832,6 +832,7 @@ func getAccessTokenUsingClientCredentialsGotrue(ctx context.Context, clientId st
 	payloadValues := url.Values{}
 	payloadValues.Set("username", clientId)
 	payloadValues.Set("password", clientSecret)
+
 	client := &http.Client{}
 
 	getTokenReq, err := http.NewRequestWithContext(ctx, http.MethodPost, getTokenUrl, strings.NewReader(payloadValues.Encode()))

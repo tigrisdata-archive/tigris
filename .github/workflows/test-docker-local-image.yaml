@@ -6,11 +6,7 @@ on:
       - docker/Dockerfile.local
       - scripts/install_local_deps.sh
       - .github/workflows/test-docker-local-image.yaml
-  merge_group:
-    paths:
-      - docker/Dockerfile.local
-      - scripts/install_local_deps.sh
-      - .github/workflows/test-docker-local-image.yaml
+      - scripts/test_docker_local.sh
   push:
     branches:
       - main
@@ -24,15 +20,5 @@ jobs:
         with:
           submodules: true
 
-      - name: Build local image
-        run: make docker-local
-
-      - name: Run local image
-        run: docker run -d -p 8081:8081 tigris_local
-
-      - name: Run CLI tests
-        run: |
-          curl -sSL https://tigris.dev/cli-linux | tar -xz -C .
-          TIGRIS_URL=localhost:8081 ./tigris ping --timeout 20s
-          TIGRIS_TEST_PORT=8081 TIGRIS_CLI_TEST_FAST=1 noup=1 /bin/bash test/v1/cli/main.sh
-
+      - name: Run tests
+        run: SUDO=sudo /bin/bash scripts/test_docker_local.sh

@@ -133,11 +133,10 @@ func mainWithCode() int {
 	if cfg.Server.Type == config.RealtimeServerType {
 		port = cfg.Server.RealtimePort
 	}
-	if err := mx.Start(cfg.Server.Host, port); err != nil {
-		log.Error().Err(err).Msgf("error starting realtime server")
-		return 1
-	}
+
+	mx.Start(cfg.Server.Host, port, cfg.Server.UnixSocket)
 
 	log.Info().Msg("Shutdown")
+
 	return 0
 }

@@ -45,6 +45,16 @@ func GetBaseURL2() string {
 	return "http://localhost:8082"
 }
 
+func GetBaseURL2Auth() string {
+	config.LoadEnvironment()
+
+	if config.GetEnvironment() == config.EnvTest {
+		return "https://tigris_server2:8081"
+	}
+
+	return "https://localhost:8082"
+}
+
 func GetGotrueURL() string {
 	config.LoadEnvironment()
 

@@ -17,6 +17,8 @@
 package server
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net/http"
 	"os"
@@ -34,23 +36,62 @@ import (
 const (
 	Authorization         = "Authorization"
 	Bearer                = "bearer "
-	RSATokenFilePath      = "../../docker/test-token-rsa.jwt"          //nolint:gosec
-	HSTokenFilePath       = "../../docker/test-token-hs.jwt"           //nolint:gosec
-	HSTokenAFilePath      = "../../docker/test-token-A-hs.jwt"         //nolint:gosec
-	HSTokenBFilePath      = "../../docker/test-token-B-hs.jwt"         //nolint:gosec
-	OwnerTokenFilePath    = "../../docker/test-token-rsa-owner.jwt"    //nolint:gosec
-	EditorTokenFilePath   = "../../docker/test-token-rsa-editor.jwt"   //nolint:gosec
-	ReadOnlyTokenFilePath = "../../docker/test-token-rsa-readonly.jwt" //nolint:gosec
+	keysDir               = "../../config/keys"
+	RSATokenFilePath      = keysDir + "/test-token-rsa.jwt"          //nolint:gosec // test only token
+	HSTokenFilePath       = keysDir + "/test-token-hs.jwt"           //nolint:gosec // test only token
+	HSTokenAFilePath      = keysDir + "/test-token-A-hs.jwt"         //nolint:gosec // test only token
+	HSTokenBFilePath      = keysDir + "/test-token-B-hs.jwt"         //nolint:gosec // test only token
+	OwnerTokenFilePath    = keysDir + "/test-token-rsa-owner.jwt"    //nolint:gosec // test only token
+	EditorTokenFilePath   = keysDir + "/test-token-rsa-editor.jwt"   //nolint:gosec // test only token
+	ReadOnlyTokenFilePath = keysDir + "/test-token-rsa-readonly.jwt" //nolint:gosec // test only token
+
+	CaCertFilePath = keysDir + "/test_ca.crt" //nolint:gosec // test only token
 )
+
+func SetupTLS(t *testing.T) *tls.Config {
+	t.Helper()
+
+	cert, err := os.ReadFile(CaCertFilePath)
+	require.NoError(t, err)
+
+	certPool := x509.NewCertPool()
+	require.True(t, certPool.AppendCertsFromPEM(cert))
+
+	tlsCfg := &tls.Config{RootCAs: certPool, ServerName: "localhost", MinVersion: tls.VersionTLS12}
+	/*
+		if config2.GetEnvironment() == config2.EnvTest {
+			tlsCfg.ServerName = "tigris_server2"
+		}
+	*/
+
+	return tlsCfg
+}
+
+func expectAuthLow(t *testing.T) *httpexpect.Expect {
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: SetupTLS(t),
+		},
+	}
+
+	e := httpexpect.WithConfig(httpexpect.Config{
+		BaseURL:  config.GetBaseURL2Auth(),
+		Reporter: httpexpect.NewRequireReporter(t),
+		Client:   client,
+	})
+
+	return e
+}
 
 func readToken(t *testing.T, file string) string {
 	tokenBytes, err := os.ReadFile(file)
 	require.NoError(t, err)
+
 	return string(tokenBytes)
 }
 
 func createNamespaceWithToken(t *testing.T, name string, token string) *httpexpect.Response {
-	e := expectLow(t, config.GetBaseURL2())
+	e := expectAuthLow(t)
 	return e.POST(getCreateNamespaceURL()).
 		WithHeader(Authorization, Bearer+token).
 		WithJSON(Map{"name": name}).
@@ -58,7 +99,7 @@ func createNamespaceWithToken(t *testing.T, name string, token string) *httpexpe
 }
 
 func createTestNamespace(t *testing.T, token string) {
-	e2 := expectLow(t, config.GetBaseURL2())
+	e2 := expectAuthLow(t)
 	createNamespacePayload := Map{
 		"name": "tigris_test_name",
 		"id":   "tigris_test",
@@ -103,7 +144,7 @@ func TestMultipleAudienceSupport(t *testing.T) {
 }
 
 func TestGoTrueAuthProvider(t *testing.T) {
-	e2 := expectLow(t, config.GetBaseURL2())
+	e2 := expectAuthLow(t)
 	token := readToken(t, RSATokenFilePath)
 
 	createTestNamespace(t, token)
@@ -178,7 +219,8 @@ func TestGoTrueAuthProvider(t *testing.T) {
 	require.Equal(t, id.Raw(), retrievedAppKey.Object().Value("id").String().Raw())
 	require.NotNil(t, retrievedAppKey.Object().Value("secret").String().Raw())
 	require.Equal(t, name.Raw(), retrievedAppKey.Object().Value("name").String().Raw())
-	require.Equal(t, "[updated]This key is used for integration test purpose.", retrievedAppKey.Object().Value("description").String().Raw())
+	require.Equal(t, "[updated]This key is used for integration test purpose.",
+		retrievedAppKey.Object().Value("description").String().Raw())
 	require.NotNil(t, retrievedAppKey.Object().Value("project").String().Raw())
 	require.True(t, strings.HasPrefix(retrievedAppKey.Object().Value("created_by").String().Raw(), "gt|"))
 
@@ -228,7 +270,7 @@ func cleanupAppKeys(e *httpexpect.Expect, token string, project string) {
 }
 
 func TestGlobalAppKeys(t *testing.T) {
-	e := expectLow(t, config.GetBaseURL2())
+	e := expectAuthLow(t)
 	token := readToken(t, RSATokenFilePath)
 
 	createTestNamespace(t, token)
@@ -301,7 +343,8 @@ func TestGlobalAppKeys(t *testing.T) {
 	require.Equal(t, id.Raw(), retrievedAppKey.Object().Value("id").String().Raw())
 	require.NotNil(t, retrievedAppKey.Object().Value("secret").String().Raw())
 	require.Equal(t, name.Raw(), retrievedAppKey.Object().Value("name").String().Raw())
-	require.Equal(t, "[updated]This key is used for integration test purpose.", retrievedAppKey.Object().Value("description").String().Raw())
+	require.Equal(t, "[updated]This key is used for integration test purpose.",
+		retrievedAppKey.Object().Value("description").String().Raw())
 	require.True(t, strings.HasPrefix(retrievedAppKey.Object().Value("created_by").String().Raw(), "gt|"))
 
 	// delete
@@ -313,7 +356,7 @@ func TestGlobalAppKeys(t *testing.T) {
 }
 
 func TestGlobalAndLocalAppKeys(t *testing.T) {
-	e := expectLow(t, config.GetBaseURL2())
+	e := expectAuthLow(t)
 	token := readToken(t, RSATokenFilePath)
 
 	proj := "TestGlobalAndLocalAppKeys"
@@ -409,10 +452,11 @@ func createGlobalAppKey(e *httpexpect.Expect, token string, name string) *httpex
 		JSON().
 		Object().Value("created_app_key")
 }
+
 func TestMultipleAppsCreation(t *testing.T) {
 	testStartTime := time.Now()
 
-	e2 := expectLow(t, config.GetBaseURL2())
+	e2 := expectAuthLow(t)
 	testProject := "TestMultipleAppsCreation2"
 	token := readToken(t, RSATokenFilePath)
 	createTestNamespace(t, token)
@@ -436,6 +480,7 @@ func TestMultipleAppsCreation(t *testing.T) {
 		JSON().
 		Object().Value("app_keys").Array()
 	require.Equal(t, 5, int(appKeys.Length().Raw()))
+
 	for _, value := range appKeys.Iter() {
 		createdAt := int64(value.Object().Value("created_at").Number().Raw())
 		require.True(t, createdAt >= testStartTime.UnixMilli())
@@ -443,7 +488,7 @@ func TestMultipleAppsCreation(t *testing.T) {
 }
 
 func TestListAppKeys(t *testing.T) {
-	e2 := expectLow(t, config.GetBaseURL2())
+	e2 := expectAuthLow(t)
 	testProject := "auth_test"
 	token := readToken(t, RSATokenFilePath)
 	createTestNamespace(t, token)
@@ -481,7 +526,7 @@ func TestListAppKeys(t *testing.T) {
 }
 
 func TestEmptyListAppKeys(t *testing.T) {
-	e2 := expectLow(t, config.GetBaseURL2())
+	e2 := expectAuthLow(t)
 	testProject := "TestEmptyListAppKeys"
 	token := readToken(t, RSATokenFilePath)
 	createTestNamespace(t, token)
@@ -500,7 +545,7 @@ func TestEmptyListAppKeys(t *testing.T) {
 func TestApiKeyUsage(t *testing.T) {
 	token := readToken(t, RSATokenFilePath)
 	createTestNamespace(t, token)
-	e := expectLow(t, config.GetBaseURL2())
+	e := expectAuthLow(t)
 	testProject := "TestApiKey"
 
 	createdApiKey := createAppKey(e, token, "test_api_key", testProject, auth.AppKeyTypeApiKey)
@@ -516,7 +561,7 @@ func TestApiKeyUsage(t *testing.T) {
 func TestApiKeyCrud(t *testing.T) {
 	token := readToken(t, RSATokenFilePath)
 	createTestNamespace(t, token)
-	e := expectLow(t, config.GetBaseURL2())
+	e := expectAuthLow(t)
 	testProject := "TestApiKeyCrud"
 
 	// create
@@ -597,7 +642,7 @@ func TestApiKeyCrud(t *testing.T) {
 func TestWhoAmI(t *testing.T) {
 	token := readToken(t, RSATokenFilePath)
 	createTestNamespace(t, token)
-	e := expectLow(t, config.GetBaseURL2())
+	e := expectAuthLow(t)
 
 	res := e.GET("/v1/observability/whoami").
 		WithHeader(Authorization, Bearer+token).
@@ -613,7 +658,7 @@ func TestWhoAmI(t *testing.T) {
 }
 
 func TestCreateAccessToken(t *testing.T) {
-	e2 := expectLow(t, config.GetBaseURL2())
+	e2 := expectAuthLow(t)
 	testProject := "auth_test"
 	token := readToken(t, RSATokenFilePath)
 	createTestNamespace(t, token)
@@ -652,7 +697,7 @@ func TestCreateAccessToken(t *testing.T) {
 }
 
 func TestCreateGlobalAccessToken(t *testing.T) {
-	e2 := expectLow(t, config.GetBaseURL2())
+	e2 := expectAuthLow(t)
 	token := readToken(t, RSATokenFilePath)
 	createTestNamespace(t, token)
 
@@ -699,7 +744,7 @@ func TestCreateGlobalAccessToken(t *testing.T) {
 }
 
 func TestCreateAccessTokenUsingInvalidCreds(t *testing.T) {
-	e2 := expectLow(t, config.GetBaseURL2())
+	e2 := expectAuthLow(t)
 	getAccessTokenResponse := e2.POST(getAuthToken()).
 		WithFormField("client_id", "invalid-id").
 		WithFormField("client_secret", "invalid-password").
@@ -872,7 +917,9 @@ func TestAuthzEditor(t *testing.T) {
 
 	// creating namespace is not be allowed
 	resp := createNamespaceWithToken(t, "TestAuthzEditor", token).Status(http.StatusForbidden).Body().Raw()
-	require.Equal(t, "{\"error\":{\"code\":\"PERMISSION_DENIED\",\"message\":\"You are not allowed to perform operation: /tigrisdata.management.v1.Management/CreateNamespace\"}}", resp)
+	require.JSONEq(t, `{"error":{"code":"PERMISSION_DENIED",
+		"message":"You are not allowed to perform operation: /tigrisdata.management.v1.Management/CreateNamespace"}}`,
+		resp)
 }
 
 func TestAuthzReadonly(t *testing.T) {
@@ -884,11 +931,13 @@ func TestAuthzReadonly(t *testing.T) {
 	resp := createProject2(t, "TestAuthzReadonly", token).
 		Status(http.StatusForbidden).Body().Raw()
 
-	require.Equal(t, "{\"error\":{\"code\":\"PERMISSION_DENIED\",\"message\":\"You are not allowed to perform operation: /tigrisdata.v1.Tigris/CreateProject\"}}", resp)
+	require.JSONEq(t, `{"error":{"code":"PERMISSION_DENIED",
+		"message":"You are not allowed to perform operation: /tigrisdata.v1.Tigris/CreateProject"}}`,
+		resp)
 }
 
 func createProject2(t *testing.T, projectName string, token string) *httpexpect.Response {
-	e2 := expectLow(t, config.GetBaseURL2())
+	e2 := expectAuthLow(t)
 
 	if token != "" {
 		return e2.POST(getProjectURL(projectName, "create")).
@@ -900,7 +949,7 @@ func createProject2(t *testing.T, projectName string, token string) *httpexpect.
 }
 
 func deleteProject2(t *testing.T, projectName string, token string) {
-	e2 := expectLow(t, config.GetBaseURL2())
+	e2 := expectAuthLow(t)
 	_ = e2.DELETE(getProjectURL(projectName, "delete")).
 		WithHeader(Authorization, Bearer+token).
 		Expect()
@@ -921,8 +970,9 @@ func getInvitationCode(t *testing.T, namespace string, email string) string {
 	return ""
 }
 
-func createUserInvitation(t *testing.T, email string, role string, invitationCreatedByName string, token string) *httpexpect.Response {
-	e2 := expectLow(t, config.GetBaseURL2())
+func createUserInvitation(t *testing.T, email string, role string, invitationCreatedByName string, token string,
+) *httpexpect.Response {
+	e2 := expectAuthLow(t)
 
 	invitationInfos := make([]api.InvitationInfo, 1)
 	payload := make(map[string][]api.InvitationInfo)
@@ -939,30 +989,22 @@ func createUserInvitation(t *testing.T, email string, role string, invitationCre
 }
 
 func listUserInvitations(t *testing.T, token string) *httpexpect.Response {
-	e2 := expectLow(t, config.GetBaseURL2())
+	e2 := expectAuthLow(t)
 
 	return e2.GET(invitationUrl("list")).
 		WithHeader(Authorization, Bearer+token).
 		Expect()
 }
 
-func listUsers(t *testing.T, token string) *httpexpect.Response {
-	e2 := expectLow(t, config.GetBaseURL2())
-
-	return e2.GET(listUsersUrl()).
-		WithHeader(Authorization, Bearer+token).
-		Expect()
-}
-
 func listProjects(t *testing.T, token string) *httpexpect.Response {
-	e2 := expectLow(t, config.GetBaseURL2())
+	e2 := expectAuthLow(t)
 	return e2.GET(listProjectsUrl()).
 		WithHeader(Authorization, Bearer+token).
 		Expect()
 }
 
 func verifyUserInvitations(t *testing.T, email string, code string, token string, dry bool) *httpexpect.Response {
-	e2 := expectLow(t, config.GetBaseURL2())
+	e2 := expectAuthLow(t)
 	payload := make(map[string]any)
 	payload["email"] = email
 	payload["code"] = code
@@ -977,7 +1019,7 @@ func deleteUserInvitations(t *testing.T, email string, status string, token stri
 	payload := make(map[string]string)
 	payload["email"] = email
 	payload["status"] = status
-	e2 := expectLow(t, config.GetBaseURL2())
+	e2 := expectAuthLow(t)
 	return e2.DELETE(invitationUrl("delete")).
 		WithJSON(payload).
 		WithHeader(Authorization, Bearer+token).
@@ -986,10 +1028,6 @@ func deleteUserInvitations(t *testing.T, email string, status string, token stri
 
 func invitationUrl(operation string) string {
 	return fmt.Sprintf("/v1/auth/namespace/invitations/%s", operation)
-}
-
-func listUsersUrl() string {
-	return "/v1/auth/namespace/users"
 }
 
 func listProjectsUrl() string {

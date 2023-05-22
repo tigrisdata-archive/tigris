@@ -17,8 +17,7 @@
 server:
   host: localhost
   port: 8081
-  chunking: true
-  compression: true
+  unix_socket: /tmp/tigris_test_server.sock
 
 cdc:
   enabled: false

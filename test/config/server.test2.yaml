@@ -1,0 +1,119 @@
+# Copyright 2022-2023 Tigris Data, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This config file is used by tigris_server2 to run auth tests
+
+server:
+  port: 8081
+  tls_http: true
+  tls_key: |
+    -----BEGIN PRIVATE KEY-----
+    MIICdgIBADANBgkqhkiG9w0BAQEFAASCAmAwggJcAgEAAoGBALiG9I8q2byHtsYs
+    swrhGDgVfaFi9xr1WdERyVAgrz/+F/5gwTTzsIjjIL0a1gcfvOKi7+5LCG+z36yy
+    pXUPd2iEfWuPH5Fw2oMRMYcqzkaAnJU7ANFeuoyHIqxx5uALuYKGK9r0dJGfTObG
+    3k/NabtUK6FC6Mfm58aGn3Nj7EylAgMBAAECgYAKbdY0oT9dIG58FNqpqr8rrEtF
+    a8p7g5Jn9pFiLfa5ryq7/cvtqjg4BF49Ud722Bxc0sistyDq70edAxvG2fDtpr0T
+    v46CrxYmoxPk9CLl1oD+CRttb5ZQz8amTFM3tbrt80/5I2eVLmL6dUFCFzOM34bj
+    0K7pkHR1hqU5eA5ioQJBANza7PJoV7H8smLezGc/ebUk9eZWl1YR719lKpjIdZed
+    xJXKMuDI12kMoasObmKslr8Vavdvc4rbU8UYZxVb8EMCQQDV5B6jMdFpG1idAgBt
+    3bsBLlLiHDpg3aqOnq1Sp9Af4fv8sGp4QGvWlenchdXGIgt9DSJrWsOKE8aVqDcR
+    wNT3AkAyA12vE1PwmXHoE94j72rnS4Rn8en5crxLVQSNbq+6ct7GsPBOmQy23EZs
+    DyuOKtlEUlxTxihbJInW00zcuGIzAkEAnYY18iacfXZAWtHAkyl7sjD1pcT4UaKv
+    G/5M09T3eKOsO7uJjiqTwSQDaf+/Iv6ry1tDACGGZUiPNmT+ubp0nQJAdbjUr5g7
+    YcFh8uAwMSDzHhDU5vv2eZPIRWLixrV06vjX5HPgdpSTJCV9dN5s3HqveGVfpyLa
+    9ggFNQi5LKAogA==
+    -----END PRIVATE KEY-----
+  tls_cert: |
+    -----BEGIN CERTIFICATE-----
+    MIIDAjCCAmugAwIBAgIUCou8ijCU05zOwyc44m46PeMio+0wDQYJKoZIhvcNAQEL
+    BQAwgYUxCzAJBgNVBAYTAlVTMQswCQYDVQQIDAJDQTEWMBQGA1UEBwwNTW91bnRh
+    aW4gVmlldzEQMA4GA1UECgwHVGVzdE9yZzEMMAoGA1UECwwDRGV2MRIwEAYDVQQD
+    DAlsb2NhbGhvc3QxHTAbBgkqhkiG9w0BCQEWDnJvb3RAbG9jYWxob3N0MB4XDTIz
+    MDUzMDIxMDkzMloXDTMzMDUyNzIxMDkzMloweDELMAkGA1UEBhMCVVMxCzAJBgNV
+    BAgMAkNBMQswCQYDVQQHDAJNVjELMAkGA1UECgwCUEMxDzANBgNVBAsMBkxhcHRv
+    cDESMBAGA1UEAwwJbG9jYWxob3N0MR0wGwYJKoZIhvcNAQkBFg5yb290QGxvY2Fs
+    aG9zdDCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEAuIb0jyrZvIe2xiyzCuEY
+    OBV9oWL3GvVZ0RHJUCCvP/4X/mDBNPOwiOMgvRrWBx+84qLv7ksIb7PfrLKldQ93
+    aIR9a48fkXDagxExhyrORoCclTsA0V66jIcirHHm4Au5goYr2vR0kZ9M5sbeT81p
+    u1QroULox+bnxoafc2PsTKUCAwEAAaN7MHkwNwYDVR0RBDAwLoIJbG9jYWxob3N0
+    ggsqLmxvY2FsaG9zdIIOdGlncmlzX3NlcnZlcjKHBH8AAAEwHQYDVR0OBBYEFMXJ
+    lCC/y0ZzRGdJy/Ffg1U52/BsMB8GA1UdIwQYMBaAFHWHqTM3LR0vG/zt92DxwHH3
+    HDP6MA0GCSqGSIb3DQEBCwUAA4GBAAhIDMQl8sqItEeUaogTEgX4musE8BqxUx83
+    5qKTvs0q2g1qDUGOkkG6FnL3c5yXELahjkWnKJzVeesbq+jd1Xg9By3KkJVXxbos
+    NmdUo1LACDSJYyI2kzKbj25IBGBqxky1EAyUKaG9aUO/rOznJKwg2gN8BbayMwwC
+    q0HcfOVW
+    -----END CERTIFICATE-----
+
+environment: test
+
+search:
+  auth_key: ts_test_key
+  host: tigris_search
+  chunking: true
+  compression: true
+
+kv:
+  chunking: true
+  compression: true
+  min_compression_threshold: 1
+
+log:
+  level: debug
+  format: console
+
+secondary_index:
+  write_enabled: true
+  read_enabled: true
+  mutate_enabled: true
+
+auth:
+  enabled: true
+  authz:
+    enabled: true
+    log_only: false
+  enable_namespace_isolation: true
+  enable_oauth: true
+  log_only: false
+  admin_namespaces:
+    - tigris_test
+  validators:
+    - issuer: http://tigris_gotrue:8086
+      algorithm: RS256
+      audience: https://tigris-test
+    - issuer: http://tigris_gotrue:8086
+      algorithm: HS256
+      audience: https://tigris-test
+    - issuer: http://tigris_gotrue:8086
+      algorithm: HS256
+      audience: https://tigris-testA
+    - issuer: http://tigris_gotrue:8086
+      algorithm: HS256
+      audience: https://tigris-testB
+  api_keys:
+    auds:
+      - https://tigris-test
+    length: 120
+    email_suffix: "@apikey.tigrisdata.com"
+    user_password: hello
+  token_cache_size: 100
+  primary_audience: https://tigris-test
+  oauth_provider: gotrue
+  user_invitations:
+    expire_after_sec: 120
+  gotrue:
+    username_suffix: "@m2m.tigrisdata.com"
+    url: http://tigris_gotrue:8086
+    admin_username: test
+    admin_password: test
+    shared_secret: test_shared_secret

@@ -25,7 +25,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/tigrisdata/tigris/test/config"
 	"gopkg.in/gavv/httpexpect.v1"
 )
 
@@ -167,7 +166,7 @@ func namespaceInfoUrl(namespaceId string) string {
 	return fmt.Sprintf("/v1/management/namespaces/%s", namespaceId)
 }
 func userMetaRequest(t *testing.T, token string, op string, key string, m Map) *httpexpect.Response {
-	e2 := expectLow(t, config.GetBaseURL2())
+	e2 := expectAuthLow(t)
 	return e2.POST(getUserMetaURL(op, key)).
 		WithHeader(Authorization, Bearer+token).
 		WithJSON(m).
@@ -175,7 +174,7 @@ func userMetaRequest(t *testing.T, token string, op string, key string, m Map) *
 }
 
 func nsMetaRequest(t *testing.T, token string, op string, key string, m Map) *httpexpect.Response {
-	e2 := expectLow(t, config.GetBaseURL2())
+	e2 := expectAuthLow(t)
 	return e2.POST(getNSMetaURL(op, key)).
 		WithHeader(Authorization, Bearer+token).
 		WithJSON(m).
@@ -193,7 +192,7 @@ func getNSMetaURL(op string, key string) string {
 func TestUserMetadata(t *testing.T) {
 	token := readToken(t, RSATokenFilePath)
 
-	e2 := expectLow(t, config.GetBaseURL2())
+	e2 := expectAuthLow(t)
 	_ = e2.POST(getCreateNamespaceURL()).
 		WithHeader(Authorization, Bearer+token).
 		WithJSON(Map{"name": "tigris_test", "id": "tigris_test"}).
@@ -227,7 +226,7 @@ func TestUserMetadata(t *testing.T) {
 func TestNamespaceMetadata(t *testing.T) {
 	token := readToken(t, RSATokenFilePath)
 
-	e2 := expectLow(t, config.GetBaseURL2())
+	e2 := expectAuthLow(t)
 	_ = e2.POST(getCreateNamespaceURL()).
 		WithHeader(Authorization, Bearer+token).
 		WithJSON(Map{"name": "tigris_test", "id": "tigris_test"}).

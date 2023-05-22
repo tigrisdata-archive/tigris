@@ -24,6 +24,7 @@ if [ -z "$TIGRIS_TEST_PORT" ]; then
 	TIGRIS_TEST_PORT=8090
 fi
 
+if [ -z "$TIGRIS_NO_TEST_CONFIG" ]; then
 unset TIGRIS_URL
 unset TIGRIS_TOKEN
 unset TIGRIS_CLIENT_SECRET
@@ -51,6 +52,8 @@ EOF
 	exit 1
 fi
 
+fi
+
 #shellcheck disable=SC2154
 if [ -z "$noup" ]; then
 	TIGRIS_LOG_LEVEL=debug $cli local up "$TIGRIS_TEST_PORT"
@@ -61,7 +64,7 @@ fi
 OS=$(uname -s)
 
 export TIGRIS_URL="localhost:$TIGRIS_TEST_PORT"
-$cli server info
+TIGRIS_LOG_LEVEL=debug $cli server info
 $cli server version
 
 if [ "$OS" == 'Darwin' ]; then
@@ -93,7 +96,7 @@ db_tests() {
 	echo "=== Test ==="
 	echo "Proto: $TIGRIS_PROTOCOL, URL: $TIGRIS_URL"
 	echo "============"
-	$cli ping
+	TIGRIS_LOG_LEVEL=debug $cli ping
 
 	$cli delete-project -f db1 || true
 
@@ -430,29 +433,35 @@ source "$BASEDIR/scaffold.sh"
 source "$BASEDIR/search/import.sh"
 
 main() { 
-	test_config
-
-	# Exercise tests via HTTP
-	unset TIGRIS_PROTOCOL
-	export TIGRIS_URL="localhost:$TIGRIS_TEST_PORT"
-	db_tests
-	test_import
-
-	test_search_import
-	test_backup
-
-	if [ -z "$TIGRIS_CLI_TEST_FAST" ]; then
-		test_scaffold
+	if [ -z "$TIGRIS_NO_TEST_CONFIG" ]; then
+		test_config
 	fi
 
-	# Exercise tests via GRPC
-	export TIGRIS_URL="localhost:$TIGRIS_TEST_PORT"
-	export TIGRIS_PROTOCOL=grpc
-	$cli config show | grep "protocol: grpc"
-	$cli config show | grep "url: localhost:$TIGRIS_TEST_PORT"
-	db_tests
-	test_import
-	test_backup
+	if [ -z "$TIGRIS_TOKEN" ]; then
+		# Exercise tests via GRPC
+		unset TIGRIS_PROTOCOL
+		export TIGRIS_URL="localhost:$TIGRIS_TEST_PORT"
+		$cli config show
+		db_tests
+		test_import
+
+		test_search_import
+		test_backup
+
+		if [ -z "$TIGRIS_CLI_TEST_FAST" ]; then
+			test_scaffold
+		fi
+
+		# Exercise tests via GRPC
+		export TIGRIS_URL="localhost:$TIGRIS_TEST_PORT"
+		export TIGRIS_PROTOCOL=grpc
+		$cli config show | grep "protocol: grpc"
+		$cli config show | grep "url: localhost:$TIGRIS_TEST_PORT"
+		db_tests
+
+		test_import
+		test_backup
+	fi
 
 	export TIGRIS_URL="localhost:$TIGRIS_TEST_PORT"
 	export TIGRIS_PROTOCOL=http
@@ -466,11 +475,13 @@ main() {
 	$cli config show | grep "url: http://localhost:$TIGRIS_TEST_PORT"
 	db_tests
 
-	export TIGRIS_PROTOCOL=http
-	export TIGRIS_URL="grpc://localhost:$TIGRIS_TEST_PORT"
-	$cli config show | grep "protocol: http"
-	$cli config show | grep "url: grpc://localhost:$TIGRIS_TEST_PORT"
-	db_tests
+	if [ -z "$TIGRIS_TOKEN" ]; then
+		export TIGRIS_PROTOCOL=http
+		export TIGRIS_URL="grpc://localhost:$TIGRIS_TEST_PORT"
+		$cli config show | grep "protocol: http"
+		$cli config show | grep "url: grpc://localhost:$TIGRIS_TEST_PORT"
+		db_tests
+	fi
 }
 
 main

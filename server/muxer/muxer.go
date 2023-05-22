@@ -17,6 +17,8 @@ package muxer
 import (
 	"fmt"
 	"net"
+	"os"
+	"runtime"
 
 	"github.com/rs/zerolog/log"
 	"github.com/soheilhy/cmux"
@@ -27,6 +29,7 @@ import (
 	"github.com/tigrisdata/tigris/server/transaction"
 	"github.com/tigrisdata/tigris/store/kv"
 	"github.com/tigrisdata/tigris/store/search"
+	"github.com/tigrisdata/tigris/util"
 	ulog "github.com/tigrisdata/tigris/util/log"
 )
 
@@ -64,18 +67,47 @@ func (m *Muxer) RegisterServices(cfg *config.ServerConfig, kvStore kv.TxStore, s
 	}
 }
 
-func (m *Muxer) Start(host string, port int16) error {
-	log.Info().Int16("port", port).Msg("initializing server")
-
-	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
-	if err != nil {
-		log.Fatal().Err(err).Msg("listening failed ")
-	}
-
+func (m *Muxer) serve(l net.Listener) {
 	cm := cmux.New(l)
+
 	for _, s := range m.servers {
 		_ = s.Start(cm)
 	}
-	log.Info().Msg("server started, servicing requests")
-	return cm.Serve()
+
+	err := cm.Serve()
+	util.Fatal(err, "serve")
+}
+
+func (m *Muxer) Start(host string, port int16, unix string) {
+	if unix == "" && port == 0 {
+		util.Fatal(fmt.Errorf("please configure TCP host:port or unix socket for server to bind to"), "binding ports")
+	}
+
+	if unix != "" && (runtime.GOOS != "windows") {
+		log.Info().Str("uds", unix).Msg("initializing server")
+
+		ulog.E(os.Remove(unix))
+
+		l, err := net.Listen("unix", unix)
+		util.Fatal(err, "listen on unix domain socket")
+
+		if port != 0 {
+			go m.serve(l)
+		} else {
+			m.serve(l)
+		}
+	}
+
+	if port == 0 && (runtime.GOOS == "windows") {
+		port = 8081
+	}
+
+	if port != 0 {
+		log.Info().Str("host", host).Int16("port", port).Msg("initializing server")
+
+		l, err := net.Listen("tcp", net.JoinHostPort(host, fmt.Sprintf("%d", port)))
+		util.Fatal(err, "listen on tcp port")
+
+		m.serve(l)
+	}
 }

@@ -496,7 +496,7 @@ func (t *ftx) Commit(_ context.Context) error {
 func (t *ftx) Rollback(_ context.Context) error {
 	t.tx.Cancel()
 
-	log.Debug().Msg("tx Rollback")
+	log.Trace().Msg("tx Rollback")
 
 	return nil
 }
