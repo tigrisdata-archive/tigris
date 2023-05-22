@@ -71,7 +71,9 @@ var (
 		// observability
 		api.QueryTimeSeriesMetricsMethodName,
 		api.QuotaLimitsMetricsMethodName,
-
+		api.QuotaUsageMethodName,
+		api.GetInfoMethodName,
+		
 		// realtime
 		api.ReadMessagesMethodName,
 
@@ -148,6 +150,8 @@ var (
 		// observability
 		api.QueryTimeSeriesMetricsMethodName,
 		api.QuotaLimitsMetricsMethodName,
+		api.QuotaUsageMethodName,
+		api.GetInfoMethodName,
 
 		// realtime
 		api.PresenceMethodName,
@@ -247,6 +251,8 @@ var (
 		// observability
 		api.QueryTimeSeriesMetricsMethodName,
 		api.QuotaLimitsMetricsMethodName,
+		api.QuotaUsageMethodName,
+		api.GetInfoMethodName,
 
 		// realtime
 		api.PresenceMethodName,
@@ -340,6 +346,8 @@ var (
 		// observability
 		api.QueryTimeSeriesMetricsMethodName,
 		api.QuotaLimitsMetricsMethodName,
+		api.QuotaUsageMethodName,
+		api.GetInfoMethodName,
 
 		// realtime
 		api.PresenceMethodName,
