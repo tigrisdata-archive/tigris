@@ -225,8 +225,8 @@ services:
       - GOTRUE_DB_URL=http://tigris_server:8081
       - GOTRUE_SITE_URL=http://tigris_gotrue:8086
       - GOTRUE_JWT_ALGORITHM=RS256
-      - GOTRUE_JWT_RSA_PRIVATE_KEY=/home/netlify/keys/jwt.test.key
-      - GOTRUE_JWT_RSA_PUBLIC_KEYS=/home/netlify/keys/jwt.test.key.pub
+      - GOTRUE_JWT_RSA_PRIVATE_KEY=/home/tigris/keys/jwt.test.key
+      - GOTRUE_JWT_RSA_PUBLIC_KEYS=/home/tigris/keys/jwt.test.key.pub
       - GOTRUE_DISABLE_SIGNUP=false
       - GOTRUE_JWT_EXP=300
       - GOTRUE_JWT_ISSUER=http://tigris_gotrue:8086
