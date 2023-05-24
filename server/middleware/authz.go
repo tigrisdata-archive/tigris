@@ -73,7 +73,7 @@ var (
 		api.QuotaLimitsMetricsMethodName,
 		api.QuotaUsageMethodName,
 		api.GetInfoMethodName,
-		
+
 		// realtime
 		api.ReadMessagesMethodName,
 
