@@ -302,6 +302,8 @@ func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, runner Quer
 			return Response{}, err
 		}
 
+		session.tx.Context().MetadataChangeSession(req.MetadataChange)
+
 		// use the same ctx assigned in the session
 		resp, session.ctx, err = session.Run(runner)
 		if changed, err1 := session.versionTracker.Stop(session.ctx); err1 != nil || changed {
@@ -310,9 +312,7 @@ func (sessMgr *SessionManager) executeWithRetry(ctx context.Context, runner Quer
 			continue
 		}
 
-		db, _ := session.GetTx().Context().GetStagedDatabase().(*metadata.Database)
-
-		err = session.Commit(sessMgr.versionH, (db == nil && req.MetadataChange) || (db != nil && db.MetadataChange), err)
+		err = session.Commit(sessMgr.versionH, session.tx.Context().IsMetadataStateChanged(), err)
 		log.Debug().Err(err).Msg("session.commit after")
 		if !IsErrConflictingTransaction(err) && !search.IsErrDuplicateFieldNames(err) {
 			return

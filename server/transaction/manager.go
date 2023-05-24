@@ -59,18 +59,41 @@ type Tx interface {
 	Rollback(ctx context.Context) error
 }
 
+type stagedDatabase interface {
+	IsMetadataChange() bool
+}
+
 // SessionCtx is used to store any baggage for the lifetime of the transaction. We use it to stage the database inside
 // a transaction when the transaction is performing any DDLs.
 type SessionCtx struct {
-	db any
+	db                    stagedDatabase
+	noMetadataChanged     bool
+	metadataChangeSession bool
 }
 
-func (c *SessionCtx) StageDatabase(db any) {
+func (c *SessionCtx) MetadataChangeSession(mcs bool) {
+	c.metadataChangeSession = mcs
+}
+
+func (c *SessionCtx) StageDatabase(db stagedDatabase) {
 	c.db = db
 }
 
-func (c *SessionCtx) GetStagedDatabase() any {
+func (c *SessionCtx) GetStagedDatabase() stagedDatabase {
 	return c.db
+}
+
+func (c *SessionCtx) MarkNoMetadataStateChanged() {
+	if c.db != nil {
+		// possible an interactive transaction
+		return
+	}
+
+	c.noMetadataChanged = true
+}
+
+func (c *SessionCtx) IsMetadataStateChanged() bool {
+	return ((c.db == nil && c.metadataChangeSession) || (c.db != nil && c.db.IsMetadataChange())) && !c.noMetadataChanged
 }
 
 // Manager is used to track all the sessions and provide all the functionality related to transactions. Once created
