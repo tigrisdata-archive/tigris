@@ -157,6 +157,7 @@ func (*Measurement) CountUnits(reqStatus *RequestStatus, tags map[string]string)
 	writeBytes := reqStatus.GetWriteBytes()
 	RequestsReadBytes.Tagged(tags).Counter("bytes").Inc(readBytes)
 	RequestsWriteBytes.Tagged(tags).Counter("bytes").Inc(writeBytes)
+	RequestsSearchWriteBytes.Tagged(tags).Counter("bytes").Inc(reqStatus.searchWriteBytes)
 	RequestsReadUnits.Tagged(tags).Counter("units").Inc(getUnitsFromBytes(readBytes, config.ReadUnitSize))
 	RequestsWriteUnits.Tagged(tags).Counter("units").Inc(getUnitsFromBytes(writeBytes, config.WriteUnitSize))
 	RequestsDDLDropUnits.Tagged(tags).Counter("units").Inc(reqStatus.GetDDLDropUnits())
@@ -164,6 +165,7 @@ func (*Measurement) CountUnits(reqStatus *RequestStatus, tags map[string]string)
 	RequestsDDLCreateUnits.Tagged(tags).Counter("units").Inc(reqStatus.GetDDLCreateUnits())
 	RequestsCollectionSearchUnits.Tagged(tags).Counter("units").Inc(reqStatus.GetCollectionSearchUnits())
 	RequestsApiSearchUnits.Tagged(tags).Counter("units").Inc(reqStatus.GetApiSearchUnits())
+	RequestsSearchWriteUnits.Tagged(tags).Counter("units").Inc(getUnitsFromBytes(reqStatus.searchWriteBytes, config.SearchUnitSize))
 }
 
 func (m *Measurement) CountErrorForScope(scope tally.Scope, tags map[string]string) {
