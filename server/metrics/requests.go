@@ -33,6 +33,8 @@ var (
 	RequestsDDLCreateUnits        tally.Scope
 	RequestsApiSearchUnits        tally.Scope
 	RequestsCollectionSearchUnits tally.Scope
+	RequestsSearchWriteBytes      tally.Scope
+	RequestsSearchWriteUnits      tally.Scope
 )
 
 func getRequestOkTagKeys() []string {
@@ -98,4 +100,6 @@ func initializeRequestScopes() {
 	RequestsDDLCreateUnits = Requests.SubScope("ddl_create")
 	RequestsCollectionSearchUnits = Requests.SubScope("collection_search")
 	RequestsApiSearchUnits = Requests.SubScope("api_search")
+	RequestsSearchWriteBytes = Requests.SubScope("search_write")
+	RequestsSearchWriteUnits = Requests.SubScope("search_write")
 }

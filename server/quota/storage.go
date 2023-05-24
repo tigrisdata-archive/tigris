@@ -147,6 +147,7 @@ func getProjectSearchSize(ctx context.Context, tenant *metadata.Tenant, project 
 	if ulog.E(err) {
 		return 0
 	}
+	log.Debug().Int64("search_byte_size", prjSearchSize.StoredBytes).Msg("Got search size")
 	return prjSearchSize.StoredBytes
 }
 
