@@ -220,14 +220,24 @@ func (runner *CollectionQueryRunner) describe(ctx context.Context, tx transactio
 			return Response{}, ctx, err
 		}
 	}
+
+	metadataChange := false
 	// A legacy collection that needs to be updated
 	if coll.SecondaryIndexes.All == nil {
 		if err = tenant.UpgradeCollectionIndexes(ctx, tx, db, coll); err != nil {
 			return Response{}, ctx, err
 		}
+		metadataChange = true
 	}
-	if err = tenant.UpgradeSearchStatus(ctx, tx, db, coll); err != nil {
-		return Response{}, ctx, err
+	if coll.GetSearchState() == schema.UnknownSearchState {
+		if err = tenant.UpgradeSearchStatus(ctx, tx, db, coll); err != nil {
+			return Response{}, ctx, err
+		}
+		metadataChange = true
+	}
+	if !metadataChange {
+		// do not reload if nothing changed.
+		tx.Context().MarkNoMetadataStateChanged()
 	}
 
 	return Response{

@@ -1995,6 +1995,10 @@ func (d *Database) Clone() *Database {
 	return &copyDB
 }
 
+func (d *Database) IsMetadataChange() bool {
+	return d.MetadataChange
+}
+
 // Name returns the internal database name.
 func (d *Database) Name() string {
 	return d.name.Name()
