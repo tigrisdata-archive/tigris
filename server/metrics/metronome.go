@@ -15,22 +15,31 @@
 package metrics
 
 import (
+	"github.com/tigrisdata/tigris/server/config"
 	"strconv"
 
 	"github.com/uber-go/tally"
 )
 
 var (
-	MetronomeCreateAccount tally.Scope
-	MetronomeAddPlan       tally.Scope
-	MetronomeIngest        tally.Scope
-	MetronomeListInvoices  tally.Scope
-	MetronomeGetInvoice    tally.Scope
-	MetronomeGetUsage      tally.Scope
-	MetronomeGetCustomer   tally.Scope
+	MetronomeRequestOk         tally.Scope
+	MetronomeRequestError      tally.Scope
+	MetronomeResponseTime      tally.Scope
+	MetronomeErrorResponseTime tally.Scope
+	MetronomeCreateAccount     tally.Scope
+	MetronomeAddPlan           tally.Scope
+	MetronomeIngest            tally.Scope
+	MetronomeListInvoices      tally.Scope
+	MetronomeGetInvoice        tally.Scope
+	MetronomeGetUsage          tally.Scope
+	MetronomeGetCustomer       tally.Scope
 )
 
 func initializeMetronomeScopes() {
+	MetronomeRequestOk = MetronomeMetrics.SubScope("count")
+	MetronomeRequestError = MetronomeMetrics.SubScope("count")
+	MetronomeResponseTime = MetronomeMetrics.SubScope("response")
+	MetronomeErrorResponseTime = MetronomeMetrics.SubScope("error_response")
 	MetronomeCreateAccount = MetronomeMetrics.SubScope("create_account")
 	MetronomeAddPlan = MetronomeMetrics.SubScope("add_plan")
 	MetronomeIngest = MetronomeMetrics.SubScope("ingest")
@@ -40,19 +49,45 @@ func initializeMetronomeScopes() {
 	MetronomeGetCustomer = MetronomeMetrics.SubScope("get_customer")
 }
 
-func GetResponseCodeTags(code int) map[string]string {
+func getMetronomeOkTagKeys() []string {
+	return []string{
+		"env",
+		"operation",
+		"response_code",
+		"event_type",
+	}
+}
+
+func getMetronomeErrorTagKeys() []string {
+	return []string{
+		"env",
+		"operation",
+		"response_code",
+		"event_type",
+		"error_value",
+	}
+}
+
+func GetMetronomeBaseTags(operation string) map[string]string {
+	return map[string]string{
+		"env":       config.GetEnvironment(),
+		"operation": operation,
+	}
+}
+
+func GetMetronomeResponseCodeTags(code int) map[string]string {
 	return map[string]string{
 		"response_code": strconv.Itoa(code),
 	}
 }
 
-func GetErrorCodeTags(err error) map[string]string {
+func GetMetronomeErrorCodeTags(err error) map[string]string {
 	return map[string]string{
 		"error_value": err.Error(),
 	}
 }
 
-func GetIngestEventTags(eventType string) map[string]string {
+func GetMetronomeIngestEventTags(eventType string) map[string]string {
 	return map[string]string{
 		"event_type": eventType,
 	}

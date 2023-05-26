@@ -76,18 +76,45 @@ func (*Metronome) measure(ctx context.Context, scope tally.Scope, operation stri
 		defer resp.Body.Close()
 		// e.g.:- metronome_create_account_request
 		// tags: response_code: 200
-		me.IncrementCount(scope, metrics.GetResponseCodeTags(resp.StatusCode), "request", 1)
+		me.IncrementCount(scope, metrics.GetMetronomeResponseCodeTags(resp.StatusCode), "request", 1)
 	}
 
 	availability := int64(100)
 	var errTags map[string]string
 	if err != nil {
 		availability = 0
-		errTags = metrics.GetErrorCodeTags(err)
+		errTags = metrics.GetMetronomeErrorCodeTags(err)
 	}
 	// e.g.:- metronome_create_account_availability
 	// tags: error_value: err.Error()
 	me.IncrementCount(scope, errTags, "availability", availability)
+}
+
+func (*Metronome) measureNew(ctx context.Context, operation string, f func(ctx context.Context) (*http.Response, error)) {
+	me := metrics.NewMeasurement(
+		metrics.MetronomeServiceName,
+		operation,
+		metrics.MetronomeSpanType,
+		metrics.GetMetronomeBaseTags(operation))
+	me.StartTracing(ctx, true)
+
+	resp, err := f(ctx)
+	_ = me.FinishTracing(ctx)
+	if resp != nil {
+		defer resp.Body.Close()
+		// e.g.:- metronome_create_account_requests
+		// tags: response_code: 200
+		me.AddTags(metrics.GetMetronomeResponseCodeTags(resp.StatusCode))
+	}
+	if err != nil {
+		me.AddTags(metrics.GetMetronomeErrorCodeTags(err))
+		me.RecordDuration(metrics.MetronomeErrorResponseTime, me.GetMetronomeErrorTags(err))
+		me.CountErrorForScope(metrics.MetronomeRequestError, me.GetMetronomeErrorTags(err))
+	}
+	me.RecordDuration(metrics.MetronomeResponseTime, me.GetMetronomeOkTags())
+	me.CountOkForScope(metrics.MetronomeRequestOk, me.GetMetronomeOkTags())
+	// The former availability is redundant like this, the ok and the error value can be checked
+	// on the metrics query side
 }
 
 func (m *Metronome) CreateAccount(ctx context.Context, namespaceId string, name string) (AccountId, error) {
@@ -102,6 +129,14 @@ func (m *Metronome) CreateAccount(ctx context.Context, namespaceId string, name 
 	}
 
 	m.measure(ctx, metrics.MetronomeCreateAccount, "create_account", func(ctx context.Context) (*http.Response, error) {
+		resp, err = m.client.CreateCustomerWithResponse(ctx, body)
+		if resp == nil {
+			return nil, err
+		}
+		return resp.HTTPResponse, err
+	})
+
+	m.measureNew(ctx, "create_account", func(ctx context.Context) (*http.Response, error) {
 		resp, err = m.client.CreateCustomerWithResponse(ctx, body)
 		if resp == nil {
 			return nil, err
@@ -147,6 +182,14 @@ func (m *Metronome) AddPlan(ctx context.Context, accountId AccountId, planId uui
 		return resp.HTTPResponse, err
 	})
 
+	m.measureNew(ctx, "add_plan", func(ctx context.Context) (*http.Response, error) {
+		resp, err = m.client.AddPlanToCustomerWithResponse(ctx, accountId, body)
+		if resp == nil {
+			return nil, err
+		}
+		return resp.HTTPResponse, err
+	})
+
 	if err != nil {
 		return false, err
 	}
@@ -171,7 +214,7 @@ func (m *Metronome) PushUsageEvents(ctx context.Context, events []*UsageEvent) e
 		metrics.MetronomeServiceName,
 		"ingest",
 		metrics.MetronomeSpanType,
-		metrics.GetIngestEventTags("usage"))
+		metrics.GetMetronomeIngestEventTags("usage"))
 	me.IncrementCount(metrics.MetronomeIngest, me.GetTags(), "events", int64(len(billingEvents)))
 
 	return m.pushBillingEvents(ctx, billingEvents)
@@ -189,7 +232,7 @@ func (m *Metronome) PushStorageEvents(ctx context.Context, events []*StorageEven
 		metrics.MetronomeServiceName,
 		"ingest",
 		metrics.MetronomeSpanType,
-		metrics.GetIngestEventTags("storage"))
+		metrics.GetMetronomeIngestEventTags("storage"))
 	me.IncrementCount(metrics.MetronomeIngest, me.GetTags(), "events", int64(len(billingEvents)))
 
 	return m.pushBillingEvents(ctx, billingEvents)
@@ -229,6 +272,15 @@ func (m *Metronome) pushBillingEvents(ctx context.Context, events []biller.Event
 			}
 			return resp.HTTPResponse, err
 		})
+
+		m.measureNew(ctx, "ingest", func(ctx context.Context) (*http.Response, error) {
+			resp, err = m.client.IngestWithResponse(ctx, page)
+			if resp == nil {
+				return nil, err
+			}
+			return resp.HTTPResponse, err
+		})
+
 		if err != nil {
 			return err
 		}
@@ -274,6 +326,15 @@ func (m *Metronome) GetInvoices(ctx context.Context, accountId AccountId, r *api
 		}
 		return resp.HTTPResponse, err
 	})
+
+	m.measureNew(ctx, "list_invoices", func(ctx context.Context) (*http.Response, error) {
+		resp, err = m.client.ListInvoicesWithResponse(ctx, accountId, params)
+		if resp == nil {
+			return nil, err
+		}
+		return resp.HTTPResponse, err
+	})
+
 	if err != nil {
 		return nil, err
 	}
@@ -304,6 +365,14 @@ func (m *Metronome) GetInvoiceById(ctx context.Context, accountId AccountId, inv
 		return nil, api.Errorf(api.Code_INVALID_ARGUMENT, "invoiceId is not valid - %s", err.Error())
 	}
 	m.measure(ctx, metrics.MetronomeGetInvoice, "get_invoice", func(ctx context.Context) (*http.Response, error) {
+		resp, err = m.client.GetInvoiceWithResponse(ctx, accountId, invoiceUUID)
+		if resp == nil {
+			return nil, err
+		}
+		return resp.HTTPResponse, err
+	})
+
+	m.measureNew(ctx, "get_invoice", func(ctx context.Context) (*http.Response, error) {
 		resp, err = m.client.GetInvoiceWithResponse(ctx, accountId, invoiceUUID)
 		if resp == nil {
 			return nil, err
@@ -397,6 +466,14 @@ func (m *Metronome) GetUsage(ctx context.Context, id AccountId, r *UsageRequest)
 		return resp.HTTPResponse, err
 	})
 
+	m.measureNew(ctx, "get_usage", func(ctx context.Context) (*http.Response, error) {
+		resp, err = m.client.GetUsageBatchWithResponse(ctx, &biller.GetUsageBatchParams{NextPage: r.NextPage}, reqParams)
+		if resp == nil {
+			return nil, err
+		}
+		return resp.HTTPResponse, err
+	})
+
 	if err != nil {
 		return nil, err
 	}
@@ -447,6 +524,15 @@ func (m *Metronome) GetAccountId(ctx context.Context, namespaceId string) (Accou
 		}
 		return resp.HTTPResponse, err
 	})
+
+	m.measureNew(ctx, "get_customer", func(ctx context.Context) (*http.Response, error) {
+		resp, err = m.client.ListCustomersWithResponse(ctx, params)
+		if resp == nil {
+			return nil, err
+		}
+		return resp.HTTPResponse, err
+	})
+
 	if err != nil {
 		return uuid.Nil, err
 	}
