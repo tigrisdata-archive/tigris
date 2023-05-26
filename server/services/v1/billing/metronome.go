@@ -28,7 +28,6 @@ import (
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metrics"
-	"github.com/uber-go/tally"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -61,34 +60,34 @@ func NewMetronomeProvider(conf config.Metronome) (*Metronome, error) {
 	return &Metronome{Config: conf, client: client, billedMetricsByName: bm, billedMetricsById: bu}, nil
 }
 
-func (*Metronome) measure(ctx context.Context, scope tally.Scope, operation string, f func(ctx context.Context) (*http.Response, error)) {
-	me := metrics.NewMeasurement(
-		metrics.MetronomeServiceName,
-		operation,
-		metrics.MetronomeSpanType,
-		map[string]string{})
-	me.StartTracing(ctx, true)
-
-	resp, err := f(ctx)
-	_ = me.FinishTracing(ctx)
-	me.RecordDuration(scope, map[string]string{})
-	if resp != nil {
-		defer resp.Body.Close()
-		// e.g.:- metronome_create_account_request
-		// tags: response_code: 200
-		me.IncrementCount(scope, metrics.GetMetronomeResponseCodeTags(resp.StatusCode), "request", 1)
-	}
-
-	availability := int64(100)
-	var errTags map[string]string
-	if err != nil {
-		availability = 0
-		errTags = metrics.GetMetronomeErrorCodeTags(err)
-	}
-	// e.g.:- metronome_create_account_availability
-	// tags: error_value: err.Error()
-	me.IncrementCount(scope, errTags, "availability", availability)
-}
+//func (*Metronome) measure(ctx context.Context, scope tally.Scope, operation string, f func(ctx context.Context) (*http.Response, error)) {
+//	me := metrics.NewMeasurement(
+//		metrics.MetronomeServiceName,
+//		operation,
+//		metrics.MetronomeSpanType,
+//		map[string]string{})
+//	me.StartTracing(ctx, true)
+//
+//	resp, err := f(ctx)
+//	_ = me.FinishTracing(ctx)
+//	me.RecordDuration(scope, map[string]string{})
+//	if resp != nil {
+//		defer resp.Body.Close()
+//		// e.g.:- metronome_create_account_request
+//		// tags: response_code: 200
+//		me.IncrementCount(scope, metrics.GetMetronomeResponseCodeTags(resp.StatusCode), "request", 1)
+//	}
+//
+//	availability := int64(100)
+//	var errTags map[string]string
+//	if err != nil {
+//		availability = 0
+//		errTags = metrics.GetMetronomeErrorCodeTags(err)
+//	}
+//	// e.g.:- metronome_create_account_availability
+//	// tags: error_value: err.Error()
+//	me.IncrementCount(scope, errTags, "availability", availability)
+//}
 
 func (*Metronome) measureNew(ctx context.Context, operation string, f func(ctx context.Context) (*http.Response, error)) {
 	me := metrics.NewMeasurement(
