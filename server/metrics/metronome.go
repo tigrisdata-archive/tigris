@@ -17,42 +17,48 @@ package metrics
 import (
 	"strconv"
 
+	"github.com/tigrisdata/tigris/server/config"
 	"github.com/uber-go/tally"
 )
 
 var (
-	MetronomeCreateAccount tally.Scope
-	MetronomeAddPlan       tally.Scope
-	MetronomeIngest        tally.Scope
-	MetronomeListInvoices  tally.Scope
-	MetronomeGetInvoice    tally.Scope
-	MetronomeGetUsage      tally.Scope
-	MetronomeGetCustomer   tally.Scope
+	MetronomeRequestOk         tally.Scope
+	MetronomeRequestError      tally.Scope
+	MetronomeResponseTime      tally.Scope
+	MetronomeErrorResponseTime tally.Scope
+	MetronomeIngest            tally.Scope
 )
 
 func initializeMetronomeScopes() {
-	MetronomeCreateAccount = MetronomeMetrics.SubScope("create_account")
-	MetronomeAddPlan = MetronomeMetrics.SubScope("add_plan")
+	MetronomeRequestOk = MetronomeMetrics.SubScope("count")
+	MetronomeRequestError = MetronomeMetrics.SubScope("count")
+	MetronomeResponseTime = MetronomeMetrics.SubScope("response")
+	MetronomeErrorResponseTime = MetronomeMetrics.SubScope("error_response")
 	MetronomeIngest = MetronomeMetrics.SubScope("ingest")
-	MetronomeListInvoices = MetronomeMetrics.SubScope("list_invoices")
-	MetronomeGetInvoice = MetronomeMetrics.SubScope("get_invoice")
-	MetronomeGetUsage = MetronomeMetrics.SubScope("get_usage")
-	MetronomeGetCustomer = MetronomeMetrics.SubScope("get_customer")
 }
 
-func GetResponseCodeTags(code int) map[string]string {
+func getMetronomeTagKeys() []string {
+	return []string{
+		"env",
+		"operation",
+		"response_code",
+	}
+}
+
+func GetMetronomeBaseTags(operation string) map[string]string {
+	return map[string]string{
+		"env":       config.GetEnvironment(),
+		"operation": operation,
+	}
+}
+
+func GetMetronomeResponseCodeTags(code int) map[string]string {
 	return map[string]string{
 		"response_code": strconv.Itoa(code),
 	}
 }
 
-func GetErrorCodeTags(err error) map[string]string {
-	return map[string]string{
-		"error_value": err.Error(),
-	}
-}
-
-func GetIngestEventTags(eventType string) map[string]string {
+func GetMetronomeIngestEventTags(eventType string) map[string]string {
 	return map[string]string{
 		"event_type": eventType,
 	}

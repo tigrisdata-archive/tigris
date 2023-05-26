@@ -220,6 +220,10 @@ func (m *Measurement) GetFdbErrorTags(err error) map[string]string {
 	return filterTags(standardizeTags(mergeTags(m.tags, getTagsForError(err)), getFdbErrorTagKeys()), config.DefaultConfig.Metrics.Fdb.FilteredTags)
 }
 
+func (m *Measurement) GetMetronomeTags() map[string]string {
+	return filterTags(standardizeTags(m.tags, getMetronomeTagKeys()), config.DefaultConfig.Metrics.Metronome.FilteredTags)
+}
+
 func (m *Measurement) GetSearchOkTags() map[string]string {
 	return filterTags(standardizeTags(m.tags, getSearchOkTagKeys()), config.DefaultConfig.Metrics.Search.FilteredTags)
 }
@@ -420,10 +424,9 @@ func (m *Measurement) RecordDuration(scope tally.Scope, tags map[string]string) 
 	case SecondaryIndexRespTime, SecondaryIndexErrorRespTime:
 		timerEnabled = cfg.SecondaryIndex.Timer.TimerEnabled
 		histogramEnabled = cfg.SecondaryIndex.Timer.HistogramEnabled
-	case MetronomeCreateAccount, MetronomeAddPlan, MetronomeIngest, MetronomeGetInvoice, MetronomeListInvoices,
-		MetronomeGetUsage, MetronomeGetCustomer:
-		timerEnabled = true
-		histogramEnabled = true
+	case MetronomeResponseTime, MetronomeErrorResponseTime:
+		timerEnabled = cfg.Metronome.Timer.TimerEnabled
+		histogramEnabled = cfg.Metronome.Timer.HistogramEnabled
 	case RequestsRespTimeToFirstDoc:
 		// Response time to first document
 		m.RecordFirstDocumentDuration(scope, tags)

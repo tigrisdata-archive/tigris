@@ -162,6 +162,7 @@ type MetricsConfig struct {
 	Auth              AuthMetricsConfig           `mapstructure:"auth" yaml:"auth" json:"auth"`
 	SecondaryIndex    SecondaryIndexMetricsConfig `mapstructure:"secondary_index" yaml:"secondary_index" json:"secondary_index"`
 	Queue             QueueMetricsConfig          `mapstructure:"queue" yaml:"queue" json:"queue"`
+	Metronome         MetronomeMetricsConfig      `mapstructure:"metronome" yaml:"metronome" json:"metronome"`
 }
 
 type LongRequestConfig struct {
@@ -225,6 +226,13 @@ type AuthMetricsConfig struct {
 }
 
 type SecondaryIndexMetricsConfig struct {
+	Enabled      bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Counter      CounterConfig `mapstructure:"counter" yaml:"counter" json:"counter"`
+	Timer        TimerConfig   `mapstructure:"timer" yaml:"timer" json:"timer"`
+	FilteredTags []string      `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
+}
+
+type MetronomeMetricsConfig struct {
 	Enabled      bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 	Counter      CounterConfig `mapstructure:"counter" yaml:"counter" json:"counter"`
 	Timer        TimerConfig   `mapstructure:"timer" yaml:"timer" json:"timer"`
@@ -448,6 +456,17 @@ var DefaultConfig = Config{
 				HistogramEnabled: false,
 			},
 			FilteredTags: nil,
+		},
+		Metronome: MetronomeMetricsConfig{
+			Enabled: true,
+			Counter: CounterConfig{
+				OkEnabled:    true,
+				ErrorEnabled: true,
+			},
+			Timer: TimerConfig{
+				TimerEnabled:     true,
+				HistogramEnabled: false,
+			},
 		},
 		Session: SessionMetricGroupConfig{
 			Enabled: true,
