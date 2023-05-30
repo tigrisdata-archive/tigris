@@ -65,12 +65,13 @@ func (runner *SearchQueryRunner) ReadOnly(ctx context.Context, tenant *metadata.
 	if err != nil {
 		return Response{}, ctx, err
 	}
-	if config.DefaultConfig.Search.LogFilter {
+	if config.DefaultConfig.Search.LogFilter && !wrappedF.None() {
 		log.Error().
 			Str("tenant", tenant.Name()).
 			Str("project", db.Name()).
 			Str("collection", collection.Name).
 			Str("filter", string(runner.req.Filter)).
+			Bool("search_index", wrappedF.IsSearchIndexed()).
 			Msg("collection search filters")
 	}
 
