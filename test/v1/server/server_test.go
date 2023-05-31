@@ -32,9 +32,8 @@ import (
 )
 
 func TestInfo(t *testing.T) {
-	resp := info(t)
-
-	resp.Status(http.StatusOK).
+	info(t).
+		Status(http.StatusOK).
 		JSON().
 		Object().
 		Value("server_version").NotNull()
@@ -42,7 +41,7 @@ func TestInfo(t *testing.T) {
 
 func info(t *testing.T) *httpexpect.Response {
 	e := httpexpect.New(t, config.GetBaseURL())
-	return e.GET(config.GetBaseURL() + "/v1/observability/info").
+	return e.GET("/v1/observability/info").
 		Expect()
 }
 
