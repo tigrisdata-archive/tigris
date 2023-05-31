@@ -1017,17 +1017,9 @@ func (x *ListAppKeysRequest) UnmarshalJSON(data []byte) error {
 
 		switch key {
 		case "key_type":
-			var keyType string
-			if err := jsoniter.Unmarshal(value, &keyType); err != nil {
-				return err
-			}
-			x.KeyType = &keyType
+			v = &x.KeyType
 		case "project":
-			var project string
-			if err := jsoniter.Unmarshal(value, &project); err != nil {
-				return err
-			}
-			x.Project = project
+			v = &x.Project
 		default:
 			continue
 		}
