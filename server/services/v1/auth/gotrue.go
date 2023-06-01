@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
@@ -101,6 +102,17 @@ type UserAppData struct {
 	Description     string `json:"description"`
 	Project         string `json:"tigris_project"`
 	KeyType         string `json:"key_type"`
+}
+
+type GetUserResp struct {
+	InstanceID        uuid.UUID `json:"instance_id"`
+	ID                uuid.UUID `json:"id"`
+	Aud               string    `json:"aud"`
+	Role              string    `json:"role"`
+	Email             string    `json:"email"`
+	EncryptedPassword string    `json:"encrypted_password"`
+
+	AppMetaData *UserAppData `json:"app_metadata" db:"app_metadata"`
 }
 
 // returns currentSub, creationTime, error.
@@ -214,12 +226,11 @@ func (g *gotrue) CreateGlobalAppKey(ctx context.Context, req *api.CreateGlobalAp
 }
 
 func _getEmail(clientId string, appKeyType string, g *gotrue) string {
-	if appKeyType == "" || appKeyType == AppKeyTypeCredentials {
-		return fmt.Sprintf("%s%s", clientId, g.AuthConfig.Gotrue.UsernameSuffix)
-	} else if appKeyType == AppKeyTypeApiKey {
-		return fmt.Sprintf("%s%s", clientId, g.AuthConfig.ApiKeys.EmailSuffix)
+	suffix := g.AuthConfig.Gotrue.UsernameSuffix
+	if appKeyType == AppKeyTypeApiKey {
+		suffix = g.AuthConfig.ApiKeys.EmailSuffix
 	}
-	return ""
+	return fmt.Sprintf("%s%s", clientId, suffix)
 }
 
 func _updateAppKey(ctx context.Context, g *gotrue, id string, name string, description string, appKeyType string) error {
@@ -505,10 +516,8 @@ type appKeyInternal struct {
 }
 
 func _listAppKeys(ctx context.Context, g *gotrue, project string, keyType string) ([]*appKeyInternal, error) {
-	if keyType != "" {
-		if !(keyType == AppKeyTypeApiKey || keyType == AppKeyTypeCredentials) {
-			return nil, errors.InvalidArgument("Invalid keytype. Supported values are [credentials, api_key]")
-		}
+	if keyType != "" && !(keyType == AppKeyTypeApiKey || keyType == AppKeyTypeCredentials) {
+		return nil, errors.InvalidArgument("Invalid key_type. Supported values are [credentials, api_key]")
 	}
 	currentSub, err := GetCurrentSub(ctx)
 	if err != nil {
@@ -531,7 +540,6 @@ func _listAppKeys(ctx context.Context, g *gotrue, project string, keyType string
 	if keyType != "" {
 		getUsersUrl = fmt.Sprintf("%s&keyType=%s", getUsersUrl, keyType)
 	}
-	log.Info().Str("url", getUsersUrl).Msg("Fetching users")
 	client := &http.Client{}
 	getUsersReq, err := http.NewRequestWithContext(ctx, http.MethodGet, getUsersUrl, nil)
 	if err != nil {
@@ -607,7 +615,6 @@ func _listAppKeys(ctx context.Context, g *gotrue, project string, keyType string
 			// parse string time to millis using rfc3339 format
 			createdAtMillis = readDate(createdAtStr)
 		}
-		log.Info().Interface("metadata", appMetadata).Msg("AppMetadata")
 		appKey := appKeyInternal{
 			Id:          clientId,
 			Name:        appMetadata.Name,
@@ -617,10 +624,9 @@ func _listAppKeys(ctx context.Context, g *gotrue, project string, keyType string
 			CreatedAt:   createdAtMillis,
 			Project:     appMetadata.Project,
 		}
-		if appMetadata.KeyType == "" || appMetadata.KeyType == AppKeyTypeCredentials {
-			appKey.KeyType = AppKeyTypeCredentials
-		} else if appMetadata.KeyType == AppKeyTypeApiKey {
-			appKey.KeyType = AppKeyTypeApiKey
+		appKey.KeyType = AppKeyTypeCredentials
+		if appMetadata.KeyType != "" {
+			appKey.KeyType = appMetadata.KeyType
 		}
 		appKeys[i] = &appKey
 	}
@@ -757,49 +763,39 @@ func (g *gotrue) ValidateApiKey(ctx context.Context, apiKey string, auds []strin
 		log.Err(err).Msg("Failed to read get user body while validating api key")
 		return nil, errors.Internal("Failed to validate the api key")
 	}
-
+	var getUserResp GetUserResp
 	// parse JSON response
-	var getUserJsonMap map[string]any
-	err = json.Unmarshal(getUserResBody, &getUserJsonMap)
+	err = json.Unmarshal(getUserResBody, &getUserResp)
 	if err != nil {
-		log.Err(err).Msg("Failed to deserialize response into JSON")
+		log.Err(err).Msg("Failed to deserialize response into GetUserResp type")
 		return nil, errors.Internal("Failed to validate the api key")
 	}
 
 	// validate password
-	password := getUserJsonMap["encrypted_password"].(string)
-	log.Error().Str("stored_password", password).
-		Str("input_password", config.DefaultConfig.Auth.ApiKeys.UserPassword).
-		Msg("Do password match")
-	if config.DefaultConfig.Auth.ApiKeys.UserPassword != password {
+	if config.DefaultConfig.Auth.ApiKeys.UserPassword != getUserResp.EncryptedPassword {
 		return nil, errors.Unauthenticated("Unsupported api-key")
 	}
 
 	// validate aud
-	aud := getUserJsonMap["aud"].(string)
 	allowedAud := false
 	for _, supportedAud := range auds {
-		if supportedAud == aud {
+		if supportedAud == getUserResp.Aud {
 			allowedAud = true
 			break
 		}
 	}
 	if !allowedAud {
-		log.Error().Str("api_key_aud", aud).Strs("supported_auds", auds).Msg("Audience is not supported")
+		log.Error().Str("api_key_aud", getUserResp.Aud).Strs("supported_auds", auds).Msg("Audience is not supported")
 		return nil, errors.Unauthenticated("Unsupported audience")
 	}
 
-	role := getUserJsonMap["role"].(string)
-	metadata := getUserJsonMap["app_metadata"].(map[string]any)
-	tigrisNamespaceCode := metadata["tigris_namespace"].(string)
-	project := metadata["tigris_project"].(string)
-	sub := fmt.Sprintf("gt_key|%s", getUserJsonMap["id"])
+	sub := fmt.Sprintf("gt_key|%s", getUserResp.ID)
 
 	return &types.AccessToken{
-		Namespace: tigrisNamespaceCode,
+		Namespace: getUserResp.AppMetaData.TigrisNamespace,
 		Sub:       sub,
-		Project:   project,
-		Role:      role,
+		Project:   getUserResp.AppMetaData.Project,
+		Role:      getUserResp.Role,
 	}, nil
 }
 
@@ -836,7 +832,6 @@ func getAccessTokenUsingClientCredentialsGotrue(ctx context.Context, clientId st
 	payloadValues := url.Values{}
 	payloadValues.Set("username", clientId)
 	payloadValues.Set("password", clientSecret)
-	log.Error().Interface("payload", payloadValues).Msg("Payload")
 	client := &http.Client{}
 
 	getTokenReq, err := http.NewRequestWithContext(ctx, http.MethodPost, getTokenUrl, strings.NewReader(payloadValues.Encode()))
