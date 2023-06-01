@@ -832,6 +832,9 @@ func (tenant *Tenant) createSearchIndex(ctx context.Context, tx transaction.Tx, 
 	if index, ok := project.search.GetIndex(factory.Name); ok {
 		if eq, err := isSchemaEq(index.Schema, factory.Schema); eq || err != nil {
 			// shortcut to just check if schema is eq then return early
+
+			tx.Context().MarkNoMetadataStateChanged()
+
 			return err
 		}
 		return tenant.updateSearchIndex(ctx, tx, project, factory, index)
