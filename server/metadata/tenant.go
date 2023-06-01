@@ -528,29 +528,45 @@ func (m *TenantManager) DecodeTableName(tableName []byte) (*Database, string, bo
 // As this is an expensive call, the reloading happens only during the start of the server. It is possible that reloading
 // fails during start time then we rely on each transaction to detect it and trigger reload. The consistency shouldn’t
 // be impacted if we fail to load the in-memory view.
-func (m *TenantManager) Reload(ctx context.Context, tx transaction.Tx) error {
+func (m *TenantManager) Reload(ctx context.Context) error {
 	log.Debug().Msg("reloading tenants")
 	m.Lock()
 	defer m.Unlock()
 
+	tx, err := m.txMgr.StartTx(ctx)
+	if err != nil {
+		log.Err(err).Msg("starting a transaction failed")
+		return err
+	}
 	currentVersion, err := m.versionH.Read(ctx, tx, false)
 	if ulog.E(err) {
+		_ = tx.Rollback(ctx)
+		return err
+	}
+	ulog.E(tx.Commit(ctx))
+
+	if err = m.reload(ctx, currentVersion); ulog.E(err) {
 		return err
 	}
 
-	if err = m.reload(ctx, tx, currentVersion); ulog.E(err) {
-		return err
-	}
 	m.version = currentVersion
 	log.Debug().Msgf("latest meta version %v", m.version)
 	return err
 }
 
-func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVersion Version) error {
-	namespaces, err := m.metaStore.GetNamespaces(ctx, tx)
+func (m *TenantManager) reload(ctx context.Context, currentVersion Version) error {
+	tx, err := m.txMgr.StartTx(ctx)
 	if err != nil {
+		log.Err(err).Msg("starting a transaction failed")
 		return err
 	}
+	namespaces, err := m.metaStore.GetNamespaces(ctx, tx)
+	if err != nil {
+		_ = tx.Rollback(ctx)
+		return err
+	}
+	ulog.E(tx.Commit(ctx))
+
 	log.Debug().Interface("ns", namespaces).Msg("existing reserved namespaces")
 
 	for namespace, metadata := range namespaces {
@@ -562,10 +578,21 @@ func (m *TenantManager) reload(ctx context.Context, tx transaction.Tx, currentVe
 
 	for _, tenant := range m.tenants {
 		log.Debug().Interface("tenant", tenant.String()).Msg("reloading tenant")
+		tx, err := m.txMgr.StartTx(ctx)
+		if err != nil {
+			log.Err(err).Msgf("starting a transaction failed '%s'", tenant.name)
+			return err
+		}
 		tenant.Lock()
-		err := tenant.reload(ctx, tx, currentVersion, m.searchSchemasSnapshot)
+		err = tenant.reload(ctx, tx, currentVersion, m.searchSchemasSnapshot)
 		tenant.Unlock()
 		if err != nil {
+			log.Err(err).Msgf("reloading a tenant failed '%s'", tenant.name)
+			_ = tx.Rollback(ctx)
+			return err
+		}
+		if err = tx.Commit(ctx); err != nil {
+			log.Err(err).Msgf("committing a reloading of tenant failed '%s'", tenant.name)
 			return err
 		}
 	}
