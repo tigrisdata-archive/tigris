@@ -176,6 +176,9 @@ func (g *gotrue) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest)
 		return nil, err
 	}
 
+	if req.GetKeyType() == AppKeyTypeApiKey {
+		clientSecret = "" // hide the secret
+	}
 	return &api.CreateAppKeyResponse{
 		CreatedAppKey: &api.AppKey{
 			Id:          clientId,

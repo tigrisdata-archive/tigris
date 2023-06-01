@@ -97,6 +97,7 @@ func TestAuthzOwnerRole(t *testing.T) {
 	require.True(t, isAuthorizedOperation(api.QuotaLimitsMetricsMethodName, ownerRoleName))
 	require.True(t, isAuthorizedOperation(api.QuotaUsageMethodName, ownerRoleName))
 	require.True(t, isAuthorizedOperation(api.GetInfoMethodName, ownerRoleName))
+	require.True(t, isAuthorizedOperation(api.WhoAmIMethodName, ownerRoleName))
 
 	// realtime
 	require.True(t, isAuthorizedOperation(api.PresenceMethodName, ownerRoleName))
@@ -193,6 +194,7 @@ func TestAuthzEditorRole(t *testing.T) {
 	require.True(t, isAuthorizedOperation(api.QuotaLimitsMetricsMethodName, editorRoleName))
 	require.True(t, isAuthorizedOperation(api.QuotaUsageMethodName, editorRoleName))
 	require.True(t, isAuthorizedOperation(api.GetInfoMethodName, editorRoleName))
+	require.True(t, isAuthorizedOperation(api.WhoAmIMethodName, editorRoleName))
 
 	// realtime
 	require.True(t, isAuthorizedOperation(api.PresenceMethodName, editorRoleName))
@@ -263,6 +265,7 @@ func TestAuthzReadOnlyRole(t *testing.T) {
 	require.True(t, isAuthorizedOperation(api.QuotaLimitsMetricsMethodName, readOnlyRoleName))
 	require.True(t, isAuthorizedOperation(api.QuotaUsageMethodName, readOnlyRoleName))
 	require.True(t, isAuthorizedOperation(api.GetInfoMethodName, readOnlyRoleName))
+	require.True(t, isAuthorizedOperation(api.WhoAmIMethodName, readOnlyRoleName))
 
 	// realtime
 	require.True(t, isAuthorizedOperation(api.ReadMessagesMethodName, readOnlyRoleName))

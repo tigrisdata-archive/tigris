@@ -594,6 +594,24 @@ func TestApiKeyCrud(t *testing.T) {
 	require.False(t, found)
 }
 
+func TestWhoAmI(t *testing.T) {
+	token := readToken(t, RSATokenFilePath)
+	createTestNamespace(t, token)
+	e := expectLow(t, config.GetBaseURL2())
+
+	res := e.GET("/v1/observability/whoami").
+		WithHeader(Authorization, Bearer+token).
+		Expect().
+		Status(http.StatusOK)
+	resJSON := res.JSON().Object()
+
+	require.Equal(t, "JWT", resJSON.Value("auth_method").String().Raw())
+	require.Equal(t, "tigris_test", resJSON.Value("namespace").String().Raw())
+	require.Equal(t, "gt|5f6812e4-6f4b-44d5-bc06-5ebe33e936ec", resJSON.Value("sub").String().Raw())
+	require.Equal(t, "machine", resJSON.Value("user_type").String().Raw())
+
+}
+
 func TestCreateAccessToken(t *testing.T) {
 	e2 := expectLow(t, config.GetBaseURL2())
 	testProject := "auth_test"

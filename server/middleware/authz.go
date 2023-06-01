@@ -72,6 +72,7 @@ var (
 		api.QuotaLimitsMetricsMethodName,
 		api.QuotaUsageMethodName,
 		api.GetInfoMethodName,
+		api.WhoAmIMethodName,
 
 		// realtime
 		api.ReadMessagesMethodName,
@@ -151,6 +152,7 @@ var (
 		api.QuotaLimitsMetricsMethodName,
 		api.QuotaUsageMethodName,
 		api.GetInfoMethodName,
+		api.WhoAmIMethodName,
 
 		// realtime
 		api.PresenceMethodName,
@@ -252,6 +254,7 @@ var (
 		api.QuotaLimitsMetricsMethodName,
 		api.QuotaUsageMethodName,
 		api.GetInfoMethodName,
+		api.WhoAmIMethodName,
 
 		// realtime
 		api.PresenceMethodName,
@@ -347,6 +350,7 @@ var (
 		api.QuotaLimitsMetricsMethodName,
 		api.QuotaUsageMethodName,
 		api.GetInfoMethodName,
+		api.WhoAmIMethodName,
 
 		// realtime
 		api.PresenceMethodName,
