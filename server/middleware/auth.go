@@ -32,6 +32,7 @@ import (
 	"github.com/tigrisdata/tigris/server/defaults"
 	"github.com/tigrisdata/tigris/server/metrics"
 	"github.com/tigrisdata/tigris/server/request"
+	"github.com/tigrisdata/tigris/server/services/v1/auth"
 	"github.com/tigrisdata/tigris/server/types"
 	"google.golang.org/grpc"
 )
@@ -135,10 +136,10 @@ func GetJWTValidators(config *config.Config) []*validator.Validator {
 	return jwtValidators
 }
 
-func measuredAuthFunction(ctx context.Context, jwtValidators []*validator.Validator, config *config.Config, cache gcache.Cache) (context.Context, error) {
+func measuredAuthFunction(ctx context.Context, jwtValidators []*validator.Validator, config *config.Config, cache gcache.Cache, a auth.Provider) (context.Context, error) {
 	measurement := metrics.NewMeasurement("auth", "auth", metrics.AuthSpanType, metrics.GetAuthBaseTags(ctx))
 	measurement.StartTracing(ctx, true)
-	ctxResult, err := authFunction(ctx, jwtValidators, config, cache)
+	ctxResult, err := authFunction(ctx, jwtValidators, config, cache, a)
 	if err != nil {
 		measurement.CountErrorForScope(metrics.AuthErrorCount, measurement.GetAuthErrorTags(err))
 		measurement.FinishWithError(ctxResult, err)
@@ -151,7 +152,7 @@ func measuredAuthFunction(ctx context.Context, jwtValidators []*validator.Valida
 	return ctxResult, nil
 }
 
-func authFunction(ctx context.Context, jwtValidators []*validator.Validator, config *config.Config, cache gcache.Cache) (ctxResult context.Context, err error) {
+func authFunction(ctx context.Context, jwtValidators []*validator.Validator, config *config.Config, cache gcache.Cache, a auth.Provider) (ctxResult context.Context, err error) {
 	reqMetadata, err := request.GetRequestMetadataFromContext(ctx)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to load request metadata")
@@ -178,9 +179,36 @@ func authFunction(ctx context.Context, jwtValidators []*validator.Validator, con
 	if err != nil {
 		return ctx, err
 	}
+	if strings.Contains(tkn, ".") {
+		return authenticateUsingAuthToken(ctx, jwtValidators, config, cache, tkn, reqMetadata)
+	} else if strings.HasPrefix(tkn, auth.ApiKeyPrefix) {
+		return authenticateUsingApiKey(ctx, jwtValidators, config, cache, tkn, reqMetadata, a)
+	}
+	return ctx, errors.Unauthenticated("Failed to authenticate")
+}
 
+func authenticateUsingApiKey(ctx context.Context, _ []*validator.Validator, _ *config.Config, cache gcache.Cache, apiKey string, reqMetadata *request.Metadata, a auth.Provider) (context.Context, error) {
+	token, err := cache.Get(apiKey)
+	if err != nil || token == nil {
+		token, err = a.ValidateApiKey(ctx, apiKey, config.DefaultConfig.Auth.ApiKeys.Auds)
+		if err != nil {
+			return ctx, err
+		}
+		// put it to cache
+		err = cache.Set(apiKey, token)
+		if err != nil {
+			log.Err(err).Msg("Could not set to the cache")
+		}
+	}
+	castedToken := token.(*types.AccessToken)
+	reqMetadata.SetNamespace(ctx, castedToken.Namespace)
+	reqMetadata.SetAccessToken(castedToken)
+	return ctx, nil
+}
+
+func authenticateUsingAuthToken(ctx context.Context, jwtValidators []*validator.Validator, config *config.Config, cache gcache.Cache, tkn string, reqMetadata *request.Metadata) (context.Context, error) {
 	validatedToken := getCachedToken(ctx, tkn, cache)
-
+	var err error
 	// if not found from cache
 	if validatedToken == nil {
 		count := 0
@@ -272,16 +300,17 @@ func getAuthFunction(config *config.Config) func(ctx context.Context) (context.C
 		lruCache := gcache.New(config.Auth.TokenValidationCacheSize).
 			Expiration(time.Duration(config.Auth.TokenValidationCacheTTLSec) * time.Second).
 			Build()
+		authProvider := auth.NewGotrueProvider()
 
 		// inline closure to access the state of jwtValidator
 		if config.Tracing.Enabled {
 			return func(ctx context.Context) (context.Context, error) {
-				return measuredAuthFunction(ctx, jwtValidators, config, lruCache)
+				return measuredAuthFunction(ctx, jwtValidators, config, lruCache, authProvider)
 			}
 		}
 
 		return func(ctx context.Context) (context.Context, error) {
-			return authFunction(ctx, jwtValidators, config, lruCache)
+			return authFunction(ctx, jwtValidators, config, lruCache, authProvider)
 		}
 	}
 

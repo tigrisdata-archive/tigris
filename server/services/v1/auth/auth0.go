@@ -33,6 +33,7 @@ import (
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/transaction"
+	"github.com/tigrisdata/tigris/server/types"
 	"golang.org/x/net/context/ctxhttp"
 )
 
@@ -325,6 +326,10 @@ func (*auth0) DeleteGlobalAppKey(_ context.Context, _ *api.DeleteGlobalAppKeyReq
 }
 
 func (*auth0) ListGlobalAppKeys(_ context.Context, _ *api.ListGlobalAppKeysRequest) (*api.ListGlobalAppKeysResponse, error) {
+	return nil, errors.Internal("auth0 implementation doesn't support it")
+}
+
+func (*auth0) ValidateApiKey(_ context.Context, _ string, _ []string) (*types.AccessToken, error) {
 	return nil, errors.Internal("auth0 implementation doesn't support it")
 }
 

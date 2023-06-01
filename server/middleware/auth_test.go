@@ -26,6 +26,7 @@ import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
+	"github.com/tigrisdata/tigris/server/services/v1/auth"
 	"github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc/metadata"
 )
@@ -47,35 +48,36 @@ func TestAuth(t *testing.T) {
 		FoundationDB: config.FoundationDBConfig{},
 	}
 	cache := gcache.New(10).Expiration(time.Duration(5) * time.Minute).Build()
+	authProvider := auth.NewGotrueProvider()
 	t.Run("log_only mode: no token", func(t *testing.T) {
-		ctx, err := authFunction(context.TODO(), []*validator.Validator{{}}, &config.DefaultConfig, cache)
+		ctx, err := authFunction(context.TODO(), []*validator.Validator{{}}, &config.DefaultConfig, cache, authProvider)
 		require.NotNil(t, ctx)
 		require.Nil(t, err)
 	})
 
 	t.Run("enforcing mode: no token", func(t *testing.T) {
-		_, err := authFunction(context.TODO(), []*validator.Validator{{}}, &enforcedAuthConfig, cache)
+		_, err := authFunction(context.TODO(), []*validator.Validator{{}}, &enforcedAuthConfig, cache, authProvider)
 		require.NotNil(t, err)
 		require.Equal(t, err, errors.Unauthenticated("request unauthenticated with bearer"))
 	})
 
 	t.Run("enforcing mode: Bad authorization string1", func(t *testing.T) {
 		incomingCtx := metadata.NewIncomingContext(context.TODO(), metadata.Pairs("authorization", "bearer"))
-		_, err := authFunction(incomingCtx, []*validator.Validator{{}}, &enforcedAuthConfig, cache)
+		_, err := authFunction(incomingCtx, []*validator.Validator{{}}, &enforcedAuthConfig, cache, authProvider)
 		require.NotNil(t, err)
 		require.Equal(t, err, errors.Unauthenticated("bad authorization string"))
 	})
 
 	t.Run("enforcing mode: Bad token", func(t *testing.T) {
 		incomingCtx := metadata.NewIncomingContext(context.TODO(), metadata.Pairs("authorization", "bearer somebadtoken"))
-		_, err := authFunction(incomingCtx, []*validator.Validator{{}}, &enforcedAuthConfig, cache)
+		_, err := authFunction(incomingCtx, []*validator.Validator{{}}, &enforcedAuthConfig, cache, authProvider)
 		require.NotNil(t, err)
-		require.Equal(t, err, errors.Unauthenticated("Failed to validate access token, could not be validated"))
+		require.Equal(t, errors.Unauthenticated("Failed to authenticate"), err)
 	})
 
 	t.Run("enforcing mode: Bad token 2", func(t *testing.T) {
 		incomingCtx := metadata.NewIncomingContext(context.TODO(), metadata.Pairs("authorization", "bearer some.bad.token"))
-		_, err := authFunction(incomingCtx, []*validator.Validator{{}}, &enforcedAuthConfig, cache)
+		_, err := authFunction(incomingCtx, []*validator.Validator{{}}, &enforcedAuthConfig, cache, authProvider)
 		require.NotNil(t, err)
 		require.Contains(t, err.Error(), "Failed to validate access token")
 	})

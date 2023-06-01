@@ -1004,6 +1004,32 @@ func (x *ListInvoicesRequest) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// UnmarshalJSON on ListAppKeysRequest. Handles query param.
+func (x *ListAppKeysRequest) UnmarshalJSON(data []byte) error {
+	var mp map[string]jsoniter.RawMessage
+
+	if err := jsoniter.Unmarshal(data, &mp); err != nil {
+		return err
+	}
+
+	for key, value := range mp {
+		var v any
+
+		switch key {
+		case "key_type":
+			v = &x.KeyType
+		case "project":
+			v = &x.Project
+		default:
+			continue
+		}
+		if err := jsoniter.Unmarshal(value, v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (x *GetNamespaceMetadataResponse) MarshalJSON() ([]byte, error) {
 	resp := struct {
 		MetadataKey string              `json:"metadataKey,omitempty"`

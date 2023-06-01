@@ -22,7 +22,9 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/server/services/v1/auth"
 	"github.com/tigrisdata/tigris/test/config"
 	"gopkg.in/gavv/httpexpect.v1"
 )
@@ -275,6 +277,16 @@ func appKeysOperation(project string, operation string) string {
 		return fmt.Sprintf("/v1/projects/%s/apps/keys", project)
 	}
 	return fmt.Sprintf("/v1/projects/%s/apps/keys/%s", project, operation)
+}
+
+func listAppKeys(t *testing.T, e *httpexpect.Expect, project string, bearer string) *httpexpect.Array {
+	listApiKeysResp := e.GET(appKeysOperation(project, "get")).
+		WithQuery("key_type", auth.AppKeyTypeApiKey).
+		WithHeader(Authorization, Bearer+bearer).
+		Expect()
+	listApiKeysRespJSON := listApiKeysResp.Status(http.StatusOK).JSON()
+	require.NotNil(t, listApiKeysRespJSON)
+	return listApiKeysRespJSON.Object().Value("app_keys").Array()
 }
 
 func globalAppKeysOperation(operation string) string {

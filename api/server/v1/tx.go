@@ -120,6 +120,7 @@ const (
 	QuotaLimitsMetricsMethodName     = ObservabilityMethodPrefix + "QuotaLimits"
 	QuotaUsageMethodName             = ObservabilityMethodPrefix + "QuotaUsage"
 	GetInfoMethodName                = ObservabilityMethodPrefix + "GetInfo"
+	WhoAmIMethodName                 = ObservabilityMethodPrefix + "WhoAmI"
 
 	// Realtime.
 	PresenceMethodName          = realtimeMethodPrefix + "Presence"

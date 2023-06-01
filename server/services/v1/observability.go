@@ -199,6 +199,43 @@ func (*observabilityService) GetInfo(_ context.Context, _ *api.GetInfoRequest) (
 	}, nil
 }
 
+func (*observabilityService) WhoAmI(ctx context.Context, _ *api.WhoAmIRequest) (*api.WhoAmIResponse, error) {
+	currentSub, err := request.GetCurrentSub(ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to read current sub")
+		return nil, errors.Internal("Failed to read current sub")
+	}
+
+	currentNamespace, err := request.GetNamespace(ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to read current namespace")
+		return nil, errors.Internal("Failed to read current namespace")
+	}
+
+	reqMeta, err := request.GetRequestMetadataFromContext(ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to read current request metadata")
+		return nil, errors.Internal("Failed to read request metadata")
+	}
+
+	userType := "machine"
+	if strings.HasPrefix(currentSub, "auth0") {
+		userType = "human"
+	}
+
+	authMethod := "JWT"
+	if strings.HasPrefix(currentSub, "gt_key|") {
+		authMethod = "api_key"
+	}
+	return &api.WhoAmIResponse{
+		Sub:        currentSub,
+		Namespace:  currentNamespace,
+		Role:       reqMeta.Role,
+		AuthMethod: authMethod,
+		UserType:   userType,
+	}, nil
+}
+
 func (o *observabilityService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel) error {
 	mux := runtime.NewServeMux(
 		runtime.WithMarshalerOption(runtime.MIMEWildcard, &api.CustomMarshaler{JSONBuiltin: &runtime.JSONBuiltin{}}),
