@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/go-chi/chi/v5"
@@ -77,17 +78,18 @@ func newApiService(kv kv.TxStore, searchStore search.Store, tenantMgr *metadata.
 		authProvider: authProvider,
 	}
 
+	var err error
 	ctx := context.TODO()
-	tx, err := u.txMgr.StartTx(ctx)
-	if ulog.E(err) {
-		log.Fatal().Err(err).Msgf("error starting server: starting transaction failed")
+	for i := 0; i < 3; i++ {
+		if err = tenantMgr.Reload(ctx); ulog.E(err) {
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		break
 	}
-
-	if err := tenantMgr.Reload(ctx, tx); ulog.E(err) {
-		// ToDo: no need to panic, probably handle through async thread.
-		log.Fatal().Err(err).Msgf("error starting server: reloading tenants failed")
+	if err != nil {
+		log.Fatal().Err(err).Msgf("error starting server: reloading tenants failed attempted three times")
 	}
-	ulog.E(tx.Commit(ctx))
 
 	var txListeners []database.TxListener
 	if config.DefaultConfig.Cdc.Enabled {
