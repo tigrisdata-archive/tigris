@@ -24,6 +24,7 @@ import (
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/transaction"
+	"github.com/tigrisdata/tigris/server/types"
 )
 
 const (
@@ -53,12 +54,19 @@ type Provider interface {
 	DeleteAppKey(ctx context.Context, req *api.DeleteAppKeyRequest) (*api.DeleteAppKeyResponse, error)
 	ListAppKeys(ctx context.Context, req *api.ListAppKeysRequest) (*api.ListAppKeysResponse, error)
 	DeleteAppKeys(ctx context.Context, project string) error
+	ValidateApiKey(ctx context.Context, apiKey string, auds []string) (*types.AccessToken, error)
 
 	CreateGlobalAppKey(ctx context.Context, req *api.CreateGlobalAppKeyRequest) (*api.CreateGlobalAppKeyResponse, error)
 	UpdateGlobalAppKey(ctx context.Context, req *api.UpdateGlobalAppKeyRequest) (*api.UpdateGlobalAppKeyResponse, error)
 	RotateGlobalAppKeySecret(ctx context.Context, req *api.RotateGlobalAppKeySecretRequest) (*api.RotateGlobalAppKeySecretResponse, error)
 	DeleteGlobalAppKey(ctx context.Context, req *api.DeleteGlobalAppKeyRequest) (*api.DeleteGlobalAppKeyResponse, error)
 	ListGlobalAppKeys(ctx context.Context, req *api.ListGlobalAppKeysRequest) (*api.ListGlobalAppKeysResponse, error)
+}
+
+func NewGotrueProvider() Provider {
+	return &gotrue{
+		AuthConfig: config.DefaultConfig.Auth,
+	}
 }
 
 func NewProvider(userstore *metadata.UserSubspace, txMgr *transaction.Manager) Provider {

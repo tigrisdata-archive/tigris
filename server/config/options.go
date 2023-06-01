@@ -76,6 +76,7 @@ type AuthzConfig struct {
 type AuthConfig struct {
 	Enabled                    bool                  `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 	Validators                 []ValidatorConfig     `mapstructure:"validators" yaml:"validators" json:"validators"`
+	ApiKeys                    ApiKeysConfig         `mapstructure:"api_keys" yaml:"api_keys" json:"api_keys"`
 	PrimaryAudience            string                `mapstructure:"primary_audience" yaml:"primary_audience" json:"primary_audience"`
 	JWKSCacheTimeout           time.Duration         `mapstructure:"jwks_cache_timeout" yaml:"jwks_cache_timeout" json:"jwks_cache_timeout"`
 	LogOnly                    bool                  `mapstructure:"log_only" yaml:"log_only" json:"log_only"`
@@ -116,6 +117,13 @@ type ValidatorConfig struct {
 	Issuer    string                       `mapstructure:"issuer" yaml:"issuer" json:"issuer"`
 	Algorithm validator.SignatureAlgorithm `mapstructure:"algorithm" yaml:"algorithm" json:"algorithm"`
 	Audience  string                       `mapstructure:"audience" yaml:"audience" json:"audience"`
+}
+
+type ApiKeysConfig struct {
+	Auds         []string `mapstructure:"auds" yaml:"auds" json:"auds"`
+	Length       int      `mapstructure:"length" yaml:"length" json:"length"`
+	EmailSuffix  string   `mapstructure:"email_suffix" yaml:"email_suffix" json:"email_suffix"`
+	UserPassword string   `mapstructure:"user_password" yaml:"user_password" json:"user_password"`
 }
 
 type CdcConfig struct {
@@ -320,6 +328,10 @@ var DefaultConfig = Config{
 			{
 				Audience: "https://tigris-api",
 			},
+		},
+		ApiKeys: ApiKeysConfig{
+			Auds:   nil,
+			Length: 120,
 		},
 		PrimaryAudience:            "https://tigris-api",
 		JWKSCacheTimeout:           5 * time.Minute,

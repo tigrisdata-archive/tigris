@@ -62,6 +62,12 @@ auth:
     - issuer: http://tigris_gotrue:8086
       algorithm: HS256
       audience: https://tigris-testB
+  api_keys:
+    auds:
+      - https://tigris-test
+    length: 120
+    email_suffix: "@apikey.tigrisdata.com"
+    user_password: hello
   token_cache_size: 100
   primary_audience: https://tigris-test
   oauth_provider: gotrue

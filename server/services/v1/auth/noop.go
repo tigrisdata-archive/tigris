@@ -19,9 +19,14 @@ import (
 
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
+	"github.com/tigrisdata/tigris/server/types"
 )
 
 type noop struct{}
+
+func (noop) ValidateApiKey(_ context.Context, _ string, _ []string) (*types.AccessToken, error) {
+	return nil, nil
+}
 
 func (noop) GetAccessToken(_ context.Context, _ *api.GetAccessTokenRequest) (*api.GetAccessTokenResponse, error) {
 	return &api.GetAccessTokenResponse{}, nil

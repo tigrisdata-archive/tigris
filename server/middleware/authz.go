@@ -23,7 +23,6 @@ import (
 	"github.com/tigrisdata/tigris/lib/container"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/request"
-	"github.com/tigrisdata/tigris/server/types"
 	"google.golang.org/grpc"
 )
 
@@ -424,11 +423,11 @@ func authorize(ctx context.Context) (err error) {
 			Msg("Empty role allowed for transition purpose")
 		return nil
 	}
+	// if !isAuthorizedProject(reqMetadata, accessToken) {
+	//	authorizationErr = errors.PermissionDenied("You are not allowed to perform operation: %s", reqMetadata.GetFullMethod())
+	//}
 	var authorizationErr error
-	if !isAuthorizedProject(reqMetadata, accessToken) {
-		authorizationErr = errors.PermissionDenied("You are not allowed to perform operation: %s", reqMetadata.GetFullMethod())
-	}
-	if err == nil && !isAuthorizedOperation(reqMetadata.GetFullMethod(), role) {
+	if !isAuthorizedOperation(reqMetadata.GetFullMethod(), role) {
 		authorizationErr = errors.PermissionDenied("You are not allowed to perform operation: %s", reqMetadata.GetFullMethod())
 	}
 
@@ -445,13 +444,6 @@ func authorize(ctx context.Context) (err error) {
 		return authorizationErr
 	}
 	return nil
-}
-
-func isAuthorizedProject(reqMetadata *request.Metadata, accessToken *types.AccessToken) bool {
-	if accessToken.Project != "" && reqMetadata.GetProject() != accessToken.Project {
-		return false
-	}
-	return true
 }
 
 func isAuthorizedOperation(method string, role string) bool {
