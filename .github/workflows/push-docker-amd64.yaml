@@ -1,0 +1,25 @@
+name: docker image
+
+on:
+  pull_request:
+    paths:
+      - docker/Dockerfile*
+      - scripts/install_*.sh
+      - .github/workflows/push-docker-amd64.yaml
+      - .github/workflows/push-docker-image.yaml
+  push:
+    branches:
+      - main
+  release:
+    types: [published]
+
+jobs:
+  amd64:
+    uses: ./.github/workflows/push-docker-image.yaml
+    secrets: inherit
+    with:
+      docker_repository: "tigrisdata/tigris"
+      quay_repository: "quay.io/tigrisdata/tigris"
+      file: docker/Dockerfile
+      platforms: amd64
+      event_name: ${{ github.event_name }}
