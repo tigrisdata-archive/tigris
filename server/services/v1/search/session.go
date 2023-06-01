@@ -105,13 +105,16 @@ func (sessions *SessionManager) TxExecute(ctx context.Context, runner TxRunner, 
 	if err != nil {
 		return Response{}, errors.Internal("failed to start transaction")
 	}
+
+	tx.Context().MetadataChangeSession(option.IncVersion)
+
 	resp, err := runner.Run(ctx, tx, tenant)
 	if err != nil {
 		_ = tx.Rollback(ctx)
 		return Response{}, createApiError(err)
 	}
 
-	if option.IncVersion {
+	if tx.Context().IsMetadataStateChanged() {
 		if err = sessions.versionH.Increment(ctx, tx); ulog.E(err) {
 			_ = tx.Rollback(ctx)
 			return Response{}, err
