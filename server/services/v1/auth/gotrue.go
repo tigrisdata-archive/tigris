@@ -27,7 +27,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
@@ -642,7 +641,6 @@ func (g *gotrue) GetAccessToken(ctx context.Context, req *api.GetAccessTokenRequ
 	case api.GrantType_REFRESH_TOKEN:
 		return nil, errors.Unimplemented("Use client_credentials to get the access token")
 	case api.GrantType_CLIENT_CREDENTIALS:
-		spew.Dump(ctx)
 		accessToken, expiresIn, err := getAccessTokenUsingClientCredentialsGotrue(ctx, fmt.Sprintf("%s%s", req.GetClientId(), g.AuthConfig.Gotrue.UsernameSuffix), req.GetClientSecret(), g)
 		if err != nil {
 			return nil, err
