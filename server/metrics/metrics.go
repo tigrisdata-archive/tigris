@@ -16,6 +16,7 @@ package metrics
 
 import (
 	"io"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -41,6 +42,7 @@ var (
 	SchemaMetrics         tally.Scope
 	MetronomeMetrics      tally.Scope
 	GlobalSt              *GlobalStatus
+	once                  sync.Once
 )
 
 func getVersion() string {
@@ -94,74 +96,76 @@ func SchemaUpdateRepaired(project string, branch string, collection string) {
 
 func InitializeMetrics() func() {
 	var closer io.Closer
-	if cfg := config.DefaultConfig.Metrics; cfg.Enabled {
-		log.Debug().Msg("Initializing metrics")
-		Reporter = promreporter.NewReporter(promreporter.Options{
-			DefaultSummaryObjectives: getTimerSummaryObjectives(),
-		})
-		root, closer = tally.NewRootScope(tally.ScopeOptions{
-			Tags:           GetGlobalTags(),
-			CachedReporter: Reporter,
-			// Panics with .
-			Separator: promreporter.DefaultSeparator,
-		}, 1*time.Second)
+	once.Do(func() {
+		if cfg := config.DefaultConfig.Metrics; cfg.Enabled {
+			log.Debug().Msg("Initializing metrics")
+			Reporter = promreporter.NewReporter(promreporter.Options{
+				DefaultSummaryObjectives: getTimerSummaryObjectives(),
+			})
+			root, closer = tally.NewRootScope(tally.ScopeOptions{
+				Tags:           GetGlobalTags(),
+				CachedReporter: Reporter,
+				// Panics with .
+				Separator: promreporter.DefaultSeparator,
+			}, 1*time.Second)
 
-		if cfg.Requests.Enabled {
-			// Request level metrics (HTTP and GRPC)
-			Requests = root.SubScope("requests")
-			initializeRequestScopes()
-		}
-		if cfg.Fdb.Enabled {
-			// FDB level metrics
-			FdbMetrics = root.SubScope("fdb")
-			initializeFdbScopes()
-		}
-		if cfg.Search.Enabled {
-			// Search level metrics
-			SearchMetrics = root.SubScope("search")
-			initializeSearchScopes()
-		}
-		if cfg.Session.Enabled {
-			// Session level metrics
-			SessionMetrics = root.SubScope("session")
-			initializeSessionScopes()
-		}
-		if cfg.Size.Enabled {
-			// Size metrics
-			SizeMetrics = root.SubScope("size")
-			initializeSizeScopes()
-		}
-		if cfg.Network.Enabled {
-			// Network metrics
-			NetworkMetrics = root.SubScope("net")
-			initializeNetworkScopes()
-		}
-		if cfg.Auth.Enabled {
-			// Auth metrics
-			AuthMetrics = root.SubScope("auth")
-			initializeAuthScopes()
-		}
+			if cfg.Requests.Enabled {
+				// Request level metrics (HTTP and GRPC)
+				Requests = root.SubScope("requests")
+				initializeRequestScopes()
+			}
+			if cfg.Fdb.Enabled {
+				// FDB level metrics
+				FdbMetrics = root.SubScope("fdb")
+				initializeFdbScopes()
+			}
+			if cfg.Search.Enabled {
+				// Search level metrics
+				SearchMetrics = root.SubScope("search")
+				initializeSearchScopes()
+			}
+			if cfg.Session.Enabled {
+				// Session level metrics
+				SessionMetrics = root.SubScope("session")
+				initializeSessionScopes()
+			}
+			if cfg.Size.Enabled {
+				// Size metrics
+				SizeMetrics = root.SubScope("size")
+				initializeSizeScopes()
+			}
+			if cfg.Network.Enabled {
+				// Network metrics
+				NetworkMetrics = root.SubScope("net")
+				initializeNetworkScopes()
+			}
+			if cfg.Auth.Enabled {
+				// Auth metrics
+				AuthMetrics = root.SubScope("auth")
+				initializeAuthScopes()
+			}
 
-		if cfg.SecondaryIndex.Enabled {
-			// Secondary Index metrics
-			SecondaryIndexMetrics = root.SubScope("secondary_index")
-			initializeSecondaryIndexScopes()
+			if cfg.SecondaryIndex.Enabled {
+				// Secondary Index metrics
+				SecondaryIndexMetrics = root.SubScope("secondary_index")
+				initializeSecondaryIndexScopes()
+			}
+
+			if cfg.Queue.Enabled {
+				QueueMetrics = root.SubScope("queue")
+				initializeQueueScopes()
+			}
+
+			// Metrics for Metronome - external billing service
+			MetronomeMetrics = root.SubScope("metronome")
+			initializeMetronomeScopes()
+
+			initializeQuotaScopes()
+
+			SchemaMetrics = root.SubScope("schema")
+			GlobalSt = NewGlobalStatus()
 		}
-
-		if cfg.Queue.Enabled {
-			QueueMetrics = root.SubScope("queue")
-			initializeQueueScopes()
-		}
-
-		// Metrics for Metronome - external billing service
-		MetronomeMetrics = root.SubScope("metronome")
-		initializeMetronomeScopes()
-
-		initializeQuotaScopes()
-
-		SchemaMetrics = root.SubScope("schema")
-		GlobalSt = NewGlobalStatus()
-	}
+	})
 
 	return func() {
 		if closer != nil {

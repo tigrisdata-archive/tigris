@@ -1,28 +1,21 @@
-name: publish docker image
+name: docker image
 
 on:
-  pull_request:
-    paths:
-      - docker/Dockerfile*
-      - scripts/install_*.sh
-      - .github/workflows/push-docker-*.yaml
-  merge_group:
-    paths:
-      - docker/Dockerfile*
-      - scripts/install_*.sh
-      - .github/workflows/push-docker-*.yaml
-  push:
-    branches:
-      - main
-  release:
-    types: [published]
-
-env:
-  DOCKER_REPOSITORY: "tigrisdata/tigris"
-  QUAY_REPOSITORY: "quay.io/tigrisdata/tigris"
+  workflow_call:
+    inputs:
+      docker_repository:
+        type: string
+      quay_repository:
+        type: string
+      platforms:
+        type: string
+      file:
+        type: string
+      event_name:
+        type: string
 
 jobs:
-  build-and-push-image:
+  build-and-push:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -46,7 +39,8 @@ jobs:
           password: ${{ secrets.GH_DOCKER_ACCESS_TOKEN }}
 
       - name: Login to Quay.io
-        uses: docker/login-action@v1
+        if: ${{ inputs.quay_repository != '' }}
+        uses: docker/login-action@v2
         with:
           registry: quay.io
           username: ${{ secrets.QUAY_REGISTRY_USER }}
@@ -58,8 +52,8 @@ jobs:
         with:
           # list of Docker images to use as base name for tags
           images: |
-            ${{ env.DOCKER_REPOSITORY }}
-            ${{ env.QUAY_REPOSITORY }}
+            ${{ inputs.docker_repository }}
+            ${{ inputs.quay_repository }}
           # generate Docker tags based on the following events/attributes
           # we generate the latest tag off the beta branch
           tags: |
@@ -67,7 +61,7 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
+            type=raw,value=latest,enable=${{ inputs.event_name == 'release' }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -79,8 +73,8 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: .
-          file: docker/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
+          file: ${{ inputs.file }}
+          platforms: ${{ inputs.platforms }}
+          push: ${{ inputs.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

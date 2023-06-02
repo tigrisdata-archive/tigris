@@ -76,6 +76,7 @@ type AuthzConfig struct {
 type AuthConfig struct {
 	Enabled                    bool                  `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 	Validators                 []ValidatorConfig     `mapstructure:"validators" yaml:"validators" json:"validators"`
+	ApiKeys                    ApiKeysConfig         `mapstructure:"api_keys" yaml:"api_keys" json:"api_keys"`
 	PrimaryAudience            string                `mapstructure:"primary_audience" yaml:"primary_audience" json:"primary_audience"`
 	JWKSCacheTimeout           time.Duration         `mapstructure:"jwks_cache_timeout" yaml:"jwks_cache_timeout" json:"jwks_cache_timeout"`
 	LogOnly                    bool                  `mapstructure:"log_only" yaml:"log_only" json:"log_only"`
@@ -116,6 +117,13 @@ type ValidatorConfig struct {
 	Issuer    string                       `mapstructure:"issuer" yaml:"issuer" json:"issuer"`
 	Algorithm validator.SignatureAlgorithm `mapstructure:"algorithm" yaml:"algorithm" json:"algorithm"`
 	Audience  string                       `mapstructure:"audience" yaml:"audience" json:"audience"`
+}
+
+type ApiKeysConfig struct {
+	Auds         []string `mapstructure:"auds" yaml:"auds" json:"auds"`
+	Length       int      `mapstructure:"length" yaml:"length" json:"length"`
+	EmailSuffix  string   `mapstructure:"email_suffix" yaml:"email_suffix" json:"email_suffix"`
+	UserPassword string   `mapstructure:"user_password" yaml:"user_password" json:"user_password"`
 }
 
 type CdcConfig struct {
@@ -162,6 +170,7 @@ type MetricsConfig struct {
 	Auth              AuthMetricsConfig           `mapstructure:"auth" yaml:"auth" json:"auth"`
 	SecondaryIndex    SecondaryIndexMetricsConfig `mapstructure:"secondary_index" yaml:"secondary_index" json:"secondary_index"`
 	Queue             QueueMetricsConfig          `mapstructure:"queue" yaml:"queue" json:"queue"`
+	Metronome         MetronomeMetricsConfig      `mapstructure:"metronome" yaml:"metronome" json:"metronome"`
 }
 
 type LongRequestConfig struct {
@@ -225,6 +234,13 @@ type AuthMetricsConfig struct {
 }
 
 type SecondaryIndexMetricsConfig struct {
+	Enabled      bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
+	Counter      CounterConfig `mapstructure:"counter" yaml:"counter" json:"counter"`
+	Timer        TimerConfig   `mapstructure:"timer" yaml:"timer" json:"timer"`
+	FilteredTags []string      `mapstructure:"filtered_tags" yaml:"filtered_tags" json:"filtered_tags"`
+}
+
+type MetronomeMetricsConfig struct {
 	Enabled      bool          `mapstructure:"enabled" yaml:"enabled" json:"enabled"`
 	Counter      CounterConfig `mapstructure:"counter" yaml:"counter" json:"counter"`
 	Timer        TimerConfig   `mapstructure:"timer" yaml:"timer" json:"timer"`
@@ -312,6 +328,10 @@ var DefaultConfig = Config{
 			{
 				Audience: "https://tigris-api",
 			},
+		},
+		ApiKeys: ApiKeysConfig{
+			Auds:   nil,
+			Length: 120,
 		},
 		PrimaryAudience:            "https://tigris-api",
 		JWKSCacheTimeout:           5 * time.Minute,
@@ -448,6 +468,17 @@ var DefaultConfig = Config{
 				HistogramEnabled: false,
 			},
 			FilteredTags: nil,
+		},
+		Metronome: MetronomeMetricsConfig{
+			Enabled: true,
+			Counter: CounterConfig{
+				OkEnabled:    true,
+				ErrorEnabled: true,
+			},
+			Timer: TimerConfig{
+				TimerEnabled:     true,
+				HistogramEnabled: false,
+			},
 		},
 		Session: SessionMetricGroupConfig{
 			Enabled: true,

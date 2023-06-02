@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/stretchr/testify/assert"
@@ -5786,6 +5787,7 @@ func TestImport(t *testing.T) {
 			}
 
 			if c.err == http.StatusOK {
+				spew.Dump(resp.Body().Raw())
 				resp.Status(c.err).JSON().Object().
 					ValueEqual("status", "inserted")
 

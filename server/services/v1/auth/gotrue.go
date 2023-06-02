@@ -27,27 +27,34 @@ import (
 	"strings"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
+	"github.com/google/uuid"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/request"
+	"github.com/tigrisdata/tigris/server/types"
 	"golang.org/x/net/context/ctxhttp"
 )
 
 const (
-	GotrueAudHeaderKey = "X-JWT-AUD"
-	ClientIdPrefix     = "tid_"
-	ClientSecretPrefix = "tsec_"
-	Component          = "component"
-	AppKey             = "app_key"
-	AppKeyUser         = "app key"
+	GotrueAudHeaderKey       = "X-JWT-AUD"
+	ClientIdPrefix           = "tid_"
+	ClientSecretPrefix       = "tsec_"
+	GlobalClientIdPrefix     = "tgid_"
+	GlobalClientSecretPrefix = "tgsec_"
+	ApiKeyPrefix             = "tkey_"
+	Component                = "component"
+	AppKey                   = "app_key"
+	AppKeyUser               = "app key"
 
 	InvitationStatusPending  = "PENDING"
 	InvitationStatusAccepted = "ACCEPTED"
 	InvitationStatusExpired  = "EXPIRED"
+
+	AppKeyTypeCredentials = "credentials"
+	AppKeyTypeApiKey      = "api_key"
 )
 
 type gotrue struct {
@@ -94,9 +101,22 @@ type UserAppData struct {
 	Name            string `json:"name"`
 	Description     string `json:"description"`
 	Project         string `json:"tigris_project"`
+	KeyType         string `json:"key_type"`
 }
 
-func _createAppKey(ctx context.Context, clientId string, clientSecret string, g *gotrue, keyName string, keyDescription string, project string) (string, int64, error) {
+type GetUserResp struct {
+	InstanceID        uuid.UUID `json:"instance_id"`
+	ID                uuid.UUID `json:"id"`
+	Aud               string    `json:"aud"`
+	Role              string    `json:"role"`
+	Email             string    `json:"email"`
+	EncryptedPassword string    `json:"encrypted_password"`
+
+	AppMetaData *UserAppData `json:"app_metadata" db:"app_metadata"`
+}
+
+// returns currentSub, creationTime, error.
+func _createAppKey(ctx context.Context, clientId string, clientSecret string, g *gotrue, keyName string, keyDescription string, project string, keyType string) (string, int64, error) {
 	currentSub, err := GetCurrentSub(ctx)
 	if err != nil {
 		log.Err(err).Msg("Failed to create application: reason - unable to extract current sub")
@@ -110,9 +130,10 @@ func _createAppKey(ctx context.Context, clientId string, clientSecret string, g 
 	}
 
 	// make gotrue call
+	email := _getEmail(clientId, keyType, g)
 	creationTime := time.Now().UnixMilli()
 	payloadBytes, err := jsoniter.Marshal(CreateUserPayload{
-		Email:    fmt.Sprintf("%s%s", clientId, g.AuthConfig.Gotrue.UsernameSuffix),
+		Email:    email,
 		Password: clientSecret,
 		AppData: UserAppData{
 			CreatedAt:       creationTime,
@@ -121,6 +142,7 @@ func _createAppKey(ctx context.Context, clientId string, clientSecret string, g 
 			Name:            keyName,
 			Description:     keyDescription,
 			Project:         project,
+			KeyType:         keyType,
 		},
 	})
 	if err != nil {
@@ -135,6 +157,7 @@ func _createAppKey(ctx context.Context, clientId string, clientSecret string, g 
 		Str("namespace", currentNamespace).
 		Str("sub", currentSub).
 		Str("client_id", clientId).
+		Str("key_type", keyType).
 		Str(Component, AppKey).
 		Msg("appkey created")
 	return currentSub, creationTime, nil
@@ -144,14 +167,30 @@ func (g *gotrue) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest)
 	if req.GetProject() == "" {
 		return nil, errors.InvalidArgument("Project must be specified")
 	}
-	clientId := generateClientId(g)
-	clientSecret := generateClientSecret(g)
+	if req.GetKeyType() != "" && !(req.GetKeyType() == AppKeyTypeCredentials || req.GetKeyType() == AppKeyTypeApiKey) {
+		return nil, errors.InvalidArgument("app key supported types are [credentials, api_key]")
+	}
 
-	currentSub, creationTime, err := _createAppKey(ctx, clientId, clientSecret, g, req.GetName(), req.GetDescription(), req.GetProject())
+	appKeyType := AppKeyTypeCredentials
+	if req.GetKeyType() != "" {
+		appKeyType = req.GetKeyType()
+	}
+	var clientId, clientSecret string
+	if appKeyType == AppKeyTypeCredentials {
+		clientId = generateClientId(ClientIdPrefix, config.DefaultConfig.Auth.Gotrue.ClientIdLength)
+		clientSecret = generateClientSecret(g, ClientSecretPrefix)
+	} else {
+		clientId = generateClientId(ApiKeyPrefix, config.DefaultConfig.Auth.ApiKeys.Length)
+		clientSecret = config.DefaultConfig.Auth.ApiKeys.UserPassword
+	}
+	currentSub, creationTime, err := _createAppKey(ctx, clientId, clientSecret, g, req.GetName(), req.GetDescription(), req.GetProject(), appKeyType)
 	if err != nil {
 		return nil, err
 	}
 
+	if req.GetKeyType() == AppKeyTypeApiKey {
+		clientSecret = "" // hide the secret
+	}
 	return &api.CreateAppKeyResponse{
 		CreatedAppKey: &api.AppKey{
 			Id:          clientId,
@@ -166,10 +205,10 @@ func (g *gotrue) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest)
 }
 
 func (g *gotrue) CreateGlobalAppKey(ctx context.Context, req *api.CreateGlobalAppKeyRequest) (*api.CreateGlobalAppKeyResponse, error) {
-	clientId := generateClientId(g)
-	clientSecret := generateClientSecret(g)
+	clientId := generateClientId(GlobalClientIdPrefix, config.DefaultConfig.Auth.Gotrue.ClientIdLength)
+	clientSecret := generateClientSecret(g, GlobalClientSecretPrefix)
 
-	currentSub, creationTime, err := _createAppKey(ctx, clientId, clientSecret, g, req.GetName(), req.GetDescription(), "")
+	currentSub, creationTime, err := _createAppKey(ctx, clientId, clientSecret, g, req.GetName(), req.GetDescription(), "", AppKeyTypeCredentials)
 	if err != nil {
 		return nil, err
 	}
@@ -186,8 +225,16 @@ func (g *gotrue) CreateGlobalAppKey(ctx context.Context, req *api.CreateGlobalAp
 	}, nil
 }
 
-func _updateAppKey(ctx context.Context, g *gotrue, id string, name string, description string) error {
-	email := fmt.Sprintf("%s%s", id, g.AuthConfig.Gotrue.UsernameSuffix)
+func _getEmail(clientId string, appKeyType string, g *gotrue) string {
+	suffix := g.AuthConfig.Gotrue.UsernameSuffix
+	if appKeyType == AppKeyTypeApiKey {
+		suffix = g.AuthConfig.ApiKeys.EmailSuffix
+	}
+	return fmt.Sprintf("%s%s", clientId, suffix)
+}
+
+func _updateAppKey(ctx context.Context, g *gotrue, id string, name string, description string, appKeyType string) error {
+	email := _getEmail(id, appKeyType, g)
 	updateAppKeyUrl := fmt.Sprintf("%s/admin/users/%s", g.AuthConfig.Gotrue.URL, email)
 
 	currentSub, err := GetCurrentSub(ctx)
@@ -250,11 +297,19 @@ func _updateAppKey(ctx context.Context, g *gotrue, id string, name string, descr
 	return nil
 }
 
+// retrieves the key type from the client id naming scheme.
+func getAppKeyType(clientId string) string {
+	if strings.HasPrefix(clientId, ApiKeyPrefix) {
+		return AppKeyTypeApiKey
+	}
+	return AppKeyTypeCredentials
+}
+
 func (g *gotrue) UpdateAppKey(ctx context.Context, req *api.UpdateAppKeyRequest) (*api.UpdateAppKeyResponse, error) {
 	if req.GetProject() == "" {
 		return nil, errors.InvalidArgument("Project must be specified")
 	}
-	err := _updateAppKey(ctx, g, req.GetId(), req.GetName(), req.GetDescription())
+	err := _updateAppKey(ctx, g, req.GetId(), req.GetName(), req.GetDescription(), getAppKeyType(req.GetId()))
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +328,7 @@ func (g *gotrue) UpdateAppKey(ctx context.Context, req *api.UpdateAppKeyRequest)
 }
 
 func (g *gotrue) UpdateGlobalAppKey(ctx context.Context, req *api.UpdateGlobalAppKeyRequest) (*api.UpdateGlobalAppKeyResponse, error) {
-	err := _updateAppKey(ctx, g, req.GetId(), req.GetName(), req.GetDescription())
+	err := _updateAppKey(ctx, g, req.GetId(), req.GetName(), req.GetDescription(), AppKeyTypeCredentials)
 	if err != nil {
 		return nil, err
 	}
@@ -291,8 +346,9 @@ func (g *gotrue) UpdateGlobalAppKey(ctx context.Context, req *api.UpdateGlobalAp
 	return result, nil
 }
 
-func _rotateAppKeySecret(ctx context.Context, g *gotrue, id string) (string, error) {
-	email := fmt.Sprintf("%s%s", id, g.AuthConfig.Gotrue.UsernameSuffix)
+func _rotateAppKeySecret(ctx context.Context, g *gotrue, id string, clientSecretPrefix string) (string, error) {
+	// no rotation for api key, only for credentials
+	email := _getEmail(id, AppKeyTypeCredentials, g)
 	updateAppKeyUrl := fmt.Sprintf("%s/admin/users/%s", g.AuthConfig.Gotrue.URL, email)
 
 	currentSub, err := GetCurrentSub(ctx)
@@ -301,7 +357,7 @@ func _rotateAppKeySecret(ctx context.Context, g *gotrue, id string) (string, err
 		return "", errors.Internal("Failed to update app key")
 	}
 
-	newSecret := generateClientSecret(g)
+	newSecret := generateClientSecret(g, clientSecretPrefix)
 
 	newAppMetadata := &UserAppData{UpdatedBy: currentSub, UpdatedAt: time.Now().UnixMilli()}
 	payload := make(map[string]any)
@@ -354,7 +410,7 @@ func (g *gotrue) RotateAppKey(ctx context.Context, req *api.RotateAppKeyRequest)
 	if req.GetProject() == "" {
 		return nil, errors.InvalidArgument("Project must be specified")
 	}
-	newSecret, err := _rotateAppKeySecret(ctx, g, req.GetId())
+	newSecret, err := _rotateAppKeySecret(ctx, g, req.GetId(), ClientSecretPrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -369,7 +425,7 @@ func (g *gotrue) RotateAppKey(ctx context.Context, req *api.RotateAppKeyRequest)
 }
 
 func (g *gotrue) RotateGlobalAppKeySecret(ctx context.Context, req *api.RotateGlobalAppKeySecretRequest) (*api.RotateGlobalAppKeySecretResponse, error) {
-	newSecret, err := _rotateAppKeySecret(ctx, g, req.GetId())
+	newSecret, err := _rotateAppKeySecret(ctx, g, req.GetId(), GlobalClientSecretPrefix)
 	if err != nil {
 		return nil, err
 	}
@@ -393,7 +449,8 @@ func _deleteAppKey(ctx context.Context, g *gotrue, id string) error {
 	}
 
 	// make external call
-	deleteUserUrl := fmt.Sprintf("%s/admin/users/%s%s", g.AuthConfig.Gotrue.URL, id, g.AuthConfig.Gotrue.UsernameSuffix)
+	email := _getEmail(id, getAppKeyType(id), g)
+	deleteUserUrl := fmt.Sprintf("%s/admin/users/%s", g.AuthConfig.Gotrue.URL, email)
 	client := &http.Client{}
 	deleteUserReq, err := http.NewRequestWithContext(ctx, http.MethodDelete, deleteUserUrl, nil)
 	if err != nil {
@@ -455,9 +512,13 @@ type appKeyInternal struct {
 	CreatedBy   string
 	CreatedAt   int64
 	Project     string
+	KeyType     string
 }
 
-func _listAppKeys(ctx context.Context, g *gotrue, project string) ([]*appKeyInternal, error) {
+func _listAppKeys(ctx context.Context, g *gotrue, project string, keyType string) ([]*appKeyInternal, error) {
+	if keyType != "" && !(keyType == AppKeyTypeApiKey || keyType == AppKeyTypeCredentials) {
+		return nil, errors.InvalidArgument("Invalid key_type. Supported values are [credentials, api_key]")
+	}
 	currentSub, err := GetCurrentSub(ctx)
 	if err != nil {
 		return nil, errors.Internal("Failed to list applications: reason = %s", err.Error())
@@ -476,6 +537,9 @@ func _listAppKeys(ctx context.Context, g *gotrue, project string) ([]*appKeyInte
 
 	// make external call
 	getUsersUrl := fmt.Sprintf("%s/admin/users?created_by=%s&tigris_namespace=%s&tigris_project=%s&page=1&per_page=5000", g.AuthConfig.Gotrue.URL, currentSub, currentNamespace, project)
+	if keyType != "" {
+		getUsersUrl = fmt.Sprintf("%s&keyType=%s", getUsersUrl, keyType)
+	}
 	client := &http.Client{}
 	getUsersReq, err := http.NewRequestWithContext(ctx, http.MethodGet, getUsersUrl, nil)
 	if err != nil {
@@ -551,7 +615,6 @@ func _listAppKeys(ctx context.Context, g *gotrue, project string) ([]*appKeyInte
 			// parse string time to millis using rfc3339 format
 			createdAtMillis = readDate(createdAtStr)
 		}
-
 		appKey := appKeyInternal{
 			Id:          clientId,
 			Name:        appMetadata.Name,
@@ -561,13 +624,17 @@ func _listAppKeys(ctx context.Context, g *gotrue, project string) ([]*appKeyInte
 			CreatedAt:   createdAtMillis,
 			Project:     appMetadata.Project,
 		}
+		appKey.KeyType = AppKeyTypeCredentials
+		if appMetadata.KeyType != "" {
+			appKey.KeyType = appMetadata.KeyType
+		}
 		appKeys[i] = &appKey
 	}
 	return appKeys, nil
 }
 
 func (g *gotrue) ListAppKeys(ctx context.Context, req *api.ListAppKeysRequest) (*api.ListAppKeysResponse, error) {
-	appKeysInternal, err := _listAppKeys(ctx, g, req.GetProject())
+	appKeysInternal, err := _listAppKeys(ctx, g, req.GetProject(), req.GetKeyType())
 	if err != nil {
 		return nil, errors.Internal("Failed to list app keys")
 	}
@@ -577,19 +644,24 @@ func (g *gotrue) ListAppKeys(ctx context.Context, req *api.ListAppKeysRequest) (
 			Id:          internalAppKey.Id,
 			Name:        internalAppKey.Name,
 			Description: internalAppKey.Description,
-			Secret:      internalAppKey.Secret,
 			CreatedAt:   internalAppKey.CreatedAt,
 			CreatedBy:   internalAppKey.CreatedBy,
 			Project:     internalAppKey.Project,
+			KeyType:     internalAppKey.KeyType,
+		}
+		// expose secret in case of credentials, for backward compatibility defaults to credentials
+		if req.GetKeyType() == "" || req.GetKeyType() == AppKeyTypeCredentials {
+			appKeys[i].Secret = internalAppKey.Secret
 		}
 	}
+
 	return &api.ListAppKeysResponse{
 		AppKeys: appKeys,
 	}, nil
 }
 
 func (g *gotrue) ListGlobalAppKeys(ctx context.Context, _ *api.ListGlobalAppKeysRequest) (*api.ListGlobalAppKeysResponse, error) {
-	appKeysInternal, err := _listAppKeys(ctx, g, "")
+	appKeysInternal, err := _listAppKeys(ctx, g, "", "")
 	if err != nil {
 		return nil, errors.Internal("Failed to delete app keys")
 	}
@@ -642,8 +714,7 @@ func (g *gotrue) GetAccessToken(ctx context.Context, req *api.GetAccessTokenRequ
 	case api.GrantType_REFRESH_TOKEN:
 		return nil, errors.Unimplemented("Use client_credentials to get the access token")
 	case api.GrantType_CLIENT_CREDENTIALS:
-		spew.Dump(ctx)
-		accessToken, expiresIn, err := getAccessTokenUsingClientCredentialsGotrue(ctx, fmt.Sprintf("%s%s", req.GetClientId(), g.AuthConfig.Gotrue.UsernameSuffix), req.GetClientSecret(), g)
+		accessToken, expiresIn, err := getAccessTokenUsingClientCredentialsGotrue(ctx, _getEmail(req.GetClientId(), AppKeyTypeCredentials, g), req.GetClientSecret(), g)
 		if err != nil {
 			return nil, err
 		}
@@ -654,6 +725,78 @@ func (g *gotrue) GetAccessToken(ctx context.Context, req *api.GetAccessTokenRequ
 		}, nil
 	}
 	return nil, errors.InvalidArgument("Failed to GetAccessToken: reason = unsupported grant_type, it has to be one of [refresh_token, client_credentials]")
+}
+
+func (g *gotrue) ValidateApiKey(ctx context.Context, apiKey string, auds []string) (*types.AccessToken, error) {
+	// get admin token
+	adminToken, _, err := getGotrueAdminAccessToken(ctx, g)
+	if err != nil {
+		log.Err(err).Msgf("Failed to create gotrue admin access token")
+		return nil, errors.Internal("Could not form request to validate api key")
+	}
+	// admin-get user
+	client := &http.Client{}
+	email := _getEmail(apiKey, AppKeyTypeApiKey, g)
+	getUserReq, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/admin/users/%s", g.AuthConfig.Gotrue.URL, email), nil)
+	if err != nil {
+		log.Err(err).Msgf("Failed to create request to retrieve user")
+		return nil, errors.Internal("Could not form request to validate api key")
+	}
+	getUserReq.Header.Add("Content-Type", "application/json")
+	getUserReq.Header.Add("Authorization", fmt.Sprintf("bearer %s", adminToken))
+
+	getUserRes, err := client.Do(getUserReq)
+	if err != nil {
+		log.Err(err).Msg("Failed to make get user call")
+		return nil, errors.Internal("Could not validate api key")
+	}
+	defer getUserRes.Body.Close()
+
+	// form the validatedClaims
+	if getUserRes.StatusCode != http.StatusOK {
+		log.Error().Int("status", getUserRes.StatusCode).Msg("Received non OK status from gotrue while validating api key")
+		return nil, errors.Internal("Received non OK status from gotrue while validating api key")
+	}
+
+	getUserResBody, err := io.ReadAll(getUserRes.Body)
+	if err != nil {
+		log.Err(err).Msg("Failed to read get user body while validating api key")
+		return nil, errors.Internal("Failed to validate the api key")
+	}
+	var getUserResp GetUserResp
+	// parse JSON response
+	err = json.Unmarshal(getUserResBody, &getUserResp)
+	if err != nil {
+		log.Err(err).Msg("Failed to deserialize response into GetUserResp type")
+		return nil, errors.Internal("Failed to validate the api key")
+	}
+
+	// validate password
+	if config.DefaultConfig.Auth.ApiKeys.UserPassword != getUserResp.EncryptedPassword {
+		return nil, errors.Unauthenticated("Unsupported api-key")
+	}
+
+	// validate aud
+	allowedAud := false
+	for _, supportedAud := range auds {
+		if supportedAud == getUserResp.Aud {
+			allowedAud = true
+			break
+		}
+	}
+	if !allowedAud {
+		log.Error().Str("api_key_aud", getUserResp.Aud).Strs("supported_auds", auds).Msg("Audience is not supported")
+		return nil, errors.Unauthenticated("Unsupported audience")
+	}
+
+	sub := fmt.Sprintf("gt_key|%s", getUserResp.ID)
+
+	return &types.AccessToken{
+		Namespace: getUserResp.AppMetaData.TigrisNamespace,
+		Sub:       sub,
+		Project:   getUserResp.AppMetaData.Project,
+		Role:      getUserResp.Role,
+	}, nil
 }
 
 func createUser(ctx context.Context, createUserPayload []byte, aud string, userType string, g *gotrue) error {
@@ -689,7 +832,6 @@ func getAccessTokenUsingClientCredentialsGotrue(ctx context.Context, clientId st
 	payloadValues := url.Values{}
 	payloadValues.Set("username", clientId)
 	payloadValues.Set("password", clientSecret)
-
 	client := &http.Client{}
 
 	getTokenReq, err := http.NewRequestWithContext(ctx, http.MethodPost, getTokenUrl, strings.NewReader(payloadValues.Encode()))
@@ -741,22 +883,21 @@ var (
 	secretChars = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-+")
 )
 
-func generateClientId(g *gotrue) string {
-	clientIdLength := g.AuthConfig.Gotrue.ClientIdLength
-	b := make([]rune, clientIdLength)
+func generateClientId(prefix string, length int) string {
+	b := make([]rune, length)
 	for i := range b {
 		b[i] = idChars[generateRandomInt(len(idChars))]
 	}
-	return fmt.Sprintf("%s%s", ClientIdPrefix, string(b))
+	return fmt.Sprintf("%s%s", prefix, string(b))
 }
 
-func generateClientSecret(g *gotrue) string {
+func generateClientSecret(g *gotrue, prefix string) string {
 	clientSecretLength := g.AuthConfig.Gotrue.ClientSecretLength
 	b := make([]rune, clientSecretLength)
 	for i := range b {
 		b[i] = secretChars[generateRandomInt(len(secretChars))]
 	}
-	return fmt.Sprintf("%s%s", ClientSecretPrefix, string(b))
+	return fmt.Sprintf("%s%s", prefix, string(b))
 }
 
 func generateRandomInt(max int) int {

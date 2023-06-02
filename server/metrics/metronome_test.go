@@ -15,14 +15,33 @@
 package metrics
 
 import (
+	"context"
 	"testing"
 )
 
 func TestMetronomeMetrics(t *testing.T) {
 	InitializeMetrics()
-	t.Run("Increment metronome counter", func(t *testing.T) {
-		tags := GetResponseCodeTags(500)
-		MetronomeListInvoices.Tagged(tags).Counter("request").Inc(1)
-		MetronomeGetInvoice.Tagged(tags).Counter("error").Inc(1)
+	t.Run("Test measuring metronome ok requests", func(t *testing.T) {
+		InitializeMetrics()
+		ctx := context.TODO()
+		op := "test_operation"
+		me := NewMeasurement(MetronomeServiceName, op, MetronomeSpanType, GetMetronomeBaseTags(op))
+		me.StartTracing(ctx, false)
+		me.AddTags(GetMetronomeResponseCodeTags(200))
+		me.FinishTracing(ctx)
+		me.CountOkForScope(MetronomeRequestOk, me.GetMetronomeTags())
+		me.RecordDuration(MetronomeResponseTime, me.GetMetronomeTags())
+	})
+
+	t.Run("Test measuring metronome error requests", func(t *testing.T) {
+		InitializeMetrics()
+		ctx := context.TODO()
+		op := "test_operation"
+		me := NewMeasurement(MetronomeServiceName, op, MetronomeSpanType, GetMetronomeBaseTags(op))
+		me.StartTracing(ctx, false)
+		me.AddTags(GetMetronomeResponseCodeTags(500))
+		me.FinishTracing(ctx)
+		me.CountErrorForScope(MetronomeRequestError, me.GetMetronomeTags())
+		me.RecordDuration(MetronomeErrorResponseTime, me.GetMetronomeTags())
 	})
 }

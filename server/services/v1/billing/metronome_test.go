@@ -30,12 +30,10 @@ import (
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metrics"
-	"github.com/uber-go/tally"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func TestMetronome_CreateAccount(t *testing.T) {
-	initializeMetricsForTest()
 	defer gock.Off()
 	cfg := config.DefaultConfig.Billing.Metronome
 	metronome, err := NewMetronomeProvider(cfg)
@@ -96,7 +94,6 @@ func TestMetronome_CreateAccount(t *testing.T) {
 }
 
 func TestMetronome_AddDefaultPlan(t *testing.T) {
-	initializeMetricsForTest()
 	defer gock.Off()
 	cfg := config.DefaultConfig.Billing.Metronome
 	metronome, err := NewMetronomeProvider(cfg)
@@ -148,7 +145,7 @@ func TestMetronome_AddDefaultPlan(t *testing.T) {
 }
 
 func TestMetronome_PushStorageEvents(t *testing.T) {
-	initializeMetricsForTest()
+	metrics.InitializeMetrics()
 	defer gock.Off()
 	cfg := config.DefaultConfig.Billing.Metronome
 	metronome, err := NewMetronomeProvider(cfg)
@@ -254,7 +251,7 @@ func TestMetronome_PushStorageEvents(t *testing.T) {
 }
 
 func TestMetronome_PushUsageEvents(t *testing.T) {
-	initializeMetricsForTest()
+	metrics.InitializeMetrics()
 	defer gock.Off()
 	cfg := config.DefaultConfig.Billing.Metronome
 	metronome, err := NewMetronomeProvider(cfg)
@@ -360,7 +357,6 @@ func TestMetronome_PushUsageEvents(t *testing.T) {
 }
 
 func TestMetronome_FetchInvoices(t *testing.T) {
-	initializeMetricsForTest()
 	defer gock.Off()
 	cfg := config.DefaultConfig.Billing.Metronome
 	metronome, err := NewMetronomeProvider(cfg)
@@ -440,7 +436,6 @@ func TestMetronome_FetchInvoices(t *testing.T) {
 }
 
 func TestMetronome_GetInvoiceById(t *testing.T) {
-	initializeMetricsForTest()
 	defer gock.Off()
 	cfg := config.DefaultConfig.Billing.Metronome
 	metronome, err := NewMetronomeProvider(cfg)
@@ -538,7 +533,6 @@ func TestMetronome_GetInvoiceById(t *testing.T) {
 }
 
 func TestMetronome_GetUsage(t *testing.T) {
-	initializeMetricsForTest()
 	defer gock.Off()
 	cfg := config.DefaultConfig.Billing.Metronome
 	cfg.BilledMetrics = map[string]string{
@@ -774,7 +768,6 @@ func TestMetronome_GetUsage(t *testing.T) {
 }
 
 func TestMetronome_GetAccountId(t *testing.T) {
-	initializeMetricsForTest()
 	defer gock.Off()
 	cfg := config.DefaultConfig.Billing.Metronome
 	metronome, err := NewMetronomeProvider(cfg)
@@ -1025,14 +1018,4 @@ func TestMetronome_buildInvoice(t *testing.T) {
 			}
 		}
 	})
-}
-
-func initializeMetricsForTest() {
-	metrics.MetronomeCreateAccount = tally.NewTestScope("create_account", map[string]string{})
-	metrics.MetronomeAddPlan = tally.NewTestScope("add_plan", map[string]string{})
-	metrics.MetronomeIngest = tally.NewTestScope("ingest", map[string]string{})
-	metrics.MetronomeListInvoices = tally.NewTestScope("list_invoices", map[string]string{})
-	metrics.MetronomeGetInvoice = tally.NewTestScope("get_invoice", map[string]string{})
-	metrics.MetronomeGetUsage = tally.NewTestScope("get_usage", map[string]string{})
-	metrics.MetronomeGetCustomer = tally.NewTestScope("get_customer", map[string]string{})
 }
