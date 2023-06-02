@@ -2,6 +2,8 @@ linters:
   enable-all: true
   disable:
     # Work on fixing this
+    - nakedret
+    - depguard
     - reassign
     - interfacebloat
     - maintidx

@@ -112,7 +112,7 @@ type GetUserResp struct {
 	Email             string    `json:"email"`
 	EncryptedPassword string    `json:"encrypted_password"`
 
-	AppMetaData *UserAppData `json:"app_metadata" db:"app_metadata"`
+	AppMetaData *UserAppData `db:"app_metadata" json:"app_metadata"`
 }
 
 // returns currentSub, creationTime, error.

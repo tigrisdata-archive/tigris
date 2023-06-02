@@ -935,7 +935,7 @@ func (*StreamingQueryRunner) writeTimestamp(buf *bytes.Buffer, key string, times
 	}
 
 	// append comma first and write the pair
-	_, _ = buf.Write([]byte(fmt.Sprintf(`, "%s":%s`, key, ts)))
+	_, _ = buf.WriteString(fmt.Sprintf(`, "%s":%s`, key, ts))
 
 	return nil
 }

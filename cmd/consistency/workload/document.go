@@ -30,7 +30,7 @@ type IDocument interface {
 
 type Document struct {
 	Id int64  `json:"id"`
-	F2 string `json:"F2" fake:"{sentence:50}"`
+	F2 string `fake:"{sentence:50}" json:"F2"`
 	F3 []byte
 	F4 uuid.UUID
 	F5 time.Time
@@ -65,40 +65,40 @@ func Deserialize(raw []byte, doc any) error {
 }
 
 type Address struct {
-	City    string `json:"city"  fake:"{city}"`
-	State   string `json:"state"  fake:"{state}"`
-	Country string `json:"country"  fake:"{country}"`
+	City    string `fake:"{city}"    json:"city"`
+	State   string `fake:"{state}"   json:"state"`
+	Country string `fake:"{country}" json:"country"`
 }
 
 type Nested struct {
-	Timestamp int64    `json:"timestamp" fake:"{nanosecond}"`
-	Random    string   `json:"random" fake:"{paragraph:10,10,50}"`
-	Random1   string   `json:"random1" fake:"{paragraph:10,10,50}"`
-	Random2   string   `json:"random2" fake:"{paragraph:10,10,50}"`
-	Random3   string   `json:"random3" fake:"{paragraph:10,10,50}"`
-	Random4   string   `json:"random4" fake:"{paragraph:10,10,50}"`
-	Random5   string   `json:"random5" fake:"{paragraph:10,10,50}"`
-	Random6   string   `json:"random6" fake:"{paragraph:10,10,50}"`
-	Random7   string   `json:"random7" fake:"{paragraph:10,10,50}"`
-	Random8   string   `json:"random8" fake:"{paragraph:10,10,50}"`
-	Random9   string   `json:"random9" fake:"{paragraph:10,10,50}"`
-	Random10  string   `json:"random10" fake:"{paragraph:10,10,50}"`
-	Name      string   `json:"name"  fake:"{paragraph:10,10,50}"`
-	URL       string   `json:"url" fake:"{paragraph:10,10,50}"`
-	Domain    string   `json:"domain"  fake:"{sentence:50}"`
-	Sentence  string   `json:"sentence" fake:"{paragraph:10,10,50}"`
-	Company   string   `json:"company"  fake:"{paragraph:10,10,50}"`
-	Labels    []string `json:"labels"  fakesize:"20000"`
+	Timestamp int64    `fake:"{nanosecond}"         json:"timestamp"`
+	Random    string   `fake:"{paragraph:10,10,50}" json:"random"`
+	Random1   string   `fake:"{paragraph:10,10,50}" json:"random1"`
+	Random2   string   `fake:"{paragraph:10,10,50}" json:"random2"`
+	Random3   string   `fake:"{paragraph:10,10,50}" json:"random3"`
+	Random4   string   `fake:"{paragraph:10,10,50}" json:"random4"`
+	Random5   string   `fake:"{paragraph:10,10,50}" json:"random5"`
+	Random6   string   `fake:"{paragraph:10,10,50}" json:"random6"`
+	Random7   string   `fake:"{paragraph:10,10,50}" json:"random7"`
+	Random8   string   `fake:"{paragraph:10,10,50}" json:"random8"`
+	Random9   string   `fake:"{paragraph:10,10,50}" json:"random9"`
+	Random10  string   `fake:"{paragraph:10,10,50}" json:"random10"`
+	Name      string   `fake:"{paragraph:10,10,50}" json:"name"`
+	URL       string   `fake:"{paragraph:10,10,50}" json:"url"`
+	Domain    string   `fake:"{sentence:50}"        json:"domain"`
+	Sentence  string   `fake:"{paragraph:10,10,50}" json:"sentence"`
+	Company   string   `fake:"{paragraph:10,10,50}" json:"company"`
+	Labels    []string `fakesize:"20000"            json:"labels"`
 	Address   Address  `json:"address"`
-	NestedId  string   `json:"nested_id"  fake:"{uuid}"`
+	NestedId  string   `fake:"{uuid}"               json:"nested_id"`
 }
 
 type DocumentV1 struct {
 	Id        int64     `json:"id"`
-	Cars      []string  `json:"cars" fake:"{carmaker}" fakesize:"20000"`
-	Food      []string  `json:"food" fake:"{food}" fakesize:"20000"`
-	CreatedAt time.Time `json:"created_at"  fake:"{date}"`
-	UpdatedAt time.Time `json:"updated_at"  fake:"{date}"`
+	Cars      []string  `fake:"{carmaker}" fakesize:"20000"  json:"cars"`
+	Food      []string  `fake:"{food}"     fakesize:"20000"  json:"food"`
+	CreatedAt time.Time `fake:"{date}"     json:"created_at"`
+	UpdatedAt time.Time `fake:"{date}"     json:"updated_at"`
 	Nested    *Nested   `json:"nested"`
 }
 
