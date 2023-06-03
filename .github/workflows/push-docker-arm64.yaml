@@ -15,6 +15,7 @@ on:
 
 jobs:
   arm64:
+    if: false
     uses: ./.github/workflows/push-docker-image.yaml
     secrets: inherit
     with:
