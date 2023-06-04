@@ -22,24 +22,27 @@ import (
 )
 
 func TestNewProvider(t *testing.T) {
-	t.Run("billing is disabled", func(t *testing.T) {
+	t.Run("billing is enabled by default", func(t *testing.T) {
+		require.False(t, config.DefaultConfig.Billing.Metronome.Disabled)
 		provider := NewProvider()
 
 		_, ok := provider.(*noop)
-		require.True(t, ok)
+		require.False(t, ok)
 
 		_, ok = provider.(*Metronome)
-		require.False(t, ok)
+		require.True(t, ok)
 	})
 
-	t.Run("billing is enabled", func(t *testing.T) {
-		config.DefaultConfig.Billing.Metronome.Enabled = true
+	t.Run("billing is disabled", func(t *testing.T) {
+		config.DefaultConfig.Billing.Metronome.Disabled = true
 		provider := NewProvider()
 
 		_, ok := provider.(*noop)
-		require.False(t, ok)
+		require.True(t, ok)
 
 		_, ok = provider.(*Metronome)
-		require.True(t, ok)
+		require.False(t, ok)
+		// reset
+		config.DefaultConfig.Billing.Metronome.Disabled = false
 	})
 }
