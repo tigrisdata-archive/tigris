@@ -290,7 +290,7 @@ type Billing struct {
 }
 
 type Metronome struct {
-	Enabled       bool          `json:"enabled"        mapstructure:"enabled"        yaml:"enabled"`
+	Disabled      bool          `json:"disabled"       mapstructure:"disabled"       yaml:"disabled"`
 	URL           string        `json:"url"            mapstructure:"url"            yaml:"url"`
 	ApiKey        string        `json:"api_key"        mapstructure:"api_key"        yaml:"api_key"`
 	DefaultPlan   string        `json:"default_plan"   mapstructure:"default_plan"   yaml:"default_plan"`
@@ -300,7 +300,7 @@ type Metronome struct {
 type BilledMetrics = map[string]string
 
 type BillingReporter struct {
-	Enabled         bool          `json:"enabled"          mapstructure:"enabled"          yaml:"enabled"`
+	Disabled        bool          `json:"disabled"         mapstructure:"disabled"         yaml:"disabled"`
 	RefreshInterval time.Duration `json:"refresh_interval" mapstructure:"refresh_interval" yaml:"refresh_interval"`
 }
 
@@ -354,14 +354,12 @@ var DefaultConfig = Config{
 	},
 	Billing: Billing{
 		Metronome: Metronome{
-			Enabled: false,
-			URL:     "https://api.metronome.com/v1",
-			ApiKey:  "replace_me",
+			URL:    "https://api.metronome.com/v1",
+			ApiKey: "replace_me",
 			// random placeholder UUID and not an actual plan
 			DefaultPlan: "47eda90f-d2e8-4184-8955-cb3a6467782b",
 		},
 		Reporter: BillingReporter{
-			Enabled:         false,
 			RefreshInterval: time.Second * 60, // 60 seconds
 		},
 	},

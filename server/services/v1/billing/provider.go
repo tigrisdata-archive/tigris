@@ -64,7 +64,7 @@ func (w WindowSize) String() string {
 }
 
 func NewProvider() Provider {
-	if config.DefaultConfig.Billing.Metronome.Enabled {
+	if !config.DefaultConfig.Billing.Metronome.Disabled {
 		svc, err := NewMetronomeProvider(config.DefaultConfig.Billing.Metronome)
 		if !ulog.E(err) {
 			return svc

@@ -62,7 +62,7 @@ func NewUsageReporter(
 }
 
 func (r *UsageReporter) Start() {
-	if config.DefaultConfig.Billing.Reporter.Enabled {
+	if !config.DefaultConfig.Billing.Reporter.Disabled {
 		go r.refreshLoop()
 	}
 }
