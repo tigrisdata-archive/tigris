@@ -9,10 +9,21 @@ PROTO_DIR=${API_DIR}/proto/server/${V}
 DATA_PROTO_DIR=internal
 LINT_TIMEOUT=5m
 
+# Generic build params
+BUILD_PARAM=-tags=release -ldflags "-X 'github.com/tigrisdata/tigris/util.Version=$(VERSION)' -X 'github.com/tigrisdata/tigris/util.BuildHash=$(GIT_HASH)'" $(shell printenv BUILD_PARAM)
+
 # Needed to be able to build amd64 binaries on MacOS M1
 DOCKER_DIR=test/docker
 DOCKER_COMPOSE=COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1 docker compose -f ${DOCKER_DIR}/docker-compose.yml
 CGO_ENABLED=1
+
+# Enables debugging when compiling binaries
+# Translates _shell_ variable WITH_DEBUG to _Makefile_ variable WITH_DEBUG
+WITH_DEBUG=$(shell printenv WITH_DEBUG) 
+DEBUG_PARAM=-gcflags "all=-N -l"
+
+# Build parameters for testing
+TEST_PARAM=-cover -race -tags=test,integration,tigris_http,tigris_grpc $(shell printenv TEST_PARAM)
 
 # Mocks required for unit tests
 MOCK_INTERFACES=\
@@ -84,12 +95,8 @@ deps:
 	/bin/bash scripts/install_build_deps.sh
 	/bin/bash scripts/install_test_deps.sh
 
-
 # The following targets are for API code generation.
 .PRECIOUS: ${PROTO_DIR}/%_openapi.yaml ${PROTO_DIR}/%.proto
-
-BUILD_PARAM=-tags=release -ldflags "-X 'github.com/tigrisdata/tigris/util.Version=$(VERSION)' -X 'github.com/tigrisdata/tigris/util.BuildHash=$(GIT_HASH)'" $(shell printenv BUILD_PARAM)
-TEST_PARAM=-cover -race -tags=test,integration,tigris_http,tigris_grpc $(shell printenv TEST_PARAM)
 
 ${PROTO_DIR}/%.proto:
 	git submodule update --init --recursive
@@ -128,8 +135,13 @@ clean_mocks:
 # Build the server binary.
 server: server/service
 server/service: $(GO_SRC) generate
+ifeq ($(strip $(WITH_DEBUG)),)
 	CGO_ENABLED=$(CGO_ENABLED) go build $(BUILD_PARAM) -o server/service ./server
+else
+	CGO_ENABLED=$(CGO_ENABLED) go build $(BUILD_PARAM) $(DEBUG_PARAM) -o server/service ./server
+endif
 
+# Builds the "admin" command
 admin: cmd/admin/admin
 cmd/admin/admin: cmd/admin/*.go cmd/admin/cmd/*.go
 	CGO_ENABLED=$(CGO_ENABLED) go build $(BUILD_PARAM) -o cmd/admin/admin ./cmd/admin

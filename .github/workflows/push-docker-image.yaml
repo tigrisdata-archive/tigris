@@ -13,6 +13,8 @@ on:
         type: string
       event_name:
         type: string
+      build_args:
+        type: string
 
 jobs:
   build-and-push:
@@ -78,3 +80,4 @@ jobs:
           push: ${{ inputs.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: ${{ inputs.build_args }}

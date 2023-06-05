@@ -22,7 +22,11 @@ COPY . /build
 # This is used to compile with integration coverage enabled
 ARG BUILD_PARAM_ARG=""
 
-RUN --mount=type=cache,target=/root/.cache/go-build rm -f server/service && BUILD_PARAM=${BUILD_PARAM_ARG} make bins
+# This sets the Makefile target that is called with go build. Defaults to bins -> server.
+ARG BUILD_TARGET="bins"
+
+RUN --mount=type=cache,target=/root/.cache/go-build rm -f server/service && \
+    BUILD_PARAM=${BUILD_PARAM_ARG} make ${BUILD_TARGET}
 
 
 FROM ubuntu:20.04 AS server

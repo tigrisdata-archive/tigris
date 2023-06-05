@@ -32,6 +32,9 @@ RUN mkdir -p /build /go/src/tigris
 COPY scripts/install_go.sh /build
 RUN sh /build/install_go.sh
 
+COPY scripts/install_delve.sh /build
+RUN sh /build/install_delve.sh
+
 #Download deps once, during docker build. Rebuild only on go.mod change
 ENV PATH="${PATH}:/root/go/bin:/usr/local/go/bin"
 COPY scripts/install_build_deps.sh /build
