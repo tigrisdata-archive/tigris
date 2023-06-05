@@ -1228,16 +1228,15 @@ func (m *TenantManager) DeleteTenant(ctx context.Context, tx transaction.Tx, ten
 func (tenant *Tenant) CreateBranch(ctx context.Context, tx transaction.Tx, projName string, dbName *DatabaseName) error {
 	tenant.Lock()
 	defer tenant.Unlock()
-
-	dbMeta, err := tenant.MetaStore.Database().Get(ctx, tx, tenant.namespace.Id(), projName)
-	if err != nil {
-		return err
-	}
-
 	// first get the project
 	proj, ok := tenant.projects[projName]
 	if !ok {
 		return NewProjectNotFoundErr(projName)
+	}
+
+	dbMeta, err := tenant.MetaStore.Database().Get(ctx, tx, tenant.namespace.Id(), projName)
+	if err != nil {
+		return err
 	}
 
 	if _, ok = proj.databaseBranches[dbName.Name()]; ok {
@@ -1272,13 +1271,13 @@ func (tenant *Tenant) DeleteBranch(ctx context.Context, tx transaction.Tx, projN
 	tenant.Lock()
 	defer tenant.Unlock()
 
-	if dbBranch.IsMainBranch() {
-		return NewMetadataError(ErrCodeCannotDeleteBranch, "'main' database cannot be deleted.")
-	}
-
 	proj, found := tenant.projects[projName]
 	if !found {
 		return NewProjectNotFoundErr(projName)
+	}
+
+	if dbBranch.IsMainBranch() {
+		return NewMetadataError(ErrCodeCannotDeleteBranch, "'main' database cannot be deleted.")
 	}
 
 	return tenant.deleteBranch(ctx, tx, proj, dbBranch)
