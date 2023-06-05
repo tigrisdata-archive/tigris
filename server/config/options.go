@@ -618,6 +618,8 @@ type SearchConfig struct {
 	Compression       bool `json:"compression"         mapstructure:"compression"         yaml:"compression"`
 	IgnoreExtraFields bool `json:"ignore_extra_fields" mapstructure:"ignore_extra_fields" yaml:"ignore_extra_fields"`
 	LogFilter         bool `json:"log_filter"          mapstructure:"log_filter"          yaml:"log_filter"`
+
+	DoNotReloadMetadata bool `json:"do_not_reload_metadata" mapstructure:"do_not_reload_metadata" yaml:"do_not_reload_metadata"`
 }
 
 type SecondaryIndexConfig struct {

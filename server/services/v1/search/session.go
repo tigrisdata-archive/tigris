@@ -26,7 +26,8 @@ import (
 )
 
 type SessionOptions struct {
-	IncVersion bool
+	IncVersion          bool
+	DoNotReloadMetadata bool
 }
 
 type Session interface {
@@ -97,8 +98,10 @@ func (sessions *SessionManager) TxExecute(ctx context.Context, runner TxRunner, 
 		return Response{}, errors.NotFound("tenant '%s' not found", namespace)
 	}
 
-	if err = sessions.TrackVersion(ctx, tenant); err != nil {
-		return Response{}, err
+	if !option.DoNotReloadMetadata {
+		if err = sessions.TrackVersion(ctx, tenant); err != nil {
+			return Response{}, err
+		}
 	}
 
 	tx, err := sessions.txMgr.StartTx(ctx)
