@@ -108,8 +108,8 @@ func (s *HTTPServer) Start(mux cmux.CMux) error {
 					nc = c.Conn
 				}
 
-				creds, err := util.ReadPeerCreds(nc)
-				if err == nil && creds.Uid == 0 {
+				uid, err := util.ReadPeerCreds(nc)
+				if err == nil && uid == 0 {
 					log.Debug().Msgf("local root on http")
 					return request.SetLocalRoot(ctx)
 				}

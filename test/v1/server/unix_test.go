@@ -84,9 +84,8 @@ func TestReadPeerCreds(t *testing.T) {
 	conn, err := l.Accept()
 	require.NoError(t, err)
 
-	creds, err := util.ReadPeerCreds(conn)
+	uid, err := util.ReadPeerCreds(conn)
 	require.NoError(t, err)
 
-	require.Equal(t, os.Geteuid(), int(creds.Uid))
-	require.Equal(t, os.Getegid(), int(creds.Gid))
+	require.Equal(t, os.Geteuid(), int(uid))
 }
