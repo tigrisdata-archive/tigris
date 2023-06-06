@@ -54,25 +54,15 @@ services:
     image: tigris_server
     environment:
       - TIGRIS_ENVIRONMENT=test
-      - TIGRIS_SERVER_CACHE_HOST=tigris_cache
-      - TIGRIS_SERVER_LOG_FORMAT=console
-      - TIGRIS_AUTH_ENABLED=false
-      - TIGRIS_SERVER_SEARCH_AUTH_KEY=ts_test_key
-      - TIGRIS_SERVER_SEARCH_HOST=tigris_search
-      - TIGRIS_SERVER_TRACING_ENABLED=true
-      - TIGRIS_SERVER_SEARCH_READ_ENABLED=true
-      - TIGRIS_SERVER_SECONDARY_INDEX_WRITE_ENABLED=true
-      - TIGRIS_SERVER_SECONDARY_INDEX_READ_ENABLED=true
-      - TIGRIS_SERVER_SECONDARY_INDEX_MUTATE_ENABLED=true
-      - TIGRIS_SERVER_WORKERS_ENABLED=true
-      - TIGRIS_SERVER_WORKERS_SEARCH_ENABLED=true
-      - TIGRIS_SERVER_KV_CHUNKING=true
+      - TIGRIS_CONFIG_FILE=/etc/tigrisdata/tigris/server.test.yaml
       - GOCOVERDIR=/tmp/tigris_coverdata
     build:
       context: ../../
       dockerfile: docker/Dockerfile
       args:
         - BUILD_PARAM_ARG="-cover"
+        - BUILD_PROFILE=.test
+        - CONF_PATH=test/
     volumes:
       - type: volume
         source: dbdata
@@ -94,15 +84,15 @@ services:
     container_name: tigris_server2
     image: tigris_server2
     environment:
-      - TIGRIS_CONFIG_FILE=/etc/tigrisdata/tigris/server.test.yaml
-      - TIGRIS_SERVER_AUTH_GOTRUE_SHARED_SECRET=test_shared_secret
+      - TIGRIS_CONFIG_FILE=/etc/tigrisdata/tigris/server.test2.yaml
       - GOCOVERDIR=/tmp/tigris_coverdata
     build:
       context: ../../
       dockerfile: docker/Dockerfile
       args:
         - BUILD_PARAM_ARG="-cover"
-        - BUILD_PROFILE=.test
+        - BUILD_PROFILE=.test2
+        - CONF_PATH=test/
     volumes:
       - type: volume
         source: dbdata
@@ -123,7 +113,7 @@ services:
 
   tigris_realtime:
     container_name: tigris_realtime
-    image: tigris_server
+    image: tigris_realtime
     environment:
       - TIGRIS_SERVER_SERVER_TYPE=realtime
       - TIGRIS_ENVIRONMENT=test

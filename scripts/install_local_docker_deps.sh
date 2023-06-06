@@ -13,8 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 set -ex
+
+D=/var/lib/tigris
 
 ARCH=$(dpkg --print-architecture)
 
@@ -69,5 +70,7 @@ curl --create-dirs -Lo "$TS_PACKAGE_PATH" "https://dl.typesense.org/releases/${T
 dpkg --unpack "$TS_PACKAGE_PATH"
 rm -f /var/lib/dpkg/info/typesense-server.postinst
 dpkg --configure typesense-server
-sed -i "s/\$API_KEY/ts_dev_key/g" /etc/typesense/typesense-server.ini && \
-rm -f "$TS_PACKAGE_PATH"
+rm -rf /var/lib/typesense /etc/typesense
+
+mkdir $D
+

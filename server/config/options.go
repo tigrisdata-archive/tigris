@@ -32,6 +32,11 @@ type ServerConfig struct {
 	Type         string `json:"type"          mapstructure:"type"          yaml:"type"`
 	FDBHardDrop  bool   `json:"fdb_hard_drop" mapstructure:"fdb_hard_drop" yaml:"fdb_hard_drop"`
 	RealtimePort int16  `json:"realtime_port" mapstructure:"realtime_port" yaml:"realtime_port"`
+	UnixSocket   string `json:"unix_socket"   mapstructure:"unix_socket"   yaml:"unix_socket"`
+	TLSKey       string `json:"tls_key"       mapstructure:"tls_key"       yaml:"tls_key"`
+	TLSCert      string `json:"tls_cert"      mapstructure:"tls_cert"      yaml:"tls_cert"`
+	// route TLS traffic to HTTP, by default GRPC handles TLS traffic
+	TLSHttp bool `json:"tls_http" mapstructure:"tls_http" yaml:"tls_http"`
 }
 
 type Config struct {
@@ -102,6 +107,7 @@ type AuthConfig struct {
 }
 
 type Invitation struct {
+	Enabled        bool  `json:"enabled" mapstructure:"enabled" yaml:"enabled"`
 	ExpireAfterSec int64 `json:"expire_after_sec" mapstructure:"expire_after_sec" yaml:"expire_after_sec"`
 }
 
@@ -113,6 +119,7 @@ type ClusterConfig struct {
 type NamespaceLocalization struct {
 	Enabled bool `json:"enabled" mapstructure:"enabled" yaml:"enabled"`
 }
+
 type ValidatorConfig struct {
 	Issuer    string                       `json:"issuer"    mapstructure:"issuer"    yaml:"issuer"`
 	Algorithm validator.SignatureAlgorithm `json:"algorithm" mapstructure:"algorithm" yaml:"algorithm"`
@@ -319,6 +326,7 @@ var DefaultConfig = Config{
 		Type:         DatabaseServerType,
 		Host:         "0.0.0.0",
 		Port:         8081,
+		UnixSocket:   "",
 		RealtimePort: 8083,
 		FDBHardDrop:  true,
 	},
@@ -347,6 +355,7 @@ var DefaultConfig = Config{
 		EnableNamespaceDeletion: false,
 		EnableNamespaceCreation: true,
 		UserInvitations: Invitation{
+			Enabled:        true,
 			ExpireAfterSec: 259200, // 3days
 		},
 		Authz:          AuthzConfig{Enabled: false, LogOnly: true},

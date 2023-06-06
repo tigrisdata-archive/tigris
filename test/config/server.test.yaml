@@ -17,6 +17,9 @@
 server:
   port: 8081
 
+cache:
+  host: tigris_cache
+
 environment: test
 
 search:
@@ -24,6 +27,7 @@ search:
   host: tigris_search
   chunking: true
   compression: true
+  read_enabled: true
 
 kv:
   chunking: true
@@ -40,41 +44,11 @@ secondary_index:
   mutate_enabled: true
 
 auth:
+  enabled: false
+
+tracing:
   enabled: true
-  authz:
-    enabled: true
-    log_only: false
-  enable_namespace_isolation: true
-  enable_oauth: true
-  log_only: false
-  admin_namespaces:
-    - tigris_test
-  validators:
-    - issuer: http://tigris_gotrue:8086
-      algorithm: RS256
-      audience: https://tigris-test
-    - issuer: http://tigris_gotrue:8086
-      algorithm: HS256
-      audience: https://tigris-test
-    - issuer: http://tigris_gotrue:8086
-      algorithm: HS256
-      audience: https://tigris-testA
-    - issuer: http://tigris_gotrue:8086
-      algorithm: HS256
-      audience: https://tigris-testB
-  api_keys:
-    auds:
-      - https://tigris-test
-    length: 120
-    email_suffix: "@apikey.tigrisdata.com"
-    user_password: hello
-  token_cache_size: 100
-  primary_audience: https://tigris-test
-  oauth_provider: gotrue
-  user_invitations:
-    expire_after_sec: 120
-  gotrue:
-    username_suffix: "@m2m.tigrisdata.com"
-    url: http://tigris_gotrue:8086
-    admin_username: test
-    admin_password: test
+
+workers:
+  enabled: true
+  search_enabled: true

@@ -88,6 +88,7 @@ func (runner *ProjectQueryRunner) delete(ctx context.Context, tx transaction.Tx,
 
 func (*ProjectQueryRunner) list(ctx context.Context, _ transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
 	// listReq projects need not include any branches
+
 	projectList := tenant.ListProjects(ctx)
 	projects := make([]*api.ProjectInfo, len(projectList))
 	for i, l := range projectList {

@@ -37,12 +37,13 @@ var (
 func namespaceSetterUnaryServerInterceptor(enabled bool) func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		namespace := defaults.DefaultNamespaceName
+
 		reqMetadata, err := request.GetRequestMetadataFromContext(ctx)
 		if err != nil {
 			ulog.E(err)
 		}
-		if enabled && !excludedMethods.Contains(info.FullMethod) {
-			var err error
+
+		if enabled && !excludedMethods.Contains(info.FullMethod) && !request.IsLocalRoot(ctx) {
 			if namespace, err = namespaceExtractor.Extract(ctx); err != nil {
 				// We know that getAccessToken with app_id/app_secret credentials doesn't have namespace set.
 				// Mark it as default_namespace instead of unknown.
@@ -50,10 +51,13 @@ func namespaceSetterUnaryServerInterceptor(enabled bool) func(ctx context.Contex
 					// We return and error when the token is set, but namespace is empty
 					return nil, err
 				}
+
 				namespace = defaults.DefaultNamespaceName
 			}
 		}
+
 		reqMetadata.SetNamespace(ctx, namespace)
+
 		return handler(ctx, req)
 	}
 }

@@ -15,7 +15,11 @@
 package muxer
 
 import (
+	"context"
+	"crypto/tls"
+	"net"
 	"net/http"
+	"reflect"
 	"time"
 
 	"github.com/fullstorydev/grpchan/inprocgrpc"
@@ -26,19 +30,28 @@ import (
 	"github.com/soheilhy/cmux"
 	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/middleware"
+	"github.com/tigrisdata/tigris/server/request"
+	"github.com/tigrisdata/tigris/util"
 )
 
 const readHeaderTimeout = 5 * time.Second
 
 type HTTPServer struct {
-	Router chi.Router
-	Inproc *inprocgrpc.Channel
+	Router     chi.Router
+	Inproc     *inprocgrpc.Channel
+	tlsConfig  *tls.Config
+	UnixSocket bool
 }
 
 func NewHTTPServer(cfg *config.Config) *HTTPServer {
 	server := &HTTPServer{
-		Inproc: &inprocgrpc.Channel{},
-		Router: chi.NewRouter(),
+		Inproc:     &inprocgrpc.Channel{},
+		Router:     chi.NewRouter(),
+		UnixSocket: len(cfg.Server.UnixSocket) > 0,
+	}
+
+	if (cfg.Server.TLSKey != "" || cfg.Server.TLSCert != "") && cfg.Server.TLSHttp {
+		server.tlsConfig = initTLS(cfg)
 	}
 
 	server.SetupMiddlewares(cfg)
@@ -56,6 +69,7 @@ func (s *HTTPServer) SetupMiddlewares(cfg *config.Config) {
 	s.Inproc.WithServerUnaryInterceptor(unary)
 
 	s.Router.Use(cors.AllowAll().Handler)
+
 	if cfg.Server.Type == config.RealtimeServerType {
 		s.Router.Use(middleware.HTTPMetadataExtractorMiddleware(cfg))
 		s.Router.Use(middleware.HTTPAuthMiddleware(cfg))
@@ -63,11 +77,57 @@ func (s *HTTPServer) SetupMiddlewares(cfg *config.Config) {
 }
 
 func (s *HTTPServer) Start(mux cmux.CMux) error {
-	match := mux.Match(cmux.HTTP1Fast("PATCH"), cmux.HTTP1HeaderField("Upgrade", "websocket"))
+	matchers := []cmux.Matcher{cmux.HTTP1Fast("PATCH"), cmux.HTTP1HeaderField("Upgrade", "websocket")}
+	if s.tlsConfig != nil {
+		matchers = append(matchers, cmux.TLS())
+	}
+
+	match := mux.Match(matchers...)
+
 	go func() {
-		srv := &http.Server{Handler: s.Router, ReadHeaderTimeout: readHeaderTimeout}
-		err := srv.Serve(match)
+		srv := &http.Server{
+			Handler:           s.Router,
+			ReadHeaderTimeout: readHeaderTimeout,
+			TLSConfig:         s.tlsConfig,
+		}
+
+		if s.UnixSocket {
+			srv.ConnContext = func(ctx context.Context, conn net.Conn) context.Context {
+				var nc net.Conn
+
+				c, ok := conn.(*cmux.MuxConn)
+				if !ok {
+					tl, ok := conn.(*tls.Conn)
+					if !ok {
+						log.Debug().Msgf("not cmux connection: %v", reflect.TypeOf(conn))
+						return ctx
+					}
+
+					nc = tl.NetConn()
+				} else {
+					nc = c.Conn
+				}
+
+				creds, err := util.ReadPeerCreds(nc)
+				if err == nil && creds.Uid == 0 {
+					log.Debug().Msgf("local root on http")
+					return request.SetLocalRoot(ctx)
+				}
+
+				return ctx
+			}
+		}
+
+		var err error
+
+		if srv.TLSConfig != nil {
+			err = srv.ServeTLS(match, "", "")
+		} else {
+			err = srv.Serve(match)
+		}
+
 		log.Fatal().Err(err).Msg("start http server")
 	}()
+
 	return nil
 }

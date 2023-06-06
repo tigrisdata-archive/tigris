@@ -152,11 +152,21 @@ func measuredAuthFunction(ctx context.Context, jwtValidators []*validator.Valida
 	return ctxResult, nil
 }
 
-func authFunction(ctx context.Context, jwtValidators []*validator.Validator, config *config.Config, cache gcache.Cache, a auth.Provider) (ctxResult context.Context, err error) {
+func authFunction(ctx context.Context, jwtValidators []*validator.Validator, config *config.Config, cache gcache.Cache, a auth.Provider,
+) (resCtx context.Context, err error) {
+	if request.IsLocalRoot(ctx) {
+		// root and no token present
+		tkn, err := AuthFromMD(ctx, "bearer")
+		if err != nil || tkn == "" {
+			return ctx, nil
+		}
+	}
+
 	reqMetadata, err := request.GetRequestMetadataFromContext(ctx)
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to load request metadata")
 	}
+
 	defer func() {
 		if err != nil {
 			if config.Auth.LogOnly {
@@ -170,11 +180,13 @@ func authFunction(ctx context.Context, jwtValidators []*validator.Validator, con
 			}
 		}
 	}()
+
 	// disable health check authn/z
 	fullMethodName, fullMethodNameFound := grpc.Method(ctx)
 	if fullMethodNameFound && BypassAuthForTheseMethods.Contains(fullMethodName) {
 		return ctx, nil
 	}
+
 	tkn, err := AuthFromMD(ctx, "bearer")
 	if err != nil {
 		return ctx, err
@@ -211,13 +223,12 @@ func authenticateUsingAuthToken(ctx context.Context, jwtValidators []*validator.
 	var err error
 	// if not found from cache
 	if validatedToken == nil {
-		count := 0
 		for i, jwtValidator := range jwtValidators {
 			validatedToken, err = jwtValidator.ValidateToken(ctx, tkn)
 			if err == nil {
 				break
 			} else if config.Auth.EnableErrorLog {
-				log.Err(err).Int("count", count).Msg("Failed to validate the token moving to next validator")
+				log.Err(err).Int("count", i).Msg("Failed to validate the token moving to next validator")
 			}
 			// if none of the validator validated the token, then reject the request
 			if i == len(jwtValidators)-1 && err != nil {
@@ -234,7 +245,6 @@ func authenticateUsingAuthToken(ctx context.Context, jwtValidators []*validator.
 				_ = cache.Remove(tkn)
 				return ctx, errors.Unauthenticated("Failed to validate access token, could not be validated")
 			}
-			count++
 		}
 	}
 

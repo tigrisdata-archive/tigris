@@ -128,6 +128,9 @@ func GetCurrentSub(ctx context.Context) (string, error) {
 	// further filter for this particular user
 	token, err := request.GetAccessToken(ctx)
 	if err != nil {
+		if request.IsLocalRoot(ctx) {
+			return "root", nil
+		}
 		return "", errors.Internal("Failed to retrieve current sub: reason = %s", err.Error())
 	}
 	return token.Sub, nil

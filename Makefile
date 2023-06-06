@@ -58,7 +58,7 @@ local_test: generate lint
 local_run: server
 	$(DOCKER_COMPOSE) up --no-build --detach tigris_search tigris_db2 tigris_cache
 	fdbcli -C ./test/config/fdb.cluster --exec "configure new single memory" || true
-	./server/service -c config/server.dev.yaml
+	./server/service -c test/config/server.dev.yaml
 
 # Start local instance with server running on the host in realtime mode.
 # This is useful for debugging the server. The process is attachable from IDE.

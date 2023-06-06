@@ -377,7 +377,7 @@ var (
 
 func authzUnaryServerInterceptor() func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		if config.DefaultConfig.Auth.Authz.Enabled {
+		if config.DefaultConfig.Auth.Enabled && config.DefaultConfig.Auth.Authz.Enabled {
 			err := authorize(ctx)
 			if err != nil {
 				return nil, err
@@ -389,15 +389,21 @@ func authzUnaryServerInterceptor() func(ctx context.Context, req any, info *grpc
 
 func authzStreamServerInterceptor() grpc.StreamServerInterceptor {
 	return func(srv any, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		err := authorize(stream.Context())
-		if err != nil {
-			return err
+		if config.DefaultConfig.Auth.Enabled && config.DefaultConfig.Auth.Authz.Enabled {
+			err := authorize(stream.Context())
+			if err != nil {
+				return err
+			}
 		}
 		return handler(srv, stream)
 	}
 }
 
 func authorize(ctx context.Context) (err error) {
+	if request.IsLocalRoot(ctx) {
+		return nil
+	}
+
 	defer func() {
 		if err != nil {
 			if config.DefaultConfig.Auth.Authz.LogOnly {
@@ -419,6 +425,7 @@ func authorize(ctx context.Context) (err error) {
 	if err != nil {
 		return errors.PermissionDenied("Couldn't read the accessToken, reason: %s", err.Error())
 	}
+
 	role := getRole(reqMetadata)
 	if role == "" {
 		log.Warn().

@@ -20,11 +20,13 @@ RUN go mod download
 COPY . /build
 RUN --mount=type=cache,target=/root/.cache/go-build rm -f server/service && make bins
 
+RUN go install -tags tigris_http,tigris_grpc -ldflags "-w -s" github.com/tigrisdata/gotrue@latest
+
 FROM ubuntu:20.04 AS server
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    ca-certificates \
+    ca-certificates openssh-client jq \
     curl && apt-get clean
 
 COPY scripts/install_local_docker_deps.sh /tmp/
@@ -35,15 +37,16 @@ RUN rm -rf /etc/apt/* /var/lib/dpkg/* /var/lib/apt/*
 # Setup an unprivileged user
 RUN groupadd -r tigris && useradd -r -s /bin/false -g tigris tigris
 
-RUN mkdir -p /server /etc/tigrisdata/tigris /etc/foundationdb /var/lib/foundationdb/logs
+RUN mkdir -p /server /etc/tigrisdata/tigris
 
 COPY --from=build /build/server/service /server/service
 COPY --from=build /build/config/server.yaml /etc/tigrisdata/tigris
 COPY --from=build /usr/lib/libfdb_c.so /usr/lib/libfdb_c.so
 COPY --from=build /usr/bin/fdbcli /usr/bin/fdbcli
+COPY --from=build /root/go/bin/gotrue /usr/bin/gotrue
 
 RUN chown -R tigris:tigris /server /etc/tigrisdata/tigris
-COPY docker/service-local.sh /server/service.sh
+COPY scripts/service-local.sh /server/service.sh
 
 EXPOSE 8081
 

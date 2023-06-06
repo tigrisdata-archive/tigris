@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/buger/jsonparser"
+	"github.com/fullstorydev/grpchan/inprocgrpc"
 	"github.com/rs/zerolog/log"
 	api "github.com/tigrisdata/tigris/api/server/v1"
 	"github.com/tigrisdata/tigris/errors"
@@ -32,6 +33,8 @@ import (
 	"github.com/tigrisdata/tigris/server/types"
 	ulog "github.com/tigrisdata/tigris/util/log"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/peer"
 )
 
 const (
@@ -51,7 +54,10 @@ var (
 	tenantGetter metadata.TenantGetter
 )
 
-type MetadataCtxKey struct{}
+type (
+	MetadataCtxKey  struct{}
+	localRootCtxKey struct{}
+)
 
 type Metadata struct {
 	accessToken *types.AccessToken
@@ -289,6 +295,9 @@ func GetAccessToken(ctx context.Context) (*types.AccessToken, error) {
 func GetCurrentSub(ctx context.Context) (string, error) {
 	tkn, err := GetAccessToken(ctx)
 	if err != nil {
+		if IsLocalRoot(ctx) {
+			return "root", nil
+		}
 		return "", err
 	}
 	return tkn.Sub, nil
@@ -455,4 +464,46 @@ func ReadSearchDataFromStorage(ctx context.Context) bool {
 func IsAcceptApplicationJSON(ctx context.Context) bool {
 	// we need to only check non grpc gateway prefix
 	return api.GetNonGRPCGatewayHeader(ctx, api.HeaderAccept) == AcceptTypeApplicationJSON
+}
+
+// AuthInfo is used for root authentication on the unix socket peer.
+type AuthInfo struct {
+	credentials.CommonAuthInfo
+	LocalRoot bool
+}
+
+// AuthType returns the type of info as a string.
+func (AuthInfo) AuthType() string {
+	return "local_root"
+}
+
+func SetLocalRoot(ctx context.Context) context.Context {
+	return context.WithValue(ctx, localRootCtxKey{}, true)
+}
+
+func IsLocalRoot(ctx context.Context) bool {
+	if pc, ok := peer.FromContext(ctx); ok {
+		if ai, ok := pc.AuthInfo.(*AuthInfo); ok {
+			log.Debug().Msg("local root detected from grpc")
+			return ai.LocalRoot
+		}
+	}
+
+	var val any
+
+	oCtx := inprocgrpc.ClientContext(ctx)
+	if oCtx != nil {
+		val = oCtx.Value(localRootCtxKey{})
+	} else {
+		val = ctx.Value(localRootCtxKey{})
+	}
+
+	if val != nil {
+		if b, ok := val.(bool); ok && b {
+			log.Debug().Msg("local root detected from http")
+			return true
+		}
+	}
+
+	return false
 }
