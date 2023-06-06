@@ -67,6 +67,9 @@ func NewDefaultUsersManager(tm *metadata.TenantManager) *DefaultUsersManager {
 }
 
 func (um *DefaultUsersManager) CreateInvitations(ctx context.Context, req *api.CreateInvitationsRequest) (*api.CreateInvitationsResponse, error) {
+	if !config.DefaultConfig.Auth.UserInvitations.Enabled {
+		return nil, errors.Unimplemented("User invitation is not enabled.")
+	}
 	for _, invitation := range req.Invitations {
 		err := createInvitation(ctx, invitation.GetEmail(), invitation.GetRole(), invitation.GetInvitationSentByName(), um)
 		if err != nil {
@@ -132,6 +135,9 @@ func createInvitation(ctx context.Context, email string, role string, invitation
 }
 
 func (*DefaultUsersManager) DeleteInvitations(ctx context.Context, req *api.DeleteInvitationsRequest) (*api.DeleteInvitationsResponse, error) {
+	if !config.DefaultConfig.Auth.UserInvitations.Enabled {
+		return nil, errors.Unimplemented("User invitation is not enabled.")
+	}
 	if req.GetEmail() == "" {
 		return nil, errors.InvalidArgument("Email must be specified")
 	}
@@ -180,6 +186,9 @@ func (*DefaultUsersManager) DeleteInvitations(ctx context.Context, req *api.Dele
 }
 
 func (*DefaultUsersManager) ListInvitations(ctx context.Context, req *api.ListInvitationsRequest) (*api.ListInvitationsResponse, error) {
+	if !config.DefaultConfig.Auth.UserInvitations.Enabled {
+		return nil, errors.Unimplemented("User invitation is not enabled.")
+	}
 	if req.GetStatus() != "" {
 		err := validateInvitationStatusInput(req.GetStatus())
 		if err != nil {
@@ -222,6 +231,9 @@ func (*DefaultUsersManager) ListInvitations(ctx context.Context, req *api.ListIn
 }
 
 func (*DefaultUsersManager) VerifyInvitation(ctx context.Context, req *api.VerifyInvitationRequest) (*api.VerifyInvitationResponse, error) {
+	if !config.DefaultConfig.Auth.UserInvitations.Enabled {
+		return nil, errors.Unimplemented("User invitation is not enabled.")
+	}
 	if req.GetEmail() == "" {
 		return nil, errors.InvalidArgument("Email must be specified")
 	}
