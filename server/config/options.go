@@ -107,6 +107,7 @@ type AuthConfig struct {
 }
 
 type Invitation struct {
+	Enabled        bool  `json:"enabled" mapstructure:"enabled" yaml:"enabled"`
 	ExpireAfterSec int64 `json:"expire_after_sec" mapstructure:"expire_after_sec" yaml:"expire_after_sec"`
 }
 
@@ -118,6 +119,7 @@ type ClusterConfig struct {
 type NamespaceLocalization struct {
 	Enabled bool `json:"enabled" mapstructure:"enabled" yaml:"enabled"`
 }
+
 type ValidatorConfig struct {
 	Issuer    string                       `json:"issuer"    mapstructure:"issuer"    yaml:"issuer"`
 	Algorithm validator.SignatureAlgorithm `json:"algorithm" mapstructure:"algorithm" yaml:"algorithm"`
@@ -353,6 +355,7 @@ var DefaultConfig = Config{
 		EnableNamespaceDeletion: false,
 		EnableNamespaceCreation: true,
 		UserInvitations: Invitation{
+			Enabled:        true,
 			ExpireAfterSec: 259200, // 3days
 		},
 		Authz:          AuthzConfig{Enabled: false, LogOnly: true},
