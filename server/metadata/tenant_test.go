@@ -267,6 +267,7 @@ func TestTenantManager_DatabaseBranches(t *testing.T) {
 	require.NoError(t, err)
 	err = tenant.CreateProject(ctx, tx, tenantProj2, nil)
 	require.NoError(t, err)
+	unknownProject := "project_not_exists"
 
 	databases := (&Project{}).GetDatabaseWithBranches()
 	require.Len(t, databases, 0)
@@ -278,6 +279,7 @@ func TestTenantManager_DatabaseBranches(t *testing.T) {
 	require.NoError(t, tenant.CreateBranch(ctx, tx, tenantProj1, NewDatabaseNameWithBranch(tenantProj1, "branch2")))
 	require.NoError(t, tenant.CreateBranch(ctx, tx, tenantProj2, NewDatabaseNameWithBranch(tenantProj2, "branch2")))
 	require.NoError(t, tenant.CreateBranch(ctx, tx, tenantProj1, NewDatabaseNameWithBranch(tenantProj1, "branch3")))
+	require.ErrorContains(t, tenant.CreateBranch(ctx, tx, unknownProject, NewDatabaseNameWithBranch(unknownProject, "branch1")), "project doesn't exist")
 
 	// reload again to get all the branches
 	require.NoError(t, tenant.reload(ctx, tx, nil, nil))
@@ -335,6 +337,7 @@ func TestTenantManager_DatabaseBranches(t *testing.T) {
 	require.NoError(t, tenant.DeleteBranch(ctx, tx, tenantProj1, NewDatabaseNameWithBranch(tenantProj1, "branch1")))
 	require.NoError(t, tenant.DeleteBranch(ctx, tx, tenantProj2, NewDatabaseNameWithBranch(tenantProj2, "branch1")))
 	require.NoError(t, tenant.DeleteBranch(ctx, tx, tenantProj1, NewDatabaseNameWithBranch(tenantProj1, "branch2")))
+	require.ErrorContains(t, tenant.DeleteBranch(ctx, tx, unknownProject, NewDatabaseNameWithBranch(unknownProject, "branch1")), "project doesn't exist")
 
 	require.NoError(t, tenant.reload(ctx, tx, nil, nil))
 	require.NoError(t, tx.Commit(ctx))

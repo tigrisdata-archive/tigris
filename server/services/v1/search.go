@@ -22,6 +22,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	api "github.com/tigrisdata/tigris/api/server/v1"
+	"github.com/tigrisdata/tigris/server/config"
 	"github.com/tigrisdata/tigris/server/metadata"
 	"github.com/tigrisdata/tigris/server/request"
 	"github.com/tigrisdata/tigris/server/services/v1/search"
@@ -120,7 +121,8 @@ func (s *searchService) DeleteIndex(ctx context.Context, req *api.DeleteIndexReq
 	runner.SetDeleteIndexReq(req)
 
 	resp, err := s.sessions.TxExecute(ctx, runner, search.SessionOptions{
-		IncVersion: true,
+		IncVersion:          !config.DefaultConfig.Search.DoNotReloadMetadata,
+		DoNotReloadMetadata: config.DefaultConfig.Search.DoNotReloadMetadata,
 	})
 	if err != nil {
 		return nil, err
