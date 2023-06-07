@@ -88,14 +88,14 @@ func (*UnixPeerCredentials) ServerHandshake(conn net.Conn) (net.Conn, credential
 		return conn, &ai, nil
 	}
 
-	creds, err := util.ReadPeerCreds(c.Conn)
+	uid, err := util.ReadPeerCreds(c.Conn)
 	if err != nil {
 		return conn, &ai, nil //nolint:nilerr
 	}
 
-	log.Debug().Msgf("grpc server handshake. user id=%v", creds.Uid)
+	log.Debug().Msgf("grpc server handshake. user id=%v", uid)
 
-	ai.LocalRoot = creds.Uid == 0
+	ai.LocalRoot = uid == 0
 
 	if ai.LocalRoot {
 		log.Debug().Msg("Local root user detected")

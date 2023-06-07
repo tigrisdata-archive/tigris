@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"strings"
 	"text/template"
@@ -29,7 +28,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/tigrisdata/tigris/lib/container"
 	ulog "github.com/tigrisdata/tigris/util/log"
-	"golang.org/x/sys/unix"
 )
 
 const (
@@ -188,32 +186,4 @@ func Fatal(err error, msg string, args ...any) {
 func RawMessageToByte(arr []jsoniter.RawMessage) [][]byte {
 	ptr := unsafe.Pointer(&arr)
 	return *(*[][]byte)(ptr)
-}
-
-func ReadPeerCreds(c net.Conn) (*unix.Ucred, error) {
-	var cred *unix.Ucred
-
-	uc, ok := c.(*net.UnixConn)
-	if !ok {
-		return nil, ErrNotUnixConn
-	}
-
-	raw, err := uc.SyscallConn()
-	if err != nil {
-		return nil, fmt.Errorf("error getting raw connection: %s", err)
-	}
-
-	err1 := raw.Control(func(fd uintptr) {
-		cred, err = unix.GetsockoptUcred(int(fd), unix.SOL_SOCKET, unix.SO_PEERCRED)
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("getsockoptUcred error: %s", err)
-	}
-
-	if err1 != nil {
-		return nil, fmt.Errorf("control error: %s", err1)
-	}
-
-	return cred, nil
 }
