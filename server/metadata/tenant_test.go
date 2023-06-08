@@ -224,7 +224,7 @@ func TestTenantManager_CreateProjects(t *testing.T) {
 
 		tx, err = tm.StartTx(ctx)
 		require.NoError(t, err)
-		err = tenant.reload(ctx, tx, nil, nil)
+		err = tenant.reload(ctx, tx, nil, nil, tm)
 		require.NoError(t, err)
 		proj1, err := tenant.GetProject(tenantProj1)
 		require.NoError(t, err)
@@ -272,7 +272,7 @@ func TestTenantManager_DatabaseBranches(t *testing.T) {
 	databases := (&Project{}).GetDatabaseWithBranches()
 	require.Len(t, databases, 0)
 
-	require.NoError(t, tenant.reload(ctx, tx, nil, nil))
+	require.NoError(t, tenant.reload(ctx, tx, nil, nil, tm))
 
 	require.NoError(t, tenant.CreateBranch(ctx, tx, tenantProj1, NewDatabaseNameWithBranch(tenantProj1, "branch1")))
 	require.NoError(t, tenant.CreateBranch(ctx, tx, tenantProj2, NewDatabaseNameWithBranch(tenantProj2, "branch1")))
@@ -282,7 +282,7 @@ func TestTenantManager_DatabaseBranches(t *testing.T) {
 	require.ErrorContains(t, tenant.CreateBranch(ctx, tx, unknownProject, NewDatabaseNameWithBranch(unknownProject, "branch1")), "project doesn't exist")
 
 	// reload again to get all the branches
-	require.NoError(t, tenant.reload(ctx, tx, nil, nil))
+	require.NoError(t, tenant.reload(ctx, tx, nil, nil, tm))
 
 	// list all branches
 	branches := tenant.ListDatabaseBranches(tenantProj1)
@@ -339,7 +339,7 @@ func TestTenantManager_DatabaseBranches(t *testing.T) {
 	require.NoError(t, tenant.DeleteBranch(ctx, tx, tenantProj1, NewDatabaseNameWithBranch(tenantProj1, "branch2")))
 	require.ErrorContains(t, tenant.DeleteBranch(ctx, tx, unknownProject, NewDatabaseNameWithBranch(unknownProject, "branch1")), "project doesn't exist")
 
-	require.NoError(t, tenant.reload(ctx, tx, nil, nil))
+	require.NoError(t, tenant.reload(ctx, tx, nil, nil, tm))
 	require.NoError(t, tx.Commit(ctx))
 
 	tx, err = tm.StartTx(ctx)
@@ -402,7 +402,7 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 		err = tenant.CreateProject(ctx, tx, tenantProj2, nil)
 		require.NoError(t, err)
 
-		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
+		require.NoError(t, tenant.reload(ctx, tx, nil, nil, tm))
 
 		proj1, err := tenant.GetProject(tenantProj1)
 		require.NoError(t, err)
@@ -444,7 +444,7 @@ func TestTenantManager_CreateCollections(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, tenant.CreateCollection(ctx, tx, db2, factory))
 
-		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
+		require.NoError(t, tenant.reload(ctx, tx, nil, nil, tm))
 
 		proj2, err = tenant.GetProject(tenantProj2)
 		require.NoError(t, err)
@@ -477,7 +477,7 @@ func TestTenantManager_DropCollection(t *testing.T) {
 		err = tenant.CreateProject(ctx, tx, tenantProj2, nil)
 		require.NoError(t, err)
 
-		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
+		require.NoError(t, tenant.reload(ctx, tx, nil, nil, tm))
 
 		proj1, err := tenant.GetProject(tenantProj1)
 		require.NoError(t, err)
@@ -507,7 +507,7 @@ func TestTenantManager_DropCollection(t *testing.T) {
 		factory, err := schema.NewFactoryBuilder(true).Build("test_collection", jsSchema)
 		require.NoError(t, err)
 		require.NoError(t, tenant.CreateCollection(ctx, tx, db2, factory))
-		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
+		require.NoError(t, tenant.reload(ctx, tx, nil, nil, tm))
 		require.NoError(t, tx.Commit(ctx))
 
 		tx, err = tm.StartTx(ctx)
@@ -549,7 +549,7 @@ func TestTenantManager_SearchIndexes(t *testing.T) {
 	err = tenant.CreateProject(ctx, tx, tenantProj1, nil)
 	require.NoError(t, err)
 
-	require.NoError(t, tenant.reload(ctx, tx, nil, nil))
+	require.NoError(t, tenant.reload(ctx, tx, nil, nil, tm))
 
 	proj1, err := tenant.GetProject(tenantProj1)
 	require.NoError(t, err)
@@ -578,7 +578,7 @@ func TestTenantManager_SearchIndexes(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, indexesInSearchStore[tenant.Encoder.EncodeSearchTableName(tenant.namespace.Id(), proj1.Id(), factory.Name)])
 
-	require.NoError(t, tenant.reload(ctx, tx, nil, indexesInSearchStore))
+	require.NoError(t, tenant.reload(ctx, tx, nil, indexesInSearchStore, tm))
 
 	proj1, err = tenant.GetProject(tenantProj1)
 	require.NoError(t, err)
@@ -615,7 +615,7 @@ func TestTenantManager_SecondaryIndexes(t *testing.T) {
 		err = tenant.CreateProject(ctx, tx, tenantProj2, nil)
 		require.NoError(t, err)
 
-		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
+		require.NoError(t, tenant.reload(ctx, tx, nil, nil, tm))
 
 		proj1, err := tenant.GetProject(tenantProj1)
 		require.NoError(t, err)
@@ -657,7 +657,7 @@ func TestTenantManager_SecondaryIndexes(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, tenant.CreateCollection(ctx, tx, db2, factory))
 
-		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
+		require.NoError(t, tenant.reload(ctx, tx, nil, nil, tm))
 
 		proj2, err = tenant.GetProject(tenantProj2)
 		require.NoError(t, err)
@@ -688,7 +688,7 @@ func TestTenantManager_SecondaryIndexes(t *testing.T) {
 		err = tenant.CreateProject(ctx, tx, tenantProj1, nil)
 		require.NoError(t, err)
 
-		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
+		require.NoError(t, tenant.reload(ctx, tx, nil, nil, tm))
 
 		proj1, err := tenant.GetProject(tenantProj1)
 		require.NoError(t, err)
@@ -720,7 +720,7 @@ func TestTenantManager_SecondaryIndexes(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, tenant.CreateCollection(ctx, tx, db1, factory))
 
-		require.NoError(t, tenant.reload(ctx, tx, nil, nil))
+		require.NoError(t, tenant.reload(ctx, tx, nil, nil, tm))
 
 		proj1, err = tenant.GetProject(tenantProj1)
 		require.NoError(t, err)
@@ -1098,7 +1098,7 @@ func TestTenantManager_SearchDataSize(t *testing.T) {
 
 	err = tenant.CreateProject(ctx, tmTx, tenantProj2, nil)
 	require.NoError(t, err)
-	require.NoError(t, tenant.reload(ctx, tmTx, nil, nil))
+	require.NoError(t, tenant.reload(ctx, tmTx, nil, nil, tm))
 
 	// proj1
 	proj1, err := tenant.GetProject(tenantProj1)

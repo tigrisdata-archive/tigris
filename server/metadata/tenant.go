@@ -188,12 +188,10 @@ func (m *TenantManager) CreateOrGetTenant(ctx context.Context, namespace Namespa
 
 	defer func() {
 		if err == nil {
-			if err = tx.Commit(ctx); err == nil {
-				// commit succeed, so we can safely cache it now, for other workers it may happen as part of the
-				// first call in query lifecycle
-				m.tenants[namespace.StrId()] = tenant
-				m.idToTenantMap[namespace.Id()] = namespace.StrId()
-			}
+			// commit succeed, so we can safely cache it now, for other workers it may happen as part of the
+			// first call in query lifecycle
+			m.tenants[namespace.StrId()] = tenant
+			m.idToTenantMap[namespace.Id()] = namespace.StrId()
 		} else {
 			_ = tx.Rollback(ctx)
 		}
@@ -379,7 +377,7 @@ func (m *TenantManager) GetTenant(ctx context.Context, namespaceId string) (*Ten
 	namespace := NewTenantNamespace(namespaceId, metadata)
 	tenant = NewTenant(namespace, m.kvStore, m.searchStore,
 		m.metaStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
-	if err = tenant.reload(ctx, tx, currentVersion, m.searchSchemasSnapshot); err != nil {
+	if err = tenant.reload(ctx, tx, currentVersion, m.searchSchemasSnapshot, m.txMgr); err != nil {
 		return nil, err
 	}
 
@@ -464,7 +462,7 @@ func (m *TenantManager) createOrGetTenantInternal(ctx context.Context, tx transa
 
 		tenant := NewTenant(namespace, m.kvStore, m.searchStore, m.metaStore, m.encoder, m.versionH, currentVersion, m.tableKeyGenerator)
 		tenant.Lock()
-		err = tenant.reload(ctx, tx, currentVersion, m.searchSchemasSnapshot)
+		err = tenant.reload(ctx, tx, currentVersion, m.searchSchemasSnapshot, m.txMgr)
 		tenant.Unlock()
 		return tenant, err
 	}
@@ -584,15 +582,11 @@ func (m *TenantManager) reload(ctx context.Context, currentVersion Version) erro
 			return err
 		}
 		tenant.Lock()
-		err = tenant.reload(ctx, tx, currentVersion, m.searchSchemasSnapshot)
+		err = tenant.reload(ctx, tx, currentVersion, m.searchSchemasSnapshot, m.txMgr)
 		tenant.Unlock()
 		if err != nil {
 			log.Err(err).Msgf("reloading a tenant failed '%s'", tenant.name)
 			_ = tx.Rollback(ctx)
-			return err
-		}
-		if err = tx.Commit(ctx); err != nil {
-			log.Err(err).Msgf("committing a reloading of tenant failed '%s'", tenant.name)
 			return err
 		}
 	}
@@ -650,7 +644,7 @@ func NewTenant(namespace Namespace, kvStore kv.TxStore, searchStore search.Store
 // thread will actually perform reload. This is a blocking API which means if most of the requests detected that the
 // tenant state is stale then they all will block till one of them will reload the tenant state from the database. All
 // the blocking transactions will be restarted to ensure they see the latest view of the tenant.
-func (tenant *Tenant) Reload(ctx context.Context, tx transaction.Tx, version Version, searchSchemasSnapshot map[string]*tsApi.CollectionResponse) error {
+func (tenant *Tenant) Reload(ctx context.Context, tx transaction.Tx, version Version, searchSchemasSnapshot map[string]*tsApi.CollectionResponse, txMgr *transaction.Manager) error {
 	if !tenant.shouldReload(version) {
 		return nil
 	}
@@ -662,7 +656,7 @@ func (tenant *Tenant) Reload(ctx context.Context, tx transaction.Tx, version Ver
 		return nil
 	}
 
-	return tenant.reload(ctx, tx, version, searchSchemasSnapshot)
+	return tenant.reload(ctx, tx, version, searchSchemasSnapshot, txMgr)
 }
 
 func (tenant *Tenant) shouldReload(currentVersion Version) bool {
@@ -678,7 +672,7 @@ func (tenant *Tenant) shouldReload(currentVersion Version) bool {
 // loads all the databases, it loads the resources for each one. Once databases are reloaded then it performs the same
 // logic for search indexes. Once search indexes are loaded it links back the search indexes to the Tigris Collection
 // if the source for these search indexes is Tigris.
-func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVersion Version, searchSchemasSnapshot map[string]*tsApi.CollectionResponse) error {
+func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVersion Version, searchSchemasSnapshot map[string]*tsApi.CollectionResponse, txMgr *transaction.Manager) error {
 	// reset
 	tenant.projects = make(map[string]*Project)
 	tenant.idToDatabaseMap = make(map[uint32]*Database)
@@ -714,11 +708,14 @@ func (tenant *Tenant) reload(ctx context.Context, tx transaction.Tx, currentVers
 		tenant.idToDatabaseMap[meta.ID] = database
 	}
 
+	err = tx.Commit(ctx)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to reload tenant")
+	}
 	// load search indexes, this is essentially loading all the search indexes created by the user and attaching it to
 	// the project object.
 	for _, p := range tenant.projects {
-		var err error
-		if p.search, err = tenant.reloadSearch(ctx, tx, p, searchSchemasSnapshot); err != nil {
+		if p.search, err = tenant.reloadSearch(ctx, txMgr, p, searchSchemasSnapshot); err != nil {
 			return err
 		}
 		for _, index := range p.search.indexes {
@@ -805,16 +802,32 @@ func (tenant *Tenant) reloadDatabase(ctx context.Context, tx transaction.Tx, dbN
 }
 
 // reloadSearch is responsible for reloading all the search indexes inside a single project.
-func (tenant *Tenant) reloadSearch(ctx context.Context, tx transaction.Tx, project *Project, searchSchemasSnapshot map[string]*tsApi.CollectionResponse) (*Search, error) {
-	projMetadata, err := tenant.namespaceStore.GetProjectMetadata(ctx, tx, tenant.namespace.Id(), project.Name())
+func (tenant *Tenant) reloadSearch(ctx context.Context, txMgr *transaction.Manager, project *Project, searchSchemasSnapshot map[string]*tsApi.CollectionResponse) (*Search, error) {
+	txToReadProjectMetadata, err := txMgr.StartTx(ctx)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to start tx to read project metadata while reloading tenant")
+	}
+
+	projMetadata, err := tenant.namespaceStore.GetProjectMetadata(ctx, txToReadProjectMetadata, tenant.namespace.Id(), project.Name())
 	if err != nil {
 		return nil, errors.Internal("failed to get project metadata for project %s", project.Name())
 	}
+	_ = txToReadProjectMetadata.Commit(ctx)
 
 	searchObj := NewSearch()
 
-	for _, searchMD := range projMetadata.SearchMetadata {
-		schV, err := tenant.searchSchemaStore.GetLatest(ctx, tx, tenant.namespace.Id(), project.id, searchMD.Name)
+	var indexLevelTx transaction.Tx
+	for i, searchMD := range projMetadata.SearchMetadata {
+		if i%10 == 0 {
+			if indexLevelTx != nil {
+				_ = indexLevelTx.Commit(ctx)
+			}
+			indexLevelTx, err = txMgr.StartTx(ctx)
+			if err != nil {
+				log.Fatal().Err(err).Msg("Failed to start tx to reload indices in batch for tenant reload")
+			}
+		}
+		schV, err := tenant.searchSchemaStore.GetLatest(ctx, indexLevelTx, tenant.namespace.Id(), project.id, searchMD.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -833,6 +846,9 @@ func (tenant *Tenant) reloadSearch(ctx context.Context, tx transaction.Tx, proje
 		searchObj.indexes[searchMD.Name] = schema.NewSearchIndex(schV.Version, searchStoreIndexName, searchFactory, fieldsInSearchStore)
 	}
 
+	if indexLevelTx != nil {
+		_ = indexLevelTx.Commit(ctx)
+	}
 	return searchObj, nil
 }
 

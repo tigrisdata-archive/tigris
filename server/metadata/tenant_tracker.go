@@ -202,11 +202,8 @@ func (cacheTracker *CacheTracker) stopTracking(ctx context.Context, tenant *Tena
 		return err
 	}
 
-	if err = tenant.Reload(ctx, tx, version, cacheTracker.tenantMgr.searchSchemasSnapshot); err != nil {
-		return err
-	}
-
-	if err = tx.Commit(ctx); err != nil {
+	// tx is handled inside
+	if err = tenant.Reload(ctx, tx, version, cacheTracker.tenantMgr.searchSchemasSnapshot, cacheTracker.txMgr); err != nil {
 		return err
 	}
 

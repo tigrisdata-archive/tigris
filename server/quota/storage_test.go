@@ -61,7 +61,7 @@ func TestStorageQuota(t *testing.T) {
 	factory, err := schema.NewFactoryBuilder(true).Build("test_collection", jsSchema)
 	require.NoError(t, err)
 
-	err = tenant.Reload(ctx, tx, []byte("aaa"), nil)
+	err = tenant.Reload(ctx, tx, []byte("aaa"), nil, txMgr)
 	require.NoError(t, err)
 
 	proj1, err := tenant.GetProject(projName)
