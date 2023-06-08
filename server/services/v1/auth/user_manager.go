@@ -91,6 +91,15 @@ func createInvitation(ctx context.Context, email string, role string, invitation
 		return errors.InvalidArgument("Role must be specified")
 	}
 
+	if !(role == OwnerRoleName || role == EditorRoleName || role == ReadOnlyRoleName) {
+		return errors.InvalidArgument("Supported roles are  [editor(e), readonly(ro), owner(o)]")
+	}
+
+	err := validateRole(ctx, role)
+	if err != nil {
+		return err
+	}
+
 	namespace, err := request.GetNamespace(ctx)
 	if err != nil {
 		log.Err(err).Msg("Failed to get namespace while creating invitation")

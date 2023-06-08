@@ -155,7 +155,7 @@ func TestGoTrueAuthProvider(t *testing.T) {
 	createProject2(t, testProject, token).Status(http.StatusOK)
 
 	// create app key
-	createdAppKey := createAppKey(e2, token, "test_key", "auth_test", "")
+	createdAppKey := createAppKey(e2, token, "test_key", "auth_test", auth.OwnerRoleName, auth.AppKeyTypeCredentials)
 	require.NotNil(t, createdAppKey)
 	id := createdAppKey.Object().Value("id").String()
 	secret := createdAppKey.Object().Value("secret").String()
@@ -236,47 +236,12 @@ func TestGoTrueAuthProvider(t *testing.T) {
 	require.True(t, deletedResponse.Raw())
 }
 
-func cleanupAppKeys(e *httpexpect.Expect, token string, project string) {
-	globalAppKeys := e.GET(globalAppKeysOperation("get")).
-		WithHeader(Authorization, Bearer+token).
-		Expect().
-		Status(http.StatusOK).
-		JSON().
-		Object()
-
-	if len(globalAppKeys.Keys().Raw()) > 0 {
-		arr := globalAppKeys.Value("app_keys").Array()
-		for i := 0; i < int(arr.Length().Raw()); i++ {
-			k := arr.Element(i)
-			deleteGlobalAppKey(e, token, k.Object().Value("id").String().Raw())
-		}
-	}
-
-	if project != "" {
-		localAppKeys := e.GET(appKeysOperation(project, "get")).
-			WithHeader(Authorization, Bearer+token).
-			Expect().
-			Status(http.StatusOK).
-			JSON().
-			Object()
-
-		if len(localAppKeys.Keys().Raw()) > 0 {
-			arr := localAppKeys.Value("app_keys").Array()
-			for _, lKey := range arr.Iter() {
-				deleteAppKey(e, token, lKey.Object().Value("id").String().Raw(), project)
-			}
-		}
-	}
-}
-
 func TestGlobalAppKeys(t *testing.T) {
 	e := expectAuthLow(t)
 	token := readToken(t, RSATokenFilePath)
 
 	createTestNamespace(t, token)
-
 	cleanupAppKeys(e, token, "")
-
 	// create app key
 	createdAppKey := createGlobalAppKey(e, token, "test_key")
 	require.NotNil(t, createdAppKey)
@@ -319,7 +284,6 @@ func TestGlobalAppKeys(t *testing.T) {
 	require.Equal(t, id.Raw(), rotatedKey.Object().Value("id").Raw())
 	require.NotEqual(t, secret.Raw(), rotatedKey.Object().Value("secret").Raw())
 	require.Equal(t, 50+len(auth.GlobalClientSecretPrefix), len(rotatedKey.Object().Value("secret").String().Raw()))
-
 	// list
 	globalAppKeys := e.GET(globalAppKeysOperation("get")).
 		WithHeader(Authorization, Bearer+token).
@@ -370,9 +334,9 @@ func TestGlobalAndLocalAppKeys(t *testing.T) {
 	_ = createGlobalAppKey(e, token, "g2")
 
 	// create three local app keys
-	_ = createAppKey(e, token, "l1", proj, "")
-	_ = createAppKey(e, token, "l2", proj, "")
-	_ = createAppKey(e, token, "l3", proj, "")
+	_ = createAppKey(e, token, "l1", proj, auth.OwnerRoleName, auth.AppKeyTypeCredentials)
+	_ = createAppKey(e, token, "l2", proj, auth.OwnerRoleName, auth.AppKeyTypeCredentials)
+	_ = createAppKey(e, token, "l3", proj, auth.OwnerRoleName, auth.AppKeyTypeCredentials)
 
 	// list
 	globalAppKeys := e.GET(globalAppKeysOperation("get")).
@@ -405,41 +369,24 @@ func TestGlobalAndLocalAppKeys(t *testing.T) {
 	require.Equal(t, int32(1), localKeysMap["l3"])
 }
 
-func deleteAppKey(e *httpexpect.Expect, token string, id string, project string) *httpexpect.Response {
-	deleteGlobalAppKeyPayload := Map{
-		"id": id,
-	}
-	return e.DELETE(appKeysOperation(project, "delete")).
-		WithHeader(Authorization, Bearer+token).WithJSON(deleteGlobalAppKeyPayload).
-		Expect()
-}
-
-func deleteGlobalAppKey(e *httpexpect.Expect, token string, id string) *httpexpect.Response {
-	deleteGlobalAppKeyPayload := Map{
-		"id": id,
-	}
-	return e.DELETE(globalAppKeysOperation("delete")).
-		WithHeader(Authorization, Bearer+token).WithJSON(deleteGlobalAppKeyPayload).
-		Expect()
-}
-
-func createAppKey(e *httpexpect.Expect, token string, name string, project string, keyType string) *httpexpect.Value {
+func createAppKey2(e *httpexpect.Expect, token string, name string, project string, role string, keyType string) *httpexpect.Response {
 	createAppKeyPayload := Map{
 		"name":        name,
 		"description": "This key is used for integration test purpose.",
 		"project":     project,
-	}
-	if keyType != "" {
-		createAppKeyPayload["key_type"] = keyType
+		"role":        role,
+		"key_type":    keyType,
 	}
 	return e.POST(appKeysOperation(project, "create")).
 		WithHeader(Authorization, Bearer+token).WithJSON(createAppKeyPayload).
-		Expect().
+		Expect()
+}
+func createAppKey(e *httpexpect.Expect, token string, name string, project string, role string, keyType string) *httpexpect.Value {
+	return createAppKey2(e, token, name, project, role, keyType).
 		Status(http.StatusOK).
 		JSON().
 		Object().Value("created_app_key")
 }
-
 func createGlobalAppKey(e *httpexpect.Expect, token string, name string) *httpexpect.Value {
 	createGlobalAppKeyPayload := Map{
 		"name":        name,
@@ -453,6 +400,24 @@ func createGlobalAppKey(e *httpexpect.Expect, token string, name string) *httpex
 		Object().Value("created_app_key")
 }
 
+func deleteAppKey(e *httpexpect.Expect, token string, id string, project string) *httpexpect.Response {
+	deleteAppKeyPayload := Map{
+		"id": id,
+	}
+	return e.DELETE(appKeysOperation(project, "delete")).
+		WithHeader(Authorization, Bearer+token).WithJSON(deleteAppKeyPayload).
+		Expect()
+}
+
+func deleteGlobalAppKey(e *httpexpect.Expect, token string, id string) *httpexpect.Response {
+	deleteGlobalAppKeyPayload := Map{
+		"id": id,
+	}
+	return e.DELETE(globalAppKeysOperation("delete")).
+		WithHeader(Authorization, Bearer+token).WithJSON(deleteGlobalAppKeyPayload).
+		Expect()
+}
+
 func TestMultipleAppsCreation(t *testing.T) {
 	testStartTime := time.Now()
 
@@ -464,7 +429,7 @@ func TestMultipleAppsCreation(t *testing.T) {
 	createProject2(t, testProject, token).Status(http.StatusOK)
 
 	for i := 0; i < 5; i++ {
-		createdAppKey := createAppKey(e2, token, fmt.Sprintf("test_key_%d", i), testProject, "")
+		createdAppKey := createAppKey(e2, token, fmt.Sprintf("test_key_%d", i), testProject, auth.OwnerRoleName, auth.AppKeyTypeCredentials)
 		require.NotNil(t, createdAppKey)
 		generatedClientId := createdAppKey.Object().Value("id").String().Raw()
 		generatedClientSecret := createdAppKey.Object().Value("secret").String().Raw()
@@ -486,7 +451,38 @@ func TestMultipleAppsCreation(t *testing.T) {
 		require.True(t, createdAt >= testStartTime.UnixMilli())
 	}
 }
+func cleanupAppKeys(e *httpexpect.Expect, token string, project string) {
+	globalAppKeys := e.GET(globalAppKeysOperation("get")).
+		WithHeader(Authorization, Bearer+token).
+		Expect().
+		Status(http.StatusOK).
+		JSON().
+		Object()
 
+	if len(globalAppKeys.Keys().Raw()) > 0 {
+		arr := globalAppKeys.Value("app_keys").Array()
+		for i := 0; i < int(arr.Length().Raw()); i++ {
+			k := arr.Element(i)
+			deleteGlobalAppKey(e, token, k.Object().Value("id").String().Raw())
+		}
+	}
+
+	if project != "" {
+		localAppKeys := e.GET(appKeysOperation(project, "get")).
+			WithHeader(Authorization, Bearer+token).
+			Expect().
+			Status(http.StatusOK).
+			JSON().
+			Object()
+
+		if len(localAppKeys.Keys().Raw()) > 0 {
+			arr := localAppKeys.Value("app_keys").Array()
+			for _, lKey := range arr.Iter() {
+				deleteAppKey(e, token, lKey.Object().Value("id").String().Raw(), project)
+			}
+		}
+	}
+}
 func TestListAppKeys(t *testing.T) {
 	e2 := expectAuthLow(t)
 	testProject := "auth_test"
@@ -500,7 +496,7 @@ func TestListAppKeys(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		projectForThisKey := fmt.Sprintf("%s%d", testProject, i%2)
-		createdAppKey := createAppKey(e2, token, fmt.Sprintf("test_key_%d", i), projectForThisKey, "")
+		createdAppKey := createAppKey(e2, token, fmt.Sprintf("test_key_%d", i), projectForThisKey, auth.OwnerRoleName, auth.AppKeyTypeCredentials)
 		require.NotNil(t, createdAppKey)
 	}
 
@@ -548,7 +544,7 @@ func TestApiKeyUsage(t *testing.T) {
 	e := expectAuthLow(t)
 	testProject := "TestApiKey"
 
-	createdApiKey := createAppKey(e, token, "test_api_key", testProject, auth.AppKeyTypeApiKey)
+	createdApiKey := createAppKey(e, token, "test_api_key", testProject, auth.OwnerRoleName, auth.AppKeyTypeApiKey)
 	require.NotNil(t, createdApiKey)
 	key := createdApiKey.Object().Value("id").String().Raw()
 	require.Equal(t, 125, len(key)) // 120 fixed + 5 prefix
@@ -565,8 +561,8 @@ func TestApiKeyCrud(t *testing.T) {
 	testProject := "TestApiKeyCrud"
 
 	// create
-	_ = createAppKey(e, token, "test_api_key_1", testProject, auth.AppKeyTypeApiKey)
-	createdApiKey := createAppKey(e, token, "test_api_key_2", testProject, auth.AppKeyTypeApiKey)
+	_ = createAppKey(e, token, "test_api_key_1", testProject, auth.OwnerRoleName, auth.AppKeyTypeApiKey)
+	createdApiKey := createAppKey(e, token, "test_api_key_2", testProject, auth.OwnerRoleName, auth.AppKeyTypeApiKey)
 	require.NotNil(t, createdApiKey)
 	key := createdApiKey.Object().Value("id").String().Raw()
 	require.Equal(t, 125, len(key)) // 120 fixed + 5 prefix
@@ -662,7 +658,7 @@ func TestCreateAccessToken(t *testing.T) {
 	testProject := "auth_test"
 	token := readToken(t, RSATokenFilePath)
 	createTestNamespace(t, token)
-	createdAppKey := createAppKey(e2, token, "test_key", testProject, "")
+	createdAppKey := createAppKey(e2, token, "test_key", testProject, auth.OwnerRoleName, auth.AppKeyTypeCredentials)
 	require.NotNil(t, createdAppKey)
 
 	id := createdAppKey.Object().Value("id").String()
@@ -681,11 +677,11 @@ func TestCreateAccessToken(t *testing.T) {
 
 	// use access token
 	deleteProject2(t, "new-project-1", token)
-	createProject2(t, "new-project-1", accessToken).Status(http.StatusOK)
+	listCollections(t, testProject, accessToken).Status(http.StatusOK)
 
 	deleteProject2(t, "new-project-2", token)
 	// use access token bypassing auth caches
-	_ = e2.POST(getProjectURL("new-project-2", "create")).
+	_ = e2.GET(listCollectionsUrl(testProject)).
 		WithHeader(Authorization, Bearer+accessToken).
 		WithHeader(api.HeaderBypassAuthCache, "true").
 		Expect().
@@ -693,7 +689,6 @@ func TestCreateAccessToken(t *testing.T) {
 
 	deleteProject2(t, "new-project-3", token)
 	// use access token with cache
-	createProject2(t, "new-project-3", accessToken).Status(http.StatusOK)
 }
 
 func TestCreateGlobalAccessToken(t *testing.T) {
@@ -732,9 +727,7 @@ func TestCreateGlobalAccessToken(t *testing.T) {
 	createProject2(t, "TestCreateGlobalAccessToken-project-1", accessToken).Status(http.StatusOK)
 
 	deleteProject2(t, "TestCreateGlobalAccessToken-project-1", token)
-
 	deleteProject2(t, "TestCreateGlobalAccessToken-project-2", token) //cleanup
-
 	// use access token bypassing auth caches
 	_ = e2.POST(getProjectURL("TestCreateGlobalAccessToken-project-2", "create")).
 		WithHeader(Authorization, Bearer+accessToken).
@@ -780,42 +773,40 @@ func TestAuthFailure(t *testing.T) {
 func TestUserInvitations(t *testing.T) {
 	token := readToken(t, RSATokenFilePath)
 	createTestNamespace(t, token)
-
 	deleteUserInvitations(t, "a@hello.com", "PENDING", token)
 	deleteUserInvitations(t, "b@hello.com", "PENDING", token)
 	deleteUserInvitations(t, "c@hello.com", "PENDING", token)
 	deleteUserInvitations(t, "d@hello.com", "PENDING", token)
 	deleteUserInvitations(t, "b@hello.com", "ACCEPTED", token)
-
-	createUserInvitation(t, "a@hello.com", "editor_a", "TestUserInvitations", token).
+	createUserInvitation(t, "a@hello.com", "e", "TestUserInvitations", token).
 		Status(http.StatusOK).
 		JSON().
 		Object().
 		Value("status").
 		String().
 		Equal(auth.CreatedStatus)
-	createUserInvitation(t, "b@hello.com", "editor_b", "TestUserInvitations", token).
+	createUserInvitation(t, "b@hello.com", "e", "TestUserInvitations", token).
 		Status(http.StatusOK).
 		JSON().
 		Object().
 		Value("status").
 		String().
 		Equal(auth.CreatedStatus)
-	createUserInvitation(t, "c@hello.com", "editor_c", "TestUserInvitations", token).
+	createUserInvitation(t, "c@hello.com", "e", "TestUserInvitations", token).
 		Status(http.StatusOK).
 		JSON().
 		Object().
 		Value("status").
 		String().
 		Equal(auth.CreatedStatus)
-	createUserInvitation(t, "d@hello.com", "editor_c", "TestUserInvitations", token).
+	createUserInvitation(t, "d@hello.com", "e", "TestUserInvitations", token).
 		Status(http.StatusOK).
 		JSON().
 		Object().
 		Value("status").
 		String().
 		Equal(auth.CreatedStatus)
-	createUserInvitation(t, "a@hello.com", "editor_a", "TestUserInvitations", token).
+	createUserInvitation(t, "a@hello.com", "e", "TestUserInvitations", token).
 		Status(http.StatusOK).
 		JSON().
 		Object().
@@ -826,7 +817,7 @@ func TestUserInvitations(t *testing.T) {
 	listUserInvitations1 := listUserInvitations(t, token)
 	listUserInvitations1.Status(http.StatusOK)
 	invitations1 := listUserInvitations1.JSON().Object().Value("invitations").Array()
-	//require.Equal(t, float64(4), invitations1.Length().Raw())
+	require.Equal(t, float64(4), invitations1.Length().Raw())
 
 	emailCountMap1 := make(map[string]int)
 	for _, value := range invitations1.Iter() {
@@ -894,7 +885,6 @@ func TestUserInvitations(t *testing.T) {
 func TestAuthzOwner(t *testing.T) {
 	token := readToken(t, OwnerTokenFilePath)
 	createTestNamespace(t, token)
-
 	deleteProject2(t, "TestAuthzOwner", token)
 
 	// create project should be allowed
@@ -908,9 +898,7 @@ func TestAuthzOwner(t *testing.T) {
 func TestAuthzEditor(t *testing.T) {
 	token := readToken(t, EditorTokenFilePath)
 	createTestNamespace(t, token)
-
 	deleteProject2(t, "TestAuthzEditor", token)
-
 	// create project should be allowed
 	createProject2(t, "TestAuthzEditor", token).
 		Status(http.StatusOK)
@@ -934,6 +922,24 @@ func TestAuthzReadonly(t *testing.T) {
 	require.JSONEq(t, `{"error":{"code":"PERMISSION_DENIED",
 		"message":"You are not allowed to perform operation: /tigrisdata.v1.Tigris/CreateProject"}}`,
 		resp)
+}
+
+func TestAppKeyCreationWithHigherRole(t *testing.T) {
+	token := readToken(t, EditorTokenFilePath)
+	proj := "TestAppKeyCreationWithHigherRole"
+	createTestNamespace(t, token)
+	deleteProject2(t, proj, token)
+	// create project should be allowed
+	createProject2(t, proj, token).
+		Status(http.StatusOK)
+
+	// creating appkey with owner role shuoldn't be allowed
+	e := expectAuthLow(t)
+
+	createOwnerAppKeyRes := createAppKey2(e, token, "test_key_name", proj, auth.OwnerRoleName, auth.AppKeyTypeCredentials)
+	createOwnerAppKeyRes.Status(http.StatusForbidden)
+	require.Equal(t, "PERMISSION_DENIED", createOwnerAppKeyRes.JSON().Object().Value("error").Object().Value("code").String().Raw())
+	require.Equal(t, "Requested higher role than user's own role", createOwnerAppKeyRes.JSON().Object().Value("error").Object().Value("message").String().Raw())
 }
 
 func createProject2(t *testing.T, projectName string, token string) *httpexpect.Response {
@@ -998,7 +1004,12 @@ func listUserInvitations(t *testing.T, token string) *httpexpect.Response {
 
 func listProjects(t *testing.T, token string) *httpexpect.Response {
 	e2 := expectAuthLow(t)
-	return e2.GET(listProjectsUrl()).
+	return e2.GET(listProjectsUrl()).WithHeader(Authorization, Bearer+token).Expect()
+}
+
+func listCollections(t *testing.T, project string, token string) *httpexpect.Response {
+	e2 := expectAuthLow(t)
+	return e2.GET(listCollectionsUrl(project)).
 		WithHeader(Authorization, Bearer+token).
 		Expect()
 }
@@ -1032,4 +1043,8 @@ func invitationUrl(operation string) string {
 
 func listProjectsUrl() string {
 	return "/v1/projects"
+}
+
+func listCollectionsUrl(project string) string {
+	return fmt.Sprintf("/v1/projects/%s/database/collections", project)
 }

@@ -44,7 +44,7 @@ func TestClientCredentialsCharacters(t *testing.T) {
 
 	// generate 100 random creds and inspect them
 	for i := 0; i < 100; i++ {
-		id := generateClientId(ClientIdPrefix, config.DefaultConfig.Auth.Gotrue.ClientIdLength)
+		id := generateClientId(ClientIdPrefix, g.AuthConfig.Gotrue.ClientIdLength)
 		secret := generateClientSecret(g, ClientSecretPrefix)
 		require.Truef(t, containsFromTheseChars(id, idCharSet), "Invalid character in id found, id=%s", id)
 		require.Truef(t, containsFromTheseChars(secret, secretCharSet), "Invalid character in secret found, id=%s", secret)

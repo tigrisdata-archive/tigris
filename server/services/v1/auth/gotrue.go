@@ -55,6 +55,11 @@ const (
 
 	AppKeyTypeCredentials = "credentials"
 	AppKeyTypeApiKey      = "api_key"
+
+	ClusterAdminRoleName = "cluster_admin"
+	ReadOnlyRoleName     = "ro"
+	EditorRoleName       = "e"
+	OwnerRoleName        = "o"
 )
 
 type gotrue struct {
@@ -101,7 +106,9 @@ type UserAppData struct {
 	Name            string `json:"name"`
 	Description     string `json:"description"`
 	Project         string `json:"tigris_project"`
-	KeyType         string `json:"key_type"`
+	// Gotrue has multiple roles in user. We use it as an array but app key has single role (first and only element of array)
+	Roles   []string `json:"roles"`
+	KeyType string   `json:"key_type"`
 }
 
 type GetUserResp struct {
@@ -115,8 +122,15 @@ type GetUserResp struct {
 	AppMetaData *UserAppData `db:"app_metadata" json:"app_metadata"`
 }
 
-// returns currentSub, creationTime, error.
-func _createAppKey(ctx context.Context, clientId string, clientSecret string, g *gotrue, keyName string, keyDescription string, project string, keyType string) (string, int64, error) {
+type keyInfo struct {
+	name        string
+	description string
+	project     string
+	role        string
+	keyType     string
+}
+
+func _createAppKey(ctx context.Context, clientId string, clientSecret string, g *gotrue, info keyInfo) (string, int64, error) {
 	currentSub, err := GetCurrentSub(ctx)
 	if err != nil {
 		log.Err(err).Msg("Failed to create application: reason - unable to extract current sub")
@@ -130,8 +144,8 @@ func _createAppKey(ctx context.Context, clientId string, clientSecret string, g 
 	}
 
 	// make gotrue call
-	email := _getEmail(clientId, keyType, g)
 	creationTime := time.Now().UnixMilli()
+	email := _getEmail(clientId, info.keyType, g)
 	payloadBytes, err := jsoniter.Marshal(CreateUserPayload{
 		Email:    email,
 		Password: clientSecret,
@@ -139,10 +153,11 @@ func _createAppKey(ctx context.Context, clientId string, clientSecret string, g 
 			CreatedAt:       creationTime,
 			CreatedBy:       currentSub,
 			TigrisNamespace: currentNamespace,
-			Name:            keyName,
-			Description:     keyDescription,
-			Project:         project,
-			KeyType:         keyType,
+			Name:            info.name,
+			Description:     info.description,
+			Project:         info.project,
+			Roles:           []string{info.role},
+			KeyType:         info.keyType,
 		},
 	})
 	if err != nil {
@@ -157,10 +172,71 @@ func _createAppKey(ctx context.Context, clientId string, clientSecret string, g 
 		Str("namespace", currentNamespace).
 		Str("sub", currentSub).
 		Str("client_id", clientId).
-		Str("key_type", keyType).
 		Str(Component, AppKey).
+		Str("key_type", info.keyType).
 		Msg("appkey created")
 	return currentSub, creationTime, nil
+}
+
+func _getEmail(clientId string, appKeyType string, g *gotrue) string {
+	suffix := g.AuthConfig.Gotrue.UsernameSuffix
+	if appKeyType == AppKeyTypeApiKey {
+		suffix = g.AuthConfig.ApiKeys.EmailSuffix
+	}
+	return fmt.Sprintf("%s%s", clientId, suffix)
+}
+
+func validateRole(ctx context.Context, role string) error {
+	if role == "" {
+		return errors.InvalidArgument("Role must be specified")
+	}
+
+	if !(role == OwnerRoleName || role == EditorRoleName || role == ReadOnlyRoleName) {
+		log.Error().Str("input_role", role).Msg("Unsupported role received as input")
+		return errors.InvalidArgument("Invalid role input. Supported roles are [owner, editor, readonly]")
+	}
+
+	reqMetadata, err := request.GetRequestMetadataFromContext(ctx)
+	if err != nil {
+		log.Err(err).Msg("Failed to retrieve role of current user")
+		return errors.Internal("Failed to validate role")
+	}
+
+	currentRole := reqMetadata.GetRole()
+	if currentRole == "" {
+		// for migration purpose
+		// TODO: clean up post authz enablement
+		currentRole = OwnerRoleName
+	}
+	currentRoleWeight := getRoleWeightage(currentRole)
+	if currentRoleWeight == -1 {
+		return errors.Internal("Failed to current validate role")
+	}
+
+	inputRoleWeight := getRoleWeightage(role)
+	if inputRoleWeight == -1 {
+		return errors.InvalidArgument("Failed to input validate role")
+	}
+
+	if inputRoleWeight > currentRoleWeight {
+		log.Error().Str("input_role", role).
+			Str("current_role", currentRole).
+			Msg("Requested higher role than own role")
+		return errors.PermissionDenied("Requested higher role than user's own role")
+	}
+	return nil
+}
+
+func getRoleWeightage(role string) int {
+	switch role {
+	case OwnerRoleName:
+		return 300
+	case EditorRoleName:
+		return 200
+	case ReadOnlyRoleName:
+		return 100
+	}
+	return -1
 }
 
 func (g *gotrue) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest) (*api.CreateAppKeyResponse, error) {
@@ -170,7 +246,10 @@ func (g *gotrue) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest)
 	if req.GetKeyType() != "" && !(req.GetKeyType() == AppKeyTypeCredentials || req.GetKeyType() == AppKeyTypeApiKey) {
 		return nil, errors.InvalidArgument("app key supported types are [credentials, api_key]")
 	}
-
+	err := validateRole(ctx, req.GetRole())
+	if err != nil {
+		return nil, err
+	}
 	appKeyType := AppKeyTypeCredentials
 	if req.GetKeyType() != "" {
 		appKeyType = req.GetKeyType()
@@ -183,7 +262,13 @@ func (g *gotrue) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest)
 		clientId = generateClientId(ApiKeyPrefix, config.DefaultConfig.Auth.ApiKeys.Length)
 		clientSecret = config.DefaultConfig.Auth.ApiKeys.UserPassword
 	}
-	currentSub, creationTime, err := _createAppKey(ctx, clientId, clientSecret, g, req.GetName(), req.GetDescription(), req.GetProject(), appKeyType)
+	currentSub, creationTime, err := _createAppKey(ctx, clientId, clientSecret, g, keyInfo{
+		name:        req.GetName(),
+		description: req.GetDescription(),
+		project:     req.GetProject(),
+		role:        req.GetRole(),
+		keyType:     appKeyType,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -191,6 +276,7 @@ func (g *gotrue) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest)
 	if req.GetKeyType() == AppKeyTypeApiKey {
 		clientSecret = "" // hide the secret
 	}
+
 	return &api.CreateAppKeyResponse{
 		CreatedAppKey: &api.AppKey{
 			Id:          clientId,
@@ -200,6 +286,7 @@ func (g *gotrue) CreateAppKey(ctx context.Context, req *api.CreateAppKeyRequest)
 			CreatedAt:   creationTime,
 			CreatedBy:   currentSub,
 			Project:     req.GetProject(),
+			Role:        req.GetRole(),
 		},
 	}, nil
 }
@@ -208,7 +295,13 @@ func (g *gotrue) CreateGlobalAppKey(ctx context.Context, req *api.CreateGlobalAp
 	clientId := generateClientId(GlobalClientIdPrefix, config.DefaultConfig.Auth.Gotrue.ClientIdLength)
 	clientSecret := generateClientSecret(g, GlobalClientSecretPrefix)
 
-	currentSub, creationTime, err := _createAppKey(ctx, clientId, clientSecret, g, req.GetName(), req.GetDescription(), "", AppKeyTypeCredentials)
+	currentSub, creationTime, err := _createAppKey(ctx, clientId, clientSecret, g, keyInfo{
+		name:        req.GetName(),
+		description: req.GetDescription(),
+		project:     "",
+		role:        OwnerRoleName,
+		keyType:     AppKeyTypeCredentials,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -225,16 +318,8 @@ func (g *gotrue) CreateGlobalAppKey(ctx context.Context, req *api.CreateGlobalAp
 	}, nil
 }
 
-func _getEmail(clientId string, appKeyType string, g *gotrue) string {
-	suffix := g.AuthConfig.Gotrue.UsernameSuffix
-	if appKeyType == AppKeyTypeApiKey {
-		suffix = g.AuthConfig.ApiKeys.EmailSuffix
-	}
-	return fmt.Sprintf("%s%s", clientId, suffix)
-}
-
-func _updateAppKey(ctx context.Context, g *gotrue, id string, name string, description string, appKeyType string) error {
-	email := _getEmail(id, appKeyType, g)
+func _updateAppKey(ctx context.Context, g *gotrue, id string, name string, description string, keyType string) error {
+	email := _getEmail(id, keyType, g)
 	updateAppKeyUrl := fmt.Sprintf("%s/admin/users/%s", g.AuthConfig.Gotrue.URL, email)
 
 	currentSub, err := GetCurrentSub(ctx)
@@ -512,6 +597,7 @@ type appKeyInternal struct {
 	CreatedBy   string
 	CreatedAt   int64
 	Project     string
+	Role        string
 	KeyType     string
 }
 
@@ -615,6 +701,7 @@ func _listAppKeys(ctx context.Context, g *gotrue, project string, keyType string
 			// parse string time to millis using rfc3339 format
 			createdAtMillis = readDate(createdAtStr)
 		}
+
 		appKey := appKeyInternal{
 			Id:          clientId,
 			Name:        appMetadata.Name,
@@ -623,6 +710,7 @@ func _listAppKeys(ctx context.Context, g *gotrue, project string, keyType string
 			CreatedBy:   appMetadata.CreatedBy,
 			CreatedAt:   createdAtMillis,
 			Project:     appMetadata.Project,
+			Role:        appMetadata.Roles[0],
 		}
 		appKey.KeyType = AppKeyTypeCredentials
 		if appMetadata.KeyType != "" {
@@ -647,6 +735,7 @@ func (g *gotrue) ListAppKeys(ctx context.Context, req *api.ListAppKeysRequest) (
 			CreatedAt:   internalAppKey.CreatedAt,
 			CreatedBy:   internalAppKey.CreatedBy,
 			Project:     internalAppKey.Project,
+			Role:        internalAppKey.Role,
 			KeyType:     internalAppKey.KeyType,
 		}
 		// expose secret in case of credentials, for backward compatibility defaults to credentials
