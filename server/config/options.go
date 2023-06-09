@@ -619,6 +619,8 @@ type SearchConfig struct {
 	AuthKey      string `json:"auth_key"      mapstructure:"auth_key"      yaml:"auth_key"`
 	ReadEnabled  bool   `json:"read_enabled"  mapstructure:"read_enabled"  yaml:"read_enabled"`
 	WriteEnabled bool   `json:"write_enabled" mapstructure:"write_enabled" yaml:"write_enabled"`
+	// SkipPrefixedIndices is a temporary solution that skips reloading certain search indices
+	SkipPrefixedIndices string `json:"skip_prefixed_indices"          mapstructure:"skip_prefixed_indices"          yaml:"skip_prefixed_indices"`
 	// StorageEnabled only applies to standalone search indexes. This is to enable persisting search indexes to storage.
 	StorageEnabled bool `json:"storage_enabled" mapstructure:"storage_enabled" yaml:"storage_enabled"`
 	// Chunking allows us to persist bigger search indexes payload in storage.
