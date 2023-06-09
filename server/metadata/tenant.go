@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -814,6 +815,10 @@ func (tenant *Tenant) reloadSearch(ctx context.Context, tx transaction.Tx, proje
 	searchObj := NewSearch()
 
 	for _, searchMD := range projMetadata.SearchMetadata {
+		if config.DefaultConfig.Search.SkipPrefixedIndices != "" && strings.HasPrefix(searchMD.Name, config.DefaultConfig.Search.SkipPrefixedIndices) {
+			log.Warn().Str("index", searchMD.Name).Msg("Skipped reloading")
+			continue
+		}
 		schV, err := tenant.searchSchemaStore.GetLatest(ctx, tx, tenant.namespace.Id(), project.id, searchMD.Name)
 		if err != nil {
 			return nil, err
