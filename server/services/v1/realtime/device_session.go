@@ -73,7 +73,7 @@ func (s *Sessions) CreateDeviceSession(ctx context.Context, conn *websocket.Conn
 		if version, err = s.versionH.Read(ctx, tx, false); err != nil {
 			return nil, err
 		}
-		if err = tenant.Reload(ctx, tx, version, nil); err != nil {
+		if err = tenant.Reload(ctx, tx, version, nil, s.txMgr); err != nil {
 			return nil, err
 		}
 
