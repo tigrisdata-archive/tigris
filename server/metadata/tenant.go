@@ -956,7 +956,18 @@ func (tenant *Tenant) DeleteSearchIndex(ctx context.Context, tx transaction.Tx, 
 
 	index, ok := project.search.GetIndex(indexName)
 	if !ok {
-		return NewSearchIndexNotFoundErr(indexName)
+		schV, err := tenant.searchSchemaStore.GetLatest(ctx, tx, tenant.namespace.Id(), project.id, indexName)
+		if err != nil {
+			return err
+		}
+
+		searchFactory, err := schema.NewFactoryBuilder(false).BuildSearch(indexName, schV.Schema)
+		if err != nil {
+			return err
+		}
+
+		searchStoreIndexName := tenant.Encoder.EncodeSearchTableName(tenant.namespace.Id(), project.Id(), indexName)
+		index = schema.NewSearchIndex(schV.Version, searchStoreIndexName, searchFactory, nil)
 	}
 
 	return tenant.deleteSearchIndex(ctx, tx, project, index)
