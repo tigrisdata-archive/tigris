@@ -522,6 +522,10 @@ func (s *apiService) CreateProject(ctx context.Context, r *api.CreateProjectRequ
 	}, nil
 }
 
+func (s *apiService) UpdateProject(ctx context.Context, r *api.UpdateProjectRequest) (*api.UpdateProjectResponse, error) {
+	return nil, errors.Unimplemented("Update project is not available")
+}
+
 func (s *apiService) DeleteProject(ctx context.Context, r *api.DeleteProjectRequest) (*api.DeleteProjectResponse, error) {
 	accessToken, _ := request.GetAccessToken(ctx)
 	runner := s.runnerFactory.GetProjectQueryRunner(accessToken)
