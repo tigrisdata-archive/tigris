@@ -522,7 +522,7 @@ func (s *apiService) CreateProject(ctx context.Context, r *api.CreateProjectRequ
 	}, nil
 }
 
-func (s *apiService) UpdateProject(ctx context.Context, r *api.UpdateProjectRequest) (*api.UpdateProjectResponse, error) {
+func (*apiService) UpdateProject(_ context.Context, _ *api.UpdateProjectRequest) (*api.UpdateProjectResponse, error) {
 	return nil, errors.Unimplemented("Update project is not available")
 }
 

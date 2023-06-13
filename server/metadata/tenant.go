@@ -1222,7 +1222,7 @@ func (tenant *Tenant) ListProjects(_ context.Context) []string {
 	return projects
 }
 
-// GetProjectMetadata retrieves the metadata associated with the project
+// GetProjectMetadata retrieves the metadata associated with the project.
 func (tenant *Tenant) GetProjectMetadata(ctx context.Context, tx transaction.Tx, projName string) (*ProjectMetadata, error) {
 	return tenant.namespaceStore.GetProjectMetadata(ctx, tx, tenant.namespace.Id(), projName)
 }
