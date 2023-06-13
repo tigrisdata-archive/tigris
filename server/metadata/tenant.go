@@ -1222,6 +1222,11 @@ func (tenant *Tenant) ListProjects(_ context.Context) []string {
 	return projects
 }
 
+// GetProjectMetadata retrieves the metadata associated with the project.
+func (tenant *Tenant) GetProjectMetadata(ctx context.Context, tx transaction.Tx, projName string) (*ProjectMetadata, error) {
+	return tenant.namespaceStore.GetProjectMetadata(ctx, tx, tenant.namespace.Id(), projName)
+}
+
 // DeleteTenant is used to delete tenant and all the content within it.
 // This needs to be followed up with a "restart" of server to clear memory state.
 // Be careful calling this.
