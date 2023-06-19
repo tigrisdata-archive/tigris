@@ -67,6 +67,9 @@ local_rt_run: server
 	fdbcli -C ./test/config/fdb.cluster --exec "configure new single memory" || true
 	TIGRIS_SERVER_SERVER_TYPE=realtime ./server/service -c config/server.dev.yaml
 
+local_debug:
+	$(DOCKER_COMPOSE) up --no-build --detach tigris_search tigris_db2
+
 # Runs tigris server and foundationdb, plus additional tools for it like:
 # - prometheus and grafana for monitoring
 run_full: coverdir

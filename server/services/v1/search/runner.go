@@ -950,6 +950,18 @@ func (runner *IndexRunner) Run(ctx context.Context, tx transaction.Tx, tenant *m
 		if err != nil {
 			return Response{}, createApiError(err)
 		}
+		projMeta, err := tenant.GetProjectMetadata(ctx, tx, runner.create.GetProject())
+		if err != nil {
+			return Response{}, createApiError(err)
+		}
+		if projMeta != nil && projMeta.Limits != nil && projMeta.Limits.MaxSearchIndexes != nil {
+			maxIndexes := int(*projMeta.Limits.MaxSearchIndexes)
+			indexes := project.GetSearch().GetIndexes()
+			if len(indexes) >= maxIndexes {
+				return Response{}, errors.InvalidArgument("search indexes limit reached for project: %d", maxIndexes)
+			}
+		}
+
 		factory.Sub = currentSub
 		if err = tenant.CreateSearchIndex(ctx, tx, project, factory); err != nil {
 			return Response{}, createApiError(err)
