@@ -60,6 +60,12 @@ type ProjectMetadata struct {
 	CreatedAt      int64
 	CachesMetadata []CacheMetadata
 	SearchMetadata []SearchMetadata
+	Limits         *ProjectLimits
+}
+
+type ProjectLimits struct {
+	MaxCollections   *int32
+	MaxSearchIndexes *int32
 }
 
 type CacheMetadata struct {

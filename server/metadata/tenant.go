@@ -1222,6 +1222,29 @@ func (tenant *Tenant) ListProjects(_ context.Context) []string {
 	return projects
 }
 
+// GetProjectMetadata retrieves the metadata associated with the project.
+func (tenant *Tenant) GetProjectMetadata(ctx context.Context, tx transaction.Tx, projName string) (*ProjectMetadata, error) {
+	tenant.RLock()
+	defer tenant.RUnlock()
+
+	_, ok := tenant.projects[projName]
+	if !ok {
+		return nil, NewProjectNotFoundErr(projName)
+	}
+	return tenant.namespaceStore.GetProjectMetadata(ctx, tx, tenant.namespace.Id(), projName)
+}
+
+func (tenant *Tenant) UpdateProjectMetadata(ctx context.Context, tx transaction.Tx, projName string, update *ProjectMetadata) error {
+	tenant.Lock()
+	defer tenant.Unlock()
+
+	_, ok := tenant.projects[projName]
+	if !ok {
+		return NewProjectNotFoundErr(projName)
+	}
+	return tenant.namespaceStore.UpdateProjectMetadata(ctx, tx, tenant.namespace.Id(), projName, update)
+}
+
 // DeleteTenant is used to delete tenant and all the content within it.
 // This needs to be followed up with a "restart" of server to clear memory state.
 // Be careful calling this.

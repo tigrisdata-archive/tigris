@@ -166,6 +166,10 @@ func (x *CreateProjectRequest) Validate() error {
 	return isValidDatabase(x.Project)
 }
 
+func (x *UpdateProjectRequest) Validate() error {
+	return isValidDatabase(x.Project)
+}
+
 func (x *DeleteProjectRequest) Validate() error {
 	return isValidDatabase(x.Project)
 }

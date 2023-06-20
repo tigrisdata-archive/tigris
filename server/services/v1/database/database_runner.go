@@ -37,6 +37,7 @@ type ProjectQueryRunner struct {
 	createReq   *api.CreateProjectRequest
 	listReq     *api.ListProjectsRequest
 	describeReq *api.DescribeDatabaseRequest
+	updateReq   *api.UpdateProjectRequest
 }
 
 func (runner *ProjectQueryRunner) SetCreateProjectReq(create *api.CreateProjectRequest) {
@@ -55,8 +56,12 @@ func (runner *ProjectQueryRunner) SetDescribeDatabaseReq(describe *api.DescribeD
 	runner.describeReq = describe
 }
 
+func (runner *ProjectQueryRunner) SetUpdateProjectReq(update *api.UpdateProjectRequest) {
+	runner.updateReq = update
+}
+
 func (runner *ProjectQueryRunner) create(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
-	projMetadata, err := createProjectMetadata(ctx)
+	projMetadata, err := createProjectMetadata(ctx, runner.createReq.Options)
 	if err != nil {
 		return Response{}, ctx, err
 	}
@@ -86,7 +91,7 @@ func (runner *ProjectQueryRunner) delete(ctx context.Context, tx transaction.Tx,
 	return Response{Status: DroppedStatus}, ctx, nil
 }
 
-func (*ProjectQueryRunner) list(ctx context.Context, _ transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
+func (*ProjectQueryRunner) list(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
 	// listReq projects need not include any branches
 
 	projectList := tenant.ListProjects(ctx)
@@ -95,11 +100,56 @@ func (*ProjectQueryRunner) list(ctx context.Context, _ transaction.Tx, tenant *m
 		projects[i] = &api.ProjectInfo{
 			Project: l,
 		}
+
+		meta, err := tenant.GetProjectMetadata(ctx, tx, l)
+		if err != nil {
+			return Response{}, ctx, err
+		}
+		if meta != nil && meta.Limits != nil {
+			projects[i].Limits = &api.ProjectLimits{
+				MaxCollections:   meta.Limits.MaxCollections,
+				MaxSearchIndexes: meta.Limits.MaxSearchIndexes,
+			}
+		}
 	}
 
 	return Response{
 		Response: &api.ListProjectsResponse{
 			Projects: projects,
+		},
+	}, ctx, nil
+}
+
+func (runner *ProjectQueryRunner) update(ctx context.Context, tx transaction.Tx, tenant *metadata.Tenant) (Response, context.Context, error) {
+	meta, err := tenant.GetProjectMetadata(ctx, tx, runner.updateReq.GetProject())
+	if err != nil {
+		return Response{}, ctx, err
+	}
+
+	if meta == nil {
+		meta, err = createProjectMetadata(ctx, runner.updateReq.GetOptions())
+		if err != nil {
+			return Response{}, ctx, err
+		}
+	} else if runner.updateReq.GetOptions() != nil {
+		limits := runner.updateReq.GetOptions().GetLimits()
+		if limits == nil {
+			meta.Limits = nil
+		} else {
+			meta.Limits = &metadata.ProjectLimits{
+				MaxCollections:   limits.MaxCollections,
+				MaxSearchIndexes: limits.MaxSearchIndexes,
+			}
+		}
+	}
+	err = tenant.UpdateProjectMetadata(ctx, tx, runner.updateReq.GetProject(), meta)
+	if err != nil {
+		return Response{}, ctx, err
+	}
+
+	return Response{
+		Response: &api.UpdateProjectResponse{
+			Status: UpdatedStatus,
 		},
 	}, ctx, nil
 }
@@ -171,6 +221,8 @@ func (runner *ProjectQueryRunner) Run(ctx context.Context, tx transaction.Tx, te
 		return runner.list(ctx, tx, tenant)
 	case runner.describeReq != nil:
 		return runner.describe(ctx, tx, tenant)
+	case runner.updateReq != nil:
+		return runner.update(ctx, tx, tenant)
 	}
 
 	return Response{}, ctx, errors.Unknown("unknown request path")
@@ -244,14 +296,23 @@ func (runner *BranchQueryRunner) Run(ctx context.Context, tx transaction.Tx, ten
 	return Response{}, ctx, errors.Unknown("unknown request path")
 }
 
-func createProjectMetadata(ctx context.Context) (*metadata.ProjectMetadata, error) {
+func createProjectMetadata(ctx context.Context, r *api.ProjectOptions) (*metadata.ProjectMetadata, error) {
 	currentSub, err := auth.GetCurrentSub(ctx)
 	if err != nil && config.DefaultConfig.Auth.Enabled {
 		return nil, errors.Internal("Failed to createReq database metadata")
 	}
+	var limits *metadata.ProjectLimits
+	if r != nil && r.Limits != nil {
+		limits = &metadata.ProjectLimits{
+			MaxCollections:   r.Limits.MaxCollections,
+			MaxSearchIndexes: r.Limits.MaxSearchIndexes,
+		}
+	}
+
 	return &metadata.ProjectMetadata{
 		ID:        0, // it will be set to right value later on
 		Creator:   currentSub,
 		CreatedAt: time.Now().Unix(),
+		Limits:    limits,
 	}, nil
 }
