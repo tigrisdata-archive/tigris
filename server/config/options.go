@@ -107,7 +107,7 @@ type AuthConfig struct {
 }
 
 type Invitation struct {
-	Enabled        bool  `json:"enabled" mapstructure:"enabled" yaml:"enabled"`
+	Enabled        bool  `json:"enabled"          mapstructure:"enabled"          yaml:"enabled"`
 	ExpireAfterSec int64 `json:"expire_after_sec" mapstructure:"expire_after_sec" yaml:"expire_after_sec"`
 }
 
@@ -388,6 +388,7 @@ var DefaultConfig = Config{
 		Compression:       false,
 		IgnoreExtraFields: false,
 		LogFilter:         false,
+		AuthKey:           "ts_test_key",
 	},
 	KV: KVConfig{
 		Chunking:             false,

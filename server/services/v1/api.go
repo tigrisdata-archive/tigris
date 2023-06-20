@@ -126,7 +126,7 @@ func (s *apiService) RegisterHTTP(router chi.Router, inproc *inprocgrpc.Channel)
 	router.HandleFunc(apiPathPrefix+projectsPath, func(w http.ResponseWriter, r *http.Request) {
 		mux.ServeHTTP(w, r)
 	})
-	for _, projectPath := range []string{"/create", "/delete"} {
+	for _, projectPath := range []string{"/create", "/delete", "/update"} {
 		// explicit add project related path
 		router.HandleFunc(apiPathPrefix+fullProjectPath+projectPath, func(w http.ResponseWriter, r *http.Request) {
 			mux.ServeHTTP(w, r)
@@ -522,8 +522,20 @@ func (s *apiService) CreateProject(ctx context.Context, r *api.CreateProjectRequ
 	}, nil
 }
 
-func (*apiService) UpdateProject(_ context.Context, _ *api.UpdateProjectRequest) (*api.UpdateProjectResponse, error) {
-	return nil, errors.Unimplemented("Update project is not available")
+func (s *apiService) UpdateProject(ctx context.Context, r *api.UpdateProjectRequest) (*api.UpdateProjectResponse, error) {
+	accessToken, _ := request.GetAccessToken(ctx)
+	runner := s.runnerFactory.GetProjectQueryRunner(accessToken)
+	runner.SetUpdateProjectReq(r)
+
+	resp, err := s.sessions.Execute(ctx, runner, database.ReqOptions{
+		MetadataChange:     true,
+		InstantVerTracking: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Response.(*api.UpdateProjectResponse), nil
 }
 
 func (s *apiService) DeleteProject(ctx context.Context, r *api.DeleteProjectRequest) (*api.DeleteProjectResponse, error) {

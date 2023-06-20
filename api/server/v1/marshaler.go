@@ -1370,6 +1370,21 @@ func (x *ChargeTier) MarshalJSON() ([]byte, error) {
 	return jsoniter.Marshal(resp)
 }
 
+func (x *ProjectInfo) MarshalJSON() ([]byte, error) {
+	resp := struct {
+		Project string         `json:"project"`
+		Limits  *ProjectLimits `json:"limits"`
+	}{
+		Project: x.GetProject(),
+		Limits:  x.GetLimits(),
+	}
+	if resp.Limits == nil {
+		resp.Limits = &ProjectLimits{}
+	}
+
+	return jsoniter.Marshal(resp)
+}
+
 func unmarshalAdditionalFunction(data []byte) (*AdditionalFunction, error) {
 	var mp map[string]jsoniter.RawMessage
 

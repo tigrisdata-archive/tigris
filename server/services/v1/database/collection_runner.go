@@ -115,6 +115,20 @@ func (runner *CollectionQueryRunner) createOrUpdate(ctx context.Context, tx tran
 		return Response{}, ctx, errors.AlreadyExists("collection already exist")
 	}
 
+	// collectionExists == true && check project limits
+	if collectionExists {
+		projMeta, err := tenant.GetProjectMetadata(ctx, tx, req.GetProject())
+		if err != nil {
+			return Response{}, ctx, err
+		}
+		if projMeta != nil && projMeta.Limits != nil && projMeta.Limits.MaxCollections != nil {
+			maxCollections := int(*(projMeta.Limits.MaxCollections))
+			if len(db.ListCollection()) >= maxCollections {
+				return Response{}, ctx, errors.InvalidArgument("collections limit reached for project: %d", maxCollections)
+			}
+		}
+	}
+
 	schFactory, err := schema.NewFactoryBuilder(true).Build(req.GetCollection(), req.GetSchema())
 	if err != nil {
 		return Response{}, ctx, err
