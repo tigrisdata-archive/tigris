@@ -388,7 +388,6 @@ var DefaultConfig = Config{
 		Compression:       false,
 		IgnoreExtraFields: false,
 		LogFilter:         false,
-		AuthKey:           "ts_test_key",
 	},
 	KV: KVConfig{
 		Chunking:             false,
