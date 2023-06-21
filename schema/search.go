@@ -61,10 +61,15 @@ type SearchSource struct {
 }
 
 type SearchJSONSchema struct {
-	Name        string              `json:"title,omitempty"`
-	Description string              `json:"description,omitempty"`
-	Properties  jsoniter.RawMessage `json:"properties,omitempty"`
-	Source      *SearchSource       `json:"source,omitempty"`
+	Name        string               `json:"title,omitempty"`
+	Description string               `json:"description,omitempty"`
+	Properties  jsoniter.RawMessage  `json:"properties,omitempty"`
+	Source      *SearchSource        `json:"source,omitempty"`
+	Options     *SearchSchemaOptions `json:"options,omitempty"`
+}
+
+type SearchSchemaOptions struct {
+	TokenSeparators *[]string `json:"token_separators,omitempty"`
 }
 
 // SearchFactory is used as an intermediate step so that collection can be initialized with properly encoded values.
@@ -74,9 +79,10 @@ type SearchFactory struct {
 	// Fields are derived from the user schema.
 	Fields []*Field
 	// Schema is the raw JSON schema received
-	Schema jsoniter.RawMessage
-	Sub    string
-	Source SearchSource
+	Schema  jsoniter.RawMessage
+	Sub     string
+	Source  SearchSource
+	Options SearchSchemaOptions
 }
 
 func (fb *FactoryBuilder) BuildSearch(index string, reqSchema jsoniter.RawMessage) (*SearchFactory, error) {
@@ -120,12 +126,17 @@ func (fb *FactoryBuilder) BuildSearch(index string, reqSchema jsoniter.RawMessag
 			return nil, err
 		}
 	}
+	var schemaOptions SearchSchemaOptions
+	if schema.Options != nil {
+		schemaOptions = *schema.Options
+	}
 
 	factory := &SearchFactory{
-		Name:   index,
-		Fields: fields,
-		Schema: searchSchema,
-		Source: source,
+		Name:    index,
+		Fields:  fields,
+		Schema:  searchSchema,
+		Source:  source,
+		Options: schemaOptions,
 	}
 
 	idFound := false
@@ -181,6 +192,9 @@ type SearchIndex struct {
 	// will be one to one mapped to queryable field but complex fields like object type field there may be more than
 	// one queryableFields. As queryableFields represent a flattened state these can be used as-is to index in memory.
 	QueryableFields []*QueryableField
+	// TokenSeparators is a list of symbols or special characters to be used for splitting the text into individual
+	// words in addition to space and new-line characters.
+	TokenSeparators []string
 	// Source of this index
 	Source        SearchSource
 	SearchIDField *QueryableField
@@ -198,12 +212,17 @@ func NewSearchIndex(ver uint32, searchStoreName string, factory *SearchFactory, 
 			searchIdField = q
 		}
 	}
+	separators := make([]string, 0)
+	if factory.Options.TokenSeparators != nil {
+		separators = append(separators, *factory.Options.TokenSeparators...)
+	}
 	index := &SearchIndex{
 		Version:         ver,
 		Name:            factory.Name,
 		Fields:          factory.Fields,
 		Schema:          factory.Schema,
 		Source:          factory.Source,
+		TokenSeparators: separators,
 		SearchIDField:   searchIdField,
 		QueryableFields: queryableFields,
 		int64FieldsPath: buildInt64Path(factory.Fields),
@@ -329,6 +348,9 @@ func (s *SearchIndex) buildSearchSchema(name string) {
 	s.StoreSchema = &tsApi.CollectionSchema{
 		Name:   name,
 		Fields: tsFields,
+	}
+	if len(s.TokenSeparators) > 0 {
+		s.StoreSchema.TokenSeparators = &s.TokenSeparators
 	}
 }
 
