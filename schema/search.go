@@ -72,6 +72,13 @@ type SearchSchemaOptions struct {
 	TokenSeparators *[]string `json:"token_separators,omitempty"`
 }
 
+func (s *SearchSchemaOptions) GetTokenSeparators() []string {
+	if s.TokenSeparators == nil {
+		return make([]string, 0)
+	}
+	return *s.TokenSeparators
+}
+
 // SearchFactory is used as an intermediate step so that collection can be initialized with properly encoded values.
 type SearchFactory struct {
 	// Name is the index name.
@@ -212,17 +219,14 @@ func NewSearchIndex(ver uint32, searchStoreName string, factory *SearchFactory, 
 			searchIdField = q
 		}
 	}
-	separators := make([]string, 0)
-	if factory.Options.TokenSeparators != nil {
-		separators = append(separators, *factory.Options.TokenSeparators...)
-	}
+
 	index := &SearchIndex{
 		Version:         ver,
 		Name:            factory.Name,
 		Fields:          factory.Fields,
 		Schema:          factory.Schema,
 		Source:          factory.Source,
-		TokenSeparators: separators,
+		TokenSeparators: factory.Options.GetTokenSeparators(),
 		SearchIDField:   searchIdField,
 		QueryableFields: queryableFields,
 		int64FieldsPath: buildInt64Path(factory.Fields),
