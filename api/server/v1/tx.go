@@ -58,6 +58,7 @@ const (
 	ListProjectsMethodName    = apiMethodPrefix + "ListProjects"
 	ListCollectionsMethodName = apiMethodPrefix + "ListCollections"
 	CreateProjectMethodName   = apiMethodPrefix + "CreateProject"
+	UpdateProjectMethodName   = apiMethodPrefix + "UpdateProject"
 
 	DeleteProjectMethodName      = apiMethodPrefix + "DeleteProject"
 	DescribeDatabaseMethodName   = apiMethodPrefix + "DescribeDatabase"
