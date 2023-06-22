@@ -862,13 +862,16 @@ func (tenant *Tenant) CreateSearchIndex(ctx context.Context, tx transaction.Tx, 
 
 func (tenant *Tenant) createSearchIndex(ctx context.Context, tx transaction.Tx, project *Project, factory *schema.SearchFactory) error {
 	if index, ok := project.search.GetIndex(factory.Name); ok {
+		if tokensEq := reflect.DeepEqual(factory.Options.GetTokenSeparators(), index.TokenSeparators); !tokensEq {
+			return errors.InvalidArgument("`token_separators` cannot be modified, please create a new search index")
+		}
+
+		// shortcut to just check if there aren't any changes then return early
 		if eq, err := isSchemaEq(index.Schema, factory.Schema); eq || err != nil {
-			// shortcut to just check if schema is eq then return early
-
 			tx.Context().MarkNoMetadataStateChanged()
-
 			return err
 		}
+		// Tokens can only be set when schema is created, if tokens changed, then raise an informative error here
 		return tenant.updateSearchIndex(ctx, tx, project, factory, index)
 	}
 
