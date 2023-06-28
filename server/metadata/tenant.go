@@ -133,7 +133,8 @@ func NewTenantManager(kvStore kv.TxStore, searchStore search.Store, txMgr *trans
 func newTenantManager(kvStore kv.TxStore, searchStore search.Store, mdNameRegistry *NameRegistry, txMgr *transaction.Manager) *TenantManager {
 	collectionsInSearch, err := searchStore.AllCollections(context.TODO())
 	if err != nil {
-		log.Fatal().Err(err).Msgf("error starting server: loading schemas from search failed")
+		log.Err(err).Msgf("error starting server: loading schemas from search failed")
+		collectionsInSearch = make(map[string]*tsApi.CollectionResponse)
 	}
 
 	return &TenantManager{
