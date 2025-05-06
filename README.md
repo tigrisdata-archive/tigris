@@ -3,8 +3,11 @@
 </p>
 
 <p align="center">
-Tigris is a Serverless NoSQL Database and Search Platform that offers an open source alternative to MongoDB and DynamoDB.
-Tigris is built on FoundationDB and combines the consistency of ACID transactions with the scale and flexibility of NoSQL, at a fraction of the cost.
+Tigris is a globally distributed, multi-cloud object storage service with built-in support for the S3 API. It uses Dynamic Data Placement and Access-Based Rebalancing to deliver low-latency access worldwide — without the need to manage replication or caching.
+</p>
+
+<p align="center">
+This repository is deprecated and contains a prior version of Tigris.
 </p>
 
 <p align="center">
