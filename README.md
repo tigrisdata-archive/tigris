@@ -1,3 +1,8 @@
+> ⚠️ **This repository is archived.**
+>
+> Tigris has pivoted from this database project to a new, globally distributed S3-compatible object storage service.
+> Learn more about the new product here: https://www.tigrisdata.com/
+
 <p align="center">
   <a href="https://www.tigrisdata.com/"><img src="https://www.tigrisdata.com/docs/logo/dark.png" alt="Tigris" width="298" /></a> 
 </p>
